@@ -26,10 +26,48 @@ const cases = readdirSync(fixturesDir, { withFileTypes: true })
   .filter((name) => existsSync(join(fixturesDir, name, 'expected-contract.json')))
   .sort();
 
-/** The fixtures `contract print` refuses, each with the meta of its refusal. */
-const expectedRefusals: ReadonlyMap<string, Record<string, unknown>> = new Map([
-  ['junction-name-in-other-schema', { modelName: 'PostToTag', namespaces: ['one', 'two'] }],
-  ['relation-name-in-two-schemas', { modelName: 'X', namespaces: ['one', 'two'] }],
+interface ExpectedRefusal {
+  readonly reason: string;
+  readonly error: unknown;
+}
+
+const modelInTwoNamespaces = (meta: Record<string, unknown>): ExpectedRefusal => ({
+  reason: 'one model name in two namespaces',
+  error: expect.objectContaining({
+    code: 'CONTRACT.PRINT_UNSUPPORTED',
+    message: expect.stringContaining('is declared in more than one namespace'),
+    meta,
+  }),
+});
+
+const storageWithNoModel: ExpectedRefusal = {
+  reason: 'storage with no model has no Prisma 8 syntax yet',
+  error: expect.objectContaining({
+    code: 'CONTRACT.PRINT_UNSUPPORTED',
+    message: expect.stringMatching(
+      /is not stored by any field|that no relation of model .* travels/,
+    ),
+  }),
+};
+
+/** The fixtures `contract print` refuses, each with why and the refusal it throws. */
+const expectedRefusals: ReadonlyMap<string, ExpectedRefusal> = new Map([
+  ['ignore', storageWithNoModel],
+  ['ignored-field-defaults', storageWithNoModel],
+  ['ignored-field-in-index', storageWithNoModel],
+  ['ignored-field-in-references', storageWithNoModel],
+  ['ignored-field-in-relation', storageWithNoModel],
+  ['ignored-relation-back-relations', storageWithNoModel],
+  ['ignored-relation-field', storageWithNoModel],
+  [
+    'junction-name-in-other-schema',
+    modelInTwoNamespaces({ modelName: 'PostToTag', namespaces: ['one', 'two'] }),
+  ],
+  [
+    'relation-name-in-two-schemas',
+    modelInTwoNamespaces({ modelName: 'X', namespaces: ['one', 'two'] }),
+  ],
+  ['relations-ignored', storageWithNoModel],
 ]);
 
 function prisma7SchemaPath(caseName: string): string {
@@ -67,15 +105,9 @@ describe('a printed Prisma 7 contract reads back as the same contract', () => {
   for (const caseName of cases) {
     const refusal = expectedRefusals.get(caseName);
     if (refusal !== undefined) {
-      it(`${caseName} is refused: one model name in two namespaces`, async () => {
+      it(`${caseName} is refused: ${refusal.reason}`, async () => {
         const prisma7 = await loadPrisma7Fixture(prisma7SchemaPath(caseName), caseName);
-        expect(() => printContract(prisma7)).toThrow(
-          expect.objectContaining({
-            code: 'CONTRACT.PRINT_UNSUPPORTED',
-            message: expect.stringContaining('is declared in more than one namespace'),
-            meta: refusal,
-          }),
-        );
+        expect(() => printContract(prisma7)).toThrow(refusal.error);
       });
       continue;
     }

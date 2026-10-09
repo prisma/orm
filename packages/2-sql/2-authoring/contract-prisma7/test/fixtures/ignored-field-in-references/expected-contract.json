@@ -12,9 +12,31 @@
               "fields": {
                 "id": {
                   "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
                 },
-                "email": {
-                  "column": "email"
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {}
+          },
+          "Post": {
+            "storage": {
+              "table": "Post",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "authorEmail": {
+                  "column": "authorEmail"
                 }
               }
             },
@@ -27,7 +49,7 @@
                 "nullable": false,
                 "many": false
               },
-              "email": {
+              "authorEmail": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
@@ -46,6 +68,10 @@
     "User": {
       "namespace": "public",
       "model": "User"
+    },
+    "Post": {
+      "namespace": "public",
+      "model": "Post"
     }
   },
   "extensions": {},
@@ -53,7 +79,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "61098c994c377275fdd65e368005c282d39dbec27de1a105b892fc7db460bb60",
+    "storageHash": "32a23f989cc8a37547590f7ee0d90efed505d02127dbf2beb3f85d727f95a679",
     "namespaces": {
       "public": {
         "id": "public",
@@ -73,17 +99,54 @@
                   "codecId": "pg/text@1",
                   "nullable": false,
                   "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "User_email_key",
+                  "unique": true,
+                  "columns": ["email"]
+                }
+              ],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "Post": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
                 },
-                "legacy": {
+                "authorEmail": {
                   "dataType": "pg/text",
                   "codecId": "pg/text@1",
-                  "nullable": true,
+                  "nullable": false,
                   "many": false
                 }
               },
               "uniques": [],
               "indexes": [],
-              "foreignKeys": [],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "Post",
+                    "columns": ["authorEmail"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "User",
+                    "columns": ["email"]
+                  },
+                  "onDelete": "restrict",
+                  "onUpdate": "cascade"
+                }
+              ],
               "primaryKey": {
                 "columns": ["id"]
               }

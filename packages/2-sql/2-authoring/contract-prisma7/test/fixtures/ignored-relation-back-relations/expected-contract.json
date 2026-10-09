@@ -153,7 +153,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "e4187fd6cb9052f1bc40535de71a35b35e6e08c49684c0fcbbf45773b27f07e0",
+    "storageHash": "da4e0719b6cc3398f07ff0e80b969ce4f4cc460a13648ec5258a4a7a36fcfbcc",
     "namespaces": {
       "public": {
         "id": "public",
@@ -177,7 +177,22 @@
               },
               "uniques": [],
               "indexes": [],
-              "foreignKeys": [],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "User",
+                    "columns": ["managerId"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "User",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "setNull",
+                  "onUpdate": "cascade"
+                }
+              ],
               "primaryKey": {
                 "columns": ["id"]
               }
@@ -199,7 +214,22 @@
               },
               "uniques": [],
               "indexes": [],
-              "foreignKeys": [],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "Post",
+                    "columns": ["authorId"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "User",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "restrict",
+                  "onUpdate": "cascade"
+                }
+              ],
               "primaryKey": {
                 "columns": ["id"]
               }
@@ -227,7 +257,25 @@
                   "columns": ["userId"]
                 }
               ],
-              "foreignKeys": [],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "Profile",
+                    "columns": ["userId"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "User",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "restrict",
+                  "onUpdate": "cascade",
+                  "index": {
+                    "name": "Profile_userId_key"
+                  }
+                }
+              ],
               "primaryKey": {
                 "columns": ["id"]
               }

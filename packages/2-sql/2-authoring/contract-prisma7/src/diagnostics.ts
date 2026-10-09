@@ -51,7 +51,6 @@ export function ignoredFieldReferenced(input: {
   readonly modelName: string;
   readonly fieldNames: readonly string[];
   readonly usedBy: string;
-  readonly constraint: 'primary key' | 'unique index' | 'index' | 'foreign key';
   readonly sourceId: string;
   readonly span: PslSpan;
 }): ContractSourceDiagnostic {
@@ -59,7 +58,7 @@ export function ignoredFieldReferenced(input: {
   const one = input.fieldNames.length === 1;
   return prisma7Diagnostic(
     'PSL.PRISMA7_IGNORED_FIELD_REFERENCED',
-    `${one ? 'Field' : 'Fields'} ${fields} ${one ? 'is' : 'are'} marked @ignore, but ${input.usedBy} uses ${one ? 'it' : 'them'}, and Prisma 7 still creates the ${input.constraint} that includes ${one ? 'its column' : 'their columns'}. Remove @ignore from ${fields}; Prisma 7's next migration is then empty, and ${one ? 'the field appears' : 'the fields appear'} in the Prisma 7 client again.`,
+    `${one ? 'Field' : 'Fields'} ${fields} ${one ? 'is' : 'are'} marked @ignore, but ${input.usedBy} uses ${one ? 'it' : 'them'}, and Prisma 8 needs every column of a model's primary key to be a field of the model. Remove @ignore from ${fields}; Prisma 7's next migration is then empty, and ${one ? 'the field appears' : 'the fields appear'} in the Prisma 7 client again.`,
     input.sourceId,
     input.span,
   );

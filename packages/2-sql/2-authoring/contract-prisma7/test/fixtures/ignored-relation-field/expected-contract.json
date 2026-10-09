@@ -25,19 +25,7 @@
                 "many": false
               }
             },
-            "relations": {
-              "posts": {
-                "to": {
-                  "namespace": "public",
-                  "model": "Post"
-                },
-                "cardinality": "1:N",
-                "on": {
-                  "localFields": ["id"],
-                  "targetFields": ["authorId"]
-                }
-              }
-            }
+            "relations": {}
           },
           "Post": {
             "storage": {
@@ -70,20 +58,7 @@
                 "many": false
               }
             },
-            "relations": {
-              "author": {
-                "to": {
-                  "namespace": "public",
-                  "model": "User"
-                },
-                "cardinality": "N:1",
-                "nullable": false,
-                "on": {
-                  "localFields": ["authorId"],
-                  "targetFields": ["id"]
-                }
-              }
-            }
+            "relations": {}
           }
         }
       }
@@ -104,7 +79,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "785e6a06e57bd5a5e7277a7e972f45235cdf8a64b8c1f98516910ae7e8726f17",
+    "storageHash": "de50b90f857b05385c3b33f2e19a3ebb22911bdec157f790e89a76df087d1b0d",
     "namespaces": {
       "public": {
         "id": "public",
@@ -140,12 +115,6 @@
                   "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
-                },
-                "legacyOwnerId": {
-                  "dataType": "pg/int4",
-                  "codecId": "pg/int4@1",
-                  "nullable": true,
-                  "many": false
                 }
               },
               "uniques": [],
@@ -162,21 +131,7 @@
                     "tableName": "User",
                     "columns": ["id"]
                   },
-                  "onDelete": "restrict",
-                  "onUpdate": "cascade"
-                },
-                {
-                  "source": {
-                    "namespaceId": "public",
-                    "tableName": "Post",
-                    "columns": ["legacyOwnerId"]
-                  },
-                  "target": {
-                    "namespaceId": "public",
-                    "tableName": "User",
-                    "columns": ["id"]
-                  },
-                  "onDelete": "setNull",
+                  "onDelete": "cascade",
                   "onUpdate": "cascade"
                 }
               ],

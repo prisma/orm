@@ -1,0 +1,9 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Account {
+  id       Int     @id
+  nickname String? @db.Citext @ignore
+  balance  Decimal @db.Money @ignore
+}

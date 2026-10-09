@@ -5,16 +5,16 @@
     "namespaces": {
       "public": {
         "models": {
-          "User": {
+          "Indexed": {
             "storage": {
-              "table": "User",
+              "table": "Indexed",
               "namespaceId": "public",
               "fields": {
                 "id": {
                   "column": "id"
                 },
-                "email": {
-                  "column": "email"
+                "a": {
+                  "column": "a"
                 }
               }
             },
@@ -27,10 +27,10 @@
                 "nullable": false,
                 "many": false
               },
-              "email": {
+              "a": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/text@1"
+                  "codecId": "pg/int4@1"
                 },
                 "nullable": false,
                 "many": false
@@ -43,9 +43,9 @@
     }
   },
   "roots": {
-    "User": {
+    "Indexed": {
       "namespace": "public",
-      "model": "User"
+      "model": "Indexed"
     }
   },
   "extensions": {},
@@ -53,14 +53,14 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "61098c994c377275fdd65e368005c282d39dbec27de1a105b892fc7db460bb60",
+    "storageHash": "3e6c8f4477e41f554888cfdc2d9122a83d4fa7933cd97865cab8d81fa360e62f",
     "namespaces": {
       "public": {
         "id": "public",
         "kind": "postgres-schema",
         "entries": {
           "table": {
-            "User": {
+            "Indexed": {
               "columns": {
                 "id": {
                   "dataType": "pg/int4",
@@ -68,21 +68,43 @@
                   "nullable": false,
                   "many": false
                 },
-                "email": {
-                  "dataType": "pg/text",
-                  "codecId": "pg/text@1",
+                "a": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
                   "nullable": false,
                   "many": false
                 },
-                "legacy": {
-                  "dataType": "pg/text",
-                  "codecId": "pg/text@1",
-                  "nullable": true,
+                "b": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "c_column": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
                   "many": false
                 }
               },
               "uniques": [],
-              "indexes": [],
+              "indexes": [
+                {
+                  "name": "Indexed_a_b_key",
+                  "unique": true,
+                  "columns": ["a", "b"]
+                },
+                {
+                  "name": "Indexed_c_column_key",
+                  "unique": true,
+                  "columns": ["c_column"]
+                },
+                {
+                  "name": "Indexed_b_idx",
+                  "unique": false,
+                  "columns": ["b"]
+                }
+              ],
               "foreignKeys": [],
               "primaryKey": {
                 "columns": ["id"]

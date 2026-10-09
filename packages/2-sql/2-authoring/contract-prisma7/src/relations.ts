@@ -18,6 +18,7 @@ import {
   normalizeReferentialAction,
 } from '@internal/sql-contract-psl/resolution';
 import type {
+  ColumnNode,
   FieldNode,
   ForeignKeyNode,
   IndexNode,
@@ -31,13 +32,7 @@ import {
   prisma7JunctionPrimaryKeyName,
   statedConstraintName,
 } from './constraint-names';
-import {
-  andList,
-  fieldList,
-  ignoredFieldReferenced,
-  type Prisma7DiagnosticCode,
-  prisma7Diagnostic,
-} from './diagnostics';
+import { andList, fieldList, type Prisma7DiagnosticCode, prisma7Diagnostic } from './diagnostics';
 import { prisma7ConstraintName } from './indexes';
 import type { Prisma7TargetBinding } from './target-binding';
 
@@ -69,8 +64,10 @@ export interface RelationModel {
   readonly sourceId: string;
   readonly sources: PslSources;
   readonly columns: ReadonlyMap<string, FieldNode>;
+  /** The columns of the model's `@ignore` scalar fields. */
+  readonly ignoredColumns: ReadonlyMap<string, ColumnNode>;
   readonly ignoredFields: ReadonlySet<string>;
-  /** Relation fields marked `@ignore`; their back-relations are omitted with them. */
+  /** Relation fields marked `@ignore`: their foreign keys are kept, and they and their back-relations stay out of the domain. */
   readonly ignoredRelationFields: readonly RelationField[];
   /** Fields whose type or attributes were reported; keys and relations over them report nothing more. */
   readonly rejectedFields: ReadonlySet<string>;
@@ -197,13 +194,32 @@ export function parseRelationAttribute(
   return { name, map, fields, references, onDelete, onUpdate, span: attribute.span };
 }
 
+function storageColumn(model: RelationModel, fieldName: string): ColumnNode | undefined {
+  return model.columns.get(fieldName) ?? model.ignoredColumns.get(fieldName);
+}
+
+/**
+ * A relation field with a foreign key that only the table keeps: the field is `@ignore`, or its `fields:` or `references:` name an `@ignore` field, which the domain does not have.
+ */
+function keepsOnlyForeignKey(
+  model: RelationModel,
+  relationField: RelationField,
+  target: RelationModel,
+): boolean {
+  return (
+    model.ignoredRelationFields.includes(relationField) ||
+    (relationField.attribute?.fields?.some((name) => model.ignoredFields.has(name)) ?? false) ||
+    (relationField.attribute?.references?.some((name) => target.ignoredFields.has(name)) ?? false)
+  );
+}
+
 function columnNames(
   model: RelationModel,
   fieldNames: readonly string[],
 ): readonly string[] | undefined {
   const columns: string[] = [];
   for (const fieldName of fieldNames) {
-    const column = model.columns.get(fieldName);
+    const column = storageColumn(model, fieldName);
     if (column === undefined) return undefined;
     columns.push(column.columnName);
   }
@@ -288,9 +304,9 @@ function referentialActionRejections(input: {
   const { model, relationField, label, fieldNames, span } = input;
   const anotherAction =
     "choose another action, which replaces the foreign key on Prisma 7's next migration and leaves the Prisma 7 client unchanged.";
-  const fieldsWhere = (predicate: (column: FieldNode) => boolean): readonly string[] =>
+  const fieldsWhere = (predicate: (column: ColumnNode) => boolean): readonly string[] =>
     fieldNames.filter((name) => {
-      const column = model.columns.get(name);
+      const column = storageColumn(model, name);
       return column !== undefined && predicate(column);
     });
   const rejections: ContractSourceDiagnostic[] = [];
@@ -398,7 +414,7 @@ export function lowerRelations(
   };
 
   for (const model of models.values()) {
-    for (const relationField of model.relationFields) {
+    for (const relationField of [...model.relationFields, ...model.ignoredRelationFields]) {
       const { field, targetModelName } = relationField;
       const label = `Relation field "${model.modelName}.${field.name}"`;
       const target = models.get(targetModelName);
@@ -407,22 +423,6 @@ export function lowerRelations(
       if (isFkSide(relationField)) {
         const attribute = relationField.attribute;
         if (attribute === undefined || attribute.fields === undefined) continue;
-        const ignoredScalars = attribute.fields.filter((name) => model.ignoredFields.has(name));
-        if (ignoredScalars.length > 0) {
-          rejectFkSide(
-            model,
-            relationField,
-            ignoredFieldReferenced({
-              modelName: model.modelName,
-              fieldNames: ignoredScalars,
-              usedBy: `relation field "${model.modelName}.${field.name}"`,
-              constraint: 'foreign key',
-              sourceId: model.sourceId,
-              span: attribute.span,
-            }),
-          );
-          continue;
-        }
         if (attribute.references === undefined) {
           rejectFkSide(
             model,
@@ -438,9 +438,7 @@ export function lowerRelations(
         }
         if (
           attribute.fields.some((name) => model.rejectedFields.has(name)) ||
-          attribute.references.some(
-            (name) => target.ignoredFields.has(name) || target.rejectedFields.has(name),
-          )
+          attribute.references.some((name) => target.rejectedFields.has(name))
         ) {
           rejectFkSide(model, relationField);
           continue;
@@ -474,7 +472,7 @@ export function lowerRelations(
           continue;
         }
         const nullability = attribute.fields.map(
-          (name) => model.columns.get(name)?.nullable === true,
+          (name) => storageColumn(model, name)?.nullable === true,
         );
         const anyNullable = nullability.includes(true);
         if (anyNullable && !field.optional) {
@@ -527,6 +525,7 @@ export function lowerRelations(
           onUpdate,
           index: false,
         });
+        if (keepsOnlyForeignKey(model, relationField, target)) continue;
         fkRelationMetadata.push({
           declaringModelName: model.modelName,
           declaringFieldName: field.name,
@@ -543,9 +542,17 @@ export function lowerRelations(
         continue;
       }
 
+      if (model.ignoredRelationFields.includes(relationField)) continue;
       if (
         target.ignoredRelationFields.some(
           (other) => other.targetModelName === model.modelName && sameName(other, relationField),
+        ) ||
+        target.relationFields.some(
+          (other) =>
+            other.targetModelName === model.modelName &&
+            isFkSide(other) &&
+            sameName(other, relationField) &&
+            keepsOnlyForeignKey(target, other, model),
         )
       ) {
         continue;

@@ -1,0 +1,154 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Account": {
+            "storage": {
+              "table": "Account",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "Account": {
+      "namespace": "public",
+      "model": "Account"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "b3b2a67eb2a307da2b785c1cad12af27905169e1dc62e481d5c8d7b78faee4df",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "Account": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "status": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": false,
+                  "many": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": "active"
+                  }
+                },
+                "createdAt": {
+                  "dataType": "pg/timestamp",
+                  "codecId": "pg/timestamp-string@1",
+                  "nullable": false,
+                  "many": false,
+                  "typeParams": {
+                    "precision": 3
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "now()"
+                  }
+                },
+                "token": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "ref": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": true,
+                  "many": false
+                },
+                "touchedAt": {
+                  "dataType": "pg/timestamp",
+                  "codecId": "pg/timestamp-string@1",
+                  "nullable": false,
+                  "many": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "seenAt": {
+                  "dataType": "pg/timestamp",
+                  "codecId": "pg/timestamp-string@1",
+                  "nullable": true,
+                  "many": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "labels": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": true,
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "noCheck": ["elementNotNull"]
+                },
+                "day": {
+                  "dataType": "pg/date",
+                  "codecId": "pg/date-string@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "stamp": {
+                  "dataType": "pg/timestamp",
+                  "codecId": "pg/timestamp-string@1",
+                  "nullable": false,
+                  "many": false,
+                  "typeParams": {
+                    "precision": 3
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "now()"
+                  }
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

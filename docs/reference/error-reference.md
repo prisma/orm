@@ -747,7 +747,7 @@ A field uses an enum declared under a different `@@schema`; a Postgres enum live
 
 ### PSL.PRISMA7_IGNORED_FIELD_REFERENCED
 
-An `@ignore`d field is used by `@id`, `@unique`, `@@id`, `@@unique`, `@@index`, or a relation's `fields:`, and Prisma 7 still creates that key, index, or foreign key over its column. Remove `@ignore` from the field. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+An `@ignore`d field is part of the model's primary key (`@id` or `@@id`). Prisma 8 keeps the column of an ignored field in the table but leaves the field out of the model, and every column of a model's primary key must be a field of the model. Remove `@ignore` from the field. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_INDEX_ARGUMENT_UNSUPPORTED
 
@@ -767,7 +767,7 @@ A model in the same schema as an implicit many-to-many junction has the junction
 
 ### PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED
 
-A `@db.*` type with no Prisma 8 codec (`Citext`, `Bit`, `VarBit`, `Xml`, `Oid`, `Money`, or an unknown spelling). Add `@ignore` to the field when no key, index, or relation uses it, or `@@ignore` to the model. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+A `@db.*` type with no Prisma 8 codec yet (`Citext`, `Bit`, `VarBit`, `Xml`, `Oid`, `Money`, or an unknown spelling). Prisma 8 cannot read the schema until it supports the column type. `@ignore` and `@@ignore` do not help, because Prisma 8 keeps the columns of ignored fields and models in the contract. Changing the field's type changes the column type on Prisma 7's next migration. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED
 
@@ -811,7 +811,7 @@ A `@default` value the source cannot read, or one the column's data type or code
 
 ### PSL.PRISMA7_UNSUPPORTED_TYPE
 
-`Unsupported("...")` or an unknown field type. Add `@@ignore` to the model, or correct the type name. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+`Unsupported("...")` or an unknown field type. For `Unsupported("...")`, Prisma 8 cannot read the schema until it supports the column type; `@@ignore` on the model does not help, because Prisma 8 keeps the columns of ignored models in the contract, and removing the field drops its column on Prisma 7's next migration. For an unknown type, correct the type name. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_UPDATED_AT_TYPE_UNSUPPORTED
 
