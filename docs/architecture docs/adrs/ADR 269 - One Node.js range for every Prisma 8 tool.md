@@ -30,8 +30,9 @@ A user meets the Prisma 8 tools one after another: `create-prisma` scaffolds a p
 
 ## Enforcement
 
-- `NODE_ENGINES_RANGE` in `scripts/validate-node-engines.mjs` is the source of truth. `pnpm lint:manifests` fails when a publishable package lacks `engines.node`, or when any package under `packages/` declares a different range.
+- `NODE_ENGINES_RANGE` in `scripts/validate-node-engines.mjs` is the source of truth. `pnpm lint:manifests` fails when a publishable package lacks `engines.node`, or when any package under `packages/` declares a different range. The check covers only `packages/`.
 - `tsdown` derives each package's build target from `engines.node`, so every package builds for `node22.18.0`, the lowest version in the range.
+- The examples under `examples/` are applications. They declare the same range unless a framework they use needs a narrower one; `examples/react-router-demo` declares `^22.22.0 || ^24.11.0 || >=26.0.0` because React Router needs Node.js 22.22 or newer.
 - The scaffold READMEs that `prisma orm init` writes, the repository README, and [Supported Versions](../../Supported%20Versions.md) state the range in prose.
 
 The repository's own development toolchain is separate: the root `package.json` and `.tool-versions` choose the Node.js version contributors and CI use, and this ADR does not change them.
@@ -39,7 +40,7 @@ The repository's own development toolchain is separate: the root `package.json` 
 ## Consequences
 
 - Node.js 22.18 and newer 22.x releases become supported. CI runs the test suites on the Node.js version in `.tool-versions` (a 24.x release); it does not yet run them on Node.js 22 or 26.
-- Output built for `node22.18.0` can use only syntax and built-in APIs that Node.js 22.18 provides.
+- `tsdown` lowers syntax to Node.js 22.18. It does not check built-in APIs: code must not call an API newer than Node.js 22.18, and only a test run on Node.js 22.18 catches one that does.
 
 ## Alternatives considered
 

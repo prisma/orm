@@ -11,9 +11,10 @@
 //   node scripts/validate-node-engines.mjs           — exit 1 on offenders
 //   node scripts/validate-node-engines.mjs --json    — same, with JSON report
 
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { listWorkspacePackages } from './list-publishable-packages.mjs';
 
 /**
  * The Node.js range every Prisma 8 package supports: Node.js 22.18 or newer
@@ -35,36 +36,8 @@ export function classifyPackage(pkgJson, { publishable }) {
   return node === NODE_ENGINES_RANGE ? null : { name, node, reason: 'wrong-range' };
 }
 
-const SKIP_DIRS = new Set([
-  'node_modules',
-  'dist',
-  'dist-tsc',
-  'dist-tsc-prod',
-  'coverage',
-  '.tmp-output',
-  '.turbo',
-]);
-
-function listPackages(root = 'packages') {
-  const found = [];
-  const walk = (dir) => {
-    for (const entry of readdirSync(dir)) {
-      if (SKIP_DIRS.has(entry)) continue;
-      const path = join(dir, entry);
-      if (statSync(path).isDirectory()) {
-        walk(path);
-      } else if (entry === 'package.json') {
-        const pkg = JSON.parse(readFileSync(path, 'utf-8'));
-        found.push({ dir, publishable: pkg.private !== true });
-      }
-    }
-  };
-  walk(root);
-  return found.sort((a, b) => a.dir.localeCompare(b.dir));
-}
-
 const DEFAULT_IO = {
-  listPackages,
+  listPackages: () => listWorkspacePackages(),
   readPackageJson: (dir) => JSON.parse(readFileSync(join(dir, 'package.json'), 'utf-8')),
   stdoutWrite: (s) => process.stdout.write(s),
   stderrWrite: (s) => process.stderr.write(s),
