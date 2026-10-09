@@ -29,6 +29,7 @@ function getOutputPath(config: GeneratorConfig): string {
 
 export class PrismaClientTsGenerator implements Generator {
   readonly name = 'prisma-client-ts'
+  readonly usageHint = 'Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)'
 
   getManifest(config: GeneratorConfig): Promise<GeneratorManifest> {
     return Promise.resolve({
