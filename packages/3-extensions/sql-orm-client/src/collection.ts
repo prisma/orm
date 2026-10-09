@@ -89,7 +89,11 @@ import {
   dispatchSplitMutationRows,
   executeMutationReturningSingleRow,
 } from './collection-mutation-dispatch';
-import { mapModelDataToStorageRow, mapPolymorphicRow } from './collection-runtime';
+import {
+  assertModelFieldNames,
+  mapModelDataToStorageRow,
+  mapPolymorphicRow,
+} from './collection-runtime';
 import type {
   CollectionRowOf,
   CollectionTypeStateOf,
@@ -2520,7 +2524,7 @@ export class CollectionBase<
       return this.#reloadMutationRowByIdentity(identityCriterion);
     }
 
-    mapModelDataToStorageRow(
+    assertModelFieldNames(
       this.contract,
       this.namespaceId,
       this.modelName,

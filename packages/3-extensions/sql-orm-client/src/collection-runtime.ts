@@ -200,6 +200,19 @@ function mapKnownColumnNames(
   return mapped;
 }
 
+/** Refuses any name in `data` with a value that is not a field of the model, as `mapModelDataToStorageRow` would, before anything reads or writes a row. */
+export function assertModelFieldNames(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  modelName: string,
+  data: Readonly<Record<string, unknown>>,
+): void {
+  const fieldColumns = getModelFieldColumns(contract, namespaceId, modelName);
+  for (const [fieldName, value] of Object.entries(data)) {
+    if (value !== undefined) resolveFieldColumn(fieldColumns, modelName, fieldName);
+  }
+}
+
 export function mapModelDataToStorageRow(
   contract: Contract<SqlStorage>,
   namespaceId: string,

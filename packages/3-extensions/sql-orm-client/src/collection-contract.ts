@@ -222,7 +222,7 @@ export function getModelFieldColumns(
 }
 
 /**
- * The fields a caller may name on a collection over a model, with their columns: the model's own and inherited fields, plus the fields of the variant the collection is narrowed to, or of every variant when it is not narrowed.
+ * The fields a caller may name on a collection over a model, with their columns: the model's own and inherited fields, plus the fields of the variant the collection is narrowed to.
  */
 export function getFieldColumnsInScope(
   contract: Contract<SqlStorage>,
@@ -230,16 +230,28 @@ export function getFieldColumnsInScope(
   modelName: string,
   variantName: string | undefined,
 ): Readonly<Record<string, string>> {
-  return cachedFor(contract, ['scope', namespaceId, modelName, variantName ?? null], () => {
+  return cachedFor(contract, ['scope', namespaceId, modelName, variantName ?? null], () => ({
+    ...(variantName === undefined ? {} : getFieldToColumnMap(contract, namespaceId, variantName)),
+    ...getModelFieldColumns(contract, namespaceId, modelName),
+  }));
+}
+
+/**
+ * The fields a `select` may name, with their columns: those in scope, and when the collection is not narrowed, every variant's fields too. Only `select` takes them, because the polymorphic projection places each column on its own table.
+ */
+export function getSelectableFieldColumns(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  modelName: string,
+  variantName: string | undefined,
+): Readonly<Record<string, string>> {
+  if (variantName !== undefined) {
+    return getFieldColumnsInScope(contract, namespaceId, modelName, variantName);
+  }
+  return cachedFor(contract, ['selectable', namespaceId, modelName], () => {
     const variants = resolvePolymorphismInfo(contract, namespaceId, modelName)?.variants;
-    const variantNames =
-      variants === undefined
-        ? []
-        : variantName === undefined
-          ? [...variants.keys()]
-          : [variantName];
     const columns: Record<string, string> = {};
-    for (const name of variantNames) {
+    for (const name of variants?.keys() ?? []) {
       Object.assign(columns, getFieldToColumnMap(contract, namespaceId, name));
     }
     return { ...columns, ...getModelFieldColumns(contract, namespaceId, modelName) };
@@ -447,7 +459,10 @@ export function resolveIncludeRelation(
   let relation: ResolvedRelation | undefined;
 
   if (variant !== undefined) {
-    const candidate = resolveModelRelations(contract, namespaceId, variant.modelName)[relationName];
+    const variantRelations = resolveModelRelations(contract, namespaceId, variant.modelName);
+    const candidate = Object.hasOwn(variantRelations, relationName)
+      ? variantRelations[relationName]
+      : undefined;
     if (candidate !== undefined) {
       relation = candidate;
       declaringModelName = variant.modelName;
@@ -455,7 +470,8 @@ export function resolveIncludeRelation(
     }
   }
 
-  relation ??= resolveModelRelations(contract, namespaceId, baseModelName)[relationName];
+  const baseRelations = resolveModelRelations(contract, namespaceId, baseModelName);
+  relation ??= Object.hasOwn(baseRelations, relationName) ? baseRelations[relationName] : undefined;
   if (!relation) {
     throw ormError(
       'ORM.RELATION_UNKNOWN',

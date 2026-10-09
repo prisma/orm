@@ -1,6 +1,8 @@
+import { BinaryExpr, ColumnRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { Collection } from '../src/collection';
 import { resolveIncludeRelation } from '../src/collection-contract';
+import { createModelAccessor } from '../src/model-accessor';
 import { compileSelect } from '../src/query-plan-select';
 import type { CollectionState } from '../src/types';
 import { createCollectionFor, createReturningCollectionFor } from './collection-fixtures';
@@ -189,3 +191,75 @@ function emptyState(): CollectionState {
   const { collection } = createCollectionFor('User');
   return collection.state;
 }
+
+describe('the where and orderBy accessor', () => {
+  function userAccessor(contract = getTestContract()) {
+    return createModelAccessor(
+      { ...getTestContext(), contract } as never,
+      'public',
+      'User',
+    ) as unknown as Record<string, unknown>;
+  }
+
+  it('answers names the JavaScript runtime probes like a plain object', async () => {
+    const user = userAccessor();
+    await expect(Promise.resolve(user)).resolves.toBe(user);
+    expect(JSON.stringify(user)).toBe('{}');
+    expect(user).toBe(user);
+    expect(user['constructor']).toBe(Object);
+    expect(String(user)).toBe('[object Object]');
+  });
+
+  it('refuses any other name that is not a field or relation', () => {
+    expect(() => userAccessor()['nmae']).toThrow(fieldUnknown('User', 'nmae'));
+  });
+
+  it('does not treat an Object.prototype member as a relation', () => {
+    const { collection } = createCollectionFor('User');
+    expect(() =>
+      collection.where((user) =>
+        (user as unknown as Record<string, { some(): never }>)['constructor']!.some(),
+      ),
+    ).toThrow(TypeError);
+    expect(() => collection.include('toString' as never)).toThrow(
+      expect.objectContaining({ code: 'ORM.RELATION_UNKNOWN' }),
+    );
+  });
+
+  it('resolves a field named then before treating it as a probe', () => {
+    const contract = withPatchedDomainModels(getTestContract(), (models) => {
+      const user = models['User'] as {
+        fields: Record<string, unknown>;
+        storage: { fields: Record<string, unknown> };
+      };
+      return {
+        ...models,
+        User: {
+          ...user,
+          fields: { ...user.fields, ...Object.fromEntries([['then', user.fields['name']]]) },
+          storage: {
+            ...user.storage,
+            fields: {
+              ...user.storage.fields,
+              ...Object.fromEntries([['then', { column: 'name' }]]),
+            },
+          },
+        },
+      };
+    });
+    const field = userAccessor(contract)['then'] as { eq(value: string): unknown };
+    expect(field.eq('x')).toEqual(
+      new BinaryExpr('eq', ColumnRef.of('users', 'name'), expect.anything()),
+    );
+  });
+
+  it('refuses a multi-table variant field on a collection that is not narrowed', () => {
+    const contract = buildMixedPolyContract();
+    const tasks = createModelAccessor(
+      { ...getTestContext(), contract } as never,
+      'public',
+      'Task',
+    ) as unknown as Record<string, unknown>;
+    expect(() => tasks['priority']).toThrow(fieldUnknown('Task', 'priority'));
+  });
+});

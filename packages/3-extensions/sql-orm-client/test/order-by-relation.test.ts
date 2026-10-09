@@ -132,7 +132,8 @@ describe('a to-one relation accessor', () => {
   it('refuses a name that is not a related field', () => {
     const post = createModelAccessor(getTestContext(), 'public', 'Post');
 
-    expect(() => Reflect.get(post.author, 'toString')).toThrow(fieldUnknown('User', 'toString'));
+    expect(Reflect.get(post.author, 'toString')).toBe(Object.prototype.toString);
+    expect(Reflect.get(post.author, 'then')).toBeUndefined();
     expect(() => Reflect.get(post.author, 'user_id')).toThrow(fieldUnknown('User', 'user_id'));
   });
 

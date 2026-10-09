@@ -409,7 +409,7 @@ describe('createModelAccessor', () => {
     ).toThrow(expect.objectContaining({ code: 'ORM.FIELD_UNKNOWN' }));
   });
 
-  it('returns undefined for fields whose storage table is not declared', () => {
+  it('fails with an internal error for a field whose storage table is not declared', () => {
     const base = getTestContract();
     const storageFallbackContract = withPatchedDomainModels(base, (models) => {
       const user = models['User'] as { storage: Record<string, unknown> };
@@ -431,7 +431,9 @@ describe('createModelAccessor', () => {
       'public',
       'User',
     );
-    expect(accessor['name']).toBeUndefined();
+    expect(() => accessor['name']).toThrow(
+      'Field "User.name" maps column "name", which table "users_storage" does not have',
+    );
   });
 
   it('refuses a field the model storage does not map, even when its table has a column of that name', () => {
@@ -636,8 +638,7 @@ describe('createModelAccessor', () => {
       expect(task['title']!.eq('x')).toEqual(
         new BinaryExpr('eq', ColumnRef.of('tasks', 'title'), polyParam('tasks', 'title', 'x')),
       );
-      // Without a selected variant the MTI variant column is not resolvable.
-      expect(task['priority']).toBeUndefined();
+      expect(() => task['priority']).toThrow(fieldUnknown('Task', 'priority'));
     });
   });
 

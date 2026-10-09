@@ -22,6 +22,7 @@ import { InternalError } from '@internal/utils/internal-error';
 import { plainAggregateExpr } from './aggregate-codecs';
 import {
   getFieldColumnsInScope,
+  getModelFieldColumns,
   isToOneCardinality,
   resolveFieldColumn,
   resolveFieldToColumn,
@@ -288,12 +289,12 @@ function createModelAccessorInScope<
   const accessor = new Proxy(
     {},
     {
-      get(_target, prop: string | symbol): unknown {
+      get(target, prop: string | symbol): unknown {
         if (typeof prop !== 'string') {
           return undefined;
         }
 
-        if (variantCoordinates) {
+        if (variantCoordinates && Object.hasOwn(variantCoordinates.relations, prop)) {
           const variantRelation = variantCoordinates.relations[prop];
           if (variantRelation) {
             return createRelationFilterAccessor(
@@ -306,7 +307,7 @@ function createModelAccessorInScope<
           }
         }
 
-        const relation = modelRelations[prop];
+        const relation = Object.hasOwn(modelRelations, prop) ? modelRelations[prop] : undefined;
         if (relation) {
           return createRelationFilterAccessor(context, namespaceId, modelName, scope, relation);
         }
@@ -314,14 +315,18 @@ function createModelAccessorInScope<
         const variantField = Object.hasOwn(variantFieldColumns, prop)
           ? variantFieldColumns[prop]
           : undefined;
+        if (variantField === undefined && !Object.hasOwn(fieldColumns, prop)) {
+          if (isProbedByRuntime(prop)) return probedValue(target, prop);
+        }
         const resolvedTable = variantField?.table ?? tableName;
         const fieldBinding = scope.forJoinedSource(namespaceId, resolvedTable).current;
         const columnName =
           variantField?.column ?? resolveFieldColumn(fieldColumns, modelName, prop);
         const column = resolveColumn(contract, namespaceId, resolvedTable, columnName);
-        // A field whose column is not on the resolved table returns `undefined`.
         if (!column) {
-          return undefined;
+          throw new InternalError(
+            `Field "${modelName}.${prop}" maps column "${columnName}", which table "${resolvedTable}" does not have`,
+          );
         }
         const traits = codecTraits(context, column.codecId);
         const operations = opsByCodecId.get(column.codecId) ?? [];
@@ -471,6 +476,15 @@ function createRelationFilterAccessor<
         if (typeof prop !== 'string') return undefined;
         if (Object.hasOwn(target, prop)) return Reflect.get(target, prop);
         if (RELATION_ACCESSOR_METHOD_NAMES.has(prop)) return undefined;
+        if (
+          isProbedByRuntime(prop) &&
+          !Object.hasOwn(
+            getModelFieldColumns(context.contract, relation.toNamespace, relation.to),
+            prop,
+          )
+        ) {
+          return probedValue(target, prop);
+        }
         return relatedOrderableField(context, relation, relatedTableName, correlate, prop);
       },
     });
@@ -481,6 +495,17 @@ function createRelationFilterAccessor<
     count: (predicate: RelationPredicateInput<TContract, string, string> | undefined) =>
       createOrderable(() => buildRelationCountExpr(context, relation, correlate(), predicate)),
   };
+}
+
+/**
+ * Whether the JavaScript runtime or a common library reads `prop` from an object it is handed: `then` when a value is awaited or resolved as a promise, `toJSON` when it is stringified, and the `Object.prototype` members such as `toString`. An accessor answers these like a plain object, so a name that is not a field is refused only when the caller asks for it.
+ */
+function isProbedByRuntime(prop: string): boolean {
+  return prop === 'then' || prop === 'toJSON' || prop in Object.prototype;
+}
+
+function probedValue(target: object, prop: string): unknown {
+  return prop === 'then' || prop === 'toJSON' ? undefined : Reflect.get(target, prop);
 }
 
 function createOrderable(buildExpr: () => AnyExpression): Orderable {

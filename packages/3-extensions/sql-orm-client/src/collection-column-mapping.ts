@@ -1,8 +1,8 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import {
-  getFieldColumnsInScope,
   getModelFieldColumns,
+  getSelectableFieldColumns,
   resolveFieldColumn,
 } from './collection-contract';
 
@@ -25,7 +25,7 @@ export function mapSelectedFieldsToColumns(
   variantName: string | undefined,
   fieldNames: readonly string[],
 ): string[] {
-  const fieldColumns = getFieldColumnsInScope(contract, namespaceId, modelName, variantName);
+  const fieldColumns = getSelectableFieldColumns(contract, namespaceId, modelName, variantName);
   return fieldNames.map((fieldName) => resolveFieldColumn(fieldColumns, modelName, fieldName));
 }
 

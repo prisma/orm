@@ -968,7 +968,7 @@ A Mongo mutation payload attempts to write `_id`, which is immutable. Thrown by 
 
 ### ORM.FIELD_UNKNOWN
 
-A shorthand relation filter references a field that is not defined on the related model. Thrown by the SQL ORM client while resolving the filter. Payload: `model`, `field`.
+A name the caller passed is not a field of the model, or of the variant the collection is narrowed to. The SQL ORM client never treats such a name as a column name, so a column no field maps cannot be read, written or filtered on. Raised by `where` shorthand and the `where`/`orderBy` callback accessor, relation filters, `select`, `distinct`, `distinctOn`, `groupBy`, `cursor`, aggregates and `having`, `create`/`update`/`upsert` data (including variant creates), `conflictOn` (which raised `ORM.ARGUMENT_INVALID` before), include nested selects and scalar reducers, and relation join fields. The message is `Model "<model>" has no field "<name>"`. A fragment applied to a collection whose model lacks a declared field, or whose field does not match the declaration, raises it too, with its own message. Payload: `model`, `field`.
 
 ### ORM.FILTER_UNSUPPORTED
 
