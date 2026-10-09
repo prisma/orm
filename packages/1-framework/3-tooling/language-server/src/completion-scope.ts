@@ -127,7 +127,11 @@ export function scopeCompletionItems(
 
 function offersMixin(resolution: ScopeResolution, selection: MixinSelection): boolean {
   if (resolution.kind === 'mixin') return selection.offers(resolution.symbol);
-  return resolution.kind === 'namespace' && selection.namespaces;
+  if (resolution.kind !== 'namespace' || !selection.namespaces) return false;
+  for (const [, member] of memberEntries(resolution)) {
+    if (member.kind === 'mixin' && selection.offers(member.symbol)) return true;
+  }
+  return false;
 }
 
 function offersEntity(resolution: ScopeResolution, selection: EntitySelection): boolean {

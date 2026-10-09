@@ -1934,6 +1934,35 @@ describe('providePslCompletionItems — after the plus of an inclusion', () => {
     },
   );
 
+  it('offers a namespace only when it has a mixin that would be offered after its qualifier', () => {
+    const source = (block: readonly string[]) =>
+      [
+        'namespace models {',
+        '  model mixin Stamps {',
+        '  }',
+        '}',
+        'namespace enums {',
+        '  enum mixin Roles {',
+        '  }',
+        '}',
+        'namespace empty {',
+        '  model Plain {',
+        '    id Int',
+        '  }',
+        '}',
+        ...block,
+      ].join('\n');
+    const labels = (block: readonly string[]) =>
+      completeWithSource({ markedSource: source(block), pslBlockDescriptors })
+        .items.map(({ label, detail }) => [label, detail])
+        .sort();
+
+    expect(labels(['model Invoice {', '  +|', '}'])).toEqual([['models', 'Namespace']]);
+    expect(labels(['enum Role {', '  +|', '}'])).toEqual([['enums', 'Namespace']]);
+    expect(labels(['model Invoice {', '  +models.Stamps', '  +|', '}'])).toEqual([]);
+    expect(labels(['policy P {', '  +|', '}'])).toEqual([]);
+  });
+
   it('offers nothing after a qualifier that names no namespace', () => {
     expect(offered(['model Invoice {', '  +nowhere.|', '}'])).toEqual([]);
     expect(offered(['model Invoice {', '  +Invoice.|', '}'])).toEqual([]);
