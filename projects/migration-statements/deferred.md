@@ -76,4 +76,4 @@ On MongoDB a variant's field rename touches only that variant's documents. On SQ
 
 **Found:** slice 4a review of dispatch 3 (2026-10-09). For the MongoDB authoring owners, not this project.
 
-`@map("o.d")` or `@map("$x")` is accepted in a MongoDB schema. MongoDB reads such a name as a path or an operator, and an insert of `{ "o.d": ... }` already fails the validator Prisma writes. Slice 4a skips such fields when planning statements. The fix belongs in authoring: reject the name with a diagnostic.
+`@map("o.d")` or `@map("$x")` is accepted in a MongoDB schema. MongoDB reads such a name as a path or an operator, and an insert of `{ "o.d": ... }` already fails the validator Prisma writes. Slice 4a skips such fields when planning statements. The fix belongs in authoring: reject the name with a diagnostic. When it lands, remove the framework resolver's fallback that reads `User.o.d` as field `o.d` (added in slice 4a), and the planner's silent skip of such fields.
