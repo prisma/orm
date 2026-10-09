@@ -22,7 +22,7 @@ import { compileAggregate, compileGroupedAggregate } from '../src/query-plan-agg
 import { compileSelect, compileSelectWithIncludes } from '../src/query-plan-select';
 import type { CollectionState } from '../src/types';
 import { baseContract, createCollectionFor } from './collection-fixtures';
-import { getEmptyAggregates, getTestAggregates, getTestContext } from './helpers';
+import { fieldUnknown, getEmptyAggregates, getTestAggregates, getTestContext } from './helpers';
 
 const adapter = createPostgresAdapter();
 
@@ -129,12 +129,11 @@ describe('a to-one relation accessor', () => {
     expect(descriptorFor.mock.calls).toEqual([['pg/text@1']]);
   });
 
-  it('yields nothing for a name that is not a related field', () => {
+  it('refuses a name that is not a related field', () => {
     const post = createModelAccessor(getTestContext(), 'public', 'Post');
 
-    expect([Reflect.get(post.author, 'toString'), Reflect.get(post.author, 'constructor')]).toEqual(
-      [undefined, undefined],
-    );
+    expect(() => Reflect.get(post.author, 'toString')).toThrow(fieldUnknown('User', 'toString'));
+    expect(() => Reflect.get(post.author, 'user_id')).toThrow(fieldUnknown('User', 'user_id'));
   });
 
   it('offers no count', () => {

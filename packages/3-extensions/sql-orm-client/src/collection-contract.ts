@@ -77,7 +77,6 @@ export function modelOf(
 }
 
 const fieldToColumnCache = new WeakMap<object, Map<string, Record<string, string>>>();
-const columnToFieldCache = new WeakMap<object, Map<string, Record<string, string>>>();
 const polymorphismCache = new WeakMap<object, Map<string, PolymorphismInfo | undefined>>();
 
 export function resolvePolymorphismInfo(
@@ -155,13 +154,162 @@ export function resolvePolymorphismInfo(
   return result;
 }
 
+const fieldResolutionCache = new WeakMap<object, Map<string, unknown>>();
+
+function cachedFor<T>(contract: Contract<SqlStorage>, key: readonly unknown[], build: () => T): T {
+  let perContract = fieldResolutionCache.get(contract);
+  if (!perContract) {
+    perContract = new Map();
+    fieldResolutionCache.set(contract, perContract);
+  }
+  const cacheKey = JSON.stringify(key);
+  if (perContract.has(cacheKey)) {
+    return blindCast<
+      T,
+      'each cache key is built by one function, which stores its own result type'
+    >(perContract.get(cacheKey));
+  }
+  const built = build();
+  perContract.set(cacheKey, built);
+  return built;
+}
+
+export interface ModelFieldColumn {
+  readonly table: string;
+  readonly column: string;
+}
+
+/**
+ * A model's fields, keyed by field name, with the table and column each maps: its own fields on its own table, and the fields it inherits from its base model on the base model's table. This is the one list of a model's fields; a column no field maps has no entry.
+ */
+export function getModelFields(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  modelName: string,
+): Readonly<Record<string, ModelFieldColumn>> {
+  return cachedFor(contract, ['fields', namespaceId, modelName], () => {
+    const model = modelOf(contract, namespaceId, modelName);
+    const table = model?.storage?.table;
+    const own =
+      table === undefined
+        ? {}
+        : Object.fromEntries(
+            Object.entries(getFieldToColumnMap(contract, namespaceId, modelName)).map(
+              ([field, column]) => [field, { table, column }],
+            ),
+          );
+    const base = model?.base;
+    return {
+      ...(base === undefined ? {} : getModelFields(contract, base.namespace, base.model)),
+      ...own,
+    };
+  });
+}
+
+/** The column each of a model's own and inherited fields maps, keyed by field name. */
+export function getModelFieldColumns(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  modelName: string,
+): Readonly<Record<string, string>> {
+  return cachedFor(contract, ['columns', namespaceId, modelName], () =>
+    Object.fromEntries(
+      Object.entries(getModelFields(contract, namespaceId, modelName)).map(
+        ([field, { column }]) => [field, column],
+      ),
+    ),
+  );
+}
+
+/**
+ * The fields a caller may name on a collection over a model, with their columns: the model's own and inherited fields, plus the fields of the variant the collection is narrowed to, or of every variant when it is not narrowed.
+ */
+export function getFieldColumnsInScope(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  modelName: string,
+  variantName: string | undefined,
+): Readonly<Record<string, string>> {
+  return cachedFor(contract, ['scope', namespaceId, modelName, variantName ?? null], () => {
+    const variants = resolvePolymorphismInfo(contract, namespaceId, modelName)?.variants;
+    const variantNames =
+      variants === undefined
+        ? []
+        : variantName === undefined
+          ? [...variants.keys()]
+          : [variantName];
+    const columns: Record<string, string> = {};
+    for (const name of variantNames) {
+      Object.assign(columns, getFieldToColumnMap(contract, namespaceId, name));
+    }
+    return { ...columns, ...getModelFieldColumns(contract, namespaceId, modelName) };
+  });
+}
+
+/**
+ * The column `fieldName` maps in `fieldColumns`. A name that is not a field is refused with `ORM.FIELD_UNKNOWN`, so no caller reaches a column by its column name, including a column no field maps.
+ */
+export function resolveFieldColumn(
+  fieldColumns: Readonly<Record<string, string>>,
+  modelName: string,
+  fieldName: string,
+): string {
+  const column = Object.hasOwn(fieldColumns, fieldName) ? fieldColumns[fieldName] : undefined;
+  if (column === undefined) {
+    throw ormError('ORM.FIELD_UNKNOWN', `Model "${modelName}" has no field "${fieldName}"`, {
+      meta: { model: modelName, field: fieldName },
+    });
+  }
+  return column;
+}
+
+/** The column a field of the model maps, among its own and inherited fields. A name that is not a field is refused. */
 export function resolveFieldToColumn(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   modelName: string,
   fieldName: string,
 ): string {
-  return getFieldToColumnMap(contract, namespaceId, modelName)[fieldName] ?? fieldName;
+  return resolveFieldColumn(
+    getModelFieldColumns(contract, namespaceId, modelName),
+    modelName,
+    fieldName,
+  );
+}
+
+/**
+ * The columns a relation's target fields name. A relation through a junction table names the junction's columns there, not fields of the target model.
+ */
+export function resolveRelationTargetColumns(
+  contract: Contract<SqlStorage>,
+  relation: {
+    readonly to: string;
+    readonly toNamespace: string;
+    readonly on: { readonly targetFields: readonly string[] };
+    readonly through?: unknown;
+  },
+): string[] {
+  if (relation.through !== undefined) return [...relation.on.targetFields];
+  return relation.on.targetFields.map((field) =>
+    resolveFieldToColumn(contract, relation.toNamespace, relation.to, field),
+  );
+}
+
+/**
+ * The field of the model that maps `column`. The ORM only asks this for a column it chose itself, such as a key column, so a column no field maps is an inconsistency in the contract.
+ */
+export function resolveColumnToField(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  modelName: string,
+  column: string,
+): string {
+  const columnToField = getColumnToFieldMap(contract, namespaceId, modelName);
+  const field = Object.hasOwn(columnToField, column) ? columnToField[column] : undefined;
+  if (field === undefined) {
+    throw new InternalError(`Column "${column}" of model "${modelName}" is mapped by no field`);
+  }
+  return field;
 }
 
 export interface VariantColumnRef {
@@ -227,55 +375,34 @@ export function getFieldToColumnMap(
   return cached;
 }
 
+/** The field each column of the model's own and inherited fields maps, keyed by column. */
 export function getColumnToFieldMap(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   modelName: string,
-): Record<string, string> {
-  let perContract = columnToFieldCache.get(contract);
-  if (!perContract) {
-    perContract = new Map();
-    columnToFieldCache.set(contract, perContract);
-  }
-  const cacheKey = metadataCacheKey(namespaceId, modelName);
-  let cached = perContract.get(cacheKey);
-  if (cached) return cached;
-
-  const storageFields = modelsOf(contract, namespaceId)[modelName]?.storage?.fields ?? {};
-  cached = {};
-  for (const [f, s] of Object.entries(storageFields)) {
-    if (s?.column) cached[s.column] = f;
-  }
-  perContract.set(cacheKey, cached);
-  return cached;
+): Readonly<Record<string, string>> {
+  return cachedFor(contract, ['columnToField', namespaceId, modelName], () =>
+    Object.fromEntries(
+      Object.entries(getModelFieldColumns(contract, namespaceId, modelName)).map(
+        ([field, column]) => [column, field],
+      ),
+    ),
+  );
 }
 
-const completeColumnToFieldCache = new WeakMap<object, Map<string, Record<string, string>>>();
-
-/**
- * Like getColumnToFieldMap, but a field without a storage `column` maps under its own name.
- */
-export function getCompleteColumnToFieldMap(
+/** The field each column of the model's own fields maps, keyed by column. */
+export function getOwnColumnToFieldMap(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   modelName: string,
-): Record<string, string> {
-  let perContract = completeColumnToFieldCache.get(contract);
-  if (!perContract) {
-    perContract = new Map();
-    completeColumnToFieldCache.set(contract, perContract);
-  }
-  const cacheKey = metadataCacheKey(namespaceId, modelName);
-  let cached = perContract.get(cacheKey);
-  if (cached) return cached;
-
-  const storageFields = modelsOf(contract, namespaceId)[modelName]?.storage?.fields ?? {};
-  cached = {};
-  for (const [f, s] of Object.entries(storageFields)) {
-    cached[s?.column ?? f] = f;
-  }
-  perContract.set(cacheKey, cached);
-  return cached;
+): Readonly<Record<string, string>> {
+  return cachedFor(contract, ['ownColumnToField', namespaceId, modelName], () =>
+    Object.fromEntries(
+      Object.entries(getFieldToColumnMap(contract, namespaceId, modelName)).map(
+        ([field, column]) => [column, field],
+      ),
+    ),
+  );
 }
 
 interface ResolvedThrough extends ContractRelationThrough {
@@ -345,9 +472,7 @@ export function resolveIncludeRelation(
   const localColumns = localFields.map((field) =>
     resolveFieldToColumn(contract, namespaceId, declaringModelName, field),
   );
-  const targetColumns = targetFields.map((field) =>
-    resolveFieldToColumn(contract, relation.toNamespace, relation.to, field),
-  );
+  const targetColumns = resolveRelationTargetColumns(contract, relation);
 
   const relatedTableName = resolveModelTableName(contract, relation.toNamespace, relation.to);
 
@@ -620,20 +745,9 @@ export function resolveInsertConflictColumns(
   namespaceId: string,
   modelName: string,
   conflictOn: readonly string[],
-  action: string,
 ): string[] {
-  const fieldToColumn = getFieldToColumnMap(contract, namespaceId, modelName);
-  return conflictOn.map((fieldName) => {
-    const column = fieldToColumn[fieldName];
-    if (column === undefined) {
-      throw ormError(
-        'ORM.ARGUMENT_INVALID',
-        `${action} conflictOn field "${fieldName}" is not a scalar field of model "${modelName}"`,
-        { meta: { action, model: modelName, field: fieldName } },
-      );
-    }
-    return column;
-  });
+  const fieldColumns = getModelFieldColumns(contract, namespaceId, modelName);
+  return conflictOn.map((fieldName) => resolveFieldColumn(fieldColumns, modelName, fieldName));
 }
 
 export function assertDistinctOnCapability(

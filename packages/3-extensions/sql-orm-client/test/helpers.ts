@@ -24,6 +24,7 @@ import {
   type SqlRuntimeExtensionDescriptor,
 } from '@internal/sql-runtime';
 import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
+import { expect } from 'vitest';
 import type { RuntimeQueryable } from '../src/types';
 import { defineContract, field, model, rel, type ScalarFieldBuilder } from './contract-builder';
 import type { Contract } from './fixtures/generated/contract';
@@ -818,4 +819,13 @@ export function createMockRuntime(): MockRuntime {
   };
 
   return runtime;
+}
+
+/** The refusal every name-resolution surface raises for a name that is not a field of the model in scope. */
+export function fieldUnknown(model: string, field: string) {
+  return expect.objectContaining({
+    code: 'ORM.FIELD_UNKNOWN',
+    message: `Model "${model}" has no field "${field}"`,
+    meta: { model, field },
+  });
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createAggregateBuilder, isAggregateSelector } from '../src/aggregate-builder';
-import { getTestAggregates, getTestContract } from './helpers';
+import { fieldUnknown, getTestAggregates, getTestContract } from './helpers';
 
 describe('aggregate-builder', () => {
   const contract = getTestContract();
@@ -36,20 +36,9 @@ describe('aggregate-builder', () => {
     });
   });
 
-  it('createAggregateBuilder() falls back to field name without mapping', () => {
-    const aggregate = createAggregateBuilder(
-      contract,
-      aggregates,
-      'public',
-      'UnknownModel' as never,
-    );
-    const numericField = 'custom_metric' as never;
-
-    expect(aggregate.sum(numericField)).toEqual({
-      kind: 'aggregate',
-      fn: 'sum',
-      column: 'custom_metric',
-    });
+  it('createAggregateBuilder() refuses a name that is not a field', () => {
+    const aggregate = createAggregateBuilder(contract, aggregates, 'public', 'Post');
+    expect(() => aggregate.sum('user_id' as never)).toThrow(fieldUnknown('Post', 'user_id'));
   });
 
   it('isAggregateSelector() validates selector shape', () => {

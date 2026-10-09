@@ -32,8 +32,8 @@ import { InternalError } from '@internal/utils/internal-error';
 import { plainAggregateExpr, resolveAggregate } from './aggregate-codecs';
 import {
   assertDistinctOnCapability,
-  getCompleteColumnToFieldMap,
-  getFieldToColumnMap,
+  getColumnToFieldMap,
+  getOwnColumnToFieldMap,
   POLYMORPHIC_DISCRIMINATOR_ALIAS,
   type PolymorphismInfo,
   resolvePolymorphismInfo,
@@ -140,49 +140,46 @@ function resolvePolymorphicProjectionSelection(
     };
   }
 
-  const baseTableColumns = new Set(resolveTableColumns(contract, namespaceId, polyInfo.baseTable));
-  const baseFieldToColumn = getFieldToColumnMap(contract, namespaceId, modelName);
-  const variantFieldMaps = Array.from(polyInfo.variants.values(), (variant) => ({
+  const baseColumnToField = getColumnToFieldMap(contract, namespaceId, modelName);
+  const variantColumnMaps = Array.from(polyInfo.variants.values(), (variant) => ({
     variant,
-    columnToField: getCompleteColumnToFieldMap(contract, namespaceId, variant.modelName),
+    columnToField: getOwnColumnToFieldMap(contract, namespaceId, variant.modelName),
   }));
   const baseSelectedFields: string[] = [];
   const selectedMtiColumnsByTable = new Map<string, Set<string>>();
   let hasVariantOwnedSelection = false;
 
-  for (const selectedField of state.selectedFields) {
-    const baseColumn =
-      baseFieldToColumn[selectedField] ??
-      (baseTableColumns.has(selectedField) ? selectedField : undefined);
-    if (baseColumn !== undefined) {
-      appendUnique(baseSelectedFields, baseColumn);
+  for (const column of state.selectedFields) {
+    const isBaseColumn = Object.hasOwn(baseColumnToField, column);
+    if (isBaseColumn) {
+      appendUnique(baseSelectedFields, column);
     }
 
-    let matchedVariantField = false;
-    for (const { variant, columnToField } of variantFieldMaps) {
-      for (const [column, field] of Object.entries(columnToField)) {
-        if (selectedField !== field && selectedField !== column) {
-          continue;
-        }
-
-        matchedVariantField = true;
-        hasVariantOwnedSelection = true;
-        if (variant.strategy === 'sti') {
-          appendUnique(baseSelectedFields, column);
-          continue;
-        }
-
-        let selectedColumns = selectedMtiColumnsByTable.get(variant.table);
-        if (selectedColumns === undefined) {
-          selectedColumns = new Set();
-          selectedMtiColumnsByTable.set(variant.table, selectedColumns);
-        }
-        selectedColumns.add(column);
+    let isVariantColumn = false;
+    for (const { variant, columnToField } of variantColumnMaps) {
+      if (!Object.hasOwn(columnToField, column)) {
+        continue;
       }
+
+      isVariantColumn = true;
+      hasVariantOwnedSelection = true;
+      if (variant.strategy === 'sti') {
+        appendUnique(baseSelectedFields, column);
+        continue;
+      }
+
+      let selectedColumns = selectedMtiColumnsByTable.get(variant.table);
+      if (selectedColumns === undefined) {
+        selectedColumns = new Set();
+        selectedMtiColumnsByTable.set(variant.table, selectedColumns);
+      }
+      selectedColumns.add(column);
     }
 
-    if (baseColumn === undefined && !matchedVariantField) {
-      appendUnique(baseSelectedFields, selectedField);
+    if (!isBaseColumn && !isVariantColumn) {
+      throw new InternalError(
+        `Selected column "${column}" is mapped by no field of model "${modelName}" or its variants; select() resolves field names before they reach the projection`,
+      );
     }
   }
 

@@ -21,12 +21,14 @@ import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import { plainAggregateExpr } from './aggregate-codecs';
 import {
-  getFieldToColumnMap,
+  getFieldColumnsInScope,
   isToOneCardinality,
+  resolveFieldColumn,
   resolveFieldToColumn,
   resolveModelRelations,
   resolveModelTableName,
   resolvePolymorphismInfo,
+  resolveRelationTargetColumns,
   resolveVariantFieldColumns,
   type VariantColumnRef,
 } from './collection-contract';
@@ -227,7 +229,7 @@ function createModelAccessorInScope<
   scope: ModelAccessorScope,
 ): VariantAwareModelAccessor<TContract, ModelName, VariantName, NsId> {
   const contract = context.contract;
-  const fieldToColumn = getFieldToColumnMap(contract, namespaceId, modelName);
+  const fieldColumns = getFieldColumnsInScope(contract, namespaceId, modelName, variantName);
   const tableName = resolveModelTableName(contract, namespaceId, modelName);
   const modelRelations = resolveModelRelations(contract, namespaceId, modelName);
   // When a variant is selected, MTI variant-owned fields resolve to a
@@ -309,16 +311,15 @@ function createModelAccessorInScope<
           return createRelationFilterAccessor(context, namespaceId, modelName, scope, relation);
         }
 
-        const variantField = variantFieldColumns[prop];
+        const variantField = Object.hasOwn(variantFieldColumns, prop)
+          ? variantFieldColumns[prop]
+          : undefined;
         const resolvedTable = variantField?.table ?? tableName;
         const fieldBinding = scope.forJoinedSource(namespaceId, resolvedTable).current;
-        const columnName = variantField?.column ?? fieldToColumn[prop] ?? prop;
+        const columnName =
+          variantField?.column ?? resolveFieldColumn(fieldColumns, modelName, prop);
         const column = resolveColumn(contract, namespaceId, resolvedTable, columnName);
-        // Unknown fields return `undefined`, matching plain JS object semantics.
-        // The `ModelAccessor<TContract, ModelName>` type already rejects typos
-        // at compile time for TS consumers, and contexts that iterate accessor
-        // keys (e.g. relation-shorthand predicates) can detect missing fields
-        // with an `undefined` check and raise their own, domain-specific error.
+        // A field whose column is not on the resolved table returns `undefined`.
         if (!column) {
           return undefined;
         }
@@ -496,10 +497,12 @@ function relatedOrderableField<TContract extends Contract<SqlStorage>>(
   correlate: () => CorrelatedRelatedRows,
   fieldName: string,
 ): Orderable | undefined {
-  const fieldToColumn = getFieldToColumnMap(context.contract, relation.toNamespace, relation.to);
-  if (!Object.hasOwn(fieldToColumn, fieldName)) return undefined;
-  const columnName = fieldToColumn[fieldName];
-  if (columnName === undefined) return undefined;
+  const columnName = resolveFieldToColumn(
+    context.contract,
+    relation.toNamespace,
+    relation.to,
+    fieldName,
+  );
   const column = resolveColumn(
     context.contract,
     relation.toNamespace,
@@ -596,7 +599,10 @@ function correlateRelatedRows<TContract extends Contract<SqlStorage>>(
       childScope.current,
       relation,
     ),
-    keyColumn: firstTargetColumn(context.contract, relation) ?? 'id',
+    keyColumn: firstJoinColumn(
+      resolveRelationTargetColumns(context.contract, relation),
+      'targetFields',
+    ),
   };
 }
 
@@ -727,15 +733,9 @@ function toRelationWhereExpr<TContract extends Contract<SqlStorage>>(
       'relation shorthand fields are read from the dynamic model accessor proxy'
     >(accessor);
     const fieldAccessor = fieldAccessors[fieldName];
-    // Unknown field in the shorthand predicate — the Proxy returns undefined
-    // for fields the contract doesn't declare. Surface it explicitly: silent
-    // skip would drop user intent (e.g. a typo'd `nmae: 'Alice'` filter would
-    // match every row).
     if (!fieldAccessor) {
-      throw ormError(
-        'ORM.FIELD_UNKNOWN',
-        `Shorthand filter on "${relatedModelName}.${fieldName}": field is not defined on the model`,
-        { meta: { model: relatedModelName, field: fieldName } },
+      throw new InternalError(
+        `Shorthand filter on "${relatedModelName}.${fieldName}": the field's column is missing from its table`,
       );
     }
 
@@ -815,16 +815,4 @@ function buildJoinWhere<TContract extends Contract<SqlStorage>>(
   }
 
   return and(...joinExprs);
-}
-
-function firstTargetColumn<TContract extends Contract<SqlStorage>>(
-  contract: TContract,
-  relation: ResolvedModelRelation,
-): string | undefined {
-  const targetFields = relation.on?.targetFields;
-  const firstField = targetFields?.[0];
-  if (!firstField) {
-    return undefined;
-  }
-  return resolveFieldToColumn(contract, relation.toNamespace, relation.to, firstField);
 }

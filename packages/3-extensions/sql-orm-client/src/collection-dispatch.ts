@@ -276,22 +276,27 @@ function createPreparedIncludedRowDecoder(
   const namespace = include.relatedNamespaceId;
   const model = include.relatedModelName;
   if (resolvePolymorphismInfo(contract, namespace, model)) return undefined;
-  const fieldToColumn = getFieldToColumnMap(contract, namespace, model);
   const columnToField = getColumnToFieldMap(contract, namespace, model);
-  const fields = include.nested.selectedFields ?? Object.keys(fieldToColumn);
-  const columns = fields.map((field) =>
-    Object.hasOwn(fieldToColumn, field) ? (fieldToColumn[field] ?? field) : field,
-  );
+  const columns =
+    include.nested.selectedFields ?? Object.values(getFieldToColumnMap(contract, namespace, model));
   const aliases = include.nested.includes.map((child) => child.relationName);
   const table = contract.storage.namespaces[namespace]?.entries.table?.[include.relatedTableName];
   if (aliases.some((alias) => table?.columns[alias] !== undefined)) return undefined;
   const keys = [...columns, ...aliases];
   if (keys.includes('__proto__') || new Set(keys).size !== keys.length) return undefined;
+  const fieldOf = (key: string): string => {
+    if (aliases.includes(key)) return key;
+    const field = Object.hasOwn(columnToField, key) ? columnToField[key] : undefined;
+    if (field === undefined) {
+      throw new InternalError(`Column "${key}" of model "${model}" is mapped by no field`);
+    }
+    return field;
+  };
   const operations = keys.map((key) => {
     const binding = deferResolution(() => bindingFor(key));
     return {
       key,
-      field: Object.hasOwn(columnToField, key) ? (columnToField[key] ?? key) : key,
+      field: fieldOf(key),
       decode(value: unknown) {
         if (value === null || value === undefined) return value;
         const resolved = binding();

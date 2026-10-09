@@ -12,10 +12,11 @@ import type { RuntimeScope } from '@internal/sql-relational-core/types';
 import { castAs } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import {
-  getColumnToFieldMap,
+  resolveColumnToField,
   resolveFieldToColumn,
   resolveModelRelations,
   resolveModelTableName,
+  resolveRelationTargetColumns,
   resolveRowIdentityColumns,
 } from './collection-contract';
 import { mapModelDataToStorageRow, mapStorageRowToModelFields } from './collection-runtime';
@@ -1307,9 +1308,7 @@ function getRelationDefinitions(
     localColumns: relation.on.localFields.map((f) =>
       resolveFieldToColumn(contract, namespaceId, modelName, f),
     ),
-    targetColumns: relation.on.targetFields.map((f) =>
-      resolveFieldToColumn(contract, relation.toNamespace, relation.to, f),
-    ),
+    targetColumns: resolveRelationTargetColumns(contract, relation),
     through: relation.through
       ? {
           table: relation.through.table,
@@ -1332,6 +1331,5 @@ function toFieldName(
   modelName: string,
   columnName: string,
 ): string {
-  const columnToField = getColumnToFieldMap(contract, namespaceId, modelName);
-  return columnToField[columnName] ?? columnName;
+  return resolveColumnToField(contract, namespaceId, modelName, columnName);
 }
