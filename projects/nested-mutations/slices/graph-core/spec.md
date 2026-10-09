@@ -11,7 +11,7 @@ The graphs are the smallest ones the design has:
 ```
 updateAll(data)                 deleteAll() with includes        update(data)
   n1 Update user set … where …    n1 Find   user where …           n1 Find   user where … (first row)
-  result: n1 rows                 n2 Delete user where … <- After n1   n2 Update user set … <- IntoWhere n1 (id->id)
+  result: n1 rows                 n2 Delete user where … <- After n1   n2 Update user set … <- FilterData n1 (id->id)
                                   result: n1 rows                  result: n2 first row
 ```
 
@@ -24,7 +24,7 @@ The design is in [`../../mutation-graph.md`](../../mutation-graph.md) and the ru
 | Part | In this slice | Later |
 | --- | --- | --- |
 | Node classes | `Find`, `Update`, `Delete` | `Insert`, `Merge` (slice 2); `Assert`, `State` (slice 3) |
-| Edge classes | `After`, `IntoWhere` | `IntoValues` (slice 2) |
+| Edge classes | `After`, `FilterData` | `PayloadData` (slice 2) |
 | Graph | `add(node, ...inputs)`, `replace(old, next)`, `inputsOf(node)`, `usersOf(node)`, the result | |
 | Peephole | the `peephole(graph)` hook called by `add`; one rule: an `Update` that sets nothing is removed | the inlining rule (slice 4) |
 | Printed form | one function that prints a graph as text, in the form shown above | |
@@ -34,11 +34,11 @@ The design is in [`../../mutation-graph.md`](../../mutation-graph.md) and the ru
 
 - **Location.** A directory `src/mutation-graph/` in `packages/3-extensions/sql-orm-client`. One file per concern (nodes, edges, graph, printed form, runner); no file re-exports another.
 - **A node holds its statement as SQL AST** (`Find` a `SelectAst`, `Update` an `UpdateAst`, `Delete` a `DeleteAst`), built by the graph builder. It holds nothing that comes from another node and nothing about what it returns; the runner applies edges and derived columns with the AST's `withWhere` and `withReturning`. Nodes are frozen; `peephole` returns the node itself or a replacement.
-- **Edges are objects held by the graph**, each with `from`, `to`, and for `IntoWhere` a list of `[sourceColumn, targetColumn]` pairs.
+- **Edges are objects held by the graph**, each with `from`, `to`, and for `FilterData` a list of `[sourceColumn, targetColumn]` pairs.
 - **The graph names its result**: a node, a form (rows, first row, or count), and the caller's selection and includes.
 - **The runner** takes a graph, the runtime, the execution context and the caller's annotations, and:
   - executes nodes one at a time in dependency order;
-  - skips a node whose `IntoWhere` source produced no row, and treats it as empty;
+  - skips a node whose `FilterData` source produced no row, and treats it as empty;
   - derives the columns a node returns from the edges that read from it, plus the caller's selection when it is the result;
   - collects a node another node reads from; hands the result node to the existing dispatch functions (`dispatchMutationRows`, `dispatchCollectionRows`), so a bulk method still streams and includes are loaded by the existing read code;
   - puts the caller's annotations on every statement;
@@ -66,7 +66,7 @@ One reviewer reads this as: a small data structure with its tests, a runner with
 **Deliberately out:**
 
 - `update()` with relation callbacks, `mutation-executor.ts`, `create*`, `upsert`. If `upsert` calls a helper this slice changes, the helper keeps a form `upsert` can still call; `upsert` itself is not moved.
-- `Insert`, `IntoValues`, `Merge`, `Assert`, `State`, any translation of relation operations.
+- `Insert`, `PayloadData`, `Merge`, `Assert`, `State`, any translation of relation operations.
 - Reads: `first`, `all`, includes. They are called, not changed.
 - Package README and user docs: nothing a user can observe changes.
 

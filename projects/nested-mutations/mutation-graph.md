@@ -26,8 +26,8 @@ class State  extends Node { table; version }      // a version of a table
 // Edges: every edge implies order
 abstract class Edge { from: Node; to: Node }
 class After      extends Edge {}                               // order only
-class IntoValues extends Edge { columns: [source, target][] }  // copy into values / set
-class IntoWhere  extends Edge { columns: [source, target][] }  // target = value; IN for many rows
+class PayloadData extends Edge { columns: [source, target][] }  // copy into values / set
+class FilterData  extends Edge { columns: [source, target][] }  // target = value; IN for many rows
 
 class Graph { add(node, ...inputs): Node; replace(old, next); result }
 ```
@@ -40,12 +40,12 @@ Example, `post.update({ title, author: connect, comments: [create, deleteAll], t
 n1 Find    post     where id = 1
 n2 Find    user     where email = 'a@x'
 n3 Assert  ROW_MISSING                         <- n2
-n4 Update  post     set title = 'T'            <- IntoWhere n1 (id->id), IntoValues n2 (id->author_id), After n3
-n5 Insert  comment  { body: 'hi' }             <- IntoValues n4 (id->post_id)
-n6 Delete  comment  where spam                 <- IntoWhere n4 (id->post_id)
+n4 Update  post     set title = 'T'            <- FilterData n1 (id->id), PayloadData n2 (id->author_id), After n3
+n5 Insert  comment  { body: 'hi' }             <- PayloadData n4 (id->post_id)
+n6 Delete  comment  where spam                 <- FilterData n4 (id->post_id)
 n7 Find    tag      where name = 'sql'
 n8 Assert  ROW_MISSING                         <- n7
-n9 Insert  post_tag {} on conflict do nothing  <- IntoValues n4 (id->post_id), IntoValues n7 (id->tag_id), After n8
+n9 Insert  post_tag {} on conflict do nothing  <- PayloadData n4 (id->post_id), PayloadData n7 (id->tag_id), After n8
 result: n4
 ```
 
@@ -62,7 +62,7 @@ Each entry: the decision, why, and what it assumes. An assumption that turns out
 
 ### D2. Everything that comes from another node is an edge
 
-Three edge classes: `After` (order only), `IntoValues` (copy columns into a write's values), `IntoWhere` (add `target = value`, or `IN` when the source has many rows). Each data edge carries a list of column pairs, so a composite key is one edge with several pairs.
+Three edge classes: `After` (order only), `PayloadData` (copy columns into a write's values), `FilterData` (add `target = value`, or `IN` when the source has many rows). Each data edge carries a list of column pairs, so a composite key is one edge with several pairs.
 
 - **Why.** With links as edges, a node's `where` stays an ordinary list of SQL AST expressions, the form the collection, the compile functions and the adapters already use. No placeholder inside expressions, no rewrite before compiling, no second representation of filters.
 - **Assumes.** Scoping conditions can be expressed as column equalities against another node's rows (see D8 for many-to-many).
@@ -110,7 +110,7 @@ Each node class may override `peephole()`, which looks at the node and its input
 
 ### D8. Many-to-many scoping is a junction read plus a peephole
 
-The translation emits a `Find` on the junction for this parent, with an `IntoWhere` edge from it to the write on the target. A peephole on the consumer inlines a `Find` that has no other user as `column IN (SELECT ...)`, and that `Find` is removed.
+The translation emits a `Find` on the junction for this parent, with an `FilterData` edge from it to the write on the target. A peephole on the consumer inlines a `Find` that has no other user as `column IN (SELECT ...)`, and that `Find` is removed.
 
 - **Why.** The base graph needs only plain edges, and the junction knowledge stays in the translation. Measured on 200,000 tags and 2,000 posts with 20 tags each: the `IN (SELECT ...)` form took 0.2 ms on Postgres and 0.06 ms on SQLite; the correlated `EXISTS` form the old executor used took 0.2-0.5 ms on Postgres and 9.5-25.8 ms on SQLite, because SQLite scans the whole target table.
 - **Assumes.** This peephole is required, not optional: without it the `IN` list is as long as the relation and exceeds bound-value limits. The SQL AST can express `IN` over a subquery for one column today (`BinaryExpr.in` with `SubqueryExpr`); the row-value form for composite keys is unverified.
@@ -152,7 +152,7 @@ A variant stored in its own table is an `Insert` into the base table, an `Insert
 
 ### D15. Intermediate nodes are collected; only the result node may stream
 
-A node another node reads from is collected into an array first. The result node is handed to the existing function that turns a compiled write into a stream and applies selection and includes. An `IntoValues` edge requires a one-row source, checked when the graph is built.
+A node another node reads from is collected into an array first. The result node is handed to the existing function that turns a compiled write into a stream and applies selection and includes. An `PayloadData` edge requires a one-row source, checked when the graph is built.
 
 - **Why.** The bulk methods return streams today. Making every node a stream brings buffering rules that exist mostly for reads.
 

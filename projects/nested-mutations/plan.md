@@ -19,13 +19,13 @@ PR [#30634](https://github.com/prisma/orm/pull/30634), the first build of `filte
 1. **Slice `graph-core`** — `projects/nested-mutations/slices/graph-core/`
    - **Outcome:** The mutation graph exists (node classes, edge classes, the graph with `add` and `replace`, the `peephole()` hook, a printed text form, the runner), and `update`, `updateAll`, `updateAndCount`, `delete`, `deleteAll` and `deleteAndCount` called without relation callbacks run through it. Every integration test on main passes unedited on Postgres and SQLite.
    - **Builds on:** None.
-   - **Hands to:** `Find`, `Update`, `Delete`, `IntoWhere`, the runner's rules (dependency order, skip on empty source, collect or stream, transaction when more than one statement, caller's selection returned by the result node, includes loaded afterwards), and the printed form graph tests assert against.
+   - **Hands to:** `Find`, `Update`, `Delete`, `FilterData`, the runner's rules (dependency order, skip on empty source, collect or stream, transaction when more than one statement, caller's selection returned by the result node, includes loaded afterwards), and the printed form graph tests assert against.
    - **Focus:** The smallest graphs: one node for the bulk methods, `Find` then a write for the single-row methods. `update()` with relation callbacks still goes to the executor in this slice. No `State` nodes yet: no graph here has two nodes on one table that need an order the data edges do not give.
 
 2. **Slice `graph-creates`** — `projects/nested-mutations/slices/graph-creates/`
    - **Outcome:** `create`, `createAll`, `createAndCount` and `upsert` called without relation callbacks run through the graph, including variants stored in the base table and variants stored in their own table. Every integration test on main passes unedited on Postgres and SQLite.
    - **Builds on:** Slice 1's graph and runner.
-   - **Hands to:** `Insert` with its conflict clause, `IntoValues`, `Merge`, and variant creates as graph translation, which slice 3 uses when a nested call creates a variant.
+   - **Hands to:** `Insert` with its conflict clause, `PayloadData`, `Merge`, and variant creates as graph translation, which slice 3 uses when a nested call creates a variant.
    - **Focus:** `#executeMtiCreate` is replaced: base insert, variant insert with a data edge for the key, `Merge` as the result, base-then-variant order and the returned row as main's tests pin them. An `Insert` node is one statement with one or many rows; the translation decides the batching and creates several nodes when the rows cannot go into one statement. How the rows of several nodes are combined into the result, in input order, is part of this slice's design. `create()` with relation callbacks still goes to the executor in this slice.
 
 3. **Slice `graph-nested`** — `projects/nested-mutations/slices/graph-nested/`
