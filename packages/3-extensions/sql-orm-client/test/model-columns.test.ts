@@ -69,6 +69,7 @@ interface LooseCollection {
     refine?: (related: LooseCollection) => LooseCollection,
   ): LooseCollection;
   distinct(...fields: string[]): LooseCollection;
+  orderBy(order: (model: Record<string, { desc(): unknown }>) => unknown): LooseCollection;
   select(...fields: string[]): LooseCollection;
   readonly state: CollectionState;
 }
@@ -192,6 +193,21 @@ describe('a query with no select reads only the model columns', () => {
     const ast = selectAstOf(plan.ast);
     expect(projectedColumns(ast.projection)).not.toContain('legacy_key');
     expect(projectedColumns(childRowsOf(ast, 'posts').projection)).not.toContain('internal_note');
+  });
+
+  it('in the ranked subquery of distinct', () => {
+    const state = collection('User')
+      .distinct('email')
+      .orderBy((user) => user['id']!.desc()).state;
+    const plan = compileSelect(contract, 'public', 'User', 'users', state);
+    const ast = selectAstOf(plan.ast);
+    const source = ast.from;
+    if (!(source instanceof DerivedTableSource)) throw new TypeError('No ranked subquery');
+    expect(projectedColumns(selectAstOf(source.query).projection)).toEqual([
+      'id',
+      'email',
+      '__prisma_distinct_rn',
+    ]);
   });
 
   it('in an include with distinct', () => {

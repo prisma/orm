@@ -33,7 +33,6 @@ import { plainAggregateExpr, resolveAggregate } from './aggregate-codecs';
 import {
   addressedModelName,
   assertDistinctOnCapability,
-  getAllTableColumns,
   getColumnsReadOnTable,
   getModelColumnFields,
   getOwnColumnFields,
@@ -1398,10 +1397,11 @@ function buildSelectAst(
     assertDistinctOnCapability(contract, 'distinctOn');
     assertDistinctOnCompatibleOrder(state.orderBy, state.distinctOn.length);
   }
+  const addressed = addressedModelName(modelName, state.variantName);
   const scalarProjection = buildProjection(
     contract,
     namespaceId,
-    addressedModelName(modelName, state.variantName),
+    addressed,
     tableName,
     state.selectedFields,
     tableName,
@@ -1410,16 +1410,19 @@ function buildSelectAst(
   const where = options.where ?? buildStateWhere(contract, tableName, state, { namespaceId });
 
   // `buildDedupedTableSource` wraps for `.distinct(cols)`, aliased back to `tableName`.
-  const allColsProjection = getAllTableColumns(contract, namespaceId, tableName).map((column) =>
-    ProjectionItem.of(column, ColumnRef.of(tableName, column)),
-  );
+  const modelColumnsProjection = getColumnsReadOnTable(
+    contract,
+    namespaceId,
+    addressed,
+    tableName,
+  ).map((column) => ProjectionItem.of(column, ColumnRef.of(tableName, column)));
   const { source: fromSource, where: effectiveWhere } = buildDedupedTableSource(
     contract,
     namespaceId,
     tableName,
     state,
     where,
-    allColsProjection,
+    modelColumnsProjection,
   );
 
   let ast = SelectAst.from(fromSource).withProjection(projection);
