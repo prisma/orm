@@ -1,0 +1,415 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "sql",
+  "target": "postgres",
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "roots": {
+    "Child": {
+      "model": "Child",
+      "namespace": "public"
+    },
+    "Parent": {
+      "model": "Parent",
+      "namespace": "public"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Child": {
+            "fields": {
+              "c": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "c_1": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "c_2": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "id_1": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "id_2": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "non_unique": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "parent_p_1": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "parent_p_2": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "parentOpt": {
+                "cardinality": "N:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "parent_p_1",
+                    "parent_p_2"
+                  ],
+                  "targetFields": [
+                    "p_1",
+                    "p_2"
+                  ]
+                },
+                "to": {
+                  "model": "Parent",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "c": {
+                  "column": "c"
+                },
+                "c_1": {
+                  "column": "c_1"
+                },
+                "c_2": {
+                  "column": "c_2"
+                },
+                "id_1": {
+                  "column": "id_1"
+                },
+                "id_2": {
+                  "column": "id_2"
+                },
+                "non_unique": {
+                  "column": "non_unique"
+                },
+                "parent_p_1": {
+                  "column": "parent_p_1"
+                },
+                "parent_p_2": {
+                  "column": "parent_p_2"
+                }
+              },
+              "namespaceId": "public",
+              "table": "Child"
+            }
+          },
+          "Parent": {
+            "fields": {
+              "non_unique": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "p": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "p_1": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "p_2": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "childrenOpt": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "p_1",
+                    "p_2"
+                  ],
+                  "targetFields": [
+                    "parent_p_1",
+                    "parent_p_2"
+                  ]
+                },
+                "to": {
+                  "model": "Child",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "non_unique": {
+                  "column": "non_unique"
+                },
+                "p": {
+                  "column": "p"
+                },
+                "p_1": {
+                  "column": "p_1"
+                },
+                "p_2": {
+                  "column": "p_2"
+                }
+              },
+              "namespaceId": "public",
+              "table": "Parent"
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "public": {
+        "entries": {
+          "table": {
+            "Child": {
+              "columns": {
+                "c": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "c_1": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "c_2": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "id_1": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "id_2": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "non_unique": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": true
+                },
+                "parent_p_1": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": true
+                },
+                "parent_p_2": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": true
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "Child_parent_p_1_parent_p_2_idx_e73a1b82"
+                  },
+                  "source": {
+                    "columns": [
+                      "parent_p_1",
+                      "parent_p_2"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Child"
+                  },
+                  "target": {
+                    "columns": [
+                      "p_1",
+                      "p_2"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Parent"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "parent_p_1",
+                    "parent_p_2"
+                  ],
+                  "name": "Child_parent_p_1_parent_p_2_idx_e73a1b82",
+                  "prefix": "Child_parent_p_1_parent_p_2_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id_1",
+                  "id_2"
+                ]
+              },
+              "uniques": [
+                {
+                  "columns": [
+                    "c"
+                  ]
+                },
+                {
+                  "columns": [
+                    "c_1",
+                    "c_2"
+                  ]
+                }
+              ]
+            },
+            "Parent": {
+              "columns": {
+                "non_unique": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": true
+                },
+                "p": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "p_1": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "p_2": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "uniques": [
+                {
+                  "columns": [
+                    "p"
+                  ]
+                },
+                {
+                  "columns": [
+                    "p_1",
+                    "p_2"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "id": "public",
+        "kind": "postgres-schema"
+      }
+    },
+    "storageHash": "c87390179180a9fc425c7d2878f3ff277bc63d1e967e3be848992a1ae700d432"
+  },
+  "execution": {
+    "executionHash": "8028ca956f4eb2048bf94916b68bee9f366fb0d874b764a3e82536d5845c84a5",
+    "mutations": {
+      "defaults": [
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "Child",
+            "field": "id_1",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "Child",
+            "field": "id_2",
+            "namespace": "public"
+          }
+        }
+      ]
+    }
+  },
+  "capabilities": {
+    "postgres": {
+      "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
+      "jsonAgg": true,
+      "lateral": true,
+      "limit": true,
+      "orderBy": true,
+      "returning": true
+    },
+    "sql": {
+      "checkConstraint": true,
+      "defaultInInsert": true,
+      "enums": true,
+      "forShare": true,
+      "forUpdate": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictWithoutTarget": true,
+      "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
+      "returning": true,
+      "scalarList": true
+    }
+  },
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}

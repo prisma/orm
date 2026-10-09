@@ -1,0 +1,27 @@
+// use prisma-8
+
+model Parent {
+  p          String  @unique
+  p_1        String
+  p_2        String
+  childOpt   Child?  @relation(fields: [parent_c], references: [c])
+  parent_c   String?
+  non_unique String?
+  id         String  @id @default(cuid(2))
+
+  @@unique([parent_c])
+  @@unique([p_1, p_2])
+  @@map("Parent")
+}
+
+model Child {
+  c          String  @unique
+  c_1        String
+  c_2        String
+  parentOpt  Parent?
+  non_unique String?
+  id         String  @id @default(cuid(2))
+
+  @@unique([c_1, c_2])
+  @@map("Child")
+}

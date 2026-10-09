@@ -1,0 +1,458 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "sql",
+  "target": "postgres",
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "roots": {
+    "ModelA": {
+      "model": "ModelA",
+      "namespace": "public"
+    },
+    "ModelB": {
+      "model": "ModelB",
+      "namespace": "public"
+    },
+    "ModelC": {
+      "model": "ModelC",
+      "namespace": "public"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "ModelA": {
+            "fields": {
+              "b_id_1": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "b_id_2": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "c_id_1": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "c_id_2": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "b": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "b_id_1",
+                    "b_id_2"
+                  ],
+                  "targetFields": [
+                    "uniq_1",
+                    "uniq_2"
+                  ]
+                },
+                "to": {
+                  "model": "ModelB",
+                  "namespace": "public"
+                }
+              },
+              "c": {
+                "cardinality": "N:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "c_id_1",
+                    "c_id_2"
+                  ],
+                  "targetFields": [
+                    "uniq_1",
+                    "uniq_2"
+                  ]
+                },
+                "to": {
+                  "model": "ModelC",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "b_id_1": {
+                  "column": "b_id_1"
+                },
+                "b_id_2": {
+                  "column": "b_id_2"
+                },
+                "c_id_1": {
+                  "column": "c_id_1"
+                },
+                "c_id_2": {
+                  "column": "c_id_2"
+                },
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "public",
+              "table": "ModelA"
+            }
+          },
+          "ModelB": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "uniq_1": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "uniq_2": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "a": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "uniq_1",
+                    "uniq_2"
+                  ],
+                  "targetFields": [
+                    "b_id_1",
+                    "b_id_2"
+                  ]
+                },
+                "to": {
+                  "model": "ModelA",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "uniq_1": {
+                  "column": "uniq_1"
+                },
+                "uniq_2": {
+                  "column": "uniq_2"
+                }
+              },
+              "namespaceId": "public",
+              "table": "ModelB"
+            }
+          },
+          "ModelC": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "uniq_1": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "uniq_2": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "a": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "uniq_1",
+                    "uniq_2"
+                  ],
+                  "targetFields": [
+                    "c_id_1",
+                    "c_id_2"
+                  ]
+                },
+                "to": {
+                  "model": "ModelA",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "uniq_1": {
+                  "column": "uniq_1"
+                },
+                "uniq_2": {
+                  "column": "uniq_2"
+                }
+              },
+              "namespaceId": "public",
+              "table": "ModelC"
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "public": {
+        "entries": {
+          "table": {
+            "ModelA": {
+              "columns": {
+                "b_id_1": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "b_id_2": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "c_id_1": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": true
+                },
+                "c_id_2": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": true
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "ModelA_b_id_1_b_id_2_idx_6bc440f9"
+                  },
+                  "source": {
+                    "columns": [
+                      "b_id_1",
+                      "b_id_2"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "ModelA"
+                  },
+                  "target": {
+                    "columns": [
+                      "uniq_1",
+                      "uniq_2"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "ModelB"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "ModelA_c_id_1_c_id_2_idx_3c2b6778"
+                  },
+                  "source": {
+                    "columns": [
+                      "c_id_1",
+                      "c_id_2"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "ModelA"
+                  },
+                  "target": {
+                    "columns": [
+                      "uniq_1",
+                      "uniq_2"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "ModelC"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "b_id_1",
+                    "b_id_2"
+                  ],
+                  "name": "ModelA_b_id_1_b_id_2_idx_6bc440f9",
+                  "prefix": "ModelA_b_id_1_b_id_2_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "c_id_1",
+                    "c_id_2"
+                  ],
+                  "name": "ModelA_c_id_1_c_id_2_idx_3c2b6778",
+                  "prefix": "ModelA_c_id_1_c_id_2_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "ModelB": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "uniq_1": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "uniq_2": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": [
+                {
+                  "columns": [
+                    "uniq_1",
+                    "uniq_2"
+                  ]
+                }
+              ]
+            },
+            "ModelC": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "uniq_1": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "uniq_2": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": [
+                {
+                  "columns": [
+                    "uniq_1",
+                    "uniq_2"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "id": "public",
+        "kind": "postgres-schema"
+      }
+    },
+    "storageHash": "0fe4d21266e631b4b4139da2ef36a21f730c294e113270641f3e743a7d1ebb48"
+  },
+  "capabilities": {
+    "postgres": {
+      "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
+      "jsonAgg": true,
+      "lateral": true,
+      "limit": true,
+      "orderBy": true,
+      "returning": true
+    },
+    "sql": {
+      "checkConstraint": true,
+      "defaultInInsert": true,
+      "enums": true,
+      "forShare": true,
+      "forUpdate": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictWithoutTarget": true,
+      "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
+      "returning": true,
+      "scalarList": true
+    }
+  },
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}
