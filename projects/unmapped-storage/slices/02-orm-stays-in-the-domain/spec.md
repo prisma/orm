@@ -26,7 +26,7 @@ The ORM may still read every column inside a query it builds where the column ne
 
 ### One strict resolver
 
-Every name a caller passes as a field resolves through one resolver that throws `ORM.FIELD_UNKNOWN` (`Model "<model>" has no field "<name>"`, meta `{ model, field }`) for a name that is not a field of the model or of the variant in scope. Nothing falls back to treating the name as a column. This covers: `where` shorthand and the `where`/`orderBy` callback accessor, `create`/`update`/`upsert` data (including single-table and multi-table variant creates), `select`, `distinct`, `distinctOn`, `groupBy`, `cursor`, aggregates and `having`, `conflictOn`, nested `select` under `include`, relation filters and relation join columns, and fragments.
+Every name a caller passes as a field resolves through one resolver that throws `ORM.FIELD_UNKNOWN` (`Model "<model>" has no field "<name>"`, meta `{ model, field }`) for a name that is not a field of the model (its own or inherited). Two surfaces also accept variant fields: `select` accepts every variant's fields on an unnarrowed collection, because its projection places each column on its own table; the `where`/`orderBy` callback accessor accepts the narrowed variant's fields when the collection is narrowed. The accessor returns `undefined` for `then` and `toJSON` and the target's value for `Object.prototype` names, so awaiting, stringifying or asserting on it in user code still works. Nothing falls back to treating the name as a column. This covers: `where` shorthand and the `where`/`orderBy` callback accessor, `create`/`update`/`upsert` data (including single-table and multi-table variant creates), `select`, `distinct`, `distinctOn`, `groupBy`, `cursor`, aggregates and `having`, `conflictOn`, nested `select` under `include`, relation filters and relation join columns, and fragments.
 
 ### Row mapping without pass-through
 
@@ -34,7 +34,7 @@ Mapping a row from columns to fields drops any column no field maps. A model wit
 
 ### The contract side
 
-- The relation lowering in contract-ts (`model-relations.ts`) refuses a join column that is not a field's column, with a `CONTRACT.*` error, instead of passing the column name through as a field name.
+- The relation lowering in contract-ts (`model-relations.ts`) refuses a join column that is not a field's column, with a `CONTRACT.*` error, instead of passing the column name through as a field name. A many-to-many relation is exempt on its target side: its target names are the junction table's columns by design.
 - Validators in `packages/2-sql/1-core/contract`: every domain field has a storage entry; an execution (ORM-generated) default targets a column some field maps.
 - The build warns about a required extra column with no database default on a table some model maps: every ORM insert into that table would fail. It is a warning, not a refusal, because Prisma 7 allows it.
 
