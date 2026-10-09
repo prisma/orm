@@ -328,4 +328,33 @@ describe('integration/nested mutations on SQLite', () => {
     },
     timeouts.databaseOperation,
   );
+
+  it(
+    'update() connect() to a tag that an earlier deleteAll() in the same array deleted rejects with ORM.RELATION_ROW_MISSING and rolls back the whole update',
+    async () => {
+      await withSqlite(
+        twoUsersWithTagsSeedSql,
+        async ({ users, rows }) => {
+          await expect(
+            users.where({ id: 1 }).update({
+              name: 'Renamed',
+              tags: (tags) => [tags.where({ id: 1 }).deleteAll(), tags.connect({ id: 1 })],
+            }),
+          ).rejects.toMatchObject({
+            code: 'ORM.RELATION_ROW_MISSING',
+            meta: { kind: 'connect', relation: 'tags' },
+          });
+
+          expect(rows('select id, name from users order by id')).toEqual([
+            { id: 1, name: 'Alice' },
+            { id: 2, name: 'Bob' },
+          ]);
+          expect(rows(tagRowsSql)).toEqual(seededTagRows);
+          expect(rows(userTagRowsSql)).toEqual(seededUserTagRows);
+        },
+        cascadingSchemaSql,
+      );
+    },
+    timeouts.databaseOperation,
+  );
 });

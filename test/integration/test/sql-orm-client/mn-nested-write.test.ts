@@ -202,7 +202,7 @@ describe('integration/mn-nested-write', () => {
   );
 
   it(
-    'create(): parent insert failure after a successful connect preflight leaves no junction rows',
+    'create(): parent insert failure with a connect on a junction relation leaves no junction rows',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         const users = createReturningUsersCollection(runtime);
@@ -212,8 +212,8 @@ describe('integration/mn-nested-write', () => {
 
         await expect(
           users.create({
-            // Duplicate primary key: the connect preflight resolves the tag
-            // successfully, then the parent INSERT fails on the users pkey.
+            // Duplicate primary key: the parent INSERT fails on the users pkey
+            // before the connect runs.
             id: 1,
             name: 'Alpha',
             email: 'alpha@example.com',
@@ -242,10 +242,9 @@ describe('integration/mn-nested-write', () => {
         const users = createReturningUsersCollection(runtime);
 
         // Seed the tag so the nested target INSERT collides on the tags pkey.
-        // Unlike the connect-preflight cases, this failure happens *after* the
-        // parent user is inserted (the target INSERT runs in the apply phase that
-        // follows the parent insert), so it exercises transactional rollback of
-        // an already-written parent row — not just preflight rejection.
+        // This failure happens *after* the parent user is inserted (the target
+        // INSERT runs in the apply phase that follows the parent insert), so it
+        // exercises transactional rollback of an already-written parent row.
         await seedTags(runtime, [{ id: TAG_RUST, name: 'Rust' }]);
 
         await expect(
@@ -873,6 +872,68 @@ describe('integration/mn-nested-write', () => {
           { id: 2, name: 'Bob' },
         ]);
         expect(await tagRows(runtime)).toEqual(allSeededTags);
+        expect(await userTagRows(runtime)).toEqual(allSeededUserTags);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update(): connect() to a tag that an earlier deleteAll() in the same array deleted rejects with ORM.RELATION_ROW_MISSING and rolls back the whole update',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+        await seedTwoUsersWithTags(runtime);
+        await addTagForeignKey(runtime, 'cascade');
+
+        await expect(
+          users.where({ id: 1 }).update({
+            name: 'Renamed',
+            tags: (t) => [t.where({ id: TAG_RUST }).deleteAll(), t.connect({ id: TAG_RUST })],
+          }),
+        ).rejects.toMatchObject({
+          code: 'ORM.RELATION_ROW_MISSING',
+          meta: { kind: 'connect', relation: 'tags' },
+        });
+
+        const userRows = await runtime.query<{ id: number; name: string }>(
+          'select id, name from users order by id',
+        );
+        expect(userRows).toEqual([
+          { id: 1, name: 'Alice' },
+          { id: 2, name: 'Bob' },
+        ]);
+        expect(await tagRows(runtime)).toEqual(allSeededTags);
+        expect(await userTagRows(runtime)).toEqual(allSeededUserTags);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update(): connect() to a tag that does not exist, with a scalar change, rejects with ORM.RELATION_ROW_MISSING and leaves the user unchanged',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+        await seedTwoUsersWithTags(runtime);
+
+        await expect(
+          users.where({ id: 1 }).update({
+            name: 'Renamed',
+            tags: (t) => t.connect({ id: 'tag-missing' as Char<36> }),
+          }),
+        ).rejects.toMatchObject({
+          code: 'ORM.RELATION_ROW_MISSING',
+          meta: { kind: 'connect', relation: 'tags' },
+        });
+
+        const userRows = await runtime.query<{ id: number; name: string }>(
+          'select id, name from users order by id',
+        );
+        expect(userRows).toEqual([
+          { id: 1, name: 'Alice' },
+          { id: 2, name: 'Bob' },
+        ]);
         expect(await userTagRows(runtime)).toEqual(allSeededUserTags);
       });
     },

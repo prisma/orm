@@ -464,7 +464,7 @@ describe('mutation-executor', () => {
       targetColumns: ['id'],
     });
     const runtime = createMockRuntime();
-    runtime.setNextResults([[{ id: 10 }], [{ id: 1 }], [{ id: 10 }], []]);
+    runtime.setNextResults([[{ id: 1 }], [{ id: 10 }]]);
 
     const created = await executeNestedCreateMutation({
       context: { ...getTestContext(), contract },
@@ -664,7 +664,7 @@ describe('mutation-executor', () => {
     );
   });
 
-  it('executeNestedCreateMutation() rejects duplicate resolved connect targets before any write', async () => {
+  it('executeNestedCreateMutation() rejects a duplicate resolved connect target before inserting its junction link', async () => {
     const contract = buildManyToManyContract({
       junctionTable: 'parent_child',
       parentColumns: ['parent_id'],
@@ -672,7 +672,7 @@ describe('mutation-executor', () => {
       targetColumns: ['id'],
     });
     const runtime = createMockRuntime();
-    runtime.setNextResults([[{ id: 10 }], [{ id: 10 }]]);
+    runtime.setNextResults([[{ id: 1 }], [{ id: 10 }], [{ id: 10 }]]);
 
     await expect(
       executeNestedCreateMutation({
@@ -691,10 +691,12 @@ describe('mutation-executor', () => {
       /connect\(\) nested mutation for relation "children" resolved duplicate junction link targets/,
     );
 
-    const inserts = runtime.executions.filter(
-      (execution) => (execution.plan as { ast?: { kind?: string } }).ast?.kind === 'insert',
-    );
-    expect(inserts).toEqual([]);
+    expect(statementTrace(runtime)).toEqual([
+      'insert parents',
+      'select children',
+      'insert parent_child',
+      'select children',
+    ]);
   });
 
   it('executeNestedCreateMutation() rejects conflicting values for shared junction columns', async () => {
@@ -706,7 +708,7 @@ describe('mutation-executor', () => {
       localFields: ['tenant_id'],
     });
     const runtime = createMockRuntime();
-    runtime.setNextResults([[{ tenant_id: 8 }], [{ tenant_id: 7 }], [{ tenant_id: 8 }]]);
+    runtime.setNextResults([[{ tenant_id: 7 }], [{ tenant_id: 8 }]]);
 
     await expect(
       executeNestedCreateMutation({
@@ -731,7 +733,7 @@ describe('mutation-executor', () => {
       targetColumns: ['id'],
     });
     const runtime = createMockRuntime();
-    runtime.setNextResults([[{ id: 1 }], [{ id: 10 }], [{ id: 10 }], []]);
+    runtime.setNextResults([[{ id: 1 }], [{ id: 10 }]]);
 
     await executeNestedUpdateMutation({
       context: { ...getTestContext(), contract },
@@ -773,7 +775,7 @@ describe('mutation-executor', () => {
       }
       return execute(plan);
     });
-    runtime.setNextResults([[{ id: 1 }], [{ id: 10 }], [{ id: 10 }]]);
+    runtime.setNextResults([[{ id: 1 }], [{ id: 10 }]]);
 
     await expect(
       executeNestedUpdateMutation({
@@ -812,7 +814,7 @@ describe('mutation-executor', () => {
       }
       return execute(plan);
     });
-    runtime.setNextResults([[{ id: 1 }], [{ id: 10 }], [{ id: 10 }]]);
+    runtime.setNextResults([[{ id: 1 }], [{ id: 10 }]]);
 
     await expect(
       executeNestedUpdateMutation({
@@ -847,7 +849,7 @@ describe('mutation-executor', () => {
       }
       return execute(plan);
     });
-    runtime.setNextResults([[{ id: 1 }], [{ id: 10 }], [{ id: 10 }]]);
+    runtime.setNextResults([[{ id: 1 }], [{ id: 10 }]]);
 
     await expect(
       executeNestedUpdateMutation({
@@ -1042,10 +1044,8 @@ describe('mutation-executor', () => {
     });
     const runtime = createMockRuntime();
     runtime.setNextResults([
-      [{ id: 'admin' }],
       [{ id: 1, name: 'Alice', email: 'alice@example.com' }],
       [{ id: 'admin' }],
-      [],
     ]);
 
     await executeNestedCreateMutation({
@@ -2148,6 +2148,92 @@ describe('mutation-executor', () => {
       'select children',
       'delete parent_child',
       'delete children',
+    ]);
+  });
+
+  it('many-to-many connect() in update() looks up each target after the parent update and inserts its link before the next lookup', async () => {
+    const runtime = createMockRuntime();
+    runtime.setNextResults([[{ id: 1 }], [{ id: 2 }], [{ id: 10 }], [{ id: 11 }]]);
+
+    await executeNestedUpdateMutation({
+      context: { ...getTestContext(), contract: manyToManyContract() },
+      runtime,
+      namespaceId: 'public',
+      modelName: 'Parent',
+      filters: [parentIdFilter],
+      data: {
+        id: 2,
+        children: (children: LooseMutator) => children.connect([{ id: 10 }, { id: 11 }]),
+      } as never,
+    });
+
+    expect(statementTrace(runtime)).toEqual([
+      'select parents',
+      'update parents',
+      'select children',
+      'insert parent_child',
+      'select children',
+      'insert parent_child',
+    ]);
+    expect(statementValues(runtime).map((statement) => statement.params)).toEqual([
+      [1],
+      [2],
+      [10],
+      [2, 10],
+      [11],
+      [2, 11],
+    ]);
+  });
+
+  it('many-to-many connect() in create() looks up its target after the parent insert', async () => {
+    const runtime = createMockRuntime();
+    runtime.setNextResults([[{ id: 1 }], [{ id: 10 }]]);
+
+    await executeNestedCreateMutation({
+      context: { ...getTestContext(), contract: manyToManyContract() },
+      runtime,
+      namespaceId: 'public',
+      modelName: 'Parent',
+      data: {
+        id: 1,
+        children: (children: LooseMutator) => children.connect({ id: 10 }),
+      } as never,
+    });
+
+    expect(statementTrace(runtime)).toEqual([
+      'insert parents',
+      'select children',
+      'insert parent_child',
+    ]);
+  });
+
+  it('many-to-many connect() rejects a second criterion that resolves to a target already linked by the same operation', async () => {
+    const runtime = createMockRuntime();
+    runtime.setNextResults([[{ id: 1 }], [{ id: 10 }], [{ id: 10 }]]);
+
+    await expect(
+      executeNestedUpdateMutation({
+        context: { ...getTestContext(), contract: manyToManyContract() },
+        runtime,
+        namespaceId: 'public',
+        modelName: 'Parent',
+        filters: [parentIdFilter],
+        data: {
+          children: (children: LooseMutator) => children.connect([{ id: 10 }, { id: 11 }]),
+        } as never,
+      }),
+    ).rejects.toMatchObject({
+      code: 'ORM.RELATION_MUTATION_INVALID',
+      message:
+        'connect() nested mutation for relation "children" resolved duplicate junction link targets; remove the duplicate criteria',
+      meta: { kind: 'connect', relation: 'children', problem: 'duplicate-criteria' },
+    });
+
+    expect(statementTrace(runtime)).toEqual([
+      'select parents',
+      'select children',
+      'insert parent_child',
+      'select children',
     ]);
   });
 
