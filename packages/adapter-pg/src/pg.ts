@@ -25,8 +25,66 @@ const types = pg.types
 
 const debug = Debug('prisma:driver-adapter:pg')
 
-type StdClient = pg.Pool
+/**
+ * Structural subset of `pg.Pool` that the adapter relies on.
+ *
+ * The adapter is typed against this structural interface rather than the
+ * concrete `pg.Pool` class so that drop-in compatible `pg` implementations
+ * (e.g. `@yugabytedb/pg`, whose cluster-aware `Pool` extends `pg.Pool`) can be
+ * passed to `PrismaPgAdapter` / `PrismaPgAdapterFactory` as long as they
+ * implement the same surface. An `instanceof pg.Pool` check would reject such
+ * forks, so the constructor uses a structural (duck-typed) check instead.
+ */
+type StdClient = {
+  options: pg.PoolConfig
+  connect(callback?: (err: Error, client: pg.PoolClient, done: (release?: unknown) => void) => void): Promise<pg.PoolClient>
+  query(
+    queryConfig: pg.QueryArrayConfig | pg.QueryConfig | string,
+    values?: unknown[],
+  ): Promise<pg.QueryResult<any> | pg.QueryArrayResult<any>>
+  // `pg.Pool#query` is overloaded (callback + promise styles); the adapter only
+  // awaits the promise-returning form, so this structural type intentionally
+  // captures just that overload rather than mirroring pg.Pool exactly.
+  end(): Promise<void>
+  on(event: string, listener: (...args: any[]) => void): unknown
+  removeListener(event: string, listener: (...args: any[]) => void): unknown
+  emit(event: string, ...args: any[]): boolean
+  listenerCount(event: string): number
+}
 type TransactionClient = pg.PoolClient
+
+/**
+ * Duck-typed guard that distinguishes a `pg.Pool`-compatible pool instance
+ * from a `PoolConfig` or a connection string. We deliberately check the
+ * structural surface instead of `instanceof pg.Pool`, so compatible forks of
+ * `pg` (e.g. `@yugabytedb/pg`) are accepted.
+ */
+function isPgPoolLike(poolOrConfig: unknown): poolOrConfig is StdClient {
+  if (typeof poolOrConfig !== 'object' || poolOrConfig === null) {
+    return false
+  }
+  const candidate = poolOrConfig as Record<string, unknown>
+  return (
+    // The full surface the adapter exercises: the query/connect/end trio plus
+    // the EventEmitter members (`on`, `removeListener`, `emit`,
+    // `listenerCount`) and an `options` config object. Requiring the
+    // EventEmitter surface makes it very unlikely a plain `PoolConfig` object
+    // is mistaken for a pool — a config that happens to carry a couple of
+    // pg.Pool-ish keys (e.g. `{ connect: someFn, options: {...} }`, or even
+    // `{ query, connect, end, options }`) would still lack most of these and
+    // be treated as config, not adopted as the pool.
+    typeof candidate.query === 'function' &&
+    typeof candidate.connect === 'function' &&
+    typeof candidate.end === 'function' &&
+    typeof candidate.on === 'function' &&
+    typeof candidate.removeListener === 'function' &&
+    typeof candidate.emit === 'function' &&
+    typeof candidate.listenerCount === 'function' &&
+    // The adapter reads `pool.options` (pg.PoolConfig) directly.
+    typeof candidate.options === 'object' &&
+    candidate.options !== null
+  )
+}
 
 class PgQueryable<ClientT extends StdClient | TransactionClient> implements SqlQueryable {
   readonly provider = 'postgres'
@@ -270,7 +328,7 @@ export class PrismaPgAdapter extends PgQueryable<StdClient> implements SqlDriver
     return this.release?.()
   }
 
-  underlyingDriver(): pg.Pool {
+  underlyingDriver(): StdClient {
     return this.client
   }
 }
@@ -279,13 +337,13 @@ export class PrismaPgAdapterFactory implements SqlMigrationAwareDriverAdapterFac
   readonly provider = 'postgres'
   readonly adapterName = packageName
   private readonly config: pg.PoolConfig
-  private externalPool: pg.Pool | null
+  private externalPool: StdClient | null
 
   constructor(
-    poolOrConfig: pg.Pool | pg.PoolConfig | string,
+    poolOrConfig: StdClient | pg.PoolConfig | string,
     private readonly options?: PrismaPgOptions,
   ) {
-    if (poolOrConfig instanceof pg.Pool) {
+    if (isPgPoolLike(poolOrConfig)) {
       this.externalPool = poolOrConfig
       this.config = poolOrConfig.options
     } else if (typeof poolOrConfig === 'string') {
