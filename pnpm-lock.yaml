@@ -3560,9 +3560,6 @@ importers:
       '@internal/sql-contract':
         specifier: workspace:8.0.0-rc.17
         version: link:../../2-sql/1-core/contract
-      '@internal/sql-errors':
-        specifier: workspace:8.0.0-rc.17
-        version: link:../../2-sql/1-core/errors
       '@internal/sql-operations':
         specifier: workspace:8.0.0-rc.17
         version: link:../../2-sql/1-core/operations
@@ -3594,6 +3591,9 @@ importers:
       '@internal/sql-contract-ts':
         specifier: workspace:8.0.0-rc.17
         version: link:../../2-sql/2-authoring/contract-ts
+      '@internal/sql-errors':
+        specifier: workspace:8.0.0-rc.17
+        version: link:../../2-sql/1-core/errors
       '@internal/target-postgres':
         specifier: workspace:8.0.0-rc.17
         version: link:../../3-targets/3-targets/postgres
