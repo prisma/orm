@@ -54,7 +54,7 @@ The project has three slices.
 ### Parallel group A (after slice 1; independent of slice 2)
 
 - **Slice `mongo-where-unique`**. Linear: none. Folder: `projects/where-unique/slices/mongo-where-unique/`
-  - **Outcome:** On the Mongo ORM, `whereUnique(criterion)` accepts `{ _id }` or one object per admitted unique index and returns `MongoUniquelyFilteredCollection`, which offers `where`, `variant`, `include`, `select`, `first`, `update`, `delete` and `upsert` and nothing else. `null` values, partial unique indexes and indexes on embedded paths are not accepted.
+  - **Outcome:** On the Mongo ORM, `whereUnique(criterion)` accepts `{ _id }` or one object per admitted unique index and returns `MongoUniquelyFilteredCollection`, which offers `where`, `variant`, `include`, `select`, `first`, `firstOrThrow`, `update`, `delete` and `upsert` and nothing else. `null` values, partial unique indexes and indexes on embedded paths are not accepted.
   - **Builds on:** Nothing in code. It follows slice 1 by the spec's ordering, and reuses its decisions on names and on the rule that an argument must guarantee at most one record.
   - **Hands to:** Project close-out. Both families satisfy the spec's cross-cutting requirements.
   - **Focus:**

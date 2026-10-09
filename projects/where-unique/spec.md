@@ -19,7 +19,7 @@ After `whereUnique`:
 | Call | SQL | Mongo |
 |---|---|---|
 | `where`, `variant`, `include`, `select` | available | available |
-| `first`, `update`, `delete` | available | available |
+| `first`, `firstOrThrow`, `update`, `delete` | available | available |
 | `upsert` | unchanged (it is keyed by `conflictOn`, not by the filter) | available |
 | `orderBy`, `limit`, `offset`, `cursor`, `distinct`, `distinctOn` | compile error | not on the returned type |
 | `all`, `aggregate`, `groupBy`, and `all` / `aggregate` on `prepared` | compile error | not on the returned type (Mongo has no `groupBy` or `prepared`) |
@@ -81,7 +81,7 @@ The snippets above are illustrative. Before a slice treats one as fact, it re-ve
 
 7. **`UniqueConstraintCriterion` itself drops `null`.** It is exported and already used by `upsert`'s `conflictOn` and by relation `connect` and `disconnect` criteria, which share one criterion type; all three reject `null` after this change. A `null` value cannot identify one record for `connect` any more than for `whereUnique`, so the rule belongs in the one type. Rejected: a second, `whereUnique`-only type that differs in one detail. Cost: a compile error for a caller passing `null` in `conflictOn` or `connect`. What `connect` does at runtime today with a `null` criterion is not investigated, since the type no longer admits it.
 
-8. **`where` stays available after `whereUnique`, and `first()` is the read terminal.** `whereUnique({ id }).where({ ownerId })` is still at most one record and is the way to write "this record, if it belongs to this user". No new terminal is added.
+8. **`where` stays available after `whereUnique`, and `first()` is the read terminal.** `whereUnique({ id }).where({ ownerId })` is still at most one record and is the way to write "this record, if it belongs to this user". No new terminal is added. `firstOrThrow()`, added on `main` (#30644) while this project was in progress, is a single-record read and stays available in the same way, on the collection and on `prepared`, in both families.
 
 9. **Relationships.**
    - A unique constraint on a foreign-key column is offered under the scalar field name (`Profile.whereUnique({ userId })`). Relation names are never keys.

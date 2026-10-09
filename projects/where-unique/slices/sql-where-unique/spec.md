@@ -35,7 +35,7 @@ Two forms, as the project spec's decision 3 records. Both were needed on the rea
 | `prepared.all`, `prepared.aggregate` | `PreparedCollection` carries the collection's type state as a phantom member (`HasTypeState<State>`); its `all` and `aggregate` take `this: Self & <requirement>`, generic in `Self`. No member is removed, so `prepared` has the same member types on every collection. Fallback if this cannot keep a uniquely filtered collection assignable to the wide `Collection` type: leave `prepared` untouched. |
 | `orderBy`, `limit`, `offset`, `cursor`, `distinct`, `distinctOn` | two overloads: first `this: Self` with `Self` constrained by a conditional that is `never` for a uniquely filtered collection; second `this: Self & <requirement>` |
 
-Methods that stay callable after `whereUnique`: `where`, `variant`, `include`, `select`, `first`, `update`, `delete`, `with`, and the row-lock methods `forUpdate`, `forNoKeyUpdate`, `forShare`, `forKeyShare`. `upsert`, `create*` and `fragment` are unchanged.
+Methods that stay callable after `whereUnique`: `where`, `variant`, `include`, `select`, `first`, `firstOrThrow`, `update`, `delete`, `with`, and the row-lock methods `forUpdate`, `forNoKeyUpdate`, `forShare`, `forKeyShare`. `upsert`, `create*` and `fragment` are unchanged.
 
 The row-lock methods are left exactly as they are. They return a plain `Collection` for every receiver, so after `whereUnique(...).forUpdate()` the type-state facts and the user subclass are gone, `first()` is the intended call, and `all()` compiles. The project spec records this as an accepted consequence.
 
