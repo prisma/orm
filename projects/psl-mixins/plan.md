@@ -5,13 +5,14 @@
 
 ## At a glance
 
-Four slices. Two start in parallel: one moves block-member reads from syntax nodes to symbols, the other adds the grammar. The third builds on both and makes inclusions take effect. The fourth adds language-server support and the ADR.
+Five slices; the editor work planned as one slice, `mixin-editor-support`, was split in two after the language server was investigated, because navigation and completion change different files and each is a full review on its own. Two start in parallel: one moves block-member reads from syntax nodes to symbols, the other adds the grammar. The third builds on both and makes inclusions take effect. The fourth adds language-server support and the ADR.
 
 ```mermaid
 flowchart LR
   A[block-symbol-members] --> C[mixin-inclusion]
   B[mixin-grammar] --> C
-  C --> D[mixin-editor-support]
+  C --> D[mixin-navigation]
+  D --> E[mixin-completion]
 ```
 
 ## Composition
@@ -63,16 +64,17 @@ flowchart LR
      - a row-level security fixture using the `policy_select` example from the spec;
      - the `psl-parser` README sections on the scope chain and resolution kinds.
 
-2. **Slice `mixin-editor-support`**. Linear: none. Folder: `projects/psl-mixins/slices/mixin-editor-support/`
-   - **Outcome:** In the language server, go-to-definition on an inclusion's operand opens the mixin, renaming a mixin updates its inclusions, and completion after `+` offers the mixins whose keyword matches the enclosing block and no others. The ADR for mixin syntax and resolution is written.
+2. **Slice `mixin-navigation`**. Linear: none. Folder: `projects/psl-mixins/slices/mixin-navigation/`
+   - **Outcome:** In the language server, go-to-definition, find references, hover and rename work on a mixin's name, at its declaration and at every inclusion; renaming a field declared in a `model` mixin keeps its column name as it does for a model's field; mixin bodies and inclusions get semantic tokens.
    - **Builds on:** `mixin-inclusion`'s mixin symbols and binder resolutions.
+   - **Hands to:** A language server in which a mixin is a navigable symbol.
+   - **Focus:** `cursor-resolution.ts`, `hover.ts`, `rename.ts` with `attribute-spec-resolution.ts`, `semantic-tokens.ts`, and their tests.
+
+3. **Slice `mixin-completion`**. Linear: none. Folder: `projects/psl-mixins/slices/mixin-completion/`
+   - **Outcome:** Completion after `+` offers the mixins whose keyword matches the enclosing block and no others; completion and signature help inside a mixin body behave as inside a block of the mixin's keyword; a block that includes a mixin is not offered the keys the mixin provides. The ADR for mixin syntax and resolution is written and `projects/prisma-8-rc1/feature-surface.md` item 6 shows the agreed spelling.
+   - **Builds on:** `mixin-navigation`.
    - **Hands to:** Project close-out. Every item in the spec's Definition of Done is met.
-   - **Focus:**
-     - completion context for the position after `+`, in `completion-context.ts` and `completion-provider.ts`;
-     - tests that definition, rename and hover work on mixin names and inclusion operands, with fixes where a provider assumes every declaration is a model, composite type or block;
-     - semantic tokens for mixin bodies and for inclusions: after `mixin-grammar` only a mixin's header is tokenised, so its members and every `+Name` are uncoloured;
-     - the ADR, and the update to `projects/prisma-8-rc1/feature-surface.md` item 6;
-     - the manual QA script and run for the editor behaviour.
+   - **Focus:** `completion-context.ts`, `completion-provider.ts`, `completion-scope.ts`, `completion-symbols.ts`, `signature-context.ts`, the owner types in `attribute-spec-resolution.ts`; the ADR; the manual QA script and run for all editor behaviour.
 
 ## Dependencies (external)
 
