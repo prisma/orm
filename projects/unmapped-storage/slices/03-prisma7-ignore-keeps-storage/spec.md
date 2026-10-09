@@ -30,7 +30,8 @@ Today the contract has table `User` with `id`, `email` and model `User`; `legacy
 
 - A scalar field marked `@ignore` becomes a column node on its model's table: column name (`@map`), type (with `@db.*`), nullability, list shape, and its column default. It gets no execution default: `uuid()`, `cuid()`, `nanoid()`, `ulid()` and `@updatedAt` are ORM-generated values, and the ORM never writes this column. A field whose only default is such a generator becomes a column with no default. The checks that only concern execution defaults (`@updatedAt` type, `@updatedAt` with `@default`, an optional generated field) do not fire on an ignored field.
 - A uniqueness constraint or index over an ignored field (`@unique`, `@@unique`, `@@index`) is kept on the model's table, naming the column. A primary key over an ignored field (`@id`, `@@id`) is still refused with `PSL.PRISMA7_IGNORED_FIELD_REFERENCED`: the model would have no identity among its fields.
-- A relation field marked `@ignore` keeps its foreign key on the model's table (the constraint Prisma 7 created), and the relation itself stays out of the domain. A relation whose `fields:` name an ignored scalar keeps its foreign key the same way.
+- A relation field marked `@ignore` keeps its foreign key on the model's table (the constraint Prisma 7 created), and the relation itself stays out of the domain.
+- A relation that is not `@ignore` but whose `fields:` or `references:` name an ignored scalar is refused with `PSL.PRISMA7_IGNORED_FIELD_REFERENCED`: Prisma 8 relations join on fields, and the reader never drops the relation silently. The message offers removing `@ignore` from the field or marking the relation field `@ignore` too.
 
 ### `@@ignore` model
 
