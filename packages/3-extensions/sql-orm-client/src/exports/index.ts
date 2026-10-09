@@ -51,6 +51,7 @@ export type {
   IncludeExpr,
   IncludeScalar,
   ModelAccessor,
+  MutationUpdateInput,
   NumericFieldNames,
   Orderable,
   OrderableFieldNames,
