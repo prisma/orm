@@ -1,0 +1,20 @@
+# Brief: slice 5 review fixes (TML-3297)
+
+Same worktree and branch `l65-5`. Logs under `wip/5-fixes/`. Same rules as the slice 5 brief: worktree only, no `/tmp`, `mise exec --`, never the full integration/e2e suites, sign off with the Will Madden trailer, no AI attribution, never amend/rebase/squash/force-push, do not push, do not switch branches, do not commit this brief. Do not edit docs, ADRs, the error reference, skills, upgrade fragments or `projects/` files; the orchestrator writes them.
+
+Read `projects/sql-expression-literals/slice-reviews/5/system-design-review.md` (A01–A09) and `code-review.md` (C01–C04). Fix these; every new or changed test must fail when its behaviour is removed (plant, run, restore, keep the log). Framework-components is read from its built `dist` by the adapter round-trip tests: rebuild before planting there.
+
+1. **A01, the renderer.** Rename `renderTaggedTemplateSource` to `tsTaggedTemplateSource`. Take the TypeScript template escaping (`\`, backtick, `${`) from `@internal/ts-render` instead of a copy: if ts-render has no exported helper for it, add one there next to `tsQuotedTextSource` and use it from both. Its doc comment states the condition: it writes a template only when the tag's TypeScript function canonicalizes text as `canonicalizeTaggedLiteralBody` does and that leaves the text unchanged, which holds for `sql`.
+2. **C03, trailing whitespace.** Fall back to the string form when any line of a multi-line text ends in a space or a tab, because editors strip trailing whitespace on save and would change the SQL. A one-line text is unaffected only if it has no trailing whitespace either; apply the rule to every line. Test it.
+3. **A02, the type name.** Rename `MigrationSqlText` to `SqlTextInput`. `sqlTextOf` stays.
+4. **A06 and C02, the error.** `sqlTextOf(value, what)` takes the argument's name. A value that is neither a string nor a `sql` value throws `CONTRACT.ARGUMENT_INVALID` with ``<what> must be a string or a sql`...` value.`` and `meta: { what }`. Name each call site's argument the way slice 3 names fields, for example `fn expression`, `checkExpression "<name>" expression`, `createIndex "<name>" where`, `createIndex "<name>" expression`, `addCheckConstraint "<name>" expression`, `createRlsPolicy "<name>" using` / `withCheck`, `alterColumnType "<table>"."<column>" using`, and for SQLite `addColumn "<table>"."<column>" default` / `recreateTable "<table>"."<column>" default`. Report the exact strings you chose. Test the message at two sites.
+5. **A07 and C01, imports.** Move the duplicated "add the `sql` import when a rendered text uses the tag" helper into one place both targets already depend on (choose the lowest family package that fits the layering; `pnpm lint:deps` must pass), and make each call compute its imports from the same list of texts it renders, so the two cannot drift. Add the SQLite per-call-class test that Postgres has: each call class imports `sql` exactly when it prints a template, including a fallback-only call.
+6. **A08, input types.** Declare the wider input types the same way in both targets: named, module-local types in each target's migration class file.
+
+## Verify
+
+`pnpm build`, `pnpm typecheck`, `pnpm lint`, `pnpm lint:deps`, `pnpm lint:casts`, `pnpm lint:throws`, `pnpm check:error-reference`, `pnpm lint:framework-vocabulary`, `pnpm fixtures:check`, `pnpm migrations:regen:examples` (no diff), `test/integration` `test/planner-golden`. Then **`pnpm test:packages` once more on the final commit** (C04) and classify every failure: the three tarball tests fail on `pnpm install` refusing `@vercel/detect-agent` ("High-risk trust downgrade"); say so explicitly if that is what you see. After committing: `pnpm check:upgrade-coverage --mode pr --prev "$(git merge-base origin/main HEAD)" --head HEAD`.
+
+## Report
+
+Plain English, short sentences: what you changed per item, the exact `what` strings, where the shared import helper lives, planted-defect evidence (log paths), every verification result with its log path, and the classification of each `test:packages` failure.

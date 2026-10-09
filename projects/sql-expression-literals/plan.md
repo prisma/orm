@@ -174,12 +174,12 @@ flowchart LR
 
 **Tests:**
 
-- `framework-components/test/tagged-literal.test.ts` (extend): `renderTaggedTemplateSource` single-line, multi-line, backtick, backslash, `${`; fallback for leading whitespace, a blank first line, a carriage return, a line holding only a non-breaking space.
+- `framework-components/test/tagged-literal.test.ts` (extend): `tsTaggedTemplateSource` single-line, multi-line, backtick, backslash, `${`; fallback for leading whitespace, a blank first line, a carriage return, a line holding only a non-breaking space.
 - Adapter `render-typescript.roundtrip.test.ts` (update): a multi-line CHECK, a policy predicate with `"userId"`, an index with `where`, and a fallback text; `ops.json` equals `renderOps(calls)`.
 - Postgres target `test/postgres-migration-op-builders.test.ts`: each of `createIndex` (expression and `extras.where`), `addCheckConstraint`, `createRlsPolicy` (`using`, `withCheck`), `alterColumnType` (`using`), `fn` and `checkExpression`, called once with strings and once with `sql` values holding the same text, gives identical ops.
 - The committed `examples/prisma-8-demo` migrations `20260422T0720_initial`, `20260917T0818_add_post_expires_at` and `20260922T1218_add_post_title_search`, which write SQL as strings, still produce their committed `ops.json` (`pnpm migrations:regen:examples` shows no diff). This proves only that strings still work: the script runs committed files and never regenerates `migration.ts`.
 - A migration file written with `sql` values (Postgres and SQLite: a CHECK, an index `where`, a policy predicate, a function default, and on SQLite `addColumn` and `recreateTable` with a function default) runs and produces the same `ops.json` as the same file written with strings.
-- SQLite `renderPostcheck` still writes its planner-built SQL as a string; `renderTaggedTemplateSource` falls back for a lone surrogate, a control character, U+2028 and U+2029.
+- SQLite `renderPostcheck` still writes its planner-built SQL as a string; `tsTaggedTemplateSource` falls back for a lone surrogate, a control character, U+2028 and U+2029.
 - `sqlTextOf` rebuilds a `sql` value made by another installed copy (indented text comes back canonical) and refuses a value that is neither a string nor a `sql` value.
 - Postgres target `test/migrations/render-typescript.test.ts` (update): the facade exports `sql`; the `sql` import appears exactly when a template was printed.
 

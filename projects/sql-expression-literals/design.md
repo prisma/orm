@@ -674,21 +674,21 @@ In `packages/2-sql/4-lanes/relational-core/src/contract-free/column.ts` (exporte
 
 ```ts
 /** SQL in a migration-file argument: a `sql` value, or a string. The string form is permanent: committed files use it, and the generator writes it when a template cannot hold the text unchanged. */
-export type MigrationSqlText = string | SqlExpression;
-export function sqlTextOf(value: MigrationSqlText): string;
+export type SqlTextInput = string | SqlExpression;
+export function sqlTextOf(value: SqlTextInput): string;
 // A string is returned unchanged. Anything else is read with `requireSqlExpression(value, 'SQL text')`, so a `sql` value from another
 // installed copy is canonicalized (slice 3's `readSqlExpression`) and a value of any other type throws CONTRACT.ARGUMENT_INVALID.
 ```
 
 Each method or factory below reads such a value with `sqlTextOf` at its entry and passes a string on, converting only defined values (`exactOptionalPropertyTypes`). `CreateIndexExtras`, `CreateIndexElements`, `PostgresRlsPolicyInput`, `RenderedRlsPolicyLiteral` and `AlterColumnTypeOptions` stay strings.
 
-- `fn(expression: MigrationSqlText)`, `checkExpression(name: string, expression: MigrationSqlText)`: wrap `opaqueSql(sqlTextOf(expression))`.
+- `fn(expression: SqlTextInput)`, `checkExpression(name: string, expression: SqlTextInput)`: wrap `opaqueSql(sqlTextOf(expression))`.
 - `PostgresMigration` (`postgres/src/core/migrations/postgres-migration.ts`):
-  - `createIndex`: the expression arm is `{ readonly expression: MigrationSqlText; readonly columns?: never }`; `extras?: Omit<CreateIndexExtras, 'where'> & { readonly where?: MigrationSqlText }`. It passes `sqlTextOf(options.expression)` and `options.extras === undefined ? undefined : { ...options.extras, ...ifDefined('where', options.extras.where === undefined ? undefined : sqlTextOf(options.extras.where)) }`.
-  - `addCheckConstraint`: `readonly expression: MigrationSqlText`.
-  - `createRlsPolicy`: `readonly policy: Omit<RenderedRlsPolicyLiteral, 'using' | 'withCheck'> & { readonly using?: MigrationSqlText; readonly withCheck?: MigrationSqlText }`; where it spreads them (lines 647–653 of `postgres-migration.ts` on 2026-10-08) it writes `using: options.policy.using === undefined ? undefined : sqlTextOf(options.policy.using)`, likewise `withCheck`.
-  - `alterColumnType`: `readonly options: Omit<AlterColumnTypeOptions, 'using'> & { readonly using?: MigrationSqlText }`, passing `{ ...options.options, ...ifDefined('using', options.options.using === undefined ? undefined : sqlTextOf(options.options.using)) }`.
-- SQLite `SqliteMigration.addColumn` and `recreateTable` (`sqlite/src/core/migrations/sqlite-migration.ts`) take `SqliteColumnSpec` (`operations/shared.ts`), whose `default` function arm is `{ kind: 'function', expression: string }` and holds user SQL. Their input type takes `expression: MigrationSqlText` in that arm, and each method reads it with `sqlTextOf` before passing the spec on; the stored `ColumnDefault` stays a string.
+  - `createIndex`: the expression arm is `{ readonly expression: SqlTextInput; readonly columns?: never }`; `extras?: Omit<CreateIndexExtras, 'where'> & { readonly where?: SqlTextInput }`. It passes `sqlTextOf(options.expression)` and `options.extras === undefined ? undefined : { ...options.extras, ...ifDefined('where', options.extras.where === undefined ? undefined : sqlTextOf(options.extras.where)) }`.
+  - `addCheckConstraint`: `readonly expression: SqlTextInput`.
+  - `createRlsPolicy`: `readonly policy: Omit<RenderedRlsPolicyLiteral, 'using' | 'withCheck'> & { readonly using?: SqlTextInput; readonly withCheck?: SqlTextInput }`; where it spreads them (lines 647–653 of `postgres-migration.ts` on 2026-10-08) it writes `using: options.policy.using === undefined ? undefined : sqlTextOf(options.policy.using)`, likewise `withCheck`.
+  - `alterColumnType`: `readonly options: Omit<AlterColumnTypeOptions, 'using'> & { readonly using?: SqlTextInput }`, passing `{ ...options.options, ...ifDefined('using', options.options.using === undefined ? undefined : sqlTextOf(options.options.using)) }`.
+- SQLite `SqliteMigration.addColumn` and `recreateTable` (`sqlite/src/core/migrations/sqlite-migration.ts`) take `SqliteColumnSpec` (`operations/shared.ts`), whose `default` function arm is `{ kind: 'function', expression: string }` and holds user SQL. Their input type takes `expression: SqlTextInput` in that arm, and each method reads it with `sqlTextOf` before passing the spec on; the stored `ColumnDefault` stays a string.
 - The Postgres and SQLite targets' `src/exports/migration.ts` add `export { sql } from '@internal/sql-contract/sql-expression';`. The `@internal/postgres/migration` and `@internal/sqlite/migration` facades re-export with `export *`.
 
 ### 17.2 The renderer prints `sql` values
@@ -697,21 +697,21 @@ Add to `packages/1-framework/1-core/framework-components/src/shared/tagged-liter
 
 ```ts
 /** TypeScript source for `text` in generated code: a template literal with `tag` when the tag reads it back unchanged, else a string literal. */
-export function renderTaggedTemplateSource(tag: string, text: string): { readonly source: string; readonly usesTag: boolean };
+export function tsTaggedTemplateSource(tag: string, text: string): { readonly source: string; readonly usesTag: boolean };
 ```
 
-1. Fall back to `{ source: tsQuotedTextSource(text), usesTag: false }` when `canonicalizeTaggedLiteralBody(text)` fails or changes the text; when a line of `text` matches `/^\s+$/` but not `/^[ \t]*$/` (the renderer's `indent()` treats such a line as blank); or when `text` holds a character a template cannot carry unchanged in a UTF-8 file: a lone surrogate, a control character other than `\n` and `\t`, or U+2028 or U+2029 (the characters `tsQuotedTextSource` escapes).
+1. Fall back to `{ source: tsQuotedTextSource(text), usesTag: false }` when `canonicalizeTaggedLiteralBody(text)` fails or changes the text; when a line of `text` matches `/^\s+$/` but not `/^[ \t]*$/` (the renderer's `indent()` treats such a line as blank); or when `text` holds a character a template cannot carry unchanged in a UTF-8 file: a lone surrogate, a control character other than `\n` and `\t`, or U+2028 or U+2029 (the characters `tsQuotedTextSource` escapes); or when a line ends in a space or a tab, because an editor that strips trailing whitespace would change the SQL (slice 5 review, C03).
 2. `escaped`: `\` → `\\`, then `` ` `` → `` \` ``, then `${` → `\${`.
 3. One line: `` `${tag}\`${escaped}\`` ``. Several lines: `` `${tag}\`\n${escaped}\n\`` ``.
 
-These slice 4 sites use `renderTaggedTemplateSource(SQL_EXPRESSION_TAG, text).source` in place of `tsQuotedTextSource`, because their text is user or contract SQL that a migration function now takes as a `sql` value:
+These slice 4 sites use `tsTaggedTemplateSource(SQL_EXPRESSION_TAG, text).source` in place of `tsQuotedTextSource`, because their text is user or contract SQL that a migration function now takes as a `sql` value:
 
 - Postgres `op-factory-call.ts`: `renderDdlColumnDefault` (`fn(...)`), `renderDdlConstraintAsTsCall` (`checkExpression`), `AddCheckConstraintCall`, `CreateIndexCall` (`expression` and `where`), `CreatePostgresRlsPolicyCall` (`using` and `withCheck`).
 - SQLite `op-factory-call.ts`: `renderDdlColumnDefault` (`fn(...)`), and `renderSpecDefault` (the function default inside a `SqliteColumnSpec`, for `addColumn` and `recreateTable`).
 
 SQLite `renderPostcheck` keeps `tsQuotedTextSource`: its text is SQL the planner builds itself (`buildRecreatePostchecks`), and `RecreatePostcheck.sql` stays a string.
 
-The three render helpers keep returning a string. Each call's `importRequirements()` adds `{ moduleSpecifier: <facade constant>, symbol: SQL_EXPRESSION_TAG }` when `renderTaggedTemplateSource(SQL_EXPRESSION_TAG, text).usesTag` holds for any text it renders, computed from the same texts (calls are frozen). That covers `CreateTableCall`, `AddColumnCall` and `SetDefaultCall` (Postgres), `AddCheckConstraintCall`, `CreateIndexCall`, `CreatePostgresRlsPolicyCall`, and SQLite `CreateTableCall`, `AddColumnCall` and `RecreateTableCall`. The facade constants are `POSTGRES_MIGRATION_FACADE` and `TARGET_MIGRATION_MODULE` (SQLite), both module-local to the file that holds the calls. `AlterColumnTypeCall` is unchanged (the planner never sets `using`). ADR 195's "same argument shapes" rule gets a recorded exception: the rendered file passes `sql` values where the IR holds strings.
+The three render helpers keep returning a string. Each call's `importRequirements()` adds `{ moduleSpecifier: <facade constant>, symbol: SQL_EXPRESSION_TAG }` when `tsTaggedTemplateSource(SQL_EXPRESSION_TAG, text).usesTag` holds for any text it renders, computed from the same texts (calls are frozen). That covers `CreateTableCall`, `AddColumnCall` and `SetDefaultCall` (Postgres), `AddCheckConstraintCall`, `CreateIndexCall`, `CreatePostgresRlsPolicyCall`, and SQLite `CreateTableCall`, `AddColumnCall` and `RecreateTableCall`. The facade constants are `POSTGRES_MIGRATION_FACADE` and `TARGET_MIGRATION_MODULE` (SQLite), both module-local to the file that holds the calls. `AlterColumnTypeCall` is unchanged (the planner never sets `using`). ADR 195's "same argument shapes" rule gets a recorded exception: the rendered file passes `sql` values where the IR holds strings.
 
 ## 18. Committed artefacts
 
@@ -795,7 +795,7 @@ Each slice that changes `examples/` or `packages/3-extensions/` adds its own fra
 | 2b | `sql-expression-literals-psl/app` and `/extension` | `raw-sql-is-a-sql-literal`, with `script: ./scripts/rewrite-sql-strings.mjs` (below); detection `**/*.prisma`: `\b(where\|expression)\s*:\s*["']` and `^\s*(using\|withCheck)\s*=\s*["']`. Supersedes the PSL plain string in `postgres-full-text-search/app` (line 79). `storage-hash-may-change-once` (a body with indentation, blank first or last lines or CRLF breaks gets canonical stored text; run `migration plan` once and commit the migration, which has no operations). Extension only: `block-spec-context-carries-data-types` (`AttributeSpecContext.dataTypes` and `BlockSpecContext.dataTypes`; `ControlDefaultRegistries.dataTypeEntries` removed; and, if blocks are still parsed in `buildSymbolTable`, its new `dataTypes` option); `supabase-contract-writes-sql-literals` |
 | 3 | `sql-expression-literals-ts/app` and `/extension` | `builder-raw-sql-is-a-sql-value` (`index`, `check`, `fullTextIndex`, `policy*` fields; supersedes the TypeScript `where` string in `postgres-full-text-search/app` line 54); `sql-tag-interpolates-sql-values`; `sql-tag-error-codes-renamed`; `storage-hash-may-change-once` (a multi-line template string, or one with leading whitespace or CRLF breaks, is canonicalized once written as `sql`). Extension only: `policy-handles-hold-sql-values`; `sql-tag-lives-in-sql-contract` (supersedes the tag text in `sql-default-literal/extension`) |
 | 4 | `migration-files-template-literals/extension` | `changes: []` if only files outside `examples/` and `packages/3-extensions/` change |
-| 5 | `migration-files-sql-values/extension` | `migration-functions-accept-sql-values` |
+| 5 | none | The slice adds no fragment: `check:upgrade-coverage` asks for none, because the change only widens what migration functions accept. It corrects the unreleased slice 3 fragments instead (`sql-expression-literals-ts/app` and `extension`), which said migration functions keep taking strings. Correcting an unreleased fragment is allowed; only released fragments under `upgrade-instructions/releases/` are never edited. |
 
 **The codemod.** The canonical file is `scripts/codemods/rewrite-sql-strings.mjs`, tested by `scripts/codemods/rewrite-sql-strings.test.mjs`, which is added to the root `test:scripts`. Copies sit at `upgrade-instructions/pending/sql-expression-literals-psl/{app,extension}/scripts/rewrite-sql-strings.mjs` and are referenced as `script: ./scripts/rewrite-sql-strings.mjs`. It follows the pending `add-model-map.mjs` codemod: `node:*` imports only, no network, no environment variables, invoked as `node scripts/rewrite-sql-strings.mjs '**/*.prisma'` with glob arguments. In each matching file it finds a quoted string (`"…"` or `'…'`) in these positions: the `where:` or `expression:` argument of `@@index`, `@@fullTextIndex` or `@@check`, and `using =` or `withCheck =` in a `policy_*` block. It decodes the PSL string escapes the way `decodeStringLiteral` does, and writes the text with its own copy of the section 11.1 rule: the backtick form, multi-line text on its own lines, or the double-quote form with `\\`, `\"`, `\n`, `\r` escapes when the text holds a backtick. It prints each changed file and the number of rewrites. The test covers each position, both quote kinds, escaped quotes, a text with a backtick, and a file with nothing to rewrite.
 

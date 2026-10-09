@@ -1,0 +1,126 @@
+# System design review: slice 5, migration files write `sql` values (TML-3297)
+
+## Scope
+
+Range: `24258f35e7...HEAD` on local branch `l65-5`, four commits (c542a4e7d5, 14366dbb90, efff1058f1, d2122b9135). I read the code at HEAD and checked it against design.md section 17, plan.md "Slice 5", design-notes.md decision 10, ADR 195, ADR 268, the Migration System doc ("Planner IR", "Opaque SQL in DDL"), design.md section 20, and the pending upgrade fragments. I did not run builds or tests. I read `wip/5/v-upgrade-coverage.log`; the coverage check passed with no output.
+
+What the slice adds, in structural terms:
+
+- One new input type, `MigrationSqlText = string | SqlExpression`, and one reader, `sqlTextOf`, in `@internal/sql-relational-core/contract-free`. Every migration function that takes opaque SQL now takes this type and turns it into a string at its entry. The IR and the stored option types stay strings.
+- One new renderer, `renderTaggedTemplateSource(tag, text)`, in framework-components `shared/tagged-literal.ts`. It writes `` sql`...` `` when the tag reads the text back unchanged, and otherwise falls back to `tsQuotedTextSource`.
+- `sql` is exported from both targets' migration modules, and each call's `importRequirements()` adds it when a rendered text uses the tag.
+- ADR 195 gets a "Recorded exception" section.
+
+What holds up well:
+
+- Dependency direction is right. `relational-core` (lanes) imports `sql-contract` (core); the targets import framework-components `authoring` (shared plane) and `ts-render`. `framework-components` already depended on `ts-render`.
+- The IR is unchanged. Conversion happens once, at the method entry, so `ops.json` and the planner do not change. This is the narrowest place to put it.
+- There is one `sql` value. The migration module re-exports the same `sql` the contract builder uses, so a migration file and a contract write raw SQL with the same function.
+- The Postgres test that checks, for every call class, that the `sql` import appears exactly when the output holds a `` sql` `` template is the right architectural test for import tracking. The round-trip tests that run a generated file and compare `ops.json` prove the main property: the new output means the same thing as the IR.
+
+## Findings
+
+### A01. `renderTaggedTemplateSource` mixes three concerns that belong to three places
+
+Location: packages/1-framework/1-core/framework-components/src/shared/tagged-literal.ts lines 179-211; packages/1-framework/1-core/ts-render/src/ts-string-literal.ts lines 26-42; packages/3-targets/3-targets/postgres/src/core/migrations/render-typescript.ts lines 145-151; packages/3-targets/3-targets/sqlite/src/core/migrations/render-typescript.ts lines 131-137
+
+Issue: The function promises that "the tag reads it back unchanged". That promise depends on three separate things:
+
+1. How the TypeScript `sql` function reads a template: `resolveTemplateTagEscapes` and `canonicalizeTaggedLiteralBody`, in `sql-contract`.
+2. How TypeScript template syntax works: which characters need escapes, and how to escape a backtick, `${` and a backslash. `ts-render` already owns this in `tsQuotedTextSource` and `needsEscapeSequence`. The new `holdsCharacterThatNeedsAnEscape` and the escape chain on line 185 are copies of that code with one change (line breaks and tabs are allowed).
+3. How the targets' `indent()` helper treats blank lines. The `WHITESPACE_ONLY_LINE` check exists only because `indent()` uses `line.trim()`, which treats a line holding only a non-breaking space as blank, while the canonicalization does not. That fact lives in two target packages, but the check that depends on it lives in the framework.
+
+So a framework function encodes a detail of two target files, and duplicates a `ts-render` rule. If `indent()` or `needsEscapeSequence` changes, nothing ties the change back to this function.
+
+The `tag` parameter suggests the function works for any tag. It only works for a tag whose TypeScript function reads a template the way `sql` does. No other tag has a TypeScript function today, so the parameter is speculative.
+
+The name also reads wrong in its module. Its sibling `printTaggedLiteral` writes PSL. `renderTaggedTemplateSource` writes TypeScript, but nothing in the name says so. `ts-render` names its functions `ts…Source` (`tsQuotedTextSource`, `tsObjectSource`, `jsonToTsSource`). And the module now has two read-back predicates, `printedTaggedLiteralReadsBack` (PSL) and the private `templateHoldsUnchanged` (TypeScript), with different rules and no shared name.
+
+Suggestion: Split the function along those lines.
+
+- In `ts-render`, add the template syntax: a function that writes a tagged template literal for a text, and a predicate for "this text can be written inside a template literal with no escape sequence". Both should share `needsEscapeSequence` with `tsQuotedTextSource`.
+- Next to `printSqlExpressionLiteral` in `sql-contract/src/sql-expression.ts`, add `sqlTemplateSource(text)`. It decides whether the `sql` tag reads the text back and calls the `ts-render` writer. It has no `tag` parameter.
+- Make the targets' `indent()` treat as blank exactly the lines the canonicalization treats as blank (`/^[ \t]*$/`). The special check then disappears. If that is not wanted, put the rule in a comment at `indent()`, which is where it would break.
+
+If the function stays where it is, at least rename it `tsTaggedTemplateSource` and state in its doc comment that it is correct only for a tag whose TypeScript function canonicalizes with `canonicalizeTaggedLiteralBody`.
+
+### A02. `MigrationSqlText` names a consumer, and the type is used outside migration files
+
+Location: packages/2-sql/4-lanes/relational-core/src/contract-free/column.ts lines 18-23, 38-39, 73-77; callers packages/3-targets/3-targets/postgres/src/core/migrations/issue-planner.ts line 468 and packages/3-targets/3-targets/postgres/src/contract-free/control-bootstrap.ts lines 12-39
+
+Issue: The type is the parameter type of `fn` and `checkExpression`. Those are contract-free DDL factories. The planner calls `checkExpression` when it builds the IR, and the control bootstrap calls `fn('now()')` to build Prisma's own tables. Neither is a migration file. The doc comment also says "SQL in a migration-file argument". A fresh reader would expect the type to be specific to migration files, and would not expect to see it on a factory the planner uses.
+
+What the type actually is: raw SQL given either as a `sql` value or as a string, before it is read. That is true in any caller.
+
+Suggestion: Rename it to describe that, for example `SqlTextInput`. This also matches the `*Input` suffix the same diff uses in the SQLite migration (`SqliteColumnSpecInput`, `SqliteTableSpecInput`). Keep the remark that the string form is permanent, but move the part about committed migration files to the Migration System doc, which already says it.
+
+### A03. ADR 195's exception says both forms read the same text, which is true only for canonical text
+
+Location: docs/architecture docs/adrs/ADR 195 - Planner IR with two renderers.md lines 131-133
+
+Issue: The section says "The migration functions take a `sql` value or a string and read the same text from either, so the factory still receives the IR's value." That is not true in general. A `sql` value canonicalizes its text and a string does not, so `` sql`  x` `` and `'  x'` give different text. ADR 268 and the Migration System doc say this correctly. What makes the exception safe is a property of the renderer: it writes a template only when canonicalization leaves the text unchanged. The section mentions the fallback in its last sentence but does not say that this is the reason the factory gets the IR's value.
+
+The section also does not say that the method signatures now differ from the IR's types. The "Factory alignment" section just above says signatures are "aligned 1:1" with the call argument shapes. After this slice, for example, `createIndex` takes `Omit<CreateIndexExtras, 'where'> & { where?: MigrationSqlText }` while `CreateIndexCall` holds `CreateIndexExtras`. The exception covers what the file writes, but not this change to the API.
+
+A smaller point: the example names `CreateIndexCall.where`, but `where` is a field of the call's extras.
+
+Suggestion: Reword the middle of the section to state the invariant. For example: "Each migration function that takes opaque SQL accepts a `sql` value or a string and converts it to a string at its entry. A `sql` value's text is canonical and a string's is not, so the renderer writes a template only when canonicalization leaves the text unchanged. The factory therefore receives the IR's text either way." Add one sentence saying the parameter types of those methods are wider than the IR's types. Write the example as `extras.where`.
+
+### A04. The rule for which SQL becomes a `sql` template is explained by where the SQL came from, but enforced by parameter type
+
+Location: docs/architecture docs/subsystems/7. Migration System.md line 125 (last sentences); packages/3-targets/3-targets/sqlite/src/core/migrations/op-factory-call.ts lines 988-992; docs/architecture docs/adrs/ADR 195 - Planner IR with two renderers.md line 133
+
+Issue: The doc says the SQLite postcheck SQL stays a string "because it is not the contract's SQL". But nothing in the IR records where a text came from. `AddCheckConstraintCall.expression` and `RecreatePostcheck.sql` are both plain strings. The real rule in the code is simpler: the renderer writes a `sql` template exactly where the migration function's parameter accepts a `sql` value. `postchecks[].sql` does not, so the file must pass a string.
+
+The provenance reason also does not hold in general. If the planner one day builds a check expression itself and passes it to `AddCheckConstraintCall`, the file will show it as `` sql`...` ``, and the stated reason will be false. A user who edits a migration file by hand also sees raw SQL in two forms in one file and has no stated rule for which form a field takes.
+
+There is a structural distinction that does hold. The places that take a `sql` value are exactly the opaque SQL fragments that the planner places inside a larger statement, which "Opaque SQL in DDL" lists. A postcheck is a whole query, like the statement of `rawSql`. That distinction is in the types and the docs already.
+
+Suggestion: State the rule that way in the Migration System doc and in ADR 195: a migration function takes a `sql` value for an opaque SQL fragment placed inside a DDL statement (the list in "Opaque SQL in DDL"), and the renderer writes a template exactly there. A whole statement or query, such as a `recreateTable` postcheck or `rawSql`, stays a string. Drop "because it is not the contract's SQL".
+
+### A05. The skill gives the new API in a broken code span and does not mention canonicalization
+
+Location: skills/prisma-8/references/migrations.md line 367 and line 55
+
+Issue: Line 367 puts `` fn(sql`expression`) `` inside a single-backtick code span. The inner backtick ends the span, so the text renders broken. The same line says the functions accept "a `sql` value ... or a string", but not that the two differ: a `sql` value is canonicalized and a string is not. This skill is what an agent reads before it edits a migration file. An agent that "tidies" a generated file by wrapping a fallback string in `sql` changes the SQL the migration runs. The upgrade instructions warn about this; the skill does not. Line 55 lists the symbols in the rendered import line and does not include `sql`.
+
+Suggestion: Use a double-backtick code span on line 367. Add one sentence: generated files write a string where the `sql` tag would change the text, so leave those strings as strings. Add `sql` to the import list on line 55.
+
+### A06. `sqlTextOf` reports a wrong message and an undocumented raise site
+
+Location: packages/2-sql/4-lanes/relational-core/src/contract-free/column.ts lines 21-23; docs/reference/error-reference.md line 242 (`CONTRACT.ARGUMENT_INVALID`)
+
+Issue: For a value that is neither a string nor a `sql` value, `sqlTextOf` calls `requireSqlExpression(value, 'SQL text')`. The message is "SQL text must be a sql`...` value." For a function that also accepts strings, that message is wrong, and "SQL text" does not name the argument that was bad. The error reference lists every place that raises `CONTRACT.ARGUMENT_INVALID` with a `sql` message and its `what` values, but not the migration functions. The `CONTRACT.` prefix is also odd for an argument in a migration file, which is not contract authoring; the reference describes this code as being for "the contract-authoring surface".
+
+Suggestion: Give `sqlTextOf` its own message, for example "`<argument>` must be a sql`...` value or a string", with the argument named by the caller. Add the raise site and its `what` value to the error reference. Whether to keep the `CONTRACT.` code is a smaller decision; if it stays, the reference should say that migration functions raise it too.
+
+### A07. The new render and import helpers are copied in both targets, and imports are listed apart from rendering
+
+Location: packages/3-targets/3-targets/postgres/src/core/migrations/op-factory-call.ts lines 188-213 and the `importRequirements()` methods of `CreateTableCall`, `AddColumnCall`, `SetDefaultCall`, `AddCheckConstraintCall`, `CreateIndexCall`, `CreatePostgresRlsPolicyCall`; packages/3-targets/3-targets/sqlite/src/core/migrations/op-factory-call.ts lines 103-125 and the `importRequirements()` methods of `CreateTableCall`, `AddColumnCall`, `RecreateTableCall`
+
+Issue: `sqlTextSource` and `sqlTagImports` are the same code in both targets, differing only in the module constant. Each call also lists the texts it renders twice: once in `renderTypeScript()` and once in `importRequirements()` (for example `columnSqlTexts` plus `constraintSqlTexts` in `CreateTableCall`). If a later change renders one more SQL text and forgets the second list, the generated file uses `sql` without importing it and does not compile. The existing code already works this way for other symbols (`constraintImportSymbols`), so this follows the current pattern. Postgres has a test over every call class that would catch the mistake. SQLite has only the round-trip tests, which cover the calls they happen to build.
+
+Suggestion: Put one helper in the SQL family (for example in `relational-core` next to `sqlTextOf`, or in `family-sql` control) that takes the module specifier and returns both the source and the import. Better still, render each SQL text as a small `TsExpression` that carries its own import, so a call's imports are collected from what it rendered and the two lists cannot drift. At minimum, add the per-class "imports `sql` exactly when it prints a template" test to SQLite.
+
+### A08. Postgres and SQLite express the wider input types in different shapes
+
+Location: packages/3-targets/3-targets/postgres/src/core/migrations/postgres-migration.ts lines 515, 577-580, 646-649, 710-726; packages/3-targets/3-targets/sqlite/src/core/migrations/sqlite-migration.ts lines 306-335
+
+Issue: Postgres writes each wider type inline in the method signature (`Omit<CreateIndexExtras, 'where'> & { where?: MigrationSqlText }`) and repeats it in the private converter below. SQLite names its wider types (`ColumnDefaultInput`, `SqliteColumnSpecInput`, `SqliteTableSpecInput`) but does not export them, although they type protected methods of an exported class that users subclass. These are sibling designs for the same idea, built two ways. A user cannot name the parameter type of either.
+
+Suggestion: Pick one shape for both targets. Named `*Input` types, written once and used in both the signature and the converter, read best. Export them from the target's migration module only if users are expected to build these arguments outside a method call; otherwise keep them private in both targets.
+
+### A09. The upgrade instructions differ from design section 20 without a recorded reason
+
+Location: upgrade-instructions/pending/sql-expression-literals-ts/app/instructions.md lines 62 and 89; upgrade-instructions/pending/sql-expression-literals-ts/extension/instructions.md lines 71 and 98; projects/sql-expression-literals/design.md section 20, slice 5 row and first paragraph
+
+Issue: Design section 20 says slice 5 adds a fragment `migration-files-sql-values/extension` with the change `migration-functions-accept-sql-values`, and says "Never edit another PR's fragment; a new fragment names the pending fragment it supersedes." The slice adds no fragment and edits the slice 3 fragment, which merged with #30558. The coverage check passes, so no fragment was required.
+
+The edit itself is the right call. The old sentence ("migration functions keep taking strings") became false, the fragment has not been released, and two fragments that contradict each other in one release would be worse for users. The record-upgrade-instructions skill allows fixes to a fragment through normal review. But the design still says the opposite.
+
+Suggestion: Update design section 20: slice 5 adds no fragment because its API changes only widen parameter types and add an export, and it corrects the unreleased slice 3 fragment in place because the sentence about migration files became false.
+
+## Out of scope for this pass
+
+- Whether `renderTaggedTemplateSource`'s fallbacks are complete and correct for every input, and whether the planted-defect logs show each test can fail: code review.
+- Readability of the generated files for users: devrel lens.

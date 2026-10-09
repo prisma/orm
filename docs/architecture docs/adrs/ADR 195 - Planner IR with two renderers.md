@@ -130,7 +130,11 @@ This alignment is what makes the TypeScript renderer possible. The rendered sour
 
 ## Recorded exception: SQL migration files pass `sql` values
 
-The rendered SQL `migration.ts` passes raw SQL as `` sql`...` `` values where the IR holds strings: `CreateIndexCall.where` is a string, and the file writes `` where: sql`"archivedAt" IS NULL` ``. The migration functions take a `sql` value or a string and read the same text from either, so the factory still receives the IR's value. The exception exists so that a migration file writes SQL the way a contract does, with no escaped quotes and with multi-line text on its own lines ([ADR 268](ADR%20268%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md)). Where a template would not read back as the same text, the file passes a string, which is the IR's shape.
+The rendered SQL `migration.ts` passes raw SQL fragments as `` sql`...` `` values where the IR holds strings. `CreateIndexCall` holds its `extras.where` as a string, and the file writes `` extras: { where: sql`"archivedAt" IS NULL` } ``. So the methods a migration file calls are wider than the IR's types: each takes a string or a `sql` value and reads the text with `sqlTextOf`.
+
+This is safe because of one rule in the renderer: it writes a `sql` template only when canonicalizing the text leaves it unchanged, and the `sql` tag canonicalizes. The method therefore receives exactly the IR's text, and `ops.json` is the same as `renderOps` produces. Where canonicalization would change the text, or the text holds characters a template cannot carry safely, the file passes a string, which is the IR's own shape.
+
+The exception exists so that a migration file writes SQL the way a contract does, with no escaped quotes and with multi-line text on its own lines ([ADR 268](ADR%20268%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md)). It covers SQL fragments that a method places inside a DDL statement. Whole statements and queries, such as `rawSql` and the SQLite `recreateTable` postchecks, stay strings.
 
 ## References
 
