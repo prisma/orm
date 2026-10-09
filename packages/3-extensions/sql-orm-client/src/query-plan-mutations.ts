@@ -51,7 +51,7 @@ export function projectTableColumns(
   );
 }
 
-function buildReturningColumns(
+export function returningProjection(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   modelName: string,
@@ -188,7 +188,7 @@ export function compileInsertReturning(
     .withRows(normalizedRows)
     .withOnConflict(conflictSkipClause(tableName, conflictSkip))
     .withReturning(
-      buildReturningColumns(contract, namespaceId, modelName, tableName, returningColumns),
+      returningProjection(contract, namespaceId, modelName, tableName, returningColumns),
     );
   const { params } = deriveParamsFromAst(ast);
   return buildOrmQueryPlan(contract, ast, params);
@@ -380,7 +380,7 @@ export function compileUpsertReturning(
     .withRows([createAssignments.assignments])
     .withOnConflict(onConflict)
     .withReturning(
-      buildReturningColumns(contract, namespaceId, modelName, tableName, returningColumns),
+      returningProjection(contract, namespaceId, modelName, tableName, returningColumns),
     );
 
   const { params } = deriveParamsFromAst(ast);
@@ -425,7 +425,7 @@ export function compileUpdateReturning(
     setValues,
     combineWhereExprs(filters),
   ).withReturning(
-    buildReturningColumns(contract, namespaceId, modelName, tableName, returningColumns),
+    returningProjection(contract, namespaceId, modelName, tableName, returningColumns),
   );
   const { params } = deriveParamsFromAst(ast);
   return buildOrmQueryPlan(contract, ast, params);
@@ -462,7 +462,7 @@ export function compileDeleteReturning(
   returningColumns: readonly string[] | undefined,
 ): SqlQueryPlan<Record<string, unknown>> {
   const ast = deleteAst(contract, namespaceId, tableName, combineWhereExprs(filters)).withReturning(
-    buildReturningColumns(contract, namespaceId, modelName, tableName, returningColumns),
+    returningProjection(contract, namespaceId, modelName, tableName, returningColumns),
   );
   const { params } = deriveParamsFromAst(ast);
   return buildOrmQueryPlan(contract, ast, params);

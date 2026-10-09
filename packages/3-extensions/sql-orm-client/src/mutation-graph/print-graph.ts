@@ -5,7 +5,7 @@ import type {
   SelectAst,
   UpdateAst,
 } from '@internal/sql-relational-core/ast';
-import { type Edge, FilterData, type NodeId } from './edges';
+import { After, type Edge, type NodeId } from './edges';
 import type { Graph } from './graph';
 import type { StatementAst } from './nodes';
 import { printExpression } from './print-expression';
@@ -75,15 +75,15 @@ function printStatement(ast: StatementAst): string {
   return printDelete(ast);
 }
 
-function printEdge(names: NodeNames, edge: Edge): string {
-  if (edge instanceof FilterData) {
-    const pairs = edge.columns.map(([source, target]) => `${source}->${target}`);
-    return `FilterData ${names.get(edge.from)} (${pairs.join(', ')})`;
+function printEdge(names: NodeNames, edge: Edge<unknown> | After): string {
+  if (edge instanceof After) {
+    return `After ${names.get(edge.from)}`;
   }
-  return `After ${names.get(edge.from)}`;
+  const pairs = edge.columns.map(([source, target]) => `${source.alias}->${target.alias}`);
+  return `${edge.constructor.name} ${names.get(edge.from)} (${pairs.join(', ')})`;
 }
 
-function printInputs(names: NodeNames, inputs: readonly Edge[]): string {
+function printInputs(names: NodeNames, inputs: readonly (Edge<unknown> | After)[]): string {
   if (inputs.length === 0) {
     return '';
   }

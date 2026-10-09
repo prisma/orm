@@ -12,12 +12,13 @@ import {
   OrderByItem,
   OrExpr,
   ParamRef,
+  ProjectionItem,
   SelectAst,
   TableSource,
   UpdateAst,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { after, filterData } from '../../src/mutation-graph/edges';
+import { type ColumnPair, filterData } from '../../src/mutation-graph/edges';
 import { Delete, Find, type Node, Update } from '../../src/mutation-graph/nodes';
 import { printGraph } from '../../src/mutation-graph/print-graph';
 import { graphOfUsers } from './statements';
@@ -40,9 +41,16 @@ function deleteFrom(table: TableSource, where?: AnyExpression): Delete {
   return new Delete(DeleteAst.from(table).withWhere(where));
 }
 
+function pairs(...names: (readonly [string, string])[]): ColumnPair[] {
+  return names.map(([source, target]) => [
+    ProjectionItem.of(source, ColumnRef.of('user', source)),
+    ProjectionItem.of(target, ColumnRef.of('post', target)),
+  ]);
+}
+
 function printNode(node: Node): string {
   const graph = graphOfUsers();
-  graph.add(node);
+  graph.add(node, { filter: [] });
   return printGraph(graph);
 }
 
@@ -55,7 +63,7 @@ describe('printGraph', () => {
     it('prints one Update as the rows result', () => {
       const graph = graphOfUsers('rows');
       const update = updateUser({ name: ParamRef.of('Ada'), age: ParamRef.of(36) }, idIsOne);
-      graph.setResult(graph.add(update));
+      graph.setResult(graph.add(update, { filter: [] }));
 
       expect(printGraph(graph)).toBe(
         ["n1 Update user set name = 'Ada', age = 36 where id = 1", 'result: n1 rows'].join('\n'),
@@ -64,8 +72,8 @@ describe('printGraph', () => {
 
     it('prints a Find and a Delete after it, with the Find as the result', () => {
       const graph = graphOfUsers('rows');
-      const find = graph.add(findUser(idIsOne));
-      graph.add(deleteFrom(user, idIsOne), after(find));
+      const find = graph.add(findUser(idIsOne), { filter: [] });
+      graph.after(find, graph.add(deleteFrom(user, idIsOne), { filter: [] }));
       graph.setResult(find);
 
       expect(printGraph(graph)).toBe(
@@ -79,9 +87,9 @@ describe('printGraph', () => {
 
     it('prints a Find whose row goes into the where of an Update', () => {
       const graph = graphOfUsers('first row');
-      const find = graph.add(findUser(idIsOne));
+      const find = graph.add(findUser(idIsOne), { filter: [] });
       const update = updateUser({ name: ParamRef.of('Ada') });
-      graph.setResult(graph.add(update, filterData(find, [['id', 'id']])));
+      graph.setResult(graph.add(update, { filter: [filterData(find, pairs(['id', 'id']))] }));
 
       expect(printGraph(graph)).toBe(
         [
@@ -94,7 +102,7 @@ describe('printGraph', () => {
 
     it('prints a count result', () => {
       const graph = graphOfUsers('count');
-      graph.setResult(graph.add(deleteFrom(user, idIsOne)));
+      graph.setResult(graph.add(deleteFrom(user, idIsOne), { filter: [] }));
 
       expect(printGraph(graph)).toBe(
         ['n1 Delete user where id = 1', 'result: n1 count'].join('\n'),
@@ -105,9 +113,10 @@ describe('printGraph', () => {
   describe('names', () => {
     it('numbers the nodes that remain, without gaps', () => {
       const graph = graphOfUsers('rows');
-      const first = graph.add(findUser(idIsOne));
-      const removed = graph.add(findUser());
-      const del = graph.add(deleteFrom(user), after(first));
+      const first = graph.add(findUser(idIsOne), { filter: [] });
+      const removed = graph.add(findUser(), { filter: [] });
+      const del = graph.add(deleteFrom(user), { filter: [] });
+      graph.after(first, del);
       graph.remove(removed);
       graph.setResult(del);
 
@@ -124,8 +133,10 @@ describe('printGraph', () => {
 
     it('prints none for an empty result next to other nodes', () => {
       const graph = graphOfUsers('first row');
-      const find = graph.add(findUser(idIsOne));
-      graph.setResult(graph.add(updateUser({}), filterData(find, [['id', 'id']])));
+      const find = graph.add(findUser(idIsOne), { filter: [] });
+      graph.setResult(
+        graph.add(updateUser({}), { filter: [filterData(find, pairs(['id', 'id']))] }),
+      );
 
       expect(printGraph(graph)).toBe(['n1 Find user where id = 1', 'result: none'].join('\n'));
     });
@@ -134,16 +145,12 @@ describe('printGraph', () => {
   describe('edges', () => {
     it('prints every column pair of a FilterData and every input of a node', () => {
       const graph = graphOfUsers();
-      const findUsers = graph.add(findUser());
-      const findPosts = graph.add(new Find(SelectAst.from(post)));
-      graph.add(
-        deleteFrom(post),
-        filterData(findUsers, [
-          ['tenant_id', 'tenant_id'],
-          ['id', 'author_id'],
-        ]),
-        after(findPosts),
-      );
+      const findUsers = graph.add(findUser(), { filter: [] });
+      const findPosts = graph.add(new Find(SelectAst.from(post)), { filter: [] });
+      const del = graph.add(deleteFrom(post), {
+        filter: [filterData(findUsers, pairs(['tenant_id', 'tenant_id'], ['id', 'author_id']))],
+      });
+      graph.after(findPosts, del);
 
       expect(printGraph(graph)).toBe(
         [
@@ -251,7 +258,7 @@ describe('printGraph', () => {
 
     it('prints an Update that sets nothing, which only replace can put in a graph', () => {
       const graph = graphOfUsers();
-      const find = graph.add(findUser());
+      const find = graph.add(findUser(), { filter: [] });
       graph.replace(find, updateUser({}));
 
       expect(printGraph(graph)).toBe(['n1 Update user set nothing', 'result: none'].join('\n'));

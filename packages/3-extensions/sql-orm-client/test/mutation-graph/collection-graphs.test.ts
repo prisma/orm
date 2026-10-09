@@ -55,10 +55,18 @@ describe('updateAllGraph', () => {
     expect(printGraph(updateAllGraph(target, {}, 'count'))).toBe('result: none');
   });
 
-  it('builds the Update without the columns it returns', () => {
-    const graph = updateAllGraph(target, { email: 'ada@example.com' }, 'rows');
+  it('makes the Update return the selection of the caller for rows and nothing for a count', () => {
+    const rows = updateAllGraph(target, { email: 'ada@example.com' }, 'rows');
+    const count = updateAllGraph(target, { email: 'ada@example.com' }, 'count');
 
-    expect(graph.nodeAt(0)?.ast).toMatchObject({ kind: 'update', returning: undefined });
+    expect(rows.nodeAt(0)?.returns.map((column) => column.alias)).toEqual(['id', 'name']);
+    expect(count.nodeAt(0)?.returns).toEqual([]);
+  });
+
+  it('makes the Update return the identity columns when includes will be loaded', () => {
+    const graph = updateAllGraph(targetWithIncludes, { email: 'ada@example.com' }, 'rows');
+
+    expect(graph.nodeAt(0)?.returns.map((column) => column.alias)).toEqual(['id']);
   });
 });
 
@@ -82,7 +90,8 @@ describe('deleteAllGraph', () => {
         'result: n1 rows',
       ].join('\n'),
     );
-    expect(graph.nodeAt(0)?.ast).toMatchObject({ projection: [{ alias: 'id' }] });
+    expect(graph.nodeAt(0)?.returns.map((column) => column.alias)).toEqual(['id']);
+    expect(graph.nodeAt(1)?.returns).toEqual([]);
     expect(graph.result.collection).toBe(targetWithIncludes);
   });
 
@@ -105,7 +114,8 @@ describe('updateFirstGraph', () => {
         'result: n2 first row',
       ].join('\n'),
     );
-    expect(graph.nodeAt(0)?.ast).toMatchObject({ projection: [{ alias: 'id' }] });
+    expect(graph.nodeAt(0)?.returns.map((column) => column.alias)).toEqual(['id']);
+    expect(graph.nodeAt(1)?.returns.map((column) => column.alias)).toEqual(['id', 'name']);
     expect(graph.result.collection).toBe(target);
   });
 
