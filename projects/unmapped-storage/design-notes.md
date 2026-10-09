@@ -33,9 +33,9 @@ Prisma 7 users put `@ignore` on a field Prisma 8 cannot type, for example `legac
 
 Recommendation pending Will: option 2 for now, recorded as a known gap in ADR 267 and the reader's README, and the codec-less column item moves ahead of the deferred syntax item on the plan.
 
-### `_prisma_migrations`
+### `_prisma_migrations` (decided)
 
-It exists on a database Prisma 7 built and is missing from a fresh database rebuilt from `migrations/`. `managed` and `tolerated` would create it; `external` fails verify when it is missing; `observed` warns when it is missing. The Prisma 7 project spec proposed an ignore list supplied by the Postgres facade instead. Decided before slice 3.
+Decided 2026-10-09 from the code. Declaring the ledger in the contract, under any control policy, puts a table with no model into every Prisma 7 contract: every Prisma 7 project's storage hash changes, and `contract print` refuses every Prisma 7 contract at cutover, because no syntax declares a table with no model. Prisma 7's own `db pull` never introspects the table either: it is the tool's bookkeeping, not the application's schema. So the Postgres target names `_prisma_migrations` as a tool table, beside Prisma 8's own `prisma_contract` schema, and `db verify` (strict included) and `contract infer` leave it alone. This is the facade ignore list the Prisma 7 project spec proposed. Slice 4.
 
 ## Alternatives considered
 

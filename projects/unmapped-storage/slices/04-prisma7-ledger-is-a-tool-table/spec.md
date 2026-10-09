@@ -14,12 +14,7 @@ prisma db verify --strict --json
 
 Prisma 7 records applied migrations in a table `_prisma_migrations` in the schema it migrates (`public` by default). It is the earlier tool's bookkeeping, not the application's schema: Prisma 7's own `db pull` never introspects it. Prisma 8 keeps its own bookkeeping in the `prisma_contract` schema, which no contract declares and no verify reports.
 
-The Postgres target names the tables in an application schema that belong to a migration tool, not to the application: `_prisma_migrations`. This is a fact about Postgres databases the target owns, so it lives on the target (its control adapter or descriptor), not in the framework or the SQL family, and the framework and family read it through an existing or new target hook. Two consumers leave such tables alone:
-
-- **`db verify`.** A tool table that no contract declares is never an unclaimed element and never a schema issue, in lenient or strict mode. If a contract does declare a table of that name, it is treated like any declared table.
-- **`contract infer`.** A tool table is not printed as a model.
-
-The planner needs nothing: it already never drops a table that no contract declares unless asked, and a tool table is never in a contract. Check that `db update` does not propose dropping it, and leave it out of the plan if it does.
+The Postgres control adapter's introspection leaves `_prisma_migrations` out of an application schema unless a contract passed to it declares a table of that name in that namespace. Every command that reads the live database goes through introspection, so all of them agree: `db verify` (lenient and strict), `db init`, `db update`, the check the runner makes after applying a migration, `db schema` and `contract infer`. The list is a fact about Postgres databases, so it lives in the Postgres adapter; the framework and the SQL family need no hook and name neither Postgres nor Prisma 7. Marker and ledger reads query `prisma_contract` directly and are unaffected. The Mongo adapter already leaves out its own `_prisma_migrations` collection the same way; there the collection is Prisma 8's own ledger, so it is left out always.
 
 Rejected: declaring the ledger in the contract. It puts a table with no model into every Prisma 7 contract, changes every Prisma 7 project's storage hash, and makes `contract print` refuse every Prisma 7 contract at cutover (no syntax declares a table with no model yet). See `projects/unmapped-storage/design-notes.md`.
 

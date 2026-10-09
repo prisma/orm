@@ -78,6 +78,8 @@ Fidelity is defined by the comparison `db verify` makes against the database the
 | check constraints, by name | |
 | native enums, by type name and ordered member list | |
 
+The earlier version's own record of applied migrations, `_prisma_migrations`, is not part of the schema and is not described. The Postgres adapter's introspection leaves it out of an application schema unless a contract declares a table of that name, so `db verify` never compares it and `contract infer` never prints it, as the earlier version's own `db pull` never introspects it.
+
 That table decides several lowering rules on its own. Index names are reproduced exactly, because they are compared. Referential actions are always written out, and enum member order is preserved. The measure of the reader is a real database, built by the earlier version's own migrations, that verifies with zero findings.
 
 `db verify` is not the only consumer of the contract, though. The migration planner drops and renames primary keys and foreign keys by name, so a name verify ignores still has to be the one the database holds, or a later migration fails. The reader therefore works out the name the earlier version gave each primary key and foreign key, and compares it with the name Prisma 8 derives for an unnamed one, which the target supplies through its binding. It states the name in the contract only where the two differ: a `map` that is not the derived name, an implicit junction's primary key (`_PostToTag_AB_pkey` where Prisma 8 derives `_PostToTag_pkey`), and a foreign key name the earlier version cut to 63 bytes. Names that agree stay unnamed, so `contract print` writes no `map` for them:
