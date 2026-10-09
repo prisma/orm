@@ -5,7 +5,7 @@
 
 ## At a glance
 
-The project is two slices, each one PR. Slice 2 was added on 2026-10-07 after QA found that a `native_enum` rename misses its `pg.enum(...)` usages. Slice 1 adds `textDocument/prepareRename` and `textDocument/rename` to the language server, built on the find-references provider, and makes rename work in `apps/lsp-playground`.
+The project is four slices, each one PR. Slices 3 and 4 were added on 2026-10-08, when the operator decided that references across namespaces and the named-type form are to work; they change the SQL interpreter and the Postgres target and do not fit one review together with slice 2. Slice 2 was added on 2026-10-07 after QA found that a `native_enum` rename misses its `pg.enum(...)` usages. Slice 1 adds `textDocument/prepareRename` and `textDocument/rename` to the language server, built on the find-references provider, and makes rename work in `apps/lsp-playground`.
 
 ## Composition
 
@@ -28,17 +28,29 @@ The project is two slices, each one PR. Slice 2 was added on 2026-10-07 after QA
      - one statement in the language-server README and one in the playground README that rename is supported;
      - the manual QA script and run, with the VS Code and playground checks as operator steps.
 
-2. **Slice `type-constructor-refs`**. Linear: none. Folder: `projects/lsp-rename/slices/type-constructor-refs/` (spec not written yet)
+2. **Slice `type-constructor-refs`**. Linear: none. Folder: `projects/lsp-rename/slices/type-constructor-refs/`
    - **Outcome:**
      - The binder records a resolution for an entity name inside a type-constructor argument (`OrderStatus` in `pg.enum(OrderStatus)`).
      - Go-to-definition, hover, find references and rename work on such a name with no change of their own.
      - Renaming a `native_enum` block used in `pg.enum(...)` leaves a schema with no diagnostics.
    - **Builds on:** Slice 1 merged (PR #30633).
-   - **Hands to:** Project close-out.
+   - **Hands to:** Slices 3 and 4: every entity-constructor argument has a binder resolution, and the SQL interpreter takes the entity name from it.
    - **Focus:**
      - how type-constructor arguments are described to the binder, so it binds them the way it binds `entityRef` attribute arguments;
      - whether the SQL interpreter then reads the binder's resolution instead of looking the name up (`psl-column-resolution.ts`, `PSL_UNKNOWN_ENTITY_REF`);
      - a design discussion with the operator before the spec: the binder rules are the operator's.
+
+3. **Slice `enum-across-namespaces`**. Linear: none. Spec not written yet.
+   - **Outcome:** a `pg.enum` column can name a `native_enum` of another namespace (unqualified from a namespaced model for a top-level one, or qualified as `auth.X`). The column's type name and value-set reference come from the enum's namespace. The entity is looked up in the resolved block's namespace, and the namespace comparison slice 2 adds to the SQL interpreter is removed.
+   - **Builds on:** Slice 2.
+   - **Hands to:** Slice 4 (type-name qualification by the enum's namespace), or close-out.
+   - **Focus:** the type-name qualification hook, which today qualifies by the column's namespace in the shared contract builder; `contract print` for such a column; the Prisma 7 interpreter's own refusal of cross-schema enums; what the TypeScript builder can express.
+
+4. **Slice `named-type-entity-constructor`**. Linear: none. Spec not written yet.
+   - **Outcome:** `types { Status = pg.enum(OrderStatus) }` and `status Status` give the same column as `status pg.enum(OrderStatus)`, apart from the `typeRef`.
+   - **Builds on:** Slice 2; slice 3 for an enum outside `public`.
+   - **Hands to:** Project close-out.
+   - **Focus:** named-type resolution taking the entity-constructor path; the value-set reference travelling to each column that uses the named type; the type name in the `storage.types` entry.
 
 ## Dependencies (external)
 

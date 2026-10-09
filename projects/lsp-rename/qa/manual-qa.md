@@ -24,6 +24,7 @@
 | 10 | Exploratory: identifier sweep | Every identifier position in the scratch project and in the shipped demo schema obeys the cross-cutting requirements | read-only | (no AC; charter) |
 | 11 | Applied renames keep the storage names | A model, a scalar field and a `native_enum` block are renamed and applied; each edit carries the map attribute, diagnostics stay empty, the formatter leaves the attribute in place, and the emitted contract has the same storage as before | tmpdir | DoD-12, DoD-13, DoD-14, DoD-15 |
 | 12 | Renames that get no map attribute | A relation field in both directions, a model with `@@base`, a namespace, a `role` block, a model and a field that already have one, and a rename to the current name return name edits only | tmpdir | DoD-12 |
+| 13 | Navigation and diagnostics on a `pg.enum(…)` argument | Go-to-definition and find references work on the enum name inside `pg.enum(…)`; an unknown name is reported once; a `native_enum` of another namespace is refused while navigation still works | tmpdir | slice `type-constructor-refs` |
 | V | Operator steps: VS Code | F2 in the editor applies the edit across files; not run by the agent runner | external | DoD-10 |
 | P | Operator steps: playground | Rename across scratch files with one never selected; not run by the agent runner | external | DoD-8 |
 
@@ -50,7 +51,7 @@
 ## Pre-flight
 
 1. From the repo root: `git status --porcelain` shows nothing under `packages/` or `apps/`.
-2. Build the CLI the editor would spawn, with its dependencies: `pnpm turbo run build --filter=@internal/cli`. The run must use this build, not an earlier one.
+2. Build the workspace: `pnpm build`. The run must use this build, not an earlier one. Building only the CLI (`--filter=@internal/cli`) is not enough: the scratch projects load the Postgres target through `@prisma/orm-postgres`, which is outside the CLI's build graph, so the interpreter would be a stale one.
 3. Confirm the entry exists: `ls packages/1-framework/3-tooling/cli/dist/bin.mjs`.
 4. Create the scratch project under `wip/` (gitignored):
 
@@ -204,7 +205,7 @@ for d in after-model after-field after-enum; do cp -a $M/project $M/$d; done
 
 1. spawns `node <cli> lsp --stdio` with the project directory as working directory and speaks LSP over the child's stdin and stdout with `Content-Length` framing;
 2. sends `initialize` (root URI = the project directory, `textDocument.rename.prepareSupport` true unless the steps file says `"prepareSupport": false`) and `initialized`, and prints the advertised `renameProvider` and `referencesProvider`;
-3. runs the steps of a JSON file in order. A `rename`, `prepareRename` or `references` step sends `textDocument/didOpen` for its own file if that file is not open yet, finds the cursor from a marked anchor (`auth.Us|er`: the anchor text must occur exactly once in the file, `|` is the cursor) and sends the request. No other file is opened by a request step;
+3. runs the steps of a JSON file in order. A `rename`, `prepareRename`, `references` or `definition` step sends `textDocument/didOpen` for its own file if that file is not open yet, finds the cursor from a marked anchor (`auth.Us|er`: the anchor text must occur exactly once in the file, `|` is the cursor) and sends the request. No other file is opened by a request step;
 4. prints each response as raw JSON, then rendered. A `WorkspaceEdit` is rendered per file, with whether the driver has that file open, and one line per edit as `file:line:column  <source line with <<old -> new>> marked>` (1-based). An error response is printed as `error response: {code, message}`;
 5. for a `rename` step with `"apply": true`, applies the returned edits to its own copy of each file and tells the server: `didChange` with the full new text for a file that is open, `didOpen` with the text on disk followed by `didChange` for a file that is not. Nothing is written to disk;
 6. for a `references` step with `"compareWithApplied": true`, prints whether the returned locations are exactly the ranges the last applied edit produced (start of each edit, length of the new name);
@@ -594,7 +595,7 @@ node projects/lsp-rename/qa/driver/compare-storage.mjs \
 | 11.15 | save to `after-enum` | — |
 | 11.16 | rename `auth.prisma`, `model Acc\|ount` → `Member`, not applied | three name edits and no second `@@map` |
 | emit | `contract emit` in the four directories | exit 0 four times |
-| compare | `compare-storage.mjs` | for each of the three "after" contracts: storage names equal: yes; storage section equal: yes; the same storage hash |
+| compare | `compare-storage.mjs` | `after-model` and `after-field`: storage names equal: yes; storage section equal: yes; the same storage hash. `after-enum`: the enum type keeps its name (`public.native_enum.OrderStatus`, `typeName=OrderStatus`) and every table and column name is unchanged. Known and not addressed by this project: the `valueSet` entry is keyed by the block name, so it becomes `public.valueSet.Stage`, the `status` column's value-set reference follows, and the storage hash differs. Record exactly which entries differ; anything beyond these three is a finding |
 
 ### What you should see
 
@@ -604,7 +605,7 @@ node projects/lsp-rename/qa/driver/compare-storage.mjs \
 ### Failure modes
 
 - A diagnostic after an applied rename.
-- A contract that fails to emit, or whose storage differs from the one emitted before the rename.
+- A contract that fails to emit, or whose storage differs from the one emitted before the rename in anything but the value-set entry key described in the compare step.
 - A map attribute missing, duplicated, or moved or removed by the formatter.
 - A usage of the renamed symbol left with the old name.
 
@@ -648,6 +649,53 @@ Every step expects name edits only: no line starting with `insert`, no `@map` in
 
 - A map attribute in any of these edits.
 - A second map attribute on 12.6 or 12.7.
+
+## Scenario 13 — Navigation and diagnostics on a `pg.enum(…)` argument
+
+**What you're proving from the user's seat:** the enum name inside `pg.enum(…)` behaves like any other reference: F12 goes to the `native_enum`, the usages list contains it, a typo is reported once, and a reference the interpreter refuses is still a reference the editor can follow.
+
+**Covers:** slice `type-constructor-refs`, done conditions on navigation and on the transitional refusal.
+
+**Isolation:** `tmpdir` (edits exist only in the driver's and the server's memory).
+
+**Oracle:** slice spec `projects/lsp-rename/slices/type-constructor-refs/spec.md`: "Go-to-definition, hover, find references and rename then work on such a name with no change of their own"; "an unknown name: `PSL_UNRESOLVED_REFERENCE`, `Cannot find entity "X"`, anchored on the argument"; the table "What changes for schema authors", row "an entity of another namespace": "the same diagnostic; navigation and rename work on the name".
+
+**Preconditions:** pre-flight done, scratch project B in place. Own server session.
+
+### Steps
+
+```bash
+node projects/lsp-rename/qa/driver/qa-driver.mjs $C $M/project \
+  projects/lsp-rename/qa/driver/enum-refs.json | tee $M/out/enum-refs.txt
+```
+
+| Step | Action | Expected |
+|---|---|---|
+| 13.1 | definition, `shop.prisma`, `pg.enum(Order\|Status)` | `native_enum <<OrderStatus>> {` |
+| 13.2 | references, same position, declaration included | the declaration and `status pg.enum(<<OrderStatus>>)` |
+| 13.3 | references, `native_enum Order\|Status`, declaration excluded | `status pg.enum(<<OrderStatus>>)` alone |
+| 13.4 | prepareRename, `pg.enum(Order\|Status)` | the range of `OrderStatus` inside the parentheses, placeholder `OrderStatus` |
+| 13.5 | `didChange` on `shop.prisma`: `pg.enum(OrderStatus)` → `pg.enum(NoSuchEnum)` | — |
+| 13.6 | diagnostics | exactly one, in `shop.prisma`, on the argument: `PSL_UNRESOLVED_REFERENCE Cannot find entity "NoSuchEnum"` |
+| 13.7 | `didChange` back | — |
+| 13.8 | `didChange` on `session.prisma`: add `status pg.enum(OrderStatus)` to `model Session` inside `namespace auth` | — |
+| 13.9 | diagnostics | exactly one, in `session.prisma`: `PSL_UNKNOWN_ENTITY_REF`, `Field "Session.status" type constructor "pg.enum(OrderStatus)" does not resolve — no entity named "OrderStatus" was found in namespace "auth"` (the diagnostic `main` gives for an entity of another namespace); none in `shop.prisma` |
+| 13.10 | definition, `session.prisma`, `pg.enum(Order\|Status)` | `native_enum <<OrderStatus>> {` in `shop.prisma` |
+
+### What you should see
+
+- 13.6: one line, not two.
+- 13.9 and 13.10 together: the interpreter refuses the reference while the editor still follows it.
+
+### Failure modes
+
+- No definition or an empty usage list on the argument.
+- Two diagnostics for the unknown name, or one that is not anchored on the argument.
+- No refusal in 13.9, or a refusal that makes 13.10 return nothing.
+
+### Restore
+
+`git status --porcelain` shows no change from this scenario.
 
 ## Operator steps: VS Code — not run by the agent runner
 
@@ -710,3 +758,4 @@ These need an editor UI. The runner marks them "not run" in the report; the oper
 | DoD-13 | 11 (formatting through the server); the remaining positions CI only |
 | DoD-14 | 11 (SQL, through `contract emit`); Mongo CI only |
 | DoD-15 | 11 |
+| Slice `type-constructor-refs`: rename of a `native_enum` edits its `pg.enum(…)` usages; navigation on the argument; one diagnostic for an unknown name; transitional refusal | 11 (steps 11.11 to 11.15), 13 |
