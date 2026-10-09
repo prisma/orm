@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { IntoWhere } from '../../src/mutation-graph/edges';
+import { After, IntoWhere } from '../../src/mutation-graph/edges';
 import { Graph } from '../../src/mutation-graph/graph';
-import { Find, Node, Update } from '../../src/mutation-graph/nodes';
+import { Delete, Find, Node, Update } from '../../src/mutation-graph/nodes';
 import { userTable } from './tables';
 
 class ReplacedOnAdd extends Node {
@@ -59,6 +59,57 @@ describe('peephole on add', () => {
       expect(graph.nodes).toEqual([find]);
       expect(graph.usersOf(find)).toEqual([]);
       expect(graph.inputsOf(update)).toEqual([]);
+    });
+
+    it('leaves no trace in the nodes it read from, also when it read from one node twice', () => {
+      const graph = new Graph();
+      const findUser = new Find(userTable, []);
+      const findOther = new Find(userTable, []);
+      const kept = new Update(userTable, { name: 'Ada' }, []);
+      const removed = new Update(userTable, {}, []);
+      const keptEdge = new IntoWhere(findUser, kept, [['id', 'id']]);
+      graph.add(findUser);
+      graph.add(findOther);
+      graph.add(kept, keptEdge);
+
+      graph.add(
+        removed,
+        new IntoWhere(findUser, removed, [['id', 'id']]),
+        new After(findOther, removed),
+        new After(findUser, removed),
+      );
+
+      expect(graph.nodes).toEqual([findUser, findOther, kept]);
+      expect(graph.usersOf(findUser)).toEqual([keptEdge]);
+      expect(graph.usersOf(findOther)).toEqual([]);
+      expect(graph.inputsOf(removed)).toEqual([]);
+    });
+
+    it('lets nodes be added after it with their own edges', () => {
+      const graph = new Graph();
+      const find = new Find(userTable, []);
+      const removed = new Update(userTable, {}, []);
+      const added = new Update(userTable, { name: 'Ada' }, []);
+      const addedEdge = new IntoWhere(find, added, [['id', 'id']]);
+      graph.add(find);
+      graph.add(removed, new IntoWhere(find, removed, [['id', 'id']]));
+
+      graph.add(added, addedEdge);
+
+      expect(graph.nodes).toEqual([find, added]);
+      expect(graph.usersOf(find)).toEqual([addedEdge]);
+      expect(graph.inputsOf(added)).toEqual([addedEdge]);
+    });
+
+    it('cannot be read from by a node added later', () => {
+      const graph = new Graph();
+      const removed = new Update(userTable, {}, []);
+      const del = new Delete(userTable, []);
+      graph.add(removed);
+
+      expect(() => graph.add(del, new After(removed, del))).toThrow(
+        'must come from a node in the graph',
+      );
     });
 
     it('gives an empty result when it was to be the result', () => {

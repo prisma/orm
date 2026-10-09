@@ -116,6 +116,85 @@ describe('Graph', () => {
       expect(graph.usersOf(find)).toEqual([new IntoWhere(find, otherUpdate, [['id', 'id']])]);
     });
 
+    it('keeps the order of the edges of the nodes at the other ends', () => {
+      const graph = new Graph();
+      const find = new Find(userTable, []);
+      const first = new Update(userTable, { name: 'Ada' }, []);
+      const middle = new Update(userTable, { name: 'Grace' }, []);
+      const last = new Update(userTable, { name: 'Edsger' }, []);
+      const del = new Delete(postTable, []);
+      const otherMiddle = new Update(userTable, { name: 'Barbara' }, []);
+      graph.add(find);
+      graph.add(first, new IntoWhere(find, first, [['id', 'id']]));
+      graph.add(middle, new IntoWhere(find, middle, [['id', 'id']]));
+      graph.add(last, new IntoWhere(find, last, [['id', 'id']]));
+      graph.add(del, new After(first, del), new After(middle, del), new After(last, del));
+
+      graph.replace(middle, otherMiddle);
+
+      expect(graph.nodes).toEqual([find, first, otherMiddle, last, del]);
+      expect(graph.usersOf(find).map((edge) => edge.to)).toEqual([first, otherMiddle, last]);
+      expect(graph.inputsOf(del).map((edge) => edge.from)).toEqual([first, otherMiddle, last]);
+    });
+
+    it('keeps the order of the edges of the node it replaces', () => {
+      const graph = new Graph();
+      const findUser = new Find(userTable, []);
+      const findPost = new Find(postTable, []);
+      const update = new Update(userTable, { name: 'Ada' }, []);
+      const firstDelete = new Delete(postTable, []);
+      const secondDelete = new Delete(postTable, []);
+      const otherUpdate = new Update(userTable, { name: 'Grace' }, []);
+      graph.add(findUser);
+      graph.add(findPost);
+      graph.add(
+        update,
+        new IntoWhere(findUser, update, [['id', 'id']]),
+        new After(findPost, update),
+      );
+      graph.add(firstDelete, new After(update, firstDelete));
+      graph.add(secondDelete, new IntoWhere(update, secondDelete, [['id', 'author_id']]));
+
+      graph.replace(update, otherUpdate);
+
+      expect(graph.inputsOf(otherUpdate)).toEqual([
+        new IntoWhere(findUser, otherUpdate, [['id', 'id']]),
+        new After(findPost, otherUpdate),
+      ]);
+      expect(graph.usersOf(otherUpdate)).toEqual([
+        new After(otherUpdate, firstDelete),
+        new IntoWhere(otherUpdate, secondDelete, [['id', 'author_id']]),
+      ]);
+    });
+
+    it('gives the nodes at both ends the same edge object', () => {
+      const graph = new Graph();
+      const find = new Find(userTable, []);
+      const update = new Update(userTable, { name: 'Ada' }, []);
+      const del = new Delete(postTable, []);
+      const otherUpdate = new Update(userTable, { name: 'Grace' }, []);
+      graph.add(find);
+      graph.add(update, new IntoWhere(find, update, [['id', 'id']]));
+      graph.add(del, new After(update, del));
+
+      graph.replace(update, otherUpdate);
+
+      expect(graph.usersOf(find)[0]).toBe(graph.inputsOf(otherUpdate)[0]);
+      expect(graph.inputsOf(del)[0]).toBe(graph.usersOf(otherUpdate)[0]);
+    });
+
+    it('lets the old node be added again', () => {
+      const graph = new Graph();
+      const update = new Update(userTable, { name: 'Ada' }, []);
+      const otherUpdate = new Update(userTable, { name: 'Grace' }, []);
+      graph.add(update);
+      graph.replace(update, otherUpdate);
+
+      graph.add(update);
+
+      expect(graph.nodes).toEqual([otherUpdate, update]);
+    });
+
     it('moves the result to the new node', () => {
       const graph = new Graph();
       const update = new Update(userTable, { name: 'Ada' }, []);
