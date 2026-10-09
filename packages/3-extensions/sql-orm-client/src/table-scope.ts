@@ -73,16 +73,8 @@ class TableScopeImpl implements TableScope {
     return new TableScopeImpl(this.#aliases);
   }
 
-  merge(others: readonly TableScope[]): TableScope {
-    const merged = new Set(this.#aliases);
-    for (const other of others) {
-      if (other instanceof TableScopeImpl) {
-        for (const alias of other.#aliases) {
-          merged.add(alias);
-        }
-      }
-    }
-    return new TableScopeImpl(merged);
+  merge(others: readonly TableScopeImpl[]): TableScope {
+    return new TableScopeImpl([this, ...others].flatMap((scope) => [...scope.#aliases]));
   }
 }
 
