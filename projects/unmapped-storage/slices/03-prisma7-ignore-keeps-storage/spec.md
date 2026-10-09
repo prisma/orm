@@ -45,14 +45,18 @@ The junction table Prisma 7 created (`_AToB` or `_RelationName`) is kept as a ta
 
 Decided by Will on 2026-10-09: a column whose type has no Prisma 8 codec is refused whether or not it is ignored, including a column of an `@@ignore` model. The type checks run before the ignore handling. The diagnostic messages stop advising `@ignore` or `@@ignore`; they say the column type is not supported by Prisma 8 yet and that the schema cannot be read until it is.
 
+### Ignored objects meet every rule of the reader
+
+An ignored field or model now becomes storage, so it goes through every check the reader applies to storage, not only the codec check. A schema that loaded before only because its ignored objects were dropped can now be refused: for example an `@@ignore` model with an index argument Prisma 8 cannot express (`sort: Desc`), an `@ignore` relation with `onDelete: SetNull` over a required field, or an ignored `Json` field with the default `"null"`. This follows Will's rule of 2026-10-09: refuse a schema whose contents the contract cannot express. The upgrade instruction says so and names the diagnostics.
+
 ### Already-signed projects
 
 A project whose Prisma 7 schema uses `@ignore` or `@@ignore` and that signed with an earlier Prisma 8 has a storage hash computed without the ignored objects; after upgrading, its contract's hash changes.
 
 - While Prisma 7 still owns migrations: `prisma contract emit`, then `prisma db sign`.
-- After the handover: `prisma contract emit`, then `prisma migration plan`, then `prisma db sign`. The plan records the creates of the ignored objects, so a database rebuilt from `migrations/` gets them; signing marks the existing database, which already has them, as current, so `db migrate` applies nothing there. Signing before planning leaves the `db` ref on a hash that is not in the migration graph, and the next plan fails with `MIGRATION.HASH_NOT_IN_GRAPH`. Running `db migrate` before signing would try to create tables that exist.
+- After the handover: `prisma contract emit`, then `prisma migration plan`, which records the creates of the ignored objects so that a database rebuilt from `migrations/` gets them. Then bring each existing database to the new hash with `prisma db sign`, or with `prisma db migrate --advance-ref db` (the runner skips each create because the object already exists). Plain `db migrate` also brings the database to the new hash but leaves the `db` ref behind, so the next plan repeats the migration; run `db sign` afterwards to move it. Signing before planning leaves the `db` ref on a hash that is not in the migration graph, and the next plan fails with `MIGRATION.HASH_NOT_IN_GRAPH`; the instruction says how to recover (`migration plan --from <previous hash>`).
 
-`examples/prisma7-adoption/test/upgrade-ignore.test.ts` proves the post-handover order, and the upgrade instruction `prisma7-ignore-keeps-storage` gives both.
+`examples/prisma7-adoption/test/upgrade-ignore.test.ts` proves the post-handover order with `db sign` and with `db migrate`, and the upgrade instruction `prisma7-ignore-keeps-storage` gives both.
 
 ## Coherence rationale
 
