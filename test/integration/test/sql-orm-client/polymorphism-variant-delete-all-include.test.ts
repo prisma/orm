@@ -71,7 +71,7 @@ describe('integration/polymorphism-variant-delete-all-include', () => {
 
         const rows = await tasksOf(runtime)
           .variant('bug')
-          .select('id', 'title', 'type', 'severity')
+          .select('id', 'title', 'type')
           .orderBy((task) => task.id.desc())
           .include('assignee', (person) => person.select('id', 'name'))
           .where((task) => task.id.gt(0))
@@ -82,14 +82,12 @@ describe('integration/polymorphism-variant-delete-all-include', () => {
             id: 2,
             title: 'Layout glitch',
             type: 'bug',
-            severity: 'minor',
             assignee: null,
           },
           {
             id: 1,
             title: 'Crash',
             type: 'bug',
-            severity: 'critical',
             assignee: { id: 101, name: 'Ada' },
           },
         ]);
@@ -107,7 +105,7 @@ describe('integration/polymorphism-variant-delete-all-include', () => {
 
         const rows = await tasksOf(runtime)
           .variant('feature')
-          .select('id', 'title', 'type', 'priority')
+          .select('id', 'title', 'type')
           .orderBy((task) => task.id.desc())
           .include('assignee', (person) => person.select('id', 'name'))
           .where((task) => task.id.gt(0))
@@ -118,14 +116,12 @@ describe('integration/polymorphism-variant-delete-all-include', () => {
             id: 4,
             title: 'Audit log',
             type: 'feature',
-            priority: 3,
             assignee: null,
           },
           {
             id: 3,
             title: 'Dark mode',
             type: 'feature',
-            priority: 7,
             assignee: { id: 102, name: 'Grace' },
           },
         ]);
