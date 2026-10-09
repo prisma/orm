@@ -1,10 +1,10 @@
-# Slice spec — MongoDB carries out renames and deletes of models and fields
+# Slice 4a — Renames and deletes on MongoDB
 
-**Project:** [`projects/migration-statements/`](../../spec.md) · **Slice 4a** · **Linear:** [TML-3478](https://linear.app/prisma-company/issue/TML-3478) · **Branch:** `tml-3478-mongo-renames` · **Builds on:** slice 2 (merged).
+**Linear:** [TML-3478](https://linear.app/prisma-company/issue/TML-3478) · **Branch:** `tml-3478-mongo-renames` · **Builds on:** slice 2 (merged) · **Project:** [`../../spec.md`](../../spec.md)
 
-## At a glance
+## In one example
 
-A MongoDB user renames the `Profile` model to `User` (collection `profiles` to `users`), changes `name` to `fullName`, and removes the `nickname` field:
+A MongoDB user renames model `Profile` to `User`, renames field `name` to `fullName`, and removes field `nickname`.
 
 ```text
 $ prisma migration plan --name tidy --rename Profile:User --rename User.name:User.fullName --delete User.nickname
@@ -17,7 +17,7 @@ $ prisma migration plan --name tidy --rename Profile:User --rename User.name:Use
   Update validator on users                                    widening
 ```
 
-`migration.ts` carries `renameCollection(...)`, `renameField(...)` and `unsetField(...)` calls, and running it reproduces `ops.json`. `prisma db update` with the same statements does the same against the live database. Today MongoDB refuses every `--rename` and prints steps to run by hand in `mongosh`, and removing a field asks nothing, even though every document that still holds the field then fails each later update against the closed validator.
+`db update` with the same flags does the same against the live database.
 
 Without `--delete User.nickname`, both commands refuse, as they do on SQL:
 
@@ -28,70 +28,111 @@ Without `--delete User.nickname`, both commands refuse, as they do on SQL:
 → Pass --delete User.nickname
 ```
 
-## Chosen design
+## What changes for users
 
-### Statements name fields by their contract key
+| Change in the schema | Today | After this slice |
+| --- | --- | --- |
+| Model renamed, `--rename` given | Refused, with steps to run by hand in `mongosh` | Collection renamed; documents, indexes and validator kept |
+| Field renamed, `--rename` given | Refused, with steps to run by hand | Every document's field renamed; indexes moved to the new name |
+| Field removed | Validator updated, nothing asked. Every document that still holds the field then fails each update | Asked about. `--delete` removes the field from every document; `--rename` keeps its values |
+| Model removed | Asked about; `--delete` drops the collection | Same, and `--rename` is offered too |
 
-A statement names a field as the contract and the generated client name it: the key in the model's `fields`. On SQL that key is the field name in the schema; on MongoDB the contract keys fields by the stored name (`id @map("_id")` is `User._id`), and the client uses the same name. The resolver already behaves this way, so nothing changes in it. On MongoDB a change to `@map` alone is a field rename in contract terms and is stated with `--rename`; a change to the schema field name alone changes nothing stored and needs no statement. This settles the deferred item "Which field name a MongoDB statement uses" and is recorded in the Migration System doc.
+## Decisions to check
 
-### Collection rename
+1. **Removing a field now asks.** Today it is silent, but MongoDB's validator then rejects every update to a document that still holds the field.
+2. **Fields are named as stored.** `id @map("_id")` is `User._id` in a statement. The contract and the generated client already use that name. Naming the schema field instead would change the contract and its hashes.
+3. **The rewrites run under `db update`.** They are classed by what they do to data: a rename is `widening`, a removal is `destructive`. `db update` refuses the `data` class, so classing them `data`, as ADR 188 says today, would block `db update`. This slice amends ADR 188.
 
-A new DDL operation, `renameCollection`, added through the MongoDB stack the way the other collection operations are: query AST command and visitor, wire command and lowering, driver, operation serializer, preview text, factory and call class. Precheck: the source collection exists and the target does not. Postcheck: the target exists. Class `widening`. A model rename renames the collection in the working copy of the origin schema before the diff, so the indexes and validator that MongoDB keeps through a rename are not dropped and recreated.
+## How it works
 
-### Field rename and field removal rewrite the documents
+**Collection rename**
+- A new `renameCollection` operation.
+- Before: the source exists and the target does not. After: the target exists.
+- The rename happens before the diff, so MongoDB keeps the indexes and validator, and nothing is dropped and recreated.
 
-- A field rename plans `renameField(collection, from, to, { filter })`: one `updateMany` with `$rename`, run with validation bypassed. Filter: documents that hold the old field, and for a variant's field also the variant's discriminator value. Precheck: no matching document already holds the new field, since `$rename` would overwrite it. Postcheck: no matching document still holds the old field, so a re-run skips it. Class `widening`.
-- Removing a field from a model is data loss, matching the spec's rule that dropping a field is destructive. The planner plans `unsetField(collection, field, { filter })`, an `updateMany` with `$unset`, class `destructive`, and reports a `field` subject. The question offers `rename` and `delete`, as on SQL. A field removed together with its collection gets no unset; the collection drop covers it.
-- Order within a plan: collection renames, collection creates, index drops, document rewrites (renames and unsets), index creates, validator changes, option changes, collection drops. Rewrites come after index drops so a unique index on the old field does not fail once documents lose it, and before index creates so a unique index on the new field sees the moved values. Validation is bypassed for the rewrite because the origin validator requires the old field and the destination validator may require a field the same plan adds. Plans without statements and without field removals keep their current operations and order.
-- The rewrite command gains a `bypassDocumentValidation` option through its wire form and the driver.
+**Field rename**
+- One `updateMany` with `$rename`, written as `renameField(...)` in `migration.ts`.
+- Touches only documents that hold the old field. For a variant's field, only documents with that variant's discriminator value.
+- Before: no document already holds the new name, which `$rename` would overwrite. After: no document holds the old name, so a re-run skips it.
 
-### Document rewrites run under `db update`
+**Field removal**
+- One `updateMany` with `$unset`, written as `unsetField(...)`.
+- No unset when the whole collection is dropped.
 
-`db update` allows `additive`, `widening` and `destructive`, not `data`, so a rewrite classed `data` would be refused there. The rewrites above carry the class of what they do to data (`widening` for a rename, `destructive` for an unset), and the MongoDB runner and operation serializer tell a rewrite from a DDL command by its shape, not by `operationClass === 'data'`. `data` stays the class of transforms a user writes or a scaffold produces; `db update` keeps excluding it. Slice 3b's SQL JSON rewrites follow the same rule. This follows the Migration System doc's rule that only the planner's own classification promises an operation loses data exactly when it is `destructive`, and it changes ADR 188, which says every MongoDB data transform is `data`: the slice amends ADR 188, and ADR 264's line that MongoDB has no rename operation.
+**Order in a plan**
 
-### What is refused
+1. Collection renames
+2. Collection creates
+3. Index drops
+4. Document rewrites (renames and removals)
+5. Index creates
+6. Validator changes
+7. Option changes
+8. Collection drops
 
-The MongoDB planner refuses, as a `statementRejected` conflict naming the reason: a rename of `_id`; a collection rename whose target exists in the working schema; a rename of a field stored on one side only; and any statement when the control policy is not `managed`, as SQL does. A document that already holds the new name fails at apply time by precheck, before anything is written.
+- Rewrites run after index drops, so a unique index on the old field doesn't fail once documents lose the field.
+- They run before index creates, so a unique index on the new field sees the moved values.
+- Rewrites skip validation. The old validator requires the old field, and the new one may require a field the same plan adds.
+- Plans with no statements and no removed fields come out exactly as today.
 
-### The temporary refusal goes
+**Refused, with the reason named**
+- Renaming `_id`.
+- Renaming a collection onto one that already exists.
+- Renaming a field that is stored on only one side.
+- Any statement when the model's control policy is not `managed`, as on SQL.
 
-`TargetMigrationsCapability.renameStatements` and `keepDataByHand` are deleted: the member in `control-migration-types.ts`, MongoDB's setting in `control-target.ts`, `keepDataByHand` and `keepTheData` in `mongo-planner.ts`, `keepDataByHandFor` and its parameter in `plan-questions.ts`, its reads in `db-run.ts` and `migration-plan.ts`, and the Statements paragraph that describes it in the Migration System doc. The unrelated `renameStatements()` helper in `statement-text.ts` stays. The member shipped in 8.0.0-rc.17, so an extension upgrade fragment tells target authors to remove it.
+**The temporary refusal goes.** MongoDB's `renameStatements: { refused: true, keepDataByHand }` setting, and all the code that reads it, is deleted.
 
-## Coherence rationale
+## Why one pull request
 
-One reviewer can hold this: it is one family learning the two verbs the SQL targets already carry out, through one new DDL operation and one new rewrite shape, with the refusal member removed as the visible proof. The collection rename's six-package plumbing is mechanical and mirrors existing collection operations.
+It is one database learning two flags the SQL targets already support. It adds one new operation and one new rewrite. The collection rename touches six packages, but the change is the same in each and copies the existing collection operations.
 
 ## Scope
 
-**In:** amendments to ADR 188 (planner-written rewrites carry the class of their effect) and ADR 264 (MongoDB has a collection rename); model rename (collection rename); top-level field rename, including a variant's field; field removal as data loss with `$unset` under `--delete`; both commands; the `bypassDocumentValidation` option; runner and serializer telling rewrites apart by shape; deleting `renameStatements`; docs (Migration System § Statements, error reference, CLI README, `skills/prisma-8/references/migrations.md`); an app upgrade fragment (MongoDB renames work; removing a field now asks) and an extension upgrade fragment (the capability member is gone).
+**In**
+- Model rename, field rename (including a variant's field), field removal.
+- Both commands.
+- Deleting `renameStatements` and `keepDataByHand`. The unrelated `renameStatements()` helper in `statement-text.ts` stays.
+- ADR amendments:
+  - ADR 188: planner-written rewrites carry the class of their effect.
+  - ADR 264: MongoDB now has a collection rename.
+- Docs: Migration System § Statements, the error reference, the CLI README, `skills/prisma-8/references/migrations.md`.
+- Upgrade fragments:
+  - App: renames work; removing a field now asks.
+  - Extension: the capability member is gone. It shipped in 8.0.0-rc.17.
 
-**Deliberately out:**
-- Value object field renames on MongoDB. They need the framework's value object statement surface (statement entity, subject kind, grammar, resolver), which slice 3b builds for SQL JSON rewrites, and a recursive update pipeline for lists, dictionaries and unions. Moved to slice 4b.
-- `--convert` and `--backfill` on MongoDB, and the required-field validator gap: slice 4b.
-- Batching large rewrites. One `updateMany` per field, as today's hand-written transforms do.
+**Out**
+- Renaming a field inside a value object. It needs statement support that slice 3b builds. Moved to 4b.
+- `--convert`, `--backfill`, and the validator problem when a field becomes required: slice 4b.
+- Batching rewrites on large collections.
 
-## Pre-investigated edge cases
+## Edge cases already known
 
 | Case | Handling |
 | --- | --- |
-| Slice 1 manual QA (F3): a unique index on the old field fails the rewrite once two documents lose it; one on the new field fails if created first | Order above: index drops, rewrite, index creates |
-| The origin validator requires the old field and forbids the new one | Rewrite runs with validation bypassed |
-| Two variants in one collection store a field with the same name | Rewrite filters on the discriminator value |
-| The runner is not transactional | Postcheck makes a re-run skip a finished rewrite |
-| `bypassDocumentValidation` needs a privilege on hosted clusters | Runner failure names the privilege |
-| TML-2447 (open): the planner creates separate collections and incomplete validators for variants that share a collection | The first dispatch checks how variants are stored today before the variant field rename is built on it |
+| A unique index on the old field fails the rewrite once two documents lose it (slice 1 QA, F3) | Index drops run before the rewrite |
+| A unique index on the new field fails if created before the rewrite | Index creates run after it |
+| The old validator requires the old field and forbids the new one | The rewrite skips validation |
+| Two variants in one collection store a field with the same name | The rewrite filters on the discriminator value |
+| MongoDB migrations are not transactional | The after-check lets a re-run skip a finished rewrite |
+| Skipping validation needs a privilege on hosted clusters | The failure names the privilege |
+| TML-2447 (open): variants that share a collection get their own collection and an incomplete validator | The first dispatch checks how variants are stored today, before building on it |
 
-## Slice-specific done conditions
+## Done when
 
-- The project DoD's MongoDB journey without the value object part: a model rename and a field rename (with a unique index on the field) and a field removal under `--delete`, through `migration plan` then `migrate` and through `db update`, on collections with documents. Afterwards the documents are under the new names, the removed field is gone from every document, every document accepts an update, a further plan is empty, and `db verify --schema-only` is clean.
-- `git grep -n "keepDataByHand\|TargetMigrationsCapability\['renameStatements'\]"` finds nothing.
+- On collections with documents, through `migration plan` then `migrate` and through `db update`: a model rename, a field rename with a unique index, and a field removal with `--delete`. Afterwards:
+  - the documents are under the new names;
+  - the removed field is gone from every document;
+  - every document accepts an update;
+  - a further plan is empty;
+  - `db verify --schema-only` is clean.
+- `git grep -n "keepDataByHand"` finds nothing.
 
-## Open questions
+## Implementation notes
 
-None.
-
-## References
-
-- Grounding report for this slice (local, gitignored): `wip/grounding-4a.md`.
-- [`../../deferred.md`](../../deferred.md) — "Which field name a MongoDB statement uses".
-- Slice 1 manual QA, F3: [`../../manual-qa-reports/2026-10-07-qa-opus.md`](../../manual-qa-reports/2026-10-07-qa-opus.md).
+- `renameCollection` goes through the stack like the other collection operations: query AST command and visitor, wire command and lowering, driver, operation serializer, preview text, factory, call class.
+- The raw update command gains `bypassDocumentValidation`, through its wire form and the driver.
+- The runner and the operation serializer tell a rewrite from a DDL command by its shape (`run` against `execute`), not by `operationClass === 'data'`.
+- Removed fields are reported as `field` subjects in `dataLoss`.
+- Code to delete: the member in `control-migration-types.ts`; MongoDB's setting in `control-target.ts`; `keepDataByHand` and `keepTheData` in `mongo-planner.ts`; `keepDataByHandFor` and its parameter in `plan-questions.ts`; the reads in `db-run.ts` and `migration-plan.ts`; the paragraph in the Migration System doc.
+- Grounding report (local, gitignored): `wip/grounding-4a.md`.

@@ -105,6 +105,6 @@ None. Will decided on 2026-10-07: consents carry a verb; the answer is a free-te
 
 ## References
 
-- Project spec [`../../spec.md`](../../spec.md) decisions 2 and 6, requirement 12; [`../../plan.md`](../../plan.md) § Stretch goal.
+- Project spec [`../../spec.md`](../../spec.md) decisions 2 and 6, requirement 12; [`../../plan.md`](../../plan.md) § Delivered: the interactive prompt.
 - prisma-cli: `packages/cli-engine/src/execution/prompts.ts`, `shared-flags.ts`, `clack-renderer.ts`, `src/context.ts`; `docs/product/cli-style-guide.md` § consent; ADR 0004 (engine version pinning).
 - `wip/slice-2-consent-options.md`: the option evaluation Will chose from.

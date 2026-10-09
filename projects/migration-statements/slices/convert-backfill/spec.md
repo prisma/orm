@@ -1,10 +1,10 @@
-# Slice spec — `--convert` and `--backfill` write the placeholder migration only when asked
+# Slice 3a — `--convert` and `--backfill`
 
-**Project:** [`projects/migration-statements/`](../../spec.md) · **Slice 3a** · **Linear:** [TML-3477](https://linear.app/prisma-company/issue/TML-3477), [TML-3517](https://linear.app/prisma-company/issue/TML-3517) · **Branch:** `tml-3477-convert-backfill` · **Builds on:** slice 2 (merged).
+**Linear:** [TML-3477](https://linear.app/prisma-company/issue/TML-3477), [TML-3517](https://linear.app/prisma-company/issue/TML-3517) · **Branch:** `tml-3477-convert-backfill` · **Builds on:** slice 2 (merged) · **Project:** [`../../spec.md`](../../spec.md)
 
-## At a glance
+## In one example
 
-A user changes `User.age` from `String` to `Int` on Postgres:
+`User.age` changes from `String` to `Int` on Postgres.
 
 ```text
 $ prisma migration plan --name age-to-int
@@ -17,7 +17,7 @@ $ prisma migration plan --name age-to-int --convert User.age
 ⚠ migration.ts has a placeholder: replace it with the conversion, then run the file to re-emit.
 ```
 
-`migration.ts` then holds one placeholder, where the conversion goes:
+`migration.ts` then has one slot to fill:
 
 ```ts
 this.alterColumnType({
@@ -28,96 +28,106 @@ this.alterColumnType({
 }),
 ```
 
-The user writes `using: '"age"::integer'` (or any SQL expression), runs the file, and gets an applicable migration. On SQLite the placeholder sits in the table rebuild's copy step for that column.
+The user writes `using: '"age"::integer'`, runs the file, and applies it.
 
-Adding a required `email` field to an existing `User` table plans a temporary default by default: the column is added with a fill value and the default is dropped, and nothing is asked. To write the fill yourself, run `prisma migration plan --backfill User.email`. That writes the nullable column, a data transform with a placeholder, and `SET NOT NULL`.
+## What changes for users
 
-Today `migration plan` writes these placeholders on its own for every type change and every required field on an existing table. Users who didn't want them get a migration they can't apply until they edit it. After this slice it writes them only when asked.
+| Change in the schema | Today | After this slice |
+| --- | --- | --- |
+| Type change that loses data | Placeholder migration, written without asking | Refused. Answer `--convert` (fill in the conversion) or `--delete` (accept the loss) |
+| Type change that keeps every value (`int4` → `int8`) | Planned, nothing asked | Same |
+| Required field added to an existing table | Placeholder migration, written without asking | Filled with a temporary value (`''`, `0`, …), nothing asked. `--backfill` writes a slot to fill instead |
+| Optional field made required | Placeholder migration, written without asking | `SET NOT NULL`, nothing asked. Fails if NULLs exist, and says how many. `--backfill` writes a slot to fill instead |
+| Any of the above through `db update` | No placeholders | Same. `--convert` and `--backfill` are refused: `db update` has no file to fill |
 
-## Chosen design
+SQLite works the same way. Two SQLite gaps close on the way:
+- `db update` can add a required field to a table with rows. Today it fails.
+- A type change gets a slot for the conversion. Today SQLite just rebuilds the table.
 
-### The two verbs
+## Decisions to check
 
-- **`--convert <Model.field>`** answers a type change that would lose data. It is accepted by `migration plan` only. It names the field by its destination name, like the new side of a rename: after `--rename User.age:User.years`, write `--convert User.years`. It needs the origin contract, like `rename`, and fails with `MIGRATION.STATEMENT_ORIGIN_UNKNOWN` without one. It must name a field that exists on both sides and whose type changes.
-- **`--backfill <Model.field>`** is an opt-in that answers no question. It is accepted by `migration plan` only. It names a field that is required in the destination and is either new on an existing table or optional in the origin. Anything else is an error that names what was found.
-- `db update` declares both verbs only to refuse them, with `MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE`. The error says `db update` has no migration file to fill and names `migration plan`. It doesn't fall through to the engine's generic "no flag registered" error, which doesn't explain the rule. The shared verb table in `orm/statement-verbs.ts` declares the verbs per command, so neither command accepts a verb by accident.
+1. **Temporary values without asking.** Without `--backfill`, `migration plan` writes fill values such as `''` or `0` into existing rows. The project spec already decided this. It is the biggest behaviour change in the slice.
+2. **`alterColumnType` changes shape.** Its options become `{ table, column, type, using? }`. Today they expose internal names. Hand-written migrations that call it need the upgrade instructions.
+3. **A type change answered with `delete` is reported honestly.** The output says `delete values of field "User.age" (type change)`, not "delete field". Slice 2's QA found the old wording misleading.
 
-### What the planners write
+## The two flags
 
-| Diff | No statement | `--convert` | `--backfill` |
-| --- | --- | --- | --- |
-| Type change the target knows is safe (`int4`→`int8`) | direct alter, `widening`, nothing asked | error: nothing to convert | — |
-| Any other type change | refused: question offers `convert` and `delete`. `--delete` plans the direct alter, `destructive` | Postgres: `alterColumnType` with `using: placeholder(…)`. SQLite: `recreateTable` whose copy step takes `placeholder(…)` for the column. Class `data` | — |
-| Required field added to an existing table | temporary-default recipe on both targets, both commands, `additive` | — | nullable add, `dataTransform` with placeholders, then `SET NOT NULL` (SQLite: a tightening rebuild) |
-| Optional field made required | direct `SET NOT NULL` (SQLite: tightening rebuild), `widening`. Fails at apply if NULLs exist, with advice that names `--backfill` | — | `dataTransform` with placeholders, then `SET NOT NULL` |
+**`--convert <Model.field>`**
+- Answers a type change that would lose data.
+- `migration plan` only.
+- Names the field by its new name. After `--rename User.age:User.years`, write `--convert User.years`.
+- Needs the old contract, like `--rename`.
 
-The four automatic placeholder strategies (Postgres `notNullBackfillCallStrategy`, `typeChangeCallStrategy`, `nullableTighteningCallStrategy`; SQLite `nullabilityTighteningBackfillStrategy`) fire only for a field a statement names. Statements reach them as destination coordinates through the strategy context. They change no names in the working schema, so they don't go through the rename path in `planStatements`. A converted type change carries no separate NULL-handling transform; the conversion expression can map NULL itself.
+**`--backfill <Model.field>`**
+- Optional. Answers no question.
+- `migration plan` only.
+- The field must be required now, and either new on an existing table or optional before.
 
-A `delete` answer to a type-change question keeps planning the direct alter, and the statement is reported as giving up the field's values in a type change (`delete values of field "User.age" (type change)`), not as deleting the field; slice 2's manual QA found the old wording misleading (F14). A converted alter is classed `data`, because the user writes its data step. So it isn't a `destructive` operation and leaves `dataLoss`. A typed `convert` at the prompt re-plans like a typed rename, and the type-change question isn't asked again.
+**On `db update`,** both flags fail with `MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE`, which points to `migration plan`.
 
-### The questions know why data is lost
+## What the planners write
 
-Each `dataLoss` entry gains `loss: 'drop' | 'typeChange'`, set by each target's operation-subjects function. The CLI stops guessing from whether the destination still has the field. A `typeChange` question offers `convert` and `delete` in `migration plan`, and `delete` only in `db update`. A `drop` question offers `rename` and `delete`, as today. The re-plan loop (`askPlanQuestions`) carries every planned statement, not only renames.
+| Case | Postgres | SQLite |
+| --- | --- | --- |
+| `--convert` | `alterColumnType` with `using: placeholder(…)` | Table rebuild whose copy step has `placeholder(…)` for the column |
+| `--backfill`, new field | Add nullable column, data transform with placeholders, `SET NOT NULL` | Add nullable column, data transform, tightening rebuild |
+| `--backfill`, optional made required | Data transform with placeholders, `SET NOT NULL` | Data transform, tightening rebuild |
+| New required field, no flag | Add with temporary default, drop the default | Rebuild that copies the temporary value into the new column |
 
-`ResolvedMigrationStatement` gains a `kind`, which is `rename`, `convert` or `backfill`. Every reader that assumes a rename now switches on `kind` first. One example is the SQL family's `StatementPlanner`, which today plans any non-model statement as a column rename. MongoDB keeps refusing statements it can't carry out, until slices 4a and 4b.
+## How the pieces fit
 
-### The temporary default becomes a real migration call
+- **Questions know why data is lost.** Each data-loss entry says `drop` or `typeChange`. A `typeChange` question offers `convert` and `delete`; a `drop` question offers `rename` and `delete`.
+- **A converted change stops being data loss.** It is classed `data`, because the user writes the conversion. So it is not asked about again.
+- **A typed `convert` at the prompt re-plans,** the same way a typed rename does.
+- **Placeholders appear only when a flag asks.** The four strategies that write them today run only for a field a flag names.
+- **The temporary default becomes a real call in `migration.ts`.** Today it renders as an empty `rawSql(...)`, so re-running the file does not reproduce `ops.json`.
+- **The NOT NULL failure names the NULLs (TML-3517).** It says how many rows hold NULL in which column, and suggests filling them, keeping the field optional, or `--backfill`. It no longer talks about schema drift.
 
-The Postgres temporary-default and direct-add calls render as `rawSql({ id, label, operationClass })` with no SQL. Re-running such a `migration.ts` doesn't reproduce `ops.json` (cross-cutting requirement 7). They now render as a facade call that builds the same operation. SQLite gets the recipe as a rebuild in which the new column's copy value is a literal. This needs a new per-column copy-expression option on `recreateTable`, which `--convert` also uses, and a SQLite fill-value map (integer `0`, real `0`, text `''`, blob `X''`, and the values its boolean and date-time codecs store). It is refused on the same primary-key, unique and foreign-key conditions as Postgres. This closes the deferred item "SQLite `db update` cannot add a required field to a table that has rows".
+## Why one pull request
 
-### `alterColumnType` takes plain options
-
-The Postgres facade's `alterColumnType` options are reshaped so the rendered call shows a readable shape with an optional `using`, and no internal names (`qualifiedTargetType`, `formatTypeExpected`, `rawTargetTypeForLabel`). The `using` slot renders as code, so it can hold `placeholder(…)`, and an unfilled slot makes `toOp()` return the unfilled-placeholder result the CLI already handles. Upgrade instructions are recorded for hand-written migrations.
-
-### The NOT NULL failure names the NULLs (TML-3517)
-
-When `SET NOT NULL` or a SQLite tightening rebuild meets NULL values, the runner reports how many rows hold NULL in which column. It says to fill them, make the field optional, or plan with `--backfill`. `MigrationRunnerFailure` gains a `fix`, and the `db update`, `db init` and `migrate` error mappers use it instead of the fixed advice about schema drift.
-
-## Coherence rationale
-
-Everything in this slice serves one change: the placeholder migration is written only when a statement asks for it. The verbs, the loss kind, the statement `kind`, the temporary default becoming real on both targets, the `alterColumnType` reshape and the NULL advice are each what that change needs to work on Postgres and SQLite. The reviewer reads one rule and its consequences.
+Everything here serves one rule: a placeholder migration is written only when a flag asks for it. The reviewer reads that rule and its consequences.
 
 ## Scope
 
-**In:**
-- `--convert` and `--backfill` on `migration plan`, for Postgres and SQLite, refused on `db update`.
-- The loss kind on `dataLoss` entries, and the statement `kind`.
-- Ending automatic scaffolding.
-- The temporary default as a real call on both targets, including the SQLite recipe.
-- The `alterColumnType` reshape.
+**In**
+- Both flags on Postgres and SQLite; refused on `db update`.
+- Ending automatic placeholders.
+- The temporary default on both targets, as a real call.
+- The `alterColumnType` reshape, with upgrade instructions.
 - TML-3517.
-- The project spec's wording: "an existing table", not "a non-empty table", since `migration plan` can't see rows.
-- An amendment to ADR 200, which says only a data transform holds a placeholder.
-- The Migration System doc's claim that the Postgres planner writes no placeholder data transforms, which the code contradicts.
-- Docs: Migration System § Statements, error reference, CLI README, `skills/prisma-8/references/migrations.md`.
-- An app upgrade fragment: type changes ask, scaffolds are opt-in, and the temporary default applies under `migration plan`.
-- Upgrade instructions for the facade change.
+- Docs:
+  - ADR 200: it says only a data transform can hold a placeholder.
+  - The Migration System doc: it says the Postgres planner never writes placeholders.
+  - Migration System § Statements, the error reference, the CLI README, `skills/prisma-8/references/migrations.md`.
+- An app upgrade fragment for the behaviour changes.
+- The project spec: "an existing table", not "a non-empty table". `migration plan` cannot see rows.
 
-**Deliberately out:**
-- `--convert` on a variant (slice 3b).
-- MongoDB (slice 4b).
-- A temporary default for a field in a new unique or foreign key, which stays refused as today.
-- Detecting rows offline.
+**Out**
+- `--convert` on a variant: slice 3b.
+- MongoDB: slice 4b.
+- A temporary value for a new unique, primary-key or foreign-key column. It stays refused, as on Postgres today.
 
-## Pre-investigated edge cases
+## Edge cases already known
 
 | Case | Handling |
 | --- | --- |
-| A temporary value in a unique column fails on the second row | The recipe is refused for new unique, primary-key and foreign-key columns, as on Postgres today |
-| A convert after a rename in the same run | The convert uses the destination name, which the diff issues already use |
-| A placeholder operation has no position until re-emit | Applied-statement positions for a convert are empty until the file is re-run, as for every placeholder today |
+| A temporary value in a unique column fails on the second row | Refused for new unique, primary-key and foreign-key columns |
+| `--convert` after a rename in the same run | Uses the new name, which the planner already uses |
+| A placeholder operation has no position until the file is re-run | The convert's reported positions are empty until then, as for every placeholder today |
 
-## Slice-specific done conditions
+## Done when
 
-- The project DoD's convert and backfill lines pass on Postgres and SQLite, reading "an existing table".
-- Re-running every `migration.ts` the planners write in this slice's tests reproduces its `ops.json`.
+- The project's convert and backfill checks pass on Postgres and SQLite.
+- Re-running every `migration.ts` that this slice's tests write reproduces its `ops.json`.
 
-## Open questions
+## Implementation notes
 
-None.
-
-## References
-
+- `dataLoss` entries gain `loss: 'drop' | 'typeChange'`, set by each target's operation-subjects function. `dataLossQuestion` stops inferring it from whether the destination has the field.
+- `ResolvedMigrationStatement` gains `kind: 'rename' | 'convert' | 'backfill'`. Every reader that assumes a rename switches on `kind` first, including the SQL `StatementPlanner`, which today plans any non-model statement as a column rename.
+- `askPlanQuestions` re-plans with every planned statement, not only renames.
+- Convert and backfill reach the strategies as destination coordinates through the strategy context. They do not go through `planStatements`, because they rename nothing.
+- Strategies gated: Postgres `notNullBackfillCallStrategy`, `typeChangeCallStrategy`, `nullableTighteningCallStrategy`; SQLite `nullabilityTighteningBackfillStrategy`.
+- `AlterColumnTypeClass` gains `data`. The `using` slot renders as code, imports `placeholder`, and an unfilled slot makes `toOp()` return the unfilled-placeholder result.
+- `recreateTable` gains a per-column copy expression, used by convert and by the SQLite temporary value. SQLite gets a fill-value map: integer `0`, real `0`, text `''`, blob `X''`, and what its boolean and date-time codecs store.
+- `MigrationRunnerFailure` gains `fix`. The `db update`, `db init` and `migrate` error mappers prefer it.
 - Grounding report (local, gitignored): `wip/grounding-3a.md`.
-- [`../../design-notes.md`](../../design-notes.md): the scaffold rule and the convert and backfill rows.
-- [ADR 200](../../../../docs/architecture%20docs/adrs/ADR%20200%20-%20Placeholder%20utility%20for%20scaffolded%20migration%20slots.md): the placeholder flow.

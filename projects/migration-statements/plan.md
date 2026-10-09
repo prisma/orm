@@ -2,112 +2,92 @@
 
 **Spec:** [`spec.md`](./spec.md) · **Linear:** [Destructive changes need stated intent](https://linear.app/prisma-company/project/destructive-changes-need-stated-intent-7626c0107cd9), plan issue [TML-3474](https://linear.app/prisma-company/issue/TML-3474)
 
-## Summary
+## At a glance
 
-Six slices. Slices 1 and 2 are merged. The rest, re-planned on 2026-10-08 when slices 3 and 4 proved too large for one review each:
+| Slice | What it delivers | Builds on | State |
+| --- | --- | --- | --- |
+| 1 | `--rename` for models and fields, Postgres and SQLite | — | Merged, prisma/orm#30638 |
+| 2 | Data loss refused until answered; `--delete`, `--allow`; the interactive prompt | 1 | Merged, prisma/orm#30648 |
+| 3a | `--convert` and `--backfill`, Postgres and SQLite | 2 | Spec: [`slices/convert-backfill/`](./slices/convert-backfill/spec.md) |
+| 4a | Renames and deletes on MongoDB | 2 | Spec: [`slices/mongo-renames/`](./slices/mongo-renames/spec.md) |
+| 3b | The remaining SQL renames and deletes | 3a | Not started |
+| 4b | `--convert`, `--backfill` and value object renames on MongoDB | 3b, 4a | Not started |
 
-- **3a** (SQL `--convert` and `--backfill`) and **4a** (MongoDB renames and deletes) run in parallel.
-- **3b** (the remaining SQL nouns) follows 3a. **4b** (MongoDB `--convert`, `--backfill` and value object renames) follows 3b and 4a, and reuses their design.
-- The storage-name syntax survey runs beside the slices and goes to Will for a decision. It does not block close-out.
+```text
+1 → 2 ─┬─ 3a ── 3b ─┐
+       └─ 4a ───────┴─ 4b → close-out
+```
 
-Each slice is one PR against `main`.
+- 3a and 4a run in parallel now.
+- Each slice is one pull request against `main`.
+- Slices 3 and 4 were split on 2026-10-08. Each was too large to review as one pull request.
 
-## Slices
+## Slices still to build
 
-### Slice 1 — Statements on the command line, and renames of models and fields on Postgres and SQLite
+### 3a — `--convert` and `--backfill` on Postgres and SQLite
 
-**Linear:** [TML-3475](https://linear.app/prisma-company/issue/TML-3475) · **Folder:** `slices/renames/`
+**Linear:** [TML-3477](https://linear.app/prisma-company/issue/TML-3477) · **Spec:** [`slices/convert-backfill/spec.md`](./slices/convert-backfill/spec.md)
 
-**Outcome.** Both commands accept `--rename old:new` for models and fields, with a model rename across namespaces resolved but refused until slice 3. The framework parses each statement, resolves it against the origin and destination contracts, and applies it in order to a working copy of the origin. The SQL planners emit the table or column rename and every companion rename, with names from the destination contract. `db update` resolves its origin contract from the marker hash through the snapshot store and fails every rename when it cannot. An unusable statement is an error. Non-data drops are widening. The written migration is what a user could write by hand.
+- A lossy type change is answered with `--convert` (fill in the conversion) or `--delete`.
+- `--backfill` writes a slot to fill existing rows of a field that became required.
+- `migration plan` stops writing placeholders nobody asked for.
+- A new required field gets a temporary value on both targets. SQLite lacks this today.
+- The `SET NOT NULL` failure names the NULL rows (TML-3517).
 
-**Builds on.** The planner substrate from prisma/orm#30570, without its contract section.
+**Hands to 3b and 4b:** the two flags and how their questions and placeholders work.
 
-**Hands to.** A statement type the framework owns, parsed and resolved, delivered to every family planner as resolved entities; the working-copy mechanism statements apply to; the origin-contract resolution for `db update`; a column rename operation on both SQL targets.
+### 4a — Renames and deletes on MongoDB
 
-### Slice 2 — Both commands refuse data loss by default, and `--delete` is the per-operation consent
+**Linear:** [TML-3478](https://linear.app/prisma-company/issue/TML-3478) · **Spec:** [`slices/mongo-renames/spec.md`](./slices/mongo-renames/spec.md)
 
-**Linear:** [TML-3476](https://linear.app/prisma-company/issue/TML-3476) · **Folder:** `slices/refusal/`
+- A model rename renames the collection. A field rename rewrites the documents.
+- Removing a field is asked about. `--delete` removes it from every document.
+- Both commands, including `db update`.
+- The temporary setting that makes MongoDB refuse renames is deleted.
 
-**Outcome.** `migration plan` refuses any plan that loses data, with the error `db update` uses. The refusal lists each destructive operation with the statements that resolve it. `--delete` consents to one operation, for namespaces, models and fields, and replaces `--confirm` on both commands. The terminal consent question asks per operation. Upgrade fragments record both changes; the CLI README describes statements and consent.
+**Hands to 4b:** a MongoDB planner that takes statements.
 
-**Builds on.** Slice 1. Two things slice 1 leaves for it: the missing-origin check in the CLI statement resolver runs over the whole input and must move inside the per-statement loop so that `--delete` works without an origin contract; and the `@@map`-only rename gap in `deferred.md` must be decided before the refusal text is written. Decided 2026-10-07 on prisma/orm#30638: dropping a row-level-security policy and disabling row-level security stay `widening` (they lose no data), and slice 2 adds a separate consent question before `db update` applies an operation that widens who can read or write rows, answered per operation like the data-loss consent and refused in a non-interactive run unless consented.
-
-**Design settled 2026-10-07 (Will).** Consent is a statement the user answers with, not a token copied back: the CLI engine gains `ctx.prompt.statement`/`statements`, answered on the command line by verb flags (`--delete Legacy`, `--rename Legacy:Archive`, `--allow User`) and interactively by typing the statement when a human runs the command. The engine change is its own slice, built in prisma/prisma-cli first: [`slices/engine-statement-prompt/spec.md`](./slices/engine-statement-prompt/spec.md). Slice 2's spec is [`slices/refusal/spec.md`](./slices/refusal/spec.md). The `@@map`-only gap gets no statement (see `deferred.md`). Operations that lose no data (`SET NOT NULL`, safe type widenings, MongoDB validator and index changes) stop being destructive.
-
-**Hands to.** The refusal shape every later verb hooks its statements into; the per-operation consent model; `--confirm` no longer consents to data loss.
-
-### Slice 3a — `--convert` and `--backfill` on Postgres and SQLite
-
-**Linear:** [TML-3477](https://linear.app/prisma-company/issue/TML-3477) · **Folder:** `slices/convert-backfill/`
-
-**Outcome.** `migration plan --convert User.age` writes the type change with a `placeholder()` where the conversion goes, and `--backfill User.email` writes the backfill transform. A lossy type change is answered with `convert` or `delete`. Neither verb is accepted by `db update`. The planner no longer scaffolds without being asked; without `--backfill`, a required field on a populated table gets the temporary-default recipe on both SQL targets, which SQLite lacks today. The Postgres runner's advice when `SET NOT NULL` meets NULLs names the NULLs (TML-3517).
-
-**Builds on.** Slice 2.
-
-**Hands to.** The convert and backfill verbs, their questions and their scaffold rule, for 3b (variants) and 4b (MongoDB).
-
-### Slice 3b — The remaining nouns on Postgres and SQLite
+### 3b — The remaining renames and deletes on Postgres and SQLite
 
 **Linear:** [TML-3477](https://linear.app/prisma-company/issue/TML-3477) · **Folder:** `slices/remaining-nouns/`
 
-**Outcome.** `--rename` on enum values, namespaces and value object fields (building the framework's value object statement surface: statement entity, subject kind, grammar, resolver), a model move across namespaces (`alter table set schema` on Postgres), and `--convert` on a variant whose discriminator value changed, each planning the row updates, JSON rewrites or schema rename. `--delete` on an enum value nulls it where nullable, else refuses. `--delete` on a variant stored in its base's table deletes the rows with that discriminator value and drops its columns, and the refusal says it deletes rows. `--delete <namespace>` answers every question for the models in it. Risk to settle in the spec: a value object can contain itself (ADR 178's `NavItem.children`), and a field rename inside such a type must rewrite to any depth, which a fixed SQL JSON expression or MongoDB update pipeline cannot do.
+- `--rename` for enum values, namespaces and fields inside value objects. This slice builds the statement support for value objects, which 4b reuses.
+- Moving a model to another namespace (`alter table set schema` on Postgres).
+- `--convert` on a variant whose discriminator value changed.
+- `--delete` on an enum value: sets it to NULL where the field is optional, otherwise refuses.
+- `--delete` on a variant stored in its base's table: deletes its rows and drops its columns. The refusal says rows are deleted.
+- `--delete <namespace>` answers every question for the models in it.
 
-**Builds on.** Slice 3a.
+**Risk to settle in its spec:** a value object can contain itself (ADR 178's `NavItem.children`). Renaming a field inside it means rewriting to any depth, which a fixed SQL JSON expression or MongoDB update cannot do.
 
-**Hands to.** Project close-out for the SQL targets.
+**Hands to:** close-out for Postgres and SQLite.
 
-### Slice 4a — Renames and deletes on MongoDB
-
-**Linear:** [TML-3478](https://linear.app/prisma-company/issue/TML-3478) · **Folder:** `slices/mongo-renames/`
-
-**Outcome.** The MongoDB planner carries out `--rename` for models (collection rename) and fields (document rewrite), with the validator and indexes kept consistent, through both commands. Removing a field becomes data loss, answered by `--delete` with an `$unset`. Document rewrites run under `db update`. The temporary capability member `renameStatements: { refused: true; keepDataByHand }`, its three CLI reads and its doc mention are deleted. Statements name MongoDB fields the same way they name SQL fields.
-
-**Builds on.** Slice 2.
-
-**Hands to.** A MongoDB planner that takes resolved statements, for 4b.
-
-### Slice 4b — `--convert`, `--backfill` and value object renames on MongoDB
+### 4b — `--convert`, `--backfill` and value object renames on MongoDB
 
 **Linear:** [TML-3478](https://linear.app/prisma-company/issue/TML-3478) · **Folder:** `slices/mongo-convert-backfill/`
 
-**Outcome.** The same two verbs as 3a on MongoDB, scaffolding a data transform with a placeholder. Value object field renames rewrite subdocuments, including lists, dictionaries and unions, using the statement surface from 3b. A validator change that makes a field required on a populated collection is no longer silent: it is answered with `--backfill`, or the command says that existing documents need the field.
+- The same two flags as 3a, writing a data transform with a placeholder.
+- Making a field required on a collection with documents is no longer silent. It is answered with `--backfill`, or the command says the existing documents need the field.
+- Renaming a field inside a value object rewrites the embedded documents, including lists, dictionaries and unions.
 
-**Builds on.** Slices 3a, 3b and 4a.
+**Hands to:** close-out for MongoDB.
 
-**Hands to.** Project close-out for MongoDB.
+### Alongside — a syntax for naming storage objects
 
-### Alongside — A syntax for naming storage objects
+There is no statement for a model that keeps its name but changes its table (`@@map`). Will asked on 2026-10-07 for a critical discussion and a look at how established tools name tables on the command line before any syntax is chosen. `--rename table/users:app_users` was an off-the-cuff example, not a decision.
 
-Will asked (2026-10-07) for a critical discussion and a survey of how established tools name tables and other storage objects on the command line, before any syntax is chosen for the `@@map`-only rename gap (`deferred.md`). The write-up goes to Will for a decision. Building the chosen syntax is not in this project unless Will adds it.
+- The write-up goes to Will for a decision.
+- It does not block close-out.
+- Building the chosen syntax is not in this project unless Will adds it.
 
-## Stretch goal — interactive statements when a human runs the command
+## Delivered: the interactive prompt
 
-Recorded 2026-10-06 at the operator's request. This is the eventual direction, and the slices build with it in mind so that it drops in on top of their mechanisms; it is not a slice of its own, and it is built once the mechanisms it needs exist (after slice 2 at the earliest).
-
-When `migration plan` or `db update` detects a destructive operation and no statement covers it, the command today refuses and prints the statements that would resolve it. The stretch goal: when the command is run by a human in a terminal (stdin and stdout are a TTY, and no `--json` or similar non-interactive flag is set), the refusal becomes an interactive prompt that asks, per destructive operation, what the user means: rename it to a name they type, or delete it. Each answer is exactly the statement the refusal would have printed, applied in order, and the plan then proceeds as if the statements had been given on the command line. In a script, an agent, or CI (no TTY) the behaviour stays as it is: refuse and print the statements.
-
-Rules that carry over unchanged: the prompt never guesses or proposes a rename candidate; it asks. The statements are not recorded anywhere; the migration file or the database is the record. The consent model of slice 2 (`--delete` per operation) is what the "delete" answer maps to.
-
-What the slices do now so this drops in later (see the spec's cross-cutting requirement 12):
-
-- The refusal is a structured value first and text second: a list of destructive operations, each with the entity it touches in domain coordinates and the statements that would resolve it, rendered to the error message by the command. The prompt consumes the same list.
-- Statement text is parsed, resolved and applied through one function the command calls, which takes the statement strings and the two contracts and does not care whether the strings came from the command line or from an answer typed at a prompt. Statements can therefore be added after the command has started and the plan re-run.
-- The per-operation consent question that `db update` already asks in a terminal is the seed of this prompt, so slice 2 keeps it as a per-operation question rather than folding it into a yes/no over the whole plan.
-
-## Sequencing
-
-- **Merged:** slice 1 → slice 2.
-- **Parallel now:** 3a and 4a.
-- **Then:** 3b after 3a; 4b after 3b and 4a.
-
-## Dependencies
-
-- Nothing external. The shelved prisma/orm#30570 is a source to copy from, not a dependency; its branch stays as a draft.
-- Users get the feature through the next published CLI release after slice 2 merges; slices 1 and 2 together are the minimum that changes behaviour a user sees.
+Recorded on 2026-10-06 as the stretch goal: when a human runs the command in a terminal, the refusal becomes a question per operation, and the answer is the same statement the flags take. Slice 2 built it on the CLI engine's statement prompt (prisma/prisma-cli#337). Scripts, agents and CI get the refusal that names the flags.
 
 ## Close-out (required)
 
 - [ ] Verify every project DoD item in [`spec.md`](./spec.md)
+- [ ] Final retro
 - [ ] Write the ADR and amend ADR 001, ADR 028 and the Data Contract and Migration System subsystem docs
 - [ ] Migrate long-lived docs into `docs/`
 - [ ] Strip repo-wide references to `projects/migration-statements/**`
