@@ -11,13 +11,14 @@
 
 import type { ColumnDefault } from '@internal/contract/types';
 import { unfilledPlaceholderOperation } from '@internal/errors/migration';
-import type {
-  MigrationOperationClass,
-  SqlMigrationPlanOperation,
+import {
+  createSqlTextSources,
+  type MigrationOperationClass,
+  type SqlMigrationPlanOperation,
+  type SqlTextSources,
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer, Lowerer } from '@internal/family-sql/control-adapter';
 import type { OpFactoryCall as FrameworkOpFactoryCall } from '@internal/framework-components/control';
-import { createSqlTextSources, type SqlTextSources } from '@internal/sql-contract/sql-expression';
 import type {
   AnyDdlColumnDefault,
   DdlColumn,

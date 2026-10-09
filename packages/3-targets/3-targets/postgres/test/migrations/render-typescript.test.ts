@@ -1,3 +1,4 @@
+import { formatMigrationTs } from '@internal/migration-tools/migration-ts';
 import { sql } from '@internal/sql-contract/sql-expression';
 import { StorageColumn } from '@internal/sql-contract/types';
 import {
@@ -404,5 +405,36 @@ describe('renderCallsToTypeScript (postgres) — facade import surface', () => {
       'this.dropRlsPolicy({ schema: "public", table: "note", policy: "p_stale" })',
     );
     expect(output).toContain('this.disableRowLevelSecurity({ schema: "public", table: "note" })');
+  });
+});
+
+describe('renderCallsToTypeScript (postgres) — multi-line sql templates', () => {
+  it('indents a template nested in createTable constraints under the line it opens on, after formatting', async () => {
+    const output = await formatMigrationTs(
+      renderTypeScript(
+        [
+          new CreateTableCall(
+            'public',
+            'profile',
+            [col('id', 'int4', { notNull: true }), col('bio', 'text')],
+            [
+              primaryKey(['id']),
+              checkExpression('profile_valid_0a1b2c3d', '"id" > 0\n  AND length("bio") < 280'),
+            ],
+          ),
+        ],
+        { from: null, to: TO_HASH, snapshotsImportPath: SNAPSHOTS_IMPORT_PATH },
+      ),
+    );
+    const lines = output.split('\n');
+    const opening = lines.findIndex((line) => line.endsWith('sql`'));
+
+    expect(lines.slice(opening - 1, opening + 4)).toEqual([
+      "            'profile_valid_0a1b2c3d',",
+      '            sql`',
+      '              "id" > 0',
+      '                AND length("bio") < 280',
+      '            `,',
+    ]);
   });
 });

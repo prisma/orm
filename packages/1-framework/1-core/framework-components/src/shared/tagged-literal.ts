@@ -181,6 +181,7 @@ export function printedTaggedLiteralReadsBack(text: string): boolean {
  * writes a template only when the tag's TypeScript function canonicalizes its text as `canonicalizeTaggedLiteralBody`
  * does and that leaves `text` unchanged, which holds for `sql`. It also falls back when a line ends in a space or a
  * tab, which editors strip on save, and when `text` holds a character a template would carry unescaped and invisible.
+ * A multi-line template's lines sit one level deeper than the line it opens on.
  */
 export function tsTaggedTemplateSource(
   tag: string,
@@ -188,8 +189,12 @@ export function tsTaggedTemplateSource(
 ): { readonly source: string; readonly usesTag: boolean } {
   if (!templateHoldsUnchanged(text)) return { source: tsQuotedTextSource(text), usesTag: false };
   const escaped = tsTemplateText(text);
-  const source = text.includes('\n') ? `${tag}\`\n${escaped}\n\`` : `${tag}\`${escaped}\``;
-  return { source, usesTag: true };
+  if (!text.includes('\n')) return { source: `${tag}\`${escaped}\``, usesTag: true };
+  const body = escaped
+    .split('\n')
+    .map((line) => (line.length === 0 ? line : `  ${line}`))
+    .join('\n');
+  return { source: `${tag}\`\n${body}\n\``, usesTag: true };
 }
 
 const WHITESPACE_ONLY_LINE = /^\s+$/;

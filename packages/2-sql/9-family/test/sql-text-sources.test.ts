@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createSqlTextSources } from '../src/sql-text-sources';
+import { createSqlTextSources } from '../src/core/migrations/sql-text-sources';
 
 describe('createSqlTextSources', () => {
   it('imports sql only once a written text uses the tag', () => {

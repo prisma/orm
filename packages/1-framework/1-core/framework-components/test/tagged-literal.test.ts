@@ -270,8 +270,8 @@ describe('tsTaggedTemplateSource', () => {
   it.each([
     ['one line', 'now()', 'sql`now()`'],
     ['both quote kinds', `"kind" IN ('a', 'b')`, `sql\`"kind" IN ('a', 'b')\``],
-    ['several lines', 'a > 0\n  AND b < 1', 'sql`\na > 0\n  AND b < 1\n`'],
-    ['an internal empty line', 'a > 0\n\nAND b', 'sql`\na > 0\n\nAND b\n`'],
+    ['several lines', 'a > 0\n  AND b < 1', 'sql`\n  a > 0\n    AND b < 1\n`'],
+    ['an internal empty line', 'a > 0\n\nAND b', 'sql`\n  a > 0\n\n  AND b\n`'],
     ['a tab', 'a\t> 0', 'sql`a\t> 0`'],
     ['a backtick', 'a = `b`', 'sql`a = \\`b\\``'],
     ['a backslash', "E'\\n' <> x", "sql`E'\\\\n' <> x`"],

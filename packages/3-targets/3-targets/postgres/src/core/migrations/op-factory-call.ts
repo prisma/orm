@@ -21,7 +21,11 @@
  */
 
 import { unfilledPlaceholderOperation } from '@internal/errors/migration';
-import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
+import {
+  createSqlTextSources,
+  type SqlMigrationPlanOperation,
+  type SqlTextSources,
+} from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer, Lowerer } from '@internal/family-sql/control-adapter';
 import type {
   OpFactoryCall as FrameworkOpFactoryCall,
@@ -29,7 +33,6 @@ import type {
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { SqlTypeLookups } from '@internal/sql-contract/data-type';
-import { createSqlTextSources, type SqlTextSources } from '@internal/sql-contract/sql-expression';
 import type { StorageColumn, StorageTypeInstance } from '@internal/sql-contract/types';
 import type { AnyDdlColumnDefault, DdlTableConstraint } from '@internal/sql-relational-core/ast';
 import {

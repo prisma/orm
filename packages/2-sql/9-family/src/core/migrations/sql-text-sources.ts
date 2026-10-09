@@ -1,10 +1,6 @@
 import { tsTaggedTemplateSource } from '@internal/framework-components/authoring';
-import { SQL_EXPRESSION_TAG } from './sql-expression';
-
-export interface SqlTagImport {
-  readonly moduleSpecifier: string;
-  readonly symbol: string;
-}
+import type { ImportRequirement } from '@internal/framework-components/control';
+import { SQL_EXPRESSION_TAG } from '@internal/sql-contract/sql-expression';
 
 /**
  * Writes the SQL texts of one generated migration-file call. Each text becomes a `sql` template where the tag reads it
@@ -12,7 +8,7 @@ export interface SqlTagImport {
  */
 export interface SqlTextSources {
   source(text: string): string;
-  imports(): readonly SqlTagImport[];
+  imports(): readonly ImportRequirement[];
 }
 
 /** `moduleSpecifier` is the module the generated file imports `sql` from. */
