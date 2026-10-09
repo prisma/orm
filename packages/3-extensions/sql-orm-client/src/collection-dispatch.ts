@@ -30,7 +30,6 @@ import {
   ColumnRef,
   ListExpression,
   LiteralExpr,
-  type OrderByItem,
   OrExpr,
 } from '@internal/sql-relational-core/ast';
 import type { Preparable } from '@internal/sql-relational-core/plan';
@@ -463,7 +462,7 @@ export function reloadMutationRowsByIdentities<Row>(options: {
   selectedFields: readonly string[] | undefined;
   includes: readonly IncludeExpr[];
   annotations?: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined;
-  orderBy?: readonly OrderByItem[] | undefined;
+  readState?: Pick<CollectionState, 'orderBy' | 'variantName'> | undefined;
 }): AsyncIterableResult<Row> {
   const {
     context,
@@ -475,7 +474,7 @@ export function reloadMutationRowsByIdentities<Row>(options: {
     selectedFields,
     includes,
     annotations,
-    orderBy,
+    readState,
   } = options;
   const { contract } = context;
   if (identityRows.length === 0) {
@@ -511,7 +510,7 @@ export function reloadMutationRowsByIdentities<Row>(options: {
       selectedFields,
       includes,
       ...ifDefined('annotations', annotations),
-      ...ifDefined('orderBy', orderBy),
+      ...readState,
     },
     tableName,
     modelName,

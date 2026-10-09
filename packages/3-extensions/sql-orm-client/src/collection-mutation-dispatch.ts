@@ -5,7 +5,6 @@ import {
   type OperationKind,
 } from '@internal/framework-components/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import type { OrderByItem } from '@internal/sql-relational-core/ast';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { resolvePolymorphismInfo, resolveRowIdentityColumns } from './collection-contract';
 import { reloadMutationRowsByIdentities } from './collection-dispatch';
@@ -17,7 +16,7 @@ import {
 } from './collection-runtime';
 import { ormError } from './orm-errors';
 import { queryPlanRows } from './query-plan-rows';
-import type { CollectionContext, IncludeExpr } from './types';
+import type { CollectionContext, CollectionState, IncludeExpr } from './types';
 
 function createMutationRowMapper(
   contract: Contract<SqlStorage>,
@@ -65,7 +64,7 @@ interface MapMutationRowsOptions<Row> {
   readonly hiddenColumns: readonly string[];
   readonly mapRow: (mapped: Record<string, unknown>) => Row;
   readonly annotations?: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined;
-  readonly orderBy?: readonly OrderByItem[] | undefined;
+  readonly readState?: Pick<CollectionState, 'orderBy' | 'variantName'> | undefined;
 }
 
 interface DispatchMutationRowsOptions<Row> extends MapMutationRowsOptions<Row> {
@@ -97,7 +96,7 @@ export function mapMutationRows<Row>(
     hiddenColumns,
     mapRow,
     annotations,
-    orderBy,
+    readState,
   } = options;
   const { contract } = context;
   const mapStorageRow = createMutationRowMapper(contract, namespaceId, modelName, variantName);
@@ -129,7 +128,7 @@ export function mapMutationRows<Row>(
       selectedFields,
       includes,
       annotations,
-      orderBy,
+      readState,
     });
   };
 

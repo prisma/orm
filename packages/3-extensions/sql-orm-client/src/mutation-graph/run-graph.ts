@@ -154,7 +154,10 @@ function callerRows<Row>(
       .map((column) => column.alias)
       .filter((column) => !selected.includes(column)),
     annotations,
-    orderBy: node.ast.kind === 'select' ? node.ast.orderBy : undefined,
+    readState:
+      node.ast.kind === 'select'
+        ? { orderBy: node.ast.orderBy, variantName: state.variantName }
+        : undefined,
     mapRow: (mapped) =>
       blindCast<Row, 'the mapped row of the result node is the row the caller selected'>(mapped),
   });
