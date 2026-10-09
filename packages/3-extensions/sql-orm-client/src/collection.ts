@@ -421,6 +421,8 @@ export class CollectionBase<
       field === undefined
         ? undefined
         : columnOfCallerField(
+            this.contract,
+            this.namespaceId,
             getModelFieldColumns(this.contract, this.namespaceId, this.modelName),
             this.modelName,
             field,
@@ -2081,7 +2083,15 @@ export class CollectionBase<
         const allMapped: Record<string, unknown> = {};
         for (const [fieldName, value] of Object.entries(row)) {
           if (value === undefined) continue;
-          allMapped[columnOfCallerField(mergedFieldToColumn, variant.modelName, fieldName)] = value;
+          allMapped[
+            columnOfCallerField(
+              contract,
+              namespaceId,
+              mergedFieldToColumn,
+              variant.modelName,
+              fieldName,
+            )
+          ] = value;
         }
         allMapped[polyInfo.discriminatorColumn] = variant.value;
 
@@ -2220,7 +2230,15 @@ export class CollectionBase<
       const mapped: Record<string, unknown> = {};
       for (const [fieldName, value] of Object.entries(row)) {
         if (value === undefined) continue;
-        mapped[columnOfCallerField(mergedFieldToColumn, variant.modelName, fieldName)] = value;
+        mapped[
+          columnOfCallerField(
+            this.contract,
+            this.namespaceId,
+            mergedFieldToColumn,
+            variant.modelName,
+            fieldName,
+          )
+        ] = value;
       }
       mapped[polyInfo.discriminatorColumn] = variant.value;
       return mapped;

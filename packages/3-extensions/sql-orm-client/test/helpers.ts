@@ -829,3 +829,19 @@ export function fieldUnknown(model: string, field: string) {
     meta: { model, field },
   });
 }
+
+export function columnPassedForField(model: string, column: string, field: string) {
+  return expect.objectContaining({
+    code: 'ORM.FIELD_UNKNOWN',
+    message: `Model "${model}" has no field "${column}". "${column}" is the column of field "${field}"; pass the field name.`,
+    meta: { model, field: column, fieldForColumn: field },
+  });
+}
+
+export function unmappedColumnPassed(model: string, column: string) {
+  return expect.objectContaining({
+    code: 'ORM.FIELD_UNKNOWN',
+    message: `Model "${model}" has no field "${column}". The table has a column "${column}", but no field of model "${model}" maps it, so the ORM cannot read or write it.`,
+    meta: { model, field: column },
+  });
+}

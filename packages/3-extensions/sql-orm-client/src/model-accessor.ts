@@ -329,7 +329,13 @@ function createModelAccessorInScope<
         const fieldBinding = scope.forJoinedSource(namespaceId, resolvedTable).current;
         const columnName =
           variantField?.column ??
-          columnOfCallerField(fieldColumns, addressedModelName(modelName, variantName), prop);
+          columnOfCallerField(
+            contract,
+            namespaceId,
+            fieldColumns,
+            addressedModelName(modelName, variantName),
+            prop,
+          );
         const column = resolveColumn(contract, namespaceId, resolvedTable, columnName);
         if (!column) {
           throw new InternalError(
@@ -531,6 +537,8 @@ function relatedOrderableField<TContract extends Contract<SqlStorage>>(
   fieldName: string,
 ): Orderable | undefined {
   const columnName = columnOfCallerField(
+    context.contract,
+    relation.toNamespace,
     getModelFieldColumns(context.contract, relation.toNamespace, relation.to),
     relation.to,
     fieldName,

@@ -16,7 +16,12 @@ import {
   mapStorageRowToModelFields,
   stripHiddenMappedFields,
 } from '../src/collection-runtime';
-import { buildMixedPolyContract, fieldUnknown, getTestContract } from './helpers';
+import {
+  buildMixedPolyContract,
+  columnPassedForField,
+  fieldUnknown,
+  getTestContract,
+} from './helpers';
 
 describe('collection-runtime', () => {
   const contract = getTestContract();
@@ -65,7 +70,7 @@ describe('collection-runtime', () => {
     ).toThrow(fieldUnknown('Post', 'custom'));
     expect(() =>
       mapModelDataToStorageRow(contract, 'public', 'Post', { id: 1, user_id: 2 }),
-    ).toThrow(fieldUnknown('Post', 'user_id'));
+    ).toThrow(columnPassedForField('Post', 'user_id', 'userId'));
   });
 
   it('stripHiddenMappedFields() removes mapped fields for hidden columns', () => {

@@ -8,7 +8,12 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { Collection } from '../src/collection';
-import { getAllTableColumns, getColumnsReadOnTable } from '../src/collection-contract';
+import {
+  columnOfCallerField,
+  getAllTableColumns,
+  getColumnsReadOnTable,
+  getModelFieldColumns,
+} from '../src/collection-contract';
 import {
   compileDeleteReturning,
   compileInsertReturning,
@@ -23,7 +28,10 @@ import {
   buildMixedPolyContract,
   buildStiPolyContract,
   buildTestContextFromContract,
+  columnPassedForField,
   createMockRuntime,
+  fieldUnknown,
+  unmappedColumnPassed,
 } from './helpers';
 
 const UserBase = model('User', {
@@ -60,6 +68,7 @@ interface LooseCollection {
     refine?: (related: LooseCollection) => LooseCollection,
   ): LooseCollection;
   distinct(...fields: string[]): LooseCollection;
+  select(...fields: string[]): LooseCollection;
   readonly state: CollectionState;
 }
 
@@ -115,6 +124,38 @@ describe('getColumnsReadOnTable', () => {
     expect(getColumnsReadOnTable(poly, 'public', 'Feature', 'features')).toEqual(
       expect.arrayContaining(['id', 'priority']),
     );
+  });
+});
+
+describe('the refusal of a name that is not a field', () => {
+  const resolve = (c: typeof contract, model: string, name: string) =>
+    columnOfCallerField(c, 'public', getModelFieldColumns(c, 'public', model), model, name);
+
+  it('names the field when the name is the column of a field of the model', () => {
+    expect(() => collection('Post').select('user_id')).toThrow(
+      columnPassedForField('Post', 'user_id', 'userId'),
+    );
+  });
+
+  it('says no field maps the name when it is a column of the model table', () => {
+    expect(() => collection('User').select('legacy_key')).toThrow(
+      unmappedColumnPassed('User', 'legacy_key'),
+    );
+  });
+
+  it('adds nothing when the name is neither a column of a field nor of the table', () => {
+    expect(() => resolve(contract, 'User', 'nickname')).toThrow(fieldUnknown('User', 'nickname'));
+  });
+
+  it('adds nothing for a column another table holds', () => {
+    expect(() => resolve(contract, 'User', 'internal_note')).toThrow(
+      fieldUnknown('User', 'internal_note'),
+    );
+  });
+
+  it('adds nothing for a column a sibling variant maps', () => {
+    const poly = buildStiPolyContract();
+    expect(() => resolve(poly, 'Admin', 'plan')).toThrow(fieldUnknown('Admin', 'plan'));
   });
 });
 

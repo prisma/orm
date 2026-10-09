@@ -352,7 +352,9 @@ function createHavingBuilder<
         );
       }
       const column =
-        field === undefined ? undefined : columnOfCallerField(fieldColumns, modelName, field);
+        field === undefined
+          ? undefined
+          : columnOfCallerField(contract, namespaceId, fieldColumns, modelName, field);
       const metric = new AggregateExpr(
         operation,
         column === undefined ? undefined : ColumnRef.of(tableName, column),

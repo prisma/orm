@@ -18,7 +18,7 @@ import {
   buildCompositeForeignKeyContract,
   buildExecutionDefaultJunctionContract,
   buildMixedPolyContract,
-  fieldUnknown,
+  columnPassedForField,
   getTestContract,
   withPatchedDomainModels,
 } from './helpers';
@@ -184,7 +184,7 @@ describe('collection-contract capability detection', () => {
     ]);
     expect(() =>
       resolveUpsertConflictColumns(contract, 'public', 'Post', { user_id: 'x' }),
-    ).toThrow(fieldUnknown('Post', 'user_id'));
+    ).toThrow(columnPassedForField('Post', 'user_id', 'userId'));
   });
 
   it('resolveModelTableName() resolves from storage.table and throws when missing', () => {

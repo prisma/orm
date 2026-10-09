@@ -17,7 +17,9 @@ export function mapFieldsToColumns(
   fieldNames: readonly string[],
 ): string[] {
   const fieldColumns = getModelFieldColumns(contract, namespaceId, modelName);
-  return fieldNames.map((fieldName) => columnOfCallerField(fieldColumns, modelName, fieldName));
+  return fieldNames.map((fieldName) =>
+    columnOfCallerField(contract, namespaceId, fieldColumns, modelName, fieldName),
+  );
 }
 
 /** The columns a `select` names: the narrowed variant's fields too, or, when the collection is not narrowed, every variant's fields, each name reading every column a variant maps it to. See `getModelAndVariantFieldColumns` for why `select` accepts more than other surfaces. */
@@ -36,12 +38,15 @@ export function mapSelectedFieldsToColumns(
       modelName,
       variantName,
     );
-    return fieldNames.map((fieldName) => columnOfCallerField(fieldColumns, addressed, fieldName));
+    return fieldNames.map((fieldName) =>
+      columnOfCallerField(contract, namespaceId, fieldColumns, addressed, fieldName),
+    );
   }
   const fieldColumns = getModelAndEveryVariantFieldColumns(contract, namespaceId, modelName);
   return fieldNames.flatMap((fieldName) => {
     const columns = Object.hasOwn(fieldColumns, fieldName) ? fieldColumns[fieldName] : undefined;
-    if (columns === undefined) throw callerFieldUnknown(addressed, fieldName);
+    if (columns === undefined)
+      throw callerFieldUnknown(contract, namespaceId, fieldColumns, addressed, fieldName);
     return [...columns];
   });
 }
@@ -60,7 +65,8 @@ export function mapCursorValuesToColumns(
       continue;
     }
 
-    mappedCursor[columnOfCallerField(fieldColumns, modelName, fieldName)] = value;
+    mappedCursor[columnOfCallerField(contract, namespaceId, fieldColumns, modelName, fieldName)] =
+      value;
   }
 
   return mappedCursor;

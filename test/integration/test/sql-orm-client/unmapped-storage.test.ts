@@ -92,10 +92,10 @@ async function seed(runtime: PgIntegrationRuntime): Promise<void> {
   `);
 }
 
-function fieldUnknown(model: string, name: string) {
+function unmappedColumnPassed(model: string, column: string) {
   return expect.objectContaining({
     code: 'ORM.FIELD_UNKNOWN',
-    message: `Model "${model}" has no field "${name}"`,
+    message: `Model "${model}" has no field "${column}". The table has a column "${column}", but no field of model "${model}" maps it, so the ORM cannot read or write it.`,
   });
 }
 
@@ -137,9 +137,9 @@ describe('storage no model maps', () => {
 
         await expect(
           (async () => users().create({ id: 2, email: 'b@example.com', legacy_key: 'x' }))(),
-        ).rejects.toEqual(fieldUnknown('User', 'legacy_key'));
+        ).rejects.toEqual(unmappedColumnPassed('User', 'legacy_key'));
         await expect((async () => users().where({ legacy_key: 'secret' }).all())()).rejects.toEqual(
-          fieldUnknown('User', 'legacy_key'),
+          unmappedColumnPassed('User', 'legacy_key'),
         );
         await expect(
           (async () =>
@@ -148,9 +148,9 @@ describe('storage no model maps', () => {
                 user['legacy_key']!.eq('secret'),
               )
               .all())(),
-        ).rejects.toEqual(fieldUnknown('User', 'legacy_key'));
+        ).rejects.toEqual(unmappedColumnPassed('User', 'legacy_key'));
         await expect((async () => users().select('legacy_key').all())()).rejects.toEqual(
-          fieldUnknown('User', 'legacy_key'),
+          unmappedColumnPassed('User', 'legacy_key'),
         );
 
         expect(await runtime.query('select count(*)::int as n from unmapped_users')).toEqual([

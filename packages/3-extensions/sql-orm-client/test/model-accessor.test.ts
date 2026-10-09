@@ -24,6 +24,7 @@ import {
   fieldUnknown,
   getTestContext,
   getTestContract,
+  unmappedColumnPassed,
   withPatchedDomainModels,
 } from './helpers';
 import { unboundTables } from './unbound-tables';
@@ -454,7 +455,7 @@ describe('createModelAccessor', () => {
           'public',
           'User',
         )['name'],
-    ).toThrow(fieldUnknown('User', 'name'));
+    ).toThrow(unmappedColumnPassed('User', 'name'));
   });
 
   it('combines relation shorthand fields with and() and rejects missing join arrays', () => {

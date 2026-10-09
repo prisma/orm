@@ -318,20 +318,76 @@ function invert(map: Readonly<Record<string, string>>): Readonly<Record<string, 
  * The column a name a caller passed maps in `fieldColumns`. A name that is not a field is refused with `ORM.FIELD_UNKNOWN`, so no caller reaches a column by its column name, including a column no field maps.
  */
 export function columnOfCallerField(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
   fieldColumns: Readonly<Record<string, string>>,
   modelName: string,
   fieldName: string,
 ): string {
   const column = Object.hasOwn(fieldColumns, fieldName) ? fieldColumns[fieldName] : undefined;
-  if (column === undefined) throw callerFieldUnknown(modelName, fieldName);
+  if (column === undefined) {
+    throw callerFieldUnknown(contract, namespaceId, fieldColumns, modelName, fieldName);
+  }
   return column;
 }
 
-/** The refusal of a name a caller passed that is not a field of the model it addressed. */
-export function callerFieldUnknown(modelName: string, fieldName: string): StructuredError {
-  return ormError('ORM.FIELD_UNKNOWN', `Model "${modelName}" has no field "${fieldName}"`, {
+/**
+ * The refusal of a name a caller passed that is not a field of the model it addressed. When the name is the column of one of the fields in `fieldColumns`, or a column of the model's tables that no field maps, the message says so.
+ */
+export function callerFieldUnknown(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  fieldColumns: Readonly<Record<string, string | readonly string[]>>,
+  modelName: string,
+  fieldName: string,
+): StructuredError {
+  const unknown = `Model "${modelName}" has no field "${fieldName}"`;
+  const fieldForColumn = Object.entries(fieldColumns).find(([, columns]) =>
+    typeof columns === 'string' ? columns === fieldName : columns.includes(fieldName),
+  )?.[0];
+  if (fieldForColumn !== undefined) {
+    return ormError(
+      'ORM.FIELD_UNKNOWN',
+      `${unknown}. "${fieldName}" is the column of field "${fieldForColumn}"; pass the field name.`,
+      { meta: { model: modelName, field: fieldName, fieldForColumn } },
+    );
+  }
+  const hint = getUnmappedColumns(contract, namespaceId, modelName).includes(fieldName)
+    ? `. The table has a column "${fieldName}", but no field of model "${modelName}" maps it, so the ORM cannot read or write it.`
+    : '';
+  return ormError('ORM.FIELD_UNKNOWN', `${unknown}${hint}`, {
     meta: { model: modelName, field: fieldName },
   });
+}
+
+/** The columns of the tables of a model's hierarchy that no field of the hierarchy maps. */
+function getUnmappedColumns(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  modelName: string,
+): readonly string[] {
+  return cachedFor(contract, ['unmappedColumns', namespaceId, modelName], () => {
+    const root = hierarchyRootName(contract, namespaceId, modelName);
+    const rootTable = domainModelTableInNamespace(contract, namespaceId, root);
+    if (rootTable === undefined) return [];
+    const variants = resolvePolymorphismInfo(contract, namespaceId, root)?.variants.values();
+    const tables = new Set([rootTable, ...[...(variants ?? [])].map((variant) => variant.table)]);
+    return [...tables].flatMap((table) => {
+      const read = new Set(getColumnsReadOnTable(contract, namespaceId, root, table));
+      return getAllTableColumns(contract, namespaceId, table).filter((column) => !read.has(column));
+    });
+  });
+}
+
+function hierarchyRootName(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  modelName: string,
+): string {
+  const base = modelOf(contract, namespaceId, modelName)?.base;
+  return base === undefined || base.namespace !== namespaceId
+    ? modelName
+    : hierarchyRootName(contract, namespaceId, base.model);
 }
 
 /**
@@ -712,7 +768,7 @@ export function resolveUpsertConflictColumns(
   if (conflictOn && typeof conflictOn === 'object') {
     const fieldColumns = getModelFieldColumns(contract, namespaceId, modelName);
     const columns = Object.keys(conflictOn).map((fieldName) =>
-      columnOfCallerField(fieldColumns, modelName, fieldName),
+      columnOfCallerField(contract, namespaceId, fieldColumns, modelName, fieldName),
     );
     if (columns.length > 0) {
       return columns;
@@ -825,7 +881,9 @@ export function resolveInsertConflictColumns(
   conflictOn: readonly string[],
 ): string[] {
   const fieldColumns = getModelFieldColumns(contract, namespaceId, modelName);
-  return conflictOn.map((fieldName) => columnOfCallerField(fieldColumns, modelName, fieldName));
+  return conflictOn.map((fieldName) =>
+    columnOfCallerField(contract, namespaceId, fieldColumns, modelName, fieldName),
+  );
 }
 
 export function assertDistinctOnCapability(

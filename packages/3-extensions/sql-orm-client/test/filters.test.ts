@@ -12,7 +12,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { all, and, not, or, shorthandToWhereExpr } from '../src/filters';
 import { createModelAccessor } from '../src/model-accessor';
-import { fieldUnknown, getTestContext } from './helpers';
+import { columnPassedForField, fieldUnknown, getTestContext } from './helpers';
 import { unboundTables } from './unbound-tables';
 
 describe('filters', () => {
@@ -194,6 +194,6 @@ describe('filters', () => {
 
     expect(() =>
       shorthandToWhereExpr(context, 'public', 'User', { invited_by_id: null } as never),
-    ).toThrow(fieldUnknown('User', 'invited_by_id'));
+    ).toThrow(columnPassedForField('User', 'invited_by_id', 'invitedById'));
   });
 });

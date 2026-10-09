@@ -30,7 +30,9 @@ export function createAggregateBuilder<
   for (const operation of aggregateOperationNames(aggregates)) {
     builder[operation] = (field?: string) => {
       const column =
-        field === undefined ? undefined : columnOfCallerField(fieldColumns, modelName, field);
+        field === undefined
+          ? undefined
+          : columnOfCallerField(contract, namespaceId, fieldColumns, modelName, field);
       return { kind: 'aggregate', fn: operation, ...ifDefined('column', column) };
     };
   }

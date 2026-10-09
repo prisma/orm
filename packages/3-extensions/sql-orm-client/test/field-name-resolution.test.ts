@@ -10,13 +10,14 @@ import { defineContract, field, model } from './contract-builder';
 import {
   buildMixedPolyContract,
   buildTestContextFromContract,
+  columnPassedForField,
   createMockRuntime,
   fieldUnknown,
   getTestContext,
   getTestContract,
 } from './helpers';
 
-const notAField = fieldUnknown('User', 'invited_by_id');
+const notAField = columnPassedForField('User', 'invited_by_id', 'invitedById');
 
 async function settle(run: () => unknown): Promise<unknown> {
   return await run();
@@ -103,17 +104,17 @@ describe('a name that is not a field of the model', () => {
   it('is refused by an include nested select and an include scalar reducer', () => {
     const { collection } = createCollectionFor('User');
     expect(() => collection.include('posts', (posts) => posts.select('user_id' as never))).toThrow(
-      fieldUnknown('Post', 'user_id'),
+      columnPassedForField('Post', 'user_id', 'userId'),
     );
     expect(() => collection.include('posts', (posts) => posts.sum('user_id' as never))).toThrow(
-      fieldUnknown('Post', 'user_id'),
+      columnPassedForField('Post', 'user_id', 'userId'),
     );
   });
 
   it('is refused by a relation filter', () => {
     const { collection } = createCollectionFor('User');
     expect(() => collection.where((user) => user.posts.some({ user_id: 1 } as never))).toThrow(
-      fieldUnknown('Post', 'user_id'),
+      columnPassedForField('Post', 'user_id', 'userId'),
     );
   });
 });

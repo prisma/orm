@@ -57,7 +57,10 @@ export function shorthandToWhereExpr<
       continue;
     }
 
-    const left = ColumnRef.of(tableName, columnOfCallerField(fieldColumns, modelName, fieldName));
+    const left = ColumnRef.of(
+      tableName,
+      columnOfCallerField(contract, namespaceId, fieldColumns, modelName, fieldName),
+    );
 
     if (value === null) {
       exprs.push(NullCheckExpr.isNull(left));

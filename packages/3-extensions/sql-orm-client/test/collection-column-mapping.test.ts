@@ -5,13 +5,18 @@ import {
   mapSelectedFieldsToColumns,
 } from '../src/collection-column-mapping';
 import { columnOfCallerField, getModelFieldColumns } from '../src/collection-contract';
-import { buildMixedPolyContract, fieldUnknown, getTestContract } from './helpers';
+import {
+  buildMixedPolyContract,
+  columnPassedForField,
+  fieldUnknown,
+  getTestContract,
+} from './helpers';
 
 describe('collection-column-mapping', () => {
   const contract = getTestContract();
 
   const columnOfModelField = (c: typeof contract, ns: string, model: string, field: string) =>
-    columnOfCallerField(getModelFieldColumns(c, ns, model), model, field);
+    columnOfCallerField(c, ns, getModelFieldColumns(c, ns, model), model, field);
 
   it('columnOfCallerField() resolves fields and refuses a name that is not a field', () => {
     expect(columnOfModelField(contract, 'public', 'Post', 'userId')).toBe('user_id');
@@ -22,7 +27,7 @@ describe('collection-column-mapping', () => {
 
   it('columnOfCallerField() refuses a column name that is not also a field name', () => {
     expect(() => columnOfModelField(contract, 'public', 'Post', 'user_id')).toThrow(
-      fieldUnknown('Post', 'user_id'),
+      columnPassedForField('Post', 'user_id', 'userId'),
     );
   });
 
@@ -38,7 +43,7 @@ describe('collection-column-mapping', () => {
       'views',
     ]);
     expect(() => mapFieldsToColumns(contract, 'public', 'Post', ['id', 'user_id'])).toThrow(
-      fieldUnknown('Post', 'user_id'),
+      columnPassedForField('Post', 'user_id', 'userId'),
     );
     expect(() => mapFieldsToColumns(contract, 'public', 'UnknownModel', ['id'])).toThrow(
       fieldUnknown('UnknownModel', 'id'),
@@ -55,7 +60,7 @@ describe('collection-column-mapping', () => {
     ).toThrow(fieldUnknown('Bug', 'priority'));
     expect(() =>
       mapSelectedFieldsToColumns(contract, 'public', 'Post', undefined, ['user_id']),
-    ).toThrow(fieldUnknown('Post', 'user_id'));
+    ).toThrow(columnPassedForField('Post', 'user_id', 'userId'));
   });
 
   it('mapCursorValuesToColumns() skips undefined values and maps field names to columns', () => {
@@ -73,7 +78,7 @@ describe('collection-column-mapping', () => {
 
   it('mapCursorValuesToColumns() refuses a name that is not a field', () => {
     expect(() => mapCursorValuesToColumns(contract, 'public', 'Post', { user_id: 2 })).toThrow(
-      fieldUnknown('Post', 'user_id'),
+      columnPassedForField('Post', 'user_id', 'userId'),
     );
   });
 });

@@ -209,7 +209,8 @@ export function assertModelFieldNames(
 ): void {
   const fieldColumns = getModelFieldColumns(contract, namespaceId, modelName);
   for (const [fieldName, value] of Object.entries(data)) {
-    if (value !== undefined) columnOfCallerField(fieldColumns, modelName, fieldName);
+    if (value !== undefined)
+      columnOfCallerField(contract, namespaceId, fieldColumns, modelName, fieldName);
   }
 }
 
@@ -225,7 +226,7 @@ export function mapModelDataToStorageRow(
     if (value === undefined) {
       continue;
     }
-    mapped[columnOfCallerField(fieldColumns, modelName, fieldName)] = value;
+    mapped[columnOfCallerField(contract, namespaceId, fieldColumns, modelName, fieldName)] = value;
   }
   return mapped;
 }
