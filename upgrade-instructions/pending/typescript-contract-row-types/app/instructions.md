@@ -36,7 +36,7 @@ Indexing `domain.namespaces` with a `string` variable no longer typechecks, beca
 +   : undefined;
 ```
 
-A model is placed in its namespace only when `namespace` is a string literal. When it comes from a `string` variable, the namespace types fall back to a `string` index and list that model in every namespace.
+A model is placed in its namespace only when `namespace` is a string literal. When any model's `namespace` comes from a `string` variable, the contract's namespace types fall back to a `string` index, and every namespace lists every model of the contract, as before this change. Access a namespace with brackets and check it for `undefined`, for example `db.orm['billing']?.Invoice`.
 
 On SQLite, `defineContract` no longer accepts `namespaces`. The build always rejected it at runtime; the type now rejects it too. Remove the option.
 

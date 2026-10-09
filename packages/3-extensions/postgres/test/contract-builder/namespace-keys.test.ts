@@ -112,4 +112,39 @@ describe('the namespaces of a TypeScript contract', () => {
     } | null>();
     expect(client.orm.auth.Session).toBeDefined();
   });
+
+  it('lists every model in every namespace when a model namespace is not a literal', () => {
+    const sessionNamespace: string = 'auth';
+    const contract = defineContract({ namespaces: ['auth', 'billing'] }, ({ field, model }) => ({
+      models: {
+        User: model('User', { fields: { id: field.id.uuidv4String() } }).sql({ table: 'users' }),
+        Invoice: model('Invoice', {
+          namespace: 'billing',
+          fields: { id: field.id.uuidv4String() },
+        }).sql({ table: 'invoices' }),
+        Session: model('Session', {
+          namespace: sessionNamespace,
+          fields: { id: field.id.uuidv4String() },
+        }).sql({ table: 'sessions' }),
+      },
+    }));
+    const client = postgres({ contract, url });
+    type Models = keyof NonNullable<(typeof contract.domain.namespaces)[string]>['models'];
+    type OrmModels = keyof NonNullable<(typeof client.orm)[string]>;
+
+    expectTypeOf<keyof typeof contract.domain.namespaces>().toEqualTypeOf<string>();
+    expectTypeOf<Models>().toEqualTypeOf<'User' | 'Invoice' | 'Session'>();
+    expectTypeOf<OrmModels>().toEqualTypeOf<'User' | 'Invoice' | 'Session'>();
+    expect({
+      domain: domainModels(contract.domain.namespaces),
+      reachable: [
+        client.orm['public']?.User,
+        client.orm['billing']?.Invoice,
+        client.orm['auth']?.Session,
+      ].map((collection) => collection !== undefined),
+    }).toEqual({
+      domain: { auth: ['Session'], billing: ['Invoice'], public: ['User'] },
+      reachable: [true, true, true],
+    });
+  });
 });

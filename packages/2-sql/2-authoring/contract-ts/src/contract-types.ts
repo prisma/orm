@@ -675,11 +675,15 @@ type ModelNamespaces<Definition> = {
 }[ModelNames<Definition>] &
   string;
 
-type ModelsInNamespace<Definition, Ns extends string> = {
-  [ModelName in ModelNames<Definition>]: Ns extends ModelNamespace<Definition, ModelName>
-    ? ModelName
-    : never;
-}[ModelNames<Definition>];
+// A model whose namespace is a non-literal `string` cannot be placed, so every namespace lists every model.
+type ModelsInNamespace<Definition, Ns extends string> =
+  string extends ModelNamespaces<Definition>
+    ? ModelNames<Definition>
+    : {
+        [ModelName in ModelNames<Definition>]: Ns extends ModelNamespace<Definition, ModelName>
+          ? ModelName
+          : never;
+      }[ModelNames<Definition>];
 
 // Mirrors the namespaces `buildSqlContractFromDefinition` puts in `domain.namespaces`: each
 // model's namespace, and the default namespace when the contract has no models or has enums.
