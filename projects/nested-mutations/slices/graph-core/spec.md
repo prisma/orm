@@ -88,6 +88,21 @@ One reviewer reads this as: a small data structure with its tests, a runner with
 - [ ] No statement is executed by the six methods except through the runner.
 - [ ] Each graph the six methods build has a unit test that asserts its printed form.
 
+## Differences from main found during the build
+
+None changes a result an integration test asserts. Each follows from a decided rule or from building the graph before the first statement.
+
+| Difference | Cause |
+| --- | --- |
+| The matching read of `update()` / `delete()`, the read of `deleteAll()` with includes, and the reload read of a write with includes carry the caller's annotations | Annotations go on every statement of a call |
+| `updateAndCount({})` runs the `configure` callback before resolving `0` | The graph is built after annotations are collected, as `updateAll({})` already did |
+| `update()` maps fields and applies update defaults before the matching read, so a default generator runs even when no row matches | The graph is built before the first statement |
+| `update()` / `delete()` after `limit(0)` open no transaction; `update({})` runs its matching read outside a transaction and selects all columns | A graph with no node or one node needs no transaction; a `Find` nobody reads from has no derived columns |
+
+Left for slice `graph-nested`: the runner refuses a node that reads from the result node, because the result's rows are mapped to field names by the existing dispatch code. Nested writes need the parent's write to be both the result and a source.
+
+Gate not run locally: the whole `pnpm test:integration` suite is refused by a hook in this environment. The directories that reach the ORM's write methods were run instead (`test/sql-orm-client`, `test/ports`, `test/temporal-defaults`, `test/value-objects`, `test/cross-package`, the namespaced-accessors test): 451 files, 2,518 passed, 88 expected failures, none failed.
+
 ## Open questions
 
 None.
