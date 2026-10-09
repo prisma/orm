@@ -187,6 +187,25 @@ describe('Tokenizer', () => {
       `);
     });
 
+    it('scans a plus as its own token kind', () => {
+      assertLossless('+auth.Timestamps');
+      expect(tokenize('+auth.Timestamps')).toMatchInlineSnapshot(`
+        "Plus           "+"
+        Ident          "auth"
+        Dot            "."
+        Ident          "Timestamps"
+        Eof            """
+      `);
+    });
+
+    it('scans a plus before a digit apart from the number', () => {
+      expect(tokenize('+1')).toMatchInlineSnapshot(`
+        "Plus           "+"
+        NumberLiteral  "1"
+        Eof            """
+      `);
+    });
+
     it('resumes known tokens after Invalid', () => {
       assertLossless('#$model');
       expect(tokenize('#$model')).toMatchInlineSnapshot(`

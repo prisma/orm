@@ -20,6 +20,8 @@ export {
   FieldDeclarationAst,
   GenericBlockDeclarationAst,
   KeyValuePairAst,
+  MixinDeclarationAst,
+  MixinInclusionAst,
   ModelDeclarationAst,
   NamedTypeDeclarationAst,
   NamespaceDeclarationAst,

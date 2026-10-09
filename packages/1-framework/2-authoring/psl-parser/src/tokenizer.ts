@@ -17,6 +17,7 @@ export type TokenKind =
   | 'Dot'
   | 'Comma'
   | 'Colon'
+  | 'Plus'
   | 'Whitespace'
   | 'Newline'
   | 'Comment'
@@ -319,4 +320,5 @@ const PUNCTUATION: Record<string, TokenKind> = {
   '.': 'Dot',
   ',': 'Comma',
   ':': 'Colon',
+  '+': 'Plus',
 };
