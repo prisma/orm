@@ -1,5 +1,9 @@
 import type { JsonValue } from '@internal/contract/types';
-import type { TaggedLiteralCanonicalization } from '@internal/framework-components/control';
+import type {
+  TaggedLiteralCanonicalization,
+  TypedValue,
+} from '@internal/framework-components/authoring';
+import type { DataTypeId } from '@internal/framework-components/codec';
 import type { PslSpan } from '@internal/framework-components/psl-ast';
 import type { Result } from '@internal/utils/result';
 import type { Simplify, UnionToIntersection } from '@internal/utils/types';
@@ -11,7 +15,7 @@ import type {
   ResolvedEntityReference,
 } from '../entity-reference';
 import type { PslSources } from '../source-file';
-import type { FieldSymbol, ModelSymbol, SymbolTable } from '../symbol-table';
+import type { BlockSymbol, FieldSymbol, ModelSymbol, SymbolTable } from '../symbol-table';
 import type { ExpressionAst } from '../syntax/ast/expressions';
 import type { AstNode } from '../syntax/ast-helpers';
 
@@ -27,12 +31,17 @@ export interface ModelAttributeCtx extends AttributeCtx {
   readonly selfModel: ModelSymbol;
 }
 
+export interface BlockAttributeCtx extends AttributeCtx {
+  readonly selfBlock: BlockSymbol;
+}
+
 export interface FieldAttributeCtx extends ModelAttributeCtx {
   readonly field: FieldSymbol;
 }
 
 export type ArgTypeKind =
   | 'bool'
+  | 'dataTypeValue'
   | 'entityRef'
   | 'fieldRef'
   | 'funcCall'
@@ -54,6 +63,8 @@ export type ArgTypeContext = 'attribute' | 'field' | 'model';
 export interface ArgTypeOutput<T, Ctx extends AttributeCtx> {
   readonly label: string;
   readonly _out?: T;
+  /** True when the argument has this type's shape, so that its diagnostics are about the argument. `oneOf` returns the result of the one alternative that claims the argument. */
+  readonly claims?: (arg: ExpressionAst) => boolean;
   readonly parse: (arg: ExpressionAst, ctx: Ctx) => Result<T, readonly PslDiagnostic[]>;
 }
 
@@ -80,10 +91,10 @@ export interface ReferencedFieldRefArgType<Ctx extends FieldAttributeCtx = Field
   readonly kind: 'referencedFieldRef';
 }
 
-export interface FuncCallSig {
+export interface FuncCallSig<Ctx extends AttributeCtx = AttributeCtx> {
   readonly documentation: string;
-  readonly positional?: readonly PositionalParam<unknown, AttributeCtx>[];
-  readonly named?: Readonly<Record<string, Param<unknown, AttributeCtx>>>;
+  readonly positional?: readonly PositionalParam<unknown, Ctx>[];
+  readonly named?: Readonly<Record<string, Param<unknown, Ctx>>>;
 }
 
 export interface TypedFuncCall {
@@ -95,11 +106,12 @@ export interface TypedFuncCall {
 export interface FuncCallArgType<
   Name extends string = string,
   Ctx extends AttributeCtx = AttributeCtx,
-  Signature extends FuncCallSig = FuncCallSig,
+  Signature extends FuncCallSig<never> = FuncCallSig<Ctx>,
 > extends ArgTypeOutput<TypedFuncCall, Ctx> {
   readonly kind: 'funcCall';
   readonly name: Name;
   readonly signature: Signature;
+  readonly claims: (arg: ExpressionAst) => boolean;
 }
 
 export interface FixedIdentifierArgType<
@@ -231,7 +243,7 @@ export type StrArgType<
 
 /**
  * A tagged literal argument as parsed: its tag, the canonicalization of its string literal, and its
- * span. Neither the tag nor the canonicalization has been checked; lowering does both.
+ * span. Neither the tag nor the canonicalization has been checked; the consumer checks both.
  */
 export interface ParsedTaggedLiteral {
   readonly tag: string;
@@ -243,6 +255,21 @@ export interface TaggedLiteralArgType<Ctx extends AttributeCtx = AttributeCtx>
   extends ArgTypeOutput<ParsedTaggedLiteral, Ctx> {
   readonly kind: 'taggedLiteral';
   readonly tags: readonly string[];
+  readonly documentation: string;
+}
+
+/** A typed value parsed from an argument, with the argument's span. */
+export interface ParsedTypedValue extends TypedValue {
+  readonly span: PslSpan;
+}
+
+export interface DataTypeValueArgType<Ctx extends AttributeCtx = AttributeCtx>
+  extends ArgTypeOutput<ParsedTypedValue, Ctx> {
+  readonly kind: 'dataTypeValue';
+  readonly dataType: DataTypeId;
+  /** The tags a position of this type admits, for completion. */
+  readonly tags: readonly string[];
+  /** The documentation of this type's authoring entry, or '' when it has none. */
   readonly documentation: string;
 }
 
@@ -278,6 +305,7 @@ export type InspectableArgType<Ctx extends AttributeCtx> = ArgType<unknown, Ctx>
 
 type ArgTypeVariant<Ctx extends AttributeCtx> =
   | BoolArgType<Ctx>
+  | DataTypeValueArgType<Ctx>
   | EntityRefArgType<EntityDeclaration, Ctx>
   | FieldRefArgType<ModelAttributeCtx & Ctx>
   | FuncCallArgType<string, Ctx>

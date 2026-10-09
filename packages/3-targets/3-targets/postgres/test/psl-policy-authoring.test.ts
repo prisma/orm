@@ -13,12 +13,18 @@
  *     factory chain (no test-side hand-lowering).
  */
 
-import { createDataTypeLookup } from '@internal/framework-components/codec';
+import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable, createBinder, interpretExtensionBlocks } from '@internal/psl-parser';
+import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { parse } from '@internal/psl-parser/syntax';
+import { type BoundPslSchema, bindPslSchema } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
-import { postgresDataTypes } from '@internal/target-postgres/data-types';
+import {
+  describeUnsupportedSqlAttribute,
+  sqlAttributeSpecs,
+} from '@internal/sql-contract-psl/attribute-specs';
+import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import { createSqlContract } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import {
@@ -26,12 +32,14 @@ import {
   postgresAuthoringModelAttributes,
   postgresAuthoringPslBlockDescriptors,
 } from '../src/core/authoring';
+import { createPostgresBuiltinCodecLookup } from '../src/core/codec-registry';
 import { PostgresContractSerializer } from '../src/core/postgres-contract-serializer';
 import { PostgresRlsPolicy } from '../src/core/postgres-rls-policy';
 import { PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
 import { computeContentHash } from '../src/core/rls/canonicalize';
+import { postgresDataTypeSupport } from './fixtures/postgres-data-type-support';
 
-const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
+const postgresCodecLookup = createPostgresBuiltinCodecLookup();
 
 const assembled = assembleAuthoringContributions([
   {
@@ -50,10 +58,14 @@ function blockResolutionBinder(
   return createBinder({
     sources,
     symbolTable,
-    typeConstructors: {},
-    attributeSpecs: { model: {}, field: {} },
-    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
+    context: {
+      authoringContributions: {
+        ...assembleAuthoringContributions([]),
+        pslBlockDescriptors: assembled.pslBlockDescriptors,
+      },
+      controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+      dataTypes: postgresDataTypeSupport,
+    },
   }).binder;
 }
 
@@ -86,7 +98,7 @@ namespace public {
   policy_select p_read {
     target = profile
     roles  = [app_user]
-    using  = "owner_id = current_setting('app.uid')::int"
+    using  = sql\`owner_id = current_setting('app.uid')::int\`
   }
 }
 `;
@@ -99,6 +111,7 @@ namespace public {
       sources,
       pslBlockDescriptors: assembled.pslBlockDescriptors,
       binder: blockResolutionBinder(symbolTable, sources),
+      dataTypes: postgresDataTypeSupport,
     });
     return { document, sources, symbolTable, diagnostics, parsedBlocks };
   }
@@ -130,7 +143,7 @@ namespace public {
     const target = envelope.values['target'] as { declaration: { name: string } };
     const tableName = target.declaration.name;
     const roles = [...readRoleNames(envelope.values)].sort();
-    const using = envelope.values['using'] as string;
+    const using = (envelope.values['using'] as { value: string }).value;
 
     const wireHash = computeContentHash({ using, roles, operation: 'select', permissive: true });
     const wireName = `${prefix}_${wireHash}`;
@@ -189,7 +202,7 @@ namespace public {
   policy_select p_read {
     target = profile
     roles  = [app_user]
-    using  = "owner_id = current_setting('app.uid')::int"
+    using  = sql\`owner_id = current_setting('app.uid')::int\`
   }
 }
 `;
@@ -204,44 +217,69 @@ namespace public {
     defaultNamespaceId: 'public',
   };
 
-  const scalarColumnDescriptors = new Map<string, { codecId: string; nativeType: string }>([
-    ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
-    ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
-    ['Boolean', { codecId: 'pg/bool@1', nativeType: 'bool' }],
-    ['BigInt', { codecId: 'pg/int8@1', nativeType: 'int8' }],
-    ['Float', { codecId: 'pg/float8@1', nativeType: 'float8' }],
-    ['Decimal', { codecId: 'pg/numeric@1', nativeType: 'numeric' }],
-    ['DateTime', { codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz' }],
-    ['Json', { codecId: 'pg/json@1', nativeType: 'json' }],
-    ['Jsonb', { codecId: 'pg/jsonb@1', nativeType: 'jsonb' }],
-    ['Bytes', { codecId: 'pg/bytea@1', nativeType: 'bytea' }],
+  const scalarColumnDescriptors = new Map<string, { codecId: string }>([
+    ['String', { codecId: 'pg/text@1' }],
+    ['Int', { codecId: 'pg/int4@1' }],
+    ['Boolean', { codecId: 'pg/bool@1' }],
+    ['BigInt', { codecId: 'pg/int8@1' }],
+    ['Float', { codecId: 'pg/float8@1' }],
+    ['Decimal', { codecId: 'pg/numeric@1' }],
+    ['DateTime', { codecId: 'pg/timestamptz-temporal@1' }],
+    ['Json', { codecId: 'pg/json@1' }],
+    ['Jsonb', { codecId: 'pg/jsonb@1' }],
+    ['Bytes', { codecId: 'pg/bytea@1' }],
   ]);
 
-  function interpret(text: string) {
-    const { document, sources } = parse(text, 'psl-policy-authoring.test.psl');
-    const { symbolTable } = buildSymbolTable({
-      documents: [document],
-      sources,
-    });
-    return interpretPslDocumentToSqlContract({
-      dataTypeLookup: postgresDataTypeLookup,
-      documents: [document],
-      symbolTable,
-      sources,
-      target: postgresTarget,
-      scalarColumnDescriptors,
-      authoringContributions: assembled,
+  const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
+    Object.fromEntries(
+      [...scalarColumnDescriptors].map(([name, output]) => [
+        name,
+        { kind: 'typeConstructor' as const, output },
+      ]),
+    );
+
+  function contextFor(): BoundPslSchema['context'] {
+    return {
+      composedExtensions: [],
       composedExtensionContracts: new Map(),
-      createNamespace: postgresCreateNamespace,
+      authoringContributions: {
+        ...assembled,
+        type: { ...scalarTypeConstructors, ...assembled.type },
+        attributeSpecs: sqlAttributeSpecs,
+      },
+      pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
+      codecLookup: postgresCodecLookup,
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+      dataTypes: postgresDataTypeSupport,
+      resolvedInputs: [],
       capabilities: { sql: { scalarList: true } },
-    });
+    };
   }
 
-  it('reads a policy expression as a JSON string, and keeps any other backslash sequence as written', () => {
+  function interpret(text: string) {
+    const bound = bindPslSchema(text, {
+      sourceId: 'psl-policy-authoring.test.psl',
+      context: contextFor(),
+    });
+    return withSeedDiagnostics(
+      interpretPslDocumentToSqlContract({
+        documents: bound.documents,
+        sources: bound.sources,
+        symbolTable: bound.symbolTable,
+        binder: bound.binder,
+        ...sqlContextInput(bound.context),
+        target: postgresTarget,
+        createNamespace: postgresCreateNamespace,
+      }),
+      bound.seedDiagnostics,
+    );
+  }
+
+  it('reads the escapes of a double-quoted sql literal as a string does, and keeps any other backslash sequence as written', () => {
     const result = interpret(
       source.replace(
-        `using  = "owner_id = current_setting('app.uid')::int"`,
-        String.raw`using  = "a\tb\u0041 \"q\" \\ \/ \d"`,
+        `using  = sql\`owner_id = current_setting('app.uid')::int\``,
+        String.raw`using  = sql"a\tb\u0041 \"q\" \\ \/ \d"`,
       ),
     );
 
@@ -253,22 +291,26 @@ namespace public {
 
   it('lowers a policy_select block to entries.policy without test-side hand-lowering', () => {
     const { document, sources } = parse(source, 'psl-policy-authoring.test.psl');
-    const { symbolTable, diagnostics } = buildSymbolTable({ documents: [document], sources });
+    const { diagnostics } = buildSymbolTable({ documents: [document], sources });
 
     expect(diagnostics).toEqual([]);
 
-    const result = interpretPslDocumentToSqlContract({
-      documents: [document],
-      dataTypeLookup: postgresDataTypeLookup,
-      symbolTable,
-      sources,
-      target: postgresTarget,
-      scalarColumnDescriptors,
-      authoringContributions: assembled,
-      composedExtensionContracts: new Map(),
-      createNamespace: postgresCreateNamespace,
-      capabilities: { sql: { scalarList: true } },
+    const bound = bindPslSchema(source, {
+      sourceId: 'psl-policy-authoring.test.psl',
+      context: contextFor(),
     });
+    const result = withSeedDiagnostics(
+      interpretPslDocumentToSqlContract({
+        documents: bound.documents,
+        sources: bound.sources,
+        symbolTable: bound.symbolTable,
+        binder: bound.binder,
+        ...sqlContextInput(bound.context),
+        target: postgresTarget,
+        createNamespace: postgresCreateNamespace,
+      }),
+      bound.seedDiagnostics,
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -312,8 +354,8 @@ describe('PostgresContractSerializer policy round-trip', () => {
               table: {
                 profile: {
                   columns: {
-                    id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                    owner_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                    id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+                    owner_id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                   },
                   primaryKey: { columns: ['id'] },
                   uniques: [],

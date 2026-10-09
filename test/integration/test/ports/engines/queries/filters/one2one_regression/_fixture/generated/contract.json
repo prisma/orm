@@ -100,22 +100,27 @@
               "columns": {
                 "friendId": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": true
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": true
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": [
+                      "friendId"
+                    ]
+                  },
                   "source": {
                     "columns": [
                       "friendId"
@@ -152,11 +157,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "5f82e4dbae933c6c55e615822c5310cb7256d4fac52ce48659cfbaf0ac6180ac"
+    "storageHash": "fc8341cdb3f37e93db8d71e550a655befb085adc9c0459451e3571dcef5367dc"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -167,9 +174,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

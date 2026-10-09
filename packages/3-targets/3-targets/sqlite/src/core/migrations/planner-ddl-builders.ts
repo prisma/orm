@@ -8,6 +8,12 @@
  * see `StorageColumn` or `storageTypes`.
  */
 
+import {
+  dataTypeParams,
+  renderSqlTypeName,
+  type SqlTypeLookups,
+  sqlDataTypeOfCodec,
+} from '@internal/sql-contract/data-type';
 import type {
   StorageColumn,
   StorageTable,
@@ -15,45 +21,50 @@ import type {
 } from '@internal/sql-contract/types';
 import { SQLITE_DATETIME_CODEC_ID } from '../codec-ids';
 import { decodeSqliteDatetime, encodeSqliteDatetime } from '../codecs';
+import { sqliteInteger } from '../data-types';
 import { sqliteError } from '../errors';
 import { escapeLiteral, quoteIdentifier } from '../sql-utils';
 
-const SAFE_NATIVE_TYPE_PATTERN = /^[a-zA-Z][a-zA-Z0-9_ ]*$/;
-
-function assertSafeNativeType(nativeType: string): void {
-  if (!SAFE_NATIVE_TYPE_PATTERN.test(nativeType)) {
-    throw sqliteError(
-      'CONTRACT.NATIVE_TYPE_INVALID',
-      `Unsafe native type name in contract: "${nativeType}". ` +
-        'Native type names must match /^[a-zA-Z][a-zA-Z0-9_ ]*$/',
-      { meta: { nativeType } },
-    );
-  }
-}
-
 /**
- * Renders the column's DDL type token (e.g. `"INTEGER"`, `"TEXT"`).
- * Resolves `typeRef` against `storageTypes` and validates the resulting
- * native type against a safe-identifier pattern.
+ * Renders the column's DDL type token (e.g. `"INTEGER"`, `"TEXT"`): the name the data type of its
+ * codec is written with, in upper case. Resolves `typeRef` against `storageTypes`.
  */
 export function buildColumnTypeSql(
-  column: StorageColumn,
+  column: Pick<StorageColumn, 'codecId' | 'typeParams' | 'typeRef'>,
+  types: SqlTypeLookups,
   storageTypes: Record<string, StorageTypeInstance> = {},
 ): string {
   const resolved = resolveColumnTypeMetadata(column, storageTypes);
-  assertSafeNativeType(resolved.nativeType);
-  return resolved.nativeType.toUpperCase();
+  const dataType = sqlDataTypeOfCodec(resolved.codecId, types);
+  return renderSqlTypeName(dataType, dataTypeParams(dataType, resolved.typeParams)).toUpperCase();
+}
+
+const DIGIT_TEXT = /^-?\d+$/;
+
+/** The column a literal default is written for: its codec, and the data type that codec represents. */
+export interface DefaultLiteralColumn {
+  readonly codecId: string;
+  readonly dataType: string;
 }
 
 /**
- * A datetime default is the stored value itself in SQLite, which compares text byte by byte, so it
- * is written as the text the column's codec writes for every row, not as its canonical form.
+ * A literal default in SQL. An `integer` column stores digit text in the contract, which is written
+ * as the integer it names. A datetime default is the stored value itself in SQLite, which compares
+ * text byte by byte, so it is written as the text the column's codec writes for every row, not as
+ * its canonical form.
  */
-export function renderDefaultLiteral(value: unknown, codecId?: string): string {
+export function renderDefaultLiteral(value: unknown, column?: DefaultLiteralColumn): string {
+  if (
+    column?.dataType === sqliteInteger.id &&
+    typeof value === 'string' &&
+    DIGIT_TEXT.test(value)
+  ) {
+    return value;
+  }
   if (value instanceof Date) {
     return `'${escapeLiteral(encodeSqliteDatetime(value))}'`;
   }
-  if (typeof value === 'string' && codecId === SQLITE_DATETIME_CODEC_ID) {
+  if (typeof value === 'string' && column?.codecId === SQLITE_DATETIME_CODEC_ID) {
     return `'${escapeLiteral(encodeSqliteDatetime(decodeSqliteDatetime(value)))}'`;
   }
   if (typeof value === 'string') {
@@ -99,10 +110,10 @@ export function isInlineAutoincrementPrimaryKey(table: StorageTable, columnName:
   return column?.default?.kind === 'function' && column.default.expression === 'autoincrement()';
 }
 
-type ResolvedColumnTypeMetadata = Pick<StorageColumn, 'nativeType' | 'codecId' | 'typeParams'>;
+type ResolvedColumnTypeMetadata = Pick<StorageColumn, 'codecId' | 'typeParams'>;
 
 export function resolveColumnTypeMetadata(
-  column: StorageColumn,
+  column: Pick<StorageColumn, 'codecId' | 'typeParams' | 'typeRef'>,
   storageTypes: Record<string, StorageTypeInstance>,
 ): ResolvedColumnTypeMetadata {
   if (!column.typeRef) {
@@ -118,7 +129,6 @@ export function resolveColumnTypeMetadata(
   }
   return {
     codecId: referencedType.codecId,
-    nativeType: referencedType.nativeType,
     typeParams: referencedType.typeParams,
   };
 }

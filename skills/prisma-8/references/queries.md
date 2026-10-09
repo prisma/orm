@@ -76,7 +76,7 @@ for await (const user of db.orm.public.User.select('id', 'email').all()) {
 }
 ```
 
-Two single-row shortcuts also exist on the result, in addition to the collection-level `.first()` (which issues `LIMIT 1` on Postgres):
+Two single-row shortcuts also exist on the result, in addition to the collection-level `.first()` and `.firstOrThrow()` (which issue `LIMIT 1` on Postgres):
 
 ```typescript
 const user = await db.orm.public.User.where({ id }).all().first();
@@ -85,7 +85,7 @@ const required = await db.orm.public.User.where({ id }).all().firstOrThrow();
 //    ^? Row          ← buffers; throws `RUNTIME.NO_ROWS` if empty.
 ```
 
-For genuine single-row reads, prefer the *collection*-level `.first()` (which adds `LIMIT 1` to the SQL on Postgres) over `.all().first()` (which fetches all rows and discards the rest). The result-level helpers are for cases where you already need the full result and want the first row without an extra round-trip.
+For genuine single-row reads, prefer the *collection*-level `.first()` or `.firstOrThrow()` (which add `LIMIT 1` to the SQL on Postgres) over `.all().first()` / `.all().firstOrThrow()` (which fetch all rows and discard the rest). Collection-level `.firstOrThrow()` runs the same query as `.first()`, returns the row without `null`, and rejects with `RUNTIME.NO_ROWS` when nothing matches: `await db.orm.public.User.firstOrThrow({ id })` on Postgres, `await db.orm.users.where({ email }).firstOrThrow()` on Mongo (no arguments there). The result-level helpers are for cases where you already need the full result and want the first row without an extra round-trip.
 
 **The result is single-consumption.** Each `AsyncIterableResult` instance can be consumed once — by `await`, by `.toArray()`, or by `for await`. Trying to consume it a second time throws **`RUNTIME.ITERATOR_CONSUMED`**. The fix is almost always to store the array in a variable on first consumption and reuse the variable:
 
@@ -161,7 +161,7 @@ The model is the whole row plus its relations, and each related model carries it
 - `Models.<ns>_<Model>` (from `contract.d.ts`) — every scalar field and every relation. On SQLite, which has no schemas, the name is bare: `Models.User` and `typeof models.User`. On Postgres the schema is part of the name: `Models.public_User`, or `typeof models.public.User` by dotted access — a model declared outside any `namespace { }` block is in `public`, so that is also its name. Mongo names its models the same way. A polymorphic base also emits one member per variant and an `Any<Base>` union (`Models.public_AnyTask`).
 - `Scalars<M>` — the model without relations; what a default fetch returns. Distributes over unions, so `Scalars<Models.public_AnyTask>` is the union of variant rows.
 - `Shape<M, Spec>` — a data structure derived from the model, for declaring an endpoint's response type once and having the compiler check the body at the `return`. At every level of `Spec`: `'+'` is a union of scalar and relation names to keep (a relation named there comes with all of its scalars and none of its relations; the scalars are narrowed only when `'+'` names a scalar, so `'+': 'posts'` alone is every scalar plus posts); `'-'` is a union of scalar names to drop; `'+'` naming a scalar beside `'-'` is a compile error, while `{ '-': 'passwordHash'; '+': 'posts' }` is every scalar but the hash plus posts; any other key is a relation whose value is a nested spec that narrows the related model. Relations are absent unless asked for; `X[]`, `X | null`, or `X` comes from the model. Wrong names, a relation in `'-'`, a non-object relation value, and a relation both in `'+'` and as a key are compile errors. No `where`/`orderBy`/`limit`; compose extras with TypeScript (`Shape<M> & { postCount: number }`).
-- `ResultType<typeof query>` — the row of any ORM collection value (plain, `.include()`, `.select()`, `.variant()`), and of SQL lane plans. Bind the query to a name first; `typeof` needs a value.
+- `ResultType<typeof query>` — the row of any ORM collection value (plain, `.include()`, `.select()`, `.variant()`), and of SQL lane plans. Bind the query to a name first; `typeof` needs a value. `.variant()` takes the variant's discriminator value, not its model name: `db.orm.public.Task.variant('bug')` for `@@base(Task, "bug")`. Call it once, on the base collection; a second `.variant()` on a variant collection is refused.
 
 ```ts
 import type { models, Models } from './prisma/contract';

@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { field } from '../src/contract-dsl';
 import { enumType, member } from '../src/enum-type';
 
-const pgText = { codecId: 'pg/text@1' as const, nativeType: 'text' } as const;
-const pgInt = { codecId: 'pg/int4@1' as const, nativeType: 'int4' } as const;
+const pgText = { codecId: 'pg/text@1' as const } as const;
+const pgInt = { codecId: 'pg/int4@1' as const } as const;
 
 const Priority = enumType(
   'Priority',

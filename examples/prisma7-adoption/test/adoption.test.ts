@@ -6,68 +6,17 @@
  * in a scratch copy of this example (inside it, so node_modules resolve) with
  * the schema and migrations rolled back to the first version.
  */
-import { spawn } from 'node:child_process';
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { timeouts, withDevDatabase } from '@repo/test-utils';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
+import { copyExample, EXAMPLE_ROOT, readContract, run, verifyHasNoFindings } from './story';
 
-const EXAMPLE_ROOT = join(__dirname, '..');
-const BIN = join(EXAMPLE_ROOT, 'node_modules/.bin');
 const FINAL_SCHEMA = readFileSync(join(EXAMPLE_ROOT, 'prisma/schema.prisma'), 'utf-8');
 const SECOND_MIGRATION = '20260914000100_add_post_view_count';
 
-// The dev database runs inside this process, so the commands must be spawned
-// asynchronously: a blocking spawn would starve it and every command would
-// report the database as unreachable.
-function run(
-  cwd: string,
-  databaseUrl: string,
-  bin: string,
-  args: readonly string[],
-): Promise<string> {
-  const command = [bin, ...args].join(' ');
-  return new Promise((resolve, reject) => {
-    const child = spawn(join(BIN, bin), args, {
-      cwd,
-      env: { ...process.env, DATABASE_URL: databaseUrl },
-    });
-    let output = '';
-    child.stdout.on('data', (chunk: Buffer) => {
-      output += chunk.toString();
-    });
-    child.stderr.on('data', (chunk: Buffer) => {
-      output += chunk.toString();
-    });
-    child.on('error', (error) => {
-      reject(new Error(`${command} did not start: ${error.message}`));
-    });
-    child.on('close', (status, signal) => {
-      if (status === 0) {
-        resolve(output);
-      } else {
-        reject(new Error(`${command} exited with ${status ?? signal}\n${output}`));
-      }
-    });
-  });
-}
-
-async function verifyHasNoFindings(cwd: string, databaseUrl: string): Promise<void> {
-  const output = await run(cwd, databaseUrl, 'prisma', ['db', 'verify', '--json']);
-  const terminal = output
-    .split('\n')
-    .filter((line) => line.startsWith('{'))
-    .map((line) => JSON.parse(line))
-    .find((event) => event.kind === 'result');
-  expect(terminal.envelope).toMatchObject({ ok: true, diagnostics: [] });
-  expect(terminal.envelope.result.schema).toMatchObject({ warnings: [] });
-}
-
 function createStoryCopy(): string {
-  const dir = mkdtempSync(join(EXAMPLE_ROOT, '.story-'));
-  for (const entry of ['prisma', 'scripts', 'src', 'prisma.config.ts', 'prisma7.config.ts']) {
-    cpSync(join(EXAMPLE_ROOT, entry), join(dir, entry), { recursive: true });
-  }
+  const dir = copyExample();
   writeFileSync(
     join(dir, 'prisma/schema.prisma'),
     FINAL_SCHEMA.split('\n')
@@ -76,10 +25,6 @@ function createStoryCopy(): string {
   );
   rmSync(join(dir, 'prisma/migrations', SECOND_MIGRATION), { recursive: true });
   return dir;
-}
-
-function readContract(dir: string): string {
-  return readFileSync(join(dir, 'generated/prisma8/contract.json'), 'utf-8');
 }
 
 describe('adopting Prisma 8 beside Prisma 7', () => {

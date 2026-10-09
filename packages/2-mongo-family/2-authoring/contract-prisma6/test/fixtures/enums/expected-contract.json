@@ -18,7 +18,8 @@
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "status": {
                 "type": {
@@ -31,7 +32,8 @@
                   "entityKind": "enum",
                   "namespaceId": "__unbound__",
                   "entityName": "Status"
-                }
+                },
+                "many": false
               },
               "role": {
                 "type": {
@@ -44,7 +46,8 @@
                   "entityKind": "enum",
                   "namespaceId": "__unbound__",
                   "entityName": "Role"
-                }
+                },
+                "many": false
               }
             },
             "relations": {},

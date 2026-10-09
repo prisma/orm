@@ -8,27 +8,19 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { PG_ENUM_CODEC_ID } from '@internal/target-postgres/codec-ids';
 
 /**
- * Reads the namespace's `valueSet` entries directly off the plain contract
- * shape (`storage.namespaces[id].entries.valueSet`), not through a hydrated
- * `PostgresSchema` class instance — the same plain-data path `db.enums`
- * reads `domain.namespaces[id].enum` through. Works on a `validateContract`'d
- * JSON contract as well as one produced by `PostgresContractSerializer`.
- *
- * A native enum is never re-emitted as its own entity: once `native_enum` is
- * lowered, its member values live on in the `valueSet` entry it derives (the
- * SQL family's generic `deriveValueSet` mechanism) — the same slot
- * `column.valueSet`-typed columns read. A member is a value, not a
- * name→value pair (matching `CREATE TYPE … AS ENUM ('a', 'b')`), so each
- * value doubles as its own accessor name.
+ * The accessors for one namespace's value sets, leaving out each value set whose name is a domain enum's in the same namespace: a domain enum's value set takes its enum's name and namespace, and `db.enums` holds that enum. The rest are native enum types, because `native_enum` is the only pack entity that derives a value set today. Reads plain contract data, so a `validateContract`'d JSON contract works as well as a hydrated one. A member is a value, as in `CREATE TYPE … AS ENUM ('a', 'b')`, so each value is also its own name.
  */
 export function buildNativeEnumsMapForNamespace(
   storage: SqlStorage,
+  domain: Contract['domain'],
   namespaceId: string,
 ): Record<string, EnumAccessor> {
   const result: Record<string, EnumAccessor> = {};
   const valueSets = storage.namespaces[namespaceId]?.entries.valueSet;
   if (!valueSets) return result;
+  const domainEnums = domain.namespaces[namespaceId]?.enum ?? {};
   for (const [name, valueSet] of Object.entries(valueSets)) {
+    if (Object.hasOwn(domainEnums, name)) continue;
     result[name] = createEnumAccessor({
       codecId: PG_ENUM_CODEC_ID,
       members: valueSet.values.map((value) => ({ name: String(value), value })),
@@ -39,10 +31,11 @@ export function buildNativeEnumsMapForNamespace(
 
 export function buildNamespacedNativeEnums(
   storage: SqlStorage,
+  domain: Contract['domain'],
 ): Record<string, Record<string, EnumAccessor>> {
   const result: Record<string, Record<string, EnumAccessor>> = {};
   for (const namespaceId of Object.keys(storage.namespaces)) {
-    result[namespaceId] = buildNativeEnumsMapForNamespace(storage, namespaceId);
+    result[namespaceId] = buildNativeEnumsMapForNamespace(storage, domain, namespaceId);
   }
   return result;
 }
@@ -83,22 +76,31 @@ type ValueSetToEnumEntry<Entry extends ValueSetEntry> = {
   readonly members: ValueSetMembers<Entry['values']>;
 };
 
-type ValueSetEntriesToEnumEntries<Entries> = {
-  readonly [K in keyof Entries]: Entries[K] extends ValueSetEntry
+type ValueSetEntriesToEnumEntries<Entries, DomainEnumNames> = {
+  readonly [K in keyof Entries as Exclude<K, DomainEnumNames>]: Entries[K] extends ValueSetEntry
     ? ValueSetToEnumEntry<Entries[K]>
     : never;
 };
 
+type DomainEnumNames<
+  TContract extends Contract,
+  Ns,
+> = Ns extends keyof TContract['domain']['namespaces']
+  ? TContract['domain']['namespaces'][Ns] extends { readonly enum?: infer E }
+    ? string extends keyof Present<E>
+      ? never
+      : keyof Present<E>
+    : never
+  : never;
+
 /**
- * Accessor type for `db.nativeEnums`. Types off the namespace's `valueSet`
- * entries — the same generic surface that types `db.enums` and column value
- * unions — not a raw `native_enum` entity slot; `contract.d.ts` no longer
- * emits one. For a no-emit (`typeof contract`) contract the storage type is
- * non-literal and this degrades to the structural shape — the same
- * emit/no-emit boundary column typing has (TML-2960).
+ * Accessor type for `db.nativeEnums`. Types off the namespace's `valueSet` entries, the same surface that types column value unions, leaving out each one the namespace's domain `enum` entries name, as the runtime does. For a no-emit (`typeof contract`) contract the storage type is non-literal and this degrades to the structural shape, the same emit/no-emit boundary column typing has (TML-2960).
  */
 export type NamespacedNativeEnums<TContract extends Contract> = {
   readonly [Ns in keyof TContract['storage']['namespaces']]: EnumEntriesToAccessors<
-    ValueSetEntriesToEnumEntries<NamespaceValueSetEntries<TContract['storage']['namespaces'][Ns]>>
+    ValueSetEntriesToEnumEntries<
+      NamespaceValueSetEntries<TContract['storage']['namespaces'][Ns]>,
+      DomainEnumNames<TContract, Ns>
+    >
   >;
 };

@@ -11,8 +11,8 @@ describe('SqlContractSerializer', () => {
     storage: sqlStorageFixture({
       User: {
         columns: {
-          id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-          email: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+          id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+          email: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
         },
         primaryKey: { columns: ['id'] },
         uniques: [],
@@ -72,7 +72,7 @@ describe('SqlContractSerializer', () => {
       storage: sqlStorageFixture({
         User: {
           columns: {
-            id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+            id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -94,7 +94,7 @@ describe('SqlContractSerializer', () => {
       storage: sqlStorageFixture({
         User: {
           columns: {
-            id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+            id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -111,7 +111,7 @@ describe('SqlContractSerializer', () => {
       storage: sqlStorageFixture({
         User: {
           columns: {
-            id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+            id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -120,8 +120,8 @@ describe('SqlContractSerializer', () => {
         },
         Post: {
           columns: {
-            id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-            userId: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+            id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+            userId: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -134,8 +134,6 @@ describe('SqlContractSerializer', () => {
                 tableName: 'NonExistent',
                 columns: ['id'],
               },
-              constraint: true,
-              index: true,
             },
           ],
         },

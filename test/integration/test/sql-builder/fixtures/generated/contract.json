@@ -12,6 +12,10 @@
       "model": "Comment",
       "namespace": "public"
     },
+    "documents": {
+      "model": "Document",
+      "namespace": "public"
+    },
     "posts": {
       "model": "Post",
       "namespace": "public"
@@ -115,6 +119,57 @@
               },
               "namespaceId": "public",
               "table": "comments"
+            }
+          },
+          "Document": {
+            "fields": {
+              "body": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "subtitle": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "title": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "body": {
+                  "column": "body"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "subtitle": {
+                  "column": "subtitle"
+                },
+                "title": {
+                  "column": "title"
+                }
+              },
+              "namespaceId": "public",
+              "table": "documents"
             }
           },
           "Post": {
@@ -381,7 +436,7 @@
               "columns": {
                 "id": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "pg/char",
                   "nullable": false,
                   "typeParams": {
                     "length": 36
@@ -389,7 +444,7 @@
                 },
                 "title": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -406,22 +461,22 @@
               "columns": {
                 "body": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "post_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "subject": {
                   "codecId": "sql/varchar@1",
-                  "nativeType": "character varying",
+                  "dataType": "pg/varchar",
                   "nullable": false,
                   "typeParams": {
                     "length": 200
@@ -431,25 +486,111 @@
               "foreignKeys": [],
               "indexes": [
                 {
-                  "expression": "to_tsvector('english', \"body\")",
-                  "name": "comments_body_live_a3f98ae2",
+                  "columns": [
+                    "body"
+                  ],
+                  "name": "comments_body_live_6eed9d3f",
+                  "options": {
+                    "language": "english",
+                    "weightGroups": [
+                      [
+                        "body"
+                      ]
+                    ]
+                  },
                   "prefix": "comments_body_live",
-                  "type": "gin",
+                  "type": "fullText",
                   "unique": false,
                   "where": "post_id = 1"
                 },
                 {
-                  "expression": "to_tsvector('english', \"body\")",
-                  "name": "comments_body_search_7b2cde4d",
+                  "columns": [
+                    "body"
+                  ],
+                  "name": "comments_body_search_5831ec58",
+                  "options": {
+                    "language": "english",
+                    "weightGroups": [
+                      [
+                        "body"
+                      ]
+                    ]
+                  },
                   "prefix": "comments_body_search",
-                  "type": "gin",
+                  "type": "fullText",
                   "unique": false
                 },
                 {
-                  "expression": "to_tsvector('english', \"subject\")",
-                  "name": "comments_subject_search_2b3d17a7",
+                  "columns": [
+                    "subject"
+                  ],
+                  "name": "comments_subject_search_803a5db2",
+                  "options": {
+                    "language": "english",
+                    "weightGroups": [
+                      [
+                        "subject"
+                      ]
+                    ]
+                  },
                   "prefix": "comments_subject_search",
-                  "type": "gin",
+                  "type": "fullText",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "documents": {
+              "columns": {
+                "body": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": true
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "subtitle": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": true
+                },
+                "title": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [
+                {
+                  "columns": [
+                    "title",
+                    "subtitle",
+                    "body"
+                  ],
+                  "name": "documents_search_2f1bb221",
+                  "options": {
+                    "language": "english",
+                    "weightGroups": [
+                      [
+                        "title",
+                        "subtitle"
+                      ],
+                      [
+                        "body"
+                      ]
+                    ]
+                  },
+                  "prefix": "documents_search",
+                  "type": "fullText",
                   "unique": false
                 }
               ],
@@ -464,7 +605,7 @@
               "columns": {
                 "embedding": {
                   "codecId": "pg/vector@1",
-                  "nativeType": "vector",
+                  "dataType": "pgvector/vector",
                   "nullable": true,
                   "typeParams": {
                     "length": 3
@@ -472,22 +613,22 @@
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "title": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "user_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "views": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -504,17 +645,17 @@
               "columns": {
                 "bio": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "user_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -531,22 +672,22 @@
               "columns": {
                 "email": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "invited_by_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": true
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -565,7 +706,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "4e3e7b1a2e6aed06486b55d35bf1fe4b435c2c16ce1a0de8ba7ffc82157b6b64"
+    "storageHash": "cc39ec65d731f934d15f8c51234782aed90989c29a9ba6cdba357fc6203aa29a"
   },
   "execution": {
     "executionHash": "551678164cf11e55dbfa5b34642fb312efdfc63dfd0d165887eaa0d73bb2db84",
@@ -588,6 +729,8 @@
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -599,9 +742,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }
@@ -645,15 +793,7 @@
             "named": "QueryOperationTypes",
             "package": "@internal/extension-pgvector/operation-types"
           }
-        },
-        "storage": [
-          {
-            "familyId": "sql",
-            "nativeType": "vector",
-            "targetId": "postgres",
-            "typeId": "pg/vector@1"
-          }
-        ]
+        }
       },
       "version": "0.0.1"
     }

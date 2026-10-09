@@ -22,13 +22,15 @@ type TestCodecTypes = {
 };
 
 type Col<Codec extends string, Nullable extends boolean = false> = {
-  readonly nativeType: string;
+  readonly dataType: string;
   readonly codecId: Codec;
   readonly nullable: Nullable;
+  readonly many: false;
 };
 
 type ScalarField<Codec extends string, Nullable extends boolean = false> = {
   readonly nullable: Nullable;
+  readonly many: false;
   readonly type: { readonly kind: 'scalar'; readonly codecId: Codec };
 };
 

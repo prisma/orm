@@ -41,6 +41,7 @@ function buildTagWithUpdatedAtContract(
   const tagFields = tagModel['fields'] as Record<string, unknown>;
   tagFields['updatedAt'] = {
     nullable: false,
+    many: false,
     type: { kind: 'scalar', codecId },
   };
   const tagStorage = tagModel['storage'] as Record<string, unknown>;
@@ -54,7 +55,7 @@ function buildTagWithUpdatedAtContract(
     throw new Error('Test contract is missing the tags table');
   }
   tagsTable.columns['updated_at'] = {
-    nativeType: 'timestamptz',
+    dataType: 'pg/timestamptz',
     codecId,
     nullable: false,
   };

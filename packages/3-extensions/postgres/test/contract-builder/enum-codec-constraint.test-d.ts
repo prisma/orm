@@ -1,8 +1,8 @@
 import { expectTypeOf } from 'vitest';
 import { enumType, member } from '../../src/exports/contract-builder';
 
-const textColumn = { codecId: 'pg/text@1' as const, nativeType: 'text' } as const;
-const int4Column = { codecId: 'pg/int4@1' as const, nativeType: 'int4' } as const;
+const textColumn = { codecId: 'pg/text@1' as const } as const;
+const int4Column = { codecId: 'pg/int4@1' as const } as const;
 
 // Int-backed enum: members are numbers, reads narrow to the literal union.
 const Priority = enumType('Priority', int4Column, member('Low', 1), member('High', 10));

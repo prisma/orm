@@ -67,9 +67,24 @@ const pslCases: ReadonlyArray<{ readonly name: string; readonly schema: string }
   tags String[]
 
   @@index([body], type: "gin", options: { fastupdate: "off" }, name: "doc_body_gin")
-  @@index([id], where: "id > 10", name: "doc_recent")
-  @@index(expression: "lower(body)", name: "doc_body_lower")
+  @@index([id], where: sql\`id > 10\`, name: "doc_recent")
+  @@index(expression: sql\`lower(body)\`, name: "doc_body_lower")
   @@index([tags], unique: true, name: "doc_tags_key")
+}
+`,
+  },
+  {
+    name: 'full-text indexes: one field, weight groups, a language, a predicate and an exact name',
+    schema: `model Post {
+  id       Int     @id
+  title    String
+  subtitle String? @map("sub_title")
+  body     String?
+
+  @@fullTextIndex([title], name: "post_title_search")
+  @@fullTextIndex([[title, subtitle], body], name: "post_search")
+  @@fullTextIndex([body, title], language: "german", where: sql\`id > 10\`, name: "post_search_de")
+  @@fullTextIndex([[body]], map: "legacy_body_search")
 }
 `,
   },
@@ -138,29 +153,51 @@ model Profile {
 policy_select p_read {
   target = Profile
   roles  = [app_user, admin]
-  using  = "owner_id = current_setting('app.uid')::int"
+  using  = sql\`owner_id = current_setting('app.uid')::int\`
 }
 
 policy_insert p_write {
   target    = Profile
   roles     = [app_user]
-  withCheck = "owner_id > 0"
+  withCheck = sql\`owner_id > 0\`
 }
 
 policy_update p_update {
   target     = Profile
   roles      = [admin]
-  using      = "true"
-  withCheck  = "owner_id > 0"
+  using      = sql\`true\`
+  withCheck  = sql\`owner_id > 0\`
   permissive = false
 }
 
 policy_all p_admin {
   target = Profile
   roles  = [admin]
-  using  = "true"
+  using  = sql\`true\`
 
   @@map("profile_admin_policy")
+}
+`,
+  },
+  {
+    name: 'a policy whose target and role are qualified by another namespace',
+    schema: `namespace unbound {
+  role auditor {
+  }
+}
+
+namespace auth {
+  model Account {
+    id Int @id
+
+    @@rls
+  }
+}
+
+policy_select p_read {
+  target = auth.Account
+  roles  = [unbound.auditor]
+  using  = sql\`true\`
 }
 `,
   },
@@ -170,8 +207,8 @@ policy_all p_admin {
   id    Int    @id
   email String
 
-  @@check(expression: "length(email) > 0", name: "widget_email_not_blank")
-  @@check(expression: "id > 0", map: "widget_id_positive")
+  @@check(expression: sql\`length(email) > 0\`, name: "widget_email_not_blank")
+  @@check(expression: sql\`id > 0\`, map: "widget_id_positive")
 }
 `,
   },
@@ -253,7 +290,7 @@ model Note {
 policy_select p_read {
   target = Note
   roles  = [app_user]
-  using  = "owner = 'a\\"b' OR owner ~ '\\\\d'\\nOR owner = 'c'"
+  using  = sql"owner = 'a\\"b' OR owner ~ '\\\\d'\\nOR owner = 'c'"
 }
 `,
   },
@@ -274,7 +311,7 @@ model Note {
 policy_select p_read {
   target = Note
   roles  = [app_user]
-  using  = "owner = 'a\tb\u0001'"
+  using  = sql"owner = 'a\\tb\\u0001'"
 }
 `,
   },

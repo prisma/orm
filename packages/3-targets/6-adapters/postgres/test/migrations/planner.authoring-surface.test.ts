@@ -3,6 +3,7 @@ import {
   APP_SPACE_ID,
   type MigrationPlanner,
   type MigrationPlannerSuccessResult,
+  planOriginOf,
 } from '@internal/framework-components/control';
 import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
@@ -82,6 +83,8 @@ describe('PostgresMigrationPlanner authoring surface', () => {
         schema: fromSchemaIR,
         policy: { allowedOperationClasses: ['additive'] },
         fromContract,
+        origin: planOriginOf(fromContract),
+        statements: [],
         frameworkComponents: [],
         spaceId: APP_SPACE_ID,
         snapshotsImportPath: '../../snapshots',

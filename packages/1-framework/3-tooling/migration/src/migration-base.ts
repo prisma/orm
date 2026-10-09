@@ -5,6 +5,7 @@ import type {
   ControlStack,
   MigrationPlan,
   MigrationPlanOperation,
+  PlanOrigin,
 } from '@internal/framework-components/control';
 import { type } from 'arktype';
 import {
@@ -132,7 +133,23 @@ export abstract class Migration<
     };
   }
 
-  get origin(): { readonly storageHash: string } | null {
+  /**
+   * Called by {@link Migration.readOperations} before each read of `operations`: a migration that
+   * builds state while its operations are read, such as the schema its earlier rename operations
+   * leave behind, discards it here so every read starts from the start contract. The default keeps
+   * no state.
+   */
+  protected beginOperationsRead(): void {}
+
+  /** Reads `migration`'s operations from the start contract; read them only through this. */
+  static readOperations(
+    migration: Migration,
+  ): readonly (MigrationPlanOperation | Promise<MigrationPlanOperation>)[] {
+    migration.beginOperationsRead();
+    return migration.operations;
+  }
+
+  get origin(): PlanOrigin | null {
     const from = this.describe().from;
     return from === null ? null : { storageHash: from };
   }
@@ -265,7 +282,7 @@ export async function buildMigrationArtifacts(
   instance: Migration,
   existing: Partial<MigrationMetadata> | null,
 ): Promise<MigrationArtifacts> {
-  const rawOps = instance.operations;
+  const rawOps = Migration.readOperations(instance);
   if (!Array.isArray(rawOps)) {
     throw errorOperationsNotArray();
   }

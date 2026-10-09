@@ -1,15 +1,22 @@
+import { createDataTypeLookup, dataType } from '@internal/framework-components/codec';
 import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
+import {
+  fixtureDataTypeSupport,
+  fixtureDataTypes,
+  pgInt2,
+  pgInt4,
+  pgvectorVector,
+} from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  interpretSqlContract,
   pgvectorAuthoringContributions,
   postgresCodecLookup,
   postgresNativeScalarTypeDescriptors,
   postgresTarget,
-  symbolTableInputFromParseArgs,
 } from './fixtures';
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import { unboundTables } from './unbound-tables';
@@ -24,14 +31,13 @@ function interpret(
   schema: string,
   codecLookup = postgresCodecLookup,
   dataTypes = fixtureDataTypeSupport.entries,
+  lookup = fixtureTypeLookups.dataTypeLookup,
 ) {
-  const document = symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' });
-  return interpretPslDocumentToSqlContract({
-    ...document,
+  return interpretSqlContract(schema, {
     target: postgresTarget,
     scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
-    authoringContributions: { ...pgvectorAuthoringContributions, dataTypes },
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    authoringContributions: pgvectorAuthoringContributions,
+    dataTypes: { entries: dataTypes, lookup },
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
     capabilities: { sql: { scalarList: true } },
@@ -126,67 +132,79 @@ describe('written defaults a column refuses', () => {
       'a number too wide for the column',
       'count Int @default(100000000000000099)',
       'PSL_VALUE_TYPE_INCOMPATIBLE',
-      'Field "N.count": pg/int4 has no cast from pg/int8; it casts from pg/int2',
+      'Field "N.count": Expected a number that pg/int4 can hold; got pg/int8',
     ],
     [
       'a number with a fraction on a whole-number column',
       'count Int @default(1.5)',
       'PSL_VALUE_TYPE_INCOMPATIBLE',
-      'Field "N.count": pg/int4 has no cast from pg/numeric; it casts from pg/int2',
+      'Field "N.count": Expected a number that pg/int4 can hold; got pg/numeric',
     ],
     [
       'a quoted document on a jsonb column',
       'meta Jsonb @default("{}")',
       'PSL_VALUE_TYPE_INCOMPATIBLE',
-      'Field "N.meta": pg/jsonb has no cast from pg/text; it casts from pg/json',
+      'Field "N.meta": Expected json`...`; write json`{}`',
+    ],
+    [
+      'a quoted string on a jsonb column that json would refuse too',
+      'meta Jsonb @default("plan")',
+      'PSL_VALUE_TYPE_INCOMPATIBLE',
+      'Field "N.meta": Expected json`...`',
+    ],
+    [
+      'a quoted string on a list column whose element type has a tag',
+      'docs Jsonb[] @default(["{}"])',
+      'PSL_VALUE_TYPE_INCOMPATIBLE',
+      'Field "N.docs" at element 1: Expected json`...`; write json`{}`',
     ],
     [
       'quoted digits on a numeric column',
       'price Decimal @default("1.50")',
       'PSL_VALUE_TYPE_INCOMPATIBLE',
-      'Field "N.price": pg/numeric has no cast from pg/text; it casts from pg/int2, pg/int4, pg/int8',
+      'Field "N.price": Expected a number',
     ],
     [
       'quoted digits on an int column',
       'count Int @default("1")',
       'PSL_VALUE_TYPE_INCOMPATIBLE',
-      'Field "N.count": pg/int4 has no cast from pg/text; it casts from pg/int2',
+      'Field "N.count": Expected a number',
     ],
     [
       'a JSON document on an int column',
       `count Int @default(${tagged('json', '1')})`,
       'PSL_VALUE_TYPE_INCOMPATIBLE',
-      'Field "N.count": pg/int4 has no cast from pg/json; it casts from pg/int2',
+      'Field "N.count": Expected a number',
     ],
     [
       'a written list on a column that holds one value',
       'count Int @default([1, 2])',
       'PSL_VALUE_TYPE_INCOMPATIBLE',
-      'Field "N.count": pg/int4 has no cast from a list; it casts from pg/int2',
+      'Field "N.count": Expected a number; got a list',
     ],
     [
       'text among a list of numbers',
       'scores Int[] @default([1, "x"])',
       'PSL_VALUE_TYPE_INCOMPATIBLE',
-      'Field "N.scores" at element 2: pg/int4 has no cast from pg/text; it casts from pg/int2',
+      'Field "N.scores" at element 2: Expected a number',
     ],
     [
       'a written list on a jsonb column',
       'meta Jsonb @default([1, 2])',
       'PSL_VALUE_TYPE_INCOMPATIBLE',
-      'Field "N.meta": pg/jsonb has no cast from a list; it casts from pg/json',
+      'Field "N.meta": Expected json`...`; got a list',
     ],
     [
       'a non-finite word on a whole-number column',
       'count Int @default(NaN)',
       'PSL_VALUE_TYPE_INCOMPATIBLE',
-      'Field "N.count": pg/int4 has no cast from pg/numeric; it casts from pg/int2',
+      'Field "N.count": Expected a number that pg/int4 can hold; got pg/numeric',
     ],
     [
       'a number on a column whose type takes only text',
       'payload Bytes @default(1234)',
       'PSL_VALUE_TYPE_INCOMPATIBLE',
-      'Field "N.payload": pg/bytea has no cast from pg/int2; it casts from pg/text',
+      'Field "N.payload": Expected a quoted string',
     ],
     [
       'a single value on a list column',
@@ -229,7 +247,8 @@ describe('written defaults a column refuses', () => {
     expect(result.ok ? [] : result.failure.diagnostics).toEqual([
       expect.objectContaining({
         code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
-        message: 'Field "N.active": this target has no data type for a boolean value',
+        message:
+          'Field "N.active": Expected sql`...`; this target has no data type for a boolean value',
       }),
     ]);
   });
@@ -254,10 +273,71 @@ describe('written defaults a column refuses', () => {
 
   it('refuses a vector whose length does not match the column, with the codec message', () => {
     expect(diagnostics(model('  embed pgvector.Vector(3) @default([1, 2])'))).toEqual([
-      expect.objectContaining({
+      {
         code: 'PSL_INVALID_DEFAULT_LITERAL',
         message: 'Field "N.embed": Vector length mismatch: expected 3, got 2',
+        sourceId: 'schema.prisma',
+        span: {
+          start: { offset: 50, line: 3, column: 28 },
+          end: { offset: 66, line: 3, column: 44 },
+        },
+      },
+    ]);
+  });
+
+  it('refuses an element the list cast does not take at the element, suggesting the forms of the types it takes', () => {
+    expect(diagnostics(model('  embed pgvector.Vector(3) @default([1, "x", 3])'))).toEqual([
+      {
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message: 'Field "N.embed" at element 2: Expected a number',
+        sourceId: 'schema.prisma',
+        span: {
+          start: { offset: 63, line: 3, column: 41 },
+          end: { offset: 66, line: 3, column: 44 },
+        },
+      },
+    ]);
+  });
+
+  it('names both types for an element of an admitted form that the list cast does not take', () => {
+    const narrowVector = dataType(pgvectorVector.id, {
+      listCast: {
+        of: [pgInt2.id, pgInt4.id],
+        cast: (elements) => elements.map(Number),
+      },
+    });
+    const lookup = createDataTypeLookup(
+      fixtureDataTypes.map((type) => (type.id === narrowVector.id ? narrowVector : type)),
+    );
+    const result = interpret(
+      model('  embed pgvector.Vector(3) @default([1, 2, 3000000000])'),
+      postgresCodecLookup,
+      fixtureDataTypeSupport.entries,
+      lookup,
+    );
+    expect(result.ok ? [] : result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message:
+          'Field "N.embed" at element 3: Expected a number that pgvector/vector can hold; got pg/int8',
       }),
+    ]);
+  });
+
+  it('refuses an unknown tag among the elements of a list read through a list cast, at the element', () => {
+    expect(
+      diagnostics(model(`  embed pgvector.Vector(3) @default([1, ${tagged('pg.json', '2')}, 3])`)),
+    ).toEqual([
+      {
+        code: 'PSL_UNKNOWN_LITERAL_TAG',
+        message:
+          'Field "N.embed" at element 2: Unknown literal tag "pg.json". Known tags: sql, json.',
+        sourceId: 'schema.prisma',
+        span: {
+          start: { offset: 63, line: 3, column: 41 },
+          end: { offset: 73, line: 3, column: 51 },
+        },
+      },
     ]);
   });
 
@@ -265,7 +345,7 @@ describe('written defaults a column refuses', () => {
     expect(diagnostics(model(`  meta Jsonb @default(${tagged('sqlite.sql', 'x')})`))).toEqual([
       expect.objectContaining({
         code: 'PSL_UNKNOWN_LITERAL_TAG',
-        message: 'Unknown literal tag "sqlite.sql". Known tags: sql, json.',
+        message: 'Field "N.meta": Unknown literal tag "sqlite.sql". Known tags: sql, json.',
       }),
     ]);
   });

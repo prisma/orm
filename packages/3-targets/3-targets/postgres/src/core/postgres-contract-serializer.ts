@@ -8,6 +8,7 @@ import {
   type AuthoringEntityTypeNamespace,
   isAuthoringEntityTypeDescriptor,
 } from '@internal/framework-components/authoring';
+import { requiredSchemaKeys } from '@internal/framework-components/codec';
 import {
   type AnyEntityKindDescriptor,
   type Namespace,
@@ -21,17 +22,23 @@ import type { JsonObject } from '@internal/utils/json';
 import type { Type } from 'arktype';
 import { postgresAuthoringEntityTypes } from './authoring';
 import { PG_INT_CODEC_ID, PG_TEXT_CODEC_ID } from './codec-ids';
+import { createPostgresBuiltinCodecLookup } from './codec-registry';
+import { createPostgresBuiltinDataTypeLookup } from './data-types';
 import {
   nativeEnumEntityKind,
   policyEntityKind,
   rlsEnablementEntityKind,
   roleEntityKind,
 } from './entity-kinds';
+import { assertFullTextIndexes } from './full-text-index-definition';
+import { postgresCodecTraitsOf } from './postgres-codec-traits';
 import { PostgresSchema } from './postgres-schema';
 
 const POSTGRES_AUTHORING_CTX: AuthoringEntityContext = {
   family: 'sql',
   target: 'postgres',
+  codecLookup: createPostgresBuiltinCodecLookup(),
+  dataTypeLookup: createPostgresBuiltinDataTypeLookup(),
   enumInferenceCodecs: { text: PG_TEXT_CODEC_ID, int: PG_INT_CODEC_ID },
 };
 
@@ -95,31 +102,14 @@ function requiredEntityFieldsSurviveDefaults(
   );
 }
 
-type SchemaProp = { readonly kind: string; readonly key: PropertyKey };
-
-function isSchemaPropList(value: unknown): value is readonly SchemaProp[] {
-  return (
-    Array.isArray(value) &&
-    value.every(
-      (prop) =>
-        prop !== null &&
-        (typeof prop === 'object' || typeof prop === 'function') &&
-        'kind' in prop &&
-        'key' in prop,
-    )
-  );
-}
-
 function requiredKeysOf(schema: Type<unknown>): readonly string[] {
-  const props = 'props' in schema ? schema.props : undefined;
-  if (!isSchemaPropList(props)) {
+  const keys = requiredSchemaKeys(schema);
+  if (keys === undefined) {
     throw new InternalError(
       'entity-kind schema does not expose arktype object props; the required-field preserve set cannot be derived',
     );
   }
-  return props.flatMap((prop) =>
-    prop.kind === 'required' && typeof prop.key === 'string' ? [prop.key] : [],
-  );
+  return keys;
 }
 
 export class PostgresContractSerializer extends SqlContractSerializerBase<Contract<SqlStorage>> {
@@ -158,7 +148,7 @@ export class PostgresContractSerializer extends SqlContractSerializerBase<Contra
     }
     const valueSetSlot = entries['valueSet'];
     const hasValueSets = valueSetSlot !== undefined && Object.keys(valueSetSlot).length > 0;
-    return new PostgresSchema({
+    const schema = new PostgresSchema({
       id,
       entries: {
         ...entries,
@@ -166,6 +156,10 @@ export class PostgresContractSerializer extends SqlContractSerializerBase<Contra
         ...(hasValueSets ? { valueSet: valueSetSlot } : {}),
       },
     });
+    for (const table of Object.values(schema.table)) {
+      assertFullTextIndexes(table, postgresCodecTraitsOf);
+    }
+    return schema;
   }
 
   override serializeContract(contract: Contract<SqlStorage>): JsonObject {

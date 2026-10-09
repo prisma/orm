@@ -2,6 +2,7 @@ import { MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
 import { coreHash, crossRef, profileHash } from '@internal/contract/types';
 import mongoControlDriver from '@internal/driver-mongo/control';
 import { contractToMongoSchemaIR } from '@internal/family-mongo/control';
+import { planOriginOf } from '@internal/framework-components/control';
 import {
   MongoCollection,
   type MongoCollectionInput,
@@ -43,6 +44,7 @@ function makeContract(
             fields: {
               _id: {
                 nullable: false,
+                many: false as const,
                 type: { kind: 'scalar' as const, codecId: 'mongo/objectId@1' },
               },
             },
@@ -82,6 +84,8 @@ async function planAndApply(
     schema,
     policy: ALL_POLICY,
     fromContract: origin,
+    origin: planOriginOf(origin),
+    statements: [],
     frameworkComponents: [],
     snapshotsImportPath: '../../snapshots',
   });

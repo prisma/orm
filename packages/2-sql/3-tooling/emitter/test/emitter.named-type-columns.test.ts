@@ -16,7 +16,6 @@ function vectorCodecLookup(): CodecLookup {
   } as ReturnType<CodecLookup['get']>;
   return {
     get: (id) => (id === 'pg/vector@1' ? vectorCodec : undefined),
-    targetTypesFor: (id) => (id === 'pg/vector@1' ? ['vector'] : undefined),
     renderOutputTypeFor: (id, params) =>
       id === 'pg/vector@1' ? `Vector<${params['length']}>` : undefined,
   };
@@ -35,9 +34,10 @@ describe('contract.d.ts types of a column typed by a named type', () => {
             },
           },
           fields: {
-            id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+            id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
             embedding: {
               nullable: true,
+              many: false,
               type: { kind: 'scalar', codecId: 'pg/vector@1', typeParams: { length: 1536 } },
             },
           },
@@ -48,9 +48,9 @@ describe('contract.d.ts types of a column typed by a named type', () => {
         tables: {
           post: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
               embedding: {
-                nativeType: 'vector',
+                dataType: 'pgvector/vector',
                 codecId: 'pg/vector@1',
                 nullable: true,
                 typeRef: 'Embedding1536',
@@ -65,7 +65,7 @@ describe('contract.d.ts types of a column typed by a named type', () => {
         types: {
           Embedding1536: {
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             typeParams: { length: 1536 },
           },
         },
@@ -102,6 +102,7 @@ describe('contract.d.ts types of a column typed by a named type', () => {
           fields: {
             embedding: {
               nullable: false,
+              many: false,
               type: {
                 kind: 'scalar',
                 codecId: 'pg/vector@1',
@@ -117,7 +118,7 @@ describe('contract.d.ts types of a column typed by a named type', () => {
           post: {
             columns: {
               embedding: {
-                nativeType: 'vector',
+                dataType: 'pgvector/vector',
                 codecId: 'pg/vector@1',
                 nullable: false,
                 typeRef: 'Embedding1536',
@@ -132,7 +133,7 @@ describe('contract.d.ts types of a column typed by a named type', () => {
         types: {
           Embedding1536: {
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             typeParams: { length: 1536 },
           },
         },

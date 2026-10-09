@@ -1,41 +1,48 @@
-import type { AuthoringContributions } from '@internal/framework-components/authoring';
-import { checkUncomposedNamespace } from '@internal/framework-components/authoring';
+import { instantiateAuthoringTypeConstructor } from '@internal/framework-components/authoring';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type {
+  Binder,
+  BlockSymbol,
   DiagnosticSource,
   NamedTypeSymbol,
   PslDiagnosticCollector,
+  Resolution,
 } from '@internal/psl-parser';
-import { diagnosticSource } from '@internal/psl-parser';
-import { reportUncomposedNamespace } from '@internal/psl-parser/interpret';
-import type { StorageTypeInstance } from '@internal/sql-contract/types';
+import { diagnosticSource, typeReferenceNode } from '@internal/psl-parser';
+import {
+  type AuthoredStorageTypeInstance,
+  CODEC_INSTANCE_KIND,
+} from '@internal/sql-contract/types';
 import { formatDbAttributeMigrationMessage } from './psl-attribute-parsing';
 import {
+  bareTypeConstructorOf,
   type ColumnDescriptor,
   instantiatePslTypeConstructor,
-  resolvePslTypeConstructorDescriptor,
   toNamedTypeFieldDescriptor,
 } from './psl-column-resolution';
 
 export interface ResolveNamedTypeDeclarationsInput {
   readonly declarations: readonly NamedTypeSymbol[];
   readonly source: DiagnosticSource;
-  readonly enumTypeDescriptors: ReadonlyMap<string, ColumnDescriptor>;
-  readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
-  readonly composedExtensions: ReadonlySet<string>;
-  readonly familyId: string;
-  readonly targetId: string;
-  readonly authoringContributions: AuthoringContributions | undefined;
+  readonly binder: Binder;
+  readonly enumTypeDescriptors: ReadonlyMap<BlockSymbol, ColumnDescriptor>;
+  readonly codecLookup: CodecLookupWithDescriptors;
   readonly diagnostics: PslDiagnosticCollector;
+}
+
+function baseColumnDescriptor(
+  resolution: Resolution | undefined,
+  enumTypeDescriptors: ReadonlyMap<BlockSymbol, ColumnDescriptor>,
+): ColumnDescriptor | undefined {
+  if (resolution?.kind === 'block') return enumTypeDescriptors.get(resolution.symbol);
+  const scalar = bareTypeConstructorOf(resolution);
+  return scalar === undefined ? undefined : instantiateAuthoringTypeConstructor(scalar, []);
 }
 
 function validateNamedTypeAttributes(input: {
   readonly declaration: NamedTypeSymbol;
   readonly source: DiagnosticSource;
   readonly diagnostics: PslDiagnosticCollector;
-  readonly composedExtensions: ReadonlySet<string>;
-  readonly authoringContributions: AuthoringContributions | undefined;
-  readonly familyId: string;
-  readonly targetId: string;
 }): boolean {
   let hasUnsupportedNamedTypeAttribute = false;
 
@@ -45,23 +52,6 @@ function validateNamedTypeAttributes(input: {
         code: 'PSL_UNSUPPORTED_NAMED_TYPE_ATTRIBUTE',
         message: formatDbAttributeMigrationMessage(attribute),
         ...input.source.at(attribute.span),
-      });
-      hasUnsupportedNamedTypeAttribute = true;
-      continue;
-    }
-
-    const uncomposedNamespace = checkUncomposedNamespace(attribute.name, input.composedExtensions, {
-      familyId: input.familyId,
-      targetId: input.targetId,
-      authoringContributions: input.authoringContributions,
-    });
-    if (uncomposedNamespace) {
-      reportUncomposedNamespace({
-        subjectLabel: `Attribute "@${attribute.name}"`,
-        namespace: uncomposedNamespace,
-        source: input.source,
-        span: attribute.span,
-        diagnostics: input.diagnostics,
       });
       hasUnsupportedNamedTypeAttribute = true;
       continue;
@@ -79,14 +69,24 @@ function validateNamedTypeAttributes(input: {
 }
 
 export function resolveNamedTypeDeclarations(input: ResolveNamedTypeDeclarationsInput): {
-  readonly storageTypes: Record<string, StorageTypeInstance>;
-  readonly namedTypeDescriptors: Map<string, ColumnDescriptor>;
+  readonly storageTypes: Record<string, AuthoredStorageTypeInstance>;
+  readonly namedTypeDescriptors: Map<NamedTypeSymbol, ColumnDescriptor>;
 } {
-  const storageTypeEntries: [string, StorageTypeInstance][] = [];
-  const namedTypeDescriptors = new Map<string, ColumnDescriptor>();
+  const storageTypeEntries: [string, AuthoredStorageTypeInstance][] = [];
+  const namedTypeDescriptors = new Map<NamedTypeSymbol, ColumnDescriptor>();
+  const storageTypeOf = (descriptor: {
+    readonly codecId: string;
+    readonly typeParams?: Record<string, unknown> | undefined;
+  }): AuthoredStorageTypeInstance => ({
+    kind: CODEC_INSTANCE_KIND,
+    codecId: descriptor.codecId,
+    typeParams: descriptor.typeParams ?? {},
+  });
 
   for (const declaration of input.declarations) {
     const source = diagnosticSource(input.source.sources, declaration.node.syntax);
+    const reference = typeReferenceNode(declaration);
+    const resolution = reference === undefined ? undefined : input.binder.symbolForNode(reference);
     if (declaration.isConstructor) {
       const typeConstructor = declaration.typeConstructor;
       if (typeConstructor === undefined) {
@@ -102,34 +102,29 @@ export function resolveNamedTypeDeclarations(input: ResolveNamedTypeDeclarations
         declaration,
         source,
         diagnostics: input.diagnostics,
-        composedExtensions: input.composedExtensions,
-        authoringContributions: input.authoringContributions,
-        familyId: input.familyId,
-        targetId: input.targetId,
       });
       if (hasUnsupportedNamedTypeAttribute) {
         continue;
       }
 
-      const helperPath = typeConstructor.path.join('.');
-      const descriptor = resolvePslTypeConstructorDescriptor({
-        call: typeConstructor,
-        authoringContributions: input.authoringContributions,
-        composedExtensions: input.composedExtensions,
-        familyId: input.familyId,
-        targetId: input.targetId,
-        diagnostics: input.diagnostics,
-        source,
-        unsupportedCode: 'PSL_UNSUPPORTED_NAMED_TYPE_CONSTRUCTOR',
-        unsupportedMessage: `Named type "${declaration.name}" references unsupported constructor "${helperPath}"`,
-      });
+      const descriptor =
+        resolution?.kind === 'contributedType' &&
+        resolution.symbol.descriptor.kind === 'typeConstructor'
+          ? resolution.symbol.descriptor
+          : undefined;
       if (!descriptor) {
+        input.diagnostics.push({
+          code: 'PSL_UNSUPPORTED_NAMED_TYPE_CONSTRUCTOR',
+          message: `Named type "${declaration.name}" references unsupported constructor "${typeConstructor.path.join('.')}"`,
+          ...source.at(typeConstructor.span),
+        });
         continue;
       }
 
       const storageType = instantiatePslTypeConstructor({
         call: typeConstructor,
         descriptor,
+        codecLookup: input.codecLookup,
         diagnostics: input.diagnostics,
         source,
         entityLabel: `Named type "${declaration.name}"`,
@@ -139,18 +134,10 @@ export function resolveNamedTypeDeclarations(input: ResolveNamedTypeDeclarations
       }
 
       namedTypeDescriptors.set(
-        declaration.name,
+        declaration,
         toNamedTypeFieldDescriptor(declaration.name, storageType),
       );
-      storageTypeEntries.push([
-        declaration.name,
-        {
-          kind: 'codec-instance',
-          codecId: storageType.codecId,
-          nativeType: storageType.nativeType,
-          typeParams: storageType.typeParams ?? {},
-        },
-      ]);
+      storageTypeEntries.push([declaration.name, storageTypeOf(storageType)]);
       continue;
     }
 
@@ -164,8 +151,7 @@ export function resolveNamedTypeDeclarations(input: ResolveNamedTypeDeclarations
       continue;
     }
 
-    const baseDescriptor =
-      input.enumTypeDescriptors.get(baseType) ?? input.scalarColumnDescriptors.get(baseType);
+    const baseDescriptor = baseColumnDescriptor(resolution, input.enumTypeDescriptors);
     if (!baseDescriptor) {
       input.diagnostics.push({
         code: 'PSL_UNSUPPORTED_NAMED_TYPE_BASE',
@@ -179,26 +165,14 @@ export function resolveNamedTypeDeclarations(input: ResolveNamedTypeDeclarations
       declaration,
       source,
       diagnostics: input.diagnostics,
-      composedExtensions: input.composedExtensions,
-      authoringContributions: input.authoringContributions,
-      familyId: input.familyId,
-      targetId: input.targetId,
     });
     if (hasUnsupportedNamedTypeAttribute) {
       continue;
     }
 
     const descriptor = toNamedTypeFieldDescriptor(declaration.name, baseDescriptor);
-    namedTypeDescriptors.set(declaration.name, descriptor);
-    storageTypeEntries.push([
-      declaration.name,
-      {
-        kind: 'codec-instance',
-        codecId: baseDescriptor.codecId,
-        nativeType: baseDescriptor.nativeType,
-        typeParams: baseDescriptor.typeParams ?? {},
-      },
-    ]);
+    namedTypeDescriptors.set(declaration, descriptor);
+    storageTypeEntries.push([declaration.name, storageTypeOf(baseDescriptor)]);
   }
 
   return { storageTypes: Object.fromEntries(storageTypeEntries), namedTypeDescriptors };

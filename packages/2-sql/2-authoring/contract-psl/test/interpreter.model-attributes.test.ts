@@ -4,22 +4,19 @@ import { fieldRef, list, modelAttribute, optional, str, structBlock } from '@int
 import type { SqlNamespaceInput } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
+  interpretSqlContract,
   postgresScalarTypeDescriptors,
   postgresTarget,
-  symbolTableInputFromParseArgs,
 } from './fixtures';
 
 const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults();
 
 function stampScopeFrom(ctx: Parameters<ModelAttributeSpecFactory>[0]): string {
   const declaredModels = Object.keys(ctx.symbols.topLevel.models).sort().join('+');
-  const defaultFunctions = [...ctx.controlMutationDefaults.defaultFunctionRegistry.keys()]
-    .sort()
-    .join('+');
+  const defaultFunctions = [...ctx.defaultFunctionRegistry.keys()].sort().join('+');
   return `${ctx.model.name}|${declaredModels}|${defaultFunctions}`;
 }
 
@@ -59,21 +56,16 @@ const stampAuthoringContributions: AuthoringContributions = {
 
 function interpretWith(schema: string, authoringContributions?: AuthoringContributions) {
   const capturedEntries: Record<string, Record<string, Record<string, unknown>>> = {};
-  const document = symbolTableInputFromParseArgs({
-    schema,
-    sourceId: 'schema.prisma',
-  });
   const createNamespace = (input: SqlNamespaceInput) => {
     capturedEntries[input.id] = { ...(capturedEntries[input.id] ?? {}), ...input.entries };
     return createTestSqlNamespace(input);
   };
-  const result = interpretPslDocumentToSqlContract({
-    ...document,
+  const result = interpretSqlContract(schema, {
     target: postgresTarget,
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     controlMutationDefaults: builtinControlMutationDefaults,
     composedExtensionContracts: new Map(),
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    ...fixtureInterpreterTypes,
     createNamespace,
     capabilities: { sql: { scalarList: true } },
     ...(authoringContributions !== undefined ? { authoringContributions } : {}),

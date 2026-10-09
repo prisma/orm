@@ -125,12 +125,12 @@
               "columns": {
                 "id": {
                   "codecId": "pg/bytea@1",
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
                   "nullable": false
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -147,17 +147,20 @@
               "columns": {
                 "accommodationId": {
                   "codecId": "pg/bytea@1",
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/bytea@1",
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "accommodationTimeTable_accommodationId_idx_6cccc5ae"
+                  },
                   "source": {
                     "columns": [
                       "accommodationId"
@@ -197,11 +200,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "cb9ea7a7d2b5db101d9659308f50801643821d12136bf99b3c211bbf4eefa407"
+    "storageHash": "0573aad644a2a36ee3974d516c180ba29708deae3041d7fc9a642cf671a7ee74"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -212,9 +217,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

@@ -218,6 +218,50 @@ describe('AddColumnCall', () => {
     const call = new AddColumnCall('user', colSpec({ name: 'bio' }));
     await expect(async () => call.toOp()).rejects.toThrow('createSqliteMigrationPlanner');
   });
+
+  it('renders a default holding both quote kinds as a template literal', () => {
+    const call = new AddColumnCall(
+      'user',
+      colSpec({
+        name: 'meta',
+        typeSql: 'TEXT',
+        default: { kind: 'function', expression: `'{"a": 1}'` },
+        nullable: false,
+      }),
+    );
+    expect(call.renderTypeScript()).toBe(
+      [
+        'this.addColumn({ table: "user", column: {',
+        '  name: "meta",',
+        '  typeSql: "TEXT",',
+        '  default: { kind: "function", expression: `\'{"a": 1}\'` },',
+        '  nullable: false,',
+        '} })',
+      ].join('\n'),
+    );
+  });
+
+  it('renders a literal default as its JSON value', () => {
+    const call = new AddColumnCall(
+      'user',
+      colSpec({
+        name: 'meta',
+        typeSql: 'TEXT',
+        default: { kind: 'literal', value: { a: 'it\'s "x"' } },
+        nullable: false,
+      }),
+    );
+    expect(call.renderTypeScript()).toBe(
+      [
+        'this.addColumn({ table: "user", column: {',
+        '  name: "meta",',
+        '  typeSql: "TEXT",',
+        '  default: { kind: "literal", value: { a: "it\'s \\"x\\"" } },',
+        '  nullable: false,',
+        '} })',
+      ].join('\n'),
+    );
+  });
 });
 
 describe('a column spec an earlier version wrote', () => {
@@ -320,12 +364,13 @@ describe('CreateIndexCall', () => {
 });
 
 describe('DropIndexCall', () => {
-  it('produces a destructive DROP INDEX IF EXISTS op', async () => {
+  it('produces a widening DROP INDEX IF EXISTS op, since an index holds no stored data', async () => {
     const lowerer = stubLowerer('CHECK SQL');
     const call = new DropIndexCall('user', 'idx_email');
     const op = await call.toOp(lowerer);
+    expect(call.operationClass).toBe('widening');
     expect(op.id).toBe('dropIndex.user.idx_email');
-    expect(op.operationClass).toBe('destructive');
+    expect(op.operationClass).toBe('widening');
     expect(op.execute[0]?.sql).toBe('DROP INDEX IF EXISTS "idx_email"');
   });
 
@@ -382,6 +427,30 @@ describe('RecreateTableCall', () => {
     expect(op.postcheck.some((s) => s.description.includes('type'))).toBe(true);
   });
 
+  it('keeps its lossy columns out of the operation and the rendered migration', async () => {
+    const args = {
+      tableName: 'user',
+      contractTable: tableSpec([
+        colSpec({ name: 'id', typeSql: 'INTEGER', nullable: false }),
+        colSpec({ name: 'age', typeSql: 'INTEGER', nullable: true }),
+      ]),
+      schemaColumnNames: ['id', 'age'],
+      indexes: [],
+      summary: 'Recreates table user to apply schema changes: type mismatch on age',
+      postchecks: [],
+      operationClass: 'destructive' as const,
+    };
+    const withLossy = new RecreateTableCall(args, ['age']);
+    const without = new RecreateTableCall(args);
+
+    expect(withLossy.lossyColumns).toEqual(['age']);
+    expect(without.lossyColumns).toEqual([]);
+    expect(withLossy.renderTypeScript()).toBe(without.renderTypeScript());
+    expect(JSON.stringify(await withLossy.toOp(stubLowerer('CHECK SQL')))).toBe(
+      JSON.stringify(await without.toOp(stubLowerer('CHECK SQL'))),
+    );
+  });
+
   it('writes each column default the adapter renders, and checks the recreated table carries it', async () => {
     const lowerer: ExecuteRequestLowerer = {
       ...stubLowerer('CHECK SQL'),
@@ -389,7 +458,7 @@ describe('RecreateTableCall', () => {
         column.default?.kind === 'literal'
           ? `DEFAULT '${String(column.default.value)}' /* ${table} */`
           : column.default?.kind === 'function'
-            ? `DEFAULT (${column.default.expression})`
+            ? `DEFAULT (${column.default.expression.text})`
             : '',
     };
     const call = new RecreateTableCall({
@@ -473,6 +542,79 @@ describe('RecreateTableCall', () => {
     });
     await expect(call.toOp()).rejects.toThrow('createSqliteMigrationPlanner');
   });
+
+  it('renders a column default and a postcheck holding both quote kinds as template literals', () => {
+    const call = new RecreateTableCall({
+      tableName: 'user',
+      contractTable: tableSpec(
+        [
+          colSpec({
+            name: 'id',
+            typeSql: 'INTEGER',
+            nullable: false,
+            inlineAutoincrementPrimaryKey: true,
+          }),
+          colSpec({
+            name: 'meta',
+            typeSql: 'TEXT',
+            default: { kind: 'function', expression: `'{"a": 1}'` },
+            codecRef: { codecId: 'sqlite/text@1' },
+            nullable: false,
+          }),
+        ],
+        { primaryKey: { columns: ['id'] } },
+      ),
+      schemaColumnNames: ['id', 'meta'],
+      indexes: [],
+      summary: 'Recreates table user',
+      postchecks: [
+        {
+          description: 'verify "meta" default on "user"',
+          sql: `SELECT COUNT(*) > 0 FROM pragma_table_info('user') WHERE "dflt_value" = '1'`,
+        },
+        { description: 'verify "meta" default', columnDefault: 'meta' },
+      ],
+      operationClass: 'widening',
+    });
+    expect(call.renderTypeScript()).toBe(
+      [
+        'this.recreateTable({',
+        '  tableName: "user",',
+        '  contractTable: {',
+        '  columns: [',
+        '  {',
+        '  name: "id",',
+        '  typeSql: "INTEGER",',
+        '  nullable: false,',
+        '  inlineAutoincrementPrimaryKey: true,',
+        '},',
+        '  {',
+        '  name: "meta",',
+        '  typeSql: "TEXT",',
+        '  default: { kind: "function", expression: `\'{"a": 1}\'` },',
+        '  codecRef: { codecId: "sqlite/text@1" },',
+        '  nullable: false,',
+        '},',
+        '],',
+        '  primaryKey: { columns: ["id"] },',
+        '  uniques: [],',
+        '  foreignKeys: [],',
+        '},',
+        '  schemaColumnNames: ["id", "meta"],',
+        '  indexes: [],',
+        '  summary: "Recreates table user",',
+        '  postchecks: [',
+        '  {',
+        '  description: "verify \\"meta\\" default on \\"user\\"",',
+        "  sql: `SELECT COUNT(*) > 0 FROM pragma_table_info('user') WHERE \"dflt_value\" = '1'`,",
+        '},',
+        '  { description: "verify \\"meta\\" default", columnDefault: "meta" },',
+        '],',
+        '  operationClass: "widening",',
+        '})',
+      ].join('\n'),
+    );
+  });
 });
 
 describe('dataTransform factory (user-authored)', () => {
@@ -507,8 +649,10 @@ describe('DataTransformCall', () => {
       'email',
     );
 
-  it('toOp() throws MIGRATION.UNFILLED_PLACEHOLDER (unfilled placeholder)', () => {
-    expect(() => makeCall().toOp()).toThrowError(/MIGRATION.UNFILLED_PLACEHOLDER|unfilled/i);
+  it('toOp() rejects with MIGRATION.UNFILLED_PLACEHOLDER (unfilled placeholder)', async () => {
+    await expect(makeCall().toOp()).rejects.toThrowError(
+      /MIGRATION.UNFILLED_PLACEHOLDER|unfilled/i,
+    );
   });
 
   it('renderTypeScript() emits a dataTransform({...}) call with a placeholder run slot', () => {

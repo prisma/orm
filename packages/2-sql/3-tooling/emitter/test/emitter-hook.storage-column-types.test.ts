@@ -15,11 +15,11 @@ const testHashes = { storageHash: 'test-core-hash', profileHash: 'test-profile-h
 function vectorCodecLookup(): CodecLookup {
   return {
     get: () => undefined,
-    targetTypesFor: () => undefined,
     renderOutputTypeFor: (id, params) =>
       id === 'pg/vector@1' ? `Vector<${params['length']}>` : undefined,
     renderInputTypeFor: (id, params) =>
       id === 'pg/vector@1' ? `VectorInput<${params['length']}>` : undefined,
+    renderValueLiteralFor: (_id, value) => renderTsLiteral(value),
   };
 }
 
@@ -39,6 +39,7 @@ describe('StorageColumnTypes', () => {
                 fields: {
                   priority: {
                     nullable: false,
+                    many: false,
                     type: { kind: 'scalar', codecId: 'pg/text@1' },
                     valueSet: {
                       plane: 'domain',
@@ -73,7 +74,7 @@ describe('StorageColumnTypes', () => {
                 post: {
                   columns: {
                     priority: {
-                      nativeType: 'text',
+                      dataType: 'pg/text',
                       codecId: 'pg/text@1',
                       nullable: false,
                       valueSet: {
@@ -127,7 +128,11 @@ describe('StorageColumnTypes', () => {
                   fields: { email: { column: 'email' } },
                 },
                 fields: {
-                  email: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+                  email: {
+                    nullable: false,
+                    many: false,
+                    type: { kind: 'scalar', codecId: 'pg/text@1' },
+                  },
                 },
                 relations: {},
               },
@@ -143,7 +148,7 @@ describe('StorageColumnTypes', () => {
               table: {
                 user: {
                   columns: {
-                    email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                    email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                   },
                   uniques: [],
                   indexes: [],
@@ -178,6 +183,7 @@ describe('StorageColumnTypes', () => {
                 fields: {
                   level: {
                     nullable: false,
+                    many: false,
                     type: { kind: 'scalar', codecId: 'pg/int4@1' },
                     valueSet: {
                       plane: 'domain',
@@ -211,7 +217,7 @@ describe('StorageColumnTypes', () => {
                 item: {
                   columns: {
                     level: {
-                      nativeType: 'int4',
+                      dataType: 'pg/int4',
                       codecId: 'pg/int4@1',
                       nullable: false,
                       valueSet: {
@@ -263,7 +269,11 @@ describe('StorageColumnTypes', () => {
                   fields: { name: { column: 'name' } },
                 },
                 fields: {
-                  name: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+                  name: {
+                    nullable: false,
+                    many: false,
+                    type: { kind: 'scalar', codecId: 'pg/text@1' },
+                  },
                 },
                 relations: {},
               },
@@ -279,7 +289,7 @@ describe('StorageColumnTypes', () => {
               table: {
                 tag: {
                   columns: {
-                    name: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                    name: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                   },
                   uniques: [],
                   indexes: [],
@@ -312,7 +322,11 @@ describe('StorageColumnTypes', () => {
                   fields: { id: { column: 'id' } },
                 },
                 fields: {
-                  id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+                  id: {
+                    nullable: false,
+                    many: false,
+                    type: { kind: 'scalar', codecId: 'pg/int4@1' },
+                  },
                 },
                 relations: {},
               },
@@ -328,9 +342,9 @@ describe('StorageColumnTypes', () => {
               table: {
                 audit: {
                   columns: {
-                    id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                    id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                     action: {
-                      nativeType: 'text',
+                      dataType: 'pg/text',
                       codecId: 'pg/text@1',
                       nullable: false,
                       valueSet: {
@@ -387,6 +401,7 @@ describe('StorageColumnTypes', () => {
                 fields: {
                   priority: {
                     nullable: false,
+                    many: false,
                     type: { kind: 'scalar', codecId: 'pg/text@1' },
                     valueSet: {
                       plane: 'domain',
@@ -421,7 +436,7 @@ describe('StorageColumnTypes', () => {
                 post: {
                   columns: {
                     priority: {
-                      nativeType: 'text',
+                      dataType: 'pg/text',
                       codecId: 'pg/text@1',
                       nullable: false,
                       valueSet: {
@@ -476,6 +491,7 @@ describe('StorageColumnTypes', () => {
                 fields: {
                   embedding: {
                     nullable: true,
+                    many: false,
                     type: { kind: 'scalar', codecId: 'pg/vector@1' },
                   },
                 },
@@ -494,7 +510,7 @@ describe('StorageColumnTypes', () => {
                 post: {
                   columns: {
                     embedding: {
-                      nativeType: 'vector',
+                      dataType: 'pgvector/vector',
                       codecId: 'pg/vector@1',
                       nullable: true,
                       typeRef: 'Embedding1536',
@@ -511,7 +527,7 @@ describe('StorageColumnTypes', () => {
         types: {
           Embedding1536: {
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             typeParams: { length: 1536 },
           },
         },
@@ -547,8 +563,16 @@ describe('StorageColumnTypes', () => {
                   fields: { embedding: { column: 'embedding' }, title: { column: 'title' } },
                 },
                 fields: {
-                  embedding: { nullable: false, type: { kind: 'scalar', codecId: 'pg/vector@1' } },
-                  title: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+                  embedding: {
+                    nullable: false,
+                    many: false,
+                    type: { kind: 'scalar', codecId: 'pg/vector@1' },
+                  },
+                  title: {
+                    nullable: false,
+                    many: false,
+                    type: { kind: 'scalar', codecId: 'pg/text@1' },
+                  },
                 },
                 relations: {},
               },
@@ -565,12 +589,12 @@ describe('StorageColumnTypes', () => {
                 post: {
                   columns: {
                     embedding: {
-                      nativeType: 'vector',
+                      dataType: 'pgvector/vector',
                       codecId: 'pg/vector@1',
                       nullable: false,
                       typeRef: 'Embedding1536',
                     },
-                    title: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                    title: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                   },
                   uniques: [],
                   indexes: [],
@@ -583,7 +607,7 @@ describe('StorageColumnTypes', () => {
         types: {
           Embedding1536: {
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             typeParams: { length: 1536 },
           },
         },
@@ -621,6 +645,7 @@ describe('StorageColumnTypes', () => {
                 fields: {
                   priority: {
                     nullable: false,
+                    many: false,
                     type: { kind: 'scalar', codecId: 'pg/text@1' },
                     valueSet: {
                       plane: 'domain',
@@ -645,7 +670,7 @@ describe('StorageColumnTypes', () => {
                 post: {
                   columns: {
                     priority: {
-                      nativeType: 'text',
+                      dataType: 'pg/text',
                       codecId: 'pg/text@1',
                       nullable: false,
                       valueSet: {
@@ -695,7 +720,7 @@ describe('StorageColumnTypes', () => {
           fields: {
             tags: {
               nullable: false,
-              many: true,
+              many: { elementNullable: false },
               type: { kind: 'scalar', codecId: 'pg/text@1' },
             },
           },
@@ -706,7 +731,7 @@ describe('StorageColumnTypes', () => {
         tables: {
           config: {
             columns: {
-              tags: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false },
+              tags: { dataType: 'pg/jsonb', codecId: 'pg/jsonb@1', nullable: false },
             },
             primaryKey: { columns: ['tags'] },
             uniques: [],
@@ -746,6 +771,7 @@ describe('StorageColumnTypes', () => {
                 fields: {
                   level: {
                     nullable: false,
+                    many: false,
                     type: { kind: 'scalar', codecId: NON_IDENTITY_CODEC_ID },
                   },
                 },
@@ -764,7 +790,7 @@ describe('StorageColumnTypes', () => {
                 item: {
                   columns: {
                     level: {
-                      nativeType: 'int4',
+                      dataType: 'pg/int4',
                       codecId: NON_IDENTITY_CODEC_ID,
                       nullable: false,
                       valueSet: {
@@ -811,7 +837,6 @@ describe('StorageColumnTypes', () => {
   it('falls back to the codec output type when a value is not literal-expressible', () => {
     const fallbackLookup: CodecLookup = {
       get: () => undefined,
-      targetTypesFor: () => undefined,
       renderOutputTypeFor: (id) => (id === NON_IDENTITY_CODEC_ID ? 'Level' : undefined),
       // Returns undefined for every value, forcing the codec-output fallback.
       renderValueLiteralFor: () => undefined,
@@ -885,7 +910,11 @@ describe('StorageColumnTypes', () => {
                     fields: { aal: { column: 'aal' } },
                   },
                   fields: {
-                    aal: { nullable: false, type: { kind: 'scalar', codecId: 'pg/enum@1' } },
+                    aal: {
+                      nullable: false,
+                      many: false,
+                      type: { kind: 'scalar', codecId: 'pg/enum@1' },
+                    },
                   },
                   relations: {},
                 },
@@ -902,7 +931,7 @@ describe('StorageColumnTypes', () => {
                   authSession: {
                     columns: {
                       aal: {
-                        nativeType: 'aal_level',
+                        dataType: 'pg/enum',
                         codecId: 'pg/enum@1',
                         nullable: false,
                         valueSet: {
@@ -931,7 +960,6 @@ describe('StorageColumnTypes', () => {
     function pgEnumCodecLookup(): CodecLookup {
       return {
         get: () => undefined,
-        targetTypesFor: () => undefined,
         renderOutputTypeFor: () => undefined,
         renderValueLiteralFor: (id, value) =>
           id === 'pg/enum@1' ? renderTsLiteral(value) : undefined,
@@ -1008,8 +1036,16 @@ describe('StorageColumnTypes', () => {
             fields: { tags: { column: 'tags' }, labels: { column: 'labels' } },
           },
           fields: {
-            tags: { nullable: false, many: true, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-            labels: { nullable: true, many: true, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+            tags: {
+              nullable: false,
+              many: { elementNullable: false },
+              type: { kind: 'scalar', codecId: 'pg/text@1' },
+            },
+            labels: {
+              nullable: true,
+              many: { elementNullable: false },
+              type: { kind: 'scalar', codecId: 'pg/text@1' },
+            },
           },
           relations: {},
         },
@@ -1018,8 +1054,18 @@ describe('StorageColumnTypes', () => {
         tables: {
           post: {
             columns: {
-              tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
-              labels: { nativeType: 'text', codecId: 'pg/text@1', nullable: true, many: true },
+              tags: {
+                dataType: 'pg/text',
+                codecId: 'pg/text@1',
+                nullable: false,
+                many: { elementNullable: false },
+              },
+              labels: {
+                dataType: 'pg/text',
+                codecId: 'pg/text@1',
+                nullable: true,
+                many: { elementNullable: false },
+              },
             },
             primaryKey: { columns: ['tags'] },
             uniques: [],
@@ -1049,5 +1095,153 @@ describe('StorageColumnTypes', () => {
     expect(inputMatch![0]).toContain(
       'readonly labels: ReadonlyArray<CodecTypes["pg/text@1"]["input"]> | null',
     );
+  });
+
+  it('renders nullable elements inside the array before whole-column nullability', () => {
+    const contract = createContract({
+      models: {
+        Post: {
+          storage: {
+            table: 'post',
+            fields: {
+              tags: { column: 'tags' },
+              labels: { column: 'labels' },
+              waived: { column: 'waived' },
+              priorities: { column: 'priorities' },
+              vectors: { column: 'vectors' },
+            },
+          },
+          fields: {
+            tags: {
+              nullable: false,
+              many: { elementNullable: true },
+              type: { kind: 'scalar', codecId: 'pg/text@1' },
+            },
+            labels: {
+              nullable: true,
+              many: { elementNullable: true },
+              type: { kind: 'scalar', codecId: 'pg/text@1' },
+            },
+            waived: {
+              nullable: false,
+              many: { elementNullable: false },
+              type: { kind: 'scalar', codecId: 'pg/text@1' },
+            },
+            priorities: {
+              nullable: false,
+              many: { elementNullable: true },
+              type: { kind: 'scalar', codecId: 'pg/text@1' },
+            },
+            vectors: {
+              nullable: false,
+              many: { elementNullable: true },
+              type: { kind: 'scalar', codecId: 'pg/vector@1', typeParams: { length: 3 } },
+            },
+          },
+          relations: {},
+        },
+      },
+      storage: {
+        namespaces: {
+          [UNBOUND_NAMESPACE_ID]: {
+            entries: {
+              table: {
+                post: {
+                  columns: {
+                    tags: {
+                      dataType: 'pg/text',
+                      codecId: 'pg/text@1',
+                      nullable: false,
+                      many: { elementNullable: true },
+                    },
+                    labels: {
+                      dataType: 'pg/text',
+                      codecId: 'pg/text@1',
+                      nullable: true,
+                      many: { elementNullable: true },
+                    },
+                    waived: {
+                      dataType: 'pg/text',
+                      codecId: 'pg/text@1',
+                      nullable: false,
+                      many: { elementNullable: false },
+                      noCheck: ['elementNotNull'],
+                    },
+                    priorities: {
+                      dataType: 'pg/text',
+                      codecId: 'pg/text@1',
+                      nullable: false,
+                      many: { elementNullable: true },
+                      valueSet: {
+                        plane: 'storage',
+                        namespaceId: UNBOUND_NAMESPACE_ID,
+                        entityKind: 'valueSet',
+                        entityName: 'Priority',
+                      },
+                    },
+                    vectors: {
+                      dataType: 'pgvector/vector',
+                      codecId: 'pg/vector@1',
+                      nullable: false,
+                      many: { elementNullable: true },
+                      typeParams: { length: 3 },
+                    },
+                  },
+                  uniques: [],
+                  indexes: [],
+                  foreignKeys: [],
+                },
+              },
+              valueSet: {
+                Priority: { kind: 'valueSet', values: ['low', 'high'] },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const dts = generateContractDts(
+      contract,
+      sqlEmission,
+      [],
+      testHashes,
+      undefined,
+      vectorCodecLookup(),
+    );
+    const outputMatch = dts.match(/export type StorageColumnTypes = ({.+?});/s);
+
+    expect(outputMatch).not.toBeNull();
+    expect(outputMatch![0]).toContain(
+      'readonly tags: ReadonlyArray<CodecTypes["pg/text@1"]["output"] | null>',
+    );
+    expect(outputMatch![0]).toContain(
+      'readonly labels: ReadonlyArray<CodecTypes["pg/text@1"]["output"] | null> | null',
+    );
+    expect(outputMatch![0]).toContain(
+      'readonly waived: ReadonlyArray<CodecTypes["pg/text@1"]["output"]>',
+    );
+    expect(outputMatch![0]).not.toContain(
+      'readonly waived: ReadonlyArray<CodecTypes["pg/text@1"]["output"] | null>',
+    );
+    expect(outputMatch![0]).toContain('readonly priorities: ReadonlyArray<"low" | "high" | null>');
+    expect(outputMatch![0]).toContain('readonly vectors: ReadonlyArray<Vector<3> | null>');
+
+    const inputMatch = dts.match(/export type StorageColumnInputTypes = ({.+?});/s);
+    expect(inputMatch).not.toBeNull();
+    expect(inputMatch![0]).toContain(
+      'readonly tags: ReadonlyArray<CodecTypes["pg/text@1"]["input"] | null>',
+    );
+    expect(inputMatch![0]).toContain(
+      'readonly labels: ReadonlyArray<CodecTypes["pg/text@1"]["input"] | null> | null',
+    );
+    expect(inputMatch![0]).toContain(
+      'readonly waived: ReadonlyArray<CodecTypes["pg/text@1"]["input"]>',
+    );
+    expect(inputMatch![0]).not.toContain(
+      'readonly waived: ReadonlyArray<CodecTypes["pg/text@1"]["input"] | null>',
+    );
+    expect(inputMatch![0]).toContain('readonly priorities: ReadonlyArray<"low" | "high" | null>');
+    expect(inputMatch![0]).toContain('readonly vectors: ReadonlyArray<VectorInput<3> | null>');
   });
 });

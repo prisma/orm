@@ -36,16 +36,14 @@ const TEMPORAL_ON_UPDATE_ARG = {
 The preset itself is a template over its arguments:
 
 ```ts
-export function temporalCodecPresetWithPrecision<
-  const CodecId extends string,
-  const NativeType extends string,
->(input: { readonly codecId: CodecId; readonly nativeType: NativeType }) {
+export function temporalCodecPresetWithPrecision<const CodecId extends string>(input: {
+  readonly codecId: CodecId;
+}) {
   return {
     kind: 'fieldPreset',
     args: [TEMPORAL_PRECISION_ARG, TEMPORAL_ON_CREATE_ARG, TEMPORAL_ON_UPDATE_ARG],
     output: {
       codecId: input.codecId,
-      nativeType: input.nativeType,
       typeParams: { precision: { kind: 'arg', index: 0 } },
       executionDefaults: {
         onCreate: temporalPhaseTemplate(1),
@@ -74,7 +72,7 @@ export interface AuthoringOption {
 }
 ```
 
-`AuthoringArgumentDescriptor` ([framework-authoring.ts](../../../packages/1-framework/1-core/framework-components/src/shared/framework-authoring.ts)) includes it as a member of its union. PSL extension-block values do not use it: a block's fixed-token vocabulary is a `oneOf` over pinned matchers in its block spec ([ADR 255](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md)), so the option type describes helper arguments only.
+`AuthoringArgumentDescriptor` ([framework-authoring.ts](../../../packages/1-framework/1-core/framework-components/src/shared/framework-authoring.ts)) includes it as a member of its union. PSL extension-block values do not use it: a block's fixed-token vocabulary is a `oneOf` over pinned matchers in its block spec ([ADR 262](ADR%20262%20-%20Block%20specs%20bind%20top-level%20block%20values.md)), so the option type describes helper arguments only.
 
 **PSL spells an option as a bare token** (`onUpdate: now`), following `@relation(onDelete: Cascade)` — the established spelling for an enumerated attribute argument. Bare identifiers are ordinary argument expressions in the PSL grammar, so the parser's only job is to accept the identifier text ([authoring-arguments.ts](../../../packages/1-framework/2-authoring/psl-parser/src/authoring-arguments.ts)):
 
@@ -176,15 +174,12 @@ That is what lets the per-codec presets share the `temporal` namespace with the 
 temporal: {
   .../* @__PURE__ */ temporalAuthoringPresets({
     codecId: 'pg/timestamptz@1',
-    nativeType: 'timestamptz',
   }),
   timestamp: /* @__PURE__ */ temporalCodecPresetWithPrecision({
     codecId: 'pg/timestamp@1',
-    nativeType: 'timestamp',
   }),
   timestamptz: /* @__PURE__ */ temporalCodecPresetWithPrecision({
     codecId: 'pg/timestamptz@1',
-    nativeType: 'timestamptz',
   }),
 },
 ```

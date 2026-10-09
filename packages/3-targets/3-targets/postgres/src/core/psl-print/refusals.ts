@@ -10,7 +10,6 @@ import type {
   Contract,
   ContractEnum,
   ContractField,
-  ExecutionMutationDefault,
   ScalarFieldType,
   ValueObjectFieldType,
 } from '@internal/contract/types';
@@ -18,6 +17,8 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { UNBOUND_PSL_NAMESPACE_NAME } from '@internal/framework-components/psl-ast';
 import { canonicalizeJson } from '@internal/framework-components/utils';
 import { isPslIdentifier, NAME_THE_PSL_SOURCE_LOSES } from '@internal/psl-parser';
+import { escapePslString } from '@internal/sql-contract/data-type-support';
+import { sqlTextsReadBack } from '@internal/sql-contract/sql-expression';
 import {
   type ForeignKey,
   type Index,
@@ -25,7 +26,6 @@ import {
   type SqlStorage,
   StorageColumn,
 } from '@internal/sql-contract/types';
-import { escapePslString } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
 import { PG_ENUM_CODEC_ID } from '../codec-ids';
 import { postgresError } from '../errors';
@@ -62,10 +62,10 @@ function sameValues(left: readonly unknown[], right: readonly unknown[]): boolea
 
 export function refuseColumnWithoutPslType(column: StorageColumn, coordinate: string): never {
   throw unsupported(
-    `column ${coordinate} has native type "${column.nativeType}" with codec "${column.codecId}", and no PSL type in the configured stack produces that pair.`,
-    'A column is written as a PSL type that reads back with its codec and native type, and none of the types the target, adapter and extensions contribute does.',
+    `column ${coordinate} has data type "${column.dataType}" with codec "${column.codecId}", and no PSL type in the configured stack produces that pair.`,
+    'A column is written as a PSL type that reads back with its codec and data type, and none of the types the target, adapter and extensions contribute does.',
     'Add the extension that contributes this type to the config, or keep authoring this contract in its current source.',
-    { coordinate, nativeType: column.nativeType, codecId: column.codecId },
+    { coordinate, dataType: column.dataType, codecId: column.codecId },
   );
 }
 
@@ -158,23 +158,6 @@ export function refuseGeneratorWithDatabaseDefault(input: {
   );
 }
 
-/** Refuses a generated value the printer did not write with the field of its column. */
-export function refuseUnwrittenExecutionDefaults(
-  contract: Contract<SqlStorage>,
-  written: ReadonlySet<ExecutionMutationDefault>,
-): void {
-  for (const entry of contract.execution?.mutations.defaults ?? []) {
-    if (written.has(entry)) continue;
-    const coordinate = `"${entry.ref.namespace}"."${entry.ref.entry}"."${entry.ref.field}"`;
-    throw unsupported(
-      `a generated value names column ${coordinate}, which no field is stored in, so it cannot be written in Prisma 8 PSL.`,
-      'PSL writes a generated value on the field stored in its column.',
-      KEEP_SOURCE,
-      { coordinate },
-    );
-  }
-}
-
 // Fields and columns
 
 /**
@@ -226,10 +209,10 @@ export function refuseFieldColumnMismatch(input: {
       { coordinate },
     );
   }
-  const fieldListInColumn = field.type.kind === 'scalar' && field.many === true;
-  if (fieldListInColumn !== (column.many === true)) {
+  const fieldListInColumn = field.type.kind === 'scalar' && !!field.many;
+  if (fieldListInColumn !== (column.many !== false)) {
     throw unsupported(
-      `field ${coordinate} is ${field.many === true ? 'a list' : 'not a list'} but its column is ${column.many === true ? 'a list' : 'not a list'}, which cannot be written in Prisma 8 PSL.`,
+      `field ${coordinate} is ${field.many ? 'a list' : 'not a list'} but its column is ${column.many !== false ? 'a list' : 'not a list'}, which cannot be written in Prisma 8 PSL.`,
       'PSL writes `[]` once: the PSL source stores a list of scalars in a list column, and a list of value objects in one JSON column.',
       fix,
       { coordinate },
@@ -338,20 +321,6 @@ export function refuseMemberCodecNeedingTypeParameters(codecId: string, coordina
   );
 }
 
-/** Refuses a model field its storage does not store in a column. */
-export function refuseFieldsWithoutColumn(entry: ModelWithTable): void {
-  const storedFieldNames = new Set(Object.keys(entry.storage.fields));
-  for (const fieldName of Object.keys(entry.model.fields)) {
-    if (storedFieldNames.has(fieldName)) continue;
-    throw unsupported(
-      `field "${entry.namespaceId}.${entry.name}.${fieldName}" is stored in no column, so it cannot be written in Prisma 8 PSL.`,
-      'PSL declares a scalar or value-object field together with the column it is stored in.',
-      'The contract source produced a field without storage. Fix the field if the source is a TypeScript contract; otherwise report the bug to the source that produced it.',
-      { namespaceId: entry.namespaceId, modelName: entry.name, field: fieldName },
-    );
-  }
-}
-
 /** Refuses a column a model stores under a field name the model does not declare. */
 export function refuseStorageOfUndeclaredField(input: {
   readonly entry: ModelWithTable;
@@ -369,22 +338,22 @@ export function refuseStorageOfUndeclaredField(input: {
 
 /**
  * Refuses a column typed by a named type when the contract declares no such type, or when the
- * column's native type or codec is not the named type's. PSL writes the column as the name of the
+ * column's data type or codec is not the named type's. PSL writes the column as the name of the
  * type, and the PSL source copies both from the named type.
  */
 export function refuseColumnDifferingFromNamedType(input: {
   readonly column: StorageColumn;
   readonly typeRef: string;
-  readonly namedType: { readonly nativeType: string; readonly codecId: string } | undefined;
+  readonly namedType: { readonly dataType: string; readonly codecId: string } | undefined;
   readonly coordinate: string;
 }): void {
   const { column, typeRef, namedType, coordinate } = input;
-  if (namedType?.nativeType === column.nativeType && namedType.codecId === column.codecId) return;
+  if (namedType?.dataType === column.dataType && namedType.codecId === column.codecId) return;
   throw unsupported(
     namedType === undefined
       ? `column ${coordinate} is typed by the named type "${typeRef}", which the contract does not declare, so it cannot be written in Prisma 8 PSL.`
-      : `column ${coordinate} is typed by the named type "${typeRef}" but has a different native type or codec from it, which cannot be written in Prisma 8 PSL.`,
-    'PSL writes such a column as the name of its named type, and the PSL source gives the column the native type and codec of that named type.',
+      : `column ${coordinate} is typed by the named type "${typeRef}" but has a different data type or codec from it, which cannot be written in Prisma 8 PSL.`,
+    'PSL writes such a column as the name of its named type, and the PSL source gives the column the data type and codec of that named type.',
     'Make the column and its named type agree, or keep authoring this contract in its current source.',
     { coordinate, typeRef },
   );
@@ -466,7 +435,7 @@ export function refuseUnderivedVariantLink(entry: ModelWithTable, variant: Varia
       base === undefined
         ? undefined
         : new StorageColumn({
-            nativeType: base.nativeType,
+            dataType: base.dataType,
             codecId: base.codecId,
             nullable: false,
             ...ifDefined('typeParams', base.typeParams),
@@ -615,6 +584,27 @@ export function refuseUnwritableIndexOptions(entry: ModelWithTable, index: Index
   }
 }
 
+/**
+ * Refuses an index, check or policy whose SQL a `sql` literal cannot write back unchanged, because
+ * reading the literal canonicalizes it into different text.
+ */
+export function refuseSqlTextThatDoesNotReadBack(input: {
+  readonly kind: 'index' | 'check' | 'policy';
+  readonly namespaceId: string;
+  readonly table: string;
+  readonly name: string;
+  readonly texts: readonly (string | undefined)[];
+}): void {
+  if (sqlTextsReadBack(input.texts)) return;
+  const { kind, namespaceId, table, name } = input;
+  throw unsupported(
+    `${kind} "${name}" on "${namespaceId}"."${table}" holds SQL that a sql literal cannot write back unchanged, so it cannot be written in Prisma 8 PSL.`,
+    'A sql literal is canonicalized when it is read: indentation shared by every line, blank lines at the start or end, a carriage return and a whitespace-only line are removed, so this text would read back as different SQL.',
+    "Write the SQL in that canonical form in the contract's source, or keep authoring this contract in its current source.",
+    kind === 'policy' ? { namespaceId, table, policy: name } : { namespaceId, table, name },
+  );
+}
+
 // Relations
 
 export function refuseToOneRelationWithoutForeignKey(modelName: string, fieldName: string): never {
@@ -622,6 +612,18 @@ export function refuseToOneRelationWithoutForeignKey(modelName: string, fieldNam
     `relation "${modelName}.${fieldName}" has no foreign key in storage, which Prisma 8 PSL cannot express.`,
     'A to-one relation is authored as `@relation(fields:…, references:…)`, which always lowers to a foreign key.',
     'Declare a foreign key for the relation, or keep authoring this contract in its current source.',
+    { model: modelName, field: fieldName },
+  );
+}
+
+/**
+ * A foreign key backed by a primary key or unique constraint that only starts with its columns is written as the relation's `index: "<name>"`, which needs the key's name; the contract states none.
+ */
+export function refuseUnnamedForeignKeyBacking(modelName: string, fieldName: string): never {
+  throw unsupported(
+    `relation "${modelName}.${fieldName}" is backed by a key with no name, which its @relation cannot name.`,
+    "The key's first columns are the foreign key's, but it has more columns, so a relation that names nothing would get its own backing index instead.",
+    'Give the key a name, or keep authoring this contract in its current source.',
     { model: modelName, field: fieldName },
   );
 }

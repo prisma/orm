@@ -1,6 +1,7 @@
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { type ContractInput, defineContract, field, model, rel } from '../src/contract-builder';
 import { columnDescriptor } from './helpers/column-descriptor';
 import { testIndexPack } from './helpers/test-index-pack';
@@ -32,10 +33,11 @@ function defineTestContract<
 >(
   definition: Omit<
     ContractInput<typeof bareFamilyPack, typeof postgresTargetPack, Types, Models, Extensions>,
-    'family' | 'target' | 'createNamespace'
+    'family' | 'target' | 'createNamespace' | 'codecLookup' | 'dataTypeLookup'
   >,
 ) {
   return defineContract({
+    ...testTypeLookups,
     family: bareFamilyPack,
     target: postgresTargetPack,
     createNamespace: createTestSqlNamespace,
@@ -157,18 +159,20 @@ describe('contract definition constraint support', () => {
     });
   });
 
-  it('emits foreign keys in the contract as a constraint-only entity', () => {
+  it('emits foreign keys in the contract naming their backing index', () => {
     const User = buildUserModel();
     const Post = buildPostModel(User);
     const contract = defineTestContract({
       models: { User, Post },
     });
 
-    expect(unboundTables(contract.storage)['post']!.foreignKeys).toHaveLength(1);
-    expect(unboundTables(contract.storage)['post']!.foreignKeys[0]).toEqual({
-      source: { namespaceId: 'public', tableName: 'post', columns: ['userId'] },
-      target: { namespaceId: 'public', tableName: 'user', columns: ['id'] },
-    });
+    expect(unboundTables(contract.storage)['post']!.foreignKeys).toEqual([
+      {
+        source: { namespaceId: 'public', tableName: 'post', columns: ['userId'] },
+        target: { namespaceId: 'public', tableName: 'user', columns: ['id'] },
+        index: { name: 'post_userId_idx_a489d58a' },
+      },
+    ]);
   });
 
   it('emits foreign keys with names in the contract', () => {
@@ -178,12 +182,14 @@ describe('contract definition constraint support', () => {
       models: { User, Post },
     });
 
-    expect(unboundTables(contract.storage)['post']!.foreignKeys).toHaveLength(1);
-    expect(unboundTables(contract.storage)['post']!.foreignKeys[0]).toEqual({
-      source: { namespaceId: 'public', tableName: 'post', columns: ['userId'] },
-      target: { namespaceId: 'public', tableName: 'user', columns: ['id'] },
-      name: 'post_userId_fkey',
-    });
+    expect(unboundTables(contract.storage)['post']!.foreignKeys).toEqual([
+      {
+        source: { namespaceId: 'public', tableName: 'post', columns: ['userId'] },
+        target: { namespaceId: 'public', tableName: 'user', columns: ['id'] },
+        name: 'post_userId_fkey',
+        index: { name: 'post_userId_idx_a489d58a' },
+      },
+    ]);
   });
 
   it('emits primary key without name when not provided', () => {
@@ -264,6 +270,7 @@ describe('contract definition constraint support', () => {
 
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: bareFamilyPack,
         target: postgresTargetPack,
         // The pack is intentionally malformed for this test; the runtime
@@ -285,6 +292,7 @@ describe('contract definition constraint support', () => {
     expect(() =>
       defineContract(
         {
+          ...testTypeLookups,
           family: bareFamilyPack,
           target: postgresTargetPack,
           extensions: { testIndexes: testIndexPack },
@@ -313,7 +321,35 @@ describe('contract definition constraint support', () => {
     ).toThrow(/unregistered index type "made-up"/);
   });
 
-  it('supports multiple constraints on the same table', () => {
+  it('supports several indexes and uniques on the same table', () => {
+    const contract = defineTestContract({
+      models: {
+        User: model('User', {
+          fields: {
+            id: field.column(int4Column).id(),
+            email: field.column(textColumn).unique(),
+            username: field.column(textColumn).unique(),
+            createdAt: field.column(int4Column),
+          },
+        }).sql(({ cols, constraints }) => ({
+          table: 'user',
+          indexes: [
+            constraints.index([cols.email, cols.createdAt]),
+            constraints.index([cols.createdAt]),
+          ],
+        })),
+      },
+    });
+
+    const user = unboundTables(contract.storage)['user']!;
+    expect(user.uniques).toEqual([{ columns: ['email'] }, { columns: ['username'] }]);
+    expect(user.indexes.map((index) => index.columns)).toEqual([
+      ['email', 'createdAt'],
+      ['createdAt'],
+    ]);
+  });
+
+  it('leaves out unnamed indexes on the columns of a unique constraint', () => {
     const contract = defineTestContract({
       models: {
         User: model('User', {
@@ -329,12 +365,15 @@ describe('contract definition constraint support', () => {
       },
     });
 
-    expect(unboundTables(contract.storage)['user']!.uniques).toHaveLength(2);
-    expect(unboundTables(contract.storage)['user']!.indexes).toHaveLength(2);
+    expect(unboundTables(contract.storage)['user']!.uniques).toEqual([
+      { columns: ['email'] },
+      { columns: ['username'] },
+    ]);
+    expect(unboundTables(contract.storage)['user']!.indexes).toEqual([]);
   });
 
   describe('FK1: constraint/index materialize into discrete entities', () => {
-    it('a default FK (constraint=true, index=true) emits a constraint-only entry plus a named backing index', () => {
+    it('a default FK (constraint=true, index=true) emits a foreign key naming its derived backing index', () => {
       const User = buildUserModel();
       const Post = buildPostModel(User);
       const contract = defineTestContract({
@@ -346,6 +385,7 @@ describe('contract definition constraint support', () => {
         {
           source: { namespaceId: 'public', tableName: 'post', columns: ['userId'] },
           target: { namespaceId: 'public', tableName: 'user', columns: ['id'] },
+          index: { name: 'post_userId_idx_a489d58a' },
         },
       ]);
       expect(post.indexes).toEqual([
@@ -406,7 +446,7 @@ describe('contract definition constraint support', () => {
       expect(post.indexes).toEqual([]);
     });
 
-    it('does not synthesize a backing index when the FK columns are already covered by a declared unique constraint', () => {
+    it('backs the FK by an unnamed unique constraint on its columns', () => {
       const User = buildUserModel();
       const Post = model('Post', {
         fields: {
@@ -427,6 +467,7 @@ describe('contract definition constraint support', () => {
         {
           source: { namespaceId: 'public', tableName: 'post', columns: ['userId'] },
           target: { namespaceId: 'public', tableName: 'user', columns: ['id'] },
+          index: { unique: ['userId'] },
         },
       ]);
       expect(post.indexes).toEqual([]);
@@ -470,7 +511,7 @@ describe('contract definition constraint support', () => {
       expect(post.indexes).toEqual([]);
     });
 
-    it('does not synthesize a backing index when the FK columns are already covered by a declared @@index', () => {
+    it('points the FK at an identical unnamed @@index instead of deriving a second one', () => {
       const User = buildUserModel();
       const Post = model('Post', {
         fields: {
@@ -501,11 +542,12 @@ describe('contract definition constraint support', () => {
         {
           source: { namespaceId: 'public', tableName: 'post', columns: ['userId'] },
           target: { namespaceId: 'public', tableName: 'user', columns: ['id'] },
+          index: { name: 'post_userId_idx_a489d58a' },
         },
       ]);
     });
 
-    it('does not synthesize a backing index when the FK columns match the primary key', () => {
+    it('backs the FK by an unnamed primary key on its columns', () => {
       const User = buildUserModel();
       const Profile = model('Profile', {
         fields: {
@@ -525,6 +567,7 @@ describe('contract definition constraint support', () => {
         {
           source: { namespaceId: 'public', tableName: 'profile', columns: ['userId'] },
           target: { namespaceId: 'public', tableName: 'user', columns: ['id'] },
+          index: { primaryKey: true },
         },
       ]);
       expect(profile.indexes).toEqual([]);
@@ -556,10 +599,12 @@ describe('contract definition constraint support', () => {
         {
           source: { namespaceId: 'public', tableName: 'link', columns: ['sourceId'] },
           target: { namespaceId: 'public', tableName: 'target_a', columns: ['id'] },
+          index: { name: 'link_sourceId_idx_d92a2571' },
         },
         {
           source: { namespaceId: 'public', tableName: 'link', columns: ['sourceId'] },
           target: { namespaceId: 'public', tableName: 'target_b', columns: ['id'] },
+          index: { name: 'link_sourceId_idx_d92a2571' },
         },
       ]);
       expect(link.indexes).toEqual([

@@ -1,6 +1,7 @@
 import type { TargetPackRef } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { buildSqlContractFromDefinition } from '../src/contract-builder';
 
 const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
@@ -21,9 +22,9 @@ const minimalModelArgs = {
       columnName: 'id',
       descriptor: {
         codecId: 'pg/int4@1',
-        nativeType: 'int4',
       },
       nullable: false,
+      many: false,
     },
   ],
   id: {
@@ -33,12 +34,16 @@ const minimalModelArgs = {
 
 describe('SqlStorage.namespaces population', () => {
   it('materialises the public namespace with lowered tables when models use the postgres default coordinate', () => {
-    const contract = buildSqlContractFromDefinition({
-      warnings: undefined,
-      target: postgresTargetPack,
-      createNamespace: createTestSqlNamespace,
-      models: [minimalModelArgs],
-    });
+    const contract = buildSqlContractFromDefinition(
+      {
+        warnings: undefined,
+        target: postgresTargetPack,
+        createNamespace: createTestSqlNamespace,
+        models: [minimalModelArgs],
+      },
+      testTypeLookups.codecLookup,
+      testTypeLookups.dataTypeLookup,
+    );
     expect(Object.keys(contract.storage.namespaces).sort()).toEqual(['public']);
     const publicNamespace = contract.storage.namespaces['public']!;
     expect(publicNamespace.id).toBe('public');
@@ -47,13 +52,17 @@ describe('SqlStorage.namespaces population', () => {
   });
 
   it('creates declared namespace slots (initially empty tables) alongside the public default coordinate', () => {
-    const contract = buildSqlContractFromDefinition({
-      warnings: undefined,
-      target: postgresTargetPack,
-      namespaces: ['public', 'auth'],
-      createNamespace: createTestSqlNamespace,
-      models: [minimalModelArgs],
-    });
+    const contract = buildSqlContractFromDefinition(
+      {
+        warnings: undefined,
+        target: postgresTargetPack,
+        namespaces: ['public', 'auth'],
+        createNamespace: createTestSqlNamespace,
+        models: [minimalModelArgs],
+      },
+      testTypeLookups.codecLookup,
+      testTypeLookups.dataTypeLookup,
+    );
     const namespaceIds = Object.keys(contract.storage.namespaces).sort();
     expect(namespaceIds).toEqual(['auth', 'public']);
     expect(Object.keys(contract.storage.namespaces['auth']!.entries.table ?? {})).toHaveLength(0);
@@ -61,15 +70,19 @@ describe('SqlStorage.namespaces population', () => {
   });
 
   it('places tables in the namespace referenced by the model coordinate', () => {
-    const contract = buildSqlContractFromDefinition({
-      warnings: undefined,
-      target: postgresTargetPack,
-      createNamespace: createTestSqlNamespace,
-      models: [
-        { ...minimalModelArgs, namespaceId: 'auth' },
-        { ...minimalModelArgs, modelName: 'Post', tableName: 'blog_post' },
-      ],
-    });
+    const contract = buildSqlContractFromDefinition(
+      {
+        warnings: undefined,
+        target: postgresTargetPack,
+        createNamespace: createTestSqlNamespace,
+        models: [
+          { ...minimalModelArgs, namespaceId: 'auth' },
+          { ...minimalModelArgs, modelName: 'Post', tableName: 'blog_post' },
+        ],
+      },
+      testTypeLookups.codecLookup,
+      testTypeLookups.dataTypeLookup,
+    );
     const namespaceIds = Object.keys(contract.storage.namespaces).sort();
     expect(namespaceIds).toEqual(['auth', 'public']);
     expect(contract.storage.namespaces['auth']!.entries.table?.['app_user']).toBeDefined();
@@ -77,12 +90,16 @@ describe('SqlStorage.namespaces population', () => {
   });
 
   it('materialises an empty public namespace when no models are declared', () => {
-    const contract = buildSqlContractFromDefinition({
-      warnings: undefined,
-      target: postgresTargetPack,
-      createNamespace: createTestSqlNamespace,
-      models: [],
-    });
+    const contract = buildSqlContractFromDefinition(
+      {
+        warnings: undefined,
+        target: postgresTargetPack,
+        createNamespace: createTestSqlNamespace,
+        models: [],
+      },
+      testTypeLookups.codecLookup,
+      testTypeLookups.dataTypeLookup,
+    );
     expect(Object.keys(contract.storage.namespaces).sort()).toEqual(['public']);
     expect(contract.storage.namespaces['public']!.id).toBe('public');
     expect(Object.keys(contract.storage.namespaces['public']!.entries.table ?? {})).toHaveLength(0);
@@ -91,24 +108,32 @@ describe('SqlStorage.namespaces population', () => {
 
   it('accepts declared namespaces with a createNamespace factory', () => {
     expect(() =>
-      buildSqlContractFromDefinition({
-        warnings: undefined,
-        target: postgresTargetPack,
-        namespaces: ['auth'],
-        createNamespace: createTestSqlNamespace,
-        models: [minimalModelArgs],
-      }),
+      buildSqlContractFromDefinition(
+        {
+          warnings: undefined,
+          target: postgresTargetPack,
+          namespaces: ['auth'],
+          createNamespace: createTestSqlNamespace,
+          models: [minimalModelArgs],
+        },
+        testTypeLookups.codecLookup,
+        testTypeLookups.dataTypeLookup,
+      ),
     ).not.toThrow();
   });
 
   it('deduplicates declared and table-referenced namespace ids — no slot is built twice', () => {
-    const contract = buildSqlContractFromDefinition({
-      warnings: undefined,
-      target: postgresTargetPack,
-      namespaces: ['auth'],
-      createNamespace: createTestSqlNamespace,
-      models: [{ ...minimalModelArgs, namespaceId: 'auth' }],
-    });
+    const contract = buildSqlContractFromDefinition(
+      {
+        warnings: undefined,
+        target: postgresTargetPack,
+        namespaces: ['auth'],
+        createNamespace: createTestSqlNamespace,
+        models: [{ ...minimalModelArgs, namespaceId: 'auth' }],
+      },
+      testTypeLookups.codecLookup,
+      testTypeLookups.dataTypeLookup,
+    );
     const namespaceIds = Object.keys(contract.storage.namespaces).sort();
     expect(namespaceIds).toEqual(['auth', 'public']);
     expect(contract.storage.namespaces['auth']!.entries.table?.['app_user']).toBeDefined();

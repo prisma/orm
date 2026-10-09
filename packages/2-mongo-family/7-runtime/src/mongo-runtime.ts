@@ -3,10 +3,13 @@ import {
   AsyncIterableResult,
   checkAborted,
   checkMiddlewareCompatibility,
+  onQueryEndOutsideTransaction,
   RuntimeCore,
   type RuntimeExecuteOptions,
   type RuntimeMiddlewareContext,
   type RuntimeStatementStats,
+  reportExecuteEnding,
+  reportQueryEnding,
   runBeforeExecuteChain,
   runBeforeQueryChain,
   runExecuteWithMiddleware,
@@ -109,7 +112,7 @@ class MongoRuntimeImpl
   readonly #codecs: MongoCodecLookup;
 
   constructor(options: MongoRuntimeOptions) {
-    const middleware = options.middleware ? [...options.middleware] : [];
+    const middleware = options.middleware ?? [];
     const targetId = options.context.stack.target.targetId;
     for (const mw of middleware) {
       checkMiddlewareCompatibility(mw, 'mongo', targetId);
@@ -240,31 +243,44 @@ class MongoRuntimeImpl
     const { codecCtx, middlewareCtx } = this.createQueryContexts(options);
     const generator = async function* (): AsyncGenerator<Row, void, unknown> {
       const exec = await self.prepareQueryExecution(plan, codecCtx, middlewareCtx);
-      const stream = runQueryWithMiddleware<MongoExecutionPlan, Record<string, unknown>>(
-        exec,
-        self.middleware,
-        middlewareCtx,
-        () => self.runDriver(exec),
+      const onQueryEnd = onQueryEndOutsideTransaction(
+        self.afterTransactionStageFor(exec, middlewareCtx),
       );
-      for await (const rawRow of stream) {
-        checkAborted(codecCtx, 'stream');
-        if (exec.resultShape === undefined) {
-          yield blindCast<Row, 'driver row matches plan _row phantom when resultShape is absent'>(
-            rawRow,
-          );
-        } else {
-          const decoded = await decodeMongoRow(
-            rawRow,
-            exec.resultShape,
-            self.#codecs,
-            exec.command.collection,
-            codecCtx,
-          );
-          yield blindCast<Row, 'decodeMongoRow output matches plan _row phantom'>(decoded);
-        }
-      }
+      yield* reportQueryEnding(onQueryEnd, () =>
+        self.#decodedRows<Row>(exec, codecCtx, middlewareCtx),
+      );
     };
     return new AsyncIterableResult(generator());
+  }
+
+  async *#decodedRows<Row>(
+    exec: MongoExecutionPlan,
+    codecCtx: CodecCallContext,
+    middlewareCtx: MongoMiddlewareContext,
+  ): AsyncGenerator<Row, void, unknown> {
+    const stream = runQueryWithMiddleware<MongoExecutionPlan, Record<string, unknown>>(
+      exec,
+      this.middleware,
+      middlewareCtx,
+      () => this.runDriver(exec),
+    );
+    for await (const rawRow of stream) {
+      checkAborted(codecCtx, 'stream');
+      if (exec.resultShape === undefined) {
+        yield blindCast<Row, 'driver row matches plan _row phantom when resultShape is absent'>(
+          rawRow,
+        );
+      } else {
+        const decoded = await decodeMongoRow(
+          rawRow,
+          exec.resultShape,
+          this.#codecs,
+          exec.command.collection,
+          codecCtx,
+        );
+        yield blindCast<Row, 'decodeMongoRow output matches plan _row phantom'>(decoded);
+      }
+    }
   }
 
   override async execute(
@@ -273,10 +289,15 @@ class MongoRuntimeImpl
   ): Promise<RuntimeStatementStats> {
     const { codecCtx, middlewareCtx } = this.createQueryContexts(options);
     const exec = await this.prepareExecuteExecution(plan, codecCtx, middlewareCtx);
-    checkAborted(codecCtx, 'stream');
-    return runExecuteWithMiddleware(exec, this.middleware, middlewareCtx, () =>
-      this.runExecute(exec),
+    const onQueryEnd = onQueryEndOutsideTransaction(
+      this.afterTransactionStageFor(exec, middlewareCtx),
     );
+    return reportExecuteEnding(onQueryEnd, async () => {
+      checkAborted(codecCtx, 'stream');
+      return runExecuteWithMiddleware(exec, this.middleware, middlewareCtx, () =>
+        this.runExecute(exec),
+      );
+    });
   }
 
   async #readDriverStatistics(exec: MongoExecutionPlan): Promise<RuntimeStatementStats> {

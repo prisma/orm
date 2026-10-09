@@ -1,5 +1,9 @@
+import type { Contract } from '@internal/contract/types';
 import type { SchemaDiffIssue } from '@internal/framework-components/control';
 import { issueOutcome } from '@internal/framework-components/control';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import type { SqlStorage } from '@internal/sql-contract/types';
+import type { TableRename, TableRenameRequest } from './resolve-table-rename';
 import type { SqlPlannerConflict } from './types';
 
 export const TABLE_NAME_CASE_CHANGED_CODE = 'MIGRATION.TABLE_NAME_CASE_CHANGED';
@@ -22,6 +26,27 @@ function plannedTable(node: TableNameCaseGuardTable, namespaceId: string): Plann
   return { namespaceId, tableName: node.name };
 }
 
+function renameNeedsNamespace(
+  drop: PlannedTable,
+  dropped: readonly PlannedTable[],
+  contract: Contract<SqlStorage>,
+  defaultNamespaceId: string,
+): boolean {
+  if (drop.namespaceId !== UNBOUND_NAMESPACE_ID && drop.namespaceId !== defaultNamespaceId) {
+    return true;
+  }
+  const declaredElsewhere = (namespaceId: string, tableName: string) =>
+    namespaceId !== drop.namespaceId && tableName === drop.tableName;
+  return (
+    dropped.some((other) => declaredElsewhere(other.namespaceId, other.tableName)) ||
+    Object.values(contract.storage.namespaces).some((namespace) =>
+      Object.keys(namespace.entries.table ?? {}).some((tableName) =>
+        declaredElsewhere(namespace.id, tableName),
+      ),
+    )
+  );
+}
+
 /**
  * Finds every (drop `X`, create `Y`) pair in the same namespace where `X` is
  * `Y` with its first letter lowered. That shape is the signature of a schema
@@ -37,6 +62,10 @@ export function detectTableNameCaseChanges(input: {
   readonly issues: readonly SchemaDiffIssue[];
   readonly tableOf: (issue: SchemaDiffIssue) => TableNameCaseGuardTable | undefined;
   readonly namespaceIdOf: (issue: SchemaDiffIssue) => string;
+  readonly renameByHandStatements: (rename: TableRename) => readonly string[];
+  readonly renameTableCall: (rename: TableRenameRequest) => string;
+  readonly contract: Contract<SqlStorage>;
+  readonly defaultNamespaceId: string;
 }): SqlPlannerConflict[] {
   const dropped: PlannedTable[] = [];
   const created: PlannedTable[] = [];
@@ -58,10 +87,17 @@ export function detectTableNameCaseChanges(input: {
         candidate.tableName === lowerFirst(create.tableName),
     );
     if (drop === undefined) continue;
+    const renameCall = input.renameTableCall({
+      namespaceId: renameNeedsNamespace(drop, dropped, input.contract, input.defaultNamespaceId)
+        ? drop.namespaceId
+        : undefined,
+      from: drop.tableName,
+      to: create.tableName,
+    });
     conflicts.push({
       kind: 'tableNameCaseChanged',
       summary: `${TABLE_NAME_CASE_CHANGED_CODE}: table "${create.tableName}" would be created and table "${drop.tableName}" dropped. Prisma 8 changed the default table name: a model with no @@map now names its table verbatim, so model ${create.tableName} points at "${create.tableName}" instead of "${drop.tableName}".`,
-      why: `To keep table "${drop.tableName}" and its rows, add @@map("${drop.tableName}") to model ${create.tableName} (or run the add-model-map codemod over the schema) and plan again. Prisma 8 has no rename-table operation, so a deliberate rename is done by hand: run ALTER TABLE "${drop.tableName}" RENAME TO "${create.tableName}" (schema-qualified where applicable), after which the plan is empty.`,
+      why: `To keep table "${drop.tableName}" and its rows, add @@map("${drop.tableName}") to model ${create.tableName} (or run the add-model-map codemod over the schema) and plan again. To rename the table and keep its rows instead: in a project with migration history, make the rename its own schema change, create its migration with prisma migration new --from <hash of the migration the database is at>, and add ${renameCall} to the migration's operations, which renames the table and the objects named after it; in a project that uses db update, rename it by hand with ${input.renameByHandStatements({ namespaceId: create.namespaceId, from: drop.tableName, to: create.tableName }).join('; ')}, then run db update again.`,
       location: {
         namespaceId: create.namespaceId,
         entityKind: 'table',

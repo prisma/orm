@@ -1,8 +1,6 @@
 import type { Contract } from '@internal/contract/types';
-import type {
-  CodecLookupWithDescriptors,
-  DataTypeLookup,
-} from '@internal/framework-components/codec';
+import type { DataTypeSupport } from '@internal/framework-components/authoring';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type { CapabilityMatrix } from '@internal/framework-components/components';
 import type {
   AssembledAuthoringContributions,
@@ -48,8 +46,8 @@ export interface ContractSourceContext {
   readonly composedExtensionContracts: ReadonlyMap<string, Contract>;
   readonly authoringContributions: AssembledAuthoringContributions;
   readonly codecLookup: CodecLookupWithDescriptors;
-  /** The stack's data types, so a written default can be cast into a column's type. ADR 254. */
-  readonly dataTypeLookup: DataTypeLookup;
+  /** The stack's data types with their authoring entries, so a written value can be read and cast into a receiving type. ADR 254. */
+  readonly dataTypes: DataTypeSupport;
   readonly controlMutationDefaults: ControlMutationDefaults;
   /**
    * The flat, expanded, deduped, sorted member file list — every
@@ -63,6 +61,12 @@ export interface ContractSourceContext {
    * Receives a warning the source reports while it still produces a contract, such as a deprecated name. Callers that show diagnostics supply it; a source reports through it when present and otherwise drops the warning.
    */
   readonly reportWarning?: (diagnostic: ContractSourceDiagnostic) => void;
+  readonly pslDiagnostics?:
+    | {
+        readonly describeUnsupportedAttribute?: unknown;
+        readonly describeUnresolvedType?: unknown;
+      }
+    | undefined;
 }
 
 /**

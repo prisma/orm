@@ -1,4 +1,5 @@
 import pgvector from '@internal/extension-pgvector/control';
+import postgis from '@internal/extension-postgis/control';
 import { describe, expect, it } from 'vitest';
 import {
   composePostgresStack,
@@ -8,6 +9,7 @@ import {
 } from './print-and-read-back';
 
 const stack = composePostgresStack([pgvector]);
+const postgisStack = composePostgresStack([postgis]);
 
 describe('a printed contract with an extension-contributed column type', () => {
   it('writes the extension type and reads back as the same contract', async () => {
@@ -31,6 +33,29 @@ model Document {
     const printed = await readPsl(text, { stack, sourceSettings });
     expect(serializedWithoutCapabilities(printed)).toEqual(serializedWithoutCapabilities(authored));
     expect(printed.storage.storageHash).toBe(authored.storage.storageHash);
+  });
+
+  it('writes a namespaced type called without arguments with parentheses, and reads back as the same contract', async () => {
+    const authored = await readPsl(
+      `// use prisma-8
+types {
+  Shape = postgis.Geometry()
+}
+
+model Place {
+  id    Int                @id
+  area  postgis.Geometry()
+  named Shape
+}
+`,
+      { stack: postgisStack },
+    );
+    const { text, sourceSettings } = printContract(authored, postgisStack);
+
+    expect(text).toContain('Shape = postgis.Geometry()');
+    expect(text).toContain('area  postgis.Geometry()');
+    const printed = await readPsl(text, { stack: postgisStack, sourceSettings });
+    expect(serializedWithoutCapabilities(printed)).toEqual(serializedWithoutCapabilities(authored));
   });
 
   it('writes an extension type with type parameters on a value-object member and reads back as the same contract', async () => {

@@ -2,11 +2,7 @@ import type { CodecInstanceContext } from '@internal/framework-components/codec'
 import { AggregateExpr, CastExpr, ColumnRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { SQLITE_BIGINT_NUMBER_CODEC_ID } from '../src/core/codec-ids';
-import {
-  sqliteBigintDescriptor,
-  sqliteBigintNumberDescriptor,
-  sqliteIntegerDescriptor,
-} from '../src/core/codecs';
+import { sqliteBigintDescriptor, sqliteBigintNumberDescriptor } from '../src/core/codecs';
 import { sqliteCodecDescriptorRegistry, sqliteCodecRegistry } from '../src/core/registry';
 
 const instanceCtx: CodecInstanceContext = { name: 'test' };
@@ -235,14 +231,6 @@ describe('sqlite/bigintnumber@1', () => {
         codecId: SQLITE_BIGINT_NUMBER_CODEC_ID,
       }),
     ).toEqual(CastExpr.as(lowered, 'TEXT'));
-  });
-
-  it('claims no target type, so integer in type position keeps its current codecs', () => {
-    expect(sqliteBigintNumberDescriptor.targetTypes).toEqual([]);
-    expect(sqliteCodecRegistry.byTargetType('integer')).toEqual([
-      sqliteIntegerDescriptor,
-      sqliteBigintDescriptor,
-    ]);
   });
 
   it('carries the numeric ordering traits', () => {

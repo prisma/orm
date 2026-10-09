@@ -18,7 +18,7 @@ import type {
   Contract,
 } from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract';
 import ormContractJson from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract.json';
-import { createMongoCollection } from '../src/collection';
+import { createMongoCollection, type MongoCollection } from '../src/collection';
 import type { MongoQueryExecutor } from '../src/executor';
 import {
   compileFieldOperations,
@@ -27,8 +27,59 @@ import {
   type FieldExpression,
   type FieldOperation,
 } from '../src/field-accessor';
+import { noEnums } from './no-enums';
 
 const contract = ormContractJson as unknown as Contract;
+
+function contractWithNullableList(fieldName: string): Contract {
+  const json = structuredClone(ormContractJson) as unknown as {
+    domain: {
+      namespaces: Record<
+        string,
+        { models: Record<string, { fields: Record<string, Record<string, unknown>> }> }
+      >;
+    };
+  };
+  const field = json.domain.namespaces['__unbound__']!.models['User']!.fields[fieldName]!;
+  field['nullable'] = false;
+  field['many'] = { elementNullable: true };
+  return json as unknown as Contract;
+}
+
+const nullableValueObjectListContract = contractWithNullableList('homeAddress');
+const nullableScalarListContract = contractWithNullableList('tags');
+const nullableValueObjectList = [
+  { city: 'NYC', country: 'US' },
+  null,
+  { city: 'Paris', country: 'FR' },
+] as const;
+const wrappedNullableValueObjectList = [
+  {
+    city: new MongoParamRef('NYC', {
+      codecId: 'mongo/string@1',
+      name: 'homeAddress.0.city',
+      collection: 'users',
+    }),
+    country: new MongoParamRef('US', {
+      codecId: 'mongo/string@1',
+      name: 'homeAddress.0.country',
+      collection: 'users',
+    }),
+  },
+  null,
+  {
+    city: new MongoParamRef('Paris', {
+      codecId: 'mongo/string@1',
+      name: 'homeAddress.2.city',
+      collection: 'users',
+    }),
+    country: new MongoParamRef('FR', {
+      codecId: 'mongo/string@1',
+      name: 'homeAddress.2.country',
+      collection: 'users',
+    }),
+  },
+];
 
 const defaultUserData = {
   name: 'Alice',
@@ -88,14 +139,14 @@ function createMockExecutor(
 describe('MongoCollection chaining', () => {
   it('returns a new instance from where()', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'User', executor);
+    const col = createMongoCollection(contract, 'User', executor, noEnums);
     const filtered = col.where(MongoFieldFilter.eq('name', 'Alice'));
     expect(filtered).not.toBe(col);
   });
 
   it('accumulates filters from multiple where() calls', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'User', executor)
+    const col = createMongoCollection(contract, 'User', executor, noEnums)
       .where(MongoFieldFilter.eq('name', 'Alice'))
       .where(MongoFieldFilter.gte('email', 'a'));
     col.all();
@@ -105,7 +156,7 @@ describe('MongoCollection chaining', () => {
 
   it('returns a new instance from select()', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'User', executor);
+    const col = createMongoCollection(contract, 'User', executor, noEnums);
     const selected = col.select('name');
     expect(selected).not.toBe(col);
     selected.all();
@@ -114,7 +165,9 @@ describe('MongoCollection chaining', () => {
 
   it('accumulates fields across multiple select() calls', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'User', executor).select('name').select('_id');
+    const col = createMongoCollection(contract, 'User', executor, noEnums)
+      .select('name')
+      .select('_id');
     col.all();
     const project = executor.lastStages!.find((s) => s.kind === 'project') as MongoProjectStage;
     expect(project.projection).toEqual({ name: 1, _id: 1 });
@@ -122,7 +175,7 @@ describe('MongoCollection chaining', () => {
 
   it('returns a new instance from orderBy()', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'User', executor);
+    const col = createMongoCollection(contract, 'User', executor, noEnums);
     const ordered = col.orderBy({ name: 1 });
     expect(ordered).not.toBe(col);
     ordered.all();
@@ -132,7 +185,7 @@ describe('MongoCollection chaining', () => {
 
   it('merges orderBy across calls', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'User', executor)
+    const col = createMongoCollection(contract, 'User', executor, noEnums)
       .orderBy({ name: 1 })
       .orderBy({ email: -1 });
     col.all();
@@ -142,7 +195,7 @@ describe('MongoCollection chaining', () => {
 
   it('returns a new instance from limit()', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'User', executor);
+    const col = createMongoCollection(contract, 'User', executor, noEnums);
     const limited = col.limit(10);
     expect(limited).not.toBe(col);
     limited.all();
@@ -152,7 +205,7 @@ describe('MongoCollection chaining', () => {
 
   it('returns a new instance from offset()', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'User', executor);
+    const col = createMongoCollection(contract, 'User', executor, noEnums);
     const skipped = col.offset(5);
     expect(skipped).not.toBe(col);
     skipped.all();
@@ -162,7 +215,7 @@ describe('MongoCollection chaining', () => {
 
   it('does not mutate original instance', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'User', executor);
+    const col = createMongoCollection(contract, 'User', executor, noEnums);
     col.where(MongoFieldFilter.eq('name', 'Alice'));
     col.all();
     expect(executor.lastStages!).toHaveLength(0);
@@ -170,7 +223,7 @@ describe('MongoCollection chaining', () => {
 
   it('chains where, orderBy, limit, offset together', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'User', executor)
+    const col = createMongoCollection(contract, 'User', executor, noEnums)
       .where(MongoFieldFilter.eq('name', 'Alice'))
       .orderBy({ name: 1 })
       .offset(10)
@@ -184,7 +237,9 @@ describe('MongoCollection chaining', () => {
 describe('MongoCollection object-based where()', () => {
   it('produces eq filter with string codecId for string field', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'User', executor).where({ name: 'Alice' });
+    const col = createMongoCollection(contract, 'User', executor, noEnums).where({
+      name: 'Alice',
+    });
     col.all();
     const match = executor.lastStages![0] as MongoMatchStage;
     expect(match.filter.kind).toBe('field');
@@ -200,7 +255,7 @@ describe('MongoCollection object-based where()', () => {
 
   it('produces eq filter with objectId codecId for ObjectId field', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'Task', executor).where({
+    const col = createMongoCollection(contract, 'Task', executor, noEnums).where({
       assigneeId: 'abc123',
     });
     col.all();
@@ -216,9 +271,49 @@ describe('MongoCollection object-based where()', () => {
     }
   });
 
+  it('preserves exact scalar-list equality while wrapping each non-null operand element', () => {
+    const executor = createMockExecutor();
+    const col = createMongoCollection(contract, 'User', executor, noEnums).where({
+      tags: ['admin', null as never, 'editor'],
+    });
+    col.all();
+    const match = executor.lastStages![0] as MongoMatchStage;
+    expect(match.filter).toEqual(
+      MongoFieldFilter.eq('tags', [
+        new MongoParamRef('admin', {
+          codecId: 'mongo/string@1',
+          name: 'tags.0',
+          collection: 'users',
+        }),
+        null,
+        new MongoParamRef('editor', {
+          codecId: 'mongo/string@1',
+          name: 'tags.2',
+          collection: 'users',
+        }),
+      ]),
+    );
+  });
+
+  it('preserves operator-owned $in refs and array shape without collection rewrapping', () => {
+    const executor = createMockExecutor();
+    const admin = new MongoParamRef('admin', { codecId: 'mongo/string@1' });
+    const editor = new MongoParamRef('editor', { codecId: 'mongo/string@1' });
+    const operands = [admin, null, editor];
+    const filter = MongoFieldFilter.in('tags', operands);
+    createMongoCollection(contract, 'User', executor, noEnums).where(filter).all();
+    const match = executor.lastStages![0] as MongoMatchStage;
+    expect(match.filter).toBe(filter);
+    expect(match.filter).toMatchObject({ value: operands });
+    if (match.filter.kind === 'field') {
+      expect(match.filter.value).toBe(operands);
+      expect(match.filter.value).toEqual([admin, null, editor]);
+    }
+  });
+
   it('produces AND of multiple eq filters for multi-field object', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'User', executor).where({
+    const col = createMongoCollection(contract, 'User', executor, noEnums).where({
       name: 'Alice',
       email: 'a@b.c',
     });
@@ -236,7 +331,7 @@ describe('MongoCollection object-based where()', () => {
 
   it('chains with MongoFilterExpr where()', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'User', executor)
+    const col = createMongoCollection(contract, 'User', executor, noEnums)
       .where({ name: 'Alice' })
       .where(MongoFieldFilter.gte('email', 'a'));
     col.all();
@@ -246,7 +341,7 @@ describe('MongoCollection object-based where()', () => {
 
   it('chains MongoFilterExpr where() then object where()', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'User', executor)
+    const col = createMongoCollection(contract, 'User', executor, noEnums)
       .where(MongoFieldFilter.eq('_id', 'id-1'))
       .where({ name: 'Alice' });
     col.all();
@@ -383,14 +478,14 @@ describe('compileFieldOperations()', () => {
 describe('MongoCollection variant()', () => {
   it('returns a new instance from variant()', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'Task', executor);
-    const narrowed = col.variant('Bug');
+    const col = createMongoCollection(contract, 'Task', executor, noEnums);
+    const narrowed = col.variant('bug');
     expect(narrowed).not.toBe(col);
   });
 
   it('injects discriminator eq filter for the variant value', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'Task', executor).variant('Bug');
+    const col = createMongoCollection(contract, 'Task', executor, noEnums).variant('bug');
     col.all();
     const match = executor.lastStages![0] as MongoMatchStage;
     expect(match.filter.kind).toBe('field');
@@ -402,33 +497,108 @@ describe('MongoCollection variant()', () => {
 
   it('does not mutate original collection', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'Task', executor);
-    col.variant('Bug');
+    const col = createMongoCollection(contract, 'Task', executor, noEnums);
+    col.variant('bug');
     col.all();
     expect(executor.lastStages!).toHaveLength(0);
   });
 
   it('composes with where()', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'Task', executor)
-      .variant('Feature')
+    const col = createMongoCollection(contract, 'Task', executor, noEnums)
+      .variant('feature')
       .where(MongoFieldFilter.eq('title', 'Login'));
     col.all();
     const match = executor.lastStages![0] as MongoMatchStage;
     expect(match.filter.kind).toBe('and');
   });
 
-  it('returns self when model has no discriminator (non-polymorphic)', () => {
+  it('throws when a variant is already selected', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'User', executor);
-    // @ts-expect-error VariantNames<Contract, 'User'> is never
-    const result = col.variant('NonExistent');
-    expect(result).toBe(col);
+    const bugs = createMongoCollection(contract, 'Task', executor, noEnums).variant(
+      'bug',
+    ) as unknown as MongoCollection<Contract, 'Task'>;
+
+    expect(() => bugs.variant('feature')).toThrow(
+      expect.objectContaining({
+        code: 'ORM.OPERATION_UNSUPPORTED',
+        message:
+          'variant("feature") cannot be called on model "Task" because variant("bug") is already selected; call variant() on the base collection instead',
+        meta: {
+          method: 'variant',
+          model: 'Task',
+          variant: 'Bug',
+          selectedValue: 'bug',
+          reason: 'variant-already-selected',
+        },
+      }),
+    );
+  });
+
+  it('keeps a discriminator where() written before variant()', () => {
+    const executor = createMockExecutor();
+    createMongoCollection(contract, 'Task', executor, noEnums)
+      .where(MongoFieldFilter.eq('type', 'feature'))
+      .variant('bug')
+      .all();
+    const match = executor.lastStages![0] as MongoMatchStage;
+    expect(match.filter.kind).toBe('and');
+    if (match.filter.kind === 'and') {
+      expect(match.filter.exprs).toEqual([
+        MongoFieldFilter.eq(
+          'type',
+          new MongoParamRef('feature', {
+            codecId: 'mongo/string@1',
+            name: 'type',
+            collection: 'tasks',
+          }),
+        ),
+        MongoFieldFilter.eq('type', new MongoParamRef('bug')),
+      ]);
+    }
+  });
+
+  it('throws when the model has no discriminator', () => {
+    const executor = createMockExecutor();
+    const col = createMongoCollection(contract, 'User', executor, noEnums);
+    expect(() => col.variant('bug' as never)).toThrow(
+      expect.objectContaining({
+        code: 'ORM.ARGUMENT_INVALID',
+        message: 'variant("bug") cannot narrow model "User": it declares no discriminator values',
+        meta: {
+          method: 'variant',
+          argument: 'value',
+          model: 'User',
+          value: 'bug',
+          declaredValues: [],
+        },
+      }),
+    );
+  });
+
+  it('throws for an undeclared discriminator value', () => {
+    const executor = createMockExecutor();
+    const col = createMongoCollection(contract, 'Task', executor, noEnums);
+    const variantModelName = 'Bug';
+    expect(() => col.variant(variantModelName as never)).toThrow(
+      expect.objectContaining({
+        code: 'ORM.ARGUMENT_INVALID',
+        message:
+          'variant("Bug") cannot narrow model "Task": the declared discriminator values are "bug", "feature"',
+        meta: {
+          method: 'variant',
+          argument: 'value',
+          model: 'Task',
+          value: 'Bug',
+          declaredValues: ['bug', 'feature'],
+        },
+      }),
+    );
   });
 
   it('create() injects discriminator value into the document', async () => {
     const executor = createMockExecutor([{ insertedId: 'new-id', document: { _id: 'new-id' } }]);
-    const col = createMongoCollection(contract, 'Task', executor).variant('Bug');
+    const col = createMongoCollection(contract, 'Task', executor, noEnums).variant('bug');
     await col.create({ title: 'Fix crash', severity: 'high', assigneeId: 'u1' } as never);
     const command = executor.plans[0]!.command;
     expect(command.kind).toBe('insertOne');
@@ -441,7 +611,7 @@ describe('MongoCollection variant()', () => {
     const executor = createMockExecutor([
       { insertedId: 'new-id', document: { _id: 'new-id', title: 'Fix crash', type: 'bug' } },
     ]);
-    const col = createMongoCollection(contract, 'Task', executor).variant('Bug');
+    const col = createMongoCollection(contract, 'Task', executor, noEnums).variant('bug');
     const result = await col.create({
       title: 'Fix crash',
       severity: 'high',
@@ -461,7 +631,7 @@ describe('MongoCollection variant()', () => {
         ],
       },
     ]);
-    const col = createMongoCollection(contract, 'Task', executor).variant('Bug');
+    const col = createMongoCollection(contract, 'Task', executor, noEnums).variant('bug');
     const rows: unknown[] = [];
     for await (const row of col.createAll([
       { title: 'Bug 1', severity: 'low', assigneeId: 'u1' },
@@ -478,7 +648,7 @@ describe('MongoCollection variant()', () => {
 describe('MongoCollection include()', () => {
   it('adds a relation include', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'Task', executor).include('assignee');
+    const col = createMongoCollection(contract, 'Task', executor, noEnums).include('assignee');
     col.all();
     const lookup = executor.lastStages!.find((s) => s.kind === 'lookup') as MongoLookupStage;
     expect(lookup.from).toBe('users');
@@ -489,21 +659,21 @@ describe('MongoCollection include()', () => {
 
   it('throws for unknown relation', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'Task', executor);
+    const col = createMongoCollection(contract, 'Task', executor, noEnums);
     // @ts-expect-error 'nonexistent' is not a valid reference relation key
     expect(() => col.include('nonexistent')).toThrow('Unknown relation');
   });
 
   it('throws for embed relation', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'Task', executor);
+    const col = createMongoCollection(contract, 'Task', executor, noEnums);
     // @ts-expect-error 'comments' is an embed relation, not a reference relation
     expect(() => col.include('comments')).toThrow('embed relation');
   });
 
   it('produces $lookup without $unwind for 1:N reference relation', () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'User', executor).include('tasks');
+    const col = createMongoCollection(contract, 'User', executor, noEnums).include('tasks');
     col.all();
     const stages = executor.lastStages!;
     const lookup = stages.find((s) => s.kind === 'lookup') as MongoLookupStage;
@@ -519,7 +689,7 @@ describe('MongoCollection include()', () => {
 describe('MongoCollection terminal methods', () => {
   it('all() executes the compiled plan', () => {
     const executor = createMockExecutor([{ _id: '1', name: 'Alice', email: 'a@b.c' }]);
-    const col = createMongoCollection(contract, 'User', executor);
+    const col = createMongoCollection(contract, 'User', executor, noEnums);
     col.all();
     expect(executor.lastPlan).toBeDefined();
     expect(executor.lastPlan!.collection).toBe('users');
@@ -531,26 +701,67 @@ describe('MongoCollection terminal methods', () => {
       { _id: '1', name: 'Alice', email: 'a@b.c' },
       { _id: '2', name: 'Bob', email: 'b@b.c' },
     ]);
-    const col = createMongoCollection(contract, 'User', executor);
+    const col = createMongoCollection(contract, 'User', executor, noEnums);
     const result = await col.first();
     expect(result).toEqual({ _id: '1', name: 'Alice', email: 'a@b.c' });
   });
 
   it('first() returns null when no results', async () => {
     const executor = createMockExecutor();
-    const col = createMongoCollection(contract, 'User', executor);
+    const col = createMongoCollection(contract, 'User', executor, noEnums);
     const result = await col.first();
     expect(result).toBeNull();
   });
 
   it('first() sets limit 1 on the compiled plan', async () => {
     const executor = createMockExecutor([{ _id: '1', name: 'Alice', email: 'a@b.c' }]);
-    const col = createMongoCollection(contract, 'User', executor);
+    const col = createMongoCollection(contract, 'User', executor, noEnums);
     await col.first();
     const limitStage = executor.lastStages!.find((s) => s.kind === 'limit') as
       | MongoLimitStage
       | undefined;
     expect(limitStage?.limit).toBe(1);
+  });
+
+  it('firstOrThrow() returns the first row', async () => {
+    const executor = createMockExecutor([
+      { _id: '1', name: 'Alice', email: 'a@b.c' },
+      { _id: '2', name: 'Bob', email: 'b@b.c' },
+    ]);
+    const col = createMongoCollection(contract, 'User', executor, noEnums);
+    expect(await col.firstOrThrow()).toEqual({ _id: '1', name: 'Alice', email: 'a@b.c' });
+  });
+
+  it('firstOrThrow() rejects with RUNTIME.NO_ROWS when no results', async () => {
+    const executor = createMockExecutor();
+    const col = createMongoCollection(contract, 'User', executor, noEnums);
+    await expect(col.firstOrThrow()).rejects.toMatchObject({
+      code: 'RUNTIME.NO_ROWS',
+      message: 'Expected at least one row, but none were returned',
+      details: {},
+    });
+  });
+
+  it('firstOrThrow() issues the plan of first()', async () => {
+    const row = { _id: '1', title: 'Crash', type: 'bug', assigneeId: '2' };
+    const executor = createMockExecutor([row], [row], [row], [row]);
+    const users = createMongoCollection(contract, 'User', executor, noEnums).where({
+      name: 'Alice',
+    });
+    const bugs = createMongoCollection(contract, 'Task', executor, noEnums)
+      .variant('bug')
+      .include('assignee')
+      .limit(99);
+    await users.first();
+    await users.firstOrThrow();
+    await bugs.first();
+    await bugs.firstOrThrow();
+    const [usersFirst, usersFirstOrThrow, bugsFirst, bugsFirstOrThrow] = executor.plans;
+    expect(usersFirstOrThrow).toEqual(usersFirst);
+    expect(bugsFirstOrThrow).toEqual(bugsFirst);
+    expect(executor.lastStages!.filter((stage) => stage.kind === 'limit')).toEqual([
+      expect.objectContaining({ limit: 1 }),
+    ]);
   });
 });
 
@@ -559,7 +770,7 @@ describe('MongoCollection write methods', () => {
     it('returns the written document the insert result carries, without a read', async () => {
       const stored = { _id: 'new-id-1', ...defaultUserData, loginCount: 1 };
       const executor = createMockExecutor([{ insertedId: 'new-id-1', document: stored }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       const result = await col.create(defaultUserData);
       expect(result).toEqual(stored);
       expect(executor.plans.map((plan) => plan.command.kind)).toEqual(['insertOne']);
@@ -567,14 +778,14 @@ describe('MongoCollection write methods', () => {
 
     it('sends an InsertOneCommand', async () => {
       const executor = createMockExecutor([{ insertedId: 'id', document: { _id: 'id' } }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await col.create({ ...defaultUserData, name: 'Bob', email: 'b@b.c' });
       expect(executor.plans[0]?.command).toMatchObject({ kind: 'insertOne', collection: 'users' });
     });
 
     it('attaches codecId from contract fields to MongoParamRef in document', async () => {
       const executor = createMockExecutor([{ insertedId: 'id', document: { _id: 'id' } }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await col.create(defaultUserData);
       const command = executor.plans[0]!.command;
       expect(command.kind).toBe('insertOne');
@@ -588,9 +799,46 @@ describe('MongoCollection write methods', () => {
       }
     });
 
+    it('wraps scalar-list elements independently and leaves null unencoded', async () => {
+      const executor = createMockExecutor([{ insertedId: 'id' }]);
+      const col = createMongoCollection(nullableScalarListContract, 'User', executor, noEnums);
+      await col.create({ ...defaultUserData, tags: ['a', null as never, 'b'] });
+      const command = executor.lastCommand!;
+      expect(command.kind).toBe('insertOne');
+      if (command.kind === 'insertOne') {
+        expect(command.document['tags']).toEqual([
+          new MongoParamRef('a', {
+            codecId: 'mongo/string@1',
+            name: 'tags.0',
+            collection: 'users',
+          }),
+          null,
+          new MongoParamRef('b', {
+            codecId: 'mongo/string@1',
+            name: 'tags.2',
+            collection: 'users',
+          }),
+        ]);
+      }
+    });
+
+    it('preserves nullable value-object list elements and wraps nested scalar leaves', async () => {
+      const executor = createMockExecutor([{ insertedId: 'id' }]);
+      const col = createMongoCollection(nullableValueObjectListContract, 'User', executor, noEnums);
+      await col.create({
+        ...defaultUserData,
+        homeAddress: nullableValueObjectList as never,
+      });
+      const command = executor.lastCommand!;
+      expect(command.kind).toBe('insertOne');
+      if (command.kind === 'insertOne') {
+        expect(command.document['homeAddress']).toEqual(wrappedNullableValueObjectList);
+      }
+    });
+
     it('attaches objectId codecId for ObjectId-typed fields', async () => {
       const executor = createMockExecutor([{ insertedId: 'id', document: { _id: 'id' } }]);
-      const col = createMongoCollection(contract, 'Task', executor);
+      const col = createMongoCollection(contract, 'Task', executor, noEnums);
       await col.create({ title: 'Fix bug', assigneeId: 'abc123', type: 'bug' });
       const command = executor.plans[0]!.command;
       expect(command.kind).toBe('insertOne');
@@ -603,7 +851,7 @@ describe('MongoCollection write methods', () => {
 
     it('attaches a result shape decoding insertedId and the document through the model, as a row', async () => {
       const executor = createMockExecutor([{ insertedId: 'id', document: { _id: 'id' } }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await col.create(defaultUserData);
       expect(executor.plans[0]!.resultShape).toMatchObject({
         kind: 'document',
@@ -632,7 +880,7 @@ describe('MongoCollection write methods', () => {
           ],
         },
       ]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       const rows: unknown[] = [];
       for await (const row of col.createAll([
         defaultUserData,
@@ -651,7 +899,7 @@ describe('MongoCollection write methods', () => {
       const executor = createMockExecutor([
         { insertedIds: ['id-1'], insertedCount: 1, documents: [{ _id: 'id-1' }] },
       ]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       for await (const _row of col.createAll([defaultUserData])) {
         // drain
       }
@@ -676,7 +924,7 @@ describe('MongoCollection write methods', () => {
   describe('createAndCount()', () => {
     it('returns the count of inserted documents', async () => {
       const executor = createMockExecutor([{ insertedIds: ['a', 'b'], insertedCount: 2 }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       const count = await col.createAndCount([
         defaultUserData,
         { ...defaultUserData, name: 'Bob', email: 'b@b.c' },
@@ -688,13 +936,13 @@ describe('MongoCollection write methods', () => {
   describe('update()', () => {
     it('throws without .where()', async () => {
       const executor = createMockExecutor();
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await expect(col.update({ name: 'Changed' })).rejects.toThrow('requires a .where()');
     });
 
     it('returns updated row via findOneAndUpdate', async () => {
       const executor = createMockExecutor([{ _id: 'id-1', name: 'Updated', email: 'a@b.c' }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       const result = await col
         .where(MongoFieldFilter.eq('_id', 'id-1'))
         .update({ name: 'Updated' });
@@ -704,7 +952,7 @@ describe('MongoCollection write methods', () => {
 
     it('passes MongoFilterExpr to command', async () => {
       const executor = createMockExecutor([{ _id: 'id-1', name: 'Updated', email: 'a@b.c' }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await col.where(MongoFieldFilter.eq('_id', 'id-1')).update({ name: 'Updated' });
       const command = executor.lastCommand!;
       expect(command.kind).toBe('findOneAndUpdate');
@@ -716,14 +964,14 @@ describe('MongoCollection write methods', () => {
 
     it('returns null when no match', async () => {
       const executor = createMockExecutor();
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       const result = await col.where(MongoFieldFilter.eq('_id', 'missing')).update({ name: 'X' });
       expect(result).toBeNull();
     });
 
     it('attaches codecId to $set fields from contract', async () => {
       const executor = createMockExecutor([{ _id: 'id-1', name: 'Updated', email: 'a@b.c' }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await col.where(MongoFieldFilter.eq('_id', 'id-1')).update({ name: 'Updated' });
       const command = executor.lastCommand!;
       expect(command.kind).toBe('findOneAndUpdate');
@@ -735,9 +983,24 @@ describe('MongoCollection write methods', () => {
       }
     });
 
+    it('preserves nullable value-object list elements in object updates', async () => {
+      const executor = createMockExecutor([{ _id: 'id-1' }]);
+      const col = createMongoCollection(nullableValueObjectListContract, 'User', executor, noEnums);
+      await col.where(MongoFieldFilter.eq('_id', 'id-1')).update({
+        homeAddress: nullableValueObjectList as never,
+      });
+      const command = executor.lastCommand!;
+      expect(command.kind).toBe('findOneAndUpdate');
+      if (command.kind === 'findOneAndUpdate') {
+        expect(command.update).toEqual({
+          $set: { homeAddress: wrappedNullableValueObjectList },
+        });
+      }
+    });
+
     it('attaches the model result shape so the returned document decodes like a read', async () => {
       const executor = createMockExecutor([{ _id: 'id-1', name: 'Updated', email: 'a@b.c' }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await col.where(MongoFieldFilter.eq('_id', 'id-1')).update({ name: 'Updated' });
       const shape = executor.lastPlan!.resultShape;
       expect(shape).toBeDefined();
@@ -755,7 +1018,7 @@ describe('MongoCollection write methods', () => {
   describe('update() with callback', () => {
     it('produces correct update doc from field operations', async () => {
       const executor = createMockExecutor([{ _id: 'id-1', name: 'Updated' }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await col
         .where(MongoFieldFilter.eq('_id', 'id-1'))
         .update((u) => [u.name.set('Updated'), u.loginCount.inc(1)]);
@@ -770,7 +1033,7 @@ describe('MongoCollection write methods', () => {
 
     it('applies codec to callback operations for scalar fields', async () => {
       const executor = createMockExecutor([{ _id: 'id-1', name: 'Updated' }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await col.where(MongoFieldFilter.eq('_id', 'id-1')).update((u) => [u.name.set('Updated')]);
       const command = executor.lastCommand!;
       if (command.kind === 'findOneAndUpdate') {
@@ -779,21 +1042,93 @@ describe('MongoCollection write methods', () => {
       }
     });
 
+    it('wraps callback scalar-list replacement elements independently', async () => {
+      const executor = createMockExecutor([{ _id: 'id-1' }]);
+      const col = createMongoCollection(nullableScalarListContract, 'User', executor, noEnums);
+      await col
+        .where(MongoFieldFilter.eq('_id', 'id-1'))
+        .update((u) => [u.tags.set(['admin', null as never, 'editor'])]);
+      const command = executor.lastCommand!;
+      if (command.kind === 'findOneAndUpdate') {
+        expect(command.update).toEqual({
+          $set: {
+            tags: [
+              new MongoParamRef('admin', {
+                codecId: 'mongo/string@1',
+                name: 'tags.0',
+                collection: 'users',
+              }),
+              null,
+              new MongoParamRef('editor', {
+                codecId: 'mongo/string@1',
+                name: 'tags.2',
+                collection: 'users',
+              }),
+            ],
+          },
+        });
+      }
+    });
+
+    it('preserves nullable value-object list elements in callback $set', async () => {
+      const executor = createMockExecutor([{ _id: 'id-1' }]);
+      const col = createMongoCollection(nullableValueObjectListContract, 'User', executor, noEnums);
+      await col
+        .where(MongoFieldFilter.eq('_id', 'id-1'))
+        .update((u) => [u.homeAddress.set(nullableValueObjectList as never)]);
+      const command = executor.lastCommand!;
+      expect(command.kind).toBe('findOneAndUpdate');
+      if (command.kind === 'findOneAndUpdate') {
+        expect(command.update).toEqual({
+          $set: { homeAddress: wrappedNullableValueObjectList },
+        });
+      }
+    });
+
+    it('preserves null in top-level nullable value-object callback $set', async () => {
+      const executor = createMockExecutor([{ _id: 'id-1' }]);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
+      await col.where(MongoFieldFilter.eq('_id', 'id-1')).update((u) => [u.homeAddress.set(null)]);
+      const command = executor.lastCommand!;
+      expect(command.kind).toBe('findOneAndUpdate');
+      if (command.kind === 'findOneAndUpdate') {
+        expect(command.update).toEqual({ $set: { homeAddress: null } });
+      }
+    });
+
     it('produces $push operations from callback', async () => {
       const executor = createMockExecutor([{ _id: 'id-1' }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await col.where(MongoFieldFilter.eq('_id', 'id-1')).update((u) => [u.tags.push('admin')]);
       const command = executor.lastCommand!;
       if (command.kind === 'findOneAndUpdate') {
         const update = command.update as Record<string, Record<string, MongoParamRef>>;
         expect(update['$push']).toBeDefined();
-        expect(update['$push']!['tags']).toBeInstanceOf(MongoParamRef);
+        expect(update['$push']!['tags']).toEqual(
+          new MongoParamRef('admin', {
+            codecId: 'mongo/string@1',
+            name: 'tags',
+            collection: 'users',
+          }),
+        );
+      }
+    });
+
+    it('leaves null callback $push elements unwrapped', async () => {
+      const executor = createMockExecutor([{ _id: 'id-1' }]);
+      const col = createMongoCollection(nullableScalarListContract, 'User', executor, noEnums);
+      await col
+        .where(MongoFieldFilter.eq('_id', 'id-1'))
+        .update((u) => [u.tags.push(null as never)]);
+      const command = executor.lastCommand!;
+      if (command.kind === 'findOneAndUpdate') {
+        expect(command.update).toEqual({ $push: { tags: null } });
       }
     });
 
     it('does not attach codecId to $unset sentinel value', async () => {
       const executor = createMockExecutor([{ _id: 'id-1' }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await col.where(MongoFieldFilter.eq('_id', 'id-1')).update((u) => [u.name.unset()]);
       const command = executor.lastCommand!;
       if (command.kind === 'findOneAndUpdate') {
@@ -807,7 +1142,7 @@ describe('MongoCollection write methods', () => {
 
     it('produces dot-path operations from callback', async () => {
       const executor = createMockExecutor([{ _id: 'id-1' }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await col
         .where(MongoFieldFilter.eq('_id', 'id-1'))
         .update((u) => [u('homeAddress.city').set('NYC')]);
@@ -821,7 +1156,7 @@ describe('MongoCollection write methods', () => {
 
     it('normalizes empty callback to { $set: {} }', async () => {
       const executor = createMockExecutor([{ _id: 'id-1' }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await col.where(MongoFieldFilter.eq('_id', 'id-1')).update(() => []);
       const command = executor.lastCommand!;
       if (command.kind === 'findOneAndUpdate') {
@@ -831,7 +1166,7 @@ describe('MongoCollection write methods', () => {
 
     it('wraps value-object payload through codec in set()', async () => {
       const executor = createMockExecutor([{ _id: 'id-1' }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await col
         .where(MongoFieldFilter.eq('_id', 'id-1'))
         .update((u) => [u.homeAddress.set({ city: 'NYC', country: 'US' })]);
@@ -857,7 +1192,7 @@ describe('MongoCollection write methods', () => {
           { _id: 'id-2', name: 'Bob', loginCount: 1 },
         ],
       );
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       const rows: unknown[] = [];
       for await (const row of col
         .where(MongoFieldFilter.eq('email', 'a@b.c'))
@@ -873,7 +1208,7 @@ describe('MongoCollection write methods', () => {
   describe('updateAndCount() with callback', () => {
     it('produces correct update doc from field operations', async () => {
       const executor = createMockExecutor({ affectedRows: 1 });
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       const count = await col
         .where(MongoFieldFilter.eq('email', 'a'))
         .updateAndCount((u) => [u.name.set('X')]);
@@ -885,7 +1220,7 @@ describe('MongoCollection write methods', () => {
   describe('upsert() with callback', () => {
     it('uses field operations for update part', async () => {
       const executor = createMockExecutor([{ _id: 'new-id' }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await col.where(MongoFieldFilter.eq('email', 'a@b.c')).upsert({
         create: defaultUserData,
         update: (u: FieldAccessor<Contract, 'User'>) => [u.loginCount.inc(1)],
@@ -900,7 +1235,7 @@ describe('MongoCollection write methods', () => {
 
     it('throws when callback produces dot-path operations', async () => {
       const executor = createMockExecutor();
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await expect(
         col.where(MongoFieldFilter.eq('email', 'a@b.c')).upsert({
           create: { ...defaultUserData, homeAddress: { city: 'SF', country: 'US' } },
@@ -913,13 +1248,13 @@ describe('MongoCollection write methods', () => {
   describe('updateAndCount()', () => {
     it('throws without .where()', async () => {
       const executor = createMockExecutor();
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await expect(col.updateAndCount({ name: 'X' })).rejects.toThrow('requires a .where()');
     });
 
     it('returns the modified count', async () => {
       const executor = createMockExecutor({ affectedRows: 3 });
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       const count = await col
         .where(MongoFieldFilter.eq('email', 'a'))
         .updateAndCount({ name: 'X' });
@@ -931,13 +1266,13 @@ describe('MongoCollection write methods', () => {
   describe('delete()', () => {
     it('throws without .where()', async () => {
       const executor = createMockExecutor();
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await expect(col.delete()).rejects.toThrow('requires a .where()');
     });
 
     it('returns deleted row via findOneAndDelete', async () => {
       const executor = createMockExecutor([{ _id: 'id-1', name: 'Alice', email: 'a@b.c' }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       const result = await col.where(MongoFieldFilter.eq('_id', 'id-1')).delete();
       expect(result).toEqual({ _id: 'id-1', name: 'Alice', email: 'a@b.c' });
       expect(executor.lastCommand!.kind).toBe('findOneAndDelete');
@@ -945,7 +1280,7 @@ describe('MongoCollection write methods', () => {
 
     it('passes MongoFilterExpr to command', async () => {
       const executor = createMockExecutor([{ _id: 'id-1', name: 'Alice', email: 'a@b.c' }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await col.where(MongoFieldFilter.eq('_id', 'id-1')).delete();
       const command = executor.lastCommand!;
       expect(command.kind).toBe('findOneAndDelete');
@@ -956,14 +1291,14 @@ describe('MongoCollection write methods', () => {
 
     it('returns null when no match', async () => {
       const executor = createMockExecutor();
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       const result = await col.where(MongoFieldFilter.eq('_id', 'none')).delete();
       expect(result).toBeNull();
     });
 
     it('attaches the model result shape so the returned document decodes like a read', async () => {
       const executor = createMockExecutor([{ _id: 'id-1', name: 'Alice', email: 'a@b.c' }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await col.where(MongoFieldFilter.eq('_id', 'id-1')).delete();
       const shape = executor.lastPlan!.resultShape;
       expect(shape).toBeDefined();
@@ -974,13 +1309,13 @@ describe('MongoCollection write methods', () => {
   describe('deleteAndCount()', () => {
     it('throws without .where()', async () => {
       const executor = createMockExecutor();
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await expect(col.deleteAndCount()).rejects.toThrow('requires a .where()');
     });
 
     it('returns the deleted count', async () => {
       const executor = createMockExecutor({ affectedRows: 2 });
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       const count = await col.where(MongoFieldFilter.eq('email', 'x')).deleteAndCount();
       expect(count).toBe(2);
       expect(executor.lastOperation).toBe('execute');
@@ -990,7 +1325,7 @@ describe('MongoCollection write methods', () => {
   describe('upsert()', () => {
     it('sends findOneAndUpdate with upsert true', async () => {
       const executor = createMockExecutor([{ _id: 'new-id', name: 'Alice', email: 'a@b.c' }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       const result = await col.where(MongoFieldFilter.eq('email', 'a@b.c')).upsert({
         create: defaultUserData,
         update: { name: 'Alice Updated' },
@@ -1001,7 +1336,7 @@ describe('MongoCollection write methods', () => {
 
     it('attaches the model result shape so the returned document decodes like a read', async () => {
       const executor = createMockExecutor([{ _id: 'new-id', name: 'Alice', email: 'a@b.c' }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await col.where(MongoFieldFilter.eq('email', 'a@b.c')).upsert({
         create: defaultUserData,
         update: { name: 'Alice Updated' },
@@ -1013,7 +1348,7 @@ describe('MongoCollection write methods', () => {
 
     it('throws without .where()', async () => {
       const executor = createMockExecutor();
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await expect(
         col.upsert({
           create: { ...defaultUserData, name: 'A' },
@@ -1025,7 +1360,7 @@ describe('MongoCollection write methods', () => {
 
   describe('windowing rejection on mutations', () => {
     function withFilter(executor: MongoQueryExecutor) {
-      return createMongoCollection(contract, 'User', executor).where(
+      return createMongoCollection(contract, 'User', executor, noEnums).where(
         MongoFieldFilter.eq('name', 'Alice'),
       );
     }
@@ -1090,7 +1425,7 @@ describe('MongoCollection write methods', () => {
           { _id: 'id-2', name: 'Updated', email: 'b@b.c' },
         ],
       );
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       const rows: unknown[] = [];
       for await (const row of col
         .where(MongoFieldFilter.eq('name', 'Alice'))
@@ -1113,7 +1448,7 @@ describe('MongoCollection write methods', () => {
 
   describe('include rejection on write terminals', () => {
     function taskWithInclude(executor: MongoQueryExecutor) {
-      return createMongoCollection(contract, 'Task', executor)
+      return createMongoCollection(contract, 'Task', executor, noEnums)
         .where(MongoFieldFilter.eq('title', 'test'))
         .include('assignee');
     }
@@ -1121,7 +1456,7 @@ describe('MongoCollection write methods', () => {
     it('create() throws with .include()', async () => {
       const executor = createMockExecutor();
       await expect(
-        createMongoCollection(contract, 'Task', executor)
+        createMongoCollection(contract, 'Task', executor, noEnums)
           .include('assignee')
           .create({ title: 'test', type: 'bug', assigneeId: 'u1' }),
       ).rejects.toThrow('include');
@@ -1130,7 +1465,7 @@ describe('MongoCollection write methods', () => {
     it('createAll() throws with .include()', () => {
       const executor = createMockExecutor();
       expect(() =>
-        createMongoCollection(contract, 'Task', executor)
+        createMongoCollection(contract, 'Task', executor, noEnums)
           .include('assignee')
           .createAll([{ title: 'test', type: 'bug', assigneeId: 'u1' }]),
       ).toThrow('include');
@@ -1160,7 +1495,7 @@ describe('MongoCollection write methods', () => {
   describe('undefined normalization on create paths', () => {
     it('create() leaves an undefined value out of the inserted document', async () => {
       const executor = createMockExecutor([{ insertedId: 'new-id', document: { _id: 'new-id' } }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       const input = { name: 'Alice', email: 'a@b.c', extra: undefined } as Record<string, unknown>;
       await col.create(input as never);
       const command = executor.plans[0]!.command;
@@ -1174,7 +1509,7 @@ describe('MongoCollection write methods', () => {
       const executor = createMockExecutor([
         { insertedIds: ['id-1'], insertedCount: 1, documents: [{ _id: 'id-1' }] },
       ]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       const input = [{ name: 'Alice', email: 'a@b.c', extra: undefined }] as Record<
         string,
         unknown
@@ -1192,7 +1527,7 @@ describe('MongoCollection write methods', () => {
   describe('_id rejection on update paths', () => {
     it('update() throws when _id is in update data', async () => {
       const executor = createMockExecutor();
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await expect(
         col.where(MongoFieldFilter.eq('_id', 'id-1')).update({ _id: 'new-id', name: 'X' }),
       ).rejects.toThrow('_id');
@@ -1200,7 +1535,7 @@ describe('MongoCollection write methods', () => {
 
     it('updateAndCount() throws when _id is in update data', async () => {
       const executor = createMockExecutor();
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await expect(
         col.where(MongoFieldFilter.eq('_id', 'id-1')).updateAndCount({ _id: 'new-id' }),
       ).rejects.toThrow('_id');
@@ -1208,7 +1543,7 @@ describe('MongoCollection write methods', () => {
 
     it('updateAll() throws when _id is in update data', async () => {
       const executor = createMockExecutor([{ _id: 'id-1' }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       const result = col
         .where(MongoFieldFilter.eq('_id', 'id-1'))
         .updateAll({ _id: 'new-id', name: 'X' });
@@ -1221,7 +1556,7 @@ describe('MongoCollection write methods', () => {
 
     it('upsert() throws when _id is in update data', async () => {
       const executor = createMockExecutor();
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await expect(
         col.where(MongoFieldFilter.eq('email', 'a@b.c')).upsert({
           create: defaultUserData,
@@ -1232,7 +1567,7 @@ describe('MongoCollection write methods', () => {
 
     it('update() with callback throws when _id is targeted', async () => {
       const executor = createMockExecutor();
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await expect(
         col.where(MongoFieldFilter.eq('_id', 'id-1')).update((u) => [u._id.set('new-id')]),
       ).rejects.toThrow('_id');
@@ -1240,7 +1575,7 @@ describe('MongoCollection write methods', () => {
 
     it('updateAll() with callback throws when _id is targeted', async () => {
       const executor = createMockExecutor([{ _id: 'id-1' }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       const result = col
         .where(MongoFieldFilter.eq('_id', 'id-1'))
         .updateAll((u: FieldAccessor<Contract, 'User'>) => [u._id.set('new-id')]);
@@ -1253,7 +1588,7 @@ describe('MongoCollection write methods', () => {
 
     it('upsert() with callback throws when _id is targeted', async () => {
       const executor = createMockExecutor();
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await expect(
         col.where(MongoFieldFilter.eq('email', 'a@b.c')).upsert({
           create: defaultUserData,
@@ -1266,7 +1601,7 @@ describe('MongoCollection write methods', () => {
   describe('immutability', () => {
     it('write methods do not mutate collection state', async () => {
       const executor = createMockExecutor([{ insertedId: 'x', document: { _id: 'x' } }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(contract, 'User', executor, noEnums);
       await col.create(defaultUserData);
       const filtered = col.where(MongoFieldFilter.eq('name', 'Alice'));
       expect(filtered).not.toBe(col);

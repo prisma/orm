@@ -1,0 +1,237 @@
+{
+  "files": ["auth.prisma", "session.prisma", "post.prisma", "extra.prisma"],
+  "steps": [
+    {
+      "id": "1.1",
+      "kind": "rename",
+      "file": "auth.prisma",
+      "at": "model Us|er",
+      "newName": "Account"
+    },
+    {
+      "id": "1.2",
+      "kind": "rename",
+      "file": "session.prisma",
+      "at": "user   Us|er",
+      "newName": "Account"
+    },
+    {
+      "id": "1.3",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "auth.Us|er",
+      "newName": "Account"
+    },
+    {
+      "id": "2.1",
+      "kind": "rename",
+      "file": "auth.prisma",
+      "at": "i|d    Int    @id",
+      "newName": "uid"
+    },
+    {
+      "id": "2.2",
+      "kind": "rename",
+      "file": "session.prisma",
+      "at": "references: [i|d]",
+      "newName": "uid"
+    },
+    {
+      "id": "2.3",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "references: [i|d]",
+      "newName": "uid"
+    },
+    {
+      "id": "2.4",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "author|Id Int",
+      "newName": "writerId"
+    },
+    {
+      "id": "2.5",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "fields: [author|Id]",
+      "newName": "writerId"
+    },
+    {
+      "id": "2.6",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "@@index([author|Id])",
+      "newName": "writerId"
+    },
+    {
+      "id": "3.1",
+      "kind": "rename",
+      "file": "auth.prisma",
+      "at": "namespace au|th",
+      "newName": "identity"
+    },
+    {
+      "id": "3.2",
+      "kind": "rename",
+      "file": "session.prisma",
+      "at": "namespace au|th",
+      "newName": "identity"
+    },
+    {
+      "id": "3.3",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "au|th.User",
+      "newName": "identity"
+    },
+    {
+      "id": "4.1",
+      "kind": "rename",
+      "file": "extra.prisma",
+      "at": "enum Ro|le",
+      "newName": "Rank"
+    },
+    {
+      "id": "4.2",
+      "kind": "rename",
+      "file": "extra.prisma",
+      "at": "role Ro|le",
+      "newName": "Rank"
+    },
+    {
+      "id": "4.3",
+      "kind": "rename",
+      "file": "extra.prisma",
+      "at": "model Memb|er",
+      "newName": "Person"
+    },
+    {
+      "id": "5.1",
+      "kind": "prepareRename",
+      "file": "post.prisma",
+      "at": "auth.Us|er"
+    },
+    {
+      "id": "5.2",
+      "kind": "prepareRename",
+      "file": "auth.prisma",
+      "at": "model Us|er"
+    },
+    {
+      "id": "5.3",
+      "kind": "prepareRename",
+      "file": "post.prisma",
+      "at": "au|th.User"
+    },
+    {
+      "id": "5.4",
+      "kind": "prepareRename",
+      "file": "post.prisma",
+      "at": "author|Id Int"
+    },
+    {
+      "id": "5.5",
+      "kind": "prepareRename",
+      "file": "extra.prisma",
+      "at": "enum Ro|le"
+    },
+    {
+      "id": "5.6",
+      "kind": "prepareRename",
+      "file": "post.prisma",
+      "at": "@rel|ation"
+    },
+    {
+      "id": "5.7",
+      "kind": "prepareRename",
+      "file": "post.prisma",
+      "at": "authorId In|t"
+    },
+    {
+      "id": "5.8",
+      "kind": "prepareRename",
+      "file": "extra.prisma",
+      "at": "Adm|in"
+    },
+    {
+      "id": "5.9",
+      "kind": "prepareRename",
+      "file": "post.prisma",
+      "at": "mo|del Post {"
+    },
+    {
+      "id": "5.10",
+      "kind": "prepareRename",
+      "file": "post.prisma",
+      "at": "author  | auth.User"
+    },
+    {
+      "id": "6.1",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "auth.Us|er",
+      "newName": "NaN"
+    },
+    {
+      "id": "6.2",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "auth.Us|er",
+      "newName": "Infinity"
+    },
+    {
+      "id": "6.3",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "auth.Us|er",
+      "newName": "1st"
+    },
+    {
+      "id": "6.4",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "auth.Us|er",
+      "newName": ""
+    },
+    {
+      "id": "6.5",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "auth.Us|er",
+      "newName": "auth.Account"
+    },
+    {
+      "id": "6.6",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "auth.Us|er",
+      "newName": "My Model"
+    },
+    {
+      "id": "6.7",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "auth.Us|er",
+      "newName": "user-profile"
+    },
+    {
+      "id": "6.8",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "@rel|ation",
+      "newName": "1st"
+    },
+    {
+      "id": "6.9",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "@rel|ation",
+      "newName": "link"
+    },
+    {
+      "id": "diag",
+      "kind": "diagnostics"
+    }
+  ]
+}

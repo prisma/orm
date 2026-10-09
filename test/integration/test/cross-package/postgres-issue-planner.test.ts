@@ -1,15 +1,17 @@
-import {
+import postgresAdapterControl, {
   createPostgresBuiltinCodecLookup,
   PostgresControlAdapter,
 } from '@internal/adapter-postgres/control';
-
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
+import { sqlTypeLookupsOf } from '@internal/family-sql/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   SqlStorage,
   type SqlStorageInput,
   type StorageTableInput,
 } from '@internal/sql-contract/types';
+import postgresTargetControl from '@internal/target-postgres/control';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { buildPostgresPlanDiff } from '@internal/target-postgres/diff-database-schema';
 import { coalesceSubtreeIssues, planIssues } from '@internal/target-postgres/issue-planner';
 import type { CreateTableCall } from '@internal/target-postgres/op-factory-call';
@@ -26,7 +28,11 @@ import {
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 
-const testAdapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+const testAdapter = new PostgresControlAdapter(
+  createPostgresBuiltinCodecLookup(),
+  createPostgresBuiltinDataTypeLookup(),
+);
+const frameworkComponents = [postgresTargetControl, postgresAdapterControl];
 
 function makeContract(
   overrides: {
@@ -81,7 +87,7 @@ function planAgainst(
   const { issues } = buildPostgresPlanDiff({
     contract,
     actualSchema: actual,
-    frameworkComponents: [],
+    frameworkComponents,
   });
   const coalesced = coalesceSubtreeIssues(issues);
   return planIssues({
@@ -90,6 +96,7 @@ function planAgainst(
     fromContract: options.fromContract ?? null,
     schemaName: 'public',
     codecHooks: new Map(),
+    types: sqlTypeLookupsOf(frameworkComponents),
     storageTypes: contract.storage.types ?? {},
     ...(options.strategies !== undefined ? { strategies: options.strategies } : {}),
   });
@@ -103,8 +110,8 @@ describe('planIssues', () => {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -135,8 +142,8 @@ describe('planIssues', () => {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                status: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                status: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -189,19 +196,17 @@ describe('planIssues', () => {
       expect(calls).toHaveLength(3);
       expect(calls[0]).toMatchObject({ factoryName: 'addColumn' });
       expect(calls[1]).toMatchObject({ factoryName: 'dataTransform' });
-      expect(calls[2]).toMatchObject({ factoryName: 'setNotNull' });
+      expect(calls[2]).toMatchObject({ factoryName: 'setNotNull', operationClass: 'widening' });
     });
 
-    it('DataTransformCall.toOp() throws MIGRATION.UNFILLED_PLACEHOLDER', () => {
+    it('DataTransformCall.toOp() rejects with MIGRATION.UNFILLED_PLACEHOLDER', async () => {
       const result = planAgainst(contractWithStatus(), actualWithoutStatus());
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error('expected ok');
       const dtCall = result.value.calls[1]!;
       expect(dtCall.factoryName).toBe('dataTransform');
-      expect(() => dtCall.toOp()).toThrow(
-        expect.objectContaining({ code: 'MIGRATION.UNFILLED_PLACEHOLDER' }),
-      );
+      await expect(dtCall.toOp()).rejects.toMatchObject({ code: 'MIGRATION.UNFILLED_PLACEHOLDER' });
     });
   });
 
@@ -212,8 +217,8 @@ describe('planIssues', () => {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -266,12 +271,12 @@ describe('planIssues', () => {
       const calls = result.value.calls;
       expect(calls).toHaveLength(2);
       expect(calls[0]).toMatchObject({ factoryName: 'dataTransform' });
-      expect(calls[1]).toMatchObject({ factoryName: 'setNotNull' });
+      expect(calls[1]).toMatchObject({ factoryName: 'setNotNull', operationClass: 'widening' });
     });
   });
 
   describe('typeChange call strategy', () => {
-    function actualWithAge(nativeType: string): PostgresDatabaseSchemaNode {
+    function actualWithAge(nativeType: string, codecId: string): PostgresDatabaseSchemaNode {
       return new PostgresDatabaseSchemaNode({
         namespaces: {
           public: new PostgresNamespaceSchemaNode({
@@ -286,7 +291,13 @@ describe('planIssues', () => {
                     nullable: false,
                     resolvedNativeType: 'uuid',
                   },
-                  age: { name: 'age', nativeType, nullable: false, resolvedNativeType: nativeType },
+                  age: {
+                    name: 'age',
+                    nativeType,
+                    nullable: false,
+                    resolvedNativeType: nativeType,
+                    codecRef: { codecId },
+                  },
                 },
                 primaryKey: { columns: ['id'] },
                 foreignKeys: [],
@@ -310,8 +321,8 @@ describe('planIssues', () => {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                age: { nativeType: 'int8', codecId: 'pg/int8@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                age: { dataType: 'pg/int8', codecId: 'pg/int8@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -325,13 +336,18 @@ describe('planIssues', () => {
       // `typeChangeCallStrategy` only fires when the planner has a prior
       // contract (`migration plan`); any non-null contract satisfies the
       // gate, it is never otherwise read by this strategy.
-      const result = planAgainst(toContract, actualWithAge('int4'), { fromContract: toContract });
+      const result = planAgainst(toContract, actualWithAge('int4', 'pg/int4@1'), {
+        fromContract: toContract,
+      });
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error('expected ok');
       const calls = result.value.calls;
       expect(calls).toHaveLength(1);
-      expect(calls[0]).toMatchObject({ factoryName: 'alterColumnType' });
+      expect(calls[0]).toMatchObject({
+        factoryName: 'alterColumnType',
+        operationClass: 'widening',
+      });
     });
 
     it('emits DataTransformCall + AlterColumnTypeCall for unsafe change', () => {
@@ -340,8 +356,8 @@ describe('planIssues', () => {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                age: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                age: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -352,14 +368,19 @@ describe('planIssues', () => {
         },
       });
 
-      const result = planAgainst(toContract, actualWithAge('int4'), { fromContract: toContract });
+      const result = planAgainst(toContract, actualWithAge('int4', 'pg/int4@1'), {
+        fromContract: toContract,
+      });
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error('expected ok');
       const calls = result.value.calls;
       expect(calls).toHaveLength(2);
       expect(calls[0]).toMatchObject({ factoryName: 'dataTransform' });
-      expect(calls[1]).toMatchObject({ factoryName: 'alterColumnType' });
+      expect(calls[1]).toMatchObject({
+        factoryName: 'alterColumnType',
+        operationClass: 'destructive',
+      });
     });
   });
 
@@ -408,8 +429,8 @@ describe('planIssues', () => {
           table: {
             doc: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                body: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                body: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -447,8 +468,8 @@ describe('planIssues', () => {
           table: {
             doc: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                body: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                body: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -486,8 +507,8 @@ describe('planIssues', () => {
           table: {
             doc: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                body: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                body: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -519,8 +540,8 @@ describe('planIssues', () => {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                status: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                status: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -579,8 +600,8 @@ describe('planIssues', () => {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                status: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                status: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -683,7 +704,9 @@ describe('planIssues', () => {
         schema: actual,
         policy: { allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'] },
         fromContract: null,
-        frameworkComponents: [],
+        origin: null,
+        statements: [],
+        frameworkComponents,
         spaceId: 'app',
         snapshotsImportPath: '../../snapshots',
       });
@@ -694,8 +717,8 @@ describe('planIssues', () => {
     it('translates a missing schema into a CREATE SCHEMA op ordered before the table', async () => {
       const userTable: StorageTableInput = {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
         },
         primaryKey: { columns: ['id'] },
         uniques: [],
@@ -743,8 +766,8 @@ describe('planIssues', () => {
     it('emits correctly-qualified DDL for each same-named table under its own namespace', () => {
       const userTable: StorageTableInput = {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
         },
         primaryKey: { columns: ['id'] },
         uniques: [],

@@ -14,7 +14,7 @@ import {
 import { runCommandAction } from './next-actions';
 
 const DB_INIT_ADDITIVE_ONLY_FIX =
-  '`db init` applies only additive changes. Run `{bin} db update`, which also applies widening and destructive ones after you confirm them by typing the database name, or pass `--no-interactive --confirm <database>` where there is nobody to ask.';
+  '`db init` applies only additive changes. Run `{bin} db update`, which also applies widening and destructive ones once you answer what each operation that would lose data means, with `--delete` or `--rename`.';
 
 const DB_INIT_NEEDS_MIGRATION_FIX =
   '`db init` applies only additive changes, and `db update` does not apply data operations. Plan a migration with `{bin} migration plan`, which can include them, and apply it with `{bin} db migrate`.';
@@ -42,7 +42,7 @@ function adviceForRefusedClasses(refused: ReadonlySet<MigrationOperationClass>):
     fix: DB_INIT_ADDITIVE_ONLY_FIX,
     nextAction: runCommandAction(
       refused.has('destructive')
-        ? 'Apply the change with db update, which lists the destructive operations and asks you to confirm them'
+        ? 'Apply the change with db update, which asks what each operation that would lose data means'
         : 'Apply the change with db update',
       '{bin} db update',
     ),

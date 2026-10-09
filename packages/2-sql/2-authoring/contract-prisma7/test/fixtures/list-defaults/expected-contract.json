@@ -48,7 +48,8 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "bl": {
                 "type": {
@@ -56,7 +57,9 @@
                   "codecId": "pg/bytea@1"
                 },
                 "nullable": true,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               },
               "blEmpty": {
                 "type": {
@@ -64,59 +67,71 @@
                   "codecId": "pg/bytea@1"
                 },
                 "nullable": true,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               },
               "dl": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "typeParams": {
                     "precision": 3
                   }
                 },
                 "nullable": true,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               },
               "dlEmpty": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "typeParams": {
                     "precision": 3
                   }
                 },
                 "nullable": true,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               },
               "tzl": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamptz-temporal@1",
+                  "codecId": "pg/timestamptz-string@1",
                   "typeParams": {
                     "precision": 6
                   }
                 },
                 "nullable": true,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               },
               "datel": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/date-temporal@1"
+                  "codecId": "pg/date-string@1"
                 },
                 "nullable": true,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               },
               "timel": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/time-temporal@1",
+                  "codecId": "pg/time-string@1",
                   "typeParams": {
                     "precision": 6
                   }
                 },
                 "nullable": true,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               },
               "timetzl": {
                 "type": {
@@ -127,18 +142,22 @@
                   }
                 },
                 "nullable": true,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               },
               "ts6l": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "typeParams": {
                     "precision": 6
                   }
                 },
                 "nullable": true,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               }
             },
             "relations": {}
@@ -158,7 +177,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "a82077bff82ee9b25e523d35b995e7d0b141226c4807c02143c1f32b28fa26f0",
+    "storageHash": "32051d4c4ec616e12702c1d37a4889a6e39a7249ced7d48d43c7096abf29b331",
     "namespaces": {
       "public": {
         "id": "public",
@@ -168,15 +187,18 @@
             "Lists": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "bl": {
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
                   "codecId": "pg/bytea@1",
                   "nullable": true,
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "noCheck": ["elementNotNull"],
                   "default": {
                     "kind": "function",
@@ -184,10 +206,12 @@
                   }
                 },
                 "blEmpty": {
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
                   "codecId": "pg/bytea@1",
                   "nullable": true,
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "noCheck": ["elementNotNull"],
                   "default": {
                     "kind": "function",
@@ -195,10 +219,12 @@
                   }
                 },
                 "dl": {
-                  "nativeType": "timestamp",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "dataType": "pg/timestamp",
+                  "codecId": "pg/timestamp-string@1",
                   "nullable": true,
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "noCheck": ["elementNotNull"],
                   "typeParams": {
                     "precision": 3
@@ -209,10 +235,12 @@
                   }
                 },
                 "dlEmpty": {
-                  "nativeType": "timestamp",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "dataType": "pg/timestamp",
+                  "codecId": "pg/timestamp-string@1",
                   "nullable": true,
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "noCheck": ["elementNotNull"],
                   "typeParams": {
                     "precision": 3
@@ -223,10 +251,12 @@
                   }
                 },
                 "tzl": {
-                  "nativeType": "timestamptz",
-                  "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
+                  "codecId": "pg/timestamptz-string@1",
                   "nullable": true,
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "noCheck": ["elementNotNull"],
                   "typeParams": {
                     "precision": 6
@@ -237,10 +267,12 @@
                   }
                 },
                 "datel": {
-                  "nativeType": "date",
-                  "codecId": "pg/date-temporal@1",
+                  "dataType": "pg/date",
+                  "codecId": "pg/date-string@1",
                   "nullable": true,
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "noCheck": ["elementNotNull"],
                   "default": {
                     "kind": "function",
@@ -248,10 +280,12 @@
                   }
                 },
                 "timel": {
-                  "nativeType": "time",
-                  "codecId": "pg/time-temporal@1",
+                  "dataType": "pg/time",
+                  "codecId": "pg/time-string@1",
                   "nullable": true,
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "noCheck": ["elementNotNull"],
                   "typeParams": {
                     "precision": 6
@@ -262,10 +296,12 @@
                   }
                 },
                 "timetzl": {
-                  "nativeType": "timetz",
+                  "dataType": "pg/timetz",
                   "codecId": "pg/timetz@1",
                   "nullable": true,
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "noCheck": ["elementNotNull"],
                   "typeParams": {
                     "precision": 6
@@ -276,10 +312,12 @@
                   }
                 },
                 "ts6l": {
-                  "nativeType": "timestamp",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "dataType": "pg/timestamp",
+                  "codecId": "pg/timestamp-string@1",
                   "nullable": true,
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "noCheck": ["elementNotNull"],
                   "typeParams": {
                     "precision": 6

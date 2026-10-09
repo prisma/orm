@@ -1,10 +1,10 @@
 import type { ColumnDefault } from '@internal/contract/types';
+import { canonicalizeTaggedLiteralBody } from '@internal/framework-components/authoring';
 import {
-  canonicalizeTaggedLiteralBody,
   describeTaggedLiteralFailure,
   resolveTemplateTagEscapes,
 } from '@internal/framework-components/control';
-import { checkSqlDefaultBody, reservedSqlDefaultBody } from '@internal/sql-contract/validators';
+import { checkSqlDefaultText, reservedSqlDefaultText } from '@internal/sql-contract/validators';
 import { contractError } from './contract-errors';
 
 /**
@@ -31,19 +31,19 @@ export function sql(strings: TemplateStringsArray, ...values: readonly never[]):
       },
     );
   }
-  const reserved = reservedSqlDefaultBody(canonical.body);
+  const reserved = reservedSqlDefaultText(canonical.text);
   if (reserved !== undefined) {
     throw contractError(
       'CONTRACT.DEFAULT_INVALID',
       `Write .default(${reserved}()) instead of sql\`${reserved}()\`; ${reserved}() is a Prisma default function, not raw SQL.`,
-      { meta: { reason: 'reserved-function', expression: canonical.body } },
+      { meta: { reason: 'reserved-function', expression: canonical.text } },
     );
   }
-  const rejected = checkSqlDefaultBody(canonical.body);
+  const rejected = checkSqlDefaultText(canonical.text);
   if (rejected !== undefined) {
     throw contractError('CONTRACT.DEFAULT_INVALID', rejected, {
-      meta: { reason: 'unsafe-sql', expression: canonical.body },
+      meta: { reason: 'unsafe-sql', expression: canonical.text },
     });
   }
-  return { kind: 'function', expression: canonical.body };
+  return { kind: 'function', expression: canonical.text };
 }

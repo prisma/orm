@@ -1,8 +1,4 @@
 export {
-  ERROR_CODE_CONSENT_PLAN_MISMATCH,
-  ERROR_CODE_DESTRUCTIVE_CHANGES,
-  errorConsentPlanMismatch,
-  errorDestructiveChanges,
   errorHashMismatch,
   errorMarkerMissing,
   errorMarkerReadFailed,

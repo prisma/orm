@@ -8,6 +8,7 @@ import { buildSymbolTable } from '../src/symbol-table';
 import { FieldAttributeAst } from '../src/syntax/ast/attributes';
 import type { ExpressionAst } from '../src/syntax/ast/expressions';
 import { createSyntaxTree } from '../src/syntax/red';
+import { binderContext } from './support';
 
 function makeCtx(sources: PslSources): FieldAttributeCtx {
   const { document, sources: modelSources } = parse('model M {\n  id Int @id\n}\n', 'test.psl');
@@ -22,12 +23,7 @@ function makeCtx(sources: PslSources): FieldAttributeCtx {
   const { binder } = createBinder({
     sources: modelSources,
     symbolTable,
-    typeConstructors: {},
-    attributeSpecs: { model: {}, field: {} },
-    controlMutationDefaults: {
-      defaultFunctionRegistry: new Map(),
-      dataTypeEntries: {},
-    },
+    context: binderContext(),
   });
   return { sources, symbols: symbolTable, selfModel, field, binder };
 }
@@ -62,7 +58,7 @@ describe('taggedLiteral', () => {
     if (result.ok) {
       expect(result.value).toEqual({
         tag: 'postgis.geometry',
-        canonicalization: { ok: true, body: 'POINT(0 0)' },
+        canonicalization: { ok: true, text: 'POINT(0 0)' },
         span: { start: { offset: 3, line: 1, column: 4 }, end: { offset: 35, line: 3, column: 2 } },
       });
     }
@@ -72,15 +68,15 @@ describe('taggedLiteral', () => {
     const { expr, ctx } = argOf('json"[1]"');
     expect(type.parse(expr, ctx)).toMatchObject({
       ok: true,
-      value: { tag: 'json', canonicalization: { ok: true, body: '[1]' } },
+      value: { tag: 'json', canonicalization: { ok: true, text: '[1]' } },
     });
   });
 
-  it('accepts a tag it does not list, leaving the tag check to lowering', () => {
+  it('accepts a tag it does not list, leaving the tag check to its consumer', () => {
     const { expr, ctx } = argOf('sql`x`');
     expect(type.parse(expr, ctx)).toMatchObject({
       ok: true,
-      value: { tag: 'sql', canonicalization: { ok: true, body: 'x' } },
+      value: { tag: 'sql', canonicalization: { ok: true, text: 'x' } },
     });
   });
 
@@ -103,11 +99,11 @@ describe('taggedLiteral', () => {
     const { expr, ctx } = argOf('sql`a $' + '{x} b`');
     expect(type.parse(expr, ctx)).toMatchObject({
       ok: true,
-      value: { canonicalization: { ok: true, body: 'a $' + '{x} b' } },
+      value: { canonicalization: { ok: true, text: 'a $' + '{x} b' } },
     });
   });
 
-  it('returns a failed canonicalization for lowering to report', () => {
+  it('returns a failed canonicalization for its consumer to report', () => {
     const nul = argOf('sql`a\0b`');
     expect(type.parse(nul.expr, nul.ctx)).toMatchObject({
       ok: true,

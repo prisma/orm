@@ -1,3 +1,4 @@
+import type { ContractSourceContext } from '@internal/config/config-types';
 import { canonicalizeContractToObject } from '@internal/contract/hashing';
 import {
   type Contract,
@@ -6,26 +7,40 @@ import {
   crossRef,
   type StorageHashBase,
 } from '@internal/contract/types';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import { enumType, member } from '@internal/contract-authoring';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   buildMongoNamespace,
   MongoCollection,
+  MongoIndex,
   MongoStorage,
   MongoValidator,
 } from '@internal/mongo-contract';
-import { buildSymbolTable, jsonValue, mapBlock, type SymbolTable } from '@internal/psl-parser';
+import {
+  buildSymbolTable,
+  createBinder,
+  jsonValue,
+  mapBlock,
+  mapPslDiagnostics,
+  type SymbolTable,
+} from '@internal/psl-parser';
+import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import type { DocumentAst, PslSources, SyntaxNode } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import type { JsonObject } from '@internal/utils/json';
 import { describe, expect, it, vi } from 'vitest';
+import type { InterpretPslDocumentToMongoContractInput } from '../src/interpreter';
+import { interpretPslDocumentToMongoContract } from '../src/interpreter';
 import {
-  type InterpretPslDocumentToMongoContractInput,
-  interpretPslDocumentToMongoContract,
-} from '../src/interpreter';
+  describeUnsupportedMongoAttribute,
+  mongoAttributeSpecs,
+} from '../src/mongo-attribute-specs';
+import { mongoCodecLookup, mongoDataTypeLookup } from './derive-json-schema-helpers';
 import {
   expectInvalidAttributeSyntax,
   expectUnresolvedReference,
+  interpretMongoContract,
 } from './interpreter-test-helpers';
 
 function buildSymbolTableInput(
@@ -48,31 +63,6 @@ const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
   ['ObjectId', 'mongo/objectId@1'],
   ['Double', 'mongo/double@1'],
 ]);
-
-const mongoTargetTypes: Record<string, readonly string[]> = {
-  'mongo/string@1': ['string'],
-  'mongo/int32@1': ['int'],
-  'mongo/bool@1': ['bool'],
-  'mongo/date@1': ['date'],
-  'mongo/objectId@1': ['objectId'],
-  'mongo/double@1': ['double'],
-};
-
-const mongoCodecLookup: CodecLookup = {
-  get(id: string) {
-    const targetTypes = mongoTargetTypes[id];
-    if (!targetTypes) return undefined;
-    return {
-      id,
-      encode: async (v: unknown) => v,
-      decode: async (w: unknown) => w,
-      encodeJson: (v: unknown) => v,
-      decodeJson: (j: unknown) => j,
-    } as ReturnType<CodecLookup['get']>;
-  },
-  targetTypesFor: (id: string) => mongoTargetTypes[id],
-  renderOutputTypeFor: () => undefined,
-};
 
 function mongoCollectionsFromIr(ir: {
   readonly storage: unknown;
@@ -107,26 +97,33 @@ function model(ir: Contract, name: string): MongoModel {
 function interpret(
   schema: string,
   overrides?: Partial<
-    Omit<InterpretPslDocumentToMongoContractInput, 'documents' | 'symbolTable' | 'sources'>
-  >,
+    Omit<
+      InterpretPslDocumentToMongoContractInput,
+      'documents' | 'symbolTable' | 'sources' | 'codecLookup'
+    >
+  > & { readonly codecLookup?: CodecLookupWithDescriptors },
 ) {
-  return interpretPslDocumentToMongoContract({
-    ...buildSymbolTableInput(schema),
-    scalarTypeCodecIds: mongoScalarTypeDescriptors,
-    controlMutationDefaults: {
-      dataTypeEntries: {},
+  return interpretMongoContract(
+    schema,
+    {
+      scalarTypeCodecIds: mongoScalarTypeDescriptors,
       defaultFunctionRegistry: new Map(),
+      codecLookup: mongoCodecLookup,
+      dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
+      ...overrides,
     },
-    codecLookup: mongoCodecLookup,
-    ...overrides,
-  });
+    'test.prisma',
+  );
 }
 
 function interpretOk(
   schema: string,
   overrides?: Partial<
-    Omit<InterpretPslDocumentToMongoContractInput, 'documents' | 'symbolTable' | 'sources'>
-  >,
+    Omit<
+      InterpretPslDocumentToMongoContractInput,
+      'documents' | 'symbolTable' | 'sources' | 'codecLookup'
+    >
+  > & { readonly codecLookup?: CodecLookupWithDescriptors },
 ) {
   const result = interpret(schema, overrides);
   expect(result.ok).toBe(true);
@@ -144,6 +141,58 @@ function getIndexes(
 }
 
 describe('interpretPslDocumentToMongoContract', () => {
+  it('lowers a bound enum block with its codec and value set', () => {
+    const ir = interpretOk(
+      `enum Role {
+  USER
+}
+model Item {
+  id ObjectId @id @map("_id")
+  roles Role[]
+}`,
+      {
+        authoringContributions: {
+          entityTypes: {
+            enum: {
+              kind: 'entity',
+              discriminator: 'enum',
+              output: {
+                factory: () => enumType('Role', { codecId: 'mongo/string@1' }, member('USER')),
+              },
+            },
+          },
+          pslBlockDescriptors: {
+            enum: {
+              kind: 'pslBlock',
+              keyword: 'enum',
+              discriminator: 'enum',
+              name: { required: true },
+              spec: () =>
+                mapBlock({
+                  value: { type: jsonValue(), documentation: 'Member value' },
+                  allowBare: true,
+                }),
+            },
+          },
+        },
+      },
+    );
+    expect(model(ir, 'Item').fields).toEqual({
+      _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false, many: false },
+      roles: {
+        type: { kind: 'scalar', codecId: 'mongo/string@1' },
+        nullable: false,
+        many: { elementNullable: false },
+        valueSet: {
+          plane: 'domain',
+          entityKind: 'enum',
+          namespaceId: UNBOUND_NAMESPACE_ID,
+          entityName: 'Role',
+        },
+      },
+    });
+  });
+
   it('resolves missing enum factory diagnostics from the enum block node', () => {
     const input = buildSymbolTableInput(
       `enum Role {
@@ -160,30 +209,63 @@ describe('interpretPslDocumentToMongoContract', () => {
     const sourceFileFor = vi.fn((node: SyntaxNode) => originalSourceFileFor(node));
     input.sources.sourceFileFor = sourceFileFor;
 
-    const result = interpretPslDocumentToMongoContract({
-      ...input,
-      scalarTypeCodecIds: mongoScalarTypeDescriptors,
-      controlMutationDefaults: {
-        dataTypeEntries: {},
-        defaultFunctionRegistry: new Map(),
-      },
-      codecLookup: mongoCodecLookup,
-      authoringContributions: {
-        pslBlockDescriptors: {
-          enum: {
-            kind: 'pslBlock',
-            keyword: 'enum',
-            discriminator: 'enum',
-            name: { required: true },
-            spec: () =>
-              mapBlock({
-                value: { type: jsonValue(), documentation: 'The member value.' },
-                allowBare: true,
-              }),
-          },
+    const authoringContributions = {
+      pslBlockDescriptors: {
+        enum: {
+          kind: 'pslBlock' as const,
+          keyword: 'enum',
+          discriminator: 'enum',
+          name: { required: true },
+          spec: () =>
+            mapBlock({
+              value: { type: jsonValue(), documentation: 'The member value.' },
+              allowBare: true,
+            }),
         },
       },
+    };
+    const context: ContractSourceContext = {
+      composedExtensions: [],
+      composedExtensionContracts: new Map(),
+      authoringContributions: {
+        type: {},
+        field: {},
+        entityTypes: {},
+        pslBlockDescriptors: authoringContributions.pslBlockDescriptors,
+        modelAttributes: {},
+        attributeSpecs: mongoAttributeSpecs,
+        dataTypes: {},
+      },
+      pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
+      codecLookup: mongoCodecLookup,
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+      dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
+      resolvedInputs: [],
+      capabilities: {},
+    };
+    const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
+      documents: input.documents,
+      sources: input.sources,
     });
+    const { binder, diagnostics: binderDiagnostics } = createBinder({
+      symbolTable,
+      sources: input.sources,
+      context,
+    });
+    const result = withSeedDiagnostics(
+      interpretPslDocumentToMongoContract({
+        documents: input.documents,
+        sources: input.sources,
+        symbolTable,
+        binder,
+        scalarTypeCodecIds: new Map(),
+        defaultFunctionRegistry: context.controlMutationDefaults.defaultFunctionRegistry,
+        dataTypes: context.dataTypes,
+        codecLookup: context.codecLookup,
+        authoringContributions: context.authoringContributions,
+      }),
+      mapPslDiagnostics([...symbolTableDiagnostics, ...binderDiagnostics], input.sources),
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -211,11 +293,27 @@ describe('interpretPslDocumentToMongoContract', () => {
 
       expect(modelsOf(ir)['Item']).toMatchObject({
         fields: {
-          _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-          name: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-          count: { type: { kind: 'scalar', codecId: 'mongo/int32@1' }, nullable: false },
-          active: { type: { kind: 'scalar', codecId: 'mongo/bool@1' }, nullable: false },
-          at: { type: { kind: 'scalar', codecId: 'mongo/date@1' }, nullable: false },
+          _id: {
+            type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+            nullable: false,
+            many: false,
+          },
+          name: {
+            type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            nullable: false,
+            many: false,
+          },
+          count: {
+            type: { kind: 'scalar', codecId: 'mongo/int32@1' },
+            nullable: false,
+            many: false,
+          },
+          active: {
+            type: { kind: 'scalar', codecId: 'mongo/bool@1' },
+            nullable: false,
+            many: false,
+          },
+          at: { type: { kind: 'scalar', codecId: 'mongo/date@1' }, nullable: false, many: false },
         },
       });
     });
@@ -231,19 +329,20 @@ describe('interpretPslDocumentToMongoContract', () => {
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.failure.diagnostics).toHaveLength(2);
-      expect(result.failure.diagnostics).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-            message: expect.stringContaining('BigInt'),
-          }),
-          expect.objectContaining({
-            code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-            message: expect.stringContaining('Bytes'),
-          }),
-        ]),
-      );
+      expect(result.failure.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message:
+            'Field "Item.big" has type "BigInt", which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are String, Int32, Bool, Date, ObjectId and Double.',
+          sourceId: 'test.prisma',
+        }),
+        expect.objectContaining({
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message:
+            'Field "Item.data" has type "Bytes", which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are String, Int32, Bool, Date, ObjectId and Double.',
+          sourceId: 'test.prisma',
+        }),
+      ]);
     });
 
     it('uses custom scalar type descriptors when provided', () => {
@@ -264,13 +363,17 @@ describe('interpretPslDocumentToMongoContract', () => {
 
       expect(modelsOf(ir)['Item']).toMatchObject({
         fields: {
-          _id: { type: { kind: 'scalar', codecId: 'custom/oid@2' }, nullable: false },
-          name: { type: { kind: 'scalar', codecId: 'custom/text@2' }, nullable: false },
+          _id: { type: { kind: 'scalar', codecId: 'custom/oid@2' }, nullable: false, many: false },
+          name: {
+            type: { kind: 'scalar', codecId: 'custom/text@2' },
+            nullable: false,
+            many: false,
+          },
         },
       });
     });
 
-    it('emits many: true for scalar list fields', () => {
+    it('emits many: { elementNullable: false } for scalar list fields', () => {
       const ir = interpretOk(`
         model Item {
           id   ObjectId @id @map("_id")
@@ -283,7 +386,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           tags: {
             type: { kind: 'scalar', codecId: 'mongo/string@1' },
             nullable: false,
-            many: true,
+            many: { elementNullable: false },
           },
         },
       });
@@ -299,14 +402,36 @@ describe('interpretPslDocumentToMongoContract', () => {
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.failure.diagnostics).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-            message: expect.stringContaining('Unsupported'),
-          }),
-        ]),
-      );
+      expect(result.failure.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message:
+            'Field "Item.data" has type "Unsupported", which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are String, Int32, Bool, Date, ObjectId and Double.',
+          sourceId: 'test.prisma',
+        }),
+      ]);
+    });
+
+    it('produces PSL_UNSUPPORTED_FIELD_TYPE for a field typed with a resolved types{} binding', () => {
+      const result = interpret(`
+        types {
+          Money = String
+        }
+
+        model Item {
+          id    ObjectId @id @map("_id")
+          price Money
+        }
+      `);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+          message: 'Field "Item.price" type "Money" is not supported in Mongo PSL interpreter',
+        }),
+      ]);
     });
   });
 
@@ -322,6 +447,28 @@ describe('interpretPslDocumentToMongoContract', () => {
         storage: { collection: 'UserProfile' },
       });
       expect(Object.keys(mongoCollectionsFromIr(ir))).toEqual(['UserProfile']);
+    });
+
+    it('keeps every storage name when a model and a field are renamed and mapped to their old names', () => {
+      const before = interpretOk(`
+        model User {
+          id   ObjectId @id @map("_id")
+          name String
+        }
+      `);
+      const after = interpretOk(`
+        model Account {
+          id       ObjectId @id @map("_id")
+          fullName String @map("name")
+
+          @@map("User")
+        }
+      `);
+
+      expect(after.storage).toEqual(before.storage);
+      expect(Object.keys(model(after, 'Account').fields)).toEqual(
+        Object.keys(model(before, 'User').fields),
+      );
     });
 
     it('uses @@map() to override collection name', () => {
@@ -524,43 +671,58 @@ describe('interpretPslDocumentToMongoContract', () => {
     it('emits one syntax diagnostic for a malformed target field @map', () => {
       const result = interpret(`
         model Parent {
-          id       ObjectId @id @map(42)
+          id       ObjectId @id @map("_id")
+          key      ObjectId @map(42)
           children Child[]
         }
 
         model Child {
           id       ObjectId @id @map("_id")
           parentId ObjectId
-          parent   Parent @relation(fields: [parentId], references: [id])
+          parent   Parent @relation(fields: [parentId], references: [key])
         }
       `);
 
-      expectInvalidAttributeSyntax(result, /Expected a string literal/);
+      const diagnostic = expectInvalidAttributeSyntax(result, /Expected a string literal/);
+      if (result.ok) throw new Error('Expected interpretation to fail');
+      expect(result.failure.diagnostics).toEqual([diagnostic]);
     });
 
-    it('uses mapped field names in relation on-clauses', () => {
+    it('uses mapped names in forward relations, unique constraints, and indexes', () => {
       const ir = interpretOk(`
-        model Parent {
-          id       ObjectId @id @map("_id")
-          children Child[]
-        }
-
         model Child {
           id       ObjectId @id @map("_id")
           parentId ObjectId @map("parent_id")
           parent   Parent @relation(fields: [parentId], references: [id])
+          @@index([parentId])
+        }
+
+        model Parent {
+          id       ObjectId @id @map("_id")
+          code     String @unique @map("code_value")
+          children Child[]
+          @@map("parents")
         }
       `);
 
-      expect(model(ir, 'Child').relations).toMatchObject({
+      expect(model(ir, 'Child').relations).toEqual({
         parent: {
           to: crossRef('Parent'),
+          cardinality: 'N:1',
+          nullable: false,
           on: {
             localFields: ['parent_id'],
             targetFields: ['_id'],
           },
         },
       });
+      expect(model(ir, 'Parent').storage).toEqual({ collection: 'parents' });
+      expect(getIndexes(ir, 'Child')).toEqual([
+        new MongoIndex({ keys: [{ field: 'parent_id', direction: 1 }] }),
+      ]);
+      expect(getIndexes(ir, 'parents')).toEqual([
+        new MongoIndex({ keys: [{ field: 'code_value', direction: 1 }], unique: true }),
+      ]);
     });
 
     it('excludes FK-side relation fields from the fields record', () => {
@@ -972,9 +1134,21 @@ describe('interpretPslDocumentToMongoContract', () => {
       expect(valueObjectsOf(ir)).toEqual({
         Address: {
           fields: {
-            street: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-            city: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-            zip: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+            street: {
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              nullable: false,
+              many: false,
+            },
+            city: {
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              nullable: false,
+              many: false,
+            },
+            zip: {
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              nullable: false,
+              many: false,
+            },
           },
         },
       });
@@ -995,12 +1169,16 @@ describe('interpretPslDocumentToMongoContract', () => {
 
       expect(modelsOf(ir)['User']).toMatchObject({
         fields: {
-          homeAddress: { type: { kind: 'valueObject', name: 'Address' }, nullable: true },
+          homeAddress: {
+            type: { kind: 'valueObject', name: 'Address' },
+            nullable: true,
+            many: false,
+          },
         },
       });
     });
 
-    it('emits many: true for value object array fields', () => {
+    it('emits many: { elementNullable: false } for value object array fields', () => {
       const ir = interpretOk(`
         type Address {
           street String
@@ -1018,7 +1196,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           addresses: {
             type: { kind: 'valueObject', name: 'Address' },
             nullable: false,
-            many: true,
+            many: { elementNullable: false },
           },
         },
       });
@@ -1051,15 +1229,35 @@ describe('interpretPslDocumentToMongoContract', () => {
       expect(valueObjectsOf(ir)).toEqual({
         GeoPoint: {
           fields: {
-            lat: { type: { kind: 'scalar', codecId: 'mongo/double@1' }, nullable: false },
-            lng: { type: { kind: 'scalar', codecId: 'mongo/double@1' }, nullable: false },
+            lat: {
+              type: { kind: 'scalar', codecId: 'mongo/double@1' },
+              nullable: false,
+              many: false,
+            },
+            lng: {
+              type: { kind: 'scalar', codecId: 'mongo/double@1' },
+              nullable: false,
+              many: false,
+            },
           },
         },
         Address: {
           fields: {
-            street: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-            city: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-            location: { type: { kind: 'valueObject', name: 'GeoPoint' }, nullable: false },
+            street: {
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              nullable: false,
+              many: false,
+            },
+            city: {
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              nullable: false,
+              many: false,
+            },
+            location: {
+              type: { kind: 'valueObject', name: 'GeoPoint' },
+              nullable: false,
+              many: false,
+            },
           },
         },
       });
@@ -1113,10 +1311,26 @@ describe('interpretPslDocumentToMongoContract', () => {
               models: {
                 User: {
                   fields: {
-                    _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-                    name: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-                    email: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-                    bio: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: true },
+                    _id: {
+                      type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                      nullable: false,
+                      many: false,
+                    },
+                    name: {
+                      type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                      nullable: false,
+                      many: false,
+                    },
+                    email: {
+                      type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                      nullable: false,
+                      many: false,
+                    },
+                    bio: {
+                      type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                      nullable: true,
+                      many: false,
+                    },
                   },
                   relations: {
                     posts: {
@@ -1129,19 +1343,30 @@ describe('interpretPslDocumentToMongoContract', () => {
                 },
                 Post: {
                   fields: {
-                    _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-                    title: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+                    _id: {
+                      type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                      nullable: false,
+                      many: false,
+                    },
+                    title: {
+                      type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                      nullable: false,
+                      many: false,
+                    },
                     content: {
                       type: { kind: 'scalar', codecId: 'mongo/string@1' },
                       nullable: false,
+                      many: false,
                     },
                     authorId: {
                       type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
                       nullable: false,
+                      many: false,
                     },
                     createdAt: {
                       type: { kind: 'scalar', codecId: 'mongo/date@1' },
                       nullable: false,
+                      many: false,
                     },
                   },
                   relations: {
@@ -1390,19 +1615,41 @@ describe('interpretPslDocumentToMongoContract', () => {
         model Events {
           id       ObjectId @id @map("_id")
           wildcard String
-          @@index([wildcard(sort: Desc)])
+          @@index([sort(wildcard, Desc)])
         }
       `);
       const indexes = getIndexes(ir, 'Events');
       expect(indexes![0]!['keys']).toEqual([{ field: 'wildcard', direction: -1 }]);
     });
 
-    it('creates descending index from sort: Desc', () => {
+    it('reports an invalid sort direction in @@index inside the sort function', () => {
+      const result = interpret(`model Events {
+  id    ObjectId @id @map("_id")
+  email String
+  @@index([sort(email, Up)])
+}
+`);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics).toEqual([
+        {
+          code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+          message: 'Expected one of: Asc | Desc',
+          sourceId: 'test.prisma',
+          span: {
+            start: { offset: 86, line: 4, column: 24 },
+            end: { offset: 88, line: 4, column: 26 },
+          },
+        },
+      ]);
+    });
+
+    it('creates descending index from sort(field, Desc)', () => {
       const ir = interpretOk(`
         model Events {
           id        ObjectId @id @map("_id")
           createdAt Date
-          @@index([createdAt(sort: Desc)])
+          @@index([sort(createdAt, Desc)])
         }
       `);
       const indexes = getIndexes(ir, 'Events');
@@ -1415,7 +1662,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           id        ObjectId @id @map("_id")
           status    String
           createdAt Date
-          @@index([status, createdAt(sort: Desc)])
+          @@index([status, sort(createdAt, Desc)])
         }
       `);
       const indexes = getIndexes(ir, 'Events');
@@ -2059,17 +2306,157 @@ describe('interpretPslDocumentToMongoContract', () => {
       expect(props['bio']).toEqual({ bsonType: ['null', 'string'] });
     });
 
-    it('handles array fields', () => {
+    it('lowers and validates the scalar-list nullability matrix', () => {
       const ir = interpretOk(`
         model User {
-          id   ObjectId @id @map("_id")
-          tags String[]
+          id ObjectId @id @map("_id")
+          strict String[]
+          nullableElements String?[]
+          nullableList String[]?
+          fullyNullable String?[]?
         }
       `);
+      expect(model(ir, 'User').fields).toMatchObject({
+        strict: { nullable: false, many: { elementNullable: false } },
+        nullableElements: { nullable: false, many: { elementNullable: true } },
+        nullableList: { nullable: true, many: { elementNullable: false } },
+        fullyNullable: { nullable: true, many: { elementNullable: true } },
+      });
       const validator = getValidator(ir, 'User');
       const schema = validator!['jsonSchema'] as Record<string, unknown>;
       const props = schema['properties'] as Record<string, Record<string, unknown>>;
-      expect(props['tags']).toEqual({ bsonType: 'array', items: { bsonType: 'string' } });
+      expect(props['strict']).toEqual({ bsonType: 'array', items: { bsonType: 'string' } });
+      expect(props['nullableElements']).toEqual({
+        bsonType: 'array',
+        items: { bsonType: ['null', 'string'] },
+      });
+      expect(props['nullableList']).toEqual({
+        bsonType: ['null', 'array'],
+        items: { bsonType: 'string' },
+      });
+      expect(props['fullyNullable']).toEqual({
+        bsonType: ['null', 'array'],
+        items: { bsonType: ['null', 'string'] },
+      });
+    });
+
+    it('lowers nullable enum list elements into exact contract and BSON validator shapes', () => {
+      const ir = interpretOk(
+        `
+          enum Role {
+            User = "user"
+            Admin = "admin"
+          }
+
+          model User {
+            id ObjectId @id @map("_id")
+            roles Role?[]
+            optionalRoles Role?[]?
+          }
+        `,
+        {
+          authoringContributions: {
+            field: {},
+            type: {},
+            entityTypes: {
+              enum: {
+                kind: 'entity',
+                discriminator: 'enum',
+                output: {
+                  factory: () =>
+                    enumType(
+                      'Role',
+                      { codecId: 'mongo/string@1' },
+                      { name: 'User', value: 'user' },
+                      { name: 'Admin', value: 'admin' },
+                    ),
+                },
+              },
+            },
+            pslBlockDescriptors: {
+              enum: {
+                kind: 'pslBlock',
+                keyword: 'enum',
+                discriminator: 'enum',
+                name: { required: true },
+                spec: () =>
+                  mapBlock({
+                    value: { type: jsonValue(), documentation: 'The member value.' },
+                    allowBare: true,
+                  }),
+              },
+            },
+            modelAttributes: {},
+          },
+        },
+      );
+      expect(model(ir, 'User').fields).toMatchObject({
+        roles: {
+          type: { kind: 'scalar', codecId: 'mongo/string@1' },
+          nullable: false,
+          many: { elementNullable: true },
+          valueSet: {
+            plane: 'domain',
+            entityKind: 'enum',
+            namespaceId: UNBOUND_NAMESPACE_ID,
+            entityName: 'Role',
+          },
+        },
+        optionalRoles: {
+          type: { kind: 'scalar', codecId: 'mongo/string@1' },
+          nullable: true,
+          many: { elementNullable: true },
+          valueSet: {
+            plane: 'domain',
+            entityKind: 'enum',
+            namespaceId: UNBOUND_NAMESPACE_ID,
+            entityName: 'Role',
+          },
+        },
+      });
+      const validator = getValidator(ir, 'User');
+      expect(validator!['jsonSchema']).toEqual({
+        bsonType: 'object',
+        required: ['_id', 'roles'],
+        properties: {
+          _id: { bsonType: 'objectId' },
+          roles: {
+            bsonType: 'array',
+            items: { bsonType: ['null', 'string'], enum: ['user', 'admin', null] },
+          },
+          optionalRoles: {
+            bsonType: ['null', 'array'],
+            items: { bsonType: ['null', 'string'], enum: ['user', 'admin', null] },
+          },
+        },
+        additionalProperties: false,
+      });
+    });
+
+    it('lowers nullable value-object list elements and both-null lists', () => {
+      const ir = interpretOk(`
+        type Address {
+          city String
+        }
+
+        model User {
+          id ObjectId @id @map("_id")
+          nullableElements Address?[]
+          fullyNullable Address?[]?
+        }
+      `);
+      expect(model(ir, 'User').fields).toMatchObject({
+        nullableElements: {
+          type: { kind: 'valueObject', name: 'Address' },
+          nullable: false,
+          many: { elementNullable: true },
+        },
+        fullyNullable: {
+          type: { kind: 'valueObject', name: 'Address' },
+          nullable: true,
+          many: { elementNullable: true },
+        },
+      });
     });
 
     it('uses @map names in jsonSchema properties', () => {
@@ -2232,57 +2619,50 @@ describe('interpretPslDocumentToMongoContract', () => {
   });
 
   describe('namespace block rejection', () => {
-    it('rejects explicit namespace blocks with a Mongo-flavoured diagnostic', () => {
-      const result = interpretPslDocumentToMongoContract({
-        ...buildSymbolTableInput(
-          `namespace auth {
+    it('rejects explicit namespaces even when a top-level relation targets a namespaced model', () => {
+      const result = interpretMongoContract(
+        `namespace auth {
   model User {
-    id String @id
+    id ObjectId @id @map("_id")
   }
 }
+model Post {
+  id ObjectId @id @map("_id")
+  userId ObjectId
+  user auth.User @relation(fields: [userId], references: [id])
+}
 `,
-          'schema.prisma',
-        ),
-        scalarTypeCodecIds: mongoScalarTypeDescriptors,
-        controlMutationDefaults: {
-          dataTypeEntries: {},
+        {
+          scalarTypeCodecIds: mongoScalarTypeDescriptors,
           defaultFunctionRegistry: new Map(),
         },
-      });
+      );
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.failure.diagnostics).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            code: 'PSL_UNSUPPORTED_NAMESPACE_BLOCK',
-            message: expect.stringMatching(/[Mm]ongo/),
-          }),
-        ]),
-      );
-      const offending = result.failure.diagnostics.find(
-        (d) => d.code === 'PSL_UNSUPPORTED_NAMESPACE_BLOCK',
-      );
-      expect(offending?.message).toContain('auth');
+      expect(result.failure.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_UNSUPPORTED_NAMESPACE_BLOCK',
+          message:
+            'Mongo does not support `namespace auth { … }` blocks (the database is bound by the connection string; declare models at the document top level instead).',
+          sourceId: 'schema.prisma',
+        }),
+      ]);
     });
 
     it('rejects `namespace unbound { … }` (Mongo has no late-binding namespace)', () => {
-      const result = interpretPslDocumentToMongoContract({
-        ...buildSymbolTableInput(
-          `namespace unbound {
+      const result = interpretMongoContract(
+        `namespace unbound {
   model Tenant {
     id String @id
   }
 }
 `,
-          'schema.prisma',
-        ),
-        scalarTypeCodecIds: mongoScalarTypeDescriptors,
-        controlMutationDefaults: {
-          dataTypeEntries: {},
+        {
+          scalarTypeCodecIds: mongoScalarTypeDescriptors,
           defaultFunctionRegistry: new Map(),
         },
-      });
+      );
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
@@ -2294,21 +2674,17 @@ describe('interpretPslDocumentToMongoContract', () => {
     });
 
     it('accepts top-level model declarations (no namespace block)', () => {
-      const result = interpretPslDocumentToMongoContract({
-        ...buildSymbolTableInput(
-          `model User {
+      const result = interpretMongoContract(
+        `model User {
   id ObjectId @id @map("_id")
   name String
 }
 `,
-          'schema.prisma',
-        ),
-        scalarTypeCodecIds: mongoScalarTypeDescriptors,
-        controlMutationDefaults: {
-          dataTypeEntries: {},
+        {
+          scalarTypeCodecIds: mongoScalarTypeDescriptors,
           defaultFunctionRegistry: new Map(),
         },
-      });
+      );
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;

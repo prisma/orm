@@ -11,6 +11,7 @@ import {
   PrimaryKeyConstraint,
   UniqueConstraint,
 } from '../ast/ddl-types';
+import { opaqueSql } from '../ast/opaque-sql';
 
 export interface DdlColumnOptions {
   readonly notNull?: boolean;
@@ -24,7 +25,7 @@ export function lit(value: ColumnDefaultLiteralInputValue): LiteralColumnDefault
 }
 
 export function fn(expression: string): FunctionColumnDefault {
-  return new FunctionColumnDefault(expression);
+  return new FunctionColumnDefault(opaqueSql(expression));
 }
 
 export function col(name: string, type: string, options?: DdlColumnOptions): DdlColumn {
@@ -59,5 +60,5 @@ export function unique(
 }
 
 export function checkExpression(name: string, expression: string): CheckExpressionConstraint {
-  return new CheckExpressionConstraint({ name, expression });
+  return new CheckExpressionConstraint({ name, expression: opaqueSql(expression) });
 }

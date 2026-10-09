@@ -22,12 +22,17 @@ import { compileAggregate, compileGroupedAggregate } from '../src/query-plan-agg
 import { compileSelect, compileSelectWithIncludes } from '../src/query-plan-select';
 import type { CollectionState } from '../src/types';
 import { baseContract, createCollectionFor } from './collection-fixtures';
-import { getEmptyAggregates, getTestAggregates, getTestContext } from './helpers';
+import { fieldUnknown, getEmptyAggregates, getTestAggregates, getTestContext } from './helpers';
 
 const adapter = createPostgresAdapter();
 
-function planOf(tableName: string, state: CollectionState): SqlQueryPlan<unknown> {
-  return compileSelect(baseContract, 'public', tableName, state);
+const modelOfTable = { posts: 'Post', users: 'User' } as const;
+
+function planOf(
+  tableName: keyof typeof modelOfTable,
+  state: CollectionState,
+): SqlQueryPlan<unknown> {
+  return compileSelect(baseContract, 'public', modelOfTable[tableName], tableName, state);
 }
 
 function sqlOf(plan: SqlQueryPlan<unknown>): string {
@@ -129,12 +134,12 @@ describe('a to-one relation accessor', () => {
     expect(descriptorFor.mock.calls).toEqual([['pg/text@1']]);
   });
 
-  it('yields nothing for a name that is not a related field', () => {
+  it('refuses a name that is not a related field', () => {
     const post = createModelAccessor(getTestContext(), 'public', 'Post');
 
-    expect([Reflect.get(post.author, 'toString'), Reflect.get(post.author, 'constructor')]).toEqual(
-      [undefined, undefined],
-    );
+    expect(Reflect.get(post.author, 'toString')).toBe(Object.prototype.toString);
+    expect(Reflect.get(post.author, 'then')).toBeUndefined();
+    expect(() => Reflect.get(post.author, 'user_id')).toThrow(fieldUnknown('User', 'user_id'));
   });
 
   it('offers no count', () => {
@@ -288,6 +293,7 @@ describe('orderBy a relation inside an include', () => {
       baseContract,
       getTestAggregates(),
       'public',
+      'User',
       'users',
       state,
     );
@@ -307,6 +313,7 @@ describe('orderBy a relation inside an include', () => {
       baseContract,
       getTestAggregates(),
       'public',
+      'User',
       'users',
       state,
     );

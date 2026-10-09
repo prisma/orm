@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canonicalizeTaggedLiteralBody,
   describeTaggedLiteralFailure,
+  printedTaggedLiteralReadsBack,
   printTaggedLiteral,
   resolvePslBacktickEscapes,
   resolveTemplateTagEscapes,
@@ -21,8 +22,10 @@ describe('canonicalizeTaggedLiteralBody', () => {
     ['CRLF becomes LF', 'a\r\nb', 'a\nb'],
     ['lone CR becomes LF', 'a\rb', 'a\nb'],
     ['blank first line dropped', '\n  a', 'a'],
+    ['every blank first line dropped', '\n\n  \n  a', 'a'],
     ['first line of only spaces and tabs dropped', ' \t\n  a', 'a'],
     ['blank last line dropped', 'a\n  ', 'a'],
+    ['every blank last line dropped', 'a\n\n  \n', 'a'],
     ['trailing newline dropped with the blank last line', 'a\n', 'a'],
     ['common leading whitespace removed', '  a\n    b', 'a\n  b'],
     ['tabs count as single characters', '\ta\n\t\tb', 'a\n\tb'],
@@ -34,7 +37,7 @@ describe('canonicalizeTaggedLiteralBody', () => {
     ['empty body stays empty', '', ''],
     ['whitespace-only body becomes empty', '  \n  ', ''],
   ])('%s', (_name, input, expected) => {
-    expect(canonicalizeTaggedLiteralBody(input)).toEqual({ ok: true, body: expected });
+    expect(canonicalizeTaggedLiteralBody(input)).toEqual({ ok: true, text: expected });
   });
 
   it('fails on a NUL character with its offset', () => {
@@ -44,7 +47,7 @@ describe('canonicalizeTaggedLiteralBody', () => {
   it('accepts a body of exactly 65536 bytes', () => {
     expect(canonicalizeTaggedLiteralBody('a'.repeat(MAX_BYTES))).toEqual({
       ok: true,
-      body: 'a'.repeat(MAX_BYTES),
+      text: 'a'.repeat(MAX_BYTES),
     });
   });
 
@@ -78,7 +81,7 @@ describe('canonicalizeTaggedLiteralBody', () => {
     const indented = `  ${'a'.repeat(MAX_BYTES)}`;
     expect(canonicalizeTaggedLiteralBody(indented)).toEqual({
       ok: true,
-      body: 'a'.repeat(MAX_BYTES),
+      text: 'a'.repeat(MAX_BYTES),
     });
   });
 });
@@ -155,7 +158,7 @@ describe('printTaggedLiteral', () => {
     const raw = printed.slice('sql`'.length, -1);
     expect(canonicalizeTaggedLiteralBody(resolvePslBacktickEscapes(raw))).toEqual({
       ok: true,
-      body: text,
+      text: text,
     });
   });
 
@@ -165,7 +168,89 @@ describe('printTaggedLiteral', () => {
     const raw = indented.slice('sql`'.length, -1);
     expect(canonicalizeTaggedLiteralBody(resolvePslBacktickEscapes(raw))).toEqual({
       ok: true,
-      body: text,
+      text: text,
     });
+  });
+});
+
+describe('printedTaggedLiteralReadsBack', () => {
+  it.each([
+    ['a single line', 'a = 1', true],
+    ['several lines', 'a = 1\n  AND b = 2', true],
+    ['an empty text', '', true],
+    ['indented text', '  a = 1', false],
+    ['a blank first line', '\na = 1', false],
+    ['a blank last line', 'a = 1\n', false],
+    ['a whitespace-only inner line', 'a = 1\n  \nAND b = 2', false],
+    ['a carriage return', 'a = 1\r\nAND b = 2', false],
+    ['a NUL character', 'a\u0000', false],
+  ])('%s reads back: %s', (_, text, expected) => {
+    expect(printedTaggedLiteralReadsBack(text)).toBe(expected);
+  });
+});
+
+const CANONICALIZATION_CASES = [
+  '\n\n(a > 0)',
+  '(a > 0)\n\n',
+  '\n  \n(a > 0)',
+  '  a\n\n    b\n',
+  '\r\n\r\n(a)',
+  '\n\n\n',
+  '  a\n\n  b',
+  'a\r\n\r\nb',
+  '\n\n  SELECT 1\n\n',
+  '\n\n  `a`\n  \n',
+];
+
+function canonical(text: string): string {
+  const result = canonicalizeTaggedLiteralBody(text);
+  if (!result.ok) throw new Error(`${JSON.stringify(text)} does not canonicalize`);
+  return result.text;
+}
+
+function readPrintedLiteral(printed: string): string {
+  const body = printed.slice('sql'.length);
+  return body.startsWith('`')
+    ? resolvePslBacktickEscapes(body.slice(1, -1))
+    : (JSON.parse(body) as string);
+}
+
+describe('the canonical text', () => {
+  it.each(CANONICALIZATION_CASES.map((text) => [JSON.stringify(text), text]))(
+    'of %s is unchanged by canonicalizing it again',
+    (_name, text) => {
+      expect(canonical(canonical(text))).toBe(canonical(text));
+    },
+  );
+
+  it.each(CANONICALIZATION_CASES.map((text) => [JSON.stringify(text), text]))(
+    'of %s reads back unchanged once printed',
+    (_name, text) => {
+      const text0 = canonical(text);
+      expect(canonical(readPrintedLiteral(printTaggedLiteral('sql', text0)))).toBe(text0);
+      expect(printedTaggedLiteralReadsBack(text0)).toBe(true);
+    },
+  );
+});
+
+describe('printedTaggedLiteralReadsBack', () => {
+  it.each([
+    ['single-line', 'md5(random()::text)'],
+    ['multi-line', "(now()\n  + '1 day'::interval)"],
+    ['a backtick', 'a `b`'],
+    ['a backslash', 'a\\b'],
+    ['a dollar-brace sequence', 'a $' + '{x} b'],
+  ])('holds for %s text', (_name, text) => {
+    expect(printedTaggedLiteralReadsBack(text)).toBe(true);
+  });
+
+  it.each([
+    ['leading indentation', '  select 1'],
+    ['a blank first line of spaces', '  \nselect 1'],
+    ['a carriage return', 'a\rb'],
+    ['a NUL character', 'a\0b'],
+    ['leading indentation in the double-quote form', '  a `b`'],
+  ])('fails for text with %s, which the literal canonicalizes away', (_name, text) => {
+    expect(printedTaggedLiteralReadsBack(text)).toBe(false);
   });
 });

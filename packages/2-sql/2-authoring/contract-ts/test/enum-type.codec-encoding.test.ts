@@ -1,5 +1,6 @@
 import type { Contract, JsonValue } from '@internal/contract/types';
 import {
+  type AnyCodecDescriptor,
   type Codec,
   type CodecLookupWithDescriptors,
   emptyCodecLookup,
@@ -8,6 +9,7 @@ import type { TargetPackRef } from '@internal/framework-components/components';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { withTestTypes } from '../../../1-core/contract/test/test-type-lookups';
 import { buildSqlContractFromDefinition } from '../src/build-contract';
 import type { ContractDefinition } from '../src/contract-definition';
 import { enumType, member } from '../src/enum-type';
@@ -22,8 +24,8 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   defaultNamespaceId: 'public',
 };
 
-const pgText = { codecId: 'pg/text@1' as const, nativeType: 'text' } as const;
-const pgInt = { codecId: 'pg/int4@1' as const, nativeType: 'int4' } as const;
+const pgText = { codecId: 'pg/text@1' as const } as const;
+const pgInt = { codecId: 'pg/int4@1' as const } as const;
 
 function stubCodec(
   id: string,
@@ -71,7 +73,10 @@ describe('enum lowering encodes member values through the codec', () => {
       'pg/text@1': stubCodec('pg/text@1', (v) => v as JsonValue),
     });
 
-    const contract = buildSqlContractFromDefinition(definitionWith(Role), codecLookup);
+    const contract = buildSqlContractFromDefinition(
+      definitionWith(Role),
+      ...withTestTypes(codecLookup),
+    );
 
     expect(valueSetValues(contract, 'Role')).toEqual(['user', 'admin']);
     expect(memberValues(contract, 'Role')).toEqual(['user', 'admin']);
@@ -83,7 +88,10 @@ describe('enum lowering encodes member values through the codec', () => {
       'pg/int4@1': stubCodec('pg/int4@1', (v) => v as JsonValue),
     });
 
-    const contract = buildSqlContractFromDefinition(definitionWith(Priority), codecLookup);
+    const contract = buildSqlContractFromDefinition(
+      definitionWith(Priority),
+      ...withTestTypes(codecLookup),
+    );
 
     expect(valueSetValues(contract, 'Priority')).toEqual([1, 10]);
     expect(memberValues(contract, 'Priority')).toEqual([1, 10]);
@@ -99,7 +107,10 @@ describe('enum lowering encodes member values through the codec', () => {
       ),
     });
 
-    const contract = buildSqlContractFromDefinition(definitionWith(Role), codecLookup);
+    const contract = buildSqlContractFromDefinition(
+      definitionWith(Role),
+      ...withTestTypes(codecLookup),
+    );
 
     expect(valueSetValues(contract, 'Role')).toEqual(['USER', 'ADMIN']);
     expect(memberValues(contract, 'Role')).toEqual(['USER', 'ADMIN']);
@@ -108,7 +119,7 @@ describe('enum lowering encodes member values through the codec', () => {
   it('stores a member in another form when the codec reads that form back as the member', () => {
     const Level = enumType(
       'Level',
-      { codecId: 'pg/int8@1', nativeType: 'int8' },
+      { codecId: 'pg/int8@1' },
       member('Low', 1n),
       member('High', 10n),
     );
@@ -120,7 +131,10 @@ describe('enum lowering encodes member values through the codec', () => {
       ),
     });
 
-    const contract = buildSqlContractFromDefinition(definitionWith(Level), codecLookup);
+    const contract = buildSqlContractFromDefinition(
+      definitionWith(Level),
+      ...withTestTypes(codecLookup),
+    );
 
     expect(memberValues(contract, 'Level')).toEqual(['1', '10']);
   });
@@ -131,14 +145,16 @@ describe('enum lowering encodes member values through the codec', () => {
   ])(
     'refuses %s member the codec stores as a different value, saying what to write',
     (_kind, written, as, stored) => {
-      const Role = enumType('Role', { codecId: 'test/folding@1', nativeType: 'text' }, written);
+      const Role = enumType('Role', { codecId: 'test/folding@1' }, written);
       const codecLookup = codecLookupOf({
         'test/folding@1': stubCodec('test/folding@1', (v) =>
           Array.isArray(v) ? [...v].sort() : String(v).toLowerCase(),
         ),
       });
 
-      expect(() => buildSqlContractFromDefinition(definitionWith(Role), codecLookup)).toThrow(
+      expect(() =>
+        buildSqlContractFromDefinition(definitionWith(Role), ...withTestTypes(codecLookup)),
+      ).toThrow(
         expect.objectContaining({
           code: 'CONTRACT.ENUM_INVALID',
           message: `enumType("Role"): member "${written.name}" is written ${JSON.stringify(as)}, but the column stores ${JSON.stringify(stored)}. Write the member as ${JSON.stringify(stored)}.`,
@@ -154,11 +170,7 @@ describe('enum lowering encodes member values through the codec', () => {
 
   it('refuses a member whose stored value the codec cannot read back, naming the member', () => {
     const decodeFailure = new Error('database JSON value must be a decimal string');
-    const Ratio = enumType(
-      'Ratio',
-      { codecId: 'test/decimal@1', nativeType: 'numeric' },
-      member('Half', 1.5),
-    );
+    const Ratio = enumType('Ratio', { codecId: 'test/decimal@1' }, member('Half', 1.5));
     const codecLookup = codecLookupOf({
       'test/decimal@1': stubCodec(
         'test/decimal@1',
@@ -170,7 +182,9 @@ describe('enum lowering encodes member values through the codec', () => {
       ),
     });
 
-    expect(() => buildSqlContractFromDefinition(definitionWith(Ratio), codecLookup)).toThrow(
+    expect(() =>
+      buildSqlContractFromDefinition(definitionWith(Ratio), ...withTestTypes(codecLookup)),
+    ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.ENUM_INVALID',
         message:
@@ -186,10 +200,165 @@ describe('enum lowering encodes member values through the codec', () => {
     );
   });
 
+  it("refuses an enum whose codec descriptor says an enum cannot use it, quoting the descriptor's reason", () => {
+    const Stamp = enumType(
+      'Stamp',
+      { codecId: 'test/printed-text@1' },
+      member('Start', '2024-01-02T03:04:05'),
+    );
+    const codec = stubCodec('test/printed-text@1', (v) => v as JsonValue);
+    const codecLookup: CodecLookupWithDescriptors = {
+      ...emptyCodecLookup,
+      get: (id) => (id === codec.id ? codec : undefined),
+      descriptorFor: (id) =>
+        id === codec.id
+          ? ({
+              codecId: id,
+              traits: ['equality'],
+              paramsSchema: undefined,
+              factory: () => () => codec,
+              enumRefusal: 'A query reads its values as text the contract does not store.',
+            } as unknown as AnyCodecDescriptor)
+          : undefined,
+    };
+
+    expect(() =>
+      buildSqlContractFromDefinition(definitionWith(Stamp), ...withTestTypes(codecLookup)),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ENUM_INVALID',
+        message:
+          'enumType("Stamp"): an enum cannot use the codec test/printed-text@1. A query reads its values as text the contract does not store.',
+        meta: { enumName: 'Stamp', codecId: 'test/printed-text@1', reason: 'codec-not-for-enums' },
+      }),
+    );
+  });
+
+  it('refuses an enum whose codec does not declare the equality trait, saying so', () => {
+    const Shape = enumType('Shape', { codecId: 'test/unequal@1' }, member('Round', 'round'));
+    const codec = stubCodec('test/unequal@1', (v) => v as JsonValue);
+    const codecLookup: CodecLookupWithDescriptors = {
+      ...emptyCodecLookup,
+      get: (id) => (id === codec.id ? codec : undefined),
+      descriptorFor: (id) =>
+        id === codec.id
+          ? ({
+              codecId: id,
+              traits: [],
+              paramsSchema: undefined,
+              factory: () => () => codec,
+            } as unknown as AnyCodecDescriptor)
+          : undefined,
+    };
+
+    expect(() =>
+      buildSqlContractFromDefinition(definitionWith(Shape), ...withTestTypes(codecLookup)),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ENUM_INVALID',
+        message:
+          'enumType("Shape"): an enum cannot use the codec test/unequal@1. The codec does not declare the equality trait, so no value can be compared with a member. Use a codec that declares it.',
+        fix: 'Type the enum with another codec.',
+        meta: { enumName: 'Shape', codecId: 'test/unequal@1', reason: 'codec-not-for-enums' },
+      }),
+    );
+  });
+
+  describe('compares members as the codec stores them', () => {
+    const jsonbLookup = codecLookupOf({
+      'pg/jsonb@1': stubCodec('pg/jsonb@1', (v) => v as JsonValue),
+    });
+    const timestampLookup = codecLookupOf({
+      'pg/timestamptz@1': stubCodec(
+        'pg/timestamptz@1',
+        (v) => (v instanceof Date ? v.toISOString() : null),
+        (json) => new Date(String(json)),
+      ),
+    });
+
+    it('accepts two different object members', () => {
+      const Shape = enumType(
+        'Shape',
+        { codecId: 'pg/jsonb@1' },
+        member('Square', { sides: 4 }),
+        member('Triangle', { sides: 3 }),
+      );
+
+      const contract = buildSqlContractFromDefinition(
+        definitionWith(Shape),
+        ...withTestTypes(jsonbLookup),
+      );
+
+      expect(memberValues(contract, 'Shape')).toEqual([{ sides: 4 }, { sides: 3 }]);
+    });
+
+    it('accepts two dates a millisecond apart', () => {
+      const Moment = enumType(
+        'Moment',
+        { codecId: 'pg/timestamptz@1' },
+        member('Start', new Date('2024-01-01T00:00:00.000Z')),
+        member('JustAfter', new Date('2024-01-01T00:00:00.001Z')),
+      );
+
+      const contract = buildSqlContractFromDefinition(
+        definitionWith(Moment),
+        ...withTestTypes(timestampLookup),
+      );
+
+      expect(memberValues(contract, 'Moment')).toEqual([
+        '2024-01-01T00:00:00.000Z',
+        '2024-01-01T00:00:00.001Z',
+      ]);
+    });
+
+    it('refuses two equal object members, showing the stored object', () => {
+      const Shape = enumType(
+        'Shape',
+        { codecId: 'pg/jsonb@1' },
+        member('Wide', { width: 2, height: 1 }),
+        member('AlsoWide', { height: 1, width: 2 }),
+      );
+
+      expect(() =>
+        buildSqlContractFromDefinition(definitionWith(Shape), ...withTestTypes(jsonbLookup)),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.ENUM_INVALID',
+          message:
+            'enumType("Shape"): members "Wide" and "AlsoWide" both store {"height":1,"width":2}. Member values must be unique as their codec stores them.',
+          meta: {
+            enumName: 'Shape',
+            members: ['Wide', 'AlsoWide'],
+            reason: 'duplicate-member-value',
+          },
+        }),
+      );
+    });
+
+    it('refuses two equal dates', () => {
+      const Moment = enumType(
+        'Moment',
+        { codecId: 'pg/timestamptz@1' },
+        member('Start', new Date('2024-01-01T00:00:00.000Z')),
+        member('SameStart', new Date('2024-01-01T00:00:00.000Z')),
+      );
+
+      expect(() =>
+        buildSqlContractFromDefinition(definitionWith(Moment), ...withTestTypes(timestampLookup)),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.ENUM_INVALID',
+          message:
+            'enumType("Moment"): members "Start" and "SameStart" both store "2024-01-01T00:00:00.000Z". Member values must be unique as their codec stores them.',
+        }),
+      );
+    });
+  });
+
   it('refuses two members the codec stores as the same value, naming both', () => {
     const Moment = enumType(
       'Moment',
-      { codecId: 'test/minute@1', nativeType: 'timestamptz' },
+      { codecId: 'test/minute@1' },
       member('Early', new Date('2024-01-01T00:00:10.000Z')),
       member('Late', new Date('2024-01-01T00:00:20.000Z')),
     );
@@ -201,11 +370,13 @@ describe('enum lowering encodes member values through the codec', () => {
       ),
     });
 
-    expect(() => buildSqlContractFromDefinition(definitionWith(Moment), codecLookup)).toThrow(
+    expect(() =>
+      buildSqlContractFromDefinition(definitionWith(Moment), ...withTestTypes(codecLookup)),
+    ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.ENUM_INVALID',
         message:
-          'enumType("Moment"): members "Early" and "Late" both store "2024-01-01T00:00". Member values must be unique as the column stores them.',
+          'enumType("Moment"): members "Early" and "Late" both store "2024-01-01T00:00". Member values must be unique as their codec stores them.',
         meta: expect.objectContaining({
           enumName: 'Moment',
           members: ['Early', 'Late'],

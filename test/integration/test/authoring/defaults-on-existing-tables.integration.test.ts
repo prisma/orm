@@ -6,7 +6,11 @@ import type { Contract } from '@internal/contract/types';
 import postgresControlDriver from '@internal/driver-postgres/control';
 import sqliteDriver from '@internal/driver-sqlite/control';
 import sql, { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
-import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
+import {
+  APP_SPACE_ID,
+  createControlStack,
+  planOriginOf,
+} from '@internal/framework-components/control';
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import postgres from '@internal/target-postgres/control';
@@ -76,6 +80,8 @@ async function move(
     schema: await stack.family.introspect({ driver }),
     policy: fromContract === null ? INIT_ADDITIVE_POLICY : EVERY_CLASS,
     fromContract,
+    origin: planOriginOf(fromContract),
+    statements: [],
     frameworkComponents: stack.frameworkComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
@@ -131,6 +137,8 @@ async function moveAndVerify(
     schema: introspected,
     policy: EVERY_CLASS,
     fromContract: after,
+    origin: planOriginOf(after),
+    statements: [],
     frameworkComponents: stack.frameworkComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',

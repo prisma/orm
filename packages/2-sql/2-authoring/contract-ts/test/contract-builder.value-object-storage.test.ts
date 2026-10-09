@@ -1,14 +1,11 @@
-import type {
-  CodecLookupWithDescriptors,
-  ColumnTypeDescriptor,
-} from '@internal/framework-components/codec';
+import type { CodecLookup, ColumnTypeDescriptor } from '@internal/framework-components/codec';
 import type { TargetPackRef } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups, withTestTypes } from '../../../1-core/contract/test/test-type-lookups';
 import { buildSqlContractFromDefinition } from '../src/contract-builder';
 import type { ContractDefinition } from '../src/contract-definition';
 import { unboundTables } from './unbound-tables';
-import { withDescriptors } from './with-descriptors';
 
 const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   kind: 'target',
@@ -19,8 +16,8 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   defaultNamespaceId: 'public',
 };
 
-const int4 = { codecId: 'pg/int4@1', nativeType: 'int4' } as const;
-const jsonb = { codecId: 'pg/jsonb@1', nativeType: 'jsonb' } as const;
+const int4 = { codecId: 'pg/int4@1' } as const;
+const jsonb = { codecId: 'pg/jsonb@1' } as const;
 const idField = { fieldName: 'id', columnName: 'id', descriptor: int4, nullable: false } as const;
 
 function userWithAddresses(descriptor: ColumnTypeDescriptor): ContractDefinition {
@@ -65,18 +62,34 @@ function userWithAddresses(descriptor: ColumnTypeDescriptor): ContractDefinition
 describe('value-object fields are stored in one column of the descriptor they carry', () => {
   it('stores a single and a list value-object field in a column of that descriptor', () => {
     const contract = buildSqlContractFromDefinition(
-      userWithAddresses({ codecId: 'sqlite/json@1', nativeType: 'text' }),
+      userWithAddresses({ codecId: 'sqlite/json@1' }),
+      testTypeLookups.codecLookup,
+      testTypeLookups.dataTypeLookup,
     );
 
     expect(unboundTables(contract.storage)['user']?.columns).toEqual({
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      home_address: { nativeType: 'text', codecId: 'sqlite/json@1', nullable: true },
-      addresses: { nativeType: 'text', codecId: 'sqlite/json@1', nullable: false },
+      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false, many: false },
+      home_address: {
+        dataType: 'sqlite/text',
+        codecId: 'sqlite/json@1',
+        nullable: true,
+        many: false,
+      },
+      addresses: {
+        dataType: 'sqlite/text',
+        codecId: 'sqlite/json@1',
+        nullable: false,
+        many: false,
+      },
     });
   });
 
   it('maps a value-object field to its column in the storage bridge', () => {
-    const contract = buildSqlContractFromDefinition(userWithAddresses(jsonb));
+    const contract = buildSqlContractFromDefinition(
+      userWithAddresses(jsonb),
+      testTypeLookups.codecLookup,
+      testTypeLookups.dataTypeLookup,
+    );
 
     expect(contract.domain.namespaces['public']?.models['User']?.storage['fields']).toEqual({
       id: { column: 'id' },
@@ -94,7 +107,7 @@ describe('value-object fields are stored in one column of the descriptor they ca
       'currency' in value &&
       typeof value.currency === 'string';
 
-    const codecLookup: CodecLookupWithDescriptors = withDescriptors({
+    const codecLookup: CodecLookup = {
       get: (id) => {
         if (id !== 'pg/jsonb@1') {
           return undefined;
@@ -117,9 +130,8 @@ describe('value-object fields are stored in one column of the descriptor they ca
           decodeJson: (json: unknown) => json,
         };
       },
-      targetTypesFor: (id) => (id === 'pg/jsonb@1' ? ['jsonb'] : undefined),
       renderOutputTypeFor: () => undefined,
-    });
+    };
 
     const contract = buildSqlContractFromDefinition(
       {
@@ -154,7 +166,7 @@ describe('value-object fields are stored in one column of the descriptor they ca
           },
         ],
       },
-      codecLookup,
+      ...withTestTypes(codecLookup),
     );
 
     expect(unboundTables(contract.storage)['invoice']?.columns['total']?.default).toEqual({

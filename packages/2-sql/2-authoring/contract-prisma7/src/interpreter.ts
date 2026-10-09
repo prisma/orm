@@ -6,15 +6,13 @@ import type { Contract } from '@internal/contract/types';
 import type {
   AuthoringEntityContext,
   AuthoringEntityTypeDescriptor,
+  DataTypeSupport,
 } from '@internal/framework-components/authoring';
 import {
-  collectScalarTypeConstructors,
+  getAuthoringTypeConstructor,
   instantiateAuthoringEntityType,
 } from '@internal/framework-components/authoring';
-import type {
-  CodecLookupWithDescriptors,
-  DataTypeLookup,
-} from '@internal/framework-components/codec';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type {
   AssembledAuthoringContributions,
   ControlMutationDefaults,
@@ -31,6 +29,7 @@ import type {
 import {
   buildSymbolTable,
   createPslDiagnosticCollector,
+  diagnosticSource,
   keywordPslSpan,
   nodePslSpan,
   readResolvedAttribute,
@@ -43,12 +42,17 @@ import type {
   SourceFile,
 } from '@internal/psl-parser/syntax';
 import { dottedPathsIn, StringLiteralExprAst } from '@internal/psl-parser/syntax';
+import { sqlDataTypeOfCodec, unquotedSqlBaseNameOfCodec } from '@internal/sql-contract/data-type';
+import {
+  declaredBackingObjectName,
+  declaredIndexesServeForeignKey,
+} from '@internal/sql-contract/foreign-key-materialization';
+import { type AuthoredIndexInput, lowerAuthoredIndex } from '@internal/sql-contract/index-naming';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import { deriveValueSetFromEntity } from '@internal/sql-contract/value-set-derivation-hook';
 import {
   buildEntityTypesByDiscriminator,
-  type ColumnDescriptor,
-  resolveFieldTypeDescriptor,
+  instantiateFieldTypeConstructor,
 } from '@internal/sql-contract-psl/resolution';
 import {
   buildSqlContractFromDefinition,
@@ -59,6 +63,11 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { basename } from 'pathe';
+import {
+  checkStatedConstraintNameLength,
+  prisma7PrimaryKeyName,
+  statedConstraintName,
+} from './constraint-names';
 import { givesColumnDefault, lowerPrisma7Default } from './defaults';
 import { andList, ignoredFieldReferenced, prisma7Diagnostic } from './diagnostics';
 import { type IndexAttribute, indexNode, parseIndexAttribute } from './indexes';
@@ -85,12 +94,11 @@ export interface InterpretPrisma7DocumentsInput {
   readonly controlMutationDefaults: ControlMutationDefaults;
   readonly authoringContributions: AssembledAuthoringContributions;
   readonly codecLookup: CodecLookupWithDescriptors;
-  readonly dataTypeLookup: DataTypeLookup;
+  readonly dataTypes: DataTypeSupport;
   readonly composedExtensions: readonly string[];
 }
 
 const SUMMARY = 'Prisma 7 schema interpretation failed';
-const EMPTY_DESCRIPTORS: ReadonlyMap<string, ColumnDescriptor> = new Map();
 
 interface SourceBlock {
   readonly block: BlockSymbol;
@@ -130,6 +138,8 @@ interface ModelBuild {
   readonly ignoredRelationFields: RelationField[];
   readonly rejectedFields: Set<string>;
   idFields: readonly string[];
+  /** The `map` name of the model's `@id` or `@@id`. */
+  idMap: string | undefined;
   readonly uniqueIndexes: IndexAttribute[];
   readonly relationFields: RelationField[];
 }
@@ -307,7 +317,7 @@ export function interpretPrisma7Documents(
         sourceId,
         sources,
         defaultNamespaceId,
-        binding.indexTypes,
+        binding,
         diagnostics,
       );
       if (declaration === undefined) {
@@ -334,7 +344,6 @@ export function interpretPrisma7Documents(
   const namespaceEntities = lowerNativeEnums(enums, input, diagnostics);
 
   const modelNames = new Set([...models.map((model) => model.symbol.name), ...ignoredModels]);
-  const scalarColumnDescriptors = collectScalarTypeConstructors(input.authoringContributions.type);
   const composedExtensions = new Set(input.composedExtensions);
   const builds = new Map<string, ModelBuild>();
   for (const declaration of models) {
@@ -345,6 +354,7 @@ export function interpretPrisma7Documents(
       ignoredRelationFields: [],
       rejectedFields: new Set(),
       idFields: declaration.id?.fields ?? [],
+      idMap: declaration.id?.map,
       uniqueIndexes: [...declaration.uniqueIndexes],
       relationFields: [],
     };
@@ -357,7 +367,6 @@ export function interpretPrisma7Documents(
         ignoredModels,
         enums,
         namespaceEntities,
-        scalarColumnDescriptors,
         composedExtensions,
         input,
         diagnostics,
@@ -454,20 +463,30 @@ export function interpretPrisma7Documents(
     });
     const foreignKeys = lowered.foreignKeys.get(modelName);
     const relations = lowered.relations.get(modelName);
-    modelNodes.push({
-      modelName,
-      tableName: model.tableName,
-      namespaceId: model.namespaceId,
-      fields: [...build.columns.values()],
-      ...(id !== undefined && id.length > 0 ? { id: { columns: id } } : {}),
-      ...(indexes.length > 0 ? { indexes } : {}),
-      ...(foreignKeys !== undefined ? { foreignKeys } : {}),
-      ...(relations !== undefined ? { relations } : {}),
-    });
+    const primaryKeyName = statedConstraintName(
+      prisma7PrimaryKeyName(model.tableName, build.idMap, binding.identifierMaxBytes),
+      binding.defaultConstraintNames.primaryKey(model.tableName),
+    );
+    modelNodes.push(
+      stateServedBackingIndexes({
+        modelName,
+        tableName: model.tableName,
+        namespaceId: model.namespaceId,
+        fields: [...build.columns.values()],
+        ...(id !== undefined && id.length > 0
+          ? { id: { columns: id, ...ifDefined('name', primaryKeyName) } }
+          : {}),
+        ...(indexes.length > 0 ? { indexes } : {}),
+        ...(foreignKeys !== undefined ? { foreignKeys } : {}),
+        ...(relations !== undefined ? { relations } : {}),
+      }),
+    );
   }
   for (const [key, junction] of lowered.junctions) {
     const relations = lowered.relations.get(key);
-    modelNodes.push(relations === undefined ? junction : { ...junction, relations });
+    modelNodes.push(
+      stateServedBackingIndexes(relations === undefined ? junction : { ...junction, relations }),
+    );
   }
 
   if (diagnostics.length > 0) {
@@ -498,8 +517,40 @@ export function interpretPrisma7Documents(
         models: modelNodes,
       },
       input.codecLookup,
+      input.dataTypes.lookup,
     ),
   );
+}
+
+/**
+ * Prisma 7 never derives a backing index for a foreign key, so its relations say `index: false`. Where the model's own indexes or keys already serve a foreign key, the relation takes the default instead, so the build drops the derived index again, or names the named key or plain index whose first columns are the foreign key's. Either way the stored foreign key states what backs it, and no index is added.
+ */
+function stateServedBackingIndexes(node: ModelNode): ModelNode {
+  if (node.foreignKeys === undefined) return node;
+  const table = {
+    indexes: (node.indexes ?? []).map((index) =>
+      lowerAuthoredIndex(
+        node.tableName,
+        blindCast<AuthoredIndexInput, 'a Prisma 7 index node carries the authored index union'>(
+          index,
+        ),
+        [],
+      ),
+    ),
+    uniques: node.uniques ?? [],
+    primaryKey: node.id,
+  };
+  return {
+    ...node,
+    foreignKeys: node.foreignKeys.map((foreignKey) => {
+      if (foreignKey.index !== false) return foreignKey;
+      if (declaredIndexesServeForeignKey(foreignKey.columns, table)) {
+        return { ...foreignKey, index: true };
+      }
+      const name = declaredBackingObjectName(foreignKey.columns, table);
+      return name === undefined ? foreignKey : { ...foreignKey, index: name };
+    }),
+  };
 }
 
 function checkDatasource(
@@ -599,9 +650,10 @@ function readModelDeclaration(
   sourceId: string,
   sources: PslSources,
   defaultNamespaceId: string,
-  indexTypes: Prisma7TargetBinding['indexTypes'],
+  binding: Pick<Prisma7TargetBinding, 'indexTypes' | 'identifierMaxBytes'>,
   diagnostics: ContractSourceDiagnostic[],
 ): ModelDeclaration | undefined {
+  const { indexTypes } = binding;
   if (symbol.attributes.some((attribute) => attribute.name === 'ignore')) return undefined;
   let tableName = symbol.name;
   let namespaceId = defaultNamespaceId;
@@ -609,6 +661,15 @@ function readModelDeclaration(
   const uniqueIndexes: IndexAttribute[] = [];
   const indexes: IndexAttribute[] = [];
   for (const attribute of symbol.attributes) {
+    if (['id', 'unique', 'index'].includes(attribute.name)) {
+      checkStatedConstraintNameLength({
+        attribute,
+        owner: `Model "${symbol.name}"`,
+        maxBytes: binding.identifierMaxBytes,
+        sourceId,
+        diagnostics,
+      });
+    }
     switch (attribute.name) {
       case 'map':
         tableName =
@@ -776,6 +837,7 @@ function lowerNativeEnums(
       family: input.binding.target.familyId,
       target: input.binding.target.targetId,
       codecLookup: input.codecLookup,
+      dataTypeLookup: input.dataTypes.lookup,
       sourceId: declaration.sourceId,
       diagnostics: {
         push: (diagnostic) => {
@@ -891,7 +953,6 @@ interface ReadFieldArgs {
   readonly ignoredModels: ReadonlySet<string>;
   readonly enums: ReadonlyMap<string, EnumDeclaration>;
   readonly namespaceEntities: NamespaceEntities;
-  readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly composedExtensions: ReadonlySet<string>;
   readonly input: InterpretPrisma7DocumentsInput;
   readonly diagnostics: ContractSourceDiagnostic[];
@@ -949,16 +1010,32 @@ function readField(args: ReadFieldArgs): void {
   let defaultAttribute: ResolvedAttribute | undefined;
   let updatedAt: ResolvedAttribute | undefined;
   for (const attribute of field.attributes) {
+    if (
+      isRelationField ? attribute.name === 'relation' : ['id', 'unique'].includes(attribute.name)
+    ) {
+      checkStatedConstraintNameLength({
+        attribute,
+        owner: label,
+        maxBytes: binding.identifierMaxBytes,
+        sourceId,
+        diagnostics,
+      });
+    }
     if (attribute.name === 'map' && !isRelationField) {
       columnName = requireStringArgument(attribute, label, sourceId, diagnostics) ?? columnName;
     } else if (attribute.name.startsWith('db.') && !isRelationField) {
       nativeType = { name: attribute.name.slice('db.'.length), attribute };
     } else if (attribute.name === 'id' && !isRelationField) {
-      if (
-        parseIndexAttribute(attribute, label, sourceId, binding.indexTypes, diagnostics) !==
-        undefined
-      ) {
+      const parsed = parseIndexAttribute(
+        attribute,
+        label,
+        sourceId,
+        binding.indexTypes,
+        diagnostics,
+      );
+      if (parsed !== undefined) {
         build.idFields = [field.name];
+        build.idMap = parsed.map;
       }
     } else if (attribute.name === 'unique' && !isRelationField) {
       const parsed = parseIndexAttribute(
@@ -1077,38 +1154,39 @@ function readField(args: ReadFieldArgs): void {
     };
   }
 
-  const namespaceExtensionEntities = args.namespaceEntities.get(model.namespaceId);
+  const typeConstructor = getAuthoringTypeConstructor(input.authoringContributions, call.path);
+  if (typeConstructor === undefined) {
+    diagnostics.push(
+      prisma7Diagnostic(
+        'PSL.PRISMA7_UNSUPPORTED_TYPE',
+        `${label} type "${field.typeName}" could not be resolved against target "${binding.target.targetId}".`,
+        sourceId,
+        field.span,
+      ),
+    );
+    return;
+  }
   const typeDiagnostics = createPslDiagnosticCollector(model.sources);
-  const resolved = resolveFieldTypeDescriptor({
-    field: { ...field, typeConstructor: call },
-    enumTypeDescriptors: EMPTY_DESCRIPTORS,
-    namedTypeDescriptors: EMPTY_DESCRIPTORS,
-    scalarColumnDescriptors: args.scalarColumnDescriptors,
-    authoringContributions: input.authoringContributions,
-    composedExtensions: args.composedExtensions,
-    familyId: binding.target.familyId,
-    targetId: binding.target.targetId,
+  const resolved = instantiateFieldTypeConstructor({
+    call,
+    descriptor: typeConstructor,
     diagnostics: typeDiagnostics,
-    sources: model.sources,
+    source: diagnosticSource(model.sources, field.node.syntax),
     entityLabel: label,
     namespaceId: model.namespaceId,
-    ...ifDefined('namespaceExtensionEntities', namespaceExtensionEntities),
+    namespaceExtensionEntities: args.namespaceEntities.get(model.namespaceId),
     codecLookup: input.codecLookup,
   });
   diagnostics.push(...typeDiagnostics.toExternal());
   if (!resolved.ok) {
-    if (!resolved.alreadyReported) {
-      diagnostics.push(
-        prisma7Diagnostic(
-          'PSL.PRISMA7_UNSUPPORTED_TYPE',
-          `${label} type "${field.typeName}" could not be resolved against target "${binding.target.targetId}".`,
-          sourceId,
-          field.span,
-        ),
-      );
-    }
     return;
   }
+  const typeLookups = { codecLookup: input.codecLookup, dataTypeLookup: input.dataTypes.lookup };
+  const columnTypeName = unquotedSqlBaseNameOfCodec(
+    resolved.descriptor.codecId,
+    resolved.descriptor.typeParams,
+    typeLookups,
+  );
   const updatedAtGeneratorId =
     updatedAt === undefined ? undefined : binding.updatedAtGeneratorId(resolved.descriptor.codecId);
   if (updatedAt !== undefined && updatedAtGeneratorId === undefined) {
@@ -1121,7 +1199,7 @@ function readField(args: ReadFieldArgs): void {
     diagnostics.push(
       prisma7Diagnostic(
         'PSL.PRISMA7_UPDATED_AT_TYPE_UNSUPPORTED',
-        `${label}: @updatedAt is not supported on this column, because Prisma 8 has no generator for column type "${resolved.descriptor.nativeType}" yet. Remove @updatedAt: Prisma 7's next migration is empty${withoutUpdatedAt}`,
+        `${label}: @updatedAt is not supported on this column, because Prisma 8 has no generator for column type "${columnTypeName}" yet. Remove @updatedAt: Prisma 7's next migration is empty${withoutUpdatedAt}`,
         sourceId,
         updatedAt.span,
       ),
@@ -1150,11 +1228,12 @@ function readField(args: ReadFieldArgs): void {
           codecId: resolved.descriptor.codecId,
           typeParams: resolved.descriptor.typeParams,
           codecLookup: input.codecLookup,
-          dataTypeSupport: {
-            entries: input.authoringContributions?.dataTypes ?? {},
-            lookup: input.dataTypeLookup,
-          },
-          literalForm: binding.literalDefaultForm(resolved.descriptor),
+          dataTypes: input.dataTypes,
+          literalForm: binding.literalDefaultForm({
+            codecId: resolved.descriptor.codecId,
+            dataType: sqlDataTypeOfCodec(resolved.descriptor.codecId, typeLookups).id,
+            typeParams: resolved.descriptor.typeParams,
+          }),
           enumMembers:
             enumDeclaration === undefined
               ? undefined
@@ -1194,7 +1273,8 @@ function readField(args: ReadFieldArgs): void {
     descriptor: resolved.descriptor,
     nullable: field.optional || field.list,
     // Prisma 7 creates no CHECK constraint on list columns; Prisma 8 would derive one.
-    ...(field.list ? { many: true, noCheck: ['elementNotNull' as const] } : {}),
+    many: field.list,
+    ...(field.list ? { elementNullable: false, noCheck: ['elementNotNull' as const] } : {}),
     ...ifDefined('default', lowered?.storage),
     ...ifDefined('executionDefaults', executionDefaults),
   });

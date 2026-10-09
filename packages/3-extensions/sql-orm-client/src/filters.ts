@@ -9,7 +9,13 @@ import {
   OrExpr,
 } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
-import { getFieldToColumnMap, modelOf, resolveModelTableName } from './collection-contract';
+import {
+  columnOfCallerField,
+  getModelFieldColumns,
+  modelOf,
+  resolveModelTableName,
+} from './collection-contract';
+import { hasTrait } from './column-codec';
 import { ormError } from './orm-errors';
 import { predicateComparison } from './predicate-comparison';
 import { predicateExpression } from './predicate-expression';
@@ -43,7 +49,7 @@ export function shorthandToWhereExpr<
 ): AnyExpression | undefined {
   const contract = context.contract;
   const tableName = resolveModelTableName(contract, namespaceId, modelName);
-  const fieldToColumn = getFieldToColumnMap(contract, namespaceId, modelName);
+  const fieldColumns = getModelFieldColumns(contract, namespaceId, modelName);
 
   const exprs: AnyExpression[] = [];
   for (const [fieldName, value] of Object.entries(filters)) {
@@ -51,8 +57,10 @@ export function shorthandToWhereExpr<
       continue;
     }
 
-    const columnName = fieldToColumn[fieldName] ?? fieldName;
-    const left = ColumnRef.of(tableName, columnName);
+    const left = ColumnRef.of(
+      tableName,
+      columnOfCallerField(contract, namespaceId, fieldColumns, modelName, fieldName),
+    );
 
     if (value === null) {
       exprs.push(NullCheckExpr.isNull(left));
@@ -80,8 +88,7 @@ function assertFieldHasEqualityTrait(
 ): void {
   const fieldType = modelOf(context.contract, namespaceId, modelName)?.fields?.[fieldName]?.type;
   const codecId = fieldType?.kind === 'scalar' ? fieldType.codecId : undefined;
-  const traits = codecId ? (context.codecDescriptors.descriptorFor(codecId)?.traits ?? []) : [];
-  if (!traits.includes('equality')) {
+  if (codecId === undefined || !hasTrait(context, codecId, 'equality')) {
     throw ormError(
       'ORM.FILTER_UNSUPPORTED',
       `Shorthand filter on "${modelName}.${fieldName}": field does not support equality comparisons`,

@@ -1,17 +1,13 @@
-import { blockSpecFactoryOf, buildSymbolTable } from '@internal/psl-parser';
+import { blockSpecContext, blockSpecFactoryOf, buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { postgresAuthoringPslBlockDescriptors } from '../src/core/authoring';
+import { postgresDataTypeSupport } from './fixtures/postgres-data-type-support';
 
 function specContext() {
-  const { document, sources } = parse('role docs_probe {\n}\n', 'block-documentation.test.psl');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
-  });
-  const block = symbolTable.topLevel.blocks['docs_probe'];
-  if (block === undefined) throw new Error('expected the probe role block in the symbol table');
-  return { symbols: symbolTable, block };
+  const { document, sources } = parse('', 'block-documentation.test.psl');
+  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+  return blockSpecContext({ symbols: symbolTable, dataTypes: postgresDataTypeSupport });
 }
 
 describe('PostgreSQL block documentation', () => {

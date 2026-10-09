@@ -1,5 +1,5 @@
-import type { AstNode, BracedBlock } from '../ast-helpers';
-import { filterChildren, findChildToken, findFirstChild } from '../ast-helpers';
+import type { AstNode, BracedBlock, HasDocComment } from '../ast-helpers';
+import { filterChildren, findChildToken, findFirstChild, readDocComment } from '../ast-helpers';
 import { SyntaxNode, type SyntaxToken } from '../red';
 import { FieldAttributeAst, ModelAttributeAst } from './attributes';
 import type { ExpressionAst } from './expressions';
@@ -50,7 +50,7 @@ export class DocumentAst implements AstNode {
   }
 }
 
-export class ModelDeclarationAst implements BracedBlock {
+export class ModelDeclarationAst implements BracedBlock, HasDocComment {
   readonly syntax: SyntaxNode;
 
   constructor(syntax: SyntaxNode) {
@@ -86,6 +86,10 @@ export class ModelDeclarationAst implements BracedBlock {
       this.syntax,
       (node) => FieldDeclarationAst.cast(node) ?? ModelAttributeAst.cast(node),
     );
+  }
+
+  docComment(): string | undefined {
+    return readDocComment(this.syntax);
   }
 
   static cast(node: SyntaxNode): ModelDeclarationAst | undefined {
@@ -93,7 +97,7 @@ export class ModelDeclarationAst implements BracedBlock {
   }
 }
 
-export class CompositeTypeDeclarationAst implements BracedBlock {
+export class CompositeTypeDeclarationAst implements BracedBlock, HasDocComment {
   readonly syntax: SyntaxNode;
 
   constructor(syntax: SyntaxNode) {
@@ -129,6 +133,10 @@ export class CompositeTypeDeclarationAst implements BracedBlock {
       this.syntax,
       (node) => FieldDeclarationAst.cast(node) ?? ModelAttributeAst.cast(node),
     );
+  }
+
+  docComment(): string | undefined {
+    return readDocComment(this.syntax);
   }
 
   static cast(node: SyntaxNode): CompositeTypeDeclarationAst | undefined {
@@ -198,7 +206,7 @@ export class TypesBlockAst implements BracedBlock {
   }
 }
 
-export class GenericBlockDeclarationAst implements BracedBlock {
+export class GenericBlockDeclarationAst implements BracedBlock, HasDocComment {
   readonly syntax: SyntaxNode;
 
   constructor(syntax: SyntaxNode) {
@@ -239,6 +247,10 @@ export class GenericBlockDeclarationAst implements BracedBlock {
       this.syntax,
       (node) => KeyValuePairAst.cast(node) ?? ModelAttributeAst.cast(node),
     );
+  }
+
+  docComment(): string | undefined {
+    return readDocComment(this.syntax);
   }
 
   static cast(node: SyntaxNode): GenericBlockDeclarationAst | undefined {
@@ -288,7 +300,7 @@ export class KeyValuePairAst implements AstNode {
   }
 }
 
-export class FieldDeclarationAst implements AstNode {
+export class FieldDeclarationAst implements AstNode, HasDocComment {
   readonly syntax: SyntaxNode;
 
   constructor(syntax: SyntaxNode) {
@@ -307,12 +319,16 @@ export class FieldDeclarationAst implements AstNode {
     yield* filterChildren(this.syntax, FieldAttributeAst.cast);
   }
 
+  docComment(): string | undefined {
+    return readDocComment(this.syntax);
+  }
+
   static cast(node: SyntaxNode): FieldDeclarationAst | undefined {
     return node.kind === 'FieldDeclaration' ? new FieldDeclarationAst(node) : undefined;
   }
 }
 
-export class NamedTypeDeclarationAst implements AstNode {
+export class NamedTypeDeclarationAst implements AstNode, HasDocComment {
   readonly syntax: SyntaxNode;
 
   constructor(syntax: SyntaxNode) {
@@ -333,6 +349,10 @@ export class NamedTypeDeclarationAst implements AstNode {
 
   *attributes(): Iterable<FieldAttributeAst> {
     yield* filterChildren(this.syntax, FieldAttributeAst.cast);
+  }
+
+  docComment(): string | undefined {
+    return readDocComment(this.syntax);
   }
 
   static cast(node: SyntaxNode): NamedTypeDeclarationAst | undefined {

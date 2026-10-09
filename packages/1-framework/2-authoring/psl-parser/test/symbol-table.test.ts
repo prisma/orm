@@ -4,6 +4,7 @@ import { blockAttribute } from '../src/attribute-spec/block-attribute';
 import { leafDiagnostic } from '../src/attribute-spec/combinators/diagnostic';
 import { jsonValue } from '../src/attribute-spec/combinators/json-value';
 import { str } from '../src/attribute-spec/combinators/str';
+import { EMPTY_DATA_TYPES } from '../src/attribute-spec/spec-context';
 import { mapBlock, structBlock } from '../src/block-spec/constructors';
 import { interpretExtensionBlocks } from '../src/block-spec/interpret';
 import { parse } from '../src/parse';
@@ -30,6 +31,7 @@ function build(source: string, pslBlockDescriptors: AuthoringPslBlockDescriptorN
       symbolTable: result.symbolTable,
       pslBlockDescriptors,
     }),
+    dataTypes: EMPTY_DATA_TYPES,
   });
   return { ...result, blocks };
 }
@@ -460,8 +462,43 @@ describe('buildSymbolTable() — resolved field shape', () => {
 
     expect(fields['nickname']?.optional).toBe(true);
     expect(fields['nickname']?.list).toBe(false);
+    expect(fields['nickname']?.elementOptional).toBe(false);
     expect(fields['tags']?.optional).toBe(false);
     expect(fields['tags']?.list).toBe(true);
+    expect(fields['tags']?.elementOptional).toBe(false);
+  });
+
+  it('splits the list and element nullability axes across all four spellings', () => {
+    const result = build(
+      [
+        'model User {',
+        '  plain String',
+        '  fieldOptional String?',
+        '  list String[]',
+        '  elementOptional String?[]',
+        '  listOptional String[]?',
+        '  bothOptional String?[]?',
+        '}',
+      ].join('\n'),
+    );
+    const fields = result.symbolTable.topLevel.models['User']?.fields ?? {};
+
+    expect(result.diagnostics).toHaveLength(0);
+    const axes = (name: string) => ({
+      optional: fields[name]?.optional,
+      list: fields[name]?.list,
+      elementOptional: fields[name]?.elementOptional,
+    });
+    expect(axes('plain')).toEqual({ optional: false, list: false, elementOptional: false });
+    expect(axes('fieldOptional')).toEqual({ optional: true, list: false, elementOptional: false });
+    expect(axes('list')).toEqual({ optional: false, list: true, elementOptional: false });
+    expect(axes('elementOptional')).toEqual({
+      optional: false,
+      list: true,
+      elementOptional: true,
+    });
+    expect(axes('listOptional')).toEqual({ optional: true, list: true, elementOptional: false });
+    expect(axes('bothOptional')).toEqual({ optional: true, list: true, elementOptional: true });
   });
 
   it('resolves a constructor field type onto typeConstructor', () => {

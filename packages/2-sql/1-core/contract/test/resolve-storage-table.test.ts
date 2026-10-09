@@ -9,7 +9,7 @@ import { createTestSqlNamespace } from './test-support';
 function tableNamed(_name: string): StorageTable {
   return new StorageTable({
     columns: {
-      id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+      id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],
@@ -21,8 +21,8 @@ function tableNamed(_name: string): StorageTable {
 function tableWithColumn(columnName: string): StorageTable {
   return new StorageTable({
     columns: {
-      id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-      [columnName]: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+      id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+      [columnName]: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],

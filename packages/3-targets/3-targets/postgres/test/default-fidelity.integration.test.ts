@@ -13,10 +13,7 @@ import { parsePostgresListText } from '../src/core/list-decoder';
 import { type CatalogColumnType, introspectedNativeType } from '../src/core/native-type-normalizer';
 import { createPostgresTypeMap } from '../src/core/psl-build/postgres-type-map';
 import { postgresCodecDescriptorRegistry } from '../src/core/registry';
-import {
-  postgresNativeAuthoringTypes,
-  postgresScalarAuthoringTypes,
-} from '../src/core/type-constructors';
+import { postgresPslTypeConstructors } from '../src/core/type-constructors';
 import { enumTypes, type FidelityRow, rows } from './default-fidelity.rows';
 
 type Compared = JsonValue | ColumnDefault | undefined;
@@ -42,7 +39,7 @@ interface CatalogColumn extends CatalogColumnType {
 const enumNames: ReadonlySet<string> = new Set(enumTypes.map((enumType) => enumType.name));
 const typeMap = createPostgresTypeMap(enumNames);
 const typeConstructors = {
-  type: { ...postgresScalarAuthoringTypes, ...postgresNativeAuthoringTypes },
+  type: postgresPslTypeConstructors,
 };
 
 /** The codec and type parameters the type constructor `contract infer` writes names, as `contract emit` reads it. */

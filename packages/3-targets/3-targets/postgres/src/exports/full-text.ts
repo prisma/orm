@@ -1,4 +1,10 @@
 export {
+  FullTextDocument,
+  type FullTextDocumentColumn,
+  type FullTextDocumentGroups,
+  fullTextDocument,
+} from '../core/full-text-document';
+export {
   phrasetoTsquery,
   plaintoTsquery,
   type TextArgument,

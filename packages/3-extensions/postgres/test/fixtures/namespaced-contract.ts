@@ -12,10 +12,12 @@ type Models = {
   readonly User: {
     readonly fields: {
       readonly id: {
+        readonly many: false;
         readonly nullable: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
       };
       readonly name: {
+        readonly many: false;
         readonly nullable: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
       };
@@ -42,12 +44,14 @@ type Storage = {
           readonly users: {
             columns: {
               readonly id: {
-                readonly nativeType: 'int4';
+                readonly many: false;
+                readonly dataType: 'pg/int4';
                 readonly codecId: 'pg/int4@1';
                 readonly nullable: false;
               };
               readonly name: {
-                readonly nativeType: 'text';
+                readonly many: false;
+                readonly dataType: 'pg/text';
                 readonly codecId: 'pg/text@1';
                 readonly nullable: false;
               };

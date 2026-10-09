@@ -1,5 +1,6 @@
+import { DATA_TYPE_ID_PATTERN } from '@internal/framework-components/codec';
 import { type Type, type } from 'arktype';
-import type { ForeignKeyInput, ReferentialAction } from './foreign-key';
+import type { ForeignKeyIndex, ForeignKeyInput, ReferentialAction } from './foreign-key';
 import type { ForeignKeyReferenceInput } from './foreign-key-reference';
 import type { PrimaryKeyInput } from './primary-key';
 import type { UniqueConstraintInput } from './unique-constraint';
@@ -36,10 +37,10 @@ const StorageValueSetRefSchema = type({
 
 const StorageColumnSchema = type({
   '+': 'reject',
-  nativeType: 'string',
+  dataType: DATA_TYPE_ID_PATTERN,
   codecId: 'string',
   nullable: 'boolean',
-  'many?': 'boolean',
+  'many?': type('false').or({ '+': 'reject', elementNullable: 'boolean' }),
   'typeParams?': 'Record<string, unknown>',
   'typeRef?': 'string',
   'default?': ColumnDefaultSchema,
@@ -52,6 +53,7 @@ const StorageColumnSchema = type({
   if (col.typeParams !== undefined && col.typeRef !== undefined) {
     return ctx.mustBe('a column with either typeParams or typeRef, not both');
   }
+
   if (col.noCheck !== undefined) {
     if (col.noCheck.length === 0) {
       return ctx.mustBe('a column whose noCheck array is non-empty (omit the key when enforced)');
@@ -121,12 +123,21 @@ export const ReferentialActionSchema = type
   .declare<ReferentialAction>()
   .type("'noAction' | 'restrict' | 'cascade' | 'setNull' | 'setDefault'");
 
+export const ForeignKeyIndexSchema = type
+  .declare<ForeignKeyIndex>()
+  .type(
+    type({ '+': 'reject', name: 'string' })
+      .or({ '+': 'reject', primaryKey: 'true' })
+      .or({ '+': 'reject', unique: type.string.array().readonly() }),
+  );
+
 export const ForeignKeySchema = type.declare<ForeignKeyInput>().type({
   source: ForeignKeySourceSchema,
   target: ForeignKeyReferenceSchema,
   'name?': 'string',
   'onDelete?': ReferentialActionSchema,
   'onUpdate?': ReferentialActionSchema,
+  'index?': ForeignKeyIndexSchema.or('boolean'),
 });
 
 export const CheckConstraintSchema = type({

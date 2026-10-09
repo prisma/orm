@@ -41,15 +41,18 @@ import {
   DropTableCall,
   EnableRowLevelSecurityCall,
   RawSqlCall,
-  RenameCheckConstraintCall,
+  RenameColumnCall,
+  RenameConstraintCall,
   RenameIndexCall,
   RenamePostgresRlsPolicyCall,
+  RenameTableCall,
   SetDefaultCall,
   SetNotNullCall,
 } from '../../src/core/migrations/op-factory-call';
 import { renderCallsToTypeScript } from '../../src/core/migrations/render-typescript';
 import { PostgresRlsPolicy } from '../../src/core/postgres-rls-policy';
 import * as migrationFacade from '../../src/exports/migration';
+import { postgresTypeLookups } from '../postgres-type-lookups';
 
 const SNAPSHOTS_IMPORT_PATH = '../../snapshots';
 const FROM_HASH = 'a'.repeat(64);
@@ -178,7 +181,7 @@ describe('renderCallsToTypeScript (postgres) — facade import surface', () => {
   };
 
   const storageColumn = new StorageColumn({
-    nativeType: 'text',
+    dataType: 'pg/text',
     codecId: 'pg/text@1',
     nullable: false,
   });
@@ -200,6 +203,8 @@ describe('renderCallsToTypeScript (postgres) — facade import surface', () => {
       ],
     ),
     new DropTableCall('public', 'stale'),
+    new RenameTableCall('public', 'stale', 'archived', []),
+    new RenameColumnCall('public', 'archived', 'title', 'heading', []),
     new AddColumnCall('public', 'note', col('nickname', 'text')),
     new DropColumnCall('public', 'note', 'nickname'),
     new AlterColumnTypeCall('public', 'note', 'kind', {
@@ -217,7 +222,7 @@ describe('renderCallsToTypeScript (postgres) — facade import surface', () => {
       tableName: 'note',
       columnName: 'title',
       column: storageColumn,
-      codecHooks: new Map(),
+      types: postgresTypeLookups,
       storageTypes: {},
       temporaryDefault: "''",
     }),
@@ -230,12 +235,14 @@ describe('renderCallsToTypeScript (postgres) — facade import surface', () => {
     new AddUniqueCall('public', 'note', 'note_kind_key', ['kind']),
     new AddCheckConstraintCall('public', 'note', 'note_kind_check', `"kind" IN ('draft')`),
     new DropCheckConstraintCall('public', 'note', 'note_kind_check'),
-    new RenameCheckConstraintCall(
+    new RenameConstraintCall(
       'public',
       'note',
+      'checkConstraint',
       'note_kind_check_0a1b2c3d',
       'note_kind_check_1b2c3d4e',
     ),
+    new RenameConstraintCall('public', 'note', 'unique', 'note_kind_key', 'Note_kind_key'),
     new CreateIndexCall('public', 'note', 'note_kind_idx', { columns: ['kind'] }),
     new RenameIndexCall('public', 'note', 'note_kind_old_idx', 'note_kind_idx'),
     new DropIndexCall('public', 'note', 'note_kind_idx'),

@@ -12,7 +12,6 @@ import type {
   CoreSchemaView,
   MigrationPlanOperation,
   OperationPreview,
-  SignDatabaseResult,
   VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
@@ -39,6 +38,7 @@ import { assertFrameworkComponentsCompatible } from '../utils/framework-componen
 import { snapshotVerifierFor } from '../utils/snapshot-content-verification';
 import { enrichContract } from './contract-enrichment';
 import { executeDbInit } from './operations/db-init';
+import { type ExecuteDbSignResult, executeDbSign } from './operations/db-sign';
 import { executeDbUpdate } from './operations/db-update';
 import { type ExecuteDbVerifyResult, executeDbVerify } from './operations/db-verify';
 import { loadContractSourceWithStack } from './operations/load-contract-source';
@@ -51,6 +51,7 @@ import type {
   ControlClientOptions,
   DbInitOptions,
   DbInitResult,
+  DbSignOptions,
   DbUpdateOptions,
   DbUpdateResult,
   DbVerifyOptions,
@@ -61,7 +62,6 @@ import type {
   MigrateResult,
   OnControlProgress,
   SchemaVerifyOptions,
-  SignOptions,
   VerifyOptions,
 } from './types';
 
@@ -347,56 +347,6 @@ class ControlClientImpl implements ControlClient {
     }
   }
 
-  async sign(options: SignOptions): Promise<SignDatabaseResult> {
-    const { onProgress } = options;
-    await this.connectWithProgress(options.connection, 'sign', onProgress);
-    const { driver, familyInstance } = await this.ensureConnected();
-
-    // Validate contract using family instance
-    let contract: Contract;
-    try {
-      contract = familyInstance.deserializeContract(options.contract);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw structuredError('CONTRACT.VALIDATION_FAILED', message, { cause: error });
-    }
-
-    // Emit sign span
-    onProgress?.({
-      action: 'sign',
-      kind: 'spanStart',
-      spanId: 'sign',
-      label: 'Signing database...',
-    });
-
-    try {
-      // Delegate to family instance sign method
-      const result = await familyInstance.sign({
-        driver,
-        contract,
-        contractPath: options.contractPath ?? '',
-        ...ifDefined('configPath', options.configPath),
-      });
-
-      onProgress?.({
-        action: 'sign',
-        kind: 'spanEnd',
-        spanId: 'sign',
-        outcome: 'ok',
-      });
-
-      return result;
-    } catch (error) {
-      onProgress?.({
-        action: 'sign',
-        kind: 'spanEnd',
-        spanId: 'sign',
-        outcome: 'error',
-      });
-      throw error;
-    }
-  }
-
   async dbInit(options: DbInitOptions): Promise<DbInitResult> {
     const { onProgress } = options;
     await this.connectWithProgress(options.connection, 'dbInit', onProgress);
@@ -469,7 +419,9 @@ class ControlClientImpl implements ControlClient {
       targetId: this.options.target.targetId,
       extensions: this.options.extensions ?? [],
       ...ifDefined('acceptDataLoss', options.acceptDataLoss),
-      ...ifDefined('consent', options.consent),
+      ...ifDefined('acceptAccessWidening', options.acceptAccessWidening),
+      ...ifDefined('statements', options.statements),
+      answerQuestions: options.answerQuestions,
       ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),
     });
@@ -491,6 +443,24 @@ class ControlClientImpl implements ControlClient {
       mode: options.strict ? 'strict' : 'lenient',
       skipSchema: options.skipSchema,
       skipMarker: options.skipMarker,
+      ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
+      ...ifDefined('onProgress', onProgress),
+    });
+  }
+
+  async dbSign(options: DbSignOptions): Promise<ExecuteDbSignResult> {
+    const { onProgress } = options;
+    await this.connectWithProgress(options.connection, 'dbSign', onProgress);
+    const { driver, familyInstance, frameworkComponents } = await this.ensureConnected();
+
+    return executeDbSign({
+      driver,
+      familyInstance,
+      contract: options.contract,
+      migrationsDir: options.migrationsDir,
+      targetId: this.options.target.targetId,
+      extensions: this.options.extensions ?? [],
+      frameworkComponents,
       ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),
     });

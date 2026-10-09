@@ -3,8 +3,8 @@
  *
  *  1. A field `pg.enum(<native_enum ref>)` resolves the ref against the
  *     `native_enum` block declared in the same document (and namespace),
- *     lowering to a column `{ codecId: 'pg/enum@1', valueSet ref, nativeType,
- *     no CHECK }` — the production factory chain, no test-side hand-lowering.
+ *     lowering to a column `{ codecId: 'pg/enum@1', dataType: 'pg/enum', valueSet ref,
+ *     typeParams.typeName, no CHECK }` — the production factory chain, no test-side hand-lowering.
  *
  *  2. Negatives: an unresolvable ref, and a ref naming something that is not
  *     a `native_enum` block.
@@ -12,12 +12,18 @@
  *  3. Nullable variant (`pg.enum(E)?`).
  */
 
-import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
-import { buildSymbolTable } from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
+import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import {
+  describeUnsupportedSqlAttribute,
+  sqlAttributeSpecs,
+} from '@internal/sql-contract-psl/attribute-specs';
+import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { describe, expect, it } from 'vitest';
 import {
@@ -26,35 +32,14 @@ import {
   postgresAuthoringTypes,
 } from '../src/core/authoring';
 import { postgresRenderCheckExpressions } from '../src/core/check-expressions';
-import { PG_ENUM_CODEC_ID } from '../src/core/codec-ids';
-import { pgEnumDescriptor, postgresQualifyColumnType } from '../src/core/codecs';
+import { createPostgresBuiltinCodecLookup } from '../src/core/codec-registry';
+import { postgresQualifyColumnType } from '../src/core/codecs';
 import type { PostgresSchema } from '../src/core/postgres-schema';
 import { postgresCreateNamespace } from '../src/core/postgres-schema';
 
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
-// Production always resolves `pg.enum(Ref)` through a real `CodecLookup` (the
-// CLI/config-loading pipeline supplies `stack.codecLookup`), so this test
-// double mirrors that shape. A `pg.enum(Ref)` column resolves through the
-// entity-ref type-constructor path, which reaches `pgEnumDescriptor` via
-// `codecLookup.descriptorFor` to call its `columnFromEntity` authoring hook —
-// without `descriptorFor` below, resolution fails, so it is required, not
-// just a production-shape mirror.
-const pgEnumCodec = {
-  id: PG_ENUM_CODEC_ID,
-  descriptor: pgEnumDescriptor,
-  encode: () => Promise.reject(new Error('unused')),
-  decode: () => Promise.reject(new Error('unused')),
-  encodeJson: (value) => value,
-  decodeJson: (json) => json,
-} as Codec;
-
-const codecLookup: CodecLookupWithDescriptors = {
-  get: (id) => (id === PG_ENUM_CODEC_ID ? pgEnumCodec : undefined),
-  targetTypesFor: () => undefined,
-  renderOutputTypeFor: () => undefined,
-  descriptorFor: (id) => (id === PG_ENUM_CODEC_ID ? pgEnumDescriptor : undefined),
-};
+const codecLookup: CodecLookupWithDescriptors = createPostgresBuiltinCodecLookup();
 
 const assembled = assembleAuthoringContributions([
   {
@@ -89,30 +74,50 @@ const postgresTarget = {
   },
 };
 
-const scalarColumnDescriptors = new Map<string, { codecId: string; nativeType: string }>([
-  ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
-  ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
+const scalarColumnDescriptors = new Map<string, { codecId: string }>([
+  ['String', { codecId: 'pg/text@1' }],
+  ['Int', { codecId: 'pg/int4@1' }],
 ]);
 
+const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
+  Object.fromEntries(
+    [...scalarColumnDescriptors].map(([name, output]) => [
+      name,
+      { kind: 'typeConstructor' as const, output },
+    ]),
+  );
+
 function interpret(source: string, capabilities: Record<string, Record<string, boolean>> = {}) {
-  const { document, sources } = parse(source, 'psl-pg-enum-column.test.psl');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
+  const bound = bindPslSchema(source, {
+    sourceId: 'psl-pg-enum-column.test.psl',
+    context: {
+      composedExtensions: [],
+      composedExtensionContracts: new Map(),
+      authoringContributions: {
+        ...assembled,
+        type: { ...scalarTypeConstructors, ...assembled.type },
+        attributeSpecs: sqlAttributeSpecs,
+      },
+      pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
+      codecLookup,
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+      dataTypes: { entries: assembled.dataTypes, lookup: postgresDataTypeLookup },
+      resolvedInputs: [],
+      capabilities,
+    },
   });
-  return interpretPslDocumentToSqlContract({
-    documents: [document],
-    dataTypeLookup: postgresDataTypeLookup,
-    symbolTable,
-    sources,
-    capabilities,
-    target: postgresTarget,
-    scalarColumnDescriptors,
-    authoringContributions: assembled,
-    composedExtensionContracts: new Map(),
-    createNamespace: postgresCreateNamespace,
-    codecLookup,
-  });
+  return withSeedDiagnostics(
+    interpretPslDocumentToSqlContract({
+      documents: bound.documents,
+      sources: bound.sources,
+      symbolTable: bound.symbolTable,
+      binder: bound.binder,
+      ...sqlContextInput(bound.context),
+      target: postgresTarget,
+      createNamespace: postgresCreateNamespace,
+    }),
+    bound.seedDiagnostics,
+  );
 }
 
 const aalLevelSource = `
@@ -132,7 +137,7 @@ namespace auth {
 `;
 
 describe('PSL pg.enum(Ref) field resolution', () => {
-  it('lowers to a column with codecId pg/enum@1, a valueSet ref, and the enum typeName as nativeType', () => {
+  it('lowers to a column with codecId pg/enum@1, a valueSet ref, and the enum typeName as typeParams.typeName', () => {
     const result = interpret(aalLevelSource);
 
     expect(result.ok).toBe(true);
@@ -144,7 +149,7 @@ describe('PSL pg.enum(Ref) field resolution', () => {
     const aalColumn = authTable?.columns['aal'];
     expect(aalColumn).toMatchObject({
       codecId: 'pg/enum@1',
-      nativeType: 'auth.aal_level',
+      dataType: 'pg/enum',
       typeParams: { typeName: 'auth.aal_level' },
       nullable: false,
       valueSet: {
@@ -209,7 +214,7 @@ namespace auth {
     const aalsColumn = ns.table['AuthSession']?.columns['aals'];
     expect(aalsColumn).toMatchObject({
       codecId: 'pg/enum@1',
-      nativeType: 'auth.aal_level',
+      dataType: 'pg/enum',
       nullable: false,
       valueSet: {
         plane: 'storage',
@@ -218,7 +223,7 @@ namespace auth {
         entityName: 'AalLevel',
       },
     });
-    expect(aalsColumn?.many).toBe(true);
+    expect(aalsColumn?.many).toEqual({ elementNullable: false });
   });
 
   it('keeps typeParams.typeName on a pg.enum(E)[] domain field, like the single field', () => {
@@ -245,6 +250,7 @@ namespace auth {
     const fields = result.value.domain.namespaces['auth']?.models['AuthSession']?.fields;
     const aal = {
       nullable: false,
+      many: false,
       type: {
         kind: 'scalar',
         codecId: 'pg/enum@1',
@@ -253,7 +259,7 @@ namespace auth {
     };
     expect({ aal: fields?.['aal'], aals: fields?.['aals'] }).toEqual({
       aal,
-      aals: { ...aal, many: true },
+      aals: { ...aal, many: { elementNullable: false } },
     });
   });
 
@@ -373,7 +379,6 @@ namespace public {
     const aalColumn = ns.table['AuthSession']?.columns['aal'];
     expect(aalColumn).toMatchObject({
       codecId: 'pg/enum@1',
-      nativeType: 'aal_level',
       typeParams: { typeName: 'aal_level' },
       valueSet: {
         plane: 'storage',

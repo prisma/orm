@@ -1,12 +1,12 @@
 # ADR 161 — Explicit foreign key constraint and index configuration
 
-> **Status: superseded — foreign keys and indexes are discrete contract entities.** The per-FK `constraint` and `index` booleans decided below are retained as the record of the original design; the corrected decision and its rationale are in [Foreign keys and indexes are discrete entities](#foreign-keys-and-indexes-are-discrete-entities) immediately below. Implementation is tracked as a follow-up.
+> **Status: superseded — foreign keys and indexes are discrete contract entities.** The per-FK `constraint` and `index` booleans decided below are retained as the record of the original design; the corrected decision and its rationale are in [Foreign keys and indexes are discrete entities](#foreign-keys-and-indexes-are-discrete-entities) immediately below, and its implementation in [A foreign key names its backing index](#a-foreign-key-names-its-backing-index).
 
 ## Foreign keys and indexes are discrete entities
 
 A foreign key is a referential constraint; an index is an index. The contract carries each as its own entity, and if one is absent it is simply absent — never a boolean on the other.
 
-The JSON below illustrates the shape this model proposes; the exact field layout is settled when the follow-up implements it (this ADR is superseded and the work deferred), so it is conceptual notation, not a literal of today's `contract.json`.
+The JSON below illustrates the model as first proposed. The implemented shape adds one field, the foreign key's `index`, described in [A foreign key names its backing index](#a-foreign-key-names-its-backing-index).
 
 ```jsonc
 // A FK whose columns have a backing index — two discrete facts:
@@ -35,13 +35,76 @@ This is the contract's *facts, not instructions* principle ([Data Contract subsy
 
 ### The corrected model
 
-Emit **materializes** the authoring sugar into discrete entities. A storage foreign-key entity is the referential constraint only (source, target, `onDelete`/`onUpdate`). Every index — including one that happens to back a FK — is a discrete index entry carrying its own name. The `constraint`/`index` knobs survive only as *authoring input* (`foreignKeyDefaults`, per-FK overrides); they are lowered at emit and never appear in `contract.json`.
+Emit **materializes** the authoring sugar into discrete entities. A storage foreign-key entity is the referential constraint (source, target, `onDelete`/`onUpdate`) plus a reference to the object that backs it, never a boolean. Every index — including one that happens to back a FK — is a discrete index entry carrying its own name. The `constraint`/`index` knobs survive only as *authoring input* (`foreignKeyDefaults`, per-FK overrides); they are lowered at emit, and the booleans never appear in `contract.json`: `index` lowers to the foreign key's reference to its backing object, or to no reference for `index: false`.
 
 Every environment case the original decision raised is expressed by presence or absence of a discrete entity, which is *more* faithful, not less:
 
 - **Managed services that omit FK constraints but keep the index** (e.g. PlanetScale): the domain relation is present (the ORM still knows the relationship), the storage foreign-key entity is absent (no physical constraint), and the index entity is present. The relation/constraint split already models exactly "a logical relationship with no enforced constraint" — cleaner than `constraint: false`.
 - **Intentionally skipping a FK's index**: no index entity for those columns.
 - **Postgres not auto-indexing FKs**: the presence or absence of a named index entity *is* the fact — nothing is inferred from a flag.
+
+## A foreign key names its backing index
+
+```prisma
+model User {
+  id    Int    @id
+  posts Post[]
+}
+
+model Post {
+  id         Int       @id
+  authorId   Int
+  archivedAt DateTime?
+  author     User      @relation(fields: [authorId], references: [id])
+
+  @@index([authorId], where: sql`"archivedAt" IS NULL`, name: "post_author_live")
+}
+```
+
+`contract emit` writes, for the `Post` table:
+
+```json
+"foreignKeys": [
+  {
+    "index": { "name": "Post_authorId_idx_e47547ed" },
+    "source": { "columns": ["authorId"], "namespaceId": "public", "tableName": "Post" },
+    "target": { "columns": ["id"], "namespaceId": "public", "tableName": "User" }
+  }
+],
+"indexes": [
+  { "columns": ["authorId"], "name": "Post_authorId_idx_e47547ed", "prefix": "Post_authorId_idx", "unique": false },
+  { "columns": ["authorId"], "name": "post_author_live_2f39f453", "prefix": "post_author_live", "unique": false, "where": "\"archivedAt\" IS NULL" }
+]
+```
+
+The partial index covers only live posts, so it does not stand in for the foreign key's backing index; the relation gets its own, and the foreign key names it.
+
+The stored foreign key states which object serves its lookups, so a reader of the contract never re-runs a rule to find out. Its `index` field is one of:
+
+- `{ "name": "<stored index name>" }`: an index, identified by its name as [ADR 243](ADR%20243%20-%20Name-identified%20indexes%20and%20exact-name%20adoption.md) identifies every index.
+- `{ "primaryKey": true }`: the table's primary key. A table has one, so its kind identifies it.
+- `{ "unique": ["<column>", ...] }`: a unique constraint, identified by its kind and its own columns in order. Its first columns are the foreign key's columns.
+
+The field is absent when nothing backs the foreign key: the relation, or `foreignKeyDefaults`, says `index: false`, or a relation read from a Prisma 7 source has no index or key that serves it. Contract validation refuses a foreign key whose `index` names no index on its table, a primary key or unique constraint the table does not have, or an object whose first columns are not the foreign key's columns. A contract written before the field existed (0.15 and earlier) may carry a boolean `index` on a foreign key; the loader treats it as absent.
+
+### How the build chooses it
+
+The authoring surface is unchanged. A relation always gets its own derived backing index unless it says `index: false`. It may instead name the object that serves it with `index: "<name>"`: the `name` or `map` the user wrote, or an index's stored name, of an index, unique constraint or primary key on the same table whose first columns are the foreign key's columns. A name that matches more than one index, unique constraint or primary key of the table is refused.
+
+Then one pass removes indexes that duplicate another, for every table, whatever declared them:
+
+- **Identical indexes.** Two indexes are identical when the planner considers their content equal (`SqlIndexIR.contentEquals`: columns in order, expression, predicate, uniqueness, access method and options, with the target's default access method equal to none). The name is not compared. An index is named by the user when its source gave it `name` or `map`; a derived backing index and an unnamed `@@index` are not. Of an identical group the pass keeps the user-named index, or the first one if none is named. Two identical indexes both named with `map:` are both kept, with the warning `PN_INDEX_DUPLICATE`. Two identical indexes both named with `name:` are refused, because their wire names carry the same content hash and the planner pairs renames by that hash.
+- **Indexes a key already serves.** A plain non-unique index (columns only, no access method, options, predicate or expression) on exactly the columns of the primary key, a unique constraint, or a unique index with no predicate or expression is redundant: the unique object serves every lookup it would. The pass removes it unless the user named it, in which case both are kept, with the warning `PN_INDEX_REDUNDANT`. A partial unique index does not count, because it serves only the rows its predicate selects.
+
+A foreign key whose index the pass removes points at what replaced it. If the user later changes their index so it no longer matches, the derived backing index is no longer removed, and the next `migration plan` creates it. The pass runs inside foreign-key materialization in `@internal/sql-contract`, which the PSL interpreter and the TypeScript builder share. Its warnings go through the build's authoring warning sink, like the build's other warnings.
+
+### Reading a database back
+
+`contract infer` reads indexes with their exact names, so they are named by the user. It asks the same predicate the pass uses whether the relation's derived backing index would be redundant next to the live table's indexes and keys. If it would be, the relation is written with no `index` argument, and emitting the result keeps the live object. Otherwise, when a live key or plain index starts with the foreign key's columns, the relation names it with `index: "<live name>"`; when nothing serves the foreign key, it writes `index: false`. `contract print` refuses (`CONTRACT.PRINT_UNSUPPORTED`) a foreign key backed by a key that has no name it could write. A database read back and emitted plans no change. `contract print` follows the same rule: it writes `index:` only where the stored foreign key differs from what the relation would get without the argument.
+
+### Without a foreign key constraint
+
+A relation with `constraint: false` stores no foreign key entry, so nothing records its backing index. The derived index is still created and still de-duplicated. Nothing reads the link when there is no constraint: the verifier has no constraint to check, and the ORM joins by the relation's fields.
 
 The original per-FK boolean design, its authoring sugar, and its planner/verifier behavior are recorded unchanged below as the superseded approach.
 

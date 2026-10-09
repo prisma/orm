@@ -5,7 +5,14 @@ import {
   profileHash,
   type StorageHashBase,
 } from '@internal/contract/types';
+import type {
+  AnyCodecDescriptor,
+  CodecLookupWithDescriptors,
+  DataType,
+} from '@internal/framework-components/codec';
+import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { sqlDataType } from '@internal/sql-contract/data-type';
 import {
   CheckConstraint,
   Index,
@@ -26,6 +33,7 @@ import {
   SqlUniqueIR,
 } from '@internal/sql-schema-ir/types';
 import { applicationDomainOf } from '@repo/test-utils';
+import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
 import type { DefaultRenderer } from '../src/core/migrations/contract-to-schema-ir';
@@ -34,17 +42,96 @@ import {
   detectDestructiveChanges,
 } from '../src/core/migrations/contract-to-schema-ir';
 
-const testRenderer: DefaultRenderer = (def: ColumnDefault, column: StorageColumn) => {
+const testRenderer: DefaultRenderer = (def: ColumnDefault, _column, { baseTypeName }) => {
   if (def.kind === 'function') return def.expression;
   const { value } = def;
   if (typeof value === 'string') return `'${value.replaceAll("'", "''")}'`;
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   if (value === null) return 'NULL';
   const json = JSON.stringify(value);
-  const isJsonColumn = column.nativeType === 'json' || column.nativeType === 'jsonb';
-  if (isJsonColumn) return `'${json}'::${column.nativeType}`;
+  if (baseTypeName === 'json' || baseTypeName === 'jsonb') return `'${json}'::${baseTypeName}`;
   return `'${json}'`;
 };
+
+const textType = sqlDataType('test/text', { texts: [{ text: 'text', written: true }] });
+const characterType = sqlDataType('test/character', {
+  params: type({ 'length?': 'number.integer >= 1' }),
+  texts: [
+    { text: 'character', written: true },
+    { text: 'character({length})', written: true },
+  ],
+});
+const vectorType = sqlDataType('test/vector', {
+  params: type({ length: 'number.integer >= 1' }),
+  texts: [{ text: 'vector({length})', written: true }],
+});
+const bareVectorType = sqlDataType('test/bare-vector', {
+  texts: [{ text: 'vector', written: true }],
+});
+const timestamptzType = sqlDataType('test/timestamptz', {
+  texts: [{ text: 'timestamptz', written: true }],
+});
+const numericType = sqlDataType('test/numeric', {
+  params: type({ 'precision?': 'number.integer >= 1', 'scale?': 'number.integer' }),
+  texts: [
+    { text: 'numeric', written: true },
+    { text: 'numeric({precision})', written: true },
+    { text: 'numeric({precision},{scale})', written: true },
+  ],
+  normalize: (params) =>
+    params.precision !== undefined && params.scale === undefined ? { ...params, scale: 0 } : params,
+});
+const fixedCharacterType = sqlDataType('test/fixed-character', {
+  params: type({ 'length?': 'number.integer >= 1' }),
+  texts: [
+    { text: 'character', written: true },
+    { text: 'character({length})', written: true },
+  ],
+  normalize: (params) => (params.length === undefined ? { ...params, length: 1 } : params),
+});
+const enumType = sqlDataType('test/enum', {
+  params: type({ typeName: 'string > 0' }),
+  claimsKind: 'enum',
+  render: ({ typeName }) => `"${typeName}"`,
+});
+
+const dataTypeOfCodec: Readonly<Record<string, DataType>> = {
+  'pg/text@1': textType,
+  'sql/char@1': characterType,
+  'pg/vector@1': vectorType,
+  'pgvector/vector@1': bareVectorType,
+  'pg/timestamptz@1': timestamptzType,
+  'pg/numeric@1': numericType,
+  'pg/char@1': fixedCharacterType,
+  'pg/enum@1': enumType,
+};
+
+const testCodecLookup: CodecLookupWithDescriptors = {
+  ...emptyCodecLookup,
+  descriptorFor: (id) => {
+    const dataType = dataTypeOfCodec[id];
+    return dataType === undefined
+      ? undefined
+      : ({ codecId: id, dataType: dataType.id } as AnyCodecDescriptor);
+  },
+};
+
+function dataTypeOf(codecId: string): string {
+  const dataType = testCodecLookup.descriptorFor?.(codecId)?.dataType;
+  if (dataType === undefined) throw new Error(`the test codec lookup has no codec ${codecId}`);
+  return dataType;
+}
+
+const testDataTypes = createDataTypeLookup([
+  textType,
+  characterType,
+  vectorType,
+  bareVectorType,
+  timestamptzType,
+  numericType,
+  fixedCharacterType,
+  enumType,
+]);
 
 function wrap(storage: SqlStorage): Contract<SqlStorage> {
   return {
@@ -60,10 +147,13 @@ function wrap(storage: SqlStorage): Contract<SqlStorage> {
   };
 }
 
-function col(overrides: Partial<StorageColumn> & { nativeType: string }): StorageColumn {
+function col(overrides: Partial<StorageColumn>): StorageColumn {
+  const codecId = overrides.codecId ?? 'pg/text@1';
   return {
-    codecId: 'pg/text@1',
+    codecId,
+    dataType: overrides.dataType ?? dataTypeOf(codecId),
     nullable: false,
+    many: false,
     ...overrides,
   };
 }
@@ -100,12 +190,51 @@ function unboundStorage(
 
 function contractToSchemaIR(
   contract: Contract<SqlStorage> | null,
-  options?: Omit<Parameters<typeof contractToSchemaIRImpl>[1], 'annotationNamespace'>,
+  options?: Pick<Parameters<typeof contractToSchemaIRImpl>[1], 'renderDefault' | 'resolveDefault'>,
 ): SqlSchemaIR {
-  return contractToSchemaIRImpl(contract, { annotationNamespace: 'pg', ...options });
+  return contractToSchemaIRImpl(contract, {
+    annotationNamespace: 'pg',
+    dataTypeLookup: testDataTypes,
+    codecLookup: testCodecLookup,
+    ...options,
+  });
 }
 
 describe('contractToSchemaIR', () => {
+  it.each([
+    { cardinality: {}, array: false },
+    { cardinality: { many: false }, array: false },
+    { cardinality: { many: { elementNullable: false } }, array: true },
+    { cardinality: { many: { elementNullable: true } }, array: true },
+  ])('projects raw column cardinality $cardinality', ({ cardinality, array }) => {
+    const column = {
+      codecId: 'pg/text@1',
+      dataType: 'pg/text',
+      nullable: false,
+      ...cardinality,
+    } as StorageColumn;
+    const storage = {
+      storageHash: 'test',
+      namespaces: {
+        [UNBOUND_NAMESPACE_ID]: {
+          id: UNBOUND_NAMESPACE_ID,
+          entries: { table: { Item: table({ columns: { tags: column } }) } },
+        },
+      },
+    } as unknown as SqlStorage;
+    const projected = contractToSchemaIR(wrap(storage)).tables['Item']?.columns['tags'];
+
+    expect({
+      resolvedNativeType: projected?.resolvedNativeType,
+      many: projected?.many,
+      codecRef: projected?.codecRef,
+    }).toEqual({
+      resolvedNativeType: array ? 'text[]' : 'text',
+      many: array ? true : undefined,
+      codecRef: array ? { codecId: 'pg/text@1', many: true } : { codecId: 'pg/text@1' },
+    });
+  });
+
   it('converts empty storage to empty schema IR', () => {
     const result = contractToSchemaIR(null, { renderDefault: testRenderer });
 
@@ -122,9 +251,9 @@ describe('contractToSchemaIR', () => {
             table: {
               User: table({
                 columns: {
-                  id: col({ nativeType: 'text' }),
-                  email: col({ nativeType: 'text', nullable: false }),
-                  name: col({ nativeType: 'text', nullable: true }),
+                  id: col({}),
+                  email: col({ nullable: false }),
+                  name: col({ nullable: true }),
                 },
               }),
             },
@@ -176,12 +305,10 @@ describe('contractToSchemaIR', () => {
               T: table({
                 columns: {
                   a: col({
-                    nativeType: 'vector',
                     codecId: 'pgvector/vector@1',
                     typeParams: { dimensions: 1536 },
                   }),
                   b: col({
-                    nativeType: 'vector',
                     codecId: 'pgvector/vector@1',
                     typeRef: 'MyVector',
                   }),
@@ -195,7 +322,7 @@ describe('contractToSchemaIR', () => {
         MyVector: {
           kind: 'codec-instance',
           codecId: 'pgvector/vector@1',
-          nativeType: 'vector',
+          dataType: 'pgvector/vector',
           typeParams: { dimensions: 1536 },
         },
       },
@@ -229,58 +356,78 @@ describe('contractToSchemaIR', () => {
     expect('typeRef' in columnB).toBe(false);
   });
 
-  it('expands parameterized native types when expandNativeType is provided', () => {
-    const storage = new SqlStorage({
-      storageHash: 'test' as StorageHashBase<string>,
-      namespaces: {
-        [UNBOUND_NAMESPACE_ID]: createTestSqlNamespace({
-          id: UNBOUND_NAMESPACE_ID,
-          entries: {
-            table: {
-              T: table({
-                columns: {
-                  id: col({
-                    nativeType: 'character',
-                    codecId: 'sql/char@1',
-                    typeParams: { length: 36 },
-                  }),
-                  name: col({ nativeType: 'text', codecId: 'pg/text@1' }),
-                },
-              }),
-            },
-          },
-        }),
-      },
+  it('writes each column type from its codec data type and parameters', () => {
+    const storage = unboundStorage('test' as StorageHashBase<string>, {
+      T: table({
+        columns: {
+          id: col({ codecId: 'sql/char@1', typeParams: { length: 36 } }),
+          code: col({ codecId: 'sql/char@1' }),
+          name: col({ codecId: 'pg/text@1' }),
+        },
+      }),
     });
 
-    const expand = (input: {
-      nativeType: string;
-      codecId?: string;
-      typeParams?: Record<string, unknown>;
-    }) => {
-      if (input.typeParams && 'length' in input.typeParams) {
-        return `${input.nativeType}(${input.typeParams['length']})`;
-      }
-      return input.nativeType;
-    };
-
-    const result = contractToSchemaIR(wrap(storage), {
-      expandNativeType: expand,
-      renderDefault: testRenderer,
-    });
-    expect(result.tables['T']!.columns['id']!.nativeType).toBe('character(36)');
-    expect(result.tables['T']!.columns['name']!.nativeType).toBe('text');
+    const columns = contractToSchemaIR(wrap(storage)).tables['T']!.columns;
+    expect({
+      id: columns['id']!.nativeType,
+      code: columns['code']!.nativeType,
+      name: columns['name']!.nativeType,
+    }).toEqual({ id: 'character(36)', code: 'character', name: 'text' });
   });
 
-  it('resolves typeRef against storage.types before expanding native type', () => {
-    // Regression: `post.embedding` in prisma-8-demo stores a bare
-    // `{ nativeType: 'vector', typeRef: 'Embedding1536' }`; the parameter
-    // metadata lives on the named `storage.types` entry. If the IR
-    // conversion doesn't resolve `typeRef`, it emits `"vector"` while
-    // `verify-sql-schema` resolves the ref and emits `"vector(1536)"`,
-    // producing a spurious `type_mismatch` (and a spurious
-    // `alterColumnType` op) when planning from one revision of the
-    // contract to itself.
+  it('writes each column type with its parameters in normal form, as the catalog reports them', () => {
+    const storage = unboundStorage('test' as StorageHashBase<string>, {
+      T: table({
+        columns: {
+          whole: col({ codecId: 'pg/numeric@1', typeParams: { precision: 10 } }),
+          scaled: col({ codecId: 'pg/numeric@1', typeParams: { precision: 10, scale: 2 } }),
+          bare: col({ codecId: 'pg/char@1' }),
+        },
+      }),
+    });
+
+    const columns = contractToSchemaIR(wrap(storage)).tables['T']!.columns;
+    expect(
+      Object.fromEntries(
+        Object.entries(columns).map(([name, column]) => [
+          name,
+          { nativeType: column.nativeType, resolvedNativeType: column.resolvedNativeType },
+        ]),
+      ),
+    ).toEqual({
+      whole: { nativeType: 'numeric(10,0)', resolvedNativeType: 'numeric(10,0)' },
+      scaled: { nativeType: 'numeric(10,2)', resolvedNativeType: 'numeric(10,2)' },
+      bare: { nativeType: 'character(1)', resolvedNativeType: 'character(1)' },
+    });
+  });
+
+  it('writes an enum column as its type name, unquoted', () => {
+    const storage = unboundStorage('test' as StorageHashBase<string>, {
+      T: table({
+        columns: {
+          mood: col({ codecId: 'pg/enum@1', typeParams: { typeName: 'Mood' } }),
+        },
+      }),
+    });
+
+    const mood = contractToSchemaIR(wrap(storage)).tables['T']!.columns['mood']!;
+    expect({ nativeType: mood.nativeType, resolvedNativeType: mood.resolvedNativeType }).toEqual({
+      nativeType: 'Mood',
+      resolvedNativeType: 'Mood',
+    });
+  });
+
+  it('refuses a column whose codec the stack does not register', () => {
+    const storage = unboundStorage('test' as StorageHashBase<string>, {
+      T: table({ columns: { id: col({ codecId: 'test/unknown@1', dataType: 'test/unknown' }) } }),
+    });
+
+    expect(() => contractToSchemaIR(wrap(storage))).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.CODEC_DESCRIPTOR_MISSING' }),
+    );
+  });
+
+  it('resolves typeRef against storage.types before writing the type', () => {
     const storage = new SqlStorage({
       storageHash: 'test' as StorageHashBase<string>,
       namespaces: {
@@ -291,7 +438,7 @@ describe('contractToSchemaIR', () => {
               Post: table({
                 columns: {
                   embedding: col({
-                    nativeType: 'vector',
+                    dataType: 'pgvector/vector',
                     codecId: 'pg/vector@1',
                     nullable: true,
                     typeRef: 'Embedding1536',
@@ -306,56 +453,15 @@ describe('contractToSchemaIR', () => {
         Embedding1536: {
           kind: 'codec-instance',
           codecId: 'pg/vector@1',
-          nativeType: 'vector',
+          dataType: 'pgvector/vector',
           typeParams: { length: 1536 },
         },
       },
     });
 
-    const expand = (input: {
-      nativeType: string;
-      codecId?: string;
-      typeParams?: Record<string, unknown>;
-    }) => {
-      if (input.typeParams && 'length' in input.typeParams) {
-        return `${input.nativeType}(${input.typeParams['length']})`;
-      }
-      return input.nativeType;
-    };
-
-    const result = contractToSchemaIR(wrap(storage), {
-      expandNativeType: expand,
-      renderDefault: testRenderer,
-    });
+    const result = contractToSchemaIR(wrap(storage), { renderDefault: testRenderer });
 
     expect(result.tables['Post']!.columns['embedding']!.nativeType).toBe('vector(1536)');
-  });
-
-  it('uses base nativeType when no expandNativeType is provided', () => {
-    const storage = new SqlStorage({
-      storageHash: 'test' as StorageHashBase<string>,
-      namespaces: {
-        [UNBOUND_NAMESPACE_ID]: createTestSqlNamespace({
-          id: UNBOUND_NAMESPACE_ID,
-          entries: {
-            table: {
-              T: table({
-                columns: {
-                  id: col({
-                    nativeType: 'character',
-                    codecId: 'sql/char@1',
-                    typeParams: { length: 36 },
-                  }),
-                },
-              }),
-            },
-          },
-        }),
-      },
-    });
-
-    const result = contractToSchemaIR(wrap(storage), { renderDefault: testRenderer });
-    expect(result.tables['T']!.columns['id']!.nativeType).toBe('character');
   });
 
   it('converts literal column defaults', () => {
@@ -369,7 +475,6 @@ describe('contractToSchemaIR', () => {
               T: table({
                 columns: {
                   status: col({
-                    nativeType: 'text',
                     default: { kind: 'literal', value: 'active' },
                   }),
                 },
@@ -395,7 +500,6 @@ describe('contractToSchemaIR', () => {
               T: table({
                 columns: {
                   author: col({
-                    nativeType: 'text',
                     default: { kind: 'literal', value: "O'Reilly" },
                   }),
                 },
@@ -421,7 +525,6 @@ describe('contractToSchemaIR', () => {
               T: table({
                 columns: {
                   textValue: col({
-                    nativeType: 'text',
                     default: { kind: 'literal', value: "a'b''c" },
                   }),
                 },
@@ -447,7 +550,6 @@ describe('contractToSchemaIR', () => {
               T: table({
                 columns: {
                   createdAt: col({
-                    nativeType: 'timestamptz',
                     default: { kind: 'function', expression: 'now()' },
                   }),
                 },
@@ -472,7 +574,7 @@ describe('contractToSchemaIR', () => {
             table: {
               T: table({
                 columns: {
-                  name: col({ nativeType: 'text' }),
+                  name: col({}),
                 },
               }),
             },
@@ -496,7 +598,7 @@ describe('contractToSchemaIR', () => {
             table: {
               T: table({
                 columns: {
-                  id: col({ nativeType: 'text' }),
+                  id: col({}),
                 },
                 primaryKey: { columns: ['id'], name: 'T_pkey' },
               }),
@@ -522,7 +624,7 @@ describe('contractToSchemaIR', () => {
             table: {
               T: table({
                 columns: {
-                  email: col({ nativeType: 'text' }),
+                  email: col({}),
                 },
                 uniques: [{ columns: ['email'], name: 'T_email_key' }],
               }),
@@ -548,7 +650,7 @@ describe('contractToSchemaIR', () => {
             table: {
               T: table({
                 columns: {
-                  email: col({ nativeType: 'text' }),
+                  email: col({}),
                 },
                 indexes: [
                   serializedIndex({ columns: ['email'], name: 'T_email_idx', unique: false }),
@@ -586,7 +688,7 @@ describe('contractToSchemaIR', () => {
             table: {
               T: table({
                 columns: {
-                  email: col({ nativeType: 'text' }),
+                  email: col({}),
                 },
                 indexes: [
                   serializedIndex({
@@ -632,8 +734,8 @@ describe('contractToSchemaIR', () => {
             table: {
               T: table({
                 columns: {
-                  id: col({ nativeType: 'text' }),
-                  email: col({ nativeType: 'text' }),
+                  id: col({}),
+                  email: col({}),
                 },
                 indexes: [
                   serializedIndex({
@@ -680,7 +782,7 @@ describe('contractToSchemaIR', () => {
             table: {
               Post: table({
                 columns: {
-                  authorId: col({ nativeType: 'text' }),
+                  authorId: col({}),
                 },
                 foreignKeys: [
                   {
@@ -735,15 +837,15 @@ describe('contractToSchemaIR', () => {
             table: {
               Workflow: table({
                 columns: {
-                  id: col({ nativeType: 'text' }),
-                  teamId: col({ nativeType: 'text' }),
+                  id: col({}),
+                  teamId: col({}),
                 },
                 primaryKey: { columns: ['id', 'teamId'] },
               }),
               WorkflowState: table({
                 columns: {
-                  workflowId: col({ nativeType: 'text' }),
-                  teamId: col({ nativeType: 'text' }),
+                  workflowId: col({}),
+                  teamId: col({}),
                 },
                 indexes: [
                   serializedIndex({
@@ -809,10 +911,10 @@ describe('contractToSchemaIR', () => {
           entries: {
             table: {
               User: table({
-                columns: { id: col({ nativeType: 'text' }) },
+                columns: { id: col({}) },
               }),
               Post: table({
-                columns: { id: col({ nativeType: 'text' }) },
+                columns: { id: col({}) },
               }),
             },
           },
@@ -825,7 +927,7 @@ describe('contractToSchemaIR', () => {
     expect(Object.keys(result.tables)).toHaveLength(2);
   });
 
-  it('propagates storage types into annotations', () => {
+  it('writes no storage-type annotations', () => {
     const storage = new SqlStorage({
       storageHash: 'test' as StorageHashBase<string>,
       namespaces: {
@@ -835,7 +937,11 @@ describe('contractToSchemaIR', () => {
             table: {
               T: table({
                 columns: {
-                  embedding: col({ nativeType: 'vector', typeRef: 'Embedding' }),
+                  embedding: col({
+                    dataType: 'pgvector/vector',
+                    codecId: 'pg/vector@1',
+                    typeRef: 'Embedding',
+                  }),
                 },
               }),
             },
@@ -845,66 +951,16 @@ describe('contractToSchemaIR', () => {
       types: {
         Embedding: {
           kind: 'codec-instance',
-          codecId: 'pgvector/vector@1',
-          nativeType: 'vector',
-          typeParams: { dimensions: 1536 },
+          codecId: 'pg/vector@1',
+          dataType: 'pgvector/vector',
+          typeParams: { length: 1536 },
         },
       },
     });
 
     const result = contractToSchemaIR(wrap(storage), { renderDefault: testRenderer });
-    expect(result.tables['T']!.columns['embedding']!.nativeType).toBe('vector');
-    expect((result.annotations as Record<string, unknown>)?.['pg']).toMatchObject({
-      storageTypes: {
-        vector: {
-          codecId: 'pgvector/vector@1',
-          nativeType: 'vector',
-          typeParams: { dimensions: 1536 },
-        },
-      },
-    });
-  });
-
-  it('writes storage type annotations using the configured namespace', () => {
-    const storage = new SqlStorage({
-      storageHash: 'test' as StorageHashBase<string>,
-      namespaces: {
-        [UNBOUND_NAMESPACE_ID]: createTestSqlNamespace({
-          id: UNBOUND_NAMESPACE_ID,
-          entries: {
-            table: {
-              T: table({
-                columns: {
-                  embedding: col({ nativeType: 'vector', typeRef: 'Embedding' }),
-                },
-              }),
-            },
-          },
-        }),
-      },
-      types: {
-        Embedding: {
-          kind: 'codec-instance',
-          codecId: 'pgvector/vector@1',
-          nativeType: 'vector',
-          typeParams: { dimensions: 1536 },
-        },
-      },
-    });
-
-    const result = contractToSchemaIRImpl(wrap(storage), {
-      annotationNamespace: 'custom',
-    });
-    expect((result.annotations as Record<string, unknown>)?.['custom']).toMatchObject({
-      storageTypes: {
-        vector: {
-          codecId: 'pgvector/vector@1',
-          nativeType: 'vector',
-          typeParams: { dimensions: 1536 },
-        },
-      },
-    });
-    expect((result.annotations as Record<string, unknown>)?.['pg']).toBeUndefined();
+    expect(result.tables['T']!.columns['embedding']!.nativeType).toBe('vector(1536)');
+    expect(result.annotations).toBeUndefined();
   });
 
   it('handles unique constraints without names', () => {
@@ -917,8 +973,8 @@ describe('contractToSchemaIR', () => {
             table: {
               T: table({
                 columns: {
-                  a: col({ nativeType: 'text' }),
-                  b: col({ nativeType: 'text' }),
+                  a: col({}),
+                  b: col({}),
                 },
                 uniques: [{ columns: ['a', 'b'] }],
               }),
@@ -941,7 +997,7 @@ describe('contractToSchemaIR', () => {
           entries: {
             table: {
               Post: table({
-                columns: { authorId: col({ nativeType: 'text' }) },
+                columns: { authorId: col({}) },
                 foreignKeys: [
                   {
                     source: {
@@ -977,7 +1033,7 @@ describe('contractToSchemaIR', () => {
 describe('contractToSchemaIR — FK referenced-namespace identity', () => {
   function postTable(targetNamespaceId: string): StorageTable {
     return table({
-      columns: { authorId: col({ nativeType: 'text' }) },
+      columns: { authorId: col({}) },
       foreignKeys: [
         {
           source: {
@@ -1023,7 +1079,7 @@ describe('contractToSchemaIR — FK referenced-namespace identity', () => {
         }),
         accounting: createTestSqlNamespace({
           id: 'accounting',
-          entries: { table: { User: table({ columns: { id: col({ nativeType: 'text' }) } }) } },
+          entries: { table: { User: table({ columns: { id: col({}) } }) } },
         }),
       },
     });
@@ -1084,7 +1140,7 @@ describe('contractToSchemaIR — FK referenced-namespace identity', () => {
           entries: {
             table: {
               Widget: table({
-                columns: { id: col({ nativeType: 'text' }), slug: col({ nativeType: 'text' }) },
+                columns: { id: col({}), slug: col({}) },
                 primaryKey: { columns: ['id'] },
                 uniques: [{ columns: ['slug'] }],
                 indexes: [
@@ -1117,7 +1173,7 @@ describe('contractToSchemaIR — FK referenced-namespace identity', () => {
 describe('detectDestructiveChanges', () => {
   it('returns empty for null from', () => {
     const to = unboundStorage('test' as StorageHashBase<string>, {
-      T: table({ columns: { a: col({ nativeType: 'text' }) } }),
+      T: table({ columns: { a: col({}) } }),
     });
     expect(detectDestructiveChanges(null, to)).toEqual([]);
   });
@@ -1130,7 +1186,7 @@ describe('detectDestructiveChanges', () => {
           id: UNBOUND_NAMESPACE_ID,
           entries: {
             table: {
-              T: table({ columns: { a: col({ nativeType: 'text' }) } }),
+              T: table({ columns: { a: col({}) } }),
             },
           },
         }),
@@ -1141,20 +1197,20 @@ describe('detectDestructiveChanges', () => {
 
   it('returns empty when columns are added', () => {
     const from = unboundStorage('test' as StorageHashBase<string>, {
-      T: table({ columns: { a: col({ nativeType: 'text' }) } }),
+      T: table({ columns: { a: col({}) } }),
     });
     const to = unboundStorage('test' as StorageHashBase<string>, {
-      T: table({ columns: { a: col({ nativeType: 'text' }), b: col({ nativeType: 'text' }) } }),
+      T: table({ columns: { a: col({}), b: col({}) } }),
     });
     expect(detectDestructiveChanges(from, to)).toEqual([]);
   });
 
   it('detects removed column', () => {
     const from = unboundStorage('test' as StorageHashBase<string>, {
-      T: table({ columns: { a: col({ nativeType: 'text' }), b: col({ nativeType: 'text' }) } }),
+      T: table({ columns: { a: col({}), b: col({}) } }),
     });
     const to = unboundStorage('test' as StorageHashBase<string>, {
-      T: table({ columns: { a: col({ nativeType: 'text' }) } }),
+      T: table({ columns: { a: col({}) } }),
     });
 
     const conflicts = detectDestructiveChanges(from, to);
@@ -1167,11 +1223,11 @@ describe('detectDestructiveChanges', () => {
 
   it('detects removed table', () => {
     const from = unboundStorage('test' as StorageHashBase<string>, {
-      A: table({ columns: { id: col({ nativeType: 'text' }) } }),
-      B: table({ columns: { id: col({ nativeType: 'text' }) } }),
+      A: table({ columns: { id: col({}) } }),
+      B: table({ columns: { id: col({}) } }),
     });
     const to = unboundStorage('test' as StorageHashBase<string>, {
-      A: table({ columns: { id: col({ nativeType: 'text' }) } }),
+      A: table({ columns: { id: col({}) } }),
     });
 
     const conflicts = detectDestructiveChanges(from, to);
@@ -1185,7 +1241,7 @@ describe('detectDestructiveChanges', () => {
   it('does not report columns of a removed table individually', () => {
     const from = unboundStorage('test' as StorageHashBase<string>, {
       T: table({
-        columns: { a: col({ nativeType: 'text' }), b: col({ nativeType: 'text' }) },
+        columns: { a: col({}), b: col({}) },
       }),
     });
     const to = unboundStorage('test' as StorageHashBase<string>, {});
@@ -1198,12 +1254,12 @@ describe('detectDestructiveChanges', () => {
   it('detects multiple removals', () => {
     const from = unboundStorage('test' as StorageHashBase<string>, {
       A: table({
-        columns: { id: col({ nativeType: 'text' }), name: col({ nativeType: 'text' }) },
+        columns: { id: col({}), name: col({}) },
       }),
-      B: table({ columns: { id: col({ nativeType: 'text' }) } }),
+      B: table({ columns: { id: col({}) } }),
     });
     const to = unboundStorage('test' as StorageHashBase<string>, {
-      A: table({ columns: { id: col({ nativeType: 'text' }) } }),
+      A: table({ columns: { id: col({}) } }),
     });
 
     const conflicts = detectDestructiveChanges(from, to);
@@ -1215,7 +1271,7 @@ describe('detectDestructiveChanges', () => {
 
   it('detects removed table with prototype-name identifier', () => {
     const from = unboundStorage('test' as StorageHashBase<string>, {
-      toString: table({ columns: { id: col({ nativeType: 'text' }) } }),
+      toString: table({ columns: { id: col({}) } }),
     });
     const to = unboundStorage('test' as StorageHashBase<string>, {});
 
@@ -1232,7 +1288,7 @@ describe('detectDestructiveChanges', () => {
     const from = unboundStorage('test' as StorageHashBase<string>, {
       T: table({
         columns: {
-          toString: col({ nativeType: 'text' }),
+          toString: col({}),
         },
       }),
     });
@@ -1253,35 +1309,29 @@ describe('detectDestructiveChanges', () => {
 describe('contractToSchemaIR — resolved leaf values', () => {
   it('stamps resolvedNativeType equal to the computed native type', () => {
     const storage = unboundStorage('test' as StorageHashBase<string>, {
-      T: table({ columns: { id: col({ nativeType: 'text' }) } }),
+      T: table({ columns: { id: col({}) } }),
     });
 
     const result = contractToSchemaIR(wrap(storage), { renderDefault: testRenderer });
     expect(result.tables['T']!.columns['id']!.resolvedNativeType).toBe('text');
   });
 
-  it('stamps the expanded type into resolvedNativeType when expandNativeType is provided', () => {
+  it('stamps the written type into resolvedNativeType', () => {
     const storage = unboundStorage('test' as StorageHashBase<string>, {
       T: table({
         columns: {
-          id: col({ nativeType: 'character', codecId: 'sql/char@1', typeParams: { length: 36 } }),
+          id: col({ codecId: 'sql/char@1', typeParams: { length: 36 } }),
         },
       }),
     });
 
-    const result = contractToSchemaIR(wrap(storage), {
-      expandNativeType: (input) =>
-        input.typeParams && 'length' in input.typeParams
-          ? `${input.nativeType}(${input.typeParams['length']})`
-          : input.nativeType,
-      renderDefault: testRenderer,
-    });
+    const result = contractToSchemaIR(wrap(storage), { renderDefault: testRenderer });
     expect(result.tables['T']!.columns['id']!.resolvedNativeType).toBe('character(36)');
   });
 
   it('appends [] to resolvedNativeType for array columns', () => {
     const storage = unboundStorage('test' as StorageHashBase<string>, {
-      T: table({ columns: { tags: col({ nativeType: 'text', many: true }) } }),
+      T: table({ columns: { tags: col({ many: { elementNullable: false } }) } }),
     });
 
     const result = contractToSchemaIR(wrap(storage), { renderDefault: testRenderer });
@@ -1292,12 +1342,11 @@ describe('contractToSchemaIR — resolved leaf values', () => {
     const storage = unboundStorage('test' as StorageHashBase<string>, {
       T: table({
         columns: {
-          status: col({ nativeType: 'text', default: { kind: 'literal', value: 'draft' } }),
+          status: col({ default: { kind: 'literal', value: 'draft' } }),
           created: col({
-            nativeType: 'timestamptz',
             default: { kind: 'function', expression: 'now()' },
           }),
-          plain: col({ nativeType: 'text' }),
+          plain: col({}),
         },
       }),
     });
@@ -1320,8 +1369,7 @@ describe('contractToSchemaIR — resolved leaf values', () => {
       T: table({
         columns: {
           tags: col({
-            nativeType: 'text',
-            many: true,
+            many: { elementNullable: false },
             default: { kind: 'function', expression: "'{}'::text[]" },
           }),
         },
@@ -1349,7 +1397,7 @@ describe('contractToSchemaIR — resolved leaf values', () => {
       entries: {
         table: {
           T: table({
-            columns: { status: col({ nativeType: 'text' }) },
+            columns: { status: col({}) },
             checks: [
               new CheckConstraint({
                 naming: { kind: 'wire', prefix: 'T_status_check', hash },

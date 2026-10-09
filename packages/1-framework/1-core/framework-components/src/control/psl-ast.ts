@@ -104,6 +104,7 @@ export interface PslField {
   readonly typeConstructor?: PslTypeConstructorCall;
   readonly optional: boolean;
   readonly list: boolean;
+  readonly elementOptional?: boolean;
   readonly typeRef?: string;
   readonly attributes: readonly PslFieldAttribute[];
   readonly span: PslSpan;

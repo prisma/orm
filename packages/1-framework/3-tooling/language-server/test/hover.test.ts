@@ -1,0 +1,639 @@
+import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
+import { assembleAuthoringContributions } from '@internal/framework-components/control';
+import {
+  type ArgType,
+  type AttributeCtx,
+  blockAttribute,
+  bool,
+  buildSymbolTable,
+  entityRef,
+  fieldAttribute,
+  fieldRef,
+  funcCall,
+  identifier,
+  list,
+  modelAttribute,
+  numLiteral,
+  oneOf,
+  optional,
+  str,
+  structBlock,
+} from '@internal/psl-parser';
+import { parse } from '@internal/psl-parser/syntax';
+import { ok } from '@internal/utils/result';
+import { describe, expect, it } from 'vitest';
+import { providePslHover } from '../src/hover';
+import { testBinder } from './helpers/binder';
+
+const relatesTo = fieldAttribute('relatesTo', {
+  documentation: '',
+  named: { fields: { type: fieldRef(), documentation: '' } },
+});
+const guardedBy = modelAttribute('guardedBy', {
+  documentation: '',
+  named: { policy: { type: entityRef({ kind: 'block', keyword: 'policy' }), documentation: '' } },
+});
+const relationSpec = fieldAttribute('relation', {
+  documentation: 'Declares a relation.',
+  named: {
+    name: { type: optional(str()), documentation: 'An explicit relation name.' },
+  },
+});
+const incompleteKeySpec = fieldAttribute('incompleteKey', {
+  documentation: '',
+  named: {
+    references: { type: optional(str()), documentation: 'Referenced fields.' },
+  },
+});
+const onDeleteSpec = fieldAttribute('onDeleteExample', {
+  documentation: '',
+  named: {
+    onDelete: {
+      type: oneOf(
+        identifier('NoAction', { documentation: 'Takes no action.' }),
+        identifier('Restrict', { documentation: 'Rejects the delete.' }),
+        identifier('Cascade', { documentation: 'Cascades the delete.' }),
+      ),
+      documentation: '',
+    },
+  },
+});
+const indexSpec = modelAttribute('index', {
+  documentation: 'Declares an index.',
+  named: { fields: { type: list(str()), documentation: 'Indexed field names.' } },
+});
+const autoincrementFunc = funcCall('autoincrement', {
+  documentation: 'Generates sequential integers.',
+});
+const dbgeneratedFunc = funcCall('dbgenerated', {
+  documentation: 'Lets the database generate the value.',
+  named: { expr: { type: str(), documentation: 'The database expression.' } },
+});
+const defaultSpec = fieldAttribute('default', {
+  documentation: '',
+  positional: [
+    { key: 'value', type: oneOf(autoincrementFunc, dbgeneratedFunc), documentation: '' },
+  ],
+});
+function nullLiteral(): ArgType<null, AttributeCtx> {
+  const nullIdentifier = identifier('null', { documentation: 'A null value.' });
+  return {
+    kind: 'null',
+    label: 'null',
+    parse: (arg, ctx) => {
+      const result = nullIdentifier.parse(arg, ctx);
+      return result.ok ? ok(null) : result;
+    },
+  };
+}
+const autoincrementRealOrderFunc = funcCall('autoincrement', {
+  documentation: 'Generates sequential integers.',
+});
+const defaultRealOrderSpec = fieldAttribute('default', {
+  documentation: '',
+  positional: [
+    {
+      key: 'value',
+      type: oneOf(str(), numLiteral(), bool(), nullLiteral(), autoincrementRealOrderFunc),
+      documentation: '',
+    },
+  ],
+});
+const someBlockAttribute = blockAttribute('someBlockAttribute', {
+  documentation: 'Does something.',
+  positional: [{ key: 'value', type: str(), documentation: 'The value.' }],
+});
+const authoringContributions = assembleAuthoringContributions([
+  {
+    id: 'hover-fixture',
+    authoring: {
+      attributeSpecs: {
+        field: {
+          relatesTo: () => relatesTo,
+          relation: () => relationSpec,
+          incompleteKey: () => incompleteKeySpec,
+          onDeleteExample: () => onDeleteSpec,
+          default: () => defaultSpec,
+          defaultRealOrder: () => defaultRealOrderSpec,
+        },
+        model: { guardedBy: () => guardedBy, index: () => indexSpec },
+      },
+      type: {
+        pg: {
+          Varchar: {
+            kind: 'typeConstructor',
+            documentation: 'A variable-length string.',
+            args: [{ name: 'length', kind: 'number' }],
+            output: { codecId: 'fixture/varchar' },
+          },
+          Text: {
+            kind: 'typeConstructor',
+            output: { codecId: 'fixture/text' },
+          },
+          Tags: {
+            kind: 'typeConstructor',
+            documentation: 'A list of tags.',
+            args: [{ name: 'tags', kind: 'stringArray' }],
+            output: { codecId: 'fixture/tags' },
+          },
+          Mode: {
+            kind: 'typeConstructor',
+            documentation: 'A deletion mode.',
+            args: [{ name: 'mode', kind: 'option', values: ['cascade', 'restrict'] }],
+            output: { codecId: 'fixture/mode' },
+          },
+          Flag: {
+            kind: 'typeConstructor',
+            documentation: '',
+            output: { codecId: 'fixture/flag' },
+          },
+        },
+      },
+      field: {
+        pg: {
+          Serial: {
+            kind: 'fieldPreset',
+            args: [{ name: 'start', kind: 'number' }],
+            output: { codecId: 'fixture/serial' },
+          },
+        },
+      },
+    },
+  },
+]);
+const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
+  policy: {
+    kind: 'pslBlock',
+    documentation: 'Row-level access rule.',
+    keyword: 'policy',
+    discriminator: 'hover-policy',
+    name: { required: true },
+    spec: () =>
+      structBlock({
+        parameters: {
+          using: { type: str(), documentation: 'The policy filter expression.' },
+        },
+      }),
+    attributes: { someBlockAttribute: () => someBlockAttribute },
+  },
+  view: {
+    kind: 'pslBlock',
+    keyword: 'view',
+    discriminator: 'hover-view',
+    name: { required: true },
+    spec: () => structBlock({ parameters: {} }),
+  },
+};
+
+function hover(markedSource: string, siblings: readonly string[] = []) {
+  const offset = markedSource.indexOf('|');
+  expect(offset).toBeGreaterThanOrEqual(0);
+  const source = markedSource.slice(0, offset) + markedSource.slice(offset + 1);
+  const parsed = parse(source, 'language-server-test.psl');
+  const { document } = parsed;
+  const others = siblings.map((text, index) => parse(text, `sibling-${index}.psl`));
+  const sources = parsed.sources.merge(...others.map((other) => other.sources));
+  const sourceFile = sources.sourceFileFor(document.syntax);
+  const { symbolTable } = buildSymbolTable({
+    documents: [...others.map((other) => other.document), document],
+    sources,
+  });
+  return providePslHover({
+    document,
+    sourceFile,
+    position: sourceFile.positionAt(offset),
+    binder: testBinder({ sources, symbolTable, authoringContributions, pslBlockDescriptors }),
+    pslBlockDescriptors,
+  });
+}
+
+describe('providePslHover', () => {
+  it('shows a model declaration line and doc at a reference', () => {
+    const result = hover('/// A user.\nmodel User {\n  id Int\n}\nmodel Post {\n  author Us|er\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nmodel User\n```\n\nA user.' },
+      range: { start: { line: 5, character: 9 }, end: { line: 5, character: 13 } },
+    });
+  });
+
+  it('shows a model declaration line and doc at the declaration name', () => {
+    const result = hover('/// A user.\nmodel Us|er {\n  id Int\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nmodel User\n```\n\nA user.' },
+      range: { start: { line: 1, character: 6 }, end: { line: 1, character: 10 } },
+    });
+  });
+
+  it('shows a composite-type declaration line at a reference', () => {
+    const result = hover(
+      '/// An address.\ntype Address {\n  street String\n}\nmodel Person {\n  home Add|ress\n}',
+    );
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\ntype Address\n```\n\nAn address.' },
+      range: { start: { line: 5, character: 7 }, end: { line: 5, character: 14 } },
+    });
+  });
+
+  it('shows a composite-type declaration line at the declaration name', () => {
+    const result = hover('/// An address.\ntype Addr|ess {\n  street String\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\ntype Address\n```\n\nAn address.' },
+      range: { start: { line: 1, character: 5 }, end: { line: 1, character: 12 } },
+    });
+  });
+
+  it('shows a field declaration line and doc at a reference', () => {
+    const result = hover(
+      'model User {\n  /// The primary key.\n  id Int\n  name String @relatesTo(fields: i|d)\n}',
+    );
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nid Int\n```\n\nThe primary key.' },
+      range: { start: { line: 3, character: 33 }, end: { line: 3, character: 35 } },
+    });
+  });
+
+  it('shows a field declaration line and doc at the declaration name', () => {
+    const result = hover('model User {\n  /// The primary key.\n  i|d Int\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nid Int\n```\n\nThe primary key.' },
+      range: { start: { line: 2, character: 2 }, end: { line: 2, character: 4 } },
+    });
+  });
+
+  it('excludes a comment that sits inside multi-line attribute arguments', () => {
+    const result = hover(
+      'model User {\n  au|thor User @relation(\n    // cascade rationale\n    fields: [authorId],\n    references: [id]\n  )\n}',
+    );
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\nauthor User @relation( fields: [authorId], references: [id] )\n```',
+      },
+      range: { start: { line: 1, character: 2 }, end: { line: 1, character: 8 } },
+    });
+  });
+
+  it('collapses a multi-line field declaration with no comment to one line', () => {
+    const result = hover(
+      'model User {\n  au|thor User @relation(\n    fields: [authorId],\n    references: [id]\n  )\n}',
+    );
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\nauthor User @relation( fields: [authorId], references: [id] )\n```',
+      },
+      range: { start: { line: 1, character: 2 }, end: { line: 1, character: 8 } },
+    });
+  });
+
+  it('excludes a trailing same-line comment from the declaration line', () => {
+    const result = hover('model User {\n  i|d Int // note\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nid Int\n```' },
+      range: { start: { line: 1, character: 2 }, end: { line: 1, character: 4 } },
+    });
+  });
+
+  it('shows a named-type declaration line at a reference', () => {
+    const result = hover(
+      'types {\n  /// A short string.\n  Short = String\n}\nmodel Person {\n  name Sho|rt\n}',
+    );
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nShort = String\n```\n\nA short string.' },
+      range: { start: { line: 5, character: 7 }, end: { line: 5, character: 12 } },
+    });
+  });
+
+  it('shows a named-type declaration line at the declaration name', () => {
+    const result = hover('types {\n  /// A short string.\n  Sho|rt = String\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nShort = String\n```\n\nA short string.' },
+      range: { start: { line: 2, character: 2 }, end: { line: 2, character: 7 } },
+    });
+  });
+
+  it('shows a block declaration line at a reference', () => {
+    const result = hover(
+      '/// Owner-only access.\npolicy ReadOwn {\n}\nmodel Invoice {\n  id Int\n  @@guardedBy(policy: ReadO|wn)\n}',
+    );
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\npolicy ReadOwn\n```\n\nOwner-only access.',
+      },
+      range: { start: { line: 5, character: 22 }, end: { line: 5, character: 29 } },
+    });
+  });
+
+  it('shows a block declaration line at the declaration name', () => {
+    const result = hover('/// Owner-only access.\npolicy ReadO|wn {\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\npolicy ReadOwn\n```\n\nOwner-only access.',
+      },
+      range: { start: { line: 1, character: 7 }, end: { line: 1, character: 14 } },
+    });
+  });
+
+  it('reads the declaration and doc from another source file of the same project', () => {
+    const result = hover('model Post {\n  author Use|r\n}', [
+      '/// A user.\nmodel User {\n  id Int\n}',
+    ]);
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nmodel User\n```\n\nA user.' },
+      range: { start: { line: 1, character: 9 }, end: { line: 1, character: 13 } },
+    });
+  });
+
+  it('omits the doc section when the declaration has no ///', () => {
+    const result = hover('model Us|er {\n  id Int\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nmodel User\n```' },
+      range: { start: { line: 0, character: 6 }, end: { line: 0, character: 10 } },
+    });
+  });
+
+  it('omits the doc section when the /// is bare', () => {
+    const result = hover('///\nmodel Us|er {\n  id Int\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nmodel User\n```' },
+      range: { start: { line: 1, character: 6 }, end: { line: 1, character: 10 } },
+    });
+  });
+
+  it('returns null for an unresolved name', () => {
+    const result = hover('model Post {\n  author Unkno|wn\n}');
+    expect(result).toBeNull();
+  });
+
+  it('shows a namespace declaration line at a namespace resolution', () => {
+    const result = hover(
+      'namespace billing {\n  model Invoice {\n    id Int\n  }\n}\nmodel Foo {\n  bad billi|ng\n}',
+    );
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nnamespace billing\n```' },
+      range: { start: { line: 6, character: 6 }, end: { line: 6, character: 13 } },
+    });
+  });
+
+  it('shows the namespace at a namespace block name', () => {
+    const result = hover('namespace bil|ling {\n  model Invoice {\n    id Int\n  }\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nnamespace billing\n```' },
+      range: { start: { line: 0, character: 10 }, end: { line: 0, character: 17 } },
+    });
+  });
+
+  it('shows the namespace at the qualifier of a type reference', () => {
+    const result = hover('model Post {\n  author au|th.User\n}', [
+      'namespace auth {\n  /// A user.\n  model User {\n    id Int\n  }\n}',
+    ]);
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nnamespace auth\n```' },
+      range: { start: { line: 1, character: 9 }, end: { line: 1, character: 13 } },
+    });
+  });
+
+  it('shows the namespace at the qualifier of an entity reference', () => {
+    const result = hover(
+      'namespace auth {\n  policy ReadOwn {\n  }\n}\nmodel Invoice {\n  id Int\n  @@guardedBy(policy: au|th.ReadOwn)\n}',
+    );
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nnamespace auth\n```' },
+      range: { start: { line: 6, character: 22 }, end: { line: 6, character: 26 } },
+    });
+  });
+
+  it('shows the member at the member of a qualified entity reference', () => {
+    const result = hover(
+      'namespace auth {\n  /// Owner-only access.\n  policy ReadOwn {\n  }\n}\nmodel Invoice {\n  id Int\n  @@guardedBy(policy: auth.Read|Own)\n}',
+    );
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\npolicy ReadOwn\n```\n\nOwner-only access.',
+      },
+      range: { start: { line: 7, character: 27 }, end: { line: 7, character: 34 } },
+    });
+  });
+
+  it('returns null for a contributedNamespace resolution', () => {
+    const result = hover('model Product {\n  label p|g\n}');
+    expect(result).toBeNull();
+  });
+
+  it('returns null for a crossSpace reference', () => {
+    const result = hover('model Cart {\n  user auth:Us|er\n}');
+    expect(result).toBeNull();
+  });
+
+  it('returns null when the cursor is not on an Ident token', () => {
+    const result = hover('model User {| id Int\n}');
+    expect(result).toBeNull();
+  });
+
+  it('shows a field-attribute signature label and its documentation', () => {
+    const result = hover('model User {\n  id Int\n  author User @relat|ion\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\n@relation(name?: string)\n```\n\nDeclares a relation.',
+      },
+      range: { start: { line: 2, character: 15 }, end: { line: 2, character: 23 } },
+    });
+  });
+
+  it('shows a model-attribute signature label and its documentation', () => {
+    const result = hover('model User {\n  id Int\n  @@ind|ex\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\n@@index(fields: string[])\n```\n\nDeclares an index.',
+      },
+      range: { start: { line: 2, character: 4 }, end: { line: 2, character: 9 } },
+    });
+  });
+
+  it('omits the documentation section when spec.documentation is empty', () => {
+    const result = hover('model User {\n  id Int\n  author User @relates|To(fields: id)\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\n@relatesTo(fields: field name)\n```' },
+      range: { start: { line: 2, character: 15 }, end: { line: 2, character: 24 } },
+    });
+  });
+
+  it('shows a contributed type with documentation and args', () => {
+    const result = hover('model Product {\n  price pg.Varc|har(255)\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\npg.Varchar(length: number)\n```\n\nA variable-length string.',
+      },
+      range: { start: { line: 1, character: 11 }, end: { line: 1, character: 18 } },
+    });
+  });
+
+  it('shows a contributed type without documentation as the bare path', () => {
+    const result = hover('model Product {\n  label pg.Te|xt\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\npg.Text\n```' },
+      range: { start: { line: 1, character: 11 }, end: { line: 1, character: 15 } },
+    });
+  });
+
+  it('omits the documentation section when descriptor.documentation is empty', () => {
+    const result = hover('model Product {\n  flag pg.Fl|ag\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\npg.Flag\n```' },
+      range: { start: { line: 1, character: 10 }, end: { line: 1, character: 14 } },
+    });
+  });
+
+  it('shows a field-preset contributed type as the fence only, with its arg labels', () => {
+    const result = hover('model Counter {\n  value pg.Ser|ial(1)\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\npg.Serial(start: number)\n```' },
+      range: { start: { line: 1, character: 11 }, end: { line: 1, character: 17 } },
+    });
+  });
+
+  it('shows a stringArray contributed-type arg as string[]', () => {
+    const result = hover('model Product {\n  labels pg.Tag|s([])\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\npg.Tags(tags: string[])\n```\n\nA list of tags.',
+      },
+      range: { start: { line: 1, character: 12 }, end: { line: 1, character: 16 } },
+    });
+  });
+
+  it('shows an option contributed-type arg as its joined allowed values', () => {
+    const result = hover('model Product {\n  onDelete pg.Mo|de(cascade)\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: "```prisma\npg.Mode(mode: 'cascade' | 'restrict')\n```\n\nA deletion mode.",
+      },
+      range: { start: { line: 1, character: 14 }, end: { line: 1, character: 18 } },
+    });
+  });
+
+  it('shows a block keyword with documentation', () => {
+    const result = hover('polic|y ReadOwn {\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: 'Row-level access rule.' },
+      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 6 } },
+    });
+  });
+
+  it('returns null for a block keyword without documentation', () => {
+    const result = hover('vie|w Summary {\n}');
+    expect(result).toBeNull();
+  });
+
+  it('shows a named attribute-argument key and its documentation', () => {
+    const result = hover('model User {\n  author User @relation(nam|e: "x")\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\nname?: string\n```\n\nAn explicit relation name.',
+      },
+      range: { start: { line: 1, character: 24 }, end: { line: 1, character: 28 } },
+    });
+  });
+
+  it('shows a named attribute-argument key while its value is missing', () => {
+    const result = hover('model User {\n  author User @incompleteKey(referen|ces: )\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\nreferences?: string\n```\n\nReferenced fields.',
+      },
+      range: { start: { line: 1, character: 29 }, end: { line: 1, character: 39 } },
+    });
+  });
+
+  it('omits the documentation section for a parameter with empty documentation', () => {
+    const result = hover('model User {\n  id Int\n  author User @relatesTo(field|s: id)\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nfields: field name\n```' },
+      range: { start: { line: 2, character: 25 }, end: { line: 2, character: 31 } },
+    });
+  });
+
+  it('shows a struct-block entry key and its documentation', () => {
+    const result = hover('policy ReadOwn {\n  usi|ng = "x"\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\nusing: string\n```\n\nThe policy filter expression.',
+      },
+      range: { start: { line: 1, character: 2 }, end: { line: 1, character: 7 } },
+    });
+  });
+
+  it('shows a function name without args and its documentation', () => {
+    const result = hover('model User {\n  id Int @default(autoincreme|nt())\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\nautoincrement()\n```\n\nGenerates sequential integers.',
+      },
+      range: { start: { line: 1, character: 18 }, end: { line: 1, character: 31 } },
+    });
+  });
+
+  it('shows a function name past leading scalar leaves, in the real @default arm order', () => {
+    const result = hover('model User {\n  id Int @defaultRealOrder(autoincreme|nt())\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\nautoincrement()\n```\n\nGenerates sequential integers.',
+      },
+      range: { start: { line: 1, character: 27 }, end: { line: 1, character: 40 } },
+    });
+  });
+
+  it('shows a function name with args and its documentation', () => {
+    const result = hover('model User {\n  value String @default(dbgenerat|ed(expr: "now()"))\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\ndbgenerated(expr: string)\n```\n\nLets the database generate the value.',
+      },
+      range: { start: { line: 1, character: 24 }, end: { line: 1, character: 35 } },
+    });
+  });
+
+  it('shows a named function-call-argument key and its documentation', () => {
+    const result = hover('model User {\n  value String @default(dbgenerated(ex|pr: "now()"))\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\nexpr: string\n```\n\nThe database expression.',
+      },
+      range: { start: { line: 1, character: 36 }, end: { line: 1, character: 40 } },
+    });
+  });
+
+  it('shows a constant not first in a oneOf and its documentation', () => {
+    const result = hover('model User {\n  author User @onDeleteExample(onDelete: Casc|ade)\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nCascade\n```\n\nCascades the delete.' },
+      range: { start: { line: 1, character: 41 }, end: { line: 1, character: 48 } },
+    });
+  });
+
+  it('shows a block attribute and its documentation', () => {
+    const result = hover('policy ReadOwn {\n  @@someBlockAttri|bute("x")\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\n@@someBlockAttribute(string)\n```\n\nDoes something.',
+      },
+      range: { start: { line: 1, character: 4 }, end: { line: 1, character: 22 } },
+    });
+  });
+});

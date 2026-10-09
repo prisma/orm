@@ -120,8 +120,23 @@ describe('normalizeIndexOptionValue', () => {
     });
   });
 
-  it('String()-coerces everything else', () => {
+  it('String()-coerces every other scalar', () => {
     expect([70, '70', null].map(normalizeIndexOptionValue)).toEqual(['70', '70', 'null']);
+  });
+
+  it('writes a structured value as JSON, so nesting is kept', () => {
+    expect([[['a', 'b']], [['a'], ['b']], { x: 1 }].map(normalizeIndexOptionValue)).toEqual([
+      '[["a","b"]]',
+      '[["a"],["b"]]',
+      '{"x":1}',
+    ]);
+  });
+
+  it('writes object keys in sorted order at every depth, so key order does not change the value', () => {
+    expect(normalizeIndexOptionValue({ b: 2, a: { d: [{ f: 1, e: 2 }], c: 3 } })).toBe(
+      normalizeIndexOptionValue({ a: { c: 3, d: [{ e: 2, f: 1 }] }, b: 2 }),
+    );
+    expect(normalizeIndexOptionValue({ b: 2, a: 1 })).toBe('{"a":1,"b":2}');
   });
 });
 
@@ -224,6 +239,41 @@ describe('normalizeSqlBody', () => {
       expect(a).toBe(b);
     });
   });
+
+  describe('bodies with a line comment keep their line breaks', () => {
+    it('a line break after a comment differs from a space after it', () => {
+      expect([normalizeSqlBody('a --c\nb'), normalizeSqlBody('a --c b')]).toEqual([
+        'a --c\nb',
+        'a --c b',
+      ]);
+    });
+
+    it('a one-line body with a comment collapses as before', () => {
+      expect(normalizeSqlBody('  a  =  b   -- comment  ')).toBe('a = b -- comment');
+    });
+
+    it('a multi-line body without a comment collapses as before', () => {
+      expect(normalizeSqlBody('a\r\n=\rb\n')).toBe('a = b');
+    });
+
+    it('treats CRLF and a lone CR as line ends', () => {
+      expect([normalizeSqlBody('a --c\r\nb'), normalizeSqlBody('a --c\rb')]).toEqual([
+        'a --c\nb',
+        'a --c\nb',
+      ]);
+    });
+
+    it('collapses whitespace within each line and drops blank lines', () => {
+      expect(normalizeSqlBody('\n  a  =\tb  -- c  \n\n   \n\t x  y \n')).toBe('a = b -- c\nx y');
+    });
+
+    it('gives the same output on its own output', () => {
+      const bodies = ['a --c\n\n  b', ' a  -- c ', 'a\n b', "x = '--'\r\n  AND y"];
+      expect(bodies.map((body) => normalizeSqlBody(normalizeSqlBody(body)))).toEqual(
+        bodies.map(normalizeSqlBody),
+      );
+    });
+  });
 });
 
 describe('computeCheckContentHash', () => {
@@ -252,6 +302,12 @@ describe('computeCheckContentHash', () => {
   it('materially different expressions hash differently', () => {
     expect(computeCheckContentHash(`"role" IN ('user')`)).not.toBe(
       computeCheckContentHash(`"role" IN ('admin')`),
+    );
+  });
+
+  it('a line break after a line comment changes the hash', () => {
+    expect(computeCheckContentHash('a > 0 --c\nAND b > 0')).not.toBe(
+      computeCheckContentHash('a > 0 --c AND b > 0'),
     );
   });
 });
@@ -313,6 +369,12 @@ describe('computeIndexContentHash', () => {
     expect(computeIndexContentHash(base)).toMatch(/^[0-9a-f]{8}$/);
   });
 
+  it('hashes an object option value the same whatever its key order', () => {
+    expect(computeIndexContentHash({ ...base, type: 'gin', options: { o: { b: 1, a: 2 } } })).toBe(
+      computeIndexContentHash({ ...base, type: 'gin', options: { o: { a: 2, b: 1 } } }),
+    );
+  });
+
   describe('tuple encoding stability', () => {
     it('matches the expected SHA-256 first-8-hex for a known input', () => {
       const hash = computeIndexContentHash({
@@ -344,6 +406,12 @@ describe('computeIndexContentHash', () => {
   });
 
   describe('options coercion and ordering', () => {
+    it('tells apart option values that differ only in how arrays nest', () => {
+      const oneGroup = computeIndexContentHash({ ...base, options: { fields: [['a', 'b']] } });
+      const twoGroups = computeIndexContentHash({ ...base, options: { fields: [['a'], ['b']] } });
+      expect(oneGroup).not.toBe(twoGroups);
+    });
+
     it('String()-coerces values: a typed 70 hashes equal to an introspected "70"', () => {
       const typed = computeIndexContentHash({ ...base, options: { fillfactor: 70 } });
       const stringly = computeIndexContentHash({ ...base, options: { fillfactor: '70' } });
@@ -406,6 +474,20 @@ describe('computeIndexContentHash', () => {
       const a = computeIndexContentHash({ expression: 'lower(email)', unique: false });
       const b = computeIndexContentHash({ expression: 'upper(email)', unique: false });
       expect(a).not.toBe(b);
+    });
+  });
+
+  describe('line comments', () => {
+    it('a line break after a line comment in the expression changes the hash', () => {
+      expect(
+        computeIndexContentHash({ expression: 'lower(email) --c\n, id', unique: false }),
+      ).not.toBe(computeIndexContentHash({ expression: 'lower(email) --c , id', unique: false }));
+    });
+
+    it('a line break after a line comment in the predicate changes the hash', () => {
+      expect(
+        computeIndexContentHash({ columns: ['email'], unique: false, where: 'a --c\nb' }),
+      ).not.toBe(computeIndexContentHash({ columns: ['email'], unique: false, where: 'a --c b' }));
     });
   });
 

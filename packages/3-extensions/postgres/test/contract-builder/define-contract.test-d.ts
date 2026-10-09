@@ -28,7 +28,6 @@ expectTypeOf(result.targetFamily).toEqualTypeOf<'sql'>();
 
 const textColumn = {
   codecId: 'sql/char@1' as const,
-  nativeType: 'character varying' as const,
   typeParams: {},
 };
 const withModel = defineContract({
@@ -49,7 +48,7 @@ expectTypeOf<SoleNamespaceModels<typeof withFactory>['Post']>().not.toBeNever();
 
 // Mixed scaffold + factory enums: the postgres wrapper must advertise both,
 // mirroring the core defineContract merge (not collapse them into one generic).
-const pgText = { codecId: 'pg/text@1' as const, nativeType: 'text' } as const;
+const pgText = { codecId: 'pg/text@1' as const } as const;
 const Role = enumType('Role', pgText, member('User', 'user'), member('Admin', 'admin'));
 const Priority = enumType('Priority', pgText, member('Low', 'low'), member('High', 'high'));
 

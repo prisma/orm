@@ -1,12 +1,15 @@
 import type { Contract } from '@internal/contract/types';
 import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
 import sqlFamilyPack from '@internal/family-sql/pack';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import {
   APP_SPACE_ID,
   type MigrationOperationPolicy,
 } from '@internal/framework-components/control';
 import type { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import { buildBoundContract, enumType, member } from '@internal/sql-contract-ts/contract-builder';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -25,6 +28,11 @@ import {
   testTimeout,
 } from './fixtures/runner-fixtures';
 
+const postgresTypeLookups = {
+  codecLookup: createPostgresBuiltinCodecLookup(),
+  dataTypeLookup: createDataTypeLookup(postgresDataTypes),
+};
+
 const FULL_POLICY: MigrationOperationPolicy = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'],
 };
@@ -33,7 +41,7 @@ const FULL_POLICY: MigrationOperationPolicy = {
 // Contract factories
 // ---------------------------------------------------------------------------
 
-const pgText = { codecId: 'pg/text@1' as const, nativeType: 'text' };
+const pgText = { codecId: 'pg/text@1' as const };
 
 function buildEnumType(members: { name: string; value: string }[]) {
   const [first, ...rest] = members;
@@ -51,7 +59,7 @@ function makeRoleContract(members: { name: string; value: string }[]): Contract<
   return buildBoundContract(
     sqlFamilyPack,
     postgresPack,
-    { enums: { Role }, createNamespace: postgresCreateNamespace },
+    { ...postgresTypeLookups, enums: { Role }, createNamespace: postgresCreateNamespace },
     ({ field: f, model: m }) => ({
       models: {
         User: m('User', {
@@ -160,6 +168,8 @@ describe('enum check-constraint — end-to-end PGlite', { concurrent: false }, (
       schema: emptySchema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -212,6 +222,8 @@ describe('enum check-constraint — end-to-end PGlite', { concurrent: false }, (
       schema: emptySchema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -256,6 +268,8 @@ describe('enum check-constraint — end-to-end PGlite', { concurrent: false }, (
       schema: emptySchema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -303,6 +317,8 @@ describe('enum check-constraint — end-to-end PGlite', { concurrent: false }, (
       schema: emptySchema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -340,6 +356,8 @@ describe('enum check-constraint — end-to-end PGlite', { concurrent: false }, (
       schema: v2Schema,
       policy: FULL_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',

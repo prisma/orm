@@ -48,13 +48,13 @@ describe('Mongo call classes', () => {
       );
     });
 
-    it('DropIndexCall freezes, labels destructively, and lowers to dropIndex(...)', () => {
+    it('DropIndexCall freezes, labels as widening, and lowers to dropIndex(...)', () => {
       const call = new DropIndexCall('users', [{ field: 'legacy', direction: -1 }]);
 
       expect(Object.isFrozen(call)).toBe(true);
       expect(call).toMatchObject({
         factoryName: 'dropIndex',
-        operationClass: 'destructive',
+        operationClass: 'widening',
         label: 'Drop index on users (legacy:-1)',
       });
 
@@ -87,13 +87,13 @@ describe('Mongo call classes', () => {
       expect(call.toOp()).toEqual(dropCollection('users'));
     });
 
-    it('CollModCall defaults operationClass to destructive, uses a default label, and lowers to collMod(...)', () => {
+    it('CollModCall defaults operationClass to widening, uses a default label, and lowers to collMod(...)', () => {
       const call = new CollModCall('users', { validator: { $jsonSchema: { type: 'object' } } });
 
       expect(Object.isFrozen(call)).toBe(true);
       expect(call).toMatchObject({
         factoryName: 'collMod',
-        operationClass: 'destructive',
+        operationClass: 'widening',
         label: 'Modify collection users',
       });
 

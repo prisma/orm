@@ -1,5 +1,6 @@
+import { col, fn } from '@internal/sql-relational-core/contract-free';
 import { describe, expect, it } from 'vitest';
-import { DropTableCall } from '../../src/core/migrations/op-factory-call';
+import { CreateTableCall, DropTableCall } from '../../src/core/migrations/op-factory-call';
 import { renderCallsToTypeScript } from '../../src/core/migrations/render-typescript';
 
 const SNAPSHOTS_IMPORT_PATH = '../../snapshots';
@@ -103,5 +104,31 @@ describe('renderCallsToTypeScript (sqlite)', () => {
       `import type { Contract as End, Contract as Start } from '${SNAPSHOTS_IMPORT_PATH}/${TO_HEX}/contract';`,
     );
     expect(output).toContain('export default class M extends Migration<Start, End> {');
+  });
+
+  it('renders a function default as fn() with the SQL text', () => {
+    const output = renderTypeScript(
+      [
+        new CreateTableCall('t', [
+          col('created', 'TEXT', { notNull: true, default: fn("datetime('now')") }),
+        ]),
+      ],
+      { from: null, to: TO_HASH, snapshotsImportPath: SNAPSHOTS_IMPORT_PATH },
+    );
+
+    expect(output).toContain(
+      `this.createTable({ table: "t", columns: [col("created", "TEXT", { notNull: true, default: fn("datetime('now')") })] })`,
+    );
+  });
+
+  it('renders a function default holding both quote kinds as a template literal', () => {
+    const output = renderTypeScript(
+      [new CreateTableCall('t', [col('label', 'TEXT', { default: fn(`printf("%s", 'x')`) })])],
+      { from: null, to: TO_HASH, snapshotsImportPath: SNAPSHOTS_IMPORT_PATH },
+    );
+
+    expect(output).toContain(
+      'this.createTable({ table: "t", columns: [col("label", "TEXT", { default: fn(`printf("%s", \'x\')`) })] })',
+    );
   });
 });

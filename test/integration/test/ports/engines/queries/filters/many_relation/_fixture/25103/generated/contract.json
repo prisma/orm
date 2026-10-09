@@ -269,12 +269,12 @@
               "columns": {
                 "deletedAt": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "nullable": true
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -291,7 +291,7 @@
               "columns": {
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -308,17 +308,20 @@
               "columns": {
                 "contactId": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "identity_contactId_idx_ec98db2a"
+                  },
                   "source": {
                     "columns": [
                       "contactId"
@@ -356,27 +359,30 @@
               "columns": {
                 "audienceId": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "identityId": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "optedOutAt": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "nullable": true
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "subscription_audienceId_idx_7242acd1"
+                  },
                   "source": {
                     "columns": [
                       "audienceId"
@@ -393,6 +399,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "subscription_identityId_idx_e29a7785"
+                  },
                   "source": {
                     "columns": [
                       "identityId"
@@ -440,11 +449,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "b0cfaf84a4a3b62a8e8ec0de4a8917c16b5a1712ca4930187a8b7761f55995d8"
+    "storageHash": "7de45ac6c94e9c42f833ecb92a36aa1952776562c6d6ad25b146c3dd61dff155"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -455,9 +466,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

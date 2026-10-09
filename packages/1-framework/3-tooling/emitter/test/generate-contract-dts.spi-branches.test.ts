@@ -14,7 +14,6 @@ const HASHES = {
 function literalCodecLookup(): CodecLookup {
   return {
     get: () => undefined,
-    targetTypesFor: () => undefined,
     renderOutputTypeFor: () => undefined,
     renderValueLiteralFor: (_id, value) =>
       typeof value === 'string'
@@ -40,6 +39,7 @@ function makeEnumContract(opts: {
         nullable: false,
         type: { kind: 'scalar' as const, codecId: 'pg/text@1' },
         valueSet: opts.valueSet,
+        many: false,
       },
     },
     relations: {},

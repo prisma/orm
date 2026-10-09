@@ -1,4 +1,6 @@
+import { opaqueSql } from '@internal/sql-relational-core/ast';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import {
   PostgresAlterPolicyRename,
   PostgresCreatePolicy,
@@ -9,7 +11,10 @@ import { describe, expect, it } from 'vitest';
 import { PostgresControlAdapter } from '../src/core/control-adapter';
 import type { PostgresContract } from '../src/core/types';
 
-const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+const adapter = new PostgresControlAdapter(
+  createPostgresBuiltinCodecLookup(),
+  createPostgresBuiltinDataTypeLookup(),
+);
 const ctx = { contract: {} as PostgresContract };
 
 describe('PostgresControlAdapter.lowerToExecuteRequest — RLS DDL', () => {
@@ -21,7 +26,7 @@ describe('PostgresControlAdapter.lowerToExecuteRequest — RLS DDL', () => {
       permissive: true,
       operation: 'select',
       roles: ['app_user'],
-      using: '(auth.uid() = user_id)',
+      using: opaqueSql('(auth.uid() = user_id)'),
     });
     const result = await adapter.lowerToExecuteRequest(ast, ctx);
     expect(result).toEqual({
@@ -39,7 +44,7 @@ describe('PostgresControlAdapter.lowerToExecuteRequest — RLS DDL', () => {
       permissive: true,
       operation: 'insert',
       roles: ['app_user'],
-      withCheck: "(owner_id = current_setting('app.uid')::int)",
+      withCheck: opaqueSql("(owner_id = current_setting('app.uid')::int)"),
     });
     const result = await adapter.lowerToExecuteRequest(ast, ctx);
     expect(result).toEqual({
@@ -58,8 +63,8 @@ describe('PostgresControlAdapter.lowerToExecuteRequest — RLS DDL', () => {
       permissive: true,
       operation: 'update',
       roles: ['app_user'],
-      using: '(owner_id = 1)',
-      withCheck: '(owner_id = 2)',
+      using: opaqueSql('(owner_id = 1)'),
+      withCheck: opaqueSql('(owner_id = 2)'),
     });
     const result = await adapter.lowerToExecuteRequest(ast, ctx);
     expect(result).toEqual({
@@ -77,7 +82,7 @@ describe('PostgresControlAdapter.lowerToExecuteRequest — RLS DDL', () => {
       permissive: true,
       operation: 'delete',
       roles: ['app_user'],
-      using: '(owner_id = 1)',
+      using: opaqueSql('(owner_id = 1)'),
     });
     const result = await adapter.lowerToExecuteRequest(ast, ctx);
     expect(result).toEqual({
@@ -95,8 +100,8 @@ describe('PostgresControlAdapter.lowerToExecuteRequest — RLS DDL', () => {
       permissive: true,
       operation: 'all',
       roles: ['app_user'],
-      using: '(owner_id = 1)',
-      withCheck: '(owner_id = 2)',
+      using: opaqueSql('(owner_id = 1)'),
+      withCheck: opaqueSql('(owner_id = 2)'),
     });
     const result = await adapter.lowerToExecuteRequest(ast, ctx);
     expect(result).toEqual({
@@ -114,7 +119,7 @@ describe('PostgresControlAdapter.lowerToExecuteRequest — RLS DDL', () => {
       permissive: false,
       operation: 'insert',
       roles: ['app_user', 'admin'],
-      withCheck: '(owner_id = 1)',
+      withCheck: opaqueSql('(owner_id = 1)'),
     });
     const result = await adapter.lowerToExecuteRequest(ast, ctx);
     expect(result).toEqual({

@@ -26,7 +26,6 @@ function makeVectorDescriptor(): RuntimeParameterizedCodecDescriptor<VectorParam
     codecId: 'pg/vector@1',
     dataType: dataTypeId('pg/vector'),
     traits: ['equality'],
-    targetTypes: ['vector'],
     paramsSchema: {
       '~standard': {
         version: 1,
@@ -59,7 +58,6 @@ function makeScalarDescriptor(): CodecDescriptor {
     codecId: 'test/scalar@1',
     dataType: dataTypeId('test/scalar'),
     traits: [],
-    targetTypes: ['scalar'],
     paramsSchema: undefined,
     isParameterized: false,
     factory: () => () =>
@@ -142,7 +140,6 @@ describe('createAstCodecResolver', () => {
       codecId: 'async/vector@1',
       dataType: dataTypeId('async/vector'),
       traits: [],
-      targetTypes: ['vector'],
       paramsSchema: {
         '~standard': {
           version: 1,

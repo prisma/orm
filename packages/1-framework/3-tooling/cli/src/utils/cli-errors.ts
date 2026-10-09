@@ -6,6 +6,7 @@
 export type { CliErrorConflict, CliErrorEnvelope } from '@internal/errors/control';
 
 import {
+  type CliErrorConflict,
   CliStructuredError,
   errorConfigFileNotFound,
   errorConfigValidation,
@@ -32,9 +33,6 @@ import type { MigrateFailure } from '../control-api/types';
 import { chooseAction, runCommandAction } from './next-actions';
 
 export {
-  ERROR_CODE_DESTRUCTIVE_CHANGES,
-  errorConsentPlanMismatch,
-  errorDestructiveChanges,
   errorHashMismatch,
   errorMarkerMissing,
   errorMarkerRequired,
@@ -141,6 +139,86 @@ export function errorAdvanceRefArgConflict(options: {
       fix,
       nextActions: [chooseAction(fix)],
       meta: { advanceRef: options.advanceRef },
+    },
+  );
+}
+
+/** A ref `db sign` meant to advance, and why writing it or its snapshot failed. */
+export interface UnwrittenRef {
+  readonly space: string;
+  readonly name: string;
+  readonly hash: string;
+  readonly reason: string;
+}
+
+function quotedSpaces(spaces: readonly string[]): string {
+  return spaces.map((space) => `"${space}"`).join(', ');
+}
+
+function notSignedSentence(
+  spaces: readonly string[],
+  because: string,
+  becausePlural: string,
+): string {
+  if (spaces.length === 0) return '';
+  return spaces.length === 1
+    ? ` Space ${quotedSpaces(spaces)} was not signed, because ${because}.`
+    : ` Spaces ${quotedSpaces(spaces)} were not signed, because ${becausePlural}.`;
+}
+
+/**
+ * `db sign` wrote the markers, then failed to write one or more refs or their snapshots. The database is signed; running the command again writes the refs. The error also names the spaces it did not sign: those whose schema failed verification, and those whose marker changed while it ran.
+ */
+export function errorSignRefsNotWritten(options: {
+  readonly signedSpaces: readonly string[];
+  readonly failedSpaces: readonly string[];
+  readonly conflictSpaces: readonly string[];
+  readonly unwrittenRefs: readonly UnwrittenRef[];
+  readonly advancedRefs: readonly {
+    readonly space: string;
+    readonly name: string;
+    readonly hash: string;
+  }[];
+  readonly rerunCommand: string;
+  readonly cause: unknown;
+}): ActionableCliError {
+  const { signedSpaces, failedSpaces, conflictSpaces, unwrittenRefs, rerunCommand } = options;
+  const markers =
+    signedSpaces.length === 1
+      ? `the marker of space ${quotedSpaces(signedSpaces)} holds its contract`
+      : `the markers of spaces ${quotedSpaces(signedSpaces)} hold their contracts`;
+  const notSigned =
+    notSignedSentence(
+      failedSpaces,
+      'its schema does not satisfy its contract',
+      'their schemas do not satisfy their contracts',
+    ) +
+    notSignedSentence(
+      conflictSpaces,
+      'its marker changed while db sign ran',
+      'their markers changed while db sign ran',
+    );
+  const refs = unwrittenRefs
+    .map((ref) => `ref "${ref.name}" of space "${ref.space}" (${ref.reason})`)
+    .join('; ');
+  const count = unwrittenRefs.length;
+  return new ActionableCliError(
+    'MIGRATION.SIGN_REFS_NOT_WRITTEN',
+    `Database signed, but ${count} ${count === 1 ? 'ref was' : 'refs were'} not written`,
+    {
+      why: `The database was signed: ${markers}.${notSigned} These refs were not written: ${refs}.`,
+      fix: `Fix what stopped the write, then run \`${rerunCommand}\` again: the markers already hold the contracts, so it writes only the refs.`,
+      nextActions: [
+        runCommandAction('Sign again to write the refs that were not written', rerunCommand),
+      ],
+      meta: {
+        signedSpaces,
+        failedSpaces,
+        conflictSpaces,
+        unwrittenRefs,
+        advancedRefs: options.advancedRefs,
+      },
+      cause: options.cause,
     },
   );
 }
@@ -483,6 +561,253 @@ export function errorPlanOriginUnknown(
   );
 }
 
+/**
+ * A statement is malformed, or names two things that cannot be
+ * renamed into each other (a model and a field, or fields of two models).
+ */
+/** A statement as the user wrote it: its verb and its text. */
+interface WrittenStatement {
+  readonly verb: string;
+  readonly text: string;
+}
+
+export function errorStatementInvalid(
+  statement: WrittenStatement,
+  why: string,
+  fix: string,
+): ActionableCliError {
+  return new ActionableCliError(
+    'MIGRATION.STATEMENT_INVALID',
+    `Invalid statement "--${statement.verb} ${statement.text}"`,
+    {
+      why,
+      fix,
+      nextActions: [chooseAction(fix)],
+      meta: { statement: statement.text, verb: statement.verb },
+    },
+  );
+}
+
+/**
+ * A statement is well formed, but its names do not resolve in the
+ * origin and destination contracts the way a rename requires.
+ */
+export function errorStatementUnresolved(
+  statement: WrittenStatement,
+  why: string,
+  fix: string,
+): ActionableCliError {
+  return new ActionableCliError(
+    'MIGRATION.STATEMENT_UNRESOLVED',
+    `Cannot resolve statement "--${statement.verb} ${statement.text}"`,
+    {
+      why,
+      fix,
+      nextActions: [chooseAction(fix)],
+      meta: { statement: statement.text, verb: statement.verb },
+    },
+  );
+}
+
+/**
+ * A rename typed in answer to a data-loss question was planned, and the plan still loses the
+ * subject's data: the rename does not account for the operation the question was about.
+ */
+export function errorStatementDidNotResolveLoss(
+  statement: WrittenStatement,
+  subject: string,
+): ActionableCliError {
+  const fix = `Answer the question about "${subject}" with --delete ${subject} if its data may be lost, or give a rename whose old name stores that data.`;
+  return new ActionableCliError(
+    'MIGRATION.STATEMENT_DID_NOT_RESOLVE_LOSS',
+    `"--${statement.verb} ${statement.text}" does not keep the data of "${subject}"`,
+    {
+      why: `The plan was made again with the rename, and it still loses the data of "${subject}".`,
+      fix,
+      nextActions: [chooseAction(fix)],
+      meta: { statement: statement.text, verb: statement.verb, subject },
+    },
+  );
+}
+
+/**
+ * `delete` or `allow` statements given to a programmatic call match no question the plan asks,
+ * so they consent to nothing.
+ */
+export function errorStatementAnswersNoQuestion(
+  statements: readonly WrittenStatement[],
+  subjects: readonly string[],
+): ActionableCliError {
+  const written = statements.map(({ verb, text }) => `"--${verb} ${text}"`);
+  const listed =
+    written.length === 1
+      ? `Statement ${written[0]} answers`
+      : `Statements ${written.slice(0, -1).join(', ')} and ${written.at(-1)} answer`;
+  const fix =
+    subjects.length === 0
+      ? 'Leave the statements out: the plan asks no question.'
+      : `Leave them out, or name a subject the plan asks about: ${subjects.join(', ')}.`;
+  return new ActionableCliError(
+    'MIGRATION.STATEMENT_ANSWERS_NO_QUESTION',
+    `${listed} no question of the plan`,
+    {
+      why: 'A delete or allow statement consents to an operation the plan asks about, and these name no subject the plan would lose data from or widen access to.',
+      fix,
+      nextActions: [chooseAction(fix)],
+      meta: {
+        statements: statements.map(({ verb, text }) => ({ verb, text })),
+        subjects,
+      },
+    },
+  );
+}
+
+/**
+ * Without statements, `db update` drops a renamed table or column and creates it again under the
+ * new name, so any advice to run without them says so.
+ */
+const WITHOUT_STATEMENTS_DROPS =
+  'A plan made without statements drops the storage of each renamed model or field with its data and creates it again under the new name, and asks for consent before it does.';
+
+/** How to store the snapshot of the contract the database is at, so statements can resolve. */
+export const STORE_ORIGIN_SNAPSHOT_STEPS = [
+  '1. Put the contract source back to the version the database is at, and run `{bin} contract emit`.',
+  '2. Run `{bin} db update --advance-ref <name> --dry-run`, with the same `--db` as this command if it has one, and check that it plans no operations. Then run it again without `--dry-run`: the database matches that contract, so this changes nothing in it, and it stores the contract snapshot. If the dry run plans operations, the database has drifted from that contract; settle that before you go on.',
+  '3. Put the new contract source back, run `{bin} contract emit`, and run this command again with `--advance-ref <name>`.',
+];
+
+/**
+ * Statements were given, but there is no origin contract to resolve their old
+ * names against.
+ */
+export function errorStatementOriginUnknown(origin: {
+  readonly hash: string | null;
+  readonly snapshotDirectory: string;
+  readonly unreadable: string | undefined;
+}): ActionableCliError {
+  if (origin.hash === null) {
+    return new ActionableCliError(
+      'MIGRATION.STATEMENT_ORIGIN_UNKNOWN',
+      'Cannot resolve statements: the database has no marker',
+      {
+        why: 'The database has no marker: Prisma has never initialised or updated it, so there is no earlier contract whose names a statement could rename.',
+        fix: `Leave out the statements. If the database already holds data under the old names, preview the plan with --dry-run first. ${WITHOUT_STATEMENTS_DROPS}`,
+        nextActions: [
+          chooseAction(
+            `Leave out the statements, and preview the plan with --dry-run first. ${WITHOUT_STATEMENTS_DROPS}`,
+          ),
+        ],
+        meta: { hash: null, snapshotDirectory: origin.snapshotDirectory },
+      },
+    );
+  }
+  const meta = {
+    hash: origin.hash,
+    snapshotDirectory: origin.snapshotDirectory,
+    ...ifDefined('unreadable', origin.unreadable),
+  };
+  if (origin.unreadable !== undefined) {
+    return new ActionableCliError(
+      'MIGRATION.STATEMENT_ORIGIN_UNKNOWN',
+      'Cannot resolve statements: the origin contract snapshot cannot be read',
+      {
+        why: `The contract snapshot for hash "${origin.hash}" in ${origin.snapshotDirectory} could not be read: ${origin.unreadable}`,
+        fix: [
+          'Restore migrations/snapshots/ from version control. If no good copy exists, store the snapshot again:',
+          ...STORE_ORIGIN_SNAPSHOT_STEPS,
+        ].join('\n'),
+        nextActions: [
+          chooseAction('Restore migrations/snapshots/ from version control'),
+          chooseAction('Or store the snapshot again from the contract the database is at'),
+        ],
+        meta,
+      },
+    );
+  }
+  return new ActionableCliError(
+    'MIGRATION.STATEMENT_ORIGIN_UNKNOWN',
+    'Cannot resolve statements: the origin contract is unknown',
+    {
+      why: `No contract snapshot for hash "${origin.hash}" was found in ${origin.snapshotDirectory}. Statements name things in the contract the database is at, so the command needs that contract. \`db update\` stores the snapshot of the contract it applies only when it advances a ref: the \`db\` ref by default, or with \`--db <url>\` only the ref named by \`--advance-ref <name>\`. Most likely the run that brought the database to this contract advanced no ref.`,
+      fix: [
+        'Store the snapshot of the contract the database is at, then run the rename:',
+        ...STORE_ORIGIN_SNAPSHOT_STEPS,
+        'Adding --advance-ref to this command alone does not help: it would store the new contract, not the one the database is at. `migration plan --from` does not apply to `db update`.',
+      ].join('\n'),
+      nextActions: [
+        chooseAction('Put the contract source back to the version the database is at, and emit it'),
+        runCommandAction(
+          'Check that it plans no operations (with the same --db as this command, if any)',
+          '{bin} db update --advance-ref <name> --dry-run',
+        ),
+        runCommandAction(
+          'Then store its snapshot, which changes nothing in the database',
+          '{bin} db update --advance-ref <name>',
+        ),
+        chooseAction(
+          'Put the new contract source back, emit it, and run this command again with --advance-ref <name>',
+        ),
+      ],
+      meta,
+    },
+  );
+}
+
+/** Where a `migration plan` leg plans from: an empty database, an empty database toward the `db` ref's contract (the automatic baseline), or an earlier contract. */
+export type PlanLegOrigin =
+  | { readonly kind: 'empty' }
+  | { readonly kind: 'baseline'; readonly hash: string }
+  | { readonly kind: 'contract'; readonly hash: string };
+
+/** Where a `migration plan` leg plans to; only the emitted contract can be the destination of `migration new`. */
+export interface PlanDestination {
+  readonly hash: string;
+  readonly isEmitted: boolean;
+}
+
+const REPORT_MISSED_CHANGE =
+  'If you expected the database to change, migration plan missed it: report it with the output of `prisma migration plan --json`.';
+
+function noOperationsConflict(
+  origin: PlanLegOrigin,
+  destination: PlanDestination,
+): CliErrorConflict {
+  switch (origin.kind) {
+    case 'empty':
+      return {
+        kind: 'nothingToCreate',
+        summary:
+          'This contract describes nothing migration plan can create, so there is no first migration to plan.',
+        why: destination.isEmitted
+          ? 'If the database needs something the contract does not describe, run `prisma migration new`, add its operations to the new `migration.ts`, then run `node migration.ts` in that directory to write `ops.json`.'
+          : '`prisma migration new` writes a migration only to the emitted contract. If the database needs something this contract does not describe, emit it, run `prisma migration new`, add its operations to the new `migration.ts`, then run `node migration.ts` in that directory to write `ops.json`.',
+      };
+    case 'baseline':
+      return {
+        kind: 'nothingToBaseline',
+        summary: `The migrations directory is empty, so migration plan starts the migration history with a baseline migration to the contract the db ref points at, ${origin.hash}. That contract describes nothing migration plan can create, so there is no baseline to plan.`,
+        why: 'No command writes a baseline migration with no operations. If you manage the database with `prisma db init` or `prisma db update`, keep using `prisma db update`. No command can start a migration history from this database yet; report it with the output of `prisma migration plan --json`.',
+      };
+    case 'contract':
+      return {
+        kind: 'noDatabaseChange',
+        summary:
+          'The contract changed, but migration plan found nothing to change in the database. That is expected after a Prisma upgrade that changes how contract.json records values, after you switch a field to another codec of the same type, or after you change a control policy.',
+        why: destination.isEmitted
+          ? `If you deploy with migrations, run \`prisma migration new --from ${origin.hash}\` to write a migration with no operations, then \`prisma db migrate\`. If you manage the database with \`prisma db init\` or \`prisma db update\`, run \`prisma db sign\` on each database instead. ${REPORT_MISSED_CHANGE}`
+          : `\`prisma migration new\` writes a migration only to the emitted contract; to write one to this target, emit it first. If you manage the database with \`prisma db init\` or \`prisma db update\`, run \`prisma db sign ${destination.hash}\` on each database. ${REPORT_MISSED_CHANGE}`,
+      };
+  }
+}
+
+/** `migration plan` refuses a leg whose planner produced no operations, and says how to proceed from where it planned. */
+export function errorPlanProducedNoOperations(
+  origin: PlanLegOrigin,
+  destination: PlanDestination,
+): CliStructuredError {
+  return errorMigrationPlanningFailed({ conflicts: [noOperationsConflict(origin, destination)] });
+}
+
 export function errorMarkerMismatch(
   markerHash: string,
   reachableHashes: readonly string[],
@@ -492,17 +817,24 @@ export function errorMarkerMismatch(
   const planFromFix =
     'Run `{bin} migration plan --from <contract>`, naming the graph node the database was migrated from, if the live marker is canonical and the on-disk graph needs catching up.';
   const planCommand = '{bin} migration plan --from <contract>';
+  const signFix =
+    'Run `{bin} db sign` to overwrite the marker if the database already matches the contract.';
   return new ActionableCliError(
     'MIGRATION.MARKER_MISMATCH',
     'Database marker is not reachable in the on-disk migration graph',
     {
       why: `DB marker is ${markerHash}, but the on-disk migration graph reaches: ${reachableList}.`,
       fix: [
+        signFix,
         planFromFix,
         `Run \`{bin} migration ref set db ${markerHash}\` if the on-disk graph is canonical and the local \`db\` ref drifted.`,
         'Investigate whether the database was migrated by an out-of-band process.',
       ].join('\n'),
       nextActions: [
+        runCommandAction(
+          'Overwrite the marker if the database already matches the contract',
+          '{bin} db sign',
+        ),
         runCommandAction('Catch the on-disk graph up to the live marker', planCommand),
         runCommandAction(
           'Point the local db ref at the live marker',
@@ -520,8 +852,8 @@ export function errorMarkerMismatch(
 
 const ROLLBACK_IS_DESTRUCTIVE =
   'A rollback (reverse) plan is expected to contain destructive (DROP) operations — review them before applying';
-const NARROWER_CASES_NEED_A_HINT =
-  'Narrower cases (rename inference, re-adding a required field without a safe default, or a type change that needs data) may additionally need a hint in the planned migration';
+const RENAMES_AND_DATA_NEED_MORE =
+  'Plan a rename with --rename old:new; re-adding a required field without a safe default, or a type change that needs data, may need you to fill in the planned migration.ts';
 
 export function errorPathUnreachable(failure: MigrateFailure): ActionableCliError {
   const meta = failure.meta ?? {};
@@ -578,14 +910,14 @@ export function errorPathUnreachable(failure: MigrateFailure): ActionableCliErro
       `  1. ${planCommand}`,
       `  2. ${applyCommand}`,
       `${ROLLBACK_IS_DESTRUCTIVE}.`,
-      `${NARROWER_CASES_NEED_A_HINT}.`,
+      `${RENAMES_AND_DATA_NEED_MORE}.`,
       'Inspect the on-disk graph with `{bin} migration list`, or `{bin} migration show <bundle>` for any bundle in the path you expected.',
     ].join('\n'),
     nextActions: [
       runCommandAction('Plan the missing edge', planCommand),
       runCommandAction('Apply it', applyCommand),
       chooseAction(ROLLBACK_IS_DESTRUCTIVE),
-      chooseAction(NARROWER_CASES_NEED_A_HINT),
+      chooseAction(RENAMES_AND_DATA_NEED_MORE),
       runCommandAction('Inspect the on-disk graph', '{bin} migration list'),
       runCommandAction(
         'Inspect a bundle in the path you expected',

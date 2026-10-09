@@ -58,7 +58,7 @@ withTempDir(({ createTempDir }) => {
           psl,
           'the hand-written check is now declared, carrying the live reprint via map:',
         ).toMatch(
-          /@@check\(expression: "\(cardinality\(tags\) > 0\)", map: "users_tags_not_empty"\)/,
+          /@@check\(expression: sql`\(cardinality\(tags\) > 0\)`, map: "users_tags_not_empty"\)/,
         );
 
         const emit = await runContractEmit(ctx);

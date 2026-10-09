@@ -10,6 +10,18 @@ import { describe, expect, it } from 'vitest';
 import { sql } from '../../src/runtime/sql';
 import type { Contract } from '../fixtures/generated/contract';
 
+const DATA_TYPE_OF_CODEC: Readonly<Record<string, string>> = {
+  'pg/int4@1': 'pg/int4',
+  'pg/text@1': 'pg/text',
+  'pg/varchar@1': 'pg/varchar',
+};
+
+function dataTypeOf(codecId: string): string {
+  const dataType = DATA_TYPE_OF_CODEC[codecId];
+  if (dataType === undefined) throw new Error(`no data type listed for codec ${codecId}`);
+  return dataType;
+}
+
 /** No target contributes aggregates to these plan-shape cases; resolution answers nothing and the codec slot stays empty. */
 const emptyAggregateRegistry = {
   resolve: () => undefined,
@@ -17,7 +29,7 @@ const emptyAggregateRegistry = {
 };
 
 function column(codecId: string) {
-  return { codecId, nativeType: codecId, nullable: false } as const;
+  return { many: false, codecId, dataType: dataTypeOf(codecId), nullable: false } as const;
 }
 
 function table(columns: Record<string, ReturnType<typeof column>>) {

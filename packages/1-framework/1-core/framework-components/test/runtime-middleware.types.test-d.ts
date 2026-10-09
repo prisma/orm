@@ -2,6 +2,8 @@ import type { PlanMeta } from '@internal/contract/types';
 import { assertType, expectTypeOf, test } from 'vitest';
 import type { ExecutionPlan, QueryPlan } from '../src/execution/query-plan';
 import type {
+  AfterTransactionResult,
+  CrossFamilyMiddleware,
   QueryInterceptResult,
   RuntimeExecutor,
   RuntimeMiddleware,
@@ -174,4 +176,20 @@ test('RuntimeMiddleware familyId and targetId are optional', () => {
   void generic;
   void familyBound;
   void targetBound;
+});
+
+test('CrossFamilyMiddleware accepts an afterTransaction hook with the plan, outcome and context', () => {
+  const middleware: CrossFamilyMiddleware = {
+    name: 'after-transaction',
+    async afterTransaction(plan, result, ctx) {
+      assertType<PlanMeta>(plan.meta);
+      expectTypeOf(result.outcome).toEqualTypeOf<'committed' | 'rolled-back' | 'unknown'>();
+      assertType<RuntimeMiddlewareContext>(ctx);
+    },
+  };
+  void middleware;
+
+  type AfterTransactionHook = NonNullable<RuntimeMiddleware['afterTransaction']>;
+  expectTypeOf<Parameters<AfterTransactionHook>[1]>().toEqualTypeOf<AfterTransactionResult>();
+  expectTypeOf<ReturnType<AfterTransactionHook>>().toEqualTypeOf<Promise<void>>();
 });

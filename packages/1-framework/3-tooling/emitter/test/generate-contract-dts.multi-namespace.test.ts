@@ -59,7 +59,11 @@ describe('generateContractDts domain namespace handling', () => {
     // under its own coordinate, and field types resolve per-namespace.
     const authUserModel = {
       fields: {
-        emailAddress: { type: { kind: 'scalar' as const, codecId: 'pg/text@1' }, nullable: false },
+        emailAddress: {
+          type: { kind: 'scalar' as const, codecId: 'pg/text@1' },
+          nullable: false,
+          many: false as const,
+        },
       },
       relations: {},
       storage: {
@@ -70,7 +74,11 @@ describe('generateContractDts domain namespace handling', () => {
     };
     const publicUserModel = {
       fields: {
-        roleLabel: { type: { kind: 'scalar' as const, codecId: 'pg/text@1' }, nullable: true },
+        roleLabel: {
+          type: { kind: 'scalar' as const, codecId: 'pg/text@1' },
+          nullable: true,
+          many: false as const,
+        },
       },
       relations: {},
       storage: {

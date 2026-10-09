@@ -27,7 +27,7 @@ import type { CreateInput, DefaultModelRow } from '@internal/sql-orm-client';
 import { expectTypeOf, test } from 'vitest';
 import { defineContract, enumType, member } from '../../src/exports/contract-builder';
 
-const pgInt = { codecId: 'pg/int4@1', nativeType: 'int4' } as const;
+const pgInt = { codecId: 'pg/int4@1' } as const;
 
 const Level = enumType('Level', pgInt, member('Low', 1), member('High', 10));
 

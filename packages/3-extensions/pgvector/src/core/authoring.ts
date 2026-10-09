@@ -1,16 +1,13 @@
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
-import { VECTOR_MAX_DIM } from './constants';
 
 export const pgvectorAuthoringTypes = {
   pgvector: {
     Vector: {
       kind: 'typeConstructor',
-      args: [
-        { kind: 'number', name: 'length', integer: true, minimum: 1, maximum: VECTOR_MAX_DIM },
-      ],
+      inferred: true,
+      args: [{ kind: 'number', name: 'length', integer: true }],
       output: {
         codecId: 'pg/vector@1',
-        nativeType: 'vector',
         typeParams: {
           length: { kind: 'arg', index: 0 },
         },

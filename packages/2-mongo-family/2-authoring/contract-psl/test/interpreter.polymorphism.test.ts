@@ -1,20 +1,18 @@
 import type { Contract } from '@internal/contract/types';
 import { crossRef } from '@internal/contract/types';
-import type { CodecLookup } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { MongoIndex } from '@internal/mongo-contract';
 
 function modelsOf(ir: Contract): Record<string, unknown> {
   return ir.domain.namespaces[UNBOUND_NAMESPACE_ID]!.models;
 }
 
-import { buildSymbolTable, type SymbolTable } from '@internal/psl-parser';
-import type { DocumentAst, PslSources } from '@internal/psl-parser/syntax';
-import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
-import { interpretPslDocumentToMongoContract } from '../src/interpreter';
+import { mongoCodecLookup, mongoDataTypeLookup } from './derive-json-schema-helpers';
 import {
   expectInvalidAttributeSyntax,
   expectUnresolvedReference,
+  interpretMongoContract,
 } from './interpreter-test-helpers';
 
 const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
@@ -26,31 +24,6 @@ const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
   ['Double', 'mongo/double@1'],
 ]);
 
-const mongoTargetTypes: Record<string, readonly string[]> = {
-  'mongo/string@1': ['string'],
-  'mongo/int32@1': ['int'],
-  'mongo/bool@1': ['bool'],
-  'mongo/date@1': ['date'],
-  'mongo/objectId@1': ['objectId'],
-  'mongo/double@1': ['double'],
-};
-
-const mongoCodecLookup: CodecLookup = {
-  get(id: string) {
-    const targetTypes = mongoTargetTypes[id];
-    if (!targetTypes) return undefined;
-    return {
-      id,
-      encode: async (v: unknown) => v,
-      decode: async (w: unknown) => w,
-      encodeJson: (v: unknown) => v,
-      decodeJson: (j: unknown) => j,
-    } as ReturnType<CodecLookup['get']>;
-  },
-  targetTypesFor: (id: string) => mongoTargetTypes[id],
-  renderOutputTypeFor: () => undefined,
-};
-
 function mongoCollectionsOf(ir: { readonly storage: unknown }): Record<string, unknown> {
   const storage = ir.storage as {
     namespaces: Record<string, { entries: { collection: Record<string, unknown> } }>;
@@ -58,29 +31,17 @@ function mongoCollectionsOf(ir: { readonly storage: unknown }): Record<string, u
   return storage.namespaces[UNBOUND_NAMESPACE_ID]!.entries.collection;
 }
 
-function buildSymbolTableInput(schema: string): {
-  documents: readonly DocumentAst[];
-  symbolTable: SymbolTable;
-  sources: PslSources;
-} {
-  const { document, sources } = parse(schema, 'test.prisma');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
-  });
-  return { documents: [document], symbolTable, sources };
-}
-
 function interpret(schema: string) {
-  return interpretPslDocumentToMongoContract({
-    ...buildSymbolTableInput(schema),
-    scalarTypeCodecIds: mongoScalarTypeDescriptors,
-    controlMutationDefaults: {
-      dataTypeEntries: {},
+  return interpretMongoContract(
+    schema,
+    {
+      scalarTypeCodecIds: mongoScalarTypeDescriptors,
       defaultFunctionRegistry: new Map(),
+      codecLookup: mongoCodecLookup,
+      dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
     },
-    codecLookup: mongoCodecLookup,
-  });
+    'test.prisma',
+  );
 }
 
 function interpretOk(schema: string) {
@@ -106,18 +67,48 @@ describe('interpretPslDocumentToMongoContract — polymorphism', () => {
     }`;
     const forward = interpretOk(`${variant}\n${base}`);
     expect(forward).toEqual(interpretOk(`${base}\n${variant}`));
-    expect(modelsOf(forward)['Bug']).toMatchObject({
+    expect(modelsOf(forward)['Bug']).toEqual({
+      fields: {
+        _id: {
+          type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+          nullable: false,
+          many: false,
+        },
+        level: {
+          type: { kind: 'scalar', codecId: 'mongo/string@1' },
+          nullable: false,
+          many: false,
+        },
+      },
+      relations: {},
       base: crossRef('Task', UNBOUND_NAMESPACE_ID),
       storage: { collection: 'tasks' },
     });
-    expect(modelsOf(forward)['Task']).toMatchObject({
+    expect(modelsOf(forward)['Task']).toEqual({
+      fields: {
+        _id: {
+          type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+          nullable: false,
+          many: false,
+        },
+        task_kind: {
+          type: { kind: 'scalar', codecId: 'mongo/string@1' },
+          nullable: false,
+          many: false,
+        },
+      },
+      relations: {},
+      storage: { collection: 'tasks' },
       discriminator: { field: 'task_kind' },
       variants: { Bug: { value: 'bug' } },
     });
     expect(forward.roots).toEqual({ tasks: crossRef('Task', UNBOUND_NAMESPACE_ID) });
-    expect(mongoCollectionsOf(forward)['tasks']).toMatchObject({
-      indexes: [expect.objectContaining({ partialFilterExpression: { task_kind: 'bug' } })],
-    });
+    expect((mongoCollectionsOf(forward)['tasks'] as { indexes: unknown }).indexes).toEqual([
+      new MongoIndex({
+        keys: [{ field: 'level', direction: 1 }],
+        partialFilterExpression: { task_kind: 'bug' },
+      }),
+    ]);
   });
 
   it('reports a wrong-kind base at the reference expression', () => {
@@ -307,6 +298,44 @@ namespace scoped {
   });
 
   describe('@@discriminator and @@base — diagnostics', () => {
+    it('diagnoses duplicate discriminator values', () => {
+      const result = interpret(`
+        model Task {
+          id    ObjectId @id @map("_id")
+          title String
+          type  String
+
+          @@discriminator(type)
+        }
+
+        model Bug {
+          id       ObjectId @id @map("_id")
+          severity String
+
+          @@base(Task, "bug")
+        }
+
+        model OtherBug {
+          id          ObjectId @id @map("_id")
+          description String
+
+          @@base(Task, "bug")
+        }
+      `);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'PSL_DUPLICATE_DISCRIMINATOR_VALUE',
+            message:
+              'Discriminator value "bug" is used by both "Bug" and "OtherBug" on base model "Task"',
+          }),
+        ]),
+      );
+    });
+
     it('diagnoses orphaned @@discriminator (no @@base declarations)', () => {
       const result = interpret(`
         model Task {
@@ -407,6 +436,51 @@ namespace scoped {
       );
     });
 
+    it('diagnoses a discriminator field typed by a user composite type named String', () => {
+      const result = interpret(`
+        type String {
+          value Int32
+        }
+
+        model Task {
+          id   ObjectId @id @map("_id")
+          type String
+
+          @@discriminator(type)
+        }
+
+        model Bug {
+          severity Int32
+
+          @@base(Task, "bug")
+        }
+      `);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics).toEqual([
+        {
+          code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
+          message:
+            'Discriminator field "type" on model "Task" must be of type String, but is "String"',
+          sourceId: 'test.prisma',
+          span: {
+            start: { line: 10, column: 11, offset: 150 },
+            end: { line: 10, column: 32, offset: 171 },
+          },
+        },
+        {
+          code: 'PSL_ORPHANED_BASE',
+          message: 'Model "Bug" declares @@base(Task, ...) but "Task" has no @@discriminator',
+          sourceId: 'test.prisma',
+          span: {
+            start: { line: 16, column: 11, offset: 239 },
+            end: { line: 16, column: 30, offset: 258 },
+          },
+        },
+      ]);
+    });
+
     it('diagnoses model with both @@discriminator and @@base', () => {
       const result = interpret(`
         model Task {
@@ -474,7 +548,12 @@ namespace scoped {
         }
       `);
 
-      expectInvalidAttributeSyntax(result, /Expected a string literal/);
+      const diagnostic = expectInvalidAttributeSyntax(result, /Expected a string literal/);
+      if (result.ok) throw new Error('Expected interpretation to fail');
+      expect(result.failure.diagnostics).toEqual([
+        diagnostic,
+        expect.objectContaining({ code: 'PSL_MONGO_VARIANT_SEPARATE_COLLECTION' }),
+      ]);
     });
 
     it('diagnoses variant with @@map to different collection', () => {

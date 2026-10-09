@@ -161,9 +161,9 @@ describe('local FK backward-compatibility', () => {
   it('a contract with only local FKs round-trips through validateStorage without error', () => {
     const s = createContract<SqlStorage>({
       storage: unboundTables({
-        user: table({ id: col('int4', 'pg/int4@1') }),
+        user: table({ id: col('pg/int4', 'pg/int4@1') }),
         post: table(
-          { id: col('int4', 'pg/int4@1'), author_id: col('int4', 'pg/int4@1') },
+          { id: col('pg/int4', 'pg/int4@1'), author_id: col('pg/int4', 'pg/int4@1') },
           { fks: [fk('post', ['author_id'], 'user', ['id'])] },
         ),
       }),
@@ -241,9 +241,9 @@ describe('round-trips mixed local and cross-space FK carriers', () => {
   it('StorageTable with mixed FKs round-trips through JSON construction', () => {
     const mixedTable = new StorageTable({
       columns: {
-        id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-        author_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-        org_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+        id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+        author_id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+        org_id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
       },
       uniques: [],
       indexes: [],
@@ -408,8 +408,8 @@ describe('validateSqlContractFully with cross-space FKs', () => {
               table: {
                 post: {
                   columns: {
-                    id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                    author_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                    id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+                    author_id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                   },
                   primaryKey: { columns: ['id'] },
                   uniques: [],
@@ -450,8 +450,8 @@ describe('validateSqlContractFully with cross-space FKs', () => {
               table: {
                 post: {
                   columns: {
-                    id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                    author_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                    id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+                    author_id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                   },
                   primaryKey: { columns: ['id'] },
                   uniques: [],

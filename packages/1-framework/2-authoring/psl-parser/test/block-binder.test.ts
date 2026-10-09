@@ -6,12 +6,14 @@ import { fieldRef } from '../src/attribute-spec/combinators/field-ref';
 import { funcCall } from '../src/attribute-spec/combinators/func-call';
 import { identifier } from '../src/attribute-spec/combinators/identifier';
 import { int } from '../src/attribute-spec/combinators/int';
+import { json } from '../src/attribute-spec/combinators/json';
 import { jsonValue } from '../src/attribute-spec/combinators/json-value';
 import { list } from '../src/attribute-spec/combinators/list';
 import { num } from '../src/attribute-spec/combinators/num';
 import { oneOf } from '../src/attribute-spec/combinators/one-of';
 import { record } from '../src/attribute-spec/combinators/record';
 import { str } from '../src/attribute-spec/combinators/str';
+import { taggedLiteral } from '../src/attribute-spec/combinators/tagged-literal';
 import { fieldAttribute } from '../src/attribute-spec/field-attribute';
 import { modelAttribute } from '../src/attribute-spec/model-attribute';
 import { optional } from '../src/attribute-spec/optional';
@@ -21,6 +23,7 @@ import { mapBlock } from '../src/block-spec/constructors';
 import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
 import { ArrayLiteralAst, FunctionCallAst } from '../src/syntax/ast/expressions';
+import { binderContext, nullLiteral, rejectingNothing } from './support';
 
 const reference = entityRef({ kind: 'model' });
 
@@ -41,19 +44,19 @@ function bind(
     ...createBinder({
       sources,
       symbolTable,
-      typeConstructors: {},
-      controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
-      attributeSpecs: { model: { refs: () => modelAttribute('refs', parameters) }, field: {} },
-      pslBlockDescriptors: {
-        policy: {
-          kind: 'pslBlock',
-          keyword: 'policy',
-          discriminator: 'policy',
-          name: { required: true },
-          spec: () => mapBlock({ value: { type: rule, documentation: 'target' } }),
-          attributes: { refs: () => blockAttribute('refs', parameters) },
+      context: binderContext({
+        attributeSpecs: { model: { refs: () => modelAttribute('refs', parameters) }, field: {} },
+        pslBlockDescriptors: {
+          policy: {
+            kind: 'pslBlock',
+            keyword: 'policy',
+            discriminator: 'policy',
+            name: { required: true },
+            spec: () => mapBlock({ value: { type: rule, documentation: 'target' } }),
+            attributes: { refs: () => blockAttribute('refs', parameters) },
+          },
         },
-      },
+      }),
     }),
   };
 }
@@ -68,12 +71,15 @@ it('shares forward entity binding and silent identifier fallback across entries 
       'model Later {',
       ' @@refs(External, targets: [Later])',
       '}',
+      'namespace app {}',
       'namespace app {',
       ' policy Local {',
       '  target = Later',
       '  fallback = Global',
       '  @@refs(Later, targets: [Global, External])',
       ' }',
+      '}',
+      'namespace app {',
       ' model Later {}',
       '}',
       'model Global {}',
@@ -82,6 +88,11 @@ it('shares forward entity binding and silent identifier fallback across entries 
   expect(diagnostics).toEqual([]);
   const root = symbolTable.topLevel.blocks['Root']!;
   const local = symbolTable.topLevel.namespaces['app']!;
+  const scope = binder.scopeAt(local.models['Later']!.node.syntax);
+  expect(binder.scopeAt(local.blocks['Local']!.node.syntax)).toBe(scope);
+  for (const declaration of local.declarations) {
+    expect(binder.scopeAt(declaration.node.syntax)).toBe(scope);
+  }
   const resolutions = [...local.blocks['Local']!.node.entries()].map((entry) =>
     binder.symbolForNode(entry.value()!.syntax),
   );
@@ -160,17 +171,36 @@ it('reports strict references once per entry or argument after all alternatives 
   });
 });
 
-it.each([
-  oneOf(reference, bool()),
-  oneOf(reference, num()),
-  oneOf(reference, str()),
-  oneOf(reference, identifier('Other', { documentation: 'other' })),
-])('treats non-reference leaf alternatives as successful binding no-ops for $label', (rule) => {
+it.each([oneOf(reference, bool()), oneOf(reference, num()), oneOf(reference, str())])(
+  'reports the missing reference when a scalar leaf alternative does not match either for $label',
+  (rule) => {
+    const { diagnostics } = bind(
+      'policy P {\n target = Missing\n @@refs(Missing, targets: [Missing])\n}\nmodel M {\n @@refs(Missing, targets: [Missing])\n}',
+      rule,
+    );
+    expect(diagnostics.map(({ code, message, data }) => ({ code, message, data }))).toEqual(
+      Array.from({ length: 5 }, () => ({
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message: 'Cannot find entity "Missing"',
+        data: { reference: 'entity' },
+      })),
+    );
+  },
+);
+
+it('reports the missing reference when a fixed identifier alternative does not match either', () => {
+  const rule = oneOf(reference, identifier('Other', { documentation: 'other' }));
   const { diagnostics } = bind(
     'policy P {\n target = Missing\n @@refs(Missing, targets: [Missing])\n}\nmodel M {\n @@refs(Missing, targets: [Missing])\n}',
     rule,
   );
-  expect(diagnostics).toEqual([]);
+  expect(diagnostics.map(({ code, message, data }) => ({ code, message, data }))).toEqual(
+    Array.from({ length: 5 }, () => ({
+      code: 'PSL_UNRESOLVED_REFERENCE',
+      message: 'Cannot find entity "Missing"',
+      data: { reference: 'entity' },
+    })),
+  );
 });
 
 it.each([identifier(), identifier('Missing', { documentation: 'missing' })])(
@@ -187,7 +217,7 @@ it.each([identifier(), identifier('Missing', { documentation: 'missing' })])(
 
 it.each([
   { rule: optional(list(oneOf(reference, identifier()))), count: 0 },
-  { rule: optional(list(oneOf(reference, bool()))), count: 0 },
+  { rule: optional(list(oneOf(reference, bool()))), count: 3 },
 ])('matches alternatives through optional lists ($count diagnostics)', ({ rule, count }) => {
   const { diagnostics } = bind(
     'policy P {\n target = [Missing]\n @@refs([Missing])\n}\nmodel M {\n @@refs([Missing])\n}',
@@ -286,16 +316,37 @@ it('selects a matching block keyword after a mismatched entity selector', () => 
 it.each([
   { rule: oneOf(list(reference), list(num(2))), value: '[Missing]' },
   { rule: oneOf(list(reference), list(int({ min: 1 }))), value: '[Missing]' },
-  {
-    rule: oneOf(record(reference), record(identifier('Other', { documentation: 'other' }))),
-    value: '{ nested: Missing }',
+])(
+  'reports the missing reference once a scalar-constrained container alternative does not match either for $value',
+  ({ rule, value }) => {
+    const result = bind(
+      `policy P {\n target = ${value}\n @@refs(${value})\n}\nmodel M {\n @@refs(${value})\n}`,
+      rule,
+    );
+    expect(result.diagnostics.map(({ code, message, data }) => ({ code, message, data }))).toEqual(
+      Array.from({ length: 3 }, () => ({
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message: 'Cannot find entity "Missing"',
+        data: { reference: 'entity' },
+      })),
+    );
   },
-])('ignores scalar constraints in container alternatives for $value', ({ rule, value }) => {
+);
+
+it('reports the missing reference when a record of fixed identifiers does not match either', () => {
+  const rule = oneOf(record(reference), record(identifier('Other', { documentation: 'other' })));
+  const value = '{ nested: Missing }';
   const result = bind(
     `policy P {\n target = ${value}\n @@refs(${value})\n}\nmodel M {\n @@refs(${value})\n}`,
     rule,
   );
-  expect(result.diagnostics).toEqual([]);
+  expect(result.diagnostics.map(({ code, message, data }) => ({ code, message, data }))).toEqual(
+    Array.from({ length: 3 }, () => ({
+      code: 'PSL_UNRESOLVED_REFERENCE',
+      message: 'Cannot find entity "Missing"',
+      data: { reference: 'entity' },
+    })),
+  );
 });
 
 it('binds symbols without checking entity selectors', () => {
@@ -350,18 +401,18 @@ it('resolves a field after an entity lookup fails', () => {
   const result = createBinder({
     sources,
     symbolTable,
-    typeConstructors: {},
-    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
-    attributeSpecs: {
-      model: {},
-      field: {
-        pick: () =>
-          fieldAttribute('pick', {
-            documentation: 'pick',
-            positional: [{ key: 'value', type: rule, documentation: 'value' }],
-          }),
+    context: binderContext({
+      attributeSpecs: {
+        model: {},
+        field: {
+          pick: () =>
+            fieldAttribute('pick', {
+              documentation: 'pick',
+              positional: [{ key: 'value', type: rule, documentation: 'value' }],
+            }),
+        },
       },
-    },
+    }),
   });
   const selfModel = symbolTable.topLevel.models['M']!;
   const field = selfModel.fields['value']!;
@@ -547,4 +598,52 @@ it('does not treat recursive JSON metadata as references', () => {
     bind('policy P {\n target = [null, { value: true }]\n @@refs(null)\n}', jsonValue())
       .diagnostics,
   ).toEqual([]);
+});
+
+it.each([
+  { label: 'str', rule: str(), value: '"hello"' },
+  { label: 'num', rule: num(), value: '5' },
+  { label: 'int', rule: int(), value: '5' },
+  { label: 'bool', rule: bool(), value: 'true' },
+  { label: 'null', rule: nullLiteral(), value: 'null' },
+  { label: 'json', rule: json(), value: '"[1]"' },
+  {
+    label: 'taggedLiteral',
+    rule: taggedLiteral(['sql'], { documentation: 'A tagged literal.' }),
+    value: 'sql`SELECT 1`',
+  },
+])(
+  'matches its own shape for $label, discarding the failed reference alternative',
+  ({ rule, value }) => {
+    const { diagnostics } = bind(`policy P {\n target = ${value}\n}`, oneOf(reference, rule));
+    expect(diagnostics).toEqual([]);
+  },
+);
+
+it.each([
+  { label: 'str', rule: str() },
+  { label: 'num', rule: num() },
+  { label: 'int', rule: int() },
+  { label: 'bool', rule: bool() },
+  { label: 'null', rule: nullLiteral() },
+  { label: 'json', rule: json() },
+  { label: 'taggedLiteral', rule: taggedLiteral(['sql'], { documentation: 'A tagged literal.' }) },
+  { label: 'rejecting', rule: rejectingNothing() },
+])('fails a different shape for $label, surfacing the failed reference alternative', ({ rule }) => {
+  const { diagnostics } = bind('policy P {\n target = Missing\n}', oneOf(reference, rule));
+  expect(diagnostics.map(({ code, message, data }) => ({ code, message, data }))).toEqual([
+    {
+      code: 'PSL_UNRESOLVED_REFERENCE',
+      message: 'Cannot find entity "Missing"',
+      data: { reference: 'entity' },
+    },
+  ]);
+});
+
+it('ignores a scalar leaf constraint violation, matching on shape alone', () => {
+  const { diagnostics } = bind(
+    'policy P {\n target = 1\n}',
+    oneOf(reference, int({ min: 10, max: 20 })),
+  );
+  expect(diagnostics).toEqual([]);
 });

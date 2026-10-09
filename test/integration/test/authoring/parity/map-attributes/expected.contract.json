@@ -95,7 +95,7 @@
               "columns": {
                 "team_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -110,17 +110,20 @@
               "columns": {
                 "member_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "team_ref": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "team_member_team_ref_idx_a6fcaafa"
+                  },
                   "name": "team_member_team_ref_fkey",
                   "onDelete": "cascade",
                   "onUpdate": "cascade",
@@ -158,11 +161,13 @@
         "id": "public"
       }
     },
-    "storageHash": "79956063a45496197760e927b15dc94e848a753280a630e0660c7c95362ea07f"
+    "storageHash": "208b450dda88de6113de4ba79fdf5cd448238e32deb403ecad990d277747aec1"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -173,9 +178,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

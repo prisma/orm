@@ -31,9 +31,8 @@ describe('arktypeJsonRuntimeDescriptor', () => {
     expect(codecDescriptors).toContain(arktypeJsonDescriptor);
   });
 
-  it('extractCodecLookup over the runtime descriptor resolves arktype/json@1 target types and renderers', () => {
+  it('extractCodecLookup over the runtime descriptor resolves arktype/json@1 renderers', () => {
     const lookup = extractCodecLookup([arktypeJsonRuntimeDescriptor]);
-    expect(lookup.targetTypesFor(ARKTYPE_JSON_CODEC_ID)).toEqual(['jsonb']);
     expect(
       lookup.renderOutputTypeFor(ARKTYPE_JSON_CODEC_ID, {
         expression: '{ name: string }',
@@ -49,31 +48,11 @@ describe('arktypeJsonRuntimeDescriptor', () => {
 });
 
 describe('arktypeJsonExtensionDescriptor (control)', () => {
-  // The control descriptor wires the migration-plane hooks into the SQL family's control stack. arktype-json's `expandNativeType` is an identity (`jsonb` is dimension-free) and there's no `databaseDependencies` (`jsonb` is built into Postgres).
   it('declares family, target, and version aligned with pack-meta', () => {
     expect(arktypeJsonExtensionDescriptor.familyId).toBe('sql');
     expect(arktypeJsonExtensionDescriptor.targetId).toBe('postgres');
     expect(arktypeJsonExtensionDescriptor.kind).toBe('extension');
     expect(arktypeJsonExtensionDescriptor.id).toBe('arktype-json');
-  });
-
-  it('binds the codec id to the control-plane hooks', () => {
-    const hooks = arktypeJsonExtensionDescriptor.types?.codecTypes?.controlPlaneHooks;
-    expect(hooks).toBeDefined();
-    expect(hooks?.[ARKTYPE_JSON_CODEC_ID]).toBeDefined();
-  });
-
-  it('expandNativeType is an identity (jsonb stays jsonb regardless of typeParams)', () => {
-    const hooks = arktypeJsonExtensionDescriptor.types?.codecTypes?.controlPlaneHooks;
-    const codecHooks = hooks?.[ARKTYPE_JSON_CODEC_ID] as
-      | { expandNativeType?: (input: { nativeType: string }) => string }
-      | undefined;
-    expect(codecHooks?.expandNativeType).toBeDefined();
-    expect(
-      codecHooks?.expandNativeType?.({
-        nativeType: 'jsonb',
-      }),
-    ).toBe('jsonb');
   });
 
   it('create() returns an instance tagged with the family/target', () => {

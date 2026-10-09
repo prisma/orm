@@ -1,4 +1,10 @@
-import { buildSymbolTable, createBinder, interpretExtensionBlocks } from '@internal/psl-parser';
+import { assembleAuthoringContributions } from '@internal/framework-components/control';
+import {
+  buildSymbolTable,
+  createBinder,
+  EMPTY_DATA_TYPES,
+  interpretExtensionBlocks,
+} from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { sqlFamilyPslBlockDescriptors } from '../src/core/authoring-entity-types';
@@ -9,16 +15,21 @@ function build(source: string) {
   const { binder } = createBinder({
     sources,
     symbolTable: result.symbolTable,
-    typeConstructors: {},
-    attributeSpecs: { model: {}, field: {} },
-    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
-    pslBlockDescriptors: sqlFamilyPslBlockDescriptors,
+    context: {
+      authoringContributions: {
+        ...assembleAuthoringContributions([]),
+        pslBlockDescriptors: sqlFamilyPslBlockDescriptors,
+      },
+      controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+      dataTypes: EMPTY_DATA_TYPES,
+    },
   });
   const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks({
     symbolTable: result.symbolTable,
     sources,
     pslBlockDescriptors: sqlFamilyPslBlockDescriptors,
     binder,
+    dataTypes: EMPTY_DATA_TYPES,
   });
   return { ...result, blockDiagnostics, parsedBlocks };
 }

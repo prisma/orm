@@ -100,6 +100,20 @@ describe('computeContentHash', () => {
     });
   });
 
+  describe('line comments', () => {
+    it('a line break after a line comment in using changes the hash', () => {
+      expect(computeContentHash({ ...base, using: 'a --c\nb' })).not.toBe(
+        computeContentHash({ ...base, using: 'a --c b' }),
+      );
+    });
+
+    it('a line break after a line comment in withCheck changes the hash', () => {
+      expect(computeContentHash({ ...base, withCheck: 'a --c\nb' })).not.toBe(
+        computeContentHash({ ...base, withCheck: 'a --c b' }),
+      );
+    });
+  });
+
   describe('string literals are data', () => {
     it('status with paren content hashes differently from status with plain content', () => {
       const a = computeContentHash({ ...base, using: "status = '(active)'" });

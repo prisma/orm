@@ -1,3 +1,4 @@
+import type { LockOptionCapabilities, LockWaitOptions } from '@internal/sql-relational-core/ast';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type {
   AggregateFunctions,
@@ -107,6 +108,17 @@ export interface WithJoin<QC extends QueryContext, AvailableScope extends Scope,
 export type PaginationValue<QC extends QueryContext> =
   | number
   | TraitExpression<readonly ['numeric'], false, QC['codecTypes']>;
+
+type LockOf<
+  QC extends QueryContext,
+  S extends Scope,
+> = QC['capabilities'] extends LockOptionCapabilities['of']
+  ? { readonly of?: ReadonlyArray<keyof S['namespaces'] & string> }
+  : { readonly of?: never };
+
+/** Options for the row-locking methods; each key exists only when the adapter reports its capability. */
+export type LockOptions<QC extends QueryContext, S extends Scope> = LockOf<QC, S> &
+  LockWaitOptions<QC['capabilities']>;
 
 export interface WithPagination<QC extends QueryContext> {
   limit(count: PaginationValue<QC>): this;

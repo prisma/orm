@@ -71,7 +71,7 @@ async function authorSqliteContractFromPsl(pslSchema: string) {
     composedExtensionContracts: new Map(),
     authoringContributions: sqliteStack.authoringContributions,
     codecLookup: sqliteStack.codecLookup,
-    dataTypeLookup: sqliteStack.dataTypeLookup,
+    dataTypes: sqliteStack.dataTypes,
     controlMutationDefaults: sqliteStack.controlMutationDefaults,
     resolvedInputs: [schemaPath],
     capabilities: sqliteStack.capabilities,
@@ -87,6 +87,8 @@ async function applyContract(connectionString: string, contract: Contract<SqlSto
       schema: await familyInstance.introspect({ driver }),
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: postgresFrameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -222,13 +224,13 @@ describe('PSL number defaults on columns whose data type casts from no number', 
       diagnostics: [
         expect.objectContaining({
           code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
-          message: 'Field "Payload.data": pg/bytea has no cast from pg/int2; it casts from pg/text',
+          message: 'Field "Payload.data": Expected a quoted string',
         }),
       ],
     });
   });
 
-  it('refuse a number on a SQLite datetime column, naming the cast it would need', async () => {
+  it('refuse a number on a SQLite datetime column, whose text type casts from nothing', async () => {
     const result = await authorSqliteContractFromPsl(
       'model Event {\n  id Int @id\n  at DateTime @default(0)\n}',
     );
@@ -236,8 +238,7 @@ describe('PSL number defaults on columns whose data type casts from no number', 
     expect(result.ok ? [] : result.failure.diagnostics).toEqual([
       expect.objectContaining({
         code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
-        message:
-          'Field "Event.at": sqlite/datetime has no cast from sqlite/integer; it casts from sqlite/text',
+        message: 'Field "Event.at": Expected a quoted string',
       }),
     ]);
   });

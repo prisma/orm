@@ -19,7 +19,7 @@ export type PostgresCheckKind = CheckKind;
 export interface PostgresCheckExpressionInput {
   readonly tableName: string;
   readonly columnName: string;
-  readonly many: boolean;
+  readonly many: boolean | { readonly elementNullable: boolean };
   readonly memberValues: readonly (string | number)[] | undefined;
 }
 
@@ -42,48 +42,46 @@ export interface PostgresCheckExpressionCandidate {
  *
  * A domain enum has no type-level enforcement, so membership is a
  * predicate: `IN` for a scalar, and `<@` containment for an array — an array
- * column cannot use `IN` at all (`operator does not exist: text[] = text`),
- * and containment additionally rejects NULL elements. Every list column also
- * gets an element-non-null check, which no Postgres column type can express.
+ * column cannot use `IN` at all (`operator does not exist: text[] = text`).
+ * Array membership strips NULL elements first, leaving element nullability to
+ * the separate element-non-null check emitted for semantically strict lists.
  *
- * Array containment casts both operands to `numeric[]` for numeric members or
- * `text[]` for string members, so different storage types share an operator
- * without comparing numbers as text. The scalar `IN` form needs no cast.
+ * Both forms compare members in the column's own type: the `IN` list and
+ * the `<@` array literal are untyped, so Postgres reads each member as the
+ * column (or element) type. A cast to `text` would compare the type's text
+ * output instead, which for `inet` always carries the prefix length.
  */
 export function postgresRenderCheckExpressions(
   input: PostgresCheckExpressionInput,
 ): readonly PostgresCheckExpressionCandidate[] {
   const candidates: PostgresCheckExpressionCandidate[] = [];
   const column = quoteIdentifier(input.columnName);
+  const isMany = input.many !== false;
+  const elementNullable =
+    (typeof input.many === 'object' && input.many.elementNullable) ||
+    ('elementNullable' in input && input.elementNullable === true);
 
   if (input.memberValues !== undefined) {
     invariant(
       input.memberValues.length > 0,
       `check for "${input.tableName}"."${input.columnName}": empty member set; both authoring surfaces reject a member-less enum before rendering`,
     );
-    const members = input.memberValues
-      .map((value) => {
-        if (typeof value === 'string') return `'${escapeLiteral(value)}'`;
-        invariant(
-          Number.isFinite(value),
-          `check for "${input.tableName}"."${input.columnName}": non-finite numeric member`,
-        );
-        return String(value);
-      })
-      .join(', ');
-    const arrayType = input.memberValues.every((value) => typeof value === 'number')
-      ? 'numeric[]'
-      : 'text[]';
+    for (const value of input.memberValues) {
+      invariant(
+        typeof value === 'string' || Number.isFinite(value),
+        `check for "${input.tableName}"."${input.columnName}": non-finite numeric member`,
+      );
+    }
     candidates.push({
       kind: 'membership',
       columnName: input.columnName,
-      expression: input.many
-        ? `${column}::${arrayType} <@ ARRAY[${members}]::${arrayType}`
-        : `${column} IN (${members})`,
+      expression: isMany
+        ? `array_remove(${column}, NULL) <@ '${escapeLiteral(arrayLiteral(input.memberValues))}'`
+        : `${column} IN (${input.memberValues.map(sqlLiteral).join(', ')})`,
     });
   }
 
-  if (input.many) {
+  if (isMany && !elementNullable) {
     candidates.push({
       kind: 'elementNotNull',
       columnName: input.columnName,
@@ -92,4 +90,15 @@ export function postgresRenderCheckExpressions(
   }
 
   return candidates;
+}
+
+function sqlLiteral(value: string | number): string {
+  return typeof value === 'string' ? `'${escapeLiteral(value)}'` : String(value);
+}
+
+function arrayLiteral(values: readonly (string | number)[]): string {
+  const elements = values.map((value) =>
+    typeof value === 'string' ? `"${value.replace(/["\\]/g, '\\$&')}"` : String(value),
+  );
+  return `{${elements.join(',')}}`;
 }

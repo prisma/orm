@@ -1,11 +1,16 @@
 import type { ColumnRef, IndexConstraint } from '@internal/sql-contract-ts/contract-builder';
-import type { FullTextSearchLanguage } from '@internal/target-postgres/operation-types';
 import {
-  DEFAULT_FULL_TEXT_SEARCH_LANGUAGE,
-  isFullTextIndexableCodec,
-  renderFullTextIndexExpression,
-} from '@internal/target-postgres/sql-utils';
-import { invariant } from '@internal/utils/assertions';
+  describeFullTextIndexProblem,
+  FULL_TEXT_INDEX_TYPE,
+  type FullTextFieldsInput,
+  type FullTextIndexCandidate,
+  fullTextIndexProblems,
+  postgresCodecTraitsOf,
+  weightGroupsOf,
+} from '@internal/target-postgres/full-text-index-authoring';
+import type { FullTextSearchLanguage } from '@internal/target-postgres/operation-types';
+import { DEFAULT_FULL_TEXT_SEARCH_LANGUAGE } from '@internal/target-postgres/sql-utils';
+import { assertDefined } from '@internal/utils/assertions';
 import { postgresError } from '../errors';
 
 type FullTextIndexOptionsBase = {
@@ -31,62 +36,77 @@ type FullTextIndexMapOptions = FullTextIndexOptionsBase & {
 
 type FullTextIndexOptions = FullTextIndexNameOptions | FullTextIndexMapOptions;
 
+function isColumnRef(value: unknown): value is ColumnRef {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 /**
- * A GIN index over the `to_tsvector` expression `fullTextMatches`,
- * `fullTextRank` and `fullTextHeadline` lower to — the TypeScript twin of
- * `@@fullTextIndex`. Pass it to a model's `sql({ indexes: [...] })`.
+ * A GIN index over the search document `fullTextMatches` and `fullTextRank`
+ * search — the TypeScript twin of `@@fullTextIndex`. Pass it to a model's
+ * `sql({ indexes: [...] })`.
  *
- * The expression is rendered at lowering, once the column's storage name is
- * known, so a `.column()` override or a column naming convention is honoured
- * rather than guessed. Pass the same `language` here and to the operation: a
- * mismatch is not an error, the query simply stops using the index.
+ * `fields` is one column, or a list whose items are columns or lists of
+ * columns. Each top-level item is a weight group, strongest first, at most
+ * four. The contract stores the groups as storage column names, resolved at
+ * lowering, so a `.column()` override or a column naming convention is
+ * honoured rather than guessed. To search it, pass the index from the
+ * table's `indexes` to the query operations, which then search its groups in
+ * its language.
  */
 export function fullTextIndex<const Name extends string>(
-  column: ColumnRef,
+  fields: FullTextFieldsInput<ColumnRef>,
   options: FullTextIndexNameOptions<Name>,
-): IndexConstraint<never, Name>;
+): IndexConstraint<readonly string[], Name>;
 export function fullTextIndex(
-  column: ColumnRef,
+  fields: FullTextFieldsInput<ColumnRef>,
   options: FullTextIndexMapOptions,
-): IndexConstraint<never, undefined>;
+): IndexConstraint<readonly string[], undefined>;
 export function fullTextIndex(
-  column: ColumnRef,
+  fields: FullTextFieldsInput<ColumnRef>,
   options: FullTextIndexOptions,
-): IndexConstraint<never, string | undefined> {
+): IndexConstraint<readonly string[], string | undefined> {
+  const fieldGroups = weightGroupsOf(fields, isColumnRef).map((group) =>
+    group.map((ref) => ref.fieldName),
+  );
+  refuseInvalid({ weightGroups: fieldGroups });
   const language = options.language ?? DEFAULT_FULL_TEXT_SEARCH_LANGUAGE;
+  const fieldNames = fieldGroups.flat();
   return {
     kind: 'index',
-    expression: {
-      fields: [column],
-      render: (columns) => {
-        const resolved = columns[0];
-        // Lowering resolves one column per field it was given, or raises
-        // `CONTRACT.FIELD_UNKNOWN`; this helper hands it exactly one.
-        invariant(
-          resolved !== undefined,
-          `fullTextIndex resolved no column for field "${column.fieldName}"`,
-        );
-        if (!isFullTextIndexableCodec(resolved.codecId)) {
-          throw postgresError(
-            'CONTRACT.INDEX_INVALID',
-            `fullTextIndex indexes a text column, but "${column.fieldName}" is stored as \`${resolved.codecId}\`.`,
-            {
-              why: 'to_tsvector takes text; Postgres rejects the CREATE INDEX for any other column type.',
-              fix: 'Index a text, varchar or char column, or drop the index.',
-              meta: {
-                helper: 'fullTextIndex',
-                fieldName: column.fieldName,
-                codecId: resolved.codecId,
-              },
-            },
-          );
-        }
-        return renderFullTextIndexExpression(language, resolved.name);
-      },
+    fields: fieldNames,
+    type: FULL_TEXT_INDEX_TYPE,
+    options: (columns) => {
+      const columnOf = new Map(fieldNames.map((fieldName, i) => [fieldName, columns[i]]));
+      refuseInvalid({
+        weightGroups: fieldGroups,
+        codecs: {
+          codecIdOf: (fieldName) => columnOf.get(fieldName)?.codecId,
+          traitsOf: postgresCodecTraitsOf,
+        },
+      });
+      const columnNameOf = (fieldName: string) => {
+        const column = columnOf.get(fieldName);
+        assertDefined(column, `fullTextIndex field "${fieldName}" was resolved to a column`);
+        return column.name;
+      };
+      return { weightGroups: fieldGroups.map((group) => group.map(columnNameOf)), language };
     },
-    type: 'gin',
     ...(options.where !== undefined ? { where: options.where } : {}),
     ...(options.name !== undefined ? { name: options.name } : {}),
     ...(options.map !== undefined ? { map: options.map } : {}),
   };
+}
+
+function refuseInvalid(candidate: FullTextIndexCandidate): void {
+  const [problem] = fullTextIndexProblems(candidate);
+  if (problem === undefined) return;
+  throw postgresError(
+    'CONTRACT.INDEX_INVALID',
+    describeFullTextIndexProblem('fullTextIndex', problem),
+    {
+      why: 'Each top-level item of the fields is one weight group; Postgres has four weights, A to D, each field belongs to one group, and to_tsvector takes text.',
+      fix: 'List each text field once, in at most four non-empty groups.',
+      meta: { helper: 'fullTextIndex', fields: candidate.weightGroups },
+    },
+  );
 }

@@ -1,7 +1,7 @@
 import { datetimeColumn } from '@prisma/orm-sqlite/adapter/column-types';
 import { defineContract, field, model, now, sql } from '@prisma/orm-sqlite/contract-builder';
 import { describe, expect, it } from 'vitest';
-import { applyMigration, int, text } from './harness';
+import { applyMigration, applyMigrationExpectingFailure, int, text } from './harness';
 
 describe('SQLite Migration E2E - Widening operations (recreate-table)', () => {
   const WIDENING = { allowedOperationClasses: ['additive', 'widening'] } as const;
@@ -30,6 +30,53 @@ describe('SQLite Migration E2E - Widening operations (recreate-table)', () => {
           (await driver.query<{ bio: string | null }>('SELECT bio FROM "User" WHERE id = ?', [1]))
             .rows[0]!.bio,
         ).toBeNull();
+      },
+    );
+  });
+
+  it('tightens nullability (nullable to NOT NULL)', async () => {
+    await applyMigration(
+      {
+        origin: defineContract({
+          models: { User: model('User', { fields: { id: int.id(), name: text.optional() } }) },
+        }),
+        destination: defineContract({
+          models: { User: model('User', { fields: { id: int.id(), name: text } }) },
+        }),
+        policy: WIDENING,
+      },
+      async ({ schema }) => {
+        expect(schema.tables['User']!.columns['name']!.nullable).toBe(false);
+      },
+    );
+  });
+
+  it('fails a nullability tightening on a NULL and keeps the row and the nullable column', async () => {
+    await applyMigrationExpectingFailure(
+      {
+        origin: defineContract({
+          models: { User: model('User', { fields: { id: int.id(), name: text.optional() } }) },
+        }),
+        destination: defineContract({
+          models: { User: model('User', { fields: { id: int.id(), name: text } }) },
+        }),
+        policy: WIDENING,
+        seed: async (driver) => {
+          await driver.query('INSERT INTO "User" (id, name) VALUES (?, ?)', [1, null]);
+        },
+      },
+      async ({ driver }) => {
+        const rows = (await driver.query('SELECT id, name FROM "User"')).rows;
+        const columns = (
+          await driver.query<{ name: string; notnull: number }>('PRAGMA table_info("User")')
+        ).rows.map(({ name, notnull }) => ({ name, notnull }));
+        expect({ rows, columns }).toEqual({
+          rows: [{ id: 1, name: null }],
+          columns: [
+            { name: 'id', notnull: 1 },
+            { name: 'name', notnull: 0 },
+          ],
+        });
       },
     );
   });
@@ -85,7 +132,7 @@ describe('SQLite Migration E2E - Widening operations (recreate-table)', () => {
       },
       async ({ schema, driver }) => {
         const stored = schema.tables['User']!.columns['createdAt']!.default;
-        expect(stored).toBe("datetime('now')");
+        expect(stored).toBe("strftime('%Y-%m-%dT%H:%M:%fZ','now')");
         await driver.query('INSERT INTO "User" (id, name) VALUES (?, ?)', [1, 'Alice']);
         const row = (
           await driver.query<{ createdAt: string }>(

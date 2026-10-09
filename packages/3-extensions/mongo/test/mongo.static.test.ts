@@ -14,7 +14,7 @@ type AnyMongoContract = MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMap
 
 const Role = enumType(
   'Role',
-  { codecId: 'mongo/string@1', nativeType: 'string' },
+  { codecId: 'mongo/string@1' },
   member('User', 'user'),
   member('Admin', 'admin'),
 );
@@ -79,12 +79,12 @@ describe('mongoStatic({ contractJson })', () => {
   });
 
   it('enums matches what buildNamespacedEnums produces for the unbound namespace', () => {
+    const result = mongoStatic<TestContract>({ contractJson });
     const allNamespaced = buildNamespacedEnums(
       contract.domain,
+      (codecId) => result.context.codecs.get(codecId) ?? expect.unreachable(codecId),
     ) as NamespacedEnums<AnyMongoContract>;
     const expectedEnums = allNamespaced[UNBOUND_NAMESPACE_ID];
-
-    const result = mongoStatic<TestContract>({ contractJson });
 
     expect(result.enums.Role.values).toEqual(expectedEnums?.['Role']?.values);
     expect(result.enums.Role.names).toEqual(expectedEnums?.['Role']?.names);

@@ -6,6 +6,7 @@
  */
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { opaqueSql } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import {
   PostgresAlterIndexRename,
@@ -65,8 +66,8 @@ describe('createIndex lowers a PostgresCreateIndex node', () => {
     expect(node.unique).toBe(true);
     expect(node.type).toBe('btree');
     expect(node.options).toEqual({ fillfactor: 70 });
-    expect(node.where).toBe('deleted_at IS NULL');
-    expect(node.elements).toEqual({ expression: 'lower(email), id' });
+    expect(node.where).toEqual(opaqueSql('deleted_at IS NULL'));
+    expect(node.elements).toEqual({ expression: opaqueSql('lower(email), id') });
   });
 
   it('lowers the unbound namespace as an absent schema (unqualified DDL)', async () => {
@@ -124,14 +125,14 @@ describe('renameIndex lowers a PostgresAlterIndexRename node', () => {
 });
 
 describe('dropIndex lowers a PostgresDropIndex node', () => {
-  it('carries schema and name; the op is destructive', async () => {
+  it('carries schema and name; the op is widening, since an index holds no stored data', async () => {
     const { lowerer, received } = recordingLowerer();
     const op = await dropIndex('public', 'user', 'user_email_idx', lowerer);
     const node = received.find((n) => n instanceof PostgresDropIndex) as PostgresDropIndex;
     expect(node).toBeDefined();
     expect(node.schema).toBe('public');
     expect(node.name).toBe('user_email_idx');
-    expect(op.operationClass).toBe('destructive');
+    expect(op.operationClass).toBe('widening');
     expect(op.id).toBe('dropIndex.user.user_email_idx');
   });
 });

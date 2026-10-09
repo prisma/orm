@@ -1,6 +1,7 @@
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { col, lit } from '@internal/sql-relational-core/contract-free';
+import { opaqueSql } from '@internal/sql-relational-core/ast';
+import { col, fn, lit } from '@internal/sql-relational-core/contract-free';
 import { parseNaming } from '@internal/sql-schema-ir/naming';
 import { describe, expect, it } from 'vitest';
 import {
@@ -145,6 +146,17 @@ describe('AddColumnCall', () => {
       { moduleSpecifier: '@internal/postgres/migration', symbol: 'lit' },
     ]);
   });
+
+  it('renders a function default holding both quote kinds as a template literal', () => {
+    const call = new AddColumnCall(
+      'public',
+      'user',
+      col('label', 'text', { default: fn(`concat("prefix", 'user')`) }),
+    );
+    expect(call.renderTypeScript()).toBe(
+      'this.addColumn({ schema: "public", table: "user", column: col("label", "text", { default: fn(`concat("prefix", \'user\')`) }) })',
+    );
+  });
 });
 
 describe('DropColumnCall', () => {
@@ -210,6 +222,21 @@ describe('AlterColumnTypeCall', () => {
     expect(call.label).toBe('Alter type of "user"."age" to bigint');
   });
 
+  it('is destructive unless the planner says the type change is a safe widening', async () => {
+    const { lowerer } = recordingCheckLowerer();
+    const call = new AlterColumnTypeCall('public', 'user', 'age', options);
+    const op = await call.toOp(lowerer);
+    expect([call.operationClass, op.operationClass]).toEqual(['destructive', 'destructive']);
+  });
+
+  it('is widening when constructed as a safe widening, and renders the class', async () => {
+    const { lowerer } = recordingCheckLowerer();
+    const call = new AlterColumnTypeCall('public', 'user', 'age', options, 'widening');
+    const op = await call.toOp(lowerer);
+    expect([call.operationClass, op.operationClass]).toEqual(['widening', 'widening']);
+    expect(call.renderTypeScript()).toContain('operationClass: "widening"');
+  });
+
   it('uses an explicit USING clause when provided', async () => {
     const { lowerer } = recordingCheckLowerer();
     const call = new AlterColumnTypeCall('public', 'user', 'age', {
@@ -219,6 +246,18 @@ describe('AlterColumnTypeCall', () => {
     const op = await call.toOp(lowerer);
     expect(op.execute[0]?.sql).toBe(
       'ALTER TABLE "public"."user" ALTER COLUMN "age" TYPE bigint USING age::bigint * 2',
+    );
+  });
+
+  it('ends a USING clause containing a line comment with a line break', async () => {
+    const { lowerer } = recordingCheckLowerer();
+    const call = new AlterColumnTypeCall('public', 'user', 'age', {
+      ...options,
+      using: 'age::bigint -- widen',
+    });
+    const op = await call.toOp(lowerer);
+    expect(op.execute[0]?.sql).toBe(
+      'ALTER TABLE "public"."user" ALTER COLUMN "age" TYPE bigint USING age::bigint -- widen\n',
     );
   });
 
@@ -234,6 +273,7 @@ describe('AlterColumnTypeCall', () => {
     expect(ts).toContain('qualifiedTargetType: "bigint"');
     expect(ts).toContain('formatTypeExpected: "bigint"');
     expect(ts).toContain('rawTargetTypeForLabel: "bigint"');
+    expect(ts).not.toContain('operationClass');
     expect(call.importRequirements()).toEqual([]);
   });
 });
@@ -259,6 +299,13 @@ describe('SetNotNullCall', () => {
       { description: 'verify column "email" is NOT NULL', sql: 'LOWERED 4', params: ['p4'] },
     ]);
     expect(call.label).toBe('Set NOT NULL on "user"."email"');
+  });
+
+  it('is widening, because its precheck fails rather than losing a NULL value', async () => {
+    const { lowerer } = recordingCheckLowerer();
+    const call = new SetNotNullCall('public', 'user', 'email');
+    const op = await call.toOp(lowerer);
+    expect([call.operationClass, op.operationClass]).toEqual(['widening', 'widening']);
   });
 
   it('toOp() throws when no lowerer is provided', async () => {
@@ -400,6 +447,14 @@ describe('SetDefaultCall', () => {
       widening: `this.setDefault({ schema: "public", table: "user", column: ${column}, operationClass: "widening" })`,
       imports: ['col', 'lit'],
     });
+  });
+
+  it('renders a default holding both quote kinds as a template literal', () => {
+    const meta = col('meta', 'jsonb', { default: fn(`'{"a": 1}'::jsonb`) });
+    const call = new SetDefaultCall('public', 'user', meta);
+    expect(call.renderTypeScript()).toBe(
+      'this.setDefault({ schema: "public", table: "user", column: col("meta", "jsonb", { default: fn(`\'{"a": 1}\'::jsonb`) }) })',
+    );
   });
 });
 
@@ -661,11 +716,24 @@ describe('CreateIndexCall', () => {
     const ddlNode = received[0] as PostgresCreateIndex;
     expect(ddlNode).toBeInstanceOf(PostgresCreateIndex);
     expect(ddlNode.unique).toBe(true);
-    expect(ddlNode.where).toBe('deleted_at IS NULL');
-    expect(ddlNode.elements).toEqual({ expression: 'lower(email)' });
+    expect(ddlNode.where).toEqual(opaqueSql('deleted_at IS NULL'));
+    expect(ddlNode.elements).toEqual({ expression: opaqueSql('lower(email)') });
     expect(op.execute[0]?.sql).toBe('LOWERED 1');
     expect(call.renderTypeScript()).toBe(
       'this.createIndex({ schema: "public", table: "user", index: "user_email_eq", expression: "lower(email)", extras: { where: "deleted_at IS NULL", unique: true } })',
+    );
+  });
+
+  it('renders an expression and a where holding both quote kinds as template literals', () => {
+    const call = new CreateIndexCall(
+      'public',
+      'user',
+      'user_kind_idx',
+      { expression: `("kind" || 'x')` },
+      { where: `"kind" <> 'guest'` },
+    );
+    expect(call.renderTypeScript()).toBe(
+      'this.createIndex({ schema: "public", table: "user", index: "user_kind_idx", expression: `("kind" || \'x\')`, extras: { where: `"kind" <> \'guest\'` } })',
     );
   });
 });
@@ -843,13 +911,13 @@ describe('RawSqlCall', () => {
 });
 
 describe('DataTransformCall', () => {
-  it('toOp() always throws MIGRATION.UNFILLED_PLACEHOLDER for the unfilled placeholder', () => {
+  it('toOp() always rejects with MIGRATION.UNFILLED_PLACEHOLDER for the unfilled placeholder', async () => {
     const call = new DataTransformCall(
       'Backfill status',
       'backfill-status:check',
       'backfill-status:run',
     );
-    expect(() => call.toOp()).toThrow(
+    await expect(call.toOp()).rejects.toThrow(
       expect.objectContaining({
         code: 'MIGRATION.UNFILLED_PLACEHOLDER',
         meta: { slot: 'Backfill status' },
@@ -1037,6 +1105,37 @@ describe('CreatePostgresRlsPolicyCall', () => {
         '  roles: ["app_user"],',
         '  using: "(tenant_id = 1)",',
         '  permissive: true,',
+        '} })',
+      ].join('\n'),
+    );
+  });
+
+  it('renders using and withCheck holding both quote kinds as template literals', () => {
+    const call = new CreatePostgresRlsPolicyCall(
+      'public',
+      'post',
+      new PostgresRlsPolicy({
+        naming: parseNaming('Members', undefined),
+        tableName: 'post',
+        namespaceId: 'public',
+        operation: 'all',
+        roles: ['app_user'],
+        using: `"status" = 'published'`,
+        withCheck: `"status" <> 'archived'`,
+        permissive: false,
+      }),
+    );
+    expect(call.renderTypeScript()).toBe(
+      [
+        'this.createRlsPolicy({ schema: "public", table: "post", policy: {',
+        '  naming: { kind: "exact", name: "Members" },',
+        '  tableName: "post",',
+        '  namespaceId: "public",',
+        '  operation: "all",',
+        '  roles: ["app_user"],',
+        '  using: `"status" = \'published\'`,',
+        '  withCheck: `"status" <> \'archived\'`,',
+        '  permissive: false,',
         '} })',
       ].join('\n'),
     );

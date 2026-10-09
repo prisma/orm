@@ -23,6 +23,7 @@ import type { Result } from '@internal/utils/result';
 import { notOk, ok, okVoid } from '@internal/utils/result';
 import { MARKER_TABLE_NAME } from '../control-tables';
 import { sqliteError } from '../errors';
+import { quoteIdentifier } from '../sql-utils';
 import { verifySqliteDatabaseSchema } from './diff-database-schema';
 import type { SqlitePlanTargetDetails } from './planner-target-details';
 
@@ -102,7 +103,6 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
         contract: options.destinationContract,
         actualSchema: schemaNode,
         strict: options.strictVerification ?? true,
-        typeMetadataRegistry: this.family.typeMetadataRegistry,
         frameworkComponents: options.frameworkComponents,
       });
       if (!schemaVerifyResult.ok) {
@@ -320,7 +320,7 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
     driver: SqlMigrationRunnerExecuteOptions<SqlitePlanTargetDetails>['driver'],
   ): Promise<Result<void, SqlMigrationRunnerFailure>> {
     const tableInfo = await driver.query<{ name: string }>(
-      `PRAGMA table_info("${MARKER_TABLE_NAME}")`,
+      `PRAGMA table_info(${quoteIdentifier(MARKER_TABLE_NAME)})`,
     );
     if (tableInfo.rows.length === 0) {
       return okVoid();
@@ -595,6 +595,7 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
       destination,
     });
     if (!updated) {
+      const found = await this.family.readMarker({ driver, space });
       return runnerFailure(
         'MIGRATION.MARKER_CAS_FAILURE',
         'Marker was modified by another process during migration execution.',
@@ -602,6 +603,7 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
           meta: {
             space,
             expectedStorageHash: existingMarker.storageHash,
+            foundStorageHash: found?.storageHash ?? null,
             destinationStorageHash: options.plan.destination.storageHash,
           },
         },

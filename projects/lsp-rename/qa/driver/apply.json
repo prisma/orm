@@ -1,0 +1,89 @@
+{
+  "files": ["auth.prisma", "session.prisma", "post.prisma", "extra.prisma"],
+  "steps": [
+    {
+      "id": "8.0",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "8.1",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "auth.Us|er",
+      "newName": "Account",
+      "apply": true
+    },
+    {
+      "id": "8.2",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "8.3",
+      "kind": "references",
+      "file": "auth.prisma",
+      "at": "model Acc|ount",
+      "includeDeclaration": true,
+      "compareWithApplied": true
+    },
+    {
+      "id": "8.4",
+      "kind": "rename",
+      "file": "auth.prisma",
+      "at": "namespace au|th",
+      "newName": "identity",
+      "apply": true
+    },
+    {
+      "id": "8.5",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "8.6",
+      "kind": "references",
+      "file": "post.prisma",
+      "at": "ident|ity.Account",
+      "includeDeclaration": true,
+      "compareWithApplied": true
+    },
+    {
+      "id": "8.7",
+      "kind": "rename",
+      "file": "session.prisma",
+      "at": "references: [i|d]",
+      "newName": "uid",
+      "apply": true
+    },
+    {
+      "id": "8.8",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "8.9",
+      "kind": "references",
+      "file": "auth.prisma",
+      "at": "ui|d    Int    @id",
+      "includeDeclaration": true,
+      "compareWithApplied": true
+    },
+    {
+      "id": "8.10",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "@@index([author|Id])",
+      "newName": "writerId",
+      "apply": true
+    },
+    {
+      "id": "8.11",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "8.12",
+      "kind": "references",
+      "file": "post.prisma",
+      "at": "writer|Id Int",
+      "includeDeclaration": true,
+      "compareWithApplied": true
+    }
+  ]
+}

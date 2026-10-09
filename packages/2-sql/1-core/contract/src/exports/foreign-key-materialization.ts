@@ -1,8 +1,14 @@
 export {
-  type BackingIndexCandidates,
-  backingIndexColumnKeys,
+  declaredBackingObjectName,
+  declaredIndexesServeForeignKey,
+  defaultForeignKeyIndex,
+  FOREIGN_KEY_INDEX_UNRESOLVED,
   type ForeignKeyAuthoringInput,
-  isBackedByColumnKeys,
   type MaterializedTableConstraints,
   materializeForeignKeysAndIndexes,
 } from '../foreign-key-materialization';
+export type { IndexCandidate } from '../index-deduplication';
+export {
+  derivedBackingIndexIsRedundant,
+  leadingBackingObjectName,
+} from '../index-equivalence';

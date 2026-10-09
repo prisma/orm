@@ -3,7 +3,7 @@ import { deriveJsonSchema, type FieldValueSets } from '../src/derive-json-schema
 import {
   arrayEnumField,
   enumField,
-  mongoCodecLookup,
+  mongoTypeLookups,
   scalarField,
 } from './derive-json-schema-helpers';
 
@@ -16,8 +16,8 @@ describe('deriveJsonSchema — enum fields', () => {
         _id: scalarField('mongo/objectId@1'),
         role: enumField('mongo/string@1', 'Role'),
       },
+      mongoTypeLookups,
       undefined,
-      mongoCodecLookup,
       valueSets,
     );
 
@@ -32,8 +32,8 @@ describe('deriveJsonSchema — enum fields', () => {
         _id: scalarField('mongo/objectId@1'),
         name: scalarField('mongo/string@1'),
       },
+      mongoTypeLookups,
       undefined,
-      mongoCodecLookup,
       valueSets,
     );
 
@@ -48,8 +48,8 @@ describe('deriveJsonSchema — enum fields', () => {
         _id: scalarField('mongo/objectId@1'),
         role: enumField('mongo/string@1', 'Role', true),
       },
+      mongoTypeLookups,
       undefined,
-      mongoCodecLookup,
       valueSets,
     );
 
@@ -63,8 +63,8 @@ describe('deriveJsonSchema — enum fields', () => {
         _id: scalarField('mongo/objectId@1'),
         roles: arrayEnumField('mongo/string@1', 'Role'),
       },
+      mongoTypeLookups,
       undefined,
-      mongoCodecLookup,
       valueSets,
     );
 
@@ -82,23 +82,23 @@ describe('deriveJsonSchema — enum fields', () => {
         _id: scalarField('mongo/objectId@1'),
         roles: arrayEnumField('mongo/string@1', 'Role', true),
       },
+      mongoTypeLookups,
       undefined,
-      mongoCodecLookup,
       valueSets,
     );
 
-    const props = result.jsonSchema['properties'] as Record<string, Record<string, unknown>>;
-    expect(props['roles']).toEqual({
-      bsonType: 'array',
-      items: { bsonType: 'string', enum: ['user', 'admin'] },
+    expect(result.jsonSchema).toEqual({
+      bsonType: 'object',
+      required: ['_id'],
+      properties: {
+        _id: { bsonType: 'objectId' },
+        roles: {
+          bsonType: ['null', 'array'],
+          items: { bsonType: 'string', enum: ['user', 'admin'] },
+        },
+      },
+      additionalProperties: false,
     });
-    expect(props['roles']).not.toHaveProperty('enum');
-    // Intentional asymmetry: nullable+many keeps bsonType:'array' (not ['null','array']).
-    // MongoDB treats a document missing the field as absent (allowed when not in required[]);
-    // a document with the field present as null is rejected because null is not an array.
-    // The cross-family convention is: nullable-array = "field may be absent", not "field may be null".
-    expect(props['roles']?.['bsonType']).toBe('array');
-    expect(props['roles']?.['bsonType']).not.toEqual(['null', 'array']);
   });
 
   it('preserves member value declaration order', () => {
@@ -107,8 +107,8 @@ describe('deriveJsonSchema — enum fields', () => {
         _id: scalarField('mongo/objectId@1'),
         status: enumField('mongo/string@1', 'Status'),
       },
+      mongoTypeLookups,
       undefined,
-      mongoCodecLookup,
       { Status: { values: ['c', 'a', 'b'] } },
     );
 
@@ -122,8 +122,8 @@ describe('deriveJsonSchema — enum fields', () => {
         _id: scalarField('mongo/objectId@1'),
         role: enumField('mongo/string@1', 'UnknownEnum'),
       },
+      mongoTypeLookups,
       undefined,
-      mongoCodecLookup,
       valueSets,
     );
 
@@ -141,8 +141,8 @@ describe('deriveJsonSchema — enum fields', () => {
         _id: scalarField('mongo/objectId@1'),
         role: enumField('mongo/string@1', 'Role'),
       },
+      mongoTypeLookups,
       undefined,
-      mongoCodecLookup,
       { Role: { values: ['from-value-set-a', 'from-value-set-b'] } },
     );
 

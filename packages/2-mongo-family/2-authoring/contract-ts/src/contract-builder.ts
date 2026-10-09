@@ -24,6 +24,7 @@ import {
   type ValueSetRef,
 } from '@internal/contract/types';
 import {
+  assertEnumMembersStoredUniquely,
   composePackAuthoringNamespace,
   createEntityHelpersFromNamespace,
   createFieldHelpersFromNamespace,
@@ -45,7 +46,8 @@ import {
   instantiateAuthoringFieldPreset,
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type { CodecLookup, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import { assembleDataTypes, enumRefusalOf } from '@internal/framework-components/codec';
 import type {
   ExtensionPackRef,
   FamilyPackRef,
@@ -95,6 +97,23 @@ function encodeEnumValue(value: unknown, codecId: string, codecLookup: CodecLook
     throw errorEnumCodecNotInPackStack({ codecId });
   }
   return codec.encodeJson(value);
+}
+
+function assertEnumCanUseCodec(
+  handle: EnumTypeHandle,
+  codecLookup: CodecLookupWithDescriptors,
+): void {
+  const descriptor = codecLookup.descriptorFor(handle.codecId);
+  const enumRefusal = descriptor === undefined ? undefined : enumRefusalOf(descriptor);
+  if (enumRefusal === undefined) return;
+  throw contractError(
+    'CONTRACT.ENUM_INVALID',
+    `enumType("${handle.enumName}"): an enum cannot use the codec ${handle.codecId}. ${enumRefusal}`,
+    {
+      fix: 'Type the enum with another codec.',
+      meta: { enumName: handle.enumName, codecId: handle.codecId, reason: 'codec-not-for-enums' },
+    },
+  );
 }
 
 // `canonicalStringify` rejects non-plain objects so a `Map` or class
@@ -237,7 +256,9 @@ type MergeExtensionCodecTypesSafe<Packs> =
 export interface FieldBuilder<
   Type extends ContractFieldType = ContractFieldType,
   Nullable extends boolean = boolean,
-  Many extends boolean = boolean,
+  Many extends false | { readonly elementNullable: boolean } =
+    | false
+    | { readonly elementNullable: boolean },
   Handle extends EnumTypeHandle | undefined = EnumTypeHandle | undefined,
   ExecutionDefaults extends ExecutionMutationDefaultPhases | undefined = undefined,
 > {
@@ -252,7 +273,33 @@ export interface FieldBuilder<
     : () => FieldBuilder<Type, true, Many, Handle, ExecutionDefaults>;
   readonly many: FilledOnWrite<ExecutionDefaults> extends true
     ? (this: 'A preset fills this field on write, so it cannot be a list') => never
-    : () => FieldBuilder<Type, Nullable, true, Handle, ExecutionDefaults>;
+    : {
+        (): FieldBuilder<
+          Type,
+          Nullable,
+          { readonly elementNullable: false },
+          Handle,
+          ExecutionDefaults
+        >;
+        (options: {
+          readonly elementsNullable: false;
+        }): FieldBuilder<
+          Type,
+          Nullable,
+          { readonly elementNullable: false },
+          Handle,
+          ExecutionDefaults
+        >;
+        (options: {
+          readonly elementsNullable: true;
+        }): FieldBuilder<
+          Type,
+          Nullable,
+          { readonly elementNullable: true },
+          Handle,
+          ExecutionDefaults
+        >;
+      };
 }
 
 /**
@@ -346,7 +393,7 @@ export interface ModelBuilder<
 type AnyFieldBuilder = FieldBuilder<
   ContractFieldType,
   boolean,
-  boolean,
+  false | { readonly elementNullable: boolean },
   EnumTypeHandle | undefined,
   ExecutionMutationDefaultPhases | undefined
 >;
@@ -490,16 +537,15 @@ type ContractFieldFromBuilder<TBuilder> =
   TBuilder extends FieldBuilder<
     infer Type extends ContractFieldType,
     infer Nullable extends boolean,
-    infer Many extends boolean,
+    infer Many extends false | { readonly elementNullable: boolean },
     EnumTypeHandle | undefined,
     ExecutionMutationDefaultPhases | undefined
   >
-    ? Simplify<
-        {
-          readonly type: Type;
-          readonly nullable: Nullable;
-        } & (Many extends true ? { readonly many: true } : EmptyObject)
-      >
+    ? Simplify<{
+        readonly type: Type;
+        readonly nullable: Nullable;
+        readonly many: Many;
+      }>
     : never;
 
 type ContractFieldsFromRecord<Fields extends Record<string, AnyFieldBuilder>> = Simplify<{
@@ -528,7 +574,7 @@ type AnyFieldNullable<
     ? Fields[Name] extends FieldBuilder<
         ContractFieldType,
         true,
-        boolean,
+        false | { readonly elementNullable: boolean },
         EnumTypeHandle | undefined,
         ExecutionMutationDefaultPhases | undefined
       >
@@ -729,14 +775,17 @@ type MaybeValueObjectsSection<ValueObjects extends Record<string, AnyValueObject
         readonly valueObjects: ContractValueObjectsFromRecord<ValueObjects>;
       };
 
-// Project EnumTypeHandle to the namespace enum-entry shape.
-// Uses enumMembers (which carries Values[number] literals) rather than
-// ContractEnum.members (which uses JsonValue and erases literals).
+// Project EnumTypeHandle to the namespace enum-entry shape. A member is stored in its codec's
+// JSON form, which is the authored literal only when that literal is JSON (a bigint or a Date
+// member is stored as text), so a member whose value is not JSON is typed as `JsonValue`.
 type EnumHandleToEntry<Handle> =
   Handle extends EnumTypeHandle<string, infer Values, infer _Names, infer _MembersMap>
     ? {
         readonly codecId: string;
-        readonly members: readonly { readonly name: string; readonly value: Values[number] }[];
+        readonly members: readonly {
+          readonly name: string;
+          readonly value: Values[number] extends JsonValue ? Values[number] : JsonValue;
+        }[];
       }
     : never;
 
@@ -826,7 +875,7 @@ type BuilderEnumValueUnion<TBuilder> =
   TBuilder extends FieldBuilder<
     ContractFieldType,
     boolean,
-    boolean,
+    false | { readonly elementNullable: boolean },
     infer Handle extends EnumTypeHandle | undefined,
     ExecutionMutationDefaultPhases | undefined
   >
@@ -849,7 +898,7 @@ type BuilderBaseChannelType<
   TBuilder extends FieldBuilder<
     infer Type extends ContractFieldType,
     boolean,
-    boolean,
+    false | { readonly elementNullable: boolean },
     EnumTypeHandle | undefined,
     ExecutionMutationDefaultPhases | undefined
   >
@@ -896,13 +945,16 @@ type BuilderFieldChannelType<
   TBuilder extends FieldBuilder<
     ContractFieldType,
     infer Nullable extends boolean,
-    infer Many extends boolean,
+    infer Many extends false | { readonly elementNullable: boolean },
     EnumTypeHandle | undefined,
     ExecutionMutationDefaultPhases | undefined
   >
     ?
-        | (Many extends true
-            ? BuilderBaseChannelType<TBuilder, TValueObjects, TCodecTypes, Channel>[]
+        | (Many extends { readonly elementNullable: infer ElementNullable extends boolean }
+            ? Array<
+                | BuilderBaseChannelType<TBuilder, TValueObjects, TCodecTypes, Channel>
+                | (ElementNullable extends true ? null : never)
+              >
             : BuilderBaseChannelType<TBuilder, TValueObjects, TCodecTypes, Channel>)
         | (Nullable extends true ? null : never)
     : never;
@@ -1158,7 +1210,12 @@ function composeMongoAuthoringHelpers<
     'entity and field preset helpers are built by a runtime walk of the pack namespaces, which returns Record<string, unknown>; their static shape comes from the pack type parameters'
   >({
     ...createEntityHelpersFromNamespace(entityNamespace, {
-      ctx: { family: family.familyId, target: target.targetId },
+      ctx: {
+        family: family.familyId,
+        target: target.targetId,
+        codecLookup: extractCodecLookup(components),
+        dataTypeLookup: assembleDataTypes(components).lookup,
+      },
     }),
     field: composeMongoFieldHelpers(fieldNamespace),
     index,
@@ -1210,7 +1267,7 @@ export type ContractFactory<
 type FieldBuilderSpec<
   Type extends ContractFieldType,
   Nullable extends boolean,
-  Many extends boolean,
+  Many extends false | { readonly elementNullable: boolean },
 > = {
   readonly type: Type;
   readonly nullable: Nullable;
@@ -1220,7 +1277,7 @@ type FieldBuilderSpec<
 function createFieldBuilder<
   Type extends ContractFieldType,
   Nullable extends boolean,
-  Many extends boolean,
+  Many extends false | { readonly elementNullable: boolean },
   Handle extends EnumTypeHandle | undefined = undefined,
   ExecutionDefaults extends ExecutionMutationDefaultPhases | undefined = undefined,
 >(
@@ -1228,6 +1285,31 @@ function createFieldBuilder<
   enumHandle?: Handle,
   executionDefaults?: ExecutionDefaults,
 ): FieldBuilder<Type, Nullable, Many, Handle, ExecutionDefaults> {
+  function many(): FieldBuilder<
+    Type,
+    Nullable,
+    { readonly elementNullable: false },
+    Handle,
+    ExecutionDefaults
+  >;
+  function many(options: {
+    readonly elementsNullable: false;
+  }): FieldBuilder<Type, Nullable, { readonly elementNullable: false }, Handle, ExecutionDefaults>;
+  function many(options: {
+    readonly elementsNullable: true;
+  }): FieldBuilder<Type, Nullable, { readonly elementNullable: true }, Handle, ExecutionDefaults>;
+  function many(options?: { readonly elementsNullable: boolean }) {
+    return createFieldBuilder(
+      {
+        type: spec.type,
+        nullable: spec.nullable,
+        many: { elementNullable: options?.elementsNullable ?? false },
+      },
+      enumHandle,
+      executionDefaults,
+    );
+  }
+
   return {
     __kind: 'field',
     ...ifDefined('__executionDefaults', executionDefaults),
@@ -1243,7 +1325,11 @@ function createFieldBuilder<
       'every builder has the method at runtime, for a JavaScript caller the type does not stop; the type refuses it on a field a preset fills'
     >(() =>
       createFieldBuilder<Type, true, Many, Handle, ExecutionDefaults>(
-        { type: spec.type, nullable: true, many: spec.many },
+        {
+          type: spec.type,
+          nullable: true,
+          many: spec.many,
+        },
         enumHandle,
         executionDefaults,
       ),
@@ -1251,13 +1337,7 @@ function createFieldBuilder<
     many: blindCast<
       FieldBuilder<Type, Nullable, Many, Handle, ExecutionDefaults>['many'],
       'every builder has the method at runtime, for a JavaScript caller the type does not stop; the type refuses it on a field a preset fills'
-    >(() =>
-      createFieldBuilder<Type, Nullable, true, Handle, ExecutionDefaults>(
-        { type: spec.type, nullable: spec.nullable, many: true },
-        enumHandle,
-        executionDefaults,
-      ),
-    ),
+    >(many),
   };
 }
 
@@ -1887,18 +1967,12 @@ function buildContractField(builder: AnyFieldBuilder): ContractField {
       }
     : undefined;
 
-  return builder.__many
-    ? {
-        type: builder.__type,
-        nullable: builder.__nullable,
-        many: true,
-        ...ifDefined('valueSet', valueSet),
-      }
-    : {
-        type: builder.__type,
-        nullable: builder.__nullable,
-        ...ifDefined('valueSet', valueSet),
-      };
+  return {
+    type: builder.__type,
+    nullable: builder.__nullable,
+    many: builder.__many,
+    ...ifDefined('valueSet', valueSet),
+  };
 }
 
 function buildFields(fields: Record<string, AnyFieldBuilder>): Record<string, ContractField> {
@@ -2024,6 +2098,8 @@ function buildModels(
       );
     }
 
+    assertUniqueDiscriminatorValues(modelBuilder);
+
     const storage = {
       ...(modelBuilder.__collection ? { collection: modelBuilder.__collection } : {}),
       ...(modelBuilder.__storageRelations ? { relations: modelBuilder.__storageRelations } : {}),
@@ -2045,6 +2121,28 @@ function buildModels(
   }
 
   return builtModels;
+}
+
+function assertUniqueDiscriminatorValues(modelBuilder: AnyModelBuilder): void {
+  const variantsByValue = new Map<string, string>();
+  for (const [variantName, { value }] of Object.entries(modelBuilder.__variants ?? {})) {
+    const existingVariant = variantsByValue.get(value);
+    if (existingVariant !== undefined) {
+      throw contractError(
+        'CONTRACT.ARGUMENT_INVALID',
+        `Discriminator value "${value}" is used by both "${existingVariant}" and "${variantName}" on base model "${modelBuilder.__name}".`,
+        {
+          meta: {
+            modelName: modelBuilder.__name,
+            value,
+            variants: [existingVariant, variantName],
+            reason: 'duplicate-discriminator-value',
+          },
+        },
+      );
+    }
+    variantsByValue.set(value, variantName);
+  }
 }
 
 function deriveRoots(
@@ -2468,9 +2566,15 @@ function buildContractFromDefinition<
   // The value set stores each enum's codec-encoded member values (mirroring SQL's build-contract).
   const storageValueSets: Record<string, MongoValueSetInput> = {};
   for (const [enumName, handle] of Object.entries(definition.enums ?? {})) {
+    assertEnumCanUseCodec(handle, codecLookup);
+    const storedMembers = handle.enumMembers.map((m) => ({
+      name: m.name,
+      stored: encodeEnumValue(m.value, handle.codecId, codecLookup),
+    }));
+    assertEnumMembersStoredUniquely(handle.enumName, storedMembers);
     storageValueSets[enumName] = {
       kind: 'valueSet',
-      values: handle.values.map((v) => encodeEnumValue(v, handle.codecId, codecLookup)),
+      values: storedMembers.map((m) => m.stored),
     };
   }
   const hasValueSets = Object.keys(storageValueSets).length > 0;

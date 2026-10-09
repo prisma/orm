@@ -39,10 +39,12 @@ type ContractWithEnum = MongoContractWithTypeMaps<
               readonly fields: {
                 readonly _id: {
                   readonly nullable: false;
+                  readonly many: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
                 };
                 readonly role: {
                   readonly nullable: false;
+                  readonly many: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
                   readonly valueSet: {
                     readonly plane: 'domain';
@@ -53,6 +55,7 @@ type ContractWithEnum = MongoContractWithTypeMaps<
                 };
                 readonly nullableRole: {
                   readonly nullable: true;
+                  readonly many: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
                   readonly valueSet: {
                     readonly plane: 'domain';
@@ -63,7 +66,7 @@ type ContractWithEnum = MongoContractWithTypeMaps<
                 };
                 readonly manyRoles: {
                   readonly nullable: false;
-                  readonly many: true;
+                  readonly many: { readonly elementNullable: false };
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
                   readonly valueSet: {
                     readonly plane: 'domain';
@@ -74,7 +77,7 @@ type ContractWithEnum = MongoContractWithTypeMaps<
                 };
                 readonly manyNullableRoles: {
                   readonly nullable: true;
-                  readonly many: true;
+                  readonly many: { readonly elementNullable: false };
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
                   readonly valueSet: {
                     readonly plane: 'domain';
@@ -189,20 +192,23 @@ type ContractWithVO = MongoContractWithTypeMaps<
               readonly fields: {
                 readonly _id: {
                   readonly nullable: false;
+                  readonly many: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
                 };
                 readonly homeAddress: {
                   readonly nullable: false;
+                  readonly many: false;
                   readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
                 };
                 readonly workAddress: {
                   readonly nullable: true;
+                  readonly many: false;
                   readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
                 };
                 readonly previousAddresses: {
                   readonly nullable: false;
                   readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
-                  readonly many: true;
+                  readonly many: { readonly elementNullable: false };
                 };
               };
               readonly relations: Record<string, never>;
@@ -214,14 +220,17 @@ type ContractWithVO = MongoContractWithTypeMaps<
               readonly fields: {
                 readonly street: {
                   readonly nullable: false;
+                  readonly many: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
                 };
                 readonly city: {
                   readonly nullable: false;
+                  readonly many: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
                 };
                 readonly zip: {
                   readonly nullable: true;
+                  readonly many: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
                 };
               };
@@ -282,7 +291,7 @@ test('InferModelRow handles nullable value object fields', () => {
   expectTypeOf<UserRow['workAddress']>().toEqualTypeOf<ExpectedAddress | null>();
 });
 
-test('InferModelRow handles many: true value object fields', () => {
+test('InferModelRow handles list value object fields', () => {
   type UserRow = InferModelRow<ContractWithVO, 'User'>;
   expectTypeOf<UserRow['previousAddresses']>().toEqualTypeOf<ExpectedAddress[]>();
 });
@@ -429,6 +438,7 @@ test('Mongo option input types reject unsupported keys', () => {
 
 type ScalarField<CId extends string, Nullable extends boolean = false> = {
   readonly nullable: Nullable;
+  readonly many: false;
   readonly type: { readonly kind: 'scalar'; readonly codecId: CId };
 };
 type EnumField<
@@ -438,6 +448,7 @@ type EnumField<
   Nullable extends boolean = false,
 > = {
   readonly nullable: Nullable;
+  readonly many: false;
   readonly type: { readonly kind: 'scalar'; readonly codecId: CId };
   readonly valueSet: {
     readonly plane: 'domain';
@@ -453,7 +464,7 @@ type ManyEnumField<
   Nullable extends boolean = false,
 > = {
   readonly nullable: Nullable;
-  readonly many: true;
+  readonly many: { readonly elementNullable: false };
   readonly type: { readonly kind: 'scalar'; readonly codecId: CId };
   readonly valueSet: {
     readonly plane: 'domain';
@@ -662,7 +673,7 @@ type ContractNoMap = MongoContractWithTypeMaps<
                 readonly price: ScalarField<'mongo/double@1', true>;
                 readonly tags: {
                   readonly nullable: false;
-                  readonly many: true;
+                  readonly many: { readonly elementNullable: false };
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
                 };
               };

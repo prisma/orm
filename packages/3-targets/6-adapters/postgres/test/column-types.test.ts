@@ -12,7 +12,6 @@ describe('adapter-postgres column-types', () => {
     it('has expected codec and native type', () => {
       expect(jsonColumn).toMatchObject({
         codecId: 'pg/json@1',
-        nativeType: 'json',
       });
     });
   });
@@ -21,7 +20,6 @@ describe('adapter-postgres column-types', () => {
     it('has expected codec and native type', () => {
       expect(jsonbColumn).toMatchObject({
         codecId: 'pg/jsonb@1',
-        nativeType: 'jsonb',
       });
     });
   });
@@ -30,7 +28,6 @@ describe('adapter-postgres column-types', () => {
     it('has expected codec and native type', () => {
       expect(byteaColumn).toMatchObject({
         codecId: 'pg/bytea@1',
-        nativeType: 'bytea',
       });
     });
   });

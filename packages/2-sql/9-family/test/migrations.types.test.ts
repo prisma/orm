@@ -162,8 +162,9 @@ describe('planner helpers', () => {
       operations: [],
       providedInvariants: [],
     });
-    const success = plannerSuccess(plan);
-    expect(success).toEqual({ kind: 'success', plan });
+    const noSubjects = { dataLoss: [], accessWidening: [] };
+    const success = plannerSuccess(plan, [], noSubjects);
+    expect(success).toEqual({ kind: 'success', plan, appliedStatements: [], ...noSubjects });
     expect(Object.isFrozen(success)).toBe(true);
 
     const warning = {
@@ -171,9 +172,14 @@ describe('planner helpers', () => {
       summary: 'control policy suppressed: createTable(users)',
       meta: { controlPolicy: 'external', factoryName: 'createTable' },
     };
-    const successWithWarnings = plannerSuccess(plan, [warning]);
+    const successWithWarnings = plannerSuccess(plan, [], noSubjects, [warning]);
     expect(successWithWarnings.warnings).toEqual([warning]);
-    expect(plannerSuccess(plan, [])).toEqual({ kind: 'success', plan });
+    expect(plannerSuccess(plan, [], noSubjects, [])).toEqual({
+      kind: 'success',
+      plan,
+      appliedStatements: [],
+      ...noSubjects,
+    });
 
     const conflict = {
       kind: 'typeMismatch',

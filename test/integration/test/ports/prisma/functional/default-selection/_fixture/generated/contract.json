@@ -48,7 +48,9 @@
                 }
               },
               "enumList": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -69,7 +71,9 @@
                 }
               },
               "list": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -184,8 +188,8 @@
             "model": {
               "checks": [
                 {
-                  "expression": "\"enumList\"::text[] <@ ARRAY['A', 'B']::text[]",
-                  "name": "model_enumList_check_b238669f",
+                  "expression": "array_remove(\"enumList\", NULL) <@ '{\"A\",\"B\"}'",
+                  "name": "model_enumList_check_2dfa0729",
                   "prefix": "model_enumList_check"
                 },
                 {
@@ -207,7 +211,7 @@
               "columns": {
                 "enum": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -218,8 +222,10 @@
                 },
                 "enumList": {
                   "codecId": "pg/text@1",
-                  "many": true,
-                  "nativeType": "text",
+                  "dataType": "pg/text",
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -230,28 +236,35 @@
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "list": {
                   "codecId": "pg/text@1",
-                  "many": true,
-                  "nativeType": "text",
+                  "dataType": "pg/text",
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nullable": false
                 },
                 "otherId": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "value": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": [
+                      "otherId"
+                    ]
+                  },
                   "source": {
                     "columns": [
                       "otherId"
@@ -286,7 +299,7 @@
               "columns": {
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -314,11 +327,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "019ff2a2b0f56316f82278233a7578b1223735e43620cdd1a6d8b2f1cf37f602"
+    "storageHash": "5681547f78f5e53d296f797d6f0383799cf72d8c2ca632ba9f7ec04d072f7d38"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -329,9 +344,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

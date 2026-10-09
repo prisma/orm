@@ -8,6 +8,7 @@ import type { AttributeSpecContext, AttributeSpecNamespace } from '@internal/psl
 import {
   assembleAttributeSpecs,
   buildSymbolTable,
+  EMPTY_DATA_TYPES,
   fieldAttribute,
   modelAttribute,
 } from '@internal/psl-parser';
@@ -16,6 +17,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveConfigInputs } from '../src/config-resolution';
 import { DocumentSnapshot } from '../src/document-snapshot';
 import { providePslSignatureHelp } from '../src/signature-help';
+import { testBinder } from './helpers/binder';
 
 vi.mock('@internal/config-loader', { spy: true });
 
@@ -110,10 +112,8 @@ describe('assembled attribute specs are consumable from a resolved project', () 
     const spec = assembleAttributeSpecs(authoringContributions).model['base']?.({
       symbols: pipeline.symbolTable,
       model,
-      controlMutationDefaults: {
-        defaultFunctionRegistry: controlMutationDefaults.defaultFunctionRegistry,
-        dataTypeEntries: {},
-      },
+      defaultFunctionRegistry: controlMutationDefaults.defaultFunctionRegistry,
+      dataTypes: EMPTY_DATA_TYPES,
     });
     expect(spec).toMatchObject({
       name: 'base',
@@ -132,6 +132,7 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       position: pipeline.sourceFile.positionAt(source.indexOf('Missing')),
       clientSupportsLabelOffsets: true,
       candidates: {
+        binder: testBinder(pipeline),
         symbolTable: pipeline.symbolTable,
         pslBlockDescriptors: {},
         authoringContributions,
@@ -202,10 +203,10 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       symbols: pipeline.symbolTable,
       model,
       field,
-      controlMutationDefaults: {
-        ...interpretation.context.controlMutationDefaults,
-        dataTypeEntries: interpretation.context.authoringContributions.dataTypes,
-      },
+      typeResolution: undefined,
+      defaultFunctionRegistry:
+        interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
+      dataTypes: interpretation.context.dataTypes,
     });
     expect(spec).toMatchObject({
       name: 'marker',
@@ -235,10 +236,9 @@ describe('assembled attribute specs are consumable from a resolved project', () 
     const ctx: AttributeSpecContext = {
       symbols: pipeline.symbolTable,
       model,
-      controlMutationDefaults: {
-        ...interpretation.context.controlMutationDefaults,
-        dataTypeEntries: interpretation.context.authoringContributions.dataTypes,
-      },
+      defaultFunctionRegistry:
+        interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
+      dataTypes: interpretation.context.dataTypes,
     };
 
     const spec = assembleAttributeSpecs(interpretation.context.authoringContributions).model[

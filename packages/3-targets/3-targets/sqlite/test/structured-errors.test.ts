@@ -1,5 +1,4 @@
-import { CheckExpressionConstraint } from '@internal/sql-relational-core/ast';
-import { col } from '@internal/sql-relational-core/contract-free';
+import { checkExpression, col } from '@internal/sql-relational-core/contract-free';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { sqliteBigintDescriptor, sqliteRealDescriptor } from '../src/core/codecs';
@@ -10,6 +9,7 @@ import { renderOps } from '../src/core/migrations/render-ops';
 import { createSqliteMigrationRunner } from '../src/core/migrations/runner';
 import { escapeLiteral, quoteIdentifier } from '../src/core/sql-utils';
 import { sqliteCreateNamespace } from '../src/core/sqlite-unbound-database';
+import { sqliteTestTypes } from './sqlite-test-types';
 
 function capture(fn: () => unknown): unknown {
   try {
@@ -86,23 +86,9 @@ describe('structured error codes', () => {
     expect(error).toMatchObject({ code: 'CONTRACT.TARGET_MISMATCH' });
   });
 
-  it('unsafe native type raises CONTRACT.NATIVE_TYPE_INVALID', () => {
-    const error = capture(() =>
-      buildColumnTypeSql({ nativeType: 'TEXT; DROP', nullable: true, codecId: 'sqlite/text@1' }),
-    );
-    expect(isStructuredError(error)).toBe(true);
-    expect(error).toMatchObject({
-      code: 'CONTRACT.NATIVE_TYPE_INVALID',
-      meta: { nativeType: 'TEXT; DROP' },
-    });
-  });
-
   it('unknown typeRef raises CONTRACT.TYPE_UNKNOWN', () => {
     const error = capture(() =>
-      buildColumnTypeSql(
-        { nativeType: 'unused', nullable: true, codecId: 'sqlite/text@1', typeRef: 'missing' },
-        {},
-      ),
+      buildColumnTypeSql({ codecId: 'sqlite/text@1', typeRef: 'missing' }, sqliteTestTypes, {}),
     );
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({ code: 'CONTRACT.TYPE_UNKNOWN', meta: { typeRef: 'missing' } });
@@ -121,7 +107,7 @@ describe('structured error codes', () => {
     const call = new CreateTableCall(
       'user',
       [col('id', 'INTEGER')],
-      [new CheckExpressionConstraint({ name: 'chk', expression: '1 = 1' })],
+      [checkExpression('chk', '1 = 1')],
     );
     const error = capture(() => call.renderTypeScript());
     expect(isStructuredError(error)).toBe(true);

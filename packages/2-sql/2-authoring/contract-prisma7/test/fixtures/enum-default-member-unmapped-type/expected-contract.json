@@ -24,7 +24,8 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "role": {
                 "type": {
@@ -34,7 +35,8 @@
                     "typeName": "Role"
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {}
@@ -54,7 +56,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "36455e48de9a1a70dfa7ab8d5a616215845612beca41290115894f73c8a1ce8f",
+    "storageHash": "8580197458756e6a1e30023c012e5bdd69dd8980bd87b7df46888aae1ae3e02a",
     "namespaces": {
       "public": {
         "id": "public",
@@ -64,14 +66,16 @@
             "User": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "role": {
-                  "nativeType": "Role",
+                  "dataType": "pg/enum",
                   "codecId": "pg/enum@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "typeName": "Role"
                   },

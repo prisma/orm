@@ -31,8 +31,8 @@ const contract = new SqlContractSerializer().deserializeContract({
           table: {
             post: {
               columns: {
-                id: { codecId: 'sqlite/integer@1', nativeType: 'integer', nullable: false },
-                title: { codecId: 'sqlite/text@1', nativeType: 'text', nullable: true },
+                id: { codecId: 'sqlite/integer@1', dataType: 'sqlite/integer', nullable: false },
+                title: { codecId: 'sqlite/text@1', dataType: 'sqlite/text', nullable: true },
               },
               uniques: [],
               indexes: [],

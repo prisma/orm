@@ -1,11 +1,11 @@
 import mongoAdapter from '@internal/adapter-mongo/control';
 import mongoDriver from '@internal/driver-mongo/control';
 import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
-import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import { createControlStack } from '@internal/framework-components/control';
 import { interpretPslDocumentToMongoContract } from '@internal/mongo-contract-psl';
-import { buildSymbolTable } from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
+import { mongoContextInput } from '@internal/mongo-contract-psl/test';
+import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema, contractSourceContextFromControlStack } from '@internal/psl-parser/test';
 import { mongoTargetDescriptor } from '@internal/target-mongo/control';
 import { describe, expect, it } from 'vitest';
 
@@ -17,27 +17,20 @@ const stack = createControlStack({
 });
 
 function interpret(schema: string) {
-  const { document, sources } = parse(schema, 'schema.prisma');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
+  const bound = bindPslSchema(schema, {
+    sourceId: 'schema.prisma',
+    context: contractSourceContextFromControlStack(stack),
   });
-  return interpretPslDocumentToMongoContract({
-    documents: [document],
-    symbolTable,
-    sources,
-    scalarTypeCodecIds: new Map(
-      [...collectScalarTypeConstructors(stack.authoringContributions.type)].map(
-        ([name, output]) => [name, output.codecId],
-      ),
-    ),
-    controlMutationDefaults: {
-      dataTypeEntries: {},
-      defaultFunctionRegistry: new Map(),
-    },
-    codecLookup: stack.codecLookup,
-    authoringContributions: stack.authoringContributions,
-  });
+  return withSeedDiagnostics(
+    interpretPslDocumentToMongoContract({
+      documents: bound.documents,
+      sources: bound.sources,
+      symbolTable: bound.symbolTable,
+      binder: bound.binder,
+      ...mongoContextInput(bound.context),
+    }),
+    bound.seedDiagnostics,
+  );
 }
 
 describe('a Mongo enum over a codec without exactly one BSON type', () => {
@@ -83,6 +76,53 @@ describe('a Mongo enum over an unknown codec', () => {
         span: expect.objectContaining({
           start: expect.objectContaining({ offset: start }),
           end: expect.objectContaining({ offset: start + '"mongo/nope@1"'.length }),
+        }),
+      }),
+    ]);
+  });
+});
+
+describe('a Mongo enum whose members the collection validator cannot list', () => {
+  it.each([
+    ['mongo/int64@1', 'long', '"1"'],
+    ['mongo/date@1', 'date', '"2024-01-01T00:00:00.000Z"'],
+    ['mongo/objectId@1', 'objectId', '"65a1b2c3d4e5f6a7b8c9d0e1"'],
+  ])(
+    'refuses @@type("%s"), whose BSON type is %s, at the @@type argument',
+    (codecId, bsonType, written) => {
+      const schema = `enum Level {\n  @@type("${codecId}")\n  First = ${written}\n}\nmodel Reading {\n  id    ObjectId @id @map("_id")\n  level Level\n}\n`;
+      const result = interpret(schema);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      const start = schema.indexOf(`"${codecId}"`);
+      expect(result.failure.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_EXTENSION_INVALID_VALUE',
+          message: `enum "Level" @@type codec "${codecId}" stores BSON type ${bsonType}, which a collection validator cannot list as an enum value. Use a codec whose BSON type is string, int, double, bool, object or array.`,
+          span: expect.objectContaining({
+            start: expect.objectContaining({ offset: start }),
+            end: expect.objectContaining({ offset: start + codecId.length + 2 }),
+          }),
+        }),
+      ]);
+    },
+  );
+
+  it('refuses a double member stored as text, at the member', () => {
+    const schema =
+      'enum Ratio {\n  @@type("mongo/double@1")\n  Half = 1.5\n  Unknown = "NaN"\n}\nmodel Reading {\n  id    ObjectId @id @map("_id")\n  ratio Ratio\n}\n';
+    const result = interpret(schema);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_EXTENSION_INVALID_VALUE',
+        message:
+          'enum "Ratio" member "Unknown" is stored as "NaN", which a collection validator cannot list as a double. A member of a double enum must be a finite number.',
+        span: expect.objectContaining({
+          start: expect.objectContaining({ offset: schema.indexOf('Unknown') }),
         }),
       }),
     ]);

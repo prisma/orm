@@ -12,7 +12,6 @@ const mockSqlHook = createMockSpi();
 function literalCodecLookup(): CodecLookup {
   return {
     get: () => undefined,
-    targetTypesFor: () => undefined,
     renderOutputTypeFor: () => undefined,
     renderValueLiteralFor: (_id, value) =>
       typeof value === 'string'
@@ -38,8 +37,12 @@ describe('emitter integration', () => {
               },
             },
             fields: {
-              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false },
-              email: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false },
+              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false, many: false },
+              email: {
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+                nullable: false,
+                many: false,
+              },
             },
             relations: {},
           },
@@ -52,8 +55,8 @@ describe('emitter integration', () => {
                 table: {
                   user: {
                     columns: {
-                      id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-                      email: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                      id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+                      email: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
                     },
                     primaryKey: { columns: ['id'] },
                     uniques: [],
@@ -125,7 +128,7 @@ describe('emitter integration', () => {
               },
             },
             fields: {
-              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false },
+              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false, many: false },
             },
             relations: {},
           },
@@ -134,7 +137,7 @@ describe('emitter integration', () => {
           tables: {
             user: {
               columns: {
-                id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+                id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -182,8 +185,12 @@ describe('emitter integration', () => {
               },
             },
             fields: {
-              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false },
-              email: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false },
+              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false, many: false },
+              email: {
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+                nullable: false,
+                many: false,
+              },
             },
             relations: {},
           },
@@ -196,8 +203,8 @@ describe('emitter integration', () => {
                 table: {
                   user: {
                     columns: {
-                      id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-                      email: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                      id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+                      email: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
                     },
                     primaryKey: { columns: ['id'] },
                     uniques: [],
@@ -276,8 +283,13 @@ describe('emitter integration', () => {
                   namespaceId: '__unbound__',
                   entityName: 'Priority',
                 },
+                many: false,
               },
-              title: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false },
+              title: {
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+                nullable: false,
+                many: false,
+              },
             },
             relations: {},
           },
@@ -300,8 +312,8 @@ describe('emitter integration', () => {
                 table: {
                   post: {
                     columns: {
-                      priority: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-                      title: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                      priority: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+                      title: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
                     },
                     primaryKey: { columns: ['title'] },
                     uniques: [],
@@ -512,7 +524,7 @@ describe('declarations follow the canonical JSON', () => {
     for (const name of order) {
       models[name] = {
         fields: {
-          id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+          id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
         },
         relations: {},
         storage: { namespaceId: '__unbound__', table: name.toLowerCase(), namespace: 'public' },

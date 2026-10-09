@@ -5,14 +5,12 @@ import {
   temporalAuthoringPresets,
   temporalCodecPreset,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { buildSymbolTable } from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
-import { interpretPslDocumentToMongoContract } from '../src/interpreter';
+import { mongoCodecLookup, mongoDataTypeLookup } from './derive-json-schema-helpers';
+import { interpretMongoContract } from './interpreter-test-helpers';
 
-const mongoDate = { codecId: 'mongo/date@1', nativeType: 'date' } as const;
+const mongoDate = { codecId: 'mongo/date@1' } as const;
 
 const authoringContributions: AuthoringContributions = {
   field: {
@@ -29,49 +27,19 @@ const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
   ['Date', 'mongo/date@1'],
 ]);
 
-const targetTypes: Record<string, readonly string[]> = {
-  'mongo/objectId@1': ['objectId'],
-  'mongo/string@1': ['string'],
-  'mongo/date@1': ['date'],
-};
-
-const codecLookup: CodecLookup = {
-  get(id: string) {
-    if (!targetTypes[id]) return undefined;
-    return {
-      id,
-      encode: async (v: unknown) => v,
-      decode: async (w: unknown) => w,
-      encodeJson: (v: unknown) => v,
-      decodeJson: (j: unknown) => j,
-    } as ReturnType<CodecLookup['get']>;
-  },
-  targetTypesFor: (id: string) => targetTypes[id],
-  renderOutputTypeFor: () => undefined,
-};
-
 function interpret(
   schema: string,
   options?: {
-    readonly composedExtensions?: readonly string[];
     readonly authoringContributions?: AuthoringContributions;
     readonly reportWarning?: (diagnostic: ContractSourceDiagnostic) => void;
   },
 ) {
-  const { document, sources } = parse(schema, 'schema.prisma');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
-  });
-  return interpretPslDocumentToMongoContract({
-    documents: [document],
-    symbolTable,
-    sources,
+  return interpretMongoContract(schema, {
     scalarTypeCodecIds,
-    controlMutationDefaults: { dataTypeEntries: {}, defaultFunctionRegistry: new Map() },
-    codecLookup,
+    defaultFunctionRegistry: new Map(),
+    codecLookup: mongoCodecLookup,
+    dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
     authoringContributions: options?.authoringContributions ?? authoringContributions,
-    ...(options?.composedExtensions ? { composedExtensions: options.composedExtensions } : {}),
     ...(options?.reportWarning ? { reportWarning: options.reportWarning } : {}),
   });
 }
@@ -148,6 +116,27 @@ describe('Mongo PSL temporal presets', () => {
     ]);
   });
 
+  it('preserves an unqualified contributed preset', () => {
+    const result = interpret(
+      `model Post {
+  id ObjectId @id @map("_id")
+  touchedAt timestamp()
+}`,
+      {
+        authoringContributions: { field: { timestamp: temporalCodecPreset(mongoDate) } },
+      },
+    );
+    if (!result.ok) throw new Error(JSON.stringify(result.failure));
+    expect(result.value.domain.namespaces[UNBOUND_NAMESPACE_ID]?.models['Post']?.fields).toEqual({
+      _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false, many: false },
+      touchedAt: {
+        type: { kind: 'scalar', codecId: 'mongo/date@1' },
+        nullable: false,
+        many: false,
+      },
+    });
+  });
+
   it('omits the execution section when no field uses a preset', () => {
     const result = interpret(`model Post {
   id        ObjectId @id @map("_id")
@@ -160,6 +149,67 @@ describe('Mongo PSL temporal presets', () => {
 });
 
 describe('Mongo PSL temporal preset misuse', () => {
+  it('keeps a contributed type namespace error instead of dropping an unqualified preset field', () => {
+    expect(
+      diagnosticsOf(
+        `model Post {
+  id ObjectId @id @map("_id")
+  touchedAt timestamp()
+}`,
+        {
+          authoringContributions: {
+            field: { timestamp: temporalCodecPreset(mongoDate) },
+            type: { timestamp: { scalar: { kind: 'typeConstructor', output: mongoDate } } },
+          },
+        },
+      ).map(({ code, message, sourceId }) => ({ code, message, sourceId })),
+    ).toEqual([
+      {
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message:
+          '"timestamp" is a namespace; a type reference must name a model, composite type, enum, or named type',
+        sourceId: 'schema.prisma',
+      },
+    ]);
+  });
+
+  it.each([
+    ['type', 'composite type', 'createdAtt'],
+    ['type', 'composite type', 'createdAt'],
+    ['model', 'model', 'createdAtt'],
+    ['model', 'model', 'createdAt'],
+  ])('keeps only the binder error for a %s (%s) qualifier with %s', (keyword, kind, member) => {
+    expect(
+      diagnosticsOf(`${keyword} temporal {
+  ${keyword === 'model' ? 'id ObjectId @id @map("_id")' : 'value String'}
+}
+model Post {
+  id ObjectId @id @map("_id")
+  createdAt temporal.${member}()?
+}`).map(({ code, message, sourceId }) => ({ code, message, sourceId })),
+    ).toEqual([
+      {
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message: `"temporal" is a ${kind}, not a namespace`,
+        sourceId: 'schema.prisma',
+      },
+    ]);
+  });
+
+  it('reports unresolved bare weather.updatedAt without a preset diagnostic', () => {
+    expect(
+      diagnosticsOf(
+        `model Post {\n  id ObjectId @id @map("_id")\n  value weather.updatedAt\n}`,
+      ).map(({ code, message, sourceId }) => ({ code, message, sourceId })),
+    ).toEqual([
+      {
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message: 'Cannot find type "weather.updatedAt"',
+        sourceId: 'schema.prisma',
+      },
+    ]);
+  });
+
   it('rejects an optional preset field with PSL_PRESET_NOT_OPTIONAL', () => {
     expect(
       diagnosticsOf(`model Post {
@@ -196,7 +246,53 @@ describe('Mongo PSL temporal preset misuse', () => {
     });
   });
 
-  it('rejects a misspelled preset with PSL_UNKNOWN_FIELD_PRESET', () => {
+  it('rejects a field preset written without a call with PSL_PRESET_NOT_CALLED', () => {
+    expect(
+      diagnosticsOf(`model Post {
+  id        ObjectId          @id @map("_id")
+  createdAt temporal.createdAt
+}
+`).map(({ code, message }) => ({ code, message })),
+    ).toEqual([
+      {
+        code: 'PSL_PRESET_NOT_CALLED',
+        message:
+          'Field "Post.createdAt" uses field preset "temporal.createdAt" without calling it. Write temporal.createdAt().',
+      },
+    ]);
+  });
+
+  it('rejects a type constructor with a required argument written without a call', () => {
+    expect(
+      diagnosticsOf(
+        `model Post {
+  id   ObjectId @id @map("_id")
+  code Sized
+}
+`,
+        {
+          authoringContributions: {
+            ...authoringContributions,
+            type: {
+              Sized: {
+                kind: 'typeConstructor',
+                args: [{ kind: 'number', name: 'length' }],
+                output: { codecId: 'mongo/string@1' },
+              },
+            },
+          },
+        },
+      ).map(({ code, message }) => ({ code, message })),
+    ).toEqual([
+      {
+        code: 'PSL_TYPE_CONSTRUCTOR_NOT_CALLED',
+        message:
+          'Field "Post.code" uses type constructor "Sized" without arguments. Write Sized(length).',
+      },
+    ]);
+  });
+
+  it('reports a misspelled preset name as a single unresolved reference', () => {
     expect(
       diagnosticsOf(`model Post {
   id        ObjectId              @id @map("_id")
@@ -205,15 +301,14 @@ describe('Mongo PSL temporal preset misuse', () => {
 `),
     ).toEqual([
       expect.objectContaining({
-        code: 'PSL_UNKNOWN_FIELD_PRESET',
-        message:
-          'Field "Post.createdAt" references unknown field preset "temporal.createdAtt". The "temporal" namespace has temporal.createdAt(), temporal.updatedAt() and temporal.timestamp(onCreate, onUpdate).',
-        data: { namespace: 'temporal', helperPath: 'temporal.createdAtt' },
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message: 'Cannot find type "temporal.createdAtt"',
+        data: { reference: 'type', name: 'temporal.createdAtt', constructorCall: true },
       }),
     ]);
   });
 
-  it('rejects an uncomposed extension namespace with PSL_EXTENSION_NAMESPACE_NOT_COMPOSED', () => {
+  it('rejects a field-preset call with an unregistered namespace with PSL_UNRESOLVED_REFERENCE', () => {
     expect(
       diagnosticsOf(`model Post {
   id ObjectId            @id @map("_id")
@@ -222,8 +317,9 @@ describe('Mongo PSL temporal preset misuse', () => {
 `),
     ).toEqual([
       expect.objectContaining({
-        code: 'PSL_EXTENSION_NAMESPACE_NOT_COMPOSED',
-        data: { namespace: 'weather', suggestedPack: 'weather' },
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message: 'Cannot find type "weather.updatedAt"',
+        data: { reference: 'type', name: 'weather.updatedAt', constructorCall: true },
       }),
     ]);
   });

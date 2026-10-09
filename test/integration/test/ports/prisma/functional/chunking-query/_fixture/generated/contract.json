@@ -172,7 +172,7 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -189,7 +189,7 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -206,17 +206,20 @@
               "columns": {
                 "postId": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "tagId": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "tagsOnPosts_postId_idx_a7a72715"
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -234,6 +237,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "tagsOnPosts_tagId_idx_86854244"
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -283,11 +289,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "5a3b7d99df10c049f6c85c3f2406c8bbfaaf512ac2bb782b491d7e0db29751f7"
+    "storageHash": "aa42b405cb4f441bc7aecb52dbfa3fc2f1f3dc0abb8982477e93a92304139e81"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -298,9 +306,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

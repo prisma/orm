@@ -24,7 +24,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'84b18a808b869a4018521f0bb9e4c8dea1f4f7fc725cc2e9c7420eafdfb00d50'>;
+  StorageHashBase<'1233844a87d9c3a4f93bf8d9c003a7f6906420cac4aa956506731a3d13fd751f'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -359,48 +359,56 @@ type ContractBase = Omit<
             readonly Child: {
               columns: {
                 readonly bit: {
-                  readonly nativeType: 'bit';
+                  readonly dataType: 'pg/bit';
                   readonly codecId: 'pg/bit@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 4 };
+                  readonly many: false;
                 };
                 readonly char: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'pg/char';
                   readonly codecId: 'pg/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 10 };
+                  readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly ip: {
-                  readonly nativeType: 'inet';
+                  readonly dataType: 'pg/inet';
                   readonly codecId: 'pg/inet@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly text: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly uuid: {
-                  readonly nativeType: 'uuid';
+                  readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly vBit: {
-                  readonly nativeType: 'bit varying';
+                  readonly dataType: 'pg/varbit';
                   readonly codecId: 'pg/varbit@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 5 };
+                  readonly many: false;
                 };
                 readonly vChar: {
-                  readonly nativeType: 'character varying';
+                  readonly dataType: 'pg/varchar';
                   readonly codecId: 'pg/varchar@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 11 };
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -411,14 +419,16 @@ type ContractBase = Omit<
             readonly Parent: {
               columns: {
                 readonly childId: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: true;
+                  readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -578,6 +588,8 @@ type ContractBase = Omit<
   readonly capabilities: {
     readonly postgres: {
       readonly distinctOn: true;
+      readonly forKeyShare: true;
+      readonly forNoKeyUpdate: true;
       readonly jsonAgg: true;
       readonly lateral: true;
       readonly limit: true;
@@ -588,9 +600,14 @@ type ContractBase = Omit<
       readonly checkConstraint: true;
       readonly defaultInInsert: true;
       readonly enums: true;
+      readonly forShare: true;
+      readonly forUpdate: true;
       readonly insertOnConflictSkip: true;
       readonly insertOnConflictWithoutTarget: true;
       readonly lateral: true;
+      readonly lockNowait: true;
+      readonly lockOf: true;
+      readonly lockSkipLocked: true;
       readonly returning: true;
       readonly scalarList: true;
     };

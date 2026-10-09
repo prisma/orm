@@ -25,7 +25,7 @@ The migration planner renders that expression as written, `DEFAULT ((now() + '00
 
 PSL gains one expression form for text that Prisma does not parse: a **tagged literal**, a qualified name followed by a string literal. The tag names the data type of the text, and a pack in the stack registers it. The string's body is canonicalized once by the framework, the same way for PSL and for the TypeScript builder, and the resulting text is read by the authoring entry of the data type the tag names, which gives the literal its value.
 
-The `sql` tag is the first user. It is the tag of the data type `sql/expression`, which the SQL family defines and registers. A `` @default(sql`...`) `` is stored as the contract's ordinary function-kind column default, so the contract format does not change and every consumer of column defaults keeps working. Index expressions, check-constraint bodies, and row-level-security predicates continue to take plain strings; whether they move to tagged literals is a separate decision.
+The `sql` tag is the first user. It is the tag of the data type `sql/expression`, which the SQL family defines and registers. A `` @default(sql`...`) `` is stored as the contract's ordinary function-kind column default, so the contract format does not change and every consumer of column defaults keeps working. Every other place that holds raw SQL takes a `sql` literal too, and only a `sql` literal: `@@index(where:)`, `@@index(expression:)`, `@@fullTextIndex(where:)`, `@@check(expression:)`, and a policy's `using` and `withCheck`. [ADR 268](ADR%20268%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md) records why.
 
 ## Why a tag and backticks
 
@@ -51,11 +51,13 @@ The body is what is written between the quotes. The text is the canonical value 
 
 1. A NUL character is `PSL_TAGGED_LITERAL_NUL`.
 2. Line endings become `\n`.
-3. A blank first line and a blank last line are dropped, so a body may start on the line after the opening backtick and end on the line before the closing one.
+3. Every blank line before the first non-blank line and after the last non-blank line is dropped, so a body may start on the line after the opening backtick and end on the line before the closing one. A blank line is empty or holds only spaces and tabs.
 4. The common leading whitespace of the non-blank lines is removed. Tabs and spaces are counted as characters, not expanded.
 5. Internal blank lines are kept, as empty lines.
 6. No trailing newline is added.
 7. A text over 65536 UTF-8 bytes is `PSL_TAGGED_LITERAL_TOO_LARGE`.
+
+The text is its own canonical form: canonicalizing it again gives the same text, and so does printing it as a literal and reading the literal back. Dropping only one blank line at each end would break this, because `"\n\n(a > 0)"` would become `"\n(a > 0)"`, which canonicalizes to `"(a > 0)"`.
 
 So these three write the same default:
 
@@ -80,7 +82,32 @@ Whether a tag carries a prefix depends on the owner of its data type, by the rul
 - **`sql` has no prefixed alias.** `pg.sql` and `sqlite.sql` are unknown tags. A schema is written for the target its stack names, so the prefix said nothing the stack does not already say, and one tag per data type keeps one way to write a value.
 - **An extension prefixes its tags** with its own namespace, such as `postgis.geometry`, so its literals cannot collide with a target's or with each other's.
 
-An attribute offers the tagged-literal form only when at least one tag is registered, and the language server completes the registered tags. Parsing an attribute argument checks only that it is a tagged literal. Whether its tag is registered is checked when the default is lowered, where the registry is at hand: an unregistered tag is `PSL_UNKNOWN_LITERAL_TAG`, and the message lists the registered tags.
+An attribute offers the tagged-literal form only when at least one tag is registered, and the language server completes the registered tags. An unregistered tag is `PSL_UNKNOWN_LITERAL_TAG`, and the message lists the registered tags. When that is checked depends on the position (below).
+
+## Typed positions check the tag while parsing
+
+A position whose receiving data type is fixed declares it in its argument specification with `dataTypeValue` ([ADR 231](ADR%20231%20-%20Declarative%20attribute%20specifications.md)). The six places that take raw SQL receive `sql/expression` this way:
+
+```prisma
+model Post {
+  id    Int     @id
+  title String
+  body  String
+
+  @@index([title], where: sql`"title" <> ''`)
+  @@index(expression: sql`lower("title")`, map: "post_title_lower_idx")
+  @@check(expression: sql`
+    length("title") > 0
+    AND length("body") < 10000
+  `, name: "post_lengths")
+}
+```
+
+`dataTypeValue` reads the literal, reads its tag through the stack's authoring entries and applies the cast rule of [ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md) while it parses the argument. So an unknown tag and a value of the wrong type are reported at the written value, while the argument is parsed. `where: "(archived IS NULL)"` is `PSL_VALUE_TYPE_INCOMPATIBLE`, ``Expected sql`...`; write sql`(archived IS NULL)` ``.
+
+`dataTypeValue` is a named argument, a block parameter or a parameter of a `funcCall`, never a bare arm of `oneOf`, whose aggregate `Expected one of: …` would hide that message. When the argument is a call and exactly one arm of a `oneOf` is a `funcCall` of that name, `oneOf` keeps that arm's diagnostics, so a typed parameter inside a call reports its own refusal.
+
+`@default` checks the tag in lowering instead. Its receiving type comes from the column, and its argument is a `oneOf` of literals and function calls, so parsing checks only that the argument is a tagged literal, and lowering reads the tag and casts the value.
 
 ## What `@default` does with a `sql` literal
 
@@ -103,6 +130,7 @@ The planners render the authored expression, never a normalised form of it. Plan
 - One canonicalization serves both languages, so the choice between PSL and TypeScript never changes a contract.
 - Nothing downstream of authoring changes. The contract shape, the planner, and the verifier all work on the function-kind default they already handled.
 - `contract infer` prints each default it reads in the first of three forms that fits: a named function (`now()`, `autoincrement()`); a literal the column's data type writes and reads back as the same stored value ([ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md)); otherwise a `sql` tagged literal holding the expression the database reported, in the double-quote form when that expression contains a backtick. It never prints a comment in place of a default and never stops on one, because its job is to describe the database; a user adopting a database should not have to write defaults back by hand.
+- `contract infer` prints the SQL of indexes, checks and policies as `sql` literals. For these three kinds of object, the printer refuses a text that would not read back unchanged: printing it and reading the literal back must give the same text. An exact-named (`map:`) index, check or policy compares its body with the database byte for byte, so a text that canonicalization would change, such as one holding a carriage return, would make every later plan report a difference. `contract infer` skips such an object and leaves a note in its place: `// prisma: skipped index "<name>": its SQL cannot be written as a sql literal that reads back unchanged. It is not in this schema, so migration plan will drop it. A sql literal written by hand holds different text, so migration plan then stops with a conflict for an index or check, or drops and recreates a policy. Either change the SQL in the database to the text of the literal, or add the object without map: or @@map so Prisma names it.` (likewise `check` and `policy`). Such an object is still in the database, and adding it by hand does not give a clean plan: a `sql` literal holds canonical text, which is not the database's text, so `migration plan` stops with a conflict for an index or check, and drops and recreates a policy. There are two ways out: change the SQL in the database to the canonical text, or add the object without `map:` (a policy without `@@map`) so Prisma names it, which drops and recreates it once under the new name. A wire-named object is compared by name, and its canonical text hashes to the same name, because the wire-name normalizer ignores everything canonicalization removes, including for a text that holds a line comment, so `contract infer` prints it with that text. `contract print` refuses any object whose text would not read back, with `CONTRACT.PRINT_UNSUPPORTED`. A default's expression is printed without this check. Default expressions are compared with case and whitespace ignored (`resolvedDefaultsEqual`), and canonicalization changes only whitespace, so a canonical text never shows as a difference. The same comparison hides one real change: a default whose string constant holds a whitespace-only line, a carriage return or indentation shared by every line reads back with that constant changed, so a database created from the inferred schema gets a different default value.
 - The tagged literal reuses the parser's qualified name and string literal, so tooling that understands those understands most of a tagged literal. The formatter never re-indents a backtick string's content. Highlighting the content as SQL is the editor's job, keyed by the tag.
 - The 64 KiB limit is a fixed rule, not an option.
 
@@ -114,7 +142,7 @@ The planners render the authored expression, never a normalised form of it. Plan
 - **Backtick strings valid everywhere a string is.** Rejected. It widens every string-taking attribute's syntax with nothing to gain; a backtick string exists to carry the body of a tagged literal.
 - **A separate token and node for tagged literals, with the string text read from raw tokens.** Rejected. It duplicates the qualified-name and string-literal parsing, their escape handling, and their unterminated-string recovery.
 - **Require the string to follow the tag with no whitespace.** Rejected. It adds a rule and a diagnostic for no benefit; TypeScript allows the space, and the formatter normalises it away.
-- **Check the tag against the registry while parsing the attribute argument.** Rejected. A registry-dependent failure during parsing had to be told apart from an argument of the wrong shape, which meant special-casing one diagnostic code when choosing between alternatives. Lowering already has the registry.
+- **Check a `@default` literal's tag while parsing the argument.** Rejected. `@default`'s argument is a `oneOf`, so a registry-dependent failure during parsing had to be told apart from an argument of the wrong shape, which meant special-casing one diagnostic code when choosing between alternatives. Lowering already has the registry and the column's type. A typed position has no such `oneOf`, so it checks while parsing (above).
 - **Give common database functions Prisma names, such as `@default(gen_random_uuid())`.** Rejected. It dresses a target's SQL function as a Prisma function, and it sits beside Prisma's own `uuid()`, which generates the value in the client before the insert, while `gen_random_uuid()` makes the database generate it; nothing in the names shows that difference. Named defaults are kept for Prisma concepts that work on every target and that the planners treat specially: `now()` and `autoincrement()`.
 - **Refuse `${` in a body.** Rejected. A PSL tagged literal has no interpolation, so `${` is ordinary text. The TypeScript `sql` tag refuses a real JavaScript interpolation, which is a different thing, and accepts `\${` for the literal characters.
 - **Resolve `\$` in PSL too, so both languages escape alike.** Rejected. PSL needs no escape there, and adding one would make every PSL author who writes a backslash before a dollar sign escape it, to serve a body that only JavaScript has trouble writing.

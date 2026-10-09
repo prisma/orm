@@ -1,6 +1,10 @@
 import type { JsonValue } from '@internal/contract/types';
 import type { DataTypeAuthoringEntry } from '@internal/framework-components/authoring';
-import { printTaggedLiteral } from '@internal/framework-components/authoring';
+import {
+  canonicalizeTaggedLiteralBody,
+  printedTaggedLiteralReadsBack,
+  printTaggedLiteral,
+} from '@internal/framework-components/authoring';
 import type { DataType, DataTypeId } from '@internal/framework-components/codec';
 import { dataType, dataTypeId } from '@internal/framework-components/codec';
 import { runtimeError } from '@internal/framework-components/components';
@@ -26,9 +30,28 @@ export function sqlTextFromCanonical(value: JsonValue): string {
   throw new InternalError(`A sql/expression value is a string, got ${JSON.stringify(value)}.`);
 }
 
-/** A `sql` literal holding `text`, as `contract infer` prints it. */
+/** The text a `sql` literal holding `text` reads back as, or `undefined` when `text` has a NUL character or is too large. */
+export function canonicalSqlText(text: string): string | undefined {
+  const canonical = canonicalizeTaggedLiteralBody(text);
+  return canonical.ok ? canonical.text : undefined;
+}
+
+/**
+ * A `sql` literal holding `text`. Throws when the literal would read back as different text; check with `sqlTextsReadBack`
+ * first. The result of `canonicalSqlText` always reads back.
+ */
 export function printSqlExpressionLiteral(text: string): string {
+  if (!printedTaggedLiteralReadsBack(text)) {
+    throw new InternalError(
+      `A sql literal cannot hold ${JSON.stringify(text)}: it would read back as different text.`,
+    );
+  }
   return printTaggedLiteral(SQL_EXPRESSION_TAG, text);
+}
+
+/** Whether every present text reads back unchanged when printed as a `sql` literal. */
+export function sqlTextsReadBack(texts: readonly (string | undefined)[]): boolean {
+  return texts.every((text) => text === undefined || printedTaggedLiteralReadsBack(text));
 }
 
 function castFromSqlExpression(type: DataType): string | undefined {

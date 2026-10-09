@@ -35,6 +35,12 @@ describe('SqliteUnboundDatabase', () => {
   it('is a stable singleton — repeated access returns the same instance', () => {
     expect(SqliteUnboundDatabase.instance).toBe(SqliteUnboundDatabase.instance);
   });
+
+  it('doubles a double quote inside a table name', () => {
+    expect(SqliteUnboundDatabase.instance.qualifyTable('us"ers; drop table x; --')).toBe(
+      '"us""ers; drop table x; --"',
+    );
+  });
 });
 
 describe('SqliteDatabase', () => {
@@ -45,7 +51,7 @@ describe('SqliteDatabase', () => {
         table: {
           user: new StorageTable({
             columns: {
-              id: { codecId: 'sqlite/integer@1', nativeType: 'integer', nullable: false },
+              id: { codecId: 'sqlite/integer@1', dataType: 'sqlite/integer', nullable: false },
             },
             uniques: [],
             indexes: [],
@@ -206,8 +212,8 @@ describe('sqliteCreateNamespace — expression/partial index rejection', () => {
         table: {
           user: new StorageTable({
             columns: {
-              id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
-              email: { nativeType: 'text', codecId: 'sqlite/text@1', nullable: false },
+              id: { dataType: 'sqlite/integer', codecId: 'sqlite/integer@1', nullable: false },
+              email: { dataType: 'sqlite/text', codecId: 'sqlite/text@1', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],

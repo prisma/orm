@@ -2,19 +2,10 @@ import { ifDefined } from '@internal/utils/defined';
 import { assertNever } from '@internal/utils/internal-error';
 import type { DbUpdateFailure } from '../control-api/types';
 import type { CliStructuredError } from './cli-errors';
-import {
-  errorConsentPlanMismatch,
-  errorDestructiveChanges,
-  errorMigrationPlanningFailed,
-  errorRunnerFailed,
-} from './cli-errors';
+import { errorMigrationPlanningFailed, errorRunnerFailed } from './cli-errors';
 
 /**
  * A `db update` failure as the CLI's structured error.
- *
- * `DESTRUCTIVE_CHANGES` is handled by the command, which asks for consent and
- * calls again; it is mapped here for the case the control API returns it from a
- * call that already carried consent, which would otherwise degrade silently.
  *
  * The `assertNever` is deliberate: a control-API failure code this does not
  * handle must stop the command rather than degrade into a generic message.
@@ -44,30 +35,6 @@ export function mapDbUpdateFailure(failure: DbUpdateFailure): CliStructuredError
           : {}),
       },
       ...ifDefined('cause', failure.cause),
-    });
-  }
-
-  if (failure.code === 'DESTRUCTIVE_CHANGES') {
-    return errorDestructiveChanges(failure.summary, {
-      ...ifDefined('why', failure.why),
-      fix: 'Re-run `{bin} db update` and type the database name when asked, or pass `--no-interactive --confirm <database>` where there is nobody to ask. Use `--dry-run` to preview the operations first.',
-      ...(failure.destructiveChanges
-        ? {
-            meta: {
-              destructiveOperations: failure.destructiveChanges.destructiveOperations,
-              databaseName: failure.destructiveChanges.databaseName,
-              planHash: failure.destructiveChanges.planHash,
-            },
-          }
-        : {}),
-    });
-  }
-
-  if (failure.code === 'CONSENT_PLAN_MISMATCH') {
-    return errorConsentPlanMismatch({
-      consentedPlanHash: failure.consentPlanMismatch?.consentedPlanHash ?? '',
-      planHash: failure.consentPlanMismatch?.planHash ?? '',
-      ...ifDefined('why', failure.why),
     });
   }
 

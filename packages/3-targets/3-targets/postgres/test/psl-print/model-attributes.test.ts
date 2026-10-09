@@ -1,3 +1,4 @@
+import { computeIndexContentHash, formatWireName } from '@internal/sql-schema-ir/naming';
 import { describe, expect, it } from 'vitest';
 import {
   attributeText,
@@ -64,6 +65,64 @@ describe('keys and indexes', () => {
     expect(withIndex?.fields.map(fieldText)).toEqual(['id Int @id', 'email String']);
   });
 
+  describe('a full-text index', () => {
+    const fullTextModel = (index: Record<string, unknown>) =>
+      buildModels({
+        models: {
+          Post: {
+            table: 'Post',
+            fields: {
+              id: { column: 'id' },
+              title: { column: 'title' },
+              body: { column: 'body_text' },
+              summary: { column: 'summary' },
+            },
+          },
+        },
+        tables: {
+          Post: table({
+            columns: {
+              id: INT_COLUMN,
+              title: TEXT_COLUMN,
+              body_text: TEXT_COLUMN,
+              summary: TEXT_COLUMN,
+            },
+            primaryKey: { columns: ['id'] },
+            indexes: [index],
+          }),
+        },
+      })[0];
+
+    it('prints as @@fullTextIndex, a group of one as the bare field and a larger group as a list', () => {
+      const index = {
+        columns: ['title', 'body_text', 'summary'],
+        unique: false,
+        type: 'fullText',
+        options: { weightGroups: [['title'], ['body_text', 'summary']], language: 'english' },
+      };
+      const name = formatWireName('post_search', computeIndexContentHash(index));
+
+      expect(
+        fullTextModel({ ...index, name, prefix: 'post_search' })?.attributes.map(attributeText),
+      ).toEqual(['@@fullTextIndex([title, [body, summary]], name: "post_search")']);
+    });
+
+    it('prints a language other than the default, a predicate, and an exact name', () => {
+      expect(
+        fullTextModel({
+          name: 'legacy_search',
+          columns: ['title'],
+          where: 'id > 1',
+          unique: false,
+          type: 'fullText',
+          options: { weightGroups: [['title']], language: 'german' },
+        })?.attributes.map(attributeText),
+      ).toEqual([
+        '@@fullTextIndex([title], map: "legacy_search", language: "german", where: sql`id > 1`)',
+      ]);
+    });
+  });
+
   it('prints a unique constraint as @@unique, under the field names its columns carry', () => {
     const [model] = buildModels({
       models: {
@@ -97,8 +156,8 @@ describe('keys and indexes', () => {
       },
     });
     expect(model?.attributes.map(attributeText)).toEqual([
-      '@@check(expression: "id > 0", map: "widget_id_positive")',
-      '@@check(expression: "id < 100", map: "widget_id_small")',
+      '@@check(expression: sql`id > 0`, map: "widget_id_positive")',
+      '@@check(expression: sql`id < 100`, map: "widget_id_small")',
     ]);
   });
 

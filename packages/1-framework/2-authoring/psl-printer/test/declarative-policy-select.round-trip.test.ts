@@ -10,7 +10,12 @@ import {
   UNSPECIFIED_PSL_NAMESPACE_ID,
 } from '@internal/framework-components/psl-ast';
 import type { BlockSymbol, PslDiagnostic, SymbolTable } from '@internal/psl-parser';
-import { buildSymbolTable, createBinder, interpretExtensionBlocks } from '@internal/psl-parser';
+import {
+  buildSymbolTable,
+  createBinder,
+  EMPTY_DATA_TYPES,
+  interpretExtensionBlocks,
+} from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { printPslFromAst } from '../src/print-psl';
@@ -59,19 +64,25 @@ function parsePolicySelect(schema: string): ParsedPolicySelect {
   const { binder, diagnostics: binderDiagnostics } = createBinder({
     sources,
     symbolTable,
-    typeConstructors: {
-      Int: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
-      String: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
+    context: {
+      authoringContributions: {
+        ...assembleAuthoringContributions([]),
+        type: {
+          Int: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
+          String: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
+        },
+        pslBlockDescriptors: assembled.pslBlockDescriptors,
+      },
+      controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+      dataTypes: EMPTY_DATA_TYPES,
     },
-    attributeSpecs: { model: {}, field: {} },
-    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks({
     symbolTable,
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
     binder,
+    dataTypes: EMPTY_DATA_TYPES,
   });
   const diagnostics = [...collectionDiagnostics, ...binderDiagnostics, ...blockDiagnostics];
   const blockSymbols = Object.values(symbolTable.topLevel.blocks).filter(

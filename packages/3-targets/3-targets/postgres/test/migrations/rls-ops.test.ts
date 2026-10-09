@@ -1,4 +1,5 @@
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
+import { opaqueSql } from '@internal/sql-relational-core/ast';
 import { parseNaming } from '@internal/sql-schema-ir/naming';
 import { describe, expect, it } from 'vitest';
 import { rlsEnabledAst, rlsPolicyExistsAst } from '../../src/contract-free/checks';
@@ -119,7 +120,7 @@ describe('createRlsPolicy op', () => {
     expect(ddlNode.permissive).toBe(true);
     expect(ddlNode.operation).toBe('select');
     expect(ddlNode.roles).toEqual(['authenticated']);
-    expect(ddlNode.using).toBe('(auth.uid() = user_id)');
+    expect(ddlNode.using).toEqual(opaqueSql('(auth.uid() = user_id)'));
     expect(ddlNode.withCheck).toBeUndefined();
   });
 
@@ -138,7 +139,7 @@ describe('createRlsPolicy op', () => {
     await createRlsPolicy('public', 'profiles', policy, lowerer);
     const ddlNode = received.find((n) => n instanceof PostgresCreatePolicy) as PostgresCreatePolicy;
     expect(ddlNode).toBeDefined();
-    expect(ddlNode.withCheck).toBe('(auth.uid() = user_id)');
+    expect(ddlNode.withCheck).toEqual(opaqueSql('(auth.uid() = user_id)'));
     expect(ddlNode.using).toBeUndefined();
   });
 
@@ -258,10 +259,10 @@ describe('dropRlsPolicy op', () => {
     );
   });
 
-  it('operationClass is destructive', async () => {
+  it('operationClass is widening, since a policy holds no stored data', async () => {
     const { lowerer } = recordingCheckLowerer();
     const op = await dropRlsPolicy('public', 'profiles', 'read_own_profiles_ab12cd34', lowerer);
-    expect(op.operationClass).toBe('destructive');
+    expect(op.operationClass).toBe('widening');
   });
 });
 
@@ -364,8 +365,8 @@ describe('DropPostgresRlsPolicyCall', () => {
     expect(call.factoryName).toBe('dropRlsPolicy');
   });
 
-  it('operationClass is destructive', () => {
+  it('operationClass is widening, since a policy holds no stored data', () => {
     const call = new DropPostgresRlsPolicyCall('public', 'profiles', 'read_own_profiles_ab12cd34');
-    expect(call.operationClass).toBe('destructive');
+    expect(call.operationClass).toBe('widening');
   });
 });

@@ -3,6 +3,7 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { CodecRef } from '@internal/sql-relational-core/ast';
 import { col, lit } from '@internal/sql-relational-core/contract-free';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { PostgresCreateTable } from '@internal/target-postgres/ddl';
 import { SetDefaultCall } from '@internal/target-postgres/op-factory-call';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -42,7 +43,10 @@ describe('a list default the codecs read applies', { concurrent: false }, () => 
   it(
     'fills a new row with each list, its NULL element and the empty list',
     async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const createTable = await adapter.lowerToExecuteRequest(
         new PostgresCreateTable({
           table: 'lists',
@@ -79,7 +83,10 @@ describe('a list default the codecs read applies', { concurrent: false }, () => 
   it(
     'writes each element as the codec writes it, beside a NULL element',
     async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       const list = (name: string, type: string, codecRef: CodecRef, value: JsonValue[]) =>
         col(name, type, { default: lit(value), codecRef: { ...codecRef, many: true } });
       const createTable = await adapter.lowerToExecuteRequest(
@@ -133,7 +140,10 @@ describe('a list default the codecs read applies', { concurrent: false }, () => 
   it(
     'sets a changed list default with a NULL element',
     async () => {
-      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const adapter = new PostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
       await driver!.query(
         'CREATE TABLE "lists" (id int4 PRIMARY KEY, tags text[] DEFAULT \'{x}\')',
       );

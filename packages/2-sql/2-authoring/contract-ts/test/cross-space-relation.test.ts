@@ -16,6 +16,7 @@ import type {
 } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { defineContract, field, model, rel } from '../src/contract-builder';
 import { ContractModelBuilder } from '../src/contract-dsl';
 import { buildContractDefinition } from '../src/contract-lowering';
@@ -85,6 +86,7 @@ describe('cross-space belongsTo relation lowering', () => {
     });
 
     const contract = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -113,6 +115,7 @@ describe('cross-space belongsTo relation lowering', () => {
     });
 
     const contract = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -140,6 +143,7 @@ describe('cross-space belongsTo relation lowering', () => {
     });
 
     const contract = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -165,6 +169,7 @@ describe('cross-space belongsTo relation lowering', () => {
     });
 
     const contract = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -253,6 +258,7 @@ describe('cross-space belongsTo relation — missing-pack fail-fast', () => {
 
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: bareFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -276,6 +282,7 @@ describe('cross-space belongsTo relation — missing-pack fail-fast', () => {
 
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: bareFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -304,6 +311,7 @@ describe('F-lazy: lazy cross-space belongsTo handle carries the brand', () => {
     });
 
     const contract = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -341,6 +349,7 @@ describe('F-relfk: cross-space belongsTo().sql({ fk }) produces a cross-space FK
     });
 
     const contract = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -379,6 +388,7 @@ describe('F-relfk: cross-space belongsTo().sql({ fk }) produces a cross-space FK
     });
 
     const contract = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -454,6 +464,7 @@ describe('local belongsTo relation regression (AC9)', () => {
       .sql({ table: 'post' });
 
     const contract = defineContract({
+      ...testTypeLookups,
       family: bareFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,

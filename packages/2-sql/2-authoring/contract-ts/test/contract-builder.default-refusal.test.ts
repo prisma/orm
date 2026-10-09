@@ -3,6 +3,7 @@ import type { TargetPackRef } from '@internal/framework-components/components';
 import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { withTestTypes } from '../../../1-core/contract/test/test-type-lookups';
 import { buildSqlContractFromDefinition } from '../src/contract-builder';
 import { withDescriptors } from './with-descriptors';
 
@@ -13,6 +14,10 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   targetId: 'postgres',
   version: '0.0.1',
   defaultNamespaceId: 'public',
+  authoring: {
+    type: { Jsonb: { kind: 'typeConstructor', output: { codecId: 'pg/jsonb@1' } } },
+    valueObjectStorageType: 'Jsonb',
+  },
 };
 
 const refusingJsonb: CodecLookupWithDescriptors = withDescriptors({
@@ -28,7 +33,6 @@ const refusingJsonb: CodecLookupWithDescriptors = withDescriptors({
           decodeJson: (json: unknown) => json,
         }
       : undefined,
-  targetTypesFor: () => undefined,
   renderOutputTypeFor: () => undefined,
 });
 
@@ -46,7 +50,6 @@ function lookupOf(codecs: Record<string, Pick<Codec, 'encodeJson'>>): CodecLooku
             ...codec,
           };
     },
-    targetTypesFor: () => undefined,
     renderOutputTypeFor: () => undefined,
   });
 }
@@ -66,25 +69,27 @@ function buildWithDefault(
           tableName: 'event',
           fields: [
             {
+              many: false,
               fieldName: 'id',
               columnName: 'id',
-              descriptor: { codecId: 'pg/int4@1', nativeType: 'int4' },
+              descriptor: { codecId: 'pg/int4@1' },
               nullable: false,
             },
             {
+              many: false,
               fieldName: 'count',
               columnName: 'count',
-              descriptor: { codecId: field.codecId, nativeType: 'int8' },
+              descriptor: { codecId: field.codecId },
               nullable: false,
               default: { kind: 'literal', value: field.value },
-              ...(field.many === true ? { many: true } : {}),
+              ...(field.many === true ? { many: true, elementNullable: false } : {}),
             },
           ],
           id: { columns: ['id'] },
         },
       ],
     },
-    codecLookup,
+    ...withTestTypes(codecLookup),
   );
 }
 
@@ -173,16 +178,17 @@ describe('a literal default the codec refuses', () => {
               tableName: 'invoice',
               fields: [
                 {
+                  many: false,
                   fieldName: 'id',
                   columnName: 'id',
-                  descriptor: { codecId: 'pg/int4@1', nativeType: 'int4' },
+                  descriptor: { codecId: 'pg/int4@1' },
                   nullable: false,
                 },
                 {
                   fieldName: 'total',
                   columnName: 'total',
                   valueObjectName: 'Money',
-                  descriptor: { codecId: 'pg/jsonb@1', nativeType: 'jsonb' },
+                  descriptor: { codecId: 'pg/jsonb@1' },
                   nullable: false,
                   default: { kind: 'literal', value: 'twelve' },
                 },
@@ -195,6 +201,7 @@ describe('a literal default the codec refuses', () => {
               name: 'Money',
               fields: [
                 {
+                  many: false,
                   fieldName: 'amount',
                   descriptor: { codecId: 'pg/int8@1' },
                   nullable: false,
@@ -203,7 +210,7 @@ describe('a literal default the codec refuses', () => {
             },
           ],
         },
-        refusingJsonb,
+        ...withTestTypes(refusingJsonb),
       ),
     ).toThrow(
       expect.objectContaining({

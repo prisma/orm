@@ -142,8 +142,7 @@ type PgEnumColumnDescriptor<Members extends readonly [string, ...string[]]> = Co
 };
 
 /**
- * Builds the deferred column descriptor for `handle`: the bare Postgres type
- * name and `typeParams` come from `pgEnumDescriptor.columnFromEntity` (the same
+ * Builds the deferred column descriptor for `handle`: its `typeParams` come from `pgEnumDescriptor.columnFromEntity` (the same
  * authoring hook the PSL `pg.enum(Ref)` type constructor resolves through),
  * carrying `handle.entity` as the descriptor's `entityRef` keyed by the entity
  * `name` (not the Postgres type name — they differ when `.map()` was used).
@@ -165,7 +164,6 @@ function pgEnumColumn<
   }
   return {
     codecId: PG_ENUM_CODEC_ID,
-    nativeType: resolved.nativeType,
     typeParams: resolved.typeParams,
     entityRef: {
       entityKind: handle.entityKind,

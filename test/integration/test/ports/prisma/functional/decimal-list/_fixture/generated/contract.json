@@ -16,7 +16,9 @@
           "User": {
             "fields": {
               "decimals": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/numeric@1",
@@ -69,14 +71,16 @@
               "columns": {
                 "decimals": {
                   "codecId": "pg/numeric@1",
-                  "many": true,
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nullable": false,
                   "typeRef": "D"
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -95,12 +99,12 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "b19e28967332f25efa131fe414093daebeece9ea3d36b1ceb0e456dfff804ae0",
+    "storageHash": "c6c83c549521a55ba3c48ff5de68cc452e794635ddcb91a995706528c86fc772",
     "types": {
       "D": {
         "codecId": "pg/numeric@1",
+        "dataType": "pg/numeric",
         "kind": "codec-instance",
-        "nativeType": "numeric",
         "typeParams": {
           "precision": 65,
           "scale": 30
@@ -129,6 +133,8 @@
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -139,9 +145,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

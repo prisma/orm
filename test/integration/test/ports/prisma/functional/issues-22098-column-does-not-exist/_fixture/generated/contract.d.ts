@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'555e73e9a36eb0260ec25c85aac3e1d40694d694d17949ab6dc68b260358eec6'>;
+  StorageHashBase<'cab7d6556cad5e71bf14a8dadd2b9cc3522cb0fa78dd3a4f7e9ededefcb073b1'>;
 export type ExecutionHash =
   ExecutionHashBase<'1f7886616c73d2fd35992d6b9727bd8478632c592681200c916c78377344059c'>;
 export type ProfileHash =
@@ -300,14 +300,16 @@ type ContractBase = Omit<
             readonly test: {
               columns: {
                 readonly TESTE_NÚMERICO: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -360,6 +362,8 @@ type ContractBase = Omit<
   readonly capabilities: {
     readonly postgres: {
       readonly distinctOn: true;
+      readonly forKeyShare: true;
+      readonly forNoKeyUpdate: true;
       readonly jsonAgg: true;
       readonly lateral: true;
       readonly limit: true;
@@ -370,9 +374,14 @@ type ContractBase = Omit<
       readonly checkConstraint: true;
       readonly defaultInInsert: true;
       readonly enums: true;
+      readonly forShare: true;
+      readonly forUpdate: true;
       readonly insertOnConflictSkip: true;
       readonly insertOnConflictWithoutTarget: true;
       readonly lateral: true;
+      readonly lockNowait: true;
+      readonly lockOf: true;
+      readonly lockSkipLocked: true;
       readonly returning: true;
       readonly scalarList: true;
     };

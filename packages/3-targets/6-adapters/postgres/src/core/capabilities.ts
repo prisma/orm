@@ -1,0 +1,27 @@
+export const postgresAdapterCapabilities = Object.freeze({
+  postgres: {
+    orderBy: true,
+    limit: true,
+    lateral: true,
+    jsonAgg: true,
+    returning: true,
+    distinctOn: true,
+    forNoKeyUpdate: true,
+    forKeyShare: true,
+  },
+  sql: {
+    enums: true,
+    returning: true,
+    defaultInInsert: true,
+    lateral: true,
+    scalarList: true,
+    checkConstraint: true,
+    insertOnConflictSkip: true,
+    insertOnConflictWithoutTarget: true,
+    forUpdate: true,
+    forShare: true,
+    lockOf: true,
+    lockNowait: true,
+    lockSkipLocked: true,
+  },
+} as const);

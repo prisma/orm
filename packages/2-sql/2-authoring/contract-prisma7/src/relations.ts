@@ -24,6 +24,13 @@ import type {
   ModelNode,
   RelationNode,
 } from '@internal/sql-contract-ts/contract-builder';
+import { ifDefined } from '@internal/utils/defined';
+import {
+  prisma7ForeignKeyName,
+  prisma7JunctionForeignKeyName,
+  prisma7JunctionPrimaryKeyName,
+  statedConstraintName,
+} from './constraint-names';
 import {
   andList,
   fieldList,
@@ -36,6 +43,8 @@ import type { Prisma7TargetBinding } from './target-binding';
 
 export interface RelationAttribute {
   readonly name: string | undefined;
+  /** The `map` name of the foreign key. */
+  readonly map: string | undefined;
   readonly fields: readonly string[] | undefined;
   readonly references: readonly string[] | undefined;
   readonly onDelete: ReferentialAction | undefined;
@@ -80,10 +89,10 @@ export const RELATION_PAIRING_CODES: ReadonlySet<string> = new Set([
   'PSL_JUNCTION_TARGET_FK_NOT_ID',
 ]);
 
-/** What the relation pass needs from the target to name junction tables, indexes and fields. */
+/** What the relation pass needs from the target to name junction tables, constraints, indexes and fields. */
 export type JunctionNaming = Pick<
   Prisma7TargetBinding,
-  'identifierMaxBytes' | 'junctionRelationFieldNames'
+  'identifierMaxBytes' | 'junctionRelationFieldNames' | 'defaultConstraintNames'
 >;
 
 export interface RelationLowering {
@@ -136,6 +145,7 @@ export function parseRelationAttribute(
   diagnostics: ContractSourceDiagnostic[],
 ): RelationAttribute | undefined {
   let name: string | undefined;
+  let map: string | undefined;
   let fields: readonly string[] | undefined;
   let references: readonly string[] | undefined;
   let onDelete: ReferentialAction | undefined;
@@ -177,12 +187,14 @@ export function parseRelationAttribute(
           return invalid('onUpdate must be a referential action', arg.span);
         break;
       case 'map':
+        map = stringValue(arg.expression);
+        if (map === undefined) return invalid('map must be a string', arg.span);
         break;
       default:
         return invalid(`argument "${key ?? ''}" is not supported`, arg.span);
     }
   }
-  return { name, fields, references, onDelete, onUpdate, span: attribute.span };
+  return { name, map, fields, references, onDelete, onUpdate, span: attribute.span };
 }
 
 function columnNames(
@@ -493,7 +505,17 @@ export function lowerRelations(
           rejectFkSide(model, relationField, ...actionRejections);
           continue;
         }
+        const foreignKeyName = statedConstraintName(
+          prisma7ForeignKeyName(
+            model.tableName,
+            localColumns,
+            attribute.map,
+            naming.identifierMaxBytes,
+          ),
+          naming.defaultConstraintNames.foreignKey(model.tableName, localColumns),
+        );
         addForeignKey(model.modelName, {
+          ...ifDefined('name', foreignKeyName),
           columns: localColumns,
           references: {
             model: target.modelName,
@@ -831,7 +853,17 @@ function synthesizeJunction(
     sideA.model.tableName,
     sideB.model.tableName,
   );
+  const foreignKeyName = (column: 'A' | 'B') =>
+    statedConstraintName(
+      prisma7JunctionForeignKeyName(name, column, naming.identifierMaxBytes),
+      naming.defaultConstraintNames.foreignKey(tableName, [column]),
+    );
+  const primaryKeyName = statedConstraintName(
+    prisma7JunctionPrimaryKeyName(name, naming.identifierMaxBytes),
+    naming.defaultConstraintNames.primaryKey(tableName),
+  );
   const foreignKey = (column: 'A' | 'B', side: JunctionSide, id: FieldNode): ForeignKeyNode => ({
+    ...ifDefined('name', foreignKeyName(column)),
     columns: [column],
     references: {
       model: side.model.modelName,
@@ -872,10 +904,22 @@ function synthesizeJunction(
       tableName,
       namespaceId,
       fields: [
-        { fieldName: 'A', columnName: 'A', descriptor: idA.descriptor, nullable: false },
-        { fieldName: 'B', columnName: 'B', descriptor: idB.descriptor, nullable: false },
+        {
+          fieldName: 'A',
+          columnName: 'A',
+          descriptor: idA.descriptor,
+          nullable: false,
+          many: false,
+        },
+        {
+          fieldName: 'B',
+          columnName: 'B',
+          descriptor: idB.descriptor,
+          nullable: false,
+          many: false,
+        },
       ],
-      id: { columns: ['A', 'B'] },
+      id: { columns: ['A', 'B'], ...ifDefined('name', primaryKeyName) },
       indexes: [index],
       foreignKeys: [foreignKey('A', sideA, idA), foreignKey('B', sideB, idB)],
     },

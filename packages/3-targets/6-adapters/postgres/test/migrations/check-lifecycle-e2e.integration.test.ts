@@ -1,5 +1,6 @@
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import {
   APP_SPACE_ID,
   type MigrationOperationPolicy,
@@ -8,6 +9,8 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { CheckConstraint, SqlStorage, type StorageTable } from '@internal/sql-contract/types';
 import { check, defineContract } from '@internal/sql-contract-ts/contract-builder';
 import { composeCheckWirePrefix, computeCheckContentHash } from '@internal/sql-schema-ir/naming';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import {
   PostgresDatabaseSchemaNode,
   postgresCreateNamespace,
@@ -46,6 +49,11 @@ const WIDENING_POLICY: MigrationOperationPolicy = {
 // path. `varchar` exists to reproduce the reprint hazard an authored check
 // exists to route around: Postgres reprints `IN (...)` against a
 // `character varying` column with an `ANY`-array cast, not verbatim.
+const postgresTypeLookups = {
+  codecLookup: createPostgresBuiltinCodecLookup(),
+  dataTypeLookup: createDataTypeLookup(postgresDataTypes),
+};
+
 const authoringFamilyPack = {
   kind: 'family',
   id: 'sql',
@@ -55,11 +63,11 @@ const authoringFamilyPack = {
     field: {
       text: {
         kind: 'fieldPreset',
-        output: { codecId: 'pg/text@1', nativeType: 'text' },
+        output: { codecId: 'pg/text@1' },
       },
       varchar: {
         kind: 'fieldPreset',
-        output: { codecId: 'pg/varchar@1', nativeType: 'character varying' },
+        output: { codecId: 'pg/varchar@1' },
       },
     },
   },
@@ -76,17 +84,19 @@ const authoringTargetPack = {
 } as const;
 
 type ColumnSpec = {
-  readonly nativeType: string;
+  readonly dataType: string;
   readonly codecId: string;
   readonly nullable: boolean;
-  readonly many?: true;
+  readonly many?: false | { readonly elementNullable: boolean };
 };
 
-/** Builds the checks the Postgres pack would emit for one column. */
 function checksForColumn(
   tableName: string,
   columnName: string,
-  options: { readonly many: boolean; readonly memberValues?: readonly string[] },
+  options: {
+    readonly many: false | { readonly elementNullable: boolean };
+    readonly memberValues?: readonly string[];
+  },
 ): CheckConstraint[] {
   return postgresRenderCheckExpressions({
     tableName,
@@ -193,7 +203,7 @@ function twoNamespaceContractOf(
   };
 }
 
-const idColumn: ColumnSpec = { nativeType: 'text', codecId: 'pg/text@1', nullable: false };
+const idColumn: ColumnSpec = { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false };
 
 function declaredCheckNames(contract: Contract<SqlStorage>): readonly string[] {
   const table = contract.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries.table?.['Item'];
@@ -213,6 +223,7 @@ function itemContractWithCheck(input: {
 }): Contract<SqlStorage> {
   return defineContract(
     {
+      ...postgresTypeLookups,
       family: authoringFamilyPack,
       target: authoringTargetPack,
       createNamespace: postgresCreateNamespace,
@@ -241,6 +252,7 @@ function itemContractWithVarcharCheck(input: {
 }): Contract<SqlStorage> {
   return defineContract(
     {
+      ...postgresTypeLookups,
       family: authoringFamilyPack,
       target: authoringTargetPack,
       createNamespace: postgresCreateNamespace,
@@ -250,6 +262,32 @@ function itemContractWithVarcharCheck(input: {
         models: {
           Item: m('Item', { fields: { id: f.text().id(), status: f.varchar() } }).sql({
             checks: [check(input)],
+          }),
+        },
+      }) as const,
+  ) as Contract<SqlStorage>;
+}
+
+function authoredScalarListContract(elementNullable: boolean): Contract<SqlStorage> {
+  return defineContract(
+    {
+      ...postgresTypeLookups,
+      family: authoringFamilyPack,
+      target: authoringTargetPack,
+      createNamespace: postgresCreateNamespace,
+    },
+    ({ field: f, model: m }) =>
+      ({
+        models: {
+          Item: m('Item', {
+            fields: {
+              id: f.text().id(),
+              strictTags: f.text().many(),
+              nullableTags: f.text().many({ elementsNullable: true }),
+              transitioningTags: elementNullable
+                ? f.text().many({ elementsNullable: true })
+                : f.text().many({ elementsNullable: false }),
+            },
           }),
         },
       }) as const,
@@ -312,6 +350,8 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
       schema,
       policy,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -369,11 +409,16 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     expect(await liveCheckNames()).toEqual([]);
 
     // Nullable: ADD COLUMN NOT NULL with no default is rejected outright.
-    const tagsChecks = checksForColumn('Item', 'tags', { many: true });
+    const tagsChecks = checksForColumn('Item', 'tags', { many: { elementNullable: false } });
     const after = contractOf(
       {
         id: idColumn,
-        tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: true, many: true },
+        tags: {
+          dataType: 'pg/text',
+          codecId: 'pg/text@1',
+          nullable: true,
+          many: { elementNullable: false },
+        },
       },
       tagsChecks,
     );
@@ -397,11 +442,16 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
   it('dropping a list column removes its element check in the same plan', {
     timeout: testTimeout,
   }, async () => {
-    const attrsChecks = checksForColumn('Item', 'attrs', { many: true });
+    const attrsChecks = checksForColumn('Item', 'attrs', { many: { elementNullable: false } });
     const before = contractOf(
       {
         id: idColumn,
-        attrs: { nativeType: 'text', codecId: 'pg/text@1', nullable: true, many: true },
+        attrs: {
+          dataType: 'pg/text',
+          codecId: 'pg/text@1',
+          nullable: true,
+          many: { elementNullable: false },
+        },
       },
       attrsChecks,
     );
@@ -424,11 +474,16 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
   it('a manually dropped check is reported missing and repaired by the next plan', {
     timeout: testTimeout,
   }, async () => {
-    const tagsChecks = checksForColumn('Item', 'tags', { many: true });
+    const tagsChecks = checksForColumn('Item', 'tags', { many: { elementNullable: false } });
     const contract = contractOf(
       {
         id: idColumn,
-        tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+        tags: {
+          dataType: 'pg/text',
+          codecId: 'pg/text@1',
+          nullable: false,
+          many: { elementNullable: false },
+        },
       },
       tagsChecks,
     );
@@ -466,13 +521,18 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
 
     const checks = [
       ...checksForColumn('Item', 'role', { many: false, memberValues: ['user', 'admin'] }),
-      ...checksForColumn('Item', 'tags', { many: true }),
+      ...checksForColumn('Item', 'tags', { many: { elementNullable: false } }),
     ];
     const contract = contractOf(
       {
         id: idColumn,
-        role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-        tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+        role: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+        tags: {
+          dataType: 'pg/text',
+          codecId: 'pg/text@1',
+          nullable: false,
+          many: { elementNullable: false },
+        },
       },
       checks,
     );
@@ -501,7 +561,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
       memberValues: ['user', 'admin'],
     });
     const contract = contractOf(
-      { id: idColumn, role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false } },
+      { id: idColumn, role: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false } },
       checks,
     );
 
@@ -537,14 +597,19 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     timeout: testTimeout,
   }, async () => {
     const checks = checksForColumn('Item', 'roles', {
-      many: true,
+      many: { elementNullable: false },
       memberValues: ['user', 'admin'],
     });
     expect(checks).toHaveLength(2);
     const contract = contractOf(
       {
         id: idColumn,
-        roles: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+        roles: {
+          dataType: 'pg/text',
+          codecId: 'pg/text@1',
+          nullable: false,
+          many: { elementNullable: false },
+        },
       },
       checks,
     );
@@ -562,23 +627,58 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     await expect(
       driver!.query(`INSERT INTO "Item" (id, roles) VALUES ('b', ARRAY['user','root'])`),
     ).rejects.toThrow(new RegExp(membershipName));
-    // `<@` does not match a NULL element either, so containment rejects this
-    // one too — the element-non-null check is belt for a different hole (a
-    // list column with no member set at all).
+    // Membership ignores NULL; the independently named element check rejects it.
     await expect(
       driver!.query(`INSERT INTO "Item" (id, roles) VALUES ('c', ARRAY['user',NULL])`),
-    ).rejects.toThrow(/Item_roles/);
+    ).rejects.toThrow(new RegExp(checks[1]?.name ?? 'Item_roles_elem_not_null'));
 
     const schema = await familyInstance.introspect({ driver: driver!, contract });
     PostgresDatabaseSchemaNode.assert(schema);
     const live = schema.namespaces['public']?.tables['Item']?.checks ?? [];
     expect([...live.map((c) => c.expression)].sort()).toEqual([
       '(array_position(roles, NULL::text) IS NULL)',
-      `(roles <@ ARRAY['user'::text, 'admin'::text])`,
+      `(array_remove(roles, NULL::text) <@ '{user,admin}'::text[])`,
     ]);
 
     expect((await verify(contract)).ok).toBe(true);
     // Reprint stability: the containment shape does not drift on re-verify.
+    expect((await verify(contract)).ok).toBe(true);
+  });
+
+  it('an element-nullable array domain enum accepts valid NULLs and rejects invalid non-null values', {
+    timeout: testTimeout,
+  }, async () => {
+    const checks = checksForColumn('Item', 'roles', {
+      many: { elementNullable: true },
+      memberValues: ['user', 'admin'],
+    });
+    expect(checks).toHaveLength(1);
+    const contract = contractOf(
+      {
+        id: idColumn,
+        roles: {
+          dataType: 'pg/text',
+          codecId: 'pg/text@1',
+          nullable: false,
+          many: { elementNullable: true },
+        },
+      },
+      checks,
+    );
+
+    await migrate(contract);
+
+    expect(await liveCheckNames()).toEqual([...declaredCheckNames(contract)]);
+    await driver!.query(`INSERT INTO "Item" (id, roles) VALUES ('a', ARRAY['user',NULL])`);
+    expect(
+      (await driver!.query<{ roles: string }>(`SELECT roles FROM "Item" WHERE id = 'a'`)).rows,
+    ).toEqual([{ roles: '{user,NULL}' }]);
+
+    const membershipName = checks[0]?.name;
+    assertDefined(membershipName, 'membership check must be named');
+    await expect(
+      driver!.query(`INSERT INTO "Item" (id, roles) VALUES ('b', ARRAY['root',NULL])`),
+    ).rejects.toThrow(new RegExp(membershipName));
     expect((await verify(contract)).ok).toBe(true);
   });
 
@@ -590,17 +690,17 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     timeout: testTimeout,
   }, async () => {
     const checks = checksForColumn('Item', 'roles', {
-      many: true,
+      many: { elementNullable: false },
       memberValues: ['user', 'admin'],
     });
     const contract = contractOf(
       {
         id: idColumn,
         roles: {
-          nativeType: 'character varying',
+          dataType: 'pg/varchar',
           codecId: 'pg/varchar@1',
           nullable: false,
-          many: true,
+          many: { elementNullable: false },
         },
       },
       checks,
@@ -638,7 +738,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     const contract = contractOf(
       {
         id: idColumn,
-        [columnName]: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+        [columnName]: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
       },
       checks,
     );
@@ -666,7 +766,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     });
     const columns = {
       id: idColumn,
-      role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+      role: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
     } as const;
     const v1 = contractOf(columns, before);
     await migrate(v1);
@@ -714,7 +814,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     const contract = contractOf(
       {
         id: idColumn,
-        role: { nativeType: 'character varying', codecId: 'pg/varchar@1', nullable: false },
+        role: { dataType: 'pg/varchar', codecId: 'pg/varchar@1', nullable: false },
       },
       checks,
     );
@@ -740,7 +840,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
   }, async () => {
     const columns = {
       id: idColumn,
-      role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false } as ColumnSpec,
+      role: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false } as ColumnSpec,
     };
     const twoMembers = checksForColumn('Item', 'role', {
       many: false,
@@ -781,21 +881,82 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     expect((await verify(changed)).ok).toBe(true);
   });
 
+  it('authored scalar lists install element checks by element nullability and enforce them', {
+    timeout: testTimeout,
+  }, async () => {
+    const contract = authoredScalarListContract(true);
+    const table = contract.storage.namespaces['public']?.entries.table?.['Item'] as
+      | StorageTable
+      | undefined;
+    expect(table?.checks?.map((constraint) => constraint.prefix).sort()).toEqual([
+      'Item_strictTags_elem_not_null',
+    ]);
+
+    await migrate(contract);
+
+    expect(await liveCheckNames()).toEqual(table?.checks?.map((constraint) => constraint.name));
+    await driver!.query(
+      `INSERT INTO "Item" (id, "strictTags", "nullableTags", "transitioningTags") VALUES ('a', ARRAY['strict'], ARRAY['nullable',NULL], ARRAY['transitioning',NULL])`,
+    );
+    expect(
+      (
+        await driver!.query<{
+          nullableTags: string;
+          transitioningTags: string;
+        }>(`SELECT "nullableTags", "transitioningTags" FROM "Item" WHERE id = 'a'`)
+      ).rows,
+    ).toEqual([{ nullableTags: '{nullable,NULL}', transitioningTags: '{transitioning,NULL}' }]);
+    await expect(
+      driver!.query(
+        `INSERT INTO "Item" (id, "strictTags", "nullableTags", "transitioningTags") VALUES ('b', ARRAY['strict',NULL], ARRAY['nullable'], ARRAY['transitioning'])`,
+      ),
+    ).rejects.toThrow(/Item_strictTags_elem_not_null/);
+    expect((await verify(contract)).ok).toBe(true);
+  });
+
+  it('changing authored list element nullability drops and restores exactly one check', {
+    timeout: testTimeout,
+  }, async () => {
+    const strict = authoredScalarListContract(false);
+    await migrate(strict);
+    const strictTable = strict.storage.namespaces['public']?.entries.table?.['Item'] as
+      | StorageTable
+      | undefined;
+    const transitioningName = strictTable?.checks?.find(
+      (constraint) => constraint.prefix === 'Item_transitioningTags_elem_not_null',
+    )?.name;
+    assertDefined(transitioningName, 'transitioning element check must be named');
+
+    const nullable = authoredScalarListContract(true);
+    const toNullable = await migrate(nullable, { from: strict, policy: FULL_POLICY });
+    expect(toNullable.opIds).toEqual([`dropCheckConstraint.Item.${transitioningName}`]);
+    expect((await verify(nullable)).ok).toBe(true);
+
+    const toStrict = await migrate(strict, { from: nullable, policy: FULL_POLICY });
+    expect(toStrict.opIds).toEqual([`checkConstraint.Item.${transitioningName}`]);
+    expect((await verify(strict)).ok).toBe(true);
+  });
+
   // Slice 3 (`@noCheck`): an opted-out contract simply does not declare the
   // check. The first two scenarios are hand-built contracts and pin the
   // planner/DDL lifecycle for a check-less contract — deleting a declared
-  // check plans one destructive drop, declaring it again plans one additive
+  // check plans one widening drop, declaring it again plans one additive
   // add. The third drives the real authoring surface (defineContract +
   // .noCheck()) end to end. The full builder-to-infer chain is covered by
   // the infer e2e journeys and the print-psl emission unit tests.
-  it('adding an opt-out later drops the live element check in one destructive plan', {
+  it('adding an opt-out later drops the live element check in one widening plan', {
     timeout: testTimeout,
   }, async () => {
-    const tagsChecks = checksForColumn('Item', 'tags', { many: true });
+    const tagsChecks = checksForColumn('Item', 'tags', { many: { elementNullable: false } });
     const enforced = contractOf(
       {
         id: idColumn,
-        tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+        tags: {
+          dataType: 'pg/text',
+          codecId: 'pg/text@1',
+          nullable: false,
+          many: { elementNullable: false },
+        },
       },
       tagsChecks,
     );
@@ -807,7 +968,12 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     const optedOut = contractOf(
       {
         id: idColumn,
-        tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+        tags: {
+          dataType: 'pg/text',
+          codecId: 'pg/text@1',
+          nullable: false,
+          many: { elementNullable: false },
+        },
       },
       [],
     );
@@ -815,7 +981,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
 
     const dropOps = ops.filter((op) => op.id.startsWith('dropCheckConstraint.'));
     expect(dropOps.map((op) => op.id)).toEqual([`dropCheckConstraint.Item.${tagsChecks[0]?.name}`]);
-    expect(dropOps[0]?.operationClass).toBe('destructive');
+    expect(dropOps[0]?.operationClass).toBe('widening');
     expect(ops).toHaveLength(1);
 
     expect(await liveCheckNames()).toEqual([]);
@@ -829,7 +995,12 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     const optedOut = contractOf(
       {
         id: idColumn,
-        tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+        tags: {
+          dataType: 'pg/text',
+          codecId: 'pg/text@1',
+          nullable: false,
+          many: { elementNullable: false },
+        },
       },
       [],
     );
@@ -837,11 +1008,16 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     expect(await liveCheckNames()).toEqual([]);
     await driver!.query(`INSERT INTO "Item" (id, tags) VALUES ('a', ARRAY['x',NULL])`);
 
-    const tagsChecks = checksForColumn('Item', 'tags', { many: true });
+    const tagsChecks = checksForColumn('Item', 'tags', { many: { elementNullable: false } });
     const enforced = contractOf(
       {
         id: idColumn,
-        tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+        tags: {
+          dataType: 'pg/text',
+          codecId: 'pg/text@1',
+          nullable: false,
+          many: { elementNullable: false },
+        },
       },
       tagsChecks,
     );
@@ -872,6 +1048,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
   }, async () => {
     const optedOut = defineContract(
       {
+        ...postgresTypeLookups,
         family: authoringFamilyPack,
         target: authoringTargetPack,
         createNamespace: postgresCreateNamespace,

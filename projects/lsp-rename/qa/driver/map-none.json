@@ -1,0 +1,65 @@
+{
+  "files": ["auth.prisma", "session.prisma", "post.prisma", "shop.prisma", "roles.prisma"],
+  "steps": [
+    {
+      "id": "12.1",
+      "kind": "rename",
+      "file": "post.prisma",
+      "at": "aut|hor   auth.User",
+      "newName": "writer"
+    },
+    {
+      "id": "12.2",
+      "kind": "rename",
+      "file": "auth.prisma",
+      "at": "pos|ts Post[]",
+      "newName": "articles"
+    },
+    {
+      "id": "12.3",
+      "kind": "rename",
+      "file": "shop.prisma",
+      "at": "model Bu|g",
+      "newName": "Defect"
+    },
+    {
+      "id": "12.4",
+      "kind": "rename",
+      "file": "auth.prisma",
+      "at": "namespace au|th",
+      "newName": "identity"
+    },
+    {
+      "id": "12.5",
+      "kind": "rename",
+      "file": "roles.prisma",
+      "at": "role app_us|er",
+      "newName": "member"
+    },
+    {
+      "id": "12.6",
+      "kind": "rename",
+      "file": "shop.prisma",
+      "at": "model Ord|er {",
+      "newName": "Purchase"
+    },
+    {
+      "id": "12.7",
+      "kind": "rename",
+      "file": "shop.prisma",
+      "at": "no|te   String",
+      "newName": "remark"
+    },
+    {
+      "id": "12.8",
+      "kind": "rename",
+      "file": "auth.prisma",
+      "at": "model Us|er",
+      "newName": "User"
+    },
+    {
+      "id": "diag",
+      "kind": "diagnostics"
+    }
+  ]
+}

@@ -8,6 +8,7 @@ import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { planIssues } from '../../src/core/migrations/issue-planner';
 import { postgresCreateNamespace } from '../../src/core/postgres-schema';
+import { postgresTypeLookups } from '../postgres-type-lookups';
 
 const TABLE_NAME = 'user';
 const SCHEMA_NAME = 'public';
@@ -49,8 +50,8 @@ function contractWith(
           table: {
             [TABLE_NAME]: new StorageTable({
               columns: {
-                id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                status: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+                status: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               foreignKeys: [],
@@ -108,6 +109,7 @@ function checkIssue(options: {
 const defaultCtx = {
   schemaName: SCHEMA_NAME,
   codecHooks: new Map(),
+  types: postgresTypeLookups,
   storageTypes: {},
 };
 
@@ -144,7 +146,7 @@ describe('check planning is diff-driven', () => {
       toContract: contractWith([UNBOUND_NAMESPACE_ID], []),
       fromContract: null,
       schema: schemaWith([live]),
-      policy: { allowedOperationClasses: ['additive', 'destructive'] },
+      policy: { allowedOperationClasses: ['additive', 'widening'] },
     });
 
     expect(result.ok).toBe(true);
@@ -216,7 +218,7 @@ describe('a prefix-only change reaches the mapper as a missing/extra pair', () =
       ),
       fromContract: null,
       schema: schemaWith([actual]),
-      policy: { allowedOperationClasses: ['additive', 'destructive'] },
+      policy: { allowedOperationClasses: ['additive', 'widening'] },
     });
 
     expect(result.ok).toBe(true);

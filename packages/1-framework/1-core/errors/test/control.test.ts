@@ -1,3 +1,5 @@
+import type { ResolvedMigrationStatement } from '@internal/framework-components/control';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { NextAction } from '@internal/utils/structured-error';
 import { docsUrlFor } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
@@ -360,6 +362,48 @@ describe('Config Errors', () => {
     expect(error.fix).toContain('Fix 1');
     expect(error.fix).toContain('Fix 2');
     expect(error.meta?.['conflicts']).toEqual(conflicts);
+  });
+
+  it('errorMigrationPlanningFailed carries the statement a conflict refuses, as JSON output writes it', () => {
+    const refusedStatement = {
+      kind: 'rename',
+      entity: 'model',
+      from: { namespaceId: UNBOUND_NAMESPACE_ID, model: 'Profile' },
+      to: { namespaceId: UNBOUND_NAMESPACE_ID, model: 'User' },
+    } as unknown as ResolvedMigrationStatement;
+    const error = errorMigrationPlanningFailed({
+      conflicts: [
+        {
+          kind: 'statementRefused',
+          summary: 'Cannot rename',
+          location: { namespaceId: UNBOUND_NAMESPACE_ID, entityKind: 'table', entityName: 'users' },
+          refusedStatement,
+        },
+      ],
+    });
+    expect(error.meta?.['conflicts']).toEqual([
+      {
+        kind: 'statementRefused',
+        summary: 'Cannot rename',
+        location: { entityKind: 'table', entityName: 'users' },
+        refusedStatement: {
+          kind: 'rename',
+          entity: 'model',
+          from: { model: 'Profile' },
+          to: { model: 'User' },
+        },
+      },
+    ]);
+  });
+
+  it('errorMigrationPlanningFailed keeps the namespace of a location in a named namespace', () => {
+    const location = { namespaceId: 'auth', entityKind: 'table', entityName: 'users' };
+    const error = errorMigrationPlanningFailed({
+      conflicts: [{ kind: 'statementRefused', summary: 'Cannot rename', location }],
+    });
+    expect(error.meta?.['conflicts']).toEqual([
+      { kind: 'statementRefused', summary: 'Cannot rename', location },
+    ]);
   });
 
   it('errorMigrationPlanningFailed with custom why', () => {

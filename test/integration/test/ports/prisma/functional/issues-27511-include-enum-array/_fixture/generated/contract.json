@@ -160,7 +160,9 @@
                 }
               },
               "permissions": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -220,7 +222,7 @@
               "columns": {
                 "id": {
                   "codecId": "sql/varchar@1",
-                  "nativeType": "character varying",
+                  "dataType": "pg/varchar",
                   "nullable": false,
                   "typeParams": {
                     "length": 30
@@ -240,17 +242,20 @@
               "columns": {
                 "memberId": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "roleId": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "workspace_member_role_memberId_idx_76b3c263"
+                  },
                   "source": {
                     "columns": [
                       "memberId"
@@ -267,6 +272,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "workspace_member_role_roleId_idx_ffccc9a4"
+                  },
                   "source": {
                     "columns": [
                       "roleId"
@@ -312,8 +320,8 @@
             "workspace_role": {
               "checks": [
                 {
-                  "expression": "\"permissions\"::text[] <@ ARRAY['HELLO', 'WORLD']::text[]",
-                  "name": "workspace_role_permissions_check_f45c4d4b",
+                  "expression": "array_remove(\"permissions\", NULL) <@ '{\"HELLO\",\"WORLD\"}'",
+                  "name": "workspace_role_permissions_check_27418ee9",
                   "prefix": "workspace_role_permissions_check"
                 },
                 {
@@ -325,7 +333,7 @@
               "columns": {
                 "id": {
                   "codecId": "sql/varchar@1",
-                  "nativeType": "character varying",
+                  "dataType": "pg/varchar",
                   "nullable": false,
                   "typeParams": {
                     "length": 30
@@ -333,13 +341,15 @@
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "permissions": {
                   "codecId": "pg/text@1",
-                  "many": true,
-                  "nativeType": "text",
+                  "dataType": "pg/text",
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -373,11 +383,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "8beb060aa674cb67f64b19e1f5b5803bb39b87bbad4ef05b861e794aeb39a9ac"
+    "storageHash": "c8a8fd8f64f8e1587979b7f400e8a7303ea2c85156259a77a6ba0cdf0fe62345"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -388,9 +400,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

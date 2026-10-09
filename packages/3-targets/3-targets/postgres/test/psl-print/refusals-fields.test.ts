@@ -1,4 +1,6 @@
+import { sqlDataType } from '@internal/sql-contract/data-type';
 import { blindCast } from '@internal/utils/casts';
+import { type as arktype } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { buildPostgresPslContract } from '../../src/core/psl-print/psl-contract';
 import { testBuildContext } from './build-context';
@@ -37,7 +39,7 @@ describe('columns and fields', () => {
     expect(
       printingWidget({
         columns: { tags: TEXT_COLUMN },
-        fields: { tags: { ...TEXT_FIELD, many: true } },
+        fields: { tags: { ...TEXT_FIELD, many: { elementNullable: false } } },
       }),
     ).toThrow(refusal({ coordinate: '"public"."Widget"."tags"' }));
   });
@@ -82,7 +84,7 @@ describe('columns and fields', () => {
           columns: {
             priorities: {
               ...TEXT_COLUMN,
-              many: true,
+              many: { elementNullable: false },
               noCheck: ['elementNotNull', 'membership'],
               valueSet: {
                 plane: 'storage',
@@ -95,7 +97,7 @@ describe('columns and fields', () => {
           fields: {
             priorities: {
               ...TEXT_FIELD,
-              many: true,
+              many: { elementNullable: false },
               valueSet: {
                 plane: 'domain',
                 namespaceId: 'public',
@@ -121,9 +123,12 @@ describe('columns and fields', () => {
   it('refuses a model field whose type is a union of types', () => {
     expect(
       printingWidget({
-        columns: { payload: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false } },
+        columns: {
+          payload: { many: false, dataType: 'pg/jsonb', codecId: 'pg/jsonb@1', nullable: false },
+        },
         fields: {
           payload: {
+            many: false,
             nullable: false,
             type: {
               kind: 'union',
@@ -141,9 +146,16 @@ describe('columns and fields', () => {
   it('refuses a model field that is a dictionary', () => {
     expect(
       printingWidget({
-        columns: { counts: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false } },
+        columns: {
+          counts: { many: false, dataType: 'pg/jsonb', codecId: 'pg/jsonb@1', nullable: false },
+        },
         fields: {
-          counts: { nullable: false, dict: true, type: { kind: 'scalar', codecId: 'pg/jsonb@1' } },
+          counts: {
+            many: false,
+            nullable: false,
+            dict: true,
+            type: { kind: 'scalar', codecId: 'pg/jsonb@1' },
+          },
         },
       }),
     ).toThrow(refusal({ coordinate: '"public"."Widget"."counts"' }));
@@ -167,22 +179,34 @@ describe('columns and fields', () => {
             args: [{ kind: 'string', name: 'shape' }],
             output: {
               codecId: 'pg/geometry@1',
-              nativeType: 'geometry',
               typeParams: { shape: { kind: 'arg', index: 0 } },
             },
           },
         },
       },
+      dataTypes: [
+        sqlDataType('postgis/geometry', {
+          params: arktype({ 'shape?': 'string' }),
+          texts: [{ text: 'geometry', written: true, catalog: true }],
+        }),
+      ],
     });
 
     function withShape(typeParams: Record<string, unknown>) {
       return printingWidget(
         {
           columns: {
-            area: { nativeType: 'geometry', codecId: 'pg/geometry@1', nullable: false, typeParams },
+            area: {
+              many: false,
+              dataType: 'postgis/geometry',
+              codecId: 'pg/geometry@1',
+              nullable: false,
+              typeParams,
+            },
           },
           fields: {
             area: {
+              many: false,
               nullable: false,
               type: { kind: 'scalar', codecId: 'pg/geometry@1', typeParams },
             },
@@ -193,12 +217,17 @@ describe('columns and fields', () => {
     }
 
     it('refuses a column whose codec no PSL type in the stack produces, naming the column', () => {
-      const vector = { nativeType: 'vector', codecId: 'pg/vector@1', typeParams: { length: 3 } };
+      const vector = {
+        dataType: 'pgvector/vector',
+        codecId: 'pg/vector@1',
+        typeParams: { length: 3 },
+      };
       expect(
         printingWidget({
           columns: { v: { ...vector, nullable: false } },
           fields: {
             v: {
+              many: false,
               nullable: false,
               type: { kind: 'scalar', codecId: vector.codecId, typeParams: vector.typeParams },
             },
@@ -207,7 +236,7 @@ describe('columns and fields', () => {
       ).toThrow(
         refusal({
           coordinate: '"public"."Widget"."v"',
-          nativeType: 'vector',
+          dataType: 'pgvector/vector',
           codecId: 'pg/vector@1',
         }),
       );
@@ -227,7 +256,7 @@ describe('columns and fields', () => {
       expect(withShape({})).toThrow(
         refusal({
           coordinate: '"public"."Widget"."area"',
-          nativeType: 'geometry',
+          dataType: 'postgis/geometry',
           codecId: 'pg/geometry@1',
         }),
       );
@@ -315,8 +344,8 @@ describe('defaults and generated values', () => {
     ).toThrow(refusal({ coordinate: '"public"."Widget"."value"', onCreate: 'uuidv4' }));
   });
 
-  it('refuses a generated value for a column no field is stored in', () => {
-    expect(
+  it('never sees a generated value for a column no field is stored in: the contract is refused when it is read', () => {
+    expect(() =>
       printingWidget({
         contract: {
           execution: {
@@ -331,7 +360,9 @@ describe('defaults and generated values', () => {
           },
         },
       }),
-    ).toThrow(refusal({ coordinate: '"public"."Widget"."missing"' }));
+    ).toThrow(
+      'Execution default for column "missing" of table "public.Widget" targets a column no field maps',
+    );
   });
 });
 
@@ -362,8 +393,8 @@ describe('checks and indexes', () => {
   it('refuses a managed list column without the element check the PSL source derives', () => {
     expect(
       printingWidget({
-        columns: { tags: { ...TEXT_COLUMN, many: true } },
-        fields: { tags: { ...TEXT_FIELD, many: true } },
+        columns: { tags: { ...TEXT_COLUMN, many: { elementNullable: false } } },
+        fields: { tags: { ...TEXT_FIELD, many: { elementNullable: false } } },
       }),
     ).toThrow(
       refusal({
@@ -377,8 +408,8 @@ describe('checks and indexes', () => {
   it('prints a list column of a table that is not managed without derived checks', () => {
     expect(
       printingWidget({
-        columns: { tags: { ...TEXT_COLUMN, many: true } },
-        fields: { tags: { ...TEXT_FIELD, many: true } },
+        columns: { tags: { ...TEXT_COLUMN, many: { elementNullable: false } } },
+        fields: { tags: { ...TEXT_FIELD, many: { elementNullable: false } } },
         table: { control: 'external' },
       }),
     ).not.toThrow();

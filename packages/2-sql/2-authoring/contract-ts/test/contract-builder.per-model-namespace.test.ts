@@ -2,6 +2,7 @@ import type { FamilyPackRef, TargetPackRef } from '@internal/framework-component
 import type { SqlNamespace } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { defineContract, field, model } from '../src/contract-builder';
 import { columnDescriptor } from './helpers/column-descriptor';
 
@@ -41,6 +42,7 @@ const userModelArgs = {
 describe('per-model `namespace` field (TS builder)', () => {
   it('lowers `model(name, { namespace, fields })` to `StorageTable.namespaceId`', () => {
     const contract = defineContract({
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: postgresTargetPack,
       namespaces: ['public', 'auth'],
@@ -59,6 +61,7 @@ describe('per-model `namespace` field (TS builder)', () => {
 
   it('omits `namespaceId` for models that do not set `namespace` — the late-bound default stays implicit', () => {
     const contract = defineContract({
+      ...testTypeLookups,
       family: sqlFamilyPack,
       target: postgresTargetPack,
       namespaces: ['public', 'auth'],
@@ -75,6 +78,7 @@ describe('per-model `namespace` field (TS builder)', () => {
   it('rejects per-model `namespace` that does not appear in the declared list', () => {
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         namespaces: ['public'],
@@ -87,6 +91,7 @@ describe('per-model `namespace` field (TS builder)', () => {
 
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         namespaces: ['public'],
@@ -101,6 +106,7 @@ describe('per-model `namespace` field (TS builder)', () => {
   it('rejects per-model `namespace` when no namespaces are declared at all', () => {
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -114,6 +120,7 @@ describe('per-model `namespace` field (TS builder)', () => {
   it('rejects per-model `namespace: "__unbound__"` — the IR sentinel is reserved on every target', () => {
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -127,6 +134,7 @@ describe('per-model `namespace` field (TS builder)', () => {
   it('rejects per-model `namespace: "__unspecified__"` — the parser sentinel is reserved on every target', () => {
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -140,6 +148,7 @@ describe('per-model `namespace` field (TS builder)', () => {
   it('rejects per-model `namespace: "unbound"` on Postgres — points to the PSL block', () => {
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -153,6 +162,7 @@ describe('per-model `namespace` field (TS builder)', () => {
   it('rejects per-model `namespace` on SQLite outright — SQLite has no schema concept', () => {
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: sqliteTargetPack,
         createNamespace: createTestSqlNamespace,
@@ -164,6 +174,7 @@ describe('per-model `namespace` field (TS builder)', () => {
 
     expect(() =>
       defineContract({
+        ...testTypeLookups,
         family: sqlFamilyPack,
         target: sqliteTargetPack,
         createNamespace: createTestSqlNamespace,

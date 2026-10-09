@@ -1,3 +1,5 @@
+import type { ContractSourceContext } from '@internal/config/config-types';
+import { emptyCodecLookup } from '@internal/framework-components/codec';
 import type {
   ArgType,
   AttributeCtx,
@@ -6,16 +8,45 @@ import type {
   ModelSymbol,
   Param,
   ResolvedEntityReference,
+  SymbolTable,
 } from '@internal/psl-parser';
-import { buildSymbolTable, createPslDiagnosticCollector } from '@internal/psl-parser';
+import {
+  buildSymbolTable,
+  createBinder,
+  createPslDiagnosticCollector,
+  EMPTY_DATA_TYPES,
+} from '@internal/psl-parser';
+import type { PslSources } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
-  createMongoBinder,
-  findModelAttributeNode,
+  describeUnsupportedMongoAttribute,
   interpretModelAttribute,
   mongoAttributeSpecs,
 } from '../src/mongo-attribute-specs';
+
+function createBinderFor(symbolTable: SymbolTable, sources: PslSources) {
+  const context: ContractSourceContext = {
+    composedExtensions: [],
+    composedExtensionContracts: new Map(),
+    authoringContributions: {
+      type: {},
+      field: {},
+      entityTypes: {},
+      pslBlockDescriptors: {},
+      modelAttributes: {},
+      attributeSpecs: mongoAttributeSpecs,
+      dataTypes: {},
+    },
+    pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
+    codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+    controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+    dataTypes: EMPTY_DATA_TYPES,
+    resolvedInputs: [],
+    capabilities: {},
+  };
+  return createBinder({ symbolTable, sources, context }).binder;
+}
 
 function listMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>) {
   if (type.kind !== 'list') throw new Error('argument is a list');
@@ -74,12 +105,10 @@ function contexts(): { model: AttributeSpecContext; field: FieldAttributeSpecCon
   const modelContext: AttributeSpecContext = {
     symbols: symbolTable,
     model,
-    controlMutationDefaults: {
-      dataTypeEntries: {},
-      defaultFunctionRegistry: new Map(),
-    },
+    defaultFunctionRegistry: new Map(),
+    dataTypes: EMPTY_DATA_TYPES,
   };
-  return { model: modelContext, field: { ...modelContext, field } };
+  return { model: modelContext, field: { ...modelContext, field, typeResolution: undefined } };
 }
 
 describe('mongoAttributeSpecs', () => {
@@ -96,7 +125,7 @@ model Base { id String }`,
     });
     const model = symbolTable.topLevel.models['Variant'];
     if (!model) throw new Error('missing variant');
-    const node = findModelAttributeNode(model, 'base');
+    const node = model.attributes.find((attr) => attr.name === 'base')?.node;
     if (!node) throw new Error('missing base');
     const diagnostics = createPslDiagnosticCollector(sources);
     const value = interpretModelAttribute({
@@ -105,12 +134,7 @@ model Base { id String }`,
       spec: mongoAttributeSpecs.model.base(),
       model,
       sources,
-      binder: createMongoBinder({
-        symbolTable,
-        sources,
-        scalarTypeCodecIds: new Map(),
-        controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
-      }).binder,
+      binder: createBinderFor(symbolTable, sources),
       diagnostics,
     });
     expectTypeOf(value).toEqualTypeOf<
@@ -174,7 +198,7 @@ model Base { id String }`,
     });
   });
 
-  it('exposes model-specific index field alternatives from the actual factory', () => {
+  it('exposes stable index field alternatives from the actual factory', () => {
     const { model } = contexts();
     const fields = listMetadata(positionalType(mongoAttributeSpecs.model.index(model)));
     const element = oneOfMetadata(fields.of);
@@ -190,14 +214,19 @@ model Base { id String }`,
       optional: true,
     });
     expect(element.alternatives.slice(2).map((alt) => funcCallMetadata(alt).name)).toEqual([
-      'id',
-      'name',
+      'sort',
     ]);
 
-    const nameField = funcCallMetadata(element.alternatives[3]);
-    const sort = nameField.signature.named?.['sort'];
-    if (sort === undefined) throw new Error('field sort argument is present');
-    expect(nameField.signature.documentation).toBe(
+    const sortFunction = funcCallMetadata(element.alternatives[2]);
+    expect(sortFunction.signature.positional?.[0]).toMatchObject({
+      key: 'field',
+      type: { kind: 'fieldRef' },
+    });
+    const sort = sortFunction.signature.positional?.[1];
+    if (sort === undefined) throw new Error('sort direction argument is present');
+    expect(sort.key).toBe('direction');
+    expect(sortFunction.signature.named).toBeUndefined();
+    expect(sortFunction.signature.documentation).toBe(
       'Selects an index field with an explicit sort direction.',
     );
     expect(sort.documentation).toBe('The index order for this field: `Asc` or `Desc`.');

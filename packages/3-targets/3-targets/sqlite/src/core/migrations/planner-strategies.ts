@@ -20,6 +20,7 @@ import type {
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type { SchemaDiffIssue } from '@internal/framework-components/control';
 import { issueOutcome } from '@internal/framework-components/control';
+import type { SqlTypeLookups } from '@internal/sql-contract/data-type';
 import {
   RelationalSchemaNodeKind,
   type SqlColumnIR,
@@ -38,6 +39,8 @@ export interface StrategyContext {
   readonly actual: SqlSchemaIR;
   readonly policy: MigrationOperationPolicy;
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>;
+  /** The composed stack's codecs and data types, which write each column's type. */
+  readonly types: SqlTypeLookups;
 }
 
 export type CallMigrationStrategy = (
@@ -62,13 +65,18 @@ export type CallMigrationStrategy = (
  * all (table/column not-found-or-not-expected, and index issues — those are
  * standalone ops, never folded into a recreate).
  *
- * Column drift is a single `not-equal` issue now (type AND nullability
- * compared together by `SqlColumnIR.isEqualTo`), so this reads both fields
- * off the node pair directly rather than trusting a separate issue kind per
- * attribute: a type change is always destructive; a pure nullability change
- * is destructive when tightening (NOT NULL required) and widening when
- * relaxing.
+ * Column drift is a single `not-equal` issue (type and nullability compared
+ * together by `SqlColumnIR.isEqualTo`): a type change is destructive, because
+ * the copy can change values; a nullability change alone is widening, because
+ * a tightening copy fails on a NULL rather than losing it.
  */
+/** The column of a column issue, which `classifyNodeIssue` classes destructive only for a type change. */
+function columnNameOf(issue: SchemaDiffIssue): string {
+  return blindCast<SqlColumnIR, 'a destructive recreate issue is a not-equal column issue'>(
+    issue.expected,
+  ).name;
+}
+
 function classifyNodeIssue(issue: SchemaDiffIssue): 'widening' | 'destructive' | null {
   const node = issue.expected ?? issue.actual;
   if (node === undefined) return null;
@@ -85,17 +93,13 @@ function classifyNodeIssue(issue: SchemaDiffIssue): 'widening' | 'destructive' |
       const actual = blindCast<SqlColumnIR, 'a not-equal column issue carries the actual node'>(
         issue.actual,
       );
-      if (columnTypeChanged(expected, actual)) return 'destructive';
-      // Type is unchanged, so `not-equal` here means only nullability
-      // differs: relaxing (NOT NULL → nullable) is safe; tightening is not.
-      return expected.nullable ? 'widening' : 'destructive';
+      return columnTypeChanged(expected, actual) ? 'destructive' : 'widening';
     }
     case RelationalSchemaNodeKind.columnDefault:
-      return issueOutcome(issue) === 'not-expected' ? 'destructive' : 'widening';
     case RelationalSchemaNodeKind.primaryKey:
     case RelationalSchemaNodeKind.foreignKey:
     case RelationalSchemaNodeKind.unique:
-      return 'destructive';
+      return 'widening';
     default:
       return null;
   }
@@ -103,7 +107,8 @@ function classifyNodeIssue(issue: SchemaDiffIssue): 'widening' | 'destructive' |
 
 /**
  * Groups recreate-eligible issues by table, decides per-table operation class
- * (destructive wins over widening), and emits one `RecreateTableCall` per
+ * (destructive wins over widening, and a recreate that leaves a live column
+ * out of the new table loses its values, so it is destructive), and emits one `RecreateTableCall` per
  * table. Returns unchanged-or-smaller issue list — issues the strategy
  * consumed are removed so `mapNodeIssueToCall` doesn't double-handle them.
  *
@@ -113,7 +118,10 @@ function classifyNodeIssue(issue: SchemaDiffIssue): 'widening' | 'destructive' |
  * issue only carries that attribute's own node, never the whole table.
  */
 export const recreateTableStrategy: CallMigrationStrategy = (issues, ctx) => {
-  const byTable = new Map<string, { issues: SchemaDiffIssue[]; hasDestructive: boolean }>();
+  const byTable = new Map<
+    string,
+    { issues: SchemaDiffIssue[]; hasDestructive: boolean; lossyColumns: string[] }
+  >();
   const consumed = new Set<SchemaDiffIssue>();
 
   for (const issue of issues) {
@@ -121,13 +129,17 @@ export const recreateTableStrategy: CallMigrationStrategy = (issues, ctx) => {
     if (!cls) continue;
     const tableName = issue.path[1];
     if (tableName === undefined) continue;
-    const entry = byTable.get(tableName);
-    if (entry) {
-      entry.issues.push(issue);
-      if (cls === 'destructive') entry.hasDestructive = true;
-    } else {
-      byTable.set(tableName, { issues: [issue], hasDestructive: cls === 'destructive' });
+    const entry = byTable.get(tableName) ?? {
+      issues: [],
+      hasDestructive: false,
+      lossyColumns: [],
+    };
+    entry.issues.push(issue);
+    if (cls === 'destructive') {
+      entry.hasDestructive = true;
+      entry.lossyColumns.push(columnNameOf(issue));
     }
+    byTable.set(tableName, entry);
     consumed.add(issue);
   }
 
@@ -138,13 +150,15 @@ export const recreateTableStrategy: CallMigrationStrategy = (issues, ctx) => {
     const expectedTable = ctx.expected.tables[tableName];
     const actualTable = ctx.actual.tables[tableName];
     if (!expectedTable || !actualTable) continue;
-    const operationClass: MigrationOperationClass = entry.hasDestructive
-      ? 'destructive'
-      : 'widening';
+    const leavesColumnsOut = Object.keys(actualTable.columns).some(
+      (column) => !Object.hasOwn(expectedTable.columns, column),
+    );
+    const operationClass: MigrationOperationClass =
+      entry.hasDestructive || leavesColumnsOut ? 'destructive' : 'widening';
 
     // Flatten the expected table node to a self-contained spec — the Call
     // holds pre-rendered SQL fragments only, no schema-IR node.
-    const tableSpec = tableSpecFromNode(expectedTable);
+    const tableSpec = tableSpecFromNode(expectedTable, ctx.types);
 
     // Indexes (declared + FK-backing) are already merged and deduped by
     // column-set at derivation (`contractToSchemaIR`'s `convertTable`).
@@ -154,15 +168,18 @@ export const recreateTableStrategy: CallMigrationStrategy = (issues, ctx) => {
     }));
 
     calls.push(
-      new RecreateTableCall({
-        tableName,
-        contractTable: tableSpec,
-        schemaColumnNames: Object.keys(actualTable.columns),
-        indexes,
-        summary: buildRecreateSummary(tableName, entry.issues),
-        postchecks: buildRecreatePostchecks(tableName, entry.issues, tableSpec),
-        operationClass,
-      }),
+      new RecreateTableCall(
+        {
+          tableName,
+          contractTable: tableSpec,
+          schemaColumnNames: Object.keys(actualTable.columns),
+          indexes,
+          summary: buildRecreateSummary(tableName, entry.issues),
+          postchecks: buildRecreatePostchecks(tableName, entry.issues, tableSpec),
+          operationClass,
+        },
+        entry.lossyColumns,
+      ),
     );
   }
 
@@ -192,11 +209,10 @@ export const recreateTableStrategy: CallMigrationStrategy = (issues, ctx) => {
  * recipe slot in strategy order (backfill first, recreate second), which
  * matches the required execution order.
  *
- * Mirrors Postgres's `nullableTighteningCallStrategy` / `'data'`-class
- * gating. When `'data'` is not in the policy (the default `db update` /
- * `db init` path), the strategy short-circuits and the recreate alone
- * runs with its current destructive-class gating — preserving today's
- * behavior where a tightening blows up at runtime if NULLs are present.
+ * Mirrors Postgres's `nullableTighteningCallStrategy`. When `'data'` is not
+ * in the policy (the default `db update` / `db init` path), the strategy
+ * short-circuits and the recreate alone runs, failing at runtime if NULLs
+ * are present.
  */
 export const nullabilityTighteningBackfillStrategy: CallMigrationStrategy = (issues, ctx) => {
   if (!ctx.policy.allowedOperationClasses.includes('data')) {

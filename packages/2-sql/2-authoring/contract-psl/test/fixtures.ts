@@ -1,6 +1,7 @@
 import type {
   ContractSourceContext,
   ContractSourceDiagnostic,
+  ContractSourceDiagnostics,
 } from '@internal/config/config-types';
 import type { Contract, JsonValue } from '@internal/contract/types';
 import {
@@ -12,6 +13,7 @@ import {
   type AuthoringEntityContext,
   type AuthoringEntityTypeNamespace,
   type AuthoringFieldPresetDescriptor,
+  type AuthoringTypeConstructorDescriptor,
   type AuthoringTypeNamespace,
   collectScalarTypeConstructors,
   type ParsedPslExtensionBlock,
@@ -35,12 +37,20 @@ import {
   optional,
   str,
 } from '@internal/psl-parser';
+import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import type { DocumentAst, PslSources, SourceFile } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
+import { bindPslSchema } from '@internal/psl-parser/test';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import { type EnumTypeHandle, enumType } from '@internal/sql-contract-ts/contract-builder';
+import type { Result } from '@internal/utils/result';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { postgresCodecLookup } from './fixture-codec-descriptors';
+import type { InterpretPslDocumentToSqlContractInput } from '../src/interpreter';
+import { interpretPslDocumentToSqlContract } from '../src/interpreter';
+import { describeUnsupportedSqlAttribute } from '../src/psl-field-resolution';
+import { sqlAttributeSpecs } from '../src/sql-attribute-specs';
+import { sqlContextInput } from '../src/test';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 
 function testEnumFactory(
@@ -56,8 +66,9 @@ function testEnumFactory(
   }
   const { codecId, codecSpan } = resolved;
 
-  const nativeType = ctx.codecLookup?.targetTypesFor(codecId)?.[0];
-  if (nativeType === undefined) {
+  const descriptor = ctx.codecLookup.descriptorFor(codecId);
+  const codec = ctx.codecLookup.get(codecId);
+  if (descriptor === undefined || codec === undefined) {
     diagnostics?.push({
       code: 'PSL_EXTENSION_INVALID_VALUE',
       message: `enum "${block.name}" @@type references unknown codec "${codecId}"`,
@@ -66,21 +77,10 @@ function testEnumFactory(
     });
     return undefined;
   }
-
-  const codec = ctx.codecLookup?.get(codecId);
-  if (codec === undefined) {
-    diagnostics?.push({
-      code: 'PSL_EXTENSION_INVALID_VALUE',
-      message: `enum "${block.name}" @@type codec "${codecId}" resolves in targetTypesFor but is absent from codecLookup.get`,
-      sourceId,
-      span: codecSpan,
-    });
-    return undefined;
-  }
   const members = readEnumBlockMembers(block, codecId, codec, ctx);
   if (members === undefined) return undefined;
 
-  return enumType(block.name, { codecId, nativeType }, ...members);
+  return enumType(block.name, { codecId }, ...members);
 }
 
 export const testEnumPslBlockDescriptor = {
@@ -150,6 +150,7 @@ export function testRenderCheckExpressions(input: {
   readonly tableName: string;
   readonly columnName: string;
   readonly many: boolean;
+  readonly elementNullable: boolean;
   readonly memberValues: readonly (string | number)[] | undefined;
 }): ReadonlyArray<{
   readonly kind: 'membership' | 'elementNotNull';
@@ -166,16 +167,18 @@ export function testRenderCheckExpressions(input: {
     const members = input.memberValues
       .map((v) => (typeof v === 'number' ? String(v) : `'${v}'`))
       .join(', ');
-    const arrayType = input.memberValues.every((v) => typeof v === 'number') ? 'numeric' : 'text';
+    const elements = input.memberValues
+      .map((v) => (typeof v === 'number' ? String(v) : `"${v}"`))
+      .join(',');
     candidates.push({
       kind: 'membership',
       columnName: input.columnName,
       expression: input.many
-        ? `${column}::${arrayType}[] <@ ARRAY[${members}]::${arrayType}[]`
+        ? `array_remove(${column}, NULL) <@ '{${elements}}'`
         : `${column} IN (${members})`,
     });
   }
-  if (input.many) {
+  if (input.many && !input.elementNullable) {
     candidates.push({
       kind: 'elementNotNull',
       columnName: input.columnName,
@@ -232,22 +235,22 @@ export const pgvectorExtensionPack: ExtensionPackRef<'sql', 'postgres'> = {
 };
 
 export const postgresBaseScalarAuthoringTypes: AuthoringTypeNamespace = {
-  String: { kind: 'typeConstructor', output: { codecId: 'pg/text@1', nativeType: 'text' } },
-  Boolean: { kind: 'typeConstructor', output: { codecId: 'pg/bool@1', nativeType: 'bool' } },
-  Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1', nativeType: 'int4' } },
-  BigInt: { kind: 'typeConstructor', output: { codecId: 'pg/int8@1', nativeType: 'int8' } },
-  Float: { kind: 'typeConstructor', output: { codecId: 'pg/float8@1', nativeType: 'float8' } },
+  String: { kind: 'typeConstructor', output: { codecId: 'pg/text@1' } },
+  Boolean: { kind: 'typeConstructor', output: { codecId: 'pg/bool@1' } },
+  Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1' } },
+  BigInt: { kind: 'typeConstructor', output: { codecId: 'pg/int8@1' } },
+  Float: { kind: 'typeConstructor', output: { codecId: 'pg/float8@1' } },
   Decimal: {
     kind: 'typeConstructor',
-    output: { codecId: 'pg/numeric@1', nativeType: 'numeric' },
+    output: { codecId: 'pg/numeric@1' },
   },
   DateTime: {
     kind: 'typeConstructor',
-    output: { codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz' },
+    output: { codecId: 'pg/timestamptz-temporal@1' },
   },
-  Json: { kind: 'typeConstructor', output: { codecId: 'pg/json@1', nativeType: 'json' } },
-  Jsonb: { kind: 'typeConstructor', output: { codecId: 'pg/jsonb@1', nativeType: 'jsonb' } },
-  Bytes: { kind: 'typeConstructor', output: { codecId: 'pg/bytea@1', nativeType: 'bytea' } },
+  Json: { kind: 'typeConstructor', output: { codecId: 'pg/json@1' } },
+  Jsonb: { kind: 'typeConstructor', output: { codecId: 'pg/jsonb@1' } },
+  Bytes: { kind: 'typeConstructor', output: { codecId: 'pg/bytea@1' } },
 };
 
 export const postgresScalarTypeDescriptors = collectScalarTypeConstructors(
@@ -256,45 +259,35 @@ export const postgresScalarTypeDescriptors = collectScalarTypeConstructors(
 
 export const postgresScalarAuthoringTypes: AuthoringTypeNamespace = {
   ...postgresBaseScalarAuthoringTypes,
-  Uuid: { kind: 'typeConstructor', output: { codecId: 'pg/uuid@1', nativeType: 'uuid' } },
-  Inet: { kind: 'typeConstructor', output: { codecId: 'pg/inet@1', nativeType: 'inet' } },
-  SmallInt: { kind: 'typeConstructor', output: { codecId: 'pg/int2@1', nativeType: 'int2' } },
-  Real: { kind: 'typeConstructor', output: { codecId: 'pg/float4@1', nativeType: 'float4' } },
-  Date: { kind: 'typeConstructor', output: { codecId: 'pg/date-temporal@1', nativeType: 'date' } },
+  Uuid: { kind: 'typeConstructor', output: { codecId: 'pg/uuid@1' } },
+  Inet: { kind: 'typeConstructor', output: { codecId: 'pg/inet@1' } },
+  SmallInt: { kind: 'typeConstructor', output: { codecId: 'pg/int2@1' } },
+  Real: { kind: 'typeConstructor', output: { codecId: 'pg/float4@1' } },
+  Date: { kind: 'typeConstructor', output: { codecId: 'pg/date-temporal@1' } },
   VarChar: {
     kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, optional: true }],
+    args: [{ kind: 'number', name: 'length', integer: true, optional: true }],
     output: {
       codecId: 'sql/varchar@1',
-      nativeType: 'character varying',
       typeParams: { length: { kind: 'arg', index: 0 } },
     },
   },
   Char: {
     kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, optional: true }],
+    args: [{ kind: 'number', name: 'length', integer: true, optional: true }],
     output: {
       codecId: 'sql/char@1',
-      nativeType: 'character',
       typeParams: { length: { kind: 'arg', index: 0 } },
     },
   },
   Numeric: {
     kind: 'typeConstructor',
     args: [
-      { kind: 'number', name: 'precision', integer: true, minimum: 1, optional: true },
-      {
-        kind: 'number',
-        name: 'scale',
-        integer: true,
-        minimum: -1000,
-        maximum: 1000,
-        optional: true,
-      },
+      { kind: 'number', name: 'precision', integer: true, optional: true },
+      { kind: 'number', name: 'scale', integer: true, optional: true },
     ],
     output: {
       codecId: 'pg/numeric@1',
-      nativeType: 'numeric',
       typeParams: {
         precision: { kind: 'arg', index: 0 },
         scale: { kind: 'arg', index: 1 },
@@ -303,37 +296,33 @@ export const postgresScalarAuthoringTypes: AuthoringTypeNamespace = {
   },
   Timestamp: {
     kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
+    args: [{ kind: 'number', name: 'precision', integer: true, optional: true }],
     output: {
       codecId: 'pg/timestamp-temporal@1',
-      nativeType: 'timestamp',
       typeParams: { precision: { kind: 'arg', index: 0 } },
     },
   },
   Timestamptz: {
     kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
+    args: [{ kind: 'number', name: 'precision', integer: true, optional: true }],
     output: {
       codecId: 'pg/timestamptz-temporal@1',
-      nativeType: 'timestamptz',
       typeParams: { precision: { kind: 'arg', index: 0 } },
     },
   },
   Time: {
     kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
+    args: [{ kind: 'number', name: 'precision', integer: true, optional: true }],
     output: {
       codecId: 'pg/time-temporal@1',
-      nativeType: 'time',
       typeParams: { precision: { kind: 'arg', index: 0 } },
     },
   },
   Timetz: {
     kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
+    args: [{ kind: 'number', name: 'precision', integer: true, optional: true }],
     output: {
       codecId: 'pg/timetz@1',
-      nativeType: 'timetz',
       typeParams: { precision: { kind: 'arg', index: 0 } },
     },
   },
@@ -344,7 +333,7 @@ export const postgresNativeScalarTypeDescriptors = collectScalarTypeConstructors
 );
 
 /**
- * Controlled test-only descriptor — intentionally uses pg/vector@1 with maximum: 2000 rather than importing the real pgvector pack, so interpreter unit tests stay layer-isolated. Real-pack parity is covered by `test/integration/test/authoring/parity/ts-psl-parity.real-packs.test.ts`.
+ * Controlled test-only descriptor — intentionally uses pg/vector@1, bounded at 2000 by the fixture data type, rather than importing the real pgvector pack, so interpreter unit tests stay layer-isolated. Real-pack parity is covered by `test/integration/test/authoring/parity/ts-psl-parity.real-packs.test.ts`.
  */
 export const pgvectorAuthoringContributions = {
   dataTypes: {},
@@ -352,16 +341,15 @@ export const pgvectorAuthoringContributions = {
   field: {},
   pslBlockDescriptors: {},
   modelAttributes: {},
-  attributeSpecs: { model: {}, field: {} },
+  attributeSpecs: sqlAttributeSpecs,
   type: {
     ...postgresScalarAuthoringTypes,
     pgvector: {
       Vector: {
         kind: 'typeConstructor',
-        args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, maximum: 2000 }],
+        args: [{ kind: 'number', name: 'length', integer: true }],
         output: {
           codecId: 'pg/vector@1',
-          nativeType: 'vector',
           typeParams: {
             length: { kind: 'arg', index: 0 },
           },
@@ -423,25 +411,103 @@ export function symbolTableInputFromParseArgs(args: {
   });
 }
 
+function contextForInterpretOptions(
+  options: Pick<
+    InterpretPslDocumentToSqlContractInput,
+    | 'authoringContributions'
+    | 'controlMutationDefaults'
+    | 'codecLookup'
+    | 'dataTypes'
+    | 'composedExtensions'
+    | 'composedExtensionContracts'
+    | 'capabilities'
+    | 'scalarColumnDescriptors'
+  >,
+): ContractSourceContext {
+  const authoring = options.authoringContributions;
+  const scalarsFromColumnDescriptors: Record<string, AuthoringTypeConstructorDescriptor> = {};
+  for (const [name, descriptor] of options.scalarColumnDescriptors ?? []) {
+    scalarsFromColumnDescriptors[name] = {
+      kind: 'typeConstructor',
+      output: { codecId: descriptor.codecId },
+    };
+  }
+  return {
+    composedExtensions: options.composedExtensions ?? [],
+    composedExtensionContracts: options.composedExtensionContracts,
+    authoringContributions: {
+      type: { ...scalarsFromColumnDescriptors, ...authoring?.type },
+      field: authoring?.field ?? {},
+      entityTypes: authoring?.entityTypes ?? {},
+      pslBlockDescriptors: authoring?.pslBlockDescriptors ?? {},
+      modelAttributes: authoring?.modelAttributes ?? {},
+      attributeSpecs: authoring?.attributeSpecs ?? sqlAttributeSpecs,
+      dataTypes: authoring?.dataTypes ?? options.dataTypes.entries,
+      ...(authoring?.valueObjectStorageType === undefined
+        ? {}
+        : { valueObjectStorageType: authoring.valueObjectStorageType }),
+    },
+    pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
+    codecLookup: options.codecLookup,
+    dataTypes: options.dataTypes,
+    controlMutationDefaults: options.controlMutationDefaults ?? {
+      defaultFunctionRegistry: new Map(),
+      generatorDescriptors: [],
+    },
+    resolvedInputs: [],
+    capabilities: options.capabilities,
+  };
+}
+
+export function interpretSqlContract(
+  schema: string,
+  options: Omit<
+    InterpretPslDocumentToSqlContractInput,
+    'documents' | 'sources' | 'symbolTable' | 'binder'
+  >,
+  sourceId?: string,
+): Result<Contract, ContractSourceDiagnostics> {
+  const bound = bindPslSchema(schema, {
+    sourceId: sourceId ?? 'schema.prisma',
+    context: contextForInterpretOptions(options),
+  });
+  return withSeedDiagnostics(
+    interpretPslDocumentToSqlContract({
+      documents: bound.documents,
+      sources: bound.sources,
+      symbolTable: bound.symbolTable,
+      binder: bound.binder,
+      ...sqlContextInput(bound.context),
+      target: options.target,
+      createNamespace: options.createNamespace,
+      ...(options.composedExtensionPackRefs?.length
+        ? { composedExtensionPackRefs: options.composedExtensionPackRefs }
+        : {}),
+      enumInferenceCodecs: options.enumInferenceCodecs ?? postgresEnumInferenceCodecs,
+    }),
+    bound.seedDiagnostics,
+  );
+}
+
 export const sqliteScalarAuthoringTypes: AuthoringTypeNamespace = {
-  String: { kind: 'typeConstructor', output: { codecId: 'sqlite/text@1', nativeType: 'text' } },
+  String: { kind: 'typeConstructor', output: { codecId: 'sqlite/text@1' } },
   Boolean: {
     kind: 'typeConstructor',
-    output: { codecId: 'sqlite/integer@1', nativeType: 'integer' },
+    output: { codecId: 'sqlite/integer@1' },
   },
-  Int: { kind: 'typeConstructor', output: { codecId: 'sqlite/integer@1', nativeType: 'integer' } },
+  Int: { kind: 'typeConstructor', output: { codecId: 'sqlite/integer@1' } },
   BigInt: {
     kind: 'typeConstructor',
-    output: { codecId: 'sqlite/bigint@1', nativeType: 'integer' },
+    output: { codecId: 'sqlite/bigint@1' },
   },
-  Float: { kind: 'typeConstructor', output: { codecId: 'sqlite/real@1', nativeType: 'real' } },
-  Decimal: { kind: 'typeConstructor', output: { codecId: 'sqlite/text@1', nativeType: 'text' } },
+  Float: { kind: 'typeConstructor', output: { codecId: 'sqlite/real@1' } },
+  Decimal: { kind: 'typeConstructor', output: { codecId: 'sqlite/text@1' } },
   DateTime: {
     kind: 'typeConstructor',
-    output: { codecId: 'sqlite/datetime@1', nativeType: 'text' },
+    output: { codecId: 'sqlite/datetime@1' },
   },
-  Json: { kind: 'typeConstructor', output: { codecId: 'sqlite/json@1', nativeType: 'text' } },
-  Bytes: { kind: 'typeConstructor', output: { codecId: 'sqlite/blob@1', nativeType: 'blob' } },
+  Json: { kind: 'typeConstructor', output: { codecId: 'sqlite/json@1' } },
+  Bytes: { kind: 'typeConstructor', output: { codecId: 'sqlite/blob@1' } },
 };
 
 export const sqliteScalarColumnDescriptors = collectScalarTypeConstructors(
@@ -463,12 +529,12 @@ export function createPostgresTestContext(
       entityTypes: {},
       pslBlockDescriptors: {},
       modelAttributes: {},
-      attributeSpecs: { model: {}, field: {} },
+      attributeSpecs: sqlAttributeSpecs,
       valueObjectStorageType: 'Jsonb',
     },
-    codecLookup: postgresCodecLookup,
+    pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
     controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    ...fixtureInterpreterTypes,
     resolvedInputs: [],
     capabilities: { sql: { scalarList: true } },
     ...overrides,
@@ -676,7 +742,6 @@ const TEMPORAL_MIRROR_PRECISION_ARG = {
   kind: 'number',
   optional: true,
   integer: true,
-  minimum: 0,
 } as const;
 const TEMPORAL_MIRROR_ON_CREATE_ARG = {
   name: 'onCreate',
@@ -702,7 +767,6 @@ export const temporalCodecPresetMirrors = {
     ],
     output: {
       codecId: 'pg/timestamp-temporal@1',
-      nativeType: 'timestamp',
       typeParams: { precision: { kind: 'arg', index: 0 } },
       executionDefaults: {
         onCreate: { kind: 'select', index: 1, cases: { now: TEMPORAL_MIRROR_NOW_PHASE } },
@@ -719,7 +783,6 @@ export const temporalCodecPresetMirrors = {
     ],
     output: {
       codecId: 'pg/timestamptz-temporal@1',
-      nativeType: 'timestamptz',
       typeParams: { precision: { kind: 'arg', index: 0 } },
       executionDefaults: {
         onCreate: { kind: 'select', index: 1, cases: { now: TEMPORAL_MIRROR_NOW_PHASE } },
@@ -732,7 +795,6 @@ export const temporalCodecPresetMirrors = {
     args: [TEMPORAL_MIRROR_ON_CREATE_ARG, TEMPORAL_MIRROR_ON_UPDATE_ARG],
     output: {
       codecId: 'sqlite/datetime@1',
-      nativeType: 'text',
       executionDefaults: {
         onCreate: { kind: 'select', index: 0, cases: { now: TEMPORAL_MIRROR_NOW_PHASE } },
         onUpdate: { kind: 'select', index: 1, cases: { now: TEMPORAL_MIRROR_NOW_PHASE } },
@@ -757,7 +819,6 @@ export const temporalConvenienceMirrors = {
       kind: 'fieldPreset',
       output: {
         codecId: 'pg/timestamptz-temporal@1',
-        nativeType: 'timestamptz',
         executionDefaults: { onCreate: TEMPORAL_MIRROR_NOW_PHASE },
       },
     },
@@ -765,7 +826,6 @@ export const temporalConvenienceMirrors = {
       kind: 'fieldPreset',
       output: {
         codecId: 'pg/timestamptz-temporal@1',
-        nativeType: 'timestamptz',
         executionDefaults: {
           onCreate: TEMPORAL_MIRROR_NOW_PHASE,
           onUpdate: TEMPORAL_MIRROR_NOW_PHASE,
@@ -778,7 +838,6 @@ export const temporalConvenienceMirrors = {
       kind: 'fieldPreset',
       output: {
         codecId: 'sqlite/datetime@1',
-        nativeType: 'text',
         executionDefaults: { onCreate: TEMPORAL_MIRROR_NOW_PHASE },
       },
     },
@@ -786,7 +845,6 @@ export const temporalConvenienceMirrors = {
       kind: 'fieldPreset',
       output: {
         codecId: 'sqlite/datetime@1',
-        nativeType: 'text',
         executionDefaults: {
           onCreate: TEMPORAL_MIRROR_NOW_PHASE,
           onUpdate: TEMPORAL_MIRROR_NOW_PHASE,

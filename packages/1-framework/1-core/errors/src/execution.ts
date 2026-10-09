@@ -281,54 +281,6 @@ export function errorRunnerFailed(
   });
 }
 
-/** Error code for destructive changes that require explicit confirmation. */
-export const ERROR_CODE_DESTRUCTIVE_CHANGES = 'MIGRATION.DESTRUCTIVE_CHANGES';
-
-/**
- * Destructive operations require explicit confirmation via -y/--yes.
- */
-export function errorDestructiveChanges(
-  summary: string,
-  options?: {
-    readonly why?: string;
-    readonly fix?: string;
-    readonly meta?: Record<string, unknown>;
-  },
-): CliStructuredError {
-  return new CliStructuredError(ERROR_CODE_DESTRUCTIVE_CHANGES, summary, {
-    why: options?.why ?? 'Planned operations include destructive changes that require confirmation',
-    fix: options?.fix ?? 'Re-run with `-y` to apply, or use `--dry-run` to preview first',
-    ...(options?.meta ? { meta: options.meta } : {}),
-  });
-}
-
-export const ERROR_CODE_CONSENT_PLAN_MISMATCH = 'MIGRATION.CONSENT_PLAN_MISMATCH';
-
-/**
- * An apply carrying consent was refused because the plan recomputed for it is
- * not the plan that was consented to.
- */
-export function errorConsentPlanMismatch(options: {
-  readonly consentedPlanHash: string;
-  readonly planHash: string;
-  readonly why?: string;
-}): CliStructuredError {
-  return new CliStructuredError(
-    ERROR_CODE_CONSENT_PLAN_MISMATCH,
-    'The plan changed between consent and apply',
-    {
-      why:
-        options.why ??
-        'The plan recomputed for the consented apply is not the plan that was consented to, so applying it could destroy something nobody agreed to.',
-      fix: 'Re-run the command and review the freshly planned operations before consenting again',
-      meta: {
-        consentedPlanHash: options.consentedPlanHash,
-        planHash: options.planHash,
-      },
-    },
-  );
-}
-
 /**
  * Generic runtime error carrying a caller-provided dotted code.
  */

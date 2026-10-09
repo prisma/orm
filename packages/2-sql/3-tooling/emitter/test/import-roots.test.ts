@@ -51,7 +51,7 @@ function emit(root: ImportRoot): string {
           fields: { id: { column: 'id' } },
         },
         fields: {
-          id: { nullable: false, type: { kind: 'scalar', codecId: 'sql/int@1' } },
+          id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'sql/int@1' } },
         },
         relations: {},
       },
@@ -59,7 +59,7 @@ function emit(root: ImportRoot): string {
     storage: {
       tables: {
         user: {
-          columns: { id: { nativeType: 'int4', codecId: 'sql/int@1', nullable: false } },
+          columns: { id: { dataType: 'pg/int4', codecId: 'sql/int@1', nullable: false } },
           primaryKey: { columns: ['id'] },
           uniques: [],
           indexes: [],

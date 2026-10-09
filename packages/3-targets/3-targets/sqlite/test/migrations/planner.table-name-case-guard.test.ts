@@ -20,6 +20,7 @@ import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createSqliteMigrationPlanner } from '../../src/core/migrations/planner';
 import { sqliteCreateNamespace } from '../../src/core/sqlite-unbound-database';
+import { sqliteTestComponents } from '../sqlite-test-types';
 
 const stubLowerer: ExecuteRequestLowerer = {
   lower: () => {
@@ -54,13 +55,13 @@ function contractWithTable(
             table: {
               [tableName]: {
                 columns: {
-                  id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
-                  email: { nativeType: 'text', codecId: 'sqlite/text@1', nullable: false },
+                  id: { dataType: 'sqlite/integer', codecId: 'sqlite/integer@1', nullable: false },
+                  email: { dataType: 'sqlite/text', codecId: 'sqlite/text@1', nullable: false },
                   ...(extraColumn === undefined
                     ? {}
                     : {
                         [extraColumn]: {
-                          nativeType: 'text',
+                          dataType: 'sqlite/text',
                           codecId: 'sqlite/text@1',
                           nullable: true,
                         },
@@ -117,7 +118,9 @@ function planFromLive(
       schema: liveSchema(previousTables),
       policy: DESTRUCTIVE_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      origin: null,
+      statements: [],
+      frameworkComponents: sqliteTestComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -138,7 +141,20 @@ describe('SQLite planner table-name case guard', () => {
       }),
     ]);
     expect(result.conflicts[0]?.summary).toContain('MIGRATION.TABLE_NAME_CASE_CHANGED');
-    expect(result.conflicts[0]?.why).toContain('ALTER TABLE "userProfile" RENAME TO "UserProfile"');
+    expect(result.conflicts[0]?.why).toContain(
+      'in a project with migration history, make the rename its own schema change, create its migration with prisma migration new --from <hash of the migration the database is at>, and add ...this.renameTable({ table: "userProfile", to: "UserProfile" }) to the migration\'s operations, which renames the table and the objects named after it;',
+    );
+    expect(result.conflicts[0]?.why).not.toContain('--rename');
+  });
+
+  it('gives a by-hand rename through a temporary name, because SQLite refuses a case-only rename in one statement', () => {
+    const result = planFromLive(['userProfile'], 'UserProfile')();
+
+    expect(result.kind).toBe('failure');
+    if (result.kind !== 'failure') return;
+    expect(result.conflicts[0]?.why).toContain(
+      'in a project that uses db update, rename it by hand with ALTER TABLE "userProfile" RENAME TO "_prisma_rename_UserProfile"; ALTER TABLE "_prisma_rename_UserProfile" RENAME TO "UserProfile", then run db update again.',
+    );
   });
 
   it('still refuses when UserProfile also gained a column', () => {

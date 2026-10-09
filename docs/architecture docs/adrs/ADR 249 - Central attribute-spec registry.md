@@ -13,8 +13,8 @@ Every model-level and field-level PSL attribute a family accepts is registered i
 ```ts
 export const sqlAttributeSpecs = {
   model: {
-    index: () => indexModelSpec,
-    check: () => checkModelSpec,
+    index: (ctx) => indexModelSpec(ctx),
+    check: (ctx) => checkModelSpec(ctx),
   },
   field: {
     id: () => idFieldSpec,
@@ -23,9 +23,9 @@ export const sqlAttributeSpecs = {
 } as const satisfies AttributeSpecNamespace;
 ```
 
-Every entry is a spec *factory* taking a framework-owned construction-time context, never a plain spec value. `index` and `check` ignore the context and return a hoisted constant; `default` builds its spec from the declaring field, because `@default`'s accepted argument grammar depends on whether the field is a list, which enum members exist, and which mutation-default functions the composed stack registered.
+Every entry is a spec *factory* taking a framework-owned construction-time context, never a plain spec value. `index` and `check` build their specs from the context's `dataTypes`, because their SQL arguments receive the stack's `sql/expression` data type ([ADR 268](ADR%20268%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md)); `default` builds its spec from the declaring field, because `@default`'s accepted argument grammar depends on whether the field is a list, which enum members exist, and which mutation-default functions the composed stack registered.
 
-The family interpreter calls a factory through its own namespace, where the key set is statically known and access is total:
+The family interpreter calls a factory through its own namespace, where the key set is statically known and access is total. It passes the context to every factory, including one whose spec does not read it, so a spec that starts to read the context needs no call-site change:
 
 ```ts
 const spec = sqlAttributeSpecs.field.default(
@@ -33,7 +33,9 @@ const spec = sqlAttributeSpecs.field.default(
     symbols: input.symbolTable,
     model,
     field,
-    controlMutationDefaults: input.defaultFunctionRegistry,
+    binder: input.binder,
+    defaultFunctionRegistry: input.defaultFunctionRegistry,
+    dataTypes: input.dataTypes,
   }),
 );
 ```
@@ -45,7 +47,8 @@ const specs = assembleAttributeSpecs(interpretation.context.authoringContributio
 const spec = specs.model['rls']?.({
   symbols: pipeline.symbolTable,
   model,
-  controlMutationDefaults: interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
+  defaultFunctionRegistry: interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
+  dataTypes: interpretation.context.dataTypes,
 });
 ```
 
@@ -78,11 +81,13 @@ The registry is descriptive. It supplies the specs the interpreters run; it does
 export interface AttributeSpecContext {
   readonly symbols: SymbolTable;
   readonly model: ModelSymbol;
-  readonly controlMutationDefaults: ControlMutationDefaultRegistry;
+  readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
+  readonly dataTypes: DataTypeSupport;
 }
 
 export interface FieldAttributeSpecContext extends AttributeSpecContext {
   readonly field: FieldSymbol;
+  readonly typeResolution: Resolution | undefined;
 }
 
 export type ModelAttributeSpecFactory = (
@@ -94,7 +99,7 @@ export type FieldAttributeSpecFactory = (
 ) => AttributeSpec<never, FieldAttributeCtx>;
 ```
 
-The three facts are exactly what the dynamic specs consume. SQL's `@default` reads `field.list` to choose between scalar and list arms, reads `controlMutationDefaults` to pin one `funcCall` arm per registered mutation-default function, and reads `symbols` to find the enum block named by the field's type and pin one `identifier` arm per member. Mongo's `@@index`, `@@unique`, and `@@textIndex` read `Object.keys(ctx.model.fields)` to pin one sorted-field call per field of the declaring model. Field-level factories receive `field` as a required property, so no factory handles its absence.
+These facts are exactly what the dynamic specs consume. `defaultFunctionRegistry` is the stack's registry of default functions. `dataTypes` is the stack's data types and their authoring entries ([ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md)); a stack that registers none passes `EMPTY_DATA_TYPES`. SQL's `@default` reads `field.list` to choose between scalar and list arms, reads `defaultFunctionRegistry` to pin one `funcCall` arm per registered mutation-default function, reads `dataTypes` for the tags it offers, and reads `typeResolution` — the binder's resolution of the field's type reference — to take the enum block the type resolves to and pin one `identifier` arm per member. It never looks the type's name up itself. SQL's `@@index` and `@@check` pass `dataTypes` to `dataTypeValue` for their `expression` and `where` arguments. Mongo's `@@index`, `@@unique`, and `@@textIndex` read `Object.keys(ctx.model.fields)` to pin one sorted-field call per field of the declaring model. Field-level factories receive `field` as a required property, so no factory handles its absence.
 
 Uniformity is what makes the registry consumable at all. A factory whose signature is specific to its family — one taking a list flag and a registry, another taking a list of enum member names — can only be called by the interpreter that owns it. Any other consumer would have to know, per attribute, what arguments to assemble, which is the opacity that declarative specs exist to remove ([ADR 231](ADR%20231%20-%20Declarative%20attribute%20specifications.md)). A single context type both consumers can construct replaces that per-attribute knowledge with one contract: the interpreter builds it from the document it is lowering, the language server builds it from the symbol table its pipeline produced and the mutation defaults on the resolved interpretation.
 
@@ -159,10 +164,7 @@ A parameter position makes `Out` contravariant. A concrete spec — the one `mod
 
 An attribute name the registry does not carry is reported, in both families and at both levels.
 
-- SQL model level: `buildModelNodeFromPsl` in `packages/2-sql/2-authoring/contract-psl/src/interpreter.ts` reports a name absent from both `sqlAttributeSpecs.model` and the target-contributed model attributes as `PSL_UNSUPPORTED_MODEL_ATTRIBUTE`.
-- SQL field level: `validateFieldAttributes` in `packages/2-sql/2-authoring/contract-psl/src/psl-field-resolution.ts` reports a name absent from `sqlAttributeSpecs.field` as `PSL_UNSUPPORTED_FIELD_ATTRIBUTE`, after the `db.` prefix and removed-attribute paths have had their say. A module-level check refuses to load if a removed-attribute rule and a registered field attribute claim the same name, so the two name sets cannot overlap.
-- Mongo, both levels: `reportUnknownAttributes` in `packages/2-mongo-family/2-authoring/contract-psl/src/interpreter.ts` walks every model and composite type and reports names absent from `mongoAttributeSpecs.model` / `.field` with the same two codes.
-- Block level: the block-spec interpreter (`interpretExtensionBlock` in `packages/1-framework/2-authoring/psl-parser/src/block-spec/interpret.ts`) reports a name absent from the block descriptor's `attributes` as `PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE`, and a repeated name as `PSL_INVALID_EXTENSION_BLOCK_ATTRIBUTE`.
+Families retain their diagnostic codes and wording, including migration hints. Model and field attributes are checked against their respective registry keys; block attributes are checked against the owning block descriptor's `attributes`.
 
 This makes coverage a correctness requirement, not a nicety: a diagnostic driven by registry keys is only sound if every attribute the interpreter accepts is registered. Mongo's field-level `@id` and `@unique` are declared as specs for that reason — argument-less `fieldAttribute` specs with required documentation for the primary-key and uniqueness markers — so that the surface is complete and enumerable rather than recognized by an ad-hoc presence check the registry cannot see. Per-family tests assert the exact key set of each level, so adding an accepted attribute without registering it fails.
 
@@ -170,7 +172,7 @@ This makes coverage a correctness requirement, not a nicety: a diagnostic driven
 
 ## Block attributes are declared on their block descriptor
 
-Block attributes are scoped by block kind. `@@type` is legal on an `enum` block and meaningless on `policy_select`; `@@map` is legal on both a policy block and a native-enum block. Placing them in the flat keyspace would invert that ownership and force every consumer to join two structures to answer what is legal here. They are declared on the descriptor instead, as `AuthoringPslBlockDescriptor.attributes` — a record of factories, sibling to the block's value `spec` ([ADR 255](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md)):
+Block attributes are scoped by block kind. `@@type` is legal on an `enum` block and meaningless on `policy_select`; `@@map` is legal on both a policy block and a native-enum block. Placing them in the flat keyspace would invert that ownership and force every consumer to join two structures to answer what is legal here. They are declared on the descriptor instead, as `AuthoringPslBlockDescriptor.attributes` — a record of factories, sibling to the block's value `spec` ([ADR 262](ADR%20262%20-%20Block%20specs%20bind%20top-level%20block%20values.md)):
 
 ```ts
 export const sqlFamilyPslBlockDescriptors = {
@@ -189,7 +191,7 @@ export const sqlFamilyPslBlockDescriptors = {
 
 A block's legal attributes are its descriptor's keys, so scoping is structural, and the language server needs no new plumbing: it already receives `pslBlockDescriptors` from the composed stack.
 
-Symbol-table construction collects declarations without interpreting blocks. After collection, the consumer creates the snapshot's binder with the block descriptors, then calls `interpretExtensionBlocks` to interpret those attributes together with the block's values and attach the typed results to the block's envelope as plain data. The consumer reports binder diagnostics once alongside interpretation diagnostics:
+Symbol-table construction collects declarations without interpreting blocks. After collection, the caller builds the snapshot's binder, whose context carries the block descriptors, reports its diagnostics, and passes it to the interpreter ([psl-parser README § Binder](../../../packages/1-framework/2-authoring/psl-parser/README.md#binder)). The interpreter calls `interpretExtensionBlocks` with that binder to interpret those attributes together with the block's values and attach the typed results to the block's envelope as plain data:
 
 ```ts
 export interface PslExtensionBlockParsedAttribute {
@@ -198,7 +200,7 @@ export interface PslExtensionBlockParsedAttribute {
 }
 ```
 
-`ParsedPslExtensionBlock.attributes` is a record of those, keyed by attribute name. Consumers in core and in target packs read the parsed values and never invoke the kit, which keeps the layering intact: `resolveEnumCodecId` reads `block.attributes['type']` and its `args['codecId']`, and the Postgres target reads `block.attributes['map']` and its `args['name']` for both the policy block and the native-enum block. The producer-only print shape's `blockAttributes` array, whose argument values are print text supplied by a generator, exists for the printer only ([ADR 255](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md)).
+`ParsedPslExtensionBlock.attributes` is a record of those, keyed by attribute name. Consumers in core and in target packs read the parsed values and never invoke the kit, which keeps the layering intact: `resolveEnumCodecId` reads `block.attributes['type']` and its `args['codecId']`, and the Postgres target reads `block.attributes['map']` and its `args['name']` for both the policy block and the native-enum block. The producer-only print shape's `blockAttributes` array, whose argument values are print text supplied by a generator, exists for the printer only ([ADR 262](ADR%20262%20-%20Block%20specs%20bind%20top-level%20block%20values.md)).
 
 ---
 

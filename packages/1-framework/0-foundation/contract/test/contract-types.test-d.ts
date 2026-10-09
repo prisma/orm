@@ -1,7 +1,7 @@
 import { expectTypeOf, test } from 'vitest';
 import type { Contract } from '../src/contract-types';
 import type { CrossReference } from '../src/cross-reference';
-import type { ContractModel, ModelStorageBase } from '../src/domain-types';
+import type { ContractField, ContractModel, ModelStorageBase } from '../src/domain-types';
 import type { NamespaceId } from '../src/namespace-id';
 import type { StorageBase, StorageHashBase } from '../src/types';
 
@@ -26,10 +26,12 @@ type ExampleModels = {
       readonly id: {
         readonly nullable: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+        readonly many: false;
       };
       readonly email: {
         readonly nullable: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+        readonly many: false;
       };
     };
     readonly relations: {
@@ -51,8 +53,8 @@ type ExampleStorage = StorageBase<'abc123'> & {
   readonly tables: {
     readonly user: {
       readonly columns: {
-        readonly id: { readonly nativeType: 'int4' };
-        readonly email: { readonly nativeType: 'text' };
+        readonly id: { readonly dataType: 'example/int4' };
+        readonly email: { readonly dataType: 'example/text' };
       };
     };
   };
@@ -110,12 +112,24 @@ test('preserves storage hash literal through TStorage', () => {
 
 test('preserves storage table literal types through TStorage', () => {
   expectTypeOf<
-    ExampleContract['storage']['tables']['user']['columns']['id']['nativeType']
-  >().toEqualTypeOf<'int4'>();
+    ExampleContract['storage']['tables']['user']['columns']['id']['dataType']
+  >().toEqualTypeOf<'example/int4'>();
 });
 
 // ── Framework consumer compatibility ─────────────────────────────────────────
 
 test('emitted contract satisfies Contract', () => {
   expectTypeOf<ExampleContract>().toExtend<Contract>();
+});
+
+test('old many: true does not satisfy ContractField', () => {
+  expectTypeOf<{
+    readonly nullable: false;
+    readonly type: { readonly kind: 'scalar'; readonly codecId: 'text' };
+    readonly many: true;
+  }>().not.toExtend<ContractField>();
+});
+
+test('ContractField has no sibling elementNullable property', () => {
+  expectTypeOf<ContractField>().not.toHaveProperty('elementNullable');
 });

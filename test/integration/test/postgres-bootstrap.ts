@@ -8,10 +8,14 @@ import {
   buildControlTableBootstrapQueries,
   buildSignMarkerBootstrapQueries,
 } from '@internal/target-postgres/contract-free';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import type { PostgresDdlNode } from '@internal/target-postgres/ddl';
 import type { Client } from 'pg';
 
-const postgresControlAdapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+const postgresControlAdapter = new PostgresControlAdapter(
+  createPostgresBuiltinCodecLookup(),
+  createPostgresBuiltinDataTypeLookup(),
+);
 const postgresControlLowererContext = { contract: {} as PostgresContract };
 
 export async function executeLoweredStatement(

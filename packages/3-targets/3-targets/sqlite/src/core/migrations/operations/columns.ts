@@ -1,6 +1,7 @@
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
-import { columnExistsAst } from '../../../contract-free/checks';
+import { columnExistsAst, columnNameTakenAst } from '../../../contract-free/checks';
 import { quoteIdentifier } from '../../sql-utils';
+import { sqliteIdentifiersCollide } from '../identifier-case';
 import { buildTargetDetails } from '../planner-target-details';
 import {
   type Op,
@@ -77,6 +78,75 @@ export async function dropColumn(
     ],
     postcheck: [
       step(`verify column "${columnName}" is gone from "${tableName}"`, absent.sql, absent.params),
+    ],
+  };
+}
+
+export function renameColumnExecuteSql(
+  tableName: string,
+  fromName: string,
+  toName: string,
+): string {
+  return `ALTER TABLE ${quoteIdentifier(tableName)} RENAME COLUMN ${quoteIdentifier(fromName)} TO ${quoteIdentifier(toName)}`;
+}
+
+/**
+ * Renames a column. SQLite updates the indexes, foreign keys and triggers that name it, and keeps
+ * index names. SQLite takes names that differ only in case for the same name, so the new name
+ * must be free whatever its case, except in a rename that only changes case, which SQLite performs
+ * in one statement.
+ */
+export function renameColumnOperationId(tableName: string, fromName: string): string {
+  return `renameColumn.${tableName}.${fromName}`;
+}
+
+export async function renameColumn(
+  tableName: string,
+  fromName: string,
+  toName: string,
+  lowerer: ExecuteRequestLowerer,
+): Promise<Op> {
+  const fromChecks = columnExistsAst(tableName, fromName);
+  const toChecks = columnExistsAst(tableName, toName);
+  const fromPresent = await lowerer.lowerToExecuteRequest(fromChecks.columnPresent());
+  const toAbsent = await lowerer.lowerToExecuteRequest(
+    sqliteIdentifiersCollide(fromName, toName)
+      ? toChecks.columnAbsent()
+      : columnNameTakenAst(tableName, toName).nameFree(),
+  );
+  const toPresent = await lowerer.lowerToExecuteRequest(toChecks.columnPresent());
+  const fromAbsent = await lowerer.lowerToExecuteRequest(fromChecks.columnAbsent());
+  return {
+    id: renameColumnOperationId(tableName, fromName),
+    label: `Rename column ${fromName} on ${tableName} to ${toName}`,
+    summary: `Renames column ${fromName} on ${tableName} to ${toName}, keeping its values`,
+    operationClass: 'widening',
+    target: { id: 'sqlite', details: buildTargetDetails('column', toName, tableName) },
+    precheck: [
+      step(
+        `ensure column "${fromName}" exists on "${tableName}"`,
+        fromPresent.sql,
+        fromPresent.params,
+      ),
+      step(
+        `ensure column "${toName}" does not exist on "${tableName}"`,
+        toAbsent.sql,
+        toAbsent.params,
+      ),
+    ],
+    execute: [
+      step(
+        `rename column "${fromName}" on "${tableName}" to "${toName}"`,
+        renameColumnExecuteSql(tableName, fromName, toName),
+      ),
+    ],
+    postcheck: [
+      step(`verify column "${toName}" exists on "${tableName}"`, toPresent.sql, toPresent.params),
+      step(
+        `verify column "${fromName}" no longer exists on "${tableName}"`,
+        fromAbsent.sql,
+        fromAbsent.params,
+      ),
     ],
   };
 }

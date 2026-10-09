@@ -2,18 +2,17 @@ import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
-  postgresCodecLookup,
+  interpretSqlContract,
   postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
   postgresTarget,
   sqliteScalarAuthoringTypes,
   sqliteScalarColumnDescriptors,
   sqliteTarget,
-  symbolTableInputFromParseArgs,
 } from './fixtures';
 
 function userFieldsAndColumns(contract: Contract) {
@@ -31,7 +30,7 @@ function interpretPostgres(
   schema: string,
   valueObjectStorage: { readonly valueObjectStorageType?: string } = jsonbStorage,
 ) {
-  return interpretPslDocumentToSqlContract({
+  return interpretSqlContract(schema, {
     target: postgresTarget,
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     authoringContributions: {
@@ -39,12 +38,10 @@ function interpretPostgres(
       dataTypes: fixtureDataTypeSupport.entries,
       ...valueObjectStorage,
     },
-    codecLookup: postgresCodecLookup,
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    ...fixtureInterpreterTypes,
     capabilities: { sql: { scalarList: true } },
-    ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
     controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
   });
 }
@@ -59,11 +56,15 @@ model User {
   addresses Address[]
 }`;
 
-const idField = { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } };
-const idColumn = { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false };
+const idField = { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' }, many: false };
+const idColumn = { many: false, dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false };
 const addressFields = {
-  home: { nullable: true, type: { kind: 'valueObject', name: 'Address' } },
-  addresses: { nullable: false, type: { kind: 'valueObject', name: 'Address' }, many: true },
+  home: { nullable: true, type: { kind: 'valueObject', name: 'Address' }, many: false },
+  addresses: {
+    nullable: false,
+    type: { kind: 'valueObject', name: 'Address' },
+    many: { elementNullable: false },
+  },
 };
 
 describe('interpretPslDocumentToSqlContract value-object storage', () => {
@@ -77,14 +78,14 @@ describe('interpretPslDocumentToSqlContract value-object storage', () => {
         fields: { id: idField, ...addressFields },
         columns: {
           id: idColumn,
-          home: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: true },
-          addresses: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false },
+          home: { many: false, dataType: 'pg/jsonb', codecId: 'pg/jsonb@1', nullable: true },
+          addresses: { many: false, dataType: 'pg/jsonb', codecId: 'pg/jsonb@1', nullable: false },
         },
       });
     });
 
     it('stores value-object fields in the storage type the sqlite target declares', () => {
-      const result = interpretPslDocumentToSqlContract({
+      const result = interpretSqlContract(userWithAddresses, {
         target: sqliteTarget,
         scalarColumnDescriptors: sqliteScalarColumnDescriptors,
         authoringContributions: {
@@ -93,9 +94,8 @@ describe('interpretPslDocumentToSqlContract value-object storage', () => {
         },
         composedExtensionContracts: new Map(),
         createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        ...fixtureInterpreterTypes,
         capabilities: { sql: {} },
-        ...symbolTableInputFromParseArgs({ schema: userWithAddresses, sourceId: 'schema.prisma' }),
         controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
       });
 
@@ -103,13 +103,27 @@ describe('interpretPslDocumentToSqlContract value-object storage', () => {
       if (!result.ok) return;
       expect(userFieldsAndColumns(result.value)).toEqual({
         fields: {
-          id: { nullable: false, type: { kind: 'scalar', codecId: 'sqlite/integer@1' } },
+          id: {
+            nullable: false,
+            type: { kind: 'scalar', codecId: 'sqlite/integer@1' },
+            many: false,
+          },
           ...addressFields,
         },
         columns: {
-          id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
-          home: { nativeType: 'text', codecId: 'sqlite/json@1', nullable: true },
-          addresses: { nativeType: 'text', codecId: 'sqlite/json@1', nullable: false },
+          id: {
+            many: false,
+            dataType: 'sqlite/integer',
+            codecId: 'sqlite/integer@1',
+            nullable: false,
+          },
+          home: { many: false, dataType: 'sqlite/text', codecId: 'sqlite/json@1', nullable: true },
+          addresses: {
+            many: false,
+            dataType: 'sqlite/text',
+            codecId: 'sqlite/json@1',
+            nullable: false,
+          },
         },
       });
     });
@@ -129,12 +143,13 @@ model User {
       expect(userFieldsAndColumns(result.value)).toEqual({
         fields: {
           id: idField,
-          home: { nullable: false, type: { kind: 'valueObject', name: 'Address' } },
+          home: { nullable: false, type: { kind: 'valueObject', name: 'Address' }, many: false },
         },
         columns: {
           id: idColumn,
           home: {
-            nativeType: 'jsonb',
+            many: false,
+            dataType: 'pg/jsonb',
             codecId: 'pg/jsonb@1',
             nullable: false,
             default: { kind: 'function', expression: "'{}'::jsonb" },
@@ -160,7 +175,8 @@ model User {
     expect(result.ok ? [] : result.failure.diagnostics).toEqual([]);
     if (!result.ok) return;
     const jsonbWithDefault = (value: unknown) => ({
-      nativeType: 'jsonb',
+      many: false,
+      dataType: 'pg/jsonb',
       codecId: 'pg/jsonb@1',
       nullable: false,
       default: { kind: 'literal', value },
@@ -187,11 +203,11 @@ model User {
     expect(result.ok ? [] : result.failure.diagnostics).toEqual([
       {
         code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
-        message: 'Field "User.home": pg/jsonb has no cast from a list; it casts from pg/json',
+        message: 'Field "User.home": Expected json`...`; got a list',
         sourceId: 'schema.prisma',
         span: {
-          start: { offset: 81, line: 7, column: 16 },
-          end: { offset: 93, line: 7, column: 28 },
+          start: { offset: 90, line: 7, column: 25 },
+          end: { offset: 92, line: 7, column: 27 },
         },
       },
     ]);
@@ -219,13 +235,13 @@ model Child {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.domain.namespaces['public']?.models['Child']?.fields).toEqual({
-      extra: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+      extra: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' }, many: false },
     });
     const tables = (result.value.storage as SqlStorage).namespaces['public']?.entries.table;
     expect(tables?.['child']).toEqual({
       columns: {
-        key: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false },
-        extra: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+        key: { many: false, dataType: 'pg/jsonb', codecId: 'pg/jsonb@1', nullable: false },
+        extra: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
       },
       primaryKey: { columns: ['key'] },
       uniques: [],
@@ -235,6 +251,7 @@ model Child {
           source: { namespaceId: 'public', tableName: 'child', columns: ['key'] },
           target: { namespaceId: 'public', tableName: 'Base', columns: ['key'] },
           onDelete: 'cascade',
+          index: { primaryKey: true },
         },
       ],
     });

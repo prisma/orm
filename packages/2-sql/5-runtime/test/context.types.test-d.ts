@@ -15,9 +15,10 @@ type TestContract = Contract<{
           readonly document: {
             readonly columns: {
               readonly id: {
-                readonly nativeType: 'int4';
+                readonly dataType: 'pg/int4';
                 readonly codecId: 'pg/int4@1';
-                nullable: false;
+                readonly nullable: false;
+                readonly many: false;
               };
             };
             readonly primaryKey: { readonly columns: readonly ['id'] };
@@ -33,7 +34,7 @@ type TestContract = Contract<{
     readonly Vector1536: {
       readonly kind: 'codec-instance';
       readonly codecId: 'pg/vector@1';
-      readonly nativeType: 'vector';
+      readonly dataType: 'pgvector/vector';
       readonly typeParams: { readonly length: 1536 };
     };
   };
@@ -59,7 +60,7 @@ test('ExecutionContext preserves contract type parameter', () => {
         readonly Vector1536: {
           readonly kind: 'codec-instance';
           readonly codecId: 'pg/vector@1';
-          readonly nativeType: 'vector';
+          readonly dataType: 'pgvector/vector';
           readonly typeParams: { readonly length: 1536 };
         };
       }

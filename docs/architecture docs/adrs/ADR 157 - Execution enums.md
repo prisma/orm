@@ -162,7 +162,7 @@ The important part is *where this logic lives*: it should be implemented once (e
     "tables": {
       "user": {
         "columns": {
-          "status": { "codecId": "pg/text@1", "nativeType": "text", "nullable": false }
+          "status": { "codecId": "pg/text@1", "dataType": "pg/text", "nullable": false }
         },
         "checks": [{ "kind": "inSet", "column": "status", "setRef": "UserStatus" }],
         "uniques": [],
@@ -174,7 +174,7 @@ The important part is *where this logic lives*: it should be implemented once (e
 }
 ```
 
-Note: this example uses Postgres codec IDs for concreteness. The same shape applies on other targets, with target-appropriate `codecId` / `nativeType`.
+Note: this example uses Postgres codec IDs for concreteness. The same shape applies on other targets, with target-appropriate `codecId` / `dataType`.
 
 #### Control plane implications
 
@@ -196,7 +196,7 @@ Note: this example uses Postgres codec IDs for concreteness. The same shape appl
     "types": {
       "Role": {
         "codecId": "pg/enum@1",
-        "nativeType": "role",
+        "dataType": "pg/enum",
         "typeParams": { "values": ["USER", "ADMIN"] }
       }
     },
@@ -205,7 +205,7 @@ Note: this example uses Postgres codec IDs for concreteness. The same shape appl
         "columns": {
           "role": {
             "codecId": "pg/enum@1",
-            "nativeType": "role",
+            "dataType": "pg/enum",
             "typeRef": "Role",
             "nullable": false
           }
@@ -254,6 +254,12 @@ Because JSON cannot safely represent many domain values (big numbers, dates, etc
 ### “Are sets actually sets, or ordered lists?”
 
 They’re “sets” in the sense that they describe membership. But some enforcement mechanisms treat ordering as schema-significant (Postgres enums). If we refactor native enums to reference `storage.sets`, we must treat `storage.sets.*.values` as an ordered canonical list for that use case.
+
+## Amendment (October 7, 2026) — the accessor holds decoded values
+
+`db.enums` holds each member as the value a query returns for it: the enum's codec reads the member's stored form with `decodeJson`, so an int8 member stored as `"1"` is `1n` and a timestamp member is a `Date` or a Temporal value. `has()`, `nameOf()` and `ordinalOf()` find a value equal to a member: a primitive by SameValueZero, an object by its kind and the form the codec stores it in.
+
+A client resolves every enum's codec when it builds `db.enums`, so a client refuses a contract whose enum codec its runtime lacks, with `RUNTIME.CODEC_DESCRIPTOR_MISSING`. It decodes an enum's members when the enum is first read, once, so a codec that needs something the runtime lacks, such as a global `Temporal`, fails only when that enum is read. An immutable member is handed out as decoded; a mutable one, such as a `Date`, is copied on every read. The Mongo ORM checks a written enum value against the same accessors.
 
 ## Consequences
 

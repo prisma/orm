@@ -14,6 +14,7 @@ import { SqlStorage, type StorageColumnInput } from '@internal/sql-contract/type
 import { col, lit } from '@internal/sql-relational-core/contract-free';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { PostgresCreateTable } from '@internal/target-postgres/ddl';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
@@ -36,38 +37,50 @@ import {
 
 interface DefaultCase {
   readonly column: string;
-  readonly nativeType: string;
+  readonly baseTypeName: string;
+  readonly dataType: string;
   readonly codecId: string;
   readonly many: boolean;
   readonly literal: ColumnDefaultLiteralInputValue;
 }
 
 const cases: readonly DefaultCase[] = [
-  { column: 'byte', nativeType: 'bytea', codecId: 'pg/bytea@1', many: false, literal: 'aGVsbG8=' },
+  {
+    column: 'byte',
+    baseTypeName: 'bytea',
+    dataType: 'pg/bytea',
+    codecId: 'pg/bytea@1',
+    many: false,
+    literal: 'aGVsbG8=',
+  },
   {
     column: 'bytes',
-    nativeType: 'bytea',
+    baseTypeName: 'bytea',
+    dataType: 'pg/bytea',
     codecId: 'pg/bytea@1',
     many: true,
     literal: ['aGVsbG8='],
   },
   {
     column: 'documents',
-    nativeType: 'jsonb',
+    baseTypeName: 'jsonb',
+    dataType: 'pg/jsonb',
     codecId: 'pg/jsonb@1',
     many: true,
     literal: [{ a: 1 }, 'x'],
   },
   {
     column: 'span',
-    nativeType: 'interval',
+    baseTypeName: 'interval',
+    dataType: 'pg/interval',
     codecId: 'pg/interval@1',
     many: false,
     literal: 'P1DT2H',
   },
   {
     column: 'spans',
-    nativeType: 'interval',
+    baseTypeName: 'interval',
+    dataType: 'pg/interval',
     codecId: 'pg/interval@1',
     many: true,
     literal: ['P1DT2H', 'PT-0.5S'],
@@ -82,7 +95,7 @@ function createTable(): PostgresCreateTable {
     columns: [
       col('id', 'int4', { notNull: true, primaryKey: true }),
       ...cases.map((defaultCase) =>
-        col(defaultCase.column, `${defaultCase.nativeType}${defaultCase.many ? '[]' : ''}`, {
+        col(defaultCase.column, `${defaultCase.baseTypeName}${defaultCase.many ? '[]' : ''}`, {
           default: lit(defaultCase.literal),
           codecRef: { codecId: defaultCase.codecId, ...(defaultCase.many ? { many: true } : {}) },
         }),
@@ -96,10 +109,12 @@ function buildContract(withDefaults: boolean): Contract<SqlStorage> {
     cases.map((defaultCase): [string, StorageColumnInput] => [
       defaultCase.column,
       {
-        nativeType: defaultCase.nativeType,
+        dataType: defaultCase.dataType,
         codecId: defaultCase.codecId,
         nullable: true,
-        ...(defaultCase.many ? { many: true, noCheck: ['elementNotNull'] } : {}),
+        ...(defaultCase.many
+          ? { many: { elementNullable: false }, noCheck: ['elementNotNull'] }
+          : {}),
         ...(withDefaults ? { default: { kind: 'literal', value: defaultCase.literal } } : {}),
       },
     ]),
@@ -118,7 +133,7 @@ function buildContract(withDefaults: boolean): Contract<SqlStorage> {
             table: {
               [table]: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                   ...columns,
                 },
                 primaryKey: { columns: ['id'] },
@@ -154,6 +169,8 @@ function plan(
     schema,
     policy,
     fromContract: null,
+    origin: null,
+    statements: [],
     frameworkComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
@@ -245,31 +262,20 @@ describe('literal defaults rendered through the column codec', { concurrent: fal
     }
   }
 
-  /**
-   * Runs each operation's statements without the runner, because the runner verifies the schema
-   * afterwards and schema verification does not read a bytea literal default back yet.
-   */
-  async function executeStatements(migration: PlannedMigration): Promise<readonly string[]> {
-    const operations = await Promise.all(migration.operations);
-    for (const operation of operations) {
-      for (const statement of operation.execute) {
-        await driver!.query(statement.sql, statement.params ?? []);
-      }
-    }
-    return operations.map((operation) => operation.id);
-  }
-
   it('stores the codec values of defaults written by CREATE TABLE', {
     timeout: testTimeout,
   }, async () => {
-    const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+    const adapter = new PostgresControlAdapter(
+      createPostgresBuiltinCodecLookup(),
+      createPostgresBuiltinDataTypeLookup(),
+    );
     const ddl = await adapter.lowerToExecuteRequest(createTable());
     await driver!.query(ddl.sql);
 
     expect(await insertedRow()).toEqual([storedDefaults]);
   });
 
-  it('stores the codec values of defaults a migration sets on existing columns', {
+  it('stores the codec values of defaults a migration sets on existing columns, and verifies them', {
     timeout: testTimeout,
   }, async () => {
     const withoutDefaults = buildContract(false);
@@ -279,14 +285,14 @@ describe('literal defaults rendered through the column codec', { concurrent: fal
       INIT_ADDITIVE_POLICY,
     );
     const contract = buildContract(true);
-
-    const operationIds = await executeStatements(
-      plan(
-        contract,
-        await familyInstance.introspect({ driver: driver!, contract }),
-        additiveAndWidening,
-      ),
+    const migration = plan(
+      contract,
+      await familyInstance.introspect({ driver: driver!, contract }),
+      additiveAndWidening,
     );
+    const operationIds = (await Promise.all(migration.operations)).map((operation) => operation.id);
+
+    await applyWithRunner(contract, migration, additiveAndWidening);
 
     expect({ operationIds, rows: await insertedRow() }).toEqual({
       operationIds: cases.map((defaultCase) => `setDefault.${table}.${defaultCase.column}`),

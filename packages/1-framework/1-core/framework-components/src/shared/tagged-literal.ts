@@ -1,9 +1,10 @@
 /**
- * Every failure `offset` is an index into the resolved text the function was
- * given, including `too-large`, whose limit is measured on the canonical body.
+ * `text` is the canonical value of the literal. Every failure `offset` is an
+ * index into the resolved body the function was given, including `too-large`,
+ * whose limit is measured on the canonical text.
  */
 export type TaggedLiteralCanonicalization =
-  | { readonly ok: true; readonly body: string }
+  | { readonly ok: true; readonly text: string }
   | {
       readonly ok: false;
       readonly reason: 'nul' | 'too-large';
@@ -64,11 +65,12 @@ interface Line {
 }
 
 /**
- * Turns the escape-resolved text of a tagged literal into its canonical body:
- * newlines become `\n`, a blank first and last line are dropped, common leading
- * whitespace is removed, internal blank lines become empty, and no trailing
- * newline is added. Fails on a NUL character or when the result is larger than
- * 65536 UTF-8 bytes.
+ * Turns the escape-resolved body of a tagged literal into its canonical text:
+ * newlines become `\n`, every blank line before the first non-blank line and
+ * after the last one is dropped, common leading whitespace is removed, internal
+ * blank lines become empty, and no trailing newline is added. The result is its
+ * own canonical text. Fails on a NUL character or when the result is larger
+ * than 65536 UTF-8 bytes.
  */
 export function canonicalizeTaggedLiteralBody(resolved: string): TaggedLiteralCanonicalization {
   const nul = resolved.indexOf('\0');
@@ -76,10 +78,10 @@ export function canonicalizeTaggedLiteralBody(resolved: string): TaggedLiteralCa
     return { ok: false, reason: 'nul', offset: nul };
   }
   const lines = splitLines(resolved);
-  if (lines.length > 0 && BLANK_LINE.test(lines[0]?.text ?? '')) {
+  while (lines.length > 0 && BLANK_LINE.test(lines[0]?.text ?? '')) {
     lines.shift();
   }
-  if (lines.length > 0 && BLANK_LINE.test(lines.at(-1)?.text ?? '')) {
+  while (lines.length > 0 && BLANK_LINE.test(lines.at(-1)?.text ?? '')) {
     lines.pop();
   }
   const indent = commonIndent(lines);
@@ -92,7 +94,7 @@ export function canonicalizeTaggedLiteralBody(resolved: string): TaggedLiteralCa
   if (excess !== undefined) {
     return { ok: false, reason: 'too-large', offset: excess };
   }
-  return { ok: true, body: bodyLines.map((line) => line.text).join('\n') };
+  return { ok: true, text: bodyLines.map((line) => line.text).join('\n') };
 }
 
 function splitLines(text: string): Line[] {
@@ -115,7 +117,7 @@ function commonIndent(lines: readonly Line[]): number {
   return Number.isFinite(indent) ? indent : 0;
 }
 
-/** The resolved-text offset of the first character that pushes the body past `limit` bytes. */
+/** The resolved-body offset of the first character that pushes the text past `limit` bytes. */
 function offsetWhereBytesExceed(lines: readonly Line[], limit: number): number | undefined {
   let bytes = 0;
   for (const [index, line] of lines.entries()) {
@@ -149,13 +151,25 @@ function escapeQuotedText(text: string): string {
 }
 
 /**
- * The PSL text of a tagged literal whose canonical text is `text`: the backtick form, or the double-quote form when the
- * text holds a backtick, which reads better than escaping each backtick. A multi-line text starts on the line after
- * the opening backtick, so indentation a printer adds to an enclosing block is common to every line and the
- * canonicalization removes it. ADR 129.
+ * The PSL text of a tagged literal holding `text`: the backtick form, or the double-quote form when the text holds a
+ * backtick, which reads better than escaping each backtick. A multi-line text starts on the line after the opening
+ * backtick, so indentation a printer adds to an enclosing block is common to every line and the canonicalization
+ * removes it. The literal's canonical text is `text` again only when {@link printedTaggedLiteralReadsBack} holds; text
+ * with leading indentation or a carriage return, for example, does not read back. ADR 129.
  */
 export function printTaggedLiteral(tag: string, text: string): string {
   if (text.includes('`')) return `${tag}"${escapeQuotedText(text)}"`;
   const fenced = text.replace(/\\/g, '\\\\');
-  return text.includes('\n') ? `${tag}\`\n${fenced}\n\`` : `${tag}\`${fenced}\``;
+  return isPrintedOnOwnLines(text) ? `${tag}\`\n${fenced}\n\`` : `${tag}\`${fenced}\``;
+}
+
+function isPrintedOnOwnLines(text: string): boolean {
+  return !text.includes('`') && text.includes('\n');
+}
+
+/** Whether the literal {@link printTaggedLiteral} prints for `text` has `text` as its canonical text. */
+export function printedTaggedLiteralReadsBack(text: string): boolean {
+  const resolvedBody = isPrintedOnOwnLines(text) ? `\n${text}\n` : text;
+  const canonical = canonicalizeTaggedLiteralBody(resolvedBody);
+  return canonical.ok && canonical.text === text;
 }

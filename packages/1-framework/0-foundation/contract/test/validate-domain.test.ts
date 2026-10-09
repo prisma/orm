@@ -491,6 +491,42 @@ describe('validateContractDomain()', () => {
         /model.*Child.*base.*must not.*variants/i,
       );
     });
+
+    it('accepts variants with distinct discriminator values', () => {
+      const contract = makeValidContract({
+        models: {
+          Item: makeMinimalModel({
+            fields: {
+              type: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+            },
+            discriminator: { field: 'type' },
+            variants: { Bug: { value: 'bug' }, Feature: { value: 'feature' } },
+          }),
+          Bug: makeMinimalModel({ base: crossRef('Item') }),
+          Feature: makeMinimalModel({ base: crossRef('Item') }),
+        },
+      });
+      expect(() => validateContractDomain(contract)).not.toThrow();
+    });
+
+    it('rejects variants that share a discriminator value', () => {
+      const contract = makeValidContract({
+        models: {
+          Item: makeMinimalModel({
+            fields: {
+              type: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+            },
+            discriminator: { field: 'type' },
+            variants: { Bug: { value: 'bug' }, OtherBug: { value: 'bug' } },
+          }),
+          Bug: makeMinimalModel({ base: crossRef('Item') }),
+          OtherBug: makeMinimalModel({ base: crossRef('Item') }),
+        },
+      });
+      expect(() => validateContractDomain(contract)).toThrow(
+        'Discriminator value "bug" is used by both "__unbound__:Bug" and "__unbound__:OtherBug" on base model "__unbound__:Item"',
+      );
+    });
   });
 
   it('does not reject orphaned models (advisory, removed from runtime validation)', () => {
@@ -763,7 +799,7 @@ describe('validateContractDomain()', () => {
   });
 
   describe('field modifier validation', () => {
-    it('rejects many + dict on the same field', () => {
+    it('rejects list many + dict on the same field', () => {
       const contract = makeValidContract({
         roots: {},
         models: {
@@ -772,7 +808,7 @@ describe('validateContractDomain()', () => {
               tags: {
                 nullable: false,
                 type: { kind: 'scalar', codecId: 'pg/text@1' },
-                many: true,
+                many: { elementNullable: false },
                 dict: true,
               },
             },
@@ -780,6 +816,62 @@ describe('validateContractDomain()', () => {
         },
       });
       expect(() => validateContractDomain(contract)).toThrow(/many.*dict|dict.*many/i);
+    });
+
+    it('accepts nullable elements inside the list descriptor', () => {
+      const contract = makeValidContract({
+        roots: {},
+        models: {
+          User: makeMinimalModel({
+            fields: {
+              tags: {
+                nullable: false,
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+                many: { elementNullable: true },
+              },
+            },
+          }),
+        },
+      });
+      expect(() => validateContractDomain(contract)).not.toThrow();
+    });
+
+    it('rejects the old sibling elementNullable shape when type checking is bypassed', () => {
+      const contract = makeValidContract({
+        roots: {},
+        models: {
+          User: makeMinimalModel({
+            fields: {
+              tags: {
+                nullable: false,
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+                many: false,
+                elementNullable: true,
+              },
+            },
+          }),
+        },
+      });
+      expect(() => validateContractDomain(contract)).toThrow(/sibling "elementNullable"/);
+    });
+
+    it('rejects old many: true when type checking is bypassed', () => {
+      const contract = makeValidContract({
+        roots: {},
+        models: {},
+        valueObjects: {
+          Address: {
+            fields: {
+              tags: {
+                nullable: false,
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+                many: true,
+              },
+            },
+          },
+        },
+      });
+      expect(() => validateContractDomain(contract)).toThrow(/Value object.*invalid "many"/);
     });
   });
 });

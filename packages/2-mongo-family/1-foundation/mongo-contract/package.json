@@ -1,7 +1,7 @@
 {
   "name": "@internal/mongo-contract",
   "private": true,
-  "version": "8.0.0-rc.14",
+  "version": "8.0.0-rc.17",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -16,18 +16,18 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/contract": "workspace:8.0.0-rc.14",
-    "@internal/errors": "workspace:8.0.0-rc.14",
-    "@internal/framework-components": "workspace:8.0.0-rc.14",
-    "@internal/mongo-value": "workspace:8.0.0-rc.14",
-    "@internal/utils": "workspace:8.0.0-rc.14",
+    "@internal/contract": "workspace:8.0.0-rc.17",
+    "@internal/errors": "workspace:8.0.0-rc.17",
+    "@internal/framework-components": "workspace:8.0.0-rc.17",
+    "@internal/mongo-value": "workspace:8.0.0-rc.17",
+    "@internal/utils": "workspace:8.0.0-rc.17",
     "arktype": "catalog:",
     "mongodb": "catalog:"
   },
   "devDependencies": {
-    "@repo/test-utils": "workspace:8.0.0-rc.14",
-    "@repo/tsconfig": "workspace:8.0.0-rc.14",
-    "@repo/tsdown": "workspace:8.0.0-rc.14",
+    "@repo/test-utils": "workspace:8.0.0-rc.17",
+    "@repo/tsconfig": "workspace:8.0.0-rc.17",
+    "@repo/tsdown": "workspace:8.0.0-rc.17",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -48,6 +48,7 @@
   "exports": {
     ".": "./dist/index.mjs",
     "./canonicalization-hooks": "./dist/canonicalization-hooks.mjs",
+    "./data-type": "./dist/data-type.mjs",
     "./entity-kinds": "./dist/entity-kinds.mjs",
     "./package.json": "./package.json"
   },

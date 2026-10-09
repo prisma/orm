@@ -5,21 +5,17 @@ import {
   TableSource,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import {
-  buildOrmPlanMeta,
-  buildOrmQueryPlan,
-  deriveParamsFromAst,
-  resolveTableColumns,
-} from '../src/query-plan-meta';
+import { getAllTableColumns } from '../src/collection-contract';
+import { buildOrmPlanMeta, buildOrmQueryPlan, deriveParamsFromAst } from '../src/query-plan-meta';
 import { baseContract } from './collection-fixtures';
 import { unboundTables } from './unbound-tables';
 
 describe('query plan meta', () => {
   it('resolves table columns and rejects unknown tables', () => {
-    expect(resolveTableColumns(baseContract, 'public', 'users')).toEqual(
+    expect(getAllTableColumns(baseContract, 'public', 'users')).toEqual(
       Object.keys(unboundTables(baseContract.storage)['users']!.columns),
     );
-    expect(() => resolveTableColumns(baseContract, 'public', 'missing')).toThrow(
+    expect(() => getAllTableColumns(baseContract, 'public', 'missing')).toThrow(
       'Unknown table "missing" in SQL ORM query planner',
     );
   });

@@ -42,7 +42,9 @@
                 }
               },
               "plans": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -82,8 +84,8 @@
             "user": {
               "checks": [
                 {
-                  "expression": "\"plans\"::text[] <@ ARRAY['FREE', 'PAID', 'CUSTOM']::text[]",
-                  "name": "user_plans_check_86e31b31",
+                  "expression": "array_remove(\"plans\", NULL) <@ '{\"FREE\",\"PAID\",\"CUSTOM\"}'",
+                  "name": "user_plans_check_cfe07708",
                   "prefix": "user_plans_check"
                 },
                 {
@@ -95,13 +97,15 @@
               "columns": {
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "plans": {
                   "codecId": "pg/text@1",
-                  "many": true,
-                  "nativeType": "text",
+                  "dataType": "pg/text",
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -136,7 +140,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "28369815a587ef18873c40e9269de8b47a1f0d86f1c34db4748d24cd98cdb9cb"
+    "storageHash": "57d1ec7b747412697397995e085fef338d2bd8bbecccee6ff0833c922950e0e2"
   },
   "execution": {
     "executionHash": "e18dbda8332f8974e92016590064ce897aa2fb8f1ca059429e3460e668f4e488",
@@ -159,6 +163,8 @@
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -169,9 +175,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

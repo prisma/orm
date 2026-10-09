@@ -248,12 +248,12 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": true
                 }
               },
@@ -270,17 +270,20 @@
               "columns": {
                 "companyId": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "locationId": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "companyLocation_companyId_idx_33acc5ed"
+                  },
                   "source": {
                     "columns": [
                       "companyId"
@@ -297,6 +300,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "companyLocation_locationId_idx_7aae3038"
+                  },
                   "source": {
                     "columns": [
                       "locationId"
@@ -343,12 +349,12 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": true
                 }
               },
@@ -367,11 +373,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "bf8f16f7179e2ed4548d81822266e441da9d0e3401c9de41eced7ed6a955ebb3"
+    "storageHash": "08c0d1a25982824095badf2a0c8734ed769451f8f40b098c8376ccaaaa8a5950"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -382,9 +390,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

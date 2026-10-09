@@ -16,6 +16,10 @@ test('ORM preparation preserves complete all and first results', async () => {
   const first = await db.prepare({}, () => db.orm.public.User.select('id').prepared.first());
   expectTypeOf(all.query(db.runtime(), {})).toEqualTypeOf<AsyncIterableResult<{ id: number }>>();
   expectTypeOf(first.query(db.runtime(), {})).toEqualTypeOf<Promise<{ id: number } | null>>();
+  const firstOrThrow = await db.prepare({}, () =>
+    db.orm.public.User.select('id').prepared.firstOrThrow(),
+  );
+  expectTypeOf(firstOrThrow.query(db.runtime(), {})).toEqualTypeOf<Promise<{ id: number }>>();
   // @ts-expect-error ordinary executing terminals are not preparation descriptions
   await db.prepare({}, () => db.orm.public.User.select('id').all());
   // @ts-expect-error the callback receives only params, never an injected SQL builder

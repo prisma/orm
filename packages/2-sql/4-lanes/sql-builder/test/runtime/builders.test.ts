@@ -52,9 +52,14 @@ const emptyAggregateRegistry = {
 
 const sqlContract = validateSqlContractFully<Contract>(contractJson);
 
+const registeredCodecIds = new Set(['pg/bool@1', 'pg/int4@1', 'pg/text@1']);
+
 const stubBase = {
   operations: {},
   codecs: {},
+  codecDescriptors: {
+    descriptorFor: (codecId: string) => (registeredCodecIds.has(codecId) ? {} : undefined),
+  },
   queryOperations: { entries: () => ({}) },
   aggregateDescriptors: emptyAggregateRegistry,
   types: {},
@@ -144,6 +149,59 @@ describe('select', () => {
     expect(ast.projection).toHaveLength(2);
     expect(ast.projection[0]!.alias).toBe('myId');
     expect(ast.projection[1]!.alias).toBe('myName');
+  });
+
+  it('computed projections carry the codec of their return type', () => {
+    const ast = getAst(
+      db().public.users.select((f, fns) => ({
+        isFirst: fns.eq(f.id, 1),
+        hasPosts: fns.exists(db().public.posts.select('id')),
+      })),
+    );
+    expect(ast.projection.map((item) => [item.alias, item.codec])).toEqual([
+      ['isFirst', { codecId: 'pg/bool@1' }],
+      ['hasPosts', { codecId: 'pg/bool@1' }],
+    ]);
+  });
+
+  it('an aliased computed projection carries the codec of its return type', () => {
+    const ast = getAst(db().public.users.select('isFirst', (f, fns) => fns.eq(f.id, 1)));
+    expect(ast.projection.map((item) => item.codec)).toEqual([{ codecId: 'pg/bool@1' }]);
+  });
+
+  it('a computed projection whose codec id the stack does not register carries no codec', () => {
+    const d = sql({
+      context: {
+        ...stubBase,
+        codecDescriptors: { descriptorFor: () => undefined },
+        contract: sqlContract,
+      } as unknown as ExecutionContext<typeof sqlContract>,
+      rawCodecInferer: stubInferer,
+    });
+    const ast = getAst(d.public.users.select('isFirst', (f, fns) => fns.eq(f.id, 1)));
+    expect(ast.projection.map((item) => item.codec)).toEqual([undefined]);
+  });
+
+  it('a computed projection whose codec needs type parameters carries no codec', () => {
+    const requiresTypeName = {
+      '~standard': {
+        version: 1,
+        vendor: 'test',
+        validate: () => ({ issues: [{ message: 'typeName must be a string' }] }),
+      },
+    };
+    const d = sql({
+      context: {
+        ...stubBase,
+        codecDescriptors: { descriptorFor: () => ({ paramsSchema: requiresTypeName }) },
+        contract: sqlContract,
+      } as unknown as ExecutionContext<typeof sqlContract>,
+      rawCodecInferer: stubInferer,
+    });
+    const ast = getAst(
+      d.public.users.select('mood', (_f, fns) => fns.raw`'happy'`.returns('pg/enum@1')),
+    );
+    expect(ast.projection.map((item) => item.codec)).toEqual([undefined]);
   });
 
   it('chained select accumulates projections', () => {
@@ -734,6 +792,28 @@ describe('UPDATE callback overload', () => {
       .build();
     expect(spy).toHaveBeenCalledTimes(1);
     expect(spy).toHaveBeenCalledWith(expect.objectContaining({ op: 'update', entry: 'users' }));
+  });
+
+  it('returning projections carry the codec of each returned column', () => {
+    const insertAst = db()
+      .public.users.insert([{ name: 'Alice' }])
+      .returning('id', 'name')
+      .build().ast;
+    const updateAst = db()
+      .public.users.update({ name: 'x' })
+      .where((f, fns) => fns.eq(f.id, 42))
+      .returning('id')
+      .build().ast;
+    if (insertAst.kind !== 'insert' || updateAst.kind !== 'update') {
+      throw new Error('expected insert and update');
+    }
+    expect(insertAst.returning?.map((item) => [item.alias, item.codec?.codecId])).toEqual([
+      ['id', 'pg/int4@1'],
+      ['name', 'pg/text@1'],
+    ]);
+    expect(updateAst.returning?.map((item) => [item.alias, item.codec?.codecId])).toEqual([
+      ['id', 'pg/int4@1'],
+    ]);
   });
 
   it('where and returning clauses are identical between object and callback overloads', () => {

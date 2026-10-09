@@ -1,27 +1,16 @@
 /**
- * The data types this target owns, with the casts that say which other types' values each one takes.
- *
- * SQLite's storage classes are shared by several logical types, so the target declares the types it
- * distinguishes rather than one per storage class: `sqlite/integer` and `sqlite/bigint` are
- * distinct although both store as INTEGER, and `sqlite/text`, `sqlite/datetime` and `sqlite/json`
- * are distinct although all store as TEXT.
+ * The data types this target owns: the types SQLite stores, plus the two character types a column
+ * may be declared with. Each is written by one text and reported by the catalog with that text.
  *
  * ADR 254.
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import {
-  type Cast,
-  type DataType,
-  dataType,
-  type ToCanonicalForm,
-} from '@internal/framework-components/codec';
-import {
-  canonicalDateTime,
-  integerTextCanonicalForm,
-  numeralText,
-} from '@internal/sql-relational-core/ast';
+import type { Cast, DataType } from '@internal/framework-components/codec';
+import { sqlDataType } from '@internal/sql-contract/data-type';
+import { integerTextCanonicalForm } from '@internal/sql-contract/data-type-support';
 import { structuredError } from '@internal/utils/structured-error';
+import { type as arktype } from 'arktype';
 
 const unchanged: Cast = (value) => value;
 
@@ -36,72 +25,53 @@ function wrongShape(value: JsonValue, expected: string): never {
   );
 }
 
-const asNumeralText: Cast = (value) =>
-  typeof value === 'number' ? numeralText(value) : wrongShape(value, 'a number');
+/** Digit text as `real` stores it: the nearest double, as SQLite converts an integer to a real. */
+const asReal: Cast = (value) =>
+  typeof value === 'string' ? Number(value) : wrongShape(value, 'digit text');
 
-/**
- * A number as `real` stores it. A magnitude past what a double holds is refused rather than
- * rounded, for the reason the target's other numeric casts give.
- */
-const asReal: Cast = (value) => {
-  if (typeof value === 'number') return value;
-  if (typeof value !== 'string') return wrongShape(value, 'a number or digit text');
-  const converted = Number(value);
-  if (Number.isFinite(converted)) return converted;
-  throw structuredError(
-    'CONTRACT.CAST_REFUSED',
-    `${value} is out of range: no double holds a number that large.`,
-    {
-      why: 'A real stores a double, which holds magnitudes up to about 1.8e308.',
-      fix: 'Use a number a double holds.',
-    },
-  );
-};
+/** A type written and reported by `name` and nothing else. */
+const storedAs = (id: string, name: string, casts: Readonly<Record<string, Cast>> = {}) =>
+  sqlDataType(id, { texts: [{ text: name, written: true, catalog: true }], casts });
 
-export const sqliteText: DataType = dataType('sqlite/text', {});
-export const sqliteJson: DataType = dataType('sqlite/json', {});
-export const sqliteInteger: DataType = dataType('sqlite/integer', {});
-
-/**
- * The canonical form of `sqlite/datetime` (ADR 254), from ISO 8601 text with a UTC offset. The range
- * and the millisecond precision are those of a JavaScript `Date`, the codec's value.
- */
-export const sqliteDatetimeCanonical = (text: string): string =>
-  canonicalDateTime(text, {
-    shape: 'instant',
-    dataTypeId: 'sqlite/datetime',
-    maxFractionDigits: 3,
-    range: { earliest: '-271821-04-20T00:00:00Z', latest: '+275760-09-13T00:00:00Z' },
-  });
-
-const datetimeCanonicalForm: ToCanonicalForm = (value) =>
-  typeof value === 'string' ? sqliteDatetimeCanonical(value) : wrongShape(value, 'text');
-
-export const sqliteDatetime: DataType = dataType('sqlite/datetime', {
-  toCanonicalForm: datetimeCanonicalForm,
-  casts: { [sqliteText.id]: datetimeCanonicalForm },
+export const sqliteText = storedAs('sqlite/text', 'text');
+/** Digit text, which holds every 64-bit integer exactly; SQLite reads an INTEGER default back as a number. */
+export const sqliteInteger = sqlDataType('sqlite/integer', {
+  texts: [{ text: 'integer', written: true, catalog: true }],
+  toCanonicalForm: integerTextCanonicalForm,
+  casts: {},
 });
+export const sqliteReal = storedAs('sqlite/real', 'real', { [sqliteInteger.id]: asReal });
+export const sqliteBlob = storedAs('sqlite/blob', 'blob', { [sqliteText.id]: unchanged });
 
-export const sqliteBlob: DataType = dataType('sqlite/blob', {
+/** The length of `character` and `character varying`, which SQLite accepts and does not enforce. */
+export const sqliteCharacterLengthParams = arktype({ 'length?': 'number.integer >= 1' });
+
+/** A character type is written without its length, so its normal form has none. */
+const withoutLength = <Params extends { readonly length?: number }>({
+  length: _length,
+  ...rest
+}: Params) => rest;
+
+export const sqliteCharacter = sqlDataType('sqlite/character', {
+  params: sqliteCharacterLengthParams,
+  texts: [{ text: 'character', written: true, catalog: true }],
+  normalize: withoutLength,
   casts: { [sqliteText.id]: unchanged },
 });
 
-export const sqliteBigint: DataType = dataType('sqlite/bigint', {
-  toCanonicalForm: integerTextCanonicalForm,
-  casts: { [sqliteInteger.id]: asNumeralText },
-});
-
-export const sqliteReal: DataType = dataType('sqlite/real', {
-  casts: { [sqliteInteger.id]: asReal, [sqliteBigint.id]: asReal },
+export const sqliteCharacterVarying = sqlDataType('sqlite/character-varying', {
+  params: sqliteCharacterLengthParams,
+  texts: [{ text: 'character varying', written: true, catalog: true }],
+  normalize: withoutLength,
+  casts: { [sqliteText.id]: unchanged },
 });
 
 /** Every data type this target registers. */
 export const sqliteDataTypes: readonly DataType[] = [
   sqliteText,
-  sqliteJson,
   sqliteInteger,
-  sqliteDatetime,
-  sqliteBlob,
-  sqliteBigint,
   sqliteReal,
+  sqliteBlob,
+  sqliteCharacter,
+  sqliteCharacterVarying,
 ];

@@ -8,6 +8,7 @@ import { list } from '../src/attribute-spec/combinators/list';
 import { oneOf } from '../src/attribute-spec/combinators/one-of';
 import { str } from '../src/attribute-spec/combinators/str';
 import { optional } from '../src/attribute-spec/optional';
+import { EMPTY_DATA_TYPES } from '../src/attribute-spec/spec-context';
 import { mapBlock, structBlock } from '../src/block-spec/constructors';
 import type { PslBlockSpecDescriptor } from '../src/block-spec/descriptor';
 import { interpretExtensionBlock } from '../src/block-spec/interpret';
@@ -103,6 +104,7 @@ function interpret<S extends BlockSpec<unknown>>(
       symbolTable: setupResult.symbolTable,
       pslBlockDescriptors: { [descriptor.keyword]: descriptor },
     }),
+    dataTypes: EMPTY_DATA_TYPES,
   });
 }
 
@@ -624,7 +626,7 @@ describe('interpretExtensionBlock — block attributes', () => {
     positional: [{ key: 'name', type: str(), documentation: 'The storage name.' }],
   });
 
-  it('interprets declared attributes into the envelope with the block factory context', () => {
+  it('interprets declared attributes into the envelope with the symbol-table factory context', () => {
     const seenContexts: BlockSpecContext[] = [];
     const descriptor = {
       ...NATIVE_ENUM_DESCRIPTOR,
@@ -650,8 +652,10 @@ describe('interpretExtensionBlock — block attributes', () => {
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     expect(parsed.value.attributes['map']).toMatchObject({ args: { name: 'levels' } });
-    expect(seenContexts.at(-1)?.block).toBe(block);
-    expect(seenContexts.at(-1)?.symbols).toBe(result.symbolTable);
+    expect(seenContexts.at(-1)).toEqual({
+      symbols: result.symbolTable,
+      dataTypes: EMPTY_DATA_TYPES,
+    });
   });
 
   it.each([

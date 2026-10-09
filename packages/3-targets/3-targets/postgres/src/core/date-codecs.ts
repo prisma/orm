@@ -12,15 +12,16 @@ import {
 import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { PostgresCodecDescriptor } from './codec-descriptor';
-import { type PrecisionParams, precisionParamsSchema } from './codec-helpers';
+import type { PrecisionParams } from './codec-helpers';
 import { PG_TIMESTAMPTZ_DATE_CODEC_ID } from './codec-ids';
-import { pgTimestamptz, pgTimestamptzCanonical } from './data-types';
-import { PG_TIMESTAMPTZ_NATIVE_TYPE } from './temporal-codec-helpers';
+import { pgPrecisionParams, pgTimestamptz, pgTimestamptzCanonical } from './data-types';
+import {
+  EARLIEST_POSTGRES_TIMESTAMP_MILLISECONDS,
+  utcTimestamptzText,
+} from './temporal-codec-helpers';
 
 const TIMESTAMPTZ_TEXT =
   /^([+-]\d{6}|\d{4,6})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(?:Z|([+-])(\d{2})(?::?(\d{2}))?(?::?(\d{2}))?)( BC)?$/;
-
-const MIN_TIMESTAMPTZ_MILLISECONDS = new Date('-004713-11-24T00:00:00.000Z').getTime();
 
 function invalidDate(): RangeError {
   return new RangeError(
@@ -32,7 +33,7 @@ function isRepresentable(value: Date): boolean {
   return (
     value instanceof Date &&
     Number.isFinite(value.getTime()) &&
-    value.getTime() >= MIN_TIMESTAMPTZ_MILLISECONDS
+    value.getTime() >= EARLIEST_POSTGRES_TIMESTAMP_MILLISECONDS
   );
 }
 
@@ -101,12 +102,7 @@ function parseDate(text: string): Date | undefined {
 }
 
 function encodeDate(value: Date): string {
-  validateDate(value);
-  const iso = value.toISOString();
-  const year = value.getUTCFullYear();
-  if (year > 0 && year < 10000) return iso;
-  const dateAndTime = iso.slice(year === 0 ? 4 : 7);
-  return `${String(year <= 0 ? 1 - year : year).padStart(4, '0')}${dateAndTime}${year <= 0 ? ' BC' : ''}`;
+  return utcTimestamptzText(validateDate(value), PG_TIMESTAMPTZ_DATE_CODEC_ID);
 }
 
 export class PgTimestamptzDateCodec extends CodecImpl<
@@ -137,18 +133,13 @@ export class PgTimestamptzDateCodec extends CodecImpl<
 }
 
 export class PgTimestamptzDateDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
-  protected override nativeType(): string {
-    return PG_TIMESTAMPTZ_NATIVE_TYPE;
-  }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
   override readonly dataType = pgTimestamptz.id;
   override readonly codecId = PG_TIMESTAMPTZ_DATE_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
-  override readonly targetTypes = [] as const;
-  override readonly paramsSchema =
-    precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
+  override readonly paramsSchema = pgPrecisionParams satisfies StandardSchemaV1<PrecisionParams>;
   override renderOutputType(_params: PrecisionParams): string {
     return 'Date';
   }
@@ -162,12 +153,7 @@ export class PgTimestamptzDateDescriptor extends PostgresCodecDescriptor<Precisi
 export const pgTimestamptzDateDescriptor = new PgTimestamptzDateDescriptor();
 
 export const pgTimestamptzDateColumn = (params: PrecisionParams = {}) =>
-  column(
-    pgTimestamptzDateDescriptor.factory(params),
-    pgTimestamptzDateDescriptor.codecId,
-    params,
-    'timestamptz',
-  );
+  column(pgTimestamptzDateDescriptor.factory(params), pgTimestamptzDateDescriptor.codecId, params);
 
 pgTimestamptzDateColumn satisfies ColumnHelperFor<PgTimestamptzDateDescriptor>;
 pgTimestamptzDateColumn satisfies ColumnHelperForStrict<PgTimestamptzDateDescriptor>;

@@ -1,15 +1,15 @@
 import { notOk, ok } from '@internal/utils/result';
-import { requireHeadRef } from './aggregate';
+import { requireHeadRef, spacesInApplyOrder } from './aggregate';
 import { allStorageElementsExternal } from './all-external';
 import { buildFabricatedMigrationEdge } from './fabricated-migration-edge';
 import type { PerSpacePlan, PlannerError, PlannerInput, PlannerOutput } from './planner-types';
 import { planFromDiff } from './strategies/plan-from-diff';
 import { resolveRecordedPath } from './strategies/resolve-recorded-path';
-import type { AggregateContractSpace } from './types';
 
 export type {
   AggregateCurrentDBState,
   AggregateMigrationEdgeRef,
+  AppSpacePlanningInputs,
   CallerPolicy,
   PerSpacePlan,
   PlannerError,
@@ -20,6 +20,9 @@ export type {
 
 /**
  * Plan a migration across every contract space of a {@link ContractSpaceAggregate}.
+ *
+ * Statements in `input.appSpace` apply only to a diff plan, so the planner refuses them with
+ * `policyConflict` unless `callerPolicy.ignoreGraphFor` includes the app space.
  *
  * Per-space operation selection, in order; first match wins:
  *
@@ -39,9 +42,7 @@ export type {
  * 5. Else → `extensionPathUnsatisfiable` (an empty graph cannot satisfy
  *    non-empty invariants).
  *
- * Output `applyOrder` is `[...aggregate.extensions.map(spaceId), aggregate.app.spaceId]`
- * — extensions alphabetical, then app — matching today's
- * `concatenateSpaceApplyInputs` ordering. This preserves
+ * Output `applyOrder` is {@link spacesInApplyOrder}: extensions alphabetical, then app. This preserves
  * `MigrationRunnerFailure.failingSpace` attribution byte-for-byte.
  *
  * Every emitted `MigrationPlan` has `targetId = aggregate.targetId`.
@@ -52,16 +53,19 @@ export async function planMigration<TFamilyId extends string, TTargetId extends 
 ): Promise<PlannerOutput> {
   const { aggregate, currentDBState, callerPolicy } = input;
 
+  const appSpaceId = aggregate.app.spaceId;
+  const statementCount = input.appSpace.statements.length;
+  if (statementCount > 0 && !callerPolicy.ignoreGraphFor.has(appSpaceId)) {
+    return notOk({
+      kind: 'policyConflict',
+      spaceId: appSpaceId,
+      detail: `${statementCount} statement${statementCount === 1 ? ' was' : 's were'} given for space "${appSpaceId}", but only a plan built from the diff applies statements, and \`callerPolicy.ignoreGraphFor\` does not include "${appSpaceId}". Add "${appSpaceId}" to \`ignoreGraphFor\` or give no statements.`,
+    });
+  }
+
   const perSpace = new Map<string, PerSpacePlan>();
 
-  // Iterate in apply order so a per-space error short-circuits the
-  // walk in the same order the runner would walk inputs.
-  const orderedSpaces: ReadonlyArray<AggregateContractSpace> = [
-    ...aggregate.extensions,
-    aggregate.app,
-  ];
-
-  for (const space of orderedSpaces) {
+  for (const space of spacesInApplyOrder(aggregate)) {
     const currentMarker = currentDBState.markersBySpaceId.get(space.spaceId) ?? null;
     const headRef = requireHeadRef(space);
 
@@ -88,6 +92,7 @@ export async function planMigration<TFamilyId extends string, TTargetId extends 
         migrations: input.migrations,
         frameworkComponents: input.frameworkComponents,
         operationPolicy: input.operationPolicy,
+        ...(space.spaceId === appSpaceId ? input.appSpace : { fromContract: null, statements: [] }),
       });
       if (diffOutcome.kind === 'failure') {
         return notOk({
@@ -108,6 +113,7 @@ export async function planMigration<TFamilyId extends string, TTargetId extends 
         aggregateTargetId: aggregate.targetId,
         space,
         currentMarker,
+        storageNameOf: input.storageNameOf,
       });
       if (resolved.kind === 'ok') {
         perSpace.set(space.spaceId, resolved.result);
@@ -168,6 +174,9 @@ export async function planMigration<TFamilyId extends string, TTargetId extends 
       displayOps: [],
       destinationContract: space.contract(),
       strategy: 'declared-state',
+      appliedStatements: [],
+      dataLoss: [],
+      accessWidening: [],
       migrationEdges: [
         buildFabricatedMigrationEdge({
           currentMarkerStorageHash: currentMarker?.storageHash,
@@ -180,6 +189,6 @@ export async function planMigration<TFamilyId extends string, TTargetId extends 
 
   return ok({
     perSpace,
-    applyOrder: [...aggregate.extensions.map((m) => m.spaceId), aggregate.app.spaceId],
+    applyOrder: spacesInApplyOrder(aggregate).map((space) => space.spaceId),
   });
 }

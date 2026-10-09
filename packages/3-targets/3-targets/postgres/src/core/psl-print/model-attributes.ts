@@ -1,7 +1,7 @@
 import type { PslModelAttribute } from '@internal/framework-components/psl-ast';
+import { escapePslString } from '@internal/sql-contract/data-type-support';
 import type { StorageTable } from '@internal/sql-contract/types';
 import { pslModelMapName } from '@internal/sql-contract-psl/map-names';
-import { escapePslString } from '@internal/sql-relational-core/ast';
 import {
   composeCheckWirePrefix,
   computeCheckContentHash,
@@ -10,15 +10,21 @@ import {
 } from '@internal/sql-schema-ir/naming';
 import { postgresRenderCheckExpressions } from '../check-expressions';
 import { PG_ENUM_CODEC_ID } from '../codec-ids';
+import { fullTextIndexDefinitionOf } from '../full-text-index-definition';
 import {
   type AttributeNaming,
   buildCheckAttribute,
+  buildFullTextIndexAttribute,
   buildIndexAttribute,
   buildModelConstraintAttribute,
 } from '../psl-build/index-attributes';
 import { buildAttribute, buildMapAttribute, positionalArg } from '../psl-build/psl-literals';
 import type { ModelWithTable, VariantInfo } from './contract-model-index';
-import { refuseUnwritableIndexOptions, refuseUnwritableObjectName } from './refusals';
+import {
+  refuseSqlTextThatDoesNotReadBack,
+  refuseUnwritableIndexOptions,
+  refuseUnwritableObjectName,
+} from './refusals';
 
 /** A check the PSL source derives for a table, which the printer does not write. */
 export interface DerivedCheck {
@@ -53,7 +59,7 @@ export function derivedChecks(input: {
     for (const candidate of postgresRenderCheckExpressions({
       tableName: input.tableName,
       columnName,
-      many: column.many === true,
+      many: column.many,
       memberValues: memberValues?.length === enumValues?.length ? memberValues : undefined,
     })) {
       if (waived.has(candidate.kind)) continue;
@@ -154,6 +160,13 @@ export function buildModelAttributes(input: {
   }
   for (const check of entry.table.checks ?? []) {
     if (derivedChecksByName.has(check.name) || !owns(undefined)) continue;
+    refuseSqlTextThatDoesNotReadBack({
+      kind: 'check',
+      namespaceId: entry.namespaceId,
+      table: entry.tableName,
+      name: check.name,
+      texts: [check.expression],
+    });
     attributes.push(
       buildCheckAttribute(
         check,
@@ -169,20 +182,27 @@ export function buildModelAttributes(input: {
   }
   for (const index of entry.table.indexes) {
     if (!owns(index.columns)) continue;
+    const naming = attributeNaming({
+      kind: 'index',
+      entry,
+      name: index.name,
+      prefix: index.prefix,
+      contentHash: () => computeIndexContentHash(index),
+    });
+    refuseSqlTextThatDoesNotReadBack({
+      kind: 'index',
+      namespaceId: entry.namespaceId,
+      table: entry.tableName,
+      name: index.name,
+      texts: [index.expression, index.where],
+    });
+    const fullText = fullTextIndexDefinitionOf(index);
+    if (fullText !== undefined) {
+      attributes.push(buildFullTextIndexAttribute(index, fullText, fieldNameOf, naming));
+      continue;
+    }
     refuseUnwritableIndexOptions(entry, index);
-    attributes.push(
-      buildIndexAttribute(
-        index,
-        index.columns?.map(fieldNameOf),
-        attributeNaming({
-          kind: 'index',
-          entry,
-          name: index.name,
-          prefix: index.prefix,
-          contentHash: () => computeIndexContentHash(index),
-        }),
-      ),
-    );
+    attributes.push(buildIndexAttribute(index, index.columns?.map(fieldNameOf), naming));
   }
   if (entry.table.control !== undefined && variant?.singleTable !== true) {
     attributes.push(buildAttribute('model', 'control', [positionalArg(entry.table.control)]));

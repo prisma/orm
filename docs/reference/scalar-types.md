@@ -99,6 +99,8 @@ These are the current names. The Postgres and SQLite rename project will change 
 
 A literal default of a date or time type is stored in the type's canonical form, whichever codec the column uses and however the default was written; [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states each form.
 
+The tools that write a schema for you use the text date and time types. In a PSL schema, `prisma orm init` writes `createdAt TimestamptzString @default(now())` and `updatedAt temporal.updatedAtString()`. In a TypeScript contract, it writes `field.temporal.createdAtString()` and `field.temporal.updatedAtString()`. All of these are `TimestamptzString` columns. `prisma contract infer` and `prisma7Schema(...)` write `TimestampString(p)`, `TimestamptzString(p)`, `DateString` and `TimeString(p)`. Four types read and write `Temporal` values: `Timestamptz` (also written `DateTime`), `Timestamp`, `Date` and `Time`. An application that uses them needs a global `Temporal`: on a runtime without one, such as Node.js 24, install it, for example with `import 'temporal-polyfill/full/global'`.
+
 ## SQLite
 
 These are the current names; the Postgres and SQLite rename project will update this table. SQLite has no scalar TS helpers; use `field.column(...)`.
@@ -115,7 +117,7 @@ These are the current names; the Postgres and SQLite rename project will update 
 | `Json` | — | `sqlite/json@1` | `text` | `JsonValue` |
 | `Bytes` | — | `sqlite/blob@1` | `blob` | `Uint8Array` |
 
-A `DateTime` default is stored in the canonical form of `sqlite/datetime`, however it was written; [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states the form and the text it takes.
+A `DateTime` default is stored in the canonical form its codec `sqlite/datetime@1` declares, however it was written; [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states the form and the text it takes.
 
 ## Across targets
 
@@ -137,3 +139,5 @@ The PSL name on each target for a concept, and the Prisma 6/7 name a migrating s
 | ObjectId | `String @db.ObjectId` (MongoDB) | — | — | `ObjectId` |
 
 A Prisma 6 MongoDB schema read with `prisma6Schema` may keep its native types. Each native type Prisma 6.19 accepts gives the field the MongoDB type of what Prisma 6 stores: `Int @db.Int` is `Int32`, `Int @db.Long` is `Int64Number` like a plain `Int`, `BigInt @db.Long` is `Int64`, `Bytes @db.ObjectId` is `ObjectId`, and `@db.String`, `@db.Bool`, `@db.Double`, `@db.Date`, `@db.BinData` and `@db.Json` are the same type as the plain field. `DateTime @db.Timestamp` stores a BSON timestamp, which no MongoDB scalar type holds, so `prisma6Schema` refuses it.
+
+A Prisma 7 PostgreSQL schema read with `prisma7Schema`, or a database Prisma 7 created and `contract infer` reads, gets `TimestampString(3)` for `DateTime`, and `TimestampString(p)`, `TimestamptzString(p)`, `DateString` and `TimeString(p)` for `@db.Timestamp`, `@db.Timestamptz`, `@db.Date` and `@db.Time`. The PostgreSQL cell above is what a new Prisma 8 schema writes for the concept.

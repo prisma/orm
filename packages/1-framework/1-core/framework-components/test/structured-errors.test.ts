@@ -7,10 +7,7 @@ import type {
 } from '../src/execution/execution-descriptors';
 import { assertRuntimeContractRequirementsSatisfied } from '../src/execution/execution-requirements';
 import { hydrateNamespaceEntities } from '../src/ir/entity-kind';
-import {
-  instantiateAuthoringTypeConstructor,
-  validateAuthoringHelperArguments,
-} from '../src/shared/framework-authoring';
+import { validateAuthoringHelperArguments } from '../src/shared/framework-authoring';
 
 function capture(fn: () => unknown): unknown {
   try {
@@ -48,20 +45,6 @@ const adapter: RuntimeAdapterDescriptor<'sql', 'postgres'> = {
 };
 
 describe('structured error codes', () => {
-  it('output template without nativeType raises CONTRACT.PACK_CONTRIBUTION_INVALID', () => {
-    const descriptor = {
-      kind: 'typeConstructor',
-      output: { codecId: 'test/text@1' },
-    } as const;
-    const error = capture(() => instantiateAuthoringTypeConstructor(descriptor, []));
-    expect(isStructuredError(error)).toBe(true);
-    expect(error).toMatchObject({
-      code: 'CONTRACT.PACK_CONTRIBUTION_INVALID',
-      message:
-        'Authoring output template for codec "test/text@1" declares no nativeType; only entity-ref constructors may omit it',
-    });
-  });
-
   it('malformed helper argument raises CONTRACT.ARGUMENT_INVALID', () => {
     const error = capture(() =>
       validateAuthoringHelperArguments('field.test', [{ kind: 'string' }], [123]),

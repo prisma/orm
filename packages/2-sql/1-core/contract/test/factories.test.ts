@@ -4,30 +4,33 @@ import { col, fk, index, model, pk, table, unique } from '../src/factories';
 
 describe('SQL contract factories', () => {
   describe('col', () => {
-    it('creates a StorageColumn with nativeType, codecId and nullable', () => {
-      const column = col('int4', 'pg/int4@1', false);
+    it('creates a StorageColumn with dataType, codecId and nullable', () => {
+      const column = col('pg/int4', 'pg/int4@1', false);
       expect(column).toEqual({
-        nativeType: 'int4',
+        dataType: 'pg/int4',
         codecId: 'pg/int4@1',
         nullable: false,
+        many: false,
       });
     });
 
     it('defaults nullable to false', () => {
-      const column = col('text', 'pg/text@1');
+      const column = col('pg/text', 'pg/text@1');
       expect(column).toEqual({
-        nativeType: 'text',
+        dataType: 'pg/text',
         codecId: 'pg/text@1',
         nullable: false,
+        many: false,
       });
     });
 
     it('creates nullable column', () => {
-      const column = col('text', 'pg/text@1', true);
+      const column = col('pg/text', 'pg/text@1', true);
       expect(column).toEqual({
-        nativeType: 'text',
+        dataType: 'pg/text',
         codecId: 'pg/text@1',
         nullable: true,
+        many: false,
       });
     });
   });
@@ -190,12 +193,12 @@ describe('SQL contract factories', () => {
   describe('table', () => {
     it('creates a StorageTable with columns', () => {
       const userTable = table({
-        id: col('int4', 'pg/int4@1'),
-        email: col('text', 'pg/text@1'),
+        id: col('pg/int4', 'pg/int4@1'),
+        email: col('pg/text', 'pg/text@1'),
       });
       expect(userTable.columns).toEqual({
-        id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-        email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+        id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false, many: false },
+        email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false, many: false },
       });
       expect(userTable.uniques).toEqual([]);
       expect(userTable.indexes).toEqual([]);
@@ -205,8 +208,8 @@ describe('SQL contract factories', () => {
     it('creates table with primary key', () => {
       const userTable = table(
         {
-          id: col('int4', 'pg/int4@1'),
-          email: col('text', 'pg/text@1'),
+          id: col('pg/int4', 'pg/int4@1'),
+          email: col('pg/text', 'pg/text@1'),
         },
         { pk: pk('id') },
       );
@@ -216,8 +219,8 @@ describe('SQL contract factories', () => {
     it('creates table with unique constraints', () => {
       const userTable = table(
         {
-          id: col('int4', 'pg/int4@1'),
-          email: col('text', 'pg/text@1'),
+          id: col('pg/int4', 'pg/int4@1'),
+          email: col('pg/text', 'pg/text@1'),
         },
         { uniques: [unique('email')] },
       );
@@ -227,8 +230,8 @@ describe('SQL contract factories', () => {
     it('creates table with indexes', () => {
       const userTable = table(
         {
-          id: col('int4', 'pg/int4@1'),
-          email: col('text', 'pg/text@1'),
+          id: col('pg/int4', 'pg/int4@1'),
+          email: col('pg/text', 'pg/text@1'),
         },
         { indexes: [index('user_email_idx', ['email'])] },
       );
@@ -240,8 +243,8 @@ describe('SQL contract factories', () => {
     it('creates table with foreign keys', () => {
       const postTable = table(
         {
-          id: col('int4', 'pg/int4@1'),
-          userId: col('int4', 'pg/int4@1'),
+          id: col('pg/int4', 'pg/int4@1'),
+          userId: col('pg/int4', 'pg/int4@1'),
         },
         { fks: [fk('post', ['userId'], 'user', ['id'])] },
       );
@@ -256,9 +259,9 @@ describe('SQL contract factories', () => {
     it('creates table with all constraints', () => {
       const postTable = table(
         {
-          id: col('int4', 'pg/int4@1'),
-          userId: col('int4', 'pg/int4@1'),
-          title: col('text', 'pg/text@1'),
+          id: col('pg/int4', 'pg/int4@1'),
+          userId: col('pg/int4', 'pg/int4@1'),
+          title: col('pg/text', 'pg/text@1'),
         },
         {
           pk: pk('id'),
@@ -297,8 +300,12 @@ describe('SQL contract factories', () => {
           },
         },
         fields: {
-          id: { nullable: false, type: { kind: 'scalar', codecId: 'core/unknown@1' } },
-          email: { nullable: false, type: { kind: 'scalar', codecId: 'core/unknown@1' } },
+          id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'core/unknown@1' } },
+          email: {
+            nullable: false,
+            many: false,
+            type: { kind: 'scalar', codecId: 'core/unknown@1' },
+          },
         },
         relations: {},
       });
@@ -311,9 +318,13 @@ describe('SQL contract factories', () => {
         email: { column: 'email' },
       });
       expect(userModel.fields).toEqual({
-        id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-        name: { nullable: true, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-        email: { nullable: false, type: { kind: 'scalar', codecId: 'core/unknown@1' } },
+        id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+        name: { nullable: true, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+        email: {
+          nullable: false,
+          many: false,
+          type: { kind: 'scalar', codecId: 'core/unknown@1' },
+        },
       });
     });
 
@@ -330,7 +341,7 @@ describe('SQL contract factories', () => {
       expect(userModel.storage.table).toBe('user');
       expect(userModel.storage.fields).toEqual({ id: { column: 'id' } });
       expect(userModel.fields).toEqual({
-        id: { nullable: false, type: { kind: 'scalar', codecId: 'core/unknown@1' } },
+        id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'core/unknown@1' } },
       });
       expect(userModel.relations).toEqual({
         posts: { kind: 'oneToMany', model: 'Post', foreignKey: 'userId' },

@@ -1,8 +1,17 @@
 import type { Contract } from '@internal/contract/types';
 import { errorMigrationOperationOptionRemoved } from '@internal/errors/migration';
-import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
+import {
+  type ColumnRenameRequest,
+  resolveColumnRenameAgainst,
+  resolveTableRenameAgainst,
+  type SqlMigrationPlanOperation,
+  type TableRenameRequest,
+  unmatchedColumnRename,
+  unmatchedTableRename,
+} from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { Migration as SqlMigration } from '@internal/family-sql/migration';
+import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type { ControlStack } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { MigrationContractViews } from '@internal/migration-tools/migration';
@@ -12,6 +21,7 @@ import { blindCast } from '@internal/utils/casts';
 import { errorPostgresMigrationStackMissing } from '../errors';
 import { PostgresContractView } from '../postgres-contract-view';
 import { PostgresRlsPolicy, type RenderedRlsPolicyLiteral } from '../postgres-rls-policy';
+import type { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
 import {
   AddCheckConstraintCall,
   AddColumnCall,
@@ -37,17 +47,23 @@ import {
   DropPostgresRlsPolicyCall,
   DropTableCall,
   EnableRowLevelSecurityCall,
-  RenameCheckConstraintCall,
+  RenameConstraintCall,
   RenameIndexCall,
   RenamePostgresRlsPolicyCall,
   SetDefaultCall,
   SetNotNullCall,
 } from './op-factory-call';
+import type { AlterColumnTypeClass } from './operations/columns';
+import type { RenamableConstraintKind } from './operations/constraints';
 import { type DataTransformOptions, dataTransform } from './operations/data-transform';
 import { installExtension } from './operations/dependencies';
 import type { CreateIndexExtras } from './operations/indexes';
 import type { ForeignKeySpec } from './operations/shared';
 import type { PostgresPlanTargetDetails } from './planner-target-details';
+import { postgresContractToSchema } from './postgres-contract-to-schema';
+import { postgresSchemaTables } from './schema-tables';
+import { postgresColumnRenameCall, postgresTableRenameCall } from './table-rename-calls';
+import { createWorkingSchema, type WorkingSchemaCall } from './working-schema';
 
 /**
  * Target-owned base class for Postgres migrations.
@@ -90,6 +106,9 @@ export abstract class PostgresMigration<
    */
   protected readonly controlAdapter: SqlControlAdapter<'postgres'> | undefined;
 
+  /** The rename calls this read of `operations` has made so far, in order. */
+  #renames: WorkingSchemaCall[] = [];
+
   #endView = new MigrationContractViews<PostgresContractView<End>>(
     this,
     'PostgresMigration',
@@ -112,6 +131,16 @@ export abstract class PostgresMigration<
           'Postgres control stacks are assembled with a Postgres SQL control adapter'
         >(stack.adapter.create(stack))
       : undefined;
+  }
+
+  private frameworkComponents(): ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>> {
+    const stack = this.stack;
+    if (stack === undefined) return [];
+    return [
+      stack.target,
+      ...(stack.adapter === undefined ? [] : [stack.adapter]),
+      ...stack.extensions,
+    ];
   }
 
   /**
@@ -301,12 +330,26 @@ export abstract class PostgresMigration<
     readonly from: string;
     readonly to: string;
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
-    return new RenameCheckConstraintCall(
+    return this.renameConstraint({ ...options, kind: 'checkConstraint' });
+  }
+
+  protected renameConstraint(options: {
+    readonly schema?: string;
+    readonly table: string;
+    readonly kind: RenamableConstraintKind;
+    readonly from: string;
+    readonly to: string;
+  }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
+    const call = new RenameConstraintCall(
       options.schema ?? UNBOUND_NAMESPACE_ID,
       options.table,
+      options.kind,
       options.from,
       options.to,
-    ).toOp(this.controlAdapterFor('renameCheckConstraint'));
+    );
+    const adapter = this.controlAdapterFor('renameConstraint');
+    this.#renames.push(call);
+    return call.toOp(adapter);
   }
 
   protected dropCheckConstraint(options: {
@@ -333,6 +376,117 @@ export abstract class PostgresMigration<
     ).toOp(this.controlAdapterFor('dropConstraint'));
   }
 
+  /**
+   * Emit the operations that rename a table: the table rename, then a rename of each primary key,
+   * unique constraint, foreign key, index and check whose name was derived from the old table name.
+   * The old name is resolved against the schema as this migration's earlier rename calls
+   * (`renameTable`, `renameIndex`, `renameConstraint`, `renameRlsPolicy`) leave it, and the new
+   * name against the end contract, so the companions start from names an earlier rename gave.
+   * Spread the result into `operations`:
+   * `...this.renameTable({ table: 'userProfile', to: 'UserProfile' })`. `schema` names the table's
+   * namespace when more than one declares the table. Throws `MIGRATION.TABLE_RENAME_UNMATCHED` when
+   * the table does not exist at that point of the migration or the end contract lacks the new name.
+   */
+  protected renameTable(options: {
+    readonly schema?: string;
+    readonly table: string;
+    readonly to: string;
+  }): readonly Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>>[] {
+    const adapter = this.controlAdapterFor('renameTable');
+    const rename: TableRenameRequest = {
+      namespaceId: options.schema,
+      from: options.table,
+      to: options.to,
+    };
+    const startContract = this.startContract;
+    if (startContract === null) {
+      throw unmatchedTableRename(rename, 'the migration has no start contract');
+    }
+    const current = this.schemaAfterRenames(startContract);
+    const endContract = this.endContract;
+    const resolved = resolveTableRenameAgainst(
+      postgresSchemaTables(current, startContract),
+      endContract,
+      rename,
+    );
+    if (!resolved.ok) {
+      throw resolved.failure;
+    }
+    const call = postgresTableRenameCall({
+      previous: current,
+      contract: endContract,
+      rename: resolved.value,
+      frameworkComponents: this.frameworkComponents(),
+    });
+    this.#renames.push(call);
+    return call.toOps(adapter).map(async (op) => op);
+  }
+
+  /**
+   * Emit the operations that rename a column: the column rename, then a rename of each unique
+   * constraint, foreign key and index on the column whose name was derived from the old column
+   * name, to the name the end contract gives it. The column is resolved against the schema as this
+   * migration's earlier rename calls leave it, so a column of a table an earlier `renameTable`
+   * renamed is named on the table's new name. Spread the result into `operations`:
+   * `...this.renameColumn({ table: 'User', column: 'name', to: 'fullName' })`. `schema` names the
+   * table's namespace when more than one declares the table. Throws
+   * `MIGRATION.COLUMN_RENAME_UNMATCHED` when the table or column does not exist at that point of
+   * the migration, the table already has the new column, or the end contract lacks it.
+   */
+  protected renameColumn(options: {
+    readonly schema?: string;
+    readonly table: string;
+    readonly column: string;
+    readonly to: string;
+  }): readonly Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>>[] {
+    const adapter = this.controlAdapterFor('renameColumn');
+    const rename: ColumnRenameRequest = {
+      namespaceId: options.schema,
+      table: options.table,
+      from: options.column,
+      to: options.to,
+    };
+    const startContract = this.startContract;
+    if (startContract === null) {
+      throw unmatchedColumnRename(rename, 'the migration has no start contract');
+    }
+    const current = this.schemaAfterRenames(startContract);
+    const endContract = this.endContract;
+    const resolved = resolveColumnRenameAgainst(
+      postgresSchemaTables(current, startContract),
+      endContract,
+      rename,
+    );
+    if (!resolved.ok) {
+      throw resolved.failure;
+    }
+    const call = postgresColumnRenameCall({
+      previous: current,
+      contract: endContract,
+      rename: resolved.value,
+      frameworkComponents: this.frameworkComponents(),
+    });
+    this.#renames.push(call);
+    return call.toOps(adapter).map(async (op) => op);
+  }
+
+  /**
+   * The start contract's schema with this read's rename calls applied in order. It is built only
+   * when a `renameTable` needs it, so a migration that renames no table never reads its start
+   * contract.
+   */
+  private schemaAfterRenames(startContract: Contract<SqlStorage>): PostgresDatabaseSchemaNode {
+    const working = createWorkingSchema(
+      postgresContractToSchema(startContract, this.frameworkComponents()),
+    );
+    for (const call of this.#renames) working.apply(call);
+    return working.current;
+  }
+
+  protected override beginOperationsRead(): void {
+    this.#renames = [];
+  }
+
   protected dropTable(options: {
     readonly schema: string;
     readonly table: string;
@@ -357,12 +511,14 @@ export abstract class PostgresMigration<
     readonly table: string;
     readonly column: string;
     readonly options: AlterColumnTypeOptions;
+    readonly operationClass?: AlterColumnTypeClass;
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
     return new AlterColumnTypeCall(
       options.schema,
       options.table,
       options.column,
       options.options,
+      options.operationClass,
     ).toOp(this.controlAdapterFor('alterColumnType'));
   }
 
@@ -439,9 +595,10 @@ export abstract class PostgresMigration<
     readonly from: string;
     readonly to: string;
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
-    return new RenameIndexCall(options.schema, options.table, options.from, options.to).toOp(
-      this.controlAdapterFor('renameIndex'),
-    );
+    const call = new RenameIndexCall(options.schema, options.table, options.from, options.to);
+    const adapter = this.controlAdapterFor('renameIndex');
+    this.#renames.push(call);
+    return call.toOp(adapter);
   }
 
   protected dropIndex(options: {
@@ -513,12 +670,15 @@ export abstract class PostgresMigration<
     readonly from: string;
     readonly to: string;
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
-    return new RenamePostgresRlsPolicyCall(
+    const call = new RenamePostgresRlsPolicyCall(
       options.schema,
       options.table,
       options.from,
       options.to,
-    ).toOp(this.controlAdapterFor('renameRlsPolicy'));
+    );
+    const adapter = this.controlAdapterFor('renameRlsPolicy');
+    this.#renames.push(call);
+    return call.toOp(adapter);
   }
 }
 

@@ -26,11 +26,12 @@ import {
   rlsEnablementEntityKind,
   roleEntityKind,
 } from './entity-kinds';
+import { assertFullTextIndexes } from './full-text-index-definition';
 import { PostgresNativeEnum } from './postgres-native-enum';
 import type { PostgresRlsEnablement } from './postgres-rls-enablement';
 import type { PostgresRlsPolicy } from './postgres-rls-policy';
 import type { PostgresRole } from './postgres-role';
-import { escapeLiteral } from './sql-utils';
+import { escapeLiteral, quoteIdentifier } from './sql-utils';
 
 export type PostgresContract = Contract<SqlStorage> & { readonly target: 'postgres' };
 
@@ -126,6 +127,7 @@ export class PostgresSchema extends SqlNamespaceBase {
         'composeSqlEntityKinds([policyEntityKind, roleEntityKind, rlsEnablementEntityKind, nativeEnumEntityKind]) supplies table→StorageTable, valueSet→StorageValueSet, policy→PostgresRlsPolicy, role→PostgresRole, rls→PostgresRlsEnablement, native_enum→PostgresNativeEnum descriptors'
       >(entriesInput),
     );
+    for (const table of Object.values(this.entries.table ?? {})) assertFullTextIndexes(table);
     Object.defineProperty(this, 'kind', {
       value: 'schema',
       writable: false,
@@ -161,7 +163,7 @@ export class PostgresSchema extends SqlNamespaceBase {
    * this to return `''`.
    */
   qualifier(): string {
-    return `"${this.id}"`;
+    return quoteIdentifier(this.id);
   }
 
   /**
@@ -171,7 +173,7 @@ export class PostgresSchema extends SqlNamespaceBase {
    * and `search_path` decides where the object lands at runtime.
    */
   qualifyTable(tableName: string): string {
-    return `"${this.id}"."${tableName}"`;
+    return `${quoteIdentifier(this.id)}.${quoteIdentifier(tableName)}`;
   }
 
   /**
@@ -269,7 +271,7 @@ export class PostgresUnboundSchema extends PostgresSchema {
   }
 
   override qualifyTable(tableName: string): string {
-    return `"${tableName}"`;
+    return quoteIdentifier(tableName);
   }
 
   override schemaSqlExpression(): string {

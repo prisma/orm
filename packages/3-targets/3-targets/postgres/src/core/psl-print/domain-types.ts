@@ -7,17 +7,18 @@ import type {
 } from '@internal/contract/types';
 import type { SqlPslBuildContext } from '@internal/family-sql/control';
 import type { PslTypeMap } from '@internal/family-sql/psl-build';
+import { requiredParamKeys, validateCodecTypeParams } from '@internal/framework-components/codec';
 import type {
   PslCompositeType,
   PslField,
   PslNamedTypeDeclaration,
   PslTypesBlock,
 } from '@internal/framework-components/psl-ast';
+import { isSqlDataType } from '@internal/sql-contract/data-type';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { resolvedTypeParams, StorageColumn } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { isPostgresCodecDescriptor } from '../codec-descriptor';
 import { SYNTHETIC_SPAN } from '../psl-build/psl-literals';
 import { buildColumnType, type PslColumnType } from './column-types';
 import {
@@ -29,29 +30,34 @@ import {
   refuseValueObjectsOutsideDefaultNamespace,
 } from './refusals';
 
-/** The native type the stack's codec names for a value-object member, which has no column of its own. */
-function nativeTypeOfMember(
+/**
+ * The data type a value-object member's codec represents, after checking the member's type
+ * parameters against it. A member has no column of its own.
+ */
+function dataTypeOfMember(
   type: ScalarFieldType,
   coordinate: string,
   context: SqlPslBuildContext,
 ): string {
   const { codecId } = type;
   const descriptor = context.codecLookup.descriptorFor(codecId);
-  if (!isPostgresCodecDescriptor(descriptor)) {
+  if (descriptor === undefined) refuseMemberCodecWithoutNativeType(codecId, coordinate);
+  const dataType = context.dataTypes.lookup.get(descriptor.dataType);
+  if (dataType === undefined || !isSqlDataType(dataType)) {
     refuseMemberCodecWithoutNativeType(codecId, coordinate);
   }
   const typeParams = resolvedTypeParams(type, undefined);
-  if (typeParams !== undefined) {
-    return descriptor.nativeTypeFor({
-      codecId,
-      typeParams: blindCast<JsonValue, 'contract type parameters are JSON'>(typeParams),
-    });
+  if (typeParams === undefined) {
+    if (requiredParamKeys(dataType).length > 0) {
+      refuseMemberCodecNeedingTypeParameters(codecId, coordinate);
+    }
+    return dataType.id;
   }
-  try {
-    return descriptor.nativeTypeFor({ codecId });
-  } catch {
-    refuseMemberCodecNeedingTypeParameters(codecId, coordinate);
-  }
+  validateCodecTypeParams(descriptor, {
+    codecId,
+    typeParams: blindCast<JsonValue, 'contract type parameters are JSON'>(typeParams),
+  });
+  return dataType.id;
 }
 
 /** The PSL type position of a value-object member: a value object or an enum by name, or a scalar as a column would print. */
@@ -80,7 +86,7 @@ function buildMemberType(input: {
   }
   return buildColumnType({
     column: new StorageColumn({
-      nativeType: nativeTypeOfMember(type, coordinate, input.context),
+      dataType: dataTypeOfMember(type, coordinate, input.context),
       codecId: type.codecId,
       nullable: field.nullable,
       ...ifDefined('many', field.many),
@@ -88,6 +94,7 @@ function buildMemberType(input: {
     }),
     typeMap: input.typeMap,
     authoringTypes: input.context.authoringContributions.type,
+    dataTypeLookup: input.context.dataTypes.lookup,
     enumBlockNames: input.enumBlockNames,
     coordinate,
   });
@@ -125,7 +132,8 @@ export function buildCompositeTypes(input: {
           typeName,
           ...ifDefined('typeConstructor', typeConstructor),
           optional: field.nullable,
-          list: field.many === true,
+          list: !!field.many,
+          elementOptional: !!field.many && field.many.elementNullable,
           attributes: [],
           span: SYNTHETIC_SPAN,
         };
@@ -147,13 +155,14 @@ export function buildTypesBlock(
     refuseUnwritableName('named type', name);
     const { typeName, typeConstructor } = buildColumnType({
       column: new StorageColumn({
-        nativeType: instance.nativeType,
+        dataType: instance.dataType,
         codecId: instance.codecId,
         nullable: false,
         ...ifDefined('typeParams', instance.typeParams),
       }),
       typeMap,
       authoringTypes: context.authoringContributions.type,
+      dataTypeLookup: context.dataTypes.lookup,
       enumBlockNames: new Map(),
       coordinate: `types.${name}`,
     });

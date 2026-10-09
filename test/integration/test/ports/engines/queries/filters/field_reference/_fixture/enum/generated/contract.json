@@ -26,7 +26,9 @@
                 }
               },
               "enum2": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/enum@1",
@@ -92,7 +94,7 @@
               "columns": {
                 "enum": {
                   "codecId": "pg/enum@1",
-                  "nativeType": "TestEnum",
+                  "dataType": "pg/enum",
                   "nullable": true,
                   "typeParams": {
                     "typeName": "TestEnum"
@@ -106,8 +108,10 @@
                 },
                 "enum2": {
                   "codecId": "pg/enum@1",
-                  "many": true,
-                  "nativeType": "TestEnum",
+                  "dataType": "pg/enum",
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nullable": false,
                   "typeParams": {
                     "typeName": "TestEnum"
@@ -121,7 +125,7 @@
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -150,11 +154,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "a58ac14bf968332c1d2a26237f9e3e91535eb4a8c4998f2ae5951a447a1ee386"
+    "storageHash": "3bf5ee54fa0ca44164f152b7196b873ab879533f65dbeb9d21d410b8a0ad4762"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -165,9 +171,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

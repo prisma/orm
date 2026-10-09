@@ -182,6 +182,26 @@ model Widget {
         exitCode: 2,
         diagnosticCodes: ['PSL_INVALID_ATTRIBUTE_SYNTAX', 'PSL_INVALID_ATTRIBUTE_SYNTAX'],
       },
+      {
+        name: 'unsupported attribute',
+        text: `// use prisma-8
+model Widget {
+  id Int @id @default(autoincrement())
+  label String @unknownThing
+}`,
+        exitCode: 2,
+        diagnosticCodes: ['PSL_UNSUPPORTED_FIELD_ATTRIBUTE'],
+      },
+      {
+        name: 'unknown type',
+        text: `// use prisma-8
+model Widget {
+  id Int @id @default(autoincrement())
+  mystery Mystery
+}`,
+        exitCode: 2,
+        diagnosticCodes: ['PSL_UNRESOLVED_REFERENCE'],
+      },
     ])(
       'agrees with emit for $name across the internal/public parser boundary',
       async ({ text, exitCode, diagnosticCodes }) => {
@@ -308,7 +328,7 @@ namespace billing {
         composedExtensionContracts: stack.extensionContracts,
         authoringContributions: stack.authoringContributions,
         codecLookup: stack.codecLookup,
-        dataTypeLookup: stack.dataTypeLookup,
+        dataTypes: stack.dataTypes,
         controlMutationDefaults: stack.controlMutationDefaults,
         resolvedInputs: await expandContractInputs(contract.source.inputs),
         capabilities: stack.capabilities,

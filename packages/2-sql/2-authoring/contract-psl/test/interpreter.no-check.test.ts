@@ -1,4 +1,4 @@
-import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import type { Codec, CodecLookup } from '@internal/framework-components/codec';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   defineContract,
@@ -9,15 +9,15 @@ import {
 } from '@internal/sql-contract-ts/contract-builder';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { withDescriptors } from '../../contract-ts/test/with-descriptors';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
+import { testSqlTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
+import { fixtureInterpreterTypes, fixtureTypeLookups } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  interpretSqlContract,
   postgresEnumInferenceCodecs,
   postgresScalarTypeDescriptors,
   postgresTargetRenderingChecks,
-  symbolTableInputFromParseArgs,
   testEnumEntityContributions,
   testEnumPslBlockDescriptor,
   testRenderCheckExpressions,
@@ -41,20 +41,12 @@ const codecsById: Record<string, Codec> = {
   'pg/int4@1': int4Codec,
 };
 
-const targetTypesById: Record<string, readonly string[]> = {
-  'pg/text@1': ['text'],
-  'pg/int4@1': ['int4'],
-};
-
-const testCodecLookup: CodecLookupWithDescriptors = withDescriptors({
+const testCodecLookup: CodecLookup = {
   get(id: string): Codec | undefined {
     return codecsById[id];
   },
-  targetTypesFor(id: string): readonly string[] | undefined {
-    return targetTypesById[id];
-  },
   renderOutputTypeFor: () => undefined,
-});
+};
 
 const authoringContributions = {
   entityTypes: testEnumEntityContributions,
@@ -62,25 +54,21 @@ const authoringContributions = {
   type: {},
   valueObjectStorageType: 'Jsonb',
   pslBlockDescriptors: { enum: testEnumPslBlockDescriptor },
+  dataTypes: fixtureDataTypeSupport.entries,
 };
 
 const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults();
 
 function interpret(schema: string) {
-  const document = symbolTableInputFromParseArgs({
-    schema,
-    sourceId: 'schema.prisma',
-  });
-  return interpretPslDocumentToSqlContract({
-    ...document,
+  return interpretSqlContract(schema, {
     target: postgresTargetRenderingChecks,
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     composedExtensionContracts: new Map(),
     controlMutationDefaults: builtinControlMutationDefaults,
     authoringContributions,
-    codecLookup: testCodecLookup,
     createNamespace: createTestSqlNamespace,
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    ...fixtureInterpreterTypes,
+    codecLookup: testSqlTypeLookups({}, testCodecLookup).codecLookup,
     enumInferenceCodecs: postgresEnumInferenceCodecs,
     capabilities: { sql: { scalarList: true } },
   });
@@ -94,7 +82,7 @@ enum Role {
 }
 `;
 
-const pgText = { codecId: 'pg/text@1' as const, nativeType: 'text' as const };
+const pgText = { codecId: 'pg/text@1' as const };
 const RoleHandle = enumType('Role', pgText, member('User', 'user'), member('Admin', 'admin'));
 
 const sqlFamilyPack = {
@@ -130,6 +118,7 @@ model Post {
     if (!pslResult.ok) return;
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: sqlFamilyPack,
       target: postgresTargetPack,
       enums: { Role: RoleHandle },
@@ -137,14 +126,11 @@ model Post {
       models: {
         Post: model('Post', {
           fields: {
-            id: field.column({ codecId: 'pg/int4@1', nativeType: 'int4' }).id(),
+            id: field.column({ codecId: 'pg/int4@1' }).id(),
             role: field.namedType(RoleHandle),
             kind: field.namedType(RoleHandle).noCheck(),
             roles: field.namedType(RoleHandle).many().noCheck('membership'),
-            tags: field
-              .column({ codecId: 'pg/text@1', nativeType: 'text' })
-              .many()
-              .noCheck('elementNotNull'),
+            tags: field.column({ codecId: 'pg/text@1' }).many().noCheck('elementNotNull'),
           },
         }).sql({ table: 'Post' }),
       },
@@ -158,6 +144,7 @@ model Post {
     expect(pslTable?.columns['kind']?.noCheck).toEqual(['membership']);
     expect(pslTable?.columns['roles']?.noCheck).toEqual(['membership']);
     expect(pslTable?.columns['tags']?.noCheck).toEqual(['elementNotNull']);
+    expect(pslTable?.columns['tags']).not.toHaveProperty('elementNullable');
     expect(pslTable?.columns).toEqual(tsTable?.columns);
     expect(pslTable?.checks).toEqual(tsTable?.checks);
     // Only role's membership check and roles' element-non-null check survive.
@@ -168,6 +155,25 @@ model Post {
     expect((pslResult.value.storage as unknown as SqlStorage).storageHash).toEqual(
       (tsContract.storage as unknown as SqlStorage).storageHash,
     );
+  });
+
+  it('nullable elements carry only the semantic marker while an explicit membership waiver remains distinct', () => {
+    const pslResult = interpret(`${ROLE_ENUM_PSL}
+model Post {
+  id    Int     @id
+  roles Role?[] @noCheck(membership)
+}
+`);
+
+    expect(pslResult.ok).toBe(true);
+    if (!pslResult.ok) return;
+    const ns = (pslResult.value.storage as unknown as SqlStorage).namespaces['public'];
+    const postTable = ns !== undefined ? ns.entries.table?.['Post'] : undefined;
+    expect(postTable?.columns['roles']).toMatchObject({
+      many: { elementNullable: true },
+      noCheck: ['membership'],
+    });
+    expect(postTable?.checks ?? []).toEqual([]);
   });
 
   it('a bare @noCheck on a list domain enum resolves to both kinds in canonical order', () => {
@@ -225,14 +231,15 @@ model Post {
     if (!pslResult.ok) return;
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: sqlFamilyPack,
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
       models: {
         Post: model('Post', {
           fields: {
-            id: field.column({ codecId: 'pg/int4@1', nativeType: 'int4' }).id(),
-            name: field.column({ codecId: 'pg/text@1', nativeType: 'text' }).noCheck('membership'),
+            id: field.column({ codecId: 'pg/int4@1' }).id(),
+            name: field.column({ codecId: 'pg/text@1' }).noCheck('membership'),
           },
         }).sql({ table: 'Post', control: 'external' }),
       },
@@ -294,6 +301,19 @@ model Post {
 model Post {
   id   Int    @id
   name String @noCheck(membership)
+}
+`,
+      'PSL_INVALID_ATTRIBUTE_ARGUMENT',
+      /does not apply/,
+    );
+  });
+
+  it('rejects elementNotNull on a nullable-element list, span-anchored', () => {
+    expectDiagnostic(
+      `${ROLE_ENUM_PSL}
+model Post {
+  id    Int     @id
+  roles Role?[] @noCheck(elementNotNull)
 }
 `,
       'PSL_INVALID_ATTRIBUTE_ARGUMENT',

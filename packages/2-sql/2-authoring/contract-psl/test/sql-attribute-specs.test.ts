@@ -7,11 +7,10 @@ import type {
   ModelSymbol,
   Param,
 } from '@internal/psl-parser';
-import { createPslDiagnosticCollector } from '@internal/psl-parser';
+import { createBinder, createPslDiagnosticCollector, EMPTY_DATA_TYPES } from '@internal/psl-parser';
 import { describe, expect, it } from 'vitest';
 import { getAttribute } from '../src/psl-attribute-parsing';
 import {
-  createSqlBinder,
   fieldSpecContext,
   interpretFieldAttribute,
   interpretModelAttribute,
@@ -19,18 +18,28 @@ import {
   sqlAttributeSpecs,
 } from '../src/sql-attribute-specs';
 import { fixtureDataTypeSupport } from './fixture-data-types';
-import { buildSymbolTableInput, createBuiltinLikeControlMutationDefaults } from './fixtures';
+import {
+  buildSymbolTableInput,
+  createBuiltinLikeControlMutationDefaults,
+  createPostgresTestContext,
+} from './fixtures';
 
-const controlMutationDefaults = {
-  ...createBuiltinLikeControlMutationDefaults(),
-  dataTypeEntries: fixtureDataTypeSupport.entries,
-};
+const { defaultFunctionRegistry } = createBuiltinLikeControlMutationDefaults();
 
-function project(schema: string, modelName: string) {
+function project(schema: string, modelName: string, namespaceName?: string) {
   const input = buildSymbolTableInput(schema);
-  const model = input.symbolTable.topLevel.models[modelName];
+  const scope =
+    namespaceName === undefined
+      ? input.symbolTable.topLevel
+      : input.symbolTable.topLevel.namespaces[namespaceName];
+  const model = scope?.models[modelName];
   if (model === undefined) throw new Error(`model ${modelName} missing`);
-  return { ...input, model };
+  const { binder } = createBinder({
+    symbolTable: input.symbolTable,
+    sources: input.sources,
+    context: createPostgresTestContext(),
+  });
+  return { ...input, model, binder };
 }
 
 function field(model: ModelSymbol, name: string): FieldSymbol {
@@ -71,8 +80,8 @@ function oneOfMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>) {
   return type;
 }
 
-function interpretDefault(schema: string, fieldName: string) {
-  const { symbolTable, sources, model } = project(schema, 'Post');
+function interpretDefault(schema: string, fieldName: string, namespaceName?: string) {
+  const { symbolTable, sources, model, binder } = project(schema, 'Post', namespaceName);
   const target = field(model, fieldName);
   const node = getAttribute(target.attributes, 'default')?.node;
   if (node === undefined) throw new Error('no @default on field');
@@ -85,13 +94,15 @@ function interpretDefault(schema: string, fieldName: string) {
         symbols: symbolTable,
         model,
         field: target,
-        controlMutationDefaults,
+        binder,
+        defaultFunctionRegistry,
+        dataTypes: fixtureDataTypeSupport,
       }),
     ),
     model,
     field: target,
     sources,
-    binder: createSqlBinder({ symbolTable, sources }).binder,
+    binder,
     diagnostics,
   });
   return { value, diagnostics: diagnostics.toExternal() };
@@ -113,10 +124,21 @@ namespace scoped {
     const value = interpretModelAttribute({
       node,
       symbols: input.symbolTable,
-      spec: sqlAttributeSpecs.model.base(),
+      spec: sqlAttributeSpecs.model.base(
+        modelSpecContext({
+          symbols: input.symbolTable,
+          model,
+          defaultFunctionRegistry,
+          dataTypes: fixtureDataTypeSupport,
+        }),
+      ),
       model,
       sources: input.sources,
-      binder: createSqlBinder({ symbolTable: input.symbolTable, sources: input.sources }).binder,
+      binder: createBinder({
+        symbolTable: input.symbolTable,
+        sources: input.sources,
+        context: createPostgresTestContext(),
+      }).binder,
       diagnostics,
     });
     expect(diagnostics.toExternal()).toEqual([]);
@@ -127,20 +149,23 @@ namespace scoped {
 });
 
 describe('sqlAttributeSpecs', () => {
-  const { symbolTable, model } = project(
+  const { symbolTable, model, binder } = project(
     'model Post {\n  id Int @id\n  tags String[]\n}\n',
     'Post',
   );
   const modelCtx = modelSpecContext({
     symbols: symbolTable,
     model,
-    controlMutationDefaults,
+    defaultFunctionRegistry,
+    dataTypes: fixtureDataTypeSupport,
   });
   const fieldCtx = fieldSpecContext({
     symbols: symbolTable,
     model,
     field: field(model, 'id'),
-    controlMutationDefaults,
+    binder,
+    defaultFunctionRegistry,
+    dataTypes: fixtureDataTypeSupport,
   });
 
   it('registers every model factory under its own attribute name at model level', () => {
@@ -195,7 +220,7 @@ describe('sqlAttributeSpecs', () => {
   });
 
   it('exposes the @relation named arguments through the spec', () => {
-    expect(Object.keys(sqlAttributeSpecs.field.relation().named).sort()).toEqual([
+    expect(Object.keys(sqlAttributeSpecs.field.relation(fieldCtx).named).sort()).toEqual([
       'fields',
       'index',
       'map',
@@ -207,7 +232,7 @@ describe('sqlAttributeSpecs', () => {
   });
 
   it('exposes SQL relation field-reference metadata from the actual factory', () => {
-    const spec = sqlAttributeSpecs.field.relation();
+    const spec = sqlAttributeSpecs.field.relation(fieldCtx);
     const fields = listMetadata(namedType(spec, 'fields'));
     const references = listMetadata(namedType(spec, 'references'));
 
@@ -223,18 +248,18 @@ describe('sqlAttributeSpecs', () => {
   });
 
   it('exposes SQL model container metadata from actual factories', () => {
-    const idFields = listMetadata(positionalType(sqlAttributeSpecs.model.id()));
+    const idFields = listMetadata(positionalType(sqlAttributeSpecs.model.id(modelCtx)));
     expect(idFields).toMatchObject({ kind: 'list', allowEmpty: false, unique: true });
     expect(idFields.of).toMatchObject({ kind: 'fieldRef' });
 
-    const options = recordMetadata(namedType(sqlAttributeSpecs.model.index(), 'options'));
+    const options = recordMetadata(namedType(sqlAttributeSpecs.model.index(modelCtx), 'options'));
     expect(options).toMatchObject({ kind: 'record', optional: true });
     expect(options.of).toMatchObject({ kind: 'str', value: undefined });
   });
 });
 
 describe('sqlAttributeSpecs.field.default', () => {
-  const { symbolTable, model } = project(
+  const { symbolTable, model, binder } = project(
     'model Post {\n  id Int @id\n  tags String[]\n}\n',
     'Post',
   );
@@ -242,7 +267,9 @@ describe('sqlAttributeSpecs.field.default', () => {
     symbols: symbolTable,
     model,
     field: field(model, 'id'),
-    controlMutationDefaults,
+    binder,
+    defaultFunctionRegistry,
+    dataTypes: fixtureDataTypeSupport,
   });
 
   it('exposes scalar default alternatives from the actual registry-backed factory', () => {
@@ -254,6 +281,7 @@ describe('sqlAttributeSpecs.field.default', () => {
       'str',
       'num',
       'bool',
+      'null',
       'funcCall',
       'funcCall',
       'funcCall',
@@ -286,10 +314,9 @@ describe('sqlAttributeSpecs.field.default', () => {
       symbols: symbolTable,
       model,
       field: field(model, 'id'),
-      controlMutationDefaults: {
-        defaultFunctionRegistry: controlMutationDefaults.defaultFunctionRegistry,
-        dataTypeEntries: {},
-      },
+      binder,
+      defaultFunctionRegistry,
+      dataTypes: EMPTY_DATA_TYPES,
     });
     const value = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(noTags)));
     expect(value.alternatives.map((alt) => alt.kind)).not.toContain('taggedLiteral');
@@ -301,7 +328,9 @@ describe('sqlAttributeSpecs.field.default', () => {
       symbols: symbolTable,
       model,
       field: field(model, 'tags'),
-      controlMutationDefaults,
+      binder,
+      defaultFunctionRegistry,
+      dataTypes: fixtureDataTypeSupport,
     });
     const value = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(listCtx)));
 
@@ -326,6 +355,23 @@ describe('sqlAttributeSpecs.field.default', () => {
     ]);
   });
 
+  it('offers every tag but sql as a list element', () => {
+    const listCtx = fieldSpecContext({
+      symbols: symbolTable,
+      model,
+      field: field(model, 'tags'),
+      binder,
+      defaultFunctionRegistry,
+      dataTypes: fixtureDataTypeSupport,
+    });
+    const value = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(listCtx)));
+    const element = oneOfMetadata(listMetadata(value.alternatives[0]).of);
+    expect(
+      element.alternatives.filter((alt) => alt.kind === 'taggedLiteral').map((alt) => alt.tags),
+    ).toEqual([['json']]);
+    expect(element.label).toBe('string | number | boolean | null | json`...`');
+  });
+
   it('exposes enum default alternatives and empty-enum rejection metadata', () => {
     const enumProject = project(
       'enum Priority {\n  Low\n  High\n}\nmodel Post {\n  id Int @id\n  priority Priority\n}\n',
@@ -336,7 +382,9 @@ describe('sqlAttributeSpecs.field.default', () => {
       symbols: enumProject.symbolTable,
       model: enumProject.model,
       field: priority,
-      controlMutationDefaults,
+      binder: enumProject.binder,
+      defaultFunctionRegistry,
+      dataTypes: fixtureDataTypeSupport,
     });
     const enumDefault = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(enumCtx)));
     expect(enumDefault.alternatives).toEqual([
@@ -353,7 +401,9 @@ describe('sqlAttributeSpecs.field.default', () => {
       symbols: emptyProject.symbolTable,
       model: emptyProject.model,
       field: kind,
-      controlMutationDefaults,
+      binder: emptyProject.binder,
+      defaultFunctionRegistry,
+      dataTypes: fixtureDataTypeSupport,
     });
     const emptyDefault = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(emptyCtx)));
     expect(emptyDefault.alternatives).toEqual([
@@ -377,7 +427,7 @@ model Post {
 }
 `;
     expect(interpretDefault(schema('Low'), 'priority')).toEqual({
-      value: { value: 'Low' },
+      value: { value: { kind: 'member', name: 'Low' } },
       diagnostics: [],
     });
     const rejected = interpretDefault(schema('Urgent'), 'priority');
@@ -401,7 +451,29 @@ model Post {
 }
 `;
     expect(interpretDefault(schema, 'role')).toEqual({
-      value: { value: 'Member' },
+      value: { value: { kind: 'member', name: 'Member' } },
+      diagnostics: [],
+    });
+  });
+
+  it('takes the enum the field type resolves to in its scope, not a same-named top-level enum', () => {
+    const schema = `
+enum Role {
+  Guest
+}
+namespace ns {
+  enum Role {
+    Admin
+    Member
+  }
+  model Post {
+    id Int @id
+    role Role @default(Member)
+  }
+}
+`;
+    expect(interpretDefault(schema, 'role', 'ns')).toEqual({
+      value: { value: { kind: 'member', name: 'Member' } },
       diagnostics: [],
     });
   });
@@ -425,29 +497,63 @@ model Post {
     ]);
   });
 
-  it('accepts scalar literals on a scalar field, keeping a number as written', () => {
+  it('accepts scalar literals on a scalar field as written scalars with their spans', () => {
     const schema = 'model Post {\n  id Int @id\n  price Decimal @default(1.50)\n}\n';
     expect(interpretDefault(schema, 'price')).toEqual({
-      value: { value: { text: '1.50' } },
+      value: {
+        value: {
+          kind: 'scalar',
+          written: { kind: 'number', text: '1.50' },
+          span: spanOf(schema, '1.50'),
+        },
+      },
       diagnostics: [],
     });
   });
 
   it('accepts a list literal on a list field and on a scalar field, where the codec decides', () => {
-    expect(
-      interpretDefault('model Post {\n  id Int @id\n  tags String[] @default(["a"])\n}\n', 'tags'),
-    ).toEqual({ value: { value: ['a'] }, diagnostics: [] });
-    expect(
-      interpretDefault('model Post {\n  id Int @id\n  tag String @default(["a"])\n}\n', 'tag'),
-    ).toEqual({ value: { value: ['a'] }, diagnostics: [] });
+    const element = (schema: string) => ({
+      kind: 'scalar',
+      written: { kind: 'string', text: 'a' },
+      span: spanOf(schema, '"a"'),
+    });
+    const listSchema = 'model Post {\n  id Int @id\n  tags String[] @default(["a"])\n}\n';
+    const scalarSchema = 'model Post {\n  id Int @id\n  tag String @default(["a"])\n}\n';
+    expect(interpretDefault(listSchema, 'tags')).toEqual({
+      value: {
+        value: { kind: 'list', elements: [element(listSchema)], span: spanOf(listSchema, '["a"]') },
+      },
+      diagnostics: [],
+    });
+    expect(interpretDefault(scalarSchema, 'tag')).toEqual({
+      value: {
+        value: {
+          kind: 'list',
+          elements: [element(scalarSchema)],
+          span: spanOf(scalarSchema, '["a"]'),
+        },
+      },
+      diagnostics: [],
+    });
   });
 
   it('accepts a registered default function and rejects an unregistered one', () => {
     expect(
       interpretDefault('model Post {\n  id Int @id @default(autoincrement())\n}\n', 'id').value,
-    ).toEqual({ value: expect.objectContaining({ fn: 'autoincrement' }) });
+    ).toEqual({
+      value: { kind: 'default-function', call: expect.objectContaining({ fn: 'autoincrement' }) },
+    });
     const rejected = interpretDefault('model Post {\n  id Int @id @default(nope())\n}\n', 'id');
     expect(rejected.value).toBeUndefined();
     expect(rejected.diagnostics).toHaveLength(1);
   });
 });
+
+function spanOf(text: string, needle: string) {
+  const position = (offset: number) => {
+    const before = text.slice(0, offset);
+    return { offset, line: before.split('\n').length, column: offset - before.lastIndexOf('\n') };
+  };
+  const start = text.indexOf(needle);
+  return { start: position(start), end: position(start + needle.length) };
+}

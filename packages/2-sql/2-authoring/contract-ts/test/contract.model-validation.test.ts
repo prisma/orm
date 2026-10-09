@@ -14,8 +14,8 @@ describe('SqlContractSerializer model validation', () => {
       tables: {
         User: {
           columns: {
-            id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-            email: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+            id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+            email: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -71,7 +71,7 @@ describe('SqlContractSerializer model validation', () => {
           tables: {
             User: {
               columns: {
-                id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
               },
               uniques: [],
               indexes: [],
@@ -163,7 +163,7 @@ describe('SqlContractSerializer model validation', () => {
           tables: {
             User: {
               columns: {
-                id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -172,8 +172,8 @@ describe('SqlContractSerializer model validation', () => {
             },
             Post: {
               columns: {
-                id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-                userId: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+                userId: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -228,7 +228,7 @@ describe('SqlContractSerializer model validation', () => {
           tables: {
             User: {
               columns: {
-                id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -237,8 +237,8 @@ describe('SqlContractSerializer model validation', () => {
             },
             Post: {
               columns: {
-                id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-                userId: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+                userId: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -251,8 +251,6 @@ describe('SqlContractSerializer model validation', () => {
                     columns: ['userId'],
                   },
                   target: { namespaceId: UNBOUND_NAMESPACE_ID, tableName: 'User', columns: ['id'] },
-                  constraint: true,
-                  index: true,
                 },
               ],
             },
@@ -300,7 +298,7 @@ describe('SqlContractSerializer model validation', () => {
           tables: {
             User: {
               columns: {
-                id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -309,8 +307,8 @@ describe('SqlContractSerializer model validation', () => {
             },
             Post: {
               columns: {
-                id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-                userId: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+                userId: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -323,8 +321,6 @@ describe('SqlContractSerializer model validation', () => {
                     columns: ['userId'],
                   },
                   target: { namespaceId: UNBOUND_NAMESPACE_ID, tableName: 'User', columns: ['id'] },
-                  constraint: true,
-                  index: true,
                 },
               ],
             },

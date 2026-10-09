@@ -1,6 +1,6 @@
 {
   "name": "@prisma/orm-mongo",
-  "version": "8.0.0-rc.14",
+  "version": "8.0.0-rc.17",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -16,18 +16,18 @@
     "clean": "rm -rf dist src-gen skills"
   },
   "dependencies": {
-    "@prisma/orm-family-mongo": "workspace:8.0.0-rc.14",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.14",
-    "@prisma/orm-target-mongo": "workspace:8.0.0-rc.14",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.14",
+    "@prisma/orm-family-mongo": "workspace:8.0.0-rc.17",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.17",
+    "@prisma/orm-target-mongo": "workspace:8.0.0-rc.17",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.17",
     "mongodb-connection-string-url": "catalog:",
     "pathe": "^2.0.3",
     "tinyglobby": "catalog:"
   },
   "devDependencies": {
-    "@internal/mongo": "workspace:8.0.0-rc.14",
-    "@repo/tsconfig": "workspace:8.0.0-rc.14",
-    "@repo/tsdown": "workspace:8.0.0-rc.14",
+    "@internal/mongo": "workspace:8.0.0-rc.17",
+    "@repo/tsconfig": "workspace:8.0.0-rc.17",
+    "@repo/tsdown": "workspace:8.0.0-rc.17",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
@@ -82,6 +82,7 @@
     "./family/schema-verify": "./dist/family__schema-verify.mjs",
     "./family-contract": "./dist/family-contract.mjs",
     "./family-contract/canonicalization-hooks": "./dist/family-contract__canonicalization-hooks.mjs",
+    "./family-contract/data-type": "./dist/family-contract__data-type.mjs",
     "./family-contract/entity-kinds": "./dist/family-contract__entity-kinds.mjs",
     "./family-runtime": "./dist/family-runtime.mjs",
     "./migration-tools/aggregate": "./dist/migration-tools__aggregate.mjs",

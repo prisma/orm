@@ -1,0 +1,878 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "sql",
+  "target": "postgres",
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "roots": {
+    "gauges": {
+      "model": "Gauge",
+      "namespace": "public"
+    },
+    "networks": {
+      "model": "Network",
+      "namespace": "public"
+    },
+    "readings": {
+      "model": "Reading",
+      "namespace": "public"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "public": {
+        "enum": {
+          "DayLevel": {
+            "codecId": "pg/date-temporal@1",
+            "members": [
+              {
+                "name": "Launch",
+                "value": "2024-01-01"
+              },
+              {
+                "name": "Sunset",
+                "value": "2025-06-30"
+              }
+            ]
+          },
+          "Float8Level": {
+            "codecId": "pg/float8@1",
+            "members": [
+              {
+                "name": "Half",
+                "value": 1.5
+              },
+              {
+                "name": "Whole",
+                "value": 2.25
+              }
+            ]
+          },
+          "FloatMixed": {
+            "codecId": "pg/float8@1",
+            "members": [
+              {
+                "name": "Half",
+                "value": 1.5
+              },
+              {
+                "name": "Nan",
+                "value": "NaN"
+              }
+            ]
+          },
+          "FloatSpecial": {
+            "codecId": "pg/float8@1",
+            "members": [
+              {
+                "name": "Nan",
+                "value": "NaN"
+              },
+              {
+                "name": "Infinite",
+                "value": "Infinity"
+              },
+              {
+                "name": "Negative",
+                "value": "-Infinity"
+              }
+            ]
+          },
+          "Host": {
+            "codecId": "pg/inet@1",
+            "members": [
+              {
+                "name": "Loopback",
+                "value": "127.0.0.1"
+              },
+              {
+                "name": "Private",
+                "value": "10.0.0.0/8"
+              },
+              {
+                "name": "Local6",
+                "value": "::1"
+              }
+            ]
+          },
+          "Int4Level": {
+            "codecId": "pg/int4@1",
+            "members": [
+              {
+                "name": "Low",
+                "value": 1
+              },
+              {
+                "name": "High",
+                "value": 10
+              }
+            ]
+          },
+          "Int8Level": {
+            "codecId": "pg/int8@1",
+            "members": [
+              {
+                "name": "Low",
+                "value": "1"
+              },
+              {
+                "name": "High",
+                "value": "10"
+              }
+            ]
+          },
+          "Ratio": {
+            "codecId": "pg/numeric@1",
+            "members": [
+              {
+                "name": "Half",
+                "value": "0.5"
+              },
+              {
+                "name": "Whole",
+                "value": "1.50"
+              }
+            ]
+          },
+          "StampLevel": {
+            "codecId": "pg/timestamptz-temporal@1",
+            "members": [
+              {
+                "name": "Launch",
+                "value": "2024-01-01T00:00:00Z"
+              },
+              {
+                "name": "Sunset",
+                "value": "2025-06-30T12:00:00Z"
+              }
+            ]
+          },
+          "TextLevel": {
+            "codecId": "pg/text@1",
+            "members": [
+              {
+                "name": "Low",
+                "value": "low"
+              },
+              {
+                "name": "High",
+                "value": "high"
+              }
+            ]
+          },
+          "UuidLevel": {
+            "codecId": "pg/uuid@1",
+            "members": [
+              {
+                "name": "First",
+                "value": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+              },
+              {
+                "name": "Second",
+                "value": "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12"
+              }
+            ]
+          }
+        },
+        "models": {
+          "Gauge": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "level": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/float8@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "FloatMixed",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "levels": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/float8@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "FloatMixed",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "level": {
+                  "column": "level"
+                },
+                "levels": {
+                  "column": "levels"
+                }
+              },
+              "namespaceId": "public",
+              "table": "gauges"
+            }
+          },
+          "Network": {
+            "fields": {
+              "hosts": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/inet@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "Host",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "ratio": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "Ratio",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "ratios": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "Ratio",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "hosts": {
+                  "column": "hosts"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "ratio": {
+                  "column": "ratio"
+                },
+                "ratios": {
+                  "column": "ratios"
+                }
+              },
+              "namespaceId": "public",
+              "table": "networks"
+            }
+          },
+          "Reading": {
+            "fields": {
+              "day": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/date-temporal@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "DayLevel",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "float8": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/float8@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "Float8Level",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "int4": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "Int4Level",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "int8": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int8@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "Int8Level",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "special": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/float8@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "FloatSpecial",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "stamp": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "StampLevel",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "text": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "TextLevel",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "uuid": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/uuid@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "UuidLevel",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "day": {
+                  "column": "day"
+                },
+                "float8": {
+                  "column": "float8"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "int4": {
+                  "column": "int4"
+                },
+                "int8": {
+                  "column": "int8"
+                },
+                "special": {
+                  "column": "special"
+                },
+                "stamp": {
+                  "column": "stamp"
+                },
+                "text": {
+                  "column": "text"
+                },
+                "uuid": {
+                  "column": "uuid"
+                }
+              },
+              "namespaceId": "public",
+              "table": "readings"
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "public": {
+        "entries": {
+          "table": {
+            "gauges": {
+              "checks": [
+                {
+                  "expression": "\"level\" IN (1.5, 'NaN')",
+                  "name": "gauges_level_check_fdbff8e6",
+                  "prefix": "gauges_level_check"
+                },
+                {
+                  "expression": "array_remove(\"levels\", NULL) <@ '{1.5,\"NaN\"}'",
+                  "name": "gauges_levels_check_87d87ba5",
+                  "prefix": "gauges_levels_check"
+                },
+                {
+                  "expression": "array_position(\"levels\", NULL) IS NULL",
+                  "name": "gauges_levels_elem_not_null_965aa1cc",
+                  "prefix": "gauges_levels_elem_not_null"
+                }
+              ],
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "level": {
+                  "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "FloatMixed",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "levels": {
+                  "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "FloatMixed",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "networks": {
+              "checks": [
+                {
+                  "expression": "array_remove(\"hosts\", NULL) <@ '{\"127.0.0.1\",\"10.0.0.0/8\",\"::1\"}'",
+                  "name": "networks_hosts_check_f8d1102f",
+                  "prefix": "networks_hosts_check"
+                },
+                {
+                  "expression": "array_position(\"hosts\", NULL) IS NULL",
+                  "name": "networks_hosts_elem_not_null_33709f6b",
+                  "prefix": "networks_hosts_elem_not_null"
+                },
+                {
+                  "expression": "\"ratio\" IN ('0.5', '1.50')",
+                  "name": "networks_ratio_check_adc94216",
+                  "prefix": "networks_ratio_check"
+                },
+                {
+                  "expression": "array_remove(\"ratios\", NULL) <@ '{\"0.5\",\"1.50\"}'",
+                  "name": "networks_ratios_check_30719f95",
+                  "prefix": "networks_ratios_check"
+                },
+                {
+                  "expression": "array_position(\"ratios\", NULL) IS NULL",
+                  "name": "networks_ratios_elem_not_null_1c71fc44",
+                  "prefix": "networks_ratios_elem_not_null"
+                }
+              ],
+              "columns": {
+                "hosts": {
+                  "codecId": "pg/inet@1",
+                  "dataType": "pg/inet",
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Host",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "ratio": {
+                  "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Ratio",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "ratios": {
+                  "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Ratio",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "readings": {
+              "checks": [
+                {
+                  "expression": "\"day\" IN ('2024-01-01', '2025-06-30')",
+                  "name": "readings_day_check_6331b648",
+                  "prefix": "readings_day_check"
+                },
+                {
+                  "expression": "\"float8\" IN (1.5, 2.25)",
+                  "name": "readings_float8_check_5c33f4f0",
+                  "prefix": "readings_float8_check"
+                },
+                {
+                  "expression": "\"int4\" IN (1, 10)",
+                  "name": "readings_int4_check_b8a19f17",
+                  "prefix": "readings_int4_check"
+                },
+                {
+                  "expression": "\"int8\" IN ('1', '10')",
+                  "name": "readings_int8_check_38f38148",
+                  "prefix": "readings_int8_check"
+                },
+                {
+                  "expression": "\"special\" IN ('NaN', 'Infinity', '-Infinity')",
+                  "name": "readings_special_check_1de0e4e5",
+                  "prefix": "readings_special_check"
+                },
+                {
+                  "expression": "\"stamp\" IN ('2024-01-01T00:00:00Z', '2025-06-30T12:00:00Z')",
+                  "name": "readings_stamp_check_176d9020",
+                  "prefix": "readings_stamp_check"
+                },
+                {
+                  "expression": "\"text\" IN ('low', 'high')",
+                  "name": "readings_text_check_ae00dbbb",
+                  "prefix": "readings_text_check"
+                },
+                {
+                  "expression": "\"uuid\" IN ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12')",
+                  "name": "readings_uuid_check_b66d39c9",
+                  "prefix": "readings_uuid_check"
+                }
+              ],
+              "columns": {
+                "day": {
+                  "codecId": "pg/date-temporal@1",
+                  "dataType": "pg/date",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "DayLevel",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "float8": {
+                  "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Float8Level",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "int4": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Int4Level",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "int8": {
+                  "codecId": "pg/int8@1",
+                  "dataType": "pg/int8",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Int8Level",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "special": {
+                  "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "FloatSpecial",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "stamp": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "StampLevel",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "text": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "TextLevel",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "uuid": {
+                  "codecId": "pg/uuid@1",
+                  "dataType": "pg/uuid",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "UuidLevel",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            }
+          },
+          "valueSet": {
+            "DayLevel": {
+              "kind": "valueSet",
+              "values": [
+                "2024-01-01",
+                "2025-06-30"
+              ]
+            },
+            "Float8Level": {
+              "kind": "valueSet",
+              "values": [
+                1.5,
+                2.25
+              ]
+            },
+            "FloatMixed": {
+              "kind": "valueSet",
+              "values": [
+                1.5,
+                "NaN"
+              ]
+            },
+            "FloatSpecial": {
+              "kind": "valueSet",
+              "values": [
+                "NaN",
+                "Infinity",
+                "-Infinity"
+              ]
+            },
+            "Host": {
+              "kind": "valueSet",
+              "values": [
+                "127.0.0.1",
+                "10.0.0.0/8",
+                "::1"
+              ]
+            },
+            "Int4Level": {
+              "kind": "valueSet",
+              "values": [
+                1,
+                10
+              ]
+            },
+            "Int8Level": {
+              "kind": "valueSet",
+              "values": [
+                "1",
+                "10"
+              ]
+            },
+            "Ratio": {
+              "kind": "valueSet",
+              "values": [
+                "0.5",
+                "1.50"
+              ]
+            },
+            "StampLevel": {
+              "kind": "valueSet",
+              "values": [
+                "2024-01-01T00:00:00Z",
+                "2025-06-30T12:00:00Z"
+              ]
+            },
+            "TextLevel": {
+              "kind": "valueSet",
+              "values": [
+                "low",
+                "high"
+              ]
+            },
+            "UuidLevel": {
+              "kind": "valueSet",
+              "values": [
+                "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+                "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12"
+              ]
+            }
+          }
+        },
+        "id": "public",
+        "kind": "postgres-schema"
+      }
+    },
+    "storageHash": "be9475adfc1f3ec93eb848359bf149e224bc38825dd407ac9031991169c71e87"
+  },
+  "capabilities": {
+    "postgres": {
+      "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
+      "jsonAgg": true,
+      "lateral": true,
+      "limit": true,
+      "orderBy": true,
+      "returning": true
+    },
+    "sql": {
+      "checkConstraint": true,
+      "defaultInInsert": true,
+      "enums": true,
+      "forShare": true,
+      "forUpdate": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictWithoutTarget": true,
+      "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
+      "returning": true,
+      "scalarList": true
+    }
+  },
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}

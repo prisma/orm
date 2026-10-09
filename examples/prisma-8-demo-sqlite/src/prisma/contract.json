@@ -330,16 +330,16 @@
               "columns": {
                 "createdAt": {
                   "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/text",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
                   },
-                  "nativeType": "text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "sqlite/character",
                   "nullable": false,
                   "typeParams": {
                     "length": 36
@@ -347,17 +347,17 @@
                 },
                 "impressionCount": {
                   "codecId": "sqlite/bigint@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": true
                 },
                 "title": {
                   "codecId": "sqlite/text@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/text",
                   "nullable": false
                 },
                 "userId": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "sqlite/character",
                   "nullable": false,
                   "typeParams": {
                     "length": 36
@@ -365,13 +365,16 @@
                 },
                 "viewCount": {
                   "codecId": "sqlite/bigintnumber@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": true,
                   "typeRef": "BigIntNumber"
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "post_userId_idx_a489d58a"
+                  },
                   "name": "post_userId_fkey",
                   "source": {
                     "columns": [
@@ -410,7 +413,7 @@
               "columns": {
                 "postId": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "sqlite/character",
                   "nullable": false,
                   "typeParams": {
                     "length": 36
@@ -418,7 +421,7 @@
                 },
                 "tagId": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "sqlite/character",
                   "nullable": false,
                   "typeParams": {
                     "length": 36
@@ -427,6 +430,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "post_tag_postId_idx_a7a72715"
+                  },
                   "name": "post_tag_postId_fkey",
                   "source": {
                     "columns": [
@@ -444,6 +450,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "post_tag_tagId_idx_86854244"
+                  },
                   "name": "post_tag_tagId_fkey",
                   "source": {
                     "columns": [
@@ -492,7 +501,7 @@
               "columns": {
                 "id": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "sqlite/character",
                   "nullable": false,
                   "typeParams": {
                     "length": 36
@@ -500,7 +509,7 @@
                 },
                 "label": {
                   "codecId": "sqlite/text@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/text",
                   "nullable": false
                 }
               },
@@ -517,26 +526,26 @@
               "columns": {
                 "createdAt": {
                   "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/text",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
                   },
-                  "nativeType": "text",
                   "nullable": false
                 },
                 "displayName": {
                   "codecId": "sqlite/text@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/text",
                   "nullable": false
                 },
                 "email": {
                   "codecId": "sqlite/text@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "sqlite/character",
                   "nullable": false,
                   "typeParams": {
                     "length": 36
@@ -557,12 +566,12 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "379449b0fa50ab981fb8993e856f682d6bef21eb6a39abe6dd6dc1d34ffb4494",
+    "storageHash": "c05a77e8c5dd486ddf723889af22c7e63f374689edce17c326101688d5d6d02a",
     "types": {
       "BigIntNumber": {
         "codecId": "sqlite/bigintnumber@1",
-        "kind": "codec-instance",
-        "nativeType": "integer"
+        "dataType": "sqlite/integer",
+        "kind": "codec-instance"
       }
     }
   },

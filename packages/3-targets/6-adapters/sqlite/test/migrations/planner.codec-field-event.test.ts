@@ -1,7 +1,11 @@
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { CodecControlHooks, SqlMigrationPlanOperation } from '@internal/family-sql/control';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
-import { APP_SPACE_ID, type OpFactoryCall } from '@internal/framework-components/control';
+import {
+  APP_SPACE_ID,
+  type OpFactoryCall,
+  planOriginOf,
+} from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageColumn, type StorageTable } from '@internal/sql-contract/types';
 import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
@@ -10,11 +14,23 @@ import { createSqliteMigrationPlanner } from '@internal/target-sqlite/planner';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { SqliteControlAdapter } from '../../src/core/control-adapter';
+import { sqliteComponents, textCodecDescriptor } from './fixtures/sqlite-components';
+
+const DATA_TYPE_OF_CODEC: Readonly<Record<string, string>> = {
+  'cs/string@1': 'cs/string',
+  'sqlite/text@1': 'sqlite/text',
+};
+
+function dataTypeOf(codecId: string): string {
+  const dataType = DATA_TYPE_OF_CODEC[codecId];
+  if (dataType === undefined) throw new Error(`no data type listed for codec ${codecId}`);
+  return dataType;
+}
 
 const HOOKED_CODEC = 'cs/string@1';
 
 function col(overrides: Partial<StorageColumn> & { codecId: string }): StorageColumn {
-  return { nativeType: 'text', nullable: false, ...overrides };
+  return { many: false, dataType: dataTypeOf(overrides.codecId), nullable: false, ...overrides };
 }
 
 function table(columns: Record<string, StorageColumn>): StorageTable {
@@ -58,13 +74,19 @@ function makeFrameworkComponents(
   hooks: CodecControlHooks,
 ): ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>> {
   return [
+    ...sqliteComponents,
     {
       kind: 'adapter',
       id: 'test-codec',
       familyId: 'sql',
       targetId: 'sqlite',
       version: '0.0.0-test',
-      types: { codecTypes: { controlPlaneHooks: { [HOOKED_CODEC]: hooks } } },
+      types: {
+        codecTypes: {
+          codecDescriptors: [textCodecDescriptor(HOOKED_CODEC)],
+          controlPlaneHooks: { [HOOKED_CODEC]: hooks },
+        },
+      },
     } as TargetBoundComponentDescriptor<'sql', string>,
   ];
 }
@@ -103,6 +125,8 @@ describe('SqliteMigrationPlanner - codec onFieldEvent wiring', () => {
       schema: { tables: {} },
       policy: { allowedOperationClasses: ['additive'] },
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: makeFrameworkComponents(hooks),
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -164,6 +188,8 @@ describe('SqliteMigrationPlanner - codec onFieldEvent wiring', () => {
       },
       policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
       fromContract,
+      origin: planOriginOf(fromContract),
+      statements: [],
       frameworkComponents: makeFrameworkComponents(hooks),
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -188,7 +214,9 @@ describe('SqliteMigrationPlanner - codec onFieldEvent wiring', () => {
       schema: { tables: {} },
       policy: { allowedOperationClasses: ['additive'] },
       fromContract: null,
-      frameworkComponents: [],
+      origin: null,
+      statements: [],
+      frameworkComponents: sqliteComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -232,6 +260,8 @@ describe('SqliteMigrationPlanner - codec onFieldEvent wiring', () => {
       schema: { tables: {} },
       policy: { allowedOperationClasses: ['additive'] },
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: fc,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -241,6 +271,8 @@ describe('SqliteMigrationPlanner - codec onFieldEvent wiring', () => {
       schema: { tables: {} },
       policy: { allowedOperationClasses: ['additive'] },
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: fc,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',

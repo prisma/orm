@@ -5,14 +5,13 @@ import type {
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   documentScopedTypes,
+  interpretSqlContract,
   postgresScalarAuthoringTypes,
   postgresTarget,
-  symbolTableInputFromParseArgs,
 } from './fixtures';
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import { unboundTables } from './unbound-tables';
@@ -24,7 +23,6 @@ const authoringTypes = {
     args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, optional: true }],
     output: {
       codecId: 'sql/varchar@1',
-      nativeType: 'character varying',
       typeParams: { length: { kind: 'arg', index: 0 } },
     },
   },
@@ -33,7 +31,6 @@ const authoringTypes = {
     args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, optional: true }],
     output: {
       codecId: 'sql/varchar@1',
-      nativeType: 'character varying',
       typeParams: { length: { kind: 'arg', index: 0, default: 191 } },
     },
   },
@@ -42,7 +39,6 @@ const authoringTypes = {
     args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
     output: {
       codecId: 'pg/vector@1',
-      nativeType: 'vector',
       typeParams: { length: { kind: 'arg', index: 0 } },
     },
   },
@@ -62,7 +58,7 @@ const authoringContributions = {
 } satisfies AuthoringContributions;
 
 const baseInput = {
-  dataTypeLookup: fixtureDataTypeSupport.lookup,
+  ...fixtureInterpreterTypes,
   target: postgresTarget,
   scalarColumnDescriptors: collectScalarTypeConstructors(authoringTypes),
   authoringContributions,
@@ -74,17 +70,15 @@ const baseInput = {
 
 describe('bare-name sugar (T ≡ T())', () => {
   it('emits identical columns for a bare all-optional-args constructor and its zero-arg call', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Doc {
+    const result = interpretSqlContract(
+      `model Doc {
   id Int @id
   bare VarCharish
   called VarCharish()
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -93,22 +87,19 @@ describe('bare-name sugar (T ≡ T())', () => {
     expect(columns?.['bare']).toEqual(columns?.['called']);
     expect(columns?.['bare']).toMatchObject({
       codecId: 'sql/varchar@1',
-      nativeType: 'character varying',
     });
   });
 
   it('applies a defaulted template value in bare form, same as the zero-arg call', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Doc {
+    const result = interpretSqlContract(
+      `model Doc {
   id Int @id
   bare Defaulted
   called Defaulted()
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -117,14 +108,13 @@ describe('bare-name sugar (T ≡ T())', () => {
     expect(columns?.['bare']).toEqual(columns?.['called']);
     expect(columns?.['bare']).toMatchObject({
       codecId: 'sql/varchar@1',
-      nativeType: 'character varying',
       typeParams: { length: 191 },
     });
   });
 
   it('emits identical named-type storage for a bare base and its zero-arg call', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `types {
+    const result = interpretSqlContract(
+      `types {
   Slug = Defaulted
   SlugCalled = Defaulted()
 }
@@ -135,10 +125,8 @@ model Doc {
   slugCalled SlugCalled
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -147,37 +135,39 @@ model Doc {
     expect(types?.['Slug']).toEqual({
       kind: 'codec-instance',
       codecId: 'sql/varchar@1',
-      nativeType: 'character varying',
+      dataType: 'pg/varchar',
       typeParams: { length: 191 },
     });
   });
 
-  it('reports the unsupported-type diagnostic for a bare required-arg constructor in field position', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Doc {
+  it('reports a bare required-arg constructor in field position as not called', () => {
+    const result = interpretSqlContract(
+      `model Doc {
   id Int @id
   v Vector
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-          message: expect.stringContaining('"Vector"'),
-        }),
-      ]),
-    );
+    expect(result.failure.diagnostics).toEqual([
+      {
+        code: 'PSL_TYPE_CONSTRUCTOR_NOT_CALLED',
+        message:
+          'Field "Doc.v" uses type constructor "Vector" without arguments. Write Vector(length).',
+        sourceId: 'schema.prisma',
+        span: {
+          start: { offset: 27, line: 3, column: 3 },
+          end: { offset: 35, line: 3, column: 11 },
+        },
+      },
+    ]);
   });
 
   it('reports the unsupported-base diagnostic for a bare required-arg constructor in named-type position', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `types {
+    const result = interpretSqlContract(
+      `types {
   V = Vector
 }
 
@@ -186,10 +176,8 @@ model Doc {
   v V
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual(
@@ -202,26 +190,28 @@ model Doc {
     );
   });
 
-  it('reports the unsupported-type diagnostic for a bare entity-ref constructor in field position', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model Doc {
+  it('reports a bare entity-ref constructor in field position as not called', () => {
+    const result = interpretSqlContract(
+      `model Doc {
   id Int @id
   level EnumRef
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+      { ...baseInput },
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-          message: expect.stringContaining('"EnumRef"'),
-        }),
-      ]),
-    );
+    expect(result.failure.diagnostics).toEqual([
+      {
+        code: 'PSL_TYPE_CONSTRUCTOR_NOT_CALLED',
+        message:
+          'Field "Doc.level" uses type constructor "EnumRef" without arguments. Write EnumRef(native_enum).',
+        sourceId: 'schema.prisma',
+        span: {
+          start: { offset: 27, line: 3, column: 3 },
+          end: { offset: 40, line: 3, column: 16 },
+        },
+      },
+    ]);
   });
 });

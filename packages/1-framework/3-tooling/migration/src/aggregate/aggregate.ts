@@ -280,6 +280,15 @@ export function collectAggregateNamespaces(aggregate: ContractSpaceAggregate): {
 }
 
 /**
+ * The order in which `migrate` applies an aggregate's contract spaces and `db sign` signs them: the extension spaces in the aggregate's order, then the app space, so an extension's tables exist before the app's tables refer to them.
+ */
+export function spacesInApplyOrder(
+  aggregate: ContractSpaceAggregate,
+): readonly AggregateContractSpace[] {
+  return [...aggregate.extensions, aggregate.app];
+}
+
+/**
  * Union two contract spaces' declarations for the same namespace id, per
  * entity kind. Two spaces may legitimately share a namespace (e.g. both
  * declaring tables in `public`); element-level disjointness is enforced by

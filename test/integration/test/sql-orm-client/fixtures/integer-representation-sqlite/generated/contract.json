@@ -135,12 +135,12 @@
               "columns": {
                 "id": {
                   "codecId": "sqlite/integer@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false
                 },
                 "peak": {
                   "codecId": "sqlite/bigintnumber@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false
                 }
               },
@@ -157,22 +157,25 @@
               "columns": {
                 "id": {
                   "codecId": "sqlite/integer@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false
                 },
                 "meter_id": {
                   "codecId": "sqlite/integer@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false
                 },
                 "reading": {
                   "codecId": "sqlite/bigintnumber@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "int_repr_samples_meter_id_idx_d5ebf9ae"
+                  },
                   "source": {
                     "columns": [
                       "meter_id"
@@ -211,7 +214,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "17398e6d66de2a0c1a138453eac935af0f965aa197c409a946436619f204a21a"
+    "storageHash": "a26473e09e8572c35fc4fe554bc5a25dca7841d21700b511026286c5fd53334b"
   },
   "capabilities": {
     "sql": {

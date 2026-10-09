@@ -27,14 +27,16 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "a": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": true
+                "nullable": true,
+                "many": false
               },
               "list": {
                 "type": {
@@ -42,7 +44,9 @@
                   "codecId": "pg/text@1"
                 },
                 "nullable": true,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               }
             },
             "relations": {}
@@ -62,7 +66,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "3c58f009777546ccb68c5b8ff33fe022a945d98a7cf8f1c80e774cf8dc472c22",
+    "storageHash": "6171282e61d9408ab97d1b82f948ea1b9047c242e151feffb13a703d2346f7e4",
     "namespaces": {
       "public": {
         "id": "public",
@@ -72,20 +76,24 @@
             "T": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "a": {
-                  "nativeType": "text",
-                  "codecId": "pg/text@1",
-                  "nullable": true
-                },
-                "list": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": true,
-                  "many": true,
+                  "many": false
+                },
+                "list": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "noCheck": ["elementNotNull"]
                 }
               },

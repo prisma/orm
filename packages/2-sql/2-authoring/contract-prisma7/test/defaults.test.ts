@@ -1,3 +1,6 @@
+import type { ContractSourceContext } from '@internal/config/config-types';
+import type { JsonValue } from '@internal/contract/types';
+import { dataTypeId } from '@internal/framework-components/codec';
 import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-binding';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
@@ -88,18 +91,23 @@ describe('dbgenerated("<sql>")', () => {
 describe('dbgenerated() with no expression', () => {
   it('describes a required column with no default and reports nothing', async () => {
     const { columns } = await loadFixtureTable('dbgenerated-without-expression', 'T');
-    expect(columns['a']).toEqual({ nativeType: 'text', codecId: 'pg/text@1', nullable: false });
+    expect(columns['a']).toEqual({
+      dataType: 'pg/text',
+      codecId: 'pg/text@1',
+      nullable: false,
+      many: false,
+    });
   });
 
   it('describes an optional or list column with no default, as Prisma 7 creates it', async () => {
     const { columns } = await loadFixtureTable('dbgenerated-without-expression-optional', 'T');
     expect({ a: columns['a'], list: columns['list'] }).toEqual({
-      a: { nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+      a: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: true, many: false },
       list: {
-        nativeType: 'text',
+        dataType: 'pg/text',
         codecId: 'pg/text@1',
         nullable: true,
-        many: true,
+        many: { elementNullable: false },
         noCheck: ['elementNotNull'],
       },
     });
@@ -169,12 +177,38 @@ describe('Decimal and BigInt number defaults', () => {
   });
 });
 
-async function diagnosticsOf(caseName: string, file: string) {
+async function diagnosticsOf(
+  caseName: string,
+  file: string,
+  contextFor: (resolvedInputs: readonly string[]) => ContractSourceContext = postgresSourceContext,
+) {
   const schemaPath = join(fixturesDir, caseName, file);
   const result = await prisma7Contract(schemaPath, {
     binding: prisma7PostgresBinding,
-  }).source.load(postgresSourceContext([schemaPath]));
+  }).source.load(contextFor([schemaPath]));
   return result.ok ? [] : result.failure.diagnostics.map((diagnostic) => diagnostic.message);
+}
+
+/** The Postgres composition, with `pg/float8` given a list cast that takes whole numbers. */
+function withFloatListCast(resolvedInputs: readonly string[]): ContractSourceContext {
+  const context = postgresSourceContext(resolvedInputs);
+  const { lookup } = context.dataTypes;
+  const float8 = lookup.get(dataTypeId('pg/float8'));
+  if (float8 === undefined) throw new Error('the Postgres stack registers pg/float8');
+  const withListCast = {
+    ...float8,
+    listCast: { of: [dataTypeId('pg/int2')], cast: (elements: readonly JsonValue[]) => elements },
+  };
+  return {
+    ...context,
+    dataTypes: {
+      ...context.dataTypes,
+      lookup: {
+        get: (id) => (id === float8.id ? withListCast : lookup.get(id)),
+        has: (id) => lookup.has(id),
+      },
+    },
+  };
 }
 
 describe('Number defaults on String, Bytes, DateTime and Boolean fields', () => {
@@ -194,6 +228,30 @@ describe('Number defaults too large for the column', () => {
       'Field "OutOfRange.count": @default holds a pg/int8 value, which pg/int4 has no cast from; it casts from pg/int2.',
       'Field "OutOfRange.small": @default holds a pg/int4 value, which pg/int2 has no cast from; it casts from nothing.',
       'Field "OutOfRange.ints": @default holds a pg/int8 value at element 2, which pg/int4 has no cast from; it casts from pg/int2.',
+    ]);
+  });
+});
+
+describe('Written lists on single-value columns', () => {
+  it('are refused, naming the casts of a type with no list cast', async () => {
+    expect(
+      await diagnosticsOf('number-default-spellings', 'lists-on-single-values.prisma'),
+    ).toEqual([
+      'Field "Lists.count": @default holds a list, which pg/int4 has no cast from; it casts from pg/int2.',
+      'Field "Lists.ratio": @default holds a list, which pg/float8 has no cast from; it casts from pg/int2, pg/int4, pg/int8, pg/numeric.',
+    ]);
+  });
+
+  it('are refused at an element the list cast does not take, naming the types it takes', async () => {
+    expect(
+      await diagnosticsOf(
+        'number-default-spellings',
+        'lists-on-single-values.prisma',
+        withFloatListCast,
+      ),
+    ).toEqual([
+      'Field "Lists.count": @default holds a list, which pg/int4 has no cast from; it casts from pg/int2.',
+      'Field "Lists.ratio": @default holds a pg/text value at element 2, which the list cast of pg/float8 does not take; it takes pg/int2.',
     ]);
   });
 });

@@ -50,6 +50,8 @@ interface Scenario {
   readonly seedSql: string;
   readonly targetContract: ContractVariant;
   readonly migrationName: string;
+  /** The statements the plan needs, such as consent to a type change that can lose values. */
+  readonly statements?: readonly string[];
   readonly dirToken: string;
   readonly placeholderId: string;
   readonly assertScaffold: (scaffold: string) => void;
@@ -135,6 +137,7 @@ const scenarios: readonly Scenario[] = [
     seedSql: `INSERT INTO "public"."user" (id, email, score) VALUES (1, 'alice@example.com', '10'), (2, 'bob@test.org', '20')`,
     targetContract: 'contract-typechange-int',
     migrationName: 'retype-score-to-int',
+    statements: ['--delete', 'User.score'],
     dirToken: 'retype_score_to_int',
     placeholderId: 'typechange-user-score',
     assertScaffold: (scaffold) => {
@@ -194,6 +197,7 @@ withTempDir(({ createTempDir }) => {
           scenario.migrationName,
           '--from',
           latestMigrationDirName(ctx),
+          ...(scenario.statements ?? []),
         ]);
         expect(planResult.exitCode, `plan: ${planResult.stderr}`).toBe(0);
 

@@ -14,7 +14,12 @@ export type {
   CodecDescriptor,
   CodecDescriptorTemplate,
 } from '../shared/codec-descriptor';
-export { CodecDescriptorImpl, CodecDescriptorTemplateImpl } from '../shared/codec-descriptor';
+export {
+  CodecDescriptorImpl,
+  CodecDescriptorTemplateImpl,
+  canonicalFormOf,
+  enumRefusalOf,
+} from '../shared/codec-descriptor';
 export type {
   CodecCallContext,
   CodecInstanceContext,
@@ -26,10 +31,13 @@ export type {
 } from '../shared/codec-types';
 export { emptyCodecLookup } from '../shared/codec-types';
 export type {
+  CodecDescriptorRef,
   ColumnHelperFor,
   ColumnHelperForStrict,
   ColumnSpec,
   ColumnTypeDescriptor,
+  ScalarFieldDeclaration,
+  ScalarFieldDeclarationBuilder,
 } from '../shared/column-spec';
 export { column } from '../shared/column-spec';
 export type {
@@ -42,9 +50,14 @@ export type {
   ToCanonicalForm,
 } from '../shared/data-type';
 export {
+  assembleDataTypes,
   createDataTypeLookup,
+  DATA_TYPE_ID_PATTERN,
   dataType,
   dataTypeId,
+  objectSchemaKeys,
+  requiredParamKeys,
+  requiredSchemaKeys,
 } from '../shared/data-type';
 export type { BigIntRange, IntegerRange } from '../shared/decode-json';
 export {

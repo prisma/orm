@@ -218,12 +218,12 @@
               "columns": {
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -246,12 +246,12 @@
               "columns": {
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -274,17 +274,20 @@
               "columns": {
                 "brandId": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "categoryId": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "categoryBrand_categoryId_idx_15c304f2"
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -302,6 +305,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "categoryBrand_brandId_idx_02e95397"
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -351,11 +357,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "3fa7764bff1563eb5fcda9e7ff4552b46d7964770e36b716c6543125a01575c6"
+    "storageHash": "51e15ea1efab02db584700acb8798c0e9a8cdb78407bb5343fc7f98c4297660f"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -366,9 +374,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

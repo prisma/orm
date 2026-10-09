@@ -1,5 +1,5 @@
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
-import { col } from '@internal/sql-relational-core/contract-free';
+import { checkExpression, col, fn } from '@internal/sql-relational-core/contract-free';
 import { describe, expect, it } from 'vitest';
 import {
   columnExistsAst,
@@ -17,6 +17,7 @@ import {
   DropCheckConstraintCall,
   DropConstraintCall,
 } from '../../src/core/migrations/op-factory-call';
+import { postgresTypeLookups } from '../postgres-type-lookups';
 
 function recordingCheckLowerer(): { lowerer: ExecuteRequestLowerer; received: unknown[] } {
   const received: unknown[] = [];
@@ -53,6 +54,18 @@ describe('CreateTableCall', () => {
     expect(op.postcheck).toEqual([
       { description: 'verify table "user" exists', sql: 'LOWERED 3', params: ['p3'] },
     ]);
+  });
+
+  it('renders a default and a CHECK holding both quote kinds as template literals', () => {
+    const call = new CreateTableCall(
+      'public',
+      'user',
+      [col('kind', 'text', { default: fn(`concat("prefix", 'user')`) })],
+      [checkExpression('user_kind_check', `"kind" IN ('admin', 'user')`)],
+    );
+    expect(call.renderTypeScript()).toBe(
+      'this.createTable({ schema: "public", table: "user", columns: [col("kind", "text", { default: fn(`concat("prefix", \'user\')`) })], constraints: [checkExpression("user_kind_check", `"kind" IN (\'admin\', \'user\')`)] })',
+    );
   });
 
   it('toOp() throws when no lowerer is provided', async () => {
@@ -173,7 +186,7 @@ describe('AddCheckConstraintCall', () => {
     expect(op.execute[0]?.sql).toContain("CHECK (\"priority\" IN ('low', 'high'))");
     expect(op.precheck[0]).toMatchObject({ sql: 'LOWERED 1', params: ['p1'] });
     expect(call.renderTypeScript()).toBe(
-      `this.addCheckConstraint({ schema: "public", table: "post", constraint: "post_priority_check", expression: "\\"priority\\" IN ('low', 'high')" })`,
+      'this.addCheckConstraint({ schema: "public", table: "post", constraint: "post_priority_check", expression: `"priority" IN (\'low\', \'high\')` })',
     );
     expect(call.importRequirements()).toEqual([]);
   });
@@ -264,13 +277,18 @@ describe('AddNotNullColumnDirectCall', () => {
 describe('AddNotNullColumnWithTempDefaultCall', () => {
   it('lowers a typed AlterTable DDL node for the ADD COLUMN execute step', async () => {
     const { lowerer, received } = recordingCheckLowerer();
-    const storageColumn = { nativeType: 'text', codecId: 'pg/text@1', nullable: false } as const;
+    const storageColumn = {
+      many: false,
+      dataType: 'pg/text',
+      codecId: 'pg/text@1',
+      nullable: false,
+    } as const;
     const call = new AddNotNullColumnWithTempDefaultCall({
       schemaName: 'public',
       tableName: 'user',
       columnName: 'name',
       column: storageColumn,
-      codecHooks: new Map(),
+      types: postgresTypeLookups,
       storageTypes: {},
       temporaryDefault: "''",
     });
@@ -292,8 +310,8 @@ describe('AddNotNullColumnWithTempDefaultCall', () => {
       schemaName: 'public',
       tableName: 'user',
       columnName: 'name',
-      column: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-      codecHooks: new Map(),
+      column: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+      types: postgresTypeLookups,
       storageTypes: {},
       temporaryDefault: "''",
     });

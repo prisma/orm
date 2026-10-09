@@ -1,7 +1,7 @@
 {
   "name": "@internal/sql-contract",
   "private": true,
-  "version": "8.0.0-rc.14",
+  "version": "8.0.0-rc.17",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -16,16 +16,16 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/contract": "workspace:8.0.0-rc.14",
-    "@internal/framework-components": "workspace:8.0.0-rc.14",
-    "@internal/sql-schema-ir": "workspace:8.0.0-rc.14",
-    "@internal/utils": "workspace:8.0.0-rc.14",
+    "@internal/contract": "workspace:8.0.0-rc.17",
+    "@internal/framework-components": "workspace:8.0.0-rc.17",
+    "@internal/sql-schema-ir": "workspace:8.0.0-rc.17",
+    "@internal/utils": "workspace:8.0.0-rc.17",
     "arktype": "^2.2.2"
   },
   "devDependencies": {
-    "@repo/test-utils": "workspace:8.0.0-rc.14",
-    "@repo/tsconfig": "workspace:8.0.0-rc.14",
-    "@repo/tsdown": "workspace:8.0.0-rc.14",
+    "@repo/test-utils": "workspace:8.0.0-rc.17",
+    "@repo/tsconfig": "workspace:8.0.0-rc.17",
+    "@repo/tsdown": "workspace:8.0.0-rc.17",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -46,6 +46,8 @@
     "./authored-check-naming": "./dist/authored-check-naming.mjs",
     "./canonicalization-hooks": "./dist/canonicalization-hooks.mjs",
     "./contract-view": "./dist/contract-view.mjs",
+    "./data-type": "./dist/data-type.mjs",
+    "./data-type-support": "./dist/data-type-support.mjs",
     "./entity-handle-lowering-hook": "./dist/entity-handle-lowering-hook.mjs",
     "./entity-kinds": "./dist/entity-kinds.mjs",
     "./factories": "./dist/factories.mjs",
@@ -53,7 +55,6 @@
     "./index-naming": "./dist/index-naming.mjs",
     "./index-type-validation": "./dist/index-type-validation.mjs",
     "./index-types": "./dist/index-types.mjs",
-    "./pack-types": "./dist/pack-types.mjs",
     "./referential-action-sql": "./dist/referential-action-sql.mjs",
     "./resolve-storage-table": "./dist/resolve-storage-table.mjs",
     "./sql-expression": "./dist/sql-expression.mjs",

@@ -1,6 +1,12 @@
 import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
-import { createIndexTypeRegistry, defineIndexTypes } from '../src/index-types';
+import {
+  accessMethodOf,
+  createIndexTypeRegistry,
+  defineIndexTypes,
+  indexTypeRegistryOf,
+  rendersIndexBody,
+} from '../src/index-types';
 
 describe('defineIndexTypes builder', () => {
   it('starts empty', () => {
@@ -21,6 +27,16 @@ describe('defineIndexTypes builder', () => {
     const b = type({ b: 'string' });
     const builder = defineIndexTypes().add('alpha', { options: a }).add('beta', { options: b });
     expect(builder.entries.map((e) => e.type)).toEqual(['alpha', 'beta']);
+  });
+
+  it("creates an index with its type's access method, the type literal unless declared", () => {
+    const { entries } = defineIndexTypes()
+      .add('btree', { options: type('object') })
+      .add('search', { options: type('object'), accessMethod: 'gin' });
+    expect(entries.map((entry) => [accessMethodOf(entry), rendersIndexBody(entry)])).toEqual([
+      ['btree', false],
+      ['gin', true],
+    ]);
   });
 
   it('add() does not mutate the prior builder', () => {
@@ -79,5 +95,72 @@ describe('createIndexTypeRegistry', () => {
     a.register({ type: 'shared', options: type({ k: 'string' }) });
     expect(a.has('shared')).toBe(true);
     expect(b.has('shared')).toBe(false);
+  });
+});
+
+describe('indexTypeRegistryOf', () => {
+  it('registers the index types of the target and every extension pack that declares some', () => {
+    const registry = indexTypeRegistryOf(
+      {
+        id: 'target',
+        indexTypes: defineIndexTypes().add('ordered', { options: type('object') }),
+      },
+      [
+        { id: 'no-indexes' },
+        {
+          id: 'search',
+          indexTypes: defineIndexTypes().add('search', { options: type('object') }),
+        },
+      ],
+    );
+
+    expect([registry.has('ordered'), registry.has('search')]).toEqual([true, true]);
+  });
+
+  it('refuses a pack whose indexTypes is not a registration', () => {
+    expect(() =>
+      indexTypeRegistryOf({ id: 'target' }, [{ id: 'broken', indexTypes: 'nope' }]),
+    ).toThrow(expect.objectContaining({ code: 'CONTRACT.PACK_CONTRIBUTION_INVALID' }));
+  });
+
+  describe('an index type whose access method is not its own name', () => {
+    const convertedSearch = defineIndexTypes().add('search', {
+      options: type('object'),
+      accessMethod: 'gin',
+    });
+
+    it('is accepted from the target, which converts it', () => {
+      const registry = indexTypeRegistryOf({ id: 'target', indexTypes: convertedSearch });
+
+      expect(registry.get('search')).toMatchObject({ type: 'search', accessMethod: 'gin' });
+    });
+
+    it('is refused from an extension pack, naming the pack and the access method', () => {
+      expect(() =>
+        indexTypeRegistryOf({ id: 'target' }, [{ id: 'search-pack', indexTypes: convertedSearch }]),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.PACK_CONTRIBUTION_INVALID',
+          message: expect.stringContaining('"search-pack"'),
+          why: expect.stringContaining('target'),
+          fix: expect.stringContaining('accessMethod'),
+          meta: { indexType: 'search', accessMethod: 'gin', packId: 'search-pack' },
+        }),
+      );
+    });
+
+    it('is accepted from an extension pack that declares its own name as the access method', () => {
+      const registry = indexTypeRegistryOf({ id: 'target' }, [
+        {
+          id: 'bm25-pack',
+          indexTypes: defineIndexTypes().add('bm25', {
+            options: type('object'),
+            accessMethod: 'bm25',
+          }),
+        },
+      ]);
+
+      expect(registry.has('bm25')).toBe(true);
+    });
   });
 });

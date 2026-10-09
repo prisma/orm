@@ -37,9 +37,9 @@ describe('variant-owned include parent correlation', () => {
       contract,
       getTestAggregates(),
       'public',
+      'Task',
       'tasks',
       rootState(include, 'Feature', 'title'),
-      'Task',
     );
 
     expect(plan.ast).toEqual(
@@ -62,9 +62,9 @@ describe('variant-owned include parent correlation', () => {
       contract,
       getTestAggregates(),
       'public',
+      'Task',
       'tasks',
       rootState(include, 'Bug', 'title'),
-      'Task',
     );
 
     expect(plan.ast).toEqual(
@@ -92,9 +92,9 @@ describe('variant-owned include parent correlation', () => {
       contract,
       getTestAggregates(),
       'public',
+      'Task',
       'tasks',
       rootState(include, 'Feature', 'title'),
-      'Task',
     );
     const childRows = childRowsFor(plan.ast, 'subtasks');
 
@@ -133,9 +133,9 @@ describe('variant-owned include child alias collisions', () => {
       contract,
       getTestAggregates(),
       'public',
+      'Task',
       'tasks',
       rootState(include, 'Feature', 'title'),
-      'Task',
     );
 
     expect(plan.ast).toEqual(
@@ -188,9 +188,9 @@ describe('variant-owned include child alias collisions', () => {
       contract,
       getTestAggregates(),
       'public',
+      'Task',
       'tasks',
       rootState(include, 'Feature', 'title'),
-      'Task',
     );
 
     expect(plan.ast).toEqual(

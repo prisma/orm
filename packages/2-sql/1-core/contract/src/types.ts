@@ -1,6 +1,6 @@
 import type { CodecTrait } from '@internal/framework-components/codec';
 import type { ControlDriverInstance } from '@internal/framework-components/control';
-import type { ReferentialAction } from './ir/foreign-key';
+import type { ForeignKeyIndex, ReferentialAction } from './ir/foreign-key';
 
 export interface SqlControlDriverInstance<T extends string = string>
   extends ControlDriverInstance<'sql', T> {
@@ -13,6 +13,7 @@ export interface SqlControlDriverInstance<T extends string = string>
 export { CheckConstraint, type CheckConstraintInput } from './ir/check-constraint';
 export {
   ForeignKey,
+  type ForeignKeyIndex,
   type ForeignKeyInput,
   type ReferentialAction,
 } from './ir/foreign-key';
@@ -39,6 +40,7 @@ export {
 export { StorageColumn, type StorageColumnInput } from './ir/storage-column';
 export { StorageTable, type StorageTableInput } from './ir/storage-table';
 export {
+  type AuthoredStorageTypeInstance,
   CODEC_INSTANCE_KIND,
   isStorageTypeInstance,
   resolvedTypeParams,
@@ -65,6 +67,7 @@ export type ForeignKeyOptions = {
   readonly name?: string;
   readonly onDelete?: ReferentialAction;
   readonly onUpdate?: ReferentialAction;
+  readonly index?: ForeignKeyIndex;
 };
 
 export type SqlModelFieldStorage = {
@@ -83,9 +86,9 @@ export const DEFAULT_FK_CONSTRAINT = true;
 export const DEFAULT_FK_INDEX = true;
 
 export function applyFkDefaults(
-  fk: { constraint?: boolean | undefined; index?: boolean | undefined },
+  fk: { constraint?: boolean | undefined; index?: boolean | string | undefined },
   overrideDefaults?: { constraint?: boolean | undefined; index?: boolean | undefined },
-): { constraint: boolean; index: boolean } {
+): { constraint: boolean; index: boolean | string } {
   return {
     constraint: fk.constraint ?? overrideDefaults?.constraint ?? DEFAULT_FK_CONSTRAINT,
     index: fk.index ?? overrideDefaults?.index ?? DEFAULT_FK_INDEX,

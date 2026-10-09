@@ -19,9 +19,11 @@ import type {
   SqlPlannerConflict,
   SqlPlannerConflictLocation,
 } from '@internal/family-sql/control';
+import { sqlTypeLookupsOf } from '@internal/family-sql/control';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type { SchemaDiffIssue } from '@internal/framework-components/control';
 import { issueOutcome, orderIssuesByDependencies } from '@internal/framework-components/control';
+import type { SqlTypeLookups } from '@internal/sql-contract/data-type';
 import {
   RelationalSchemaNodeKind,
   type SqlColumnIR,
@@ -128,9 +130,9 @@ export function columnTypeChanged(expected: SqlColumnIR, actual: SqlColumnIR): b
  * `toTableSpec` (which read a raw contract `StorageTable`). Every column's
  * spec is resolved from its `codecRef` via `columnSpecFromNode`.
  */
-export function tableSpecFromNode(table: SqlTableIR): SqliteTableSpec {
+export function tableSpecFromNode(table: SqlTableIR, types: SqlTypeLookups): SqliteTableSpec {
   const columns: SqliteColumnSpec[] = Object.values(table.columns).map((c) =>
-    columnSpecFromNode(c, isInlineAutoincrementPrimaryKeyNode(table, c)),
+    columnSpecFromNode(c, isInlineAutoincrementPrimaryKeyNode(table, c), types),
   );
   const uniques: SqliteUniqueSpec[] = table.uniques.map((u) => ({
     columns: u.columns,
@@ -205,9 +207,9 @@ function absorbedConflictKind(nodeKind: string): SqlPlannerConflict['kind'] {
  * (declared + FK-backing, deduped) are already merged and ordered at
  * derivation (`contractToSchemaIR`'s `convertTable`).
  */
-function buildCreateTableCalls(table: SqlTableIR): SqliteOpFactoryCall[] {
+function buildCreateTableCalls(table: SqlTableIR, types: SqlTypeLookups): SqliteOpFactoryCall[] {
   const columns = Object.values(table.columns).map((c) =>
-    ddlColumnFromNode(c, isInlineAutoincrementPrimaryKeyNode(table, c)),
+    ddlColumnFromNode(c, isInlineAutoincrementPrimaryKeyNode(table, c), types),
   );
   const hasInlinePk = Object.values(table.columns).some((c) =>
     isInlineAutoincrementPrimaryKeyNode(table, c),
@@ -229,13 +231,14 @@ function buildCreateTableCalls(table: SqlTableIR): SqliteOpFactoryCall[] {
 
 function mapTableIssue(
   issue: SchemaDiffIssue,
+  types: SqlTypeLookups,
 ): Result<readonly SqliteOpFactoryCall[], SqlPlannerConflict> {
   if (issueOutcome(issue) === 'not-found') {
     const table = blindCast<
       SqlTableIR,
       'a not-found table issue always carries the expected table node'
     >(issue.expected);
-    return ok(buildCreateTableCalls(table));
+    return ok(buildCreateTableCalls(table, types));
   }
   if (issueOutcome(issue) === 'not-expected') {
     const table = blindCast<
@@ -277,7 +280,7 @@ function mapColumnIssue(
     // honest against the table node rather than assuming it.
     const table = ctx.expected.tables[tableName];
     const inline = table !== undefined && isInlineAutoincrementPrimaryKeyNode(table, column);
-    return ok([new AddColumnCall(tableName, columnSpecFromNode(column, inline))]);
+    return ok([new AddColumnCall(tableName, columnSpecFromNode(column, inline, ctx.types))]);
   }
   if (issueOutcome(issue) === 'not-expected') {
     const column = blindCast<
@@ -350,7 +353,7 @@ export function mapNodeIssueToCall(
   }
   switch (node.nodeKind) {
     case RelationalSchemaNodeKind.table:
-      return mapTableIssue(issue);
+      return mapTableIssue(issue, ctx.types);
     case RelationalSchemaNodeKind.column:
       return mapColumnIssue(issue, ctx);
     case RelationalSchemaNodeKind.index:
@@ -441,6 +444,7 @@ export function planIssues(
     actual: options.actual ?? emptySchemaIR(),
     policy,
     frameworkComponents,
+    types: sqlTypeLookupsOf(frameworkComponents),
   };
 
   const strategies = options.strategies ?? sqlitePlannerStrategies;
@@ -531,7 +535,7 @@ function emptySchemaIR(): SqlSchemaIR {
   return new SqlSchemaIR({ tables: {} });
 }
 
-function conflictForDisallowedCall(
+export function conflictForDisallowedCall(
   call: SqliteOpFactoryCall,
   allowed: readonly string[],
 ): SqlPlannerConflict {

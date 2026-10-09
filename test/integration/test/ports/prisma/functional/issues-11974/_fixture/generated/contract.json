@@ -322,7 +322,7 @@
               "columns": {
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -339,17 +339,20 @@
               "columns": {
                 "commentId": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "userId": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "downVote_commentId_idx_b5a4f615"
+                  },
                   "source": {
                     "columns": [
                       "commentId"
@@ -366,6 +369,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "downVote_userId_idx_a489d58a"
+                  },
                   "source": {
                     "columns": [
                       "userId"
@@ -412,17 +418,20 @@
               "columns": {
                 "commentId": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "userId": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "upVote_commentId_idx_b5a4f615"
+                  },
                   "source": {
                     "columns": [
                       "commentId"
@@ -439,6 +448,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "upVote_userId_idx_a489d58a"
+                  },
                   "source": {
                     "columns": [
                       "userId"
@@ -485,7 +497,7 @@
               "columns": {
                 "uid": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -504,11 +516,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "5ee4271de58d510d3800d53a22d1b252e0733525c9411c46d35663d24e129881"
+    "storageHash": "79d2ddc4bb621bd431f563a89975c26387754fc0e3242bafc86f9a8e29f7ca2b"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -519,9 +533,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

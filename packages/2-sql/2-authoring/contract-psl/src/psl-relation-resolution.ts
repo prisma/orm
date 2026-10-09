@@ -1,6 +1,10 @@
-import type { AuthoringContributions } from '@internal/framework-components/authoring';
-import { checkUncomposedNamespace } from '@internal/framework-components/authoring';
-import type { Binder, FieldSymbol, ModelSymbol, SymbolTable } from '@internal/psl-parser';
+import type {
+  Binder,
+  FieldAttributeSpecContext,
+  FieldSymbol,
+  ModelSymbol,
+  SymbolTable,
+} from '@internal/psl-parser';
 import {
   diagnosticSource,
   type PslDiagnostic,
@@ -9,7 +13,6 @@ import {
 import {
   fkRelationPairKey,
   type InvalidFkPairing,
-  reportUncomposedNamespace,
   requiredOneToOneBackrelationDiagnostic,
 } from '@internal/psl-parser/interpret';
 import type { PslSources } from '@internal/psl-parser/syntax';
@@ -87,6 +90,7 @@ export function normalizeReferentialAction(actionToken: string): ReferentialActi
 export function interpretRelationAttribute(input: {
   readonly selfModel: ModelSymbol;
   readonly field: FieldSymbol;
+  readonly specContext: FieldAttributeSpecContext;
   readonly symbols: SymbolTable;
   readonly sources: PslSources;
   readonly binder: Binder;
@@ -97,7 +101,7 @@ export function interpretRelationAttribute(input: {
   return interpretFieldAttribute({
     symbols: input.symbols,
     node,
-    spec: sqlAttributeSpecs.field.relation(),
+    spec: sqlAttributeSpecs.field.relation(input.specContext),
     model: input.selfModel,
     field: input.field,
     sources: input.sources,
@@ -522,11 +526,7 @@ export function validateBackrelationFieldAttributes(input: {
   readonly field: FieldSymbol;
   readonly sources: PslSources;
   readonly binder: Binder;
-  readonly composedExtensions: Set<string>;
-  readonly authoringContributions: AuthoringContributions | undefined;
   readonly diagnostics: PslDiagnosticCollector;
-  readonly familyId: string;
-  readonly targetId: string;
 }): boolean {
   const source = diagnosticSource(input.sources, input.field.node.syntax);
   let valid = true;
@@ -535,22 +535,6 @@ export function validateBackrelationFieldAttributes(input: {
       continue;
     }
 
-    const uncomposedNamespace = checkUncomposedNamespace(attribute.name, input.composedExtensions, {
-      familyId: input.familyId,
-      targetId: input.targetId,
-      authoringContributions: input.authoringContributions,
-    });
-    if (uncomposedNamespace) {
-      reportUncomposedNamespace({
-        subjectLabel: `Attribute "@${attribute.name}"`,
-        namespace: uncomposedNamespace,
-        source,
-        span: attribute.span,
-        diagnostics: input.diagnostics,
-      });
-      valid = false;
-      continue;
-    }
     input.diagnostics.push({
       code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
       message: `Field "${input.modelName}.${input.field.name}" uses unsupported attribute "@${attribute.name}"`,

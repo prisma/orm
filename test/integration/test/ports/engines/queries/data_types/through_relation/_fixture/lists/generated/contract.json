@@ -20,7 +20,9 @@
           "Child": {
             "fields": {
               "bInt": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int8@1",
@@ -28,7 +30,9 @@
                 }
               },
               "bool": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -36,7 +40,9 @@
                 }
               },
               "bytes": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bytea@1",
@@ -51,7 +57,9 @@
                 }
               },
               "dt": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -59,7 +67,9 @@
                 }
               },
               "empty": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -67,7 +77,9 @@
                 }
               },
               "float": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/float8@1",
@@ -75,7 +87,9 @@
                 }
               },
               "int": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -90,7 +104,9 @@
                 }
               },
               "string": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -98,7 +114,9 @@
                 }
               },
               "unset": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -261,71 +279,92 @@
               "columns": {
                 "bInt": {
                   "codecId": "pg/int8@1",
-                  "many": true,
-                  "nativeType": "int8",
+                  "dataType": "pg/int8",
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nullable": false
                 },
                 "bool": {
                   "codecId": "pg/bool@1",
-                  "many": true,
-                  "nativeType": "bool",
+                  "dataType": "pg/bool",
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nullable": false
                 },
                 "bytes": {
                   "codecId": "pg/bytea@1",
-                  "many": true,
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nullable": false
                 },
                 "childId": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "dt": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "many": true,
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nullable": false
                 },
                 "empty": {
                   "codecId": "pg/int4@1",
-                  "many": true,
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nullable": false
                 },
                 "float": {
                   "codecId": "pg/float8@1",
-                  "many": true,
-                  "nativeType": "float8",
+                  "dataType": "pg/float8",
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nullable": false
                 },
                 "int": {
                   "codecId": "pg/int4@1",
-                  "many": true,
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nullable": false
                 },
                 "parentId": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": true
                 },
                 "string": {
                   "codecId": "pg/text@1",
-                  "many": true,
-                  "nativeType": "text",
+                  "dataType": "pg/text",
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nullable": false
                 },
                 "unset": {
                   "codecId": "pg/int4@1",
-                  "many": true,
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "child_parentId_idx_6a68f597"
+                  },
                   "source": {
                     "columns": [
                       "parentId"
@@ -363,7 +402,7 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -382,11 +421,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "684b4f51e9b798d6e691aaf5e2c04918aa635cfa3bce005236264630dd3c33ed"
+    "storageHash": "64ff2d759d43c6d986c4a088e077d01d4baf02e86e790d766cfdb6cdd0467692"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -397,9 +438,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

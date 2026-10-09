@@ -11,7 +11,6 @@ const int4Column = columnDescriptor('pg/int4@1');
 const embedding1536 = {
   kind: 'codec-instance',
   codecId: 'pg/vector@1',
-  nativeType: 'vector',
   typeParams: { length: 1536 },
 } as const;
 

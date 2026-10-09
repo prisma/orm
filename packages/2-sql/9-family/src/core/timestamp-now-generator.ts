@@ -24,7 +24,6 @@ const TEMPORAL_PRECISION_ARG = {
   kind: 'number',
   optional: true,
   integer: true,
-  minimum: 0,
 } as const;
 
 /**
@@ -39,20 +38,14 @@ const TEMPORAL_PRECISION_ARG = {
 /* @__NO_SIDE_EFFECTS__ */
 export function temporalCodecPresetWithPrecision<
   const CodecId extends string,
-  const NativeType extends string,
   const GeneratorId extends string = typeof TIMESTAMP_NOW_GENERATOR_ID,
->(input: {
-  readonly codecId: CodecId;
-  readonly nativeType: NativeType;
-  readonly generatorId?: GeneratorId;
-}) {
+>(input: { readonly codecId: CodecId; readonly generatorId?: GeneratorId }) {
   const generatorId = input.generatorId ?? TIMESTAMP_NOW_GENERATOR_ID;
   return {
     kind: 'fieldPreset',
     args: [TEMPORAL_PRECISION_ARG, TEMPORAL_ON_CREATE_ARG, TEMPORAL_ON_UPDATE_ARG],
     output: {
       codecId: input.codecId,
-      nativeType: input.nativeType,
       typeParams: { precision: { kind: 'arg', index: 0 } },
       executionDefaults: {
         onCreate: temporalPhaseTemplate(1, generatorId),

@@ -1,5 +1,6 @@
-import { ok } from '@internal/utils/result';
+import { notOk, ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
+import { leafDiagnostic } from '../src/attribute-spec/combinators/diagnostic';
 import { createBinder } from '../src/binder';
 import type { ArgType, AttributeCtx, FieldAttributeCtx, ModelAttributeCtx } from '../src/exports';
 import {
@@ -29,6 +30,7 @@ import { buildSymbolTable } from '../src/symbol-table';
 import { FieldAttributeAst, ModelAttributeAst } from '../src/syntax/ast/attributes';
 import { ArrayLiteralAst, type ExpressionAst } from '../src/syntax/ast/expressions';
 import { createSyntaxTree } from '../src/syntax/red';
+import { binderContext } from './support';
 
 function makeCtx(sources: PslSources): FieldAttributeCtx {
   const { document, sources: modelSources } = parse('model M {\n  id Int @id\n}\n', 'test.psl');
@@ -43,12 +45,7 @@ function makeCtx(sources: PslSources): FieldAttributeCtx {
   const { binder } = createBinder({
     sources: modelSources,
     symbolTable,
-    typeConstructors: {},
-    attributeSpecs: { model: {}, field: {} },
-    controlMutationDefaults: {
-      defaultFunctionRegistry: new Map(),
-      dataTypeEntries: {},
-    },
+    context: binderContext(),
   });
   return { sources, symbols: symbolTable, selfModel, field, binder };
 }
@@ -67,25 +64,22 @@ function schemaArg(schema: string, attribute: string, argName?: string) {
   const { binder } = createBinder({
     sources: registry,
     symbolTable,
-    typeConstructors: {},
-    attributeSpecs: {
-      model: {},
-      field: {
-        [attribute]: () =>
-          fieldAttribute(attribute, {
-            documentation: 'fixture',
-            positional: [{ key: 'fields', type: list(fieldRef()), documentation: 'fixture' }],
-            named: {
-              fields: { type: list(fieldRef()), documentation: 'fixture' },
-              references: { type: list(referencedFieldRef()), documentation: 'fixture' },
-            },
-          }),
+    context: binderContext({
+      attributeSpecs: {
+        model: {},
+        field: {
+          [attribute]: () =>
+            fieldAttribute(attribute, {
+              documentation: 'fixture',
+              positional: [{ key: 'fields', type: list(fieldRef()), documentation: 'fixture' }],
+              named: {
+                fields: { type: list(fieldRef()), documentation: 'fixture' },
+                references: { type: list(referencedFieldRef()), documentation: 'fixture' },
+              },
+            }),
+        },
       },
-    },
-    controlMutationDefaults: {
-      defaultFunctionRegistry: new Map(),
-      dataTypeEntries: {},
-    },
+    }),
   });
   for (const node of field.node.attributes()) {
     if (node.name()?.path().join('.') !== attribute) continue;
@@ -616,6 +610,28 @@ describe('oneOf', () => {
     if (result.ok) expect(result.value).toBe('first');
   });
 
+  it('returns the result of the one alternative that claims the argument, success or failure', () => {
+    const { expr, ctx } = argOf('Cascade');
+    const claiming: ArgType<'claimed', AttributeCtx> = {
+      kind: 'str',
+      value: undefined,
+      label: 'claimed',
+      claims: () => true,
+      parse: () => notOk([leafDiagnostic(ctx, expr, 'claimed but malformed')]),
+    };
+    const accepting: ArgType<'accepted', AttributeCtx> = {
+      kind: 'str',
+      value: undefined,
+      label: 'accepted',
+      parse: () => ok('accepted'),
+    };
+
+    expect(oneOf(accepting, claiming).parse(expr, ctx)).toEqual(
+      notOk([expect.objectContaining({ message: 'claimed but malformed' })]),
+    );
+    expect(oneOf(accepting, claiming, claiming).parse(expr, ctx)).toEqual(ok('accepted'));
+  });
+
   it('matches whichever alternative accepts the argument', () => {
     const { expr, ctx } = argOf('SetNull');
 
@@ -764,20 +780,20 @@ describe('entityRef', () => {
     const { binder } = createBinder({
       sources,
       symbolTable,
-      typeConstructors: {},
-      attributeSpecs: {
-        model: {},
-        field: {
-          x: () =>
-            fieldAttribute('x', {
-              documentation: 'fixture',
-              positional: [
-                { key: 'model', type: entityRef({ kind: 'model' }), documentation: 'fixture' },
-              ],
-            }),
+      context: binderContext({
+        attributeSpecs: {
+          model: {},
+          field: {
+            x: () =>
+              fieldAttribute('x', {
+                documentation: 'fixture',
+                positional: [
+                  { key: 'model', type: entityRef({ kind: 'model' }), documentation: 'fixture' },
+                ],
+              }),
+          },
         },
-      },
-      controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
+      }),
     });
     return { expr, ctx: { sources, symbols: symbolTable, selfModel, binder } };
   }
@@ -1011,6 +1027,15 @@ describe('record', () => {
 });
 
 describe('funcCall', () => {
+  it('claims a call to its name and nothing else', () => {
+    const call = funcCall('now', { documentation: 'The current time.' });
+    expect(call.claims(argOf('now()').expr)).toBe(true);
+    expect(call.claims(argOf('now(1)').expr)).toBe(true);
+    expect(call.claims(argOf('later()').expr)).toBe(false);
+    expect(call.claims(argOf('pg.now()').expr)).toBe(false);
+    expect(call.claims(argOf('now').expr)).toBe(false);
+  });
+
   it('accepts a nullary call whose callee matches the pinned name', () => {
     const { expr, ctx } = argOf('now()');
 

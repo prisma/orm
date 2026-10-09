@@ -45,11 +45,11 @@ export class TagCollection extends Collection<Contract, 'Tag'> {
 
 export class TaskCollection extends Collection<Contract, 'Task'> {
   bugs() {
-    return this.variant('Bug');
+    return this.variant('bug');
   }
 
   features() {
-    return this.variant('Feature');
+    return this.variant('feature');
   }
 
   forUser(userId: string) {

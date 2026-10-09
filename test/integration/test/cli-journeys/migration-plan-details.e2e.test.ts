@@ -135,6 +135,8 @@ withTempDir(({ createTempDir }) => {
           'drop-email',
           '--from',
           latestMigrationDirName(ctx),
+          '--delete',
+          'User.email',
           '--json',
         ]);
         expect(planDrop.exitCode, 'I.03: plan drop-email').toBe(0);

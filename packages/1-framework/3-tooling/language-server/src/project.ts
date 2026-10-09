@@ -1,7 +1,7 @@
 import { pathToFileURL } from 'node:url';
 import { CliStructuredError } from '@internal/errors/control';
 import { renameLegacyDirective } from '@internal/psl-parser';
-import { format } from '@internal/psl-parser/format';
+import { format, resolveFormatOptions } from '@internal/psl-parser/format';
 import {
   type CompletionItem,
   type Connection,
@@ -12,20 +12,30 @@ import {
   DocumentDiagnosticReportKind,
   type FoldingRange,
   type FullDocumentDiagnosticReport,
+  type Hover,
+  type Location,
+  type LocationLink,
+  LSPErrorCodes,
   type Position,
   type PublishDiagnosticsParams,
   type Range,
   type RelatedFullDocumentDiagnosticReport,
+  ResponseError,
   type SemanticTokens,
   type SignatureHelp,
+  type WorkspaceEdit,
 } from 'vscode-languageserver';
 import { classifyPslCompletionContext } from './completion-context';
 import { providePslCompletionItems } from './completion-provider';
 import { type ConfigResolution, resolveConfigInputs } from './config-resolution';
+import { provideDefinition } from './definition';
 import { type LspDiagnostic, ParseDiagnosticSeverity } from './diagnostic-mapping';
 import type { DocumentStore } from './document-store';
 import { computeFoldingRanges } from './folding-ranges';
+import { providePslHover } from './hover';
 import { ProjectArtifacts } from './project-artifacts';
+import { provideReferences } from './references';
+import { type PrepareRenameResult, providePrepareRename, provideRename } from './rename';
 import {
   isWatcherCacheEligible,
   normalizeFileUri,
@@ -108,8 +118,7 @@ export class Project {
       {
         document: document.parse().document,
         sourceFile: document.sourceFile,
-        symbolTable: data.artifacts.symbolTable(),
-        scalarTypes: data.controlStack.scalarTypes,
+        binder: data.artifacts.binder(),
       },
       range,
     );
@@ -140,6 +149,7 @@ export class Project {
           candidates: {
             ...data.controlStack,
             symbolTable: data.artifacts.symbolTable(),
+            binder: data.artifacts.binder(),
           },
           clientSupportsSnippets: capabilities.completionSnippets,
           clientSupportsTriggerSuggestCommand: capabilities.completionTriggerSuggestCommand,
@@ -169,9 +179,122 @@ export class Project {
         candidates: {
           ...data.controlStack,
           symbolTable: data.artifacts.symbolTable(),
+          binder: data.artifacts.binder(),
         },
       });
     } catch {
+      return null;
+    }
+  }
+
+  async hover(uri: string, position: Position): Promise<Hover | null> {
+    const data = await this.#resolveMember(uri);
+    const document = data?.artifacts.document(uri);
+    if (data === undefined || document === undefined) return null;
+    try {
+      return providePslHover({
+        document: document.parse().document,
+        sourceFile: document.sourceFile,
+        position,
+        binder: data.artifacts.binder(),
+        pslBlockDescriptors: data.controlStack.pslBlockDescriptors,
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async definition(
+    uri: string,
+    position: Position,
+    linkSupport: boolean,
+  ): Promise<LocationLink[] | Location[] | null> {
+    const data = await this.#resolveMember(uri);
+    const document = data?.artifacts.document(uri);
+    if (data === undefined || document === undefined) return null;
+    try {
+      return provideDefinition({
+        document: document.parse().document,
+        sourceFile: document.sourceFile,
+        position,
+        sources: data.artifacts.sources,
+        binder: data.artifacts.binder(),
+        linkSupport,
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async references(
+    uri: string,
+    position: Position,
+    includeDeclaration: boolean,
+  ): Promise<Location[]> {
+    const data = await this.#resolveMember(uri);
+    const document = data?.artifacts.document(uri);
+    if (data === undefined || document === undefined) return [];
+    try {
+      const documents = data.artifacts.documents().map((snapshot) => ({
+        document: snapshot.parse().document,
+        sourceFile: snapshot.sourceFile,
+      }));
+      return provideReferences({
+        document: document.parse().document,
+        sourceFile: document.sourceFile,
+        position,
+        documents,
+        binder: data.artifacts.binder(),
+        includeDeclaration,
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  async prepareRename(uri: string, position: Position): Promise<PrepareRenameResult | null> {
+    const data = await this.#resolveMember(uri);
+    const document = data?.artifacts.document(uri);
+    if (data === undefined || document === undefined) return null;
+    try {
+      const documents = data.artifacts.documents().map((snapshot) => ({
+        document: snapshot.parse().document,
+        sourceFile: snapshot.sourceFile,
+      }));
+      return providePrepareRename({
+        document: document.parse().document,
+        sourceFile: document.sourceFile,
+        position,
+        documents,
+        binder: data.artifacts.binder(),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async rename(uri: string, position: Position, newName: string): Promise<WorkspaceEdit | null> {
+    const data = await this.#resolveMember(uri);
+    const document = data?.artifacts.document(uri);
+    if (data === undefined || document === undefined) return null;
+    try {
+      const documents = data.artifacts.documents().map((snapshot) => ({
+        document: snapshot.parse().document,
+        sourceFile: snapshot.sourceFile,
+      }));
+      return provideRename({
+        document: document.parse().document,
+        sourceFile: document.sourceFile,
+        position,
+        documents,
+        binder: data.artifacts.binder(),
+        ...data.controlStack,
+        symbolTable: data.artifacts.symbolTable(),
+        formatOptions: resolveFormatOptions(data.formatter),
+        newName,
+      });
+    } catch (error) {
+      if (error instanceof ResponseError && error.code === LSPErrorCodes.RequestFailed) throw error;
       return null;
     }
   }
@@ -330,6 +453,7 @@ export class Project {
       this.#options.documents.text(uri),
     );
     const artifacts = new ProjectArtifacts({
+      controlStack: resolution.controlStack,
       inputs: resolution.inputs,
       readSnapshot: this.#options.documents.readSnapshot,
       onInterpretationError: (uri, error) => {

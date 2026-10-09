@@ -1,7 +1,4 @@
-export {
-  isFullTextIndexableCodec,
-  renderFullTextIndexExpression,
-} from '../core/full-text-index-expression';
+export { renderFullTextIndexDocument } from '../core/full-text-search-document';
 export {
   escapeLiteral,
   qualifyName,

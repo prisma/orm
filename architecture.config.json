@@ -229,6 +229,48 @@
       "plane": "runtime"
     },
     {
+      "glob": "packages/3-targets/3-targets/postgres/src/core/data-types.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/3-targets/postgres/src/core/data-type-entries.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/3-targets/postgres/src/core/sql-utils.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/3-targets/postgres/src/core/postgres-keywords.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/3-targets/postgres/src/core/errors.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/3-targets/postgres/src/core/codec-helpers.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/3-targets/postgres/src/exports/data-types.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/3-targets/postgres/src/exports/control.ts",
       "domain": "extensions",
       "layer": "targets",
@@ -431,6 +473,12 @@
       "domain": "extensions",
       "layer": "targets",
       "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/3-targets/sqlite/src/exports/data-types.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
     },
     {
       "glob": "packages/3-targets/3-targets/sqlite/src/exports/pack.ts",

@@ -40,14 +40,10 @@ import { parse } from '@internal/psl-parser/syntax';
 import type { SqlValueSetDerivingEntityTypeOutput } from '@internal/sql-contract/value-set-derivation-hook';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
+import { testSqlTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { resolveFieldTypeDescriptor } from '../src/psl-column-resolution';
-import { fixtureDataTypeSupport } from './fixture-data-types';
-import {
-  postgresScalarTypeDescriptors,
-  postgresTarget,
-  symbolTableInputFromParseArgs,
-} from './fixtures';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
+import { interpretSqlContract, postgresScalarTypeDescriptors, postgresTarget } from './fixtures';
 
 const NATIVE_ENUM_DISCRIMINATOR = 'test-native-enum';
 const PLAIN_REF_DISCRIMINATOR = 'test-plain-ref';
@@ -115,19 +111,17 @@ const entityTypes: AuthoringEntityTypeNamespace = {
   },
 };
 
-type EntityRefColumnResult = { readonly typeParams?: Record<string, unknown> } & {
-  readonly nativeType: string;
-};
+type EntityRefColumnResult = { readonly typeParams?: Record<string, unknown> };
 
 function makeCodecDescriptor(options: {
   readonly codecId: string;
+  readonly dataType?: string;
   readonly columnFromEntity?: (entity: unknown) => EntityRefColumnResult | undefined;
 }): AnyCodecDescriptor {
   return {
     codecId: options.codecId,
-    dataType: dataTypeId('demo/fixture'),
+    dataType: dataTypeId(options.dataType ?? 'demo/fixture'),
     traits: ['equality'],
-    targetTypes: ['text'],
     paramsSchema: {
       '~standard': { version: 1, vendor: 'test', validate: (input: unknown) => ({ value: input }) },
     },
@@ -141,18 +135,16 @@ function makeCodecDescriptor(options: {
 
 const nativeEnumCodec = makeCodecDescriptor({
   codecId: 'test/native-enum@1',
+  dataType: 'pg/enum',
   columnFromEntity: (entity) => {
     const enumEntity = entity as TestNativeEnum;
-    return { typeParams: { typeName: enumEntity.typeName }, nativeType: enumEntity.typeName };
+    return { typeParams: { typeName: enumEntity.typeName } };
   },
 });
 
 const plainRefCodec = makeCodecDescriptor({
   codecId: 'test/plain-ref@1',
-  columnFromEntity: (entity) => {
-    const plainEntity = entity as TestPlainRef;
-    return { nativeType: plainEntity.name };
-  },
+  columnFromEntity: () => ({}),
 });
 
 // No `columnFromEntity` hook — used to exercise the contributor-bug throw.
@@ -173,12 +165,14 @@ const codecsById = new Map<string, AnyCodecDescriptor>([
   [rejectsCodec.codecId, rejectsCodec],
 ]);
 
-const codecLookup: CodecLookupWithDescriptors = {
-  get: () => undefined,
-  targetTypesFor: () => undefined,
-  renderOutputTypeFor: () => undefined,
-  descriptorFor: (id) => codecsById.get(id),
-};
+const codecLookup: CodecLookupWithDescriptors = testSqlTypeLookups(
+  {},
+  {
+    get: () => undefined,
+    renderOutputTypeFor: () => undefined,
+    descriptorFor: (id) => codecsById.get(id),
+  },
+).codecLookup;
 
 const type: AuthoringTypeNamespace = {
   pg: {
@@ -212,7 +206,7 @@ const authoringContributions: AuthoringContributions = {
 };
 
 const baseInput = {
-  dataTypeLookup: fixtureDataTypeSupport.lookup,
+  ...fixtureInterpreterTypes,
   target: postgresTarget,
   scalarColumnDescriptors: postgresScalarTypeDescriptors,
   composedExtensionContracts: new Map(),
@@ -222,13 +216,8 @@ const baseInput = {
 } as const;
 
 function interpretWith(schema: string) {
-  const document = symbolTableInputFromParseArgs({
-    schema,
-    sourceId: 'schema.prisma',
-  });
-  return interpretPslDocumentToSqlContract({
+  return interpretSqlContract(schema, {
     ...baseInput,
-    ...document,
     authoringContributions,
   });
 }
@@ -252,7 +241,7 @@ namespace docs {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    // `nativeType` / `typeParams.typeName` stay bare here: schema-qualification
+    // `typeParams.typeName` stays bare here: schema-qualification
     // (e.g. `auth.aal_level`) is a Postgres-target concern applied when the
     // target builds the namespace (`postgresCreateNamespace`), not something
     // the generic interpreter or its `TestSqlNamespace` double perform. Real
@@ -267,7 +256,7 @@ namespace docs {
                 columns: {
                   aal: {
                     codecId: 'test/native-enum@1',
-                    nativeType: 'AalLevel',
+                    dataType: 'pg/enum',
                     typeParams: { typeName: 'AalLevel' },
                     nullable: false,
                     valueSet: {
@@ -284,6 +273,31 @@ namespace docs {
         },
       },
     });
+  });
+
+  it('refuses a field typed by a non-enum block', () => {
+    const result = interpretWith(`
+namespace docs {
+  native_enum AalLevel {
+    aal1
+  }
+
+  model AuthSession {
+    id Int @id
+    aal AalLevel
+  }
+}
+`);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      {
+        code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+        message:
+          'Field "AuthSession.aal" is typed by the native_enum "AalLevel", which is not a column type.',
+      },
+    ]);
   });
 
   it('does not set a typeRef on an entity-ref-resolved column', () => {
@@ -338,7 +352,7 @@ namespace docs {
             table: {
               Thing: {
                 columns: {
-                  ref: { codecId: 'test/plain-ref@1', nativeType: 'AnyName' },
+                  ref: { codecId: 'test/plain-ref@1' },
                 },
               },
             },
@@ -501,13 +515,21 @@ model AuthSession {
     const diagnostics = createPslDiagnosticCollector(sources);
     const result = resolveFieldTypeDescriptor({
       field,
+      resolution: {
+        kind: 'contributedType',
+        symbol: {
+          kind: 'contributedType',
+          name: 'enum',
+          path: ['pg', 'enum'],
+          descriptor: {
+            kind: 'typeConstructor',
+            entityRefArg: { index: 0, entityKind: NATIVE_ENUM_DISCRIMINATOR },
+            output: { codecId: nativeEnumCodec.codecId },
+          },
+        },
+      },
       enumTypeDescriptors: new Map(),
       namedTypeDescriptors: new Map(),
-      scalarColumnDescriptors: postgresScalarTypeDescriptors,
-      authoringContributions,
-      composedExtensions: new Set(),
-      familyId: 'sql',
-      targetId: 'postgres',
       diagnostics,
       sources,
       entityLabel: 'Field "AuthSession.aal"',

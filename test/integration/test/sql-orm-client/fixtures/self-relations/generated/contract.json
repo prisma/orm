@@ -373,27 +373,30 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "manager_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": true
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "partner_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": true
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "people_manager_id_idx_c3dee277"
+                  },
                   "source": {
                     "columns": [
                       "manager_id"
@@ -410,6 +413,11 @@
                   }
                 },
                 {
+                  "index": {
+                    "unique": [
+                      "partner_id"
+                    ]
+                  },
                   "source": {
                     "columns": [
                       "partner_id"
@@ -436,10 +444,20 @@
                   "unique": false
                 },
                 {
-                  "expression": "to_tsvector('english', \"name\")",
-                  "name": "person_name_search_2455a3e1",
+                  "columns": [
+                    "name"
+                  ],
+                  "name": "person_name_search_139e2a64",
+                  "options": {
+                    "language": "english",
+                    "weightGroups": [
+                      [
+                        "name"
+                      ]
+                    ]
+                  },
                   "prefix": "person_name_search",
-                  "type": "gin",
+                  "type": "fullText",
                   "unique": false
                 }
               ],
@@ -460,22 +478,25 @@
               "columns": {
                 "source_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "target_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "weight": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "person_connections_source_id_idx_b2d19e21"
+                  },
                   "source": {
                     "columns": [
                       "source_id"
@@ -492,6 +513,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "person_connections_target_id_idx_7e52b3aa"
+                  },
                   "source": {
                     "columns": [
                       "target_id"
@@ -538,17 +562,20 @@
               "columns": {
                 "followee_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "follower_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "person_follows_follower_id_idx_e343d705"
+                  },
                   "source": {
                     "columns": [
                       "follower_id"
@@ -565,6 +592,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "person_follows_followee_id_idx_c86a372f"
+                  },
                   "source": {
                     "columns": [
                       "followee_id"
@@ -613,11 +643,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "68cbf64f1e2ea804ae94e926908ae4a093edc4f7e897b835b1eacc66ddd89b2b"
+    "storageHash": "d4bf8b9a0fb4f51652c81415c3e05b502c3c501e0ae6226140f8c8a56a4ae0ba"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -628,9 +660,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, rm } from 'node:fs/promises';
+import type { PrismaNextConfig } from '@internal/config/config-types';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeRef } from '@internal/migration-tools/refs';
@@ -7,7 +8,10 @@ import { notOk } from '@internal/utils/result';
 import { structuredError } from '@internal/utils/structured-error';
 import { createTestCli } from '@prisma/cli-engine/testing';
 import { basename, dirname, join } from 'pathe';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { executeMigrationPlanCommand } from '../../src/control-api/operations/migration-plan';
+import type { AnswerPlanQuestions } from '../../src/control-api/statements/plan-questions';
+import type { StatementText } from '../../src/control-api/statements/statement-text';
 import { BIN_GROUPS } from '../../src/orm/cli';
 import { errorUnfilledPlaceholder } from '../../src/utils/cli-errors';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
@@ -275,6 +279,34 @@ describe('migration plan', () => {
     });
   });
 
+  it('dates the auto-baseline before now and the delta at now', async () => {
+    const now = new Date('2026-10-05T11:00:30.000Z');
+    vi.useFakeTimers({ now, toFake: ['Date'] });
+    try {
+      const project = await createOfflineProject({ storageHash: HASH_TO });
+      await seedContractSnapshot({ migrationsDir: project.migrationsDir, storageHash: HASH_FROM });
+      await seedDbRef({ appMigrationsDir: project.appMigrationsDir, storageHash: HASH_FROM });
+
+      await harness(project).run(['migration', 'plan', '--name', 'delta'], { cwd: project.dir });
+      const createdAt = await Promise.all(
+        (await plannedDirs(project)).map(async (dir) => {
+          const manifest = await readFile(
+            join(project.appMigrationsDir, dir, 'migration.json'),
+            'utf-8',
+          );
+          return [dir.replace(/^\d+T\d+_/, ''), JSON.parse(manifest).createdAt];
+        }),
+      );
+
+      expect(createdAt).toEqual([
+        ['baseline', '2026-10-05T10:59:30.000Z'],
+        ['delta', '2026-10-05T11:00:30.000Z'],
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('warns when the default origin ref already has outgoing edges', async () => {
     const HASH_MID = `abba${'4'.repeat(60)}`;
     const project = await createOfflineProject({ storageHash: HASH_TO });
@@ -394,164 +426,506 @@ describe('migration plan', () => {
     });
   });
 
-  describe('auto-baseline consent', () => {
-    /** An empty graph whose db ref demands a destructive baseline. */
-    async function destructiveBaselineProject(): Promise<OfflineProject> {
-      const project = await createOfflineProject({ storageHash: HASH_TO });
-      await seedContractSnapshot({ migrationsDir: project.migrationsDir, storageHash: HASH_FROM });
+  describe('data loss', () => {
+    const LEGACY_LOSS = {
+      operationIndex: 1,
+      subject: { kind: 'model', namespaceId: 'app', model: 'Legacy' },
+    } as const;
+    const AUDIT_LOSS = {
+      operationIndex: 2,
+      subject: { kind: 'storage', name: 'audit_log' },
+    } as const;
+    const DROP_AUDIT_OP = {
+      ...DESTRUCTIVE_OP,
+      id: 'table.drop_audit',
+      label: 'Drop table "audit_log"',
+    };
+    const losingScript: FakePlannerScript = {
+      operations: [ADDITIVE_OP, DESTRUCTIVE_OP],
+      dataLoss: [LEGACY_LOSS],
+    };
+
+    /** A project whose database sits at HASH_FROM, with models Legacy and User, and whose contract is HASH_TO. */
+    async function losingProject(): Promise<OfflineProject> {
+      const project = await createOfflineProject({
+        storageHash: HASH_TO,
+        models: ['User', 'Archive'],
+      });
+      await seedMigrationPackage({
+        appMigrationsDir: project.appMigrationsDir,
+        dirName: '20260101T0000_initial',
+        from: null,
+        to: HASH_FROM,
+      });
+      await seedContractSnapshot({
+        migrationsDir: project.migrationsDir,
+        storageHash: HASH_FROM,
+        models: ['User', 'Legacy'],
+      });
       await seedDbRef({ appMigrationsDir: project.appMigrationsDir, storageHash: HASH_FROM });
       return project;
     }
-    const destructiveScript = { operations: [ADDITIVE_OP, DESTRUCTIVE_OP] } as const;
 
-    it('refuses non-interactively without --confirm and writes nothing', async () => {
-      const project = await destructiveBaselineProject();
-
-      const run = await harness(project, { script: destructiveScript }).run(
-        ['migration', 'plan', '--json'],
-        { cwd: project.dir },
-      );
-
-      expect(run.exitCode).toBe(2);
-      const terminal = run.json.at(-1);
-      const envelope =
-        terminal !== undefined && terminal.kind === 'result' ? terminal.envelope : undefined;
-      expect(envelope).toMatchObject({
-        ok: false,
-        error: { code: 'CLI.CONSENT_REQUIRED', meta: { consentToken: basename(project.dir) } },
+    /** An empty graph whose db ref demands a baseline, then a delta that loses data. */
+    async function losingBaselineProject(): Promise<OfflineProject> {
+      const project = await createOfflineProject({
+        storageHash: HASH_TO,
+        models: ['User', 'Archive'],
       });
-      expect(await plannedDirs(project)).toEqual([]);
-    });
-
-    it('names every destructive operation in the question', async () => {
-      const project = await destructiveBaselineProject();
-
-      const run = await harness(project, { script: destructiveScript }).run(['migration', 'plan'], {
-        cwd: project.dir,
-        isTty: { stdin: true, stdout: true, stderr: true },
-        stdin: `${basename(project.dir)}\n`,
+      await seedContractSnapshot({
+        migrationsDir: project.migrationsDir,
+        storageHash: HASH_FROM,
+        models: ['User', 'Legacy'],
       });
+      await seedDbRef({ appMigrationsDir: project.appMigrationsDir, storageHash: HASH_FROM });
+      return project;
+    }
 
-      expect(run.stderr).toContain('Drop table "legacy"');
-    });
+    function envelopeOf(run: { readonly json: readonly unknown[] }) {
+      const terminal = run.json.at(-1) as
+        | { readonly kind: string; readonly envelope?: unknown }
+        | undefined;
+      return terminal?.kind === 'result' ? terminal.envelope : undefined;
+    }
 
-    it('writes the baseline once consent is typed', async () => {
-      const project = await destructiveBaselineProject();
-
-      const run = await harness(project, { script: destructiveScript }).run(
-        ['migration', 'plan', '--name', 'delta', '--json'],
-        { cwd: project.dir, isTty: { stdin: true }, answers: [basename(project.dir)] },
+    function planThroughControlApi(
+      project: OfflineProject,
+      statements: readonly StatementText[],
+      answerQuestions: AnswerPlanQuestions,
+    ) {
+      return executeMigrationPlanCommand(
+        {
+          config: {
+            ...offlineConfig({
+              project,
+              script: {
+                operations: [ADDITIVE_OP, DESTRUCTIVE_OP, DROP_AUDIT_OP],
+                dataLoss: [LEGACY_LOSS, AUDIT_LOSS],
+              },
+            }),
+            baseDir: project.dir,
+          } as unknown as PrismaNextConfig,
+          cwd: project.dir,
+          projectDir: project.dir,
+          statements,
+          answerQuestions,
+          client: { renderContractDts: renderContractDtsMock },
+        },
+        Date.now(),
       );
-      const dirs = await plannedDirs(project);
+    }
 
-      expect(run.exitCode).toBe(0);
-      expect(dirs.map((entry) => entry.replace(/^\d+T\d+_/, ''))).toEqual(['baseline', 'delta']);
-    });
+    it('takes delete statements given to the control API as answers', async () => {
+      const project = await losingProject();
+      const answerQuestions = vi.fn(async () => []);
 
-    it('writes the baseline when --confirm carries the project directory name', async () => {
-      const project = await destructiveBaselineProject();
-
-      const run = await harness(project, { script: destructiveScript }).run(
-        ['migration', 'plan', '--confirm', basename(project.dir), '--json'],
-        { cwd: project.dir },
+      const result = await planThroughControlApi(
+        project,
+        [
+          { verb: 'delete', text: 'Legacy' },
+          { verb: 'delete', text: 'audit_log' },
+        ],
+        answerQuestions,
       );
 
-      expect(run.exitCode).toBe(0);
-      expect((await plannedDirs(project)).length).toBe(2);
+      expect(result.ok && result.value.appliedStatements).toMatchObject([
+        { verb: 'delete', description: 'delete model "Legacy"' },
+        { verb: 'delete', description: 'delete storage "audit_log"' },
+      ]);
+      expect(answerQuestions).toHaveBeenCalledWith([]);
     });
 
-    it('still asks when the destructive baseline also carries a placeholder', async () => {
-      const project = await destructiveBaselineProject();
+    it('refuses delete and allow statements given to the control API that answer no question', async () => {
+      const project = await losingProject();
+
+      const result = await planThroughControlApi(
+        project,
+        [
+          { verb: 'delete', text: 'Legacy' },
+          { verb: 'delete', text: 'audit_log' },
+          { verb: 'delete', text: 'Nope' },
+          { verb: 'allow', text: 'User' },
+        ],
+        async () => [],
+      );
+
+      expect(!result.ok && result.failure.toEnvelope()).toMatchObject({
+        code: 'MIGRATION.STATEMENT_ANSWERS_NO_QUESTION',
+        meta: {
+          statements: [
+            { verb: 'delete', text: 'Nope' },
+            { verb: 'allow', text: 'User' },
+          ],
+        },
+      });
+      expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
+    });
+
+    it('refuses where nobody can answer, listing every operation with the flags that answer it', async () => {
+      const project = await losingProject();
 
       const run = await harness(project, {
         script: {
-          operations: [ADDITIVE_OP, DESTRUCTIVE_OP],
-          throwOnOperations: errorUnfilledPlaceholder('backfill'),
+          operations: [ADDITIVE_OP, DESTRUCTIVE_OP, DROP_AUDIT_OP],
+          dataLoss: [LEGACY_LOSS, AUDIT_LOSS],
         },
       }).run(['migration', 'plan', '--json'], { cwd: project.dir });
 
       expect(run.exitCode).toBe(2);
-      const terminal = run.json.at(-1);
-      const envelope =
-        terminal !== undefined && terminal.kind === 'result' ? terminal.envelope : undefined;
-      expect(envelope).toMatchObject({ ok: false, error: { code: 'CLI.CONSENT_REQUIRED' } });
-      expect(await plannedDirs(project)).toEqual([]);
+      const envelope = envelopeOf(run) as {
+        readonly error: { readonly code: string; readonly nextActions: readonly unknown[] };
+      };
+      expect(envelope.error.code).toBe('CLI.CONSENT_REQUIRED');
+      const actions = JSON.stringify(envelope.error.nextActions);
+      expect(actions).toContain('--delete Legacy');
+      expect(actions).toContain("--rename 'Legacy:<new name>'");
+      expect(actions).toContain('--delete audit_log');
+      expect(actions).not.toContain('--rename audit_log');
+      expect(JSON.stringify(envelope)).toContain(
+        'Drop table \\"legacy\\" would lose the data of model \\"Legacy\\".',
+      );
+      expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
     });
 
-    it('writes the placeholder baseline once --confirm grants consent', async () => {
-      const project = await destructiveBaselineProject();
+    it('writes the plan once --delete names the subject, and reports the statement', async () => {
+      const project = await losingProject();
+
+      const run = await harness(project, { script: losingScript }).run(
+        ['migration', 'plan', '--delete', 'Legacy', '--json'],
+        { cwd: project.dir },
+      );
+
+      expect(run.exitCode).toBe(0);
+      expect(run.presented?.data).toMatchObject({
+        appliedStatements: [
+          {
+            verb: 'delete',
+            statement: {
+              kind: 'delete',
+              subject: { kind: 'model', namespaceId: 'app', model: 'Legacy' },
+            },
+            operationIndexes: [1],
+            description: 'delete model "Legacy"',
+          },
+        ],
+      });
+      expect((await plannedDirs(project)).length).toBe(2);
+    });
+
+    it('lists the delete under Statements applied, and keeps the marker on the operation', async () => {
+      const project = await losingProject();
+
+      const run = await harness(project, { script: losingScript }).run(
+        ['migration', 'plan', '--delete', 'Legacy'],
+        { cwd: project.dir, isTty: { stdout: true } },
+      );
+
+      expect(run.presented?.presentation.human).toContainEqual({
+        kind: 'tree',
+        roots: [
+          {
+            label: 'Statements applied',
+            children: [{ label: 'delete model "Legacy" (1 operation)' }],
+          },
+        ],
+      });
+      expect(JSON.stringify(run.presented?.presentation.human)).toContain(
+        '{"label":"Drop table \\"legacy\\"","status":"warn"}',
+      );
+    });
+
+    it('plans a --rename from the flag in the first plan, which then loses nothing', async () => {
+      const project = await losingProject();
+      const statementsReceived: unknown[][] = [];
+
+      const run = await harness(project, {
+        script: { ...losingScript, statementsResolveDataLoss: true, statementsReceived },
+      }).run(['migration', 'plan', '--rename', 'Legacy:Archive', '--json'], { cwd: project.dir });
+
+      expect(run.exitCode).toBe(0);
+      expect(statementsReceived).toEqual([
+        [
+          {
+            kind: 'rename',
+            entity: 'model',
+            from: { namespaceId: 'app', model: 'Legacy' },
+            to: { namespaceId: 'app', model: 'Archive' },
+          },
+        ],
+      ]);
+    });
+
+    it('plans again with a rename typed at the prompt, and writes the plan', async () => {
+      const project = await losingProject();
+      const statementsReceived: unknown[][] = [];
+
+      const run = await harness(project, {
+        script: { ...losingScript, statementsResolveDataLoss: true, statementsReceived },
+      }).run(['migration', 'plan', '--json'], {
+        cwd: project.dir,
+        isTty: { stdin: true },
+        answers: ['rename Legacy:Archive'],
+      });
+
+      expect(run.exitCode).toBe(0);
+      expect(statementsReceived.map((statements) => statements.length)).toEqual([0, 1]);
+      expect(run.presented?.data).toMatchObject({
+        appliedStatements: [{ verb: 'rename', description: 'rename model "Legacy" to "Archive"' }],
+      });
+      expect((await plannedDirs(project)).length).toBe(2);
+    });
+
+    it('fails when a typed rename does not remove the loss it answered', async () => {
+      const project = await losingProject();
+
+      const run = await harness(project, { script: losingScript }).run(
+        ['migration', 'plan', '--json'],
+        {
+          cwd: project.dir,
+          isTty: { stdin: true },
+          answers: ['rename Legacy:Archive'],
+        },
+      );
+
+      expect(run.exitCode).not.toBe(0);
+      expect(envelopeOf(run)).toMatchObject({
+        error: {
+          code: 'MIGRATION.STATEMENT_DID_NOT_RESOLVE_LOSS',
+          meta: { statement: 'Legacy:Archive', subject: 'Legacy' },
+        },
+      });
+      expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
+    });
+
+    it('writes the plan when delete is typed at the prompt', async () => {
+      const project = await losingProject();
+
+      const run = await harness(project, { script: losingScript }).run(
+        ['migration', 'plan', '--json'],
+        {
+          cwd: project.dir,
+          isTty: { stdin: true },
+          answers: ['delete'],
+        },
+      );
+
+      expect(run.exitCode).toBe(0);
+      expect(run.presented?.data).toMatchObject({
+        appliedStatements: [{ verb: 'delete', description: 'delete model "Legacy"' }],
+      });
+    });
+
+    it('fails on a typed answer the question rejects, with scripted input', async () => {
+      const project = await losingProject();
+
+      const run = await harness(project, { script: losingScript }).run(
+        ['migration', 'plan', '--json'],
+        {
+          cwd: project.dir,
+          isTty: { stdin: true },
+          answers: ['delete Nope'],
+        },
+      );
+
+      expect(envelopeOf(run)).toMatchObject({ error: { code: 'CLI.PROMPT_INVALID' } });
+      expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
+    });
+
+    it('refuses a --delete nothing asked for before writing anything', async () => {
+      const project = await losingProject();
+
+      const run = await harness(project).run(['migration', 'plan', '--delete', 'Nope', '--json'], {
+        cwd: project.dir,
+      });
+
+      expect(envelopeOf(run)).toMatchObject({ error: { code: 'CLI.CONSENT_UNUSED' } });
+      expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
+    });
+
+    it('does not take --yes as an answer', async () => {
+      const project = await losingProject();
+
+      const run = await harness(project, { script: losingScript }).run(
+        ['migration', 'plan', '--yes', '--json'],
+        { cwd: project.dir, isTty: { stdin: true } },
+      );
+
+      expect(envelopeOf(run)).toMatchObject({ error: { code: 'CLI.CONSENT_REQUIRED' } });
+      expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
+    });
+
+    it('does not take --confirm as consent', async () => {
+      const project = await losingProject();
+
+      const run = await harness(project, { script: losingScript }).run(
+        ['migration', 'plan', '--confirm', basename(project.dir), '--json'],
+        { cwd: project.dir },
+      );
+
+      expect(envelopeOf(run)).toMatchObject({ error: { code: 'CLI.CONSENT_REQUIRED' } });
+      expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
+    });
+
+    it('asks before writing either package of an auto-baseline whose delta loses data', async () => {
+      const project = await losingBaselineProject();
+      const script: FakePlannerScript = {
+        operationsByPlan: [[ADDITIVE_OP], [ADDITIVE_OP, DESTRUCTIVE_OP]],
+        dataLossByPlan: [[], [LEGACY_LOSS]],
+      };
+
+      const refused = await harness(project, { script }).run(['migration', 'plan', '--json'], {
+        cwd: project.dir,
+      });
+      expect(envelopeOf(refused)).toMatchObject({ error: { code: 'CLI.CONSENT_REQUIRED' } });
+      expect(await plannedDirs(project)).toEqual([]);
+
+      const answered = await harness(project, { script }).run(
+        ['migration', 'plan', '--delete', 'Legacy', '--json'],
+        { cwd: project.dir },
+      );
+      expect(answered.exitCode).toBe(0);
+      expect((await plannedDirs(project)).length).toBe(2);
+    });
+
+    it('writes a placeholder plan once its loss is answered, positioning the loss among the listed operations', async () => {
+      const project = await losingBaselineProject();
 
       const run = await harness(project, {
         script: {
           operations: [ADDITIVE_OP, DESTRUCTIVE_OP],
           throwOnOperations: errorUnfilledPlaceholder('backfill'),
+          placeholderAt: 1,
+          dataLoss: [{ ...LEGACY_LOSS, operationIndex: 2 }],
         },
-      }).run(['migration', 'plan', '--confirm', basename(project.dir), '--json'], {
-        cwd: project.dir,
-      });
+      }).run(['migration', 'plan', '--delete', 'Legacy', '--json'], { cwd: project.dir });
 
       expect(run.exitCode).toBe(0);
-      expect(run.presented?.data).toMatchObject({ pendingPlaceholders: true });
+      const data = run.presented?.data as {
+        readonly pendingPlaceholders: boolean;
+        readonly operations: readonly { readonly id: string }[];
+        readonly appliedStatements: readonly { readonly operationIndexes: readonly number[] }[];
+      };
+      expect(data.pendingPlaceholders).toBe(true);
+      expect(
+        data.appliedStatements.map(({ operationIndexes }) =>
+          operationIndexes.map((index) => data.operations[index]?.id),
+        ),
+      ).toEqual([[DESTRUCTIVE_OP.id]]);
       expect((await plannedDirs(project)).length).toBe(2);
     });
 
-    it('reports extension dirs the refused first run seeded once consent is granted', async () => {
-      const EXT_HASH = `f00d${'5'.repeat(60)}`;
-      const extMetadataBase = {
-        from: null,
-        to: EXT_HASH,
-        providedInvariants: [],
-        createdAt: '2026-01-01T00:00:00.000Z',
+    it('still asks about a loss when the operations accessor throws on a placeholder', async () => {
+      const project = await losingProject();
+      const script: FakePlannerScript = {
+        operations: [ADDITIVE_OP, DESTRUCTIVE_OP],
+        operationsAccessorThrows: errorUnfilledPlaceholder('backfill'),
+        dataLoss: [LEGACY_LOSS],
       };
-      const project = await destructiveBaselineProject();
+
+      const refused = await harness(project, { script }).run(['migration', 'plan', '--json'], {
+        cwd: project.dir,
+      });
+      expect(envelopeOf(refused)).toMatchObject({ error: { code: 'CLI.CONSENT_REQUIRED' } });
+
+      const answered = await harness(project, { script }).run(
+        ['migration', 'plan', '--delete', 'Legacy', '--json'],
+        { cwd: project.dir },
+      );
+      expect(answered.exitCode).toBe(0);
+      expect(answered.presented?.data).toMatchObject({ pendingPlaceholders: true });
+    });
+
+    it('asks a question a re-plan brings up in a second batch', async () => {
+      const project = await losingProject();
 
       const run = await harness(project, {
-        script: destructiveScript,
-        overrides: {
-          extensions: [
-            {
-              kind: 'extension',
-              id: 'cipherstash',
-              familyId: 'sql',
-              targetId: 'postgres',
-              version: '1.0.0',
-              create: () => ({}),
-              contractSpace: {
-                contractJson: contractJson(EXT_HASH),
-                headRef: { hash: EXT_HASH, invariants: [] },
-                migrations: [
-                  {
-                    dirName: '0001_seed',
-                    metadata: {
-                      ...extMetadataBase,
-                      migrationHash: computeMigrationHash(extMetadataBase, []),
-                    },
-                    ops: [],
-                  },
-                ],
-              },
-            },
-          ],
+        script: {
+          operations: [ADDITIVE_OP, DESTRUCTIVE_OP, DROP_AUDIT_OP],
+          dataLossByPlan: [[LEGACY_LOSS], [AUDIT_LOSS]],
         },
-      }).run(['migration', 'plan', '--confirm', basename(project.dir), '--json'], {
+      }).run(['migration', 'plan', '--json'], {
         cwd: project.dir,
+        isTty: { stdin: true },
+        answers: ['rename Legacy:Archive', 'delete'],
       });
 
       expect(run.exitCode).toBe(0);
       expect(run.presented?.data).toMatchObject({
-        emittedExtensionDirs: [{ spaceId: 'cipherstash', dirName: '0001_seed' }],
+        appliedStatements: [
+          { verb: 'rename', description: 'rename model "Legacy" to "Archive"' },
+          { verb: 'delete', description: 'delete storage "audit_log"', operationIndexes: [2] },
+        ],
       });
     });
 
-    it('never asks when the baseline is purely additive', async () => {
-      const project = await destructiveBaselineProject();
-
-      const run = await harness(project).run(['migration', 'plan', '--json'], {
-        cwd: project.dir,
+    it('names a field of a renamed model through its new name, and takes a rename written that way', async () => {
+      const project = await createOfflineProject({
+        storageHash: HASH_TO,
+        models: [{ name: 'User', fields: ['id', 'handle'] }],
       });
+      await seedMigrationPackage({
+        appMigrationsDir: project.appMigrationsDir,
+        dirName: '20260101T0000_initial',
+        from: null,
+        to: HASH_FROM,
+      });
+      await seedContractSnapshot({
+        migrationsDir: project.migrationsDir,
+        storageHash: HASH_FROM,
+        models: [{ name: 'Profile', fields: ['id', 'nickname'] }],
+      });
+      await seedDbRef({ appMigrationsDir: project.appMigrationsDir, storageHash: HASH_FROM });
+      const script: FakePlannerScript = {
+        operations: [ADDITIVE_OP, DESTRUCTIVE_OP],
+        dataLoss: [
+          {
+            operationIndex: 1,
+            subject: { kind: 'field', namespaceId: 'app', model: 'Profile', field: 'nickname' },
+          },
+        ],
+        statementsResolvingDataLoss: 2,
+      };
 
-      expect(run.exitCode).toBe(0);
-      expect((await plannedDirs(project)).length).toBe(2);
+      const refused = await harness(project, { script }).run(
+        ['migration', 'plan', '--rename', 'Profile:User', '--json'],
+        { cwd: project.dir },
+      );
+      const actions = JSON.stringify(
+        (envelopeOf(refused) as { readonly error: { readonly nextActions: unknown } }).error
+          .nextActions,
+      );
+      expect(actions).toContain('--delete User.nickname');
+      expect(actions).toContain("--rename 'User.nickname:User.<new name>'");
+
+      const deleted = await harness(project, { script }).run(
+        ['migration', 'plan', '--rename', 'Profile:User', '--delete', 'User.nickname', '--json'],
+        { cwd: project.dir },
+      );
+      expect(deleted.presented?.data).toMatchObject({
+        appliedStatements: [
+          { verb: 'rename' },
+          { verb: 'delete', description: 'delete field "User.nickname"' },
+        ],
+      });
+      for (const dir of await plannedDirs(project)) {
+        if (dir !== '20260101T0000_initial') {
+          await rm(join(project.appMigrationsDir, dir), { recursive: true });
+        }
+      }
+
+      const renamed = await harness(project, { script }).run(
+        [
+          'migration',
+          'plan',
+          '--rename',
+          'Profile:User',
+          '--rename',
+          'User.nickname:User.handle',
+          '--json',
+        ],
+        { cwd: project.dir },
+      );
+      expect(renamed.exitCode).toBe(0);
     });
   });
 
@@ -562,7 +936,7 @@ describe('migration plan', () => {
 
     const run = await harness(project, {
       script: { operations: [ADDITIVE_OP, DESTRUCTIVE_OP] },
-    }).run(['migration', 'plan', '--confirm', basename(project.dir)], {
+    }).run(['migration', 'plan'], {
       cwd: project.dir,
       isTty: { stdout: true },
     });

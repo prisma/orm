@@ -18,8 +18,9 @@ import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { APP_SPACE_ID, storageHashHex } from '@internal/framework-components/control';
 import { keepInternalSpecifiers } from '@internal/framework-components/emission';
-import { col, primaryKey } from '@internal/sql-relational-core/contract-free';
+import { checkExpression, col, fn, primaryKey } from '@internal/sql-relational-core/contract-free';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import {
   AddColumnCall,
   CreateExtensionCall,
@@ -34,6 +35,7 @@ import {
   RawSqlCall,
   RenameIndexCall,
   RenamePostgresRlsPolicyCall,
+  SetDefaultCall,
 } from '@internal/target-postgres/op-factory-call';
 import { TypeScriptRenderablePostgresMigration } from '@internal/target-postgres/planner-produced-postgres-migration';
 import { renderOps } from '@internal/target-postgres/render-ops';
@@ -44,7 +46,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { PostgresControlAdapter } from '../../src/core/control-adapter';
 
 const execFileAsync = promisify(execFile);
-const testAdapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+const testAdapter = new PostgresControlAdapter(
+  createPostgresBuiltinCodecLookup(),
+  createPostgresBuiltinDataTypeLookup(),
+);
 const packageRoot = resolve(import.meta.dirname, '../..');
 const repoRoot = resolve(packageRoot, '../../../..');
 const targetPostgresRoot = resolve(repoRoot, 'packages/3-targets/3-targets/postgres');
@@ -229,16 +234,26 @@ describe('TypeScriptRenderablePostgresMigration round-trip', () => {
         'public',
         'user',
         [col('id', 'text', { notNull: true }), col('email', 'text', { notNull: true })],
-        [primaryKey(['id'])],
+        [
+          primaryKey(['id']),
+          checkExpression('user_email_check', `"email" <> ''`),
+          checkExpression('user_email_escapes', `"email" !~ '\\d' AND "email" <> '\`\${x}'`),
+        ],
       ),
       new AddColumnCall('public', 'user', col('nickname', 'text')),
+      new AddColumnCall('public', 'user', col('meta', 'jsonb')),
+      new SetDefaultCall(
+        'public',
+        'user',
+        col('meta', 'jsonb', { default: fn(`'{"a": 1}'::jsonb`) }),
+      ),
       new CreateIndexCall('public', 'user', 'user_email_idx', { columns: ['email'] }),
       new CreateIndexCall(
         'public',
         'user',
         'user_email_eq',
         { expression: 'lower(email)' },
-        { unique: true, where: 'nickname IS NOT NULL' },
+        { unique: true, where: `"nickname" <> 'anonymous'` },
       ),
       new RenameIndexCall('public', 'user', 'user_email_idx', 'user_email_lookup_ab12cd34'),
       new EnableRowLevelSecurityCall('public', 'user'),
@@ -251,8 +266,8 @@ describe('TypeScriptRenderablePostgresMigration round-trip', () => {
           namespaceId: 'public',
           operation: 'select',
           roles: ['authenticated'],
-          using: '(id = auth.uid())',
-          withCheck: '(id = auth.uid())',
+          using: `("id" = auth.uid() AND "email" <> '')`,
+          withCheck: `("id" = auth.uid())`,
           permissive: true,
         }),
       ),
@@ -270,6 +285,11 @@ describe('TypeScriptRenderablePostgresMigration round-trip', () => {
     );
 
     const tsSource = rewriteImports(migration.renderTypeScript(keepInternalSpecifiers));
+    expect(tsSource).toContain('checkExpression("user_email_check", `"email" <> \'\'`)');
+    expect(tsSource).toContain('where: `"nickname" <> \'anonymous\'`');
+    expect(tsSource).toContain('using: `("id" = auth.uid() AND "email" <> \'\')`');
+    expect(tsSource).toContain(`\`"email" !~ '\\\\d' AND "email" <> '\\\`\\\${x}'\``);
+    expect(tsSource).toContain('default: fn(`\'{"a": 1}\'::jsonb`)');
     await writeFile(join(tmpDir, 'migration.ts'), tsSource);
 
     const { stdout, stderr } = await execFileAsync(tsxPath, [join(tmpDir, 'migration.ts')], {

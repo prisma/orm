@@ -7,6 +7,7 @@ import type {
   RuntimeTargetDescriptor,
 } from '@internal/framework-components/execution';
 import postgresTargetControlDescriptor from '@internal/target-postgres/control';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import postgresAdapterControlDescriptor from '../../src/exports/control';
 import postgresRuntimeAdapterDescriptor from '../../src/exports/runtime';
 
@@ -16,6 +17,7 @@ const stubRuntimeTarget: RuntimeTargetDescriptor<'sql', 'postgres'> = {
   version: '0.0.1',
   familyId: 'sql',
   targetId: 'postgres',
+  dataTypes: postgresDataTypes,
   create() {
     return { familyId: 'sql', targetId: 'postgres' };
   },

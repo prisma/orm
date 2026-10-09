@@ -26,7 +26,7 @@ describe('column defaults', () => {
   it('prints a decimal default as the text that keeps every digit', () => {
     expect(
       defaultOf({
-        nativeType: 'numeric',
+        dataType: 'pg/numeric',
         codecId: 'pg/numeric@1',
         nullable: false,
         default: { kind: 'literal', value: '1.50' },
@@ -46,7 +46,7 @@ describe('column defaults', () => {
     ).toBe('@default(autoincrement())');
     expect(
       defaultOf({
-        nativeType: 'timestamp',
+        dataType: 'pg/timestamp',
         codecId: 'pg/timestamp-temporal@1',
         nullable: false,
         default: { kind: 'function', expression: 'now()' },
@@ -57,7 +57,7 @@ describe('column defaults', () => {
   it('prints every other function default as a sql tagged literal', () => {
     expect(
       defaultOf({
-        nativeType: 'uuid',
+        dataType: 'pg/uuid',
         codecId: 'pg/uuid@1',
         nullable: false,
         default: { kind: 'function', expression: 'gen_random_uuid()' },
@@ -69,7 +69,7 @@ describe('column defaults', () => {
     let thrown: unknown;
     try {
       defaultOf({
-        nativeType: 'inet',
+        dataType: 'pg/inet',
         codecId: 'pg/inet@1',
         nullable: false,
         default: { kind: 'literal', value: { a: 1 } },
@@ -85,9 +85,23 @@ describe('column defaults', () => {
 });
 
 describe('list columns', () => {
+  it('prints nullable elements without inventing an element-not-null check', () => {
+    const model = oneModel(
+      { id: INT_COLUMN, tags: { ...TEXT_COLUMN, many: { elementNullable: true } } },
+      { id: { column: 'id' }, tags: { column: 'tags' } },
+    );
+    expect(model?.fields.find((field) => field.name === 'tags')).toMatchObject({
+      list: true,
+      elementOptional: true,
+      attributes: [],
+    });
+  });
   it('prints a waived element-not-null check as @noCheck(elementNotNull)', () => {
     const model = oneModel(
-      { id: INT_COLUMN, tags: { ...TEXT_COLUMN, many: true, noCheck: ['elementNotNull'] } },
+      {
+        id: INT_COLUMN,
+        tags: { ...TEXT_COLUMN, many: { elementNullable: false }, noCheck: ['elementNotNull'] },
+      },
       { id: { column: 'id' }, tags: { column: 'tags' } },
     );
     expect(model?.fields.map(fieldText)).toEqual([

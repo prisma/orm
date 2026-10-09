@@ -1,6 +1,6 @@
 {
   "name": "@prisma/orm-sqlite",
-  "version": "8.0.0-rc.14",
+  "version": "8.0.0-rc.17",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -16,17 +16,17 @@
     "clean": "rm -rf dist src-gen skills"
   },
   "dependencies": {
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.14",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.14",
-    "@prisma/orm-target-sqlite": "workspace:8.0.0-rc.14",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.14",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.17",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.17",
+    "@prisma/orm-target-sqlite": "workspace:8.0.0-rc.17",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.17",
     "pathe": "^2.0.3",
     "tinyglobby": "catalog:"
   },
   "devDependencies": {
-    "@internal/sqlite": "workspace:8.0.0-rc.14",
-    "@repo/tsconfig": "workspace:8.0.0-rc.14",
-    "@repo/tsdown": "workspace:8.0.0-rc.14",
+    "@internal/sqlite": "workspace:8.0.0-rc.17",
+    "@repo/tsconfig": "workspace:8.0.0-rc.17",
+    "@repo/tsdown": "workspace:8.0.0-rc.17",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
@@ -92,6 +92,8 @@
     "./family-contract/authored-check-naming": "./dist/family-contract__authored-check-naming.mjs",
     "./family-contract/canonicalization-hooks": "./dist/family-contract__canonicalization-hooks.mjs",
     "./family-contract/contract-view": "./dist/family-contract__contract-view.mjs",
+    "./family-contract/data-type": "./dist/family-contract__data-type.mjs",
+    "./family-contract/data-type-support": "./dist/family-contract__data-type-support.mjs",
     "./family-contract/entity-handle-lowering-hook": "./dist/family-contract__entity-handle-lowering-hook.mjs",
     "./family-contract/entity-kinds": "./dist/family-contract__entity-kinds.mjs",
     "./family-contract/factories": "./dist/family-contract__factories.mjs",
@@ -99,7 +101,6 @@
     "./family-contract/index-naming": "./dist/family-contract__index-naming.mjs",
     "./family-contract/index-type-validation": "./dist/family-contract__index-type-validation.mjs",
     "./family-contract/index-types": "./dist/family-contract__index-types.mjs",
-    "./family-contract/pack-types": "./dist/family-contract__pack-types.mjs",
     "./family-contract/referential-action-sql": "./dist/family-contract__referential-action-sql.mjs",
     "./family-contract/resolve-storage-table": "./dist/family-contract__resolve-storage-table.mjs",
     "./family-contract/sql-expression": "./dist/family-contract__sql-expression.mjs",

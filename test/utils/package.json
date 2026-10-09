@@ -1,6 +1,6 @@
 {
   "name": "@repo/test-utils",
-  "version": "8.0.0-rc.14",
+  "version": "8.0.0-rc.17",
   "private": true,
   "type": "module",
   "sideEffects": false,
@@ -13,15 +13,15 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/contract": "workspace:8.0.0-rc.14",
-    "@internal/utils": "workspace:8.0.0-rc.14"
+    "@internal/contract": "workspace:8.0.0-rc.17",
+    "@internal/utils": "workspace:8.0.0-rc.17"
   },
   "devDependencies": {
-    "@repo/tsconfig": "workspace:8.0.0-rc.14",
+    "@repo/tsconfig": "workspace:8.0.0-rc.17",
     "@prisma/dev": "catalog:",
     "@types/pg": "catalog:",
     "pg": "catalog:",
-    "@repo/tsdown": "workspace:8.0.0-rc.14",
+    "@repo/tsdown": "workspace:8.0.0-rc.17",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -54,6 +54,10 @@
     "./timeouts": {
       "types": "./dist/exports/timeouts.d.mts",
       "import": "./dist/exports/timeouts.mjs"
+    },
+    "./data-loss-expectations": {
+      "types": "./dist/exports/data-loss-expectations.d.mts",
+      "import": "./dist/exports/data-loss-expectations.mjs"
     },
     "./typed-expectations": {
       "types": "./dist/exports/typed-expectations.d.mts",

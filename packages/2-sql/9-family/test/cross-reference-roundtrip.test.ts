@@ -22,14 +22,16 @@ describe('cross-reference shape round-trip', () => {
       roots: { users: rootsCrossRef },
       models: {
         User: {
-          fields: { kind: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } } },
+          fields: {
+            kind: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+          },
           discriminator: { field: 'kind' },
           variants: { Post: { value: 'post' } },
           relations: {
             posts: {
               to: relationCrossRef,
               cardinality: '1:N',
-              on: { localFields: ['id'], targetFields: ['authorId'] },
+              on: { localFields: ['kind'], targetFields: ['kind'] },
             },
           },
           storage: {
@@ -53,7 +55,7 @@ describe('cross-reference shape round-trip', () => {
               table: {
                 user: {
                   columns: {
-                    kind: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                    kind: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                   },
                   uniques: [],
                   indexes: [],

@@ -1,21 +1,15 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
-import { buildSymbolTable } from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
+import { emptyCodecLookup } from '@internal/framework-components/codec';
+import { EMPTY_DATA_TYPES } from '@internal/psl-parser';
 import { describe, expect, it } from 'vitest';
-import { interpretPslDocumentToMongoContract } from '../src/interpreter';
+import { interpretMongoContract } from './interpreter-test-helpers';
 
 function diagnosticsOf(schema: string): readonly ContractSourceDiagnostic[] {
-  const { document, sources } = parse(schema, 'schema.prisma');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
-  });
-  const result = interpretPslDocumentToMongoContract({
-    documents: [document],
-    symbolTable,
-    sources,
+  const result = interpretMongoContract(schema, {
     scalarTypeCodecIds: new Map([['ObjectId', 'mongo/objectId@1']]),
-    controlMutationDefaults: { dataTypeEntries: {}, defaultFunctionRegistry: new Map() },
+    codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+    dataTypes: EMPTY_DATA_TYPES,
+    defaultFunctionRegistry: new Map(),
   });
   if (result.ok) throw new Error('Expected interpretation to fail');
   return result.failure.diagnostics;

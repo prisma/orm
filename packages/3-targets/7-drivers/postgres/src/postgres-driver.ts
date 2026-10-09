@@ -26,7 +26,7 @@ import { callbackToPromise } from './callback-to-promise';
 import { type DriverRuntimeError, driverError } from './driver-error';
 import { NamedCursor } from './named-cursor';
 import { isAlreadyConnectedError, isPostgresError, normalizePgError } from './normalize-error';
-import { temporalTextTypes } from './temporal-text-parsers';
+import { serverTextTypes } from './server-text-types';
 
 export type QueryResult<T extends QueryResultRow = QueryResultRow> = PgQueryResult<T>;
 
@@ -424,7 +424,7 @@ abstract class PostgresQueryable<C extends PoolClient | Client = PoolClient | Cl
       unknown[],
       'pg cursor types require a mutable array but pg does not mutate execution params'
     >(params ?? []);
-    const config = { types: temporalTextTypes };
+    const config = { types: serverTextTypes };
     const cursor = client.query(
       name === undefined
         ? new Cursor(sql, values, config)
@@ -462,7 +462,7 @@ abstract class PostgresQueryable<C extends PoolClient | Client = PoolClient | Cl
         unknown[],
         'pg query types require a mutable array but pg does not mutate execution params'
       >(params ?? []),
-      types: temporalTextTypes,
+      types: serverTextTypes,
     };
     const releaseLock = await acquireClientQueryLock(client);
     let result: PgQueryResult;

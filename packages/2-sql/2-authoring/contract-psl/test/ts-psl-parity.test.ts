@@ -12,11 +12,10 @@ import { countSemanticLines } from '@repo/test-utils/semantic-lines';
 import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { interpretPslDocumentToSqlContract } from '../src/interpreter';
-import { fixtureDataTypeSupport } from './fixture-data-types';
+import { fixtureInterpreterTypes, fixtureTypeLookups } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
-  symbolTableInputFromParseArgs,
+  interpretSqlContract,
   temporalCodecPresetMirrors,
   temporalConvenienceMirrors,
   testEnumEntityContributions,
@@ -34,7 +33,6 @@ const sqlFamilyPack = {
         kind: 'fieldPreset',
         output: {
           codecId: 'sql/text@1',
-          nativeType: 'text',
         },
       },
       temporal: {
@@ -42,7 +40,6 @@ const sqlFamilyPack = {
           kind: 'fieldPreset',
           output: {
             codecId: 'test/timestamp@1',
-            nativeType: 'timestamp',
             default: {
               kind: 'function',
               expression: 'now()',
@@ -82,7 +79,6 @@ const pgvectorExtensionPack = {
           args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, maximum: 2000 }],
           output: {
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
             typeParams: {
               length: { kind: 'arg', index: 0 },
             },
@@ -103,20 +99,18 @@ const authoringContributions = {
 } as const satisfies AuthoringContributions;
 
 const scalarColumnDescriptors = new Map([
-  ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
-  ['String', { codecId: 'sql/text@1', nativeType: 'text' }],
-  ['DateTime', { codecId: 'test/timestamp@1', nativeType: 'timestamp' }],
-  ['Bytes', { codecId: 'pg/bytea@1', nativeType: 'bytea' }],
+  ['Int', { codecId: 'pg/int4@1' }],
+  ['String', { codecId: 'sql/text@1' }],
+  ['DateTime', { codecId: 'test/timestamp@1' }],
+  ['Bytes', { codecId: 'pg/bytea@1' }],
 ] as const);
 
 const int4Column = {
   codecId: 'pg/int4@1',
-  nativeType: 'int4',
 } as const satisfies ColumnTypeDescriptor;
 
 const textColumn = {
   codecId: 'sql/text@1',
-  nativeType: 'text',
 } as const satisfies ColumnTypeDescriptor;
 
 const bareSqlFamilyPack = {
@@ -139,14 +133,12 @@ const sqliteTimestampTargetPack = {
         kind: 'fieldPreset',
         output: {
           codecId: 'sqlite/integer@1',
-          nativeType: 'integer',
         },
       },
       text: {
         kind: 'fieldPreset',
         output: {
           codecId: 'sqlite/text@1',
-          nativeType: 'text',
         },
       },
       temporal: temporalConvenienceMirrors.sqlite,
@@ -167,14 +159,12 @@ const postgresTimestampTargetPack = {
         kind: 'fieldPreset',
         output: {
           codecId: 'pg/int4@1',
-          nativeType: 'int4',
         },
       },
       text: {
         kind: 'fieldPreset',
         output: {
           codecId: 'pg/text@1',
-          nativeType: 'text',
         },
       },
       temporal: {
@@ -190,11 +180,11 @@ const postgresTimestampTargetPack = {
 } as const satisfies TargetPackRef<'sql', 'postgres'>;
 
 const postgresTimestampScalarTypeDescriptors = new Map([
-  ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
-  ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
-  ['DateTime', { codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz' }],
-  ['Json', { codecId: 'pg/json@1', nativeType: 'json' }],
-  ['Jsonb', { codecId: 'pg/jsonb@1', nativeType: 'jsonb' }],
+  ['Int', { codecId: 'pg/int4@1' }],
+  ['String', { codecId: 'pg/text@1' }],
+  ['DateTime', { codecId: 'pg/timestamptz-temporal@1' }],
+  ['Json', { codecId: 'pg/json@1' }],
+  ['Jsonb', { codecId: 'pg/jsonb@1' }],
 ] as const);
 
 const postgresTimestampAuthoringContributions = {
@@ -202,10 +192,10 @@ const postgresTimestampAuthoringContributions = {
 } as const satisfies AuthoringContributions;
 
 const sqliteTimestampScalarTypeDescriptors = new Map([
-  ['Int', { codecId: 'sqlite/integer@1', nativeType: 'integer' }],
-  ['String', { codecId: 'sqlite/text@1', nativeType: 'text' }],
-  ['DateTime', { codecId: 'sqlite/datetime@1', nativeType: 'text' }],
-  ['Json', { codecId: 'sqlite/json@1', nativeType: 'text' }],
+  ['Int', { codecId: 'sqlite/integer@1' }],
+  ['String', { codecId: 'sqlite/text@1' }],
+  ['DateTime', { codecId: 'sqlite/datetime@1' }],
+  ['Json', { codecId: 'sqlite/json@1' }],
 ] as const);
 
 const sqliteTimestampAuthoringContributions = {
@@ -244,7 +234,7 @@ model Post {
 
 const representativeTsAuthoring = `const Role = enumType('Role', pgText, member('USER', 'user'), member('ADMIN', 'admin'));
 defineContract(
-  { family: sqlFamilyPack, target: portablePostgresTargetPack, extensions: { pgvector: pgvectorExtensionPack } },
+  { ...fixtureTypeLookups, family: sqlFamilyPack, target: portablePostgresTargetPack, extensions: { pgvector: pgvectorExtensionPack } },
   ({ type, field, model, rel }) => {
     const types = {
       Embedding1536: type.pgvector.Vector(1536),
@@ -278,6 +268,7 @@ defineContract(
 function buildSqliteTimestampTsContract() {
   return defineContract(
     {
+      ...fixtureTypeLookups,
       family: bareSqlFamilyPack,
       target: sqliteTimestampTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -300,6 +291,7 @@ function buildSqliteTimestampTsContract() {
 function buildPostgresTimestampTsContract() {
   return defineContract(
     {
+      ...fixtureTypeLookups,
       family: bareSqlFamilyPack,
       target: postgresTimestampTargetPack,
       createNamespace: createTestSqlNamespace,
@@ -343,20 +335,15 @@ describe('TS and PSL authoring parity', () => {
     readonly authoringContributions: AuthoringContributions;
   }): void {
     const tsContract = target.buildTsContract();
-    const pslDocument = symbolTableInputFromParseArgs({
-      schema: timestampParityPslSchema,
-      sourceId: 'schema.prisma',
-    });
 
-    const interpreted = interpretPslDocumentToSqlContract({
-      ...pslDocument,
+    const interpreted = interpretSqlContract(timestampParityPslSchema, {
       target: target.targetPack,
       scalarColumnDescriptors: target.scalarColumnDescriptors,
       composedExtensionContracts: new Map(),
       controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
       authoringContributions: target.authoringContributions,
       createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      ...fixtureInterpreterTypes,
       capabilities: { sql: { scalarList: true } },
     });
 
@@ -384,8 +371,8 @@ describe('TS and PSL authoring parity', () => {
   });
 
   it('PSL and TS lower the same cross-namespace FK shape to identical contract IR', () => {
-    const pslDocument = symbolTableInputFromParseArgs({
-      schema: `namespace auth {
+    const pslContract = interpretSqlContract(
+      `namespace auth {
   model User {
     id Int @id
     posts Post[]
@@ -400,20 +387,17 @@ model Post {
   @@map("post")
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const pslContract = interpretPslDocumentToSqlContract({
-      ...pslDocument,
-      target: portablePostgresTargetPack,
-      scalarColumnDescriptors,
-      composedExtensionContracts: new Map(),
-      controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
-      authoringContributions,
-      createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-      capabilities: { sql: { scalarList: true } },
-    });
+      {
+        target: portablePostgresTargetPack,
+        scalarColumnDescriptors,
+        composedExtensionContracts: new Map(),
+        controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+        authoringContributions,
+        createNamespace: createTestSqlNamespace,
+        ...fixtureInterpreterTypes,
+        capabilities: { sql: { scalarList: true } },
+      },
+    );
 
     expect(pslContract.ok).toBe(true);
     if (!pslContract.ok) return;
@@ -441,6 +425,7 @@ model Post {
     });
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: sqlFamilyPack,
       target: portablePostgresTargetPack,
       namespaces: ['auth'],
@@ -469,31 +454,30 @@ model Post {
   });
 
   it('PSL and TS lower the same expression index to identical wire-named IR (wire name pinned)', () => {
-    const pslDocument = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const pslContract = interpretSqlContract(
+      `model User {
   id    Int    @id
   email String
-  @@index(expression: "lower(email)", name: "users_email_eq")
+  @@index(expression: sql\`lower(email)\`, name: "users_email_eq")
   @@map("user")
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const pslContract = interpretPslDocumentToSqlContract({
-      ...pslDocument,
-      target: portablePostgresTargetPack,
-      scalarColumnDescriptors,
-      composedExtensionContracts: new Map(),
-      controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
-      authoringContributions,
-      createNamespace: createTestSqlNamespace,
-      capabilities: { sql: { scalarList: true } },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-    });
+      {
+        target: portablePostgresTargetPack,
+        scalarColumnDescriptors,
+        composedExtensionContracts: new Map(),
+        controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+        authoringContributions,
+        createNamespace: createTestSqlNamespace,
+        capabilities: { sql: { scalarList: true } },
+        ...fixtureInterpreterTypes,
+      },
+    );
     expect(pslContract.ok).toBe(true);
     if (!pslContract.ok) return;
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: sqlFamilyPack,
       target: portablePostgresTargetPack,
       models: {
@@ -535,34 +519,33 @@ model Post {
       indexTypes: defineIndexTypes().add('bm25', { options: type('object') }),
     } as const;
 
-    const pslDocument = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const pslContract = interpretSqlContract(
+      `model User {
   id    Int    @id
   email String
-  @@index(expression: "eql_v3.eq_term(email)", where: "(deleted_at IS NULL)", unique: true, name: "users_email_eq", type: "bm25", options: {})
+  @@index(expression: sql\`eql_v3.eq_term(email)\`, where: sql\`(deleted_at IS NULL)\`, unique: true, name: "users_email_eq", type: "bm25", options: {})
   @@map("user")
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const pslContract = interpretPslDocumentToSqlContract({
-      ...pslDocument,
-      target: portablePostgresTargetPack,
-      scalarColumnDescriptors,
-      composedExtensions: [indexTypesPack.id],
-      composedExtensionPackRefs: [indexTypesPack],
-      composedExtensionContracts: new Map(),
-      controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
-      authoringContributions,
-      createNamespace: createTestSqlNamespace,
-      capabilities: { sql: { scalarList: true } },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-    });
+      {
+        target: portablePostgresTargetPack,
+        scalarColumnDescriptors,
+        composedExtensions: [indexTypesPack.id],
+        composedExtensionPackRefs: [indexTypesPack],
+        composedExtensionContracts: new Map(),
+        controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+        authoringContributions,
+        createNamespace: createTestSqlNamespace,
+        capabilities: { sql: { scalarList: true } },
+        ...fixtureInterpreterTypes,
+      },
+    );
     expect(pslContract.ok).toBe(true);
     if (!pslContract.ok) return;
 
     const tsContract = defineContract(
       {
+        ...fixtureTypeLookups,
         family: sqlFamilyPack,
         target: portablePostgresTargetPack,
         extensions: { indexTypes: indexTypesPack },
@@ -611,31 +594,30 @@ model Post {
   });
 
   it('PSL map: and TS map: lower the same exact fields index', () => {
-    const pslDocument = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const pslContract = interpretSqlContract(
+      `model User {
   id    Int    @id
   email String
   @@index([email], map: "users_email_adopted")
   @@map("user")
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const pslContract = interpretPslDocumentToSqlContract({
-      ...pslDocument,
-      target: portablePostgresTargetPack,
-      scalarColumnDescriptors,
-      composedExtensionContracts: new Map(),
-      controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
-      authoringContributions,
-      createNamespace: createTestSqlNamespace,
-      capabilities: { sql: { scalarList: true } },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-    });
+      {
+        target: portablePostgresTargetPack,
+        scalarColumnDescriptors,
+        composedExtensionContracts: new Map(),
+        controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+        authoringContributions,
+        createNamespace: createTestSqlNamespace,
+        capabilities: { sql: { scalarList: true } },
+        ...fixtureInterpreterTypes,
+      },
+    );
     expect(pslContract.ok).toBe(true);
     if (!pslContract.ok) return;
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: sqlFamilyPack,
       target: portablePostgresTargetPack,
       models: {
@@ -663,31 +645,30 @@ model Post {
   });
 
   it('PSL name: and TS name: lower the same wire-named fields index (wire name pinned)', () => {
-    const pslDocument = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const pslContract = interpretSqlContract(
+      `model User {
   id    Int    @id
   email String
   @@index([email], name: "user_email_lookup")
   @@map("user")
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-    const pslContract = interpretPslDocumentToSqlContract({
-      ...pslDocument,
-      target: portablePostgresTargetPack,
-      scalarColumnDescriptors,
-      composedExtensionContracts: new Map(),
-      controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
-      authoringContributions,
-      createNamespace: createTestSqlNamespace,
-      capabilities: { sql: { scalarList: true } },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-    });
+      {
+        target: portablePostgresTargetPack,
+        scalarColumnDescriptors,
+        composedExtensionContracts: new Map(),
+        controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+        authoringContributions,
+        createNamespace: createTestSqlNamespace,
+        capabilities: { sql: { scalarList: true } },
+        ...fixtureInterpreterTypes,
+      },
+    );
     expect(pslContract.ok).toBe(true);
     if (!pslContract.ok) return;
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: sqlFamilyPack,
       target: portablePostgresTargetPack,
       models: {
@@ -720,33 +701,31 @@ model Post {
   });
 
   it('PSL and TS lower the same unnamed index to identical wire-named IR (wire names pinned)', () => {
-    const pslDocument = symbolTableInputFromParseArgs({
-      schema: `model User {
+    const pslContract = interpretSqlContract(
+      `model User {
   id Int @id
   email String @map("email")
   @@index([email])
   @@map("user")
 }
 `,
-      sourceId: 'schema.prisma',
-    });
-
-    const pslContract = interpretPslDocumentToSqlContract({
-      ...pslDocument,
-      target: portablePostgresTargetPack,
-      scalarColumnDescriptors,
-      composedExtensionContracts: new Map(),
-      controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
-      authoringContributions,
-      createNamespace: createTestSqlNamespace,
-      capabilities: { sql: { scalarList: true } },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-    });
+      {
+        target: portablePostgresTargetPack,
+        scalarColumnDescriptors,
+        composedExtensionContracts: new Map(),
+        controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+        authoringContributions,
+        createNamespace: createTestSqlNamespace,
+        capabilities: { sql: { scalarList: true } },
+        ...fixtureInterpreterTypes,
+      },
+    );
 
     expect(pslContract.ok).toBe(true);
     if (!pslContract.ok) return;
 
     const tsContract = defineContract({
+      ...fixtureTypeLookups,
       family: sqlFamilyPack,
       target: portablePostgresTargetPack,
       models: {
@@ -786,25 +765,23 @@ model Post {
   // equal.
   describe('temporal.updatedAt() three-way byte-identity', () => {
     const interpretTemporalPsl = (field: string) => {
-      const document = symbolTableInputFromParseArgs({
-        schema: `model User {
+      const result = interpretSqlContract(
+        `model User {
   id Int @id
   stamped ${field}
   @@map("user")
 }`,
-        sourceId: 'schema.prisma',
-      });
-      const result = interpretPslDocumentToSqlContract({
-        ...document,
-        target: postgresTimestampTargetPack,
-        scalarColumnDescriptors: postgresTimestampScalarTypeDescriptors,
-        composedExtensionContracts: new Map(),
-        controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
-        authoringContributions: postgresTimestampAuthoringContributions,
-        createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
-        capabilities: { sql: { scalarList: true } },
-      });
+        {
+          target: postgresTimestampTargetPack,
+          scalarColumnDescriptors: postgresTimestampScalarTypeDescriptors,
+          composedExtensionContracts: new Map(),
+          controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+          authoringContributions: postgresTimestampAuthoringContributions,
+          createNamespace: createTestSqlNamespace,
+          ...fixtureInterpreterTypes,
+          capabilities: { sql: { scalarList: true } },
+        },
+      );
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error('interpretation failed');
       return result.value;
@@ -813,6 +790,7 @@ model Post {
     const buildTsFullForm = () =>
       defineContract(
         {
+          ...fixtureTypeLookups,
           family: bareSqlFamilyPack,
           target: postgresTimestampTargetPack,
           createNamespace: createTestSqlNamespace,
@@ -832,6 +810,7 @@ model Post {
     const buildTsConvenienceForm = () =>
       defineContract(
         {
+          ...fixtureTypeLookups,
           family: bareSqlFamilyPack,
           target: postgresTimestampTargetPack,
           createNamespace: createTestSqlNamespace,

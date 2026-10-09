@@ -11,7 +11,10 @@
 // Re-export core control plane types for consumer convenience
 export type {
   ControlStack,
-  SignDatabaseResult,
+  MigrationOperationSubject,
+  MigrationPlanSubjects,
+  MigrationSubject,
+  ResolvedMigrationStatement,
   VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
@@ -52,6 +55,13 @@ export {
 // These drive the aggregate-pipeline `db init` / `db update` / `db verify`
 // flow against a loaded contract-space aggregate.
 export { type ExecuteDbInitOptions, executeDbInit } from '../control-api/operations/db-init';
+export {
+  type DbSignSpaceFailure,
+  type DbSignSpaceOutcome,
+  type ExecuteDbSignOptions,
+  type ExecuteDbSignResult,
+  executeDbSign,
+} from '../control-api/operations/db-sign';
 export {
   type ExecuteDbUpdateOptions,
   executeDbUpdate,
@@ -103,7 +113,6 @@ export {
 export {
   appliedHashesFromLedger,
   deriveStatusEdgeAnnotations,
-  originHashForStatus,
   statusForMigrationHash,
 } from '../control-api/operations/migration-status-overlay';
 export {
@@ -136,8 +145,22 @@ export type {
   RenderContractDtsResult,
   RenderContractDtsSuccess,
 } from '../control-api/render-contract-dts';
+export type {
+  AnswerPlanQuestions,
+  PlanAnswer,
+  PlanQuestion,
+  PlanQuestionVerb,
+} from '../control-api/statements/plan-questions';
+export type { AppliedStatementReport } from '../control-api/statements/report-applied-statements';
+export {
+  type ResolveStatementsInput,
+  resolveStatements,
+  type StatementOrigin,
+} from '../control-api/statements/resolve-statements';
+export type { StatementText, StatementVerb } from '../control-api/statements/statement-text';
 // CLI-specific types
 export type {
+  AskedSubject,
   ContractEmitOptions,
   ContractEmitResult,
   ControlActionName,
@@ -149,6 +172,7 @@ export type {
   DbInitOptions,
   DbInitResult,
   DbInitSuccess,
+  DbSignOptions,
   DbUpdateFailure,
   DbUpdateFailureCode,
   DbUpdateOptions,
@@ -163,7 +187,6 @@ export type {
   IntrospectOptions,
   OnControlProgress,
   SchemaVerifyOptions,
-  SignOptions,
   VerifyOptions,
 } from '../control-api/types';
 // Lifecycle helpers for hosts that publish to many output paths

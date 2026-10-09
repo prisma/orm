@@ -16,6 +16,7 @@
           "Shop": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -23,6 +24,7 @@
                 }
               },
               "location": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "kind": "valueObject",
@@ -30,6 +32,7 @@
                 }
               },
               "name": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -37,6 +40,7 @@
                 }
               },
               "notes": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "kind": "valueObject",
@@ -69,6 +73,7 @@
           "Address": {
             "fields": {
               "city": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -76,6 +81,7 @@
                 }
               },
               "street": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -83,6 +89,7 @@
                 }
               },
               "zip": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -104,22 +111,22 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "location": {
                   "codecId": "pg/jsonb@1",
-                  "nativeType": "jsonb",
+                  "dataType": "pg/jsonb",
                   "nullable": false
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "notes": {
                   "codecId": "pg/jsonb@1",
-                  "nativeType": "jsonb",
+                  "dataType": "pg/jsonb",
                   "nullable": true
                 }
               },
@@ -138,7 +145,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "36c2557fc1c8e38328d6515c94c66a20ca4843d34209dd1a4b68ea914b050355"
+    "storageHash": "8334dda9271ee13d092ca25003aed6d6507dbad3e83de89f994a48661d16bbf4"
   },
   "capabilities": {
     "postgres": {

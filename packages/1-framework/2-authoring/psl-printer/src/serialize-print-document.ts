@@ -222,6 +222,7 @@ function serializeModel(model: import('./types').PrinterModel, keyword: 'model' 
 function formatFieldType(field: PrinterField): string {
   let type = field.typeName;
   if (field.list) {
+    if (field.elementOptional) type += '?';
     type += '[]';
   }
   if (field.optional) {

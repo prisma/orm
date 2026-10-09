@@ -48,8 +48,8 @@ function makeContractWithTablesJson() {
             table: {
               user: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                  email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+                  email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],
@@ -58,8 +58,8 @@ function makeContractWithTablesJson() {
               },
               post: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                  userId: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+                  userId: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],
@@ -136,7 +136,7 @@ describe('PostgresContractSerializer', () => {
             entries: {
               table: {
                 user: {
-                  columns: { id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } },
+                  columns: { id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false } },
                 },
               },
             },
@@ -156,7 +156,7 @@ describe('PostgresContractSerializer', () => {
   it('hydrates storage.types entries via the family registry dispatch path', () => {
     const sentinel: StorageTypeInstance = toStorageTypeInstance({
       codecId: 'test/fake-test-entity@1',
-      nativeType: 'fake-test-entity',
+      dataType: 'test/fake-test-entity',
       typeParams: { proof: true },
     });
 
@@ -218,12 +218,12 @@ describe('control-policy round-trip fidelity', () => {
                 user: {
                   columns: {
                     id: {
-                      nativeType: 'int4',
+                      dataType: 'pg/int4',
                       codecId: 'pg/int4@1',
                       nullable: false,
                       control: 'observed',
                     },
-                    email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                    email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                   },
                   primaryKey: { columns: ['id'] },
                   uniques: [],
@@ -300,8 +300,8 @@ describe('role + policy round-trip', () => {
               table: {
                 posts: {
                   columns: {
-                    id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                    user_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                    id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+                    user_id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                   },
                   primaryKey: { columns: ['id'] },
                   uniques: [],
@@ -310,7 +310,7 @@ describe('role + policy round-trip', () => {
                 },
                 logs: {
                   columns: {
-                    id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                    id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                   },
                   primaryKey: { columns: ['id'] },
                   uniques: [],
@@ -816,7 +816,7 @@ describe('native_enum + valueSet round-trip', () => {
               table: {
                 sessions: {
                   columns: {
-                    id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                    id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                   },
                   primaryKey: { columns: ['id'] },
                   uniques: [],
@@ -842,9 +842,10 @@ describe('native_enum + valueSet round-trip', () => {
           sessions: {
             columns: {
               id: {
-                nativeType: 'int4',
+                dataType: 'pg/int4',
                 codecId: 'pg/int4@1',
                 nullable: false,
+                many: false,
               },
             },
             primaryKey: { columns: ['id'] },

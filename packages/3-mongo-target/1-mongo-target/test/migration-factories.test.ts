@@ -124,7 +124,7 @@ describe('dropIndex', () => {
 
     expect(op.id).toBe(buildIndexOpId('drop', 'users', keys));
     expect(op.label).toBe('Drop index on users (email:1)');
-    expect(op.operationClass).toBe('destructive');
+    expect(op.operationClass).toBe('widening');
   });
 
   it('includes precheck that index exists', () => {
@@ -282,7 +282,7 @@ describe('setValidation', () => {
 
     expect(op.id).toBe('collection.users.setValidation');
     expect(op.label).toBe('Set validation on users');
-    expect(op.operationClass).toBe('destructive');
+    expect(op.operationClass).toBe('widening');
   });
 
   it('wraps schema in $jsonSchema validator', () => {
@@ -378,7 +378,7 @@ describe('collMod', () => {
 
     expect(op.id).toBe('collection.users.collMod');
     expect(op.label).toBe('Modify collection users');
-    expect(op.operationClass).toBe('destructive');
+    expect(op.operationClass).toBe('widening');
   });
 
   it('applies meta overrides for id, label, and operationClass', () => {

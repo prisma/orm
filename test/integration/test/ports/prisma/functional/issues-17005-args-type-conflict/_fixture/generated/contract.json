@@ -182,7 +182,7 @@
               "columns": {
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -199,7 +199,7 @@
               "columns": {
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -216,22 +216,25 @@
               "columns": {
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "mediaId": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "postId": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "postMedia_postId_idx_a7a72715"
+                  },
                   "source": {
                     "columns": [
                       "postId"
@@ -248,6 +251,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "postMedia_mediaId_idx_6b06655c"
+                  },
                   "source": {
                     "columns": [
                       "mediaId"
@@ -302,7 +308,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "eb8b33ce3462e3fd3f95971b3d4820e8f3ec7cb3e5ff02dbff741f028b06eb1c"
+    "storageHash": "912cec075e29cfcbbf7bb1d132e9559bd290b8407dd2e6db2d513cbc6880b05f"
   },
   "execution": {
     "executionHash": "cb5920d1539620a0cc34be80def320ed2a7a2507350ebb5eebd8d51847f18961",
@@ -347,6 +353,8 @@
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -357,9 +365,14 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

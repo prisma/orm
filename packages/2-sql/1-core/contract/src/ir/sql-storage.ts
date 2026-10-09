@@ -193,7 +193,7 @@ function normaliseTypeEntry(name: string, entry: SqlStorageTypeEntry): StorageTy
     }
     return toStorageTypeInstance(entry);
   }
-  const rawKind = isPlainRecord(entry) ? entry['kind'] : undefined;
+  const rawKind = isPlainRecord(entry) && 'kind' in entry ? entry.kind : undefined;
   const kindDescription =
     rawKind === undefined
       ? 'missing `kind` discriminator'

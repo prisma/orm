@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  checkUncomposedNamespace,
   fieldPresetSpellings,
   getAuthoringFieldPreset,
 } from '../src/shared/field-preset-resolution';
@@ -37,12 +36,11 @@ describe('timestampNow generator', () => {
 
 describe('temporalAuthoringPresets', () => {
   it('generates createdAt on create and updatedAt on create and update', () => {
-    expect(temporalAuthoringPresets({ codecId: 'test/date@1', nativeType: 'date' })).toEqual({
+    expect(temporalAuthoringPresets({ codecId: 'test/date@1' })).toEqual({
       createdAt: {
         kind: 'fieldPreset',
         output: {
           codecId: 'test/date@1',
-          nativeType: 'date',
           executionDefaults: { onCreate: TIMESTAMP_NOW },
         },
       },
@@ -50,7 +48,6 @@ describe('temporalAuthoringPresets', () => {
         kind: 'fieldPreset',
         output: {
           codecId: 'test/date@1',
-          nativeType: 'date',
           executionDefaults: { onCreate: TIMESTAMP_NOW, onUpdate: TIMESTAMP_NOW },
         },
       },
@@ -60,7 +57,6 @@ describe('temporalAuthoringPresets', () => {
   it('uses a supplied generator id for both timestamps', () => {
     const presets = temporalAuthoringPresets({
       codecId: 'test/date@1',
-      nativeType: 'date',
       generatorId: 'dateNow',
     });
     expect(presets.updatedAt.output.executionDefaults).toEqual({
@@ -71,7 +67,7 @@ describe('temporalAuthoringPresets', () => {
 });
 
 describe('temporalCodecPreset', () => {
-  const preset = temporalCodecPreset({ codecId: 'test/date@1', nativeType: 'date' });
+  const preset = temporalCodecPreset({ codecId: 'test/date@1' });
 
   it('declares optional onCreate and onUpdate options', () => {
     expect(preset.args).toEqual([TEMPORAL_ON_CREATE_ARG, TEMPORAL_ON_UPDATE_ARG]);
@@ -92,7 +88,6 @@ describe('temporalCodecPreset', () => {
   it('maps each phase argument to the timestampNow generator', () => {
     expect(preset.output).toEqual({
       codecId: 'test/date@1',
-      nativeType: 'date',
       executionDefaults: {
         onCreate: temporalPhaseTemplate(0, 'timestampNow'),
         onUpdate: temporalPhaseTemplate(1, 'timestampNow'),
@@ -112,7 +107,7 @@ describe('temporalCodecPreset', () => {
   });
 });
 
-const temporal = temporalAuthoringPresets({ codecId: 'test/date@1', nativeType: 'date' });
+const temporal = temporalAuthoringPresets({ codecId: 'test/date@1' });
 const contributions: Pick<AuthoringContributions, 'field'> = { field: { temporal } };
 
 describe('getAuthoringFieldPreset', () => {
@@ -131,7 +126,7 @@ describe('getAuthoringFieldPreset', () => {
 
 describe('fieldPresetSpellings', () => {
   it('lists every preset under the namespace with its arguments, nested namespaces included', () => {
-    const stamp = temporalCodecPreset({ codecId: 'test/date@1', nativeType: 'date' });
+    const stamp = temporalCodecPreset({ codecId: 'test/date@1' });
     const nested = { field: { ext: { stamp, clock: { created: temporal.createdAt } } } };
     expect(fieldPresetSpellings(nested, 'ext')).toEqual([
       'ext.stamp(onCreate, onUpdate)',
@@ -142,19 +137,4 @@ describe('fieldPresetSpellings', () => {
   it('lists nothing for a namespace that holds no preset at any depth', () => {
     expect(fieldPresetSpellings({ field: { ext: { empty: {} } } }, 'ext')).toEqual([]);
   });
-});
-
-describe('checkUncomposedNamespace', () => {
-  const context = { familyId: 'fam', targetId: 'tgt', authoringContributions: contributions };
-
-  it('returns the namespace of an attribute from an uncomposed extension', () => {
-    expect(checkUncomposedNamespace('ext.foo', new Set(), context)).toBe('ext');
-  });
-
-  it.each(['db.Text', 'fam.foo', 'tgt.foo', 'temporal.foo', 'composed.foo', 'plain', '.x', 'x.'])(
-    'accepts %s',
-    (name) => {
-      expect(checkUncomposedNamespace(name, new Set(['composed']), context)).toBeUndefined();
-    },
-  );
 });

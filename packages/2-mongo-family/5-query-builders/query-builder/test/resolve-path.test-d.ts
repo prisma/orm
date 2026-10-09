@@ -16,6 +16,35 @@ type CustomerShape = ModelNestedShape<TestContract, 'Customer'>;
 type AddressShape = CustomerShape['address'] extends ObjectField<infer N> ? N : never;
 type GeoShape = AddressShape['geo'] extends ObjectField<infer N> ? N : never;
 
+type ScalarListField<N extends boolean, E extends boolean> = {
+  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+  readonly nullable: N;
+  readonly many: { readonly elementNullable: E };
+};
+
+type ScalarListContract = Omit<TestContract, 'domain'> & {
+  readonly domain: {
+    readonly namespaces: {
+      readonly __unbound__: {
+        readonly models: {
+          readonly Order: {
+            readonly fields: {
+              readonly strict: ScalarListField<false, false>;
+              readonly nullableElements: ScalarListField<false, true>;
+              readonly nullableContainer: ScalarListField<true, false>;
+              readonly nullableBoth: ScalarListField<true, true>;
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: { readonly collection: 'orders' };
+          };
+        };
+      };
+    };
+  };
+};
+
+type ScalarListShape = ModelNestedShape<ScalarListContract, 'Order'>;
+
 describe('ModelNestedShape', () => {
   // Guard against the translation silently degrading to an open index
   // signature (`{ [x: string]: any }`). An open shape would make every
@@ -84,6 +113,41 @@ describe('ModelNestedShape', () => {
 });
 
 describe('ResolvePath', () => {
+  it('resolves strict scalar lists to array leaves', () => {
+    expectTypeOf<ResolvePath<ScalarListShape, 'strict'>>().toEqualTypeOf<{
+      readonly codecId: 'mongo/array@1';
+      readonly nullable: false;
+    }>();
+  });
+
+  it('resolves nullable-element scalar lists to required array leaves', () => {
+    expectTypeOf<ResolvePath<ScalarListShape, 'nullableElements'>>().toEqualTypeOf<{
+      readonly codecId: 'mongo/array@1';
+      readonly nullable: false;
+    }>();
+  });
+
+  it('preserves nullable containers for strict-element scalar lists', () => {
+    expectTypeOf<ResolvePath<ScalarListShape, 'nullableContainer'>>().toEqualTypeOf<{
+      readonly codecId: 'mongo/array@1';
+      readonly nullable: true;
+    }>();
+  });
+
+  it('preserves nullable containers for nullable-element scalar lists', () => {
+    expectTypeOf<ResolvePath<ScalarListShape, 'nullableBoth'>>().toEqualTypeOf<{
+      readonly codecId: 'mongo/array@1';
+      readonly nullable: true;
+    }>();
+  });
+
+  it('preserves the codec and nullability of a nullable non-list scalar', () => {
+    expectTypeOf<ResolvePath<ModelNestedShape<TestContract, 'Order'>, 'notes'>>().toEqualTypeOf<{
+      readonly codecId: 'mongo/string@1';
+      readonly nullable: true;
+    }>();
+  });
+
   it('resolves a top-level scalar path to its leaf DocField', () => {
     type Resolved = ResolvePath<CustomerShape, 'name'>;
     expectTypeOf<Resolved>().toEqualTypeOf<{

@@ -3,7 +3,7 @@
  * derive from the table's `rlsEnabled` attribute diff (the contract marker vs
  * `pg_class.relrowsecurity`) — never from the policy set. Pins the
  * pre-investigated edges: in-sync-policies-but-RLS-off re-enables, marker
- * removal disables under the destructive allowance and surfaces a conflict
+ * removal disables under the widening allowance and surfaces a conflict
  * without it, a marker with zero policies enables (deny-all), last-policy
  * removal plans no enablement change, and external tables suppress both
  * directions with a warning.
@@ -26,6 +26,7 @@ import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-da
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresPolicySchemaNode } from '../../src/core/schema-ir/postgres-policy-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
+import { postgresTypeComponents } from '../postgres-type-lookups';
 
 const TABLE_NAME = 'profiles';
 const stubLowerer: ExecuteRequestLowerer = {
@@ -37,7 +38,6 @@ const stubLowerer: ExecuteRequestLowerer = {
 const ALL_CLASSES_POLICY = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'] as const,
 };
-const NO_DESTRUCTIVE_POLICY = { allowedOperationClasses: ['additive', 'widening'] as const };
 const ADDITIVE_ONLY_POLICY = { allowedOperationClasses: ['additive'] as const };
 
 function contractPolicy(name: string): PostgresRlsPolicy {
@@ -68,8 +68,8 @@ function buildContract(options: {
       table: {
         [TABLE_NAME]: new StorageTable({
           columns: {
-            id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-            user_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+            id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+            user_id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           foreignKeys: [],
@@ -160,7 +160,9 @@ function plan(
     schema,
     policy: { allowedOperationClasses: [...policy.allowedOperationClasses] },
     fromContract: null,
-    frameworkComponents: [],
+    origin: null,
+    statements: [],
+    frameworkComponents: postgresTypeComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
   });
@@ -202,7 +204,7 @@ describe('marker-driven ENABLE', () => {
 });
 
 describe('marker-removal DISABLE', () => {
-  it('plans DISABLE when the marker is removed and the destructive allowance is present', async () => {
+  it('plans DISABLE when the marker is removed and the widening allowance is present', async () => {
     const contract = buildContract({ marked: false });
     const schema = actualSchema({ rlsEnabled: true });
 
@@ -210,11 +212,11 @@ describe('marker-removal DISABLE', () => {
     expect(opIds).toEqual([`rowLevelSecurity.public.${TABLE_NAME}.disable`]);
   });
 
-  it('surfaces a conflict (not a silent skip) when the destructive allowance is absent', () => {
+  it('surfaces a conflict (not a silent skip) when the widening allowance is absent', () => {
     const contract = buildContract({ marked: false });
     const schema = actualSchema({ rlsEnabled: true });
 
-    const result = plan(contract, schema, NO_DESTRUCTIVE_POLICY);
+    const result = plan(contract, schema, ADDITIVE_ONLY_POLICY);
     expect(result.kind).toBe('failure');
     if (result.kind !== 'failure') return;
     expect(result.conflicts).toContainEqual(
