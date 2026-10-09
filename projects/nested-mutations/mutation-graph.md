@@ -1,0 +1,207 @@
+# Mutation graph — design record
+
+Outcome of the design discussion of 2026-10-09. It replaces the executor-based approach the project started with, and it is the reason PR #30634 is not merged. The project spec and plan refer to this file for the design; this file holds the decisions, the reasons, what they assume, and what was rejected.
+
+## The question, as sharpened
+
+The project began by adding operations to the nested-write executor. That produced an executor nobody could read: each operation was written once per relation layout, statements were issued as a side effect of walking the input, and every defect of the week (a lookup that ran before a write it should have seen, a doubled lookup, validation that ran too late) came from the same place: nothing between "what the caller asked for" and "statements already executed" could be inspected.
+
+The question became: what explicit structure sits between the two, for every write the ORM client performs?
+
+## The design in one page
+
+A write call is turned into a **mutation graph**. Nodes are database-level steps. Edges carry everything one node needs from another. A small runner executes the graph.
+
+```ts
+// Nodes: frozen classes, static content only
+abstract class Node { peephole(graph: Graph): Node }
+class Find   extends Node { table; where: Expr[] }
+class Insert extends Node { table; values; onConflict? }
+class Update extends Node { table; set; where: Expr[] }
+class Delete extends Node { table; where: Expr[] }
+class Assert extends Node { error }              // throws when its input is empty
+class Merge  extends Node {}                      // one row from the rows of its inputs
+class State  extends Node { table; version }      // a version of a table
+
+// Edges: every edge implies order
+abstract class Edge { from: Node; to: Node }
+class After      extends Edge {}                               // order only
+class IntoValues extends Edge { columns: [source, target][] }  // copy into values / set
+class IntoWhere  extends Edge { columns: [source, target][] }  // target = value; IN for many rows
+
+class Graph { add(node, ...inputs): Node; replace(old, next); result }
+```
+
+Illustrative; names are settled only where a decision below says so.
+
+Example, `post.update({ title, author: connect, comments: [create, deleteAll], tags: connect })`, state nodes left out:
+
+```
+n1 Find    post     where id = 1
+n2 Find    user     where email = 'a@x'
+n3 Assert  ROW_MISSING                         <- n2
+n4 Update  post     set title = 'T'            <- IntoWhere n1 (id->id), IntoValues n2 (id->author_id), After n3
+n5 Insert  comment  { body: 'hi' }             <- IntoValues n4 (id->post_id)
+n6 Delete  comment  where spam                 <- IntoWhere n4 (id->post_id)
+n7 Find    tag      where name = 'sql'
+n8 Assert  ROW_MISSING                         <- n7
+n9 Insert  post_tag {} on conflict do nothing  <- IntoValues n4 (id->post_id), IntoValues n7 (id->tag_id), After n8
+result: n4
+```
+
+## Decisions
+
+Each entry: the decision, why, and what it assumes. An assumption that turns out false is the signal to reopen the entry.
+
+### D1. Nodes are database-level steps, not user operations
+
+`Find`, `Insert`, `Update`, `Delete`, plus `Assert`, `Merge` and `State`. A translation in front turns each user operation on each relation layout into nodes and edges.
+
+- **Why.** A user operation does not map to one statement shape: `connect` is an update of the child on one-to-many, a lookup feeding the parent's write when the parent holds the key, and a lookup plus a junction insert on many-to-many. Putting that table in one translation keeps the runner and the nodes free of relation knowledge. An earlier attempt to make user operations the classes failed for this reason.
+- **Assumes.** Every user operation, present and planned, can be expressed as these node kinds.
+
+### D2. Everything that comes from another node is an edge
+
+Three edge classes: `After` (order only), `IntoValues` (copy columns into a write's values), `IntoWhere` (add `target = value`, or `IN` when the source has many rows). Each data edge carries a list of column pairs, so a composite key is one edge with several pairs.
+
+- **Why.** With links as edges, a node's `where` stays an ordinary list of SQL AST expressions, the form the collection, the compile functions and the adapters already use. No placeholder inside expressions, no rewrite before compiling, no second representation of filters.
+- **Assumes.** Scoping conditions can be expressed as column equalities against another node's rows (see D8 for many-to-many).
+
+### D3. Order comes only from edges
+
+No phases and no reliance on the order things were written in. The runner executes nodes one at a time in dependency order.
+
+- **Why.** One mechanism decides order. The fixed phases of the old executor (parent-owned relations, parent write, child-owned, junction) are a consequence of data edges here, not a rule.
+
+### D4. Table state is nodes in the graph
+
+Per table, `State(table, n)`. A read depends on the latest state of its table. A write depends on the latest state and produces the next. A write also depends on every read of the state it replaces.
+
+- **Why.** This orders a lookup after earlier writes to the same table, which fixes the defect where a lookup read rows as they were before an earlier write in the same call, without anyone having to remember to add an edge. State as nodes, not as bookkeeping in the builder, because peephole rules need to ask "do these two nodes see the same version of this table" and that must be readable from the graph.
+- **Assumes.** Two nodes that touch different tables and share no data edge need no order between them, except as D5 says.
+
+### D5. A write to the target of a `through` relation also advances the junction's state
+
+Reads and junction writes use only their own table's state. An update or delete on the target table of a many-to-many relation depends on and advances the state of that relation's junction table.
+
+- **Why.** `[t.connect(x), t.deleteAll()]` inserts into the junction and deletes from the target: two tables, no shared state, no order. The order matters, because deleting the target changes junction rows through the foreign key. The rule models that one hop and nothing more.
+- **Assumes.** The only cross-table ordering that matters within one relation's array is target-versus-junction. A schema that also declares a direct relation from the parent to the junction model can still produce two writes with no defined order; that case is accepted as unordered.
+
+### D6. An empty source skips its consumers; `Assert` is the only way empty becomes an error
+
+A node whose data-edge source produced no row is skipped and is empty itself. An `Assert` node attached to a result throws a named error when that result is empty.
+
+- **Why.** One rule covers `update()` finding no row (everything is skipped, the result is `null`), `connect` finding no target (`Assert` raises `ORM.RELATION_ROW_MISSING`), and the planned nested upsert (an `Assert` on an `Insert`). No conditional nodes.
+- **Assumes.** No operation needs "do A if the row exists, otherwise B" as two different statement shapes. A to-one nested upsert is the case to check against this when it is designed.
+
+### D7. Optimisation is by peephole, at construction
+
+Each node class may override `peephole()`, which looks at the node and its inputs and returns the node or a replacement. `Graph.add` calls it. There are no passes and no worklist.
+
+- **Why.** A local rule owned by a node class is small and testable with a three-node graph, and rules that run as nodes are added have no order to choose. A worklist is added only when a rule can become applicable because of a later change (merging duplicate lookups would be one).
+- **Assumes.** The rules needed are local. The first two: inlining (D8) and removing an `Update` that sets nothing.
+
+### D8. Many-to-many scoping is a junction read plus a peephole
+
+The translation emits a `Find` on the junction for this parent, with an `IntoWhere` edge from it to the write on the target. A peephole on the consumer inlines a `Find` that has no other user as `column IN (SELECT ...)`, and that `Find` is removed.
+
+- **Why.** The base graph needs only plain edges, and the junction knowledge stays in the translation. Measured on 200,000 tags and 2,000 posts with 20 tags each: the `IN (SELECT ...)` form took 0.2 ms on Postgres and 0.06 ms on SQLite; the correlated `EXISTS` form the old executor used took 0.2-0.5 ms on Postgres and 9.5-25.8 ms on SQLite, because SQLite scans the whole target table.
+- **Assumes.** This peephole is required, not optional: without it the `IN` list is as long as the relation and exceeds bound-value limits. The SQL AST can express `IN` over a subquery for one column today (`BinaryExpr.in` with `SubqueryExpr`); the row-value form for composite keys is unverified.
+
+### D9. What a node returns is derived from the edges that read from it
+
+Nothing is stored on the node. The columns a node must return are the source columns of its outgoing data edges, plus the caller's selection when it is the result. A node nobody reads from uses the count-only statement form.
+
+- **Why.** A stored list would repeat what the edges say and become wrong when a peephole removes an edge.
+
+### D10. Nodes are frozen
+
+A peephole returns a new node and the graph rewires edges to it.
+
+- **Why.** It is the repo's convention for IR class hierarchies, a rule cannot change a node it does not own, and the only cost is one `replace` function the graph needs anyway.
+
+### D11. The caller's `select` is returned by the write; `include` is loaded afterwards by the existing read code
+
+- **Why.** Returning the selection from the write costs no extra statement, which is what plain writes do today and nested writes do not (they reload the row). Putting includes in the graph would mean building the read half of a planner, which is out of scope.
+
+### D12. Annotations are an argument to the runner
+
+The caller's annotation map is merged onto every statement of the call.
+
+- **Why.** The map describes the call, not a statement. Today statements issued for nested operations carry no annotations; with this they do.
+
+### D13. A `Merge` node, and variant writes go through the graph
+
+A variant stored in its own table is an `Insert` into the base table, an `Insert` into the variant table with a data edge for the key, and a `Merge` of the two rows as the result. A variant stored in the base table is one `Insert` with a literal discriminator.
+
+- **Why.** Variant handling then applies whether or not the call has relation callbacks. On main it exists only in the plain create path, and the nested executor has no variant handling at all.
+- **Assumes.** Main's tests pin base-then-variant order and that the returned row comes from the variant insert; the merge must reproduce both.
+
+### D14. Scope: every write method of the collection
+
+`create`, `createAll`, `createAndCount`, `update`, `updateAll`, `updateAndCount`, `delete`, `deleteAll`, `deleteAndCount`, `upsert`. Reads are not included.
+
+- **Why.** On main, `create()` and `update()` branch on "does the input contain a relation callback", and the two branches differ: annotations, variant handling and the returned selection exist in one and not the other. Plain `create()` and `update()` call the bulk functions with one row, so moving only the single-row methods would leave two implementations of the same write. One path removes the branch and the duplication.
+
+### D15. Intermediate nodes are collected; only the result node may stream
+
+A node another node reads from is collected into an array first. The result node is handed to the existing function that turns a compiled write into a stream and applies selection and includes. An `IntoValues` edge requires a one-row source, checked when the graph is built.
+
+- **Why.** The bulk methods return streams today. Making every node a stream brings buffering rules that exist mostly for reads.
+
+### D16. More than one statement means a transaction
+
+The runner opens a transaction when the graph will execute more than one statement, and runs a single statement directly. A transaction supplied by the caller is used as is.
+
+- **Why.** It reproduces what each path on main does today from one rule, and it does not hold a connection open around a single streamed statement.
+
+### D17. Delivery: restructure first, then features
+
+Stage 1 builds the graph for what main does today. The bar is that every integration test on main passes unedited on Postgres and SQLite; SQL statements may change freely, and statement-level unit tests are rewritten. Stage 2 adds the project's features one at a time as translation entries.
+
+- **Why.** PR #30634 mixed new behaviour, fixes and restructuring in one executor and could not be read. The structure has to be reviewable separately from the behaviour.
+
+## Smaller points settled without discussion
+
+- The name is "mutation graph", with nodes and edges. "Plan" already means a compiled statement in this package.
+- The graph names its result node and whether the caller gets rows, the first row, or a count.
+- Input that can be rejected from the input and the contract alone is rejected while the graph is built, before any statement runs.
+- `upsert` is an `Insert` node with a conflict clause.
+
+## Rejected alternatives
+
+| Alternative | Why rejected |
+| --- | --- |
+| Keep the executor and make it more regular (one object per relation layout, one class per user operation) | Tried in PR #30634 and abandoned: `create` does not fit an attach/detach interface, and statements still run as a side effect with nothing to inspect |
+| Classes for user operations (`Connect`, `Disconnect`, ...) in the list | Each would branch on relation layout when run; the per-layout knowledge belongs in one translation |
+| Links as references embedded in a node's values and `where`, filled in before compiling | Needs a placeholder inside expression trees and a rewrite step; edges avoid both |
+| Separate payload and filter link types | One edge hierarchy with a class per use is enough; the position says what the data does |
+| Order from the order the caller wrote things in, with an exception for what the parent's write needs | Two mechanisms for order; edges alone decide it |
+| An order-only edge between consecutive operations of one array | Table state already orders most pairs; D5 covers the remaining many-to-many pairs without a per-array rule |
+| A write advancing the state of every table that references its table | Spreads through the schema, needs cycle handling, and depends on foreign keys the contract does not always have |
+| Table state as bookkeeping in the builder | Peephole rules could not ask whether two nodes see the same version of a table |
+| A junction-aware edge lowered to `EXISTS` | A special edge where a peephole belongs; and `EXISTS` is slow on SQLite |
+| Optimisation passes run in a chosen order | Order between passes has to be found by trial; peepholes at construction have none |
+| A worklist run after the graph is built | Not needed for the rules we have; added only when a rule requires it |
+| Storing returned columns on the node and updating them when an edge is added | Repeats what the edges say and becomes wrong when an edge is removed |
+| Mutable nodes | Would save one `replace` function and lose value comparison and safety |
+| A required/optional flag on `Find` | `Assert` as a node works for any result, not only lookups |
+| Conditional nodes | Skip-on-empty plus `Assert` covers every case we have |
+| Scope limited to nested writes, or to single-row `create()` and `update()` | Leaves the branch between nested and plain paths, or two implementations of each write |
+| The whole planner from `projects/ssa-planner` on the `worktree-ssa-planner` branch of the archived `prisma/prisma-next`, reads included | Out of proportion for this project; five of its decisions are taken (edges that copy columns, order from dependencies, table state, expansion of nested operations into reads and writes, printable graphs) and its read side, passes and streaming model are not |
+
+## Sources consulted
+
+- `projects/ssa-planner` (spec, data structures, plan) on branch `worktree-ssa-planner` of `prisma/prisma-next`: a design, not implemented.
+- `SeaOfNodes/Simple`, chapters 2 and 9: peepholes at node construction; the worklist to a fixed point.
+- `projects/psl-relation-syntax` on branch `tml-2943-s4-implicit-mn-synthesis` of `prisma/prisma-next`: implicit many-to-many with a model-less junction, designed and partly built, never merged. The graph therefore works from a relation's `through` and never assumes a junction model.
+
+## Questions raised and decided
+
+The rest of the decisions from the same round (ports PR, capability check, empty link columns, non-callback relation value, matrix fixtures) are in the project spec.
+
+1. **Row-value `IN` for composite keys.** Decided: the SQL AST has no row-value form today; it is added to the AST and both adapters in the slice that adds many-to-many `updateAll` / `deleteAll`. Rejected: `EXISTS` for composite keys only (two statement forms, and the slow one on SQLite); refusing those relations.
+2. **Junction `connect` in stage 1.** Decided: slice `graph-nested` takes the already-decided behaviour: a conflict clause where the junction has a key over exactly its link columns, a plain insert otherwise, no duplicate check, no wrapped error; `ORM.RELATION_LINK_DUPLICATE` is removed. It is the one deliberate behaviour change in stage 1. No test on main asserts either of main's errors. Rejected: reproducing main's duplicate check and wrapped error in stage 1, which needs a comparison of two lookups' rows and a per-node error mapping that nothing else uses and that the next slice would remove.
+3. **Rejection timing in stage 1.** Decided: the graph rejects invalid nested input while it is built, before any statement, including when the filter matches no row, where main resolves `null`. This matches Prisma 7 and is the second deliberate behaviour change in stage 1. An integration test on main that asserts the `null` result, if one exists, is edited in slice `graph-nested`; that has not been checked yet. Rejected: postponing validation until the parent lookup has returned a row, which carries unvalidated input into the runner.
+4. **`createAll` batching.** Decided: an `Insert` node is exactly one statement and holds one or many rows. The translation decides the batching: rows that can go into one statement become one node; rows that cannot (different column sets without the `defaultInInsert` capability, own-table variants, a row with nested operations of its own) become several nodes. The node never splits itself into statements, and no peephole merges inserts. How the rows of several `Insert` nodes are combined into the call's result, in input order, is settled in the design of slice `graph-creates`.
+5. **Annotations.** Decided: the runner takes the caller's annotations and puts them on every statement the call executes, including lookups, child writes and junction inserts. A middleware sees the annotation once per statement. Rejected: annotating only the result node's statement.
