@@ -197,4 +197,65 @@ describe('createBinder', () => {
       { kind: 'field', name: 'id' },
     ]);
   });
+
+  it('reports an unsupported attribute of a mixin once, in the mixin, naming the mixin', () => {
+    const schema = [
+      'model mixin Stamped {',
+      '  createdAt Int @unrecognized',
+      '  @@unrecognizedModelAttribute',
+      '}',
+      'type mixin Geo {',
+      '  lat Int @unrecognized',
+      '  @@unrecognizedModelAttribute',
+      '}',
+      'type Address {',
+      '  street String @unrecognized',
+      '  +Geo',
+      '}',
+      'model User {',
+      '  id Int @id',
+      '  +Stamped',
+      '}',
+      'model Post {',
+      '  id Int @id',
+      '  +Stamped',
+      '}',
+    ].join('\n');
+    const { symbolTable, sources } = buildSymbolTableInput(schema);
+    const context: ContractSourceContext = {
+      composedExtensions: [],
+      composedExtensionContracts: new Map(),
+      authoringContributions: {
+        dataTypes: fixtureDataTypeSupport.entries,
+        field: fieldPresets,
+        type: authoringType,
+        entityTypes: {},
+        pslBlockDescriptors: {},
+        modelAttributes: {},
+        attributeSpecs: sqlAttributeSpecs,
+      },
+      pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
+      controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+      ...fixtureInterpreterTypes,
+      resolvedInputs: [],
+      capabilities: { sql: { scalarList: true } },
+    };
+
+    const { diagnostics } = createBinder({ symbolTable, sources, context });
+
+    expect(diagnostics).toEqual([
+      {
+        code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
+        message: 'Mixin "Stamped" uses unsupported attribute "@@unrecognizedModelAttribute"',
+        filename: 'schema.prisma',
+        range: { start: { line: 2, character: 2 }, end: { line: 2, character: 30 } },
+      },
+      {
+        code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+        message: 'Field "Stamped.createdAt" uses unsupported attribute "@unrecognized"',
+        filename: 'schema.prisma',
+        range: { start: { line: 1, character: 16 }, end: { line: 1, character: 29 } },
+      },
+    ]);
+  });
 });

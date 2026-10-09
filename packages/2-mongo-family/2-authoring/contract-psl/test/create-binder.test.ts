@@ -7,6 +7,7 @@ import { emptyCodecLookup } from '@internal/framework-components/codec';
 import { buildSymbolTable, createBinder, EMPTY_DATA_TYPES } from '@internal/psl-parser';
 import { parse, SyntaxNode } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
+import { describeUnresolvedMongoType } from '../src/describe-unresolved-type';
 import {
   describeUnsupportedMongoAttribute,
   mongoAttributeSpecs,
@@ -183,6 +184,80 @@ describe('createBinder', () => {
       { kind: 'contributedType', name: 'ObjectId', path: ['ObjectId'] },
       { kind: 'attribute', name: 'id', level: 'field' },
       { kind: 'attribute', name: 'map', level: 'field' },
+    ]);
+  });
+
+  it('reports an unsupported attribute of a mixin once, in the mixin, naming the mixin', () => {
+    const schema = [
+      'model mixin Stamped {',
+      '  label String @unrecognized',
+      '  ghost Unknown',
+      '  @@unrecognizedModelAttribute',
+      '}',
+      'type mixin Geo {',
+      '  place String',
+      '  @@unrecognizedModelAttribute',
+      '}',
+      'model User {',
+      '  id ObjectId @id @map("_id")',
+      '  +Stamped',
+      '}',
+      'model Post {',
+      '  id ObjectId @id @map("_id")',
+      '  +Stamped',
+      '}',
+    ].join('\n');
+    const { document, sources } = parse(schema, 'schema.prisma');
+    const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+    const context: ContractSourceContext = {
+      composedExtensions: [],
+      composedExtensionContracts: new Map(),
+      authoringContributions: {
+        dataTypes: {},
+        field: fieldPresets,
+        type: mongoScalarAuthoringTypes,
+        entityTypes: {},
+        pslBlockDescriptors: {},
+        modelAttributes: {},
+        attributeSpecs: mongoAttributeSpecs,
+      },
+      pslDiagnostics: {
+        describeUnsupportedAttribute: describeUnsupportedMongoAttribute,
+        describeUnresolvedType: describeUnresolvedMongoType,
+      },
+      codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+      dataTypes: EMPTY_DATA_TYPES,
+      resolvedInputs: [],
+      capabilities: {},
+    };
+
+    const { diagnostics } = createBinder({ symbolTable, sources, context });
+
+    expect(
+      diagnostics.map(({ code, message, range }) => ({ code, message, line: range.start.line })),
+    ).toEqual([
+      {
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message:
+          'Field "Stamped.ghost" has type "Unknown", which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are String, ObjectId and Points.',
+        line: 2,
+      },
+      {
+        code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
+        message: 'Mixin "Stamped" uses unsupported attribute "@@unrecognizedModelAttribute"',
+        line: 3,
+      },
+      {
+        code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+        message: 'Field "Stamped.label" uses unsupported attribute "@unrecognized"',
+        line: 1,
+      },
+      {
+        code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
+        message: 'Mixin "Geo" uses unsupported attribute "@@unrecognizedModelAttribute"',
+        line: 7,
+      },
     ]);
   });
 });
