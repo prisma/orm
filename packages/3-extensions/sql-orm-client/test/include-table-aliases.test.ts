@@ -151,38 +151,6 @@ describe('table aliases in includes', () => {
     );
   });
 
-  it('keeps a derived-table alias apart from an alias taken inside a combine branch', () => {
-    const { collection } = createCollectionFor('User');
-    const state = collection
-      .select('id')
-      .include('posts', (posts) => posts.combine({ rows: posts.select('id') })).state;
-    const [include] = state.includes;
-    const branch = include?.combine?.['rows'];
-    if (include === undefined || branch?.kind !== 'rows') {
-      throw new Error('Expected a combine include with a rows branch');
-    }
-    const branchScope = branch.state.tables.scope.copy();
-    branchScope.alias('posts__rows');
-
-    const sql = sqlOf({
-      ...state,
-      includes: [
-        {
-          ...include,
-          combine: {
-            rows: {
-              kind: 'rows',
-              state: { ...branch.state, tables: { ...branch.state.tables, scope: branchScope } },
-            },
-          },
-        },
-      ],
-    });
-
-    expect(sql).toContain(') AS "posts__rows_2")');
-    expect(sql).not.toContain(') AS "posts__rows")');
-  });
-
   it('rejects a refinement result that was not derived from the collection it was handed', () => {
     const { collection } = createCollectionFor('User');
     const { collection: unrelated } = createCollectionFor('Post');
