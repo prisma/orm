@@ -126,7 +126,7 @@ describe('ORM row locking, rendered SQL', () => {
         .toArray();
 
       expect(sqlOf(runtime, contract)).toBe(
-        'SELECT "tasks"."id" AS "id", "tasks"."title" AS "title", "tasks"."type" AS "type", "tasks"."severity" AS "severity", "tasks"."project_id" AS "project_id", "tasks"."parent_id" AS "parent_id", "tasks"."assignee_id" AS "assignee_id", "features"."priority" AS "features__priority", "features"."assignee_id" AS "features__assignee_id" FROM "public"."tasks" INNER JOIN "public"."features" ON "tasks"."id" = "features"."id" WHERE "tasks"."type" = $1 FOR UPDATE OF "tasks"',
+        'SELECT "tasks"."id" AS "id", "tasks"."title" AS "title", "tasks"."type" AS "type", "tasks"."project_id" AS "project_id", "tasks"."parent_id" AS "parent_id", "features"."priority" AS "features__priority", "features"."assignee_id" AS "features__assignee_id" FROM "public"."tasks" INNER JOIN "public"."features" ON "tasks"."id" = "features"."id" WHERE "tasks"."type" = $1 FOR UPDATE OF "tasks"',
       );
     });
 

@@ -17,7 +17,7 @@
  *   2. `db.asServiceRole().supabase.nativeEnums.auth.AalLevel` exposes the
  *      same member set at runtime, wired via `@internal/postgres`'s
  *      `buildNamespacedNativeEnums`, built from the extension contract's own
- *      storage.
+ *      value sets.
  *   3. A query that binds `aal` as a parameter forces the renderer to emit a
  *      `$N::auth.aal_level` cast (the column's own schema-qualified
  *      `typeParams.typeName`, since `auth` is not the default `public` schema). The

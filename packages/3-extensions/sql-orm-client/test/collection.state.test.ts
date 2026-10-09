@@ -20,7 +20,7 @@ import {
   createReturningCollectionWithoutCapabilities,
   createReturningCollectionWithoutDefaultInInsert,
 } from './collection-fixtures';
-import type { MockExecution, MockRuntime } from './helpers';
+import { fieldUnknown, type MockExecution, type MockRuntime } from './helpers';
 
 function insertAstOf(execution: MockExecution): InsertAst {
   const ast = (execution.plan as { ast: unknown }).ast;
@@ -580,12 +580,7 @@ describe('Collection', () => {
           onConflict: 'skip',
           conflictOn: ['posts' as never],
         }),
-      ).toThrow(
-        expect.objectContaining({
-          code: 'ORM.ARGUMENT_INVALID',
-          message: expect.stringContaining('posts'),
-        }),
-      );
+      ).toThrow(fieldUnknown('User', 'posts'));
       expect(runtime.executions).toHaveLength(0);
     });
 

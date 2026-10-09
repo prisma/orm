@@ -29,11 +29,14 @@ const orders = new Collection({ runtime: createMockRuntime(), context }, 'Order'
   namespaceId: 'public',
 });
 
-function compile(tableName: string, state: CollectionState): SqlQueryPlan {
+const modelOfTable = { customers: 'Customer', orders: 'Order' } as const;
+
+function compile(tableName: keyof typeof modelOfTable, state: CollectionState): SqlQueryPlan {
   return compileSelectWithIncludes(
     contract,
     context.aggregateDescriptors,
     'public',
+    modelOfTable[tableName],
     tableName,
     state,
   );

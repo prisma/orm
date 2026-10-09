@@ -24,7 +24,6 @@ import {
   refuseColumnControl,
   refuseColumnDifferingFromNamedType,
   refuseFieldColumnMismatch,
-  refuseFieldsWithoutColumn,
   refuseGeneratorWithDatabaseDefault,
   refuseStorageOfUndeclaredField,
   refuseUnwritableFieldShape,
@@ -95,8 +94,7 @@ function scalarFieldAttributes(input: {
 }
 
 /**
- * The scalar and value-object fields of one model, one per column its storage names. Each generated
- * value written with a field is added to `writtenExecutionDefaults`.
+ * The scalar and value-object fields of one model, one per column its storage names.
  */
 export function buildScalarFields(input: {
   readonly entry: ModelWithTable;
@@ -106,15 +104,12 @@ export function buildScalarFields(input: {
   readonly typeMap: PslTypeMap;
   readonly context: SqlPslBuildContext;
   readonly executionDefaults: ReadonlyMap<string, ExecutionMutationDefault>;
-  readonly writtenExecutionDefaults: Set<ExecutionMutationDefault>;
   readonly defaultDomainEnumNames: ReadonlySet<string>;
   readonly namedTypes: NonNullable<SqlStorage['types']>;
 }): readonly PslField[] {
   const { entry, variant, enums, domainEnums, typeMap, context, executionDefaults } = input;
   const primaryKeyColumns = variant === undefined ? (entry.table.primaryKey?.columns ?? []) : [];
   const fields: PslField[] = [];
-
-  refuseFieldsWithoutColumn(entry);
 
   for (const [fieldName, fieldStorage] of Object.entries(entry.storage.fields)) {
     const columnName = fieldStorage.column;
@@ -164,7 +159,6 @@ export function buildScalarFields(input: {
     );
     let generatedDefault: PslFieldAttribute | undefined;
     if (execution !== undefined) {
-      input.writtenExecutionDefaults.add(execution);
       const built = buildExecutionDefault({
         executionDefault: execution,
         codecId: column.codecId,

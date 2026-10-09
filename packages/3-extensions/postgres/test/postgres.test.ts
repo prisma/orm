@@ -496,13 +496,11 @@ describe('postgres', () => {
   });
 
   describe('db.nativeEnums (facade)', () => {
-    // Built from real `PostgresSchema` IR instances (not plain literals):
-    // `PostgresContractSerializer.serializeContract` carries `entries.valueSet`
-    // for any namespace it recognizes via `isPostgresSchema`, matching how a
-    // real Postgres contract always rehydrates through the serializer at the
-    // `postgres()` call site. `db.nativeEnums` reads that `valueSet` entry —
-    // the same generic entry a `native_enum`'s `deriveValueSet` hook produces
-    // — not the (never re-serialized) `native_enum` entity itself.
+    // Built from real `PostgresSchema` IR instances (not plain literals),
+    // as a Postgres contract is rehydrated at the `postgres()` call site.
+    // `db.nativeEnums` reads the `valueSet` entry a `native_enum`'s
+    // `deriveValueSet` hook produces, keyed by the entity name. The
+    // `native_enum` entity is stored too, but keyed by the Postgres type name.
     const publicNs = new PostgresSchema({
       id: 'public',
       entries: {
@@ -588,7 +586,7 @@ describe('postgres', () => {
         },
       };
 
-      const result = buildNativeEnumsMapForNamespace(plainStorage, 'public');
+      const result = buildNativeEnumsMapForNamespace(plainStorage, contract.domain, 'public');
 
       expect(result['AalLevel']?.values).toEqual(['aal1', 'aal2', 'aal3']);
       expect(result['AalLevel']?.has('aal2')).toBe(true);

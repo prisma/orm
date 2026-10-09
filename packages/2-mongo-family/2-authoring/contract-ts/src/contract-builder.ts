@@ -24,6 +24,7 @@ import {
   type ValueSetRef,
 } from '@internal/contract/types';
 import {
+  assertEnumMembersStoredUniquely,
   composePackAuthoringNamespace,
   createEntityHelpersFromNamespace,
   createFieldHelpersFromNamespace,
@@ -2566,9 +2567,14 @@ function buildContractFromDefinition<
   const storageValueSets: Record<string, MongoValueSetInput> = {};
   for (const [enumName, handle] of Object.entries(definition.enums ?? {})) {
     assertEnumCanUseCodec(handle, codecLookup);
+    const storedMembers = handle.enumMembers.map((m) => ({
+      name: m.name,
+      stored: encodeEnumValue(m.value, handle.codecId, codecLookup),
+    }));
+    assertEnumMembersStoredUniquely(handle.enumName, storedMembers);
     storageValueSets[enumName] = {
       kind: 'valueSet',
-      values: handle.values.map((v) => encodeEnumValue(v, handle.codecId, codecLookup)),
+      values: storedMembers.map((m) => m.stored),
     };
   }
   const hasValueSets = Object.keys(storageValueSets).length > 0;

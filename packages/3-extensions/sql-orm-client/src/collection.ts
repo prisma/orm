@@ -38,18 +38,25 @@ import { createAggregateBuilder, isAggregateSelector } from './aggregate-builder
 import { resolveAggregate } from './aggregate-codecs';
 import { emptyAggregateResult } from './aggregate-empty-result';
 import { aggregateOperationNames } from './aggregate-operations';
-import { mapCursorValuesToColumns, mapFieldsToColumns } from './collection-column-mapping';
+import {
+  mapCursorValuesToColumns,
+  mapFieldsToColumns,
+  mapSelectedFieldsToColumns,
+} from './collection-column-mapping';
 import {
   assertDistinctOnCapability,
   assertInsertConflictSkipCapability,
   assertLockCapability,
   assertReturningCapability,
-  getColumnToFieldMap,
-  getFieldToColumnMap,
+  columnOfCallerField,
+  fieldOfColumn,
+  getModelAndVariantFieldColumns,
+  getModelColumnFields,
+  getModelFieldColumns,
+  getOwnFieldColumns,
   isToOneCardinality,
   type PolymorphismInfo,
   type PolymorphismVariantInfo,
-  resolveFieldToColumn,
   resolveIncludeRelation,
   resolveInsertConflictColumns,
   resolveModelTableName,
@@ -82,7 +89,11 @@ import {
   dispatchSplitMutationRows,
   executeMutationReturningSingleRow,
 } from './collection-mutation-dispatch';
-import { mapModelDataToStorageRow, mapPolymorphicRow } from './collection-runtime';
+import {
+  assertModelFieldNames,
+  mapModelDataToStorageRow,
+  mapPolymorphicRow,
+} from './collection-runtime';
 import type {
   CollectionRowOf,
   CollectionTypeStateOf,
@@ -290,8 +301,9 @@ function isMtiVariantInfo(variant: PolymorphismVariantInfo | undefined): variant
 interface MtiCreateContext {
   polyInfo: PolymorphismInfo;
   variant: MtiVariantInfo;
-  baseFieldToColumn: Record<string, string>;
-  variantFieldToColumn: Record<string, string>;
+  baseFieldToColumn: Readonly<Record<string, string>>;
+  variantFieldToColumn: Readonly<Record<string, string>>;
+  mergedFieldToColumn: Readonly<Record<string, string>>;
   pkColumns: readonly string[];
 }
 
@@ -408,7 +420,13 @@ export class CollectionBase<
     const column =
       field === undefined
         ? undefined
-        : resolveFieldToColumn(this.contract, this.namespaceId, this.modelName, field);
+        : columnOfCallerField(
+            this.contract,
+            this.namespaceId,
+            getModelFieldColumns(this.contract, this.namespaceId, this.modelName),
+            this.modelName,
+            field,
+          );
     return createIncludeScalar(operation, this.state, column);
   }
 
@@ -979,10 +997,11 @@ export class CollectionBase<
     >,
     State
   > {
-    const selectedFields = mapFieldsToColumns(
+    const selectedFields = mapSelectedFieldsToColumns(
       this.contract,
       this.namespaceId,
       this.modelName,
+      this.state.variantName,
       fields,
     );
 
@@ -1894,6 +1913,7 @@ export class CollectionBase<
       const plans = compileInsertReturningSplit(
         this.contract,
         this.namespaceId,
+        this.modelName,
         this.tableName,
         mappedRows,
         selectedForInsert,
@@ -1919,6 +1939,7 @@ export class CollectionBase<
       compileInsertReturning(
         this.contract,
         this.namespaceId,
+        this.modelName,
         this.tableName,
         mappedRows,
         selectedForInsert,
@@ -1971,7 +1992,6 @@ export class CollectionBase<
         this.namespaceId,
         this.modelName,
         conflictOn,
-        method,
       ),
     };
   }
@@ -2012,8 +2032,8 @@ export class CollectionBase<
     const variant = polyInfo.variants.get(variantName);
     if (!isMtiVariantInfo(variant)) return null;
 
-    const baseFieldToColumn = getFieldToColumnMap(this.contract, this.namespaceId, this.modelName);
-    const variantFieldToColumn = getFieldToColumnMap(
+    const baseFieldToColumn = getModelFieldColumns(this.contract, this.namespaceId, this.modelName);
+    const variantFieldToColumn = getOwnFieldColumns(
       this.contract,
       this.namespaceId,
       variant.modelName,
@@ -2025,6 +2045,12 @@ export class CollectionBase<
       variant,
       baseFieldToColumn,
       variantFieldToColumn,
+      mergedFieldToColumn: getModelAndVariantFieldColumns(
+        this.contract,
+        this.namespaceId,
+        this.modelName,
+        variant.modelName,
+      ),
       pkColumns,
     };
   }
@@ -2033,7 +2059,14 @@ export class CollectionBase<
     data: readonly Record<string, unknown>[],
     mtiCtx: MtiCreateContext,
   ): AsyncIterableResult<Row> {
-    const { polyInfo, variant, baseFieldToColumn, variantFieldToColumn, pkColumns } = mtiCtx;
+    const {
+      polyInfo,
+      variant,
+      baseFieldToColumn,
+      variantFieldToColumn,
+      mergedFieldToColumn,
+      pkColumns,
+    } = mtiCtx;
     const contract = this.contract;
     const collectionCtx = this.ctx;
     const runtime = collectionCtx.runtime;
@@ -2043,7 +2076,6 @@ export class CollectionBase<
 
     const baseFieldColumns = new Set(Object.values(baseFieldToColumn));
     const variantFieldColumns = new Set(Object.values(variantFieldToColumn));
-    const mergedFieldToColumn = { ...baseFieldToColumn, ...variantFieldToColumn };
 
     const generator = async function* (): AsyncGenerator<Row, void, unknown> {
       const defaultValueCache = new Map<string, unknown>();
@@ -2051,8 +2083,15 @@ export class CollectionBase<
         const allMapped: Record<string, unknown> = {};
         for (const [fieldName, value] of Object.entries(row)) {
           if (value === undefined) continue;
-          const columnName = mergedFieldToColumn[fieldName] ?? fieldName;
-          allMapped[columnName] = value;
+          allMapped[
+            columnOfCallerField(
+              contract,
+              namespaceId,
+              mergedFieldToColumn,
+              variant.modelName,
+              fieldName,
+            )
+          ] = value;
         }
         allMapped[polyInfo.discriminatorColumn] = variant.value;
 
@@ -2072,6 +2111,7 @@ export class CollectionBase<
           const baseCompiled = compileInsertReturning(
             contract,
             namespaceId,
+            modelName,
             tableName,
             [baseRow],
             undefined,
@@ -2109,6 +2149,7 @@ export class CollectionBase<
           const variantCompiled = compileInsertReturning(
             contract,
             namespaceId,
+            variant.modelName,
             variant.table,
             [variantRow],
             undefined,
@@ -2178,20 +2219,26 @@ export class CollectionBase<
       );
     }
 
-    const baseFieldToColumn = getFieldToColumnMap(this.contract, this.namespaceId, this.modelName);
-    const variantFieldToColumn = getFieldToColumnMap(
+    const mergedFieldToColumn = getModelAndVariantFieldColumns(
       this.contract,
       this.namespaceId,
+      this.modelName,
       variant.modelName,
     );
-    const mergedFieldToColumn = { ...baseFieldToColumn, ...variantFieldToColumn };
 
     return data.map((row) => {
       const mapped: Record<string, unknown> = {};
       for (const [fieldName, value] of Object.entries(row)) {
         if (value === undefined) continue;
-        const columnName = mergedFieldToColumn[fieldName] ?? fieldName;
-        mapped[columnName] = value;
+        mapped[
+          columnOfCallerField(
+            this.contract,
+            this.namespaceId,
+            mergedFieldToColumn,
+            variant.modelName,
+            fieldName,
+          )
+        ] = value;
       }
       mapped[polyInfo.discriminatorColumn] = variant.value;
       return mapped;
@@ -2381,6 +2428,7 @@ export class CollectionBase<
       compileUpsertReturning(
         this.contract,
         this.namespaceId,
+        this.modelName,
         this.tableName,
         createValues,
         updateValues,
@@ -2516,6 +2564,12 @@ export class CollectionBase<
       return this.#reloadMutationRowByIdentity(identityCriterion);
     }
 
+    assertModelFieldNames(
+      this.contract,
+      this.namespaceId,
+      this.modelName,
+      blindCast<Record<string, unknown>, 'scalar update input is a model-field record'>(data),
+    );
     return withMutationScope(this.ctx.runtime, async (scope) => {
       const scoped = this.#withRuntime(scope);
       const identityWhere = await scoped.#findFirstMatchingRowIdentityWhere();
@@ -2600,6 +2654,7 @@ export class CollectionBase<
       compileUpdateReturning(
         this.contract,
         this.namespaceId,
+        this.modelName,
         this.tableName,
         mappedData,
         this.state.filters,
@@ -2770,6 +2825,7 @@ export class CollectionBase<
       compileDeleteReturning(
         this.contract,
         this.namespaceId,
+        this.modelName,
         this.tableName,
         this.state.filters,
         selectedForDelete,
@@ -2880,7 +2936,6 @@ export class CollectionBase<
     createValues: Record<string, unknown>,
     conflictColumns: readonly string[],
   ): Record<string, unknown> {
-    const columnToField = getColumnToFieldMap(this.contract, this.namespaceId, this.modelName);
     const criterion: Record<string, unknown> = {};
 
     for (const columnName of conflictColumns) {
@@ -2892,7 +2947,11 @@ export class CollectionBase<
         );
       }
 
-      const fieldName = columnToField[columnName] ?? columnName;
+      const fieldName = fieldOfColumn(
+        getModelColumnFields(this.contract, this.namespaceId, this.modelName),
+        this.modelName,
+        columnName,
+      );
       criterion[fieldName] = createValues[columnName];
     }
 
@@ -2955,10 +3014,13 @@ export class CollectionBase<
     if (!firstRow) {
       return null;
     }
-    const columnToField = getColumnToFieldMap(this.contract, this.namespaceId, this.modelName);
     const criterion: Record<string, unknown> = {};
     for (const column of identityColumns) {
-      const fieldName = columnToField[column] ?? column;
+      const fieldName = fieldOfColumn(
+        getModelColumnFields(this.contract, this.namespaceId, this.modelName),
+        this.modelName,
+        column,
+      );
       const value = blindCast<
         Record<string, unknown>,
         'selected collection rows are model-field records used for identity lookup'

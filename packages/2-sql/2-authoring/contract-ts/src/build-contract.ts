@@ -64,6 +64,7 @@ import {
   resolveCheckExpressionRenderer,
   resolveColumnTypeQualifier,
 } from './target-authoring-hooks';
+import { requiredUnmappedColumnWarnings } from './unmapped-column-warnings';
 
 function assertStorageSemantics(
   contract: Contract<SqlStorage>,
@@ -178,10 +179,10 @@ export function buildSqlContractFromDefinition(
     warnings: authoringWarnings,
   };
   const tablesByNamespace: Record<string, Record<string, StorageTableInput>> = {};
-  for (const table of mergeTables(
-    components.map((c) => c.storage),
-    tableNodes,
-  )) {
+  const modelStorages = components.map((c) => c.storage);
+  const tables = mergeTables(modelStorages, tableNodes);
+  authoringWarnings.push(...requiredUnmappedColumnWarnings(modelStorages, tables));
+  for (const table of tables) {
     const namespaceTables = tablesByNamespace[table.namespaceId] ?? {};
     namespaceTables[table.tableName] = lowerTable(table, tableLoweringContext);
     tablesByNamespace[table.namespaceId] = namespaceTables;

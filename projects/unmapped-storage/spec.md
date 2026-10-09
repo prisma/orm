@@ -53,7 +53,7 @@ Migrations, `db verify` and the storage hash see `legacy_key` and `audit_rows`. 
 1. **One lowering.** A column or table with no model enters the contract only through `ContractDefinition` and is lowered by the same code that lowers a model's column or table.
 2. **Exposure does not move storage.** Lowering a model with a field gives the same storage plane, compared with deep equality, as lowering the model without the field plus the same column as a column node.
 3. **The ORM stays in the domain, at runtime as well as in types.** No name a caller passes falls back to a column name, and no row carries a column no field maps.
-4. **The reader never drops silently.** Every ignored object the reader cannot describe is refused with a diagnostic that says what to do.
+4. **The reader never drops silently.** Every ignored object the reader cannot describe, including a column whose type has no Prisma 8 codec, is refused with a diagnostic.
 
 ## Transitional-shape constraints
 
@@ -71,7 +71,6 @@ Inherits `drive/calibration/dod.md`. Project-specific:
 
 ## Open questions
 
-- What the reader does with an `@ignore` field whose type has no Prisma 8 codec. Decided before slice 3 starts; see `design-notes.md`.
 - Which control policy, or which other mechanism, covers `_prisma_migrations`. Decided before slice 3 starts.
 
 ## References

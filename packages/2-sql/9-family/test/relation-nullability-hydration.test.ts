@@ -65,7 +65,7 @@ function contractJson(input: {
     roots: { posts: crossRef('Post', UNBOUND_DOMAIN_NAMESPACE_ID) },
     models: {
       Post: {
-        fields: { id: int, authorId: int },
+        fields: input.authorIdColumn === 'missing' ? { id: int } : { id: int, authorId: int },
         relations: { author: input.relation },
         storage: {
           namespaceId: UNBOUND_NAMESPACE_ID,
@@ -77,12 +77,12 @@ function contractJson(input: {
         },
       },
       User: {
-        fields: { id: int },
+        fields: { id: int, postId: int },
         relations: {},
         storage: {
           namespaceId: UNBOUND_NAMESPACE_ID,
           table: 'user',
-          fields: { id: { column: 'id' } },
+          fields: { id: { column: 'id' }, postId: { column: 'post_id' } },
         },
       },
     },
@@ -99,7 +99,12 @@ function contractJson(input: {
                 indexes: [],
                 foreignKeys: postForeignKeys,
               },
-              user: { columns: { id: column(false) }, uniques: [], indexes: [], foreignKeys: [] },
+              user: {
+                columns: { id: column(false), post_id: column(false) },
+                uniques: [],
+                indexes: [],
+                foreignKeys: [],
+              },
             },
           },
         },
@@ -131,12 +136,14 @@ describe('to-one relation nullability on deserialization', () => {
     expect(hydratedAuthor(json)).toMatchObject({ cardinality: 'N:1', nullable: false });
   });
 
-  it('derives nullable: true when the local column cannot be resolved', () => {
+  it('refuses a relation whose local join field is not a field of its model', () => {
     const json = contractJson({
       relation: toOne({ to: user }),
       authorIdColumn: 'missing',
     });
-    expect(hydratedAuthor(json)).toMatchObject({ nullable: true });
+    expect(() => hydratedAuthor(json)).toThrow(
+      'Relation "author" on model "__unbound__:Post" joins on "authorId", which is not a field of model "__unbound__:Post"',
+    );
   });
 
   it('defaults a cross-space to-one relation to nullable: true', () => {

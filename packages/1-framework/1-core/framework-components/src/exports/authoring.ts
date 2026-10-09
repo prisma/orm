@@ -5,6 +5,11 @@ export type {
 export { findAuthoringTypeConstructorCall } from '../shared/authoring-type-constructor-call';
 export { type EnumBlockMember, readEnumBlockMembers } from '../shared/enum-block-members';
 export {
+  type DuplicateStoredValue,
+  duplicateStoredMembers,
+  type StoredEnumMember,
+} from '../shared/enum-stored-members';
+export {
   fieldPresetSpellings,
   getAuthoringFieldPreset,
 } from '../shared/field-preset-resolution';

@@ -1177,7 +1177,7 @@ describe('mutation-executor', () => {
     expect(created).toEqual({ id: 1, title: 'Post', userId: 5, views: 1 });
   });
 
-  it('executeNestedCreateMutation() tolerates sparse parent/child column pairs', async () => {
+  it('executeNestedCreateMutation() refuses relation metadata with a missing join field', async () => {
     const contract = getTestContract();
     const sparseAuthorRelation = withPatchedDomainModels(contract, (models) => {
       const post = models['Post'] as { relations: { author: Record<string, unknown> } };
@@ -1204,21 +1204,21 @@ describe('mutation-executor', () => {
       [{ id: 1, title: 'Post', user_id: 5, views: 1 }],
     ]);
 
-    const created = await executeNestedCreateMutation({
-      context: { ...getTestContext(), contract: sparseAuthorRelation },
-      runtime,
-      namespaceId: 'public',
-      modelName: 'Post',
-      data: {
-        id: 1,
-        title: 'Post',
-        views: 1,
-        author: (author: { connect: (criterion: Record<string, unknown>) => unknown }) =>
-          author.connect({ id: 5 }),
-      } as never,
-    });
-
-    expect(created).toEqual({ id: 1, title: 'Post', userId: 5, views: 1 });
+    await expect(
+      executeNestedCreateMutation({
+        context: { ...getTestContext(), contract: sparseAuthorRelation },
+        runtime,
+        namespaceId: 'public',
+        modelName: 'Post',
+        data: {
+          id: 1,
+          title: 'Post',
+          views: 1,
+          author: (author: { connect: (criterion: Record<string, unknown>) => unknown }) =>
+            author.connect({ id: 5 }),
+        } as never,
+      }),
+    ).rejects.toThrow('has no field "undefined" the contract names');
   });
 
   it('executeNestedUpdateMutation() returns null when no row matches filters', async () => {
@@ -1342,7 +1342,7 @@ describe('mutation-executor', () => {
     ).rejects.toThrow(/requires non-empty criterion/);
   });
 
-  it('executeNestedUpdateMutation() supports composite child joins and sparse relation columns', async () => {
+  it('executeNestedUpdateMutation() supports composite child joins', async () => {
     const contract = getTestContract();
     const compositeRelationContract = withPatchedDomainModels(contract, (models) => {
       const user = models['User'] as { relations: { posts: Record<string, unknown> } };
@@ -1355,8 +1355,8 @@ describe('mutation-executor', () => {
             posts: {
               ...user.relations.posts,
               on: {
-                localFields: [undefined, 'id', 'email'] as unknown as readonly string[],
-                targetFields: ['userId', 'userId', 'title'],
+                localFields: ['id', 'email'],
+                targetFields: ['userId', 'title'],
               },
             },
           },
