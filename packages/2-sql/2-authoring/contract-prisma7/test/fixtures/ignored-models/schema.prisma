@@ -1,0 +1,40 @@
+datasource db {
+  provider = "postgresql"
+  schemas  = ["public", "legacy"]
+}
+
+model User {
+  id        Int      @id
+  archiveId Int?
+  archive   Archive? @relation(fields: [archiveId], references: [id]) @ignore
+
+  @@schema("public")
+}
+
+model Archive {
+  id      Int            @id
+  label   String
+  users   User[]
+  entries ArchiveEntry[]
+
+  @@index([label])
+  @@map("archives")
+  @@schema("legacy")
+  @@ignore
+}
+
+model ArchiveEntry {
+  id        Int     @id
+  archiveId Int
+  archive   Archive @relation(fields: [archiveId], references: [id])
+
+  @@schema("legacy")
+  @@ignore
+}
+
+model Loose {
+  value Int
+
+  @@schema("public")
+  @@ignore
+}

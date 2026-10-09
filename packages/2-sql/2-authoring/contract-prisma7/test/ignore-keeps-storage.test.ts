@@ -11,10 +11,10 @@ function withoutIgnoreOn(text: string, fieldNames: readonly string[]): string {
   }, text);
 }
 
-function withoutModelIgnore(text: string): string {
-  const line = /^\s*@@ignore\n/m;
+function withoutModelIgnore(text: string, modelName?: string): string {
+  const line = new RegExp(`(^model ${modelName ?? '\\w+'} \\{[^}]*?)\\n\\s*@@ignore`, 'm');
   expect(text).toMatch(line);
-  return text.replace(line, '');
+  return text.replace(line, '$1');
 }
 
 describe('@ignore leaves storage as it is', () => {
@@ -78,5 +78,15 @@ describe('@ignore leaves storage as it is', () => {
     expect(storageOf(ignored)).toStrictEqual(
       storageOf(withoutIgnoreOn(withoutModelIgnore(ignored), ['tags'])),
     );
+  });
+
+  // Model `Loose` has no @id and stays ignored on both sides: Prisma 7 and Prisma 8 both refuse a model with no unique criteria unignored.
+  it('on models that reference each other across schemas, and a relation field to one of them', () => {
+    const ignored = fixtureSchemaText('ignored-models');
+    const unignored = withoutIgnoreOn(
+      withoutModelIgnore(withoutModelIgnore(ignored, 'Archive'), 'ArchiveEntry'),
+      ['archive'],
+    );
+    expect(storageOf(ignored)).toStrictEqual(storageOf(unignored));
   });
 });
