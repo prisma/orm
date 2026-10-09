@@ -7,10 +7,8 @@ import type {
 import { AsyncIterableResult, createMetaBuilder } from '@internal/framework-components/runtime';
 import type { ExtractCodecTypes, SqlStorage } from '@internal/sql-contract/types';
 import {
-  type AnyExpression,
   BinaryExpr,
   ColumnRef,
-  checkLimitOffset,
   isWhereExpr,
   LiteralExpr,
   LockingClause,
@@ -138,8 +136,19 @@ import {
   hasNestedMutationCallbacks,
   withMutationScope,
 } from './mutation-executor';
-import { type BulkTarget, deleteAllGraph, updateAllGraph } from './mutation-graph/bulk-graphs';
-import { type RunOptions, runForCount, runForRows } from './mutation-graph/run-graph';
+import {
+  deleteAllGraph,
+  deleteFirstGraph,
+  updateAllGraph,
+  updateFirstGraph,
+  type WriteTarget,
+} from './mutation-graph/collection-graphs';
+import {
+  type RunOptions,
+  runForCount,
+  runForFirstRow,
+  runForRows,
+} from './mutation-graph/run-graph';
 import { assertCursorCompatibleOrder, assertDistinctOnCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
 import type { PreparedCollection } from './prepared-collection';
@@ -181,7 +190,6 @@ import {
   type RelationTargetNamespace,
   type ResolvedCreateInput,
   type ResolvedScalarCreateInput,
-  type RuntimeQueryable,
   type ShorthandWhereFilter,
   type UniqueConstraintCriterion,
   type VariantAwareIncludeRelationNames,
@@ -2606,22 +2614,14 @@ export class CollectionBase<
       this.modelName,
       blindCast<Record<string, unknown>, 'scalar update input is a model-field record'>(data),
     );
-    return withMutationScope(this.ctx.runtime, async (scope) => {
-      const scoped = this.#withRuntime(scope);
-      const identityWhere = await scoped.#findFirstMatchingRowIdentityWhere();
-      if (!identityWhere) {
-        return null;
-      }
-      const narrowed = scoped.#clone({ filters: [identityWhere] });
-      const rows = await narrowed.#updateAllWithAnnotations(
-        blindCast<
-          Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
-          'absence of nested callbacks selects the scalar update input'
-        >(data),
-        annotationsMap,
-      );
-      return rows[0] ?? null;
-    });
+    const values = this.#updateValues(
+      blindCast<
+        Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
+        'absence of nested callbacks selects the scalar update input'
+      >(data),
+    );
+    const graph = updateFirstGraph(this.#writeTarget(), this.#rowIdentityColumns(), values);
+    return runForFirstRow(graph, this.#runOptions(annotationsMap));
   }
 
   /**
@@ -2660,19 +2660,10 @@ export class CollectionBase<
   ): AsyncIterableResult<unknown> {
     assertBulkWriteIgnoresNothing(this.state, this.modelName, 'updateAll');
     assertLockCompatible(this.state, 'mutation');
-    return this.#updateAllWithAnnotations(
-      data,
-      this.#collectAnnotationsFromMeta(configure, 'write', 'updateAll'),
-    );
-  }
-
-  #updateAllWithAnnotations(
-    data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
-    annotationsMap: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined,
-  ): AsyncIterableResult<Row> {
+    const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'updateAll');
     assertReturningCapability(this.contract, 'updateAll()');
-    const graph = updateAllGraph(this.#bulkTarget(), this.#updateValues(data), 'rows');
-    return runForRows<Row>(graph, this.#runOptions(annotationsMap));
+    const graph = updateAllGraph(this.#writeTarget(), this.#updateValues(data), 'rows');
+    return runForRows(graph, this.#runOptions(annotationsMap));
   }
 
   /**
@@ -2700,7 +2691,7 @@ export class CollectionBase<
   ): Promise<number> {
     assertBulkWriteIgnoresNothing(this.state, this.modelName, 'updateAndCount');
     assertLockCompatible(this.state, 'mutation');
-    const graph = updateAllGraph(this.#bulkTarget(), this.#updateValues(data), 'count');
+    const graph = updateAllGraph(this.#writeTarget(), this.#updateValues(data), 'count');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'updateAndCount');
     return runForCount(graph, this.#runOptions(annotationsMap));
   }
@@ -2727,20 +2718,8 @@ export class CollectionBase<
     assertLockCompatible(this.state, 'mutation');
     assertReturningCapability(this.contract, 'delete()');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'delete');
-    return withMutationScope(this.ctx.runtime, async (scope) => {
-      const scoped = this.#withRuntime(scope);
-      const identityWhere = await scoped.#findFirstMatchingRowIdentityWhere();
-      if (!identityWhere) {
-        return null;
-      }
-      const narrowed = scoped.#clone({
-        filters: [identityWhere],
-        limit: undefined,
-        offset: undefined,
-      });
-      const rows = await narrowed.#executeDeleteReturning(annotationsMap).toArray();
-      return rows[0] ?? null;
-    });
+    const graph = deleteFirstGraph(this.#writeTarget(), this.#rowIdentityColumns());
+    return runForFirstRow(graph, this.#runOptions(annotationsMap));
   }
 
   /**
@@ -2775,14 +2754,8 @@ export class CollectionBase<
     assertLockCompatible(this.state, 'mutation');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAll');
     assertReturningCapability(this.contract, 'deleteAll()');
-    return this.#executeDeleteReturning(annotationsMap);
-  }
-
-  #executeDeleteReturning(
-    annotationsMap: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined,
-  ): AsyncIterableResult<Row> {
-    const graph = deleteAllGraph(this.#bulkTarget(), 'rows');
-    return runForRows<Row>(graph, this.#runOptions(annotationsMap));
+    const graph = deleteAllGraph(this.#writeTarget(), 'rows');
+    return runForRows(graph, this.#runOptions(annotationsMap));
   }
 
   /**
@@ -2805,11 +2778,11 @@ export class CollectionBase<
     assertBulkWriteIgnoresNothing(this.state, this.modelName, 'deleteAndCount');
     assertLockCompatible(this.state, 'mutation');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAndCount');
-    const graph = deleteAllGraph(this.#bulkTarget(), 'count');
+    const graph = deleteAllGraph(this.#writeTarget(), 'count');
     return runForCount(graph, this.#runOptions(annotationsMap));
   }
 
-  #bulkTarget(): BulkTarget {
+  #writeTarget(): WriteTarget {
     const { filters, orderBy, offset, cursor, distinct, distinctOn, limit } = this.state;
     return {
       table: {
@@ -2823,6 +2796,10 @@ export class CollectionBase<
       selectedFields: this.state.selectedFields,
       includes: this.state.includes,
     };
+  }
+
+  #rowIdentityColumns(): readonly string[] {
+    return resolveRowIdentityColumns(this.contract, this.namespaceId, this.tableName);
   }
 
   #runOptions(
@@ -2890,61 +2867,6 @@ export class CollectionBase<
       this.state.includes,
     );
     return { selectedForQuery, hiddenColumns: [] };
-  }
-
-  async #findFirstMatchingRowIdentityWhere(): Promise<AnyExpression | null> {
-    const identityColumns = resolveRowIdentityColumns(
-      this.contract,
-      this.namespaceId,
-      this.tableName,
-    );
-    if (identityColumns.length === 0) {
-      throw ormError(
-        'ORM.ROW_IDENTITY_MISSING',
-        `update()/delete() on model "${this.modelName}" requires the table to have a primary key or unique constraint`,
-        { meta: { model: this.modelName, table: this.tableName } },
-      );
-    }
-    checkLimitOffset('limit', this.state.limit);
-    if (this.state.limit === 0) {
-      return null;
-    }
-    const firstRow = await this.#clone({
-      selectedFields: [...identityColumns],
-      includes: [],
-    }).first();
-    if (!firstRow) {
-      return null;
-    }
-    const criterion: Record<string, unknown> = {};
-    for (const column of identityColumns) {
-      const fieldName = fieldOfColumn(
-        getModelColumnFields(this.contract, this.namespaceId, this.modelName),
-        this.modelName,
-        column,
-      );
-      const value = blindCast<
-        Record<string, unknown>,
-        'selected collection rows are model-field records used for identity lookup'
-      >(firstRow)[fieldName];
-      if (value === undefined) {
-        throw new InternalError(
-          `Missing identity field "${fieldName}" while resolving single-row scope for model "${this.modelName}"`,
-        );
-      }
-      criterion[fieldName] = value;
-    }
-    return (
-      shorthandToWhereExpr(
-        this.ctx.context,
-        this.namespaceId,
-        this.modelName,
-        blindCast<
-          ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
-          'identity columns were resolved from this model before building the shorthand filter'
-        >(criterion),
-      ) ?? null
-    );
   }
 
   async #reloadMutationRowByIdentity(criterion: Record<string, unknown>): Promise<Row | null> {
@@ -3035,25 +2957,6 @@ export class CollectionBase<
       this & Flags,
       'the clone is built by this constructor, so it is an instance of the same class'
     >(this.#createSelf<Row, State>({ ...this.state, ...overrides }));
-  }
-
-  #withRuntime(runtime: RuntimeQueryable): CollectionBase<TContract, ModelName, Row, State> {
-    const Ctor = blindCast<
-      CollectionConstructor<TContract>,
-      'runtime collection subclasses preserve the Collection constructor contract'
-    >(this.constructor);
-    return blindCast<
-      CollectionBase<TContract, ModelName, Row, State>,
-      'runtime collection construction erases model row and state generics'
-    >(
-      new Ctor({ ...this.ctx, runtime }, this.modelName, {
-        tableName: this.tableName,
-        namespaceId: this.namespaceId,
-        state: this.state,
-        registry: this.registry,
-        includeRefinementMode: this.includeRefinementMode,
-      }),
-    );
   }
 
   #cloneWithRow<NextRow, NextState extends CollectionTypeState = State>(

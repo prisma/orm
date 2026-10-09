@@ -1,5 +1,9 @@
 import type { Contract } from '@internal/contract/types';
-import { AsyncIterableResult } from '@internal/framework-components/runtime';
+import {
+  type AnnotationValue,
+  AsyncIterableResult,
+  type OperationKind,
+} from '@internal/framework-components/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { resolvePolymorphismInfo, resolveRowIdentityColumns } from './collection-contract';
@@ -60,6 +64,7 @@ interface DispatchMutationRowsOptions<Row> {
   readonly selectedFields: readonly string[] | undefined;
   readonly hiddenColumns: readonly string[];
   readonly mapRow: (mapped: Record<string, unknown>) => Row;
+  readonly annotations?: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined;
 }
 
 export function dispatchMutationRows<Row>(
@@ -77,6 +82,7 @@ export function dispatchMutationRows<Row>(
     selectedFields,
     hiddenColumns,
     mapRow,
+    annotations,
   } = options;
   const { contract } = context;
   const mapStorageRow = createMutationRowMapper(contract, namespaceId, modelName, variantName);
@@ -109,6 +115,7 @@ export function dispatchMutationRows<Row>(
       identityRows,
       selectedFields,
       includes,
+      annotations,
     });
   };
 

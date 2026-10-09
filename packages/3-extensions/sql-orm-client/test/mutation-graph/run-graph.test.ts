@@ -11,6 +11,7 @@ import {
   runForFirstRow,
   runForRows,
 } from '../../src/mutation-graph/run-graph';
+import { createCollectionFor } from '../collection-fixtures';
 import {
   createMockRuntime,
   getTestContext,
@@ -372,6 +373,29 @@ describe('running a graph', () => {
 
       expect(statements(runtime)).toEqual(['query update', 'query delete']);
       expect(returnedColumns(runtime.executions[0]!)).toEqual(['id']);
+    });
+  });
+
+  describe('with includes on a write that is the result', () => {
+    it('puts the annotations on the write and on the read that loads the includes', async () => {
+      const runtime = createMockRuntime();
+      runtime.setNextResults([[{ id: 1 }], [{ id: 1, name: 'Ada', posts: [] }]]);
+      const annotation = auditAnnotation({ actor: 'system' });
+      const { includes } = createCollectionFor('User').collection.include('posts').state;
+      const graph = new Graph();
+      const update = graph.add(new Update(usersTable, { name: 'Ada' }, [nameIsAda]));
+      graph.setResult({ node: update, form: 'rows', selectedFields: undefined, includes });
+
+      await runForRows(graph, {
+        ...optionsFor(runtime),
+        annotations: new Map([[annotation.namespace, annotation]]),
+      });
+
+      expect(statements(runtime)).toEqual(['query update', 'query select']);
+      expect(runtime.executions.map((execution) => auditAnnotation.read(execution.plan))).toEqual([
+        { actor: 'system' },
+        { actor: 'system' },
+      ]);
     });
   });
 

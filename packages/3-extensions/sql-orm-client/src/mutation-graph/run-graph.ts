@@ -264,6 +264,7 @@ function resultRows<Row>(
     includes: result.includes,
     selectedFields: result.selectedFields,
     hiddenColumns: [],
+    annotations: options.annotations,
     mapRow: (mapped) =>
       blindCast<Row, 'the mapped row of the result node is the row the caller selected'>(mapped),
   });

@@ -410,22 +410,18 @@ describe('Collection.upsert annotations', () => {
 });
 
 describe('Collection.update annotations', () => {
-  it('writes the applied annotation onto the update statement (not the matching read)', async () => {
+  it('writes the applied annotation onto the matching read and the update statement', async () => {
     const { collection, runtime } = createReturningCollectionFor('User');
-    // Two execute calls: matching select first, then the update.
     runtime.setNextResults([[{ id: 1 }], [{ id: 1, name: 'Alice', email: 'a@b.com' }]]);
 
     await collection
       .where({ id: 1 })
       .update({ name: 'Alice' }, (meta) => meta.annotate(auditAnnotation({ actor: 'system' })));
 
-    expect(runtime.executions).toHaveLength(2);
-    const matchingPlan = runtime.executions[0]!.plan;
-    const updatePlan = runtime.executions[1]!.plan;
-    // The matching read does NOT carry the write annotation.
-    expect(auditAnnotation.read(matchingPlan)).toBeUndefined();
-    // The update statement DOES.
-    expect(auditAnnotation.read(updatePlan)).toEqual({ actor: 'system' });
+    expect(runtime.executions.map((execution) => auditAnnotation.read(execution.plan))).toEqual([
+      { actor: 'system' },
+      { actor: 'system' },
+    ]);
   });
 
   it('runtime gate rejects a read-only annotation forced through a cast', async () => {
@@ -480,22 +476,18 @@ describe('Collection.updateAndCount annotations', () => {
 });
 
 describe('Collection.delete annotations', () => {
-  it('writes the applied annotation onto the delete statement (not the matching read)', async () => {
+  it('writes the applied annotation onto the matching read and the delete statement', async () => {
     const { collection, runtime } = createReturningCollectionFor('User');
-    // Two execute calls: matching select first, then the delete.
     runtime.setNextResults([[{ id: 1 }], [{ id: 1, name: 'Alice', email: 'a@b.com' }]]);
 
     await collection
       .where({ id: 1 })
       .delete((meta) => meta.annotate(auditAnnotation({ actor: 'system' })));
 
-    expect(runtime.executions).toHaveLength(2);
-    const matchingPlan = runtime.executions[0]!.plan;
-    const deletePlan = runtime.executions[1]!.plan;
-    // The matching read does NOT carry the write annotation.
-    expect(auditAnnotation.read(matchingPlan)).toBeUndefined();
-    // The delete statement DOES.
-    expect(auditAnnotation.read(deletePlan)).toEqual({ actor: 'system' });
+    expect(runtime.executions.map((execution) => auditAnnotation.read(execution.plan))).toEqual([
+      { actor: 'system' },
+      { actor: 'system' },
+    ]);
   });
 
   it('runtime gate rejects a read-only annotation forced through a cast', async () => {
