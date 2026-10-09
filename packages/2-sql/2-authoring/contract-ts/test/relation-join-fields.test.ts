@@ -117,4 +117,35 @@ describe('a relation join column', () => {
       on: { localFields: ['id'], targetFields: ['user_id'] },
     });
   });
+
+  it('is refused on the local side of a cross-space relation when no field maps it', () => {
+    const account: RelationNode = {
+      fieldName: 'account',
+      toModel: 'Account',
+      toTable: undefined,
+      cardinality: 'N:1',
+      nullable: true,
+      spaceId: 'billing',
+      namespaceId: 'public',
+      on: {
+        parentTable: 'users',
+        parentColumns: ['legacy_id'],
+        childTable: undefined,
+        childColumns: ['id'],
+      },
+    };
+    expect(() =>
+      build(
+        definitionOf([user([account])], {
+          tables: [{ tableName: 'users', columns: [{ ...legacyId, nullable: true }] }],
+        }),
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.RELATION_INVALID',
+        message:
+          'Relation "User.account" joins on column "legacy_id" of table "users", which no field of model "User" maps. A relation joins on fields; declare a field for the column.',
+      }),
+    );
+  });
 });

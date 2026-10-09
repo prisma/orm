@@ -139,13 +139,16 @@ export function lowerRelations(
     // a different contract space, so skip local model lookup and validation.
     if (relation.spaceId !== undefined) {
       const targetNamespaceId = relation.namespaceId ?? defaultNamespaceId;
+      const localFields = relation.on.parentColumns.map((col) =>
+        joinFieldOf(semanticModel, relation, semanticModel, columnToField, col),
+      );
       modelRelations[relation.fieldName] = {
         to: crossRef(relation.toModel, targetNamespaceId, relation.spaceId),
         // Cross-space belongsTo relations are always N:1 (the FK-owning side).
         cardinality: 'N:1',
         nullable: toOneRelationNullable(semanticModel, relation),
         on: {
-          localFields: relation.on.parentColumns.map((col) => columnToField.get(col) ?? col),
+          localFields,
           // For cross-space targets the lowering carries field names directly
           // (no fieldToColumn map available for the remote model).
           targetFields: relation.on.childColumns,
