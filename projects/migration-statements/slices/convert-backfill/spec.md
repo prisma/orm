@@ -53,7 +53,7 @@ Today `migration plan` writes these placeholders on its own for every type chang
 
 The four automatic placeholder strategies (Postgres `notNullBackfillCallStrategy`, `typeChangeCallStrategy`, `nullableTighteningCallStrategy`; SQLite `nullabilityTighteningBackfillStrategy`) fire only for a field a statement names. Statements reach them as destination coordinates through the strategy context. They change no names in the working schema, so they don't go through the rename path in `planStatements`. A converted type change carries no separate NULL-handling transform; the conversion expression can map NULL itself.
 
-A converted alter is classed `data`, because the user writes its data step. So it isn't a `destructive` operation and leaves `dataLoss`. A typed `convert` at the prompt re-plans like a typed rename, and the type-change question isn't asked again.
+A `delete` answer to a type-change question keeps planning the direct alter, and the statement is reported as giving up the field's values in a type change (`delete values of field "User.age" (type change)`), not as deleting the field; slice 2's manual QA found the old wording misleading (F14). A converted alter is classed `data`, because the user writes its data step. So it isn't a `destructive` operation and leaves `dataLoss`. A typed `convert` at the prompt re-plans like a typed rename, and the type-change question isn't asked again.
 
 ### The questions know why data is lost
 
@@ -87,6 +87,8 @@ Everything in this slice serves one change: the placeholder migration is written
 - The `alterColumnType` reshape.
 - TML-3517.
 - The project spec's wording: "an existing table", not "a non-empty table", since `migration plan` can't see rows.
+- An amendment to ADR 200, which says only a data transform holds a placeholder.
+- The Migration System doc's claim that the Postgres planner writes no placeholder data transforms, which the code contradicts.
 - Docs: Migration System § Statements, error reference, CLI README, `skills/prisma-8/references/migrations.md`.
 - An app upgrade fragment: type changes ask, scaffolds are opt-in, and the temporary default applies under `migration plan`.
 - Upgrade instructions for the facade change.

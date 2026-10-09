@@ -47,7 +47,7 @@ A new DDL operation, `renameCollection`, added through the MongoDB stack the way
 
 ### Document rewrites run under `db update`
 
-`db update` allows `additive`, `widening` and `destructive`, not `data`, so a rewrite classed `data` would be refused there. The rewrites above carry the class of what they do to data (`widening` for a rename, `destructive` for an unset), and the MongoDB runner and operation serializer tell a rewrite from a DDL command by its shape, not by `operationClass === 'data'`. `data` stays the class of transforms a user writes or a scaffold produces; `db update` keeps excluding it. Slice 3b's SQL JSON rewrites follow the same rule.
+`db update` allows `additive`, `widening` and `destructive`, not `data`, so a rewrite classed `data` would be refused there. The rewrites above carry the class of what they do to data (`widening` for a rename, `destructive` for an unset), and the MongoDB runner and operation serializer tell a rewrite from a DDL command by its shape, not by `operationClass === 'data'`. `data` stays the class of transforms a user writes or a scaffold produces; `db update` keeps excluding it. Slice 3b's SQL JSON rewrites follow the same rule. This follows the Migration System doc's rule that only the planner's own classification promises an operation loses data exactly when it is `destructive`, and it changes ADR 188, which says every MongoDB data transform is `data`: the slice amends ADR 188, and ADR 264's line that MongoDB has no rename operation.
 
 ### What is refused
 
@@ -63,7 +63,7 @@ One reviewer can hold this: it is one family learning the two verbs the SQL targ
 
 ## Scope
 
-**In:** model rename (collection rename); top-level field rename, including a variant's field; field removal as data loss with `$unset` under `--delete`; both commands; the `bypassDocumentValidation` option; runner and serializer telling rewrites apart by shape; deleting `renameStatements`; docs (Migration System § Statements, error reference, CLI README, `skills/prisma-8/references/migrations.md`); an app upgrade fragment (MongoDB renames work; removing a field now asks) and an extension upgrade fragment (the capability member is gone).
+**In:** amendments to ADR 188 (planner-written rewrites carry the class of their effect) and ADR 264 (MongoDB has a collection rename); model rename (collection rename); top-level field rename, including a variant's field; field removal as data loss with `$unset` under `--delete`; both commands; the `bypassDocumentValidation` option; runner and serializer telling rewrites apart by shape; deleting `renameStatements`; docs (Migration System § Statements, error reference, CLI README, `skills/prisma-8/references/migrations.md`); an app upgrade fragment (MongoDB renames work; removing a field now asks) and an extension upgrade fragment (the capability member is gone).
 
 **Deliberately out:**
 - Value object field renames on MongoDB. They need the framework's value object statement surface (statement entity, subject kind, grammar, resolver), which slice 3b builds for SQL JSON rewrites, and a recursive update pipeline for lists, dictionaries and unions. Moved to slice 4b.
@@ -79,6 +79,7 @@ One reviewer can hold this: it is one family learning the two verbs the SQL targ
 | Two variants in one collection store a field with the same name | Rewrite filters on the discriminator value |
 | The runner is not transactional | Postcheck makes a re-run skip a finished rewrite |
 | `bypassDocumentValidation` needs a privilege on hosted clusters | Runner failure names the privilege |
+| TML-2447 (open): the planner creates separate collections and incomplete validators for variants that share a collection | The first dispatch checks how variants are stored today before the variant field rename is built on it |
 
 ## Slice-specific done conditions
 

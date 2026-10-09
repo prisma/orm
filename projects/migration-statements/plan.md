@@ -50,7 +50,7 @@ Each slice is one PR against `main`.
 
 **Linear:** [TML-3477](https://linear.app/prisma-company/issue/TML-3477) · **Folder:** `slices/remaining-nouns/`
 
-**Outcome.** `--rename` on enum values, namespaces and value object fields (building the framework's value object statement surface: statement entity, subject kind, grammar, resolver), a model move across namespaces (`alter table set schema` on Postgres), and `--convert` on a variant whose discriminator value changed, each planning the row updates, JSON rewrites or schema rename. `--delete` on an enum value nulls it where nullable, else refuses. `--delete <namespace>` answers every question for the models in it.
+**Outcome.** `--rename` on enum values, namespaces and value object fields (building the framework's value object statement surface: statement entity, subject kind, grammar, resolver), a model move across namespaces (`alter table set schema` on Postgres), and `--convert` on a variant whose discriminator value changed, each planning the row updates, JSON rewrites or schema rename. `--delete` on an enum value nulls it where nullable, else refuses. `--delete` on a variant stored in its base's table deletes the rows with that discriminator value and drops its columns, and the refusal says it deletes rows. `--delete <namespace>` answers every question for the models in it. Risk to settle in the spec: a value object can contain itself (ADR 178's `NavItem.children`), and a field rename inside such a type must rewrite to any depth, which a fixed SQL JSON expression or MongoDB update pipeline cannot do.
 
 **Builds on.** Slice 3a.
 
