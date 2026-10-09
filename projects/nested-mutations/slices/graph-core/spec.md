@@ -33,7 +33,7 @@ The design is in [`../../mutation-graph.md`](../../mutation-graph.md) and the ru
 ### Rules the code follows
 
 - **Location.** A directory `src/mutation-graph/` in `packages/3-extensions/sql-orm-client`. One file per concern (nodes, edges, graph, printed form, runner); no file re-exports another.
-- **Nodes hold static content only.** A node names its table and holds its `where` as a list of SQL AST expressions, and for `Update` the values to set. It holds nothing that comes from another node and nothing about what it returns. Nodes are frozen; `peephole` returns the node itself or a replacement.
+- **A node holds its statement as SQL AST** (`Find` a `SelectAst`, `Update` an `UpdateAst`, `Delete` a `DeleteAst`), built by the graph builder. It holds nothing that comes from another node and nothing about what it returns; the runner applies edges and derived columns with the AST's `withWhere` and `withReturning`. Nodes are frozen; `peephole` returns the node itself or a replacement.
 - **Edges are objects held by the graph**, each with `from`, `to`, and for `IntoWhere` a list of `[sourceColumn, targetColumn]` pairs.
 - **The graph names its result**: a node, a form (rows, first row, or count), and the caller's selection and includes.
 - **The runner** takes a graph, the runtime, the execution context and the caller's annotations, and:
@@ -48,7 +48,7 @@ The design is in [`../../mutation-graph.md`](../../mutation-graph.md) and the ru
 
 ### The `Find` of the single-row methods
 
-`update()` and `delete()` choose their row the way `first()` does: the collection's order, offset, cursor, `distinct` and `distinctOn` decide which row it is, and `limit(0)` means no row. So the `Find` node carries that read state as well as `where`, and the runner compiles it with the existing select compiler. The row it returns is identified by the table's identity columns (primary key or a unique constraint); a table with neither is refused with `ORM.ROW_IDENTITY_MISSING`, as today, while the graph is built.
+`update()` and `delete()` choose their row the way `first()` does: the collection's order, offset, cursor, `distinct` and `distinctOn` decide which row it is, and `limit(0)` means no row. So the graph builder compiles that read state into the `Find` node's `SelectAst` with the existing select compiler. The row it returns is identified by the table's identity columns (primary key or a unique constraint); a table with neither is refused with `ORM.ROW_IDENTITY_MISSING`, as today, while the graph is built.
 
 ## Coherence rationale
 

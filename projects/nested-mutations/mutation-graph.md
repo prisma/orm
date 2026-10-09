@@ -15,10 +15,10 @@ A write call is turned into a **mutation graph**. Nodes are database-level steps
 ```ts
 // Nodes: frozen classes, static content only
 abstract class Node { peephole(graph: Graph): Node }
-class Find   extends Node { table; where: Expr[] }
-class Insert extends Node { table; values; onConflict? }
-class Update extends Node { table; set; where: Expr[] }
-class Delete extends Node { table; where: Expr[] }
+class Find   extends Node { ast: SelectAst }
+class Insert extends Node { ast: InsertAst }
+class Update extends Node { ast: UpdateAst }
+class Delete extends Node { ast: DeleteAst }
 class Assert extends Node { error }              // throws when its input is empty
 class Merge  extends Node {}                      // one row from the rows of its inputs
 class State  extends Node { table; version }      // a version of a table
@@ -66,6 +66,13 @@ Three edge classes: `After` (order only), `IntoValues` (copy columns into a writ
 
 - **Why.** With links as edges, a node's `where` stays an ordinary list of SQL AST expressions, the form the collection, the compile functions and the adapters already use. No placeholder inside expressions, no rewrite before compiling, no second representation of filters.
 - **Assumes.** Scoping conditions can be expressed as column equalities against another node's rows (see D8 for many-to-many).
+
+### D2a. A node holds its statement as SQL AST
+
+`Find` holds a `SelectAst`, `Update` an `UpdateAst`, `Delete` a `DeleteAst`, `Insert` an `InsertAst`. The graph builder creates the AST; the runner applies a node's edges with the AST's own `withWhere`, `withRows` and `withReturning` and builds the plan from the result. A node has no description of its statement besides the AST.
+
+- **Why.** The first build gave nodes their own fields (table identity, raw values, `where`, a copy of the read state) and the runner compiled them to AST with a switch on the node's class: two forms of one statement. The AST classes are already frozen and already have the operations the edges need. Inlining a `Find` into its consumer (D8) becomes a subquery over the `Find`'s AST.
+- **Assumes.** Everything the runner needs besides the AST (which model the result's rows are mapped to, the caller's selection and includes) belongs to the graph's result, not to a node. A result `Find` with includes returns identity columns and its rows are loaded with includes by identity, as writes with includes already are.
 
 ### D3. Order comes only from edges
 
