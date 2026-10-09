@@ -17,6 +17,8 @@ A hand-written MongoDB migration can call `renameField(...)` and `unsetField(...
 3. **Telling rewrites from DDL by shape.** The runner (`mongo-runner.ts`) and the operation serializer recognise these by their shape (`run` against `execute`), not by `operationClass === 'data'`. `data` stays the class of user-written and scaffolded transforms. A `db update`-style policy without `data` accepts these two and still refuses a `data` transform.
 4. **Storage name.** The family helper that names an operation's storage (`mongoStorageNameOf`, `packages/2-mongo-family/9-family/src/core/operation-storage-name.ts`) handles the new shape: `<collection>.<field>`.
 
+5. **Preview text that mongosh accepts (review finding D1-1).** Every MongoDB preview line in `packages/2-mongo-family/9-family/src/core/operation-preview.ts` writes the collection as `db.getCollection("<name>")`, with the name escaped as a string, so a name such as `my-coll` or one containing quotes is valid mongosh. This covers the existing lines (`drop`, `createIndex`, and the rest) and the new rename and rewrite lines.
+
 ## Not in this dispatch
 
 Planning them (dispatch 3). Value object fields (slice 4b).

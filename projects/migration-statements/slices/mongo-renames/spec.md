@@ -9,10 +9,10 @@ A MongoDB user renames model `Profile` to `User`, renames field `name` to `fullN
 ```text
 $ prisma migration plan --name tidy --rename Profile:User --rename User.name:User.fullName --delete User.nickname
 ✔ Planned 6 operation(s)
-  Rename collection "profiles" to "users"                      widening
+  Rename collection profiles to users                          widening
   Drop index users.name_1                                      widening
-  Rename field "name" to "fullName" in collection "users"      widening
-  Remove field "nickname" from collection "users"              destructive
+  Rename field name to fullName in users                       widening
+  Remove field nickname from users                             destructive
   Create index users.fullName_1                                additive
   Update validator on users                                    widening
 ```
@@ -78,6 +78,7 @@ Without `--delete User.nickname`, both commands refuse, as they do on SQL:
 - Plans with no statements and no removed fields come out exactly as today.
 
 **Refused, with the reason named**
+- Renaming a model stored in a time-series collection, or in a view. MongoDB cannot rename them.
 - Renaming `_id`.
 - Renaming a collection onto one that already exists.
 - Renaming a field that is stored on only one side.
