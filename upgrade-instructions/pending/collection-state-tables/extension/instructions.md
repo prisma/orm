@@ -77,7 +77,7 @@ Every object typed `CollectionState` needs the property, not only top-level stat
 
 A state passed to `new Collection(ctx, modelName, { state })` needs it too. A `Collection` constructed without `state` builds its own tables, so that call needs no change.
 
-Do not build a `CollectionTables` or a table scope by hand. The scope must be one the package created.
+Do not build a `CollectionTables` or a table scope by hand.
 
 A state built by hand for an include child must not reuse the parent's table aliases. Prefer building includes through `collection.include(...)` and reading `collection.state`, which aliases the child's tables from the parent's scope. Where a child state is built by hand for a relation whose target table already appears in the parent chain (a self-relation, or an include that returns to an ancestor's table), build it through `include()` instead; `createCollectionTables` starts a fresh scope and would give the child the same alias as its parent.
 

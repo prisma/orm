@@ -277,7 +277,7 @@ Collections are immutable, and so are their aliases. Two collections derived fro
 
 The derived tables an include is built from (`<relation>__rows`, `<relation>__distinct`, `<relation>__ranked`, `<relation>__scalar`, `<relation>__scalar_distinct`, `<relation>__combine__<branch>`) are aliased from the same scope, and get a `_<n>` suffix when the same alias is needed twice in a statement. The column of a variant table is projected under the label `<variant table alias>__<column>`.
 
-`CollectionState.tables` holds the scope and the aliased root table and variant tables of the collection. Build it with `createCollectionTables(contract, namespaceId, modelName)` and pass it to `emptyState(tables)` and `createModelAccessor(context, namespaceId, modelName, tables)`. A `TableScope` is created by `createCollectionTables` and by the collection methods; `merge` rejects a scope the package did not create.
+`CollectionState.tables` holds the scope and the aliased root table and variant tables of the collection. Build it with `createCollectionTables(contract, namespaceId, modelName)` and pass it to `emptyState(tables)` and `createModelAccessor(context, namespaceId, modelName, tables)`.
 
 ## Codec Roundtrip
 

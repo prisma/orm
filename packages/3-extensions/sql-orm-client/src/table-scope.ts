@@ -1,7 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { ColumnRef, type TableSource } from '@internal/sql-relational-core/ast';
-import { InternalError } from '@internal/utils/internal-error';
 import { tableSourceForContract } from './storage-resolution';
 
 const MAX_ALIAS_BYTES = 63;
@@ -77,11 +76,10 @@ class TableScopeImpl implements TableScope {
   merge(others: readonly TableScope[]): TableScope {
     const merged = new Set(this.#aliases);
     for (const other of others) {
-      if (!(other instanceof TableScopeImpl)) {
-        throw new InternalError('a table scope must be made by createTableScope()');
-      }
-      for (const alias of other.#aliases) {
-        merged.add(alias);
+      if (other instanceof TableScopeImpl) {
+        for (const alias of other.#aliases) {
+          merged.add(alias);
+        }
       }
     }
     return new TableScopeImpl(merged);

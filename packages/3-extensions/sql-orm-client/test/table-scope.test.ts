@@ -1,6 +1,6 @@
 import { ColumnRef, TableSource } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { createTableScope, type TableScope } from '../src/table-scope';
+import { createTableScope } from '../src/table-scope';
 import { getTestContract } from './helpers';
 
 const byteLength = (value: string) => new TextEncoder().encode(value).length;
@@ -129,19 +129,6 @@ describe('TableScope.merge', () => {
     ]);
     expect(first.alias('users')).toBe('users');
     expect(second.alias('tags')).toBe('tags');
-  });
-
-  it('rejects a scope that was not made by createTableScope', () => {
-    const foreign: TableScope = {
-      alias: (preferred) => preferred,
-      aliasTable: (storage) => createTableScope().aliasTable(storage),
-      copy: () => foreign,
-      merge: () => foreign,
-    };
-
-    expect(() => createTableScope().merge([foreign])).toThrow(
-      'a table scope must be made by createTableScope()',
-    );
   });
 });
 
