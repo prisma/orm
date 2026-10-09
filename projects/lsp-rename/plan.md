@@ -34,14 +34,14 @@ The project is four slices, each one PR. Slices 3 and 4 were added on 2026-10-08
      - Go-to-definition, hover, find references and rename work on such a name with no change of their own.
      - Renaming a `native_enum` block used in `pg.enum(...)` leaves a schema with no diagnostics.
    - **Builds on:** Slice 1 merged (PR #30633).
-   - **Hands to:** Slices 3 and 4: every entity-constructor argument has a binder resolution, and the SQL interpreter finds the lowered entity by block symbol, with its namespace id.
+   - **Hands to:** Slices 3 and 4: every entity-constructor argument has a binder resolution, and the SQL interpreter takes the entity name from it.
    - **Focus:**
      - how type-constructor arguments are described to the binder, so it binds them the way it binds `entityRef` attribute arguments;
      - whether the SQL interpreter then reads the binder's resolution instead of looking the name up (`psl-column-resolution.ts`, `PSL_UNKNOWN_ENTITY_REF`);
      - a design discussion with the operator before the spec: the binder rules are the operator's.
 
 3. **Slice `enum-across-namespaces`**. Linear: none. Spec not written yet.
-   - **Outcome:** a `pg.enum` column can name a `native_enum` of another namespace (unqualified from a namespaced model for a top-level one, or qualified as `auth.X`). The column's type name and value-set reference come from the enum's namespace. The refusal slice 2 adds is removed.
+   - **Outcome:** a `pg.enum` column can name a `native_enum` of another namespace (unqualified from a namespaced model for a top-level one, or qualified as `auth.X`). The column's type name and value-set reference come from the enum's namespace. The entity is looked up in the resolved block's namespace, and the namespace comparison slice 2 adds to the SQL interpreter is removed.
    - **Builds on:** Slice 2.
    - **Hands to:** Slice 4 (type-name qualification by the enum's namespace), or close-out.
    - **Focus:** the type-name qualification hook, which today qualifies by the column's namespace in the shared contract builder; `contract print` for such a column; the Prisma 7 interpreter's own refusal of cross-schema enums; what the TypeScript builder can express.
