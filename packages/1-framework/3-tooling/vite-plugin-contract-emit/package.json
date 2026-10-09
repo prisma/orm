@@ -39,7 +39,7 @@
     "typescript": ">=5.9"
   },
   "engines": {
-    "node": ">=24"
+    "node": "^22.18.0 || ^24.11.0 || >=26.0.0"
   },
   "exports": {
     ".": "./dist/index.mjs",

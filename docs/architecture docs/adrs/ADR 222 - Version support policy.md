@@ -1,6 +1,6 @@
 # ADR 222 — Version support policy for Prisma Next
 
-**Status:** Accepted — PostgreSQL floor amended by [ADR 248](ADR%20248%20-%20PostgreSQL%20floor%20lowered%20to%2015.md)
+**Status:** Accepted — PostgreSQL floor amended by [ADR 248](ADR%20248%20-%20PostgreSQL%20floor%20lowered%20to%2015.md); Node.js range amended by [ADR 269](ADR%20269%20-%20One%20Node.js%20range%20for%20every%20Prisma%208%20tool.md)
 **Date:** 2026-05-31
 **Linear:** TML-1810, TML-1809
 
@@ -14,7 +14,7 @@ The ratified floor table:
 
 | Dimension | Floor | Enforcement |
 |---|---|---|
-| Node.js | `>=24` | `engines.node` on every publishable package |
+| Node.js | `^22.18.0 \|\| ^24.11.0 \|\| >=26.0.0` (changed from `>=24` by [ADR 269](ADR%20269%20-%20One%20Node.js%20range%20for%20every%20Prisma%208%20tool.md)) | `engines.node` on every publishable package + source-of-truth constant + drift check |
 | TypeScript | `>=5.9` | optional `peerDependencies.typescript` on every publishable package + source-of-truth constant + drift test |
 | PostgreSQL (server) | `15` (lowered from `17` by [ADR 248](ADR%20248%20-%20PostgreSQL%20floor%20lowered%20to%2015.md)) | `prismaNext.minServerVersion` on `@internal/target-postgres` + CLI mirror + `postgres:15` CI service containers + `docker-compose.yaml` |
 | MongoDB (server) | `8.0` | `prismaNext.minServerVersion` on `@internal/target-mongo` + CLI mirror; MMS 11.x downloads 8.2.x by default |
@@ -38,7 +38,7 @@ The guiding insight: **lowering a floor is backwards-compatible; raising one is 
 
 ## Why these specific floors
 
-**Node.js 24**: This is the current Active LTS line. Node 22 reached LTS in October 2024; Node 24 is the successor, released April 2025. `tsdown` infers the JS output target from `engines.node`, so the declaration is load-bearing, not advisory: packages with `>=20` would produce wider-compat output than the codebase actually requires or tests.
+**Node.js 24**: [ADR 269](ADR%20269%20-%20One%20Node.js%20range%20for%20every%20Prisma%208%20tool.md) replaced this floor with the range `^22.18.0 || ^24.11.0 || >=26.0.0`, shared by every Prisma 8 tool. The original reasoning follows. This is the current Active LTS line. Node 22 reached LTS in October 2024; Node 24 is the successor, released April 2025. `tsdown` infers the JS output target from `engines.node`, so the declaration is load-bearing, not advisory: packages with `>=20` would produce wider-compat output than the codebase actually requires or tests.
 
 **TypeScript 5.9**: The latest GA release at the time this policy was ratified, and the version pinned in the workspace catalog. TypeScript peer declarations are optional because TypeScript is a dev-time tool — plain-JS consumers must not be forced to install it. The optional peer allows type-checking consumers to get type information without requiring it universally.
 
@@ -54,7 +54,7 @@ The guiding insight: **lowering a floor is backwards-compatible; raising one is 
 
 ### Node.js engines
 
-Every publishable package declares `"engines": { "node": ">=24" }`. This is enforced structurally: `tsdown` uses the `engines.node` field to set its output target, so a package that omits or understates this will produce different (and potentially unintended) JavaScript output.
+Every publishable package declares `"engines": { "node": "^22.18.0 || ^24.11.0 || >=26.0.0" }` ([ADR 269](ADR%20269%20-%20One%20Node.js%20range%20for%20every%20Prisma%208%20tool.md)). The source of truth is `NODE_ENGINES_RANGE` in `scripts/validate-node-engines.mjs`, and `pnpm lint:manifests` checks every package against it. This is enforced structurally: `tsdown` uses the `engines.node` field to set its output target, so a package that omits or understates this will produce different (and potentially unintended) JavaScript output.
 
 ### TypeScript peer
 
