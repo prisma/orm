@@ -30,4 +30,18 @@ describe('duplicateStoredMembers', () => {
       { earlier: 'Wide', later: 'WideAgain', stored: { width: 2, height: 1 } },
     ]);
   });
+
+  it('treats negative zero as zero, as contract.json writes it', () => {
+    expect(
+      duplicateStoredMembers([
+        { name: 'Zero', stored: 0 },
+        { name: 'NegativeZero', stored: -0 },
+        { name: 'Origin', stored: { x: 0 } },
+        { name: 'NegativeOrigin', stored: { x: -0 } },
+      ]),
+    ).toEqual([
+      { earlier: 'Zero', later: 'NegativeZero', stored: -0 },
+      { earlier: 'Origin', later: 'NegativeOrigin', stored: { x: -0 } },
+    ]);
+  });
 });
