@@ -71,3 +71,9 @@ Adding a required field to a populated collection, or making an optional field r
 
 On MongoDB a variant's field rename touches only that variant's documents. On SQL today a variant's field is a column in the shared table, and a rename applies to every row. When SQL supports variants stored in their own tables, a variant's field statements must act on that variant's table only.
 
+
+## MongoDB `@map` accepts field names MongoDB cannot validate
+
+**Found:** slice 4a review of dispatch 3 (2026-10-09). For the MongoDB authoring owners, not this project.
+
+`@map("o.d")` or `@map("$x")` is accepted in a MongoDB schema. MongoDB reads such a name as a path or an operator, and an insert of `{ "o.d": ... }` already fails the validator Prisma writes. Slice 4a skips such fields when planning statements. The fix belongs in authoring: reject the name with a diagnostic.
