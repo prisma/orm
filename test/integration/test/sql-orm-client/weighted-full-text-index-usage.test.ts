@@ -16,9 +16,9 @@ import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { fullTextDocument, websearchToTsquery } from '@internal/target-postgres/full-text';
 import { blindCast } from '@internal/utils/casts';
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { Contract } from './fixtures/generated/contract';
-import { type PlannedIndex, plannedExpressionIndexes } from './full-text-index-ddl';
-import { setupIntegrationTest, timeouts } from './setup';
+import type { Contract } from '../sql-builder/fixtures/generated/contract';
+import { type PlannedIndex, plannedExpressionIndexes } from '../sql-builder/full-text-index-ddl';
+import { setupIntegrationTest, timeouts } from '../sql-builder/setup';
 
 const QUERY = 'zebra';
 
