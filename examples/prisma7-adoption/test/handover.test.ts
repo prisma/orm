@@ -321,7 +321,7 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
               to: sequenceHash,
               operations: [],
             });
-            await verifyOnlyLedgerUnclaimed();
+            await verifyStrictlyWithNothingUnclaimed();
           };
           await expectNoChanges('edit-4.prisma', 'ignore-content-and-comments');
           await expectNoChanges('edit-3.prisma', 'restore-content-and-comments');
