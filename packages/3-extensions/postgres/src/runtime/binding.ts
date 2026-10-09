@@ -84,9 +84,10 @@ export function validatePostgresUrl(url: string): string {
   }
 
   if (preserveEmptyHost || parsed.hostname === '') {
-    if (preserveEmptyHost && emptyHost?.[1] === '@') {
+    if (preserveEmptyHost && (emptyHost?.[1] === '@' || emptyHost?.[1] === ':@')) {
       const authorityEnd = emptyHost[0].length;
-      return `${trimmed.slice(0, authorityEnd - 1)}${trimmed.slice(authorityEnd)}`;
+      const authorityStart = emptyHost[0].indexOf('//') + 2;
+      return `${trimmed.slice(0, authorityStart)}${trimmed.slice(authorityEnd)}`;
     }
     return trimmed;
   }

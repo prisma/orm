@@ -73,6 +73,10 @@ describe('validatePostgresUrl', () => {
     expect(validatePostgresUrl('postgresql://localhost/mydb')).toBe('postgresql://localhost/mydb');
     expect(validatePostgresUrl('postgresql://@localhost/mydb')).toBe('postgresql://localhost/mydb');
     expect(validatePostgresUrl('postgresql://@/mydb')).toBe('postgresql:///mydb');
+    expect(validatePostgresUrl('postgresql://:@/mydb')).toBe('postgresql:///mydb');
+    expect(validatePostgresUrl('postgres://:@/mydb?host=/var/run/postgresql#connection')).toBe(
+      'postgres:///mydb?host=/var/run/postgresql#connection',
+    );
   });
 
   it('keeps provided credentials, host, and port', () => {
