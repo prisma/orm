@@ -6,6 +6,7 @@ import type { SchemaEngine } from './SchemaEngine'
 import { SchemaEngineCLI } from './SchemaEngineCLI'
 import type { EngineArgs, EngineResults } from './types'
 import { createMigration, writeMigrationLockfile, writeMigrationScript } from './utils/createMigration'
+import { extractGeneratedColumns, transformMigrationSQL } from './utils/generatedColumns'
 import { listMigrations } from './utils/listMigrations'
 
 type MigrateSetupInput = {
@@ -89,6 +90,17 @@ export class Migrate {
       }
     }
 
+    // Post-process migration SQL to support generated columns
+    let processedMigrationScript = migrationScript
+    if (this.schemaContext) {
+      const schemaContent = this.schemaContext.schemaFiles.map((f) => f.content).join('\n')
+      const generatedColumns = extractGeneratedColumns(schemaContent)
+
+      if (generatedColumns.length > 0) {
+        processedMigrationScript = transformMigrationSQL(migrationScript, generatedColumns, connectorType)
+      }
+    }
+
     const directoryPath = await createMigration({
       baseDir,
       generatedMigrationName,
@@ -100,7 +112,7 @@ export class Migrate {
       baseDir,
       extension,
       migrationName: generatedMigrationName,
-      script: migrationScript,
+      script: processedMigrationScript,
     }).catch((e: Error) => {
       throw new Error(`Failed to write migration script to ${directoryPath}: ${e.message}`)
     })
