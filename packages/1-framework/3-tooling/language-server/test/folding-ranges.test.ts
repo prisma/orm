@@ -127,4 +127,30 @@ type Address {
       { startLine: 8, endLine: 10, kind: FoldingRangeKind.Region },
     ]);
   });
+
+  it('returns a range for a mixin declaration and for a block that includes a mixin', () => {
+    const source = `model mixin Timestamps {
+  createdAt DateTime
+}
+
+namespace auth {
+  enum mixin BaseRoles {
+    ADMIN
+  }
+}
+
+model User {
+  id Int @id
+  +Timestamps
+}`;
+    const { document, sources } = parse(source, 'language-server-test.psl');
+    const ranges = computeFoldingRanges(document, sources);
+
+    expect(ranges).toEqual([
+      { startLine: 0, endLine: 2, kind: FoldingRangeKind.Region },
+      { startLine: 4, endLine: 8, kind: FoldingRangeKind.Region },
+      { startLine: 5, endLine: 7, kind: FoldingRangeKind.Region },
+      { startLine: 10, endLine: 13, kind: FoldingRangeKind.Region },
+    ]);
+  });
 });

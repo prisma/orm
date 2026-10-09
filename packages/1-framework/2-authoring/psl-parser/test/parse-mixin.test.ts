@@ -375,14 +375,36 @@ describe('a mixin inclusion', () => {
     ]);
   });
 
-  it('parses on the same line as other members', () => {
-    const result = parseLossless('model User { id Int +Timestamps name String }');
+  it('is read only when the plus is the first token on its line', () => {
+    const model = parseLossless('model User { +Timestamps }');
+    const afterField = parseLossless('model User {\n  id Int +Timestamps\n  name String\n}');
+    const entryBlock = parseLossless('policy P {\n  k = 1 +Shared\n  j = 2\n}');
+    const enumBlock = parseLossless('enum Role {\n  ADMIN +BaseRoles\n  USER\n}');
+
+    expect(messages(model)).toEqual([
+      'PSL_INVALID_MODEL_MEMBER: Invalid model member declaration "+"',
+    ]);
+    expect(messages(afterField)).toEqual([
+      'PSL_INVALID_MODEL_MEMBER: Invalid model member declaration "+"',
+    ]);
+    expect(messages(entryBlock)).toEqual([
+      'PSL_INVALID_EXTENSION_BLOCK_MEMBER: Invalid block entry',
+    ]);
+    expect(messages(enumBlock)).toEqual([
+      'PSL_INVALID_EXTENSION_BLOCK_MEMBER: Invalid block entry',
+    ]);
+    for (const result of [model, afterField, entryBlock, enumBlock]) {
+      expect(descendantKinds(result.document.syntax)).not.toContain('MixinInclusion');
+    }
+  });
+
+  it('is read after a comment line and after indentation', () => {
+    const result = parseLossless('model User {\n  // shared columns\n\t  +Timestamps\n}');
     const [model] = Array.from(result.document.declarations());
     if (!(model instanceof ModelDeclarationAst)) throw new Error('expected a model');
 
     expect(result.diagnostics).toEqual([]);
     expect(inclusionPaths(model)).toEqual([['Timestamps']]);
-    expect(Array.from(model.fields(), (field) => field.name()?.name())).toEqual(['id', 'name']);
   });
 
   it('is not a member of a types block or a namespace', () => {
@@ -488,15 +510,16 @@ describe('the reserved word mixin in a block header', () => {
 });
 
 describe('malformed mixin input', () => {
-  it('reports a plus in expression position and recovers at the next member', () => {
+  it('reports a plus in expression position as an invalid member and recovers at the next member', () => {
     const source = 'model User {\n  id Int @default(+1)\n  name String\n}';
     const result = parseLossless(source);
     const [model] = Array.from(result.document.declarations());
     if (!(model instanceof ModelDeclarationAst)) throw new Error('expected a model');
 
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
-      'PSL_INVALID_MODEL_MEMBER',
+    expect(messages(result)).toEqual([
+      'PSL_INVALID_MODEL_MEMBER: Invalid model member declaration "+"',
     ]);
+    expect(descendantKinds(result.document.syntax)).not.toContain('MixinInclusion');
     expect(diagnosedText(result, source)).toEqual(['+']);
     expect(Array.from(model.fields(), (field) => field.name()?.name())).toEqual(['id', 'name']);
     expect(model.rbrace()).toBeDefined();
@@ -506,7 +529,7 @@ describe('malformed mixin input', () => {
     ['a brace', 'model User {\n  + {\n  id Int\n}', ['id']],
     ['an attribute', 'model User {\n  +@id\n  id Int\n}', ['id']],
     ['the end of the body', 'model User {\n  id Int\n  +\n}', ['id']],
-    ['the closing brace on the same line', 'model User { id Int + }', ['id']],
+    ['the closing brace on the same line', 'model User {\n  id Int\n  + }', ['id']],
     ['a name on the next line', 'model User {\n  +\n  id Int\n}', ['id']],
   ])('reports an inclusion with no name before %s', (_case, source, fields) => {
     const result = parseLossless(source);

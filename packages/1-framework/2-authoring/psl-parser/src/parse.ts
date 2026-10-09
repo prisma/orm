@@ -916,7 +916,9 @@ function parseMixinInclusion(
   options: PslParserOptions,
   memberCode: PslDiagnosticCode,
 ): GreenNode | undefined {
-  if (cursor.peekKind() !== 'Plus' || usesEarlierGrammar(options)) return undefined;
+  if (cursor.peekKind() !== 'Plus' || !cursor.newlineBefore() || usesEarlierGrammar(options)) {
+    return undefined;
+  }
   const plusMark = cursor.mark();
   cursor.startNode('MixinInclusion');
   cursor.bump();

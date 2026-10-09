@@ -6,6 +6,8 @@ import {
   FieldDeclarationAst,
   GenericBlockDeclarationAst,
   KeyValuePairAst,
+  MixinDeclarationAst,
+  MixinInclusionAst,
   ModelDeclarationAst,
   NamedTypeDeclarationAst,
   NamespaceDeclarationAst,
@@ -137,6 +139,7 @@ function spaceBetween(
     case 'Dot':
     case 'At':
     case 'DoubleAt':
+    case 'Plus':
       return false;
     default:
       return true;
@@ -259,6 +262,12 @@ function leafMember(
 
 type MemberClassifier = (node: SyntaxNode) => BlockMember | undefined;
 
+function inclusionMember(writer: LineWriter, node: SyntaxNode): BlockMember | undefined {
+  const inclusion = MixinInclusionAst.cast(node);
+  if (inclusion === undefined) return undefined;
+  return leafMember(writer, 'regular', () => streamNode(writer, inclusion.syntax));
+}
+
 function emitModel(
   writer: LineWriter,
   model: ModelDeclarationAst,
@@ -272,7 +281,7 @@ function emitModel(
     const attribute = ModelAttributeAst.cast(node);
     if (attribute)
       return leafMember(writer, 'blockAttribute', () => emitBlockAttribute(writer, attribute));
-    return undefined;
+    return inclusionMember(writer, node);
   });
 }
 
@@ -289,13 +298,13 @@ function emitCompositeType(
     const attribute = ModelAttributeAst.cast(node);
     if (attribute)
       return leafMember(writer, 'blockAttribute', () => emitBlockAttribute(writer, attribute));
-    return undefined;
+    return inclusionMember(writer, node);
   });
 }
 
 function emitGenericBlock(
   writer: LineWriter,
-  block: GenericBlockDeclarationAst,
+  block: GenericBlockDeclarationAst | MixinDeclarationAst,
   trailing: string | undefined,
 ): void {
   const alignment = alignmentMap(block.syntax);
@@ -307,7 +316,7 @@ function emitGenericBlock(
     const attribute = ModelAttributeAst.cast(node);
     if (attribute)
       return leafMember(writer, 'blockAttribute', () => emitBlockAttribute(writer, attribute));
-    return undefined;
+    return inclusionMember(writer, node);
   });
 }
 
@@ -360,7 +369,7 @@ function castBlockDeclaration(node: SyntaxNode): BlockEmitter | undefined {
   if (model) return (writer, trailing) => emitModel(writer, model, trailing);
   const composite = CompositeTypeDeclarationAst.cast(node);
   if (composite) return (writer, trailing) => emitCompositeType(writer, composite, trailing);
-  const generic = GenericBlockDeclarationAst.cast(node);
+  const generic = GenericBlockDeclarationAst.cast(node) ?? MixinDeclarationAst.cast(node);
   if (generic) return (writer, trailing) => emitGenericBlock(writer, generic, trailing);
   return undefined;
 }

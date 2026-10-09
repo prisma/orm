@@ -1802,4 +1802,30 @@ namespace app {
     expect(items.map((item) => item.label)).not.toContain('Audit');
     expect(items.map((item) => item.label)).not.toContain('auth.ScopedAudit');
   });
+
+  it('offers the same field type candidates in a document that holds a mixin and an inclusion', () => {
+    const model = ['model Post {', '  author |', '}'].join('\n');
+    const mixins = [
+      'model mixin Timestamps {',
+      '  createdAt DateTime',
+      '}',
+      'model Tagged {',
+      '  id Int',
+      '  +Timestamps',
+      '}',
+    ].join('\n');
+    const plain = ['', '', '', 'model Tagged {', '  id Int', '', '}'].join('\n');
+
+    expect(complete(`${mixins}\n${model}`).items).toEqual(complete(`${plain}\n${model}`).items);
+  });
+
+  it.each([
+    ['in a mixin field type slot', 'model mixin Timestamps {\n  createdAt |\n}'],
+    ['in a mixin header', 'model mixin |'],
+    ['after the plus of an inclusion', 'model Post {\n  id Int\n  +|\n}'],
+    ['inside the name of an inclusion', 'model Post {\n  +auth.Ti|\n}'],
+    ['in an enum mixin body', 'enum mixin BaseRoles {\n  |\n}'],
+  ])('completes without an error %s', (_case, markedSource) => {
+    expect(() => complete(markedSource)).not.toThrow();
+  });
 });

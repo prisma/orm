@@ -14,6 +14,7 @@ import {
   FunctionCallAst,
   type GenericBlockMemberAst,
   type IdentifierAst,
+  MixinDeclarationAst,
   ModelDeclarationAst,
   type NamedTypeDeclarationAst,
   NamespaceDeclarationAst,
@@ -260,6 +261,13 @@ function collectDeclaration(
     for (const namedType of declaration.declarations()) {
       collectNamedTypeDeclaration(namedType, source, tokens);
     }
+    return;
+  }
+
+  if (declaration instanceof MixinDeclarationAst) {
+    addToken(declaration.keyword(), 'keyword', tokens);
+    addToken(declaration.mixinKeyword(), 'keyword', tokens);
+    addIdentifier(declaration.name(), 'type', tokens, semanticTokenModifierBits.declaration);
     return;
   }
 
