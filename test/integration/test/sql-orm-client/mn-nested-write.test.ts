@@ -146,7 +146,7 @@ describe('integration/mn-nested-write', () => {
   );
 
   it(
-    'update(): connect to an already-linked tag rejects and preserves the junction link',
+    'update(): connect to an already-linked tag does nothing and keeps the one junction link',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         const users = createReturningUsersCollection(runtime);
@@ -155,15 +155,15 @@ describe('integration/mn-nested-write', () => {
         await seedTags(runtime, [{ id: TAG_RUST, name: 'Rust' }]);
         await seedUserTags(runtime, [{ userId: 1, tagId: TAG_RUST }]);
 
-        await expect(
-          users
-            .where({ id: 1 })
-            .select('id', 'name')
-            .include('tags', (tags) => tags.select('id', 'name'))
-            .update({
-              tags: (t) => t.connect({ id: TAG_RUST }),
-            }),
-        ).rejects.toThrow(/violated a unique constraint on junction "user_tags"/);
+        const updated = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('tags', (tags) => tags.select('id', 'name'))
+          .update({
+            tags: (t) => t.connect({ id: TAG_RUST }),
+          });
+
+        expect(updated).toEqual({ id: 1, name: 'Alice', tags: [{ id: TAG_RUST, name: 'Rust' }] });
 
         const junctionRows = await runtime.query<{ user_id: number; tag_id: string }>(
           'select user_id, tag_id from user_tags',
@@ -872,6 +872,91 @@ describe('integration/mn-nested-write', () => {
           { id: 2, name: 'Bob' },
         ]);
         expect(await tagRows(runtime)).toEqual(allSeededTags);
+        expect(await userTagRows(runtime)).toEqual(allSeededUserTags);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update(): connect() naming the same tag twice links it once',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+        await seedTwoUsersWithTags(runtime);
+
+        const updated = await users
+          .where({ id: 2 })
+          .select('id', 'name')
+          .include('tags', (tags) => tags.select('id', 'name').orderBy((t) => t.id.asc()))
+          .update({
+            tags: (t) => t.connect([{ id: TAG_RUST }, { id: TAG_RUST }]),
+          });
+
+        expect(updated).toEqual({
+          id: 2,
+          name: 'Bob',
+          tags: [
+            { id: TAG_GO, name: 'Go' },
+            { id: TAG_RUST, name: 'Rust' },
+          ],
+        });
+        expect(await userTagRows(runtime)).toEqual([
+          ...allSeededUserTags,
+          { user_id: 2, tag_id: TAG_RUST },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update(): connect() with two different criteria for the same tag links it once',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+        await seedTwoUsersWithTags(runtime);
+
+        const updated = await users
+          .where({ id: 2 })
+          .select('id', 'name')
+          .include('tags', (tags) => tags.select('id', 'name').orderBy((t) => t.id.asc()))
+          .update({
+            tags: (t) => t.connect([{ id: TAG_RUST }, { name: 'Rust' }]),
+          });
+
+        expect(updated).toEqual({
+          id: 2,
+          name: 'Bob',
+          tags: [
+            { id: TAG_GO, name: 'Go' },
+            { id: TAG_RUST, name: 'Rust' },
+          ],
+        });
+        expect(await userTagRows(runtime)).toEqual([
+          ...allSeededUserTags,
+          { user_id: 2, tag_id: TAG_RUST },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update(): connect() that collides with another unique constraint of the junction table surfaces the database error and adds no junction row',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+        await seedTwoUsersWithTags(runtime);
+        await runtime.query('create unique index user_tags_tag_once on user_tags (tag_id)');
+
+        const error = await users
+          .where({ id: 2 })
+          .update({ tags: (t) => t.connect({ id: TAG_RUST }) })
+          .catch((caught: unknown) => caught);
+
+        expect(error).toMatchObject({ message: expect.stringContaining('user_tags_tag_once') });
+        expect(error).not.toMatchObject({ code: 'ORM.RELATION_LINK_DUPLICATE' });
         expect(await userTagRows(runtime)).toEqual(allSeededUserTags);
       });
     },

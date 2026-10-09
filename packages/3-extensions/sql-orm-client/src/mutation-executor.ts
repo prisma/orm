@@ -24,7 +24,6 @@ import { mapModelDataToStorageRow, mapStorageRowToModelFields } from './collecti
 import { and, shorthandToWhereExpr } from './filters';
 import { withMutationScope } from './mutation-scope';
 import {
-  invalidMutation,
   type ResolvedMutationInput,
   type ResolvedOperation,
   resolveMutationInput,
@@ -39,6 +38,7 @@ import {
 } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
 import type {
+  JunctionRelation,
   JunctionRelationDefinition,
   RelationDefinition,
   RelationDefinitionBase,
@@ -475,7 +475,7 @@ async function applyJunctionOwnedMutation(
   parentNamespaceId: string,
   parentModelName: string,
   parentRow: Record<string, unknown>,
-  relation: JunctionRelationDefinition,
+  relation: JunctionRelation,
   operation: ResolvedOperation,
 ): Promise<void> {
   const contract = context.contract;
@@ -520,7 +520,7 @@ async function applyJunctionOwnedMutation(
     return;
   }
 
-  const seenTargetKeys = new Set<string>();
+  const linkedTargetKeys = new Set<string>();
   for (const criterion of operation.criteria) {
     const targetPkValues = readJunctionTargetValues(
       contract,
@@ -532,15 +532,10 @@ async function applyJunctionOwnedMutation(
       continue;
     }
     const targetKey = JSON.stringify([...targetPkValues.entries()]);
-    if (seenTargetKeys.has(targetKey)) {
-      throw invalidMutation(
-        'connect',
-        relation,
-        'duplicate-criteria',
-        'resolved duplicate junction link targets; remove the duplicate criteria',
-      );
+    if (linkedTargetKeys.has(targetKey)) {
+      continue;
     }
-    seenTargetKeys.add(targetKey);
+    linkedTargetKeys.add(targetKey);
     await insertJunctionLink(scope, context, relation, parentPkValues, targetPkValues, 'connect');
   }
 }
@@ -627,7 +622,7 @@ function buildJunctionRow(
 async function insertJunctionLink(
   scope: RuntimeScope,
   context: ExecutionContext,
-  relation: JunctionRelationDefinition,
+  relation: JunctionRelation,
   parentPkValues: Map<string, unknown>,
   targetPkValues: Map<string, unknown>,
   mutationKind: 'create' | 'connect',
@@ -641,16 +636,21 @@ async function insertJunctionLink(
   // database.
   applyCreateDefaults(context, through.namespaceId, through.table, [junctionRow]);
 
-  const compiled = compileInsertCount(context.contract, through.namespaceId, through.table, [
-    junctionRow,
-  ]);
+  const conflictColumns = mutationKind === 'connect' ? relation.connectConflictColumns : undefined;
+  const compiled = compileInsertCount(
+    context.contract,
+    through.namespaceId,
+    through.table,
+    [junctionRow],
+    conflictColumns && { columns: conflictColumns },
+  );
   try {
     await scope.execute(compiled);
   } catch (error) {
     // The junction PK is the common unique constraint here, but the table may
     // carry others — say a unique constraint was violated rather than
     // asserting the link itself already exists.
-    if (mutationKind === 'connect' && isUniqueConstraintViolation(error)) {
+    if (mutationKind === 'connect' && !conflictColumns && isUniqueConstraintViolation(error)) {
       throw ormError(
         'ORM.RELATION_LINK_DUPLICATE',
         `connect() nested mutation for relation "${relation.relationName}" violated a unique constraint on junction "${through.table}"; the junction link may already be present`,

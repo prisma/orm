@@ -590,6 +590,25 @@ export function resolveRowIdentityColumns(
   return [];
 }
 
+export function hasUniqueKeyOverColumns(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  tableName: string,
+  columns: readonly string[],
+): boolean {
+  const table = resolveTableForContract(contract, namespaceId, tableName)?.table;
+  if (table === undefined) {
+    return false;
+  }
+  const wanted = new Set(columns);
+  return [table.primaryKey, ...table.uniques].some(
+    (key) =>
+      key !== undefined &&
+      key.columns.length === wanted.size &&
+      key.columns.every((column) => wanted.has(column)),
+  );
+}
+
 export function assertReturningCapability(contract: Contract<SqlStorage>, action: string): void {
   if (hasContractCapability(contract, 'returning')) {
     return;

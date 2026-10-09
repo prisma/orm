@@ -401,7 +401,7 @@ function invalidRelationField(
   );
 }
 
-export function invalidMutation(
+function invalidMutation(
   kind: string,
   relation: RelationDefinitionBase,
   problem: string,

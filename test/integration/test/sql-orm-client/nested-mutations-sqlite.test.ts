@@ -357,4 +357,56 @@ describe('integration/nested mutations on SQLite', () => {
     },
     timeouts.databaseOperation,
   );
+
+  it(
+    'update() connect() naming the same tag twice links it once',
+    async () => {
+      await withSqlite(twoUsersWithTagsSeedSql, async ({ users, rows }) => {
+        await users.where({ id: 2 }).update({
+          tags: (tags) => tags.connect([{ id: 1 }, { id: 1 }]),
+        });
+
+        expect(rows(userTagRowsSql)).toEqual([
+          { user_id: 1, tag_id: 1 },
+          { user_id: 1, tag_id: 2 },
+          { user_id: 2, tag_id: 1 },
+          { user_id: 2, tag_id: 3 },
+        ]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'update() connect() with two different criteria for the same tag links it once',
+    async () => {
+      await withSqlite(twoUsersWithTagsSeedSql, async ({ users, rows }) => {
+        await users.where({ id: 2 }).update({
+          tags: (tags) => tags.connect([{ id: 1 }, { name: 'Rust' }]),
+        });
+
+        expect(rows(userTagRowsSql)).toEqual([
+          { user_id: 1, tag_id: 1 },
+          { user_id: 1, tag_id: 2 },
+          { user_id: 2, tag_id: 1 },
+          { user_id: 2, tag_id: 3 },
+        ]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'update() connect() to a tag that is already linked does nothing',
+    async () => {
+      await withSqlite(twoUsersWithTagsSeedSql, async ({ users, rows }) => {
+        await users.where({ id: 1 }).update({
+          tags: (tags) => tags.connect({ id: 1 }),
+        });
+
+        expect(rows(userTagRowsSql)).toEqual(seededUserTagRows);
+      });
+    },
+    timeouts.databaseOperation,
+  );
 });

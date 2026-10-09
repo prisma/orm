@@ -2,6 +2,8 @@ import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { InternalError } from '@internal/utils/internal-error';
 import {
+  hasContractCapability,
+  hasUniqueKeyOverColumns,
   type ResolvedThrough,
   resolveFieldToColumn,
   resolveModelRelations,
@@ -26,7 +28,12 @@ export interface JunctionRelationDefinition extends RelationDefinitionBase {
 export type RelationDefinition =
   | (RelationDefinitionBase & { readonly ownership: 'parent' })
   | (RelationDefinitionBase & { readonly ownership: 'child' })
-  | (JunctionRelationDefinition & { readonly ownership: 'junction' });
+  | JunctionRelation;
+
+export interface JunctionRelation extends JunctionRelationDefinition {
+  readonly ownership: 'junction';
+  readonly connectConflictColumns: readonly string[] | undefined;
+}
 
 export type RelationOwnership = RelationDefinition['ownership'];
 
@@ -70,7 +77,22 @@ export function getRelationDefinitions(
         const junction = { ...definition, through: relation.through };
         assertJunctionParentMetadataLength(junction);
         assertJunctionTargetMetadataLength(junction);
-        return { ...junction, ownership: 'junction' };
+        const linkColumns = [
+          ...new Set([...relation.through.parentColumns, ...relation.through.childColumns]),
+        ];
+        const skipsExistingLink =
+          hasContractCapability(contract, 'insertOnConflictSkip') &&
+          hasUniqueKeyOverColumns(
+            contract,
+            relation.through.namespaceId,
+            relation.through.table,
+            linkColumns,
+          );
+        return {
+          ...junction,
+          ownership: 'junction',
+          connectConflictColumns: skipsExistingLink ? linkColumns : undefined,
+        };
       }
       return {
         ...definition,

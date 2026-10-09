@@ -1016,11 +1016,11 @@ A valid ORM method was called in a configuration that does not support it: mutat
 
 ### ORM.RELATION_LINK_DUPLICATE
 
-A `connect()` nested mutation violated a unique constraint on the junction table: the junction link is likely already present. The original driver error is preserved as `cause`. Payload: `relation`, `junction`.
+A `connect()` nested mutation on a many-to-many relation violated a unique constraint on the junction table: the junction link is likely already present. Raised only when the junction table has no primary key or unique constraint over its two link columns, or the contract lacks the `insertOnConflictSkip` capability; otherwise connecting a row that is already linked does nothing. The original driver error is preserved as `cause`. Payload: `relation`, `junction`.
 
 ### ORM.RELATION_MUTATION_INVALID
 
-A nested relation mutation's input is malformed: a relation field without a mutator callback or returning an invalid descriptor, `create` without data or with a row that is not an object, `connect`/`disconnect` with a missing or empty criterion, duplicate connect criteria resolving to the same junction link, conflicting values for a junction column, an array of operations that contains a nested array or a value that is not an operation, or `updateAll` data that sets the field linking the related row to its parent. Payload: `kind`, `relation`, `model`, `problem`, `junction`, `column`, `index`, `fields`.
+A nested relation mutation's input is malformed: a relation field without a mutator callback or returning an invalid descriptor, `create` without data or with a row that is not an object, `connect`/`disconnect` with a missing or empty criterion, conflicting values for a junction column, an array of operations that contains a nested array or a value that is not an operation, or `updateAll` data that sets the field linking the related row to its parent. Payload: `kind`, `relation`, `model`, `problem`, `junction`, `column`, `index`, `fields`.
 
 ### ORM.RELATION_MUTATION_UNSUPPORTED
 

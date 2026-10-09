@@ -664,7 +664,7 @@ describe('mutation-executor', () => {
     );
   });
 
-  it('executeNestedCreateMutation() rejects a duplicate resolved connect target before inserting its junction link', async () => {
+  it('executeNestedCreateMutation() links a target once when a connect names it twice', async () => {
     const contract = buildManyToManyContract({
       junctionTable: 'parent_child',
       parentColumns: ['parent_id'],
@@ -674,22 +674,18 @@ describe('mutation-executor', () => {
     const runtime = createMockRuntime();
     runtime.setNextResults([[{ id: 1 }], [{ id: 10 }], [{ id: 10 }]]);
 
-    await expect(
-      executeNestedCreateMutation({
-        context: { ...getTestContext(), contract },
-        runtime,
-        namespaceId: 'public',
-        modelName: 'Parent',
-        data: {
-          id: 1,
-          children: (children: {
-            connect: (criteria: readonly Record<string, unknown>[]) => unknown;
-          }) => children.connect([{ id: 10 }, { id: 10 }]),
-        } as never,
-      }),
-    ).rejects.toThrow(
-      /connect\(\) nested mutation for relation "children" resolved duplicate junction link targets/,
-    );
+    await executeNestedCreateMutation({
+      context: { ...getTestContext(), contract },
+      runtime,
+      namespaceId: 'public',
+      modelName: 'Parent',
+      data: {
+        id: 1,
+        children: (children: {
+          connect: (criteria: readonly Record<string, unknown>[]) => unknown;
+        }) => children.connect([{ id: 10 }, { id: 10 }]),
+      } as never,
+    });
 
     expect(statementTrace(runtime)).toEqual([
       'insert parents',
@@ -2207,26 +2203,19 @@ describe('mutation-executor', () => {
     ]);
   });
 
-  it('many-to-many connect() rejects a second criterion that resolves to a target already linked by the same operation', async () => {
+  it('many-to-many connect() links a target once when two different criteria resolve to it', async () => {
     const runtime = createMockRuntime();
     runtime.setNextResults([[{ id: 1 }], [{ id: 10 }], [{ id: 10 }]]);
 
-    await expect(
-      executeNestedUpdateMutation({
-        context: { ...getTestContext(), contract: manyToManyContract() },
-        runtime,
-        namespaceId: 'public',
-        modelName: 'Parent',
-        filters: [parentIdFilter],
-        data: {
-          children: (children: LooseMutator) => children.connect([{ id: 10 }, { id: 11 }]),
-        } as never,
-      }),
-    ).rejects.toMatchObject({
-      code: 'ORM.RELATION_MUTATION_INVALID',
-      message:
-        'connect() nested mutation for relation "children" resolved duplicate junction link targets; remove the duplicate criteria',
-      meta: { kind: 'connect', relation: 'children', problem: 'duplicate-criteria' },
+    await executeNestedUpdateMutation({
+      context: { ...getTestContext(), contract: manyToManyContract() },
+      runtime,
+      namespaceId: 'public',
+      modelName: 'Parent',
+      filters: [parentIdFilter],
+      data: {
+        children: (children: LooseMutator) => children.connect([{ id: 10 }, { id: 11 }]),
+      } as never,
     });
 
     expect(statementTrace(runtime)).toEqual([
@@ -2235,6 +2224,158 @@ describe('mutation-executor', () => {
       'insert parent_child',
       'select children',
     ]);
+  });
+
+  function keylessJunctionContract() {
+    const Parent = model('Parent', { fields: { id: field.column(int4Column).id() } });
+    const Child = model('Child', { fields: { id: field.column(int4Column).id() } }).sql({
+      table: 'children',
+    });
+    const Junction = model('Junction', {
+      fields: {
+        parentId: field.column(int4Column).column('parent_id'),
+        childId: field.column(int4Column).column('child_id'),
+      },
+    }).sql({ table: 'parent_child' });
+    return defineContract({
+      models: {
+        Parent: Parent.relations({
+          children: rel.manyToMany(() => Child, {
+            through: () => Junction,
+            from: 'parentId',
+            to: 'childId',
+          }),
+        }).sql({ table: 'parents' }),
+        Child,
+        Junction,
+      },
+    });
+  }
+
+  const conflictSkip = { sql: { insertOnConflictSkip: true } };
+
+  async function connectChildTen(contract: object): Promise<MockRuntime> {
+    const runtime = createMockRuntime();
+    runtime.setNextResults([[{ id: 1 }], [{ id: 10 }]]);
+    await executeNestedUpdateMutation({
+      context: { ...getTestContext(), contract } as never,
+      runtime,
+      namespaceId: 'public',
+      modelName: 'Parent',
+      filters: [parentIdFilter],
+      data: { children: (children: LooseMutator) => children.connect({ id: 10 }) } as never,
+    });
+    return runtime;
+  }
+
+  function junctionInsertConflict(runtime: MockRuntime): unknown {
+    const insert = findJunctionDml(runtime, 'insert', 'parent_child') as {
+      onConflict?: { columns: readonly { column: string }[]; action: { kind: string } };
+    };
+    return (
+      insert.onConflict && {
+        columns: insert.onConflict.columns.map((column) => column.column),
+        action: insert.onConflict.action.kind,
+      }
+    );
+  }
+
+  it('many-to-many connect() inserts the junction row with a do-nothing conflict clause on the link columns when the junction has a key over them', async () => {
+    const runtime = await connectChildTen({
+      ...manyToManyContract(),
+      capabilities: conflictSkip,
+    });
+
+    expect(junctionInsertConflict(runtime)).toEqual({
+      columns: ['parent_id', 'child_id'],
+      action: 'do-nothing',
+    });
+  });
+
+  it('many-to-many connect() inserts the junction row without a conflict clause when the junction has no key over the link columns', async () => {
+    const runtime = await connectChildTen({
+      ...keylessJunctionContract(),
+      capabilities: conflictSkip,
+    });
+
+    expect(junctionInsertConflict(runtime)).toBeUndefined();
+  });
+
+  it('many-to-many connect() inserts the junction row without a conflict clause when the contract lacks insertOnConflictSkip', async () => {
+    const runtime = await connectChildTen({ ...manyToManyContract(), capabilities: {} });
+
+    expect(junctionInsertConflict(runtime)).toBeUndefined();
+  });
+
+  it('many-to-many connect() on a junction with no key links a target once when two criteria resolve to it', async () => {
+    const runtime = createMockRuntime();
+    runtime.setNextResults([[{ id: 1 }], [{ id: 10 }], [{ id: 10 }]]);
+
+    await executeNestedUpdateMutation({
+      context: { ...getTestContext(), contract: keylessJunctionContract() } as never,
+      runtime,
+      namespaceId: 'public',
+      modelName: 'Parent',
+      filters: [parentIdFilter],
+      data: {
+        children: (children: LooseMutator) => children.connect([{ id: 10 }, { id: 11 }]),
+      } as never,
+    });
+
+    expect(statementTrace(runtime)).toEqual([
+      'select parents',
+      'select children',
+      'insert parent_child',
+      'select children',
+    ]);
+  });
+
+  function failJunctionInsert(runtime: MockRuntime): void {
+    const execute = runtime.execute.bind(runtime);
+    vi.spyOn(runtime, 'execute').mockImplementation((plan) => {
+      const ast = (plan as { ast?: { kind: string; table?: { name: string } } }).ast;
+      if (ast?.kind === 'insert' && ast.table?.name === 'parent_child') {
+        throw new SqlQueryError('duplicate key value violates unique constraint "other_key"', {
+          sqlState: UNIQUE_VIOLATION_SQLSTATE,
+        });
+      }
+      return execute(plan);
+    });
+  }
+
+  async function connectWithFailingJunctionInsert(contract: object): Promise<unknown> {
+    const runtime = createMockRuntime();
+    failJunctionInsert(runtime);
+    runtime.setNextResults([[{ id: 1 }], [{ id: 10 }]]);
+    return executeNestedUpdateMutation({
+      context: { ...getTestContext(), contract } as never,
+      runtime,
+      namespaceId: 'public',
+      modelName: 'Parent',
+      filters: [parentIdFilter],
+      data: { children: (children: LooseMutator) => children.connect({ id: 10 }) } as never,
+    }).catch((error: unknown) => error);
+  }
+
+  it('many-to-many connect() on a junction with no key reports a unique violation as ORM.RELATION_LINK_DUPLICATE', async () => {
+    const error = await connectWithFailingJunctionInsert({
+      ...keylessJunctionContract(),
+      capabilities: conflictSkip,
+    });
+
+    expect(error).toMatchObject({
+      code: 'ORM.RELATION_LINK_DUPLICATE',
+      meta: { relation: 'children', junction: 'parent_child' },
+    });
+  });
+
+  it('many-to-many connect() with the conflict clause passes a unique violation on another constraint through unwrapped', async () => {
+    const error = await connectWithFailingJunctionInsert({
+      ...manyToManyContract(),
+      capabilities: conflictSkip,
+    });
+
+    expect(error).toBeInstanceOf(SqlQueryError);
   });
 
   interface NoRowCase {
