@@ -120,4 +120,48 @@ describe('collection.fragment', () => {
     // @ts-expect-error the class's own methods are not carried through a fragment for one model
     db.Post.with(published).published();
   });
+
+  test('is defined from a root collection, a custom class or a concrete Collection type', () => {
+    expectTypeOf(plain.Post.fragment((p) => p)).toBeFunction();
+    expectTypeOf(db.Post.fragment((p) => p)).toBeFunction();
+    expectTypeOf(posts.fragment((p) => p)).toBeFunction();
+    expectTypeOf(vehicles.fragment((v) => v)).toBeFunction();
+  });
+
+  test('compiles for a type that does not record the chain, which the run-time check refuses', () => {
+    const maybeFiltered = Math.random() > 0.5 ? db.Post.where({ title: 'x' }) : db.Post;
+    expectTypeOf(maybeFiltered.fragment((p) => p)).toBeFunction();
+    const limited: Collection<TestContract, 'Post'> = db.Post.limit(1);
+    expectTypeOf(limited.fragment((p) => p)).toBeFunction();
+    expectTypeOf(db.Post.limit(1).fragment((p) => p)).toBeFunction();
+  });
+
+  test('refuses a collection with a filter, an order or an include', () => {
+    // @ts-expect-error the fragment is built from the model alone; the where would be ignored
+    db.Post.where({ title: 'x' }).fragment((p) => p);
+    // @ts-expect-error the fragment is built from the model alone; the where would be ignored
+    db.Post.published().fragment((p) => p);
+    // @ts-expect-error the fragment is built from the model alone; the orderBy would be ignored
+    db.Post.orderBy((p) => p.id.asc()).fragment((p) => p);
+    // @ts-expect-error the fragment is built from the model alone; the include would be ignored
+    db.Post.include('author').fragment((p) => p);
+  });
+
+  test('refuses this in a custom class, which may carry a filter or an order', () => {
+    class TitlePostCollection extends Collection<TestContract, 'Post'> {
+      titles() {
+        // @ts-expect-error this may be a chained collection, whose calls the fragment would ignore
+        return this.fragment((p) => p.select('id', 'title'));
+      }
+    }
+    expectTypeOf<TitlePostCollection>().toHaveProperty('titles');
+  });
+
+  test('refuses a collection typed by a type parameter, which may carry a filter or an order', () => {
+    function titles<C extends Collection<TestContract, 'Post'>>(collection: C) {
+      // @ts-expect-error C may be a chained collection, whose calls the fragment would ignore
+      return collection.fragment((p) => p.select('id', 'title'));
+    }
+    expectTypeOf(titles).toBeFunction();
+  });
 });

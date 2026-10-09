@@ -1,6 +1,6 @@
 # ADR 268 — Raw SQL is a value of the data type `sql/expression`
 
-**Status:** Accepted. Built: the data type, the `sql` tag, and the six PSL places. Decided and not yet built: the TypeScript builder's `sql` values (the TypeScript examples below show that surface as planned).
+**Status:** Accepted. Built: the data type, the `sql` tag, the six PSL places and the TypeScript builder's `sql` values.
 **Date:** 2026-09-30
 **Builds on:** [ADR 129 — Tagged literals write values of data types](ADR%20129%20-%20Template-Tagged%20Literals%20for%20Extensions.md), [ADR 231 — Declarative attribute specifications](ADR%20231%20-%20Declarative%20attribute%20specifications.md), [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md), [ADR 262 — Block specs bind top-level block values](ADR%20262%20-%20Block%20specs%20bind%20top-level%20block%20values.md)
 
@@ -41,9 +41,28 @@ The places are `@default`, `@@index(where:)`, `@@index(expression:)`, `@@fullTex
 PSL_VALUE_TYPE_INCOMPATIBLE: Expected sql`...`; write sql`"archived" IS NULL`
 ```
 
-The TypeScript builder follows the same rule. As planned, the `sql` tag returns a `SqlExpression`, every builder field that takes raw SQL accepts only that value, and one `sql` value may be interpolated in another:
+The TypeScript builder follows the same rule. The `sql` tag returns a `SqlExpression`, every builder field that takes raw SQL accepts only that value, and one `sql` value may be interpolated in another:
 
 ```ts
+import {
+  int4Column,
+  textColumn,
+  timestamptzTemporalColumn,
+} from '@prisma/orm-postgres/adapter/column-types';
+import { check, field, model, policyUpdate, role, sql } from '@prisma/orm-postgres/contract-builder';
+
+const Post = model('Post', {
+  fields: {
+    id: field.column(int4Column).id(),
+    authorId: field.column(textColumn),
+    title: field.column(textColumn),
+    archived: field.column(timestamptzTemporalColumn).optional(),
+  },
+}).sql({
+  checks: [check({ expression: sql`length("title") > 0`, name: 'post_title_nonempty' })],
+});
+
+const authenticated = role('authenticated');
 const owner = sql`"authorId"::uuid = auth.uid()`;
 
 policyUpdate(Post, {
@@ -52,7 +71,6 @@ policyUpdate(Post, {
   using: owner,
   withCheck: sql`${owner} AND "archived" IS NULL`,
 });
-check({ expression: sql`length("title") > 0`, name: 'post_title_nonempty' });
 ```
 
 ## Decision
@@ -112,11 +130,21 @@ The language server completes `sql` wherever an argument receives `sql/expressio
 
 ## The TypeScript builder follows the same rule
 
-As planned, the `sql` template tag returns a `SqlExpression`, a value of `sql/expression` whose text is canonical. `.default()` and every builder field that takes raw SQL (`index`'s `where` and `expression`, `check`, `fullTextIndex`'s `where`, a policy's `using` and `withCheck`) accept it, and a plain string does not compile. The refusals specific to defaults move from the tag into `.default()`.
+The `sql` template tag returns a `SqlExpression`, a value of `sql/expression` whose text is canonical. It is exported from `@internal/sql-contract/sql-expression`, and each contract-builder module re-exports `sql` and the `SqlExpression` type. `.default()` and every builder field that takes raw SQL (`index`'s `where` and `expression`, `check`, `fullTextIndex`'s `where`, a policy's `using` and `withCheck`) accept it, and a plain string does not compile. `.default('draft')` still takes a string, which is a literal default, not SQL. The refusals specific to defaults run in `.default()`, not in the tag.
 
-The tag accepts other `sql` values inside `${…}` and refuses anything else there. It joins the pieces and canonicalizes the whole text once. The `SqlExpression` constructor canonicalizes too, so no way of making a value skips it.
+The tag accepts other `sql` values inside `${…}` and refuses anything else there (`CONTRACT.SQL_EXPRESSION_INTERPOLATION`). Each line of an interpolated value after its first takes the indentation of the template line it sits on, so the joined text is what the author sees. The tag then canonicalizes the whole text once, and a multi-line value inside an indented template stores the same text as the PSL literal of the same SQL. The `SqlExpression` constructor canonicalizes too, so no way of making a value skips it; a NUL character or an oversize text is `CONTRACT.SQL_EXPRESSION_INVALID`. `SqlExpression` is a class, so an object literal such as `{ text: 'x' }` is not assignable to it and is not mistaken for a literal default. Lowering reads each field through `requireSqlExpression`, which refuses anything else with `CONTRACT.ARGUMENT_INVALID` for JavaScript that is not type-checked.
+
+The tag interpolates only `sql` values, unlike the query lane's `db.raw.sql` (ADR 247), which binds `${…}` values as parameters. Contract SQL becomes DDL, and DDL has no parameters, so a value interpolated into it would have to be pasted into the text. Two deprecated forms still take a string: `.defaultSql()`, which TML-3286 removes at 8.0.0, and `.default({ kind: 'function', expression })`. Both store the string as written, without canonicalization.
 
 Why: PSL removes the common indentation of a multi-line literal, and a TypeScript template string keeps it. Without the tag, the same SQL would get the same wire name but different text in `contract.json`, and PSL and TypeScript would stop emitting byte-identical contracts (ADR 129). Interpolation exists because TypeScript contracts reuse a predicate across policies; without it, authors would build SQL some other way and skip the canonicalization.
+
+## Column defaults that do not read back
+
+A column default whose text a `sql` literal cannot write back unchanged is printed by `contract infer`, with a note, and refused by `contract print`. The two commands keep different things unchanged.
+
+`contract print` turns a contract into PSL that must emit the same contract. Any text that changes when the PSL is read is a failure, so it refuses such a default with `CONTRACT.PRINT_UNSUPPORTED`, as it refuses an index, check or policy.
+
+`contract infer` turns a database into PSL whose next `migration plan` must not damage that database. Default expressions are compared with case and whitespace ignored, so a printed default with canonical text plans as no change, while a skipped default plans as a dropped default. Only a string constant inside the default can change its meaning, so infer prints the default and adds the note `// prisma: default of "<column>" holds text a sql literal cannot write back unchanged; check its string constants before applying a migration` to the model. An index, check or policy is different: infer skips an exact-named one, because its text is compared byte for byte and a changed text would plan as a conflict or a drop.
 
 ## Line comments in multi-line literals
 
@@ -131,6 +159,7 @@ Multi-line `sql` literals make line comments likely. The content hash behind ind
 - A PSL or TypeScript schema that writes raw SQL as a plain string stops working. The upgrade instructions carry a codemod that rewrites every place in a `.prisma` file.
 - A stored text may change once, where canonicalization removes indentation shared by every line, blank lines at the start or end, a whitespace-only line or a carriage return. Wire names do not change, because canonicalization removes only what the wire-name normalizer already ignores; this holds for a text with a line comment too, since the normalizer's line-comment rule (ADR 234) drops the same blank lines and collapses the same whitespace per line. For a wire-named index, check or policy, one `migration plan` after upgrading records the new text, and the migration has no operations. For an index or check named with `map:`, `migration plan` stops with a conflict that asks for a custom migration written with `migration new`; the database needs no change, so that migration has no operations. For a policy named with `@@map`, `migration plan` writes a migration that drops the policy and creates it again with the canonical text; dropping a policy loses no data, so the plan needs no `--delete` answer.
 - `contract infer` prints each place as a `sql` literal. It prints a wire-named index whose text would not read back unchanged with its canonical text, which hashes to the same name. It skips an exact-named object whose text would not read back, with a note that the object is not in the schema, that the next plan will drop it, and that adding it by hand still differs from the database (ADR 129). `contract print` refuses any object whose text would not read back.
+- A column default is the exception: `contract infer` prints it with a note even when its text would not read back, and `contract print` refuses it (see "Column defaults that do not read back").
 - An extension that builds spec contexts supplies the stack's data types in `AttributeSpecContext.dataTypes` and `BlockSpecContext.dataTypes`.
 
 ## Alternatives considered
@@ -145,6 +174,7 @@ Multi-line `sql` literals make line comments likely. The content hash behind ind
 - **Wait for ADR 254's follow-up work to build typed arguments.** Rejected. Typed arguments are needed by the raw-SQL places, and that work has no specification.
 - **A separate step that types block values in the family interpreter.** Rejected. Block specs already parse values with the same combinators as attributes (ADR 262), so a second mechanism would duplicate it.
 - **Leave the TypeScript builder on plain strings.** Rejected. PSL and TypeScript would stop emitting identical contracts for multi-line text.
+- **`contract infer` skips a default whose text would not read back, as it skips an exact-named object.** Rejected. Default expressions are compared with case and whitespace ignored, so the printed default plans as no change, while a skipped default would be dropped by the next plan.
 - **A `SqlExpression` class with a private constructor and no interpolation.** Rejected. Authors would repeat SQL text across policies, or find another way to build values and skip the canonicalization.
 
 ## References

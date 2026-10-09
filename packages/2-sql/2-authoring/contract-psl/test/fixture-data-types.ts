@@ -18,11 +18,7 @@ import {
   isNonFiniteText,
 } from '@internal/framework-components/codec';
 import { sqlDataType } from '@internal/sql-contract/data-type';
-import {
-  SQL_EXPRESSION_DATA_TYPE_ID,
-  sqlExpressionAuthoringEntry,
-  sqlExpressionDataType,
-} from '@internal/sql-contract/sql-expression';
+import { sqlExpressionRegistration } from '@internal/sql-contract/sql-expression';
 import { structuredError } from '@internal/utils/structured-error';
 import { type } from 'arktype';
 
@@ -161,7 +157,7 @@ export const pgvectorVector: DataType = sqlDataType('pgvector/vector', {
 });
 
 export const fixtureDataTypes: readonly DataType[] = [
-  sqlExpressionDataType,
+  ...sqlExpressionRegistration.dataTypes,
   pgText,
   pgBool,
   pgJson,
@@ -222,7 +218,7 @@ function parseJson(text: string): JsonValue {
 }
 
 export const fixtureDataTypeEntries: Readonly<Record<string, DataTypeAuthoringEntry>> = {
-  [SQL_EXPRESSION_DATA_TYPE_ID]: sqlExpressionAuthoringEntry,
+  ...sqlExpressionRegistration.authoring.dataTypes,
   [pgText.id]: {
     written: { kind: 'plain', syntax: 'string', parse: (text) => text },
     print: (value) => String(value),

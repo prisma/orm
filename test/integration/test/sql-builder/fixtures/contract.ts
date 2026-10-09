@@ -8,6 +8,7 @@ import {
   fullTextIndex,
   model,
   rel,
+  sql,
 } from '@internal/postgres/contract-builder';
 
 const UserBase = model('User', {
@@ -50,7 +51,7 @@ const Comment = model('Comment', {
     fullTextIndex(cols.subject, { name: 'comments_subject_search' }),
     // Partial: the index-usage test proves Postgres picks this one up for a
     // query that carries the same predicate.
-    fullTextIndex(cols.body, { where: 'post_id = 1', name: 'comments_body_live' }),
+    fullTextIndex(cols.body, { where: sql`post_id = 1`, name: 'comments_body_live' }),
   ],
 }));
 

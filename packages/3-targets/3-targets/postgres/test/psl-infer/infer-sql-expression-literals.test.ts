@@ -9,7 +9,11 @@ import {
   formatWireName,
   parseNaming,
 } from '@internal/sql-schema-ir/naming';
-import type { SqlCheckConstraintIRInput, SqlIndexIRInput } from '@internal/sql-schema-ir/types';
+import type {
+  SqlCheckConstraintIRInput,
+  SqlColumnIRInput,
+  SqlIndexIRInput,
+} from '@internal/sql-schema-ir/types';
 import { describe, expect, it } from 'vitest';
 import { postgresAuthoringPslBlockDescriptors } from '../../src/core/authoring';
 import { inferPostgresPslContract } from '../../src/core/psl-infer/infer-psl-contract';
@@ -49,6 +53,7 @@ function policy(name: string, using: string, withCheck?: string): PostgresPolicy
 }
 
 function infer(input: {
+  readonly columns?: Record<string, SqlColumnIRInput>;
   readonly indexes?: readonly SqlIndexIRInput[];
   readonly checks?: readonly SqlCheckConstraintIRInput[];
   readonly policies?: readonly PostgresPolicySchemaNode[];
@@ -63,6 +68,7 @@ function infer(input: {
             columns: {
               id: { name: 'id', nativeType: 'int4', nullable: false },
               owner_id: { name: 'owner_id', nativeType: 'int4', nullable: false },
+              ...input.columns,
             },
             primaryKey: { columns: ['id'] },
             foreignKeys: [],
@@ -179,5 +185,32 @@ describe('contract infer skips SQL that would not read back', () => {
     expect(psl).not.toContain('policy_');
     expect(psl).toContain(SKIP_NOTE('policy', 'p_crlf'));
     expect(psl).toContain(SKIP_NOTE('policy', 'p_blank'));
+  });
+});
+
+describe('contract infer keeps a default whose text would not read back, with a note', () => {
+  const DEFAULT_NOTE = (column: string) =>
+    `// prisma: default of "${column}" holds text a sql literal cannot write back unchanged; check its string constants before applying a migration`;
+
+  it('prints the default and notes it on the model', () => {
+    const psl = infer({
+      columns: {
+        label: { name: 'label', nativeType: 'text', nullable: false, default: "lower('a\r\nb')" },
+      },
+    });
+
+    expect(psl).toContain("  label   String @default(sql`\nlower('a\r\nb')\n`)\n");
+    expect(psl).toContain(DEFAULT_NOTE('label'));
+  });
+
+  it('adds no note for a default that reads back', () => {
+    const psl = infer({
+      columns: {
+        label: { name: 'label', nativeType: 'text', nullable: false, default: "lower('a')" },
+      },
+    });
+
+    expect(psl).toContain("label   String @default(sql`lower('a')`)");
+    expect(psl).not.toContain('prisma: default of');
   });
 });

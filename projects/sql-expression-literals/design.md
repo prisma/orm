@@ -36,6 +36,20 @@ export const sqlExpressionAuthoringEntry: DataTypeAuthoringEntry = {
   print: (value) => sqlTextFromCanonical(value),
   documentation: "A SQL expression in the target database's language. Prisma passes it to the database unchanged.",
 };
+// Slice 3 freezes both: the data type and its `casts`, and the entry and its `written` object.
+
+// Slice 3
+export interface SqlExpressionRegistration {
+  readonly dataTypes: readonly DataType[];
+  readonly authoring: {
+    readonly dataTypes: Readonly<Record<string, DataTypeAuthoringEntry>>;
+  };
+}
+
+/** The SQL family's registration of `sql/expression`, shaped as the family descriptor's `dataTypes` and `authoring.dataTypes`. */
+export const sqlExpressionRegistration: SqlExpressionRegistration;
+// `{ dataTypes: [sqlExpressionDataType], authoring: { dataTypes: { [SQL_EXPRESSION_DATA_TYPE_ID]: sqlExpressionAuthoringEntry } } }`,
+// frozen at every level.
 
 /** The SQL text held by the canonical form of a `sql/expression` value. */
 export function sqlTextFromCanonical(value: JsonValue): string;
@@ -72,10 +86,15 @@ export class SqlExpression {
 }
 
 export function isSqlExpression(value: unknown): value is SqlExpression;
-// `typeof value === 'object' && value !== null && Reflect.get(value, SQL_EXPRESSION_MARKER) === true`.
+// `typeof value === 'object' && value !== null && Reflect.get(value, SQL_EXPRESSION_MARKER) === true` and its `text` is a string.
 // The `Symbol.for` marker makes the check work when two installed copies of this package meet at run time.
 
-/** Raw SQL written as a template literal: `` sql`"userId" = auth.uid()` ``. Other `sql` values may be interpolated. */
+/** This copy's `SqlExpression` for `value`, or undefined. A marked value from another copy is rebuilt with `new SqlExpression(value.text)`, so its text is canonicalized too. */
+export function readSqlExpression(value: unknown): SqlExpression | undefined;
+// Returns `value` when it is an instance of this copy's class; `new SqlExpression(value.text)` when `isSqlExpression(value)`; otherwise undefined.
+// `.default()`, lowering and `requireSqlExpression` read values through it. (Added in slice 3 review round 3, C01.)
+
+/** Raw SQL written as a template literal: `` sql`"userId" = auth.uid()` ``. Other `sql` values may be interpolated; each later line of one takes the indentation of the template line it sits on. */
 export function sql(strings: TemplateStringsArray, ...values: readonly SqlExpression[]): SqlExpression;
 
 /** Returns `value` when it is a `SqlExpression`; throws for anything else. For callers that JavaScript cannot type-check. */
@@ -87,12 +106,12 @@ export function requireSqlExpression(value: unknown, what: string): SqlExpressio
 `sql` does, in order:
 
 1. For each `values[i]`: if `!isSqlExpression(values[i])`, throw `contractError('CONTRACT.SQL_EXPRESSION_INTERPOLATION', 'sql`...` only interpolates other sql`...` values; write any other text inside the template.', { meta: { index: i } })`.
-2. `joined` = `resolveTemplateTagEscapes(strings.raw[0])`, then for each `i`, `values[i].text` followed by `resolveTemplateTagEscapes(strings.raw[i + 1])`. Escapes are resolved per chunk, and interpolated text is inserted as it is.
-3. Return `new SqlExpression(joined)`. The whole joined text is canonicalized once. An interpolated multi-line value inside an indented template keeps the template's indentation on its first line only; write such SQL as one literal when indentation matters.
+2. `joined` = `resolveTemplateTagEscapes(strings.raw[0])`, then for each `i`, `values[i].text` followed by `resolveTemplateTagEscapes(strings.raw[i + 1])`. Escapes are resolved per chunk. Each line of `values[i].text` after its first is prefixed with the leading spaces and tabs of the template line on which the `${…}` sits. That indentation comes from the template's own pieces only: it is the leading whitespace of the last line of the most recent piece that holds a line break (or of `strings.raw[0]`), and text inserted from a value never changes it. So two values on one template line both take that line's indentation. The joined text is then what the author sees, so a multi-line value inside an indented template keeps the template's indentation on every line.
+3. Return `new SqlExpression(joined)`. The whole joined text is canonicalized once, so the result equals the canonical text of the same SQL written out as one PSL literal.
 
 It performs no other check. An empty text is allowed.
 
-`requireSqlExpression(value, what)` returns `value` when `isSqlExpression(value)`. Otherwise it throws `contractError('CONTRACT.ARGUMENT_INVALID', \`${what} must be a sql\\\`...\\\` value.\`, { meta: { what } })`, for example ``Index "where" must be a sql`...` value.``
+`requireSqlExpression(value, what)` returns `readSqlExpression(value)` when that is defined. Otherwise it throws `contractError('CONTRACT.ARGUMENT_INVALID', \`${what} must be a sql\\\`...\\\` value.\`, { meta: { what } })`, for example ``Index "post_user_active" where must be a sql`...` value.`` Section 15 lists the `what` strings.
 
 In slice 3, add `'SQL_EXPRESSION_INTERPOLATION'` and `'SQL_EXPRESSION_INVALID'` to `ContractSubcode` in `packages/2-sql/1-core/contract/src/contract-errors.ts`.
 
@@ -102,7 +121,7 @@ Imports: `dataType`, `dataTypeId`, `DataType`, `DataTypeId` from `@internal/fram
 
 ### 3.1 The family registers its type and entry
 
-- `packages/2-sql/9-family/src/core/control-descriptor.ts`: `SqlFamilyDescriptor` gets `readonly dataTypes: readonly DataType[] = [sqlExpressionDataType]` and `dataTypes: { [SQL_EXPRESSION_DATA_TYPE_ID]: sqlExpressionAuthoringEntry }` in its `authoring`. The owner of the type and the component that registers it are then one component, and a new SQL target has nothing to remember. ADR 254 allows a family to register only a type that is the same on every target and that nothing casts from.
+- `packages/2-sql/9-family/src/core/control-descriptor.ts`: `SqlFamilyDescriptor` gets `readonly dataTypes = sqlExpressionRegistration.dataTypes` and `dataTypes: sqlExpressionRegistration.authoring.dataTypes` in its `authoring`. `sqlExpressionRegistration` (section 2) holds `[sqlExpressionDataType]` and `{ [SQL_EXPRESSION_DATA_TYPE_ID]: sqlExpressionAuthoringEntry }`, frozen, so no importer can change what the family registers. The owner of the type and the component that registers it are then one component, and a new SQL target has nothing to remember. ADR 254 allows a family to register only a type that is the same on every target and that nothing casts from.
 - The targets' lists hold only their own types: `postgresDataTypes`, `postgresDataTypeEntries()`, `sqliteDataTypes` and `sqliteDataTypeEntries()` do not contain `sql/expression`. In `packages/3-targets/3-targets/postgres/src/core/data-type-entries.ts`, replace the doc sentence about `sql` and `pg.sql` with: "The `sql` tag is not here: it writes `sql/expression`, which the SQL family defines and registers itself."
 - Every production path that reads the stack's data types assembles the family with the target, the adapter and the extensions (`createControlStack`), so it sees the type and entry. `contract infer` does not read the stack (section 11.1), which changes no output.
 - The stack assembles the family first, so messages and completion list the tags in the order `sql, json`: `Unknown literal tag "pg.sql". Known tags: sql, json.`
@@ -453,7 +472,7 @@ export function printTaggedLiteral(tag: string, text: string): string {
 - **Bodies that do not read back.** An exact-named (`map:`) object compares its body with the database byte for byte, so infer never prints a body that would read back changed. A wire-named object is compared by name, and `normalizeSqlBody` gives its canonical text the same name, so infer prints it with that text. `psl-infer/infer-sql-text.ts` holds the note text and `printableIndex`:
   - In `buildModel` (`infer-model-blocks.ts`), `printableIndex` returns an index unchanged when its `expression` and `where` read back, the index with canonical texts when they do not and its naming is wire, and `undefined` otherwise. Infer detects every live check and policy as exact-named, so a non-derived check whose `expression` fails `sqlTextsReadBack` is skipped. Each skip adds the note `` `// prisma: skipped ${kind} "${name}": its SQL cannot be written as a sql literal that reads back unchanged. It is not in this schema, so migration plan will drop it. A sql literal written by hand holds different text, so migration plan then stops with a conflict for an index or check, or drops and recreates a policy. Either change the SQL in the database to the text of the literal, or add the object without map: or @@map so Prisma names it.` `` (`kind` is `index` or `check`) to the model's comment lines, after any policy notes.
   - In `buildIntrospectedPolicyBlocks` (`infer-policy-blocks.ts`), a policy whose `using` or `withCheck` fails `sqlTextsReadBack` is skipped with the same note, `policy` as its kind, through the existing `skipNotesByTable`.
-  - Function defaults keep printing unconditionally, with `printTaggedLiteral` rather than the checking printer. Default expressions are compared with case and whitespace ignored (`resolvedDefaultsEqual`), not byte for byte, and canonicalization changes only whitespace, so the canonical text never shows as a difference. A string constant inside a default whose whitespace canonicalization changes reads back as a different value; `plan.md` records this.
+  - Function defaults keep printing unconditionally, with `printTaggedLiteral` rather than the checking printer. Default expressions are compared with case and whitespace ignored (`resolvedDefaultsEqual`), not byte for byte, and canonicalization changes only whitespace, so the canonical text never shows as a difference. A string constant inside a default whose whitespace canonicalization changes reads back as a different value. Decided in slice 3, with the reason in ADR 268 ("Column defaults that do not read back"): `contract infer` keeps printing such a default and adds `` `// prisma: default of "${column}" holds text a sql literal cannot write back unchanged; check its string constants before applying a migration` `` to the model's comment lines (`defaultDoesNotReadBackNote` in `psl-infer/infer-sql-text.ts`). `contract print` refuses such a default through `refuseSqlTextThatDoesNotReadBack` with kind `default` and the column's coordinate.
 
 ## 12. Language server (slice 2b)
 
@@ -479,7 +498,7 @@ In `packages/1-framework/3-tooling/language-server/src/`:
 | `PSL_INVALID_JSON_LITERAL`, `PSL_UNKNOWN_DEFAULT_LITERAL_TAG` | — | Retired / renamed |
 | `CONTRACT.DATA_TYPE_CASTS_FROM_SQL_EXPRESSION` (new, slice 2a) | SQL family, when it creates its control instance | A registered data type declares a cast or a list cast from `sql/expression` (section 3.5) |
 | `CONTRACT.SQL_EXPRESSION_INTERPOLATION` (renamed from `CONTRACT.DEFAULT_SQL_INTERPOLATION`) | TS `sql` tag | Something other than a `sql` value interpolated |
-| `CONTRACT.SQL_EXPRESSION_INVALID` (new) | `SqlExpression` constructor | Canonicalization failed |
+| `CONTRACT.SQL_EXPRESSION_INVALID` (new) | `SqlExpression` constructor; lowering, for a rendered index expression | Canonicalization failed; in lowering the message starts with the index's `what` |
 | `CONTRACT.DEFAULT_INVALID` | TS `.default()` | Reserved text or unsafe SQL (moved from the tag) |
 | `CONTRACT.ARGUMENT_INVALID` | `requireSqlExpression` | A TS raw-SQL field holds something other than a `SqlExpression` at run time |
 
@@ -594,20 +613,21 @@ In `contract-dsl.ts`: `IndexOptionsBase.where?: SqlExpression`; `IndexExpression
 
 In `contract-ts/src/contract-lowering.ts`, `resolveModelNode`:
 
-- Index `where`: `index.where === undefined ? undefined : requireSqlExpression(index.where, 'Index "where"').text`.
-- Index `expression`, in this order: `isSqlExpression(e)` → `e.text`; `typeof e === 'object' && e !== null && 'render' in e` → render as today; otherwise `requireSqlExpression(e, 'Index "expression"')`, which throws. Testing `'render' in e` on a string would throw a `TypeError`, so the order matters.
-- Check: `expression: requireSqlExpression(check.expression, 'Check "expression"').text`.
+- The `what` string names the object. An index or check with a `name` or `map` is `Index "<name>"` or `Check "<name>"` (`map` when there is no `name`). One with neither, before lowering names it, is `Index on "<Model>"` or `Check on "<Model>"`. The field follows: `where` or `expression`.
+- Index `where`: `index.where === undefined ? undefined : requireSqlExpression(index.where, \`${owner} where\`).text`, for example `Index "post_user_active" where` or `Index on "Post" where`.
+- Index `expression`, in this order: `isSqlExpression(e)` → `e.text`; `typeof e === 'object' && e !== null && 'render' in e` → `new SqlExpression(e.render(...)).text`, so rendered text is canonicalized like every other raw-SQL text; a refusal is rethrown as `CONTRACT.SQL_EXPRESSION_INVALID` with the message prefixed by `` `${owner} expression: ` `` and `what` added to `meta`; otherwise `requireSqlExpression(e, \`${owner} expression\`)`, which throws. Testing `'render' in e` on a string would throw a `TypeError`, so the order matters.
+- Check: `expression: requireSqlExpression(check.expression, \`${owner} expression\`).text`, for example `Check "post_email_no_space" expression`.
 
-In `packages/3-extensions/postgres/src/contract/full-text-index.ts`: `FullTextIndexOptionsBase.where?: SqlExpression`, passed to `IndexConstraint.where` unchanged.
+In `packages/3-extensions/postgres/src/contract/full-text-index.ts`: `FullTextIndexOptionsBase.where?: SqlExpression`. `fullTextIndex` checks it with `requireSqlExpression(where, 'Full-text index "<name>" where')`, `<name>` being its `name` or `map`; with neither (only an untyped caller can omit both), it is `Full-text index on fields "<field>", "<field>" where`, listing the field names of every weight group in order, because the helper does not know the model. ("on fields" keeps it apart from `Index on "<Model>"`, which names a model.) It checks `where` itself because lowering sees only an index and cannot tell the author used `fullTextIndex`.
 
 ### 15.4 Policies
 
 - `packages/3-extensions/postgres/src/contract/rls.ts`: every `using` and `withCheck` in `RlsPolicyHandle`, `RlsUsingPolicyDescriptor`, `RlsWithCheckPolicyDescriptor`, `RlsUsingWithCheckPolicyDescriptor` and `buildPolicyHandle`'s parameter becomes `SqlExpression`; values are copied unchanged.
-- `packages/3-targets/3-targets/postgres/src/core/authoring.ts`: `RlsPolicyHandleShape.using?: SqlExpression`, `withCheck?: SqlExpression`. `postgresLowerEntityHandles` passes `requireSqlExpression(policy.using, 'Policy "using"').text` (and `'Policy "withCheck"'`) to `buildRlsPolicyEntity` when defined.
+- `packages/3-targets/3-targets/postgres/src/core/authoring.ts`: `RlsPolicyHandleShape.using?: SqlExpression`, `withCheck?: SqlExpression`. `postgresLowerEntityHandles` passes `requireSqlExpression(policy.using, 'Policy "<name>" using').text` (and `'Policy "<name>" withCheck'`) to `buildRlsPolicyEntity` when defined, `<name>` being the policy's name (its prefix).
 
 ### 15.5 What stays strings
 
-`buildSqlContractFromDefinition` and the definition tree (`IndexNode`, `CheckNode`) take strings; PSL builds the same tree. `DeferredIndexExpression.render` returns a string.
+`buildSqlContractFromDefinition` and the definition tree (`IndexNode`, `CheckNode`) take strings; PSL builds the same tree. `DeferredIndexExpression.render` returns a string, which lowering canonicalizes (section 15.3).
 
 ## 16. Migration files: untagged template literals (slice 4)
 
@@ -646,7 +666,7 @@ No migration function, type or import changes. Rendered SQL is unchanged, so `op
 
 ## 17. Stretch: `sql` values in migration files (slice 5)
 
-Built only after slices 1–4, if the project still wants it.
+Confirmed by Will on 2026-10-08. Checked against `main` plus slice 3 on 2026-10-08; the corrections from that check are written into 17.1 to 17.3.
 
 ### 17.1 Migration methods accept both forms
 
@@ -655,7 +675,9 @@ In `packages/2-sql/4-lanes/relational-core/src/contract-free/column.ts` (exporte
 ```ts
 /** SQL in a migration-file argument: a `sql` value, or a string. The string form is permanent: committed files use it, and the generator writes it when a template cannot hold the text unchanged. */
 export type MigrationSqlText = string | SqlExpression;
-export function sqlTextOf(value: MigrationSqlText): string; // typeof value === 'string' ? value : value.text
+export function sqlTextOf(value: MigrationSqlText): string;
+// A string is returned unchanged. Anything else is read with `requireSqlExpression(value, 'SQL text')`, so a `sql` value from another
+// installed copy is canonicalized (slice 3's `readSqlExpression`) and a value of any other type throws CONTRACT.ARGUMENT_INVALID.
 ```
 
 Each method or factory below reads such a value with `sqlTextOf` at its entry and passes a string on, converting only defined values (`exactOptionalPropertyTypes`). `CreateIndexExtras`, `CreateIndexElements`, `PostgresRlsPolicyInput`, `RenderedRlsPolicyLiteral` and `AlterColumnTypeOptions` stay strings.
@@ -664,8 +686,9 @@ Each method or factory below reads such a value with `sqlTextOf` at its entry an
 - `PostgresMigration` (`postgres/src/core/migrations/postgres-migration.ts`):
   - `createIndex`: the expression arm is `{ readonly expression: MigrationSqlText; readonly columns?: never }`; `extras?: Omit<CreateIndexExtras, 'where'> & { readonly where?: MigrationSqlText }`. It passes `sqlTextOf(options.expression)` and `options.extras === undefined ? undefined : { ...options.extras, ...ifDefined('where', options.extras.where === undefined ? undefined : sqlTextOf(options.extras.where)) }`.
   - `addCheckConstraint`: `readonly expression: MigrationSqlText`.
-  - `createRlsPolicy`: `readonly policy: Omit<RenderedRlsPolicyLiteral, 'using' | 'withCheck'> & { readonly using?: MigrationSqlText; readonly withCheck?: MigrationSqlText }`; where it spreads them (about line 494) it writes `using: options.policy.using === undefined ? undefined : sqlTextOf(options.policy.using)`, likewise `withCheck`.
+  - `createRlsPolicy`: `readonly policy: Omit<RenderedRlsPolicyLiteral, 'using' | 'withCheck'> & { readonly using?: MigrationSqlText; readonly withCheck?: MigrationSqlText }`; where it spreads them (lines 647–653 of `postgres-migration.ts` on 2026-10-08) it writes `using: options.policy.using === undefined ? undefined : sqlTextOf(options.policy.using)`, likewise `withCheck`.
   - `alterColumnType`: `readonly options: Omit<AlterColumnTypeOptions, 'using'> & { readonly using?: MigrationSqlText }`, passing `{ ...options.options, ...ifDefined('using', options.options.using === undefined ? undefined : sqlTextOf(options.options.using)) }`.
+- SQLite `SqliteMigration.addColumn` and `recreateTable` (`sqlite/src/core/migrations/sqlite-migration.ts`) take `SqliteColumnSpec` (`operations/shared.ts`), whose `default` function arm is `{ kind: 'function', expression: string }` and holds user SQL. Their input type takes `expression: MigrationSqlText` in that arm, and each method reads it with `sqlTextOf` before passing the spec on; the stored `ColumnDefault` stays a string.
 - The Postgres and SQLite targets' `src/exports/migration.ts` add `export { sql } from '@internal/sql-contract/sql-expression';`. The `@internal/postgres/migration` and `@internal/sqlite/migration` facades re-export with `export *`.
 
 ### 17.2 The renderer prints `sql` values
@@ -677,11 +700,18 @@ Add to `packages/1-framework/1-core/framework-components/src/shared/tagged-liter
 export function renderTaggedTemplateSource(tag: string, text: string): { readonly source: string; readonly usesTag: boolean };
 ```
 
-1. Fall back to `{ source: tsQuotedTextSource(text), usesTag: false }` when `canonicalizeTaggedLiteralBody(text)` fails or changes the text, or when a line of `text` matches `/^\s+$/` but not `/^[ \t]*$/` (the renderer's `indent()` treats such a line as blank).
+1. Fall back to `{ source: tsQuotedTextSource(text), usesTag: false }` when `canonicalizeTaggedLiteralBody(text)` fails or changes the text; when a line of `text` matches `/^\s+$/` but not `/^[ \t]*$/` (the renderer's `indent()` treats such a line as blank); or when `text` holds a character a template cannot carry unchanged in a UTF-8 file: a lone surrogate, a control character other than `\n` and `\t`, or U+2028 or U+2029 (the characters `tsQuotedTextSource` escapes).
 2. `escaped`: `\` → `\\`, then `` ` `` → `` \` ``, then `${` → `\${`.
 3. One line: `` `${tag}\`${escaped}\`` ``. Several lines: `` `${tag}\`\n${escaped}\n\`` ``.
 
-Every slice 4 site uses `renderTaggedTemplateSource(SQL_EXPRESSION_TAG, text).source` in place of `tsQuotedTextSource`. Each call's `importRequirements()` adds `{ moduleSpecifier: <facade constant>, symbol: SQL_EXPRESSION_TAG }` when `usesTag` holds for a text it renders, computing it from the same texts (calls are frozen). The facade constants are `POSTGRES_MIGRATION_FACADE` and `TARGET_MIGRATION_MODULE` (SQLite). `renderDdlColumnDefault`, `renderDdlColumnAsTsCall` and `renderDdlConstraintAsTsCall` return `{ readonly source: string; readonly usesTag: boolean }`. `AlterColumnTypeCall` is unchanged (the planner never sets `using`). ADR 195's "same argument shapes" rule gets a recorded exception: the rendered file passes `sql` values where the IR holds strings.
+These slice 4 sites use `renderTaggedTemplateSource(SQL_EXPRESSION_TAG, text).source` in place of `tsQuotedTextSource`, because their text is user or contract SQL that a migration function now takes as a `sql` value:
+
+- Postgres `op-factory-call.ts`: `renderDdlColumnDefault` (`fn(...)`), `renderDdlConstraintAsTsCall` (`checkExpression`), `AddCheckConstraintCall`, `CreateIndexCall` (`expression` and `where`), `CreatePostgresRlsPolicyCall` (`using` and `withCheck`).
+- SQLite `op-factory-call.ts`: `renderDdlColumnDefault` (`fn(...)`), and `renderSpecDefault` (the function default inside a `SqliteColumnSpec`, for `addColumn` and `recreateTable`).
+
+SQLite `renderPostcheck` keeps `tsQuotedTextSource`: its text is SQL the planner builds itself (`buildRecreatePostchecks`), and `RecreatePostcheck.sql` stays a string.
+
+The three render helpers keep returning a string. Each call's `importRequirements()` adds `{ moduleSpecifier: <facade constant>, symbol: SQL_EXPRESSION_TAG }` when `renderTaggedTemplateSource(SQL_EXPRESSION_TAG, text).usesTag` holds for any text it renders, computed from the same texts (calls are frozen). That covers `CreateTableCall`, `AddColumnCall` and `SetDefaultCall` (Postgres), `AddCheckConstraintCall`, `CreateIndexCall`, `CreatePostgresRlsPolicyCall`, and SQLite `CreateTableCall`, `AddColumnCall` and `RecreateTableCall`. The facade constants are `POSTGRES_MIGRATION_FACADE` and `TARGET_MIGRATION_MODULE` (SQLite), both module-local to the file that holds the calls. `AlterColumnTypeCall` is unchanged (the planner never sets `using`). ADR 195's "same argument shapes" rule gets a recorded exception: the rendered file passes `sql` values where the IR holds strings.
 
 ## 18. Committed artefacts
 

@@ -7,7 +7,12 @@ import {
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { CheckConstraint, SqlStorage, type StorageTable } from '@internal/sql-contract/types';
-import { check, defineContract } from '@internal/sql-contract-ts/contract-builder';
+import {
+  check,
+  defineContract,
+  type SqlExpression,
+  sql,
+} from '@internal/sql-contract-ts/contract-builder';
 import { composeCheckWirePrefix, computeCheckContentHash } from '@internal/sql-schema-ir/naming';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
@@ -217,7 +222,7 @@ function declaredCheckNames(contract: Contract<SqlStorage>): readonly string[] {
  * authoring surface end to end.
  */
 function itemContractWithCheck(input: {
-  readonly expression: string;
+  readonly expression: SqlExpression;
   readonly name?: string;
   readonly map?: string;
 }): Contract<SqlStorage> {
@@ -246,7 +251,7 @@ function itemContractWithCheck(input: {
  * reprints `IN (...)` there as an `ANY`-array cast, not verbatim).
  */
 function itemContractWithVarcharCheck(input: {
-  readonly expression: string;
+  readonly expression: SqlExpression;
   readonly name?: string;
   readonly map?: string;
 }): Contract<SqlStorage> {
@@ -1083,7 +1088,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     timeout: testTimeout,
   }, async () => {
     const contract = itemContractWithCheck({
-      expression: 'total::numeric > 0',
+      expression: sql`total::numeric > 0`,
       name: 'item_total_positive',
     });
     const checkName = itemCheckName(contract);
@@ -1109,7 +1114,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     timeout: testTimeout,
   }, async () => {
     const v1 = itemContractWithCheck({
-      expression: 'total::numeric > 0',
+      expression: sql`total::numeric > 0`,
       name: 'item_total_positive',
     });
     await migrate(v1);
@@ -1118,7 +1123,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     expect(await liveCheckNames()).toEqual([nameV1]);
 
     const v2 = itemContractWithCheck({
-      expression: 'total::numeric > 10',
+      expression: sql`total::numeric > 10`,
       name: 'item_total_positive',
     });
     const nameV2 = itemCheckName(v2);
@@ -1140,7 +1145,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     timeout: testTimeout,
   }, async () => {
     const v1 = itemContractWithCheck({
-      expression: 'total::numeric > 0',
+      expression: sql`total::numeric > 0`,
       name: 'item_total_positive',
     });
     await migrate(v1);
@@ -1148,7 +1153,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     assertDefined(nameV1, 'v1 check must be named');
 
     const v2 = itemContractWithCheck({
-      expression: 'total::numeric > 0',
+      expression: sql`total::numeric > 0`,
       name: 'item_total_positive_v2',
     });
     const nameV2 = itemCheckName(v2);
@@ -1170,7 +1175,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     timeout: testTimeout,
   }, async () => {
     const contract = itemContractWithVarcharCheck({
-      expression: "status IN ('active', 'inactive')",
+      expression: sql`status IN ('active', 'inactive')`,
       name: 'item_status_valid',
     });
     const checkName = itemCheckName(contract);
@@ -1192,7 +1197,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     timeout: testTimeout,
   }, async () => {
     const contract = itemContractWithCheck({
-      expression: 'total::numeric > 0 AND total::numeric < 1000',
+      expression: sql`total::numeric > 0 AND total::numeric < 1000`,
       name: 'item_total_in_range',
     });
     const checkName = itemCheckName(contract);

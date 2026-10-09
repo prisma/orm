@@ -2,13 +2,14 @@
 
 Read this first when you resume the project. It records where the work stands and the context that is not in the spec, design or plan. Update it at the end of every slice.
 
-## State on 2026-10-07
+## State on 2026-10-08
 
-- Merged: slice 2a (#30534), slice 1 (#30546), slice 4 (#30554) and slice 2t (#30539, squash `b35bcd7d10`, shipped in 8.0.0-rc.16).
-- Slice 2b (TML-3288) is pull request https://github.com/prisma/orm/pull/30550 on branch `tml-3288-sql-expression-places`, base `main`. Review round 3 covered the merges of 2t and `main` and the branch's commits since round 2; its findings are fixed (see "Slice 2b review, round 3" below). Next: hand it to Will.
-- Slice 3 (TML-3289) is https://github.com/prisma/orm/pull/30558, based on the 2b branch and in conflict with it. It waits for 2b. Its branch still names the ADR `ADR 260 - Raw SQL is a value of the data type sql-expression.md`; the decision is ADR 268 now.
-- Slice 5 (stretch, TML-3297) is not started. Ask Will before starting it.
-- The decision's ADR is ADR 268, because #30641 claims 267.
+lagertha-65 took over from hammurabi-31 on 2026-10-08.
+
+- Merged: slice 2a (#30534), slice 1 (#30546), slice 4 (#30554), slice 2t (#30539, shipped in 8.0.0-rc.16) and slice 2b (#30550, squash `7ae50f13f9`, 2026-10-08). TML-3288 and TML-3367 are Done in Linear.
+- Slice 3 (TML-3289) is https://github.com/prisma/orm/pull/30558, base `main`, branch `tml-3289-sql-expression-ts` (local name `l65-3`). 2b's final commit `a044872a36` and then `main` are merged in (`b3f0ca7a04`, `ba45958509`); every reference to its ADR says ADR 268 (`fc10468cd3`); `bd80bf468a` fixes what `main` added since. Brief: `dispatches/3-merge-2b-and-main-brief.md`; logs in `wip/3-merge/`. All checks pass except the three tarball tests below. One decision in the merge: an unnamed full-text index's `where` refusal names every field of its weight groups, `Full-text index on fields "title", "subtitle" where` (TML-3431, #30562, made full-text indexes span several fields; "on fields" added in review round 3). Review round 3 (`slice-reviews/3-round-3/`, A01–A07, C01–C06) is done and every finding is fixed: docs in `79e9498810` and the close-out commit of this round, code in `cab6bcce23` and `b368f8c449` (briefs `dispatches/3-round-3-fixes-brief.md` and the follow-up message for C05 and the PSL backtick case; logs `wip/3-round-3-fixes/`, `wip/3-round-3-fixes-2/`). Notable code change: `readSqlExpression` rebuilds a `sql` value made by another installed copy of the package, so its text is canonicalized wherever it is read, including interpolation. Manual QA rerun on 2026-10-08 with a revised script: every case matches. Next: Will reviews #30558; then slice 5.
+- Slice 5 (TML-3297): Will confirmed on 2026-10-08 that it is built, after slice 3 is with him. Not before.
+- The decision's ADR is ADR 268, because #30641 claims 267. Mentions of "ADR 260" in the slice 3 history below mean this ADR under its old number.
 - The three publish-shell tarball tests (`all-shells-tarball`, `module-identity`, `cross-shell-tarball`) fail on this machine because `pnpm install` in the scratch project refuses `@vercel/detect-agent` as a "high-risk trust downgrade". That is the registry, not the branch. Check them in CI.
 
 ## Known limits
@@ -239,6 +240,74 @@ Brief: `dispatches/2b-round-2-fixes-brief.md`. Reviews: `slice-reviews/2b-round-
 
 Verification, logs in `wip/2b-round-2-fixes/`: `build`, `typecheck`, `lint`, `lint:deps`, `check:error-reference`, `lint:framework-vocabulary`, `lint:skills`, `fixtures:check` (tree clean) pass; `lint:casts` and `lint:throws` delta 0. `test:scripts`: 593 pass. `test:packages`: 1454 files pass, 5 fail: the three known tarball tests and two `cli-telemetry` files, which pass alone (`rerun-cli-telemetry.log`). Integration files: 44 files, 928 tests pass (`integration.log`). `check:upgrade-coverage` after committing: pass (`upgrade-coverage.log`).
 
+## Slice 3, 2026-10-01
+
+Branch `tml-3289-sql-expression-ts`, on top of slice 2b (`ed1df11285`). Not pushed; no pull request. Brief: `dispatches/3-implementer-brief.md`. Commits `7db66e9278` to the status commit. No findings file: nothing in the design was wrong against the code.
+
+### What was built
+
+- **The value and the tag** (`29aa1fb121`): `SqlExpression`, `isSqlExpression`, `sql`, `requireSqlExpression` in `@internal/sql-contract/sql-expression`; subcodes `SQL_EXPRESSION_INTERPOLATION` and `SQL_EXPRESSION_INVALID`; `describeTaggedLiteralFailure` and `resolveTemplateTagEscapes` exported from the framework's `authoring` entry. Tests: `sql-expression.test.ts` (extended), `sql-expression.test-d.ts`.
+- **contract-ts** (`49d5ee392e`): `sql-default-literal.ts` and `DEFAULT_SQL_INTERPOLATION` deleted; the entry exports `sql` and `type SqlExpression`. `.default()` takes a `SqlExpression` and runs the reserved-function and unsafe-SQL checks. Index `where`/`expression`, `IndexConstraint.where` and `check` `expression` are `SqlExpression`; lowering reads them through `requireSqlExpression`, testing `isSqlExpression` before `'render' in`. Tests: `raw-sql-fields.test-d.ts`, `contract-dsl.default-sql-expression.test.ts`, `contract-lowering.sql-expression.test.ts`. The old tag tests moved into the sql-contract test.
+- **Postgres** (`2af0096d89`): policy handles and descriptors, `fullTextIndex` `where`, and the target's `RlsPolicyHandleShape` hold `SqlExpression`; the target lowers predicates through `requireSqlExpression`. Both facades export `type SqlExpression`. `rls-handles.test-d.ts` and `full-text-index.test-d.ts` assert strings are type errors.
+- **Call sites** (`46fd2ddc68`, `8ebe465a9c`): every TypeScript test and fixture that passed a string, including the RLS parity fixture, `contract-expression-authored.ts`, the sql-builder fixture and the walking skeleton, which now composes its edited predicate by interpolation.
+- **Parity fixture** (`c80d9a8519`): `test/integration/test/authoring/parity/sql-expressions/` covers a partial index and a raw default over indented lines, an expression index, a full-text index with `where`, a check with a backslash, and a policy whose TypeScript `withCheck` interpolates its `using`.
+- **Carried over, registration** (`b4b8a95264`): `sqlExpressionRegistration = { dataTypes, authoring }`, used by the family descriptor and spread in the four fixtures.
+- **Carried over, defaults that do not read back** (`03a1daaada`): `contract print` refuses such a default through `refuseSqlTextThatDoesNotReadBack` with kind `default` and the column's coordinate. `contract infer` prints it and adds `// prisma: default of "<column>" holds text a sql literal cannot write back unchanged; check its string constants before applying a migration`. Tests in `refusals-sql-text.test.ts` and `infer-sql-expression-literals.test.ts`. Recorded in ADR 129, ADR 260, design 11.2, the error reference and the app fragment.
+- **Upgrade fragments** (`1dab1c6edb`): `upgrade-instructions/pending/sql-expression-literals-ts/{app,extension}` with the change ids of design 20.
+- **Docs** (`dfc4539e9b`): ADRs 129, 234, 236, 243, 244, 254, 260; the error reference; the contract-ts README; `skills/prisma-8/references/contract.md`; the adapters subsystem doc; design 11.2 and the plan's "Carried over" entries. The codec authoring guide has no TypeScript raw-SQL place.
+- **Manual QA** (`fdecb64281`): slice 3 script and run in `manual-qa.md`; every case gave the expected result.
+
+### Design corrections
+
+- `canonicalizeTaggedLiteralBody` returns `text`, not `body` (renamed in slice 2t); the constructor uses `canonical.text`.
+- `.default()` is typed through `DefaultArgumentOf<State>`, not one parameter type; `SqlExpression` joins its non-enum arm.
+- The default checks are `reservedSqlDefaultText` and `checkSqlDefaultText` (renamed in slice 2a).
+
+### Verification
+
+Logs in the gitignored `wip/3/`.
+
+- Pass: `build.log`, `typecheck.log`, `lint.log`, `lint:deps.log`, `lint:skills.log`, `check:error-reference.log` (362 codes), `fixtures:check.log` (tree clean). `lint:casts` and `lint:throws` delta 0. `lint:framework-vocabulary` 272 of 272. `test:scripts`: 593 pass.
+- `test:packages` (`test-packages.log`): 1453 files pass, 7 fail. The three tarball tests are the known failures. `render-typescript.roundtrip.test.ts`, the two `cli-telemetry` files and `cli` `lsp.test.ts` pass alone (`rerun-render-roundtrip.log`, `rerun-cli-telemetry.log`, `rerun-cli-lsp.log`).
+- Integration files alone (`integration.log`): `test/authoring`, `test/sql-builder`, the walking skeleton, the two journeys, `test/psl-print`, `rls-helper-invisibility`, `family.schema-verify.index-drift`: 92 files, 1276 tests pass. Postgres extension 25 files and Supabase 18 files pass (`ext-postgres.log`, `ext-supabase.log`). Adapter `check-lifecycle-e2e.integration.test.ts` passes (`check-lifecycle.log`).
+- Fragments (`fragment-validation.log`): the extension prose, applied to `packages/3-extensions/` restored to `ed1df11285`, reproduces every non-test change; tests stay at the base. No `examples/` change. Detection patterns: 62 true-positive and nearest-false-positive cases pass (`detection-check.mjs`).
+- Done-condition grep (`grep-done-condition.log`): empty.
+- `check:upgrade-coverage`: `upgrade-coverage.log`, run after the status commit.
+
+### Slice 3 review fixes, 2026-10-01
+
+Brief: `dispatches/3-review-fixes-brief.md`. Reviews: `slice-reviews/3/`. Commits `a96c781ef6` to the status commit. Not pushed, no pull request. No findings file: no decision was wrong against the code.
+
+- **A01**: in the `sql` tag, each line of an interpolated value after its first is prefixed with the spaces and tabs at the start of the last line of the text joined so far. That is not always the template line the `${…}` sits on: after a multi-line value on the same line it is the value's last line. Round 2 (B01) changed the code to use the template line. The joined text is then canonicalized once. Unit tests compare with `canonicalSqlText` of the same SQL written out. The parity fixture adds `post_admin_write`, a multi-line predicate interpolated into an indented `withCheck`; it fails with the old join (`parity-red-old-join.log`). Design section 2, ADRs 129 and 260, the README and both fragments state the rule.
+- **A02, A03**: ADR 129's infer bullet ends at the print refusal; the default bullet names `.defaultSql()` too. ADR 260 has a section "Column defaults that do not read back" that says what each command keeps unchanged. ADR 129, the error reference, design 11.2 and the app fragment link to it.
+- **A04 and the deferred item**: the `what` strings are `Index "<name>" where`, `Index "<name>" expression`, `Check "<name>" expression`, `Full-text index "<name>" where`, `Policy "<name>" using`, `Policy "<name>" withCheck`. `<name>` is `name`, else `map`. An unnamed index or check is `Index on "<Model>"` or `Check on "<Model>"` (the check form extends the decision the same way). `fullTextIndex` checks its own `where`, because lowering cannot tell a full-text index from another index. Design 15 and the error reference record the strings.
+- **A05**: the doc comment sits on `refuseSqlTextThatDoesNotReadBack` and names column defaults.
+- **A06, F05, frozen registration**: `sqlExpressionRegistration` is `{ dataTypes, authoring: { dataTypes } }`, frozen at its containers (round 2, B05, freezes the data type and the entry too). The family descriptor, the language-server test and six fixtures read it.
+- **A07**: lowering canonicalizes the text `render` returns with `new SqlExpression(...)`. Test in `contract-builder.deferred-index-expression.test.ts`.
+- **A08**: ADR 254 names `sql/expression` as the one type without a codec.
+- **A09**: app change `infer-notes-defaults-that-do-not-read-back`, detection `**/contract.prisma` with `@default(sql` whose backtick text does not close on its line, or a double-quoted text holding `\r` or `\n`. The extension fragment keeps one sentence.
+- **F01**: both raw-SQL detections use `glob: ["**/*.{ts,mts,cts}", "!**/migrations/**"]`; the prose says migration files keep strings.
+- **F02**: `rls-entities.test.ts` refuses a string `using` and `withCheck` on `policyUpdate`, asserting code, message and meta.
+- **F03, F04, F07**: several interpolated values, oversize `meta`, `not.toExtend`, and the whole inferred default line.
+- **F06**: the extension import detection matches only imports that name `sql`.
+- **Deferred items**: ADR 260's example defines `Post` and compiles against `@prisma/orm-postgres` (`adr-260-example-tsc.log`). The plan lists a public way to build a `sql` value from a computed string under "Deferred beyond this project".
+
+Verification, logs in `wip/3-fixes/`: `build`, `typecheck`, `lint`, `lint:deps`, `lint:skills`, `check:error-reference` (362 codes), `fixtures:check` (tree clean) pass; `lint:casts` and `lint:throws` delta 0; `lint:framework-vocabulary` 272 of 272. Detection check: 81 cases pass (`detection-check.log`). Integration files: 88 files, 1262 tests pass (`integration.log`). Postgres extension: 25 files pass (`ext-postgres.log`). `test:packages` (`test-packages.log`): 1450 files pass, 10 fail. The three tarball tests are the known failures. The two `language-server` files and `mongo-orm` `polymorphism.test.ts` pass alone (`rerun-language-server.log`, `rerun-mongo-polymorphism.log`). `render-typescript.roundtrip.test.ts`, the two `cli-telemetry` files and `driver.buffered-release.integration.test.ts` failed again alone with timeouts while the machine's load average was about 230 (`rerun-render-roundtrip.log`, `rerun-cli-telemetry.log`, `rerun-driver-buffered.log`); none of them is touched by these fixes, and different tests time out on each run. CI must confirm them. `check:upgrade-coverage` after the status commit: `upgrade-coverage.log`.
+
+### Slice 3 review fixes, round 2, 2026-10-01
+
+Brief: `dispatches/3-round-2-fixes-brief.md`. Reviews: `slice-reviews/3-round-2/`. Commits `2f54391c64` to the status commit. Not pushed, no pull request. Findings file: `dispatches/3-round-2-fixes-findings.md` (B04).
+
+- **B01, G01**: the `sql` tag takes the indentation for a value's later lines from the template pieces only. It is the leading spaces and tabs of the last line of the most recent template piece that holds a line break; inserted text never changes it. Two values on one template line both take that line's indentation. New tests: two multi-line values on one line, a value after one that ends on an indented line (also adjacent placeholders), and a value on the next template line. Design section 2 states the rule once; the round 1 A01 bullet is corrected.
+- **B02, G04**: the README says lowering canonicalizes the rendered string. Both fragments' `storage-hash-may-change-once` say a `render` that returns text that is not canonical stores different text once, and that `fullTextIndex` is not affected. The app fragment and the extension fragment's API list say the rendered text is canonicalized.
+- **B03**: lowering catches the canonicalizer's refusal of a rendered index text and throws `CONTRACT.SQL_EXPRESSION_INVALID` with `Index "<name>" expression: ` in front of the message and `what` added to `meta`. Tested with a NUL character. The error reference and design sections 13 and 15.3 say so.
+- **B04, G02**: `fullTextIndex` receives a `ColumnRef`, which has no model name, so it cannot write `Full-text index on "<Model>" where` (findings file). Decided: option 1. A full-text index with neither `name` nor `map` reports `Full-text index on "<field>" where`, using the column's field name. Tested with an untyped call that passes a string `where` and no name or map; design section 15.3 and the error reference record the string.
+- **B05**: frozen now: the registration, its array and two records, `sqlExpressionDataType` and its `casts`, and `sqlExpressionAuthoringEntry` and its `written` object. No consumer mutates them; the readers spread copies. The test name lists exactly these.
+- **B06**: design section 2 shows `SqlExpressionRegistration` and `sqlExpressionRegistration`, and the `sql` doc comment matches the code. Section 3.1 says the descriptor reads the registration.
+- **G03**: both fragments' raw-SQL detections use the single glob `**/*.{ts,mts,cts}`. The prose says to skip files under a `migrations/` folder, because migration functions keep taking strings. No committed helper gave the list form meaning.
+
+Verification, logs in `wip/3-round-2/`: `build`, `typecheck`, `lint`, `lint:deps`, `check:error-reference` (362 codes) and `fixtures:check` (tree clean) pass. `pnpm test`: sql-contract 452 tests, sql-contract-ts 535, Postgres extension 287, all pass. `test/integration` `test/authoring`: 28 files, 198 tests pass. `test:packages` was not run this round, as the brief says. `check:upgrade-coverage` after the status commit: `upgrade-coverage.log`.
+
 ## Slice 1, 2026-09-30
 
 Built in the linked worktree `wip/wt-1` from `main`, since it depends on no other slice. Briefs: `dispatches/1-implementer-brief.md`, `dispatches/1-review-fixes-brief.md`. Reviews: `slice-reviews/1/` and `slice-reviews/1-round-2/`. Round 1 found a real bug: the SQLite migration-file renderer passed the `OpaqueSql` object to the JSON printer. Round 2 corrected the app fragment: only the wire name changes, not a policy's stored body, and the plan drops and recreates the object. PR https://github.com/prisma/orm/pull/30546.
@@ -270,17 +339,21 @@ hammurabi-31 took over from marconi-29. Brief: `dispatches/2b-round-3-review-bri
 - **Line comments in the journey:** the plan gave slice 1 the job of adding a `--` case to `sql-expression-literals.e2e.test.ts`, but slice 1 merged before that file existed. The journey's partial index, CHECK and `withCheck` texts now end in a `--` comment, and the journey passes. A run with `renderOpaqueSql` broken was not done (the permission check refused editing production code for it); slice 1's unit and PGlite tests cover that function.
 - **Not changed:** the Bash hook in `.claude/scripts/enforce-tools.mjs` (C08, D07). Will asked for it, round 1 (F08) kept it in this pull request, and the description names it as unrelated.
 
+## Slice 4, 2026-10-01
+
+Built in the linked worktree `wip/wt-1`, stacked on slice 1. Briefs: `dispatches/4-implementer-brief.md`, `4-review-fixes-brief.md`, `4-round-2-fixes-brief.md`. Reviews: `slice-reviews/4/` and `4-round-2/`. Round 1 found three column-default render sites the design missed (`setDefault`, SQLite `addColumn` and `recreateTable`); round 2 made every hand-listed renderer typed over its input's keys. PR https://github.com/prisma/orm/pull/30554.
+
 ## Slice order and tickets
 
 | Order | Plan slice | Ticket | State |
 | --- | --- | --- | --- |
 | 1 | 2a: `sql` is the data type `sql/expression` | TML-3296 | Merged 2026-09-30 (#30534) |
 | 2 | 2t: an argument declares the data type it receives | TML-3367 | Merged 2026-10-07 (#30539), shipped in rc.16 |
-| 3 | 2b: the six places take `sql` literals | TML-3288 | #30550 open against `main`; three review rounds done, all findings fixed |
-| 4 | 3: the TypeScript builder takes `sql` values | TML-3289 | #30558 open against the 2b branch; waits for 2b |
+| 3 | 2b: the six places take `sql` literals | TML-3288 | Merged 2026-10-08 (#30550) |
+| 4 | 3: the TypeScript builder takes `sql` values | TML-3289 | #30558 against `main`, up to date; review round 3 next |
 | On the side | 1: line comments in raw SQL | TML-3287 | Merged (#30546) |
 | Last | 4: migration files write template literals | TML-3290 | Merged (#30554) |
-| Stretch | 5: migration files write `sql` values | TML-3297 | Not started; ask Will |
+| Stretch | 5: migration files write `sql` values | TML-3297 | Confirmed by Will 2026-10-08; starts after slice 3 is with him |
 
 TML-3282 was the decision ticket and is done.
 

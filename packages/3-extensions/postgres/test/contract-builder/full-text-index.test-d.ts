@@ -5,7 +5,13 @@
  */
 import type { ColumnRef, ContractModelBuilder } from '@internal/sql-contract-ts/contract-builder';
 import { expectTypeOf, test } from 'vitest';
-import { defineContract, field, fullTextIndex, model } from '../../src/exports/contract-builder';
+import {
+  defineContract,
+  field,
+  fullTextIndex,
+  model,
+  sql,
+} from '../../src/exports/contract-builder';
 
 const intColumn = { codecId: 'pg/int4@1' } as const;
 const textColumn = { codecId: 'pg/text@1' } as const;
@@ -85,4 +91,14 @@ test('defineContract rejects a model whose sql() stage reuses an index name', ()
   });
   // @ts-expect-error the sql() stage resolved to never
   defineContract({ models: { Message: message } });
+});
+
+test('where takes a sql value; a string, a number and a boolean are type errors', () => {
+  fullTextIndex(text, { name: 'a', where: sql`archived_at IS NULL` });
+  // @ts-expect-error raw SQL is a sql value
+  fullTextIndex(text, { name: 'b', where: 'archived_at IS NULL' });
+  // @ts-expect-error raw SQL is a sql value
+  fullTextIndex(text, { name: 'c', where: 1 });
+  // @ts-expect-error raw SQL is a sql value
+  fullTextIndex(text, { map: 'd', where: true });
 });

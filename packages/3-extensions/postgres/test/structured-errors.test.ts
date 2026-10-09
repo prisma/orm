@@ -1,3 +1,4 @@
+import { sql } from '@internal/sql-contract/sql-expression';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { isInternalError } from '@internal/utils/internal-error';
 import { isStructuredError } from '@internal/utils/structured-error';
@@ -92,7 +93,7 @@ describe('RLS policy helpers raise CONTRACT.POLICY_INVALID', () => {
   const Profile = { stageOne: { fields: {} } };
 
   it('empty policy name', () => {
-    const error = capture(() => policySelect(Profile, { name: '', roles: [], using: 'true' }));
+    const error = capture(() => policySelect(Profile, { name: '', roles: [], using: sql`true` }));
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({ code: 'CONTRACT.POLICY_INVALID' });
   });

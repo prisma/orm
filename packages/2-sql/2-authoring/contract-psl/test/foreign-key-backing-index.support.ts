@@ -2,6 +2,7 @@ import type { AuthoringContributions } from '@internal/framework-components/auth
 import type { ColumnTypeDescriptor } from '@internal/framework-components/codec';
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { defineIndexTypes } from '@internal/sql-contract/index-types';
+import { sql } from '@internal/sql-contract/sql-expression';
 import type { ForeignKeyIndex, SqlStorage } from '@internal/sql-contract/types';
 import { defineContract, type IndexConstraint } from '@internal/sql-contract-ts/contract-builder';
 import { type } from 'arktype';
@@ -195,7 +196,7 @@ export function buildFromTs({ ts }: Case) {
               constraints.index([cols.authorId], { name: 'post_author' }),
             ],
             partial: [
-              constraints.index([cols.authorId], { name: 'post_author_live', where: 'id > 0' }),
+              constraints.index([cols.authorId], { name: 'post_author_live', where: sql`id > 0` }),
             ],
             hash: [
               constraints.index([cols.authorId], {
@@ -213,7 +214,7 @@ export function buildFromTs({ ts }: Case) {
             ],
             byId: [constraints.index([cols.id], { name: 'post_by_id' })],
             partialNamedLikeKey: [
-              constraints.index([cols.authorId], { map: 'post_author_key', where: 'id > 0' }),
+              constraints.index([cols.authorId], { map: 'post_author_key', where: sql`id > 0` }),
             ],
           };
           return declared[kind];

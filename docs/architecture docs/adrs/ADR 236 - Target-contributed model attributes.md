@@ -27,7 +27,7 @@ policy_select profile_owner_read {
 }
 ```
 
-The predicate is a `sql` literal, the only form PSL takes for raw SQL ([ADR 268](ADR%20268%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md)).
+The predicate is a `sql` literal, the only form PSL takes for raw SQL; the TypeScript `policy*` helpers take a `sql` value ([ADR 268](ADR%20268%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md)).
 
 Neither the framework nor the SQL family knows what `@@rls` means. The Postgres target teaches the interpreter both facts about it declaratively.
 

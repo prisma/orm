@@ -14,6 +14,7 @@
  * contract and verify reports the index not-equal.
  */
 
+import { sql } from '@internal/postgres/contract-builder';
 import { describe, expect, it } from 'vitest';
 import {
   defineContract,
@@ -58,7 +59,7 @@ describe('index drift', () => {
               table: 'user',
               indexes: [
                 constraints.index({
-                  expression: "lower(email || 'x')",
+                  expression: sql`lower(email || 'x')`,
                   map: 'user_email_expr_exact',
                 }),
               ],

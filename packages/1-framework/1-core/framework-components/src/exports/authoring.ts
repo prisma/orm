@@ -83,8 +83,10 @@ export type {
 export type { TaggedLiteralCanonicalization } from '../shared/tagged-literal';
 export {
   canonicalizeTaggedLiteralBody,
+  describeTaggedLiteralFailure,
   printedTaggedLiteralReadsBack,
   printTaggedLiteral,
+  resolveTemplateTagEscapes,
 } from '../shared/tagged-literal';
 export type { PresetStorageTemplate } from '../shared/temporal-presets';
 export {

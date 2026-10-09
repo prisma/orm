@@ -2,6 +2,7 @@ import { soleDomainNamespaceId } from '@internal/contract/types';
 import { LockingClause } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { Collection } from '../src/collection';
+import { createChainingOrm, PostCollection } from './collection-chaining-fixture';
 import { baseContract, createCollectionFor } from './collection-fixtures';
 import { createMockRuntime, getTestContext, withCapabilities } from './helpers';
 
@@ -35,6 +36,15 @@ describe('row-locking methods', () => {
       expect(collection[method]().state.locking).toEqual([
         LockingClause.of(method, { of: ['posts'] }),
       ]);
+    },
+  );
+
+  it.each(['forUpdate', 'forNoKeyUpdate', 'forShare', 'forKeyShare'] as const)(
+    '%s returns an instance of the receiver class',
+    (method) => {
+      const { db } = createChainingOrm();
+
+      expect(db.Post[method]()).toBeInstanceOf(PostCollection);
     },
   );
 
