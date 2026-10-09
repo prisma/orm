@@ -685,8 +685,11 @@ type OrmFunctionResult<R, TCodecTypes extends Record<string, unknown>> =
       : R & Orderable
     : R;
 
+type SameSignature<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
+
 /**
- * An operation's implementation with each result as {@link OrmFunctionResult}. Up to four overloads keep their parameters; a generic signature keeps its parameters at their constraints.
+ * An operation's implementation with each result as {@link OrmFunctionResult}. Matching four call signatures reads the last four overloads, and TypeScript repeats the signatures of an implementation with fewer; a single signature stays one. An implementation with five or more overloads loses all but its last four, and a generic signature keeps its parameters at their constraints.
  */
 type OrmOperation<Impl, CT extends Record<string, unknown>> = Impl extends {
   (...args: infer A1): infer R1;
@@ -694,33 +697,15 @@ type OrmOperation<Impl, CT extends Record<string, unknown>> = Impl extends {
   (...args: infer A3): infer R3;
   (...args: infer A4): infer R4;
 }
-  ? {
-      (...args: A1): OrmFunctionResult<R1, CT>;
-      (...args: A2): OrmFunctionResult<R2, CT>;
-      (...args: A3): OrmFunctionResult<R3, CT>;
-      (...args: A4): OrmFunctionResult<R4, CT>;
-    }
-  : Impl extends {
-        (...args: infer A1): infer R1;
-        (...args: infer A2): infer R2;
-        (...args: infer A3): infer R3;
-      }
-    ? {
+  ? SameSignature<[A1, R1] | [A2, R2] | [A3, R3], [A4, R4]> extends true
+    ? (...args: A4) => OrmFunctionResult<R4, CT>
+    : {
         (...args: A1): OrmFunctionResult<R1, CT>;
         (...args: A2): OrmFunctionResult<R2, CT>;
         (...args: A3): OrmFunctionResult<R3, CT>;
+        (...args: A4): OrmFunctionResult<R4, CT>;
       }
-    : Impl extends {
-          (...args: infer A1): infer R1;
-          (...args: infer A2): infer R2;
-        }
-      ? {
-          (...args: A1): OrmFunctionResult<R1, CT>;
-          (...args: A2): OrmFunctionResult<R2, CT>;
-        }
-      : Impl extends (...args: infer A) => infer R
-        ? (...args: A) => OrmFunctionResult<R, CT>
-        : Impl;
+  : Impl;
 
 /** `fns.raw` in the ORM: its result also has `asc()` and `desc()`. */
 export interface OrmRawSqlBuilder {

@@ -51,7 +51,17 @@ function contextWithChainOperation() {
     ...context,
     queryOperations: {
       register: () => undefined,
-      entries: () => ({ ...operations, chain: { impl: (word: string) => new Chain([word]) } }),
+      entries: () => ({
+        ...operations,
+        chain: { impl: (word: string) => new Chain([word]) },
+        frozen: {
+          impl: (column: string) =>
+            Object.freeze({
+              returnType: Object.freeze({ codecId: 'pg/text@1', nullable: false }),
+              buildAst: () => ColumnRef.of('users', column),
+            }),
+        },
+      }),
     },
   };
 }
@@ -76,6 +86,28 @@ describe('a value from fns', () => {
     expect({ dir: order?.dir, expr: order?.expr }).toEqual({
       dir: 'desc',
       expr: ColumnRef.of('users', 'a'),
+    });
+  });
+
+  it('keeps working on a frozen operation result', () => {
+    const collection = new Collection(
+      { runtime: createMockRuntime(), context: contextWithChainOperation() },
+      'User',
+      { namespaceId: 'public' },
+    );
+    let read: { readonly ast: unknown; readonly order: OrderByItem } | undefined;
+
+    collection.where((u, { fns }) => {
+      const frozen: unknown = Reflect.get(fns, 'frozen');
+      const value = typeof frozen === 'function' ? frozen('email') : undefined;
+      read = { ast: value.buildAst(), order: value.asc() };
+      return u.id.eq(1);
+    });
+
+    expect({ ast: read?.ast, dir: read?.order.dir, expr: read?.order.expr }).toEqual({
+      ast: ColumnRef.of('users', 'email'),
+      dir: 'asc',
+      expr: ColumnRef.of('users', 'email'),
     });
   });
 

@@ -185,7 +185,8 @@ This package follows the standard `exports/` directory pattern:
 - `src/exports/operations-registry.ts` - Re-exports operations registry
 - `src/exports/plan.ts` - Re-exports plan types and helpers
 - `src/exports/ast.ts` - Re-exports SQL AST types
-- `src/exports/functions.ts` - Re-exports the function surface and `ExpressionImpl`
+- `src/exports/expression.ts` - Re-exports expression types and helpers, and `ExpressionImpl`
+- `src/exports/functions.ts` - Re-exports the function surface
 - `src/exports/index-reference.ts` - Re-exports index reference types and construction
 - `src/index.ts` - Main entry point that re-exports from `exports/`
 

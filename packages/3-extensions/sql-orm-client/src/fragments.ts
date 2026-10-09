@@ -641,12 +641,15 @@ const NO_INDEXES = Object.freeze({});
 
 const collectionsBehindViews = new WeakMap<object, unknown>();
 
-const BODY_CHAIN_METHODS: ReadonlySet<PropertyKey> = new Set([
-  'where',
-  'orderBy',
-  'limit',
-  'offset',
-]);
+const BODY_CHAIN_METHODS: Readonly<
+  Record<
+    Exclude<
+      keyof DeclaredFieldsFragmentCollection<unknown, FragmentFacts>,
+      typeof FragmentFactsType
+    >,
+    true
+  >
+> = { where: true, orderBy: true, limit: true, offset: true };
 
 /**
  * The collection as the body of a fragment for any model sees it: a `where` or `orderBy` callback receives `fns` and an `indexes` with no members, as the body does not know its model.
@@ -656,7 +659,7 @@ function withoutIndexes(collection: object): object {
     get(target, prop) {
       const member: unknown = Reflect.get(target, prop, target);
       if (typeof member !== 'function') return member;
-      if (!BODY_CHAIN_METHODS.has(prop)) return member.bind(target);
+      if (!Object.hasOwn(BODY_CHAIN_METHODS, prop)) return member.bind(target);
       return (...args: unknown[]) => {
         const result: unknown = Reflect.apply(member, target, args.map(withoutIndexesInCallbacks));
         return typeof result === 'object' && result !== null ? withoutIndexes(result) : result;

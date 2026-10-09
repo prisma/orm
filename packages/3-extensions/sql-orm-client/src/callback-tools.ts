@@ -35,7 +35,7 @@ const rawCodecInfererUnavailable: RawCodecInferer = {
 };
 
 /**
- * The expression with `asc()` and `desc()` added. Every other member reads from the expression itself, so its own methods keep working.
+ * The expression with `asc()` and `desc()` added. Its own properties read as they are, which a frozen expression requires; an inherited method is bound to the expression, so it keeps working.
  */
 function orderable(expression: Expression<ScopeField>): unknown {
   const order = {
@@ -47,7 +47,9 @@ function orderable(expression: Expression<ScopeField>): unknown {
     get(target, prop) {
       if (prop === 'asc' || prop === 'desc') return order[prop];
       const member: unknown = Reflect.get(target, prop, target);
-      return typeof member === 'function' ? member.bind(target) : member;
+      return typeof member === 'function' && !Object.hasOwn(target, prop)
+        ? member.bind(target)
+        : member;
     },
   });
 }
