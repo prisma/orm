@@ -1,6 +1,6 @@
 import type { Index } from '@internal/sql-contract/types';
 import { structuredError } from '@internal/utils/structured-error';
-import type { Expression, ScopeField } from './expression';
+import type { Expression, ScopeField, StorageColumnScopeField } from './expression';
 
 /**
  * An index of a table as a query reads it: its columns, bound to the table's alias, its type and its options. A query operation that searches what an index covers, such as Postgres's `fullTextMatches`, takes it in place of the columns and settings the index was built with.
@@ -27,22 +27,13 @@ type AuthoredIndexName<I> = I extends { readonly prefix: infer Prefix extends st
     ? Name
     : never;
 
-type ColumnField<Column> = Column extends {
-  readonly codecId: infer CodecId;
-  readonly nullable: infer Nullable;
-}
-  ? Column extends { many: true }
-    ? { codecId: CodecId; nullable: Nullable; many: true }
-    : { codecId: CodecId; nullable: Nullable }
-  : never;
-
 type IndexColumnExpressions<Columns, I> = I extends {
   readonly columns: infer IndexColumns extends readonly string[];
 }
   ? {
       readonly [Column in IndexColumns[number]]: Column extends keyof Columns
-        ? ColumnField<Columns[Column]> extends infer Field extends ScopeField
-          ? Expression<Field>
+        ? Columns[Column] extends { readonly codecId: string; readonly nullable: boolean }
+          ? Expression<StorageColumnScopeField<Columns[Column]>>
           : never
         : never;
     }

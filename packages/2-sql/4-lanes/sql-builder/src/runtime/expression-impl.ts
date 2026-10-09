@@ -1,6 +1,6 @@
 import type { AnyExpression as AstExpression } from '@internal/sql-relational-core/ast';
 import type { Expression } from '@internal/sql-relational-core/expression';
-import { ExpressionImpl } from '@internal/sql-relational-core/functions';
+import { ExpressionImpl } from '@internal/sql-relational-core/expression';
 import { structuredError } from '@internal/utils/structured-error';
 import type { ScopeField } from '../scope';
 

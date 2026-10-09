@@ -27,6 +27,14 @@ export type ScopeField = {
   codec?: CodecRef;
 };
 
+/** A storage column as a scope field: its codec id, its nullability, and `many` for a list column. */
+export type StorageColumnScopeField<
+  Column extends { readonly codecId: string; readonly nullable: boolean },
+> = {
+  codecId: Column['codecId'];
+  nullable: Column['nullable'];
+} & (Column extends { many: true } ? { many: true } : Record<never, never>);
+
 export type CodecTypesBase = Record<string, { readonly input: unknown; readonly output: unknown }>;
 
 /**

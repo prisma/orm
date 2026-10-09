@@ -1,7 +1,8 @@
 import type { SqlOperationEntry } from '@internal/sql-operations';
 import { AggregateExpr, type CodecRef, isAggregateFn } from '@internal/sql-relational-core/ast';
 import type { RawCodecInferer } from '@internal/sql-relational-core/expression';
-import { createFunctions, ExpressionImpl } from '@internal/sql-relational-core/functions';
+import { ExpressionImpl } from '@internal/sql-relational-core/expression';
+import { createFunctions } from '@internal/sql-relational-core/functions';
 import type { SqlAggregateDescriptorRegistry } from '@internal/sql-relational-core/query-lane-context';
 import { assertDefined } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';

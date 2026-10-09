@@ -1,4 +1,3 @@
-export { ExpressionImpl } from '../expression-impl';
 export {
   type BooleanCodecType,
   type BuiltinFunctions,

@@ -4,7 +4,11 @@ import type {
   StorageTable,
 } from '@internal/sql-contract/types';
 import type { AnyFromSource } from '@internal/sql-relational-core/ast';
-import type { CodecTypesBase, ScopeField } from '@internal/sql-relational-core/expression';
+import type {
+  CodecTypesBase,
+  ScopeField,
+  StorageColumnScopeField,
+} from '@internal/sql-relational-core/expression';
 
 export type { ScopeField };
 
@@ -45,10 +49,7 @@ export type DefaultScope<Name extends string, Table extends StorageTable> = {
 };
 
 export type StorageTableToScopeTable<T extends StorageTable> = {
-  [K in keyof T['columns']]: {
-    codecId: T['columns'][K]['codecId'];
-    nullable: T['columns'][K]['nullable'];
-  } & (T['columns'][K] extends { many: true } ? { many: true } : Record<never, never>);
+  [K in keyof T['columns']]: StorageColumnScopeField<T['columns'][K]>;
 };
 
 export type MergeScopes<A extends Scope, B extends Scope> = {

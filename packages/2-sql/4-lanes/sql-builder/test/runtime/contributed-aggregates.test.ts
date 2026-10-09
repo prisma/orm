@@ -14,7 +14,7 @@ import {
   IdentifierRef,
 } from '@internal/sql-relational-core/ast';
 import { buildCodecDescriptorRegistry } from '@internal/sql-relational-core/codec-descriptor-registry';
-import type { ExpressionImpl } from '@internal/sql-relational-core/functions';
+import type { ExpressionImpl } from '@internal/sql-relational-core/expression';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { describe, expect, it } from 'vitest';
 import type { Expression } from '../../src/expression';

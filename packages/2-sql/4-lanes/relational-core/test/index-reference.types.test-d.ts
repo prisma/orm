@@ -1,5 +1,5 @@
 import { expectTypeOf, test } from 'vitest';
-import type { Expression } from '../src/expression';
+import type { Expression, StorageColumnScopeField } from '../src/expression';
 import type { TableIndexReferences } from '../src/index-reference';
 
 type Int = { readonly codecId: 'pg/int4@1'; readonly nullable: false };
@@ -45,6 +45,6 @@ test('an index reference carries the type, the options and the columns as expres
     readonly fastupdate: 'off';
   }>();
   expectTypeOf<PostIndexes['post_title']['columns']>().toEqualTypeOf<{
-    readonly title: Expression<{ codecId: 'pg/text@1'; nullable: true }>;
+    readonly title: Expression<StorageColumnScopeField<Text>>;
   }>();
 });

@@ -15,11 +15,8 @@ import {
   SubqueryExpr,
 } from '@internal/sql-relational-core/ast';
 import { buildCodecDescriptorRegistry } from '@internal/sql-relational-core/codec-descriptor-registry';
-import {
-  createFunctions,
-  ExpressionImpl,
-  type Functions,
-} from '@internal/sql-relational-core/functions';
+import { ExpressionImpl } from '@internal/sql-relational-core/expression';
+import { createFunctions, type Functions } from '@internal/sql-relational-core/functions';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { AggregateFunctions } from '../../src/expression';
 import { createFieldProxy } from '../../src/runtime/field-proxy';

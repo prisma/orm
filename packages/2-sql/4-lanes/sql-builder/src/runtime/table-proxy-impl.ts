@@ -1,10 +1,7 @@
 import type { StorageTable } from '@internal/sql-contract/types';
 import { type AnyFromSource, ColumnRef, type TableSource } from '@internal/sql-relational-core/ast';
-import {
-  ExpressionImpl,
-  type Functions,
-  type Subquery,
-} from '@internal/sql-relational-core/functions';
+import { ExpressionImpl } from '@internal/sql-relational-core/expression';
+import type { Functions, Subquery } from '@internal/sql-relational-core/functions';
 import { createIndexReferences } from '@internal/sql-relational-core/index-reference';
 import { assertDefined } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
