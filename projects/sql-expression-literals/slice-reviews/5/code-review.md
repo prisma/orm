@@ -112,3 +112,26 @@ None. This is the first code-review round for slice 5.
 | FAIL | 0 | |
 | NOT VERIFIED | 0 | |
 | WEAK | 1 | AC10 |
+
+## Fixes check
+
+Commits checked: 7226832a37 (code), ada268bae6 and 5d7fc74dd9 (docs). I rebuilt the workspace first (`pnpm build`, all 87 tasks; the `dist` of framework-components and sql-contract holds `tsTaggedTemplateSource` with the trailing-whitespace rule and `createSqlTextSources`). Logs are in `wip/5-review/fx-*.log`. Scratch tests were deleted after the runs.
+
+**Hostile-text probe, rerun.** I reran the probe against the new code (`tsTaggedTemplateSource` through `createSqlTextSources`). It used 55 texts: the original 49 plus a trailing space on one line, a trailing tab on one line, a trailing tab on the last line, a trailing space on a middle line, a trailing NBSP and an inner tab. Postgres: 110 cases passed, and Postgres now also covers `AddColumnCall` with a function default. SQLite: 55 cases passed. Each case asserts three things:
+
+- the generated file imports `sql` exactly when it prints a template;
+- the operations part of the generated file has no line ending in a space or a tab;
+- the `ops.json` the file writes equals `renderOps(calls)`.
+
+Ten cases were skipped because `renderOps` itself refuses them: in each target, the five texts that function defaults refuse (`--` and `$$`). On Postgres the same five texts pass in the variant without defaults. Evidence: `fx-p1-pg.log`, `fx-p1-sqlite.log`.
+
+| Finding | Status | Evidence |
+| --- | --- | --- |
+| C01 SQLite has no test for an unused `sql` import | **Fixed** | SQLite `render-typescript.test.ts` now checks one call of each class (with a guard that fails when a new class is not listed), three template calls and three fallback-only calls. I planted two kinds of drift. `AddColumnCall.importRequirements` always returning `sql`: 2 failed ("AddColumnCall imports sql exactly when it prints a sql template"), `fx-plant-addcolumn-always.log`. `RecreateTableCall.importRequirements` returning `[]`: 1 failed ("RecreateTableCall imports sql exactly when..."), `fx-plant-recreate-drop.log`. The implementer's plant that makes the shared helper always import fails the per-class tests in both targets (`wip/5-fixes/plant-writer-always-imports.log`). The design change matters more than the test: each call now builds its imports from the same writer that wrote its source, so the two can no longer drift. |
+| C02 Refusal message is inaccurate and names no argument | **Fixed** | `fn(42)` gives `CONTRACT.ARGUMENT_INVALID`, `fn expression must be a string or a sql`...` value.`, meta `{"what":"fn expression"}`. `checkExpression('c "x"', null)` gives `checkExpression "c \"x\"" expression must be ...`; the name is JSON-quoted, so a quote inside it stays readable. Every call site passes a name (Postgres `postgres-migration.ts`, SQLite `sqlite-migration.ts`). The error reference lists the strings. |
+| C03 Trailing whitespace in a multi-line template | **Fixed** | Every case with a line ending in a space or a tab now falls back to a string literal: `"x = 'a  \nb'"`, `"x = 1 "`, `"x = 1\t"`, `"x = 1\nAND y = 2\t"`, `"x = 1\nAND y = 2 \nAND z = 3"`. A trailing NBSP still gets a template. That is acceptable: common editors that trim on save remove only spaces and tabs. The rule has a test; the implementer's plant fails it (`wip/5-fixes/plant-no-trailing-ws-check.log`). |
+| C04 `test:packages` not shown green at HEAD | **Fixed** | `wip/5-fixes/v-test-packages.log` (16:38, after the 16:26 code commit; the only later commit, 5d7fc74dd9, changes docs only): 1738 test files passed and 3 failed (24929 tests passed). The 3 failures are `all-shells-tarball`, `module-identity` and `cross-shell-tarball`. Each fails in `pnpm install` with "High-risk trust downgrade for @vercel/detect-agent@1.2.5". That is a registry environment failure, not this slice. The earlier timeout no longer occurs. The other verification logs in `wip/5-fixes/` pass (build, typecheck, lint, lint:deps, lint:casts delta 0, lint:throws delta 0, check:error-reference, lint:framework-vocabulary 254/254, fixtures:check, planner-golden, upgrade coverage). My own `pnpm migrations:regen:examples` leaves no diff (`fx-regen.log`). |
+
+### New findings
+
+None. Note: `createSqlTextSources` holds state. Its `imports()` is correct only after every `source()` call of the same call. Each call class keeps that true by creating the writer inside a private `#written()` that both `renderTypeScript()` and `importRequirements()` use. This is not a defect, and the per-class tests in both targets catch a call that breaks it.

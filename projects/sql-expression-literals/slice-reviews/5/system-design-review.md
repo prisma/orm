@@ -124,3 +124,47 @@ Suggestion: Update design section 20: slice 5 adds no fragment because its API c
 
 - Whether `renderTaggedTemplateSource`'s fallbacks are complete and correct for every input, and whether the planted-defect logs show each test can fail: code review.
 - Readability of the generated files for users: devrel lens.
+
+## Fixes check
+
+Commits checked: ada268bae6 and 5d7fc74dd9 (docs), 7226832a37 (code), on `l65-5`. I read the diff `d2122b9135..HEAD`. I did not run builds or tests.
+
+| Finding | Status | Evidence |
+| --- | --- | --- |
+| A01 | Partly fixed | Renamed to `tsTaggedTemplateSource`. The escape chain now comes from the new `tsTemplateText` in `ts-render`, which `tsQuotedTextSource` also uses. The doc comment states the condition (the tag must canonicalize as `canonicalizeTaggedLiteralBody` does, which holds for `sql`). Still open: `holdsCharacterThatNeedsAnEscape` in tagged-literal.ts lines 210-219 still copies `needsEscapeSequence` in ts-string-literal.ts. The check for whitespace-only lines still depends on the targets' `indent()`, with no note at `indent()`. The generic `tag` parameter remains. These were the lesser parts of the suggestion, and the brief chose the minimum. I accept that. |
+| A02 | Fixed | `MigrationSqlText` is now `SqlTextInput` in column.ts line 20. Its doc comment no longer names migration files. |
+| A03 | Fixed | ADR 195 lines 131-137 now state the invariant: a template is written only when canonicalization leaves the text unchanged, so the method receives the IR's text. It says the methods are wider than the IR's types, and the example is `extras.where`. |
+| A04 | Fixed | ADR 195 and Migration System doc line 125 now state the rule by where the SQL sits: a fragment placed inside a DDL statement takes a `sql` value, and a whole statement or query (`rawSql`, the `recreateTable` postchecks) stays a string. "Because it is not the contract's SQL" is gone. |
+| A05 | Fixed | The skill's line 367 no longer nests backticks, and it says that a `sql` value is canonicalized while a string is kept as written, so a committed string should not be wrapped. Line 55 lists `sql`. |
+| A06 | Fixed | `sqlTextOf(value, what)` throws ``<what> must be a string or a sql`...` value.`` with `meta: { what }`. Every call site names its argument. The error reference lists the raise site and every `what` form. See A11 for one sentence left over. |
+| A07 | Fixed | Each call builds its source and its imports in one pass through a `SqlTextSources` object (`#written()`), so the two cannot drift. Both targets use one shared helper, `createSqlTextSources`. SQLite now has the test over every call class, plus a test that the fixture list covers every class. See A10 for where the helper lives. |
+| A08 | Fixed | Postgres now declares named, module-local `CreateIndexExtrasInput`, `AlterColumnTypeOptionsInput` and `RlsPolicyInput` (postgres-migration.ts lines 720-732), the same shape SQLite uses. |
+| A09 | Fixed | Design section 20's slice 5 row says no fragment is added, why, and that the unreleased slice 3 fragments are corrected in place. |
+
+### A10. The migration-file render helper lives in the `sql` value's module and copies `ImportRequirement`
+
+Location: packages/2-sql/1-core/contract/src/sql-text-sources.ts lines 1-31; packages/2-sql/1-core/contract/src/exports/sql-expression.ts lines 2-6
+
+Issue: `createSqlTextSources` writes the SQL texts of a generated migration-file call and collects that call's imports. That is code generation for migration files. It lives in `sql-contract` and is exported from the `sql-expression` entry point, next to the `sql` value itself. A reader who opens the module for `sql` values now finds a migration renderer in it.
+
+`sql-contract` does not depend on `ts-render`, so the helper declares its own `SqlTagImport { moduleSpecifier; symbol }`. That is a second name for `ImportRequirement` from `ts-render`. The targets push it into an `ImportRequirement[]` only because the shapes happen to match.
+
+`@internal/family-sql/control` is a SQL family package in the migration plane. Both targets already import it, and it can depend on `ts-render`. It is a closer home for the helper.
+
+Suggestion: Move `createSqlTextSources` and `SqlTextSources` to `family-sql`'s control entry point, if `pnpm lint:deps` allows. Use `ImportRequirement` there and delete `SqlTagImport`. If the helper must stay in `sql-contract`, give it its own entry point, for example `@internal/sql-contract/migration-render`, and add `ts-render` as a dependency so it can return `ImportRequirement`.
+
+### A11. The error reference says the migration raise site happens "while building the contract"
+
+Location: docs/reference/error-reference.md line 242 (end of the `CONTRACT.ARGUMENT_INVALID` entry)
+
+Issue: The new sentence about `sqlTextOf` is added before the entry's closing sentence: "Raised while authoring/building the contract, before emit." A migration function raises the error when the migration file runs, not while the contract is built. Read in order, the entry now says something false about the new site.
+
+Suggestion: In the `sqlTextOf` sentence, say when the error is raised, for example "raised when the migration file runs". Or narrow the closing sentence to the contract-authoring sites.
+
+### A12. Design section 17 still describes the replaced code
+
+Location: projects/sql-expression-literals/design.md section 17.1 (the code block near line 676) and section 17.2 (the paragraph on `importRequirements()`)
+
+Issue: Section 17.1 still shows `sqlTextOf(value: SqlTextInput): string` with no `what` parameter. It says a non-string value is read with `requireSqlExpression(value, 'SQL text')`, and its doc comment still says "SQL in a migration-file argument". Section 17.2 still says each call computes its imports by calling `tsTaggedTemplateSource` again over a separate list of texts. The code now builds both through `createSqlTextSources`. The design is the record later slices and reviewers read, so it should match the code.
+
+Suggestion: Update 17.1 to the two-argument `sqlTextOf` and its message, and replace the 17.2 import paragraph with one sentence about `createSqlTextSources`.

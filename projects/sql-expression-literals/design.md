@@ -675,9 +675,10 @@ In `packages/2-sql/4-lanes/relational-core/src/contract-free/column.ts` (exporte
 ```ts
 /** SQL in a migration-file argument: a `sql` value, or a string. The string form is permanent: committed files use it, and the generator writes it when a template cannot hold the text unchanged. */
 export type SqlTextInput = string | SqlExpression;
-export function sqlTextOf(value: SqlTextInput): string;
-// A string is returned unchanged. Anything else is read with `requireSqlExpression(value, 'SQL text')`, so a `sql` value from another
-// installed copy is canonicalized (slice 3's `readSqlExpression`) and a value of any other type throws CONTRACT.ARGUMENT_INVALID.
+export function sqlTextOf(value: SqlTextInput, what: string): string;
+// A string is returned unchanged. A `sql` value is read with `readSqlExpression`, so a `sql` value from another
+// installed copy is canonicalized. Anything else throws CONTRACT.ARGUMENT_INVALID: ``<what> must be a string or a sql`...` value.``, meta `{ what }`;
+// each call site passes its argument's name (`fn expression`, `createIndex "<index>" where`, …; the error reference lists them).
 ```
 
 Each method or factory below reads such a value with `sqlTextOf` at its entry and passes a string on, converting only defined values (`exactOptionalPropertyTypes`). `CreateIndexExtras`, `CreateIndexElements`, `PostgresRlsPolicyInput`, `RenderedRlsPolicyLiteral` and `AlterColumnTypeOptions` stay strings.
@@ -711,7 +712,7 @@ These slice 4 sites use `tsTaggedTemplateSource(SQL_EXPRESSION_TAG, text).source
 
 SQLite `renderPostcheck` keeps `tsQuotedTextSource`: its text is SQL the planner builds itself (`buildRecreatePostchecks`), and `RecreatePostcheck.sql` stays a string.
 
-The three render helpers keep returning a string. Each call's `importRequirements()` adds `{ moduleSpecifier: <facade constant>, symbol: SQL_EXPRESSION_TAG }` when `tsTaggedTemplateSource(SQL_EXPRESSION_TAG, text).usesTag` holds for any text it renders, computed from the same texts (calls are frozen). That covers `CreateTableCall`, `AddColumnCall` and `SetDefaultCall` (Postgres), `AddCheckConstraintCall`, `CreateIndexCall`, `CreatePostgresRlsPolicyCall`, and SQLite `CreateTableCall`, `AddColumnCall` and `RecreateTableCall`. The facade constants are `POSTGRES_MIGRATION_FACADE` and `TARGET_MIGRATION_MODULE` (SQLite), both module-local to the file that holds the calls. `AlterColumnTypeCall` is unchanged (the planner never sets `using`). ADR 195's "same argument shapes" rule gets a recorded exception: the rendered file passes `sql` values where the IR holds strings.
+Each call that renders SQL text builds its source once, through a text writer the SQL family provides (`createSqlTextSources(moduleSpecifier)`): `source(text)` writes one text with `tsTaggedTemplateSource` and records whether it used the tag, and `imports()` returns the `sql` import only after a text used it. `renderTypeScript()` and `importRequirements()` both read that one pass, so a call imports `sql` exactly when it prints a template. That covers `CreateTableCall`, `AddColumnCall` and `SetDefaultCall` (Postgres), `AddCheckConstraintCall`, `CreateIndexCall`, `CreatePostgresRlsPolicyCall`, and SQLite `CreateTableCall`, `AddColumnCall` and `RecreateTableCall`. `AlterColumnTypeCall` is unchanged (the planner never sets `using`). ADR 195's "same argument shapes" rule gets a recorded exception: the rendered file passes `sql` values where the IR holds strings.
 
 ## 18. Committed artefacts
 

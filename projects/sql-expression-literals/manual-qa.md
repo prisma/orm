@@ -922,3 +922,28 @@ wip-qa-3/compile-errors.ts(10,7): error TS6133: 'notSql' is declared but its val
 ```
 
 Every case gave the expected result. The last `tsc` line only says the scratch variable is unused.
+
+## Slice 5: migration files write `sql` values
+
+Slice 5 makes a planned `migration.ts` write the contract's SQL as `` sql`...` `` templates, and lets the migration functions take a `sql` value or a string. The script reads a generated file as a user would, runs it, applies it to a database, and checks the error a wrong argument gets.
+
+### Script
+
+1. Run `pnpm build` at the repository root.
+2. Copy `test/integration/test/cli-journeys/sql-expression-literals.e2e.test.ts` to `test/integration/test/cli-journeys/wip-qa-5.e2e.test.ts`. Do not commit it. In the copy:
+   - Change the CHECK so its text holds both quote kinds and spans several lines: `` sql`\n      owner_id > 0\n        AND email <> 'it''s' -- an owner needs an email\n    ` ``, and add a column `createdAt DateTime @default(sql`now() - interval '1 day'`)` to `Profile`.
+   - Add a second index whose `where` text has a trailing space on its first line (`sql`owner_id > 1 \n  AND email <> ''``).
+   - After `planMigrationAndSelfEmit`, find the written `migration.ts` under `ctx.testDir/migrations/app/` and `console.log` it in full. Keep the apply and verify steps; remove everything from `runContractInfer` on.
+3. Run `pnpm --filter integration-tests test test/cli-journeys/wip-qa-5.e2e.test.ts` and save the output to `wip/5-qa/journey.log`.
+4. In a scratch file `wip/5-qa/refusal.ts`, call `fn(42 as never)` and `checkExpression('c', { text: 'x' } as never)` from `@prisma/orm-postgres/migration` inside try/catch and print `code`, `message` and `meta`. Run it with `pnpm exec tsx` from `examples/prisma-8-demo` (copy the file into `examples/prisma-8-demo/src/wip-qa-5/` so the package resolves), save the output to `wip/5-qa/refusal.log`, then delete the scratch folder.
+5. Delete `wip-qa-5.e2e.test.ts`.
+
+### Expected
+
+- The printed `migration.ts` imports `sql` from the target's migration module.
+- The CHECK is written as a multi-line `` sql`...` `` template whose lines read like the schema's, with no escaped quote: `email <> 'it''s'` appears as written.
+- The default is `` fn(sql`now() - interval '1 day'`) ``.
+- The partial index and the policy predicates are `sql` templates; the index whose text has a trailing space is written as a string, not a template.
+- Apply succeeds and verify is clean, so the SQL the file runs is the contract's SQL.
+- `fn(42)` gives ``CONTRACT.ARGUMENT_INVALID fn expression must be a string or a sql`...` value.`` with `{"what":"fn expression"}`; the `checkExpression` call gives the same code with `checkExpression "c" expression`.
+
