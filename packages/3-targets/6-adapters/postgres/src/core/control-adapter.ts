@@ -122,6 +122,11 @@ import type { PostgresContract } from './types';
 const POSTGRES_MARKER_TABLE = 'prisma_contract.marker';
 const POSTGRES_LEDGER_TABLE = 'prisma_contract.ledger';
 
+/**
+ * Tables another migration tool, not Prisma 8, keeps in an application schema: Prisma 7's ledger. `introspect` leaves them out unless the contract declares a table of that name in the same namespace.
+ */
+const OTHER_TOOL_MIGRATION_TABLES: ReadonlySet<string> = new Set(['_prisma_migrations']);
+
 function markerRowDecodeWhy(detail: string): string {
   return `Invalid contract marker row: ${detail}`;
 }
@@ -706,19 +711,23 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     schema = 'public',
   ): Promise<PostgresDatabaseSchemaNode> {
     return readWithDefaultOutputSettings(driver, async () => {
-      const declaredNamespaces = extractContractNamespaceIds(contract);
-      const resolvedSchemas =
-        declaredNamespaces.length > 0
-          ? await this.resolveNamespaceSchemas(driver, declaredNamespaces)
-          : [schema];
+      const declaredTables = extractContractTableNames(contract);
+      const declaredTablesBySchema =
+        declaredTables.size > 0
+          ? await this.resolveNamespaceSchemas(driver, declaredTables)
+          : new Map([[schema, new Set<string>()]]);
 
       // Walk schemas sequentially: every introspectSchema call shares the one
       // control connection, so a parallel walk only serialises behind the wire
       // protocol and trips pg's "already executing a query" deprecation.
       const namespaces: Record<string, PostgresNamespaceSchemaNode> = {};
       let pgVersion = 'unknown';
-      for (const resolved of resolvedSchemas) {
-        const { namespace, pgVersion: version } = await this.introspectSchema(driver, resolved);
+      for (const [resolved, tablesDeclaredHere] of declaredTablesBySchema) {
+        const { namespace, pgVersion: version } = await this.introspectSchema(
+          driver,
+          resolved,
+          tablesDeclaredHere,
+        );
         namespaces[resolved] = namespace;
         pgVersion = version;
       }
@@ -778,26 +787,30 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   /**
    * Resolves the declared namespace ids to their live DDL schema names,
    * mapping `UNBOUND_NAMESPACE_ID` to the connection's `current_schema()`
-   * and de-duplicating. The caller introspects one namespace node per
-   * resolved schema — there is no flat cross-schema merge, so two schemas
-   * holding a same-named table no longer collide.
+   * and merging the table names declared for each schema. The caller
+   * introspects one namespace node per resolved schema — there is no flat
+   * cross-schema merge, so two schemas holding a same-named table no longer
+   * collide.
    */
   private async resolveNamespaceSchemas(
     driver: SqlControlDriverInstance<'postgres'>,
-    namespaceIds: readonly string[],
-  ): Promise<readonly string[]> {
-    const resolvedSchemas: string[] = [];
-    for (const id of namespaceIds) {
-      if (id === UNBOUND_NAMESPACE_ID) {
-        const { rows } = await driver.query<{ current_schema: string }>(
-          'SELECT current_schema() AS current_schema',
-        );
-        resolvedSchemas.push(rows[0]?.current_schema ?? 'public');
-      } else {
-        resolvedSchemas.push(id);
-      }
+    declaredTables: ReadonlyMap<string, readonly string[]>,
+  ): Promise<ReadonlyMap<string, ReadonlySet<string>>> {
+    const tablesBySchema = new Map<string, Set<string>>();
+    for (const [id, tableNames] of declaredTables) {
+      const resolved = id === UNBOUND_NAMESPACE_ID ? await this.currentSchema(driver) : id;
+      const tables = tablesBySchema.get(resolved) ?? new Set<string>();
+      for (const name of tableNames) tables.add(name);
+      tablesBySchema.set(resolved, tables);
     }
-    return Array.from(new Set(resolvedSchemas));
+    return tablesBySchema;
+  }
+
+  private async currentSchema(driver: SqlControlDriverInstance<'postgres'>): Promise<string> {
+    const { rows } = await driver.query<{ current_schema: string }>(
+      'SELECT current_schema() AS current_schema',
+    );
+    return rows[0]?.current_schema ?? 'public';
   }
 
   /**
@@ -809,6 +822,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   private async introspectSchema(
     driver: SqlControlDriverInstance<'postgres'>,
     schema: string,
+    declaredTables: ReadonlySet<string>,
   ): Promise<{ readonly namespace: PostgresNamespaceSchemaNode; readonly pgVersion: string }> {
     // Issue the schema-wide queries one at a time. A single control connection
     // serialises queries anyway, so Promise.all buys no parallelism here and
@@ -1419,6 +1433,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
 
     const tables: Record<string, PostgresTableSchemaNode> = {};
     for (const [tableName, input] of Object.entries(tableInputs)) {
+      if (OTHER_TOOL_MIGRATION_TABLES.has(tableName) && !declaredTables.has(tableName)) continue;
       tables[tableName] = new PostgresTableSchemaNode({
         ...input,
         policies: policiesByTable.get(tableName) ?? [],
@@ -1491,12 +1506,6 @@ function mapPgCmd(cmd: string): RlsPolicyOperation {
   }
 }
 
-/**
- * Extracts the namespace coordinate ids declared on a contract's storage,
- * or returns an empty array when no contract (or no storage / namespaces)
- * is present. Used by `PostgresControlAdapter.introspect` to decide
- * between the multi-namespace walk and the single-schema fallback.
- */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -1505,13 +1514,26 @@ function freezeStringArray(values: readonly string[]): readonly string[] {
   return Object.freeze([...values]);
 }
 
-function extractContractNamespaceIds(contract: unknown): readonly string[] {
-  if (!isRecord(contract)) return [];
+/**
+ * The table names a contract's storage declares, keyed by namespace id. Empty when no contract (or no storage / namespaces) is present, which makes `PostgresControlAdapter.introspect` fall back to the single-schema walk.
+ */
+function extractContractTableNames(contract: unknown): ReadonlyMap<string, readonly string[]> {
+  if (!isRecord(contract)) return new Map();
   const storage = contract['storage'];
-  if (!isRecord(storage)) return [];
+  if (!isRecord(storage)) return new Map();
   const namespaces = storage['namespaces'];
-  if (!isRecord(namespaces)) return [];
-  return Object.keys(namespaces);
+  if (!isRecord(namespaces)) return new Map();
+  return new Map(
+    Object.entries(namespaces).map(([id, namespace]) => [id, declaredTableNames(namespace)]),
+  );
+}
+
+function declaredTableNames(namespace: unknown): readonly string[] {
+  if (!isRecord(namespace)) return [];
+  const entries = namespace['entries'];
+  if (!isRecord(entries)) return [];
+  const tables = entries['table'];
+  return isRecord(tables) ? Object.keys(tables) : [];
 }
 
 /**

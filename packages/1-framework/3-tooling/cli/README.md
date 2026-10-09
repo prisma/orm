@@ -393,6 +393,8 @@ The SQL family provides this via `@internal/family-sql/control`. The `verify()` 
 
 Inspect the live database schema and display it as a human-readable tree or machine-consumable JSON. This command is read-only and never writes files.
 
+On Postgres it leaves out `_prisma_migrations`, the table Prisma 7 records its applied migrations in.
+
 **Command:**
 ```bash
 prisma db schema [--db <url>] [--config <path>] [--json] [-v] [-q] [--color/--no-color]
@@ -500,6 +502,8 @@ prisma migration ref set db <timestamp>_baseline
 ### `prisma contract infer`
 
 Inspect the live database schema and write an inferred PSL contract to disk. Use this for brownfield adoption when you want a starting `contract.prisma` before running `contract emit` and `db sign`.
+
+On Postgres it writes no model for `_prisma_migrations`, the table Prisma 7 records its applied migrations in.
 
 **Command:**
 ```bash

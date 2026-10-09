@@ -46,7 +46,7 @@ Migrations, `db verify` and the storage hash see `legacy_key` and `audit_rows`. 
 - Every contract source lowers to `ContractDefinition` (`packages/2-sql/2-authoring/contract-ts/src/contract-definition.ts`), and `buildSqlContractFromDefinition` (`build-contract.ts`) turns it into a contract. ADR 181 makes that the shared lowering target. This project adds column nodes and table nodes to the definition and lowers them through the same code as a model's columns.
 - The Prisma 7 reader (`packages/2-sql/2-authoring/contract-prisma7`) is the only source that produces such storage. ADR 252 governs it: every construct is described exactly or refused.
 - The SQL ORM client (`packages/3-extensions/sql-orm-client`) reads every column of a table today and falls back to a column name when a field name is unknown, in 18 places.
-- The handover test (`examples/prisma7-adoption/test/handover.test.ts`) pins `unclaimed: ["_prisma_migrations"]` under strict verify.
+- The handover test (`examples/prisma7-adoption/test/handover.test.ts`) pinned `unclaimed: ["_prisma_migrations"]` under strict verify until slice 4.
 
 ## Cross-cutting requirements
 
@@ -71,7 +71,7 @@ Inherits `drive/calibration/dod.md`. Project-specific:
 
 ## Open questions
 
-- Which control policy, or which other mechanism, covers `_prisma_migrations`. Decided before slice 3 starts.
+None. The codec-less column and `_prisma_migrations` are both decided; see `design-notes.md`.
 
 ## References
 
