@@ -5,6 +5,8 @@ import {
   type CodecListField,
   Collection,
   type Filtered,
+  type ModelAccessor,
+  type ModelCallbackTools,
   orderByField,
   orm,
 } from '@prisma/orm-postgres/orm-client';
@@ -46,6 +48,14 @@ export const unexpired = (now: Temporal.Instant) =>
   client.fragment({ expiresAt: field.temporal.timestamptz() }, (rows) =>
     rows.where((row) => row.expiresAt.gt(now)).orderBy((row) => row.expiresAt.asc()),
   );
+
+export const matchesSearch = (query: string) => {
+  const q = websearchToTsquery(query);
+  return (
+    _post: ModelAccessor<Contract, 'Post'>,
+    { fns, indexes }: ModelCallbackTools<Contract, 'Post'>,
+  ) => fns.fullTextMatches(indexes.post_search, q);
+};
 
 export const searched = (query: string) => {
   const q = websearchToTsquery(query);
