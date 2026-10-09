@@ -2,13 +2,14 @@
 
 **Spec:** [`spec.md`](./spec.md) · **Linear:** P-TML-1151
 
-Three slices, in sequence. Each is one PR.
+Four slices. Slices 1 to 3 in sequence; slice 4 is independent of 2 and 3. Each is one PR.
 
 | # | Slice | Delivers | Builds on | Hands to | Ticket |
 |---|---|---|---|---|---|
 | 1 | `storage-in-the-definition` | `ContractDefinition` holds column nodes and table nodes, and the build lowers them through the same code as a model's columns and tables. The build is split so a model lowers on its own before assembly. Foreign keys may target a table by name. | main | A definition any source can fill with storage that has no model, and a matrix test that proves exposure does not move storage. | TML-3468 |
 | 2 | `orm-stays-in-the-domain` | The ORM reads and writes only the columns a model's fields map: per-model projection, one resolver that throws `ORM.FIELD_UNKNOWN`, row mapping without pass-through, relation lowering that refuses a join column with no field, the validators, and a warning for a required extra column with no default. Model types already leave extra columns out. | Slice 1 | An ORM that is safe against any contract slice 1 can produce. | TML-3532 |
-| 3 | `prisma7-ignore-keeps-storage` | The Prisma 7 reader turns `@ignore` fields into column nodes and `@@ignore` models into table nodes, keeps the foreign keys and indexes Prisma 7 created, refuses a primary key over an ignored field, and handles `_prisma_migrations`. The handover test adds and removes `@ignore` with no plan, and strict verify reports nothing unclaimed. Upgrade instruction for projects that already signed. | Slices 1 and 2; the two open questions in `design-notes.md` | Project close-out. | TML-3467, TML-3453, TML-3462 |
+| 3 | `prisma7-ignore-keeps-storage` | The Prisma 7 reader turns `@ignore` fields into column nodes and `@@ignore` models into table nodes, keeps the foreign keys and indexes Prisma 7 created, refuses a primary key over an ignored field and any column with no Prisma 8 codec. The handover test adds and removes `@ignore` with no plan. Upgrade instruction for projects that already signed. | Slices 1 and 2 | Project close-out. | TML-3467, TML-3462 |
+| 4 | `prisma7-ledger-is-a-tool-table` | The Postgres target names Prisma 7's `_prisma_migrations` as a tool table that `db verify` and `contract infer` leave alone, as they leave Prisma 8's own `prisma_contract` schema alone. The handover test's strict verify reports nothing unclaimed. | main | Project close-out. | TML-3453 |
 
 Deferred, not in this project: Prisma 8 syntax for storage with no model, and `contract print` and `contract infer` for it (TML-3469), until the syntax is agreed.
 

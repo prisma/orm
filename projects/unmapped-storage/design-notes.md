@@ -27,9 +27,9 @@ The lowering merges a table's column nodes with the columns its model's fields i
 
 Will, 2026-10-09: refuse to load the schema if the contract cannot express its contents. An `@ignore` field, or a column of an `@@ignore` model, whose type has no Prisma 8 codec is an error, like the same field without `@ignore`. The reader's messages stop offering `@ignore` and `@@ignore` as a way around a missing codec, because neither leaves the column out any more. A Prisma 7 project with such a column cannot load until Prisma 8 supports the column type (planning row "Columns whose type has no codec").
 
-### `_prisma_migrations`
+### `_prisma_migrations` (decided)
 
-It exists on a database Prisma 7 built and is missing from a fresh database rebuilt from `migrations/`. `managed` and `tolerated` would create it; `external` fails verify when it is missing; `observed` warns when it is missing. The Prisma 7 project spec proposed an ignore list supplied by the Postgres facade instead. Decided before slice 3.
+Decided 2026-10-09 from the code. Declaring the ledger in the contract, under any control policy, puts a table with no model into every Prisma 7 contract: every Prisma 7 project's storage hash changes, and `contract print` refuses every Prisma 7 contract at cutover, because no syntax declares a table with no model. Prisma 7's own `db pull` never introspects the table either: it is the tool's bookkeeping, not the application's schema. So the Postgres target names `_prisma_migrations` as a tool table, beside Prisma 8's own `prisma_contract` schema, and `db verify` (strict included) and `contract infer` leave it alone. This is the facade ignore list the Prisma 7 project spec proposed. Slice 4.
 
 ## Alternatives considered
 
