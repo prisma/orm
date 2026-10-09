@@ -264,6 +264,11 @@ function hasColumnFromEntityHook(
   return 'columnFromEntity' in descriptor && typeof descriptor.columnFromEntity === 'function';
 }
 
+interface EntityNameResolution {
+  readonly binder: Binder;
+  readonly namespaceIdOf: (namespace: NamespaceSymbol | undefined) => string | undefined;
+}
+
 /**
  * Resolves a type-constructor call whose descriptor declares an
  * `entityRefArg` (e.g. `pg.enum(AalLevel)`): extracts the call's sole
@@ -279,11 +284,6 @@ function hasColumnFromEntityHook(
  * name (the generic `deriveValueSet` mechanism), scoped to the field's own
  * namespace.
  */
-interface EntityNameResolution {
-  readonly binder: Binder;
-  readonly namespaceIdOf: (namespace: NamespaceSymbol | undefined) => string | undefined;
-}
-
 function resolveEntityRefTypeConstructorCall(input: {
   readonly call: ResolvedTypeConstructorCall;
   readonly descriptor: AuthoringTypeConstructorDescriptor;
