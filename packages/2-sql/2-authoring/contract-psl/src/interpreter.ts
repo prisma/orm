@@ -609,7 +609,6 @@ interface BuildModelNodeInput {
   >;
   /** Codec-id-keyed descriptor lookup — forwarded to `collectResolvedFields` for entity-ref type-constructor resolution (e.g. `pg.enum(Ref)`). */
   readonly codecLookup: CodecLookupWithDescriptors;
-  readonly namespaceIdOf: (namespace: NamespaceSymbol | undefined) => string | undefined;
   /** Contributed model-attribute descriptors keyed by bare `@@` attribute name (the exact shape `buildModelAttributesByName` produces). */
   readonly modelAttributesByName: ReadonlyMap<string, AuthoringModelAttributeDescriptor>;
   readonly contributedModelAttributeSpecs: Readonly<Record<string, ModelAttributeSpecFactory>>;
@@ -726,7 +725,6 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     ...ifDefined('namespaceId', modelNamespaceId),
     ...ifDefined('namespaceExtensionEntities', namespaceExtensionEntitiesForModel),
     codecLookup: input.codecLookup,
-    namespaceIdOf: input.namespaceIdOf,
   });
 
   const inlineIdFields = resolvedFields.filter((field) => field.isId);
@@ -1561,7 +1559,6 @@ interface BuildValueObjectNodesInput {
     | Readonly<Record<string, Readonly<Record<string, unknown>>>>
     | undefined;
   readonly codecLookup: CodecLookupWithDescriptors;
-  readonly namespaceIdOf: (namespace: NamespaceSymbol | undefined) => string | undefined;
   readonly binder: Binder;
 }
 
@@ -1608,7 +1605,6 @@ function buildValueObjectNodes(input: BuildValueObjectNodesInput): ValueObjectNo
         entityLabel: `Field "${compositeType.name}.${field.name}"`,
         namespaceId: input.defaultNamespaceId,
         ...ifDefined('namespaceExtensionEntities', input.defaultNamespaceExtensionEntities),
-        entityNames: { binder, namespaceIdOf: input.namespaceIdOf },
         codecLookup: input.codecLookup,
       });
       if (!resolved.ok) {
@@ -2352,16 +2348,13 @@ export function interpretPslDocumentToSqlContract(
     },
     warnings: authoringWarnings,
   };
-  const namespaceIdOfBucket = (bucketName: string | undefined) =>
-    resolveNamespaceIdForSqlTarget({
-      bucketName: bucketName ?? UNSPECIFIED_PSL_NAMESPACE_ID,
-      targetId: input.target.targetId,
-    }) ?? defaultNamespaceId;
-  const namespaceIdOf = (namespace: NamespaceSymbol | undefined) =>
-    namespaceIdOfBucket(namespace?.name);
   const modelCoordinateOf = (model: ModelSymbol) => {
     const namespace = model.node.syntax.findAncestor(NamespaceDeclarationAst.cast);
-    const namespaceId = namespaceIdOfBucket(namespace?.name()?.name());
+    const namespaceId =
+      resolveNamespaceIdForSqlTarget({
+        bucketName: namespace?.name()?.name() ?? UNSPECIFIED_PSL_NAMESPACE_ID,
+        targetId: input.target.targetId,
+      }) ?? defaultNamespaceId;
     return { namespaceId, tableName: storageName(model, physicalNames) };
   };
   const namespaceExtensionEntities = new Map<string, Record<string, Record<string, unknown>>>();
@@ -2513,7 +2506,6 @@ export function interpretPslDocumentToSqlContract(
     defaultNamespaceId,
     defaultNamespaceExtensionEntities: namespaceExtensionEntities.get(defaultNamespaceId),
     codecLookup: input.codecLookup,
-    namespaceIdOf,
     binder,
   });
   const valueObjectTypes: ValueObjectTypes = {
@@ -2550,7 +2542,6 @@ export function interpretPslDocumentToSqlContract(
       capabilities: input.capabilities,
       ...(namespaceExtensionEntities.size > 0 ? { namespaceExtensionEntities } : {}),
       codecLookup: input.codecLookup,
-      namespaceIdOf,
       modelAttributesByName,
       contributedModelAttributeSpecs: contributedModelSpecs,
       defaultNamespaceId,

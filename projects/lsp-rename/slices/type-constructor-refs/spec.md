@@ -4,7 +4,7 @@ Parent project: [`projects/lsp-rename/`](../../spec.md). Outcome for the project
 
 ## At a glance
 
-The binder records a resolution for the entity name inside a type-constructor argument (`OrderStatus` in `status pg.enum(OrderStatus)`), and the SQL interpreter reads that resolution instead of looking the name up. Go-to-definition, hover, find references and rename then work on such a name with no change of their own.
+The binder records a resolution for the entity name inside a type-constructor argument (`OrderStatus` in `status pg.enum(OrderStatus)`), so go-to-definition, hover, find references and rename work on such a name with no change of their own. The SQL interpreter is not changed.
 
 ## Chosen design
 
@@ -27,33 +27,17 @@ Three places bind it, each with the scope that place already uses for the type n
 | field of a composite type | the same |
 | named type (`types { Status = pg.enum(OrderStatus) }`) | the named-type base scope: the document without named types, so a named type cannot resolve to itself |
 
-### SQL interpreter (`packages/2-sql/2-authoring/contract-psl`, amended 2026-10-09 after PR review)
+### SQL interpreter: not changed (operator decision, 2026-10-09)
 
-The change is confined to where the entity name comes from. Everything after that point in `resolveEntityRefTypeConstructorCall` stays as it is on `main`: the map of lowered entities, the lookup in the field's namespace, the diagnostics and their texts, the `columnFromEntity` hook, the value-set reference.
+The fix for rename belongs to the binder. The SQL interpreter keeps resolving the constructor argument from its written text, exactly as on `main`; changing it is out of scope of this project.
 
-- On `main` the name is the written text of the argument. Now the PSL path reads `binder.symbolForNode` on the argument's node:
-
-| Resolution on the argument | Result |
-|---|---|
-| `unresolved` | no diagnostic from the interpreter: the binder reported it |
-| a block whose namespace is the field's namespace | the entity name is the block's name; the rest of the function runs as on `main` |
-| anything else (a model, a namespace, a block of another namespace) | the existing `PSL_UNKNOWN_ENTITY_REF` diagnostic, unchanged |
-| none, because the argument is not a name | the existing arity diagnostic, unchanged |
-
-- The namespace comparison uses namespace ids from `resolveNamespaceIdForSqlTarget`, the way a referenced model's namespace is found today. It is there so that a qualified `other.X` cannot pick up a same-named entity of the field's own namespace. It is transitional: slice 3 looks the entity up in the resolved block's namespace and removes the comparison.
-- No new map, type, export or diagnostic text. `interpreter.ts` changes only where it has to pass the binder.
-- **The Prisma 7 interpreter is not changed.** It keeps calling `instantiateFieldTypeConstructor` with its synthesized call; it has no binder, and its enum name is not a PSL reference.
-
-### What changes for schema authors
+Consequences of the binder binding a name the interpreter still resolves on its own:
 
 | Schema | `main` | After this slice |
 |---|---|---|
-| unknown name in `pg.enum(...)` | `PSL_UNKNOWN_ENTITY_REF` on the type | `PSL_UNRESOLVED_REFERENCE`, `Cannot find entity "X"`, on the argument |
-| `pg.enum(auth.X)` from a model inside `auth` | `PSL_UNKNOWN_ENTITY_REF` | works |
-| top-level model, `X` declared in `namespace public { }`, written unqualified | works (both are `public`) | `Cannot find entity "X"`; `public.X` works. A name inside a namespace is not in scope outside it, as for models |
-| an entity of another namespace, a model with the enum's name | `PSL_UNKNOWN_ENTITY_REF` | the same diagnostic; navigation and rename work on the name |
-
-A named type over the constructor is bound by the binder and fails interpretation exactly as on `main`.
+| unknown name in `pg.enum(...)` | `PSL_UNKNOWN_ENTITY_REF` on the type | the same, plus the binder's `PSL_UNRESOLVED_REFERENCE`, `Cannot find entity "X"`, on the argument |
+| top-level model, `X` declared in `namespace public { }`, written unqualified | works (both are `public`) | the binder reports `Cannot find entity "X"`, because a name inside a namespace is not in scope outside it; the interpreter still produces the column |
+| everything else | | unchanged; navigation and rename work wherever the binder resolves the name |
 
 ### Language server
 
@@ -61,44 +45,29 @@ No source change. Tests are added for go-to-definition, hover, find references a
 
 ## Coherence rationale
 
-The binder change alone would produce two diagnostics for an unknown name (the binder's and the interpreter's), so the interpreter has to take the name from the binder in the same PR. The reviewer reads one binder addition and a few lines at the top of one interpreter function.
+One binder function and its tests, plus two find-references cases in the language server.
 
 ## Scope
 
-**In:** `psl-parser` binder and its tests; SQL `contract-psl` (`psl-column-resolution.ts`, and passing the binder where it is not passed yet) and its tests; Postgres target tests for `pg.enum` columns; language-server tests in the existing suites; the QA rerun of the `native_enum` rename.
+**In:** `psl-parser` binder and its tests; language-server tests in the existing suites.
 
-**Out:**
-
-- References across namespaces producing a column (slice 3), and a named type over an entity constructor producing a column (slice 4). The operator confirmed on 2026-10-09 that both stay in this project.
-- The Prisma 7 interpreter, a symbol-keyed map of lowered entities, new diagnostic texts.
-- Completion, signature help and hover text for constructor arguments.
-- Replacing `entityRefArg` with an argument spec.
-- The value-set entry keyed by the block name (observed in slice 1).
-- The Mongo interpreter and the SQLite target: neither has an entity constructor.
+**Out:** the SQL and Prisma 7 interpreters; everything listed in the project plan for slices 3 and 4.
 
 ### Contract impact
 
-None. For every schema that is valid before and after, the emitted contract is identical.
+None.
 
 ### Adapter impact
 
-None. The Postgres target's source does not change; its tests gain cases.
+None.
 
 ## Pre-investigated edge cases
 
-| Edge case | Disposition | Notes |
-| --------- | ----------- | ----- |
-| Unknown name | One diagnostic, the binder's, on the argument | Two tests accepted `PSL_UNKNOWN_ENTITY_REF` loosely; they assert the full list |
-| `pg.enum(other.X)` from a model whose own namespace also declares an `X` | The existing `PSL_UNKNOWN_ENTITY_REF`; the entity of the field's namespace is not used | The reason for the namespace comparison |
-| Language-server completion tests with an undeclared `pg.enum(StatusValues)` | Change them only if they assert on diagnostics | `completion-symbols.test.ts` |
+**None pre-investigated.**
 
 ## Slice-specific done conditions
 
-- [ ] `git diff origin/main -- packages/2-sql/2-authoring/contract-prisma7` is empty, and the diff of `contract-psl/src` is confined to `psl-column-resolution.ts` plus passing the binder.
-- [ ] For the existing same-namespace fixtures the emitted contract is unchanged; `pnpm fixtures:check` passes.
-- [ ] A test per row of the two tables above.
-- [ ] Language-server tests for the constructor argument are in the existing suites, not in a file of their own.
-- [ ] The QA scenario that failed in slice 1 (rename of `native_enum OrderStatus` used in `pg.enum(OrderStatus)`) passes after the simplification.
+- [ ] `git diff` against the merge base touches only `psl-parser/src/binder.ts`, binder tests and language-server tests under `packages/`.
 
 ## Open Questions
 

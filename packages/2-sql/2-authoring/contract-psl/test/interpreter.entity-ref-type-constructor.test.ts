@@ -372,7 +372,7 @@ namespace docs {
     expect((column as { valueSet?: unknown } | undefined)?.valueSet).toBeUndefined();
   });
 
-  it('leaves an unknown name to the diagnostic the binder reported', () => {
+  it('rejects an unresolvable entity ref with PSL_UNKNOWN_ENTITY_REF', () => {
     const result = interpretWith(`
 namespace docs {
   model AuthSession {
@@ -384,160 +384,9 @@ namespace docs {
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
-      { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find entity "NoSuchEnum"' },
-    ]);
-  });
-
-  it('resolves a qualified entity named from a model inside its namespace', () => {
-    const result = interpretWith(`
-namespace docs {
-  native_enum AalLevel {
-    aal1
-  }
-
-  model AuthSession {
-    id Int @id
-    aal pg.enum(docs.AalLevel)
-  }
-}
-`);
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.storage).toMatchObject({
-      namespaces: {
-        docs: {
-          entries: {
-            table: {
-              AuthSession: {
-                columns: {
-                  aal: {
-                    typeParams: { typeName: 'AalLevel' },
-                    valueSet: { namespaceId: 'docs', entityName: 'AalLevel' },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-  });
-
-  it('does not find an entity of the default-namespace block from a top-level model when it is written unqualified', () => {
-    const result = interpretWith(`
-namespace public {
-  native_enum AalLevel {
-    aal1
-  }
-}
-
-model AuthSession {
-  id Int @id
-  aal pg.enum(AalLevel)
-}
-`);
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
-      { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find entity "AalLevel"' },
-    ]);
-  });
-
-  it('resolves an entity of the default-namespace block from a top-level model when it is qualified', () => {
-    const result = interpretWith(`
-namespace public {
-  native_enum AalLevel {
-    aal1
-  }
-}
-
-model AuthSession {
-  id Int @id
-  aal pg.enum(public.AalLevel)
-}
-`);
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.storage).toMatchObject({
-      namespaces: {
-        public: {
-          entries: {
-            table: {
-              AuthSession: {
-                columns: { aal: { valueSet: { namespaceId: 'public', entityName: 'AalLevel' } } },
-              },
-            },
-          },
-        },
-      },
-    });
-  });
-
-  it('refuses an entity of another namespace even when the namespace of the field declares one of the same name', () => {
-    const result = interpretWith(`
-namespace other {
-  native_enum AalLevel {
-    other1
-  }
-}
-
-namespace docs {
-  native_enum AalLevel {
-    aal1
-  }
-
-  model AuthSession {
-    id Int @id
-    aal pg.enum(other.AalLevel)
-  }
-}
-`);
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics.map(({ code }) => code)).toEqual(['PSL_UNKNOWN_ENTITY_REF']);
-  });
-
-  it('refuses a name that resolves to a model', () => {
-    const result = interpretWith(`
-namespace docs {
-  model AalLevel {
-    id Int @id
-  }
-
-  model AuthSession {
-    id Int @id
-    aal pg.enum(AalLevel)
-  }
-}
-`);
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics.map(({ code }) => code)).toEqual(['PSL_UNKNOWN_ENTITY_REF']);
-  });
-
-  it('refuses a top-level entity named from a model of another namespace', () => {
-    const result = interpretWith(`
-native_enum AalLevel {
-  aal1
-}
-
-namespace docs {
-  model AuthSession {
-    id Int @id
-    aal pg.enum(AalLevel)
-  }
-}
-`);
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics.map(({ code }) => code)).toEqual(['PSL_UNKNOWN_ENTITY_REF']);
+    expect(result.failure.diagnostics).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'PSL_UNKNOWN_ENTITY_REF' })]),
+    );
   });
 
   it('rejects an entity-ref call with no arguments', () => {

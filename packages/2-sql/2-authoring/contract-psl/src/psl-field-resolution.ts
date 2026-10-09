@@ -20,7 +20,6 @@ import type {
   FieldSymbol,
   ModelSymbol,
   NamedTypeSymbol,
-  NamespaceSymbol,
   ResolvedAttribute,
   SymbolTable,
 } from '@internal/psl-parser';
@@ -204,7 +203,6 @@ export interface CollectResolvedFieldsInput {
   readonly namespaceExtensionEntities?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
   /** Codec-id-keyed descriptor lookup — forwarded to `resolveFieldTypeDescriptor` for entity-ref type-constructor resolution (e.g. `pg.enum(Ref)`). */
   readonly codecLookup: CodecLookupWithDescriptors;
-  readonly namespaceIdOf: (namespace: NamespaceSymbol | undefined) => string | undefined;
 }
 
 /**
@@ -426,7 +424,6 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     namespaceId,
     namespaceExtensionEntities,
     codecLookup,
-    namespaceIdOf,
   } = input;
   const resolvedFields: ResolvedField[] = [];
   const valueObjectStorageTypeName = authoringContributions?.valueObjectStorageType;
@@ -497,7 +494,6 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       entityLabel: `Field "${model.name}.${field.name}"`,
       ...ifDefined('namespaceId', namespaceId),
       ...ifDefined('namespaceExtensionEntities', namespaceExtensionEntities),
-      entityNames: { binder, namespaceIdOf },
       codecLookup,
     };
 

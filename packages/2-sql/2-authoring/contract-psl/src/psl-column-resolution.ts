@@ -40,7 +40,6 @@ import type {
   FieldSymbol,
   ModelSymbol,
   NamedTypeSymbol,
-  NamespaceSymbol,
   ParsedWrittenScalar,
   PslSpan,
   Resolution,
@@ -264,11 +263,6 @@ function hasColumnFromEntityHook(
   return 'columnFromEntity' in descriptor && typeof descriptor.columnFromEntity === 'function';
 }
 
-interface EntityNameResolution {
-  readonly binder: Binder;
-  readonly namespaceIdOf: (namespace: NamespaceSymbol | undefined) => string | undefined;
-}
-
 /**
  * Resolves a type-constructor call whose descriptor declares an
  * `entityRefArg` (e.g. `pg.enum(AalLevel)`): extracts the call's sole
@@ -291,7 +285,6 @@ function resolveEntityRefTypeConstructorCall(input: {
   readonly namespaceExtensionEntities:
     | Readonly<Record<string, Readonly<Record<string, unknown>>>>
     | undefined;
-  readonly entityNames: EntityNameResolution | undefined;
   readonly codecLookup: CodecLookupWithDescriptors;
   readonly diagnostics: PslDiagnosticCollector;
   readonly source: DiagnosticSource;
@@ -306,19 +299,8 @@ function resolveEntityRefTypeConstructorCall(input: {
 
   const helperPath = input.call.path.join('.');
   const positionalArgs = input.call.args.filter((arg) => arg.kind === 'positional');
-  const argument = positionalArgs[entityRefArg.index];
-  const ref = argument?.value;
-  const node = argument?.expression?.syntax;
-  const resolution =
-    input.entityNames === undefined || node === undefined
-      ? undefined
-      : input.entityNames.binder.symbolForNode(node);
-  if (
-    input.call.args.length !== 1 ||
-    positionalArgs.length !== 1 ||
-    ref === undefined ||
-    (input.entityNames !== undefined && resolution === undefined)
-  ) {
+  const ref = positionalArgs[entityRefArg.index]?.value;
+  if (input.call.args.length !== 1 || positionalArgs.length !== 1 || ref === undefined) {
     input.diagnostics.push({
       code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
       message: `${input.entityLabel} type constructor "${helperPath}" expects exactly one positional argument naming the referenced entity`,
@@ -336,19 +318,7 @@ function resolveEntityRefTypeConstructorCall(input: {
     return NOT_RESOLVED;
   };
 
-  let entityName = ref;
-  if (input.entityNames !== undefined && resolution !== undefined) {
-    if (resolution.kind === 'unresolved') return NOT_RESOLVED;
-    if (
-      resolution.kind !== 'block' ||
-      input.entityNames.namespaceIdOf(resolution.namespace) !== input.namespaceId
-    ) {
-      return reportUnknownRef();
-    }
-    entityName = resolution.symbol.name;
-  }
-
-  const entity = input.namespaceExtensionEntities?.[entityRefArg.entityKind]?.[entityName];
+  const entity = input.namespaceExtensionEntities?.[entityRefArg.entityKind]?.[ref];
   if (entity === undefined) {
     return reportUnknownRef();
   }
@@ -368,7 +338,7 @@ function resolveEntityRefTypeConstructorCall(input: {
     return reportUnknownRef();
   }
 
-  const derivedValueSet = input.namespaceExtensionEntities?.['valueSet']?.[entityName];
+  const derivedValueSet = input.namespaceExtensionEntities?.['valueSet']?.[ref];
   if (derivedValueSet !== undefined && input.namespaceId === undefined) {
     input.diagnostics.push({
       code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
@@ -384,7 +354,7 @@ function resolveEntityRefTypeConstructorCall(input: {
           plane: 'storage',
           entityKind: 'valueSet',
           namespaceId: input.namespaceId,
-          entityName,
+          entityName: ref,
         }
       : undefined;
 
@@ -441,7 +411,6 @@ interface FieldTypeConstructorContext {
   readonly namespaceExtensionEntities?:
     | Readonly<Record<string, Readonly<Record<string, unknown>>>>
     | undefined;
-  readonly entityNames?: EntityNameResolution | undefined;
   /**
    * Codec-id-keyed descriptor lookup — consulted only when a type
    * constructor's descriptor declares an `entityRefArg`, to reach the
@@ -462,7 +431,6 @@ export function instantiateFieldTypeConstructor(
       descriptor: input.descriptor,
       namespaceId: input.namespaceId,
       namespaceExtensionEntities: input.namespaceExtensionEntities,
-      entityNames: input.entityNames,
       codecLookup: input.codecLookup,
       diagnostics: input.diagnostics,
       source: input.source,
