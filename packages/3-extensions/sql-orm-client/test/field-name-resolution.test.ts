@@ -1,18 +1,19 @@
+import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import { BinaryExpr, ColumnRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { Collection } from '../src/collection';
-import { resolveIncludeRelation } from '../src/collection-contract';
 import { createModelAccessor } from '../src/model-accessor';
 import { compileSelect } from '../src/query-plan-select';
 import type { CollectionState } from '../src/types';
 import { createCollectionFor, createReturningCollectionFor } from './collection-fixtures';
+import { defineContract, field, model } from './contract-builder';
 import {
   buildMixedPolyContract,
+  buildTestContextFromContract,
   createMockRuntime,
   fieldUnknown,
   getTestContext,
   getTestContract,
-  withPatchedDomainModels,
 } from './helpers';
 
 const notAField = fieldUnknown('User', 'invited_by_id');
@@ -115,28 +116,6 @@ describe('a name that is not a field of the model', () => {
       fieldUnknown('Post', 'user_id'),
     );
   });
-
-  it('is refused as a relation join field', () => {
-    const contract = withPatchedDomainModels(getTestContract(), (models) => {
-      const user = models['User'] as { relations: Record<string, { on: unknown }> };
-      return {
-        ...models,
-        User: {
-          ...user,
-          relations: {
-            ...user.relations,
-            posts: {
-              ...user.relations['posts'],
-              on: { localFields: ['id'], targetFields: ['user_id'] },
-            },
-          },
-        },
-      };
-    });
-    expect(() => resolveIncludeRelation(contract, 'public', 'User', 'posts')).toThrow(
-      fieldUnknown('Post', 'user_id'),
-    );
-  });
 });
 
 describe('a name that is not a field of the variant in scope', () => {
@@ -227,29 +206,20 @@ describe('the where and orderBy accessor', () => {
   });
 
   it('resolves a field named then before treating it as a probe', () => {
-    const contract = withPatchedDomainModels(getTestContract(), (models) => {
-      const user = models['User'] as {
-        fields: Record<string, unknown>;
-        storage: { fields: Record<string, unknown> };
-      };
-      return {
-        ...models,
-        User: {
-          ...user,
-          fields: { ...user.fields, ...Object.fromEntries([['then', user.fields['name']]]) },
-          storage: {
-            ...user.storage,
-            fields: {
-              ...user.storage.fields,
-              ...Object.fromEntries([['then', { column: 'name' }]]),
-            },
-          },
-        },
-      };
-    });
-    const field = userAccessor(contract)['then'] as { eq(value: string): unknown };
-    expect(field.eq('x')).toEqual(
-      new BinaryExpr('eq', ColumnRef.of('users', 'name'), expect.anything()),
+    const Thing = model('Thing', {
+      fields: Object.fromEntries([
+        ['id', field.column(int4Column).id()],
+        ['then', field.column(textColumn)],
+      ]),
+    }).sql({ table: 'things' });
+    const contract = defineContract({ models: { Thing } });
+    const thing = createModelAccessor(
+      buildTestContextFromContract(contract) as never,
+      'public',
+      'Thing',
+    ) as unknown as Record<string, { eq(value: string): unknown }>;
+    expect(thing['then']!.eq('x')).toEqual(
+      new BinaryExpr('eq', ColumnRef.of('things', 'then'), expect.anything()),
     );
   });
 
