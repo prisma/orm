@@ -53,14 +53,14 @@ post
 1. **Every ORM callback that receives a model accessor to build a condition or an order also receives a second argument, `{ fns, indexes }`.** That covers `where` and `orderBy`, wherever they are called: on a root collection, after other methods, inside a fragment, inside an include refinement, and inside a relation filter.
 2. **`fns` is the SQL query builder's function surface for the contract.** Its functions accept ORM fields as arguments, because an ORM field is already a query expression. A function that returns a condition can be passed to `where` and combined with `and`, `or` and `not`. A function that returns a value has `asc()` and `desc()`, as an operation on an ORM field already does, so `orderBy` accepts it.
 3. **`indexes` is the model's table's indexes, as the SQL query builder's `table.indexes` gives them.** Each is an index reference: the index's columns bound to the table as this query reads it, its type and its options. Inside an include refinement or a relation filter, the columns are bound to the related table's alias, so the reference is correct there too.
-4. **The ORM and the SQL query builder share the function surface and the index reference.** Both are built by the same code, in a package both lanes depend on, so a function or an index type added by a target or extension reaches both lanes without further work.
+4. **The ORM and the SQL query builder share the function surface and the index reference.** Both are built by the same code, in `@internal/sql-relational-core`, which both lanes depend on, so a function or an index type added by a target or extension reaches both lanes without further work.
 5. **Nothing is added to the contract, the schema language or the `Collection` type's chaining methods.** The callbacks gain an argument; existing callbacks that take one argument keep working.
 
 ## Why
 
 ### The ORM cannot search several fields today
 
-Slice 3 of this project gave the full-text index weight groups and stored them as data in the contract. It also let a SQL query builder query name the index, so the query reads the weights and language from the contract and cannot drift from the index.
+A Postgres full-text index can span several fields in weight groups, and the contract stores its groups and language as data ([ADR 236](ADR%20236%20-%20Target-contributed%20model%20attributes.md)). A SQL query builder query can name the index, so the query reads the weights and language from the contract and cannot drift from the index.
 
 The ORM has none of this. Its search operations attach to one field, according to the field's data type (ADR 206): `p.title.fullTextMatches(q)` searches the title alone. A search over the title and the body together, weighted as the index weights them, cannot be written in the ORM at all. An application that needs it drops to the SQL query builder.
 
@@ -91,13 +91,17 @@ interface ModelCallbackTools<TContract, ModelName, NsId> {
 }
 ```
 
-`OrmFunctions<TContract>` is the SQL query builder's `Functions` for the contract, except that a query operation's result that is a value, not a condition, also has `asc()` and `desc()`. The ORM builds the object once per callback call, from the collection's execution context and the table reference it already holds for the model accessor. `indexes` is a lazy getter, as on the SQL query builder's table proxy, so a callback that does not read it costs nothing at run time. `fns.raw` binds an interpolated value through the adapter's raw codec inferer, which the database clients pass to `orm({ rawCodecInferer })`.
+`OrmFunctions<TContract>` is the SQL query builder's `Functions` for the contract, except that two kinds of result also have `asc()` and `desc()`: a query operation's result that is a value, not a condition, and the expression `fns.raw` returns. Such a result keeps its own members, such as the `within()` of ParadeDB's proximity chain. A reusable condition names the argument's type, `ModelCallbackTools<Contract, 'Post'>`, which the ORM client exports with `OrmFunctions` and `ModelIndexReferences`. The ORM builds the object once per callback call, from the collection's execution context and the table reference it already holds for the model accessor. `indexes` is a lazy getter, as on the SQL query builder's table proxy, so a callback that does not read it costs nothing at run time. `fns.raw` binds an interpolated value through the adapter's raw codec inferer, which the database clients pass to `orm({ rawCodecInferer })`.
+
+### Where the shared code lives
+
+`@internal/sql-relational-core/functions` holds the function surface: `Functions`, `BuiltinFunctions` and `createFunctions`. `@internal/sql-relational-core/index-reference` holds the index reference: `IndexReference`, `TableIndexReferences` and `createIndexReferences`, which keys a table's indexes by authored name and takes the column expressions from the lane that asks, so each lane binds the columns to its own table reference. The SQL query builder's `table.indexes` and `fns` and the ORM's second argument are built from these.
 
 ### Index references in the ORM
 
 The ORM resolves the model to its storage table, as it already does for the model accessor, and builds one reference per index: its columns as column expressions on the table reference this query uses, its `type` and its `options`. The key is the index's authored name: the `name:` the schema gave it, or its `map:` name. An unnamed index, such as a foreign key's backing index, appears under its default prefix. A name more than one index of the table shares is left out of the type and refused when read, as in the SQL query builder.
 
-A fragment for any model with given fields (ADR 259) does not know which model it runs on, so the `indexes` its body receives has no members. Its `fns` is complete.
+A fragment for any model with given fields (ADR 259) does not know which model it runs on, so the `indexes` its body receives has no members, in its type and at run time. Its `fns` is complete.
 
 ### Ordering by a function's value
 
@@ -147,7 +151,7 @@ db.User.where({ id }).include('posts', (posts) => posts.with(search(input.search
 | Party | Owns |
 | --- | --- |
 | Target or extension | Its operations, as today (ADR 206), and its index types (ADR 210). An operation that takes an index reference reads its columns and options. |
-| Shared lane package | The function surface and the index reference, built the same way for both lanes. |
+| `@internal/sql-relational-core` | The function surface (`/functions`) and the index reference (`/index-reference`), built the same way for both lanes. |
 | SQL query builder | `table.indexes` and `fns` in its callbacks, as today. |
 | ORM client | The second callback argument: `fns` and the model's `indexes`, bound to the table reference the query uses. |
 
@@ -158,6 +162,7 @@ db.User.where({ id }).include('posts', (posts) => posts.with(search(input.search
 - **The model accessor's callbacks gain a parameter in their type.** Code that annotates a callback's type with one parameter keeps compiling, because a function with fewer parameters is assignable to one with more.
 - **The index's name is part of the application's code.** Renaming an index in the schema breaks the queries that name it, at compile time. This is the same as renaming a field.
 - **A query can still write a search document by hand**, with `fullTextDocument(...)` from `@prisma/orm-postgres/target/full-text` or a single column. It gets no error when it differs from every index, only a sequential scan. Naming the index is the form the documentation leads with.
+- **An operation whose implementation is generic loses its type parameters in the ORM.** The ORM's `fns` gives each operation's results `asc()` and `desc()` by mapping its signatures, and a mapped generic signature keeps its parameters at their constraints. Up to four overloads keep their parameters. No operation in this repository is generic or has more than two overloads; a type test checks that the ORM's `fns` keeps the SQL query builder's signature for every operation the Postgres target, pgvector, ParadeDB and PostGIS register.
 - **The MongoDB ORM client is unchanged.** It has no `fns` surface and its indexes have no names in the contract.
 - **Type-checking cost is small.** Measured with `tsc --extendedDiagnostics`, twice each with identical counts. On `examples/prisma-8-demo`, the merge base checks in 793,326 instantiations. With this change and the demo not using the feature, 788,361 (−0.6%); the drop comes from moving the index reference to the shared package, where its type resolves only the columns an index covers. Ten uses at different sites (`where` and `orderBy` on a root and a chained collection, an include refinement, a relation filter, a fragment, a custom collection method, a `first` filter, `fns.eq` between two fields and an `orderBy` array) add 1,287 (+0.16%). In the ORM client package, without this change's tests, 1,876,427 at the merge base and 1,885,961 with the change (+0.5%, which includes a new index in the test fixture); ten uses add 12,398 (+0.66%).
 
