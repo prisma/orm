@@ -222,6 +222,12 @@ describe('Number defaults on String, Bytes, DateTime and Boolean fields', () => 
   });
 });
 
+describe('Number defaults written with a plus sign', () => {
+  it('are read as the number without the sign', async () => {
+    expect(await diagnosticsOf('number-default-spellings', 'plus-sign.prisma')).toEqual([]);
+  });
+});
+
 describe('Number defaults too large for the column', () => {
   it('are refused before anything is decoded, naming the data type', async () => {
     expect(await diagnosticsOf('number-default-spellings', 'out-of-range.prisma')).toEqual([

@@ -187,6 +187,47 @@ describe('Tokenizer', () => {
       `);
     });
 
+    it('scans a plus as its own token kind', () => {
+      assertLossless('+auth.Timestamps');
+      expect(tokenize('+auth.Timestamps')).toMatchInlineSnapshot(`
+        "Plus           "+"
+        Ident          "auth"
+        Dot            "."
+        Ident          "Timestamps"
+        Eof            """
+      `);
+    });
+
+    it.each([
+      ['an integer', '+1'],
+      ['a decimal', '+1.5'],
+      ['several digits', '+007'],
+    ])('scans a plus directly before %s as one number', (_name, source) => {
+      expect(collectAll(source)).toEqual([
+        { kind: 'NumberLiteral', text: source },
+        { kind: 'Eof', text: '' },
+      ]);
+    });
+
+    it.each([
+      ['a letter', '+a', ['Plus', 'Ident', 'Eof']],
+      ['a space and a digit', '+ 1', ['Plus', 'Whitespace', 'NumberLiteral', 'Eof']],
+      ['nothing', '+', ['Plus', 'Eof']],
+      ['a dot', '+.5', ['Plus', 'Dot', 'NumberLiteral', 'Eof']],
+      ['another plus', '++1', ['Plus', 'NumberLiteral', 'Eof']],
+    ])('scans a plus before %s as a Plus token', (_name, source, kinds) => {
+      assertLossless(source);
+      expect(collectAll(source).map((token) => token.kind)).toEqual(kinds);
+    });
+
+    it('keeps a plus after a digit apart from the number before it', () => {
+      expect(collectAll('1+2').map((token) => [token.kind, token.text])).toEqual([
+        ['NumberLiteral', '1'],
+        ['NumberLiteral', '+2'],
+        ['Eof', ''],
+      ]);
+    });
+
     it('resumes known tokens after Invalid', () => {
       assertLossless('#$model');
       expect(tokenize('#$model')).toMatchInlineSnapshot(`

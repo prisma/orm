@@ -934,6 +934,24 @@ function parseNumberExpr(source: string) {
   return { node, expr: NumberLiteralExprAst.cast(createSyntaxTree(node)) };
 }
 
+describe('NumberLiteralExprAst for a number written with a plus sign', () => {
+  it.each([
+    ['+1', 1, '1'],
+    ['+1.5', 1.5, '1.5'],
+    ['+007.50', 7.5, '007.50'],
+    ['-2', -2, '-2'],
+    ['3', 3, '3'],
+  ])('reads %s with its value and its text without the plus sign', (source, value, text) => {
+    const { node, expr } = parseNumberExpr(source);
+
+    expect(node.kind).toBe('NumberLiteralExpr');
+    expect(expr?.value()).toBe(value);
+    expect(expr?.text()).toBe(text);
+    expect(expr?.token()?.text).toBe(source);
+    expect(greenText(node)).toBe(source);
+  });
+});
+
 describe('NumberLiteralExprAst.value() for NaN / Infinity', () => {
   it('parses Infinity as a NumberLiteralExpr whose value() is Infinity', () => {
     const { node, expr } = parseNumberExpr('Infinity');

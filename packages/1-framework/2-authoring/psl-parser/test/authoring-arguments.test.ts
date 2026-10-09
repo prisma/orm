@@ -106,6 +106,15 @@ describe('mapPslHelperArgs argument kinds', () => {
     expect(diagnostics).toHaveLength(0);
   });
 
+  it('reads a number written with a plus sign in a number-kind and an object-kind argument', () => {
+    const { result, diagnostics } = callMap(
+      [positional('+3'), positional('{n: +2.5}')],
+      [{ kind: 'number' }, { kind: 'object', properties: {} }],
+    );
+    expect(result).toEqual([3, { n: 2.5 }]);
+    expect(diagnostics).toHaveLength(0);
+  });
+
   it('rejects an object-kind argument that is not brace-delimited', () => {
     const { result, diagnostics } = callMap(
       [positional('[1, 2]')],

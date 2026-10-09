@@ -17,6 +17,7 @@ export type TokenKind =
   | 'Dot'
   | 'Comma'
   | 'Colon'
+  | 'Plus'
   | 'Whitespace'
   | 'Newline'
   | 'Comment'
@@ -182,7 +183,7 @@ function scanKeywordNumber(source: string, pos: number): Token | undefined {
 
 function scanNumber(source: string, pos: number): Token | undefined {
   let end = pos;
-  if (source.charAt(end) === '-') {
+  if (source.charAt(end) === '-' || source.charAt(end) === '+') {
     if (end + 1 >= source.length || !isDigit(source.charAt(end + 1))) return undefined;
     end++;
   } else if (!isDigit(source.charAt(end))) {
@@ -319,4 +320,5 @@ const PUNCTUATION: Record<string, TokenKind> = {
   '.': 'Dot',
   ',': 'Comma',
   ':': 'Colon',
+  '+': 'Plus',
 };

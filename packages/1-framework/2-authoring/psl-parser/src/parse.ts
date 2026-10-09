@@ -538,9 +538,41 @@ export function parseAttributeArgList(cursor: Cursor): GreenNode {
   return cursor.finishNode();
 }
 
+const LIST_CLOSERS: Partial<Record<SyntaxKind, TokenKind>> = {
+  AttributeArgList: 'RParen',
+  FunctionCall: 'RParen',
+  ArrayLiteral: 'RBracket',
+  ObjectLiteralExpr: 'RBrace',
+};
+
+function isUnclosed(node: GreenNode): boolean {
+  const closer = LIST_CLOSERS[node.kind];
+  if (closer === undefined) {
+    return node.children.some((child) => child.type === 'node' && isUnclosed(child));
+  }
+  const last = node.children.at(-1);
+  return last?.type !== 'token' || last.kind !== closer;
+}
+
+function consumeLeftover(
+  cursor: Cursor,
+  code: PslDiagnosticCode,
+  place: string,
+  diagnosticsBefore: number,
+): boolean {
+  const kind = cursor.peekKind();
+  if (kind === 'Eof' || kind === 'RBrace' || cursor.newlineBefore()) return false;
+  if (cursor.diagnostics.length === diagnosticsBefore) {
+    cursor.diagnostic(code, `Unexpected "${cursor.peekToken().text}" in ${place}`, cursor.mark());
+  }
+  cursor.recoverToSyncPoint();
+  return true;
+}
+
 export function parseAttribute(cursor: Cursor): GreenNode {
   const isBlockAttribute = cursor.peekKind() === 'DoubleAt';
   const attributeMark = cursor.mark();
+  const diagnosticsBefore = cursor.diagnostics.length;
   cursor.startNode(isBlockAttribute ? 'ModelAttribute' : 'FieldAttribute');
   cursor.bump();
   if (cursor.peekKind() === 'Ident') {
@@ -548,8 +580,13 @@ export function parseAttribute(cursor: Cursor): GreenNode {
   } else {
     cursor.diagnostic('PSL_INVALID_ATTRIBUTE_SYNTAX', 'Attribute name expected', attributeMark);
   }
-  if (cursor.peekKind() === 'LParen') {
-    parseAttributeArgList(cursor);
+  if (cursor.peekKind() === 'LParen' && isUnclosed(parseAttributeArgList(cursor))) {
+    consumeLeftover(
+      cursor,
+      'PSL_INVALID_ATTRIBUTE_SYNTAX',
+      'attribute arguments',
+      diagnosticsBefore,
+    );
   }
   return cursor.finishNode();
 }
@@ -571,8 +608,14 @@ export function parseTypeAnnotation(cursor: Cursor, memberCode: PslDiagnosticCod
   cursor.startNode('TypeAnnotation');
   if (cursor.peekKind() === 'Ident') {
     parseQualifiedName(cursor);
-    if (cursor.peekKind() === 'LParen') {
-      parseAttributeArgList(cursor);
+    const diagnosticsBefore = cursor.diagnostics.length;
+    if (
+      cursor.peekKind() === 'LParen' &&
+      isUnclosed(parseAttributeArgList(cursor)) &&
+      consumeLeftover(cursor, memberCode, 'type arguments', diagnosticsBefore)
+    ) {
+      cursor.finishNode();
+      return;
     }
   }
   const hasLeadingQuestion = cursor.peekKind() === 'Question';
@@ -639,6 +682,28 @@ const RESERVED_BLOCK_KEYWORDS: ReadonlySet<string> = new Set([
   'types',
 ]);
 
+const MIXIN_KEYWORD = 'mixin';
+
+const KEYWORDS_WITHOUT_MIXINS: ReadonlySet<string> = new Set(['namespace', 'types']);
+
+function usesEarlierGrammar(options: PslParserOptions): boolean {
+  // biome-ignore lint/plugin/no-family-vocabulary: the parser names the grammar versions it parses
+  return options.grammar === 'prisma-7';
+}
+
+function isMixinHeaderAhead(cursor: Cursor, options: PslParserOptions): boolean {
+  return (
+    !usesEarlierGrammar(options) &&
+    cursor.peekKind() === 'Ident' &&
+    cursor.peekKind(1) === 'Ident' &&
+    cursor.peekToken(1).text === MIXIN_KEYWORD
+  );
+}
+
+function mixinWithoutBlockKeywordMessage(name: string | undefined): string {
+  return `A mixin starts with the keyword of the block it is for, for example "model ${MIXIN_KEYWORD} ${name ?? 'Name'}"`;
+}
+
 function keywordIs(cursor: Cursor, keyword: string): boolean {
   return cursor.peekKind() === 'Ident' && cursor.peekToken().text === keyword;
 }
@@ -654,6 +719,10 @@ function parseDeclaration(
   insideNamespace: boolean,
   options: PslParserOptions,
 ): void {
+  if (isMixinHeaderAhead(cursor, options)) {
+    parseMixinDeclaration(cursor, options);
+    return;
+  }
   const name = cursor.peekKind(1) === 'Ident' ? cursor.peekToken(1).text : '';
   if (insideNamespace && keywordIs(cursor, 'namespace')) {
     cursor.diagnostic(
@@ -676,9 +745,9 @@ function parseDeclaration(
   }
 
   const node =
-    parseModel(cursor) ??
+    parseModel(cursor, options) ??
     parseNamespace(cursor, options) ??
-    parseCompositeType(cursor) ??
+    parseCompositeType(cursor, options) ??
     parseTypesBlock(cursor) ??
     parseGenericBlock(cursor, options);
   if (!node) {
@@ -721,9 +790,65 @@ function parseBlock(
   return cursor.finishNode();
 }
 
-export function parseModel(cursor: Cursor): GreenNode | undefined {
+export function parseModel(cursor: Cursor, options: PslParserOptions = {}): GreenNode | undefined {
   if (!keywordIs(cursor, 'model')) return undefined;
-  return parseBlock(cursor, 'ModelDeclaration', true, parseModelMember);
+  return parseBlock(cursor, 'ModelDeclaration', true, (inner) => parseModelMember(inner, options));
+}
+
+function parseMixinDeclaration(cursor: Cursor, options: PslParserOptions): GreenNode {
+  const keyword = cursor.peekToken().text;
+  const keywordMark = cursor.mark();
+  const mixinMark = cursor.mark(1);
+  cursor.startNode('MixinDeclaration');
+  cursor.bump();
+  cursor.bump();
+  const hasName =
+    cursor.peekKind() === 'Ident' && (!cursor.newlineBefore() || cursor.peekKind(1) === 'LBrace');
+  const name = hasName ? cursor.peekToken().text : undefined;
+  if (hasName) {
+    parseIdentifier(cursor);
+  }
+  const hasBody = cursor.peekKind() === 'LBrace';
+  if (KEYWORDS_WITHOUT_MIXINS.has(keyword)) {
+    cursor.diagnostic(
+      'PSL_INVALID_DECLARATION',
+      `A mixin cannot be declared for "${keyword}"`,
+      keywordMark,
+    );
+  } else if (keyword === MIXIN_KEYWORD) {
+    cursor.diagnostic(
+      'PSL_INVALID_DECLARATION',
+      mixinWithoutBlockKeywordMessage(name),
+      keywordMark,
+    );
+  } else if (!hasName) {
+    cursor.diagnostic(
+      'PSL_INVALID_DECLARATION',
+      `Expected a mixin name after "${MIXIN_KEYWORD}"`,
+      mixinMark,
+    );
+  } else if (!hasBody) {
+    cursor.diagnostic(
+      'PSL_INVALID_DECLARATION',
+      `Expected "{" to open the "${keyword} ${MIXIN_KEYWORD}" block`,
+      cursor.markAfterLastToken(),
+    );
+  }
+  if (hasBody) {
+    parseBlockBody(cursor, mixinMemberParser(keyword, options));
+  } else {
+    cursor.recoverToSyncPoint();
+  }
+  return cursor.finishNode();
+}
+
+function mixinMemberParser(keyword: string, options: PslParserOptions): MemberParser {
+  if (keyword === 'namespace') return (inner) => parseDeclaration(inner, true, options);
+  if (keyword === 'types') return parseNamedTypeMember;
+  if (keyword === 'model' || keyword === 'type') {
+    return (inner) => parseModelMember(inner, options);
+  }
+  return genericBlockMemberParser(keyword, options);
 }
 
 /**
@@ -740,6 +865,18 @@ export function parseGenericBlock(
   const keyword = cursor.peekToken().text;
   if (RESERVED_BLOCK_KEYWORDS.has(keyword)) return undefined;
   const hasName = cursor.peekKind(1) === 'Ident' && cursor.peekKind(2) === 'LBrace';
+  const isMixinKeyword = keyword === MIXIN_KEYWORD && !usesEarlierGrammar(options);
+  if (isMixinKeyword) {
+    cursor.diagnostic(
+      'PSL_INVALID_DECLARATION',
+      mixinWithoutBlockKeywordMessage(
+        cursor.peekKind(1) === 'Ident' && !cursor.newlineBefore(1)
+          ? cursor.peekToken(1).text
+          : undefined,
+      ),
+      cursor.mark(),
+    );
+  }
   cursor.startNode('GenericBlockDeclaration');
   cursor.bump();
   if (hasName) {
@@ -748,11 +885,13 @@ export function parseGenericBlock(
   if (cursor.peekKind() === 'LBrace') {
     parseBlockBody(cursor, genericBlockMemberParser(keyword, options));
   } else {
-    cursor.diagnostic(
-      'PSL_INVALID_DECLARATION',
-      `Expected "{" to open the "${keyword}" block`,
-      cursor.markAfterLastToken(),
-    );
+    if (!isMixinKeyword) {
+      cursor.diagnostic(
+        'PSL_INVALID_DECLARATION',
+        `Expected "{" to open the "${keyword}" block`,
+        cursor.markAfterLastToken(),
+      );
+    }
     cursor.recoverToSyncPoint();
   }
   return cursor.finishNode();
@@ -763,9 +902,14 @@ export function parseNamespace(cursor: Cursor, options: PslParserOptions): Green
   return parseBlock(cursor, 'Namespace', true, (inner) => parseDeclaration(inner, true, options));
 }
 
-export function parseCompositeType(cursor: Cursor): GreenNode | undefined {
+export function parseCompositeType(
+  cursor: Cursor,
+  options: PslParserOptions = {},
+): GreenNode | undefined {
   if (!keywordIs(cursor, 'type')) return undefined;
-  return parseBlock(cursor, 'CompositeTypeDeclaration', true, parseModelMember);
+  return parseBlock(cursor, 'CompositeTypeDeclaration', true, (inner) =>
+    parseModelMember(inner, options),
+  );
 }
 
 /** `types` (plural) is the no-name types block; the singular `type` is the composite type above. */
@@ -810,8 +954,29 @@ export function parseBlockAttribute(cursor: Cursor): GreenNode | undefined {
   return parseAttribute(cursor);
 }
 
-function parseModelMember(cursor: Cursor): void {
-  const node = parseBlockAttribute(cursor) ?? parseField(cursor);
+function parseMixinInclusion(
+  cursor: Cursor,
+  options: PslParserOptions,
+  memberCode: PslDiagnosticCode,
+): GreenNode | undefined {
+  if (cursor.peekKind() !== 'Plus' || usesEarlierGrammar(options)) return undefined;
+  const plusMark = cursor.mark();
+  cursor.startNode('MixinInclusion');
+  cursor.bump();
+  if (cursor.peekKind() === 'Ident' && !cursor.newlineBefore()) {
+    parseQualifiedName(cursor);
+  } else {
+    cursor.diagnostic(memberCode, 'Expected a mixin name after "+"', plusMark);
+    cursor.recoverToSyncPoint();
+  }
+  return cursor.finishNode();
+}
+
+function parseModelMember(cursor: Cursor, options: PslParserOptions): void {
+  const node =
+    parseMixinInclusion(cursor, options, 'PSL_INVALID_MODEL_MEMBER') ??
+    parseBlockAttribute(cursor) ??
+    parseField(cursor);
   if (!node) {
     invalidMember(
       cursor,
@@ -838,10 +1003,11 @@ function parseNamedTypeMember(cursor: Cursor): void {
  * body. Each interpreter decides whether it accepts the block and its members.
  */
 function genericBlockMemberParser(keyword: string, options: PslParserOptions): MemberParser {
-  // biome-ignore lint/plugin/no-family-vocabulary: the parser names the grammar versions it parses
-  if (keyword === 'view' && options.grammar === 'prisma-7') return parseModelMember;
-  if (keyword === 'enum') return parseEnumMember;
-  return parseKeyValueMember;
+  if (keyword === 'view' && usesEarlierGrammar(options)) {
+    return (inner) => parseModelMember(inner, options);
+  }
+  if (keyword === 'enum') return (inner) => parseEnumMember(inner, options);
+  return (inner) => parseKeyValueMember(inner, options);
 }
 
 /**
@@ -849,15 +1015,21 @@ function genericBlockMemberParser(keyword: string, options: PslParserOptions): M
  * entry. The block-attribute alternative is purely syntactic — it does not judge
  * whether the attribute is valid for the block's kind.
  */
-function parseKeyValueMember(cursor: Cursor): void {
-  const node = parseBlockAttribute(cursor) ?? parseKeyValue(cursor);
+function parseKeyValueMember(cursor: Cursor, options: PslParserOptions): void {
+  const node =
+    parseMixinInclusion(cursor, options, 'PSL_INVALID_EXTENSION_BLOCK_MEMBER') ??
+    parseBlockAttribute(cursor) ??
+    parseKeyValue(cursor);
   if (!node) {
     invalidMember(cursor, 'PSL_INVALID_EXTENSION_BLOCK_MEMBER', 'Invalid block entry');
   }
 }
 
-function parseEnumMember(cursor: Cursor): void {
-  const node = parseBlockAttribute(cursor) ?? parseKeyValue(cursor, { memberAttributes: true });
+function parseEnumMember(cursor: Cursor, options: PslParserOptions): void {
+  const node =
+    parseMixinInclusion(cursor, options, 'PSL_INVALID_EXTENSION_BLOCK_MEMBER') ??
+    parseBlockAttribute(cursor) ??
+    parseKeyValue(cursor, { memberAttributes: true });
   if (!node) {
     invalidMember(cursor, 'PSL_INVALID_EXTENSION_BLOCK_MEMBER', 'Invalid block entry');
   }
@@ -922,11 +1094,21 @@ export function parseKeyValue(
   parseIdentifier(cursor);
   if (cursor.peekKind() === 'Equals') {
     cursor.bump();
-    if (!parseExpression(cursor)) {
+    const diagnosticsBefore = cursor.diagnostics.length;
+    const value = parseExpression(cursor);
+    if (!value) {
       cursor.diagnostic(
         'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
         'Expected a value after "="',
         cursor.mark(),
+      );
+    }
+    if (!value || isUnclosed(value)) {
+      consumeLeftover(
+        cursor,
+        'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
+        'the entry value',
+        diagnosticsBefore,
       );
     }
   }

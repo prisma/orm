@@ -128,7 +128,7 @@ function parseJsLikeLiteral(value: string): ParsedPslLiteral | typeof INVALID_AU
   }
 
   function parseNumber(): number | typeof INVALID_AUTHORING_ARGUMENT {
-    const match = value.slice(index).match(/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/);
+    const match = value.slice(index).match(/^[+-]?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/);
     const raw = match?.[0];
     if (!raw) {
       return INVALID_AUTHORING_ARGUMENT;
@@ -241,7 +241,7 @@ function parseJsLikeLiteral(value: string): ParsedPslLiteral | typeof INVALID_AU
     if (character === '"' || character === "'") {
       return parseString();
     }
-    if (character === '-' || /\d/.test(character ?? '')) {
+    if (character === '-' || character === '+' || /\d/.test(character ?? '')) {
       return parseNumber();
     }
 

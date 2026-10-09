@@ -730,4 +730,59 @@ policy Probe { on = auth.User\n other = Top.User }`,
     expect(findToken(details, { text: '"anonymous"', tokenType: 'string' })).toBeDefined();
     expect(findToken(details, { text: 'true', tokenType: 'keyword' })).toBeDefined();
   });
+
+  it('leaves the tokens of the rest of a document unchanged around a mixin and an inclusion', () => {
+    const lines = [
+      'model User {',
+      '  id Int @id',
+      '  +auth.Timestamps',
+      '  name String @default("anonymous")',
+      '}',
+      'model mixin Timestamps {',
+      '  createdAt DateTime',
+      '}',
+    ];
+    const withMixins = collectDetails(parseSemanticTokenSource(lines.join('\n')));
+    const withoutMixins = collectDetails(
+      parseSemanticTokenSource([lines[0], lines[1], '', lines[3], lines[4]].join('\n')),
+    );
+
+    expect(withMixins.filter((token) => token.line < 5)).toEqual(withoutMixins);
+    expect(withMixins.filter((token) => token.line >= 5)).toEqual([
+      { text: 'model', tokenType: 'keyword', modifiers: [], line: 5, character: 0 },
+      { text: 'mixin', tokenType: 'keyword', modifiers: [], line: 5, character: 6 },
+      { text: 'Timestamps', tokenType: 'type', modifiers: ['declaration'], line: 5, character: 12 },
+    ]);
+  });
+
+  it('builds tokens for a mixin of each keyword inside a namespace', () => {
+    const source = parseSemanticTokenSource(
+      [
+        'namespace auth {',
+        '  enum mixin BaseRoles {',
+        '    ADMIN',
+        '  }',
+        '  policy mixin OwnerRead {',
+        '    +Shared',
+        '    k = 1',
+        '  }',
+        '  type mixin {',
+        '  }',
+        '}',
+      ].join('\n'),
+    );
+
+    expect(collectDetails(source).map((token) => [token.text, token.tokenType])).toEqual([
+      ['namespace', 'keyword'],
+      ['auth', 'namespace'],
+      ['enum', 'keyword'],
+      ['mixin', 'keyword'],
+      ['BaseRoles', 'type'],
+      ['policy', 'keyword'],
+      ['mixin', 'keyword'],
+      ['OwnerRead', 'type'],
+      ['type', 'keyword'],
+      ['mixin', 'keyword'],
+    ]);
+  });
 });

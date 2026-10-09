@@ -45,7 +45,7 @@ export function readWrittenScalar(expression: ExpressionAst): WrittenScalarResul
 
   const number = NumberLiteralExprAst.cast(syntax);
   if (number !== undefined) {
-    const text = number.token()?.text;
+    const text = number.text();
     return text === undefined ? AN_EXPRESSION : written({ kind: 'number', text });
   }
 

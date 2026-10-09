@@ -11,10 +11,13 @@ import type { PslSources, Range } from './source-file';
 import type { FieldAttributeAst, ModelAttributeAst } from './syntax/ast/attributes';
 import {
   CompositeTypeDeclarationAst,
+  type DeclarationAst,
   type DocumentAst,
   type FieldDeclarationAst,
   GenericBlockDeclarationAst,
   type KeyValuePairAst,
+  MixinDeclarationAst,
+  type MixinInclusionAst,
   ModelDeclarationAst,
   type NamedTypeDeclarationAst,
   NamespaceDeclarationAst,
@@ -213,6 +216,7 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
         }
       }
     }
+    reportMixins(document.declarations(), sources, diagnostics);
   }
 
   return {
@@ -278,6 +282,7 @@ function extendNamespace(
   const { models, compositeTypes, blocks } = namespace;
 
   for (const member of node.declarations()) {
+    if (member instanceof MixinDeclarationAst) continue;
     const memberName = member.name()?.name();
     if (memberName === undefined) continue;
     if (
@@ -304,6 +309,64 @@ function extendNamespace(
       blocks[memberName] = buildBlock(memberName, member, sources);
     }
   }
+}
+
+const MIXINS_NOT_SUPPORTED = 'Mixins are not supported yet';
+
+function reportMixins(
+  declarations: Iterable<DeclarationAst>,
+  sources: PslSources,
+  diagnostics: ParseDiagnostic[],
+): void {
+  for (const declaration of declarations) {
+    if (declaration instanceof NamespaceDeclarationAst) {
+      reportMixins(declaration.declarations(), sources, diagnostics);
+      continue;
+    }
+    if (declaration instanceof TypesBlockAst) continue;
+    if (declaration instanceof MixinDeclarationAst) {
+      const range =
+        nameRange(declaration.name(), sources) ?? mixinKeywordRange(declaration, sources);
+      if (range !== undefined) {
+        diagnostics.push({
+          code: 'PSL_INVALID_DECLARATION',
+          message: MIXINS_NOT_SUPPORTED,
+          filename: sources.sourceFileFor(declaration.syntax).filename,
+          range,
+        });
+      }
+    }
+    for (const inclusion of declaration.inclusions()) {
+      reportInclusion(inclusion, sources, diagnostics);
+    }
+  }
+}
+
+function reportInclusion(
+  inclusion: MixinInclusionAst,
+  sources: PslSources,
+  diagnostics: ParseDiagnostic[],
+): void {
+  if (inclusion.name() === undefined) return;
+  diagnostics.push({
+    code: 'PSL_INVALID_DECLARATION',
+    message: MIXINS_NOT_SUPPORTED,
+    filename: sources.sourceFileFor(inclusion.syntax).filename,
+    range: nodeRange(inclusion.syntax, sources),
+  });
+}
+
+function mixinKeywordRange(
+  declaration: MixinDeclarationAst,
+  sources: PslSources,
+): Range | undefined {
+  const token = declaration.mixinKeyword();
+  if (token === undefined) return undefined;
+  const sourceFile = sources.sourceFileFor(declaration.syntax);
+  return {
+    start: sourceFile.positionAt(token.offset),
+    end: sourceFile.positionAt(token.offset + token.text.length),
+  };
 }
 
 function buildFields(

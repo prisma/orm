@@ -52,11 +52,20 @@ The parser reads structure only. Attributes, their arguments and block entries a
 
 `options.grammar` selects the grammar a file is written in: `prisma-8` by default, or `prisma-7` for Prisma 7 and Prisma 6 schemas.
 
-Strongly typed AST classes wrap the tree for convenient reading. See [ADR 253](../../../../docs/architecture%20docs/adrs/ADR%20253%20-%20PSL%20red-root%20source%20ownership.md) for how nodes relate to their source files.
+In the default grammar the parser reads two mixin forms:
+
+- `<keyword> mixin <Name> { … }` declares a mixin for blocks of that keyword, for example `model mixin Timestamps { … }` or `enum mixin BaseRoles { … }`. It may appear wherever a model or a generic block may, and its body is read like the body of a block of that keyword.
+- `+<Name>` or `+<namespace>.<Name>`, as a member of a model, a composite type, a generic block or a mixin body, includes a mixin. A `+` directly before a digit is the sign of a number instead: `+1` is the number `1`.
+
+`mixin` is therefore not accepted as a block keyword or as a block name. The `prisma-7` grammar has neither form: there `model mixin { … }` is a model named `mixin`.
+
+Strongly typed AST classes wrap the tree for convenient reading. A mixin declaration is a `MixinDeclarationAst`, never a model, composite type or generic block class, and an inclusion is a `MixinInclusionAst` that its block lists through `inclusions()`; the `fields()`, `entries()`, `attributes()` and `members()` of a block do not contain inclusions. See [ADR 253](../../../../docs/architecture%20docs/adrs/ADR%20253%20-%20PSL%20red-root%20source%20ownership.md) for how nodes relate to their source files.
 
 ### Symbol table
 
 `buildSymbolTable({ documents, sources })` collects the declarations of a schema's files: namespaces, models, composite types, named types, generic blocks and their fields. It reports duplicate declarations. It does not resolve references and does not interpret blocks.
+
+Mixin declarations are not collected and take no part in duplicate detection. The symbol table reports each mixin declaration and each inclusion as not supported yet.
 
 Each symbol carries the members of its declaration. A model or composite type symbol has its fields and attributes; a generic block symbol has its entries and its attributes, both in source order, and a repeated entry key appears once per occurrence. Consumers read a declaration's members from its symbol, not from the symbol's syntax node.
 
