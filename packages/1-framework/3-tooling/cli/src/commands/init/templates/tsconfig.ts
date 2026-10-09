@@ -36,6 +36,30 @@ export const REQUIRED_COMPILER_OPTIONS: Record<string, string | boolean> = {
  */
 export const REQUIRED_COMPILER_OPTIONS_TYPES: readonly string[] = ['node'];
 
+const MODULE_COMPILER_OPTIONS: readonly string[] = ['module', 'moduleResolution'];
+
+/**
+ * The `module` values that go with each resolution mode the scaffold
+ * already typechecks under, so a project that has picked one keeps its
+ * own pair. `db.ts` spells its type import `./contract.js`, which
+ * resolves to the emitted `contract.d.ts` under both.
+ *
+ * Node 18 and Node 20 projects resolve under `moduleResolution:
+ * 'node16'` — TypeScript has no `node18` or `node20` resolution mode —
+ * and under `'nodenext'` as well.
+ *
+ * Only whole pairs count: TypeScript rejects a mismatched one (TS5110,
+ * TS5095), so a project carrying half of one still gets the required
+ * defaults. So does one on `module: 'node16'`, which predates import
+ * attributes — `db.ts` imports `contract.json with { type: 'json' }`,
+ * which is TS2823 there.
+ */
+const SUPPORTED_MODULE_PAIRS: Readonly<Record<string, readonly string[]>> = {
+  bundler: ['preserve', 'esnext'],
+  node16: ['node18', 'node20'],
+  nodenext: ['nodenext', 'node18', 'node20'],
+};
+
 export function defaultTsConfig(): string {
   return JSON.stringify(
     {
@@ -95,6 +119,11 @@ function formatTsConfigParseErrors(errors: readonly ParseError[]): string {
  * Throws `TsConfigParseError` when the input is not parseable as JSONC.
  * The caller must catch this and surface a structured error before
  * writing any scaffold files (FR6.2 atomicity).
+ *
+ * A project already on a `SUPPORTED_MODULE_PAIRS` pair keeps its own
+ * `module` / `moduleResolution`: rewriting a resolution mode the
+ * scaffold typechecks under buys nothing, and the options a project
+ * never set are still added.
  */
 export function mergeTsConfig(existing: string): string {
   const { config } = parseTsConfigText(existing);
@@ -109,16 +138,19 @@ export function mergeTsConfig(existing: string): string {
     eol: existing.includes('\r\n') ? '\r\n' : '\n',
   };
 
+  const compilerOptions = config['compilerOptions'] as Record<string, unknown> | undefined;
+  const keepModuleOptions = resolvesScaffoldImports(compilerOptions);
+
   let result = existing;
   for (const [key, value] of Object.entries(REQUIRED_COMPILER_OPTIONS)) {
+    if (keepModuleOptions && MODULE_COMPILER_OPTIONS.includes(key)) {
+      continue;
+    }
     const edits = modify(result, ['compilerOptions', key], value, { formattingOptions });
     result = applyEdits(result, edits);
   }
 
-  const existingTypes = (config['compilerOptions'] as Record<string, unknown> | undefined)?.[
-    'types'
-  ];
-  const mergedTypes = mergeTypesArray(existingTypes);
+  const mergedTypes = mergeTypesArray(compilerOptions?.['types']);
   const typesEdits = modify(result, ['compilerOptions', 'types'], mergedTypes, {
     formattingOptions,
   });
@@ -154,6 +186,19 @@ export function parseTsConfigText(text: string): {
     throw new TsConfigParseError(errors);
   }
   return { config: value as Record<string, unknown> };
+}
+
+function resolvesScaffoldImports(compilerOptions: Record<string, unknown> | undefined): boolean {
+  const moduleResolution = compilerOptions?.['moduleResolution'];
+  const moduleOption = compilerOptions?.['module'];
+  if (typeof moduleResolution !== 'string' || typeof moduleOption !== 'string') {
+    return false;
+  }
+  const resolution = moduleResolution.toLowerCase();
+  if (!Object.hasOwn(SUPPORTED_MODULE_PAIRS, resolution)) {
+    return false;
+  }
+  return SUPPORTED_MODULE_PAIRS[resolution]?.includes(moduleOption.toLowerCase()) ?? false;
 }
 
 function detectIndent(text: string): number {
