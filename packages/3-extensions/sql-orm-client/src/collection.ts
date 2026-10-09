@@ -48,15 +48,15 @@ import {
   assertInsertConflictSkipCapability,
   assertLockCapability,
   assertReturningCapability,
-  getFieldColumnsInScope,
-  getFieldToColumnMap,
+  columnOfCallerField,
+  fieldOfColumn,
+  getModelAndVariantFieldColumns,
+  getModelColumnFields,
   getModelFieldColumns,
+  getOwnFieldColumns,
   isToOneCardinality,
   type PolymorphismInfo,
   type PolymorphismVariantInfo,
-  resolveColumnToField,
-  resolveFieldColumn,
-  resolveFieldToColumn,
   resolveIncludeRelation,
   resolveInsertConflictColumns,
   resolveModelTableName,
@@ -301,8 +301,9 @@ function isMtiVariantInfo(variant: PolymorphismVariantInfo | undefined): variant
 interface MtiCreateContext {
   polyInfo: PolymorphismInfo;
   variant: MtiVariantInfo;
-  baseFieldToColumn: Record<string, string>;
-  variantFieldToColumn: Record<string, string>;
+  baseFieldToColumn: Readonly<Record<string, string>>;
+  variantFieldToColumn: Readonly<Record<string, string>>;
+  mergedFieldToColumn: Readonly<Record<string, string>>;
   pkColumns: readonly string[];
 }
 
@@ -419,7 +420,11 @@ export class CollectionBase<
     const column =
       field === undefined
         ? undefined
-        : resolveFieldToColumn(this.contract, this.namespaceId, this.modelName, field);
+        : columnOfCallerField(
+            getModelFieldColumns(this.contract, this.namespaceId, this.modelName),
+            this.modelName,
+            field,
+          );
     return createIncludeScalar(operation, this.state, column);
   }
 
@@ -2026,7 +2031,7 @@ export class CollectionBase<
     if (!isMtiVariantInfo(variant)) return null;
 
     const baseFieldToColumn = getModelFieldColumns(this.contract, this.namespaceId, this.modelName);
-    const variantFieldToColumn = getFieldToColumnMap(
+    const variantFieldToColumn = getOwnFieldColumns(
       this.contract,
       this.namespaceId,
       variant.modelName,
@@ -2038,6 +2043,12 @@ export class CollectionBase<
       variant,
       baseFieldToColumn,
       variantFieldToColumn,
+      mergedFieldToColumn: getModelAndVariantFieldColumns(
+        this.contract,
+        this.namespaceId,
+        this.modelName,
+        variant.modelName,
+      ),
       pkColumns,
     };
   }
@@ -2046,7 +2057,14 @@ export class CollectionBase<
     data: readonly Record<string, unknown>[],
     mtiCtx: MtiCreateContext,
   ): AsyncIterableResult<Row> {
-    const { polyInfo, variant, baseFieldToColumn, variantFieldToColumn, pkColumns } = mtiCtx;
+    const {
+      polyInfo,
+      variant,
+      baseFieldToColumn,
+      variantFieldToColumn,
+      mergedFieldToColumn,
+      pkColumns,
+    } = mtiCtx;
     const contract = this.contract;
     const collectionCtx = this.ctx;
     const runtime = collectionCtx.runtime;
@@ -2056,7 +2074,6 @@ export class CollectionBase<
 
     const baseFieldColumns = new Set(Object.values(baseFieldToColumn));
     const variantFieldColumns = new Set(Object.values(variantFieldToColumn));
-    const mergedFieldToColumn = { ...baseFieldToColumn, ...variantFieldToColumn };
 
     const generator = async function* (): AsyncGenerator<Row, void, unknown> {
       const defaultValueCache = new Map<string, unknown>();
@@ -2064,7 +2081,7 @@ export class CollectionBase<
         const allMapped: Record<string, unknown> = {};
         for (const [fieldName, value] of Object.entries(row)) {
           if (value === undefined) continue;
-          allMapped[resolveFieldColumn(mergedFieldToColumn, variant.modelName, fieldName)] = value;
+          allMapped[columnOfCallerField(mergedFieldToColumn, variant.modelName, fieldName)] = value;
         }
         allMapped[polyInfo.discriminatorColumn] = variant.value;
 
@@ -2192,7 +2209,7 @@ export class CollectionBase<
       );
     }
 
-    const mergedFieldToColumn = getFieldColumnsInScope(
+    const mergedFieldToColumn = getModelAndVariantFieldColumns(
       this.contract,
       this.namespaceId,
       this.modelName,
@@ -2203,7 +2220,7 @@ export class CollectionBase<
       const mapped: Record<string, unknown> = {};
       for (const [fieldName, value] of Object.entries(row)) {
         if (value === undefined) continue;
-        mapped[resolveFieldColumn(mergedFieldToColumn, variant.modelName, fieldName)] = value;
+        mapped[columnOfCallerField(mergedFieldToColumn, variant.modelName, fieldName)] = value;
       }
       mapped[polyInfo.discriminatorColumn] = variant.value;
       return mapped;
@@ -2912,9 +2929,8 @@ export class CollectionBase<
         );
       }
 
-      const fieldName = resolveColumnToField(
-        this.contract,
-        this.namespaceId,
+      const fieldName = fieldOfColumn(
+        getModelColumnFields(this.contract, this.namespaceId, this.modelName),
         this.modelName,
         columnName,
       );
@@ -2982,9 +2998,8 @@ export class CollectionBase<
     }
     const criterion: Record<string, unknown> = {};
     for (const column of identityColumns) {
-      const fieldName = resolveColumnToField(
-        this.contract,
-        this.namespaceId,
+      const fieldName = fieldOfColumn(
+        getModelColumnFields(this.contract, this.namespaceId, this.modelName),
         this.modelName,
         column,
       );

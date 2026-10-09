@@ -71,7 +71,7 @@ describe('ORM namespace qualification', () => {
       },
     } as Contract<SqlStorageType>;
 
-    expect(() => compileSelect(contract, 'missing', 'users', emptyState(), 'User')).toThrow(
+    expect(() => compileSelect(contract, 'missing', 'User', 'users', emptyState())).toThrow(
       /namespace "missing" is not present/,
     );
   });
@@ -80,9 +80,9 @@ describe('ORM namespace qualification', () => {
     const selectPlan = compileSelect(
       publicPostgresContract,
       'public',
+      'User',
       'users',
       emptyState(),
-      'User',
     );
     expect((selectPlan.ast as { from: TableSource }).from.namespaceId).toBe('public');
 
@@ -102,16 +102,10 @@ describe('ORM namespace qualification', () => {
 
   it('renders schema-qualified SQL for Postgres via the adapter lower path', () => {
     const adapter = createPostgresAdapter();
-    const selectPlan = compileSelect(
-      publicPostgresContract,
-      'public',
-      'users',
-      {
-        ...emptyState(),
-        selectedFields: ['id', 'email'],
-      },
-      'User',
-    );
+    const selectPlan = compileSelect(publicPostgresContract, 'public', 'User', 'users', {
+      ...emptyState(),
+      selectedFields: ['id', 'email'],
+    });
     const selectSql = adapter.lower(selectPlan.ast, {
       contract: publicPostgresContract,
       params: selectPlan.params,
@@ -173,16 +167,10 @@ describe('ORM namespace qualification', () => {
       }),
     } as unknown as Contract<SqlStorageType>;
 
-    const selectPlan = compileSelect(
-      sqliteContract,
-      UNBOUND_NAMESPACE_ID,
-      'users',
-      {
-        ...emptyState(),
-        selectedFields: ['id'],
-      },
-      'User',
-    );
+    const selectPlan = compileSelect(sqliteContract, UNBOUND_NAMESPACE_ID, 'User', 'users', {
+      ...emptyState(),
+      selectedFields: ['id'],
+    });
     expect((selectPlan.ast as { from: TableSource }).from.namespaceId).toBe(UNBOUND_NAMESPACE_ID);
   });
 });

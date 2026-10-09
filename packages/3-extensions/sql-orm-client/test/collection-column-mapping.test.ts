@@ -4,28 +4,31 @@ import {
   mapFieldsToColumns,
   mapSelectedFieldsToColumns,
 } from '../src/collection-column-mapping';
-import { resolveFieldToColumn } from '../src/collection-contract';
+import { columnOfCallerField, getModelFieldColumns } from '../src/collection-contract';
 import { buildMixedPolyContract, fieldUnknown, getTestContract } from './helpers';
 
 describe('collection-column-mapping', () => {
   const contract = getTestContract();
 
-  it('resolveFieldToColumn() resolves fields and refuses a name that is not a field', () => {
-    expect(resolveFieldToColumn(contract, 'public', 'Post', 'userId')).toBe('user_id');
-    expect(() => resolveFieldToColumn(contract, 'public', 'Post', 'customField')).toThrow(
+  const columnOfModelField = (c: typeof contract, ns: string, model: string, field: string) =>
+    columnOfCallerField(getModelFieldColumns(c, ns, model), model, field);
+
+  it('columnOfCallerField() resolves fields and refuses a name that is not a field', () => {
+    expect(columnOfModelField(contract, 'public', 'Post', 'userId')).toBe('user_id');
+    expect(() => columnOfModelField(contract, 'public', 'Post', 'customField')).toThrow(
       fieldUnknown('Post', 'customField'),
     );
   });
 
-  it('resolveFieldToColumn() refuses a column name that is not also a field name', () => {
-    expect(() => resolveFieldToColumn(contract, 'public', 'Post', 'user_id')).toThrow(
+  it('columnOfCallerField() refuses a column name that is not also a field name', () => {
+    expect(() => columnOfModelField(contract, 'public', 'Post', 'user_id')).toThrow(
       fieldUnknown('Post', 'user_id'),
     );
   });
 
-  it('resolveFieldToColumn() resolves a field a variant inherits from its base', () => {
+  it('getModelFieldColumns() includes a field a variant inherits from its base', () => {
     const polyContract = buildMixedPolyContract();
-    expect(resolveFieldToColumn(polyContract, 'public', 'Bug', 'title')).toBe('title');
+    expect(columnOfModelField(polyContract, 'public', 'Bug', 'title')).toBe('title');
   });
 
   it('mapFieldsToColumns() maps fields and refuses a name that is not a field', () => {
@@ -49,7 +52,7 @@ describe('collection-column-mapping', () => {
     ).toEqual(['title', 'severity']);
     expect(() =>
       mapSelectedFieldsToColumns(polyContract, 'public', 'Task', 'Bug', ['priority']),
-    ).toThrow(fieldUnknown('Task', 'priority'));
+    ).toThrow(fieldUnknown('Bug', 'priority'));
     expect(() =>
       mapSelectedFieldsToColumns(contract, 'public', 'Post', undefined, ['user_id']),
     ).toThrow(fieldUnknown('Post', 'user_id'));

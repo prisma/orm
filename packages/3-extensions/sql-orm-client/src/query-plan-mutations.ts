@@ -22,9 +22,13 @@ import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-de
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
-import { resolvePolymorphismInfo, resolvePrimaryKeyColumns } from './collection-contract';
+import {
+  getColumnsReadOnTable,
+  resolvePolymorphismInfo,
+  resolvePrimaryKeyColumns,
+} from './collection-contract';
 import { ormError } from './orm-errors';
-import { buildOrmQueryPlan, deriveParamsFromAst, resolveModelColumns } from './query-plan-meta';
+import { buildOrmQueryPlan, deriveParamsFromAst } from './query-plan-meta';
 import { buildPrimaryKeyJoinOn } from './query-plan-source';
 import { storageTableForContract, tableSourceForContract } from './storage-resolution';
 import { combineWhereExprs } from './where-utils';
@@ -39,7 +43,7 @@ function buildReturningColumns(
   const columns =
     returningColumns && returningColumns.length > 0
       ? [...returningColumns]
-      : resolveModelColumns(contract, namespaceId, modelName, tableName);
+      : getColumnsReadOnTable(contract, namespaceId, modelName, tableName);
 
   return columns.map((column) =>
     ProjectionItem.of(

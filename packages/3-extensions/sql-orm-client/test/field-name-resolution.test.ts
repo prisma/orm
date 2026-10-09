@@ -154,14 +154,14 @@ describe('a name that is not a field of the variant in scope', () => {
     const bugs = polyCollection().variant('bug' as never) as unknown as {
       select(...fields: string[]): unknown;
     };
-    expect(() => bugs.select('priority')).toThrow(fieldUnknown('Task', 'priority'));
+    expect(() => bugs.select('priority')).toThrow(fieldUnknown('Bug', 'priority'));
   });
 
   it('cannot reach the polymorphic projection as a column name', () => {
     const contract = buildMixedPolyContract();
     const state = { selectedFields: ['parent_id_extra'] } as unknown as CollectionState;
     expect(() =>
-      compileSelect(contract, 'public', 'tasks', { ...emptyState(), ...state }, 'Task'),
+      compileSelect(contract, 'public', 'Task', 'tasks', { ...emptyState(), ...state }),
     ).toThrow('Selected column "parent_id_extra" is mapped by no field of model "Task"');
   });
 });

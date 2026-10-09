@@ -50,6 +50,7 @@ The framework must not learn family or target vocabulary (`no-family-vocabulary-
 |---|---|---|
 | Exact-name body-comparison warning | [`packages/2-sql/1-core/contract/src/index-naming.ts`](../../../packages/2-sql/1-core/contract/src/index-naming.ts) | Minting beside the emitter; shared by index lowering and the Postgres policy factory |
 | Duplicate-index warnings | [`packages/2-sql/1-core/contract/src/index-deduplication.ts`](../../../packages/2-sql/1-core/contract/src/index-deduplication.ts) | A contract-build pass pushing `PN_INDEX_DUPLICATE` and `PN_INDEX_REDUNDANT` into the build's sink |
+| Required unmapped column warning | [`packages/2-sql/2-authoring/contract-ts/src/unmapped-column-warnings.ts`](../../../packages/2-sql/2-authoring/contract-ts/src/unmapped-column-warnings.ts) | A contract-build pass pushing `PN_COLUMN_REQUIRED_UNMAPPED` for a required column with no default that a table node adds to a table some model maps |
 | PSL interpreter accumulation | [`packages/2-sql/2-authoring/contract-psl/src/interpreter.ts`](../../../packages/2-sql/2-authoring/contract-psl/src/interpreter.ts) | The array-as-sink, seeded into the build via `ContractDefinition.warnings` |
 | Per-build flush | [`packages/2-sql/2-authoring/contract-ts/src/build-contract.ts`](../../../packages/2-sql/2-authoring/contract-ts/src/build-contract.ts) | One flush at the end of `buildSqlContractFromDefinition` covering indexes and policies |
 

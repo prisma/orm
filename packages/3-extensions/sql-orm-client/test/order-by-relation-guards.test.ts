@@ -76,7 +76,7 @@ describe('cursor() after an order it cannot key on', () => {
       .cursor({ id: 1 })
       .orderBy((post) => post.author.name.asc()).state;
 
-    expect(() => compileSelect(baseContract, 'public', 'posts', state, 'Post')).toThrow(
+    expect(() => compileSelect(baseContract, 'public', 'Post', 'posts', state)).toThrow(
       expect.objectContaining({ code: 'ORM.ARGUMENT_INVALID' }),
     );
   });
@@ -88,7 +88,7 @@ describe('cursor() after an order it cannot key on', () => {
       .cursor({ id: 1 })
       .orderBy((post) => post.title.asc({ nulls: 'first' })).state;
 
-    expect(() => compileSelect(baseContract, 'public', 'posts', state, 'Post')).toThrow(
+    expect(() => compileSelect(baseContract, 'public', 'Post', 'posts', state)).toThrow(
       expect.objectContaining({ code: 'ORM.ARGUMENT_INVALID' }),
     );
   });
@@ -116,7 +116,7 @@ describe('distinctOn() and the orders it needs', () => {
       .orderBy([(post) => post.title.asc(), (post) => post.author.name.asc()])
       .distinctOn('title').state;
 
-    expect(() => compileSelect(baseContract, 'public', 'posts', state, 'Post')).not.toThrow();
+    expect(() => compileSelect(baseContract, 'public', 'Post', 'posts', state)).not.toThrow();
   });
 
   it('accepts column orders with null placement', () => {
@@ -143,7 +143,7 @@ describe('distinctOn() and the orders it needs', () => {
     const sum = { totalViews: { kind: 'aggregate' as const, fn: 'sum', column: 'views' } };
 
     it('refuses to build the select', () => {
-      expect(() => compileSelect(baseContract, 'public', 'posts', postsState(), 'Post')).toThrow(
+      expect(() => compileSelect(baseContract, 'public', 'Post', 'posts', postsState())).toThrow(
         refusal,
       );
     });
@@ -183,9 +183,9 @@ describe('distinctOn() and the orders it needs', () => {
           baseContract,
           getTestAggregates(),
           'public',
+          'User',
           'users',
           state,
-          'User',
         ),
       ).toThrow(refusal);
     });
@@ -205,9 +205,9 @@ describe('distinctOn() and the orders it needs', () => {
           baseContract,
           getTestAggregates(),
           'public',
+          'User',
           'users',
           state,
-          'User',
         ),
       ).toThrow(refusal);
     });

@@ -36,9 +36,9 @@ function compile(tableName: keyof typeof modelOfTable, state: CollectionState): 
     contract,
     context.aggregateDescriptors,
     'public',
+    modelOfTable[tableName],
     tableName,
     state,
-    modelOfTable[tableName],
   );
 }
 

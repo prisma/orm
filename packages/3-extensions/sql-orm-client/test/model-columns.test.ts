@@ -8,7 +8,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { Collection } from '../src/collection';
-import { resolveModelColumns, resolveTableColumns } from '../src/query-plan-meta';
+import { getAllTableColumns, getColumnsReadOnTable } from '../src/collection-contract';
 import {
   compileDeleteReturning,
   compileInsertReturning,
@@ -90,29 +90,29 @@ function returningOf(ast: AnyQueryAst): string[] {
   return projectedColumns((ast as unknown as { returning?: readonly ProjectionItem[] }).returning);
 }
 
-describe('resolveModelColumns', () => {
+describe('getColumnsReadOnTable', () => {
   it('reads the columns a model maps, not a column no field maps', () => {
-    expect(resolveTableColumns(contract, 'public', 'users')).toContain('legacy_key');
-    expect(resolveModelColumns(contract, 'public', 'User', 'users')).toEqual(['id', 'email']);
+    expect(getAllTableColumns(contract, 'public', 'users')).toContain('legacy_key');
+    expect(getColumnsReadOnTable(contract, 'public', 'User', 'users')).toEqual(['id', 'email']);
   });
 
   it('reads a single-table base model and every variant on its table', () => {
     const poly = buildStiPolyContract();
-    expect(resolveModelColumns(poly, 'public', 'User', 'users')).toEqual(
-      resolveTableColumns(poly, 'public', 'users'),
+    expect(getColumnsReadOnTable(poly, 'public', 'User', 'users')).toEqual(
+      getAllTableColumns(poly, 'public', 'users'),
     );
   });
 
   it('reads a single-table variant and its base, not a sibling variant', () => {
     const poly = buildStiPolyContract();
-    const columns = resolveModelColumns(poly, 'public', 'Admin', 'users');
+    const columns = getColumnsReadOnTable(poly, 'public', 'Admin', 'users');
     expect(columns).toContain('role');
     expect(columns).not.toContain('plan');
   });
 
   it('reads the key a multi-table variant inherits on its own table', () => {
     const poly = buildMixedPolyContract();
-    expect(resolveModelColumns(poly, 'public', 'Feature', 'features')).toEqual(
+    expect(getColumnsReadOnTable(poly, 'public', 'Feature', 'features')).toEqual(
       expect.arrayContaining(['id', 'priority']),
     );
   });
@@ -120,7 +120,7 @@ describe('resolveModelColumns', () => {
 
 describe('a query with no select reads only the model columns', () => {
   it('in the default projection', () => {
-    const plan = compileSelect(contract, 'public', 'users', collection('User').state, 'User');
+    const plan = compileSelect(contract, 'public', 'User', 'users', collection('User').state);
     expect(projectedColumns(selectAstOf(plan.ast).projection)).not.toContain('legacy_key');
   });
 
@@ -130,9 +130,9 @@ describe('a query with no select reads only the model columns', () => {
       contract,
       context.aggregateDescriptors,
       'public',
+      'User',
       'users',
       state,
-      'User',
     );
     const ast = selectAstOf(plan.ast);
     expect(projectedColumns(ast.projection)).not.toContain('legacy_key');
@@ -147,9 +147,9 @@ describe('a query with no select reads only the model columns', () => {
       contract,
       context.aggregateDescriptors,
       'public',
+      'User',
       'users',
       state,
-      'User',
     );
     expect(JSON.stringify(plan.ast)).not.toContain('internal_note');
   });
@@ -204,7 +204,7 @@ describe('a query pinned to a variant reads the base fields and that variant fie
 
   it('leaves out a sibling single-table variant column', () => {
     const poly = buildStiPolyContract();
-    const plan = compileSelect(poly, 'public', 'users', pinned(poly, 'User', 'admin'), 'User');
+    const plan = compileSelect(poly, 'public', 'User', 'users', pinned(poly, 'User', 'admin'));
     const columns = projectedColumns(selectAstOf(plan.ast).projection);
     expect(columns).toContain('role');
     expect(columns).not.toContain('plan');
@@ -212,7 +212,7 @@ describe('a query pinned to a variant reads the base fields and that variant fie
 
   it('leaves out a single-table variant column when pinned to a multi-table variant', () => {
     const poly = buildMixedPolyContract();
-    const plan = compileSelect(poly, 'public', 'tasks', pinned(poly, 'Task', 'feature'), 'Task');
+    const plan = compileSelect(poly, 'public', 'Task', 'tasks', pinned(poly, 'Task', 'feature'));
     const columns = projectedColumns(selectAstOf(plan.ast).projection);
     expect(columns).toContain('title');
     expect(columns).not.toContain('severity');

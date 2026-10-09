@@ -286,6 +286,8 @@ constraints.foreignKey(cols.authorId, User.refs.id, { index: 'post_author_live' 
 
 The emitted foreign key states what backs it in `index`: `{ name }` for an index, `{ primaryKey: true }` for the primary key, `{ unique: [columns] }` for a unique constraint by its columns, or nothing for `index: false`. The build drops an index identical to another (the planner's equality, so `type: 'btree'` equals no type), keeping the one with a `name` or `map`, and drops an unnamed plain index on the columns of a key; it warns with `PN_INDEX_DUPLICATE` or `PN_INDEX_REDUNDANT` about named indexes it keeps. See [ADR 161](../../../../docs/architecture%20docs/adrs/ADR%20161%20-%20Explicit%20foreign%20key%20constraint%20and%20index%20configuration.md).
 
+A contract definition's table nodes (`tables`) declare columns and tables no model maps. When a table node adds a required column with no default to a table a model maps, the build warns with `PN_COLUMN_REQUIRED_UNMAPPED`: the ORM writes only the columns fields map, so every insert it makes into that table fails.
+
 ### Validating Contracts
 
 Contract JSON validation flows through the per-target descriptor's

@@ -1,9 +1,12 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import {
+  addressedModelName,
+  callerFieldUnknown,
+  columnOfCallerField,
+  getModelAndEveryVariantFieldColumns,
+  getModelAndVariantFieldColumns,
   getModelFieldColumns,
-  getSelectableFieldColumns,
-  resolveFieldColumn,
 } from './collection-contract';
 
 /** The columns of a model's own and inherited fields, for operations that apply each column to the model's table: `groupBy`, `distinct` and `distinctOn`. */
@@ -14,10 +17,10 @@ export function mapFieldsToColumns(
   fieldNames: readonly string[],
 ): string[] {
   const fieldColumns = getModelFieldColumns(contract, namespaceId, modelName);
-  return fieldNames.map((fieldName) => resolveFieldColumn(fieldColumns, modelName, fieldName));
+  return fieldNames.map((fieldName) => columnOfCallerField(fieldColumns, modelName, fieldName));
 }
 
-/** The columns a `select` names. It also accepts the fields of the variant in scope, or of every variant when the collection is not narrowed, because the polymorphic projection places each column on its own table. */
+/** The columns a `select` names: the narrowed variant's fields too, or, when the collection is not narrowed, every variant's fields, each name reading every column a variant maps it to. See `getModelAndVariantFieldColumns` for why `select` accepts more than other surfaces. */
 export function mapSelectedFieldsToColumns(
   contract: Contract<SqlStorage>,
   namespaceId: string,
@@ -25,8 +28,22 @@ export function mapSelectedFieldsToColumns(
   variantName: string | undefined,
   fieldNames: readonly string[],
 ): string[] {
-  const fieldColumns = getSelectableFieldColumns(contract, namespaceId, modelName, variantName);
-  return fieldNames.map((fieldName) => resolveFieldColumn(fieldColumns, modelName, fieldName));
+  const addressed = addressedModelName(modelName, variantName);
+  if (variantName !== undefined) {
+    const fieldColumns = getModelAndVariantFieldColumns(
+      contract,
+      namespaceId,
+      modelName,
+      variantName,
+    );
+    return fieldNames.map((fieldName) => columnOfCallerField(fieldColumns, addressed, fieldName));
+  }
+  const fieldColumns = getModelAndEveryVariantFieldColumns(contract, namespaceId, modelName);
+  return fieldNames.flatMap((fieldName) => {
+    const columns = Object.hasOwn(fieldColumns, fieldName) ? fieldColumns[fieldName] : undefined;
+    if (columns === undefined) throw callerFieldUnknown(addressed, fieldName);
+    return [...columns];
+  });
 }
 
 export function mapCursorValuesToColumns(
@@ -43,7 +60,7 @@ export function mapCursorValuesToColumns(
       continue;
     }
 
-    mappedCursor[resolveFieldColumn(fieldColumns, modelName, fieldName)] = value;
+    mappedCursor[columnOfCallerField(fieldColumns, modelName, fieldName)] = value;
   }
 
   return mappedCursor;

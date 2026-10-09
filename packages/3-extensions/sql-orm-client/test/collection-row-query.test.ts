@@ -23,15 +23,15 @@ describe('collection row query', () => {
     const state = collection
       .select('name')
       .include('posts', (posts) => posts.select('title')).state;
-    const fieldMap = collectionContract.getFieldToColumnMap;
-    const columnMap = collectionContract.getColumnToFieldMap;
-    vi.spyOn(collectionContract, 'getFieldToColumnMap').mockImplementation(
+    const fieldMap = collectionContract.getOwnFieldColumns;
+    const columnMap = collectionContract.getModelColumnFields;
+    vi.spyOn(collectionContract, 'getOwnFieldColumns').mockImplementation(
       (contract, namespace, model) =>
         model === 'Post'
           ? Object.setPrototypeOf({}, { title: 'user_id' })
           : fieldMap(contract, namespace, model),
     );
-    vi.spyOn(collectionContract, 'getColumnToFieldMap').mockImplementation(
+    vi.spyOn(collectionContract, 'getModelColumnFields').mockImplementation(
       (contract, namespace, model) =>
         model === 'Post'
           ? Object.setPrototypeOf({ user_id: 'userId' }, { title: Object.prototype.toString })

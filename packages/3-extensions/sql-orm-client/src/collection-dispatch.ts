@@ -36,7 +36,10 @@ import { InternalError, isInternalError } from '@internal/utils/internal-error';
 import { resolveAggregate } from './aggregate-codecs';
 import { emptyAggregateResult } from './aggregate-empty-result';
 import {
-  getColumnToFieldMap,
+  addressedModelName,
+  fieldOfColumn,
+  getColumnsReadOnTable,
+  getModelColumnFields,
   isToOneCardinality,
   resolvePolymorphismInfo,
   resolveRowIdentityColumns,
@@ -52,7 +55,6 @@ import {
 import { resolveColumn } from './column-codec';
 import { ormError } from './orm-errors';
 import { compileSelect, compileSelectWithIncludes } from './query-plan';
-import { resolveModelColumns } from './query-plan-meta';
 import { queryPlanRows } from './query-plan-rows';
 import {
   type CollectionContext,
@@ -89,7 +91,7 @@ function describeExecutionRows<Row>(
   const polyInfo = resolvePolymorphismInfo(contract, namespaceId, modelName);
 
   if (state.includes.length === 0) {
-    const compiled = compileSelect(contract, namespaceId, tableName, state, modelName);
+    const compiled = compileSelect(contract, namespaceId, modelName, tableName, state);
     const mapper = polyInfo
       ? (rawRow: Record<string, unknown>) =>
           blindCast<
@@ -117,9 +119,9 @@ function describeExecutionRows<Row>(
     contract,
     context.aggregateDescriptors,
     namespaceId,
+    modelName,
     tableName,
     state,
-    modelName,
   );
   return {
     plan,
@@ -219,16 +221,16 @@ function createPreparedIncludeConsumer(
   const bindings = deferResolution(() => {
     const namespace = include.relatedNamespaceId;
     const keys = new Set(
-      resolveModelColumns(
+      getColumnsReadOnTable(
         contract,
         namespace,
-        include.nested.variantName ?? include.relatedModelName,
+        addressedModelName(include.relatedModelName, include.nested.variantName),
         include.relatedTableName,
       ),
     );
     const polyInfo = resolvePolymorphismInfo(contract, namespace, include.relatedModelName);
     for (const variant of polyInfo?.mtiVariants ?? []) {
-      for (const column of resolveModelColumns(
+      for (const column of getColumnsReadOnTable(
         contract,
         namespace,
         variant.modelName,
@@ -284,23 +286,17 @@ function createPreparedIncludedRowDecoder(
   const namespace = include.relatedNamespaceId;
   const model = include.relatedModelName;
   if (resolvePolymorphismInfo(contract, namespace, model)) return undefined;
-  const columnToField = getColumnToFieldMap(contract, namespace, model);
+  const columnToField = getModelColumnFields(contract, namespace, model);
   const columns =
     include.nested.selectedFields ??
-    resolveModelColumns(contract, namespace, model, include.relatedTableName);
+    getColumnsReadOnTable(contract, namespace, model, include.relatedTableName);
   const aliases = include.nested.includes.map((child) => child.relationName);
   const table = contract.storage.namespaces[namespace]?.entries.table?.[include.relatedTableName];
   if (aliases.some((alias) => table?.columns[alias] !== undefined)) return undefined;
   const keys = [...columns, ...aliases];
   if (keys.includes('__proto__') || new Set(keys).size !== keys.length) return undefined;
-  const fieldOf = (key: string): string => {
-    if (aliases.includes(key)) return key;
-    const field = Object.hasOwn(columnToField, key) ? columnToField[key] : undefined;
-    if (field === undefined) {
-      throw new InternalError(`Column "${key}" of model "${model}" is mapped by no field`);
-    }
-    return field;
-  };
+  const fieldOf = (key: string): string =>
+    aliases.includes(key) ? key : fieldOfColumn(columnToField, model, key);
   const operations = keys.map((key) => {
     const binding = deferResolution(() => bindingFor(key));
     return {

@@ -406,7 +406,7 @@ describe('createModelAccessor', () => {
           'User',
         ) as unknown as Record<string, { some: () => unknown }>
       )['posts']!.some(),
-    ).toThrow(expect.objectContaining({ code: 'ORM.FIELD_UNKNOWN' }));
+    ).toThrow('has no field "undefined" the contract names');
   });
 
   it('fails with an internal error for a field whose storage table is not declared', () => {
@@ -630,7 +630,7 @@ describe('createModelAccessor', () => {
         ),
       );
       // Selecting an STI variant must not surface the MTI variant column.
-      expect(() => bug['priority']).toThrow(fieldUnknown('Task', 'priority'));
+      expect(() => bug['priority']).toThrow(fieldUnknown('Bug', 'priority'));
     });
 
     it('leaves base resolution untouched when no variant is selected', () => {

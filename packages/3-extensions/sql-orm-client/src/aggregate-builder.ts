@@ -4,7 +4,7 @@ import type { SqlAggregateDescriptorRegistry } from '@internal/sql-relational-co
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { aggregateOperationNames } from './aggregate-operations';
-import { getModelFieldColumns, resolveFieldColumn } from './collection-contract';
+import { columnOfCallerField, getModelFieldColumns } from './collection-contract';
 import type { AggregateBuilder, AggregateSelector } from './types';
 
 /**
@@ -30,7 +30,7 @@ export function createAggregateBuilder<
   for (const operation of aggregateOperationNames(aggregates)) {
     builder[operation] = (field?: string) => {
       const column =
-        field === undefined ? undefined : resolveFieldColumn(fieldColumns, modelName, field);
+        field === undefined ? undefined : columnOfCallerField(fieldColumns, modelName, field);
       return { kind: 'aggregate', fn: operation, ...ifDefined('column', column) };
     };
   }

@@ -3,12 +3,12 @@ import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { RuntimeScope } from '@internal/sql-relational-core/types';
 import {
-  getColumnToFieldMap,
+  columnOfCallerField,
+  getModelColumnFields,
   getModelFieldColumns,
-  getOwnColumnToFieldMap,
+  getOwnColumnFields,
   POLYMORPHIC_DISCRIMINATOR_ALIAS,
   type PolymorphismInfo,
-  resolveFieldColumn,
 } from './collection-contract';
 import type { CollectionContext } from './types';
 
@@ -28,7 +28,7 @@ export function stripHiddenMappedFields(
     return;
   }
 
-  const columnToField = getColumnToFieldMap(contract, namespaceId, modelName);
+  const columnToField = getModelColumnFields(contract, namespaceId, modelName);
   for (const hiddenColumn of hiddenColumns) {
     const fieldName = Object.hasOwn(columnToField, hiddenColumn)
       ? columnToField[hiddenColumn]
@@ -55,7 +55,7 @@ export function mapStorageRowToModelFields(
   modelName: string,
   row: Record<string, unknown>,
 ): Record<string, unknown> {
-  return mapKnownColumnNames(row, getColumnToFieldMap(contract, namespaceId, modelName));
+  return mapKnownColumnNames(row, getModelColumnFields(contract, namespaceId, modelName));
 }
 
 export function createStorageRowMapper(
@@ -63,7 +63,7 @@ export function createStorageRowMapper(
   namespaceId: string,
   modelName: string,
 ): (row: Record<string, unknown>) => Record<string, unknown> {
-  const columnToField = getColumnToFieldMap(contract, namespaceId, modelName);
+  const columnToField = getModelColumnFields(contract, namespaceId, modelName);
   return (row) => mapKnownColumnNames(row, columnToField);
 }
 
@@ -85,8 +85,8 @@ function getMergedColumnToFieldMap(
   const cached = perContract.get(cacheKey);
   if (cached) return cached;
 
-  const baseMap = getColumnToFieldMap(contract, namespaceId, baseModelName);
-  const variantMap = getOwnColumnToFieldMap(contract, namespaceId, variantModelName);
+  const baseMap = getModelColumnFields(contract, namespaceId, baseModelName);
+  const variantMap = getOwnColumnFields(contract, namespaceId, variantModelName);
 
   const merged: Record<string, string> = { ...baseMap };
   for (const [col, field] of Object.entries(variantMap)) {
@@ -118,7 +118,7 @@ export function mapPolymorphicRow(
       : undefined;
 
   if (!variant) {
-    return mapKnownColumnNames(row, getColumnToFieldMap(contract, namespaceId, baseModelName));
+    return mapKnownColumnNames(row, getModelColumnFields(contract, namespaceId, baseModelName));
   }
 
   const mtiTable = variant.strategy === 'mti' ? variant.table : undefined;
@@ -140,7 +140,7 @@ export function createPolymorphicRowMapper(
   variantName?: string,
 ): (row: Record<string, unknown>) => Record<string, unknown> {
   const baseMapper = captureColumnMapper(() =>
-    getColumnToFieldMap(contract, namespaceId, baseModelName),
+    getModelColumnFields(contract, namespaceId, baseModelName),
   );
   const mappersByValue = new Map<string, typeof baseMapper>();
   let pinnedMapper = baseMapper;
@@ -209,7 +209,7 @@ export function assertModelFieldNames(
 ): void {
   const fieldColumns = getModelFieldColumns(contract, namespaceId, modelName);
   for (const [fieldName, value] of Object.entries(data)) {
-    if (value !== undefined) resolveFieldColumn(fieldColumns, modelName, fieldName);
+    if (value !== undefined) columnOfCallerField(fieldColumns, modelName, fieldName);
   }
 }
 
@@ -225,7 +225,7 @@ export function mapModelDataToStorageRow(
     if (value === undefined) {
       continue;
     }
-    mapped[resolveFieldColumn(fieldColumns, modelName, fieldName)] = value;
+    mapped[columnOfCallerField(fieldColumns, modelName, fieldName)] = value;
   }
   return mapped;
 }

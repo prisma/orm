@@ -23,13 +23,13 @@ import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-de
 import { assertDefined } from '@internal/utils/assertions';
 import { InternalError } from '@internal/utils/internal-error';
 import {
+  getColumnsReadOnTable,
   type PolymorphismInfo,
   resolvePolymorphismInfo,
   resolvePrimaryKeyColumns,
 } from './collection-contract';
 import { assertCursorCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
-import { resolveModelColumns } from './query-plan-meta';
 import { tableSourceForContract } from './storage-resolution';
 import type { CollectionState } from './types';
 import { bindWhereExpr } from './where-binding';
@@ -328,7 +328,7 @@ function buildMtiJoins(
         : JoinAst.left(tableSourceForContract(contract, namespaceId, variant.table), joinOn);
     joins.push(join);
 
-    const variantColumns = resolveModelColumns(
+    const variantColumns = getColumnsReadOnTable(
       contract,
       namespaceId,
       variant.modelName,

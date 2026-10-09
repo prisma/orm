@@ -71,9 +71,9 @@ export function representativePlans(): ReadonlyArray<readonly [string, SelectAst
       baseContract,
       getTestAggregates(),
       'public',
+      table === 'users' ? 'User' : 'Project',
       table,
       state,
-      table === 'users' ? 'User' : 'Project',
     );
     return [label, plan.ast as SelectAst] as const;
   });

@@ -1218,7 +1218,7 @@ describe('mutation-executor', () => {
             author.connect({ id: 5 }),
         } as never,
       }),
-    ).rejects.toThrow(expect.objectContaining({ code: 'ORM.FIELD_UNKNOWN' }));
+    ).rejects.toThrow('has no field "undefined" the contract names');
   });
 
   it('executeNestedUpdateMutation() returns null when no row matches filters', async () => {

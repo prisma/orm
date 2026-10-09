@@ -12,8 +12,9 @@ import type { RuntimeScope } from '@internal/sql-relational-core/types';
 import { castAs } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import {
-  resolveColumnToField,
-  resolveFieldToColumn,
+  columnOfContractField,
+  fieldOfColumn,
+  getModelColumnFields,
   resolveModelRelations,
   resolveModelTableName,
   resolveRelationTargetColumns,
@@ -1233,7 +1234,7 @@ async function findRowByCriterion(
     filters: [whereExpr],
     limit: 1,
   };
-  const compiled = compileSelect(contract, namespaceId, tableName, state, modelName);
+  const compiled = compileSelect(contract, namespaceId, modelName, tableName, state);
   const rows = await queryPlanRows<Record<string, unknown>>(scope, compiled).toArray();
 
   const firstRow = rows[0];
@@ -1257,7 +1258,7 @@ async function findFirstByFilters(
     filters,
     limit: 1,
   };
-  const compiled = compileSelect(contract, namespaceId, tableName, state, modelName);
+  const compiled = compileSelect(contract, namespaceId, modelName, tableName, state);
   const rows = await queryPlanRows<Record<string, unknown>>(scope, compiled).toArray();
 
   const firstRow = rows[0];
@@ -1308,7 +1309,7 @@ function getRelationDefinitions(
     relatedTableName: resolveModelTableName(contract, relation.toNamespace, relation.to),
     cardinality: relation.cardinality,
     localColumns: relation.on.localFields.map((f) =>
-      resolveFieldToColumn(contract, namespaceId, modelName, f),
+      columnOfContractField(contract, namespaceId, modelName, f),
     ),
     targetColumns: resolveRelationTargetColumns(contract, relation),
     through: relation.through
@@ -1333,5 +1334,9 @@ function toFieldName(
   modelName: string,
   columnName: string,
 ): string {
-  return resolveColumnToField(contract, namespaceId, modelName, columnName);
+  return fieldOfColumn(
+    getModelColumnFields(contract, namespaceId, modelName),
+    modelName,
+    columnName,
+  );
 }

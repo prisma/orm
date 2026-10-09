@@ -48,9 +48,9 @@ describe('SQL ORM rich AST query plans', () => {
       baseContract,
       getTestAggregates(),
       'public',
+      'User',
       'users',
       state,
-      'User',
     );
 
     expect(plan.ast.kind).toBe('select');

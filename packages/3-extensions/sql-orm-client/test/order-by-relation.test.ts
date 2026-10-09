@@ -32,7 +32,7 @@ function planOf(
   tableName: keyof typeof modelOfTable,
   state: CollectionState,
 ): SqlQueryPlan<unknown> {
-  return compileSelect(baseContract, 'public', tableName, state, modelOfTable[tableName]);
+  return compileSelect(baseContract, 'public', modelOfTable[tableName], tableName, state);
 }
 
 function sqlOf(plan: SqlQueryPlan<unknown>): string {
@@ -293,9 +293,9 @@ describe('orderBy a relation inside an include', () => {
       baseContract,
       getTestAggregates(),
       'public',
+      'User',
       'users',
       state,
-      'User',
     );
 
     expect(sqlOf(plan)).toMatchInlineSnapshot(
@@ -313,9 +313,9 @@ describe('orderBy a relation inside an include', () => {
       baseContract,
       getTestAggregates(),
       'public',
+      'User',
       'users',
       state,
-      'User',
     );
 
     expect(sqlOf(plan)).toMatchInlineSnapshot(

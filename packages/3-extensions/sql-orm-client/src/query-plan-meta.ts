@@ -4,14 +4,6 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { type AnyQueryAst, collectOrderedParamRefs } from '@internal/sql-relational-core/ast';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { ifDefined } from '@internal/utils/defined';
-import {
-  getModelFields,
-  modelOf,
-  resolvePolymorphismInfo,
-  resolvePrimaryKeyColumns,
-} from './collection-contract';
-import { ormError } from './orm-errors';
-import { domainModelTableInNamespace, storageTableForContract } from './storage-resolution';
 
 export function deriveParamsFromAst(ast: AnyQueryAst): {
   params: unknown[];
@@ -19,94 +11,6 @@ export function deriveParamsFromAst(ast: AnyQueryAst): {
   return {
     params: collectOrderedParamRefs(ast).map((p) => (p.kind === 'param-ref' ? p.value : undefined)),
   };
-}
-
-export function resolveTableColumns(
-  contract: Contract<SqlStorage>,
-  namespaceId: string,
-  tableName: string,
-): string[] {
-  try {
-    return Object.keys(storageTableForContract(contract, namespaceId, tableName).columns);
-  } catch (error) {
-    // Surface the ambiguous-bare-name fail-fast rather than masking it as an
-    // unknown table.
-    if (error instanceof Error && error.message.includes('ambiguous')) {
-      throw error;
-    }
-    throw ormError('ORM.TABLE_UNKNOWN', `Unknown table "${tableName}" in SQL ORM query planner`, {
-      meta: { namespaceId, tableName },
-    });
-  }
-}
-
-const modelColumnsCache = new WeakMap<object, Map<string, ReadonlySet<string>>>();
-
-function isMultiTableVariantTable(
-  contract: Contract<SqlStorage>,
-  namespaceId: string,
-  modelName: string,
-  tableName: string,
-): boolean {
-  const base = modelOf(contract, namespaceId, modelName)?.base;
-  return (
-    base !== undefined &&
-    domainModelTableInNamespace(contract, namespaceId, modelName) === tableName &&
-    domainModelTableInNamespace(contract, base.namespace, base.model) !== tableName
-  );
-}
-
-function modelColumnsOnTable(
-  contract: Contract<SqlStorage>,
-  namespaceId: string,
-  modelName: string,
-  tableName: string,
-): ReadonlySet<string> {
-  let perContract = modelColumnsCache.get(contract);
-  if (perContract === undefined) {
-    perContract = new Map();
-    modelColumnsCache.set(contract, perContract);
-  }
-  const cacheKey = JSON.stringify([namespaceId, modelName, tableName]);
-  const cached = perContract.get(cacheKey);
-  if (cached !== undefined) return cached;
-
-  const columns = new Set<string>();
-  const addFieldsOnTable = (name: string) => {
-    for (const field of Object.values(getModelFields(contract, namespaceId, name))) {
-      if (field.table === tableName) columns.add(field.column);
-    }
-  };
-  const addInheritedKey = () => {
-    for (const column of resolvePrimaryKeyColumns(contract, namespaceId, tableName)) {
-      columns.add(column);
-    }
-  };
-
-  addFieldsOnTable(modelName);
-  if (isMultiTableVariantTable(contract, namespaceId, modelName, tableName)) addInheritedKey();
-  const variants = resolvePolymorphismInfo(contract, namespaceId, modelName)?.variants.values();
-  for (const variant of variants ?? []) {
-    if (variant.table !== tableName) continue;
-    addFieldsOnTable(variant.modelName);
-    if (variant.strategy === 'mti') addInheritedKey();
-  }
-
-  perContract.set(cacheKey, columns);
-  return columns;
-}
-
-/**
- * The columns of `tableName` a query on `modelName` reads, in table order: the columns on that table of the model's own and inherited fields, of its variants' fields, and, on a multi-table variant's table, the key the variant inherits. Any other column of the table is storage the model does not map, and the ORM never reads it into a row.
- */
-export function resolveModelColumns(
-  contract: Contract<SqlStorage>,
-  namespaceId: string,
-  modelName: string,
-  tableName: string,
-): string[] {
-  const read = modelColumnsOnTable(contract, namespaceId, modelName, tableName);
-  return resolveTableColumns(contract, namespaceId, tableName).filter((column) => read.has(column));
 }
 
 export function buildOrmPlanMeta(

@@ -10,9 +10,9 @@ import {
 } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import {
+  columnOfCallerField,
   getModelFieldColumns,
   modelOf,
-  resolveFieldColumn,
   resolveModelTableName,
 } from './collection-contract';
 import { hasTrait } from './column-codec';
@@ -57,7 +57,7 @@ export function shorthandToWhereExpr<
       continue;
     }
 
-    const left = ColumnRef.of(tableName, resolveFieldColumn(fieldColumns, modelName, fieldName));
+    const left = ColumnRef.of(tableName, columnOfCallerField(fieldColumns, modelName, fieldName));
 
     if (value === null) {
       exprs.push(NullCheckExpr.isNull(left));

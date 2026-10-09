@@ -23,7 +23,7 @@ import type { SimplifyDeep } from '@internal/utils/simplify-deep';
 import { createAggregateBuilder, isAggregateSelector } from './aggregate-builder';
 import { resolveAggregate } from './aggregate-codecs';
 import { aggregateOperationNames } from './aggregate-operations';
-import { getModelFieldColumns, resolveFieldColumn } from './collection-contract';
+import { columnOfCallerField, getModelFieldColumns } from './collection-contract';
 import { createStorageRowMapper } from './collection-runtime';
 import { createModelAccessor } from './model-accessor';
 import { ormError } from './orm-errors';
@@ -352,7 +352,7 @@ function createHavingBuilder<
         );
       }
       const column =
-        field === undefined ? undefined : resolveFieldColumn(fieldColumns, modelName, field);
+        field === undefined ? undefined : columnOfCallerField(fieldColumns, modelName, field);
       const metric = new AggregateExpr(
         operation,
         column === undefined ? undefined : ColumnRef.of(tableName, column),

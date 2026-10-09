@@ -164,7 +164,7 @@ describe('mapPolymorphicRow()', () => {
   it('precomputes STI, MTI, pinned and fallback maps without looking up metadata per row', () => {
     const contract = buildMixedPolyContract();
     const polyInfo = resolvePolymorphismInfo(contract, 'public', 'Task')!;
-    const lookup = vi.spyOn(collectionContract, 'getColumnToFieldMap');
+    const lookup = vi.spyOn(collectionContract, 'getModelColumnFields');
     const map = createPolymorphicRowMapper(contract, 'public', 'Task', polyInfo);
     const pinned = createPolymorphicRowMapper(contract, 'public', 'Task', polyInfo, 'Feature');
     expect(lookup).toHaveBeenCalledWith(contract, 'public', 'Task');
