@@ -1,13 +1,13 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import { isWhereExpr, type WhereArg } from '@internal/sql-relational-core/ast';
+import type { WhereArg } from '@internal/sql-relational-core/ast';
 import {
   type Expression,
   isExpression,
   type RawCodecInferer,
   type ScopeField,
 } from '@internal/sql-relational-core/expression';
-import { createFunctions } from '@internal/sql-relational-core/functions';
+import { type BooleanCodecType, createFunctions } from '@internal/sql-relational-core/functions';
 import type { IndexReference } from '@internal/sql-relational-core/index-reference';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { blindCast } from '@internal/utils/casts';
@@ -110,6 +110,9 @@ export function createModellessCallbackTools<TContract extends Contract<SqlStora
 
 /** A `where` callback's result as a filter: a condition from `fns` is an expression, and becomes its AST. */
 export function whereArgOf(result: WhereCallbackResult): WhereArg {
-  if (isWhereExpr(result) || 'toWhereExpr' in result) return result;
-  return result.buildAst();
+  return isFunctionCondition(result) ? result.buildAst() : result;
+}
+
+function isFunctionCondition(result: WhereCallbackResult): result is Expression<BooleanCodecType> {
+  return isExpression(result);
 }

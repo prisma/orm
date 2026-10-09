@@ -8,7 +8,7 @@ import {
   NullCheckExpr,
   OrExpr,
 } from '@internal/sql-relational-core/ast';
-import type { Expression } from '@internal/sql-relational-core/expression';
+import { type Expression, isExpression } from '@internal/sql-relational-core/expression';
 import type { BooleanCodecType } from '@internal/sql-relational-core/functions';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import {
@@ -28,7 +28,11 @@ export type Condition = AnyExpression | Expression<BooleanCodecType>;
 
 /** The filter expression of a condition: a condition from `fns` becomes its AST. */
 export function conditionExpr(condition: Condition): AnyExpression {
-  return 'buildAst' in condition ? condition.buildAst() : condition;
+  return isFunctionCondition(condition) ? condition.buildAst() : condition;
+}
+
+function isFunctionCondition(condition: Condition): condition is Expression<BooleanCodecType> {
+  return isExpression(condition);
 }
 
 export function and(...exprs: Condition[]): AndExpr {

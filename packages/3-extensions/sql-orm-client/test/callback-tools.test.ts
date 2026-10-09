@@ -47,6 +47,16 @@ describe('where with fns and indexes', () => {
     );
   });
 
+  it('still takes a condition from a field operation', () => {
+    const { collection } = createCollectionFor('User');
+
+    const users = collection.select('id').where((u) => u.name.ilike('a%'));
+
+    expect(usersSql(users.state)).toBe(
+      'SELECT "users"."id" AS "id" FROM "public"."users" WHERE "users"."name" ILIKE $1',
+    );
+  });
+
   it('combines a condition from fns with ORM conditions', () => {
     const { collection } = createCollectionFor('User');
 
