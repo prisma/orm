@@ -308,4 +308,50 @@ describe('integration/self-relations', () => {
     },
     timeouts.spinUpPpgDev,
   );
+  it(
+    'combine() branches that each filter by a relation return their own rows next to a sibling include of the same table',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createUsersCollection(runtime);
+
+        await seedUsers(runtime, [
+          { id: 1, name: 'Alice', email: 'alice@example.com' },
+          { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: 1 },
+        ]);
+        await seedPosts(runtime, [
+          { id: 10, title: 'First', userId: 1, views: 5 },
+          { id: 11, title: 'Second', userId: 1, views: 50 },
+          { id: 12, title: 'Third', userId: 2, views: 500 },
+        ]);
+
+        const rows = await users
+          .select('id')
+          .orderBy((user) => user.id.asc())
+          .include('posts', (posts) =>
+            posts.combine({
+              byAlice: posts
+                .select('id')
+                .where((post) => post.author.some((author) => author.name.eq('Alice')))
+                .orderBy((post) => post.id.asc()),
+              byBob: posts
+                .where((post) => post.author.some((author) => author.name.eq('Bob')))
+                .count(),
+            }),
+          )
+          .include('invitedUsers', (invitedUsers) => invitedUsers.select('id'))
+          .where((user) => user.invitedBy.none((inviter) => inviter.name.eq('Nobody')))
+          .all();
+
+        expect(rows).toEqual([
+          {
+            id: 1,
+            posts: { byAlice: [{ id: 10 }, { id: 11 }], byBob: 0 },
+            invitedUsers: [{ id: 2 }],
+          },
+          { id: 2, posts: { byAlice: [], byBob: 1 }, invitedUsers: [] },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
 });

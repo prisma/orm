@@ -260,6 +260,41 @@ function buildIncludeOrderArtifacts(
   };
 }
 
+type DerivedTableAliaser = (preferred: string) => string;
+
+function combineBranchStates(include: IncludeExpr): readonly CollectionState[] {
+  return Object.values(include.combine ?? {}).map((branch) =>
+    branch.kind === 'rows' ? branch.state : branch.selector.state,
+  );
+}
+
+function combineBranchScopes(includes: readonly IncludeExpr[]): readonly TableScope[] {
+  return includes.flatMap((include) => {
+    const branchStates = combineBranchStates(include);
+    return [
+      ...branchStates.map((branchState) => branchState.tables.scope),
+      ...combineBranchScopes([
+        ...include.nested.includes,
+        ...(include.scalar?.state.includes ?? []),
+        ...branchStates.flatMap((branchState) => branchState.includes),
+      ]),
+    ];
+  });
+}
+
+function createDerivedTableAliaser(state: CollectionState): DerivedTableAliaser {
+  const scope = state.tables.scope.copy();
+  const branchScopes = combineBranchScopes(state.includes);
+  return (preferred) => {
+    for (;;) {
+      const alias = scope.alias(preferred);
+      if (branchScopes.every((branchScope) => branchScope.copy().alias(alias) === alias)) {
+        return alias;
+      }
+    }
+  };
+}
+
 interface IncludeParent {
   readonly tables: CollectionTables;
   readonly projectedThrough?: string;
@@ -324,13 +359,14 @@ function requireJunction(include: IncludeExpr): AliasedTable {
 function buildNestedIncludeProjections(
   contract: Contract<SqlStorage>,
   aggregates: SqlAggregateDescriptorRegistry,
-  scope: TableScope,
+  aliasDerivedTable: DerivedTableAliaser,
   parent: IncludeParent,
   includes: readonly IncludeExpr[],
 ): ReadonlyArray<ProjectionItem> {
   return includes.map(
     (nested) =>
-      buildCorrelatedIncludeProjection(contract, aggregates, scope, parent, nested).projection,
+      buildCorrelatedIncludeProjection(contract, aggregates, aliasDerivedTable, parent, nested)
+        .projection,
   );
 }
 
@@ -351,11 +387,6 @@ function documentAliasesOf(nestedProjections: ReadonlyArray<ProjectionItem>): Re
  * variant-specific columns live on the base table and reach the row through
  * the ordinary base-column projection (`buildProjection`); only the MTI
  * variant tables need a join.
- *
- * When the child base table is aliased (self-relations), `buildMtiJoins`
- * emits a join `ON` against the unaliased base table name, which would fall
- * out of scope. Remap it to the child alias — the same remap the row builder
- * already applies to `orderBy`/`where`.
  */
 function buildChildPolymorphismJoinsAndProjection(
   contract: Contract<SqlStorage>,
@@ -517,7 +548,7 @@ function buildManyToManyJunctionArtifacts(
 function buildIncludeChildRowsSelect(
   contract: Contract<SqlStorage>,
   aggregates: SqlAggregateDescriptorRegistry,
-  scope: TableScope,
+  aliasDerivedTable: DerivedTableAliaser,
   parent: IncludeParent,
   include: IncludeExpr,
 ): {
@@ -539,7 +570,7 @@ function buildIncludeChildRowsSelect(
     include,
     localColumnsForRowInclude(include),
   );
-  const rowsAlias = scope.alias(`${include.relationName}__rows`);
+  const rowsAlias = aliasDerivedTable(`${include.relationName}__rows`);
   const { childOrderBy, hiddenOrderProjection, aggregateOrderBy } = buildIncludeOrderArtifacts(
     include.relationName,
     rowsAlias,
@@ -584,7 +615,7 @@ function buildIncludeChildRowsSelect(
     return buildDistinctNonLeafChildRowsSelect({
       contract,
       aggregates,
-      scope,
+      aliasDerivedTable,
       include,
       rowsAlias,
       childOrderBy,
@@ -608,7 +639,7 @@ function buildIncludeChildRowsSelect(
   const nestedProjections = buildNestedIncludeProjections(
     contract,
     aggregates,
-    scope,
+    aliasDerivedTable,
     { tables: childState.tables },
     childState.includes,
   );
@@ -651,7 +682,7 @@ function buildIncludeChildRowsSelect(
     // The user's `orderBy` (if any) feeds the OVER clause so it picks
     // the right representative; we reapply it on the wrapped SELECT
     // for any subsequent LIMIT/OFFSET. See `wrapWithRowNumberDedup`.
-    const rankedAlias = scope.alias(`${include.relationName}__distinct`);
+    const rankedAlias = aliasDerivedTable(`${include.relationName}__distinct`);
     childRows = wrapWithRowNumberDedup({
       base: childRows,
       distinctColumnRefs: childState.distinct.map((column) => child.column(column)),
@@ -687,7 +718,7 @@ function buildIncludeChildRowsSelect(
 function buildDistinctNonLeafChildRowsSelect(options: {
   readonly contract: Contract<SqlStorage>;
   readonly aggregates: SqlAggregateDescriptorRegistry;
-  readonly scope: TableScope;
+  readonly aliasDerivedTable: DerivedTableAliaser;
   readonly include: IncludeExpr;
   readonly rowsAlias: string;
   readonly childOrderBy: ReadonlyArray<OrderByItem> | undefined;
@@ -705,7 +736,7 @@ function buildDistinctNonLeafChildRowsSelect(options: {
   const {
     contract,
     aggregates,
-    scope,
+    aliasDerivedTable,
     include,
     rowsAlias,
     childOrderBy,
@@ -784,7 +815,7 @@ function buildDistinctNonLeafChildRowsSelect(options: {
       'buildDistinctNonLeafChildRowsSelect requires a non-empty `distinct` selection',
     );
   }
-  const rankedAlias = scope.alias(`${include.relationName}__ranked`);
+  const rankedAlias = aliasDerivedTable(`${include.relationName}__ranked`);
   let innerSelect = wrapWithRowNumberDedup({
     base: baseInner,
     distinctColumnRefs: distinctColumns.map((column) => child.column(column)),
@@ -808,7 +839,7 @@ function buildDistinctNonLeafChildRowsSelect(options: {
     innerSelect = innerSelect.withOffset(childState.offset);
   }
 
-  const distinctAlias = scope.alias(`${include.relationName}__distinct`);
+  const distinctAlias = aliasDerivedTable(`${include.relationName}__distinct`);
 
   // OUTER: user-visible scalar projection (using the original
   // `selectedFields`, which strips any force-included hidden columns) +
@@ -823,7 +854,7 @@ function buildDistinctNonLeafChildRowsSelect(options: {
   const outerNestedProjections = buildNestedIncludeProjections(
     contract,
     aggregates,
-    scope,
+    aliasDerivedTable,
     { tables: childState.tables, projectedThrough: distinctAlias },
     childState.includes,
   );
@@ -894,7 +925,7 @@ function buildDistinctNonLeafChildRowsSelect(options: {
 function buildIncludeChildScalarSelect(
   contract: Contract<SqlStorage>,
   aggregates: SqlAggregateDescriptorRegistry,
-  scope: TableScope,
+  aliasDerivedTable: DerivedTableAliaser,
   parent: IncludeParent,
   include: IncludeExpr,
   scalar: IncludeScalar<unknown>,
@@ -985,7 +1016,7 @@ function buildIncludeChildScalarSelect(
   // we carry hidden order columns through the wrap and re-reference
   // them on the wrapped alias — mirrors the row-include lowering in
   // `buildIncludeChildRowsSelect`'s distinct branch.
-  const innerAlias = scope.alias(`${include.relationName}__scalar`);
+  const innerAlias = aliasDerivedTable(`${include.relationName}__scalar`);
   const needsHiddenOrderProjection =
     state.distinct !== undefined &&
     state.distinct.length > 0 &&
@@ -1021,7 +1052,7 @@ function buildIncludeChildScalarSelect(
     // orderBy feeds the OVER clause so dedup picks the right
     // representative; the reapplied orderBy below sequences the
     // surviving rows for LIMIT / OFFSET.
-    const rankedAlias = scope.alias(`${include.relationName}__scalar_distinct`);
+    const rankedAlias = aliasDerivedTable(`${include.relationName}__scalar_distinct`);
     inner = wrapWithRowNumberDedup({
       base: inner,
       distinctColumnRefs: state.distinct.map((column) => child.column(column)),
@@ -1098,7 +1129,7 @@ function buildIncludeAggregateExpr(
 function buildIncludeChildCombineSelect(
   contract: Contract<SqlStorage>,
   aggregates: SqlAggregateDescriptorRegistry,
-  scope: TableScope,
+  aliasDerivedTable: DerivedTableAliaser,
   parent: IncludeParent,
   include: IncludeExpr,
   branches: Readonly<Record<string, IncludeCombineBranch>>,
@@ -1116,11 +1147,11 @@ function buildIncludeChildCombineSelect(
 
   const compiledBranches = branchEntries.map(([name, branch]) => ({
     name,
-    alias: scope.alias(`${include.relationName}__combine__${name}`),
+    alias: aliasDerivedTable(`${include.relationName}__combine__${name}`),
     select: buildIncludeChildCombineBranchSelect(
       contract,
       aggregates,
-      scope,
+      aliasDerivedTable,
       parent,
       include,
       branch,
@@ -1161,7 +1192,7 @@ function buildIncludeChildCombineSelect(
 function buildIncludeChildCombineBranchSelect(
   contract: Contract<SqlStorage>,
   aggregates: SqlAggregateDescriptorRegistry,
-  scope: TableScope,
+  aliasDerivedTable: DerivedTableAliaser,
   parent: IncludeParent,
   include: IncludeExpr,
   branch: IncludeCombineBranch,
@@ -1170,7 +1201,7 @@ function buildIncludeChildCombineBranchSelect(
     return buildIncludeChildScalarSelect(
       contract,
       aggregates,
-      scope,
+      aliasDerivedTable,
       parent,
       include,
       branch.selector,
@@ -1187,7 +1218,7 @@ function buildIncludeChildCombineBranchSelect(
   return buildIncludeChildRowsAggregateSelect(
     contract,
     aggregates,
-    scope,
+    aliasDerivedTable,
     parent,
     syntheticInclude,
   );
@@ -1202,12 +1233,12 @@ function buildIncludeChildCombineBranchSelect(
 function buildIncludeChildRowsAggregateSelect(
   contract: Contract<SqlStorage>,
   aggregates: SqlAggregateDescriptorRegistry,
-  scope: TableScope,
+  aliasDerivedTable: DerivedTableAliaser,
   parent: IncludeParent,
   include: IncludeExpr,
 ): SelectAst {
   const { childRows, childProjection, documentAliases, rowsAlias, aggregateOrderBy } =
-    buildIncludeChildRowsSelect(contract, aggregates, scope, parent, include);
+    buildIncludeChildRowsSelect(contract, aggregates, aliasDerivedTable, parent, include);
   const jsonObjectExpr = JsonObjectExpr.fromEntries(
     childProjection.map((item) =>
       JsonObjectExpr.entry(
@@ -1234,7 +1265,7 @@ function buildIncludeChildRowsAggregateSelect(
 function buildCorrelatedIncludeProjection(
   contract: Contract<SqlStorage>,
   aggregates: SqlAggregateDescriptorRegistry,
-  scope: TableScope,
+  aliasDerivedTable: DerivedTableAliaser,
   parent: IncludeParent,
   include: IncludeExpr,
 ): {
@@ -1244,7 +1275,7 @@ function buildCorrelatedIncludeProjection(
     const scalarSelect = buildIncludeChildScalarSelect(
       contract,
       aggregates,
-      scope,
+      aliasDerivedTable,
       parent,
       include,
       include.scalar,
@@ -1258,7 +1289,7 @@ function buildCorrelatedIncludeProjection(
     const combineSelect = buildIncludeChildCombineSelect(
       contract,
       aggregates,
-      scope,
+      aliasDerivedTable,
       parent,
       include,
       include.combine,
@@ -1271,7 +1302,7 @@ function buildCorrelatedIncludeProjection(
   const aggregateQuery = buildIncludeChildRowsAggregateSelect(
     contract,
     aggregates,
-    scope,
+    aliasDerivedTable,
     parent,
     include,
   );
@@ -1422,10 +1453,16 @@ export function compileSelectWithIncludes(
   const polymorphism = buildRootPolymorphism(contract, state, modelName);
   const includeProjection: ProjectionItem[] = [...polymorphism.projection];
 
-  const scope = state.tables.scope.copy();
+  const aliasDerivedTable = createDerivedTableAliaser(state);
   const parent: IncludeParent = { tables: state.tables };
   for (const include of state.includes) {
-    const artifact = buildCorrelatedIncludeProjection(contract, aggregates, scope, parent, include);
+    const artifact = buildCorrelatedIncludeProjection(
+      contract,
+      aggregates,
+      aliasDerivedTable,
+      parent,
+      include,
+    );
     includeProjection.push(artifact.projection);
   }
 

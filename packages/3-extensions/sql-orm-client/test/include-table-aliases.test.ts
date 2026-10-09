@@ -128,23 +128,59 @@ describe('table aliases in includes', () => {
     );
   });
 
-  it('keeps a name taken inside one combine branch out of a later sibling include', () => {
+  it('lets a later sibling include reuse an alias used only inside a combine branch', () => {
     const { collection } = createCollectionFor('User');
     const state = collection
       .select('id')
       .include('posts', (posts) =>
         posts.combine({
           byAuthor: posts.select('id').where((post) => post.author.some()),
-          total: posts.count(),
+          authored: posts.where((post) => post.author.some()).count(),
         }),
       )
       .include('invitedUsers', (invited) => invited.select('id')).state;
 
     const sql = sqlOf(state);
-    expect(sql).toContain(
-      'FROM "public"."users" AS "users_2" WHERE "users_2"."id" = "posts"."user_id"',
+    expect(
+      sql.match(/FROM "public"\."users" AS "users_2" WHERE "users_2"\."id" = "posts"\."user_id"/g),
+    ).toHaveLength(2);
+    expect(sql).toContain('"users_2"."invited_by_id" = "users"."id"');
+    expect(sql).not.toContain('"users_3"');
+    expect(sql).toMatchInlineSnapshot(
+      `"SELECT "users"."id" AS "id", (SELECT json_build_object('byAuthor', "posts__combine__byAuthor"."posts", 'authored', "posts__combine__authored"."posts") AS "posts" FROM (SELECT coalesce(json_agg(json_build_object('id', "posts__rows"."id")), json_build_array()) AS "posts" FROM (SELECT "posts"."id" AS "id" FROM "public"."posts" WHERE ("posts"."user_id" = "users"."id" AND EXISTS (SELECT "users_2"."id" AS "_exists" FROM "public"."users" AS "users_2" WHERE "users_2"."id" = "posts"."user_id"))) AS "posts__rows") AS "posts__combine__byAuthor" INNER JOIN (SELECT json_build_object('value', CAST(COUNT(*) AS text)) AS "posts" FROM "public"."posts" WHERE ("posts"."user_id" = "users"."id" AND EXISTS (SELECT "users_2"."id" AS "_exists" FROM "public"."users" AS "users_2" WHERE "users_2"."id" = "posts"."user_id"))) AS "posts__combine__authored" ON TRUE) AS "posts", (SELECT coalesce(json_agg(json_build_object('id', "invitedUsers__rows"."id")), json_build_array()) AS "invitedUsers" FROM (SELECT "users_2"."id" AS "id" FROM "public"."users" AS "users_2" WHERE "users_2"."invited_by_id" = "users"."id") AS "invitedUsers__rows") AS "invitedUsers" FROM "public"."users""`,
     );
-    expect(sql).toContain('"users_3"."invited_by_id" = "users"."id"');
+  });
+
+  it('keeps a derived-table alias apart from an alias taken inside a combine branch', () => {
+    const { collection } = createCollectionFor('User');
+    const state = collection
+      .select('id')
+      .include('posts', (posts) => posts.combine({ rows: posts.select('id') })).state;
+    const [include] = state.includes;
+    const branch = include?.combine?.['rows'];
+    if (include === undefined || branch?.kind !== 'rows') {
+      throw new Error('Expected a combine include with a rows branch');
+    }
+    const branchScope = branch.state.tables.scope.copy();
+    branchScope.alias('posts__rows');
+
+    const sql = sqlOf({
+      ...state,
+      includes: [
+        {
+          ...include,
+          combine: {
+            rows: {
+              kind: 'rows',
+              state: { ...branch.state, tables: { ...branch.state.tables, scope: branchScope } },
+            },
+          },
+        },
+      ],
+    });
+
+    expect(sql).toContain(') AS "posts__rows_2")');
+    expect(sql).not.toContain(') AS "posts__rows")');
   });
 
   it('rejects a refinement result that was not derived from the collection it was handed', () => {

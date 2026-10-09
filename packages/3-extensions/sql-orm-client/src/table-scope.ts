@@ -21,7 +21,6 @@ export interface TableScope {
   alias(preferred: string): string;
   aliasTable(storage: TableStorageCoordinate): AliasedTable;
   copy(): TableScope;
-  merge(others: readonly TableScope[]): TableScope;
 }
 
 const encoder = new TextEncoder();
@@ -71,10 +70,6 @@ class TableScopeImpl implements TableScope {
 
   copy(): TableScope {
     return new TableScopeImpl(this.#aliases);
-  }
-
-  merge(others: readonly TableScopeImpl[]): TableScope {
-    return new TableScopeImpl([this, ...others].flatMap((scope) => [...scope.#aliases]));
   }
 }
 

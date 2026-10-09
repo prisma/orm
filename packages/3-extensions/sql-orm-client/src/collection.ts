@@ -907,11 +907,9 @@ export class CollectionBase<
             { meta: { relation: relationName, kind: 'combine' } },
           );
         }
-        adoptedScope = child.tables.scope.merge(
-          Object.values(refined.branches).map((branch) =>
-            derivedScope(branch.kind === 'rows' ? branch.state : branch.selector.state),
-          ),
-        );
+        for (const branch of Object.values(refined.branches)) {
+          derivedScope(branch.kind === 'rows' ? branch.state : branch.selector.state);
+        }
         combineBranches = refined.branches;
       } else if (isCollectionStateCarrier(refined)) {
         adoptedScope = derivedScope(refined.state);

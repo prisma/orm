@@ -111,27 +111,6 @@ describe('TableScope.copy', () => {
   });
 });
 
-describe('TableScope.merge', () => {
-  it('holds every alias taken in the receiver or any of the others', () => {
-    const first = createTableScope();
-    first.alias('posts');
-    const second = createTableScope();
-    second.alias('posts');
-    second.alias('posts');
-    second.alias('users');
-
-    const merged = first.merge([second]);
-
-    expect([merged.alias('posts'), merged.alias('users'), merged.alias('tags')]).toEqual([
-      'posts_3',
-      'users_2',
-      'tags',
-    ]);
-    expect(first.alias('users')).toBe('users');
-    expect(second.alias('tags')).toBe('tags');
-  });
-});
-
 describe('TableScope.aliasTable', () => {
   const contract = getTestContract();
   const posts = { namespaceId: 'public', tableName: 'posts' };

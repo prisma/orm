@@ -273,7 +273,7 @@ db.User
 
 The filter in the `invitedUsers` refinement reads `"users_2"."name"`. A ready-made expression passed to `where()` on such a collection may name the bare table: references to it are moved to the collection's own alias, except inside a subquery that itself reads that table.
 
-Collections are immutable, and so are their aliases. Two collections derived from the same parent get the same aliases for the same calls, and neither sees the aliases the other took. `combine()` branches read the related table under one shared alias.
+Collections are immutable, and so are their aliases. Two collections derived from the same parent get the same aliases for the same calls, and neither sees the aliases the other took. `combine()` branches read the related table under one shared alias. An alias a branch takes for itself, such as the table of a relation filter inside it, stays within that branch: another branch, or a later include or filter on the parent, may use the same alias.
 
 The derived tables an include is built from (`<relation>__rows`, `<relation>__distinct`, `<relation>__ranked`, `<relation>__scalar`, `<relation>__scalar_distinct`, `<relation>__combine__<branch>`) are aliased from the same scope, and get a `_<n>` suffix when the same alias is needed twice in a statement. The column of a variant table is projected under the label `<variant table alias>__<column>`.
 
