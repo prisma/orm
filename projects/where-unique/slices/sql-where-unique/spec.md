@@ -21,7 +21,7 @@ whereUnique<Self>(this: Self, criterion: UniqueConstraintCriterion<TContract, Mo
 
 ### Type state
 
-- `HasUniqueFilter` is `HasTypeState<{ readonly uniqueFilter: true }>`.
+- `HasUniqueFilter` is `HasTypeState<{ readonly uniqueFilter: true }>` plus a top-level symbol-keyed member with the value `true`. The requirement type has the matching member as optional `never`. The top-level member is what makes the refusal work on an open `this` inside a class body; the state key is what the conditional constraint tests, because `select` keeps the state key and drops the top-level member. The symbol is not exported.
 - `CollectionTypeState.hasUniqueFilter: boolean` and its copy in `DefaultCollectionTypeState` are removed. Nothing reads them, and the key `uniqueFilter` must be absent from the base state for the rejection to work.
 - A requirement type states "the key is absent": `HasTypeState<{ readonly hasWhere: boolean; readonly uniqueFilter?: never }>`. `hasWhere` is there only so the state object is not all-optional. The spike called it `AllowsManyRows`; the name is internal and the implementer may choose a better one.
 
