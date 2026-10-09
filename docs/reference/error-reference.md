@@ -569,7 +569,7 @@ An RLS policy declaration is invalid: it targets a model in another contract spa
 
 ### CONTRACT.RELATION_INVALID
 
-A relation's shape is wrong: `.sql(...)` on a non-belongsTo relation, mismatched field counts between the two sides, an N:M relation without `through` metadata, or a relation target referencing a field of another model. Raised while authoring/building a contract (SQL and Mongo). Payload: `modelName`, `relationName`, `reason`.
+A relation's shape is wrong: `.sql(...)` on a non-belongsTo relation, mismatched field counts between the two sides, an N:M relation without `through` metadata, a relation target referencing a field of another model, or a join column that no field of its model maps (`reason: 'join-column-not-a-field'`; the target side of an N:M relation names junction columns and is exempt). Raised while authoring/building a contract (SQL and Mongo). Payload: `modelName`, `relationName`, `reason`, and `column` for an unmapped join column.
 
 ### CONTRACT.ROLE_INVALID
 

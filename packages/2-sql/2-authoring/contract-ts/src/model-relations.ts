@@ -102,6 +102,30 @@ function targetColumnsForJunction(targetModel: ModelNode, fieldName: string): re
   );
 }
 
+/** The field of `model` that maps a relation's join column. A relation joins on fields, so a column no field maps is refused. */
+function joinFieldOf(
+  owner: ModelNode,
+  relation: RelationNode,
+  model: ModelNode,
+  columnToField: ReadonlyMap<string, string>,
+  column: string,
+): string {
+  const field = columnToField.get(column);
+  if (field !== undefined) return field;
+  throw contractError(
+    'CONTRACT.RELATION_INVALID',
+    `Relation "${owner.modelName}.${relation.fieldName}" joins on column "${column}" of table "${model.tableName}", which no field of model "${model.modelName}" maps. A relation joins on fields; declare a field for the column.`,
+    {
+      meta: {
+        modelName: owner.modelName,
+        relationName: relation.fieldName,
+        column,
+        reason: 'join-column-not-a-field',
+      },
+    },
+  );
+}
+
 /** Lowers a model's relations. `columnToField` maps the model's columns to the fields that hold them. */
 export function lowerRelations(
   semanticModel: ModelNode,
@@ -153,9 +177,20 @@ export function lowerRelations(
         ? relation.toNamespaceId
         : modelNamespaceId(targetModel, defaultNamespaceId),
     );
+    const joinField = (
+      model: ModelNode,
+      fields: ReadonlyMap<string, string>,
+      column: string,
+    ): string => joinFieldOf(semanticModel, relation, model, fields, column);
     const on = {
-      localFields: relation.on.parentColumns.map((col) => columnToField.get(col) ?? col),
-      targetFields: relation.on.childColumns.map((col) => targetColumnToField.get(col) ?? col),
+      localFields: relation.on.parentColumns.map((col) =>
+        joinField(semanticModel, columnToField, col),
+      ),
+      // A many-to-many relation names the junction table's columns on its target side.
+      targetFields:
+        relation.through !== undefined
+          ? [...relation.on.childColumns]
+          : relation.on.childColumns.map((col) => joinField(targetModel, targetColumnToField, col)),
     };
 
     if (relation.cardinality === 'N:M') {
