@@ -2021,4 +2021,18 @@ export const scenarios = [
       data: ['some', 'array', 1, 2, 3, { object: 'value' }],
     },
   },
+  {
+    name: 'queryRaw - basic validation in custom schema',
+    up: `
+        create table posts (
+          id serial primary key not null,
+          title text not null,
+          data jsonb not null
+        );
+        `,
+    do: async (client) => {
+      return await client.$queryRaw`SELECT * FROM "posts"`
+    },
+    expect: [],
+  },
 ] as Input['scenarios']
