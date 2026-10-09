@@ -55,7 +55,7 @@ The parser reads structure only. Attributes, their arguments and block entries a
 In the default grammar the parser reads two mixin forms:
 
 - `<keyword> mixin <Name> { … }` declares a mixin for blocks of that keyword, for example `model mixin Timestamps { … }` or `enum mixin BaseRoles { … }`. It may appear wherever a model or a generic block may, and its body is read like the body of a block of that keyword.
-- `+<Name>` or `+<namespace>.<Name>`, as the first thing on a line inside a model, a composite type, a generic block or a mixin body, includes a mixin.
+- `+<Name>` or `+<namespace>.<Name>`, as a member of a model, a composite type, a generic block or a mixin body, includes a mixin. A `+` directly before a digit is the sign of a number instead: `+1` is the number `1`.
 
 `mixin` is therefore not accepted as a block keyword or as a block name. The `prisma-7` grammar has neither form: there `model mixin { … }` is a model named `mixin`.
 

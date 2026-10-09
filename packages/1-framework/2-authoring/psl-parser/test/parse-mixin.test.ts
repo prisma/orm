@@ -4,12 +4,12 @@ import {
   CompositeTypeDeclarationAst,
   GenericBlockDeclarationAst,
   MixinDeclarationAst,
-  type MixinInclusionAst,
+  MixinInclusionAst,
   ModelDeclarationAst,
   NamespaceDeclarationAst,
 } from '../src/syntax/ast/declarations';
 import { filterChildren, printSyntax } from '../src/syntax/ast-helpers';
-import type { SyntaxNode } from '../src/syntax/red';
+import { type SyntaxNode, SyntaxNode as SyntaxNodeClass } from '../src/syntax/red';
 import { printTree } from './support';
 
 const prisma7 = { grammar: 'prisma-7' } as const;
@@ -375,27 +375,26 @@ describe('a mixin inclusion', () => {
     ]);
   });
 
-  it('is read only when the plus is the first token on its line', () => {
-    const model = parseLossless('model User { +Timestamps }');
-    const afterField = parseLossless('model User {\n  id Int +Timestamps\n  name String\n}');
-    const entryBlock = parseLossless('policy P {\n  k = 1 +Shared\n  j = 2\n}');
-    const enumBlock = parseLossless('enum Role {\n  ADMIN +BaseRoles\n  USER\n}');
+  it('is read wherever a member may start, on the same line as other members', () => {
+    const only = parseLossless('model User { +Timestamps }');
+    const afterField = parseLossless('model User { id Int +Timestamps name String }');
+    const inEntryBlock = parseLossless('policy P { k = 1 +Shared j = 2 }');
+    const inEnum = parseLossless('enum Role { ADMIN +auth.BaseRoles USER }');
 
-    expect(messages(model)).toEqual([
-      'PSL_INVALID_MODEL_MEMBER: Invalid model member declaration "+"',
-    ]);
-    expect(messages(afterField)).toEqual([
-      'PSL_INVALID_MODEL_MEMBER: Invalid model member declaration "+"',
-    ]);
-    expect(messages(entryBlock)).toEqual([
-      'PSL_INVALID_EXTENSION_BLOCK_MEMBER: Invalid block entry',
-    ]);
-    expect(messages(enumBlock)).toEqual([
-      'PSL_INVALID_EXTENSION_BLOCK_MEMBER: Invalid block entry',
-    ]);
-    for (const result of [model, afterField, entryBlock, enumBlock]) {
-      expect(descendantKinds(result.document.syntax)).not.toContain('MixinInclusion');
+    for (const result of [only, afterField, inEntryBlock, inEnum]) {
+      expect(result.diagnostics).toEqual([]);
     }
+    expect(
+      [only, afterField, inEntryBlock, inEnum].map((result) =>
+        Array.from(result.document.syntax.descendants())
+          .filter((element): element is SyntaxNode => element instanceof SyntaxNodeClass)
+          .flatMap((node) => MixinInclusionAst.cast(node)?.name()?.path() ?? [])
+          .join('.'),
+      ),
+    ).toEqual(['Timestamps', 'Timestamps', 'Shared', 'auth.BaseRoles']);
+    const [model] = Array.from(afterField.document.declarations());
+    if (!(model instanceof ModelDeclarationAst)) throw new Error('expected a model');
+    expect(Array.from(model.fields(), (field) => field.name()?.name())).toEqual(['id', 'name']);
   });
 
   it('is read after a comment line and after indentation', () => {
@@ -510,19 +509,13 @@ describe('the reserved word mixin in a block header', () => {
 });
 
 describe('malformed mixin input', () => {
-  it('reports a plus in expression position as an invalid member and recovers at the next member', () => {
-    const source = 'model User {\n  id Int @default(+1)\n  name String\n}';
-    const result = parseLossless(source);
-    const [model] = Array.from(result.document.declarations());
-    if (!(model instanceof ModelDeclarationAst)) throw new Error('expected a model');
+  it('reads a signed number in an attribute argument', () => {
+    const result = parseLossless(
+      'model User {\n  id Int @default(+1)\n  ratio Float @default(+1.5)\n}',
+    );
 
-    expect(messages(result)).toEqual([
-      'PSL_INVALID_MODEL_MEMBER: Invalid model member declaration "+"',
-    ]);
+    expect(result.diagnostics).toEqual([]);
     expect(descendantKinds(result.document.syntax)).not.toContain('MixinInclusion');
-    expect(diagnosedText(result, source)).toEqual(['+']);
-    expect(Array.from(model.fields(), (field) => field.name()?.name())).toEqual(['id', 'name']);
-    expect(model.rbrace()).toBeDefined();
   });
 
   it.each([

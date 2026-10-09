@@ -71,6 +71,7 @@ describe('interpretExtensionBlock records the source text of number entries', ()
         '  Huge     = 9007199254740993',
         '  Fraction = 0.12345678901234567890',
         '  Negative = -1',
+        '  Positive = +2',
         '  Text     = "9007199254740993"',
         '  Bare',
         '}',
@@ -85,6 +86,7 @@ describe('interpretExtensionBlock records the source text of number entries', ()
       Huge: '9007199254740993',
       Fraction: '0.12345678901234567890',
       Negative: '-1',
+      Positive: '2',
     });
   });
 

@@ -276,7 +276,7 @@ function writtenLiteral(
       ? { kind: 'tag', tag: 'json', text }
       : { kind: 'string', text };
   }
-  const number = NumberLiteralExprAst.cast(expression.syntax)?.token()?.text;
+  const number = NumberLiteralExprAst.cast(expression.syntax)?.text();
   if (number !== undefined) return { kind: 'number', text: number };
   const boolean = BooleanLiteralExprAst.cast(expression.syntax)?.value();
   return boolean === undefined ? undefined : { kind: 'boolean', value: boolean };

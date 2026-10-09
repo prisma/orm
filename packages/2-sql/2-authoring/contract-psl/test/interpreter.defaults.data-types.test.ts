@@ -105,6 +105,10 @@ describe('written defaults a column takes', () => {
     ['a decimal keeping its trailing zeros', 'price Decimal @default(1.50)', 'price', '1.50'],
     ['leading zeros dropped', 'price Decimal @default(007.50)', 'price', '7.50'],
     ['the sign of zero dropped', 'price Decimal @default(-0.0)', 'price', '0.0'],
+    ['a plus sign on an int column', 'count Int @default(+1)', 'count', 1],
+    ['a plus sign on a float column', 'ratio Float @default(+1.5)', 'ratio', 1.5],
+    ['a plus sign dropped on a decimal column', 'price Decimal @default(+1.50)', 'price', '1.50'],
+    ['a plus sign dropped on a bigint column', 'balance BigInt @default(+42)', 'balance', '42'],
     ['Infinity on a float column', 'ratio Float @default(Infinity)', 'ratio', 'Infinity'],
     ['a json null', `meta Jsonb @default(${tagged('json', 'null')})`, 'meta', null],
   ])('reads %s', (_name, field, column, expected) => {

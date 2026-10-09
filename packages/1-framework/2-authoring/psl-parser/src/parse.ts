@@ -538,9 +538,41 @@ export function parseAttributeArgList(cursor: Cursor): GreenNode {
   return cursor.finishNode();
 }
 
+const LIST_CLOSERS: Partial<Record<SyntaxKind, TokenKind>> = {
+  AttributeArgList: 'RParen',
+  FunctionCall: 'RParen',
+  ArrayLiteral: 'RBracket',
+  ObjectLiteralExpr: 'RBrace',
+};
+
+function isUnclosed(node: GreenNode): boolean {
+  const closer = LIST_CLOSERS[node.kind];
+  if (closer === undefined) {
+    return node.children.some((child) => child.type === 'node' && isUnclosed(child));
+  }
+  const last = node.children.at(-1);
+  return last?.type !== 'token' || last.kind !== closer;
+}
+
+function consumeLeftover(
+  cursor: Cursor,
+  code: PslDiagnosticCode,
+  place: string,
+  diagnosticsBefore: number,
+): boolean {
+  const kind = cursor.peekKind();
+  if (kind === 'Eof' || kind === 'RBrace' || cursor.newlineBefore()) return false;
+  if (cursor.diagnostics.length === diagnosticsBefore) {
+    cursor.diagnostic(code, `Unexpected "${cursor.peekToken().text}" in ${place}`, cursor.mark());
+  }
+  cursor.recoverToSyncPoint();
+  return true;
+}
+
 export function parseAttribute(cursor: Cursor): GreenNode {
   const isBlockAttribute = cursor.peekKind() === 'DoubleAt';
   const attributeMark = cursor.mark();
+  const diagnosticsBefore = cursor.diagnostics.length;
   cursor.startNode(isBlockAttribute ? 'ModelAttribute' : 'FieldAttribute');
   cursor.bump();
   if (cursor.peekKind() === 'Ident') {
@@ -548,8 +580,13 @@ export function parseAttribute(cursor: Cursor): GreenNode {
   } else {
     cursor.diagnostic('PSL_INVALID_ATTRIBUTE_SYNTAX', 'Attribute name expected', attributeMark);
   }
-  if (cursor.peekKind() === 'LParen') {
-    parseAttributeArgList(cursor);
+  if (cursor.peekKind() === 'LParen' && isUnclosed(parseAttributeArgList(cursor))) {
+    consumeLeftover(
+      cursor,
+      'PSL_INVALID_ATTRIBUTE_SYNTAX',
+      'attribute arguments',
+      diagnosticsBefore,
+    );
   }
   return cursor.finishNode();
 }
@@ -571,8 +608,14 @@ export function parseTypeAnnotation(cursor: Cursor, memberCode: PslDiagnosticCod
   cursor.startNode('TypeAnnotation');
   if (cursor.peekKind() === 'Ident') {
     parseQualifiedName(cursor);
-    if (cursor.peekKind() === 'LParen') {
-      parseAttributeArgList(cursor);
+    const diagnosticsBefore = cursor.diagnostics.length;
+    if (
+      cursor.peekKind() === 'LParen' &&
+      isUnclosed(parseAttributeArgList(cursor)) &&
+      consumeLeftover(cursor, memberCode, 'type arguments', diagnosticsBefore)
+    ) {
+      cursor.finishNode();
+      return;
     }
   }
   const hasLeadingQuestion = cursor.peekKind() === 'Question';
@@ -916,9 +959,7 @@ function parseMixinInclusion(
   options: PslParserOptions,
   memberCode: PslDiagnosticCode,
 ): GreenNode | undefined {
-  if (cursor.peekKind() !== 'Plus' || !cursor.newlineBefore() || usesEarlierGrammar(options)) {
-    return undefined;
-  }
+  if (cursor.peekKind() !== 'Plus' || usesEarlierGrammar(options)) return undefined;
   const plusMark = cursor.mark();
   cursor.startNode('MixinInclusion');
   cursor.bump();
@@ -1053,11 +1094,21 @@ export function parseKeyValue(
   parseIdentifier(cursor);
   if (cursor.peekKind() === 'Equals') {
     cursor.bump();
-    if (!parseExpression(cursor)) {
+    const diagnosticsBefore = cursor.diagnostics.length;
+    const value = parseExpression(cursor);
+    if (!value) {
       cursor.diagnostic(
         'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
         'Expected a value after "="',
         cursor.mark(),
+      );
+    }
+    if (!value || isUnclosed(value)) {
+      consumeLeftover(
+        cursor,
+        'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
+        'the entry value',
+        diagnosticsBefore,
       );
     }
   }

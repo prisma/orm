@@ -200,7 +200,7 @@ function interpretMapBlock(
 }
 
 function recordNumberText(numberTexts: Record<string, string>, key: string, value: AstNode): void {
-  const text = NumberLiteralExprAst.cast(value.syntax)?.token()?.text;
+  const text = NumberLiteralExprAst.cast(value.syntax)?.text();
   if (text !== undefined) numberTexts[key] = text;
 }
 

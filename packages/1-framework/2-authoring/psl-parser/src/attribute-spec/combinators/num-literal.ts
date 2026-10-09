@@ -11,7 +11,7 @@ export function numLiteral(): NumLiteralArgType<AttributeCtx> {
     label: 'number',
     value: undefined,
     parse: (arg, ctx): Result<NumLiteral, readonly PslDiagnostic[]> => {
-      const text = NumberLiteralExprAst.cast(arg.syntax)?.token()?.text;
+      const text = NumberLiteralExprAst.cast(arg.syntax)?.text();
       if (text !== undefined) return ok({ text });
       return notOk([leafDiagnostic(ctx, arg, 'Expected a number literal')]);
     },

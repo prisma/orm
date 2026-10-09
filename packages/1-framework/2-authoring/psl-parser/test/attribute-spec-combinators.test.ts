@@ -404,6 +404,27 @@ describe('num', () => {
   });
 });
 
+describe('a number written with a plus sign', () => {
+  it('is its value for int', () => {
+    const { expr, ctx } = argOf('+7');
+
+    expect(int({ min: 1, max: 10 }).parse(expr, ctx)).toEqual(ok(7));
+  });
+
+  it('is its value for num, unrestricted and fixed', () => {
+    const { expr, ctx } = argOf('+1.5');
+
+    expect(num().parse(expr, ctx)).toEqual(ok(1.5));
+    expect(num(1.5).parse(expr, ctx)).toEqual(ok(1.5));
+  });
+
+  it('is its text without the sign for numLiteral', () => {
+    const { expr, ctx } = argOf('+9007199254740993');
+
+    expect(numLiteral().parse(expr, ctx)).toEqual(ok({ text: '9007199254740993' }));
+  });
+});
+
 describe('numLiteral', () => {
   it.each([
     ['a decimal with more digits than a JS number holds', '12345678901234567890.123456789'],

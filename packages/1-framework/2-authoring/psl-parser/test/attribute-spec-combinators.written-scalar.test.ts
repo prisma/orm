@@ -66,6 +66,7 @@ describe('writtenScalar', () => {
   it.each([
     ['a string', str(), '"x"', { kind: 'string', text: 'x' }],
     ['a number', numLiteral(), '-1.50', { kind: 'number', text: '-1.50' }],
+    ['a number written with a plus sign', numLiteral(), '+1.50', { kind: 'number', text: '1.50' }],
     ['a boolean', bool(), 'false', { kind: 'boolean', value: false }],
     ['a tagged literal', tag, 'json`  [1]`', { kind: 'tag', tag: 'json', text: '[1]' }],
   ])('yields %s as a written scalar with its span', (_, arm, source, written) => {

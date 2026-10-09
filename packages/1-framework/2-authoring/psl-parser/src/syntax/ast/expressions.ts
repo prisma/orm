@@ -288,6 +288,11 @@ export class NumberLiteralExprAst implements AstNode {
     return findChildToken(this.syntax, 'NumberLiteral');
   }
 
+  text(): string | undefined {
+    const written = this.token()?.text;
+    return written?.startsWith('+') ? written.slice(1) : written;
+  }
+
   value(): number | undefined {
     const tok = this.token();
     if (!tok) return undefined;

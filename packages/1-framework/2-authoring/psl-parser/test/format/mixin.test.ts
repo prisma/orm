@@ -70,6 +70,15 @@ describe('format given a mixin declaration', () => {
   });
 });
 
+describe('format given a number written with a plus sign', () => {
+  it('prints the number as written', () => {
+    formatsTo(
+      'model N {\n  count Int   @default( +1 )\n  ratio Float @default(+1.5)\n}\npolicy P {\n  limit = +10\n}\n',
+      'model N {\n  count Int   @default(+1)\n  ratio Float @default(+1.5)\n}\n\npolicy P {\n  limit = +10\n}\n',
+    );
+  });
+});
+
 describe('format given a mixin inclusion', () => {
   it('prints it on its own line between aligned fields without changing their columns', () => {
     formatsTo(
