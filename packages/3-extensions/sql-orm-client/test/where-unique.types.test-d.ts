@@ -4,6 +4,7 @@ import { Collection } from '../src/collection';
 import type {
   CollectionRowOf,
   CollectionTypeStateOf,
+  Ordered,
   UniquelyFiltered,
 } from '../src/collection-types';
 import type { PreparedCollection } from '../src/prepared-collection';
@@ -512,5 +513,188 @@ describe('a uniquely filtered collection among other collections', () => {
     expectTypeOf(either.limit(1)).not.toBeAny();
     expectTypeOf(either.all()).toEqualTypeOf<AsyncIterableResult<Row>>();
     expectTypeOf(either.deleteAll()).toEqualTypeOf<AsyncIterableResult<Row>>();
+  });
+});
+
+class ClassBodyPostCollection extends Collection<TestContract, 'Post'> {
+  allAfterWhereUnique() {
+    // @ts-expect-error all needs a collection without a unique filter
+    return this.whereUnique({ id: 1 }).all();
+  }
+
+  limitAfterWhereUnique() {
+    // @ts-expect-error limit needs a collection without a unique filter
+    return this.whereUnique({ id: 1 }).limit(1);
+  }
+
+  orderByAfterWhereUnique() {
+    // @ts-expect-error orderBy needs a collection without a unique filter
+    return this.whereUnique({ id: 1 }).orderBy((p) => p.views.desc());
+  }
+
+  aggregateAfterWhereUnique() {
+    // @ts-expect-error aggregate needs a collection without a unique filter
+    return this.whereUnique({ id: 1 }).aggregate((a) => ({ n: a.count() }));
+  }
+
+  groupByAfterWhereUnique() {
+    // @ts-expect-error groupBy needs a collection without a unique filter
+    return this.whereUnique({ id: 1 }).groupBy('userId');
+  }
+
+  deleteAllAfterWhereUnique() {
+    // @ts-expect-error deleteAll needs a collection without a unique filter
+    return this.whereUnique({ id: 1 }).deleteAll();
+  }
+
+  distinctAfterWhereUnique() {
+    // @ts-expect-error distinct needs a collection without a unique filter
+    return this.whereUnique({ id: 1 }).distinct('title');
+  }
+
+  updateAllAfterWhereUniqueAndWhere() {
+    const one = this.whereUnique({ id: 1 }).where({ title: 'x' });
+    // @ts-expect-error updateAll needs a collection without a unique filter
+    return one.updateAll({ title: 'y' });
+  }
+
+  limitAfterWhereUniqueAndWhere() {
+    const one = this.whereUnique({ id: 1 }).where({ title: 'x' });
+    // @ts-expect-error limit needs a collection without a unique filter
+    return one.limit(1);
+  }
+
+  offsetOnStoredValue() {
+    const one = this.whereUnique({ id: 1 });
+    // @ts-expect-error offset needs a collection without a unique filter
+    return one.offset(1);
+  }
+
+  cursorAfterOrderByAndWhereUnique() {
+    const one = this.orderBy((p) => p.views.desc()).whereUnique({ id: 1 });
+    // @ts-expect-error cursor needs a collection without a unique filter
+    return one.cursor({ views: 1 });
+  }
+
+  allAfterWhereUniqueAndInclude() {
+    const one = this.whereUnique({ id: 1 }).include('author');
+    // @ts-expect-error all needs a collection without a unique filter
+    return one.all();
+  }
+
+  allAfterWhereUniqueAndSelect() {
+    const one = this.whereUnique({ id: 1 }).select('id');
+    // @ts-expect-error all needs a collection without a unique filter
+    return one.all();
+  }
+
+  limitInsideWith() {
+    const one = this.whereUnique({ id: 1 });
+    // @ts-expect-error limit needs a collection without a unique filter
+    return one.with((posts) => posts.limit(1));
+  }
+
+  preparedAllAfterWhereUnique() {
+    return this.whereUnique({ id: 1 }).prepared.all();
+  }
+
+  allAfterWhereUniqueAndOwnMethod() {
+    return this.whereUnique({ id: 1 }).titled('x').all();
+  }
+
+  byId(id: number) {
+    return this.whereUnique({ id });
+  }
+
+  firstById(id: number) {
+    return this.whereUnique({ id }).first();
+  }
+
+  updateById(id: number) {
+    return this.whereUnique({ id }).update({ title: 'y' });
+  }
+
+  deleteById(id: number) {
+    return this.whereUnique({ id }).where({ title: 'x' }).delete();
+  }
+
+  byIdWithAuthor(id: number) {
+    return this.whereUnique({ id }).include('author');
+  }
+
+  idOfId(id: number) {
+    return this.whereUnique({ id }).select('id').first();
+  }
+
+  byIdTitled(id: number) {
+    return this.whereUnique({ id }).titled('x');
+  }
+
+  titled(title: string) {
+    return this.where({ title });
+  }
+
+  top() {
+    return this.orderBy((p) => p.views.desc())
+      .limit(10)
+      .offset(0);
+  }
+
+  after(views: number) {
+    return this.top().cursor({ views });
+  }
+
+  everything() {
+    return this.all();
+  }
+
+  total() {
+    return this.aggregate((a) => ({ n: a.count() }));
+  }
+
+  purge() {
+    return this.where({ title: 'x' }).deleteAll();
+  }
+
+  preparedRows() {
+    return this.prepared.all();
+  }
+}
+
+declare const inClass: ClassBodyPostCollection;
+
+describe('whereUnique on this inside a class body', () => {
+  test('single-record calls keep their types', () => {
+    expectTypeOf(inClass.byId(1)).toEqualTypeOf<UniquelyFiltered<ClassBodyPostCollection>>();
+    expectTypeOf(inClass.firstById(1)).resolves.toEqualTypeOf<Row | null>();
+    expectTypeOf(inClass.updateById(1)).resolves.toEqualTypeOf<Row | null>();
+    expectTypeOf(inClass.deleteById(1)).resolves.toEqualTypeOf<Row | null>();
+    expectTypeOf(inClass.idOfId(1)).resolves.toEqualTypeOf<{ id: number } | null>();
+    expectTypeOf(inClass.byIdTitled(1)).toExtend<ClassBodyPostCollection>();
+    expectTypeOf(inClass.byIdWithAuthor(1).first()).resolves.toExtend<{
+      id: number;
+      author: { name: string };
+    } | null>();
+  });
+
+  test('many-record calls on this keep their types', () => {
+    expectTypeOf(inClass.top()).toEqualTypeOf<Ordered<ClassBodyPostCollection>>();
+    expectTypeOf(inClass.after(1)).toEqualTypeOf<Ordered<ClassBodyPostCollection>>();
+    expectTypeOf(inClass.everything()).toEqualTypeOf<AsyncIterableResult<Row>>();
+    expectTypeOf(inClass.total()).resolves.toEqualTypeOf<{ n: number }>();
+    expectTypeOf(inClass.purge()).toEqualTypeOf<AsyncIterableResult<Row>>();
+    expectTypeOf(inClass.preparedRows().consume).returns.toEqualTypeOf<AsyncIterableResult<Row>>();
+  });
+
+  test('prepared.all after whereUnique is not refused', () => {
+    expectTypeOf(inClass.preparedAllAfterWhereUnique().consume).returns.toEqualTypeOf<
+      AsyncIterableResult<Row>
+    >();
+  });
+
+  test('all after a method of the same class called on the result is not refused', () => {
+    expectTypeOf(inClass.allAfterWhereUniqueAndOwnMethod()).toEqualTypeOf<
+      AsyncIterableResult<Row>
+    >();
   });
 });
