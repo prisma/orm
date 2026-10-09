@@ -1,0 +1,20 @@
+[
+  {
+    "code": "PSL.PRISMA7_INDEX_ARGUMENT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 9,
+    "message": "\"Event\": @index field arguments such as sort or length are not supported; Prisma 8 indexes carry none."
+  },
+  {
+    "code": "PSL.PRISMA7_JSON_NULL_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 15,
+    "message": "Field \"Document.data\": @default(\"null\") is the JSON value null, which the contract cannot tell apart from SQL NULL. Remove the @default or give it another JSON value; either changes the column default on Prisma 7's next migration."
+  },
+  {
+    "code": "PSL.PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 26,
+    "message": "Relation field \"Pet.owner\": onDelete: SetNull sets the foreign key fields to null, but \"Pet.ownerId\" is required, so Prisma 8 cannot describe this foreign key. Make \"Pet.ownerId\" and \"Pet.owner\" optional, which drops NOT NULL on Prisma 7's next migration and makes them nullable in the Prisma 7 client, or choose another action, which replaces the foreign key on Prisma 7's next migration and leaves the Prisma 7 client unchanged."
+  }
+]

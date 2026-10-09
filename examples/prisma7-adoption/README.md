@@ -97,6 +97,8 @@ What each step does:
 
 When the last route has moved to Prisma 8, `pnpm exec prisma contract print --output prisma/contract.prisma` writes the Prisma 8 PSL that produces the same contract this example emits from `prisma/schema.prisma`. Point `contract` in `prisma.config.ts` at the written file, then run `pnpm exec prisma contract emit` again to confirm the contract is unchanged. Then remove Prisma 7 as the [upgrade guide](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql)'s phase 5 describes.
 
+A Prisma 7 schema that uses `@ignore` or `@@ignore` cannot take this step yet. Its contract keeps the ignored columns and tables as storage with no model, and `contract print` refuses such a contract until Prisma 8 has syntax for it (TML-3469). Keep `prisma/schema.prisma` as the contract source until then.
+
 ## What a Prisma 7 user meets along the way
 
 - `@prisma/client@7.10.0` declares `prisma` as a peer dependency. With pnpm's default automatic peer installation and no `prisma` dev dependency of your own, the package manager installs Prisma 7's `prisma` to satisfy it, and `prisma contract emit` runs Prisma 7. Keep an explicit `prisma` dev dependency for Prisma 8 (the guide's `prisma@latest`; here the workspace alias) so the `prisma` binary is Prisma 8's.

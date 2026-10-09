@@ -72,7 +72,7 @@ import {
   statedConstraintName,
 } from './constraint-names';
 import { givesColumnDefault, lowerPrisma7Default } from './defaults';
-import { ignoredFieldReferenced, prisma7Diagnostic } from './diagnostics';
+import { ignoredFieldInPrimaryKey, prisma7Diagnostic } from './diagnostics';
 import { type IndexAttribute, indexNode, parseIndexAttribute } from './indexes';
 import { prisma7NativeTypeMapping, prisma7ScalarMapping } from './native-types';
 import {
@@ -139,8 +139,9 @@ interface ModelDeclaration {
 interface ModelBuild {
   readonly declaration: ModelDeclaration;
   readonly columns: Map<string, FieldNode>;
-  /** The columns of the model's `@ignore` scalar fields, which the table keeps and the model leaves out. */
+  /** The columns the table keeps and no field of the model maps: those of `@ignore` fields, or every column of an `@@ignore` model. */
   readonly ignoredColumns: Map<string, ColumnNode>;
+  /** Fields marked `@ignore`, and relation fields to an `@@ignore` model. */
   readonly ignoredFields: Set<string>;
   readonly ignoredRelationFields: RelationField[];
   readonly rejectedFields: Set<string>;
@@ -416,10 +417,10 @@ export function interpretPrisma7Documents(
     const ignoredAmong = (fieldNames: readonly string[] | undefined): readonly string[] =>
       fieldNames?.filter((name) => build.ignoredFields.has(name)) ?? [];
     const idAttribute = build.declaration.id;
-    const ignoredIdFields = model.ignored ? [] : ignoredAmong(idAttribute?.fields);
+    const ignoredIdFields = ignoredAmong(idAttribute?.fields);
     if (idAttribute !== undefined && ignoredIdFields.length > 0) {
       diagnostics.push(
-        ignoredFieldReferenced({
+        ignoredFieldInPrimaryKey({
           modelName,
           fieldNames: ignoredIdFields,
           usedBy: `@@id on model "${modelName}"`,
@@ -483,7 +484,7 @@ export function interpretPrisma7Documents(
       });
     }
   }
-  tables.push(...[...lowered.storageJunctions.values()].map(stateServedBackingIndexes));
+  tables.push(...[...lowered.ignoredJunctions.values()].map(stateServedBackingIndexes));
   for (const [key, junction] of lowered.junctions) {
     const relations = lowered.relations.get(key);
     modelNodes.push(
@@ -904,7 +905,7 @@ function lowerNativeEnums(
 }
 
 function nativeTypeMessage(label: string, nativeType: string): string {
-  return `${label}: native type "@db.${nativeType}" has no Prisma 8 codec yet, and Prisma 8 cannot read this schema until it supports the column type. @ignore on the field or @@ignore on the model does not help: Prisma 8 keeps the columns of ignored fields and models in the contract. Changing the field's type instead changes the column type on Prisma 7's next migration.`;
+  return `${label}: native type "@db.${nativeType}" has no Prisma 8 codec yet, and Prisma 8 cannot read this schema until it supports the column type. @ignore on the field or @@ignore on the model does not help: Prisma 8 keeps the columns of ignored fields and models in the contract. Changing the field's type to one Prisma 8 supports changes the column type on Prisma 7's next migration.`;
 }
 
 interface ReadFieldArgs {
@@ -927,10 +928,11 @@ function readField(args: ReadFieldArgs): void {
   const label = `Field "${model.symbol.name}.${field.name}"`;
   const isRelationField =
     args.modelNames.has(field.typeName) && field.typeConstructor === undefined;
-  const fieldIgnored = field.attributes.some((attribute) => attribute.name === 'ignore');
-  const ignored =
-    fieldIgnored || model.ignored || (isRelationField && args.ignoredModels.has(field.typeName));
-  if (ignored) build.ignoredFields.add(field.name);
+  const fieldIgnored =
+    field.attributes.some((attribute) => attribute.name === 'ignore') ||
+    (isRelationField && args.ignoredModels.has(field.typeName));
+  if (fieldIgnored) build.ignoredFields.add(field.name);
+  const ignored = fieldIgnored || model.ignored;
 
   let columnName = field.name;
   let nativeType: { readonly name: string; readonly attribute: ResolvedAttribute } | undefined;
@@ -965,9 +967,9 @@ function readField(args: ReadFieldArgs): void {
         build.idFields = [field.name];
         build.idMap = parsed.map;
       }
-      if (fieldIgnored && !model.ignored) {
+      if (fieldIgnored) {
         diagnostics.push(
-          ignoredFieldReferenced({
+          ignoredFieldInPrimaryKey({
             modelName: model.symbol.name,
             fieldNames: [field.name],
             usedBy: 'its @id',

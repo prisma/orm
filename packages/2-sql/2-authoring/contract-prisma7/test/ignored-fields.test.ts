@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { interpretSchemaText, loadFixtureSchema, loadFixtureTable } from './support';
 
 const sourceColumns = (fk: Record<string, unknown>) =>
@@ -113,5 +113,23 @@ model Legacy {
 }
 `;
     expect(() => interpretSchemaText(schema)).toThrow(/PSL\.PRISMA7_TABLE_COLLISION/);
+  });
+});
+
+describe('a required @ignore column with no database default', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('warns that every insert the ORM makes into its table fails', async () => {
+    const emitWarning = vi.spyOn(process, 'emitWarning').mockImplementation(() => {});
+    await loadFixtureSchema('ignored-field-defaults');
+    expect(
+      emitWarning.mock.calls
+        .filter(
+          ([, options]) => (options as { code?: string })?.code === 'PN_COLUMN_REQUIRED_UNMAPPED',
+        )
+        .map(([message]) => String(message).match(/^Column "(\w+)"/)?.[1]),
+    ).toEqual(['token', 'touchedAt', 'day']);
   });
 });

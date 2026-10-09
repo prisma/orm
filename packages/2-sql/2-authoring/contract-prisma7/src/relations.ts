@@ -73,8 +73,9 @@ export interface RelationModel {
   readonly sourceId: string;
   readonly sources: PslSources;
   readonly columns: ReadonlyMap<string, FieldNode>;
-  /** The columns of the model's `@ignore` scalar fields. */
+  /** The columns the table keeps and no field of the model maps: those of `@ignore` fields, or every column of an `@@ignore` model. */
   readonly ignoredColumns: ReadonlyMap<string, ColumnNode>;
+  /** Fields marked `@ignore`, and relation fields to an `@@ignore` model. */
   readonly ignoredFields: ReadonlySet<string>;
   /** Relation fields marked `@ignore`: their foreign keys are kept, and they and their back-relations stay out of the domain. */
   readonly ignoredRelationFields: readonly RelationField[];
@@ -103,7 +104,8 @@ export type JunctionNaming = Pick<
 
 export interface RelationLowering {
   readonly junctions: ReadonlyMap<string, ModelNode>;
-  readonly storageJunctions: ReadonlyMap<string, TableNode>;
+  /** Junctions with an ignored side: each table is kept, with no model and no relations. */
+  readonly ignoredJunctions: ReadonlyMap<string, TableNode>;
   readonly foreignKeys: ReadonlyMap<string, readonly ForeignKeyNode[]>;
   readonly relations: ReadonlyMap<string, readonly RelationNode[]>;
 }
@@ -249,7 +251,7 @@ interface JunctionRequest {
   readonly partner: JunctionSide;
   readonly name: string;
   /** A side is `@ignore` or `@@ignore`: the junction table is kept, with no model and no relations. */
-  readonly storageOnly: boolean;
+  readonly ignored: boolean;
 }
 
 function groupBy<T>(items: readonly T[], keyOf: (item: T) => string): Map<string, T[]> {
@@ -391,7 +393,7 @@ export function lowerRelations(
   const invalidFkPairings: InvalidFkPairing[] = [];
   const foreignKeys = new Map<string, ForeignKeyNode[]>();
   const junctions = new Map<string, ModelNode>();
-  const storageJunctions = new Map<string, TableNode>();
+  const ignoredJunctions = new Map<string, TableNode>();
   const reportedJunctionNames = new Set<string>();
   const junctionRequests: JunctionRequest[] = [];
   const addForeignKey = (modelName: string, node: ForeignKeyNode): void => {
@@ -659,7 +661,7 @@ export function lowerRelations(
         requester,
         partner: partnerSide,
         name: junctionName,
-        storageOnly: ignoredPair,
+        ignored: ignoredPair,
       });
     }
   }
@@ -722,15 +724,15 @@ export function lowerRelations(
       );
       continue;
     }
-    for (const { requester, partner, storageOnly } of requests) {
+    for (const { requester, partner, ignored } of requests) {
       const junction = synthesizeJunction(requester, partner, naming, diagnostics);
       if (junction === undefined) continue;
-      if (storageOnly) {
-        storageJunctions.set(junction.key, junctionTable(junction.node));
+      if (ignored) {
+        ignoredJunctions.set(junction.key, junction.table);
         continue;
       }
       if (!junctions.has(junction.key)) {
-        junctions.set(junction.key, junction.node);
+        junctions.set(junction.key, junctionModel(junction.name, junction.table));
         fkRelationMetadata.push(...junction.foreignKeys);
       }
       candidates.push({
@@ -812,35 +814,24 @@ export function lowerRelations(
       [...nodes].sort((left, right) => left.fieldName.localeCompare(right.fieldName)),
     );
   }
-  return { junctions, storageJunctions, foreignKeys, relations };
+  return { junctions, ignoredJunctions, foreignKeys, relations };
 }
 
-/** The table of a junction no relation reaches through the domain. */
-function junctionTable(node: ModelNode): TableNode {
+/** The junction model over a junction table: a field for each of its columns. */
+function junctionModel(name: string, table: TableNode): ModelNode {
+  const { columns, ...properties } = table;
   return {
-    tableName: node.tableName,
-    ...ifDefined('namespaceId', node.namespaceId),
-    columns: node.fields.flatMap((field) =>
-      'columnName' in field
-        ? [
-            {
-              columnName: field.columnName,
-              descriptor: field.descriptor,
-              nullable: field.nullable,
-              many: field.many ?? false,
-            },
-          ]
-        : [],
-    ),
-    ...ifDefined('id', node.id),
-    ...ifDefined('indexes', node.indexes),
-    ...ifDefined('foreignKeys', node.foreignKeys),
+    ...properties,
+    modelName: name,
+    fields: columns.map((column) => ({ fieldName: column.columnName, ...column })),
   };
 }
 
 interface SynthesizedJunction {
   readonly key: string;
-  readonly node: ModelNode;
+  /** The junction model's name. */
+  readonly name: string;
+  readonly table: TableNode;
   readonly foreignKeys: readonly FkRelationMetadata[];
   /** The relation name the requesting side's back-relation candidate pairs on. */
   readonly candidateRelationName: string;
@@ -858,9 +849,7 @@ function singleIdColumn(
 ): ColumnNode | undefined {
   if (
     side.model.idFields.some(
-      (name) =>
-        (!side.model.ignored && side.model.ignoredFields.has(name)) ||
-        side.model.rejectedFields.has(name),
+      (name) => side.model.ignoredFields.has(name) || side.model.rejectedFields.has(name),
     )
   ) {
     return undefined;
@@ -953,25 +942,13 @@ function synthesizeJunction(
   };
   return {
     key,
-    node: {
-      modelName: name,
+    name,
+    table: {
       tableName,
       namespaceId,
-      fields: [
-        {
-          fieldName: 'A',
-          columnName: 'A',
-          descriptor: idA.descriptor,
-          nullable: false,
-          many: false,
-        },
-        {
-          fieldName: 'B',
-          columnName: 'B',
-          descriptor: idB.descriptor,
-          nullable: false,
-          many: false,
-        },
+      columns: [
+        { columnName: 'A', descriptor: idA.descriptor, nullable: false, many: false },
+        { columnName: 'B', descriptor: idB.descriptor, nullable: false, many: false },
       ],
       id: { columns: ['A', 'B'], ...ifDefined('name', primaryKeyName) },
       indexes: [index],
