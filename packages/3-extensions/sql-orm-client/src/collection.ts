@@ -1334,9 +1334,11 @@ export class CollectionBase<
    * const job = await tx.orm.Job.where({ state: 'queued' }).limit(1).forUpdate({ skipLocked: true }).first();
    * ```
    */
-  forUpdate(
+  forUpdate<Self>(
+    this: Self,
     ...options: LockMethodArgs<TContract['capabilities'], 'forUpdate'>
-  ): Collection<TContract, ModelName, Row, State> {
+  ): Self;
+  forUpdate(...options: LockMethodArgs<TContract['capabilities'], 'forUpdate'>): this {
     return this.#lock('forUpdate', options[0]);
   }
 
@@ -1345,9 +1347,11 @@ export class CollectionBase<
    *
    * Requires the `postgres.forNoKeyUpdate` and `sql.lockOf` capabilities, because the lock always names the model's table with `OF`.
    */
-  forNoKeyUpdate(
+  forNoKeyUpdate<Self>(
+    this: Self,
     ...options: LockMethodArgs<TContract['capabilities'], 'forNoKeyUpdate'>
-  ): Collection<TContract, ModelName, Row, State> {
+  ): Self;
+  forNoKeyUpdate(...options: LockMethodArgs<TContract['capabilities'], 'forNoKeyUpdate'>): this {
     return this.#lock('forNoKeyUpdate', options[0]);
   }
 
@@ -1356,9 +1360,11 @@ export class CollectionBase<
    *
    * Requires the `sql.forShare` and `sql.lockOf` capabilities, because the lock always names the model's table with `OF`.
    */
-  forShare(
+  forShare<Self>(
+    this: Self,
     ...options: LockMethodArgs<TContract['capabilities'], 'forShare'>
-  ): Collection<TContract, ModelName, Row, State> {
+  ): Self;
+  forShare(...options: LockMethodArgs<TContract['capabilities'], 'forShare'>): this {
     return this.#lock('forShare', options[0]);
   }
 
@@ -1367,9 +1373,11 @@ export class CollectionBase<
    *
    * Requires the `postgres.forKeyShare` and `sql.lockOf` capabilities, because the lock always names the model's table with `OF`.
    */
-  forKeyShare(
+  forKeyShare<Self>(
+    this: Self,
     ...options: LockMethodArgs<TContract['capabilities'], 'forKeyShare'>
-  ): Collection<TContract, ModelName, Row, State> {
+  ): Self;
+  forKeyShare(...options: LockMethodArgs<TContract['capabilities'], 'forKeyShare'>): this {
     return this.#lock('forKeyShare', options[0]);
   }
 
@@ -3099,10 +3107,7 @@ export class CollectionBase<
     );
   }
 
-  #lock(
-    strength: LockStrength,
-    options: LockWaitRequest | undefined,
-  ): Collection<TContract, ModelName, Row, State> {
+  #lock(strength: LockStrength, options: LockWaitRequest | undefined): this {
     if (this.includeRefinementMode) {
       throw lockIncompatible(
         'includeRefinement',
@@ -3119,7 +3124,7 @@ export class CollectionBase<
       of: [this.tableName],
       ...ifDefined('waitPolicy', waitPolicy),
     });
-    return this.#clone({ locking: [...(this.state.locking ?? []), clause] });
+    return this.#cloneSelf({ locking: [...(this.state.locking ?? []), clause] });
   }
 
   #clone<NextState extends CollectionTypeState = State>(
