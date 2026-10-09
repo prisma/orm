@@ -25,8 +25,8 @@ import {
   type WhereArg,
 } from '@internal/sql-relational-core/ast';
 import type {
+  CodecExpression,
   Expression,
-  RawCodecInferer,
   RawSqlInterpolation,
 } from '@internal/sql-relational-core/expression';
 import type { BooleanCodecType, BuiltinFunctions } from '@internal/sql-relational-core/functions';
@@ -204,8 +204,6 @@ export interface RuntimeQueryable extends RuntimeScope {
 export interface CollectionContext<TContract extends Contract<SqlStorage>> {
   readonly runtime: RuntimeQueryable;
   readonly context: ExecutionContext<TContract>;
-  /** The adapter's codec inferer, which `fns.raw` uses for an interpolated value. */
-  readonly rawCodecInferer?: RawCodecInferer;
 }
 
 type PredicateOperand<T, CodecId extends string> =
@@ -721,11 +719,20 @@ export type OrmRawSqlTag = (
   ...values: RawSqlInterpolation[]
 ) => OrmRawSqlBuilder;
 
+/** `fns.and` and `fns.or` in the ORM: they also take ORM conditions, such as `p.title.ilike(...)`. */
+export type OrmLogicalFunction<CT extends Record<string, { readonly input: unknown }>> = (
+  ...conditions: (AnyExpression | CodecExpression<'pg/bool@1', boolean, CT>)[]
+) => FunctionCondition;
+
 /** The SQL query builder's functions over the given codec types and query operations, as the ORM's callbacks receive them. */
 export type OrmFunctionsOf<
   CT extends Record<string, { readonly input: unknown }>,
   OT extends QueryOperationTypesBase,
-> = Omit<BuiltinFunctions<CT>, 'raw'> & { readonly raw: OrmRawSqlTag } & {
+> = Omit<BuiltinFunctions<CT>, 'raw' | 'and' | 'or'> & {
+  readonly raw: OrmRawSqlTag;
+  readonly and: OrmLogicalFunction<CT>;
+  readonly or: OrmLogicalFunction<CT>;
+} & {
   readonly [K in keyof OT]: OrmOperation<OT[K]['impl'], CT>;
 };
 

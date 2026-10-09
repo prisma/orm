@@ -1,12 +1,10 @@
 import { type Contract, domainModelsAtDefaultNamespace } from '@internal/contract/types';
 import type { ExtractCodecTypes, SqlStorage } from '@internal/sql-contract/types';
-import type { RawCodecInferer } from '@internal/sql-relational-core/expression';
 import type {
   ExecutionContext,
   SqlAggregateDescriptorRegistry,
 } from '@internal/sql-relational-core/query-lane-context';
 import { blindCast } from '@internal/utils/casts';
-import { ifDefined } from '@internal/utils/defined';
 import { aggregateOperationNames } from './aggregate-operations';
 import { type Collection, CollectionBase, reservedCollectionMemberNames } from './collection';
 import {
@@ -37,8 +35,6 @@ export interface OrmOptions<
   readonly runtime: RuntimeQueryable;
   readonly collections?: Collections;
   readonly context: ExecutionContext<TContract>;
-  /** The adapter's codec inferer, which `fns.raw` in a `where` or `orderBy` callback uses for an interpolated value. */
-  readonly rawCodecInferer?: RawCodecInferer;
 }
 
 type ModelNames<TContract extends Contract<SqlStorage>> = CollectionModelName<TContract>;
@@ -172,14 +168,10 @@ export function orm<
   TContract extends Contract<SqlStorage>,
   Collections extends Partial<Record<string, AnyCollectionClass>> = Record<never, never>,
 >(options: OrmOptions<TContract, Collections>): OrmClient<TContract, Collections> {
-  const { runtime, collections, context, rawCodecInferer } = options;
+  const { runtime, collections, context } = options;
   assertAggregateOperationsNotReserved(context.aggregateDescriptors);
   const contract = context.contract;
-  const ctx: CollectionContext<TContract> = {
-    runtime,
-    context,
-    ...ifDefined('rawCodecInferer', rawCodecInferer),
-  };
+  const ctx: CollectionContext<TContract> = { runtime, context };
   const collectionRegistry = createCollectionRegistry(contract, collections);
 
   type AnyCollection = Collection<TContract, string, unknown, CollectionTypeState>;

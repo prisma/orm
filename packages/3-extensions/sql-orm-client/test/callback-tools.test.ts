@@ -1,12 +1,14 @@
-import { createPostgresAdapter, postgresRawCodecInferer } from '@internal/adapter-postgres/adapter';
+import { createPostgresAdapter } from '@internal/adapter-postgres/adapter';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { websearchToTsquery } from '@internal/target-postgres/full-text';
 import { describe, expect, it } from 'vitest';
 import type { PostgresContract } from '../../../3-targets/6-adapters/postgres/src/core/types';
 import { Collection } from '../src/collection';
 import { and, not } from '../src/filters';
+import { orm } from '../src/orm';
 import { compileSelect, compileSelectWithIncludes } from '../src/query-plan-select';
 import type { CollectionState } from '../src/types';
+import { UserCollection } from './collection-chaining-fixture';
 import { baseContract, createCollectionFor } from './collection-fixtures';
 import { createMockRuntime, getTestAggregates, getTestContext } from './helpers';
 
@@ -68,6 +70,20 @@ describe('where with fns and indexes', () => {
 
     expect(usersSql(users.state)).toBe(
       `SELECT "users"."id" AS "id" FROM "public"."users" WHERE ("users"."name" = $1 AND NOT (${searchOf('users')} @@ websearch_to_tsquery('english', $2)))`,
+    );
+  });
+
+  it('combines ORM conditions with fns.and and fns.or', () => {
+    const { collection } = createCollectionFor('User');
+
+    const users = collection
+      .select('id')
+      .where((u, { fns }) =>
+        fns.or(fns.and(u.name.ilike('a%'), fns.eq(u.id, 1)), u.email.eq('b@example.com')),
+      );
+
+    expect(usersSql(users.state)).toBe(
+      'SELECT "users"."id" AS "id" FROM "public"."users" WHERE (("users"."name" ILIKE $1 AND "users"."id" = $2) OR "users"."email" = $3)',
     );
   });
 
@@ -150,28 +166,27 @@ describe('the callback tools', () => {
     expect(reads[0]).toBe(reads[1]);
   });
 
-  it('bind a bare value in fns.raw through the raw codec inferer the client was given', () => {
-    const collection = new Collection(
-      {
-        runtime: createMockRuntime(),
-        context: getTestContext(),
-        rawCodecInferer: postgresRawCodecInferer,
-      },
-      'User',
-      { namespaceId: 'public' },
-    );
+  it('bind a bare value in fns.raw in a client built with orm({ runtime, context, collections })', () => {
+    const db = orm({
+      runtime: createMockRuntime(),
+      context: getTestContext(),
+      collections: { User: UserCollection },
+    }).public;
 
-    const users = collection
-      .select('id')
-      .where((u, { fns }) => fns.eq(u.id, fns.raw`${1}`.returns('pg/int4@1')));
+    const users = db.User.select('id').where((u, { fns }) =>
+      fns.eq(u.id, fns.raw`${1}`.returns('pg/int4@1')),
+    );
 
     expect(usersSql(users.state)).toBe(
       'SELECT "users"."id" AS "id" FROM "public"."users" WHERE "users"."id" = $1',
     );
   });
 
-  it('refuse a bare value in fns.raw without a raw codec inferer', () => {
-    const { collection } = createCollectionFor('User');
+  it('refuse a bare value in fns.raw for an execution context without a raw codec inferer', () => {
+    const { rawCodecInferer: _inferer, ...context } = getTestContext();
+    const collection = new Collection({ runtime: createMockRuntime(), context }, 'User', {
+      namespaceId: 'public',
+    });
 
     expect(() =>
       collection.where((u, { fns }) => fns.eq(u.id, fns.raw`${1}`.returns('pg/int4@1'))),

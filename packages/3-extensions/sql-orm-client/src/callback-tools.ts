@@ -1,7 +1,9 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import type { AnyExpression } from '@internal/sql-relational-core/ast';
 import {
   type Expression,
+  ExpressionImpl,
   isExpression,
   type RawCodecInferer,
   type RawSqlBuilder,
@@ -18,16 +20,16 @@ import { ormError } from './orm-errors';
 import type { ModelCallbackTools, ModelIndexReferences, OrderOptions, OrmFunctions } from './types';
 
 /**
- * Refuses a bare value in `fns.raw` for an ORM client built without the adapter's raw codec inferer.
+ * Refuses a bare value in `fns.raw` when the execution context has no raw codec inferer, as a hand-built context may not.
  */
 const rawCodecInfererUnavailable: RawCodecInferer = {
   inferCodec(value) {
     throw ormError(
       'ORM.ARGUMENT_INVALID',
-      'fns.raw cannot infer the codec of an interpolated value: this ORM client was built without a raw codec inferer.',
+      'fns.raw cannot infer the codec of an interpolated value: the execution context has no raw codec inferer.',
       {
         why: 'A value interpolated into fns.raw is bound as a parameter, and its codec comes from the adapter.',
-        fix: 'Wrap the value with param(value, { codecId }), or build the client through the database facade.',
+        fix: "Wrap the value with param(value, { codecId }), or pass orm() an execution context built from an execution stack, such as the client's db.context.",
         meta: { argument: typeof value },
       },
     );
@@ -71,12 +73,32 @@ function orderableRaw(
   };
 }
 
+const CONDITION_FIELD = Object.freeze({ codecId: 'pg/bool@1', nullable: false });
+
+/** An ORM condition as an argument of `fns.and` or `fns.or`, which read an expression. */
+function asFunctionArgument(argument: unknown): unknown {
+  return isOrmCondition(argument) ? new ExpressionImpl(argument, CONDITION_FIELD) : argument;
+}
+
+function isOrmCondition(value: unknown): value is AnyExpression {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !isExpression(value) &&
+    'accept' in value &&
+    typeof value.accept === 'function'
+  );
+}
+
+function logical(fn: (...conditions: unknown[]) => unknown) {
+  return (...conditions: unknown[]) => fn(...conditions.map(asFunctionArgument));
+}
+
 function createOrmFunctions<TContract extends Contract<SqlStorage>>(
   context: ExecutionContext<TContract>,
-  rawCodecInferer: RawCodecInferer | undefined,
 ): OrmFunctions<TContract> {
   const operations = context.queryOperations.entries();
-  const fns = createFunctions(operations, rawCodecInferer ?? rawCodecInfererUnavailable);
+  const fns = createFunctions(operations, context.rawCodecInferer ?? rawCodecInfererUnavailable);
   const raw = orderableRaw(fns.raw);
   return new Proxy(
     blindCast<OrmFunctions<TContract>, 'the handler answers every function name'>({}),
@@ -84,6 +106,7 @@ function createOrmFunctions<TContract extends Contract<SqlStorage>>(
       get(_target, prop) {
         if (typeof prop !== 'string') return undefined;
         if (prop === 'raw') return raw;
+        if (prop === 'and' || prop === 'or') return logical(Reflect.get(fns, prop));
         const fn: unknown = Reflect.get(fns, prop);
         if (typeof fn !== 'function' || !Object.hasOwn(operations, prop)) return fn;
         return (...args: unknown[]) => orderableValue(context, Reflect.apply(fn, undefined, args));
@@ -101,12 +124,11 @@ export function createCallbackTools<
   NsId extends string,
 >(
   context: ExecutionContext<TContract>,
-  rawCodecInferer: RawCodecInferer | undefined,
   indexes: () => Readonly<Record<string, IndexReference>>,
 ): ModelCallbackTools<TContract, ModelName, NsId> {
   let resolved: Readonly<Record<string, IndexReference>> | undefined;
   return Object.freeze({
-    fns: createOrmFunctions(context, rawCodecInferer),
+    fns: createOrmFunctions(context),
     get indexes() {
       resolved ??= indexes();
       return blindCast<

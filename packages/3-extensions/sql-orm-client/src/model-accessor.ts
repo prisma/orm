@@ -15,11 +15,7 @@ import {
   type TableSource,
 } from '@internal/sql-relational-core/ast';
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
-import type {
-  Expression,
-  RawCodecInferer,
-  ScopeField,
-} from '@internal/sql-relational-core/expression';
+import type { Expression, ScopeField } from '@internal/sql-relational-core/expression';
 import {
   createIndexReferences,
   type IndexReference,
@@ -148,30 +144,20 @@ class ModelAccessorScope {
     readonly current: SqlTableBinding,
     visibleBindings: readonly SqlTableBinding[],
     aliasCounter: RelationAliasCounter,
-    readonly rawCodecInferer: RawCodecInferer | undefined,
   ) {
     this.#visibleBindings = Object.freeze([...visibleBindings]);
     this.#aliasCounter = aliasCounter;
     Object.freeze(this);
   }
 
-  static root(
-    namespaceId: string,
-    tableName: string,
-    rawCodecInferer: RawCodecInferer | undefined,
-  ): ModelAccessorScope {
+  static root(namespaceId: string, tableName: string): ModelAccessorScope {
     const binding = SqlTableBinding.unaliased({ namespaceId, tableName });
-    return new ModelAccessorScope(binding, [binding], { nextId: 1 }, rawCodecInferer);
+    return new ModelAccessorScope(binding, [binding], { nextId: 1 });
   }
 
   forRelation(namespaceId: string, tableName: string): ModelAccessorScope {
     const binding = this.#allocateBinding(namespaceId, tableName, 'rel');
-    return new ModelAccessorScope(
-      binding,
-      [...this.#visibleBindings, binding],
-      this.#aliasCounter,
-      this.rawCodecInferer,
-    );
+    return new ModelAccessorScope(binding, [...this.#visibleBindings, binding], this.#aliasCounter);
   }
 
   forManyToManyRelation(
@@ -190,7 +176,6 @@ class ModelAccessorScope {
       initialChildScope.current,
       [...initialChildScope.#visibleBindings, junctionBinding],
       this.#aliasCounter,
-      this.rawCodecInferer,
     );
     return { childScope, junctionBinding };
   }
@@ -200,12 +185,7 @@ class ModelAccessorScope {
       return this;
     }
     const binding = SqlTableBinding.unaliased({ namespaceId, tableName });
-    return new ModelAccessorScope(
-      binding,
-      [...this.#visibleBindings, binding],
-      this.#aliasCounter,
-      this.rawCodecInferer,
-    );
+    return new ModelAccessorScope(binding, [...this.#visibleBindings, binding], this.#aliasCounter);
   }
 
   #allocateBinding(
@@ -241,7 +221,6 @@ export function createModelAccessor<
   namespaceId: NsId,
   modelName: ModelName,
   variantName?: VariantName,
-  rawCodecInferer?: RawCodecInferer,
 ): VariantAwareModelAccessor<TContract, ModelName, VariantName, NsId> {
   const tableName = resolveModelTableName(context.contract, namespaceId, modelName);
   return createModelAccessorInScope(
@@ -249,7 +228,7 @@ export function createModelAccessor<
     namespaceId,
     modelName,
     variantName,
-    ModelAccessorScope.root(namespaceId, tableName, rawCodecInferer),
+    ModelAccessorScope.root(namespaceId, tableName),
   );
 }
 
@@ -264,14 +243,13 @@ export function createModelCallbackTools<
   context: ExecutionContext<TContract>,
   namespaceId: NsId,
   modelName: ModelName,
-  rawCodecInferer: RawCodecInferer | undefined,
 ): ModelCallbackTools<TContract, ModelName, NsId> {
   const tableName = resolveModelTableName(context.contract, namespaceId, modelName);
   return callbackToolsFor(
     context,
     namespaceId,
     modelName,
-    ModelAccessorScope.root(namespaceId, tableName, rawCodecInferer),
+    ModelAccessorScope.root(namespaceId, tableName),
   );
 }
 
@@ -285,7 +263,7 @@ function callbackToolsFor<
   modelName: ModelName,
   scope: ModelAccessorScope,
 ): ModelCallbackTools<TContract, ModelName, NsId> {
-  return createCallbackTools<TContract, ModelName, NsId>(context, scope.rawCodecInferer, () =>
+  return createCallbackTools<TContract, ModelName, NsId>(context, () =>
     indexReferencesOf(context, namespaceId, modelName, scope.current),
   );
 }

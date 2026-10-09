@@ -83,7 +83,6 @@ export function buildPostgresRuntimeBoundMembers<TContract extends Contract<SqlS
       },
     },
     context,
-    rawCodecInferer,
   });
 
   function prepare<
@@ -123,7 +122,6 @@ export function buildPostgresRuntimeBoundMembers<TContract extends Contract<SqlS
             },
           },
           context,
-          rawCodecInferer,
         });
 
         // Use `txCtx` as the prototype instead of spreading it so that live

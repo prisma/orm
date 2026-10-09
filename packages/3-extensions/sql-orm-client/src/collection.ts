@@ -512,7 +512,6 @@ export class CollectionBase<
                 this.namespaceId,
                 this.modelName,
                 this.state.variantName,
-                this.ctx.rawCodecInferer,
               ),
               this.#callbackTools(),
             ),
@@ -542,7 +541,6 @@ export class CollectionBase<
       this.ctx.context,
       this.namespaceId,
       this.modelName,
-      this.ctx.rawCodecInferer,
     );
   }
 
@@ -1131,7 +1129,6 @@ export class CollectionBase<
       this.namespaceId,
       this.modelName,
       this.state.variantName,
-      this.ctx.rawCodecInferer,
     );
     const tools = this.#callbackTools();
     const selectors = Array.isArray(selection) ? selection : [selection];

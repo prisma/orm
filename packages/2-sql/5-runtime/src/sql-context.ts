@@ -661,6 +661,7 @@ export function createExecutionContext<
     aggregateDescriptors,
     queryOperations: queryOperationRegistry,
     types,
+    rawCodecInferer: stack.adapter.rawCodecInferer,
     applyMutationDefaults: (options) =>
       applyMutationDefaults(contract.execution, mutationDefaultGeneratorRegistry, options),
   };
