@@ -12,7 +12,7 @@ Your package needs to have:
 
 1. `tsconfig.prod.json` - a TypeScript configuration file specific for bundling.
 
-2. `package.json#engines.node` - `tsdown` infers the bundling target based on this value. e.g. `{ "engines": { "node": ">=24" } }`
+2. `package.json#engines.node` - `tsdown` infers the bundling target based on this value. e.g. `{ "engines": { "node": "^22.18.0 || ^24.11.0 || >=26.0.0" } }`
 
 3. `"tsdown": "catalog:"` in your packages `devDependencies`.
 

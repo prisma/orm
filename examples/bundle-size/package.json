@@ -4,7 +4,7 @@
   "type": "module",
   "version": "8.0.0-rc.17",
   "engines": {
-    "node": ">=24"
+    "node": "^22.18.0 || ^24.11.0 || >=26.0.0"
   },
   "scripts": {
     "start:pg": "tsx src/postgres/main.ts",
