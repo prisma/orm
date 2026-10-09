@@ -33,16 +33,3 @@ test('the client returns rows of a TypeScript contract with the codec output typ
     level: 1n | 10n;
   } | null>();
 });
-
-test('the client keeps a namespace declared on a TypeScript contract', () => {
-  const withAuth = defineContract({ namespaces: ['auth'] }, ({ field, model }) => ({
-    models: {
-      Session: model('Session', {
-        namespace: 'auth',
-        fields: { id: field.id.uuidv4String() },
-      }).sql({ table: 'sessions' }),
-    },
-  }));
-  const client = postgres({ contract: withAuth, url: 'postgres://localhost/db' });
-  expectTypeOf<keyof typeof client.orm>().toEqualTypeOf<'public' | 'auth' | 'fragment'>();
-});

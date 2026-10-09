@@ -8,6 +8,12 @@ type SoleNamespaceModels<
 // @ts-expect-error — capabilities are contributed by components, not authoring input
 defineContract({ capabilities: { sql: { lateral: true } } });
 
+// @ts-expect-error — SQLite has no namespaces
+defineContract({ namespaces: ['aux'] });
+
+// @ts-expect-error — SQLite has no namespaces
+defineContract({ namespaces: ['aux'] }, () => ({}));
+
 const result = defineContract({});
 expectTypeOf(result.target).toEqualTypeOf<'sqlite'>();
 expectTypeOf(result.targetFamily).toEqualTypeOf<'sql'>();

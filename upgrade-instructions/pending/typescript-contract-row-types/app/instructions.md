@@ -2,31 +2,54 @@
 changes:
   - id: typescript-contract-namespace-keys
     summary: |
-      A contract built with `defineContract` from TypeScript now types `contract.domain.namespaces` with only the namespaces it has: `public` on Postgres, `__unbound__` on SQLite, plus each namespace listed in `namespaces`. Before, any key typechecked. Replace a key the contract does not have with the one it has. ORM rows of such a contract, which were typed `unknown` field by field, now have each field's codec output type, so casts that stated those types can go.
+      A contract built with `defineContract` from TypeScript now types `contract.domain.namespaces`, `contract.storage.namespaces` and `db.orm` with the same namespace keys the built contract has at runtime, each holding only its own models and tables. Before, any string key typechecked and every namespace listed every model. Code that reads a namespace the contract does not have, or indexes `domain.namespaces` with a `string` variable, now fails to typecheck. ORM rows of such a contract, which were typed `unknown` field by field, now have each field's codec output type, so a cast to a type that disagrees with the codec type now fails with TS2352. The detection matches dot and bracket access to `domain.namespaces`.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - '\.domain\.namespaces\b'
+        - '\[\s*[''"]domain[''"]\s*\]\s*\[\s*[''"]namespaces[''"]\s*\]'
 ---
 
 # A TypeScript contract's namespaces and rows have precise types
 
-A contract built with `defineContract` from TypeScript typed `contract.domain.namespaces` as a record with any string key, so any key typechecked. It now has only the keys the built contract has at runtime: `public` on Postgres, `__unbound__` on SQLite, and each namespace the definition lists in `namespaces`.
+## Namespace keys equal the runtime keys
 
-Code that reads a namespace the contract does not have now fails to typecheck. At runtime that key was always `undefined`. Use the namespace the contract has:
+A contract built with `defineContract` from TypeScript typed `contract.domain.namespaces` as a record with any string key, and every key listed every model. The types now have exactly the keys the built contract has at runtime:
+
+- `contract.domain.namespaces` and `db.orm` have a key for each namespace that holds a model. They also have the default namespace (`public` on Postgres, `__unbound__` on SQLite) when the contract has no models or declares enums. Each namespace lists only its own models.
+- `contract.storage.namespaces` has the default namespace, each namespace listed in `namespaces`, and each model's namespace. Each lists only the tables of its own models.
+
+A Postgres contract whose models all have `namespace: 'auth'` has no `public` domain namespace, so `db.orm.public` no longer typechecks. At runtime it was always `undefined`. Code that reads a namespace the contract does not have now fails to typecheck. Use the namespace the model is in:
 
 ```diff
-  // A Postgres contract built with defineContract
+  // A Postgres contract built with defineContract, with User in the default namespace
 - type User = (typeof contract.domain.namespaces)['__unbound__']['models']['User'];
 + type User = (typeof contract.domain.namespaces)['public']['models']['User'];
 ```
 
-The ORM client of such a contract now types each row field as its codec's output type, narrowed to the enum's values for an enum field. Before, every field was `unknown`. On Postgres, `db.orm.public` is no longer possibly `undefined`. Casts and non-null assertions written to work around this still typecheck, and you can remove them:
+Indexing `domain.namespaces` with a `string` variable no longer typechecks, because the type has no index signature. Narrow the key to the contract's keys first:
+
+```diff
+- const namespace = contract.domain.namespaces[name];
++ const namespace = Object.hasOwn(contract.domain.namespaces, name)
++   ? contract.domain.namespaces[name as keyof typeof contract.domain.namespaces]
++   : undefined;
+```
+
+A model is placed in its namespace only when `namespace` is a string literal. When it comes from a `string` variable, the namespace types fall back to a `string` index and list that model in every namespace.
+
+On SQLite, `defineContract` no longer accepts `namespaces`. The build always rejected it at runtime; the type now rejects it too. Remove the option.
+
+## Rows have their codec output types
+
+The ORM client of such a contract now types each row field as its codec's output type, narrowed to the enum's values for an enum field. Before, every field was `unknown`. This also applies to `field.column({ codecId, nativeType })` with an inline codec id, which no longer needs `as const`.
+
+A cast that agrees with the codec type still typechecks and can be removed. A cast that disagrees with the codec type now fails with TS2352, and shows a real mismatch: fix the code that expected the other type.
 
 ```diff
   const row = await db.orm.Sample.first();
-- const level = row.level as 1n | 10n;
-+ const level = row.level;
+- const when = row.when as string;
++ const when = row.when.toISOString();
 ```
 
-`field.column({ codecId: 'pg/int4@1', nativeType: 'int4' })` now keeps the literal codec id without `as const`, so the field reads as that codec's output type instead of `unknown`.
+Rows of an included relation are still typed `unknown`; casts on those still typecheck.

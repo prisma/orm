@@ -1659,8 +1659,10 @@ export class ContractModelBuilder<
   SqlSpec extends SqlStageSpec | undefined = undefined,
   IndexTypes extends IndexTypeMap = Record<never, never>,
   TSpaceId extends string = '<self>',
+  Namespace extends string | undefined = string | undefined,
 > {
   declare readonly __name: ModelName;
+  declare readonly __namespace: Namespace;
   declare readonly __fields: Fields;
   declare readonly __relations: Relations;
   declare readonly __attributes: AttributesSpec;
@@ -1678,7 +1680,7 @@ export class ContractModelBuilder<
   constructor(
     readonly stageOne: {
       readonly modelName?: ModelName;
-      readonly namespace?: string;
+      readonly namespace?: Namespace;
       readonly fields: Fields;
       readonly relations: Relations;
     },
@@ -1707,7 +1709,16 @@ export class ContractModelBuilder<
 
   ref<FieldName extends keyof Fields & string>(
     this: ModelName extends string
-      ? ContractModelBuilder<ModelName, Fields, Relations, AttributesSpec, SqlSpec, IndexTypes>
+      ? ContractModelBuilder<
+          ModelName,
+          Fields,
+          Relations,
+          AttributesSpec,
+          SqlSpec,
+          IndexTypes,
+          TSpaceId,
+          Namespace
+        >
       : never,
     fieldName: FieldName,
   ): TargetFieldRef<ModelName & string, FieldName> {
@@ -1736,7 +1747,8 @@ export class ContractModelBuilder<
     AttributesSpec,
     SqlSpec,
     IndexTypes,
-    TSpaceId
+    TSpaceId,
+    Namespace
   > {
     const duplicateRelationName = findDuplicateRelationName(this.stageOne.relations, relations);
     if (duplicateRelationName) {
@@ -1771,7 +1783,16 @@ export class ContractModelBuilder<
   attributes<const NextAttributesSpec extends ModelAttributesSpec>(
     specOrFactory: StageInput<AttributeContext<Fields>, NextAttributesSpec>,
   ): [ValidateAttributesStageSpec<Fields, Relations, SqlSpec, NextAttributesSpec>] extends [never]
-    ? ContractModelBuilder<ModelName, Fields, Relations, never, SqlSpec, IndexTypes, TSpaceId>
+    ? ContractModelBuilder<
+        ModelName,
+        Fields,
+        Relations,
+        never,
+        SqlSpec,
+        IndexTypes,
+        TSpaceId,
+        Namespace
+      >
     : ContractModelBuilder<
         ModelName,
         Fields,
@@ -1779,7 +1800,8 @@ export class ContractModelBuilder<
         NextAttributesSpec,
         SqlSpec,
         IndexTypes,
-        TSpaceId
+        TSpaceId,
+        Namespace
       > {
     return blindCast<
       never,
@@ -1805,7 +1827,8 @@ export class ContractModelBuilder<
         AttributesSpec,
         never,
         IndexTypes,
-        TSpaceId
+        TSpaceId,
+        Namespace
       >
     : ContractModelBuilder<
         ModelName,
@@ -1814,7 +1837,8 @@ export class ContractModelBuilder<
         AttributesSpec,
         NextSqlSpec,
         IndexTypes,
-        TSpaceId
+        TSpaceId,
+        Namespace
       > {
     // Conditional return type cannot be verified by the implementation; the runtime value is always a valid ContractModelBuilder regardless of the validation outcome (validation is type-level only).
     // When specOrFactory is a static object (not a function), extract tableName for the cross-space coordinate.
@@ -2039,23 +2063,43 @@ export function model<
   const ModelName extends string,
   Fields extends Record<string, ScalarFieldBuilder>,
   Relations extends Record<string, AnyRelationBuilder> = Record<never, never>,
+  const Namespace extends string | undefined = undefined,
 >(
   modelName: ModelName,
   input: {
     readonly fields: Fields;
     readonly relations?: Relations;
-    readonly namespace?: string;
+    readonly namespace?: Namespace;
   },
-): ContractModelBuilder<ModelName, Fields, Relations>;
+): ContractModelBuilder<
+  ModelName,
+  Fields,
+  Relations,
+  undefined,
+  undefined,
+  Record<never, never>,
+  '<self>',
+  NoInfer<Namespace>
+>;
 
 export function model<
   Fields extends Record<string, ScalarFieldBuilder>,
   Relations extends Record<string, AnyRelationBuilder> = Record<never, never>,
+  const Namespace extends string | undefined = undefined,
 >(input: {
   readonly fields: Fields;
   readonly relations?: Relations;
-  readonly namespace?: string;
-}): ContractModelBuilder<undefined, Fields, Relations>;
+  readonly namespace?: Namespace;
+}): ContractModelBuilder<
+  undefined,
+  Fields,
+  Relations,
+  undefined,
+  undefined,
+  Record<never, never>,
+  '<self>',
+  NoInfer<Namespace>
+>;
 
 export function model<
   const ModelName extends string,

@@ -59,6 +59,7 @@ type SqliteBaseScaffold<
   | 'types'
   | 'models'
   | 'enums'
+  | 'namespaces'
   | 'createNamespace'
   | 'codecLookup'
   | 'dataTypeLookup'
