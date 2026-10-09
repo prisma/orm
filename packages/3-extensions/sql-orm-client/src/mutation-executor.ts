@@ -1,6 +1,5 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import { isUniqueConstraintViolation } from '@internal/sql-errors';
 import {
   type AnyExpression,
   BinaryExpr,
@@ -520,7 +519,6 @@ async function applyJunctionOwnedMutation(
     return;
   }
 
-  const linkedTargetKeys = new Set<string>();
   for (const criterion of operation.criteria) {
     const targetPkValues = readJunctionTargetValues(
       contract,
@@ -529,14 +527,9 @@ async function applyJunctionOwnedMutation(
     );
     if (operation.kind === 'disconnect') {
       await deleteJunctionLink(scope, context, relation, parentPkValues, targetPkValues);
-      continue;
+    } else {
+      await insertJunctionLink(scope, context, relation, parentPkValues, targetPkValues, 'connect');
     }
-    const targetKey = JSON.stringify([...targetPkValues.entries()]);
-    if (linkedTargetKeys.has(targetKey)) {
-      continue;
-    }
-    linkedTargetKeys.add(targetKey);
-    await insertJunctionLink(scope, context, relation, parentPkValues, targetPkValues, 'connect');
   }
 }
 
@@ -644,21 +637,7 @@ async function insertJunctionLink(
     [junctionRow],
     conflictColumns && { columns: conflictColumns },
   );
-  try {
-    await scope.execute(compiled);
-  } catch (error) {
-    // The junction PK is the common unique constraint here, but the table may
-    // carry others — say a unique constraint was violated rather than
-    // asserting the link itself already exists.
-    if (mutationKind === 'connect' && !conflictColumns && isUniqueConstraintViolation(error)) {
-      throw ormError(
-        'ORM.RELATION_LINK_DUPLICATE',
-        `connect() nested mutation for relation "${relation.relationName}" violated a unique constraint on junction "${through.table}"; the junction link may already be present`,
-        { meta: { relation: relation.relationName, junction: through.table }, cause: error },
-      );
-    }
-    throw error;
-  }
+  await scope.execute(compiled);
 }
 
 async function deleteJunctionLink(

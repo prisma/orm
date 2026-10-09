@@ -2,7 +2,6 @@ import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { InternalError } from '@internal/utils/internal-error';
 import {
-  hasContractCapability,
   hasUniqueKeyOverColumns,
   type ResolvedThrough,
   resolveFieldToColumn,
@@ -80,18 +79,16 @@ export function getRelationDefinitions(
         const linkColumns = [
           ...new Set([...relation.through.parentColumns, ...relation.through.childColumns]),
         ];
-        const skipsExistingLink =
-          hasContractCapability(contract, 'insertOnConflictSkip') &&
-          hasUniqueKeyOverColumns(
-            contract,
-            relation.through.namespaceId,
-            relation.through.table,
-            linkColumns,
-          );
+        const hasLinkKey = hasUniqueKeyOverColumns(
+          contract,
+          relation.through.namespaceId,
+          relation.through.table,
+          linkColumns,
+        );
         return {
           ...junction,
           ownership: 'junction',
-          connectConflictColumns: skipsExistingLink ? linkColumns : undefined,
+          connectConflictColumns: hasLinkKey ? linkColumns : undefined,
         };
       }
       return {

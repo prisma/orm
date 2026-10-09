@@ -956,7 +956,6 @@ describe('integration/mn-nested-write', () => {
           .catch((caught: unknown) => caught);
 
         expect(error).toMatchObject({ message: expect.stringContaining('user_tags_tag_once') });
-        expect(error).not.toMatchObject({ code: 'ORM.RELATION_LINK_DUPLICATE' });
         expect(await userTagRows(runtime)).toEqual(allSeededUserTags);
       });
     },
