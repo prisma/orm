@@ -320,9 +320,9 @@ type ContractOf<C extends FragmentSource> = C['ctx']['context']['contract'];
 
 type ModelNameOf<C extends FragmentSource> = C['modelName'];
 
-/** The compile error `fragment` gives on a collection with a filter, an order or an include. */
-interface FragmentFromModelAlone {
-  readonly fragmentFromModelAlone: 'the fragment is built from the model alone, so call fragment on the root collection of the model';
+/** The compile error `fragment` gives on a collection whose type records a filter, an order or an include. */
+interface FragmentNeedsRootCollection {
+  readonly fragmentNeedsRootCollection: 'the fragment is built from the model alone, so call fragment on the root collection of the model';
 }
 
 type HasRowBeyondModel<Self extends FragmentSource, NsId extends string> = Self extends HasRow
@@ -336,12 +336,12 @@ type HasRowBeyondModel<Self extends FragmentSource, NsId extends string> = Self 
     : true
   : false;
 
-type RefuseQueryFacts<Self extends FragmentSource, NsId extends string> = Self extends
+type RootCollectionOnly<Self extends FragmentSource, NsId extends string> = Self extends
   | HasWhere
   | HasOrderBy
-  ? FragmentFromModelAlone
+  ? FragmentNeedsRootCollection
   : HasRowBeyondModel<Self, NsId> extends true
-    ? FragmentFromModelAlone
+    ? FragmentNeedsRootCollection
     : unknown;
 
 type ModelFragmentBody<
@@ -542,7 +542,9 @@ export class CollectionBase<
   }
 
   /**
-   * Define a query fragment for this collection's model, such as a shared `select` and `include`. The body is typed once, against the model's plain collection. The fragment accepts any collection of the model that `select` and `variant` have not narrowed. The fragment is built from the model alone, so `fragment` refuses a collection with chained calls, such as a filter, an order or an include, and throws `ORM.ARGUMENT_INVALID`; call it on the model's root collection.
+   * Define a query fragment for this collection's model, such as a shared `select` and `include`. The body is typed once, against the model's plain collection. The fragment can be applied to any collection of the model that `select` and `variant` have not narrowed.
+   *
+   * The fragment is built from the model alone, so call `fragment` on the model's root collection. On a collection with chained calls it throws `ORM.ARGUMENT_INVALID`. The type check is partial: it refuses a collection whose type records a filter, an order or an include, and a collection typed by a type parameter, such as `this` in a class method; it does not see `limit`, `offset`, `select`, `cursor`, `distinct`, `variant` or a lock, a union with a root collection, or a value typed as the plain collection.
    *
    * ```ts
    * const summary = db.Post.fragment((posts) => posts.select('id', 'title').include('user'));
@@ -550,7 +552,7 @@ export class CollectionBase<
    * ```
    */
   fragment<Self extends FragmentSource, NsId extends string, Result>(
-    this: Self & HasTypeState<{ readonly nsId: NsId }> & RefuseQueryFacts<Self, NsId>,
+    this: Self & HasTypeState<{ readonly nsId: NsId }> & RootCollectionOnly<Self, NsId>,
     body: (collection: ModelFragmentBody<ContractOf<Self>, ModelNameOf<Self>, NsId>) => Result,
   ): QueryFragment<ModelFragmentReceiver<ContractOf<Self>, ModelNameOf<Self>, NsId>, Result> {
     assertFragmentBody(body);

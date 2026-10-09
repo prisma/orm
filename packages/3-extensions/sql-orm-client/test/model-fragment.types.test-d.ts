@@ -121,11 +121,19 @@ describe('collection.fragment', () => {
     db.Post.with(published).published();
   });
 
-  test('is defined from a root collection, a custom class or a generic collection', () => {
+  test('is defined from a root collection, a custom class or a concrete Collection type', () => {
     expectTypeOf(plain.Post.fragment((p) => p)).toBeFunction();
     expectTypeOf(db.Post.fragment((p) => p)).toBeFunction();
     expectTypeOf(posts.fragment((p) => p)).toBeFunction();
     expectTypeOf(vehicles.fragment((v) => v)).toBeFunction();
+  });
+
+  test('compiles for a type that does not record the chain, which the run-time check refuses', () => {
+    const maybeFiltered = Math.random() > 0.5 ? db.Post.where({ title: 'x' }) : db.Post;
+    expectTypeOf(maybeFiltered.fragment((p) => p)).toBeFunction();
+    const limited: Collection<TestContract, 'Post'> = db.Post.limit(1);
+    expectTypeOf(limited.fragment((p) => p)).toBeFunction();
+    expectTypeOf(db.Post.limit(1).fragment((p) => p)).toBeFunction();
   });
 
   test('refuses a collection with a filter, an order or an include', () => {
@@ -147,5 +155,13 @@ describe('collection.fragment', () => {
       }
     }
     expectTypeOf<TitlePostCollection>().toHaveProperty('titles');
+  });
+
+  test('refuses a collection typed by a type parameter, which may carry a filter or an order', () => {
+    function titles<C extends Collection<TestContract, 'Post'>>(collection: C) {
+      // @ts-expect-error C may be a chained collection, whose calls the fragment would ignore
+      return collection.fragment((p) => p.select('id', 'title'));
+    }
+    expectTypeOf(titles).toBeFunction();
   });
 });
