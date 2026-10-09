@@ -17,7 +17,9 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { MigrationContractViews } from '@internal/migration-tools/migration';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { DdlColumn, DdlTableConstraint } from '@internal/sql-relational-core/ast';
+import { type MigrationSqlText, sqlTextOf } from '@internal/sql-relational-core/contract-free';
 import { blindCast } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import { errorPostgresMigrationStackMissing } from '../errors';
 import { PostgresContractView } from '../postgres-contract-view';
 import { PostgresRlsPolicy, type RenderedRlsPolicyLiteral } from '../postgres-rls-policy';
@@ -314,13 +316,13 @@ export abstract class PostgresMigration<
     readonly schema: string;
     readonly table: string;
     readonly constraint: string;
-    readonly expression: string;
+    readonly expression: MigrationSqlText;
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
     return new AddCheckConstraintCall(
       options.schema,
       options.table,
       options.constraint,
-      options.expression,
+      sqlTextOf(options.expression),
     ).toOp(this.controlAdapterFor('addCheckConstraint'));
   }
 
@@ -510,14 +512,14 @@ export abstract class PostgresMigration<
     readonly schema: string;
     readonly table: string;
     readonly column: string;
-    readonly options: AlterColumnTypeOptions;
+    readonly options: Omit<AlterColumnTypeOptions, 'using'> & { readonly using?: MigrationSqlText };
     readonly operationClass?: AlterColumnTypeClass;
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
     return new AlterColumnTypeCall(
       options.schema,
       options.table,
       options.column,
-      options.options,
+      alterColumnTypeOptionsOf(options.options),
       options.operationClass,
     ).toOp(this.controlAdapterFor('alterColumnType'));
   }
@@ -572,10 +574,10 @@ export abstract class PostgresMigration<
       readonly schema: string;
       readonly table: string;
       readonly index: string;
-      readonly extras?: CreateIndexExtras;
+      readonly extras?: Omit<CreateIndexExtras, 'where'> & { readonly where?: MigrationSqlText };
     } & (
       | { readonly columns: readonly string[]; readonly expression?: never }
-      | { readonly expression: string; readonly columns?: never }
+      | { readonly expression: MigrationSqlText; readonly columns?: never }
     ),
   ): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
     return new CreateIndexCall(
@@ -584,8 +586,8 @@ export abstract class PostgresMigration<
       options.index,
       options.columns !== undefined
         ? { columns: options.columns }
-        : { expression: options.expression },
-      options.extras,
+        : { expression: sqlTextOf(options.expression) },
+      options.extras === undefined ? undefined : createIndexExtrasOf(options.extras),
     ).toOp(this.controlAdapterFor('createIndex'));
   }
 
@@ -641,15 +643,18 @@ export abstract class PostgresMigration<
   protected createRlsPolicy(options: {
     readonly schema: string;
     readonly table: string;
-    readonly policy: RenderedRlsPolicyLiteral;
+    readonly policy: Omit<RenderedRlsPolicyLiteral, 'using' | 'withCheck'> & {
+      readonly using?: MigrationSqlText;
+      readonly withCheck?: MigrationSqlText;
+    };
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
     return new CreatePostgresRlsPolicyCall(
       options.schema,
       options.table,
       new PostgresRlsPolicy({
         ...options.policy,
-        using: options.policy.using,
-        withCheck: options.policy.withCheck,
+        using: optionalSqlTextOf(options.policy.using),
+        withCheck: optionalSqlTextOf(options.policy.withCheck),
       }),
     ).toOp(this.controlAdapterFor('createRlsPolicy'));
   }
@@ -700,4 +705,22 @@ function refuseEarlierSetDefaultOptions(options: {
       'Pass the column as `col(name, type, { default, codecRef })`, with its default written as `lit(value)` or `fn(expression)`, in place of its name and `defaultSql`.',
     upgradeEntry: 'migration-ts-column-defaults',
   });
+}
+
+function optionalSqlTextOf(value: MigrationSqlText | undefined): string | undefined {
+  return value === undefined ? undefined : sqlTextOf(value);
+}
+
+function alterColumnTypeOptionsOf(
+  options: Omit<AlterColumnTypeOptions, 'using'> & { readonly using?: MigrationSqlText },
+): AlterColumnTypeOptions {
+  const { using, ...rest } = options;
+  return { ...rest, ...ifDefined('using', optionalSqlTextOf(using)) };
+}
+
+function createIndexExtrasOf(
+  extras: Omit<CreateIndexExtras, 'where'> & { readonly where?: MigrationSqlText },
+): CreateIndexExtras {
+  const { where, ...rest } = extras;
+  return { ...rest, ...ifDefined('where', optionalSqlTextOf(where)) };
 }

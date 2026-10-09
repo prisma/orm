@@ -1,4 +1,6 @@
 import type { ColumnDefaultLiteralInputValue } from '@internal/contract/types';
+import type { SqlExpression } from '@internal/sql-contract/sql-expression';
+import { requireSqlExpression } from '@internal/sql-contract/sql-expression';
 import type { ReferentialAction } from '@internal/sql-contract/types';
 import type { CodecRef } from '../ast/codec-types';
 import type { AnyDdlColumnDefault } from '../ast/ddl-types';
@@ -13,6 +15,15 @@ import {
 } from '../ast/ddl-types';
 import { opaqueSql } from '../ast/opaque-sql';
 
+/** SQL in a migration-file argument: a `sql` value, or a string. The string form is permanent: committed files use it, and the generator writes it when a template cannot hold the text unchanged. */
+export type MigrationSqlText = string | SqlExpression;
+
+/** The SQL text of `value`. A `sql` value from another installed copy is canonicalized; anything that is neither a string nor a `sql` value throws CONTRACT.ARGUMENT_INVALID. */
+export function sqlTextOf(value: MigrationSqlText): string {
+  if (typeof value === 'string') return value;
+  return requireSqlExpression(value, 'SQL text').text;
+}
+
 export interface DdlColumnOptions {
   readonly notNull?: boolean;
   readonly primaryKey?: boolean;
@@ -24,8 +35,8 @@ export function lit(value: ColumnDefaultLiteralInputValue): LiteralColumnDefault
   return new LiteralColumnDefault(value);
 }
 
-export function fn(expression: string): FunctionColumnDefault {
-  return new FunctionColumnDefault(opaqueSql(expression));
+export function fn(expression: MigrationSqlText): FunctionColumnDefault {
+  return new FunctionColumnDefault(opaqueSql(sqlTextOf(expression)));
 }
 
 export function col(name: string, type: string, options?: DdlColumnOptions): DdlColumn {
@@ -59,6 +70,9 @@ export function unique(
   return new UniqueConstraint({ columns, ...options });
 }
 
-export function checkExpression(name: string, expression: string): CheckExpressionConstraint {
-  return new CheckExpressionConstraint({ name, expression: opaqueSql(expression) });
+export function checkExpression(
+  name: string,
+  expression: MigrationSqlText,
+): CheckExpressionConstraint {
+  return new CheckExpressionConstraint({ name, expression: opaqueSql(sqlTextOf(expression)) });
 }

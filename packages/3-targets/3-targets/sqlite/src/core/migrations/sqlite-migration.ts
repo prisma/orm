@@ -1,4 +1,4 @@
-import type { Contract } from '@internal/contract/types';
+import type { ColumnDefault, Contract } from '@internal/contract/types';
 import {
   type ColumnRenameRequest,
   type MigrationOperationClass,
@@ -17,8 +17,10 @@ import type { ControlStack } from '@internal/framework-components/control';
 import { MigrationContractViews } from '@internal/migration-tools/migration';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { DdlColumn, DdlTableConstraint } from '@internal/sql-relational-core/ast';
+import { type MigrationSqlText, sqlTextOf } from '@internal/sql-relational-core/contract-free';
 import type { SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import { errorSqliteMigrationStackMissing } from '../errors';
 import { SqliteContractView } from '../sqlite-contract-view';
 import { sqliteContractToSchema } from './diff-database-schema';
@@ -253,9 +255,9 @@ export abstract class SqliteMigration<
 
   protected addColumn(options: {
     readonly table: string;
-    readonly column: SqliteColumnSpec;
+    readonly column: SqliteColumnSpecInput;
   }): Promise<Op> {
-    return new AddColumnCall(options.table, options.column).toOp(
+    return new AddColumnCall(options.table, columnSpecOf(options.column)).toOp(
       this.controlAdapterFor('addColumn'),
     );
   }
@@ -284,13 +286,48 @@ export abstract class SqliteMigration<
 
   protected recreateTable(options: {
     readonly tableName: string;
-    readonly contractTable: SqliteTableSpec;
+    readonly contractTable: SqliteTableSpecInput;
     readonly schemaColumnNames: readonly string[];
     readonly indexes: readonly SqliteIndexSpec[];
     readonly summary: string;
     readonly postchecks: readonly RecreatePostcheck[];
     readonly operationClass: MigrationOperationClass;
   }): Promise<Op> {
-    return new RecreateTableCall(options).toOp(this.controlAdapterFor('recreateTable'));
+    return new RecreateTableCall({
+      ...options,
+      contractTable: {
+        ...options.contractTable,
+        columns: options.contractTable.columns.map(columnSpecOf),
+      },
+    }).toOp(this.controlAdapterFor('recreateTable'));
   }
+}
+
+type ColumnDefaultInput =
+  | Exclude<ColumnDefault, { readonly kind: 'function' }>
+  | { readonly kind: 'function'; readonly expression: MigrationSqlText };
+
+type SqliteColumnSpecInput = Omit<SqliteColumnSpec, 'default'> & {
+  readonly default?: ColumnDefaultInput;
+};
+
+type SqliteTableSpecInput = Omit<SqliteTableSpec, 'columns'> & {
+  readonly columns: readonly SqliteColumnSpecInput[];
+};
+
+function columnDefaultOf(columnDefault: ColumnDefaultInput): ColumnDefault {
+  return columnDefault.kind === 'function'
+    ? { kind: 'function', expression: sqlTextOf(columnDefault.expression) }
+    : columnDefault;
+}
+
+function columnSpecOf(column: SqliteColumnSpecInput): SqliteColumnSpec {
+  const { default: columnDefault, ...rest } = column;
+  return {
+    ...rest,
+    ...ifDefined(
+      'default',
+      columnDefault === undefined ? undefined : columnDefaultOf(columnDefault),
+    ),
+  };
 }
