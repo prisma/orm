@@ -1,5 +1,5 @@
 import { type Context, type Span, SpanKind, type SpanOptions } from '@opentelemetry/api'
-import type { SqlQuery } from '@prisma/driver-adapter-utils'
+import type { ConnectionInfo, SqlQuery } from '@prisma/driver-adapter-utils'
 
 import { QueryEvent } from './events'
 import type { SchemaProvider } from './schema'
@@ -50,12 +50,14 @@ export async function withQuerySpanAndEvent<T>({
   provider,
   onQuery,
   execute,
+  connectionInfo,
 }: {
   query: DeepReadonly<SqlQuery>
   tracingHelper: TracingHelper
   provider: SchemaProvider
   onQuery?: (event: QueryEvent) => void
   execute: () => Promise<T>
+  connectionInfo?: ConnectionInfo
 }): Promise<T> {
   const callback =
     onQuery === undefined
@@ -80,14 +82,24 @@ export async function withQuerySpanAndEvent<T>({
     return callback()
   }
 
+  const attributes: Record<string, string | number> = {
+    'db.query.text': query.sql,
+    'db.system.name': providerToOtelSystem(provider),
+  }
+
+  if (connectionInfo?.serverAddress) {
+    attributes['server.address'] = connectionInfo.serverAddress
+  }
+
+  if (connectionInfo?.serverPort) {
+    attributes['server.port'] = connectionInfo.serverPort
+  }
+
   return await tracingHelper.runInChildSpan(
     {
       name: 'db_query',
       kind: SpanKind.CLIENT,
-      attributes: {
-        'db.query.text': query.sql,
-        'db.system.name': providerToOtelSystem(provider),
-      },
+      attributes,
     },
     callback,
   )

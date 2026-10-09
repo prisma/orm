@@ -15,6 +15,7 @@ import type {
 import { Debug, DriverAdapterError } from '@prisma/driver-adapter-utils'
 // @ts-ignore: this is used to avoid the `Module '"<path>/node_modules/@types/pg/index"' has no default export.` error.
 import pg from 'pg'
+import { parse as parseConnectionString } from 'pg-connection-string'
 
 import { name as packageName } from '../package.json'
 import { FIRST_NORMAL_OBJECT_ID } from './constants'
@@ -197,12 +198,15 @@ export type UserDefinedTypeParser = (oid: number, value: unknown, adapter: SqlQu
 export type StatementNameGenerator = (query: SqlQuery) => string
 
 export class PrismaPgAdapter extends PgQueryable<StdClient> implements SqlDriverAdapter {
+  readonly #connectionInfo: ConnectionInfo
+
   constructor(
     client: StdClient,
     protected readonly pgOptions?: PrismaPgOptions,
     private readonly release?: () => Promise<void>,
   ) {
     super(client)
+    this.#connectionInfo = this.#extractConnectionInfo()
   }
 
   async startTransaction(isolationLevel?: IsolationLevel): Promise<Transaction> {
@@ -259,11 +263,47 @@ export class PrismaPgAdapter extends PgQueryable<StdClient> implements SqlDriver
     }
   }
 
-  getConnectionInfo(): ConnectionInfo {
-    return {
+  #extractConnectionInfo(): ConnectionInfo {
+    const info: ConnectionInfo = {
       schemaName: this.pgOptions?.schema,
       supportsRelationJoins: true,
     }
+
+    const { host, port, connectionString } = this.client.options
+
+    if (host) {
+      info.serverAddress = host
+    }
+
+    if (port) {
+      info.serverPort = port
+    }
+
+    if (connectionString && (info.serverAddress === undefined || info.serverPort === undefined)) {
+      try {
+        const parsed = parseConnectionString(connectionString)
+
+        if (info.serverAddress === undefined && parsed.host) {
+          info.serverAddress = parsed.host
+        }
+
+        if (info.serverPort === undefined && parsed.port) {
+          const parsedPort = Number(parsed.port)
+          if (Number.isInteger(parsedPort)) {
+            info.serverPort = parsedPort
+          }
+        }
+      } catch {
+        // A malformed connection string fails later when connecting; it must
+        // not prevent the adapter from being constructed.
+      }
+    }
+
+    return info
+  }
+
+  getConnectionInfo(): ConnectionInfo {
+    return this.#connectionInfo
   }
 
   async dispose(): Promise<void> {
