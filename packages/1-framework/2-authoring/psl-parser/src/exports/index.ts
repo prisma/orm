@@ -126,7 +126,6 @@ export type {
 export {
   contributedTypeOf,
   createBinder,
-  PSL_UNRESOLVED_REFERENCE,
   typeReferenceNode,
 } from '../binder';
 export { mapBlock, structBlock } from '../block-spec/constructors';
@@ -166,6 +165,7 @@ export {
   diagnosticFromSpan,
   diagnosticSource,
   mapPslDiagnostics,
+  PSL_UNRESOLVED_REFERENCE,
 } from '../diagnostic';
 export type {
   DeclarationFor,
@@ -184,13 +184,14 @@ export {
   readResolvedConstructorCall,
 } from '../resolve';
 export { isPrismaNextSchema, renameLegacyDirective } from '../schema-directive';
-export type { Scope, ScopeResolution } from '../scope';
-export { isNamespaceLike, memberEntries } from '../scope';
+export type { Scope, ScopeResolution, WrittenMixinReference } from '../scope';
+export { isNamespaceLike, lookupMixinReference, memberEntries } from '../scope';
 export type {
   BlockSymbol,
   BuildSymbolTableOptions,
   CompositeTypeSymbol,
   FieldSymbol,
+  MixinSymbol,
   ModelSymbol,
   NamedTypeSymbol,
   NamespaceSymbol,

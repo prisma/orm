@@ -65,7 +65,7 @@ Strongly typed AST classes wrap the tree for convenient reading. A mixin declara
 
 `buildSymbolTable({ documents, sources })` collects the declarations of a schema's files: namespaces, models, composite types, named types, generic blocks and their fields. It reports duplicate declarations. It does not resolve references and does not interpret blocks.
 
-Mixin declarations are not collected and take no part in duplicate detection. The symbol table reports each mixin declaration and each inclusion as not supported yet.
+Mixin declarations are collected too, and a mixin's name must be unique among the models, composite types, generic blocks and mixins of its namespace. A symbol's members include the members of every mixin its declaration includes, at the position of the inclusion, so a consumer that reads members from symbols sees an included member exactly as it sees one written in the block. The symbol table reports an inclusion it cannot place: a name that is not a mixin, a mixin for a different block keyword, a mixin included twice, a member the block already has, and an inclusion inside a mixin.
 
 Each symbol carries the members of its declaration. A model or composite type symbol has its fields and attributes; a generic block symbol has its entries and its attributes, both in source order, and a repeated entry key appears once per occurrence. Consumers read a declaration's members from its symbol, not from the symbol's syntax node.
 

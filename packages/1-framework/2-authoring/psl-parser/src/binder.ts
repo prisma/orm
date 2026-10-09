@@ -7,7 +7,6 @@ import type {
   ControlMutationDefaultRegistry,
   ControlMutationDefaults,
 } from '@internal/framework-components/control';
-import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import { blindCast } from '@internal/utils/casts';
 import {
   assembleAttributeSpecs,
@@ -36,7 +35,7 @@ import {
   contributedTypeScope,
   mergeContributedTypes,
 } from './contributed-type-scope';
-import { diagnosticSource } from './diagnostic';
+import { diagnosticSource, PSL_UNRESOLVED_REFERENCE } from './diagnostic';
 import {
   describeWrittenEntityReference,
   type WrittenEntityReference,
@@ -80,9 +79,6 @@ import { IdentifierAst } from './syntax/ast/identifier';
 import type { QualifiedNameAst } from './syntax/ast/qualified-name';
 import type { SyntaxNode } from './syntax/red';
 import { readWrittenScalar } from './written-scalar';
-
-export const PSL_UNRESOLVED_REFERENCE =
-  'PSL_UNRESOLVED_REFERENCE' satisfies ContributedPslDiagnosticCode;
 
 export type BoundSpec =
   | AttributeSpec<never, ModelAttributeCtx>

@@ -27,7 +27,14 @@ function argOf(source: string): { expr: ExpressionAst; ctx: AttributeCtx } {
   if (expr === undefined) throw new Error('expected an argument expression');
   const sources = new PslSources([[root, cursor.sourceFile]]);
   const symbols = {
-    topLevel: { namespaces: {}, models: {}, compositeTypes: {}, namedTypes: {}, blocks: {} },
+    topLevel: {
+      namespaces: {},
+      models: {},
+      compositeTypes: {},
+      namedTypes: {},
+      blocks: {},
+      mixins: {},
+    },
   };
   const { binder } = createBinder({
     sources,

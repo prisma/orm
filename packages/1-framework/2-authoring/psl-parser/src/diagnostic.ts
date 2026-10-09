@@ -1,8 +1,11 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
-import type { PslSpan } from '@internal/framework-components/psl-ast';
+import type { ContributedPslDiagnosticCode, PslSpan } from '@internal/framework-components/psl-ast';
 import { InternalError } from '@internal/utils/internal-error';
 import type { PslSources, Range } from './source-file';
 import type { SyntaxNode } from './syntax/red';
+
+export const PSL_UNRESOLVED_REFERENCE =
+  'PSL_UNRESOLVED_REFERENCE' satisfies ContributedPslDiagnosticCode;
 
 export interface PslDiagnostic {
   readonly filename: string;

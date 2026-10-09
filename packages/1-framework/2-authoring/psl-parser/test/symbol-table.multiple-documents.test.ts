@@ -93,7 +93,14 @@ describe('multiple-document symbol tables', () => {
   it('accepts no documents as an empty scope', () => {
     expect(buildSymbolTable({ documents: [], sources: new PslSources([]) })).toEqual({
       symbolTable: {
-        topLevel: { namespaces: {}, namedTypes: {}, blocks: {}, models: {}, compositeTypes: {} },
+        topLevel: {
+          namespaces: {},
+          namedTypes: {},
+          blocks: {},
+          models: {},
+          compositeTypes: {},
+          mixins: {},
+        },
       },
       diagnostics: [],
     });

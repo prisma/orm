@@ -19,7 +19,14 @@ function argOf(exprSource: string): { expr: ExpressionAst; ctx: AttributeCtx } {
   if (!expr) throw new Error('expected an argument expression');
   const sources = new PslSources([[root, cursor.sourceFile]]);
   const symbols = {
-    topLevel: { namespaces: {}, models: {}, compositeTypes: {}, namedTypes: {}, blocks: {} },
+    topLevel: {
+      namespaces: {},
+      models: {},
+      compositeTypes: {},
+      namedTypes: {},
+      blocks: {},
+      mixins: {},
+    },
   };
   return {
     expr,

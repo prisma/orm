@@ -7,6 +7,7 @@ import type {
 import type {
   BlockSymbol,
   CompositeTypeSymbol,
+  MixinSymbol,
   ModelSymbol,
   NamedTypeSymbol,
   NamespaceSymbol,
@@ -26,6 +27,7 @@ export type ScopeResolution =
       readonly namespace?: NamespaceSymbol;
     }
   | { readonly kind: 'block'; readonly symbol: BlockSymbol; readonly namespace?: NamespaceSymbol }
+  | { readonly kind: 'mixin'; readonly symbol: MixinSymbol; readonly namespace?: NamespaceSymbol }
   | { readonly kind: 'namespace'; readonly symbol: NamespaceSymbol }
   | { readonly kind: 'contributedNamespace'; readonly symbol: ContributedNamespaceSymbol }
   | { readonly kind: 'contributedType'; readonly symbol: ContributedTypeSymbol };
@@ -68,6 +70,8 @@ function namespaceMember(namespace: NamespaceSymbol, name: string): ScopeResolut
     return { kind: 'compositeType', symbol: compositeType, namespace };
   const block = namespace.blocks[name];
   if (block !== undefined) return { kind: 'block', symbol: block, namespace };
+  const mixin = namespace.mixins[name];
+  if (mixin !== undefined) return { kind: 'mixin', symbol: mixin, namespace };
   return undefined;
 }
 
@@ -107,6 +111,8 @@ class DocumentScope extends Scope {
     if (namedType !== undefined) return { kind: 'namedType', symbol: namedType };
     const block = records.blocks[name];
     if (block !== undefined) return { kind: 'block', symbol: block };
+    const mixin = records.mixins[name];
+    if (mixin !== undefined) return { kind: 'mixin', symbol: mixin };
     const namespace = records.namespaces[name];
     if (namespace !== undefined) return { kind: 'namespace', symbol: namespace };
     return this.parent?.lookup(name);
@@ -119,6 +125,7 @@ class DocumentScope extends Scope {
       records.compositeTypes,
       records.namedTypes,
       records.blocks,
+      records.mixins,
       records.namespaces,
     );
   }
@@ -138,7 +145,12 @@ class NamespaceScope extends Scope {
 
   protected ownNames(): Iterable<string> {
     const namespace = this.#namespace;
-    return recordNames(namespace.models, namespace.compositeTypes, namespace.blocks);
+    return recordNames(
+      namespace.models,
+      namespace.compositeTypes,
+      namespace.blocks,
+      namespace.mixins,
+    );
   }
 }
 
@@ -156,6 +168,25 @@ export function namedTypeBaseScope(records: TopLevelRecords, parent: Scope | und
 
 export function namespaceScope(namespace: NamespaceSymbol, parent: Scope): Scope {
   return new NamespaceScope(namespace, parent);
+}
+
+export interface WrittenMixinReference {
+  readonly namespaceId?: string | undefined;
+  readonly name: string;
+}
+
+export function lookupMixinReference(
+  records: TopLevelRecords,
+  enclosing: NamespaceSymbol | undefined,
+  written: WrittenMixinReference,
+): ScopeResolution | undefined {
+  if (written.namespaceId !== undefined) {
+    const namespace = records.namespaces[written.namespaceId];
+    return namespace === undefined ? undefined : namespaceMember(namespace, written.name);
+  }
+  const document = new DocumentScope(records, undefined);
+  const scope = enclosing === undefined ? document : new NamespaceScope(enclosing, document);
+  return scope.lookup(written.name);
 }
 
 export function isNamespaceLike(
