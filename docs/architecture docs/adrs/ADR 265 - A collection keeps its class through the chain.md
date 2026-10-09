@@ -61,6 +61,7 @@ Each fact has three names. The flag `hasWhere` in the type state is set to `true
 | `where` | `Filtered<Self>` | yes | a filter has been applied |
 | `orderBy` | `Ordered<Self>` | yes | an order has been applied |
 | `limit`, `offset`, `distinct`, `distinctOn`, `cursor` | `Self` | yes | nothing |
+| `forUpdate`, `forNoKeyUpdate`, `forShare`, `forKeyShare` | `Self` | yes | nothing; the contract's capabilities decide which arguments each accepts |
 | `include` | `Including<Self, { [K in Rel]: ... }>` | yes | each row has the included relation |
 | `with(fn)` | whatever `fn(this)` returns | as the function | as the function |
 | `select` | `Collection<Contract, Model, NarrowedRow, State>` | no | a different row |
@@ -169,6 +170,8 @@ The public `Collection` type is `CollectionBase` intersected with one reducer me
 - At run time each chained collection is built with `this.constructor`, so the object is an instance of the receiver's class, as its type says.
 
 **Guards.** All eight guarded methods use one form: a `this` parameter whose type parameter is constrained to the fact. `update`, `updateAll`, `updateAndCount`, `delete`, `deleteAll` and `deleteAndCount` take `this: Self` with `Self extends HasWhere`; `cursor` and `distinctOn` take `this: Self` with `Self extends HasOrderBy`. When the fact is missing, the error is on the receiver and names the fact: "The 'this' context of type 'PostCollection' is not assignable to method's 'this' of type 'HasWhere'".
+
+**Refusals.** `fragment` (ADR 259) refuses a receiver that has a fact, which a constraint cannot express: an unfiltered collection's state has `hasWhere: boolean`, and `true` is a subtype of `boolean`, so any constraint that accepts the unfiltered state also accepts the filtered one. A refusal therefore uses a second form: the `this` parameter is intersected with a conditional type, `RootCollectionOnly<Self, NsId>`, that resolves to an interface with one property naming the reason, `FragmentNeedsRootCollection`, when the receiver has the fact, and to `unknown` otherwise. The error is on the receiver: "Property 'fragmentNeedsRootCollection' is missing in type 'PostCollection & HasWhere'". A later refusal uses this form. It has two limits. Facts record what is known to be present, so a receiver without a fact in its type, such as a union with an unfiltered collection, is not refused. A receiver typed by a type parameter, such as `this` in a class method, leaves the conditional unresolved, so TypeScript refuses the call with an error that names the conditional type; a negative type test holds that behaviour.
 
 The requirement is about the receiver, so the receiver is where it is checked: no argument type changes with the state, and a cast on an argument cannot bypass it. The constraint keeps `Self` inferred as the whole receiver type, so `cursor` and `distinctOn` return the receiver with every fact it has. The writes return `CollectionRowOf<Self & HasRow<CollectionRowOf<this>>>`, the receiver's row.
 

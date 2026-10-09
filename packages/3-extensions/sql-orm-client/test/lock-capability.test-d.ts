@@ -1,6 +1,8 @@
 import { soleDomainNamespaceId } from '@internal/contract/types';
 import { expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
+import type { Filtered } from '../src/collection-types';
+import { createChainingOrm, type PostCollection } from './collection-chaining-fixture';
 import { baseContract, createCollectionFor } from './collection-fixtures';
 import { createMockRuntime, getTestContext, withCapabilities } from './helpers';
 
@@ -89,4 +91,25 @@ test('of is not an option', () => {
 
   // @ts-expect-error the ORM always locks the model table
   collection.forUpdate({ of: ['posts'] });
+});
+
+test('a custom collection class keeps its methods after each method', () => {
+  const { db } = createChainingOrm();
+
+  expectTypeOf(db.Post.forUpdate()).toEqualTypeOf<PostCollection>();
+  expectTypeOf(db.Post.forNoKeyUpdate()).toEqualTypeOf<PostCollection>();
+  expectTypeOf(db.Post.forShare()).toEqualTypeOf<PostCollection>();
+  expectTypeOf(db.Post.forKeyShare()).toEqualTypeOf<PostCollection>();
+  db.Post.forUpdate().published();
+});
+
+test('a filtered collection stays filtered after each method', () => {
+  const { db } = createChainingOrm();
+  const filtered = db.Post.where({ id: 1 });
+
+  expectTypeOf(filtered.forUpdate()).toEqualTypeOf<Filtered<PostCollection>>();
+  expectTypeOf(filtered.forNoKeyUpdate()).toEqualTypeOf<Filtered<PostCollection>>();
+  expectTypeOf(filtered.forShare()).toEqualTypeOf<Filtered<PostCollection>>();
+  expectTypeOf(filtered.forKeyShare()).toEqualTypeOf<Filtered<PostCollection>>();
+  filtered.forUpdate().update({ title: 'x' });
 });

@@ -48,7 +48,7 @@ export { buildSqlContractFromDefinition } from './build-contract';
 type ModelLike = {
   readonly stageOne: {
     readonly modelName?: string;
-    readonly namespace?: string;
+    readonly namespace?: string | undefined;
     readonly fields: Record<string, ScalarFieldBuilder>;
     readonly relations: Record<string, RelationBuilder<RelationState>>;
   };

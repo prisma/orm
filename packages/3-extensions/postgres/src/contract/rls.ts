@@ -14,7 +14,7 @@ import { postgresError } from '../errors';
 export interface RlsTargetModel {
   readonly stageOne: {
     readonly modelName?: string;
-    readonly namespace?: string;
+    readonly namespace?: string | undefined;
     readonly fields: Record<string, ScalarFieldBuilder>;
   };
 }

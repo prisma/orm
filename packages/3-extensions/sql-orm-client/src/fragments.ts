@@ -19,6 +19,7 @@ import { ormError } from './orm-errors';
 import type {
   CodecField,
   CodecListField,
+  CollectionState,
   FieldCodecId,
   FieldNullable,
   FieldsOf,
@@ -410,6 +411,44 @@ export function assertModelFragmentReceiver(
       },
     );
   }
+}
+
+function firstQueryState(state: CollectionState): string | undefined {
+  const present: ReadonlyArray<readonly [string, boolean]> = [
+    ['a variant', state.variantName !== undefined],
+    ['a cursor', state.cursor !== undefined],
+    ['distinctOn', state.distinctOn !== undefined],
+    ['distinct', state.distinct !== undefined],
+    ['a filter', state.filters.length > 0],
+    ['an order', state.orderBy !== undefined],
+    ['a limit', state.limit !== undefined],
+    ['an offset', state.offset !== undefined],
+    ['an include', state.includes.length > 0],
+    ['selected fields', state.selectedFields !== undefined],
+    ['a row lock', state.locking !== undefined],
+  ];
+  return present.find(([, isPresent]) => isPresent)?.[0];
+}
+
+/** Throws `ORM.ARGUMENT_INVALID` when the collection a fragment for one model is made from carries query state, which the fragment would ignore. */
+export function assertModelFragmentSource(source: {
+  readonly modelName: string;
+  readonly namespaceId: string;
+  readonly state: CollectionState;
+}): void {
+  const state = firstQueryState(source.state);
+  if (state === undefined) {
+    return;
+  }
+  throw ormError(
+    'ORM.ARGUMENT_INVALID',
+    `Cannot define a fragment from a collection of ${source.modelName} that has ${state}`,
+    {
+      why: 'A fragment for one model is built from the model alone, so the calls before .fragment(...) would be ignored.',
+      fix: `Call fragment on the model's root collection, such as db.orm.${source.namespaceId}.${source.modelName}.fragment(...), and apply the other calls where the fragment is used.`,
+      meta: { method: 'fragment', model: source.modelName, state },
+    },
+  );
 }
 
 /** The model as error messages name it: with its namespace when the contract has more than one. */

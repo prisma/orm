@@ -115,6 +115,7 @@ import { shorthandToWhereExpr } from './filters';
 import {
   assertFragmentBody,
   assertModelFragmentReceiver,
+  assertModelFragmentSource,
   type FragmentFacts,
   type FragmentFactsType,
   type WithFacts,
@@ -307,16 +308,41 @@ interface MtiCreateContext {
   pkColumns: readonly string[];
 }
 
-/** What `fragment` reads from the collection it is called on: its contract and its model. */
+/** What `fragment` reads from the collection it is called on: its contract, its model and its query state. */
 interface FragmentSource {
   readonly modelName: string;
   readonly namespaceId: string;
+  readonly state: CollectionState;
   readonly ctx: { readonly context: { readonly contract: Contract<SqlStorage> } };
 }
 
 type ContractOf<C extends FragmentSource> = C['ctx']['context']['contract'];
 
 type ModelNameOf<C extends FragmentSource> = C['modelName'];
+
+/** The compile error `fragment` gives on a collection whose type records a filter, an order or an include. */
+interface FragmentNeedsRootCollection {
+  readonly fragmentNeedsRootCollection: 'the fragment is built from the model alone, so call fragment on the root collection of the model';
+}
+
+type HasRowBeyondModel<Self extends FragmentSource, NsId extends string> = Self extends HasRow
+  ? [
+      Exclude<
+        keyof CollectionRowOf<Self>,
+        keyof DefaultModelRow<ContractOf<Self>, ModelNameOf<Self>, NsId>
+      >,
+    ] extends [never]
+    ? false
+    : true
+  : false;
+
+type RootCollectionOnly<Self extends FragmentSource, NsId extends string> = Self extends
+  | HasWhere
+  | HasOrderBy
+  ? FragmentNeedsRootCollection
+  : HasRowBeyondModel<Self, NsId> extends true
+    ? FragmentNeedsRootCollection
+    : unknown;
 
 type ModelFragmentBody<
   TContract extends Contract<SqlStorage>,
@@ -516,7 +542,9 @@ export class CollectionBase<
   }
 
   /**
-   * Define a query fragment for this collection's model, such as a shared `select` and `include`. The body is typed once, against the model's plain collection. The fragment accepts any collection of the model that `select` and `variant` have not narrowed.
+   * Define a query fragment for this collection's model, such as a shared `select` and `include`. The body is typed once, against the model's plain collection. The fragment can be applied to any collection of the model that `select` and `variant` have not narrowed.
+   *
+   * The fragment is built from the model alone, so call `fragment` on the model's root collection. On a collection with chained calls it throws `ORM.ARGUMENT_INVALID`. The type check is partial: it refuses a collection whose type records a filter, an order or an include, and a collection typed by a type parameter, such as `this` in a class method; it does not see `limit`, `offset`, `select`, `cursor`, `distinct`, `variant` or a lock, a union with a root collection, or a value typed as the plain collection.
    *
    * ```ts
    * const summary = db.Post.fragment((posts) => posts.select('id', 'title').include('user'));
@@ -524,10 +552,11 @@ export class CollectionBase<
    * ```
    */
   fragment<Self extends FragmentSource, NsId extends string, Result>(
-    this: Self & HasTypeState<{ readonly nsId: NsId }>,
+    this: Self & HasTypeState<{ readonly nsId: NsId }> & RootCollectionOnly<Self, NsId>,
     body: (collection: ModelFragmentBody<ContractOf<Self>, ModelNameOf<Self>, NsId>) => Result,
   ): QueryFragment<ModelFragmentReceiver<ContractOf<Self>, ModelNameOf<Self>, NsId>, Result> {
     assertFragmentBody(body);
+    assertModelFragmentSource(this);
     const source = { modelName: this.modelName, namespaceId: this.namespaceId };
     return (collection) => {
       assertModelFragmentReceiver(source, collection);
@@ -1334,9 +1363,11 @@ export class CollectionBase<
    * const job = await tx.orm.Job.where({ state: 'queued' }).limit(1).forUpdate({ skipLocked: true }).first();
    * ```
    */
-  forUpdate(
+  forUpdate<Self>(
+    this: Self,
     ...options: LockMethodArgs<TContract['capabilities'], 'forUpdate'>
-  ): Collection<TContract, ModelName, Row, State> {
+  ): Self;
+  forUpdate(...options: LockMethodArgs<TContract['capabilities'], 'forUpdate'>): this {
     return this.#lock('forUpdate', options[0]);
   }
 
@@ -1345,9 +1376,11 @@ export class CollectionBase<
    *
    * Requires the `postgres.forNoKeyUpdate` and `sql.lockOf` capabilities, because the lock always names the model's table with `OF`.
    */
-  forNoKeyUpdate(
+  forNoKeyUpdate<Self>(
+    this: Self,
     ...options: LockMethodArgs<TContract['capabilities'], 'forNoKeyUpdate'>
-  ): Collection<TContract, ModelName, Row, State> {
+  ): Self;
+  forNoKeyUpdate(...options: LockMethodArgs<TContract['capabilities'], 'forNoKeyUpdate'>): this {
     return this.#lock('forNoKeyUpdate', options[0]);
   }
 
@@ -1356,9 +1389,11 @@ export class CollectionBase<
    *
    * Requires the `sql.forShare` and `sql.lockOf` capabilities, because the lock always names the model's table with `OF`.
    */
-  forShare(
+  forShare<Self>(
+    this: Self,
     ...options: LockMethodArgs<TContract['capabilities'], 'forShare'>
-  ): Collection<TContract, ModelName, Row, State> {
+  ): Self;
+  forShare(...options: LockMethodArgs<TContract['capabilities'], 'forShare'>): this {
     return this.#lock('forShare', options[0]);
   }
 
@@ -1367,9 +1402,11 @@ export class CollectionBase<
    *
    * Requires the `postgres.forKeyShare` and `sql.lockOf` capabilities, because the lock always names the model's table with `OF`.
    */
-  forKeyShare(
+  forKeyShare<Self>(
+    this: Self,
     ...options: LockMethodArgs<TContract['capabilities'], 'forKeyShare'>
-  ): Collection<TContract, ModelName, Row, State> {
+  ): Self;
+  forKeyShare(...options: LockMethodArgs<TContract['capabilities'], 'forKeyShare'>): this {
     return this.#lock('forKeyShare', options[0]);
   }
 
@@ -3099,10 +3136,7 @@ export class CollectionBase<
     );
   }
 
-  #lock(
-    strength: LockStrength,
-    options: LockWaitRequest | undefined,
-  ): Collection<TContract, ModelName, Row, State> {
+  #lock(strength: LockStrength, options: LockWaitRequest | undefined): this {
     if (this.includeRefinementMode) {
       throw lockIncompatible(
         'includeRefinement',
@@ -3119,7 +3153,7 @@ export class CollectionBase<
       of: [this.tableName],
       ...ifDefined('waitPolicy', waitPolicy),
     });
-    return this.#clone({ locking: [...(this.state.locking ?? []), clause] });
+    return this.#cloneSelf({ locking: [...(this.state.locking ?? []), clause] });
   }
 
   #clone<NextState extends CollectionTypeState = State>(
