@@ -128,6 +128,10 @@ Factory function signatures in `migration-factories.ts` are aligned 1:1 with `Op
 
 This alignment is what makes the TypeScript renderer possible. The rendered source code calls the same functions with the same argument shapes, so a user reading or editing `migration.ts` is working with the same API that the planner uses internally.
 
+## Recorded exception: SQL migration files pass `sql` values
+
+The rendered SQL `migration.ts` passes raw SQL as `` sql`...` `` values where the IR holds strings: `CreateIndexCall.where` is a string, and the file writes `` where: sql`"archivedAt" IS NULL` ``. The migration functions take a `sql` value or a string and read the same text from either, so the factory still receives the IR's value. The exception exists so that a migration file writes SQL the way a contract does, with no escaped quotes and with multi-line text on its own lines ([ADR 268](ADR%20268%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md)). Where a template would not read back as the same text, the file passes a string, which is the IR's shape.
+
 ## References
 
 - [ADR 188 — MongoDB migration operation model](ADR%20188%20-%20MongoDB%20migration%20operation%20model.md): the three-phase envelope that `renderOps` produces.
