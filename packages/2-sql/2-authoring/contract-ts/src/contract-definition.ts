@@ -88,14 +88,14 @@ export interface ColumnNode {
    * derivable kinds at contract build time.
    */
   readonly noCheck?: readonly CheckKind[];
+  /** Present when the column is typed by an `enumType()` enum, which gives it the enum's storage value set and a membership check. */
+  readonly enumTypeHandle?: EnumTypeHandle;
 }
 
-/** What a model field adds to its column: the field's name, the defaults the runtime fills, and the enum that types it. */
+/** What a model field adds to its column: the field's name and the defaults the runtime fills. */
 export interface FieldPart {
   readonly fieldName: string;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
-  /** Present when the field is typed by an enum. */
-  readonly enumTypeHandle?: EnumTypeHandle;
 }
 
 export interface FieldNode extends ColumnNode, FieldPart {}

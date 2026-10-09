@@ -43,6 +43,13 @@ const rows: readonly Row[] = [
     fieldName: 'tags',
   },
   {
+    kind: 'enumType() handle',
+    definition: definitionOf([user(field('role', 'pg/text@1', { enumTypeHandle: Role }))], {
+      enums: { Role },
+    }),
+    fieldName: 'role',
+  },
+  {
     kind: 'pg.enum(handle)',
     definition: definitionOf([
       {
@@ -218,54 +225,5 @@ describe('a column node lowers exactly as the field it replaces', () => {
     expect(build(withFieldAsColumnNode(definition, modelName, fieldName)).storage).toStrictEqual(
       build(definition).storage,
     );
-  });
-
-  it('enumType() handle: a column node cannot carry the handle, so it has no value set and no membership check', () => {
-    const definition = definitionOf([user(field('role', 'pg/text@1', { enumTypeHandle: Role }))], {
-      enums: { Role },
-    });
-    const withField = build(definition).storage;
-    const withNode = build(withFieldAsColumnNode(definition, 'User', 'role')).storage;
-
-    const tableOf = (storage: typeof withField) =>
-      storage.namespaces['public']?.entries.table?.['User'];
-    expect(tableOf(withField)?.columns['role']?.valueSet).toEqual({
-      plane: 'storage',
-      entityKind: 'valueSet',
-      namespaceId: 'public',
-      entityName: 'Role',
-    });
-    expect(tableOf(withField)?.checks).toHaveLength(1);
-    expect(tableOf(withNode)?.columns['role']?.valueSet).toBeUndefined();
-    expect(tableOf(withNode)?.checks).toBeUndefined();
-  });
-
-  it("enumType() handle: a column node whose descriptor names the enum's value set gets the value set but no membership check", () => {
-    const definition = definitionOf([user(field('role', 'pg/text@1', { enumTypeHandle: Role }))], {
-      enums: { Role },
-    });
-    const withNode = withFieldAsColumnNode(definition, 'User', 'role');
-    const valueSet = {
-      plane: 'storage',
-      entityKind: 'valueSet',
-      namespaceId: 'public',
-      entityName: 'Role',
-    } as const;
-    const withValueSet: ContractDefinition = {
-      ...withNode,
-      tables: (withNode.tables ?? []).map((table) => ({
-        ...table,
-        columns: table.columns.map((column) => ({
-          ...column,
-          descriptor: { ...column.descriptor, valueSet },
-        })),
-      })),
-    };
-
-    const fieldTable = build(definition).storage.namespaces['public']?.entries.table?.['User'];
-    const nodeTable = build(withValueSet).storage.namespaces['public']?.entries.table?.['User'];
-    expect(nodeTable?.columns).toStrictEqual(fieldTable?.columns);
-    expect(fieldTable?.checks).toHaveLength(1);
-    expect(nodeTable?.checks).toBeUndefined();
   });
 });

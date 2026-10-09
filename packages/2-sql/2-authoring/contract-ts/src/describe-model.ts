@@ -142,10 +142,9 @@ function describeFieldColumn(modelName: string, field: ModelField): ColumnDescri
         ...ifDefined('default', field.default),
       },
       site,
-      undefined,
     );
   }
-  return describeColumn(field, site, field.enumTypeHandle);
+  return describeColumn(field, site);
 }
 
 /** The phases a generated default fills the field on, refused alongside a default or on an optional field. */

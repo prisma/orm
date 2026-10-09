@@ -1,15 +1,9 @@
-import type { EnumTypeHandle } from '@internal/contract-authoring';
 import type { ColumnSite } from './column-site';
 import type { ColumnNode, TableNode } from './contract-definition';
 import { type ForeignKeyResolutionContext, resolveForeignKey } from './resolve-foreign-key';
 import type { ColumnDescription, TableDescription } from './storage-description';
 
-/** Describes one column node. A model field passes its enum, which a column node alone cannot carry. */
-export function describeColumn(
-  column: ColumnNode,
-  site: ColumnSite,
-  domainEnum: EnumTypeHandle | undefined,
-): ColumnDescription {
+export function describeColumn(column: ColumnNode, site: ColumnSite): ColumnDescription {
   return {
     columnName: column.columnName,
     descriptor: column.descriptor,
@@ -17,7 +11,7 @@ export function describeColumn(
     many: column.many === true ? { elementNullable: column.elementNullable === true } : false,
     default: column.default,
     noCheck: column.noCheck,
-    domainEnum,
+    domainEnum: column.enumTypeHandle,
     site,
   };
 }
@@ -40,11 +34,12 @@ export function describeTableNode(
     namespaceId,
     tableName,
     columns: table.columns.map((column) =>
-      describeColumn(
-        column,
-        { kind: 'column', namespaceId, tableName, columnName: column.columnName },
-        undefined,
-      ),
+      describeColumn(column, {
+        kind: 'column',
+        namespaceId,
+        tableName,
+        columnName: column.columnName,
+      }),
     ),
     control: table.control,
     primaryKey: table.id,

@@ -39,7 +39,7 @@ describe('table node refusals', () => {
     );
   });
 
-  it('refuses two column nodes for one column', () => {
+  it('refuses a table node that lists one column twice', () => {
     expect(() =>
       build(
         definitionOf([user], {
@@ -49,7 +49,7 @@ describe('table node refusals', () => {
     ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.NAME_DUPLICATE',
-        message: 'Column "id" of table "audit_rows" is declared by two table nodes.',
+        message: 'Column "id" of table "audit_rows" is listed twice by its table node.',
         meta: { kind: 'column', name: 'id', tableName: 'audit_rows', namespaceId: 'public' },
       }),
     );

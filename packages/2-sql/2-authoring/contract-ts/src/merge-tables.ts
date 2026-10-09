@@ -72,13 +72,13 @@ function withColumns(
   for (const column of tableNode.columns) {
     const earlier = byName.get(column.columnName);
     if (earlier !== undefined) {
-      const declaredBy =
+      const problem =
         earlier.site.kind === 'field'
-          ? `field "${earlier.site.modelName}.${earlier.site.fieldName}" and again by a table node`
-          : 'two table nodes';
+          ? `is declared by field "${earlier.site.modelName}.${earlier.site.fieldName}" and again by a table node`
+          : 'is listed twice by its table node';
       throw contractError(
         'CONTRACT.NAME_DUPLICATE',
-        `Column "${column.columnName}" of table "${tableNode.tableName}" is declared by ${declaredBy}.`,
+        `Column "${column.columnName}" of table "${tableNode.tableName}" ${problem}.`,
         {
           meta: {
             kind: 'column',

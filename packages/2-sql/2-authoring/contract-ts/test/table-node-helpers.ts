@@ -116,7 +116,7 @@ function columnNodeOf(modelField: FieldNode | ValueObjectFieldNode): ColumnNode 
       ...(modelField.default !== undefined ? { default: modelField.default } : {}),
     };
   }
-  const { fieldName: _f, executionDefaults: _e, enumTypeHandle: _h, ...column } = modelField;
+  const { fieldName: _f, executionDefaults: _e, ...column } = modelField;
   return column;
 }
 
