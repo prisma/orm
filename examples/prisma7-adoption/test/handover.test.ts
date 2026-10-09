@@ -3,7 +3,9 @@
  * Prisma 7 built, Prisma 8 signs, then plans and applies three edits made to
  * `prisma/schema.prisma` in the Prisma 7 dialect: an additive one, a
  * destructive one, and one that gives an existing column an autoincrement
- * default and names a foreign key with `map`. After each, `db verify --strict`
+ * default and names a foreign key with `map`. Then it marks a field `@ignore`
+ * and a model `@@ignore`, and removes them again; neither edit changes the
+ * storage hash or plans a migration. After each, `db verify --strict`
  * reports only Prisma 7's ledger table as unclaimed, Prisma 7 sees no drift,
  * and the clients read the new shape. Finally the migrations replay onto an
  * empty database, which verifies strictly with nothing unclaimed and has the
@@ -315,6 +317,22 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
           const v7Sequenced = await tsx('test/handover/v7-after-edit-3.ts');
           expect(v7Sequenced).toContain('largest viewCount before: 41');
           expect(v7Sequenced).toContain('Numbered by the sequence: viewCount 42 via Prisma 7');
+
+          const expectNoChanges = async (fixture: string, name: string) => {
+            editSchema(fixture);
+            await v8('contract', 'emit');
+            expect(storageHash(dir)).toBe(sequenceHash);
+            expect(await v8('migration', 'plan', '--name', name)).toMatchObject({
+              ok: true,
+              noOp: true,
+              from: sequenceHash,
+              to: sequenceHash,
+              operations: [],
+            });
+            await verifyOnlyLedgerUnclaimed();
+          };
+          await expectNoChanges('edit-4.prisma', 'ignore-content-and-comments');
+          await expectNoChanges('edit-3.prisma', 'restore-content-and-comments');
 
           await withDevDatabase(async ({ connectionString: freshUrl }) => {
             const replayed = resultEnvelope(

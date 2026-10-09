@@ -79,11 +79,12 @@ pnpm exec prisma7 migrate diff --from-config-datasource --to-schema prisma/schem
 pnpm exec prisma7 generate --config prisma7.config.ts
 ```
 
-The test runs that loop three times. Each edited schema is a file in `test/handover/`:
+The test runs that loop three times, then makes two edits that plan nothing. Each edited schema is a file in `test/handover/`:
 
 - `edit-1.prisma` makes additive changes. It adds `User.bio String?`, `Post.likes Int @default(0)`, `@@index([authorId])` on `Post`, and a `Comment` model with a required relation to `Post`. The plan creates the `Comment` table, adds both columns, creates the index `Post_authorId_idx`, and adds the foreign key `Comment_postId_fkey` with `ON DELETE RESTRICT ON UPDATE CASCADE`. Those are the names and referential actions Prisma 7 would have written. After `prisma7 generate`, the Prisma 7 client writes and reads the new columns and the new model (`test/handover/v7-after-edit-1.ts`), and the Prisma 8 ORM reads them (`test/handover/v8-after-edit-1.ts`).
 - `edit-2.prisma` makes destructive changes. It drops `User.bio` and makes `Post.likes` optional with no default. The plan drops the column, drops the default, and drops `NOT NULL`. After `prisma7 generate`, the Prisma 7 client reads the surviving columns and clears one post's `likes` to null (`test/handover/v7-after-edit-2.ts`), and the Prisma 8 ORM reads that null back (`test/handover/v8-after-edit-2.ts`).
 - `edit-3.prisma` gives the existing `Post.viewCount` column, which already has rows, `@default(autoincrement())`, and names the `Post.author` foreign key with `map: "Post_author_fk"`. The plan creates the sequence `Post_viewCount_seq`, sets the column's default to it, makes the column own it, and starts it one past the largest `viewCount`; it also renames `Post_authorId_fkey` to `Post_author_fk`. After `prisma7 generate`, a post the Prisma 7 client creates without a `viewCount` gets the next number (`test/handover/v7-after-edit-3.ts`).
+- `edit-4.prisma` marks `Post.content` `@ignore` and the `Comment` model `@@ignore`, with `Post.comments` `@ignore` as Prisma 7 requires; the test then puts `edit-3.prisma` back. The contract keeps the columns and tables of ignored fields and models as storage with no model, so neither edit changes the storage hash, `migration plan` reports no changes, and Prisma 7's `migrate diff` is empty.
 
 What each step does:
 
@@ -123,6 +124,7 @@ When the last route has moved to Prisma 8, `pnpm exec prisma contract print --ou
 | `scripts/seed.ts`, `src/v7-read.ts` | Routes still on Prisma 7. |
 | `scripts/db-start.ts` | In-process Postgres for local runs. |
 | `test/adoption.test.ts` | Phases 1 to 3 on a fresh database, including the second Prisma 7 migration. |
-| `test/handover.test.ts` | Phase 4 on a fresh database: Prisma 8 plans, applies and verifies an additive and a destructive edit. |
-| `test/handover/` | The two edited schemas, the scripts each client runs after them, and the tsconfigs the test typechecks those scripts with once the edit is applied. |
+| `test/handover.test.ts` | Phase 4 on a fresh database: Prisma 8 plans, applies and verifies an additive, a destructive and a sequence edit, then adds and removes `@ignore` and `@@ignore` with no migration. |
+| `test/upgrade-ignore.test.ts` | A project signed by a Prisma 8 that left `@ignore` and `@@ignore` objects out of the contract upgrades: it plans a migration that records them, signs again with no findings, and then plans nothing. |
+| `test/handover/` | The edited schemas, the scripts each client runs after them, and the tsconfigs the test typechecks those scripts with once the edit is applied. |
 | `test/story.ts` | Helpers both tests share. |
