@@ -4,10 +4,10 @@
  * Mirrors the patterns in `postgres/codecs-class.ts` and `sqlite/codecs-class.ts` for the single `pg/vector@1` codec. Three artifacts:
  *
  * 1. `PgVectorCodec` extends {@link CodecImpl} with the wire and value conversions inline. Conversions are simple enough (PostgreSQL `[1,2,3]` text format) that no shared helper module is warranted; the class body is the source of truth.
- * 2. `PgVectorDescriptor` extends {@link PostgresCodecDescriptor} with the codec id, traits, the `pgvector/vector` data type and its params schema, and explicit target behavior. The column's type, `Vector<${length}>`, comes from the pack's type function in `types/codec-types.ts`. The data type declares the type's name and the bounds of `length`.
- * 3. `pgVectorColumn(length)` per-codec column helper invoking `descriptor.factory({ length })` directly.
+ * 2. `PgVectorDescriptor` extends {@link PostgresCodecDescriptor} with the codec id, traits, the `pgvector/vector` data type and its params schema, and explicit target behavior. The column's type, `Vector` or `Vector<${length}>`, comes from the pack's type function in `types/codec-types.ts`. The data type declares the type's name and the bounds of `length`.
+ * 3. `pgVectorColumn(length?)` per-codec column helper invoking `descriptor.factory({ length })` directly.
  *
- * `length` threads into the runtime codec via the constructor so the wire methods enforce the declared dimension, and `pgvector/vector` checks it for every stored value. Without this, `vector(3)` and `vector(1536)` would produce codecs with identical behaviour and a dimension-mismatched value would round-trip undetected.
+ * When provided, `length` threads into the runtime codec via the constructor so the wire methods enforce the declared dimension, and `pgvector/vector` checks it for every stored value. Without this, `vector(3)` and `vector(1536)` would produce codecs with identical behaviour and a dimension-mismatched value would round-trip undetected.
  */
 
 import {
@@ -26,14 +26,15 @@ import {
   definePostgresCodecs,
   PostgresCodecDescriptor,
 } from '@internal/target-postgres/codec-descriptor';
+import { ifDefined } from '@internal/utils/defined';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
-import { VECTOR_CODEC_ID } from './constants';
+import { VECTOR_CODEC_ID, VECTOR_MAX_DIM } from './constants';
 import { pgvectorVector, pgvectorVectorParams } from './data-types';
 import { pgVectorError } from './errors';
 
 type VectorConversionCode = 'RUNTIME.ENCODE_FAILED' | 'RUNTIME.DECODE_FAILED';
 
-type VectorParams = { readonly length: number };
+type VectorParams = { readonly length?: number };
 
 function parseVector(value: string): number[] {
   if (!value.startsWith('[') || !value.endsWith(']')) {
@@ -71,13 +72,15 @@ export class PgVectorCodec extends CodecImpl<
   string,
   number[]
 > {
-  readonly length: number;
+  readonly length: number | undefined;
 
-  constructor(descriptor: AnyCodecDescriptor, length: number) {
-    super(descriptor, pgvectorVector, { length });
+  /** Creates a codec with an optional exact dimension; undefined permits variable dimensions. */
+  constructor(descriptor: AnyCodecDescriptor, length: number | undefined) {
+    super(descriptor, pgvectorVector, ifDefined('length', length));
     this.length = length;
   }
 
+  /** Rejects non-finite elements and lengths outside the declared dimension or supported bounds. */
   assertVector(value: unknown, code: VectorConversionCode): asserts value is number[] {
     const meta = { codecId: VECTOR_CODEC_ID, expectedLength: this.length };
     if (!Array.isArray(value)) {
@@ -91,7 +94,14 @@ export class PgVectorCodec extends CodecImpl<
         throw pgVectorError(code, 'Vector value must contain only finite numbers', { meta });
       }
     }
-    if (value.length !== this.length) {
+    if (this.length === undefined && !this.acceptsLength(value.length)) {
+      throw pgVectorError(
+        code,
+        `Vector length must be between 1 and ${VECTOR_MAX_DIM}, got ${value.length}`,
+        { meta: { ...meta, receivedLength: value.length } },
+      );
+    }
+    if (this.length !== undefined && value.length !== this.length) {
       throw pgVectorError(
         code,
         `Vector length mismatch: expected ${this.length}, got ${value.length}`,
@@ -127,6 +137,13 @@ export class PgVectorCodec extends CodecImpl<
     this.assertVector(input, 'RUNTIME.ENCODE_FAILED');
     return this.dataTypeValueOf([...input]);
   }
+
+  /** Checks the exact declared dimension, or the supported 1–16,000 range when none is declared. */
+  private acceptsLength(length: number): boolean {
+    return this.length === undefined
+      ? length >= 1 && length <= VECTOR_MAX_DIM
+      : length === this.length;
+  }
 }
 
 /**
@@ -157,11 +174,30 @@ export class PgVectorDescriptor extends PostgresCodecDescriptor<VectorParams> {
 
 export const pgVectorDescriptor = new PgVectorDescriptor();
 
-/**
- * Per-codec column helper for `pg/vector@1`. Generic over `N extends number` so the column site preserves the dimension literal in `typeParams` (e.g. `pgVectorColumn(1536)` packs `typeParams: { length: 1536 }`).
- */
-export const pgVectorColumn = <N extends number>(length: N) =>
-  column(pgVectorDescriptor.factory({ length }), pgVectorDescriptor.codecId, { length });
+/** Creates a vector column with variable dimensions and empty type parameters. */
+export function pgVectorColumn(): ReturnType<typeof variableVectorColumn>;
+/** Creates a vector column that preserves its exact dimension as a type parameter. */
+export function pgVectorColumn<N extends number>(
+  length: N,
+): ReturnType<typeof fixedVectorColumn<N>>;
+/** Creates a vector column whose dimension may be absent, binding variable dimensions when it is. */
+export function pgVectorColumn(
+  length?: number,
+): ReturnType<typeof variableVectorColumn> | ReturnType<typeof fixedVectorColumn<number>>;
+/** Selects a variable or fixed dimension codec factory from the optional length. */
+export function pgVectorColumn(length?: number) {
+  return length === undefined ? variableVectorColumn() : fixedVectorColumn(length);
+}
+
+/** Binds an undimensioned codec using an explicit empty parameter object. */
+function variableVectorColumn() {
+  return column(pgVectorDescriptor.factory({}), pgVectorDescriptor.codecId, {});
+}
+
+/** Binds a dimensioned codec while preserving the dimension literal in its type parameters. */
+function fixedVectorColumn<N extends number>(length: N) {
+  return column(pgVectorDescriptor.factory({ length }), pgVectorDescriptor.codecId, { length });
+}
 
 pgVectorColumn satisfies ColumnHelperFor<PgVectorDescriptor>;
 pgVectorColumn satisfies ColumnHelperForStrict<PgVectorDescriptor>;

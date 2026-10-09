@@ -38,6 +38,7 @@ describe('the pgvector data type declaration', () => {
 
   it('declares its texts and claims no kind', () => {
     expect(vectorType().sql.texts).toEqual([
+      { text: 'vector', written: true, catalog: true },
       { text: 'vector({length})', written: true, catalog: true },
     ]);
     expect(vectorType().sql.claimsKind).toBeUndefined();
@@ -46,6 +47,11 @@ describe('the pgvector data type declaration', () => {
   it('writes and reports the length', () => {
     expect(renderSqlTypeName(vectorType(), { length: 1536 })).toBe('vector(1536)');
     expect(renderSqlCatalogText(vectorType(), { length: 1536 })).toBe('vector(1536)');
+  });
+
+  it('writes and reports an unspecified length', () => {
+    expect(renderSqlTypeName(vectorType(), {})).toBe('vector');
+    expect(renderSqlCatalogText(vectorType(), {})).toBe('vector');
   });
 
   it('has the base name vector', () => {
@@ -63,7 +69,10 @@ describe('the pgvector data type declaration', () => {
       dataType: 'pgvector/vector',
       typeParams: { length: 3 },
     });
-    expect(resolveReportedSqlType(reported('vector'), dataTypes)).toBeUndefined();
+    expect(resolveReportedSqlType(reported('vector'), dataTypes)).toEqual({
+      dataType: 'pgvector/vector',
+      typeParams: {},
+    });
     expect(resolveReportedSqlType(reported('vector(16001)'), dataTypes)).toBeUndefined();
   });
 
@@ -71,12 +80,9 @@ describe('the pgvector data type declaration', () => {
     expect(renderSqlTypeName(vectorType(), { length })).toBe(`vector(${length})`);
   });
 
-  it.each([[{ length: 0 }], [{ length: 16001 }], [{ length: 1.5 }], [{}]])(
-    'refuses %j',
-    (params) => {
-      expect(() => renderSqlTypeName(vectorType(), params)).toThrow(invalidParams);
-    },
-  );
+  it.each([[{ length: 0 }], [{ length: 16001 }], [{ length: 1.5 }]])('refuses %j', (params) => {
+    expect(() => renderSqlTypeName(vectorType(), params)).toThrow(invalidParams);
+  });
 
   it('normalizes to itself', () => {
     const { normalize } = vectorType().sql;
