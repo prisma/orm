@@ -115,6 +115,7 @@ import { shorthandToWhereExpr } from './filters';
 import {
   assertFragmentBody,
   assertModelFragmentReceiver,
+  assertModelFragmentSource,
   type FragmentFacts,
   type FragmentFactsType,
   type WithFacts,
@@ -307,16 +308,41 @@ interface MtiCreateContext {
   pkColumns: readonly string[];
 }
 
-/** What `fragment` reads from the collection it is called on: its contract and its model. */
+/** What `fragment` reads from the collection it is called on: its contract, its model and its query state. */
 interface FragmentSource {
   readonly modelName: string;
   readonly namespaceId: string;
+  readonly state: CollectionState;
   readonly ctx: { readonly context: { readonly contract: Contract<SqlStorage> } };
 }
 
 type ContractOf<C extends FragmentSource> = C['ctx']['context']['contract'];
 
 type ModelNameOf<C extends FragmentSource> = C['modelName'];
+
+/** The compile error `fragment` gives on a collection with a filter, an order or an include. */
+interface FragmentFromModelAlone {
+  readonly fragmentFromModelAlone: 'the fragment is built from the model alone, so call fragment on the root collection of the model';
+}
+
+type HasRowBeyondModel<Self extends FragmentSource, NsId extends string> = Self extends HasRow
+  ? [
+      Exclude<
+        keyof CollectionRowOf<Self>,
+        keyof DefaultModelRow<ContractOf<Self>, ModelNameOf<Self>, NsId>
+      >,
+    ] extends [never]
+    ? false
+    : true
+  : false;
+
+type RefuseQueryFacts<Self extends FragmentSource, NsId extends string> = Self extends
+  | HasWhere
+  | HasOrderBy
+  ? FragmentFromModelAlone
+  : HasRowBeyondModel<Self, NsId> extends true
+    ? FragmentFromModelAlone
+    : unknown;
 
 type ModelFragmentBody<
   TContract extends Contract<SqlStorage>,
@@ -516,7 +542,7 @@ export class CollectionBase<
   }
 
   /**
-   * Define a query fragment for this collection's model, such as a shared `select` and `include`. The body is typed once, against the model's plain collection. The fragment accepts any collection of the model that `select` and `variant` have not narrowed.
+   * Define a query fragment for this collection's model, such as a shared `select` and `include`. The body is typed once, against the model's plain collection. The fragment accepts any collection of the model that `select` and `variant` have not narrowed. The fragment is built from the model alone, so `fragment` refuses a collection with chained calls, such as a filter, an order or an include, and throws `ORM.ARGUMENT_INVALID`; call it on the model's root collection.
    *
    * ```ts
    * const summary = db.Post.fragment((posts) => posts.select('id', 'title').include('user'));
@@ -524,10 +550,11 @@ export class CollectionBase<
    * ```
    */
   fragment<Self extends FragmentSource, NsId extends string, Result>(
-    this: Self & HasTypeState<{ readonly nsId: NsId }>,
+    this: Self & HasTypeState<{ readonly nsId: NsId }> & RefuseQueryFacts<Self, NsId>,
     body: (collection: ModelFragmentBody<ContractOf<Self>, ModelNameOf<Self>, NsId>) => Result,
   ): QueryFragment<ModelFragmentReceiver<ContractOf<Self>, ModelNameOf<Self>, NsId>, Result> {
     assertFragmentBody(body);
+    assertModelFragmentSource(this);
     const source = { modelName: this.modelName, namespaceId: this.namespaceId };
     return (collection) => {
       assertModelFragmentReceiver(source, collection);
