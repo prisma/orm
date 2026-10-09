@@ -51,7 +51,7 @@
 ## Pre-flight
 
 1. From the repo root: `git status --porcelain` shows nothing under `packages/` or `apps/`.
-2. Build the CLI the editor would spawn, with its dependencies: `pnpm turbo run build --filter=@internal/cli`. The run must use this build, not an earlier one.
+2. Build the workspace: `pnpm build`. The run must use this build, not an earlier one. Building only the CLI (`--filter=@internal/cli`) is not enough: the scratch projects load the Postgres target through `@prisma/orm-postgres`, which is outside the CLI's build graph, so the interpreter would be a stale one.
 3. Confirm the entry exists: `ls packages/1-framework/3-tooling/cli/dist/bin.mjs`.
 4. Create the scratch project under `wip/` (gitignored):
 
@@ -658,7 +658,7 @@ Every step expects name edits only: no line starting with `insert`, no `@map` in
 
 **Isolation:** `tmpdir` (edits exist only in the driver's and the server's memory).
 
-**Oracle:** slice spec `projects/lsp-rename/slices/type-constructor-refs/spec.md`: "Go-to-definition, hover, find references and rename then work on such a name with no change of their own"; "an unknown name: `PSL_UNRESOLVED_REFERENCE`, `Cannot find entity "X"`, anchored on the argument"; the first row of the transitional table, and "Navigation and rename work in every row where the binder resolves the name, including the refused ones".
+**Oracle:** slice spec `projects/lsp-rename/slices/type-constructor-refs/spec.md`: "Go-to-definition, hover, find references and rename then work on such a name with no change of their own"; "an unknown name: `PSL_UNRESOLVED_REFERENCE`, `Cannot find entity "X"`, anchored on the argument"; the table "What changes for schema authors", row "an entity of another namespace": "the same diagnostic; navigation and rename work on the name".
 
 **Preconditions:** pre-flight done, scratch project B in place. Own server session.
 
@@ -679,12 +679,13 @@ node projects/lsp-rename/qa/driver/qa-driver.mjs $C $M/project \
 | 13.6 | diagnostics | exactly one, in `shop.prisma`, on the argument: `PSL_UNRESOLVED_REFERENCE Cannot find entity "NoSuchEnum"` |
 | 13.7 | `didChange` back | — |
 | 13.8 | `didChange` on `session.prisma`: add `status pg.enum(OrderStatus)` to `model Session` inside `namespace auth` | — |
-| 13.9 | diagnostics | exactly one, in `session.prisma`: `PSL_UNKNOWN_ENTITY_REF`, naming the `native_enum` `OrderStatus` of namespace `public` and the namespace `auth` it may be named from; none in `shop.prisma` |
+| 13.9 | diagnostics | exactly one, in `session.prisma`: `PSL_UNKNOWN_ENTITY_REF`, `Field "Session.status" type constructor "pg.enum(OrderStatus)" does not resolve — no entity named "OrderStatus" was found in namespace "auth"` (the diagnostic `main` gives for an entity of another namespace); none in `shop.prisma` |
 | 13.10 | definition, `session.prisma`, `pg.enum(Order\|Status)` | `native_enum <<OrderStatus>> {` in `shop.prisma` |
 
 ### What you should see
 
-- 13.6: one line, not two. Judge the wording of 13.9: does it tell the author what to do?
+- 13.6: one line, not two.
+- 13.9 and 13.10 together: the interpreter refuses the reference while the editor still follows it.
 
 ### Failure modes
 
