@@ -25,6 +25,14 @@ overrides:
   '@azure/msal-node>uuid': '>=14.0.0'
   fast-uri@<3.1.6: '>=3.1.6 <4'
   ws@>=8.0.0 <8.20.1: '>=8.20.1'
+  source-map-js@<1.2.2: '>=1.2.2 <2'
+
+# No patched release exists. Neither is reachable with attacker input: fast-glob in client-generator-ts only expands the
+# user's own output path, and tedious only passes its own constant format strings to sprintf-js.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-vfj7-8cjw-p6xm # braces
+    - GHSA-hp3w-g68c-fv3c # sprintf-js
 
 peerDependencyRules:
   allowedVersions:
