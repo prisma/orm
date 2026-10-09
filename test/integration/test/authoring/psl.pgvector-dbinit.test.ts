@@ -129,16 +129,16 @@ describe(
       }
     }
 
-    it(
-      'dbInit succeeds for a PSL-emitted pgvector named type schema',
-      async () => {
+    it.each(['1536', ''])(
+      'dbInit succeeds for a PSL-emitted pgvector named type schema with dimension %s',
+      async (dimension) => {
         const emittedContract = await emitPgvectorContract(`types {
-  Embedding1536 = pgvector.Vector(1536)
+  Embedding = pgvector.Vector(${dimension})
 }
 
 model Document {
   id Int @id @default(autoincrement())
-  embedding Embedding1536
+  embedding Embedding
 }
 `);
 
@@ -161,7 +161,7 @@ model Document {
                 .filter((s) => s.language === 'sql')
                 .map((s) => s.text)
                 .join(';\n\n') ?? '';
-            expect(ddl).toContain('vector(1536)');
+            expect(ddl).toContain(dimension ? `vector(${dimension})` : 'vector');
             expect(ddl).not.toContain('"vector(1536)"');
 
             const apply = await client.dbInit({
@@ -175,6 +175,17 @@ model Document {
               );
             }
           });
+          if (dimension === '') {
+            await withClient(connectionString, async (client) => {
+              await client.query(
+                `INSERT INTO "Document" ("embedding") VALUES ('[1]'), ('[1,2,3]')`,
+              );
+              const result = await client.query<{ dimensions: number }>(
+                `SELECT vector_dims("embedding") AS dimensions FROM "Document" ORDER BY "id"`,
+              );
+              expect(result.rows).toEqual([{ dimensions: 1 }, { dimensions: 3 }]);
+            });
+          }
         });
       },
       timeouts.spinUpPpgDev,
