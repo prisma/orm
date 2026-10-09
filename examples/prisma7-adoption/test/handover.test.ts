@@ -4,7 +4,7 @@
  * `prisma/schema.prisma` in the Prisma 7 dialect: an additive one, a
  * destructive one, and one that gives an existing column an autoincrement
  * default and names a foreign key with `map`. After each, `db verify --strict`
- * reports only Prisma 7's ledger table as unclaimed, Prisma 7 sees no drift,
+ * passes with nothing unclaimed, Prisma 7 sees no drift,
  * and the clients read the new shape. Finally the migrations replay onto an
  * empty database, which verifies strictly with nothing unclaimed and has the
  * same primary key and foreign key names as the database Prisma 7 built.
@@ -110,23 +110,15 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
             expect(dbRefHash(dir)).toBe(storageHash(dir));
           };
 
-          const verifyOnlyLedgerUnclaimed = async () => {
+          const verifyStrictlyWithNothingUnclaimed = async () => {
             const strict = await runAllowingFailure(dir, connectionString, 'prisma', [
               'db',
               'verify',
               '--strict',
               '--json',
             ]);
-            expect(strict.status, strict.output).toBe(4);
-            const envelope = resultEnvelope(strict.output);
-            expect(envelope.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
-              'CONTRACT.SCHEMA_VERIFICATION_FAILED',
-            ]);
-            expect(envelope.result).toMatchObject({
-              ok: false,
-              unclaimed: ['_prisma_migrations'],
-              schema: { issues: [], warnings: { issues: [] } },
-            });
+            expect(strict.status, strict.output).toBe(0);
+            expect(resultEnvelope(strict.output).result).toMatchObject({ ok: true, unclaimed: [] });
             await verifyHasNoFindings(dir, connectionString);
             expect(
               await v7(
@@ -200,7 +192,7 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
             'ALTER TABLE "public"."Comment" ADD CONSTRAINT "Comment_postId_fkey" FOREIGN KEY ("postId") REFERENCES "public"."Post" ("id") ON DELETE RESTRICT ON UPDATE CASCADE',
           );
           await migrate();
-          await verifyOnlyLedgerUnclaimed();
+          await verifyStrictlyWithNothingUnclaimed();
           await v7('generate');
           await typecheck('tsconfig.edit-1.json');
           const v7Additive = await tsx('test/handover/v7-after-edit-1.ts');
@@ -263,7 +255,7 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
             'ALTER TABLE "public"."Post" ALTER COLUMN "likes" DROP NOT NULL',
           );
           await migrate();
-          await verifyOnlyLedgerUnclaimed();
+          await verifyStrictlyWithNothingUnclaimed();
           await v7('generate');
           await typecheck('tsconfig.edit-2.json');
           const v7Destructive = await tsx('test/handover/v7-after-edit-2.ts');
@@ -306,7 +298,7 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
             'ALTER TABLE "public"."Post" RENAME CONSTRAINT "Post_authorId_fkey" TO "Post_author_fk"',
           );
           await migrate();
-          await verifyOnlyLedgerUnclaimed();
+          await verifyStrictlyWithNothingUnclaimed();
           expect(await constraintNames(connectionString)).toContain(
             'Post foreign key Post_author_fk',
           );
