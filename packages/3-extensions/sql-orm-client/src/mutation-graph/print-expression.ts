@@ -14,7 +14,7 @@ const binaryOperators: Record<BinaryOp, string> = {
   notIn: 'not in',
 };
 
-export function printValue(value: unknown): string {
+function printValue(value: unknown): string {
   if (typeof value === 'string') {
     return `'${value}'`;
   }

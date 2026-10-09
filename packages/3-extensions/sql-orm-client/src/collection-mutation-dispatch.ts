@@ -5,6 +5,7 @@ import {
   type OperationKind,
 } from '@internal/framework-components/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import type { OrderByItem } from '@internal/sql-relational-core/ast';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { resolvePolymorphismInfo, resolveRowIdentityColumns } from './collection-contract';
 import { reloadMutationRowsByIdentities } from './collection-dispatch';
@@ -52,10 +53,9 @@ export function mutationReturningColumns(
   return identityColumns;
 }
 
-interface DispatchMutationRowsOptions<Row> {
+interface MapMutationRowsOptions<Row> {
   readonly context: CollectionContext<Contract<SqlStorage>>['context'];
   readonly runtime: CollectionContext<Contract<SqlStorage>>['runtime'];
-  readonly compiled: SqlQueryPlan<Record<string, unknown>>;
   readonly tableName: string;
   readonly modelName: string;
   readonly namespaceId: string;
@@ -65,15 +65,29 @@ interface DispatchMutationRowsOptions<Row> {
   readonly hiddenColumns: readonly string[];
   readonly mapRow: (mapped: Record<string, unknown>) => Row;
   readonly annotations?: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined;
+  readonly orderBy?: readonly OrderByItem[] | undefined;
+}
+
+interface DispatchMutationRowsOptions<Row> extends MapMutationRowsOptions<Row> {
+  readonly compiled: SqlQueryPlan<Record<string, unknown>>;
 }
 
 export function dispatchMutationRows<Row>(
   options: DispatchMutationRowsOptions<Row>,
 ): AsyncIterableResult<Row> {
+  return mapMutationRows(
+    () => queryPlanRows<Record<string, unknown>>(options.runtime, options.compiled),
+    options,
+  );
+}
+
+export function mapMutationRows<Row>(
+  storageRows: () => AsyncIterableResult<Record<string, unknown>>,
+  options: MapMutationRowsOptions<Row>,
+): AsyncIterableResult<Row> {
   const {
     context,
     runtime,
-    compiled,
     tableName,
     modelName,
     namespaceId,
@@ -83,14 +97,13 @@ export function dispatchMutationRows<Row>(
     hiddenColumns,
     mapRow,
     annotations,
+    orderBy,
   } = options;
   const { contract } = context;
   const mapStorageRow = createMutationRowMapper(contract, namespaceId, modelName, variantName);
 
   if (includes.length === 0) {
-    const source = queryPlanRows<Record<string, unknown>>(runtime, compiled);
-
-    return mapResultRows(source, (rawRow) => {
+    return mapResultRows(storageRows(), (rawRow) => {
       const mapped = mapStorageRow(rawRow);
       if (hiddenColumns.length > 0) {
         stripHiddenMappedFields(contract, namespaceId, modelName, mapped, hiddenColumns);
@@ -105,7 +118,7 @@ export function dispatchMutationRows<Row>(
   // path uses — no parallel read-back implementation. The reload streams;
   // only the small set of identities is buffered to key it.
   const generator = async function* (): AsyncGenerator<Row, void, unknown> {
-    const identityRows = await queryPlanRows<Record<string, unknown>>(runtime, compiled).toArray();
+    const identityRows = await storageRows().toArray();
     yield* reloadMutationRowsByIdentities<Row>({
       context,
       runtime,
@@ -116,6 +129,7 @@ export function dispatchMutationRows<Row>(
       selectedFields,
       includes,
       annotations,
+      orderBy,
     });
   };
 

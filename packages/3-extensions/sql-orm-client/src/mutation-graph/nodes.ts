@@ -1,85 +1,46 @@
-import type {
-  AnyExpression,
-  LimitOffsetValue,
-  OrderByItem,
-} from '@internal/sql-relational-core/ast';
+import type { DeleteAst, SelectAst, UpdateAst } from '@internal/sql-relational-core/ast';
 import type { Graph } from './graph';
 
-export interface TableIdentity {
-  readonly namespaceId: string;
-  readonly tableName: string;
-  readonly modelName: string;
-  readonly variantName: string | undefined;
-}
-
-export interface FindRead {
-  readonly orderBy: readonly OrderByItem[] | undefined;
-  readonly offset: LimitOffsetValue | undefined;
-  readonly cursor: Readonly<Record<string, unknown>> | undefined;
-  readonly distinct: readonly string[] | undefined;
-  readonly distinctOn: readonly string[] | undefined;
-  readonly limit: LimitOffsetValue | undefined;
-}
-
-const defaultRead: FindRead = {
-  orderBy: undefined,
-  offset: undefined,
-  cursor: undefined,
-  distinct: undefined,
-  distinctOn: undefined,
-  limit: undefined,
-};
+export type StatementAst = SelectAst | UpdateAst | DeleteAst;
 
 export abstract class Node {
+  abstract readonly ast: StatementAst;
+
   peephole(_graph: Graph): Node | undefined {
     return this;
   }
 }
 
 export class Find extends Node {
-  readonly table: TableIdentity;
-  readonly where: readonly AnyExpression[];
-  readonly read: FindRead;
+  readonly ast: SelectAst;
 
-  constructor(table: TableIdentity, where: readonly AnyExpression[], read: FindRead = defaultRead) {
+  constructor(ast: SelectAst) {
     super();
-    this.table = Object.freeze({ ...table });
-    this.where = Object.freeze([...where]);
-    this.read = Object.freeze({ ...read });
+    this.ast = ast;
     Object.freeze(this);
   }
 }
 
 export class Update extends Node {
-  readonly table: TableIdentity;
-  readonly set: Readonly<Record<string, unknown>>;
-  readonly where: readonly AnyExpression[];
+  readonly ast: UpdateAst;
 
-  constructor(
-    table: TableIdentity,
-    set: Readonly<Record<string, unknown>>,
-    where: readonly AnyExpression[],
-  ) {
+  constructor(ast: UpdateAst) {
     super();
-    this.table = Object.freeze({ ...table });
-    this.set = Object.freeze({ ...set });
-    this.where = Object.freeze([...where]);
+    this.ast = ast;
     Object.freeze(this);
   }
 
   override peephole(_graph: Graph): Node | undefined {
-    return Object.keys(this.set).length === 0 ? undefined : this;
+    return Object.keys(this.ast.set).length === 0 ? undefined : this;
   }
 }
 
 export class Delete extends Node {
-  readonly table: TableIdentity;
-  readonly where: readonly AnyExpression[];
+  readonly ast: DeleteAst;
 
-  constructor(table: TableIdentity, where: readonly AnyExpression[]) {
+  constructor(ast: DeleteAst) {
     super();
-    this.table = Object.freeze({ ...table });
-    this.where = Object.freeze([...where]);
+    this.ast = ast;
     Object.freeze(this);
   }
 }

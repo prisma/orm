@@ -30,8 +30,26 @@ import {
 import { ormError } from './orm-errors';
 import { buildOrmQueryPlan, deriveParamsFromAst } from './query-plan-meta';
 import { buildPrimaryKeyJoinOn } from './query-plan-source';
-import { storageTableForContract, tableSourceForContract } from './storage-resolution';
+import {
+  codecRefForTableSource,
+  storageTableForContract,
+  tableSourceForContract,
+} from './storage-resolution';
 import { combineWhereExprs } from './where-utils';
+
+export function projectTableColumns(
+  contract: Contract<SqlStorage>,
+  table: TableSource,
+  columns: readonly string[],
+): ReadonlyArray<ProjectionItem> {
+  return columns.map((column) =>
+    ProjectionItem.of(
+      column,
+      ColumnRef.of(table.name, column),
+      codecRefForTableSource(contract, table, column),
+    ),
+  );
+}
 
 function buildReturningColumns(
   contract: Contract<SqlStorage>,
@@ -45,12 +63,10 @@ function buildReturningColumns(
       ? [...returningColumns]
       : getColumnsReadOnTable(contract, namespaceId, modelName, tableName);
 
-  return columns.map((column) =>
-    ProjectionItem.of(
-      column,
-      ColumnRef.of(tableName, column),
-      codecRefForStorageColumn(contract.storage, namespaceId, tableName, column),
-    ),
+  return projectTableColumns(
+    contract,
+    tableSourceForContract(contract, namespaceId, tableName),
+    columns,
   );
 }
 
@@ -223,7 +239,7 @@ function createTableRefRemapper(fromTable: string, toTable: string): AstRewriter
   };
 }
 
-function buildCountMutationWhere(
+export function countMutationWhere(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   tableName: string,
@@ -371,6 +387,28 @@ export function compileUpsertReturning(
   return buildOrmQueryPlan(contract, ast, params);
 }
 
+export function updateAst(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  tableName: string,
+  setValues: Readonly<Record<string, unknown>>,
+  where: AnyExpression | undefined,
+): UpdateAst {
+  const { assignments } = toParamAssignments(contract, namespaceId, tableName, setValues);
+  return UpdateAst.table(tableSourceForContract(contract, namespaceId, tableName))
+    .withSet(assignments)
+    .withWhere(where);
+}
+
+export function deleteAst(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  tableName: string,
+  where: AnyExpression | undefined,
+): DeleteAst {
+  return DeleteAst.from(tableSourceForContract(contract, namespaceId, tableName)).withWhere(where);
+}
+
 export function compileUpdateReturning(
   contract: Contract<SqlStorage>,
   namespaceId: string,
@@ -380,16 +418,15 @@ export function compileUpdateReturning(
   filters: readonly AnyExpression[],
   returningColumns: readonly string[] | undefined,
 ): SqlQueryPlan<Record<string, unknown>> {
-  const where = combineWhereExprs(filters);
-  const { assignments } = toParamAssignments(contract, namespaceId, tableName, setValues);
-  let ast = UpdateAst.table(tableSourceForContract(contract, namespaceId, tableName))
-    .withSet(assignments)
-    .withReturning(
-      buildReturningColumns(contract, namespaceId, modelName, tableName, returningColumns),
-    );
-  if (where) {
-    ast = ast.withWhere(where);
-  }
+  const ast = updateAst(
+    contract,
+    namespaceId,
+    tableName,
+    setValues,
+    combineWhereExprs(filters),
+  ).withReturning(
+    buildReturningColumns(contract, namespaceId, modelName, tableName, returningColumns),
+  );
   const { params } = deriveParamsFromAst(ast);
   return buildOrmQueryPlan(contract, ast, params);
 }
@@ -403,7 +440,7 @@ export function compileUpdateCount(
   variantName?: string | undefined,
   modelName?: string | undefined,
 ): SqlQueryPlan<Record<string, unknown>> {
-  const where = buildCountMutationWhere(
+  const where = countMutationWhere(
     contract,
     namespaceId,
     tableName,
@@ -411,13 +448,7 @@ export function compileUpdateCount(
     variantName,
     modelName,
   );
-  const { assignments } = toParamAssignments(contract, namespaceId, tableName, setValues);
-  let ast = UpdateAst.table(tableSourceForContract(contract, namespaceId, tableName)).withSet(
-    assignments,
-  );
-  if (where) {
-    ast = ast.withWhere(where);
-  }
+  const ast = updateAst(contract, namespaceId, tableName, setValues, where);
   const { params } = deriveParamsFromAst(ast);
   return buildOrmQueryPlan(contract, ast, params);
 }
@@ -430,13 +461,9 @@ export function compileDeleteReturning(
   filters: readonly AnyExpression[],
   returningColumns: readonly string[] | undefined,
 ): SqlQueryPlan<Record<string, unknown>> {
-  const where = combineWhereExprs(filters);
-  let ast = DeleteAst.from(tableSourceForContract(contract, namespaceId, tableName)).withReturning(
+  const ast = deleteAst(contract, namespaceId, tableName, combineWhereExprs(filters)).withReturning(
     buildReturningColumns(contract, namespaceId, modelName, tableName, returningColumns),
   );
-  if (where) {
-    ast = ast.withWhere(where);
-  }
   const { params } = deriveParamsFromAst(ast);
   return buildOrmQueryPlan(contract, ast, params);
 }
@@ -449,7 +476,7 @@ export function compileDeleteCount(
   variantName?: string | undefined,
   modelName?: string | undefined,
 ): SqlQueryPlan<Record<string, unknown>> {
-  const where = buildCountMutationWhere(
+  const where = countMutationWhere(
     contract,
     namespaceId,
     tableName,
@@ -457,10 +484,7 @@ export function compileDeleteCount(
     variantName,
     modelName,
   );
-  let ast = DeleteAst.from(tableSourceForContract(contract, namespaceId, tableName));
-  if (where) {
-    ast = ast.withWhere(where);
-  }
+  const ast = deleteAst(contract, namespaceId, tableName, where);
   const { params } = deriveParamsFromAst(ast);
   return buildOrmQueryPlan(contract, ast, params);
 }

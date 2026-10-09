@@ -1456,13 +1456,13 @@ function buildSelectAst(
   return ast;
 }
 
-export function compileSelect(
+export function collectionSelectAst(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   modelName: string,
   tableName: string,
   state: CollectionState,
-): SqlQueryPlan<Record<string, unknown>> {
+): SelectAst {
   assertLockCompatible(state);
   if (state.distinctOn !== undefined && state.distinctOn.length > 0) {
     assertDistinctOnCapability(contract, 'distinctOn');
@@ -1496,7 +1496,7 @@ export function compileSelect(
         )
       : [];
 
-  const ast = buildSelectAst(
+  return buildSelectAst(
     contract,
     modelName,
     tableName,
@@ -1507,7 +1507,16 @@ export function compileSelect(
       namespaceId,
     },
   );
+}
 
+export function compileSelect(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  modelName: string,
+  tableName: string,
+  state: CollectionState,
+): SqlQueryPlan<Record<string, unknown>> {
+  const ast = collectionSelectAst(contract, namespaceId, modelName, tableName, state);
   const { params } = deriveParamsFromAst(ast);
   return buildOrmQueryPlan(contract, ast, params, state.annotations);
 }

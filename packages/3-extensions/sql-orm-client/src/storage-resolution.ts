@@ -4,7 +4,8 @@ import {
   resolveStorageTable,
 } from '@internal/sql-contract/resolve-storage-table';
 import type { SqlStorage, StorageTable } from '@internal/sql-contract/types';
-import { TableSource } from '@internal/sql-relational-core/ast';
+import { type CodecRef, TableSource } from '@internal/sql-relational-core/ast';
+import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
 import { ormError } from './orm-errors';
 
 export type { ResolvedStorageTable };
@@ -66,4 +67,15 @@ export function tableSourceForContract(
   const resolved = requireStorageTableForContract(contract, namespaceId, tableName);
   const effectiveAlias = alias !== undefined && alias !== tableName ? alias : undefined;
   return TableSource.named(tableName, effectiveAlias, resolved.namespaceId);
+}
+
+export function codecRefForTableSource(
+  contract: Contract<SqlStorage>,
+  table: TableSource,
+  column: string,
+): CodecRef | undefined {
+  const resolved = resolveStorageTable(contract.storage, table.name, table.namespaceId);
+  return (
+    resolved && codecRefForStorageColumn(contract.storage, resolved.namespaceId, table.name, column)
+  );
 }

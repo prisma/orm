@@ -1,7 +1,10 @@
 import {
   AndExpr,
+  type AnyExpression,
   BinaryExpr,
   ColumnRef,
+  DeleteAst,
+  DerivedTableSource,
   ExistsExpr,
   ListExpression,
   LiteralExpr,
@@ -11,34 +14,48 @@ import {
   ParamRef,
   SelectAst,
   TableSource,
+  UpdateAst,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { After, IntoWhere } from '../../src/mutation-graph/edges';
-import { Graph } from '../../src/mutation-graph/graph';
-import { Delete, Find, Node, Update } from '../../src/mutation-graph/nodes';
+import { After, FilterData } from '../../src/mutation-graph/edges';
+import { Delete, Find, type Node, Update } from '../../src/mutation-graph/nodes';
 import { printGraph } from '../../src/mutation-graph/print-graph';
-import { postTable, userTable } from './tables';
+import { graphOfUsers } from './statements';
 
+const user = TableSource.named('user');
+const post = TableSource.named('post');
 const id = ColumnRef.of('user', 'id');
 const name = ColumnRef.of('user', 'name');
 const idIsOne = BinaryExpr.eq(id, ParamRef.of(1));
 
-function printFind(find: Find): string {
-  const graph = new Graph();
-  graph.add(find);
+function findUser(where?: AnyExpression): Find {
+  return new Find(SelectAst.from(user).withWhere(where));
+}
+
+function updateUser(set: Record<string, AnyExpression>, where?: AnyExpression): Update {
+  return new Update(UpdateAst.table(user).withSet(set).withWhere(where));
+}
+
+function deleteFrom(table: TableSource, where?: AnyExpression): Delete {
+  return new Delete(DeleteAst.from(table).withWhere(where));
+}
+
+function printNode(node: Node): string {
+  const graph = graphOfUsers();
+  graph.add(node);
   return printGraph(graph);
 }
 
-function printWhere(...where: ConstructorParameters<typeof Find>[1]): string {
-  return printFind(new Find(userTable, where));
+function printWhere(where: AnyExpression): string {
+  return printNode(findUser(where));
 }
 
 describe('printGraph', () => {
   describe('graphs of the update and delete methods', () => {
     it('prints one Update as the rows result', () => {
-      const graph = new Graph();
-      const update = graph.add(new Update(userTable, { name: 'Ada', age: 36 }, [idIsOne]));
-      graph.setResult({ node: update, form: 'rows', selectedFields: undefined, includes: [] });
+      const graph = graphOfUsers('rows');
+      const update = updateUser({ name: ParamRef.of('Ada'), age: ParamRef.of(36) }, idIsOne);
+      graph.setResult(graph.add(update));
 
       expect(printGraph(graph)).toBe(
         ["n1 Update user set name = 'Ada', age = 36 where id = 1", 'result: n1 rows'].join('\n'),
@@ -46,12 +63,12 @@ describe('printGraph', () => {
     });
 
     it('prints a Find and a Delete after it, with the Find as the result', () => {
-      const graph = new Graph();
-      const find = new Find(userTable, [idIsOne]);
+      const graph = graphOfUsers('rows');
+      const find = findUser(idIsOne);
+      const del = deleteFrom(user, idIsOne);
       graph.add(find);
-      const del = new Delete(userTable, [idIsOne]);
       graph.add(del, new After(find, del));
-      graph.setResult({ node: find, form: 'rows', selectedFields: undefined, includes: [] });
+      graph.setResult(find);
 
       expect(printGraph(graph)).toBe(
         [
@@ -63,26 +80,24 @@ describe('printGraph', () => {
     });
 
     it('prints a Find whose row goes into the where of an Update', () => {
-      const graph = new Graph();
-      const find = new Find(userTable, [idIsOne]);
+      const graph = graphOfUsers('first row');
+      const find = findUser(idIsOne);
+      const update = updateUser({ name: ParamRef.of('Ada') });
       graph.add(find);
-      const update = new Update(userTable, { name: 'Ada' }, []);
-      graph.add(update, new IntoWhere(find, update, [['id', 'id']]));
-      graph.setResult({ node: update, form: 'first row', selectedFields: undefined, includes: [] });
+      graph.setResult(graph.add(update, new FilterData(find, update, [['id', 'id']])));
 
       expect(printGraph(graph)).toBe(
         [
           'n1 Find user where id = 1',
-          "n2 Update user set name = 'Ada' <- IntoWhere n1 (id->id)",
+          "n2 Update user set name = 'Ada' <- FilterData n1 (id->id)",
           'result: n2 first row',
         ].join('\n'),
       );
     });
 
     it('prints a count result', () => {
-      const graph = new Graph();
-      const del = graph.add(new Delete(userTable, [idIsOne]));
-      graph.setResult({ node: del, form: 'count', selectedFields: undefined, includes: [] });
+      const graph = graphOfUsers('count');
+      graph.setResult(graph.add(deleteFrom(user, idIsOne)));
 
       expect(printGraph(graph)).toBe(
         ['n1 Delete user where id = 1', 'result: n1 count'].join('\n'),
@@ -91,78 +106,73 @@ describe('printGraph', () => {
   });
 
   describe('result line', () => {
-    it('says when no result is set', () => {
-      expect(printGraph(new Graph())).toBe('result: not set');
+    it('prints none for a graph with no node', () => {
+      expect(printGraph(graphOfUsers())).toBe('result: none');
     });
 
-    it('prints none for the node of an empty result', () => {
-      const graph = new Graph();
-      const find = new Find(userTable, [idIsOne]);
+    it('prints none for an empty result next to other nodes', () => {
+      const graph = graphOfUsers('first row');
+      const find = findUser(idIsOne);
+      const update = updateUser({});
       graph.add(find);
-      const update = new Update(userTable, {}, []);
-      const added = graph.add(update, new IntoWhere(find, update, [['id', 'id']]));
-      graph.setResult({ node: added, form: 'first row', selectedFields: undefined, includes: [] });
+      graph.setResult(graph.add(update, new FilterData(find, update, [['id', 'id']])));
 
       expect(printGraph(graph)).toBe(['n1 Find user where id = 1', 'result: none'].join('\n'));
     });
   });
 
   describe('edges', () => {
-    it('prints every column pair of an IntoWhere and every input of a node', () => {
-      const graph = new Graph();
-      const findUser = new Find(userTable, []);
-      graph.add(findUser);
-      const findPost = new Find(postTable, []);
-      graph.add(findPost);
-      const del = new Delete(postTable, []);
+    it('prints every column pair of a FilterData and every input of a node', () => {
+      const graph = graphOfUsers();
+      const findUsers = findUser();
+      const findPosts = new Find(SelectAst.from(post));
+      const del = deleteFrom(post);
+      graph.add(findUsers);
+      graph.add(findPosts);
       graph.add(
         del,
-        new IntoWhere(findUser, del, [
+        new FilterData(findUsers, del, [
           ['tenant_id', 'tenant_id'],
           ['id', 'author_id'],
         ]),
-        new After(findPost, del),
+        new After(findPosts, del),
       );
 
       expect(printGraph(graph)).toBe(
         [
           'n1 Find user',
           'n2 Find post',
-          'n3 Delete post <- IntoWhere n1 (tenant_id->tenant_id, id->author_id), After n2',
-          'result: not set',
+          'n3 Delete post <- FilterData n1 (tenant_id->tenant_id, id->author_id), After n2',
+          'result: none',
         ].join('\n'),
       );
     });
   });
 
-  describe('table', () => {
-    it('prints the variant after the table', () => {
-      const find = new Find({ ...userTable, variantName: 'Admin' }, []);
-
-      expect(printFind(find)).toBe(['n1 Find user variant Admin', 'result: not set'].join('\n'));
-    });
-  });
-
   describe('where', () => {
-    it('joins the expressions of the list with and', () => {
-      expect(printWhere(idIsOne, BinaryExpr.neq(name, LiteralExpr.of('Ada')))).toBe(
-        ["n1 Find user where id = 1 and name <> 'Ada'", 'result: not set'].join('\n'),
+    it('prints the parts of a top-level and without parentheses', () => {
+      expect(printWhere(AndExpr.of([idIsOne, BinaryExpr.neq(name, LiteralExpr.of('Ada'))]))).toBe(
+        ["n1 Find user where id = 1 and name <> 'Ada'", 'result: none'].join('\n'),
       );
     });
 
     it('prints comparison operators', () => {
       expect(
         printWhere(
-          BinaryExpr.gt(id, ParamRef.of(1)),
-          BinaryExpr.gte(id, ParamRef.of(2)),
-          BinaryExpr.lt(id, ParamRef.of(3)),
-          BinaryExpr.lte(id, ParamRef.of(4)),
-          BinaryExpr.like(name, ParamRef.of('A%')),
+          AndExpr.of([
+            BinaryExpr.gt(id, ParamRef.of(1)),
+            BinaryExpr.gte(id, ParamRef.of(2)),
+            BinaryExpr.lt(id, ParamRef.of(3)),
+            BinaryExpr.lte(id, ParamRef.of(4)),
+            BinaryExpr.like(name, ParamRef.of('A%')),
+            new BinaryExpr('isDistinctFrom', id, ParamRef.of(5)),
+            new BinaryExpr('isNotDistinctFrom', id, ParamRef.of(6)),
+          ]),
         ),
       ).toBe(
         [
-          "n1 Find user where id > 1 and id >= 2 and id < 3 and id <= 4 and name like 'A%'",
-          'result: not set',
+          "n1 Find user where id > 1 and id >= 2 and id < 3 and id <= 4 and name like 'A%' and id is distinct from 5 and id is not distinct from 6",
+          'result: none',
         ].join('\n'),
       );
     });
@@ -170,113 +180,107 @@ describe('printGraph', () => {
     it('prints in and not in with a list', () => {
       expect(
         printWhere(
-          BinaryExpr.in(id, ListExpression.fromValues([1, 2])),
-          BinaryExpr.notIn(id, ListExpression.fromValues([3])),
+          AndExpr.of([
+            BinaryExpr.in(id, ListExpression.fromValues([1, 2])),
+            BinaryExpr.notIn(id, ListExpression.fromValues([3])),
+          ]),
         ),
-      ).toBe(['n1 Find user where id in (1, 2) and id not in (3)', 'result: not set'].join('\n'));
+      ).toBe(['n1 Find user where id in (1, 2) and id not in (3)', 'result: none'].join('\n'));
     });
 
     it('puts nested and and or in parentheses', () => {
       const nested = OrExpr.of([idIsOne, AndExpr.of([idIsOne, NullCheckExpr.isNull(name)])]);
 
       expect(printWhere(nested)).toBe(
-        ['n1 Find user where (id = 1 or (id = 1 and name is null))', 'result: not set'].join('\n'),
+        ['n1 Find user where (id = 1 or (id = 1 and name is null))', 'result: none'].join('\n'),
       );
     });
 
     it('prints an and of nothing as true and an or of nothing as false', () => {
-      expect(printWhere(AndExpr.true(), OrExpr.false())).toBe(
-        ['n1 Find user where true and false', 'result: not set'].join('\n'),
+      expect(printWhere(AndExpr.true())).toBe(
+        ['n1 Find user where true', 'result: none'].join('\n'),
+      );
+      expect(printWhere(OrExpr.false())).toBe(
+        ['n1 Find user where false', 'result: none'].join('\n'),
       );
     });
 
     it('prints not and null checks', () => {
-      expect(printWhere(idIsOne.not(), NullCheckExpr.isNotNull(name))).toBe(
-        ['n1 Find user where not (id = 1) and name is not null', 'result: not set'].join('\n'),
+      expect(printWhere(AndExpr.of([idIsOne.not(), NullCheckExpr.isNotNull(name)]))).toBe(
+        ['n1 Find user where not (id = 1) and name is not null', 'result: none'].join('\n'),
       );
     });
 
     it('prints the table of a column of another table', () => {
       expect(printWhere(BinaryExpr.eq(id, ColumnRef.of('post', 'author_id')))).toBe(
-        ['n1 Find user where id = post.author_id', 'result: not set'].join('\n'),
+        ['n1 Find user where id = post.author_id', 'result: none'].join('\n'),
       );
     });
 
     it('prints the kind of an expression it has no text for', () => {
-      const exists = ExistsExpr.exists(SelectAst.from(TableSource.named('post')));
-
-      expect(printWhere(exists)).toBe(
-        ['n1 Find user where <exists>', 'result: not set'].join('\n'),
+      expect(printWhere(ExistsExpr.exists(SelectAst.from(post)))).toBe(
+        ['n1 Find user where <exists>', 'result: none'].join('\n'),
       );
     });
   });
 
   describe('values', () => {
     it('prints null, booleans, bigints, dates and objects', () => {
-      const graph = new Graph();
-      graph.add(
-        new Update(
-          userTable,
-          {
-            deleted_at: null,
-            active: true,
-            visits: 10n,
-            seen_at: new Date('2026-01-02T03:04:05.000Z'),
-            settings: { theme: 'dark' },
-          },
-          [],
-        ),
-      );
+      const update = updateUser({
+        deleted_at: ParamRef.of(null),
+        active: ParamRef.of(true),
+        visits: ParamRef.of(10n),
+        seen_at: ParamRef.of(new Date('2026-01-02T03:04:05.000Z')),
+        settings: ParamRef.of({ theme: 'dark' }),
+      });
 
-      expect(printGraph(graph)).toBe(
+      expect(printNode(update)).toBe(
         [
           'n1 Update user set deleted_at = null, active = true, visits = 10, seen_at = 2026-01-02T03:04:05.000Z, settings = {"theme":"dark"}',
-          'result: not set',
+          'result: none',
         ].join('\n'),
       );
     });
+
+    it('prints an Update that sets nothing, which only replace can put in a graph', () => {
+      const graph = graphOfUsers();
+      const find = findUser();
+      graph.add(find);
+      graph.replace(find, updateUser({}));
+
+      expect(printGraph(graph)).toBe(['n1 Update user set nothing', 'result: none'].join('\n'));
+    });
   });
 
-  describe('read state of a Find', () => {
-    it('prints order, limit, offset, cursor, distinct and distinct on', () => {
-      const find = new Find(userTable, [idIsOne], {
-        orderBy: [OrderByItem.asc(name, { nulls: 'last' }), OrderByItem.desc(id)],
-        limit: 1,
-        offset: 2,
-        cursor: { id: 5, name: 'Ada' },
-        distinct: ['name'],
-        distinctOn: ['email', 'name'],
-      });
+  describe('a Find', () => {
+    it('prints order, limit, offset and distinct on', () => {
+      const find = new Find(
+        SelectAst.from(user)
+          .withWhere(idIsOne)
+          .withOrderBy([OrderByItem.asc(name, { nulls: 'last' }), OrderByItem.desc(id)])
+          .withLimit(1)
+          .withOffset(2)
+          .withDistinctOn([ColumnRef.of('user', 'email'), name]),
+      );
 
-      expect(printFind(find)).toBe(
+      expect(printNode(find)).toBe(
         [
-          "n1 Find user where id = 1 order by name asc nulls last, id desc limit 1 offset 2 cursor (id = 5, name = 'Ada') distinct (name) distinct on (email, name)",
-          'result: not set',
+          'n1 Find user where id = 1 order by name asc nulls last, id desc limit 1 offset 2 distinct on (email, name)',
+          'result: none',
         ].join('\n'),
       );
     });
 
     it('prints a limit that is an expression', () => {
-      const find = new Find(userTable, [], {
-        orderBy: undefined,
-        limit: ParamRef.of(10),
-        offset: undefined,
-        cursor: undefined,
-        distinct: undefined,
-        distinctOn: undefined,
-      });
+      const find = new Find(SelectAst.from(user).withLimit(ParamRef.of(10)));
 
-      expect(printFind(find)).toBe(['n1 Find user limit 10', 'result: not set'].join('\n'));
+      expect(printNode(find)).toBe(['n1 Find user limit 10', 'result: none'].join('\n'));
     });
-  });
 
-  describe('nodes it does not know', () => {
-    it('refuses to print', () => {
-      class Unknown extends Node {}
-      const graph = new Graph();
-      graph.add(new Unknown());
+    it('prints the alias of a source that is not a table', () => {
+      const find = new Find(SelectAst.from(DerivedTableSource.as('user', SelectAst.from(user))));
 
-      expect(() => printGraph(graph)).toThrow('Unknown');
+      expect(printNode(find)).toBe(['n1 Find user', 'result: none'].join('\n'));
     });
   });
 });

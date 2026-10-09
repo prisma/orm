@@ -1,127 +1,64 @@
-import { BinaryExpr, ColumnRef, OrderByItem, ParamRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { Graph } from '../../src/mutation-graph/graph';
 import { Delete, Find, Update } from '../../src/mutation-graph/nodes';
-import { userTable } from './tables';
-
-const idIsOne = BinaryExpr.eq(ColumnRef.of('user', 'id'), ParamRef.of(1));
+import { deleteUsers, findUsers, graphOfUsers, nameIsAda, updateUsers } from './statements';
 
 describe('Find', () => {
-  it('holds its table and where', () => {
-    const find = new Find(userTable, [idIsOne]);
+  it('holds its statement as a select', () => {
+    const { ast } = findUsers([nameIsAda]);
 
-    expect(find.table).toEqual(userTable);
-    expect(find.where).toEqual([idIsOne]);
-  });
-
-  it('reads without order, offset, cursor, distinct or limit by default', () => {
-    expect(new Find(userTable, []).read).toEqual({
-      orderBy: undefined,
-      offset: undefined,
-      cursor: undefined,
-      distinct: undefined,
-      distinctOn: undefined,
-      limit: undefined,
-    });
-  });
-
-  it('holds the read state it is given', () => {
-    const read = {
-      orderBy: [OrderByItem.asc(ColumnRef.of('user', 'name'))],
-      offset: 2,
-      cursor: { id: 5 },
-      distinct: ['name'],
-      distinctOn: ['email'],
-      limit: 1,
-    };
-
-    expect(new Find(userTable, [], read).read).toEqual(read);
+    expect(ast.kind).toBe('select');
+    expect(new Find(ast).ast).toBe(ast);
   });
 
   it('is frozen', () => {
-    const find = new Find(userTable, [idIsOne]);
-
-    expect(Object.isFrozen(find)).toBe(true);
-    expect(Object.isFrozen(find.table)).toBe(true);
-    expect(Object.isFrozen(find.where)).toBe(true);
-    expect(Object.isFrozen(find.read)).toBe(true);
-  });
-
-  it('does not change when the array it was built from changes', () => {
-    const where = [idIsOne];
-    const find = new Find(userTable, where);
-
-    where.push(idIsOne);
-
-    expect(find.where).toEqual([idIsOne]);
+    expect(Object.isFrozen(findUsers())).toBe(true);
   });
 
   it('is its own peephole result', () => {
-    const find = new Find(userTable, []);
+    const find = findUsers();
 
-    expect(find.peephole(new Graph())).toBe(find);
+    expect(find.peephole(graphOfUsers())).toBe(find);
   });
 });
 
 describe('Update', () => {
-  it('holds its table, the values to set and where', () => {
-    const update = new Update(userTable, { name: 'Ada' }, [idIsOne]);
+  it('holds its statement as an update', () => {
+    const { ast } = updateUsers({ name: 'Ada' }, nameIsAda);
 
-    expect(update.table).toEqual(userTable);
-    expect(update.set).toEqual({ name: 'Ada' });
-    expect(update.where).toEqual([idIsOne]);
+    expect(ast.kind).toBe('update');
+    expect(new Update(ast).ast).toBe(ast);
   });
 
   it('is frozen', () => {
-    const update = new Update(userTable, { name: 'Ada' }, [idIsOne]);
-
-    expect(Object.isFrozen(update)).toBe(true);
-    expect(Object.isFrozen(update.table)).toBe(true);
-    expect(Object.isFrozen(update.set)).toBe(true);
-    expect(Object.isFrozen(update.where)).toBe(true);
-  });
-
-  it('does not change when the values it was built from change', () => {
-    const set: Record<string, unknown> = { name: 'Ada' };
-    const update = new Update(userTable, set, []);
-
-    set['email'] = 'ada@example.com';
-
-    expect(update.set).toEqual({ name: 'Ada' });
+    expect(Object.isFrozen(updateUsers({ name: 'Ada' }))).toBe(true);
   });
 
   it('is its own peephole result when it sets a value', () => {
-    const update = new Update(userTable, { name: 'Ada' }, []);
+    const update = updateUsers({ name: 'Ada' });
 
-    expect(update.peephole(new Graph())).toBe(update);
+    expect(update.peephole(graphOfUsers())).toBe(update);
   });
 
   it('has no peephole result when it sets nothing', () => {
-    const update = new Update(userTable, {}, [idIsOne]);
-
-    expect(update.peephole(new Graph())).toBeUndefined();
+    expect(updateUsers({}, nameIsAda).peephole(graphOfUsers())).toBeUndefined();
   });
 });
 
 describe('Delete', () => {
-  it('holds its table and where', () => {
-    const del = new Delete(userTable, [idIsOne]);
+  it('holds its statement as a delete', () => {
+    const { ast } = deleteUsers(nameIsAda);
 
-    expect(del.table).toEqual(userTable);
-    expect(del.where).toEqual([idIsOne]);
+    expect(ast.kind).toBe('delete');
+    expect(new Delete(ast).ast).toBe(ast);
   });
 
   it('is frozen', () => {
-    const del = new Delete(userTable, [idIsOne]);
-
-    expect(Object.isFrozen(del)).toBe(true);
-    expect(Object.isFrozen(del.table)).toBe(true);
-    expect(Object.isFrozen(del.where)).toBe(true);
+    expect(Object.isFrozen(deleteUsers())).toBe(true);
   });
 
   it('is its own peephole result', () => {
-    const del = new Delete(userTable, []);
+    const del = deleteUsers();
 
-    expect(del.peephole(new Graph())).toBe(del);
+    expect(del.peephole(graphOfUsers())).toBe(del);
   });
 });

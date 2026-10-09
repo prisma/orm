@@ -1,38 +1,33 @@
 import { defineAnnotation } from '@internal/framework-components/runtime';
-import { BinaryExpr, ColumnRef, ParamRef } from '@internal/sql-relational-core/ast';
+import { BinaryExpr, ColumnRef, OrderByItem, ParamRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it, vi } from 'vitest';
-import { After, IntoWhere } from '../../src/mutation-graph/edges';
-import { Graph, type ResultForm } from '../../src/mutation-graph/graph';
-import { Delete, Find, type Node, Update } from '../../src/mutation-graph/nodes';
+import { After, type ColumnPair, FilterData } from '../../src/mutation-graph/edges';
+import type { Graph } from '../../src/mutation-graph/graph';
+import { Find } from '../../src/mutation-graph/nodes';
 import { printExpression } from '../../src/mutation-graph/print-expression';
-import {
-  type RunOptions,
-  runForCount,
-  runForFirstRow,
-  runForRows,
-} from '../../src/mutation-graph/run-graph';
+import { runForCount, runForFirstRow, runForRows } from '../../src/mutation-graph/run-graph';
 import { createCollectionFor } from '../collection-fixtures';
+import { createMockRuntime, type MockExecution, type MockRuntime } from '../helpers';
 import {
-  createMockRuntime,
-  getTestContext,
-  type MockExecution,
-  type MockRuntime,
-} from '../helpers';
-import { postsTable, usersTable } from './tables';
+  deletePosts,
+  deleteUsers,
+  findUsers,
+  graphOfPosts,
+  graphOfUsers,
+  nameIsAda,
+  updatePosts,
+  updateUsers,
+} from './statements';
 
 const auditAnnotation = defineAnnotation<{ actor: string }>()({
   namespace: 'audit',
   applicableTo: ['write'],
 });
+const audit = auditAnnotation({ actor: 'system' });
+const auditAnnotations = new Map([[audit.namespace, audit]]);
 
-const nameIsAda = BinaryExpr.eq(ColumnRef.of('users', 'name'), ParamRef.of('Ada'));
-
-function optionsFor(runtime: MockRuntime): RunOptions {
-  return { context: getTestContext(), runtime, annotations: undefined };
-}
-
-function setResult(graph: Graph, node: Node | undefined, form: ResultForm): void {
-  graph.setResult({ node, form, selectedFields: undefined, includes: [] });
+function userIncludes() {
+  return createCollectionFor('User').collection.include('posts').state.includes;
 }
 
 function astOf(execution: MockExecution) {
@@ -77,13 +72,25 @@ function withTransaction(runtime: MockRuntime) {
   return { runtime: Object.assign(runtime, { transaction: open }), open, commit, rollback };
 }
 
-function findThenUpdate(columns: readonly (readonly [string, string])[]) {
-  const graph = new Graph();
-  const find = new Find(usersTable, [nameIsAda]);
-  const update = new Update(postsTable, { title: 'New' }, []);
+function findThenUpdatePost(columns: readonly ColumnPair[]): Graph {
+  const graph = graphOfPosts('first row');
+  const find = findUsers(
+    [nameIsAda],
+    columns.map(([sourceColumn]) => sourceColumn),
+  );
+  const update = updatePosts({ title: 'New' });
   graph.add(find);
-  graph.add(update, new IntoWhere(find, update, columns));
-  setResult(graph, update, 'first row');
+  graph.setResult(graph.add(update, new FilterData(find, update, columns)));
+  return graph;
+}
+
+function findThenDeleteUsers(): Graph {
+  const graph = graphOfUsers('rows');
+  const find = findUsers([nameIsAda], ['id', 'name']);
+  const del = deleteUsers(nameIsAda);
+  graph.add(find);
+  graph.add(del, new After(find, del));
+  graph.setResult(find);
   return graph;
 }
 
@@ -92,22 +99,37 @@ describe('running a graph', () => {
     it('returns the rows of an Update, mapped to fields', async () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[{ id: 1, name: 'Ada', invited_by_id: 2 }]]);
-      const graph = new Graph();
-      setResult(graph, graph.add(new Update(usersTable, { name: 'Ada' }, [nameIsAda])), 'rows');
+      const graph = graphOfUsers('rows');
+      graph.setResult(graph.add(updateUsers({ name: 'Ada' }, nameIsAda)));
 
-      const rows = await runForRows(graph, optionsFor(runtime));
+      const rows = await runForRows(graph, runtime, undefined);
 
       expect(rows).toEqual([{ id: 1, name: 'Ada', invitedById: 2 }]);
       expect(statements(runtime)).toEqual(['query update']);
     });
 
+    it('returns every column of the model when the caller selected nothing', async () => {
+      const runtime = createMockRuntime();
+      const graph = graphOfUsers('rows');
+      graph.setResult(graph.add(deleteUsers(nameIsAda)));
+
+      await runForRows(graph, runtime, undefined);
+
+      expect(returnedColumns(runtime.executions[0]!)).toEqual([
+        'address',
+        'email',
+        'id',
+        'invited_by_id',
+        'name',
+      ]);
+    });
+
     it('returns the selection of the caller from the write', async () => {
       const runtime = createMockRuntime();
-      const graph = new Graph();
-      const del = graph.add(new Delete(usersTable, [nameIsAda]));
-      graph.setResult({ node: del, form: 'rows', selectedFields: ['id', 'email'], includes: [] });
+      const graph = graphOfUsers('rows', { selectedFields: ['id', 'email'] });
+      graph.setResult(graph.add(deleteUsers(nameIsAda)));
 
-      await runForRows(graph, optionsFor(runtime));
+      await runForRows(graph, runtime, undefined);
 
       expect(returnedColumns(runtime.executions[0]!)).toEqual(['id', 'email']);
     });
@@ -115,28 +137,29 @@ describe('running a graph', () => {
     it('returns the affected row count of a count result without returning rows', async () => {
       const runtime = createMockRuntime();
       runtime.setNextStats([{ affectedRows: 3 }]);
-      const graph = new Graph();
-      setResult(graph, graph.add(new Delete(usersTable, [nameIsAda])), 'count');
+      const graph = graphOfUsers('count');
+      graph.setResult(graph.add(deleteUsers(nameIsAda)));
 
-      expect(await runForCount(graph, optionsFor(runtime))).toBe(3);
+      expect(await runForCount(graph, runtime, undefined)).toBe(3);
       expect(statements(runtime)).toEqual(['execute delete']);
+      expect(returnedColumns(runtime.executions[0]!)).toEqual([]);
     });
 
     it('returns the first row of a first row result', async () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[{ id: 1 }, { id: 2 }]]);
-      const graph = new Graph();
-      setResult(graph, graph.add(new Find(usersTable, [])), 'first row');
+      const graph = graphOfUsers('first row');
+      graph.setResult(graph.add(findUsers()));
 
-      expect(await runForFirstRow(graph, optionsFor(runtime))).toEqual({ id: 1 });
+      expect(await runForFirstRow(graph, runtime, undefined)).toEqual({ id: 1 });
     });
 
     it('does not open a transaction', async () => {
       const transactional = withTransaction(createMockRuntime());
-      const graph = new Graph();
-      setResult(graph, graph.add(new Delete(usersTable, [])), 'rows');
+      const graph = graphOfUsers('rows');
+      graph.setResult(graph.add(deleteUsers()));
 
-      await runForRows(graph, optionsFor(transactional.runtime));
+      await runForRows(graph, transactional.runtime, undefined);
 
       expect(transactional.open).not.toHaveBeenCalled();
     });
@@ -145,55 +168,46 @@ describe('running a graph', () => {
   describe('with an empty result', () => {
     it('gives no rows, null and zero, and executes nothing when the graph has no node', async () => {
       const runtime = createMockRuntime();
-      const rows = new Graph();
-      setResult(rows, undefined, 'rows');
-      const firstRow = new Graph();
-      setResult(firstRow, undefined, 'first row');
-      const count = new Graph();
-      setResult(count, undefined, 'count');
 
-      expect(await runForRows(rows, optionsFor(runtime))).toEqual([]);
-      expect(await runForFirstRow(firstRow, optionsFor(runtime))).toBeNull();
-      expect(await runForCount(count, optionsFor(runtime))).toBe(0);
+      expect(await runForRows(graphOfUsers('rows'), runtime, undefined)).toEqual([]);
+      expect(await runForFirstRow(graphOfUsers('first row'), runtime, undefined)).toBeNull();
+      expect(await runForCount(graphOfUsers('count'), runtime, undefined)).toBe(0);
       expect(runtime.executions).toEqual([]);
     });
 
     it('still executes the nodes of the graph', async () => {
       const runtime = createMockRuntime();
-      const graph = new Graph();
-      graph.add(new Find(usersTable, [nameIsAda]));
-      setResult(graph, undefined, 'first row');
+      const graph = graphOfUsers('first row');
+      graph.add(findUsers([nameIsAda]));
 
-      expect(await runForFirstRow(graph, optionsFor(runtime))).toBeNull();
+      expect(await runForFirstRow(graph, runtime, undefined)).toBeNull();
       expect(statements(runtime)).toEqual(['query select']);
     });
   });
 
   describe('with a Find and a Delete after it', () => {
-    function findThenDelete() {
-      const graph = new Graph();
-      const find = new Find(usersTable, [nameIsAda]);
-      const del = new Delete(usersTable, [nameIsAda]);
-      graph.add(find);
-      graph.add(del, new After(find, del));
-      setResult(graph, find, 'rows');
-      return graph;
-    }
-
     it('reads the rows, then deletes with the count form, and returns the rows read', async () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[{ id: 1, name: 'Ada' }]]);
 
-      const rows = await runForRows(findThenDelete(), optionsFor(runtime));
+      const rows = await runForRows(findThenDeleteUsers(), runtime, undefined);
 
       expect(rows).toEqual([{ id: 1, name: 'Ada' }]);
       expect(statements(runtime)).toEqual(['query select', 'execute delete']);
     });
 
+    it('returns from the Find the columns its statement was built with', async () => {
+      const runtime = createMockRuntime();
+
+      await runForRows(findThenDeleteUsers(), runtime, undefined);
+
+      expect(returnedColumns(runtime.executions[0]!)).toEqual(['id', 'name']);
+    });
+
     it('executes nothing until the rows are asked for', async () => {
       const runtime = createMockRuntime();
 
-      runForRows(findThenDelete(), optionsFor(runtime));
+      runForRows(findThenDeleteUsers(), runtime, undefined);
       await Promise.resolve();
 
       expect(runtime.executions).toEqual([]);
@@ -202,7 +216,7 @@ describe('running a graph', () => {
     it('runs in one transaction that it commits', async () => {
       const transactional = withTransaction(createMockRuntime());
 
-      await runForRows(findThenDelete(), optionsFor(transactional.runtime));
+      await runForRows(findThenDeleteUsers(), transactional.runtime, undefined);
 
       expect(transactional.open).toHaveBeenCalledTimes(1);
       expect(transactional.commit).toHaveBeenCalledTimes(1);
@@ -215,21 +229,17 @@ describe('running a graph', () => {
         throw new Error('delete failed');
       };
 
-      await expect(runForRows(findThenDelete(), optionsFor(transactional.runtime))).rejects.toThrow(
-        'delete failed',
-      );
+      await expect(
+        runForRows(findThenDeleteUsers(), transactional.runtime, undefined),
+      ).rejects.toThrow('delete failed');
       expect(transactional.rollback).toHaveBeenCalledTimes(1);
       expect(transactional.commit).not.toHaveBeenCalled();
     });
 
     it('puts the annotations of the caller on every statement', async () => {
       const runtime = createMockRuntime();
-      const annotation = auditAnnotation({ actor: 'system' });
 
-      await runForRows(findThenDelete(), {
-        ...optionsFor(runtime),
-        annotations: new Map([[annotation.namespace, annotation]]),
-      });
+      await runForRows(findThenDeleteUsers(), runtime, auditAnnotations);
 
       expect(runtime.executions.map((execution) => auditAnnotation.read(execution.plan))).toEqual([
         { actor: 'system' },
@@ -238,20 +248,12 @@ describe('running a graph', () => {
     });
   });
 
-  describe('with an IntoWhere edge', () => {
-    it('makes the source return the source columns of the edge', async () => {
-      const runtime = createMockRuntime();
-
-      await runForFirstRow(findThenUpdate([['id', 'user_id']]), optionsFor(runtime));
-
-      expect(returnedColumns(runtime.executions[0]!)).toEqual(['id']);
-    });
-
+  describe('with a FilterData edge', () => {
     it('skips the target and gives null when the source has no row', async () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[]]);
 
-      const row = await runForFirstRow(findThenUpdate([['id', 'user_id']]), optionsFor(runtime));
+      const row = await runForFirstRow(findThenUpdatePost([['id', 'user_id']]), runtime, undefined);
 
       expect(row).toBeNull();
       expect(statements(runtime)).toEqual(['query select']);
@@ -260,30 +262,28 @@ describe('running a graph', () => {
     it('gives zero for a count result that was skipped', async () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[]]);
-      const graph = new Graph();
-      const find = new Find(usersTable, [nameIsAda]);
-      const del = new Delete(postsTable, []);
+      const graph = graphOfPosts('count');
+      const find = findUsers([nameIsAda]);
+      const del = deletePosts();
       graph.add(find);
-      graph.add(del, new IntoWhere(find, del, [['id', 'user_id']]));
-      setResult(graph, del, 'count');
+      graph.setResult(graph.add(del, new FilterData(find, del, [['id', 'user_id']])));
 
-      expect(await runForCount(graph, optionsFor(runtime))).toBe(0);
+      expect(await runForCount(graph, runtime, undefined)).toBe(0);
       expect(statements(runtime)).toEqual(['query select']);
     });
 
     it('skips a node whose source was skipped', async () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[]]);
-      const graph = new Graph();
-      const find = new Find(usersTable, [nameIsAda]);
-      const update = new Update(postsTable, { title: 'New' }, []);
-      const del = new Delete(postsTable, []);
+      const graph = graphOfPosts('count');
+      const find = findUsers([nameIsAda]);
+      const update = updatePosts({ title: 'New' });
+      const del = deletePosts();
       graph.add(find);
-      graph.add(update, new IntoWhere(find, update, [['id', 'user_id']]));
-      graph.add(del, new IntoWhere(update, del, [['id', 'id']]));
-      setResult(graph, del, 'count');
+      graph.add(update, new FilterData(find, update, [['id', 'user_id']]));
+      graph.setResult(graph.add(del, new FilterData(update, del, [['id', 'id']])));
 
-      expect(await runForCount(graph, optionsFor(runtime))).toBe(0);
+      expect(await runForCount(graph, runtime, undefined)).toBe(0);
       expect(statements(runtime)).toEqual(['query select']);
     });
 
@@ -291,7 +291,7 @@ describe('running a graph', () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[{ id: 7 }], [{ id: 70, title: 'New' }]]);
 
-      const row = await runForFirstRow(findThenUpdate([['id', 'user_id']]), optionsFor(runtime));
+      const row = await runForFirstRow(findThenUpdatePost([['id', 'user_id']]), runtime, undefined);
 
       expect(row).toEqual({ id: 70, title: 'New' });
       expect(statements(runtime)).toEqual(['query select', 'query update']);
@@ -301,16 +301,13 @@ describe('running a graph', () => {
     it('keeps the where of the target next to the condition of the edge', async () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[{ id: 7 }], []]);
-      const graph = new Graph();
-      const find = new Find(usersTable, [nameIsAda]);
-      const del = new Delete(postsTable, [
-        BinaryExpr.eq(ColumnRef.of('posts', 'title'), ParamRef.of('Old')),
-      ]);
+      const graph = graphOfPosts('count');
+      const find = findUsers([nameIsAda]);
+      const del = deletePosts(BinaryExpr.eq(ColumnRef.of('posts', 'title'), ParamRef.of('Old')));
       graph.add(find);
-      graph.add(del, new IntoWhere(find, del, [['id', 'user_id']]));
-      setResult(graph, del, 'count');
+      graph.setResult(graph.add(del, new FilterData(find, del, [['id', 'user_id']])));
 
-      await runForCount(graph, optionsFor(runtime));
+      await runForCount(graph, runtime, undefined);
 
       expect(whereText(runtime.executions[1]!, 'posts')).toBe("(title = 'Old' and user_id = 7)");
     });
@@ -319,7 +316,7 @@ describe('running a graph', () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[{ id: 7 }, { id: 8 }], []]);
 
-      await runForFirstRow(findThenUpdate([['id', 'user_id']]), optionsFor(runtime));
+      await runForFirstRow(findThenUpdatePost([['id', 'user_id']]), runtime, undefined);
 
       expect(whereText(runtime.executions[1]!, 'posts')).toBe('user_id in (7, 8)');
     });
@@ -327,14 +324,13 @@ describe('running a graph', () => {
     it('compares every column pair for a source with one row', async () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[{ id: 7, name: 'Ada' }], []]);
-      const graph = findThenUpdate([
+      const graph = findThenUpdatePost([
         ['id', 'user_id'],
         ['name', 'title'],
       ]);
 
-      await runForFirstRow(graph, optionsFor(runtime));
+      await runForFirstRow(graph, runtime, undefined);
 
-      expect(returnedColumns(runtime.executions[0]!)).toEqual(['id', 'name']);
       expect(whereText(runtime.executions[1]!, 'posts')).toBe("(user_id = 7 and title = 'Ada')");
     });
 
@@ -347,12 +343,12 @@ describe('running a graph', () => {
         ],
         [],
       ]);
-      const graph = findThenUpdate([
+      const graph = findThenUpdatePost([
         ['id', 'user_id'],
         ['name', 'title'],
       ]);
 
-      await runForFirstRow(graph, optionsFor(runtime));
+      await runForFirstRow(graph, runtime, undefined);
 
       expect(whereText(runtime.executions[1]!, 'posts')).toBe(
         "((user_id = 7 and title = 'Ada') or (user_id = 8 and title = 'Grace'))",
@@ -362,71 +358,114 @@ describe('running a graph', () => {
     it('makes an Update that another node reads from return the columns it is read for', async () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[{ id: 7 }], []]);
-      const graph = new Graph();
-      const update = new Update(usersTable, { name: 'Ada' }, [nameIsAda]);
-      const del = new Delete(postsTable, []);
+      const graph = graphOfPosts('rows');
+      const update = updateUsers({ name: 'Ada' }, nameIsAda);
+      const del = deletePosts();
       graph.add(update);
-      graph.add(del, new IntoWhere(update, del, [['id', 'user_id']]));
-      setResult(graph, del, 'rows');
+      graph.setResult(graph.add(del, new FilterData(update, del, [['id', 'user_id']])));
 
-      await runForRows(graph, optionsFor(runtime));
+      await runForRows(graph, runtime, undefined);
 
       expect(statements(runtime)).toEqual(['query update', 'query delete']);
       expect(returnedColumns(runtime.executions[0]!)).toEqual(['id']);
     });
   });
 
-  describe('with includes on a write that is the result', () => {
-    it('puts the annotations on the write and on the read that loads the includes', async () => {
+  describe('with a node that reads from the result node', () => {
+    it('uses the rows of a Find result for the edge and returns them mapped', async () => {
+      const runtime = createMockRuntime();
+      runtime.setNextResults([[{ id: 7, invited_by_id: 2 }]]);
+      const graph = graphOfUsers('first row');
+      const find = findUsers([nameIsAda], ['id', 'invited_by_id']);
+      const del = deleteUsers();
+      graph.add(find);
+      graph.add(del, new FilterData(find, del, [['id', 'id']]));
+      graph.setResult(find);
+
+      const row = await runForFirstRow(graph, runtime, undefined);
+
+      expect(row).toEqual({ id: 7, invitedById: 2 });
+      expect(statements(runtime)).toEqual(['query select', 'execute delete']);
+      expect(whereText(runtime.executions[1]!, 'users')).toBe('id = 7');
+    });
+
+    it('returns the columns the edge reads next to the selection and leaves them out of the rows', async () => {
+      const runtime = createMockRuntime();
+      runtime.setNextResults([[{ name: 'Ada', id: 7 }]]);
+      const graph = graphOfUsers('rows', { selectedFields: ['name'] });
+      const update = updateUsers({ name: 'Ada' }, nameIsAda);
+      const del = deletePosts();
+      graph.add(update);
+      graph.add(del, new FilterData(update, del, [['id', 'user_id']]));
+      graph.setResult(update);
+
+      const rows = await runForRows(graph, runtime, undefined);
+
+      expect(returnedColumns(runtime.executions[0]!)).toEqual(['name', 'id']);
+      expect(rows).toEqual([{ name: 'Ada' }]);
+      expect(whereText(runtime.executions[1]!, 'posts')).toBe('user_id = 7');
+    });
+
+    it('counts the rows of a count result that returns rows for an edge', async () => {
+      const runtime = createMockRuntime();
+      runtime.setNextResults([[{ id: 7 }, { id: 8 }]]);
+      const graph = graphOfUsers('count');
+      const update = updateUsers({ name: 'Ada' }, nameIsAda);
+      const del = deletePosts();
+      graph.add(update);
+      graph.add(del, new FilterData(update, del, [['id', 'user_id']]));
+      graph.setResult(update);
+
+      expect(await runForCount(graph, runtime, undefined)).toBe(2);
+      expect(statements(runtime)).toEqual(['query update', 'execute delete']);
+    });
+  });
+
+  describe('with includes', () => {
+    it('returns identity columns from a write and loads the rows with their includes', async () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[{ id: 1 }], [{ id: 1, name: 'Ada', posts: [] }]]);
-      const annotation = auditAnnotation({ actor: 'system' });
-      const { includes } = createCollectionFor('User').collection.include('posts').state;
-      const graph = new Graph();
-      const update = graph.add(new Update(usersTable, { name: 'Ada' }, [nameIsAda]));
-      graph.setResult({ node: update, form: 'rows', selectedFields: undefined, includes });
+      const graph = graphOfUsers('rows', { includes: userIncludes() });
+      graph.setResult(graph.add(updateUsers({ name: 'Ada' }, nameIsAda)));
 
-      await runForRows(graph, {
-        ...optionsFor(runtime),
-        annotations: new Map([[annotation.namespace, annotation]]),
-      });
+      const rows = await runForRows(graph, runtime, auditAnnotations);
 
+      expect(rows).toEqual([{ id: 1, name: 'Ada', posts: [] }]);
       expect(statements(runtime)).toEqual(['query update', 'query select']);
+      expect(returnedColumns(runtime.executions[0]!)).toEqual(['id']);
       expect(runtime.executions.map((execution) => auditAnnotation.read(execution.plan))).toEqual([
         { actor: 'system' },
         { actor: 'system' },
       ]);
     });
-  });
 
-  describe('refusals', () => {
-    it('refuses a graph with no result', async () => {
-      await expect(runForCount(new Graph(), optionsFor(createMockRuntime()))).rejects.toThrow(
-        'has no result',
-      );
-    });
-
-    it('refuses a result of another form', () => {
-      const graph = new Graph();
-      setResult(graph, graph.add(new Delete(usersTable, [])), 'count');
-
-      expect(() => runForRows(graph, optionsFor(createMockRuntime()))).toThrow(
-        'result is count, not rows',
-      );
-    });
-
-    it('refuses a node that reads from the result node', async () => {
+    it('loads the rows of a Find result with their includes before the next node runs', async () => {
       const runtime = createMockRuntime();
-      const graph = new Graph();
-      const update = new Update(usersTable, { name: 'Ada' }, []);
-      const del = new Delete(postsTable, []);
-      graph.add(update);
-      graph.add(del, new IntoWhere(update, del, [['id', 'user_id']]));
-      setResult(graph, update, 'rows');
+      runtime.setNextResults([[{ id: 1 }], [{ id: 1, name: 'Ada', posts: [] }]]);
+      const graph = graphOfUsers('rows', { includes: userIncludes() });
+      const find = findUsers([nameIsAda]);
+      const del = deleteUsers(nameIsAda);
+      graph.add(find);
+      graph.add(del, new After(find, del));
+      graph.setResult(find);
 
-      await expect(runForRows(graph, optionsFor(runtime))).rejects.toThrow(
-        'cannot read from the result node',
-      );
+      const rows = await runForRows(graph, runtime, undefined);
+
+      expect(rows).toEqual([{ id: 1, name: 'Ada', posts: [] }]);
+      expect(statements(runtime)).toEqual(['query select', 'query select', 'execute delete']);
+      expect(whereText(runtime.executions[1]!, 'users')).toBe('id in (1)');
+    });
+
+    it('orders the load by the order of the Find', async () => {
+      const runtime = createMockRuntime();
+      runtime.setNextResults([[{ id: 1 }], []]);
+      const orderBy = [OrderByItem.desc(ColumnRef.of('users', 'name'))];
+      const graph = graphOfUsers('rows', { includes: userIncludes() });
+      graph.setResult(graph.add(new Find(findUsers([nameIsAda]).ast.withOrderBy(orderBy))));
+
+      await runForRows(graph, runtime, undefined);
+
+      expect(astOf(runtime.executions[1]!)).toMatchObject({ kind: 'select', orderBy });
     });
   });
 });

@@ -25,7 +25,7 @@ export class After extends Edge {
   }
 }
 
-export class IntoWhere extends Edge {
+export class FilterData extends Edge {
   readonly columns: readonly ColumnPair[];
 
   constructor(from: Node, to: Node, columns: readonly ColumnPair[]) {
@@ -34,8 +34,8 @@ export class IntoWhere extends Edge {
     Object.freeze(this);
   }
 
-  override replaceNode(old: Node, next: Node): IntoWhere {
-    return new IntoWhere(
+  override replaceNode(old: Node, next: Node): FilterData {
+    return new FilterData(
       this.from === old ? next : this.from,
       this.to === old ? next : this.to,
       this.columns,

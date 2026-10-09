@@ -60,7 +60,6 @@ import {
   resolveModelTableName,
   resolvePolymorphismInfo,
   resolvePrimaryKeyColumns,
-  resolveRowIdentityColumns,
   resolveUpsertConflictColumns,
 } from './collection-contract';
 import {
@@ -141,14 +140,8 @@ import {
   deleteFirstGraph,
   updateAllGraph,
   updateFirstGraph,
-  type WriteTarget,
 } from './mutation-graph/collection-graphs';
-import {
-  type RunOptions,
-  runForCount,
-  runForFirstRow,
-  runForRows,
-} from './mutation-graph/run-graph';
+import { runForCount, runForFirstRow, runForRows } from './mutation-graph/run-graph';
 import { assertCursorCompatibleOrder, assertDistinctOnCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
 import type { PreparedCollection } from './prepared-collection';
@@ -2620,8 +2613,8 @@ export class CollectionBase<
         'absence of nested callbacks selects the scalar update input'
       >(data),
     );
-    const graph = updateFirstGraph(this.#writeTarget(), this.#rowIdentityColumns(), values);
-    return runForFirstRow(graph, this.#runOptions(annotationsMap));
+    const graph = updateFirstGraph(this.#descriptionOptions(), values);
+    return runForFirstRow(graph, this.ctx.runtime, annotationsMap);
   }
 
   /**
@@ -2662,8 +2655,8 @@ export class CollectionBase<
     assertLockCompatible(this.state, 'mutation');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'updateAll');
     assertReturningCapability(this.contract, 'updateAll()');
-    const graph = updateAllGraph(this.#writeTarget(), this.#updateValues(data), 'rows');
-    return runForRows(graph, this.#runOptions(annotationsMap));
+    const graph = updateAllGraph(this.#descriptionOptions(), this.#updateValues(data), 'rows');
+    return runForRows(graph, this.ctx.runtime, annotationsMap);
   }
 
   /**
@@ -2691,9 +2684,9 @@ export class CollectionBase<
   ): Promise<number> {
     assertBulkWriteIgnoresNothing(this.state, this.modelName, 'updateAndCount');
     assertLockCompatible(this.state, 'mutation');
-    const graph = updateAllGraph(this.#writeTarget(), this.#updateValues(data), 'count');
+    const graph = updateAllGraph(this.#descriptionOptions(), this.#updateValues(data), 'count');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'updateAndCount');
-    return runForCount(graph, this.#runOptions(annotationsMap));
+    return runForCount(graph, this.ctx.runtime, annotationsMap);
   }
 
   /**
@@ -2718,8 +2711,8 @@ export class CollectionBase<
     assertLockCompatible(this.state, 'mutation');
     assertReturningCapability(this.contract, 'delete()');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'delete');
-    const graph = deleteFirstGraph(this.#writeTarget(), this.#rowIdentityColumns());
-    return runForFirstRow(graph, this.#runOptions(annotationsMap));
+    const graph = deleteFirstGraph(this.#descriptionOptions());
+    return runForFirstRow(graph, this.ctx.runtime, annotationsMap);
   }
 
   /**
@@ -2754,8 +2747,8 @@ export class CollectionBase<
     assertLockCompatible(this.state, 'mutation');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAll');
     assertReturningCapability(this.contract, 'deleteAll()');
-    const graph = deleteAllGraph(this.#writeTarget(), 'rows');
-    return runForRows(graph, this.#runOptions(annotationsMap));
+    const graph = deleteAllGraph(this.#descriptionOptions(), 'rows');
+    return runForRows(graph, this.ctx.runtime, annotationsMap);
   }
 
   /**
@@ -2778,34 +2771,8 @@ export class CollectionBase<
     assertBulkWriteIgnoresNothing(this.state, this.modelName, 'deleteAndCount');
     assertLockCompatible(this.state, 'mutation');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAndCount');
-    const graph = deleteAllGraph(this.#writeTarget(), 'count');
-    return runForCount(graph, this.#runOptions(annotationsMap));
-  }
-
-  #writeTarget(): WriteTarget {
-    const { filters, orderBy, offset, cursor, distinct, distinctOn, limit } = this.state;
-    return {
-      table: {
-        namespaceId: this.namespaceId,
-        tableName: this.tableName,
-        modelName: this.modelName,
-        variantName: this.state.variantName,
-      },
-      where: filters,
-      read: { orderBy, offset, cursor, distinct, distinctOn, limit },
-      selectedFields: this.state.selectedFields,
-      includes: this.state.includes,
-    };
-  }
-
-  #rowIdentityColumns(): readonly string[] {
-    return resolveRowIdentityColumns(this.contract, this.namespaceId, this.tableName);
-  }
-
-  #runOptions(
-    annotations: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined,
-  ): RunOptions {
-    return { context: this.ctx.context, runtime: this.ctx.runtime, annotations };
+    const graph = deleteAllGraph(this.#descriptionOptions(), 'count');
+    return runForCount(graph, this.ctx.runtime, annotationsMap);
   }
 
   #updateValues(

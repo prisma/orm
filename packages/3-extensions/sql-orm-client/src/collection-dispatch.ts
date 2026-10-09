@@ -30,6 +30,7 @@ import {
   ColumnRef,
   ListExpression,
   LiteralExpr,
+  type OrderByItem,
   OrExpr,
 } from '@internal/sql-relational-core/ast';
 import type { Preparable } from '@internal/sql-relational-core/plan';
@@ -71,7 +72,7 @@ import { bindWhereExpr } from './where-binding';
 
 type CodecExecutionContext = CollectionContext<Contract<SqlStorage>>['context'];
 
-interface DescribeCollectionRowsOptions {
+export interface DescribeCollectionRowsOptions {
   context: CodecExecutionContext;
   state: CollectionState;
   tableName: string;
@@ -462,6 +463,7 @@ export function reloadMutationRowsByIdentities<Row>(options: {
   selectedFields: readonly string[] | undefined;
   includes: readonly IncludeExpr[];
   annotations?: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined;
+  orderBy?: readonly OrderByItem[] | undefined;
 }): AsyncIterableResult<Row> {
   const {
     context,
@@ -473,6 +475,7 @@ export function reloadMutationRowsByIdentities<Row>(options: {
     selectedFields,
     includes,
     annotations,
+    orderBy,
   } = options;
   const { contract } = context;
   if (identityRows.length === 0) {
@@ -508,6 +511,7 @@ export function reloadMutationRowsByIdentities<Row>(options: {
       selectedFields,
       includes,
       ...ifDefined('annotations', annotations),
+      ...ifDefined('orderBy', orderBy),
     },
     tableName,
     modelName,
