@@ -5,3 +5,4 @@
 - **A relation to a bare model name used in two namespaces resolves by list order.** Recorded on TML-3280.
 - **A many-to-many junction declared only by a table node is refused,** because a relation's `through` resolves by model. This matches ADR 267 (a junction is a model).
 - **Typing a model with no fields.** Today `Record<string, never>`, whose `keyof` is `string`, so a row type accepts any key on read. `{}` fixes rows but accepts any key in a create input. Rows should be `{}` and inputs should keep rejecting keys. Not needed for this project's outcome, because extra columns never reach model types. ADR 267 states `{}` for both; correct it in prisma/orm#30641.
+- **Integration test for a polymorphic model whose table holds an extra column.** No source can produce one until Prisma 8 syntax exists; recorded on TML-3469.

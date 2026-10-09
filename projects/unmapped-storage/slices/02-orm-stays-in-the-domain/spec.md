@@ -64,8 +64,10 @@ Deliberately out:
 
 ## Slice-specific done conditions
 
-- Integration tests against a real database, with a contract whose table holds an extra column (built through slice 1's `ContractDefinition` table nodes): `findMany` with no `select` returns no extra column, on a plain model, a single-table base and variant, and a multi-table variant; `create` returns no extra column; passing the extra column's name to `create`, `where` (shorthand and callback) and `select` throws `ORM.FIELD_UNKNOWN`.
+- Integration tests against a real database, with a contract whose table holds an extra column (built through slice 1's `ContractDefinition` table nodes): `findMany` with no `select` and with `include` returns no extra column; `create` returns no extra column; passing the extra column's name to `create`, `where` (shorthand and callback) and `select` throws `ORM.FIELD_UNKNOWN`.
 - No `?? fieldName`-style or `?? columnName`-style fallback remains in `sql-orm-client/src` (grep check in the PR).
+
+Polymorphic models with extra columns are not covered by an integration test, because no source can produce one: the TypeScript builder has no inheritance, the PSL reader adds polymorphism after the build and takes no table nodes, and Prisma 7 has no inheritance. Unit tests cover the per-model column sets for single-table and multi-table variants with the existing polymorphic fixtures, where sibling variants' columns play the part of columns a model does not map. The integration case moves to TML-3469, when Prisma 8 syntax can declare extra columns.
 
 ## Dispatch plan
 
