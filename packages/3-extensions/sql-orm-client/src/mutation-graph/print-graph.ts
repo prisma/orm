@@ -104,8 +104,10 @@ function printResult(names: NodeNames, graph: Graph): string {
   if (result === undefined) {
     return 'result: not set';
   }
-  const node = result.node === undefined ? 'none' : nameOf(names, result.node);
-  return `result: ${node} ${result.form}`;
+  if (result.node === undefined) {
+    return 'result: none';
+  }
+  return `result: ${nameOf(names, result.node)} ${result.form}`;
 }
 
 export function printGraph(graph: Graph): string {

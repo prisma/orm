@@ -103,9 +103,7 @@ describe('printGraph', () => {
       const added = graph.add(update, new IntoWhere(find, update, [['id', 'id']]));
       graph.setResult({ node: added, form: 'first row', selectedFields: undefined, includes: [] });
 
-      expect(printGraph(graph)).toBe(
-        ['n1 Find user where id = 1', 'result: none first row'].join('\n'),
-      );
+      expect(printGraph(graph)).toBe(['n1 Find user where id = 1', 'result: none'].join('\n'));
     });
   });
 

@@ -2,7 +2,7 @@ import type { Contract } from '@internal/contract/types';
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
-import { resolvePolymorphismInfo } from './collection-contract';
+import { resolvePolymorphismInfo, resolveRowIdentityColumns } from './collection-contract';
 import { reloadMutationRowsByIdentities } from './collection-dispatch';
 import {
   mapPolymorphicRow,
@@ -24,6 +24,28 @@ function createMutationRowMapper(
   return polyInfo
     ? (row) => mapPolymorphicRow(contract, namespaceId, modelName, polyInfo, row, variantName)
     : (row) => mapStorageRowToModelFields(contract, namespaceId, modelName, row);
+}
+
+export function mutationReturningColumns(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  modelName: string,
+  tableName: string,
+  selectedFields: readonly string[] | undefined,
+  includes: readonly IncludeExpr[],
+): readonly string[] | undefined {
+  if (includes.length === 0) {
+    return selectedFields;
+  }
+  const identityColumns = resolveRowIdentityColumns(contract, namespaceId, tableName);
+  if (identityColumns.length === 0) {
+    throw ormError(
+      'ORM.ROW_IDENTITY_MISSING',
+      `Cannot load includes for the mutation result on model "${modelName}": table "${tableName}" has no primary key or unique constraint to key the include read-back on.`,
+      { meta: { model: modelName, table: tableName } },
+    );
+  }
+  return identityColumns;
 }
 
 interface DispatchMutationRowsOptions<Row> {

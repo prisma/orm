@@ -13,3 +13,17 @@ export const postTable: TableIdentity = {
   modelName: 'Post',
   variantName: undefined,
 };
+
+export const usersTable: TableIdentity = {
+  namespaceId: 'public',
+  tableName: 'users',
+  modelName: 'User',
+  variantName: undefined,
+};
+
+export const postsTable: TableIdentity = {
+  namespaceId: 'public',
+  tableName: 'posts',
+  modelName: 'Post',
+  variantName: undefined,
+};
