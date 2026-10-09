@@ -466,7 +466,7 @@ describe('TypeScriptRenderablePostgresMigration round-trip', () => {
     expect(ops[0]).toEqual(JSON.parse(JSON.stringify(op)));
   });
   it('a migration file written with sql values produces the same ops.json as one written with strings', {
-    timeout: timeouts.typeScriptCompilation,
+    timeout: timeouts.repeatedScriptRuns,
   }, async () => {
     const stringSource = handWrittenMigration(asStringLiteral);
     const sqlSource = handWrittenMigration(asSqlTemplate);
@@ -486,8 +486,12 @@ describe('TypeScriptRenderablePostgresMigration round-trip', () => {
     expect(fromStrings).toContain('length(\\"id\\") < 64');
     expect(fromStrings).toContain('NOT \\"locked\\"');
     expect(fromSql).toBe(fromStrings);
+  });
 
-    await writeTypecheckDir(tmpDir, sqlSource);
+  it('a migration file written with sql values typechecks against the live migration surface', {
+    timeout: timeouts.typeScriptCompilation,
+  }, async () => {
+    await writeTypecheckDir(tmpDir, handWrittenMigration(asSqlTemplate));
     await execFileAsync(tscPath, ['--project', tmpDir]);
   });
 });

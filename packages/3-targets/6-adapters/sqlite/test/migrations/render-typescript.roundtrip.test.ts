@@ -325,7 +325,7 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
     expect(ops).toEqual(expected);
   });
   it('a migration file written with sql values produces the same ops.json as one written with strings', {
-    timeout: timeouts.coldTransformImport,
+    timeout: timeouts.repeatedScriptRuns,
   }, async () => {
     const stringSource = handWrittenMigration(asStringLiteral);
     const sqlSource = handWrittenMigration(asSqlTemplate);
