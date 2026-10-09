@@ -455,7 +455,7 @@ describe('createModelAccessor', () => {
           'public',
           'User',
         )['name'],
-    ).toThrow(unmappedColumnPassed('User', 'name'));
+    ).toThrow(unmappedColumnPassed('User', 'users', 'name'));
   });
 
   it('combines relation shorthand fields with and() and rejects missing join arrays', () => {

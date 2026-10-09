@@ -8,6 +8,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { Collection } from '../src/collection';
+import { mapSelectedFieldsToColumns } from '../src/collection-column-mapping';
 import {
   columnOfCallerField,
   getAllTableColumns,
@@ -139,7 +140,20 @@ describe('the refusal of a name that is not a field', () => {
 
   it('says no field maps the name when it is a column of the model table', () => {
     expect(() => collection('User').select('legacy_key')).toThrow(
-      unmappedColumnPassed('User', 'legacy_key'),
+      unmappedColumnPassed('User', 'users', 'legacy_key'),
+    );
+  });
+
+  it('names the variant table that holds a column no field maps', () => {
+    const poly = buildMixedPolyContract();
+    expect(() => resolve(poly, 'Task', 'internal_note')).toThrow(
+      unmappedColumnPassed('Task', 'features', 'internal_note'),
+    );
+    expect(() =>
+      mapSelectedFieldsToColumns(poly, 'public', 'Task', undefined, ['internal_note']),
+    ).toThrow(unmappedColumnPassed('Task', 'features', 'internal_note'));
+    expect(() => resolve(poly, 'Bug', 'internal_note')).toThrow(
+      unmappedColumnPassed('Bug', 'features', 'internal_note'),
     );
   });
 

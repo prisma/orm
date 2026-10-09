@@ -236,6 +236,7 @@ export interface MockRuntime extends RuntimeQueryable {
  *   `assignee` relation (assignee_id → assignees.id, on the base table)
  * - Feature (MTI, table: features, value: feature) with `priority` field and
  *   an `assignee` relation (assignee_id → assignees.id, on the variant table)
+ * - `features.internal_note`, a column no field maps
  *
  * A non-polymorphic `Project` parent (table: projects_tbl) owns a `tasks`
  * relation targeting the polymorphic `Task`, so an include can be planned
@@ -383,6 +384,7 @@ export function buildMixedPolyContract(): TestContract {
       id: { many: false, dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
       priority: { many: false, dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
       assignee_id: { many: false, dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: true },
+      internal_note: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],
@@ -838,10 +840,10 @@ export function columnPassedForField(model: string, column: string, field: strin
   });
 }
 
-export function unmappedColumnPassed(model: string, column: string) {
+export function unmappedColumnPassed(model: string, table: string, column: string) {
   return expect.objectContaining({
     code: 'ORM.FIELD_UNKNOWN',
-    message: `Model "${model}" has no field "${column}". The table has a column "${column}", but no field of model "${model}" maps it, so the ORM cannot read or write it.`,
+    message: `Model "${model}" has no field "${column}". Table "${table}" has a column "${column}" that no field maps, so the ORM cannot read or write it.`,
     meta: { model, field: column },
   });
 }

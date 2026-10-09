@@ -332,7 +332,7 @@ export function columnOfCallerField(
 }
 
 /**
- * The refusal of a name a caller passed that is not a field of the model it addressed. When the name is the column of one of the fields in `fieldColumns`, or a column of the model's tables that no field maps, the message says so.
+ * The refusal of a name a caller passed that is not a field of the model it addressed. When the name is the column of one of the fields in `fieldColumns`, or a column that no field maps on a table of the model's hierarchy, the message says so and names the table.
  */
 export function callerFieldUnknown(
   contract: Contract<SqlStorage>,
@@ -352,9 +352,13 @@ export function callerFieldUnknown(
       { meta: { model: modelName, field: fieldName, fieldForColumn } },
     );
   }
-  const hint = getUnmappedColumns(contract, namespaceId, modelName).includes(fieldName)
-    ? `. The table has a column "${fieldName}", but no field of model "${modelName}" maps it, so the ORM cannot read or write it.`
-    : '';
+  const unmapped = getUnmappedColumns(contract, namespaceId, modelName).find(
+    ({ column }) => column === fieldName,
+  );
+  const hint =
+    unmapped === undefined
+      ? ''
+      : `. Table "${unmapped.table}" has a column "${fieldName}" that no field maps, so the ORM cannot read or write it.`;
   return ormError('ORM.FIELD_UNKNOWN', `${unknown}${hint}`, {
     meta: { model: modelName, field: fieldName },
   });
@@ -365,7 +369,7 @@ function getUnmappedColumns(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   modelName: string,
-): readonly string[] {
+): readonly { readonly table: string; readonly column: string }[] {
   return cachedFor(contract, ['unmappedColumns', namespaceId, modelName], () => {
     const root = hierarchyRootName(contract, namespaceId, modelName);
     const rootTable = domainModelTableInNamespace(contract, namespaceId, root);
@@ -374,7 +378,9 @@ function getUnmappedColumns(
     const tables = new Set([rootTable, ...[...(variants ?? [])].map((variant) => variant.table)]);
     return [...tables].flatMap((table) => {
       const read = new Set(getColumnsReadOnTable(contract, namespaceId, root, table));
-      return getAllTableColumns(contract, namespaceId, table).filter((column) => !read.has(column));
+      return getAllTableColumns(contract, namespaceId, table)
+        .filter((column) => !read.has(column))
+        .map((column) => ({ table, column }));
     });
   });
 }
