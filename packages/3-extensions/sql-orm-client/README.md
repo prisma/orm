@@ -187,7 +187,7 @@ Two restrictions apply on a many-to-many relation:
 
 - `r.disconnect()` without criteria is refused with `ORM.RELATION_MUTATION_INVALID`, and is a type error. Pass the criteria of the rows to disconnect.
 - `r.connect` does nothing for a row that is already linked when the junction table has a primary key or unique constraint over its link columns; without such a key it inserts another junction row.
-- `r.create` and `r.connect` are refused with `ORM.RELATION_MUTATION_UNSUPPORTED`, and are type errors, when the junction table has a column other than its two keys that is not nullable and has no default. `r.disconnect(criteria)` stays available.
+- `r.create` and `r.connect` are refused with `ORM.RELATION_MUTATION_UNSUPPORTED`, and are type errors, when the junction table has a column other than its link columns that is not nullable and has no default. `r.disconnect(criteria)` stays available.
 
 On a runtime that provides transactions, the parent write and its nested operations run in one transaction, so either all of them are applied or none is.
 
