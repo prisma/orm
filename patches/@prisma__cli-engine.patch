@@ -1,0 +1,36 @@
+diff --git a/dist/engine-DVJ5Ie5H.js b/dist/engine-DVJ5Ie5H.js
+index 062a272..6a03b9b 100644
+--- a/dist/engine-DVJ5Ie5H.js
++++ b/dist/engine-DVJ5Ie5H.js
+@@ -5593,8 +5593,10 @@ function emitErrored(invocation, raw) {
+ *  version travels as the run's single result frame. */
+ function settleVersion(spec, invocation) {
+ 	const { runtime, state } = invocation;
++	const binPath = currentBinPath();
+ 	if (state.format !== "json") {
+ 		runtime.stdout.write(`${spec.version}\n`);
++		if (binPath !== void 0) runtime.stdout.write(`Path: ${binPath}\n`);
+ 		return 0;
+ 	}
+ 	emitFrame(invocation, {
+@@ -5602,7 +5604,7 @@ function settleVersion(spec, invocation) {
+ 		envelope: {
+ 			ok: true,
+ 			commandId: "version",
+-			result: { version: spec.version },
++			result: { version: spec.version, ...(binPath !== void 0 ? { path: binPath } : {}) },
+ 			exitCode: 0,
+ 			diagnostics: [],
+ 			nextActions: []
+@@ -5612,6 +5614,11 @@ function settleVersion(spec, invocation) {
+ 	});
+ 	return 0;
+ }
++function currentBinPath() {
++	const entry = process.argv[1];
++	if (entry === void 0) return void 0;
++	return realpathOr(entry);
++}
+ /** What the user typed that no longer exists: a retired path, or a
+ *  retired flag on a command that still exists. */
+ function retiredInvocation(redirect) {
