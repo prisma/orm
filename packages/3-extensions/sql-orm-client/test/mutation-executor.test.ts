@@ -792,7 +792,7 @@ describe('mutation-executor', () => {
     });
   });
 
-  it('executeNestedUpdateMutation() passes a NOT NULL junction constraint failure through unwrapped', async () => {
+  it('executeNestedUpdateMutation() passes a NOT NULL violation on the junction insert of a connect through unchanged', async () => {
     const contract = buildManyToManyContract({
       junctionTable: 'parent_child',
       parentColumns: ['parent_id'],
@@ -804,8 +804,7 @@ describe('mutation-executor', () => {
     vi.spyOn(runtime, 'execute').mockImplementation((plan) => {
       const ast = (plan as { ast?: { kind: string; table?: { name: string } } }).ast;
       if (ast?.kind === 'insert' && ast.table?.name === 'parent_child') {
-        // Drivers normalize a NOT NULL violation to sqlState 23502, not the
-        // unique-violation 23505, so the connect wrap must leave it alone.
+        // Drivers normalize a NOT NULL violation to sqlState 23502.
         throw new SqlQueryError('NOT NULL constraint failed: parent_child.level', {
           sqlState: '23502',
         });
