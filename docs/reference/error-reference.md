@@ -1014,17 +1014,13 @@ A mutation that expected the database to return a row got none: `create()`/`upse
 
 A valid ORM method was called in a configuration that does not support it: mutating an MTI variant collection with a method that requires `createAll()`, passing `onConflict: 'skip'` to `createAll()` on an MTI variant collection, Mongo `upsert()` with dot-path field operations, a Mongo `upsert()` whose `create` sets a field that has an update default and whose update pulls by a match document (that upsert runs as one update pipeline, which can pull only a single value), a Mongo mutation carrying windowing (`orderBy`/`offset`/`limit`) or includes, or `variant()` called on a collection that already has a variant selected (SQL and Mongo ORMs; call it on the base collection instead; `reason: 'variant-already-selected'`, with `variant` and `selectedValue` naming the selected variant model and its discriminator value). Payload: `method`, `model`, `reason`, `field`.
 
-### ORM.RELATION_LINK_DUPLICATE
-
-A `connect()` nested mutation violated a unique constraint on the junction table: the junction link is likely already present. The original driver error is preserved as `cause`. Payload: `relation`, `junction`.
-
 ### ORM.RELATION_MUTATION_INVALID
 
-A nested relation mutation's input is malformed: a relation field without a mutator callback or returning an invalid descriptor, `create` without data, `connect`/`disconnect` with a missing or empty criterion, duplicate connect criteria resolving to the same junction link, or conflicting values for a junction column. Payload: `kind`, `relation`, `model`, `problem`, `junction`, `column`.
+A nested relation mutation's input is malformed: a relation field without a mutator callback or returning an invalid descriptor, `create` without data or with a row that is not an object, `connect`/`disconnect` with a missing or empty criterion, conflicting values for a junction column, an array of operations that contains a nested array or a value that is not an operation, or `updateAll` data that sets the field linking the related row to its parent. Payload: `kind`, `relation`, `model`, `problem`, `junction`, `column`, `index`, `fields`.
 
 ### ORM.RELATION_MUTATION_UNSUPPORTED
 
-A nested relation mutation kind is not supported in this position: `disconnect()` outside `update()` nested mutations, or `create()`/`connect()` through a junction table with required columns the relation API cannot populate (`disconnect()` stays available). Payload: `kind`, `relation`.
+A nested relation mutation kind is not supported in this position: `disconnect()`, `updateAll()` or `deleteAll()` outside `update()` nested mutations, `updateAll()` or `deleteAll()` on a to-one relation, or `create()`/`connect()` through a junction table with required columns the relation API cannot populate (`disconnect()` stays available). Payload: `kind`, `relation`, `reason`.
 
 ### ORM.RELATION_ROW_MISSING
 

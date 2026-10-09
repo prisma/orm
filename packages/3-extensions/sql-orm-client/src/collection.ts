@@ -11,7 +11,6 @@ import {
   BinaryExpr,
   ColumnRef,
   checkLimitOffset,
-  isWhereExpr,
   LiteralExpr,
   LockingClause,
   type LockOptionCapabilities,
@@ -24,7 +23,6 @@ import {
   lockStrengthCapabilities,
   lockWaitPolicyOf,
   type OrderByItem,
-  type ToWhereExpr,
   type WhereArg,
 } from '@internal/sql-relational-core/ast';
 import { type TraitExpression, toExpr } from '@internal/sql-relational-core/expression';
@@ -123,8 +121,8 @@ import {
   executeNestedCreateMutation,
   executeNestedUpdateMutation,
   hasNestedMutationCallbacks,
-  withMutationScope,
 } from './mutation-executor';
+import { withMutationScope } from './mutation-scope';
 import { assertCursorCompatibleOrder, assertDistinctOnCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
 import type { PreparedCollection } from './prepared-collection';
@@ -143,6 +141,7 @@ import {
   mergeAnnotations,
 } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
+import { applyCreateDefaults, applyUpdateDefaults, insertRowReturning } from './row-writes';
 import {
   type AggregateBuilder,
   type AggregateIncludeReducers,
@@ -179,46 +178,8 @@ import {
   type VariantNameForValue,
   type WithNsId,
 } from './types';
-import { normalizeWhereArg } from './where-interop';
+import { resolveWhereInput } from './where-interop';
 import { assertBulkWriteIgnoresNothing, assertRelationUpdateIgnoresNothing } from './write-guards';
-
-function applyCreateDefaults(
-  ctx: CollectionContext<Contract<SqlStorage>>,
-  namespaceId: string,
-  tableName: string,
-  rows: Record<string, unknown>[],
-  defaultValueCache = new Map<string, unknown>(),
-): void {
-  for (const row of rows) {
-    const applied = ctx.context.applyMutationDefaults({
-      op: 'create',
-      entry: tableName,
-      namespace: namespaceId,
-      values: row,
-      defaultValueCache,
-    });
-    for (const def of applied) {
-      row[def.field] = def.value;
-    }
-  }
-}
-
-function applyUpdateDefaults(
-  ctx: CollectionContext<Contract<SqlStorage>>,
-  namespaceId: string,
-  tableName: string,
-  values: Record<string, unknown>,
-): void {
-  const applied = ctx.context.applyMutationDefaults({
-    op: 'update',
-    entry: tableName,
-    namespace: namespaceId,
-    values,
-  });
-  for (const def of applied) {
-    values[def.field] = def.value;
-  }
-}
 
 type WhereDirectInput = WhereArg;
 
@@ -228,26 +189,6 @@ type LockMethodArgs<
 > = Capabilities extends LockStrengthCapabilities[Strength] & LockOptionCapabilities['of']
   ? [options?: LockWaitOptions<Capabilities>]
   : never;
-
-function isToWhereExprInput(value: unknown): value is ToWhereExpr {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'toWhereExpr' in value &&
-    typeof value.toWhereExpr === 'function'
-  );
-}
-
-function isWhereDirectInput(value: unknown): value is WhereDirectInput {
-  return (
-    (isWhereExpr(value) &&
-      typeof value === 'object' &&
-      value !== null &&
-      'accept' in value &&
-      typeof value.accept === 'function') ||
-    isToWhereExprInput(value)
-  );
-}
 
 type WriteConfigure = (meta: MetaBuilder<'write'>) => void;
 
@@ -455,22 +396,18 @@ export class CollectionBase<
         ) => WhereDirectInput)
       | ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
   ): Filtered<this> {
-    const whereArg =
-      typeof input === 'function'
-        ? input(
-            createModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>(
-              this.ctx.context,
-              this.namespaceId,
-              this.modelName,
-              this.state.variantName,
-            ),
-          )
-        : isWhereDirectInput(input)
-          ? input
-          : shorthandToWhereExpr(this.ctx.context, this.namespaceId, this.modelName, input);
-    const filter = normalizeWhereArg(whereArg, {
+    const filter = resolveWhereInput(input, {
       contract: this.contract,
       namespaceId: this.namespaceId,
+      accessor: () =>
+        createModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>(
+          this.ctx.context,
+          this.namespaceId,
+          this.modelName,
+          this.state.variantName,
+        ),
+      shorthand: (filters: ShorthandWhereFilter<TContract, State['nsId'], ModelName>) =>
+        shorthandToWhereExpr(this.ctx.context, this.namespaceId, this.modelName, filters),
     });
 
     if (!filter) {
@@ -1888,7 +1825,7 @@ export class CollectionBase<
     }
 
     const mappedRows = this.#mapCreateRows(rows);
-    applyCreateDefaults(this.ctx, this.namespaceId, this.tableName, mappedRows);
+    applyCreateDefaults(this.ctx.context, this.namespaceId, this.tableName, mappedRows, new Map());
     const { selectedForQuery: selectedForInsert, hiddenColumns } = this.#augmentMutationSelection();
     if (this.contract.capabilities?.['sql']?.['defaultInInsert'] !== true) {
       const plans = compileInsertReturningSplit(
@@ -2068,19 +2005,14 @@ export class CollectionBase<
         }
 
         const merged = await withMutationScope(runtime, async (scope) => {
-          applyCreateDefaults(collectionCtx, namespaceId, tableName, [baseRow], defaultValueCache);
-          const baseCompiled = compileInsertReturning(
-            contract,
+          const baseCreated = await insertRowReturning(
+            scope,
+            collectionCtx.context,
             namespaceId,
             tableName,
-            [baseRow],
-            undefined,
+            baseRow,
+            defaultValueCache,
           );
-          const baseResult = await queryPlanRows<Record<string, unknown>>(
-            scope,
-            baseCompiled,
-          ).toArray();
-          const baseCreated = baseResult[0];
           if (!baseCreated) {
             throw ormError(
               'ORM.MUTATION_ROW_MISSING',
@@ -2099,25 +2031,14 @@ export class CollectionBase<
           for (const pkColumn of pkColumns) {
             variantRow[pkColumn] = baseCreated[pkColumn];
           }
-          applyCreateDefaults(
-            collectionCtx,
+          const variantCreated = await insertRowReturning(
+            scope,
+            collectionCtx.context,
             namespaceId,
             variant.table,
-            [variantRow],
+            variantRow,
             defaultValueCache,
           );
-          const variantCompiled = compileInsertReturning(
-            contract,
-            namespaceId,
-            variant.table,
-            [variantRow],
-            undefined,
-          );
-          const variantResult = await queryPlanRows<Record<string, unknown>>(
-            scope,
-            variantCompiled,
-          ).toArray();
-          const variantCreated = variantResult[0];
           if (!variantCreated) {
             throw ormError(
               'ORM.MUTATION_ROW_MISSING',
@@ -2253,7 +2174,7 @@ export class CollectionBase<
       'resolved create-and-count inputs are model-field records for storage mapping'
     >(data);
     const mappedRows = this.#mapCreateRows(rows);
-    applyCreateDefaults(this.ctx, this.namespaceId, this.tableName, mappedRows);
+    applyCreateDefaults(this.ctx.context, this.namespaceId, this.tableName, mappedRows, new Map());
 
     if (this.contract.capabilities?.['sql']?.['defaultInInsert'] !== true) {
       const plans = compileInsertCountSplit(
@@ -2348,7 +2269,13 @@ export class CollectionBase<
       >(input.create),
     ]);
     const createValues = mappedCreateRows[0] ?? {};
-    applyCreateDefaults(this.ctx, this.namespaceId, this.tableName, [createValues]);
+    applyCreateDefaults(
+      this.ctx.context,
+      this.namespaceId,
+      this.tableName,
+      [createValues],
+      new Map(),
+    );
     const updateValues = mapModelDataToStorageRow(
       this.contract,
       this.namespaceId,
@@ -2357,7 +2284,7 @@ export class CollectionBase<
     );
     const hasUpdateValues = Object.keys(updateValues).length > 0;
     if (hasUpdateValues) {
-      applyUpdateDefaults(this.ctx, this.namespaceId, this.tableName, updateValues);
+      applyUpdateDefaults(this.ctx.context, this.namespaceId, this.tableName, updateValues);
     }
     const conflictColumns = resolveUpsertConflictColumns(
       this.contract,
@@ -2593,7 +2520,7 @@ export class CollectionBase<
       return new AsyncIterableResult(generator());
     }
 
-    applyUpdateDefaults(this.ctx, this.namespaceId, this.tableName, mappedData);
+    applyUpdateDefaults(this.ctx.context, this.namespaceId, this.tableName, mappedData);
 
     const { selectedForQuery: selectedForUpdate, hiddenColumns } = this.#augmentMutationSelection();
     const compiled = mergeAnnotations(
@@ -2658,7 +2585,7 @@ export class CollectionBase<
       return 0;
     }
 
-    applyUpdateDefaults(this.ctx, this.namespaceId, this.tableName, mappedData);
+    applyUpdateDefaults(this.ctx.context, this.namespaceId, this.tableName, mappedData);
 
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'updateAndCount');
 

@@ -23,6 +23,7 @@ import { plainAggregateExpr } from './aggregate-codecs';
 import {
   getFieldToColumnMap,
   isToOneCardinality,
+  type ResolvedRelation,
   resolveFieldToColumn,
   resolveModelRelations,
   resolveModelTableName,
@@ -44,15 +45,6 @@ import {
   type RelationFilterAccessor,
   type VariantAwareModelAccessor,
 } from './types';
-
-type ResolvedModelRelation = ReturnType<typeof resolveModelRelations>[string];
-type ResolvedModelRelationWithThrough = ResolvedModelRelation & {
-  through: NonNullable<ResolvedModelRelation['through']>;
-};
-
-function hasThrough(relation: ResolvedModelRelation): relation is ResolvedModelRelationWithThrough {
-  return relation.through !== undefined;
-}
 
 type RelationPredicateInput<
   TContract extends Contract<SqlStorage>,
@@ -441,7 +433,7 @@ function createRelationFilterAccessor<
   parentNamespaceId: string,
   parentModelName: ParentModelName,
   parentScope: ModelAccessorScope,
-  relation: ResolvedModelRelation,
+  relation: ResolvedRelation,
 ): RelationAccessor<TContract> {
   const relatedTableName = resolveModelTableName(
     context.contract,
@@ -491,7 +483,7 @@ function createOrderable(buildExpr: () => AnyExpression): Orderable {
 
 function relatedOrderableField<TContract extends Contract<SqlStorage>>(
   context: ExecutionContext<TContract>,
-  relation: ResolvedModelRelation,
+  relation: ResolvedRelation,
   relatedTableName: string,
   correlate: () => CorrelatedRelatedRows,
   fieldName: string,
@@ -519,7 +511,7 @@ function relatedOrderableField<TContract extends Contract<SqlStorage>>(
 
 function buildRelationCountExpr<TContract extends Contract<SqlStorage>>(
   context: ExecutionContext<TContract>,
-  relation: ResolvedModelRelation,
+  relation: ResolvedRelation,
   rows: CorrelatedRelatedRows,
   predicate: RelationPredicateInput<TContract, string, string> | undefined,
 ): AnyExpression {
@@ -550,10 +542,10 @@ function correlateRelatedRows<TContract extends Contract<SqlStorage>>(
   parentModelName: string,
   parentScope: ModelAccessorScope,
   relatedTableName: string,
-  relation: ResolvedModelRelation,
+  relation: ResolvedRelation,
 ): CorrelatedRelatedRows {
-  if (hasThrough(relation)) {
-    const { through } = relation;
+  const { through } = relation;
+  if (through !== undefined) {
     const { childScope, junctionBinding } = parentScope.forManyToManyRelation(
       relation.toNamespace,
       relatedTableName,
@@ -602,7 +594,7 @@ function correlateRelatedRows<TContract extends Contract<SqlStorage>>(
 
 function buildExistsExpr<TContract extends Contract<SqlStorage>>(
   context: ExecutionContext<TContract>,
-  relation: ResolvedModelRelation,
+  relation: ResolvedRelation,
   rows: CorrelatedRelatedRows,
   mode: RelationFilterMode,
   predicate: RelationPredicateInput<TContract, string, string> | undefined,
@@ -772,7 +764,7 @@ function buildJoinWhere<TContract extends Contract<SqlStorage>>(
   parentModelName: string,
   parentTable: SqlTableBinding,
   relatedTable: SqlTableBinding,
-  relation: ResolvedModelRelation,
+  relation: ResolvedRelation,
 ): AnyExpression {
   const localFields = relation.on?.localFields ?? [];
   const targetFields = relation.on?.targetFields ?? [];
@@ -819,7 +811,7 @@ function buildJoinWhere<TContract extends Contract<SqlStorage>>(
 
 function firstTargetColumn<TContract extends Contract<SqlStorage>>(
   contract: TContract,
-  relation: ResolvedModelRelation,
+  relation: ResolvedRelation,
 ): string | undefined {
   const targetFields = relation.on?.targetFields;
   const firstField = targetFields?.[0];

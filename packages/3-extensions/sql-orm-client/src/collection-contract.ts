@@ -250,6 +250,16 @@ export function getColumnToFieldMap(
   return cached;
 }
 
+export function resolveColumnToField(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  modelName: string,
+  columnName: string,
+): string {
+  const columnToField = getColumnToFieldMap(contract, namespaceId, modelName);
+  return columnToField[columnName] ?? columnName;
+}
+
 const completeColumnToFieldCache = new WeakMap<object, Map<string, Record<string, string>>>();
 
 /**
@@ -278,11 +288,11 @@ export function getCompleteColumnToFieldMap(
   return cached;
 }
 
-interface ResolvedThrough extends ContractRelationThrough {
+export interface ResolvedThrough extends ContractRelationThrough {
   readonly requiredPayloadColumns: readonly string[];
 }
 
-interface ResolvedRelation {
+export interface ResolvedRelation {
   readonly to: string;
   readonly toNamespace: string;
   readonly cardinality: RelationCardinalityTag | undefined;
@@ -578,6 +588,25 @@ export function resolveRowIdentityColumns(
     }
   }
   return [];
+}
+
+export function hasUniqueKeyOverColumns(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  tableName: string,
+  columns: readonly string[],
+): boolean {
+  const table = resolveTableForContract(contract, namespaceId, tableName)?.table;
+  if (table === undefined) {
+    return false;
+  }
+  const wanted = new Set(columns);
+  return [table.primaryKey, ...table.uniques].some(
+    (key) =>
+      key !== undefined &&
+      key.columns.length === wanted.size &&
+      key.columns.every((column) => wanted.has(column)),
+  );
 }
 
 export function assertReturningCapability(contract: Contract<SqlStorage>, action: string): void {

@@ -164,6 +164,77 @@ The option needs the contract capability `insertOnConflictSkip`, and `insertOnCo
 
 The optional `configure` callback may still be passed in second position when there are no options.
 
+## Nested writes
+
+A relation field in `create()` or `update()` data takes a callback. The callback receives a mutator for that relation and returns the operation to apply to it.
+
+```ts
+await db.User.where({ id: 1 }).update({
+  name: 'Alice',
+  posts: (posts) => posts.create({ title: 'Hello' }),
+});
+```
+
+| Operation | Available in | Relations |
+| --- | --- | --- |
+| `r.create(data)` | `create()`, `update()` | all |
+| `r.connect(criteria)` | `create()`, `update()` | all |
+| `r.disconnect(criteria?)` | `update()` | all |
+| `r.where(w).updateAll(data)`, `r.updateAll(data)` | `update()` | to-many |
+| `r.where(w).deleteAll()`, `r.deleteAll()` | `update()` | to-many |
+
+Two restrictions apply on a many-to-many relation:
+
+- `r.disconnect()` without criteria is refused with `ORM.RELATION_MUTATION_INVALID`, and is a type error. Pass the criteria of the rows to disconnect.
+- `r.connect` does nothing for a row that is already linked when the junction table has a primary key or unique constraint over its link columns; without such a key it inserts another junction row.
+- `r.create` and `r.connect` are refused with `ORM.RELATION_MUTATION_UNSUPPORTED`, and are type errors, when the junction table has a column other than its link columns that is not nullable and has no default. `r.disconnect(criteria)` stays available.
+
+On a runtime that provides transactions, the parent write and its nested operations run in one transaction, so either all of them are applied or none is.
+
+### Updating and deleting related rows
+
+`updateAll` and `deleteAll` change or delete only rows related to the record being updated. On a one-to-many relation, a row is related when its foreign key equals that record's key. On a many-to-many relation, a row is related when the junction table has a row holding both that record's key and the row's key. A row that matches the filter but is related only to another record is not changed. A row related to this record and also to other records is changed.
+
+```ts
+await db.User.where({ id: 1 }).update({
+  posts: (posts) => posts.where({ published: false }).updateAll({ published: true }),
+});
+
+await db.User.where({ id: 1 }).update({
+  posts: (posts) => posts.where((post) => post.title.like('Draft%')).deleteAll(),
+});
+```
+
+`where` takes the same inputs as a collection's `where`: a callback over the related model, a field/value object, or an expression. Chained `where` calls combine with AND.
+
+Unlike a collection's `updateAll` and `deleteAll`, the nested forms do not require `where`. Without it they apply to every related row:
+
+```ts
+await db.User.where({ id: 1 }).update({
+  posts: (posts) => posts.deleteAll(),
+});
+```
+
+`updateAll` data is the related model's own fields. It cannot set the foreign-key field that refers to the parent; that is refused with `ORM.RELATION_MUTATION_INVALID`. `updateAll` with no fields to set changes no rows. It is not an error when no row matches.
+
+Both operations are refused with `ORM.RELATION_MUTATION_UNSUPPORTED` inside `create()` and on a to-one relation. With an emitted `contract.d.ts` these are also type errors.
+
+On a many-to-many relation, `deleteAll` deletes the related rows and does not delete or change junction rows itself. What happens to their junction rows is decided by the foreign-key action in your schema: with a cascading foreign key they are removed, and with a restricting one the database refuses the delete and the whole `update()` is rolled back. When the junction table has no foreign key to the related table, `deleteAll` deletes the related rows and their junction rows remain, holding keys of rows that no longer exist. Declare a foreign key with a cascading delete on the junction table so that the junction rows are removed with the rows they refer to.
+
+### Several operations on one relation
+
+A callback may return an array of operations. They are applied in array order, each after the previous one has been written. An empty array applies no operation.
+
+```ts
+await db.User.where({ id: 1 }).update({
+  posts: (posts) => [
+    posts.where({ published: false }).deleteAll(),
+    posts.create({ title: 'Fresh start' }),
+    posts.updateAll({ featured: false }),
+  ],
+});
+```
+
 ## Prepared row descriptions
 
 Built-in collection chains expose terminal-only `.prepared.all(configure?)`, `.prepared.first(filter?, configure?)` and `.prepared.firstOrThrow(filter?, configure?)` views. They synchronously return a `Preparable<DbRow, Result>` without executing it: a description containing a SQL `plan` and a required `consume` function. The description is not itself a `SqlQueryPlan`. Filters, projection, includes, variants, first-row limit replacement and read annotations use the ordinary row pipeline.

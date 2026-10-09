@@ -1,19 +1,43 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type {
+  FilteredRelationMutator,
   MutationCreateInput,
   RelationMutation,
   RelationMutationConnect,
   RelationMutationCreate,
   RelationMutationDisconnect,
+  RelationMutationFilter,
+  RelationMutationResult,
+  RelationMutationUpdateAllData,
   RelationMutator,
 } from './types';
+
+function createFilteredRelationMutator<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+>(
+  filters: readonly RelationMutationFilter<TContract, ModelName>[],
+): FilteredRelationMutator<TContract, ModelName> {
+  return {
+    where(input: RelationMutationFilter<TContract, ModelName>) {
+      return createFilteredRelationMutator<TContract, ModelName>([...filters, input]);
+    },
+    updateAll(data: RelationMutationUpdateAllData<TContract, ModelName>) {
+      return { kind: 'updateAll', filters, data: { ...data } };
+    },
+    deleteAll() {
+      return { kind: 'deleteAll', filters };
+    },
+  };
+}
 
 export function createRelationMutator<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
 >(): RelationMutator<TContract, ModelName> {
   return {
+    ...createFilteredRelationMutator<TContract, ModelName>([]),
     create(
       data:
         | MutationCreateInput<TContract, ModelName>
@@ -50,26 +74,24 @@ export function createRelationMutator<
 export function isRelationMutationDescriptor(
   value: unknown,
 ): value is RelationMutation<Contract<SqlStorage>, string> {
-  if (!value || typeof value !== 'object') {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false;
   }
 
   const candidate = value as { kind?: unknown };
-  if (
-    candidate.kind !== 'create' &&
-    candidate.kind !== 'connect' &&
-    candidate.kind !== 'disconnect'
-  ) {
-    return false;
-  }
-
-  return true;
+  return (
+    candidate.kind === 'create' ||
+    candidate.kind === 'connect' ||
+    candidate.kind === 'disconnect' ||
+    candidate.kind === 'updateAll' ||
+    candidate.kind === 'deleteAll'
+  );
 }
 
 export function isRelationMutationCallback(
   value: unknown,
 ): value is (
   mutator: RelationMutator<Contract<SqlStorage>, string>,
-) => RelationMutation<Contract<SqlStorage>, string> {
+) => RelationMutationResult<Contract<SqlStorage>, string> {
   return typeof value === 'function';
 }
