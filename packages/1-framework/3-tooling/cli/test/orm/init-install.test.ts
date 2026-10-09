@@ -36,6 +36,9 @@ let script: ScriptedResult[];
 const PNPM_WORKSPACE_LEAK =
   'ERR_PNPM_WORKSPACE_PKG_NOT_FOUND  In : "@prisma/orm-postgres@workspace:*" is in the dependencies but no package named "@prisma/orm-postgres" is present in the workspace';
 
+const PNPM_IGNORED_BUILDS =
+  'ERR_PNPM_IGNORED_BUILDS  Ignored build scripts: esbuild@0.25.11, msgpackr-extract@3.0.3, workerd@1.20251003.0';
+
 beforeEach(() => {
   projectDir = createTestProjectDir('orm-init-install');
   calls = [];
@@ -321,6 +324,81 @@ describe('init installs', () => {
 
         expect(run.exitCode).toBe(4);
         expect(calls).toHaveLength(1);
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'retries the pair with npm when pnpm reports ignored builds',
+      async () => {
+        script = [{ exitCode: 1, stderr: PNPM_IGNORED_BUILDS }];
+
+        const run = await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
+
+        expect(run.exitCode).toBe(0);
+        expect(calls.map((call) => `${call.file} ${call.args.join(' ')}`)).toEqual([
+          'pnpm add @prisma/orm-postgres dotenv',
+          'npm add @prisma/orm-postgres dotenv',
+          'npm add -D prisma@latest @types/node',
+          'npm add -D @prisma/cli-engine@latest',
+        ]);
+        expect(run.events).toContainEqual(
+          expect.objectContaining({
+            kind: 'message',
+            severity: 'warn',
+            text: expect.stringContaining('ERR_PNPM_IGNORED_BUILDS'),
+          }),
+        );
+        expect(run.events).toContainEqual(
+          expect.objectContaining({
+            kind: 'message',
+            severity: 'warn',
+            text: expect.stringContaining('allowBuilds'),
+          }),
+        );
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'keeps registry credentials out of the ignored-builds warning',
+      async () => {
+        script = [
+          {
+            exitCode: 1,
+            stderr: `${PNPM_IGNORED_BUILDS} https://alice:hunter2@registry.example.com/ //registry.npmjs.org/:_authToken=npm_realsecret`,
+          },
+        ];
+
+        const run = await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
+        const warnings = run.presented?.data;
+
+        expect(JSON.stringify(warnings)).not.toContain('hunter2');
+        expect(JSON.stringify(warnings)).not.toContain('npm_realsecret');
+        expect(warnings).toMatchObject({
+          warnings: expect.arrayContaining([expect.stringContaining('ERR_PNPM_IGNORED_BUILDS')]),
+        });
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'completes at exit 4 with retried warning when npm fails after ignored builds',
+      async () => {
+        script = [
+          { exitCode: 1, stderr: PNPM_IGNORED_BUILDS },
+          { exitCode: 1, stderr: 'npm ERR! 404 Not Found' },
+        ];
+
+        const run = await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
+
+        expect(run.exitCode).toBe(4);
+        expect(envelopeOf(run)).toMatchObject({
+          diagnostics: [{ code: 'CLI.INIT_INSTALL_FAILED' }],
+        });
+        expect(run.presented?.data).toMatchObject({
+          warnings: expect.arrayContaining([expect.stringContaining('ERR_PNPM_IGNORED_BUILDS')]),
+        });
       },
       timeouts.coldTransformImport,
     );
