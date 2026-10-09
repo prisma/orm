@@ -1,0 +1,66 @@
+{
+  "files": ["auth.prisma", "session.prisma", "post.prisma", "shop.prisma", "roles.prisma"],
+  "steps": [
+    {
+      "id": "13.1",
+      "kind": "definition",
+      "file": "shop.prisma",
+      "at": "pg.enum(Order|Status)"
+    },
+    {
+      "id": "13.2",
+      "kind": "references",
+      "file": "shop.prisma",
+      "at": "pg.enum(Order|Status)",
+      "includeDeclaration": true
+    },
+    {
+      "id": "13.3",
+      "kind": "references",
+      "file": "shop.prisma",
+      "at": "native_enum Order|Status",
+      "includeDeclaration": false
+    },
+    {
+      "id": "13.4",
+      "kind": "prepareRename",
+      "file": "shop.prisma",
+      "at": "pg.enum(Order|Status)"
+    },
+    {
+      "id": "13.5",
+      "kind": "change",
+      "file": "shop.prisma",
+      "replace": "pg.enum(OrderStatus)",
+      "with": "pg.enum(NoSuchEnum) "
+    },
+    {
+      "id": "13.6",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "13.7",
+      "kind": "change",
+      "file": "shop.prisma",
+      "replace": "pg.enum(NoSuchEnum) ",
+      "with": "pg.enum(OrderStatus)"
+    },
+    {
+      "id": "13.8",
+      "kind": "change",
+      "file": "session.prisma",
+      "replace": "    userId Int\n",
+      "with": "    userId Int\n    status pg.enum(OrderStatus)\n"
+    },
+    {
+      "id": "13.9",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "13.10",
+      "kind": "definition",
+      "file": "session.prisma",
+      "at": "pg.enum(Order|Status)"
+    }
+  ]
+}

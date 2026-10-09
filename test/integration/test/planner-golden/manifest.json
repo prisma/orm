@@ -149,6 +149,7 @@
   "test/integration/test/authoring/parity/rls/expected.contract.json": "b3bab65d3dfb451dc724f34ea1b4b2da15d8cf8ec1fd0f170073c7cae5a4ac7e",
   "test/integration/test/authoring/side-by-side/postgres/contract.json": "164811a8eefa9ec5a0aff40d2dd8b264595e7c666214feb754f5e6d6eed5933e",
   "test/integration/test/date-time-defaults/_fixture-before-canonical-form/emitted-before/contract.json": "2405c147a4744b916784a6e70a18eb6efe19218d6923a3f52705ba6f2d7bff4a",
+  "test/integration/test/enum-members/_fixture-native-enums/generated/contract.json": "cd9980a35b5b056cf5cbe8e475f0073b0390b0dc4996a2b971050e6fc58676f6",
   "test/integration/test/enum-members/_fixture-postgres/generated/contract.json": "69387f51566dabfc7ccf1663762644f7eb4b6782ef0aea6a67c93dbe7053a1d0",
   "test/integration/test/enum-members/_fixture-sqlite/generated/contract.json": "40430a7ce5304c84f47d782ec2e847ff1555c740acf864244a3960e0057b61f9",
   "test/integration/test/enum-order-by/_fixture/generated/contract.json": "dbc54c0ae7817573a031399ac5931927041d5c89634b53b219f5bae011b54fd5",

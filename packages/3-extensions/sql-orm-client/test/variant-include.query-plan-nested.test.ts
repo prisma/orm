@@ -41,9 +41,9 @@ describe('nested variant-owned include correlation', () => {
       contract,
       getTestAggregates(),
       'public',
+      'Project',
       'projects_tbl',
       { ...emptyState(), includes: [tasksInclude(nested)], selectedFields: ['name'] },
-      'Project',
     );
     const childRows = childRowsFor(plan.ast, 'tasks');
     const assigneeAggregate = rowAggregate('assignee', assigneeRows('features', 'assignee_id'), [
@@ -78,9 +78,9 @@ describe('nested variant-owned include correlation', () => {
       contract,
       getTestAggregates(),
       'public',
+      'Project',
       'projects_tbl',
       { ...emptyState(), includes: [tasksInclude(nested)], selectedFields: ['name'] },
-      'Project',
     );
     const childRows = childRowsFor(plan.ast, 'tasks');
     const baseProjection = [
@@ -146,9 +146,9 @@ describe('nested variant-owned include correlation', () => {
       contract,
       getTestAggregates(),
       'public',
+      'Project',
       'projects_tbl',
       { ...emptyState(), includes: [tasksInclude(nested)], selectedFields: ['name'] },
-      'Project',
     );
     const childRows = childRowsFor(plan.ast, 'tasks');
 
@@ -199,9 +199,9 @@ describe('nested variant-owned include correlation', () => {
       contract,
       getTestAggregates(),
       'public',
+      'Project',
       'projects_tbl',
       { ...emptyState(), includes: [tasksInclude(nested)], selectedFields: ['name'] },
-      'Project',
     );
     const childRows = childRowsFor(plan.ast, 'tasks');
     const labelsProjection = childRows.projection.find((item) => item.alias === 'labels');

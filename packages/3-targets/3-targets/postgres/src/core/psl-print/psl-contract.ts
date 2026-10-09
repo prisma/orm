@@ -58,7 +58,6 @@ import {
   refuseUntravelledForeignKeys,
   refuseUnwritableMappedName,
   refuseUnwritableName,
-  refuseUnwrittenExecutionDefaults,
   refuseUnwrittenNamespaces,
 } from './refusals';
 import {
@@ -83,7 +82,6 @@ interface ContractModels {
   readonly relationsByModel: ReadonlyMap<string, readonly ModelRelation[]>;
   readonly pinned: ReadonlySet<string>;
   readonly executionDefaults: ReadonlyMap<string, ExecutionMutationDefault>;
-  readonly writtenExecutionDefaults: Set<ExecutionMutationDefault>;
   readonly defaultDomainEnums: Readonly<Record<string, ContractEnum>>;
   readonly domainEnumValues: ReadonlyMap<string, readonly unknown[]>;
 }
@@ -150,7 +148,6 @@ function buildModel(
       typeMap: all.typeMap,
       context: all.context,
       executionDefaults: all.executionDefaults,
-      writtenExecutionDefaults: all.writtenExecutionDefaults,
       defaultDomainEnumNames: new Set(Object.keys(all.defaultDomainEnums)),
       namedTypes: all.contract.storage.types ?? {},
     }),
@@ -314,7 +311,6 @@ export function buildPostgresPslContract(
     relationsByModel: byModel,
     pinned: resolvePinnedRelations(relations, byModel),
     executionDefaults: executionDefaultsByColumn(contract),
-    writtenExecutionDefaults: new Set<ExecutionMutationDefault>(),
     defaultDomainEnums,
     domainEnumValues: new Map(
       Object.entries(defaultDomainEnums).map(([name, domainEnum]) => [
@@ -347,7 +343,6 @@ export function buildPostgresPslContract(
 
   refuseUnmodelledTablesAndColumns(contract, models, all.variants);
   refuseUnwrittenNamespaces({ contract, models, writtenStorageNamespaces });
-  refuseUnwrittenExecutionDefaults(contract, all.writtenExecutionDefaults);
   refuseContractMeta(contract);
   refuseUnderivedRoots(contract, models, all.variants);
 

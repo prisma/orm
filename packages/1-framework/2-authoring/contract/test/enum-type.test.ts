@@ -1,6 +1,7 @@
 import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import {
+  assertEnumMembersStoredUniquely,
   bindEnumType,
   ENUM_TYPE_HANDLE_BRAND,
   type EnumTypeHandle,
@@ -150,25 +151,104 @@ describe('enumType validation errors', () => {
     });
   });
 
-  it('rejects a duplicate member value with CONTRACT.ENUM_INVALID', () => {
-    let thrown: unknown;
-    try {
-      enumType('Status', textCodec, member('active', 'x'), member('inactive', 'x'));
-    } catch (error) {
-      thrown = error;
-    }
-    expect(isStructuredError(thrown)).toBe(true);
-    if (!isStructuredError(thrown)) {
-      throw new Error('expected a structured error');
-    }
-    expect(thrown.code).toBe('CONTRACT.ENUM_INVALID');
-    expect(thrown.message).toBe(
-      'enumType("Status"): duplicate member value "x". Member values must be unique.',
+  it('accepts members that differ by SameValueZero, leaving stored forms to the contract build', () => {
+    const shapes = enumType(
+      'Shape',
+      { codecId: 'pg/jsonb@1' },
+      member('Square', { sides: 4 }),
+      member('Triangle', { sides: 3 }),
     );
-    expect(thrown.meta).toEqual({
-      enumName: 'Status',
-      member: 'x',
-      reason: 'duplicate-member-value',
+    const moments = enumType(
+      'Moment',
+      { codecId: 'pg/timestamptz@1' },
+      member('Start', new Date('2024-01-01T00:00:00.000Z')),
+      member('JustAfter', new Date('2024-01-01T00:00:00.001Z')),
+    );
+    const mixed = enumType('Mixed', textCodec, member('Number', 1), member('Text', '1'));
+
+    expect({
+      shapes: shapes.values,
+      moments: moments.names,
+      mixed: { values: mixed.values, number: mixed.nameOf(1), text: mixed.nameOf('1') },
+    }).toEqual({
+      shapes: [{ sides: 4 }, { sides: 3 }],
+      moments: ['Start', 'JustAfter'],
+      mixed: { values: [1, '1'], number: 'Number', text: 'Text' },
     });
+  });
+
+  it('names a NaN value as NaN when two members have it', () => {
+    expect(() =>
+      enumType(
+        'Ratio',
+        { codecId: 'pg/float8@1' },
+        member('Unknown', Number.NaN),
+        member('Missing', Number.NaN),
+      ),
+    ).toThrow(
+      'enumType("Ratio"): members "Unknown" and "Missing" have the same value NaN. Member values must be unique.',
+    );
+  });
+
+  it('names a value JSON cannot write by its string form', () => {
+    const marker = Symbol('marker');
+    const cyclic: { self?: unknown } = {};
+    cyclic.self = cyclic;
+
+    expect(() =>
+      enumType('Marker', textCodec, member('First', marker), member('Second', marker)),
+    ).toThrow(
+      'enumType("Marker"): members "First" and "Second" have the same value Symbol(marker). Member values must be unique.',
+    );
+    expect(() =>
+      enumType('Node', textCodec, member('First', cyclic), member('Second', cyclic)),
+    ).toThrow(
+      'enumType("Node"): members "First" and "Second" have the same value [object Object]. Member values must be unique.',
+    );
+  });
+
+  it('rejects two members equal by SameValueZero with CONTRACT.ENUM_INVALID', () => {
+    expect(() =>
+      enumType('Status', textCodec, member('Active', 'x'), member('Inactive', 'x')),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ENUM_INVALID',
+        message:
+          'enumType("Status"): members "Active" and "Inactive" have the same value "x". Member values must be unique.',
+        meta: {
+          enumName: 'Status',
+          members: ['Active', 'Inactive'],
+          reason: 'duplicate-member-value',
+        },
+      }),
+    );
+  });
+});
+
+describe('assertEnumMembersStoredUniquely', () => {
+  it('accepts members whose stored forms differ', () => {
+    expect(() =>
+      assertEnumMembersStoredUniquely('Shape', [
+        { name: 'Square', stored: { sides: 4 } },
+        { name: 'Triangle', stored: { sides: 3 } },
+      ]),
+    ).not.toThrow();
+  });
+
+  it('refuses two members that store the same value, naming both and the stored form', () => {
+    expect(() =>
+      assertEnumMembersStoredUniquely('Shape', [
+        { name: 'Square', stored: { width: 2, height: 2 } },
+        { name: 'Triangle', stored: { sides: 3 } },
+        { name: 'Box', stored: { height: 2, width: 2 } },
+      ]),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ENUM_INVALID',
+        message:
+          'enumType("Shape"): members "Square" and "Box" both store {"height":2,"width":2}. Member values must be unique as their codec stores them.',
+        meta: { enumName: 'Shape', members: ['Square', 'Box'], reason: 'duplicate-member-value' },
+      }),
+    );
   });
 });

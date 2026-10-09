@@ -12,11 +12,10 @@ import {
 import { describe, expect, it } from 'vitest';
 import { all, and, not, or, shorthandToWhereExpr } from '../src/filters';
 import { createModelAccessor } from '../src/model-accessor';
-import { getTestContext, getTestContract, withPatchedDomainModels } from './helpers';
+import { columnPassedForField, fieldUnknown, getTestContext } from './helpers';
 import { unboundTables } from './unbound-tables';
 
 describe('filters', () => {
-  const contract = getTestContract();
   const context = getTestContext();
 
   function paramRef(table: string, column: string, value: unknown): ParamRef {
@@ -163,11 +162,10 @@ describe('filters', () => {
     ).toThrow(/does not support equality comparisons/);
   });
 
-  it('shorthandToWhereExpr() rejects equality-shorthand on a non-scalar field type', () => {
-    // When `fieldType?.kind !== 'scalar'` (e.g. the field doesn't have a codec id resolvable from a scalar type), the trait array is empty and the filter throws — this models a relation-shorthand attempt through the scalar code path.
+  it('shorthandToWhereExpr() refuses a relation name, which is not a field', () => {
     expect(() =>
       shorthandToWhereExpr(context, 'public', 'User', { posts: 'oops' } as never),
-    ).toThrow(/does not support equality comparisons/);
+    ).toThrow(fieldUnknown('User', 'posts'));
   });
 
   it('shorthandToWhereExpr() rejects equality-shorthand when no descriptor is registered for the codec', () => {
@@ -185,7 +183,7 @@ describe('filters', () => {
     ).toThrow(/does not support equality comparisons/);
   });
 
-  it('shorthandToWhereExpr() supports storage and model-name fallbacks', () => {
+  it('shorthandToWhereExpr() maps fields and refuses a name that is not a field', () => {
     expect(shorthandToWhereExpr(context, 'public', 'User', {})).toBeUndefined();
 
     expect(
@@ -194,24 +192,8 @@ describe('filters', () => {
       }),
     ).toEqual(BinaryExpr.eq(ColumnRef.of('users', 'email'), LiteralExpr.of('alice@example.com')));
 
-    const withoutStorageFields = withPatchedDomainModels(contract, (models) => ({
-      ...models,
-      User: {
-        ...(models['User'] as Record<string, unknown>),
-        fields: {},
-        storage: { namespaceId: 'public', table: 'users' },
-      },
-    }));
-
-    expect(
-      shorthandToWhereExpr(
-        { ...context, contract: withoutStorageFields } as never,
-        'public',
-        'User',
-        {
-          unknownField: null,
-        } as never,
-      ),
-    ).toEqual(NullCheckExpr.isNull(ColumnRef.of('users', 'unknownField')));
+    expect(() =>
+      shorthandToWhereExpr(context, 'public', 'User', { invited_by_id: null } as never),
+    ).toThrow(columnPassedForField('User', 'invited_by_id', 'invitedById'));
   });
 });

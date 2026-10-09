@@ -369,6 +369,16 @@ async function run() {
         const same = [...keys].sort().join('|') === [...applied].sort().join('|');
         console.log(`  same positions as the applied edit: ${same ? 'yes' : 'NO'}`);
       }
+    } else if (step.kind === 'definition') {
+      const targets = (await result('textDocument/definition', params)) ?? [];
+      console.log(`\n[${step.id}] definition ${where}`);
+      console.log(`  raw: ${shorten(targets)}`);
+      for (const target of targets) {
+        console.log(
+          `  ${render(target.targetUri ?? target.uri, target.targetSelectionRange ?? target.range)}`,
+        );
+      }
+      if (targets.length === 0) console.log('  (none)');
     } else if (step.kind === 'prepareRename') {
       const response = await request('textDocument/prepareRename', params);
       console.log(`\n[${step.id}] prepareRename ${where}`);

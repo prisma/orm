@@ -36,8 +36,10 @@ import { InternalError, isInternalError } from '@internal/utils/internal-error';
 import { resolveAggregate } from './aggregate-codecs';
 import { emptyAggregateResult } from './aggregate-empty-result';
 import {
-  getColumnToFieldMap,
-  getFieldToColumnMap,
+  addressedModelName,
+  fieldOfColumn,
+  getColumnsReadOnTable,
+  getModelColumnFields,
   isToOneCardinality,
   resolvePolymorphismInfo,
   resolveRowIdentityColumns,
@@ -89,7 +91,7 @@ function describeExecutionRows<Row>(
   const polyInfo = resolvePolymorphismInfo(contract, namespaceId, modelName);
 
   if (state.includes.length === 0) {
-    const compiled = compileSelect(contract, namespaceId, tableName, state, modelName);
+    const compiled = compileSelect(contract, namespaceId, modelName, tableName, state);
     const mapper = polyInfo
       ? (rawRow: Record<string, unknown>) =>
           blindCast<
@@ -117,9 +119,9 @@ function describeExecutionRows<Row>(
     contract,
     context.aggregateDescriptors,
     namespaceId,
+    modelName,
     tableName,
     state,
-    modelName,
   );
   return {
     plan,
@@ -217,15 +219,23 @@ function createPreparedIncludeConsumer(
     include.nested.variantName,
   );
   const bindings = deferResolution(() => {
-    const tables = contract.storage.namespaces[include.relatedNamespaceId]?.entries.table;
-    const keys = new Set(Object.keys(tables?.[include.relatedTableName]?.columns ?? {}));
-    const polyInfo = resolvePolymorphismInfo(
-      contract,
-      include.relatedNamespaceId,
-      include.relatedModelName,
+    const namespace = include.relatedNamespaceId;
+    const keys = new Set(
+      getColumnsReadOnTable(
+        contract,
+        namespace,
+        addressedModelName(include.relatedModelName, include.nested.variantName),
+        include.relatedTableName,
+      ),
     );
+    const polyInfo = resolvePolymorphismInfo(contract, namespace, include.relatedModelName);
     for (const variant of polyInfo?.mtiVariants ?? []) {
-      for (const column of Object.keys(tables?.[variant.table]?.columns ?? {})) {
+      for (const column of getColumnsReadOnTable(
+        contract,
+        namespace,
+        variant.modelName,
+        variant.table,
+      )) {
         keys.add(`${variant.table}__${column}`);
       }
     }
@@ -276,22 +286,22 @@ function createPreparedIncludedRowDecoder(
   const namespace = include.relatedNamespaceId;
   const model = include.relatedModelName;
   if (resolvePolymorphismInfo(contract, namespace, model)) return undefined;
-  const fieldToColumn = getFieldToColumnMap(contract, namespace, model);
-  const columnToField = getColumnToFieldMap(contract, namespace, model);
-  const fields = include.nested.selectedFields ?? Object.keys(fieldToColumn);
-  const columns = fields.map((field) =>
-    Object.hasOwn(fieldToColumn, field) ? (fieldToColumn[field] ?? field) : field,
-  );
+  const columnToField = getModelColumnFields(contract, namespace, model);
+  const columns =
+    include.nested.selectedFields ??
+    getColumnsReadOnTable(contract, namespace, model, include.relatedTableName);
   const aliases = include.nested.includes.map((child) => child.relationName);
   const table = contract.storage.namespaces[namespace]?.entries.table?.[include.relatedTableName];
   if (aliases.some((alias) => table?.columns[alias] !== undefined)) return undefined;
   const keys = [...columns, ...aliases];
   if (keys.includes('__proto__') || new Set(keys).size !== keys.length) return undefined;
+  const fieldOf = (key: string): string =>
+    aliases.includes(key) ? key : fieldOfColumn(columnToField, model, key);
   const operations = keys.map((key) => {
     const binding = deferResolution(() => bindingFor(key));
     return {
       key,
-      field: Object.hasOwn(columnToField, key) ? (columnToField[key] ?? key) : key,
+      field: fieldOf(key),
       decode(value: unknown) {
         if (value === null || value === undefined) return value;
         const resolved = binding();

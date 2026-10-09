@@ -31,9 +31,11 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { plainAggregateExpr, resolveAggregate } from './aggregate-codecs';
 import {
+  addressedModelName,
   assertDistinctOnCapability,
-  getCompleteColumnToFieldMap,
-  getFieldToColumnMap,
+  getColumnsReadOnTable,
+  getModelColumnFields,
+  getOwnColumnFields,
   POLYMORPHIC_DISCRIMINATOR_ALIAS,
   type PolymorphismInfo,
   resolvePolymorphismInfo,
@@ -41,7 +43,7 @@ import {
 import { assertLockCompatible } from './lock-guards';
 import { assertDistinctOnCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
-import { buildOrmQueryPlan, deriveParamsFromAst, resolveTableColumns } from './query-plan-meta';
+import { buildOrmQueryPlan, deriveParamsFromAst } from './query-plan-meta';
 import {
   buildDedupedTableSource,
   buildMtiJoins,
@@ -95,6 +97,7 @@ function jsonEntryProjection(
 function buildProjection(
   contract: Contract<SqlStorage>,
   namespaceId: string,
+  modelName: string,
   tableName: string,
   selectedFields: readonly string[] | undefined,
   tableRef = tableName,
@@ -102,7 +105,7 @@ function buildProjection(
   const columns =
     selectedFields !== undefined
       ? [...selectedFields]
-      : resolveTableColumns(contract, namespaceId, tableName);
+      : getColumnsReadOnTable(contract, namespaceId, modelName, tableName);
 
   return columns.map((column) =>
     ProjectionItem.of(
@@ -140,49 +143,46 @@ function resolvePolymorphicProjectionSelection(
     };
   }
 
-  const baseTableColumns = new Set(resolveTableColumns(contract, namespaceId, polyInfo.baseTable));
-  const baseFieldToColumn = getFieldToColumnMap(contract, namespaceId, modelName);
-  const variantFieldMaps = Array.from(polyInfo.variants.values(), (variant) => ({
+  const baseColumnToField = getModelColumnFields(contract, namespaceId, modelName);
+  const variantColumnMaps = Array.from(polyInfo.variants.values(), (variant) => ({
     variant,
-    columnToField: getCompleteColumnToFieldMap(contract, namespaceId, variant.modelName),
+    columnToField: getOwnColumnFields(contract, namespaceId, variant.modelName),
   }));
   const baseSelectedFields: string[] = [];
   const selectedMtiColumnsByTable = new Map<string, Set<string>>();
   let hasVariantOwnedSelection = false;
 
-  for (const selectedField of state.selectedFields) {
-    const baseColumn =
-      baseFieldToColumn[selectedField] ??
-      (baseTableColumns.has(selectedField) ? selectedField : undefined);
-    if (baseColumn !== undefined) {
-      appendUnique(baseSelectedFields, baseColumn);
+  for (const column of state.selectedFields) {
+    const isBaseColumn = Object.hasOwn(baseColumnToField, column);
+    if (isBaseColumn) {
+      appendUnique(baseSelectedFields, column);
     }
 
-    let matchedVariantField = false;
-    for (const { variant, columnToField } of variantFieldMaps) {
-      for (const [column, field] of Object.entries(columnToField)) {
-        if (selectedField !== field && selectedField !== column) {
-          continue;
-        }
-
-        matchedVariantField = true;
-        hasVariantOwnedSelection = true;
-        if (variant.strategy === 'sti') {
-          appendUnique(baseSelectedFields, column);
-          continue;
-        }
-
-        let selectedColumns = selectedMtiColumnsByTable.get(variant.table);
-        if (selectedColumns === undefined) {
-          selectedColumns = new Set();
-          selectedMtiColumnsByTable.set(variant.table, selectedColumns);
-        }
-        selectedColumns.add(column);
+    let isVariantColumn = false;
+    for (const { variant, columnToField } of variantColumnMaps) {
+      if (!Object.hasOwn(columnToField, column)) {
+        continue;
       }
+
+      isVariantColumn = true;
+      hasVariantOwnedSelection = true;
+      if (variant.strategy === 'sti') {
+        appendUnique(baseSelectedFields, column);
+        continue;
+      }
+
+      let selectedColumns = selectedMtiColumnsByTable.get(variant.table);
+      if (selectedColumns === undefined) {
+        selectedColumns = new Set();
+        selectedMtiColumnsByTable.set(variant.table, selectedColumns);
+      }
+      selectedColumns.add(column);
     }
 
-    if (baseColumn === undefined && !matchedVariantField) {
-      appendUnique(baseSelectedFields, selectedField);
+    if (!isBaseColumn && !isVariantColumn) {
+      throw new InternalError(
+        `Selected column "${column}" is mapped by no field of model "${modelName}" or its variants; select() resolves field names before they reach the projection`,
+      );
     }
   }
 
@@ -644,6 +644,7 @@ function buildIncludeChildRowsSelect(
   const scalarProjection = buildProjection(
     contract,
     include.relatedNamespaceId,
+    addressedModelName(include.relatedModelName, include.nested.variantName),
     include.relatedTableName,
     polyJoinsAndProjection.baseSelectedFields,
     childTableRef,
@@ -825,6 +826,7 @@ function buildDistinctNonLeafChildRowsSelect(options: {
   const innerScalarProjection = buildProjection(
     contract,
     include.relatedNamespaceId,
+    addressedModelName(include.relatedModelName, include.nested.variantName),
     include.relatedTableName,
     queryPolyProjection.baseSelectedFields,
     childTableRef,
@@ -895,6 +897,7 @@ function buildDistinctNonLeafChildRowsSelect(options: {
   const outerScalarProjection = buildProjection(
     contract,
     include.relatedNamespaceId,
+    addressedModelName(include.relatedModelName, include.nested.variantName),
     include.relatedTableName,
     visiblePolyProjection.baseSelectedFields,
     distinctAlias,
@@ -1379,6 +1382,7 @@ function buildCorrelatedIncludeProjection(
 
 function buildSelectAst(
   contract: Contract<SqlStorage>,
+  modelName: string,
   tableName: string,
   state: CollectionState,
   options: {
@@ -1393,9 +1397,11 @@ function buildSelectAst(
     assertDistinctOnCapability(contract, 'distinctOn');
     assertDistinctOnCompatibleOrder(state.orderBy, state.distinctOn.length);
   }
+  const addressed = addressedModelName(modelName, state.variantName);
   const scalarProjection = buildProjection(
     contract,
     namespaceId,
+    addressed,
     tableName,
     state.selectedFields,
     tableName,
@@ -1404,16 +1410,19 @@ function buildSelectAst(
   const where = options.where ?? buildStateWhere(contract, tableName, state, { namespaceId });
 
   // `buildDedupedTableSource` wraps for `.distinct(cols)`, aliased back to `tableName`.
-  const allColsProjection = resolveTableColumns(contract, namespaceId, tableName).map((column) =>
-    ProjectionItem.of(column, ColumnRef.of(tableName, column)),
-  );
+  const modelColumnsProjection = getColumnsReadOnTable(
+    contract,
+    namespaceId,
+    addressed,
+    tableName,
+  ).map((column) => ProjectionItem.of(column, ColumnRef.of(tableName, column)));
   const { source: fromSource, where: effectiveWhere } = buildDedupedTableSource(
     contract,
     namespaceId,
     tableName,
     state,
     where,
-    allColsProjection,
+    modelColumnsProjection,
   );
 
   let ast = SelectAst.from(fromSource).withProjection(projection);
@@ -1450,22 +1459,19 @@ function buildSelectAst(
 export function compileSelect(
   contract: Contract<SqlStorage>,
   namespaceId: string,
+  modelName: string,
   tableName: string,
   state: CollectionState,
-  modelName?: string,
 ): SqlQueryPlan<Record<string, unknown>> {
   assertLockCompatible(state);
   if (state.distinctOn !== undefined && state.distinctOn.length > 0) {
     assertDistinctOnCapability(contract, 'distinctOn');
   }
 
-  const polyInfo = modelName
-    ? resolvePolymorphismInfo(contract, namespaceId, modelName)
+  const polyInfo = resolvePolymorphismInfo(contract, namespaceId, modelName);
+  const selection = polyInfo
+    ? resolvePolymorphicProjectionSelection(contract, namespaceId, modelName, polyInfo, state)
     : undefined;
-  const selection =
-    polyInfo && modelName
-      ? resolvePolymorphicProjectionSelection(contract, namespaceId, modelName, polyInfo, state)
-      : undefined;
   const projectionState = selection
     ? { ...state, selectedFields: selection.baseSelectedFields }
     : state;
@@ -1492,6 +1498,7 @@ export function compileSelect(
 
   const ast = buildSelectAst(
     contract,
+    modelName,
     tableName,
     { ...projectionState, includes: [] },
     {
@@ -1509,22 +1516,19 @@ export function compileSelectWithIncludes(
   contract: Contract<SqlStorage>,
   aggregates: SqlAggregateDescriptorRegistry,
   namespaceId: string,
+  modelName: string,
   tableName: string,
   state: CollectionState,
-  modelName?: string,
 ): SqlQueryPlan<Record<string, unknown>> {
   assertLockCompatible(state);
   const includeJoins: JoinAst[] = [];
   const includeProjection: ProjectionItem[] = [];
   const topLevelWhere = buildStateWhere(contract, tableName, state, { namespaceId });
 
-  const polyInfo = modelName
-    ? resolvePolymorphismInfo(contract, namespaceId, modelName)
+  const polyInfo = resolvePolymorphismInfo(contract, namespaceId, modelName);
+  const selection = polyInfo
+    ? resolvePolymorphicProjectionSelection(contract, namespaceId, modelName, polyInfo, state)
     : undefined;
-  const selection =
-    polyInfo && modelName
-      ? resolvePolymorphicProjectionSelection(contract, namespaceId, modelName, polyInfo, state)
-      : undefined;
   const projectionState = selection
     ? { ...state, selectedFields: selection.baseSelectedFields }
     : state;
@@ -1563,6 +1567,7 @@ export function compileSelectWithIncludes(
 
   const ast = buildSelectAst(
     contract,
+    modelName,
     tableName,
     {
       ...projectionState,

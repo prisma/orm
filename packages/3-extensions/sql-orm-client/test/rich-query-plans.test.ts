@@ -48,6 +48,7 @@ describe('SQL ORM rich AST query plans', () => {
       baseContract,
       getTestAggregates(),
       'public',
+      'User',
       'users',
       state,
     );
@@ -75,6 +76,7 @@ describe('SQL ORM rich AST query plans', () => {
     const insertPlan = compileInsertReturning(
       baseContract,
       'public',
+      'User',
       'users',
       [{ id: 1, name: 'Alice', email: 'a@example.com' }],
       ['id'],
@@ -84,6 +86,7 @@ describe('SQL ORM rich AST query plans', () => {
     const upsertPlan = compileUpsertReturning(
       baseContract,
       'public',
+      'User',
       'users',
       { id: 1, name: 'Alice', email: 'a@example.com' },
       { name: 'Alice Updated' },
@@ -96,6 +99,7 @@ describe('SQL ORM rich AST query plans', () => {
     const updatePlan = compileUpdateReturning(
       baseContract,
       'public',
+      'User',
       'users',
       { email: 'b@example.com' },
       [BinaryExpr.eq(ColumnRef.of('users', 'id'), LiteralExpr.of(1))],
@@ -107,6 +111,7 @@ describe('SQL ORM rich AST query plans', () => {
     const deletePlan = compileDeleteReturning(
       baseContract,
       'public',
+      'User',
       'users',
       [BinaryExpr.eq(ColumnRef.of('users', 'id'), LiteralExpr.of(1))],
       ['id'],

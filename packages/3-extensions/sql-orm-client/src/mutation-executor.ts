@@ -12,10 +12,12 @@ import type { RuntimeScope } from '@internal/sql-relational-core/types';
 import { castAs } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import {
-  getColumnToFieldMap,
-  resolveFieldToColumn,
+  columnOfContractField,
+  fieldOfColumn,
+  getModelColumnFields,
   resolveModelRelations,
   resolveModelTableName,
+  resolveRelationTargetColumns,
   resolveRowIdentityColumns,
 } from './collection-contract';
 import { mapModelDataToStorageRow, mapStorageRowToModelFields } from './collection-runtime';
@@ -368,6 +370,7 @@ async function updateFirstGraph(
     const compiled = compileUpdateReturning(
       contract,
       namespaceId,
+      modelName,
       tableName,
       mappedUpdateData,
       [identityWhere],
@@ -1184,6 +1187,7 @@ async function insertSingleRow(
   const compiled = compileInsertReturning(
     contract,
     namespaceId,
+    modelName,
     tableName,
     [mappedData],
     undefined,
@@ -1230,7 +1234,7 @@ async function findRowByCriterion(
     filters: [whereExpr],
     limit: 1,
   };
-  const compiled = compileSelect(contract, namespaceId, tableName, state);
+  const compiled = compileSelect(contract, namespaceId, modelName, tableName, state);
   const rows = await queryPlanRows<Record<string, unknown>>(scope, compiled).toArray();
 
   const firstRow = rows[0];
@@ -1254,7 +1258,7 @@ async function findFirstByFilters(
     filters,
     limit: 1,
   };
-  const compiled = compileSelect(contract, namespaceId, tableName, state);
+  const compiled = compileSelect(contract, namespaceId, modelName, tableName, state);
   const rows = await queryPlanRows<Record<string, unknown>>(scope, compiled).toArray();
 
   const firstRow = rows[0];
@@ -1305,11 +1309,9 @@ function getRelationDefinitions(
     relatedTableName: resolveModelTableName(contract, relation.toNamespace, relation.to),
     cardinality: relation.cardinality,
     localColumns: relation.on.localFields.map((f) =>
-      resolveFieldToColumn(contract, namespaceId, modelName, f),
+      columnOfContractField(contract, namespaceId, modelName, f),
     ),
-    targetColumns: relation.on.targetFields.map((f) =>
-      resolveFieldToColumn(contract, relation.toNamespace, relation.to, f),
-    ),
+    targetColumns: resolveRelationTargetColumns(contract, relation),
     through: relation.through
       ? {
           table: relation.through.table,
@@ -1332,6 +1334,9 @@ function toFieldName(
   modelName: string,
   columnName: string,
 ): string {
-  const columnToField = getColumnToFieldMap(contract, namespaceId, modelName);
-  return columnToField[columnName] ?? columnName;
+  return fieldOfColumn(
+    getModelColumnFields(contract, namespaceId, modelName),
+    modelName,
+    columnName,
+  );
 }

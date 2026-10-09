@@ -5,8 +5,8 @@ import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import { Collection } from '../src/collection';
 import {
-  getColumnToFieldMap,
-  getFieldToColumnMap,
+  getModelColumnFields,
+  getOwnFieldColumns,
   resolveModelTableName,
 } from '../src/collection-contract';
 import { createMockRuntime, getEmptyAggregates } from './helpers';
@@ -59,22 +59,22 @@ const twoNamespaceContract = blindCast<Contract<SqlStorage>, 'hand-built multi-n
 
 describe('namespace-scoped metadata resolution', () => {
   it('resolves field→column maps within the named namespace, discriminating per namespace', () => {
-    expect(getFieldToColumnMap(twoNamespaceContract, 'public', 'User')).toEqual({
+    expect(getOwnFieldColumns(twoNamespaceContract, 'public', 'User')).toEqual({
       id: 'id',
       email: 'email_addr',
     });
-    expect(getFieldToColumnMap(twoNamespaceContract, 'auth', 'User')).toEqual({
+    expect(getOwnFieldColumns(twoNamespaceContract, 'auth', 'User')).toEqual({
       id: 'id',
       token: 'token_col',
     });
   });
 
   it('resolves column→field maps within the named namespace', () => {
-    expect(getColumnToFieldMap(twoNamespaceContract, 'public', 'User')).toEqual({
+    expect(getModelColumnFields(twoNamespaceContract, 'public', 'User')).toEqual({
       id: 'id',
       email_addr: 'email',
     });
-    expect(getColumnToFieldMap(twoNamespaceContract, 'auth', 'User')).toEqual({
+    expect(getModelColumnFields(twoNamespaceContract, 'auth', 'User')).toEqual({
       id: 'id',
       token_col: 'token',
     });
@@ -86,7 +86,7 @@ describe('namespace-scoped metadata resolution', () => {
   });
 
   it('throws when the named namespace is not present on the contract', () => {
-    expect(() => getFieldToColumnMap(twoNamespaceContract, 'missing', 'User')).toThrow(
+    expect(() => getOwnFieldColumns(twoNamespaceContract, 'missing', 'User')).toThrow(
       /namespace "missing" is not present/,
     );
   });

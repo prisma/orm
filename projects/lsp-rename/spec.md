@@ -139,7 +139,7 @@ The server edits nothing itself, so a failed request leaves every file as it was
 
 ## Transitional-shape constraints
 
-Two slices (see `plan.md`). Between them, one gap is known and accepted (found by the QA run of 2026-10-07, decided by the operator the same day):
+Four slices (see `plan.md`). Between them, one gap is known and accepted (found by the QA run of 2026-10-07, decided by the operator the same day):
 
 - An entity name inside a type-constructor argument, such as `OrderStatus` in `status pg.enum(OrderStatus)`, has no binder resolution: the SQL interpreter looks the name up itself. Go-to-definition, find references and rename do not see it. After slice 1, renaming a `native_enum` block edits the block name and adds `@@map`, and leaves `pg.enum(...)` usages unchanged; the schema then reports `PSL_UNKNOWN_ENTITY_REF` until the usages are edited by hand.
 - Slice 2 makes the binder record that resolution. Rename needs no change for it: its name edits are the find-references result.
@@ -148,6 +148,8 @@ Also observed, not addressed by either slice: with the usage corrected, a rename
 
 ## Project Definition of Done
 
+- [ ] Slice 3: a `pg.enum` column that names a `native_enum` of another namespace emits a contract whose column type and value-set reference point at the enum's namespace, and the Postgres migration plan for it creates the column with the schema-qualified type.
+- [ ] Slice 4: a field typed by a named type declared as `pg.enum(X)` emits the same column as `pg.enum(X)` written on the field, apart from the `typeRef`.
 - [ ] Slice 2: go-to-definition, find references and rename work from and to an entity name inside a type-constructor argument; renaming a `native_enum` block used in `pg.enum(...)` leaves a schema with no diagnostics.
 - [ ] Team-DoD floor items (inherited; see [`drive/calibration/dod.md`](../../drive/calibration/dod.md)).
 - [ ] The language server declares `renameProvider`, with `prepareProvider` when the client declares `prepareSupport`.

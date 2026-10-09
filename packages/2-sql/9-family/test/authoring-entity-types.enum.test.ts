@@ -173,6 +173,23 @@ describe('sqlFamilyEnumEntityDescriptor: explicit @@type bypasses inference, nev
     });
   });
 
+  it('accepts two different object members and two different array members', () => {
+    const diagnostics: unknown[] = [];
+    const handle = factory(
+      enumBlock({
+        name: 'Config',
+        values: { east: { zone: 'a' }, west: { zone: 'b' }, small: [1], large: [1, 2] },
+        typeCodecId: JSON_CODEC_ID,
+      }),
+      makeContext(diagnostics),
+    );
+
+    expect({ diagnostics, members: handle?.members }).toEqual({
+      diagnostics: [],
+      members: { east: { zone: 'a' }, west: { zone: 'b' }, small: [1], large: [1, 2] },
+    });
+  });
+
   it('an explicit null member reaches the codec and its rejection is reported', () => {
     const diagnostics: unknown[] = [];
     const handle = factory(

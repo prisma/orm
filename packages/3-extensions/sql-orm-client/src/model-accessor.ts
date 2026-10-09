@@ -21,15 +21,20 @@ import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import { plainAggregateExpr } from './aggregate-codecs';
 import {
-  getFieldToColumnMap,
+  addressedModelName,
+  columnOfCallerField,
+  columnOfContractField,
+  type FieldColumn,
+  getModelAndVariantFieldColumns,
+  getModelFieldColumns,
   isToOneCardinality,
-  resolveFieldToColumn,
   resolveModelRelations,
   resolveModelTableName,
   resolvePolymorphismInfo,
+  resolveRelationTargetColumns,
   resolveVariantFieldColumns,
-  type VariantColumnRef,
 } from './collection-contract';
+import { assertModelFieldNames } from './collection-runtime';
 import { codecTraits, hasTrait, resolveColumn } from './column-codec';
 import { and, not } from './filters';
 import { checkedOrderByItem } from './order-by-guards';
@@ -227,7 +232,12 @@ function createModelAccessorInScope<
   scope: ModelAccessorScope,
 ): VariantAwareModelAccessor<TContract, ModelName, VariantName, NsId> {
   const contract = context.contract;
-  const fieldToColumn = getFieldToColumnMap(contract, namespaceId, modelName);
+  const fieldColumns = getModelAndVariantFieldColumns(
+    contract,
+    namespaceId,
+    modelName,
+    variantName,
+  );
   const tableName = resolveModelTableName(contract, namespaceId, modelName);
   const modelRelations = resolveModelRelations(contract, namespaceId, modelName);
   // When a variant is selected, MTI variant-owned fields resolve to a
@@ -238,7 +248,7 @@ function createModelAccessorInScope<
   // produces exactly the same accessor it did before variant support was
   // added: an empty `variantFieldColumns`, so every field falls through to the
   // base-table column resolution below.
-  const variantFieldColumns: Record<string, VariantColumnRef> = variantName
+  const variantFieldColumns: Readonly<Record<string, FieldColumn>> = variantName
     ? resolveVariantFieldColumns(contract, namespaceId, modelName, variantName)
     : {};
   // A selected variant's own relations are resolved against the variant's
@@ -286,12 +296,12 @@ function createModelAccessorInScope<
   const accessor = new Proxy(
     {},
     {
-      get(_target, prop: string | symbol): unknown {
+      get(target, prop: string | symbol): unknown {
         if (typeof prop !== 'string') {
           return undefined;
         }
 
-        if (variantCoordinates) {
+        if (variantCoordinates && Object.hasOwn(variantCoordinates.relations, prop)) {
           const variantRelation = variantCoordinates.relations[prop];
           if (variantRelation) {
             return createRelationFilterAccessor(
@@ -304,23 +314,33 @@ function createModelAccessorInScope<
           }
         }
 
-        const relation = modelRelations[prop];
+        const relation = Object.hasOwn(modelRelations, prop) ? modelRelations[prop] : undefined;
         if (relation) {
           return createRelationFilterAccessor(context, namespaceId, modelName, scope, relation);
         }
 
-        const variantField = variantFieldColumns[prop];
+        const variantField = Object.hasOwn(variantFieldColumns, prop)
+          ? variantFieldColumns[prop]
+          : undefined;
+        if (variantField === undefined && !Object.hasOwn(fieldColumns, prop)) {
+          if (isProbedByRuntime(prop)) return probedValue(target, prop);
+        }
         const resolvedTable = variantField?.table ?? tableName;
         const fieldBinding = scope.forJoinedSource(namespaceId, resolvedTable).current;
-        const columnName = variantField?.column ?? fieldToColumn[prop] ?? prop;
+        const columnName =
+          variantField?.column ??
+          columnOfCallerField(
+            contract,
+            namespaceId,
+            fieldColumns,
+            addressedModelName(modelName, variantName),
+            prop,
+          );
         const column = resolveColumn(contract, namespaceId, resolvedTable, columnName);
-        // Unknown fields return `undefined`, matching plain JS object semantics.
-        // The `ModelAccessor<TContract, ModelName>` type already rejects typos
-        // at compile time for TS consumers, and contexts that iterate accessor
-        // keys (e.g. relation-shorthand predicates) can detect missing fields
-        // with an `undefined` check and raise their own, domain-specific error.
         if (!column) {
-          return undefined;
+          throw new InternalError(
+            `Field "${modelName}.${prop}" maps column "${columnName}", which table "${resolvedTable}" does not have`,
+          );
         }
         const traits = codecTraits(context, column.codecId);
         const operations = opsByCodecId.get(column.codecId) ?? [];
@@ -470,6 +490,15 @@ function createRelationFilterAccessor<
         if (typeof prop !== 'string') return undefined;
         if (Object.hasOwn(target, prop)) return Reflect.get(target, prop);
         if (RELATION_ACCESSOR_METHOD_NAMES.has(prop)) return undefined;
+        if (
+          isProbedByRuntime(prop) &&
+          !Object.hasOwn(
+            getModelFieldColumns(context.contract, relation.toNamespace, relation.to),
+            prop,
+          )
+        ) {
+          return probedValue(target, prop);
+        }
         return relatedOrderableField(context, relation, relatedTableName, correlate, prop);
       },
     });
@@ -480,6 +509,17 @@ function createRelationFilterAccessor<
     count: (predicate: RelationPredicateInput<TContract, string, string> | undefined) =>
       createOrderable(() => buildRelationCountExpr(context, relation, correlate(), predicate)),
   };
+}
+
+/**
+ * Whether the JavaScript runtime or a common library reads `prop` from an object it is handed: `then` when a value is awaited or resolved as a promise, `toJSON` when it is stringified, and the `Object.prototype` members such as `toString`. An accessor answers these like a plain object, so a name that is not a field is refused only when the caller asks for it.
+ */
+function isProbedByRuntime(prop: string): boolean {
+  return prop === 'then' || prop === 'toJSON' || prop in Object.prototype;
+}
+
+function probedValue(target: object, prop: string): unknown {
+  return prop === 'then' || prop === 'toJSON' ? undefined : Reflect.get(target, prop);
 }
 
 function createOrderable(buildExpr: () => AnyExpression): Orderable {
@@ -496,10 +536,13 @@ function relatedOrderableField<TContract extends Contract<SqlStorage>>(
   correlate: () => CorrelatedRelatedRows,
   fieldName: string,
 ): Orderable | undefined {
-  const fieldToColumn = getFieldToColumnMap(context.contract, relation.toNamespace, relation.to);
-  if (!Object.hasOwn(fieldToColumn, fieldName)) return undefined;
-  const columnName = fieldToColumn[fieldName];
-  if (columnName === undefined) return undefined;
+  const columnName = columnOfCallerField(
+    context.contract,
+    relation.toNamespace,
+    getModelFieldColumns(context.contract, relation.toNamespace, relation.to),
+    relation.to,
+    fieldName,
+  );
   const column = resolveColumn(
     context.contract,
     relation.toNamespace,
@@ -567,7 +610,7 @@ function correlateRelatedRows<TContract extends Contract<SqlStorage>>(
       through.targetColumns,
     );
     const parentLocalColumns = relation.on.localFields.map((field) =>
-      resolveFieldToColumn(context.contract, parentNamespaceId, parentModelName, field),
+      columnOfContractField(context.contract, parentNamespaceId, parentModelName, field),
     );
     return {
       childScope,
@@ -596,7 +639,10 @@ function correlateRelatedRows<TContract extends Contract<SqlStorage>>(
       childScope.current,
       relation,
     ),
-    keyColumn: firstTargetColumn(context.contract, relation) ?? 'id',
+    keyColumn: firstJoinColumn(
+      resolveRelationTargetColumns(context.contract, relation),
+      'targetFields',
+    ),
   };
 }
 
@@ -716,6 +762,7 @@ function toRelationWhereExpr<TContract extends Contract<SqlStorage>>(
   }
 
   // Shorthand object — skip fields without eq
+  assertModelFieldNames(context.contract, relatedNamespaceId, relatedModelName, predicate);
   const exprs: AnyExpression[] = [];
   for (const [fieldName, value] of Object.entries(predicate)) {
     if (value === undefined) {
@@ -727,15 +774,9 @@ function toRelationWhereExpr<TContract extends Contract<SqlStorage>>(
       'relation shorthand fields are read from the dynamic model accessor proxy'
     >(accessor);
     const fieldAccessor = fieldAccessors[fieldName];
-    // Unknown field in the shorthand predicate — the Proxy returns undefined
-    // for fields the contract doesn't declare. Surface it explicitly: silent
-    // skip would drop user intent (e.g. a typo'd `nmae: 'Alice'` filter would
-    // match every row).
     if (!fieldAccessor) {
-      throw ormError(
-        'ORM.FIELD_UNKNOWN',
-        `Shorthand filter on "${relatedModelName}.${fieldName}": field is not defined on the model`,
-        { meta: { model: relatedModelName, field: fieldName } },
+      throw new InternalError(
+        `Shorthand filter on "${relatedModelName}.${fieldName}": the field's column is missing from its table`,
       );
     }
 
@@ -787,13 +828,13 @@ function buildJoinWhere<TContract extends Contract<SqlStorage>>(
       continue;
     }
 
-    const localColumn = resolveFieldToColumn(
+    const localColumn = columnOfContractField(
       contract,
       parentNamespaceId,
       parentModelName,
       localField,
     );
-    const targetColumn = resolveFieldToColumn(
+    const targetColumn = columnOfContractField(
       contract,
       relation.toNamespace,
       relation.to,
@@ -815,16 +856,4 @@ function buildJoinWhere<TContract extends Contract<SqlStorage>>(
   }
 
   return and(...joinExprs);
-}
-
-function firstTargetColumn<TContract extends Contract<SqlStorage>>(
-  contract: TContract,
-  relation: ResolvedModelRelation,
-): string | undefined {
-  const targetFields = relation.on?.targetFields;
-  const firstField = targetFields?.[0];
-  if (!firstField) {
-    return undefined;
-  }
-  return resolveFieldToColumn(contract, relation.toNamespace, relation.to, firstField);
 }

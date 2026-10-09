@@ -31,7 +31,7 @@ describe('cross-reference shape round-trip', () => {
             posts: {
               to: relationCrossRef,
               cardinality: '1:N',
-              on: { localFields: ['id'], targetFields: ['authorId'] },
+              on: { localFields: ['kind'], targetFields: ['kind'] },
             },
           },
           storage: {

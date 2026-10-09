@@ -1,7 +1,7 @@
 import type { JsonValue } from '@internal/contract/types';
-import { canonicalStringify } from '@internal/utils/canonical-stringify';
 import { isInternalError } from '@internal/utils/internal-error';
 import type { Codec } from './codec';
+import { duplicateStoredMembers, type StoredEnumMember } from './enum-stored-members';
 import type { AuthoringEntityContext } from './framework-authoring';
 import type { ParsedPslExtensionBlock } from './psl-extension-block';
 
@@ -23,8 +23,8 @@ export function readEnumBlockMembers(
 ): readonly EnumBlockMember[] | undefined {
   const sourceId = ctx.sourceId ?? 'unknown';
   const diagnostics = ctx.diagnostics;
-  const memberByStoredValue = new Map<string, string>();
   const members: EnumBlockMember[] = [];
+  const storedMembers: StoredEnumMember[] = [];
   let memberError = false;
 
   for (const [memberName, memberValue] of Object.entries(block.values)) {
@@ -68,21 +68,18 @@ export function readEnumBlockMembers(
       continue;
     }
 
-    const stored = codec.encodeJson(read);
-    const storedKey = canonicalStringify(stored);
-    const earlier = memberByStoredValue.get(storedKey);
-    if (earlier !== undefined) {
-      diagnostics?.push({
-        code: 'PSL_ENUM_DUPLICATE_MEMBER_VALUE',
-        message: `enum "${block.name}": members "${earlier}" and "${memberName}" both store ${JSON.stringify(stored)}`,
-        sourceId,
-        span,
-      });
-      memberError = true;
-      continue;
-    }
-    memberByStoredValue.set(storedKey, memberName);
     members.push({ name: memberName, value: read });
+    storedMembers.push({ name: memberName, stored: codec.encodeJson(read) });
+  }
+
+  for (const { earlier, later, stored } of duplicateStoredMembers(storedMembers)) {
+    diagnostics?.push({
+      code: 'PSL_ENUM_DUPLICATE_MEMBER_VALUE',
+      message: `enum "${block.name}": members "${earlier}" and "${later}" both store ${JSON.stringify(stored)}`,
+      sourceId,
+      span: block.parameterSpans[later] ?? block.span,
+    });
+    memberError = true;
   }
 
   if (memberError) return undefined;
