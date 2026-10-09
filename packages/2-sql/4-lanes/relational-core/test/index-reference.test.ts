@@ -7,6 +7,7 @@ const table = {
   indexes: [
     { name: 'post_title_11111111', prefix: 'post_title', columns: ['title'], type: 'gin' },
     { name: 'post_title_22222222', prefix: 'post_title', columns: ['title'] },
+    { name: 'post_title_lower', expression: 'lower(title)' },
     {
       name: 'post_search',
       columns: ['title', 'id'],
@@ -46,13 +47,17 @@ describe('createIndexReferences', () => {
   it('lists every authored name, and refuses one more than one index shares when it is read', () => {
     const references = referencesFor('posts');
 
-    expect(Object.keys(references)).toEqual(['post_title', 'post_search']);
+    expect(Object.keys(references)).toEqual(['post_title', 'post_title_lower', 'post_search']);
     expect(() => references['post_title']).toThrow(
       expect.objectContaining({
         code: 'ORM.ARGUMENT_INVALID',
         message: 'Table "posts" has more than one index named "post_title".',
       }),
     );
+  });
+
+  it('gives an expression index no columns', () => {
+    expect(referencesFor('posts')['post_title_lower']?.columns).toEqual({});
   });
 
   it('returns the same reference on every read', () => {
