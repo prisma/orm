@@ -183,6 +183,10 @@ export class Cursor {
     });
   }
 
+  discardDiagnosticsFrom(count: number): void {
+    this.#diagnostics.length = Math.min(this.#diagnostics.length, count);
+  }
+
   #advance(): void {
     this.#offset += this.#tokenizer.next().text.length;
   }
@@ -692,12 +696,12 @@ function usesEarlierGrammar(options: PslParserOptions): boolean {
 }
 
 function isMixinHeaderAhead(cursor: Cursor, options: PslParserOptions): boolean {
-  return (
-    !usesEarlierGrammar(options) &&
-    cursor.peekKind() === 'Ident' &&
-    cursor.peekKind(1) === 'Ident' &&
-    cursor.peekToken(1).text === MIXIN_KEYWORD
-  );
+  if (usesEarlierGrammar(options) || cursor.peekKind() !== 'Ident') return false;
+  return cursor.peekToken().text === MIXIN_KEYWORD || hasMixinWordAhead(cursor);
+}
+
+function hasMixinWordAhead(cursor: Cursor): boolean {
+  return cursor.peekKind(1) === 'Ident' && cursor.peekToken(1).text === MIXIN_KEYWORD;
 }
 
 function mixinWithoutBlockKeywordMessage(name: string | undefined): string {
@@ -796,12 +800,13 @@ export function parseModel(cursor: Cursor, options: PslParserOptions = {}): Gree
 }
 
 function parseMixinDeclaration(cursor: Cursor, options: PslParserOptions): GreenNode {
-  const keyword = cursor.peekToken().text;
+  const hasBlockKeyword = hasMixinWordAhead(cursor);
+  const keyword = hasBlockKeyword ? cursor.peekToken().text : MIXIN_KEYWORD;
   const keywordMark = cursor.mark();
-  const mixinMark = cursor.mark(1);
+  const mixinMark = cursor.mark(hasBlockKeyword ? 1 : 0);
   cursor.startNode('MixinDeclaration');
   cursor.bump();
-  cursor.bump();
+  if (hasBlockKeyword) cursor.bump();
   const hasName =
     cursor.peekKind() === 'Ident' && (!cursor.newlineBefore() || cursor.peekKind(1) === 'LBrace');
   const name = hasName ? cursor.peekToken().text : undefined;
@@ -835,7 +840,9 @@ function parseMixinDeclaration(cursor: Cursor, options: PslParserOptions): Green
     );
   }
   if (hasBody) {
+    const reported = cursor.diagnostics.length;
     parseBlockBody(cursor, mixinMemberParser(keyword, options));
+    if (keyword === MIXIN_KEYWORD) cursor.discardDiagnosticsFrom(reported);
   } else {
     cursor.recoverToSyncPoint();
   }
@@ -865,18 +872,6 @@ export function parseGenericBlock(
   const keyword = cursor.peekToken().text;
   if (RESERVED_BLOCK_KEYWORDS.has(keyword)) return undefined;
   const hasName = cursor.peekKind(1) === 'Ident' && cursor.peekKind(2) === 'LBrace';
-  const isMixinKeyword = keyword === MIXIN_KEYWORD && !usesEarlierGrammar(options);
-  if (isMixinKeyword) {
-    cursor.diagnostic(
-      'PSL_INVALID_DECLARATION',
-      mixinWithoutBlockKeywordMessage(
-        cursor.peekKind(1) === 'Ident' && !cursor.newlineBefore(1)
-          ? cursor.peekToken(1).text
-          : undefined,
-      ),
-      cursor.mark(),
-    );
-  }
   cursor.startNode('GenericBlockDeclaration');
   cursor.bump();
   if (hasName) {
@@ -885,13 +880,11 @@ export function parseGenericBlock(
   if (cursor.peekKind() === 'LBrace') {
     parseBlockBody(cursor, genericBlockMemberParser(keyword, options));
   } else {
-    if (!isMixinKeyword) {
-      cursor.diagnostic(
-        'PSL_INVALID_DECLARATION',
-        `Expected "{" to open the "${keyword}" block`,
-        cursor.markAfterLastToken(),
-      );
-    }
+    cursor.diagnostic(
+      'PSL_INVALID_DECLARATION',
+      `Expected "{" to open the "${keyword}" block`,
+      cursor.markAfterLastToken(),
+    );
     cursor.recoverToSyncPoint();
   }
   return cursor.finishNode();

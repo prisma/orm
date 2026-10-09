@@ -431,6 +431,64 @@ describe('the reserved word mixin in a block header', () => {
     ]);
     expect(diagnosedText(result, source)).toEqual(['mixin']);
     expect(Array.from(result.document.syntax.childNodes(), (node) => node.kind)).toEqual([
+      'MixinDeclaration',
+    ]);
+  });
+
+  it.each([
+    ['at the top level', (declaration: string) => declaration],
+    [
+      'in a namespace',
+      (declaration: string) =>
+        `namespace app {\n${declaration
+          .split('\n')
+          .map((line) => `  ${line}`)
+          .join('\n')}\n}`,
+    ],
+  ])(
+    'reports one diagnostic for a mixin written without its block keyword %s, whatever its body holds',
+    (_place, wrap) => {
+      const source = wrap(
+        [
+          'mixin Timestamps {',
+          '  createdAt DateTime @default(now())',
+          '  updatedAt DateTime?',
+          '  +Other',
+          '  123',
+          '  @@index([createdAt])',
+          '}',
+        ].join('\n'),
+      );
+      const result = parseLossless(source);
+
+      expect(messages(result)).toEqual([
+        'PSL_INVALID_DECLARATION: A mixin starts with the keyword of the block it is for, for example "model mixin Timestamps"',
+      ]);
+      expect(diagnosedText(result, source)).toEqual(['mixin']);
+      expect(descendantKinds(result.document.syntax)).not.toContain('GenericBlockDeclaration');
+      expect(descendantKinds(result.document.syntax)).toContain('MixinDeclaration');
+    },
+  );
+
+  it('reports the declarations after a mixin written without its block keyword as usual', () => {
+    const result = parseLossless(
+      'mixin Timestamps {\n  createdAt DateTime @default(now())\n}\nmodel User {\n  id Int @\n}',
+    );
+
+    expect(messages(result)).toEqual([
+      'PSL_INVALID_DECLARATION: A mixin starts with the keyword of the block it is for, for example "model mixin Timestamps"',
+      'PSL_INVALID_ATTRIBUTE_SYNTAX: Attribute name expected',
+    ]);
+  });
+
+  it('reads the same source as an ordinary generic block in the prisma-7 grammar, with its member diagnostics', () => {
+    const result = parseLossless(
+      'mixin Timestamps {\n  createdAt DateTime @default(now())\n}',
+      prisma7,
+    );
+
+    expect(messages(result)).toEqual(['PSL_INVALID_EXTENSION_BLOCK_MEMBER: Invalid block entry']);
+    expect(Array.from(result.document.syntax.childNodes(), (node) => node.kind)).toEqual([
       'GenericBlockDeclaration',
     ]);
   });
