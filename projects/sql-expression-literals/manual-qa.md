@@ -931,7 +931,7 @@ Slice 5 makes a planned `migration.ts` write the contract's SQL as `` sql`...` `
 
 1. Run `pnpm build` at the repository root.
 2. Copy `test/integration/test/cli-journeys/sql-expression-literals.e2e.test.ts` to `test/integration/test/cli-journeys/wip-qa-5.e2e.test.ts`. Do not commit it. In the copy:
-   - Change the CHECK so its text holds both quote kinds and spans several lines: `` sql`\n      owner_id > 0\n        AND email <> 'it''s' -- an owner needs an email\n    ` ``, and add a column `createdAt DateTime @default(sql`now() - interval '1 day'`)` to `Profile`.
+   - Change the CHECK so its text holds both quote kinds and spans several lines: `` sql`\n      owner_id > 0\n        AND email <> 'it''s' -- an owner needs an email\n    ` ``, and add a column `createdAt DateTime @default(sql`clock_timestamp()`)` to `Profile`. (`now() - interval '1 day'` fails apply's schema check because Postgres stores it as `(now() - '1 day'::interval)`; that gap is outside this slice and tracked in TML-2362.)
    - Add a second index whose `where` text has a trailing space on its first line (`sql`owner_id > 1 \n  AND email <> ''``).
    - After `planMigrationAndSelfEmit`, find the written `migration.ts` under `ctx.testDir/migrations/app/` and `console.log` it in full. Keep the apply and verify steps; remove everything from `runContractInfer` on.
 3. Run `pnpm --filter integration-tests test test/cli-journeys/wip-qa-5.e2e.test.ts` and save the output to `wip/5-qa/journey.log`.
@@ -942,8 +942,119 @@ Slice 5 makes a planned `migration.ts` write the contract's SQL as `` sql`...` `
 
 - The printed `migration.ts` imports `sql` from the target's migration module.
 - The CHECK is written as a multi-line `` sql`...` `` template whose lines read like the schema's, with no escaped quote: `email <> 'it''s'` appears as written.
-- The default is `` fn(sql`now() - interval '1 day'`) ``.
+- The default is `` fn(sql`clock_timestamp()`) ``.
 - The partial index and the policy predicates are `sql` templates; the index whose text has a trailing space is written as a string, not a template.
 - Apply succeeds and verify is clean, so the SQL the file runs is the contract's SQL.
 - `fn(42)` gives ``CONTRACT.ARGUMENT_INVALID fn expression must be a string or a sql`...` value.`` with `{"what":"fn expression"}`; the `checkExpression` call gives the same code with `checkExpression "c" expression`.
+
+### Run, 2026-10-09, on `c0ae2b3d66`
+
+Every Expected bullet matches. Logs: `wip/5-qa-3/`. An earlier run (`wip/5-qa/`) used the `now() - interval '1 day'` default and failed apply's schema check (TML-2362, outside this slice); a second run (`wip/5-qa-2/`) was on a commit with a re-indent pass that review then removed.
+
+Printed `migration.ts`:
+
+```ts
+#!/usr/bin/env -S node
+import type { Contract as End } from '../../snapshots/f573687edfcea0f93621a0ddeded3c7c8a36f79543c0db99398c85dd51cfe06b/contract';
+import endContract from '../../snapshots/f573687edfcea0f93621a0ddeded3c7c8a36f79543c0db99398c85dd51cfe06b/contract.json' with { type: 'json' };
+import {
+  Migration,
+  MigrationCLI,
+  checkExpression,
+  col,
+  fn,
+  primaryKey,
+  sql,
+} from '@internal/postgres/migration';
+
+export default class M extends Migration<never, End> {
+  override readonly endContractJson = endContract;
+
+  override get operations() {
+    return [
+      this.createSchema({ schema: 'public' }),
+      this.createTable({
+        schema: 'public',
+        table: 'post',
+        columns: [
+          col('author_id', 'int4', { notNull: true, codecRef: { codecId: 'pg/int4@1' } }),
+          col('id', 'int4', { notNull: true, codecRef: { codecId: 'pg/int4@1' } }),
+        ],
+        constraints: [primaryKey(['id'])],
+      }),
+      this.createTable({
+        schema: 'public',
+        table: 'profile',
+        columns: [
+          col('createdAt', 'timestamptz', {
+            notNull: true,
+            default: fn(sql`clock_timestamp()`),
+            codecRef: { codecId: 'pg/timestamptz-temporal@1' },
+          }),
+          col('email', 'text', { notNull: true, codecRef: { codecId: 'pg/text@1' } }),
+          col('id', 'int4', { notNull: true, codecRef: { codecId: 'pg/int4@1' } }),
+          col('owner_id', 'int4', { notNull: true, codecRef: { codecId: 'pg/int4@1' } }),
+        ],
+        constraints: [
+          primaryKey(['id']),
+          checkExpression(
+            'profile_valid_5901ae2d',
+            sql`
+        owner_id > 0
+          AND email <> 'it''s' -- an owner needs an email
+      `,
+          ),
+        ],
+      }),
+      this.createIndex({
+        schema: 'public',
+        table: 'profile',
+        index: 'profile_email_lower_17273133',
+        expression: sql`lower(email)`,
+      }),
+      this.createIndex({
+        schema: 'public',
+        table: 'profile',
+        index: 'profile_owner_active_30bfcfac',
+        columns: ['owner_id'],
+        extras: { where: sql`owner_id > 0 -- active owners only` },
+      }),
+      this.createIndex({
+        schema: 'public',
+        table: 'profile',
+        index: 'profile_owner_trailing_1a83a52e',
+        columns: ['owner_id'],
+        extras: { where: "owner_id > 1 \n  AND email <> ''" },
+      }),
+      this.enableRowLevelSecurity({ schema: 'public', table: 'post' }),
+      this.enableRowLevelSecurity({ schema: 'public', table: 'profile' }),
+      this.createRlsPolicy({
+        schema: 'public',
+        table: 'post',
+        policy: {
+          naming: { kind: 'wire', prefix: 'post_author_write', hash: '1dc62610' },
+          tableName: 'post',
+          namespaceId: 'public',
+          operation: 'update',
+          roles: ['app_user'],
+          using: sql`EXISTS (SELECT 1 FROM profile WHERE profile.id = post.author_id AND profile.owner_id = 1)`,
+          withCheck: sql`author_id > 0 -- an author is required`,
+          permissive: true,
+        },
+      }),
+    ];
+  }
+}
+
+MigrationCLI.run(import.meta.url, M);
+```
+
+Refusals:
+
+```text
+fn(42): CONTRACT.ARGUMENT_INVALID fn expression must be a string or a sql`...` value. {"what":"fn expression"}
+checkExpression('c', { text: 'x' }): CONTRACT.ARGUMENT_INVALID checkExpression "c" expression must be a string or a sql`...` value. {"what":"checkExpression \"c\" expression"}
+```
+
+How it reads: the multi-line CHECK's body sits two spaces inside its closing backtick and keeps the schema's relative indentation, but the block sits left of the argument it belongs to, because prettier keeps template text as written. The SQL and `ops.json` are unaffected. This is the accepted trade-off recorded in design section 17.2.
 
