@@ -22,7 +22,7 @@ This package depends on:
 - `@internal/sql-contract` for contract shape and mappings
 - `@internal/contract` for the contract shape and `PlanMeta`
 - `@internal/framework-components` for `AsyncIterableResult`
-- `@internal/sql-relational-core` for SQL AST, plan types, and the `RuntimeScope` interface
+- `@internal/sql-relational-core` for SQL AST, plan types, the `RuntimeScope` interface, and the function surface and index references it shares with the SQL query builder
 
 This package should not depend on target adapters or drivers directly; execution is delegated to the runtime queryable interface.
 
