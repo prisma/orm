@@ -1,16 +1,5 @@
 /**
- * The user-facing journey for `prisma contract print`: a project whose
- * `prisma.config.ts` points at `prisma7Schema('./schema.prisma')` runs
- * `contract print`, switches its config to the Prisma 8 PSL the command wrote,
- * and emits the same contract, which `db sign` and `db verify` then accept
- * against the database the Prisma 7 SQL built. It runs over the `relations` and
- * `supported-verify` fixtures, whose database is the SQL Prisma 7.10.0
- * generated for the full `supported` schema. The command is not tied to
- * Prisma 7: a PSL source prints too. Two things are refused with exit 2 and no
- * file written: a Prisma 7 schema Prisma 8 cannot read, and an output path
- * that is the schema being read. A contract with a default control policy
- * prints with a warning, and the config the READMEs show for the printed file
- * emits it with the same policy.
+ * The user-facing journey for `prisma contract print`: a project whose `prisma.config.ts` points at `prisma7Schema('./schema.prisma')` runs `contract print`, switches its config to the Prisma 8 PSL the command wrote, and emits the same contract, which `db sign` and `db verify` then accept against the database the Prisma 7 SQL built. It runs over the `relations` and `supported-verify` fixtures, whose database is the SQL Prisma 7.10.0 generated for the full `supported` schema, with their `@ignore` fields and `@@ignore` models removed: Prisma 8 PSL has no syntax yet for storage that no field or model maps (TML-3469), so print refuses those schemas as they are. The command is not tied to Prisma 7: a PSL source prints too. Three things are refused with exit 2 and no file written: a Prisma 7 schema Prisma 8 cannot read, a Prisma 7 schema with ignored storage, and an output path that is the schema being read. A contract with a default control policy prints with a warning, and the config the READMEs show for the printed file emits it with the same policy.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { withClient } from '@repo/test-utils';
@@ -84,6 +73,20 @@ view ActiveUsers {
 `;
 
 const NO_DATABASE = 'postgres://user:password@localhost:5432/unused';
+
+/**
+ * The schema without its `@ignore` fields and `@@ignore` models, so the contract it emits has no
+ * storage that Prisma 8 PSL cannot write.
+ */
+function withoutIgnoredStorage(schema: string): string {
+  const stripped = schema
+    .replace(/^model \w+ \{[^}]*@@ignore[^}]*\}\n+/gm, '')
+    .replace(/^.*\s@ignore\n/gm, '');
+  if (stripped.includes('@ignore')) {
+    throw new Error('the schema still has an @ignore this helper does not remove');
+  }
+  return stripped;
+}
 
 function writeConfig(testDir: string, fixture: string, connectionString: string): string {
   const config = readFileSync(join(JOURNEY_FIXTURES, fixture), 'utf-8').replace(
@@ -199,7 +202,9 @@ withTempDir(({ createTempDir }) => {
       async (fixture) => {
         await printAndVerify(
           setupPrisma7Project(createTempDir, db.connectionString, {
-            copyFrom: join(PRISMA7_FIXTURES, `${fixture}/schema.prisma`),
+            text: withoutIgnoredStorage(
+              readFileSync(join(PRISMA7_FIXTURES, `${fixture}/schema.prisma`), 'utf-8'),
+            ),
           }),
           db.connectionString,
         );
@@ -292,6 +297,18 @@ withTempDir(({ createTempDir }) => {
 
       expect(print.exitCode, output(print)).toBe(2);
       expect(errorOf(print).code).toBe('CONTRACT.SOURCE_LOAD_FAILED');
+      expect(existsSync(join(ctx.testDir, 'contract.prisma'))).toBe(false);
+    });
+
+    it('refuses a Prisma 7 schema with ignored storage and writes nothing', async () => {
+      const ctx = setupPrisma7Project(createTempDir, NO_DATABASE, {
+        copyFrom: join(PRISMA7_FIXTURES, 'relations/schema.prisma'),
+      });
+
+      const print = await runContractPrint(ctx, ['--output', 'contract.prisma', '--json']);
+
+      expect(print.exitCode, output(print)).toBe(2);
+      expect(errorOf(print).code).toBe('CONTRACT.PRINT_UNSUPPORTED');
       expect(existsSync(join(ctx.testDir, 'contract.prisma'))).toBe(false);
     });
 

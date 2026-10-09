@@ -152,6 +152,53 @@ const expectedRefusals: ReadonlyMap<string, ExpectedRefusal> = new Map<string, E
       meta: { model: 'Profile', field: 'user', space: 'supabase' },
     },
   ],
+  // Prisma 7 `@ignore` and `@@ignore` keep storage that no field or model maps, which Prisma 8 PSL cannot write until TML-3469.
+  [
+    'packages/2-sql/2-authoring/contract-prisma7/test/fixtures/ignore/expected-contract.json',
+    {
+      reason: 'is not stored by any field',
+      meta: { namespaceId: 'public', table: 'User', column: 'legacy' },
+    },
+  ],
+  [
+    'packages/2-sql/2-authoring/contract-prisma7/test/fixtures/ignored-field-defaults/expected-contract.json',
+    {
+      reason: 'is not stored by any field',
+      meta: { namespaceId: 'public', table: 'Account', column: 'status' },
+    },
+  ],
+  [
+    'packages/2-sql/2-authoring/contract-prisma7/test/fixtures/ignored-field-in-index/expected-contract.json',
+    {
+      reason: 'is not stored by any field',
+      meta: { namespaceId: 'public', table: 'Indexed', column: 'b' },
+    },
+  ],
+  [
+    'packages/2-sql/2-authoring/contract-prisma7/test/fixtures/ignored-model-many-to-many/expected-contract.json',
+    { reason: 'has no model stored in it', meta: { namespaceId: 'public', table: 'tags' } },
+  ],
+  [
+    'packages/2-sql/2-authoring/contract-prisma7/test/fixtures/ignored-models/expected-contract.json',
+    {
+      reason: 'that no relation of model "User" travels',
+      meta: { namespaceId: 'public', table: 'User', columns: ['archiveId'] },
+    },
+  ],
+  [
+    'packages/2-sql/2-authoring/contract-prisma7/test/fixtures/ignored-relation-back-relations/expected-contract.json',
+    {
+      reason: 'that no relation of model "User" travels',
+      meta: { namespaceId: 'public', table: 'User', columns: ['managerId'] },
+    },
+  ],
+  [
+    'packages/2-sql/2-authoring/contract-prisma7/test/fixtures/ignored-relation-field/expected-contract.json',
+    {
+      reason: 'that no relation of model "Post" travels',
+      meta: { namespaceId: 'public', table: 'Post', columns: ['authorId'] },
+    },
+  ],
   [
     'packages/2-sql/2-authoring/contract-prisma7/test/fixtures/junction-name-in-other-schema/expected-contract.json',
     {
@@ -164,6 +211,13 @@ const expectedRefusals: ReadonlyMap<string, ExpectedRefusal> = new Map<string, E
     {
       reason: 'is declared in more than one namespace',
       meta: { modelName: 'X', namespaces: ['one', 'two'] },
+    },
+  ],
+  [
+    'packages/2-sql/2-authoring/contract-prisma7/test/fixtures/relations-ignored/expected-contract.json',
+    {
+      reason: 'that no relation of model "Post" travels',
+      meta: { namespaceId: 'public', table: 'Post', columns: ['legacyOwnerId'] },
     },
   ],
   [

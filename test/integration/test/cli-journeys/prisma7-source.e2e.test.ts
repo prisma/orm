@@ -3,11 +3,7 @@
  * `prisma.config.ts` points `defineConfig` from the Postgres config entry at
  * `prisma7Schema('./schema.prisma')` runs `contract emit`, `db sign`, and
  * `db verify` through the real command family against a database built by the
- * SQL Prisma 7.10.0 generated, with exit 0 and zero findings. `db verify
- * --strict` reports only what Prisma 7 creates for `@ignore` and `@@ignore`
- * constructs, and the column default left behind by the `@default(now())`
- * removed beside `@updatedAt`. A schema with a `view` fails `contract emit` with one diagnostic
- * and writes nothing.
+ * SQL Prisma 7.10.0 generated, with exit 0 and zero findings. The contract keeps the columns of `@ignore` fields and the tables of `@@ignore` models, so `db verify --strict` reports only the column default left behind by the `@default(now())` removed beside `@updatedAt`. A schema with a `view` fails `contract emit` with one diagnostic and writes nothing.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { withClient } from '@repo/test-utils';
@@ -137,6 +133,7 @@ withTempDir(({ createTempDir }) => {
           public: {
             tables: [
               'Defaults',
+              'LegacyThing',
               'ListDefaults',
               'NativeTypes',
               'NumberDefaults',
@@ -197,13 +194,8 @@ withTempDir(({ createTempDir }) => {
           issues: strictResult.schema.issues.map((issue) => issue.path).sort(),
           unclaimed: strictResult.unclaimed,
         }).toEqual({
-          issues: [
-            ['database', 'public', 'Post', 'column:legacyOwnerId'],
-            ['database', 'public', 'Post', 'foreign-key:legacyOwnerId->public.User(id)'],
-            ['database', 'public', 'Timestamps', 'column:updatedAtNow', 'default'],
-            ['database', 'public', 'User', 'column:legacy'],
-          ],
-          unclaimed: ['LegacyThing'],
+          issues: [['database', 'public', 'Timestamps', 'column:updatedAtNow', 'default']],
+          unclaimed: [],
         });
       },
       timeouts.spinUpPpgDev,
