@@ -86,34 +86,46 @@ describe('a relation join field', () => {
   });
 
   it('may name junction columns on the target side of a many-to-many relation', () => {
-    const contract = createContract<SqlStorage>({
-      storage,
-      models: {
-        User: modelOf(
-          'user',
-          { id: { column: 'id' } },
-          {
-            tags: {
-              to: crossRef('Tag', UNBOUND_NAMESPACE_ID),
-              cardinality: 'N:M',
-              on: { localFields: ['id'], targetFields: ['user_id'] },
-              through: {
-                table: 'user_tag',
-                namespaceId: UNBOUND_NAMESPACE_ID,
-                parentColumns: ['user_id'],
-                childColumns: ['tag_id'],
-                targetColumns: ['id'],
-              },
-            },
-          },
-        ),
-        Tag: modelOf('tag', { id: { column: 'id' } }),
-        UserTag: modelOf('user_tag', {
-          userId: { column: 'user_id' },
-          tagId: { column: 'tag_id' },
-        }),
-      },
-    });
-    expect(() => validateSqlContractFully(contract)).not.toThrow();
+    expect(() => validateSqlContractFully(contractWithTags(['user_id']))).not.toThrow();
+  });
+
+  it('is refused on the target side of a many-to-many relation when it names no junction column', () => {
+    expect(() => validateSqlContractFully(contractWithTags(['userId']))).toThrow(
+      new ContractValidationError(
+        'Relation "tags" on model "__unbound__:User" joins on "userId", which is not a column of junction table "__unbound__.user_tag"',
+        'domain',
+      ),
+    );
   });
 });
+
+function contractWithTags(targetFields: readonly string[]) {
+  return createContract<SqlStorage>({
+    storage,
+    models: {
+      User: modelOf(
+        'user',
+        { id: { column: 'id' } },
+        {
+          tags: {
+            to: crossRef('Tag', UNBOUND_NAMESPACE_ID),
+            cardinality: 'N:M',
+            on: { localFields: ['id'], targetFields },
+            through: {
+              table: 'user_tag',
+              namespaceId: UNBOUND_NAMESPACE_ID,
+              parentColumns: ['user_id'],
+              childColumns: ['tag_id'],
+              targetColumns: ['id'],
+            },
+          },
+        },
+      ),
+      Tag: modelOf('tag', { id: { column: 'id' } }),
+      UserTag: modelOf('user_tag', {
+        userId: { column: 'user_id' },
+        tagId: { column: 'tag_id' },
+      }),
+    },
+  });
+}

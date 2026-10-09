@@ -859,7 +859,7 @@ function fieldNamesWithInherited(
 }
 
 /**
- * Every relation joins on fields: its local fields are fields of the model that declares it, and its target fields are fields of the target model. The target side of a many-to-many relation names the junction table's columns, and a cross-space relation's target is in another contract, so neither is checked there. Throws `ContractValidationError` on the first name that is not a field.
+ * Every relation joins on fields: its local fields are fields of the model that declares it, and its target fields are fields of the target model. The target side of a many-to-many relation names columns of its junction table instead. A cross-space relation's target is in another contract, so its target side is not checked. Throws `ContractValidationError` on the first name that is not a field.
  */
 export function validateRelationJoinFields(contract: Contract<SqlStorage>): void {
   for (const [namespaceId, namespace] of Object.entries(contract.domain.namespaces)) {
@@ -876,7 +876,19 @@ export function validateRelationJoinFields(contract: Contract<SqlStorage>): void
             );
           }
         }
-        if (relation.cardinality === 'N:M' || relation.to.space !== undefined) continue;
+        if (relation.cardinality === 'N:M') {
+          const { namespaceId: junctionNamespaceId, table: junctionTable } = relation.through;
+          for (const column of relation.on.targetFields) {
+            if (!lookupStorageColumn(contract, junctionNamespaceId, junctionTable, column)) {
+              throw new ContractValidationError(
+                `${location} joins on "${column}", which is not a column of junction table "${junctionNamespaceId}.${junctionTable}"`,
+                'domain',
+              );
+            }
+          }
+          continue;
+        }
+        if (relation.to.space !== undefined) continue;
         const targetFields = fieldNamesWithInherited(
           contract,
           relation.to.namespace,
