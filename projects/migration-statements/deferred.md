@@ -65,3 +65,27 @@ Adding a required field to a populated collection, or making an optional field r
 
 `CLI.CONSENT_REQUIRED` lists one `user-choice` next action per flag form ("Run the command again with --delete Legacy", another for the rename form), not grouped by subject and not a complete runnable command, and its summary says "N subjects need a statement", which is project vocabulary. Grouping the forms per subject and printing a full command would need the engine to know the invocation; raise it on prisma/prisma-cli once the statement prompt has shipped.
 
+## SQL variants stored in their own tables
+
+**Found:** slice 4a design (2026-10-09). Will: SQL will need to handle multi-table storage of variants in the future.
+
+On MongoDB a variant's field rename touches only that variant's documents. On SQL today a variant's field is a column in the shared table, and a rename applies to every row. When SQL supports variants stored in their own tables, a variant's field statements must act on that variant's table only.
+
+
+## MongoDB `@map` accepts field names MongoDB cannot validate
+
+**Found:** slice 4a review of dispatch 3 (2026-10-09). For the MongoDB authoring owners, not this project.
+
+`@map("o.d")` or `@map("$x")` is accepted in a MongoDB schema. MongoDB reads such a name as a path or an operator, and an insert of `{ "o.d": ... }` already fails the validator Prisma writes. Slice 4a skips such fields when planning statements. The fix belongs in authoring: reject the name with a diagnostic. When it lands, remove the framework resolver's fallback that reads `User.o.d` as field `o.d` (added in slice 4a), and the planner's silent skip of such fields.
+
+## A repeated run reports outdated statements one at a time
+
+**Found:** slice 4a manual QA (2026-10-09), F3. Applies to every family.
+
+Running the same `db update` again after it applied fails on the first outdated `--rename` or `--delete`, so a user with three outdated flags needs three runs to learn about all of them. The resolver could report every statement that no longer resolves in one error.
+
+## A collection name MongoDB rejects reaches the runner
+
+**Found:** slice 4a manual QA (2026-10-09), F9. For the MongoDB authoring owners.
+
+`@@map("system.x")` is accepted in a MongoDB schema. A rename onto it is refused with a reason, but a plan that creates or drops such a collection fails at apply with `CLI.UNEXPECTED`. Authoring should reject collection names MongoDB rejects.
