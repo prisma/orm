@@ -70,7 +70,7 @@ flowchart LR
    - **Focus:**
      - completion context for the position after `+`, in `completion-context.ts` and `completion-provider.ts`;
      - tests that definition, rename and hover work on mixin names and inclusion operands, with fixes where a provider assumes every declaration is a model, composite type or block;
-     - `semantic-tokens.ts` and `folding-ranges.ts`, which walk the syntax tree directly, for the two new node kinds;
+     - semantic tokens for mixin bodies and for inclusions: after `mixin-grammar` only a mixin's header is tokenised, so its members and every `+Name` are uncoloured;
      - the ADR, and the update to `projects/prisma-8-rc1/feature-surface.md` item 6;
      - the manual QA script and run for the editor behaviour.
 
@@ -78,6 +78,11 @@ flowchart LR
 
 - [ ] **Other in-flight work on the binder and the language server.** `mixin-inclusion` and `mixin-editor-support` change `binder.ts`, the `Resolution` kinds and the completion provider. Check open PRs on those files when each slice is picked up.
 - [x] **Tagged literals (ADR 129).** The RC plan asks for the two grammar changes to be coordinated. `TaggedLiteral` is already a syntax kind in `psl-parser`, so there is nothing left to coordinate.
+
+## Known gaps, not planned
+
+- **A `+name` at the start of a line inside a multi-line argument list that is already invalid** (for example `@@index([` / `a,` / `+b` / `])`) is read as an inclusion of `name`, followed by an "invalid member" diagnostic for the stray `]`. The input is invalid either way, and on `main` the same input already produces member-level diagnostics for the leftover lines. Found in review of `mixin-grammar`.
+- **An argument list left open at the end of a line reports no diagnostic.** This is behaviour on `main`, unrelated to mixins.
 
 ## Sequencing rationale
 
