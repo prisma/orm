@@ -60,6 +60,25 @@ const posts = await db.Post
   .all();
 ```
 
+## Functions and indexes in callbacks
+
+A `where` or `orderBy` callback receives a second argument, `{ fns, indexes }`. So do the filter of `first` and `firstOrThrow`, and these callbacks inside an include refinement, a fragment body and a relation filter (`some`, `every`, `none`, `count`).
+
+```ts
+const q = websearchToTsquery(input.search);
+
+db.Post
+  .where((p, { fns, indexes }) => fns.fullTextMatches(indexes.post_search, q))
+  .orderBy((p, { fns, indexes }) => fns.fullTextRank(indexes.post_search, q).desc())
+  .limit(20)
+  .all();
+```
+
+- `fns` is the SQL query builder's function surface for the contract: `eq`, `and`, `or`, `in`, `exists`, `raw` and every query operation the target and extensions register. It accepts ORM fields as expressions. A condition it returns goes to `where` and to `and`, `or` and `not` from this package. A value it returns has `asc()` and `desc()` for `orderBy`. `fns.raw` binds an interpolated value through the adapter's codec inferer, which `orm({ rawCodecInferer })` takes; the database clients pass it.
+- `indexes` holds the indexes of the model's table, keyed by the name the contract source gave each, as the SQL query builder's `table.indexes` gives them. Each index's columns are bound to the table reference the query uses, so inside an include refinement or a relation filter they follow the alias the ORM gives the related table. A name that more than one index shares is not a key, and reading it throws `ORM.ARGUMENT_INVALID`. On a collection narrowed by `variant`, `indexes` is the base model's table's indexes. The body of a fragment for any model receives an `indexes` with no members, since it does not know its model.
+
+Naming the index makes the query search the document the index was built over, so Postgres uses the index. See [ADR 270](../../../docs/architecture%20docs/adrs/ADR%20270%20-%20ORM%20queries%20use%20the%20query%20builder's%20functions%20and%20a%20model's%20indexes.md).
+
 ## Custom collections
 
 An application extends `Collection` with its own query methods and registers the class with `orm({ collections })`:

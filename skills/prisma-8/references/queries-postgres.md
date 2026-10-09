@@ -123,10 +123,25 @@ model('Message', { fields: { id, text } }).sql(({ cols }) => ({
 @@fullTextIndex([[title, subtitle], body], name: "post_search")
 ```
 
-**Searching an index from the SQL builder.** A table's `indexes` holds each of its indexes under the name the contract gave it, `name:` or `map:`. Pass the full-text index to `fns.fullTextMatches` and `fns.fullTextRank` in place of a column: the operation searches the document the index was built over, with the index's weight groups and language, so the query always matches the index and a title match ranks above a body match. The index states its language, so passing `language` with one is a type error. An index of another type is a type error too.
+**Searching an index: name it.** Name the full-text index and pass it to `fns.fullTextMatches` and `fns.fullTextRank` in place of a column. The operation searches the document the index was built over, with the index's weight groups and language, so the query always matches the index, Postgres uses it, and a title match ranks above a body match. The index states its language, so passing `language` with one is a type error. An index of another type, or a name the model's table does not have, is a type error too.
+
+In the ORM, every `where` and `orderBy` callback receives a second argument `{ fns, indexes }`: `fns` is the SQL builder's functions, and `indexes` holds the indexes of the model's table under the name the contract gave each, `name:` or `map:`. A value from `fns`, such as a rank, has `.asc()` and `.desc()`:
 
 ```typescript
 const q = websearchToTsquery(query);
+const posts = await db.orm.public.Post
+  .select('id', 'title')
+  .where((_p, { fns, indexes }) => fns.fullTextMatches(indexes.post_search, q))
+  .orderBy((_p, { fns, indexes }) => fns.fullTextRank(indexes.post_search, q).desc())
+  .limit(20)
+  .all();
+```
+
+The same argument reaches the callbacks inside an include refinement, a fragment and a relation filter (`some`, `every`, `none`), where the index's columns follow the alias the ORM gives the related table. A condition from `fns` combines with the ORM's `and`, `or` and `not`. The body of a fragment for any model (`db.orm.fragment(fields, body)`) gets `fns` but no indexes.
+
+In the SQL builder, a table's `indexes` holds the same references:
+
+```typescript
 const post = db.sql.public.post;
 const posts = post
   .select('id', 'title')
