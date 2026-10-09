@@ -174,7 +174,7 @@ After `whereUnique`:
 | `create`, `createAll`, `createAndCount`, `upsert` | unchanged; they do not use the filter |
 | `orderBy`, `limit`, `offset`, `cursor`, `distinct`, `distinctOn`, `all`, `aggregate`, `groupBy`, `updateAll`, `updateAndCount`, `deleteAll`, `deleteAndCount`, `prepared.all`, `prepared.aggregate` | compile error |
 
-The refused methods still appear in editor completion; calling one is the error. The error message names `uniqueFilter`.
+The refused methods still appear in editor completion; calling one is the error. The error message names `HasNoUniqueFilter`.
 
 `whereUnique` is not available inside an `include` refinement. The refinement collection does not have the method, and a call that reaches it another way, such as through a fragment made by `collection.fragment`, throws `ORM.INCLUDE_INVALID`.
 
@@ -189,10 +189,11 @@ function ownedBy<C extends Collection<Contract, 'Post', unknown, CollectionTypeS
 }
 ```
 
-Four cases are not refused:
+These cases are not refused:
 
-- A method of a custom collection class, or a fragment run with `with`, can still add an order or a limit to a uniquely filtered collection, and the result of `with(fragment)` for a fragment made by `collection.fragment` no longer records the unique filter. The query still matches at most one record.
-- Inside a method of a custom collection class, `.prepared` after `this.whereUnique(...)` loses the unique filter, as `.prepared` after `.include(...)` loses what `include` established (see [Custom collections](#custom-collections)): `this.whereUnique({ id }).prepared.all()` compiles there, while the same call from outside the class is refused.
+- A method of a custom collection class is callable on a uniquely filtered collection whatever its body does, and so is a fragment made by the client's `fragment` method or by `collection.fragment`, run with `with`. One that adds an order or a limit is accepted; the query still matches at most one record. A function passed to `with` directly is checked: `db.Post.whereUnique({ id }).with((posts) => posts.limit(1))` is refused.
+- The result of `with(fragment)` for a fragment made by `collection.fragment` is the fragment's own result type and no longer records the unique filter, so the many-record methods compile on it.
+- Inside a method of a custom collection class, two results no longer record the unique filter: the result of another method of the class called after `this.whereUnique(...)`, and `.prepared` after `this.whereUnique(...)`, as `.prepared` after `.include(...)` loses what `include` established (see [Custom collections](#custom-collections)). `this.whereUnique({ id }).withTitle('orm').all()` and `this.whereUnique({ id }).prepared.all()` compile there, while the same calls from outside the class are refused. Every other many-record call after `this.whereUnique(...)` is refused inside the class as it is outside.
 - The row-lock methods return the plain `Collection` type for every receiver, so after `whereUnique(...).forUpdate()` the many-record methods compile again and `update` and `delete` do not. Read the locked record with `first()`.
 - A conditional that mixes a uniquely filtered collection with another one, such as `flag ? db.Post.whereUnique({ id }) : db.Post.where({ userId })`, has the many-record methods.
 
