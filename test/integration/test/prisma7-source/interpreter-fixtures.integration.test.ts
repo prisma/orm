@@ -3,8 +3,7 @@
  * against the database Prisma 7.10.0 builds for it: the fixture's
  * `migration.sql` is applied to an empty database, the schema is interpreted
  * through the Postgres binding, and `db verify` reports nothing in lenient
- * mode. In strict mode it reports exactly the tables, columns, and foreign
- * keys Prisma 7 still creates for `@ignore` and `@@ignore` constructs.
+ * or strict mode, `@ignore` and `@@ignore` constructs included.
  * `db verify` does not compare constraint names, so each primary key and
  * foreign key is also checked to have the name the migration planner would
  * use for it: the contract's, or the one the planner derives.
@@ -36,40 +35,6 @@ const successFixtures = readdirSync(fixturesDir, { withFileTypes: true })
   .map((entry) => entry.name)
   .filter((name) => existsSync(join(fixturesDir, name, 'expected-contract.json')))
   .sort();
-
-const strictExtras: Record<string, readonly (readonly string[])[]> = {
-  ignore: [
-    ['database', 'public', 'LegacyThing'],
-    ['database', 'public', 'LegacyThing', 'column:id'],
-    ['database', 'public', 'LegacyThing', 'column:userId'],
-    ['database', 'public', 'LegacyThing', 'foreign-key:userId->public.User(id)'],
-    ['database', 'public', 'LegacyThing', 'primary-key'],
-  ],
-  'ignored-relation-back-relations': [
-    ['database', 'public', '_TagToUser'],
-    ['database', 'public', '_TagToUser', 'column:A'],
-    ['database', 'public', '_TagToUser', 'column:B'],
-    ['database', 'public', '_TagToUser', 'foreign-key:A->public.Tag(id)'],
-    ['database', 'public', '_TagToUser', 'foreign-key:B->public.User(id)'],
-    ['database', 'public', '_TagToUser', 'index:_TagToUser_B_index'],
-    ['database', 'public', '_TagToUser', 'primary-key'],
-  ],
-  'relations-ignored': [
-    ['database', 'public', 'Thing'],
-    ['database', 'public', 'Thing', 'column:id'],
-    ['database', 'public', 'Thing', 'column:userId'],
-    ['database', 'public', 'Thing', 'foreign-key:userId->public.User(id)'],
-    ['database', 'public', 'Thing', 'primary-key'],
-  ],
-  'unsupported-type-model-ignored': [
-    ['database', 'public', 'Post'],
-    ['database', 'public', 'Post', 'column:authorId'],
-    ['database', 'public', 'Post', 'column:id'],
-    ['database', 'public', 'Post', 'column:search'],
-    ['database', 'public', 'Post', 'foreign-key:authorId->public.User(id)'],
-    ['database', 'public', 'Post', 'primary-key'],
-  ],
-};
 
 interface SerializedConstraint {
   readonly name?: string;
@@ -194,14 +159,13 @@ END $$;
 describe('Prisma 7 contract source fixtures against the database Prisma 7 built', () => {
   const { getConnectionString } = useDevDatabase();
 
-  it('finds success fixtures, and pins strict extras only for them', () => {
+  it('finds success fixtures', () => {
     expect(successFixtures.length).toBeGreaterThan(0);
-    expect(Object.keys(strictExtras).filter((name) => !successFixtures.includes(name))).toEqual([]);
   });
 
   for (const fixture of successFixtures) {
     it(
-      `${fixture} verifies with zero lenient findings and only its ignored constructs as strict extras`,
+      `${fixture} verifies with zero lenient and zero strict findings`,
       async () => {
         const migrationPath = join(fixturesDir, fixture, 'migration.sql');
         expect(existsSync(migrationPath), `${fixture} has no migration.sql`).toBe(true);
@@ -217,9 +181,7 @@ describe('Prisma 7 contract source fixtures against the database Prisma 7 built'
         expect(lenient.schema.issues).toEqual([]);
 
         const strict = await runSchemaVerify(getConnectionString(), serialized, { strict: true });
-        expect(strict.schema.issues.map((issue) => issue.path).sort()).toEqual(
-          strictExtras[fixture] ?? [],
-        );
+        expect(strict.schema.issues).toEqual([]);
 
         const planned = plannedConstraintNames(serialized);
         expect(Object.keys(planned).length).toBeGreaterThan(0);

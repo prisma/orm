@@ -60,6 +60,7 @@ import {
   type FieldNode,
   type ModelNode,
   type TableNode,
+  type TableProperties,
 } from '@internal/sql-contract-ts/contract-builder';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -128,6 +129,8 @@ interface ModelDeclaration {
   readonly sources: PslSources;
   readonly namespaceId: string;
   readonly tableName: string;
+  /** The model is `@@ignore`: its table is kept, and the model stays out of the domain. */
+  readonly ignored: boolean;
   readonly id: IndexAttribute | undefined;
   readonly uniqueIndexes: readonly IndexAttribute[];
   readonly indexes: readonly IndexAttribute[];
@@ -235,7 +238,6 @@ export function interpretPrisma7Documents(
   const datasources: SourceBlock[] = [];
   const enumBlocks: SourceBlock[] = [];
   const models: ModelDeclaration[] = [];
-  const ignoredModels = new Set<string>();
   // The symbol table catches duplicates within one file; a name declared
   // again in a later file is caught here with the later file's id.
   const declaredNames = new Map<string, string>();
@@ -316,19 +318,9 @@ export function interpretPrisma7Documents(
     }
     for (const symbol of Object.values(symbolTable.topLevel.models)) {
       if (!claimName('model', symbol.name, sourceId, symbol.span)) continue;
-      const declaration = readModelDeclaration(
-        symbol,
-        sourceId,
-        sources,
-        defaultNamespaceId,
-        binding,
-        diagnostics,
+      models.push(
+        readModelDeclaration(symbol, sourceId, sources, defaultNamespaceId, binding, diagnostics),
       );
-      if (declaration === undefined) {
-        ignoredModels.add(symbol.name);
-      } else {
-        models.push(declaration);
-      }
     }
   }
 
@@ -347,7 +339,10 @@ export function interpretPrisma7Documents(
   }
   const namespaceEntities = lowerNativeEnums(enums, input, diagnostics);
 
-  const modelNames = new Set([...models.map((model) => model.symbol.name), ...ignoredModels]);
+  const modelNames = new Set(models.map((model) => model.symbol.name));
+  const ignoredModels = new Set(
+    models.filter((model) => model.ignored).map((model) => model.symbol.name),
+  );
   const composedExtensions = new Set(input.composedExtensions);
   const builds = new Map<string, ModelBuild>();
   for (const declaration of models) {
@@ -392,6 +387,7 @@ export function interpretPrisma7Documents(
     relationModels.set(modelName, {
       modelName,
       tableName: build.declaration.tableName,
+      ignored: build.declaration.ignored,
       tableSpan:
         build.declaration.symbol.attributes.find((attribute) => attribute.name === 'map')?.span ??
         build.declaration.symbol.span,
@@ -413,13 +409,14 @@ export function interpretPrisma7Documents(
   const lowered = lowerRelations(relationModels, binding, diagnostics);
 
   const modelNodes: ModelNode[] = [];
+  const tables: TableNode[] = [];
   for (const [modelName, build] of builds) {
     const model = relationModels.get(modelName);
     if (model === undefined) continue;
     const ignoredAmong = (fieldNames: readonly string[] | undefined): readonly string[] =>
       fieldNames?.filter((name) => build.ignoredFields.has(name)) ?? [];
     const idAttribute = build.declaration.id;
-    const ignoredIdFields = ignoredAmong(idAttribute?.fields);
+    const ignoredIdFields = model.ignored ? [] : ignoredAmong(idAttribute?.fields);
     if (idAttribute !== undefined && ignoredIdFields.length > 0) {
       diagnostics.push(
         ignoredFieldReferenced({
@@ -458,32 +455,35 @@ export function interpretPrisma7Documents(
       prisma7PrimaryKeyName(model.tableName, build.idMap, binding.identifierMaxBytes),
       binding.defaultConstraintNames.primaryKey(model.tableName),
     );
-    modelNodes.push(
-      stateServedBackingIndexes({
-        modelName,
-        tableName: model.tableName,
+    const tableProperties = stateServedBackingIndexes({
+      tableName: model.tableName,
+      ...(id !== undefined && id.length > 0
+        ? { id: { columns: id, ...ifDefined('name', primaryKeyName) } }
+        : {}),
+      ...(indexes.length > 0 ? { indexes } : {}),
+      ...(foreignKeys !== undefined ? { foreignKeys } : {}),
+    });
+    const ignoredColumns = [...build.ignoredColumns.values()];
+    if (model.ignored) {
+      tables.push({ ...tableProperties, namespaceId: model.namespaceId, columns: ignoredColumns });
+      continue;
+    }
+    modelNodes.push({
+      ...tableProperties,
+      modelName,
+      namespaceId: model.namespaceId,
+      fields: [...build.columns.values()],
+      ...(relations !== undefined ? { relations } : {}),
+    });
+    if (ignoredColumns.length > 0) {
+      tables.push({
         namespaceId: model.namespaceId,
-        fields: [...build.columns.values()],
-        ...(id !== undefined && id.length > 0
-          ? { id: { columns: id, ...ifDefined('name', primaryKeyName) } }
-          : {}),
-        ...(indexes.length > 0 ? { indexes } : {}),
-        ...(foreignKeys !== undefined ? { foreignKeys } : {}),
-        ...(relations !== undefined ? { relations } : {}),
-      }),
-    );
+        tableName: model.tableName,
+        columns: ignoredColumns,
+      });
+    }
   }
-  const tables: TableNode[] = [...builds.values()].flatMap((build) =>
-    build.ignoredColumns.size === 0
-      ? []
-      : [
-          {
-            namespaceId: build.declaration.namespaceId,
-            tableName: build.declaration.tableName,
-            columns: [...build.ignoredColumns.values()],
-          },
-        ],
-  );
+  tables.push(...[...lowered.storageJunctions.values()].map(stateServedBackingIndexes));
   for (const [key, junction] of lowered.junctions) {
     const relations = lowered.relations.get(key);
     modelNodes.push(
@@ -528,7 +528,9 @@ export function interpretPrisma7Documents(
 /**
  * Prisma 7 never derives a backing index for a foreign key, so its relations say `index: false`. Where the model's own indexes or keys already serve a foreign key, the relation takes the default instead, so the build drops the derived index again, or names the named key or plain index whose first columns are the foreign key's. Either way the stored foreign key states what backs it, and no index is added.
  */
-function stateServedBackingIndexes(node: ModelNode): ModelNode {
+function stateServedBackingIndexes<Node extends TableProperties & { readonly tableName: string }>(
+  node: Node,
+): Node {
   if (node.foreignKeys === undefined) return node;
   const table = {
     indexes: (node.indexes ?? []).map((index) =>
@@ -655,9 +657,9 @@ function readModelDeclaration(
   defaultNamespaceId: string,
   binding: Pick<Prisma7TargetBinding, 'indexTypes' | 'identifierMaxBytes'>,
   diagnostics: ContractSourceDiagnostic[],
-): ModelDeclaration | undefined {
+): ModelDeclaration {
   const { indexTypes } = binding;
-  if (symbol.attributes.some((attribute) => attribute.name === 'ignore')) return undefined;
+  let ignored = false;
   let tableName = symbol.name;
   let namespaceId = defaultNamespaceId;
   let id: IndexAttribute | undefined;
@@ -715,6 +717,9 @@ function readModelDeclaration(
         if (parsed?.fields !== undefined) indexes.push(parsed);
         break;
       }
+      case 'ignore':
+        ignored = true;
+        break;
       default:
         diagnostics.push(
           prisma7Diagnostic(
@@ -726,7 +731,17 @@ function readModelDeclaration(
         );
     }
   }
-  return { symbol, sourceId, sources, namespaceId, tableName, id, uniqueIndexes, indexes };
+  return {
+    symbol,
+    sourceId,
+    sources,
+    namespaceId,
+    tableName,
+    ignored,
+    id,
+    uniqueIndexes,
+    indexes,
+  };
 }
 
 function requireStringArgument(
@@ -912,7 +927,9 @@ function readField(args: ReadFieldArgs): void {
   const label = `Field "${model.symbol.name}.${field.name}"`;
   const isRelationField =
     args.modelNames.has(field.typeName) && field.typeConstructor === undefined;
-  const ignored = field.attributes.some((attribute) => attribute.name === 'ignore');
+  const fieldIgnored = field.attributes.some((attribute) => attribute.name === 'ignore');
+  const ignored =
+    fieldIgnored || model.ignored || (isRelationField && args.ignoredModels.has(field.typeName));
   if (ignored) build.ignoredFields.add(field.name);
 
   let columnName = field.name;
@@ -948,7 +965,7 @@ function readField(args: ReadFieldArgs): void {
         build.idFields = [field.name];
         build.idMap = parsed.map;
       }
-      if (ignored) {
+      if (fieldIgnored && !model.ignored) {
         diagnostics.push(
           ignoredFieldReferenced({
             modelName: model.symbol.name,
@@ -999,7 +1016,6 @@ function readField(args: ReadFieldArgs): void {
     );
     return;
   }
-  if (args.ignoredModels.has(field.typeName)) return;
   if (isRelationField) {
     const attribute =
       relation === undefined

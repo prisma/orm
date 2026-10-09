@@ -5,16 +5,13 @@
     "namespaces": {
       "public": {
         "models": {
-          "User": {
+          "Post": {
             "storage": {
-              "table": "User",
+              "table": "Post",
               "namespaceId": "public",
               "fields": {
                 "id": {
                   "column": "id"
-                },
-                "email": {
-                  "column": "email"
                 }
               }
             },
@@ -23,14 +20,6 @@
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
-                },
-                "nullable": false,
-                "many": false
-              },
-              "email": {
-                "type": {
-                  "kind": "scalar",
-                  "codecId": "pg/text@1"
                 },
                 "nullable": false,
                 "many": false
@@ -43,9 +32,9 @@
     }
   },
   "roots": {
-    "User": {
+    "Post": {
       "namespace": "public",
-      "model": "User"
+      "model": "Post"
     }
   },
   "extensions": {},
@@ -53,31 +42,19 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "9244b30d46c12b08f2dc8264e12ce2738f4ec3e779dc7e30d7dee86d11332ad7",
+    "storageHash": "f9cef4b5c90251ebba06e1307b43cb342f99250634b5925b3bc2c570205a2666",
     "namespaces": {
       "public": {
         "id": "public",
         "kind": "postgres-schema",
         "entries": {
           "table": {
-            "User": {
+            "Post": {
               "columns": {
                 "id": {
                   "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
-                  "many": false
-                },
-                "email": {
-                  "dataType": "pg/text",
-                  "codecId": "pg/text@1",
-                  "nullable": false,
-                  "many": false
-                },
-                "legacy": {
-                  "dataType": "pg/text",
-                  "codecId": "pg/text@1",
-                  "nullable": true,
                   "many": false
                 }
               },
@@ -88,7 +65,7 @@
                 "columns": ["id"]
               }
             },
-            "LegacyThing": {
+            "tags": {
               "columns": {
                 "id": {
                   "dataType": "pg/int4",
@@ -96,7 +73,35 @@
                   "nullable": false,
                   "many": false
                 },
-                "userId": {
+                "label": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "tags_label_key",
+                  "unique": true,
+                  "columns": ["label"]
+                }
+              ],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "_PostToTag": {
+              "columns": {
+                "A": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "B": {
                   "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false,
@@ -104,25 +109,52 @@
                 }
               },
               "uniques": [],
-              "indexes": [],
+              "indexes": [
+                {
+                  "name": "_PostToTag_B_index",
+                  "unique": false,
+                  "columns": ["B"]
+                }
+              ],
               "foreignKeys": [
                 {
                   "source": {
                     "namespaceId": "public",
-                    "tableName": "LegacyThing",
-                    "columns": ["userId"]
+                    "tableName": "_PostToTag",
+                    "columns": ["A"]
                   },
                   "target": {
                     "namespaceId": "public",
-                    "tableName": "User",
+                    "tableName": "Post",
                     "columns": ["id"]
                   },
-                  "onDelete": "restrict",
-                  "onUpdate": "cascade"
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade",
+                  "index": {
+                    "primaryKey": true
+                  }
+                },
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "_PostToTag",
+                    "columns": ["B"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "tags",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade",
+                  "index": {
+                    "name": "_PostToTag_B_index"
+                  }
                 }
               ],
               "primaryKey": {
-                "columns": ["id"]
+                "columns": ["A", "B"],
+                "name": "_PostToTag_AB_pkey"
               }
             }
           }

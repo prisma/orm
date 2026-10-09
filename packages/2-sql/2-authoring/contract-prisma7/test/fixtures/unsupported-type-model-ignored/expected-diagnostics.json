@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA7_UNSUPPORTED_TYPE",
+    "file": "schema.prisma",
+    "line": 12,
+    "message": "Field \"Post.search\" has type \"Unsupported(...)\", which has no Prisma 8 codec yet, and Prisma 8 cannot read this schema until it supports the column type. @@ignore on model \"Post\" does not help: Prisma 8 keeps the columns of ignored models in the contract. Removing the field drops its column on Prisma 7's next migration."
+  }
+]

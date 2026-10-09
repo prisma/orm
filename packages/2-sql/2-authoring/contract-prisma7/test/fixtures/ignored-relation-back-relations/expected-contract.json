@@ -153,7 +153,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "da4e0719b6cc3398f07ff0e80b969ce4f4cc460a13648ec5258a4a7a36fcfbcc",
+    "storageHash": "538f8a67cde7ccca9791d96b12e8fe0ccbca04d844b3f2e2091824be228cda1c",
     "namespaces": {
       "public": {
         "id": "public",
@@ -294,6 +294,70 @@
               "foreignKeys": [],
               "primaryKey": {
                 "columns": ["id"]
+              }
+            },
+            "_TagToUser": {
+              "columns": {
+                "A": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "B": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "_TagToUser_B_index",
+                  "unique": false,
+                  "columns": ["B"]
+                }
+              ],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "_TagToUser",
+                    "columns": ["A"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "Tag",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade",
+                  "index": {
+                    "primaryKey": true
+                  }
+                },
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "_TagToUser",
+                    "columns": ["B"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "User",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade",
+                  "index": {
+                    "name": "_TagToUser_B_index"
+                  }
+                }
+              ],
+              "primaryKey": {
+                "columns": ["A", "B"],
+                "name": "_TagToUser_AB_pkey"
               }
             }
           }

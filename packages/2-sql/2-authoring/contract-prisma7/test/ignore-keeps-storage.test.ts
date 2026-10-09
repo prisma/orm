@@ -11,6 +11,12 @@ function withoutIgnoreOn(text: string, fieldNames: readonly string[]): string {
   }, text);
 }
 
+function withoutModelIgnore(text: string): string {
+  const line = /^\s*@@ignore\n/m;
+  expect(text).toMatch(line);
+  return text.replace(line, '');
+}
+
 describe('@ignore leaves storage as it is', () => {
   it('on fields a unique and an index cover', () => {
     const ignored = fixtureSchemaText('ignored-field-in-index');
@@ -36,6 +42,41 @@ describe('@ignore leaves storage as it is', () => {
     const ignored = fixtureSchemaText('ignored-field-defaults');
     expect(storageOf(ignored)).toStrictEqual(
       storageOf(withoutIgnoreOn(ignored, ['status', 'createdAt', 'token', 'touchedAt', 'labels'])),
+    );
+  });
+
+  it('on a model and the relation fields that point to it', () => {
+    const ignored = fixtureSchemaText('ignore');
+    expect(storageOf(ignored)).toStrictEqual(
+      storageOf(withoutIgnoreOn(withoutModelIgnore(ignored), ['legacy', 'things'])),
+    );
+  });
+
+  it('on a model, a relation field, and its back-relation', () => {
+    const ignored = fixtureSchemaText('relations-ignored');
+    expect(storageOf(ignored)).toStrictEqual(
+      storageOf(
+        withoutIgnoreOn(withoutModelIgnore(ignored), [
+          'legacyOwned',
+          'things',
+          'legacyOwnerId',
+          'legacyOwner',
+        ]),
+      ),
+    );
+  });
+
+  it('on relation fields, including one side of an implicit many-to-many relation', () => {
+    const ignored = fixtureSchemaText('ignored-relation-back-relations');
+    expect(storageOf(ignored)).toStrictEqual(
+      storageOf(withoutIgnoreOn(ignored, ['manager', 'author', 'user', 'users'])),
+    );
+  });
+
+  it('on a model on one side of an implicit many-to-many relation', () => {
+    const ignored = fixtureSchemaText('ignored-model-many-to-many');
+    expect(storageOf(ignored)).toStrictEqual(
+      storageOf(withoutIgnoreOn(withoutModelIgnore(ignored), ['tags'])),
     );
   });
 });

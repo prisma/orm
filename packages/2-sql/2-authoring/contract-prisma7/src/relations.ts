@@ -24,6 +24,7 @@ import type {
   IndexNode,
   ModelNode,
   RelationNode,
+  TableNode,
 } from '@internal/sql-contract-ts/contract-builder';
 import { ifDefined } from '@internal/utils/defined';
 import {
@@ -64,6 +65,8 @@ export interface RelationField {
 export interface RelationModel {
   readonly modelName: string;
   readonly tableName: string;
+  /** The model is `@@ignore`: every field of it is ignored, and its table has no model. */
+  readonly ignored: boolean;
   /** The model's `@@map` attribute, or the model when it has none. */
   readonly tableSpan: PslSpan;
   readonly namespaceId: string;
@@ -100,6 +103,7 @@ export type JunctionNaming = Pick<
 
 export interface RelationLowering {
   readonly junctions: ReadonlyMap<string, ModelNode>;
+  readonly storageJunctions: ReadonlyMap<string, TableNode>;
   readonly foreignKeys: ReadonlyMap<string, readonly ForeignKeyNode[]>;
   readonly relations: ReadonlyMap<string, readonly RelationNode[]>;
 }
@@ -204,6 +208,15 @@ function storageColumn(model: RelationModel, fieldName: string): ColumnNode | un
   return model.columns.get(fieldName) ?? model.ignoredColumns.get(fieldName);
 }
 
+/** A foreign key reaches a table with a model through the model, and an `@@ignore` model's table by its name. */
+function referenceTo(
+  model: RelationModel,
+  columns: readonly string[],
+): ForeignKeyNode['references'] {
+  const table = { table: model.tableName, columns, namespaceId: model.namespaceId };
+  return model.ignored ? table : { model: model.modelName, ...table };
+}
+
 function columnNames(
   model: RelationModel,
   fieldNames: readonly string[],
@@ -235,6 +248,8 @@ interface JunctionRequest {
   readonly requester: JunctionSide;
   readonly partner: JunctionSide;
   readonly name: string;
+  /** A side is `@ignore` or `@@ignore`: the junction table is kept, with no model and no relations. */
+  readonly storageOnly: boolean;
 }
 
 function groupBy<T>(items: readonly T[], keyOf: (item: T) => string): Map<string, T[]> {
@@ -376,6 +391,7 @@ export function lowerRelations(
   const invalidFkPairings: InvalidFkPairing[] = [];
   const foreignKeys = new Map<string, ForeignKeyNode[]>();
   const junctions = new Map<string, ModelNode>();
+  const storageJunctions = new Map<string, TableNode>();
   const reportedJunctionNames = new Set<string>();
   const junctionRequests: JunctionRequest[] = [];
   const addForeignKey = (modelName: string, node: ForeignKeyNode): void => {
@@ -530,12 +546,7 @@ export function lowerRelations(
         addForeignKey(model.modelName, {
           ...ifDefined('name', foreignKeyName),
           columns: localColumns,
-          references: {
-            model: target.modelName,
-            table: target.tableName,
-            columns: referencedColumns,
-            namespaceId: target.namespaceId,
-          },
+          references: referenceTo(target, referencedColumns),
           onDelete,
           onUpdate,
           index: false,
@@ -557,21 +568,20 @@ export function lowerRelations(
         continue;
       }
 
-      if (model.ignoredRelationFields.includes(relationField)) continue;
-      if (
+      const ignoredPair =
+        model.ignoredRelationFields.includes(relationField) ||
         target.ignoredRelationFields.some(
           (other) => other.targetModelName === model.modelName && sameName(other, relationField),
-        )
-      ) {
-        continue;
-      }
-      const fkSides = target.relationFields.filter(
+        );
+      const targetRelationFields = [...target.relationFields, ...target.ignoredRelationFields];
+      const fkSides = targetRelationFields.filter(
         (other) =>
           other.targetModelName === model.modelName &&
           isFkSide(other) &&
           sameName(other, relationField),
       );
       if (fkSides.length > 0 || !field.list) {
+        if (ignoredPair) continue;
         candidates.push({
           modelName: model.modelName,
           tableName: model.tableName,
@@ -587,7 +597,7 @@ export function lowerRelations(
         continue;
       }
 
-      const partners = target.relationFields.filter(
+      const partners = targetRelationFields.filter(
         (other) =>
           other !== relationField &&
           other.targetModelName === model.modelName &&
@@ -645,7 +655,12 @@ export function lowerRelations(
         }
         continue;
       }
-      junctionRequests.push({ requester, partner: partnerSide, name: junctionName });
+      junctionRequests.push({
+        requester,
+        partner: partnerSide,
+        name: junctionName,
+        storageOnly: ignoredPair,
+      });
     }
   }
 
@@ -707,9 +722,13 @@ export function lowerRelations(
       );
       continue;
     }
-    for (const { requester, partner } of requests) {
+    for (const { requester, partner, storageOnly } of requests) {
       const junction = synthesizeJunction(requester, partner, naming, diagnostics);
       if (junction === undefined) continue;
+      if (storageOnly) {
+        storageJunctions.set(junction.key, junctionTable(junction.node));
+        continue;
+      }
       if (!junctions.has(junction.key)) {
         junctions.set(junction.key, junction.node);
         fkRelationMetadata.push(...junction.foreignKeys);
@@ -793,7 +812,30 @@ export function lowerRelations(
       [...nodes].sort((left, right) => left.fieldName.localeCompare(right.fieldName)),
     );
   }
-  return { junctions, foreignKeys, relations };
+  return { junctions, storageJunctions, foreignKeys, relations };
+}
+
+/** The table of a junction no relation reaches through the domain. */
+function junctionTable(node: ModelNode): TableNode {
+  return {
+    tableName: node.tableName,
+    ...ifDefined('namespaceId', node.namespaceId),
+    columns: node.fields.flatMap((field) =>
+      'columnName' in field
+        ? [
+            {
+              columnName: field.columnName,
+              descriptor: field.descriptor,
+              nullable: field.nullable,
+              many: field.many ?? false,
+            },
+          ]
+        : [],
+    ),
+    ...ifDefined('id', node.id),
+    ...ifDefined('indexes', node.indexes),
+    ...ifDefined('foreignKeys', node.foreignKeys),
+  };
 }
 
 interface SynthesizedJunction {
@@ -813,16 +855,18 @@ function singleIdColumn(
   side: JunctionSide,
   requester: JunctionSide,
   diagnostics: ContractSourceDiagnostic[],
-): FieldNode | undefined {
+): ColumnNode | undefined {
   if (
     side.model.idFields.some(
-      (name) => side.model.ignoredFields.has(name) || side.model.rejectedFields.has(name),
+      (name) =>
+        (!side.model.ignored && side.model.ignoredFields.has(name)) ||
+        side.model.rejectedFields.has(name),
     )
   ) {
     return undefined;
   }
   const [idField, ...rest] = side.model.idFields;
-  const column = idField === undefined ? undefined : side.model.columns.get(idField);
+  const column = idField === undefined ? undefined : storageColumn(side.model, idField);
   if (column === undefined || rest.length > 0) {
     diagnostics.push(
       prisma7Diagnostic(
@@ -877,20 +921,15 @@ function synthesizeJunction(
     prisma7JunctionPrimaryKeyName(name, naming.identifierMaxBytes),
     naming.defaultConstraintNames.primaryKey(tableName),
   );
-  const foreignKey = (column: 'A' | 'B', side: JunctionSide, id: FieldNode): ForeignKeyNode => ({
+  const foreignKey = (column: 'A' | 'B', side: JunctionSide, id: ColumnNode): ForeignKeyNode => ({
     ...ifDefined('name', foreignKeyName(column)),
     columns: [column],
-    references: {
-      model: side.model.modelName,
-      table: side.model.tableName,
-      columns: [id.columnName],
-      namespaceId: side.model.namespaceId,
-    },
+    references: referenceTo(side.model, [id.columnName]),
     onDelete: 'cascade',
     onUpdate: 'cascade',
     index: false,
   });
-  const metadata = (column: 'A' | 'B', side: JunctionSide, id: FieldNode): FkRelationMetadata => ({
+  const metadata = (column: 'A' | 'B', side: JunctionSide, id: ColumnNode): FkRelationMetadata => ({
     declaringModelName: key,
     declaringFieldName: column === 'A' ? relationFieldA : relationFieldB,
     declaringTableName: tableName,

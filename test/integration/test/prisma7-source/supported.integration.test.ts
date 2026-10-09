@@ -1,8 +1,7 @@
 /**
  * The end-to-end proof for the Prisma 7 contract source on Postgres: the SQL
  * Prisma 7.10.0 generated for the supported schema is applied unchanged, the
- * schema is interpreted, and strict `db verify` reports only what Prisma 7
- * creates for `@@ignore` models, and the column default left
+ * schema is interpreted, and strict `db verify` reports only the column default left
  * behind by the `@default(now())` removed beside `@updatedAt`. See
  * `fixtures/prisma7-source/supported-verify/README.md` for the three edits that
  * make the schema interpretable and the full schema's error case.
@@ -70,7 +69,7 @@ describe('Prisma 7 supported schema against the database Prisma 7 built', () => 
     await withClient(getConnectionString(), (client) => client.query(migrationSql));
   }, timeouts.spinUpPpgDev);
 
-  it('verifies strictly with only the ignored constructs as extras', async () => {
+  it('verifies strictly with only the removed column default as an extra', async () => {
     const serialized = await interpretVerifiableSchema();
     const lenient = await runSchemaVerify(getConnectionString(), serialized);
     expect(lenient.schema.issues).toEqual([]);
@@ -78,9 +77,6 @@ describe('Prisma 7 supported schema against the database Prisma 7 built', () => 
 
     const strict = await runSchemaVerify(getConnectionString(), serialized, { strict: true });
     expect(strict.schema.issues.map((issue) => issue.path).sort()).toEqual([
-      ['database', 'public', 'LegacyThing'],
-      ['database', 'public', 'LegacyThing', 'column:id'],
-      ['database', 'public', 'LegacyThing', 'primary-key'],
       ['database', 'public', 'Timestamps', 'column:updatedAtNow', 'default'],
     ]);
   });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadFixtureSchema, loadFixtureTable } from './support';
+import { interpretSchemaText, loadFixtureSchema, loadFixtureTable } from './support';
 
 const sourceColumns = (fk: Record<string, unknown>) =>
   (fk['source'] as { columns: unknown }).columns;
@@ -90,5 +90,28 @@ describe('an @ignore field whose type has no Prisma 8 codec', () => {
     expect(
       result.ok ? [] : result.failure.diagnostics.map((diagnostic) => diagnostic.code),
     ).toEqual(['PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED', 'PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED']);
+  });
+});
+
+describe('an @@ignore model', () => {
+  it('collides with another model on its table', () => {
+    const schema = `datasource db {
+  provider = "postgresql"
+}
+
+model Live {
+  id Int @id
+
+  @@map("shared")
+}
+
+model Legacy {
+  id Int @id
+
+  @@map("shared")
+  @@ignore
+}
+`;
+    expect(() => interpretSchemaText(schema)).toThrow(/PSL\.PRISMA7_TABLE_COLLISION/);
   });
 });

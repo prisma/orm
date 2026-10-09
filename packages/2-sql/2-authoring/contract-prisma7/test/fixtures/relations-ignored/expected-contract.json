@@ -104,7 +104,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "785e6a06e57bd5a5e7277a7e972f45235cdf8a64b8c1f98516910ae7e8726f17",
+    "storageHash": "6d56d95f4c7e89b6324a27466d7fa8697d240e45a5c85931a5703b9d99953de2",
     "namespaces": {
       "public": {
         "id": "public",
@@ -177,6 +177,43 @@
                     "columns": ["id"]
                   },
                   "onDelete": "setNull",
+                  "onUpdate": "cascade"
+                }
+              ],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "Thing": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "userId": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "Thing",
+                    "columns": ["userId"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "User",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "restrict",
                   "onUpdate": "cascade"
                 }
               ],

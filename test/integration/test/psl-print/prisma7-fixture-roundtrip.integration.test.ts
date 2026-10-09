@@ -45,7 +45,7 @@ const storageWithNoModel: ExpectedRefusal = {
   error: expect.objectContaining({
     code: 'CONTRACT.PRINT_UNSUPPORTED',
     message: expect.stringMatching(
-      /is not stored by any field|that no relation of model .* travels/,
+      /is not stored by any field|that no relation of model .* travels|has no model stored in it/,
     ),
   }),
 };
@@ -55,6 +55,7 @@ const expectedRefusals: ReadonlyMap<string, ExpectedRefusal> = new Map([
   ['ignore', storageWithNoModel],
   ['ignored-field-defaults', storageWithNoModel],
   ['ignored-field-in-index', storageWithNoModel],
+  ['ignored-model-many-to-many', storageWithNoModel],
   ['ignored-relation-back-relations', storageWithNoModel],
   ['ignored-relation-field', storageWithNoModel],
   [

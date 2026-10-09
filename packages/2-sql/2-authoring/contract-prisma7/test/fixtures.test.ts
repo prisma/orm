@@ -67,6 +67,7 @@ describe('Prisma 7 fixtures', () => {
       'ignored-field-in-relation',
       'ignored-field-no-codec',
       'ignored-id-in-implicit-many-to-many',
+      'ignored-model-many-to-many',
       'ignored-relation-back-relations',
       'ignored-relation-field',
       'implicit-many-to-many',
