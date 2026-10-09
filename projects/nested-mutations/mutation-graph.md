@@ -127,6 +127,13 @@ A peephole returns a new node and the graph rewires edges to it.
 
 - **Why.** It is the repo's convention for IR class hierarchies, a rule cannot change a node it does not own, and the only cost is one `replace` function the graph needs anyway.
 
+### D10a. The graph is a bidirectional adjacency list with stable positions
+
+Nodes sit in numbered slots; a node is referred to by its position, which `add` returns. An edge is one object holding `from` and `to` as positions and is listed at both of its nodes (edges in, edges out). Replacing a node writes its slot and touches no edge. A removed node leaves its slot empty; other positions do not change. Position order is dependency order.
+
+- **Why.** The operations are: append a node with its inputs, look up the edges into and out of a node, replace a node, remove a node, make a node's users read from another node. Edges that hold node objects had to be rebuilt on every replacement, and a single edge array made every lookup a scan. This is the form of Boost's `adjacency_list` with `bidirectionalS` and petgraph's `StableGraph`: parallel edges, data on edges, both directions by lookup, removal that does not invalidate other positions.
+- **Assumes.** Nodes stay frozen and edges stay separate objects (D2, D10). The form compilers use, where each node holds mutable arrays of its inputs and users (Simple, LLVM), fits peephole rules slightly better and is the one to revisit if those two decisions change.
+
 ### D11. The caller's `select` is returned by the write; `include` is loaded afterwards by the existing read code
 
 - **Why.** Returning the selection from the write costs no extra statement, which is what plain writes do today and nested writes do not (they reload the row). Putting includes in the graph would mean building the read half of a planner, which is out of scope.
@@ -179,6 +186,10 @@ Stage 1 builds the graph for what main does today. The bar is that every integra
 
 | Alternative | Why rejected |
 | --- | --- |
+| Graph as an edge list, or edges that hold node objects | Lookups scan the graph; every replacement rebuilds the node's edges |
+| Adjacency list with input edges only | "Who reads from this node" is a scan, and rules that redirect a node's users need it |
+| Use-def and def-use arrays on the nodes (Simple, LLVM) | Nodes are mutated on every change and an edge has nowhere to carry its kind and column pairs |
+| Adjacency matrix, compressed sparse row, adjacency map | For dense graphs; for graphs that do not change; no parallel edges without a further level |
 | Keep the executor and make it more regular (one object per relation layout, one class per user operation) | Tried in PR #30634 and abandoned: `create` does not fit an attach/detach interface, and statements still run as a side effect with nothing to inspect |
 | Classes for user operations (`Connect`, `Disconnect`, ...) in the list | Each would branch on relation layout when run; the per-layout knowledge belongs in one translation |
 | Links as references embedded in a node's values and `where`, filled in before compiling | Needs a placeholder inside expression trees and a rewrite step; edges avoid both |

@@ -34,7 +34,7 @@ The design is in [`../../mutation-graph.md`](../../mutation-graph.md) and the ru
 
 - **Location.** A directory `src/mutation-graph/` in `packages/3-extensions/sql-orm-client`. One file per concern (nodes, edges, graph, printed form, runner); no file re-exports another.
 - **A node holds its statement as SQL AST** (`Find` a `SelectAst`, `Update` an `UpdateAst`, `Delete` a `DeleteAst`), built by the graph builder. It holds nothing that comes from another node and nothing about what it returns; the runner applies edges and derived columns with the AST's `withWhere` and `withReturning`. Nodes are frozen; `peephole` returns the node itself or a replacement.
-- **Edges are objects held by the graph**, each with `from`, `to`, and for `FilterData` a list of `[sourceColumn, targetColumn]` pairs.
+- **The graph is a bidirectional adjacency list with stable positions** (design record D10a). `add` returns the node's position; an edge is one object with `from` and `to` as positions, listed at both of its nodes, and for `FilterData` a list of `[sourceColumn, targetColumn]` pairs; a removed node leaves its slot empty.
 - **The graph names its result**: a node, a form (rows, first row, or count), and the caller's selection and includes.
 - **The runner** takes a graph, the runtime, the execution context and the caller's annotations, and:
   - executes nodes one at a time in dependency order;
