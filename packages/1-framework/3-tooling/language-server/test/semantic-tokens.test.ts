@@ -747,42 +747,178 @@ policy Probe { on = auth.User\n other = Top.User }`,
       parseSemanticTokenSource([lines[0], lines[1], '', lines[3], lines[4]].join('\n')),
     );
 
-    expect(withMixins.filter((token) => token.line < 5)).toEqual(withoutMixins);
-    expect(withMixins.filter((token) => token.line >= 5)).toEqual([
-      { text: 'model', tokenType: 'keyword', modifiers: [], line: 5, character: 0 },
-      { text: 'mixin', tokenType: 'keyword', modifiers: [], line: 5, character: 6 },
-      { text: 'Timestamps', tokenType: 'type', modifiers: ['declaration'], line: 5, character: 12 },
-    ]);
+    expect(withMixins.filter((token) => token.line < 5 && token.line !== 2)).toEqual(withoutMixins);
   });
 
-  it('builds tokens for a mixin of each keyword inside a namespace', () => {
+  it('tokenises a model body with an inclusion that has a namespace qualifier, in source order', () => {
     const source = parseSemanticTokenSource(
       [
+        'model User {',
+        '  id Int @id',
+        '  +auth.Timestamps',
+        '}',
         'namespace auth {',
-        '  enum mixin BaseRoles {',
-        '    ADMIN',
-        '  }',
-        '  policy mixin OwnerRead {',
-        '    +Shared',
-        '    k = 1',
-        '  }',
-        '  type mixin {',
+        '  model mixin Timestamps {',
         '  }',
         '}',
       ].join('\n'),
     );
 
+    expect(collectDetails(source).filter((token) => token.line < 4)).toEqual([
+      { text: 'model', tokenType: 'keyword', modifiers: [], line: 0, character: 0 },
+      { text: 'User', tokenType: 'class', modifiers: ['declaration'], line: 0, character: 6 },
+      { text: 'id', tokenType: 'property', modifiers: ['declaration'], line: 1, character: 2 },
+      { text: 'Int', tokenType: 'type', modifiers: ['defaultLibrary'], line: 1, character: 5 },
+      { text: '@id', tokenType: 'decorator', modifiers: [], line: 1, character: 9 },
+      { text: '+auth', tokenType: 'namespace', modifiers: [], line: 2, character: 2 },
+      { text: 'Timestamps', tokenType: 'type', modifiers: [], line: 2, character: 8 },
+    ]);
+  });
+
+  it('tokenises an inclusion without a qualifier as one type token that starts at the plus', () => {
+    const source = parseSemanticTokenSource(
+      ['model mixin Timestamps {', '}', 'model User {', '  +Timestamps', '  id Int', '}'].join(
+        '\n',
+      ),
+    );
+
+    expect(collectDetails(source).filter((token) => token.line === 3)).toEqual([
+      { text: '+Timestamps', tokenType: 'type', modifiers: [], line: 3, character: 2 },
+    ]);
+  });
+
+  it('tokenises an enum mixin: the header, then each member', () => {
+    const source = parseSemanticTokenSource(
+      ['enum mixin BaseRoles {', '  ADMIN', '  USER = "user"', '}'].join('\n'),
+    );
+
+    expect(collectDetails(source)).toEqual([
+      { text: 'enum', tokenType: 'keyword', modifiers: [], line: 0, character: 0 },
+      { text: 'mixin', tokenType: 'keyword', modifiers: [], line: 0, character: 5 },
+      { text: 'BaseRoles', tokenType: 'type', modifiers: ['declaration'], line: 0, character: 11 },
+      { text: 'ADMIN', tokenType: 'property', modifiers: [], line: 1, character: 2 },
+      { text: 'USER', tokenType: 'property', modifiers: [], line: 2, character: 2 },
+      { text: '"user"', tokenType: 'string', modifiers: [], line: 2, character: 9 },
+    ]);
+  });
+
+  it.each([
+    [
+      'a model mixin like a model body',
+      'model mixin Stamped {',
+      'model Stamped {',
+      [
+        '  createdAt DateTime @default(now())',
+        '  owner User @relation(fields: [ownerId], references: [id])',
+        '  ownerId Int',
+        '',
+        '  @@index([createdAt])',
+      ],
+    ],
+    [
+      'a type mixin like a composite type body',
+      'type mixin Geo {',
+      'type Geo {',
+      ['  lat Float', '  label String?'],
+    ],
+    [
+      'an enum mixin like an enum body',
+      'enum mixin Roles {',
+      'enum Roles {',
+      ['  ADMIN', '  USER = "user"', '  @@type("pg/text@1")'],
+    ],
+    [
+      'a key = value mixin like a generic block body',
+      'policy mixin Owner {',
+      'policy Owner {',
+      ['  roles = [authenticated]', '  using = "true"', '  @@map("owner")'],
+    ],
+  ])('tokenises the body of %s', (_name, mixinHeader, blockHeader, body) => {
+    const rest = ['}', 'model User {', '  id Int @id', '}'];
+    const bodyTokens = (header: string) =>
+      collectDetails(parseSemanticTokenSource([header, ...body, ...rest].join('\n'))).filter(
+        (token) => token.line > 0,
+      );
+
+    expect(bodyTokens(mixinHeader)).toEqual(bodyTokens(blockHeader));
+    expect(bodyTokens(mixinHeader).some((token) => token.line <= body.length)).toBe(true);
+  });
+
+  it('tokenises inclusions in a composite type, an enum, a key = value block and a mixin body, between their members', () => {
+    const source = parseSemanticTokenSource(
+      [
+        'namespace shared {',
+        '  type mixin Geo {',
+        '  }',
+        '}',
+        'type Address {',
+        '  street String',
+        '  +shared.Geo',
+        '}',
+        'enum Role {',
+        '  +BaseRoles',
+        '  GUEST',
+        '}',
+        'policy P {',
+        '  k = 1',
+        '  +shared.Owner',
+        '}',
+        'model mixin Audited {',
+        '  +Timestamps',
+        '  actor String',
+        '}',
+      ].join('\n'),
+    );
+    const onLines = (...lines: number[]) =>
+      collectDetails(source)
+        .filter((token) => lines.includes(token.line))
+        .map((token) => [token.text, token.tokenType, token.modifiers.join(',')]);
+
+    expect(onLines(5, 6)).toEqual([
+      ['street', 'property', 'declaration'],
+      ['String', 'type', 'defaultLibrary'],
+      ['+shared', 'namespace', ''],
+      ['Geo', 'type', ''],
+    ]);
+    expect(onLines(9, 10)).toEqual([
+      ['+BaseRoles', 'type', ''],
+      ['GUEST', 'property', ''],
+    ]);
+    expect(onLines(13, 14)).toEqual([
+      ['k', 'property', ''],
+      ['1', 'number', ''],
+      ['+shared', 'namespace', ''],
+      ['Owner', 'type', ''],
+    ]);
+    expect(onLines(17, 18)).toEqual([
+      ['+Timestamps', 'type', ''],
+      ['actor', 'property', 'declaration'],
+      ['String', 'type', 'defaultLibrary'],
+    ]);
+  });
+
+  it('gives a qualifier that is not a namespace no token, and the name a type token', () => {
+    const source = parseSemanticTokenSource(['model User {', '  +nowhere.Thing', '}'].join('\n'));
+
+    expect(collectDetails(source).filter((token) => token.line === 1)).toEqual([
+      { text: 'Thing', tokenType: 'type', modifiers: [], line: 1, character: 11 },
+    ]);
+  });
+
+  it('builds tokens for a mixin with no name and for an inclusion with no name', () => {
+    const source = parseSemanticTokenSource(
+      ['type mixin {', '  lat Int', '}', 'model User {', '  +', '  id Int', '}'].join('\n'),
+    );
+
     expect(collectDetails(source).map((token) => [token.text, token.tokenType])).toEqual([
-      ['namespace', 'keyword'],
-      ['auth', 'namespace'],
-      ['enum', 'keyword'],
-      ['mixin', 'keyword'],
-      ['BaseRoles', 'type'],
-      ['policy', 'keyword'],
-      ['mixin', 'keyword'],
-      ['OwnerRead', 'type'],
       ['type', 'keyword'],
       ['mixin', 'keyword'],
+      ['lat', 'property'],
+      ['Int', 'type'],
+      ['model', 'keyword'],
+      ['User', 'class'],
+      ['id', 'property'],
+      ['Int', 'type'],
     ]);
   });
 });

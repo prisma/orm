@@ -1,10 +1,11 @@
 import type { Binder, Resolution } from '@internal/psl-parser';
 import {
   ArrayLiteralAst,
+  type AstNode,
   type AttributeArgAst,
   type AttributeArgListAst,
   type AttributeAst,
-  type BlockMemberAst,
+  any,
   BooleanLiteralExprAst,
   CompositeTypeDeclarationAst,
   type DeclarationAst,
@@ -12,9 +13,12 @@ import {
   type ExpressionAst,
   FieldDeclarationAst,
   FunctionCallAst,
-  type GenericBlockMemberAst,
+  filterChildren,
   type IdentifierAst,
+  KeyValuePairAst,
   MixinDeclarationAst,
+  MixinInclusionAst,
+  ModelAttributeAst,
   ModelDeclarationAst,
   type NamedTypeDeclarationAst,
   NamespaceDeclarationAst,
@@ -236,14 +240,14 @@ function collectDeclaration(
   if (declaration instanceof ModelDeclarationAst) {
     addToken(declaration.keyword(), 'keyword', tokens);
     addIdentifier(declaration.name(), 'class', tokens, semanticTokenModifierBits.declaration);
-    collectBlockMembers(declaration.members(), source, tokens);
+    collectFieldBlockMembers(declaration, source, tokens);
     return;
   }
 
   if (declaration instanceof CompositeTypeDeclarationAst) {
     addToken(declaration.keyword(), 'keyword', tokens);
     addIdentifier(declaration.name(), 'struct', tokens, semanticTokenModifierBits.declaration);
-    collectBlockMembers(declaration.members(), source, tokens);
+    collectFieldBlockMembers(declaration, source, tokens);
     return;
   }
 
@@ -268,12 +272,82 @@ function collectDeclaration(
     addToken(declaration.keyword(), 'keyword', tokens);
     addToken(declaration.mixinKeyword(), 'keyword', tokens);
     addIdentifier(declaration.name(), 'type', tokens, semanticTokenModifierBits.declaration);
+    if (FIELD_BLOCK_KEYWORDS.has(declaration.keyword()?.text ?? '')) {
+      collectFieldBlockMembers(declaration, source, tokens);
+    } else {
+      collectEntryBlockMembers(declaration, source, tokens);
+    }
     return;
   }
 
   addToken(declaration.keyword(), 'keyword', tokens);
   addIdentifier(declaration.name(), 'type', tokens, semanticTokenModifierBits.declaration);
-  collectGenericBlockMembers(declaration.members(), source, tokens);
+  collectEntryBlockMembers(declaration, source, tokens);
+}
+
+const FIELD_BLOCK_KEYWORDS: ReadonlySet<string> = new Set(['model', 'type']);
+
+const fieldBlockMember = any(
+  FieldDeclarationAst.cast,
+  ModelAttributeAst.cast,
+  MixinInclusionAst.cast,
+);
+
+const entryBlockMember = any(KeyValuePairAst.cast, ModelAttributeAst.cast, MixinInclusionAst.cast);
+
+function collectFieldBlockMembers(
+  block: AstNode,
+  source: SemanticTokenSource,
+  tokens: PendingSemanticToken[],
+): void {
+  for (const member of filterChildren(block.syntax, fieldBlockMember)) {
+    if (member instanceof MixinInclusionAst) {
+      collectInclusion(member, source, tokens);
+    } else if (member instanceof FieldDeclarationAst) {
+      collectField(member, source, tokens);
+    } else {
+      collectAttribute(member, source, tokens);
+    }
+  }
+}
+
+function collectEntryBlockMembers(
+  block: AstNode,
+  source: SemanticTokenSource,
+  tokens: PendingSemanticToken[],
+): void {
+  for (const member of filterChildren(block.syntax, entryBlockMember)) {
+    if (member instanceof MixinInclusionAst) {
+      collectInclusion(member, source, tokens);
+    } else if (member instanceof KeyValuePairAst) {
+      addIdentifier(member.key(), 'property', tokens);
+      collectExpression(member.value(), source, tokens);
+    } else {
+      collectAttribute(member, source, tokens);
+    }
+  }
+}
+
+function collectInclusion(
+  inclusion: MixinInclusionAst,
+  source: SemanticTokenSource,
+  tokens: PendingSemanticToken[],
+): void {
+  const name = inclusion.name();
+  if (name === undefined) return;
+  const plus = inclusion.plus();
+  const segments = identifierSegments(name);
+  for (const [index, segment] of segments.entries()) {
+    const isName = index === segments.length - 1;
+    const qualifier = isName ? undefined : source.binder.symbolForNode(segment.identifier.syntax);
+    if (!isName && qualifier?.kind !== 'namespace') continue;
+    const range = rangeForIdentifier(segment.identifier, isName ? 'type' : 'namespace');
+    tokens.push(
+      index === 0 && plus !== undefined && plus.offset < range.startOffset
+        ? createPendingSemanticToken(plus.offset, range.endOffset, isName ? 'type' : 'namespace')
+        : range,
+    );
+  }
 }
 
 function collectNamedTypeDeclaration(
@@ -284,35 +358,6 @@ function collectNamedTypeDeclaration(
   addIdentifier(declaration.name(), 'type', tokens, semanticTokenModifierBits.declaration);
   collectTypeAnnotation(declaration.typeAnnotation(), source, tokens);
   collectAttributes(declaration.attributes(), source, tokens);
-}
-
-function collectGenericBlockMembers(
-  members: Iterable<GenericBlockMemberAst>,
-  source: SemanticTokenSource,
-  tokens: PendingSemanticToken[],
-): void {
-  for (const member of members) {
-    if ('key' in member) {
-      addIdentifier(member.key(), 'property', tokens);
-      collectExpression(member.value(), source, tokens);
-      continue;
-    }
-    collectAttribute(member, source, tokens);
-  }
-}
-
-function collectBlockMembers(
-  members: Iterable<BlockMemberAst>,
-  source: SemanticTokenSource,
-  tokens: PendingSemanticToken[],
-): void {
-  for (const member of members) {
-    if (member instanceof FieldDeclarationAst) {
-      collectField(member, source, tokens);
-      continue;
-    }
-    collectAttribute(member, source, tokens);
-  }
 }
 
 function collectField(
