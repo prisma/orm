@@ -5,12 +5,12 @@ import {
   isPslIdentifier,
   type ModelSymbol,
   type PslSymbol,
+  type ResolvedAttribute,
   typeReferenceNode,
 } from '@internal/psl-parser';
 import type { ResolvedFormatOptions } from '@internal/psl-parser/format';
 import {
   type AstNode,
-  type ModelAttributeAst,
   ModelDeclarationAst,
   type SourceFile,
   type SyntaxNode,
@@ -108,8 +108,8 @@ function renamedSymbol(input: ProvideRenameInput): PslSymbol | undefined {
 }
 
 function modelTakesMap(model: ModelSymbol, source: AttributeSpecSource): boolean {
-  if (hasAttribute(model.node.attributes(), 'map')) return false;
-  if (hasAttribute(model.node.attributes(), 'base')) return false;
+  if (hasAttribute(model.attributes, 'map')) return false;
+  if (hasAttribute(model.attributes, 'base')) return false;
   return (
     attributeSpecResolver({ ownerKind: 'model', model: model.node }, source)('map') !== undefined
   );
@@ -119,7 +119,7 @@ function fieldTakesMap(field: FieldSymbol, source: AttributeSpecSource): boolean
   const owner = field.node.syntax.parent;
   const model = owner === undefined ? undefined : ModelDeclarationAst.cast(owner);
   if (model === undefined) return false;
-  if (hasAttribute(field.node.attributes(), 'map')) return false;
+  if (hasAttribute(field.attributes, 'map')) return false;
   const type = typeReferenceNode(field);
   const typeKind = type === undefined ? undefined : source.binder.symbolForNode(type)?.kind;
   if (typeKind === 'model' || typeKind === 'crossSpace') return false;
@@ -128,18 +128,13 @@ function fieldTakesMap(field: FieldSymbol, source: AttributeSpecSource): boolean
 }
 
 function blockTakesMap(block: BlockSymbol, source: AttributeSpecSource): boolean {
-  if (hasAttribute(block.node.attributes(), 'map')) return false;
+  if (hasAttribute(block.attributes, 'map')) return false;
   return findBlockDescriptor(source.pslBlockDescriptors, block.keyword)?.nameIsStorageName === true;
 }
 
-function hasAttribute(attributes: Iterable<AttributeNameHolder>, name: string): boolean {
-  for (const attribute of attributes) {
-    if (attribute.name()?.isSimpleName(name) === true) return true;
-  }
-  return false;
+function hasAttribute(attributes: readonly ResolvedAttribute[], name: string): boolean {
+  return attributes.some((attribute) => attribute.node.name()?.isSimpleName(name) === true);
 }
-
-type AttributeNameHolder = Pick<ModelAttributeAst, 'name'>;
 
 function fieldMapEdit(field: FieldSymbol, input: ProvideRenameInput): MapAttributeEdit | undefined {
   const sourceFile = sourceFileOf(field.node, input);

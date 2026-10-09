@@ -346,7 +346,7 @@ function enumMemberNames(ctx: FieldAttributeSpecContext): readonly string[] | un
   const block = resolution.symbol;
   const names: string[] = [];
   const seen = new Set<string>();
-  for (const entry of block.node.entries()) {
+  for (const entry of block.entries) {
     const key = entry.key()?.name();
     if (key === undefined || seen.has(key)) continue;
     seen.add(key);

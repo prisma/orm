@@ -33,7 +33,6 @@ import {
   keywordPslSpan,
   nodePslSpan,
   readResolvedAttribute,
-  readResolvedAttributes,
 } from '@internal/psl-parser';
 import type {
   DocumentAst,
@@ -163,7 +162,7 @@ function stringArgument(attribute: ResolvedAttribute): string | undefined {
 }
 
 function blockEntry(source: SourceBlock, key: string): KeyValuePairAst | undefined {
-  for (const entry of source.block.node.entries()) {
+  for (const entry of source.block.entries) {
     if (entry.key()?.name() === key) return entry;
   }
   return undefined;
@@ -187,7 +186,7 @@ function reportDottedBlockValues(
   sources: PslSources,
   diagnostics: ContractSourceDiagnostic[],
 ): void {
-  for (const entry of block.node.entries()) {
+  for (const entry of block.entries) {
     const value = entry.value();
     if (value === undefined) continue;
     for (const path of dottedPathsIn(value)) {
@@ -206,7 +205,7 @@ function reportDuplicateBlockEntries(
   diagnostics: ContractSourceDiagnostic[],
 ): void {
   const seen = new Set<string>();
-  for (const entry of source.block.node.entries()) {
+  for (const entry of source.block.entries) {
     const key = entry.key()?.name();
     if (key === undefined) continue;
     if (seen.has(key)) {
@@ -752,7 +751,7 @@ function readEnumDeclaration(
   const { block, sourceId, sources } = source;
   let typeName = block.name;
   let namespaceId = defaultNamespaceId;
-  for (const attribute of readResolvedAttributes(block.node.attributes(), sources)) {
+  for (const attribute of block.attributes) {
     switch (attribute.name) {
       case 'map':
         typeName = requireStringArgument(attribute, block.name, sourceId, diagnostics) ?? typeName;
@@ -774,7 +773,7 @@ function readEnumDeclaration(
   }
   const members: EnumDeclaration['members'][number][] = [];
   const seenMemberNames = new Set<string>();
-  for (const entry of block.node.entries()) {
+  for (const entry of block.entries) {
     const name = entry.key()?.name();
     if (name === undefined) continue;
     if (seenMemberNames.has(name)) {
