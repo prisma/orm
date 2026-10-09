@@ -27,7 +27,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'e3b0c8f8179cd7f34043bd807931a2c8da42d929b6636356078f801e0065b4a2'>;
+  StorageHashBase<'eb6f84b41a504f6321cee64830fa009008d86182fc00b541b4c9b6e8e457134d'>;
 export type ExecutionHash =
   ExecutionHashBase<'829773c079904c23ddf101be0289f11ed0567791abfb43e4a322833c60ba7aef'>;
 export type ProfileHash =
@@ -980,10 +980,27 @@ type ContractBase = Omit<
               uniques: readonly [{ readonly columns: readonly ['email'] }];
               indexes: readonly [
                 {
+                  readonly name: 'users_invited_by_id_idx_3fd5d47f';
+                  readonly prefix: 'users_invited_by_id_idx';
+                  readonly columns: readonly ['email', 'invited_by_id'];
+                  readonly unique: false;
+                },
+                {
                   readonly name: 'users_invited_by_id_idx_80b34397';
                   readonly prefix: 'users_invited_by_id_idx';
                   readonly columns: readonly ['invited_by_id'];
                   readonly unique: false;
+                },
+                {
+                  readonly name: 'users_search_1d1ec8a9';
+                  readonly prefix: 'users_search';
+                  readonly columns: readonly ['name', 'email'];
+                  readonly unique: false;
+                  readonly type: 'fullText';
+                  readonly options: {
+                    readonly language: 'english';
+                    readonly weightGroups: readonly [readonly ['name'], readonly ['email']];
+                  };
                 },
               ];
               foreignKeys: readonly [

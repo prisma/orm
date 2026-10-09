@@ -127,6 +127,8 @@
     "./relational-core/codec-descriptor-registry": "./dist/relational-core__codec-descriptor-registry.mjs",
     "./relational-core/contract-free": "./dist/relational-core__contract-free.mjs",
     "./relational-core/expression": "./dist/relational-core__expression.mjs",
+    "./relational-core/functions": "./dist/relational-core__functions.mjs",
+    "./relational-core/index-reference": "./dist/relational-core__index-reference.mjs",
     "./relational-core/middleware": "./dist/relational-core__middleware.mjs",
     "./relational-core/plan": "./dist/relational-core__plan.mjs",
     "./relational-core/query-lane-context": "./dist/relational-core__query-lane-context.mjs",

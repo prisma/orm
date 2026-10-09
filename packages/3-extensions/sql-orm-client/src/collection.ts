@@ -111,7 +111,7 @@ import type {
   RowType,
   TypeState,
 } from './collection-types';
-import { shorthandToWhereExpr } from './filters';
+import { shorthandToWhereExpr, whereArgOf } from './filters';
 import {
   assertFragmentBody,
   assertModelFragmentReceiver,
@@ -129,7 +129,7 @@ import {
   isIncludeScalar,
 } from './include-descriptors';
 import { assertLockCompatible } from './lock-guards';
-import { createModelAccessor } from './model-accessor';
+import { createModelAccessor, createModelCallbackTools } from './model-accessor';
 import {
   buildRowIdentityFilterFromRow,
   executeNestedCreateMutation,
@@ -175,6 +175,7 @@ import {
   type IncludeRelationValue,
   type IncludeScalar,
   type InferRootRow,
+  type ModelCallbackTools,
   type MutationCreateInput,
   type MutationCreateInputWithRelations,
   type MutationUpdateInput,
@@ -189,6 +190,7 @@ import {
   type VariantAwareModelAccessor,
   type VariantModelRow,
   type VariantNameForValue,
+  type WhereCallbackResult,
   type WithNsId,
 } from './types';
 import { normalizeWhereArg } from './where-interop';
@@ -479,7 +481,8 @@ export class CollectionBase<
     this: Self,
     fn: (
       model: VariantAwareModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>,
-    ) => WhereDirectInput,
+      tools: ModelCallbackTools<TContract, ModelName, State['nsId']>,
+    ) => WhereCallbackResult,
   ): Filtered<Self>;
   where<Self>(this: Self, input: WhereDirectInput): Filtered<Self>;
   where<Self>(
@@ -496,17 +499,21 @@ export class CollectionBase<
             State['variantName'],
             State['nsId']
           >,
-        ) => WhereDirectInput)
+          tools: ModelCallbackTools<TContract, ModelName, State['nsId']>,
+        ) => WhereCallbackResult)
       | ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
   ): Filtered<this> {
     const whereArg =
       typeof input === 'function'
-        ? input(
-            createModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>(
-              this.ctx.context,
-              this.namespaceId,
-              this.modelName,
-              this.state.variantName,
+        ? whereArgOf(
+            input(
+              createModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>(
+                this.ctx.context,
+                this.namespaceId,
+                this.modelName,
+                this.state.variantName,
+              ),
+              this.#callbackTools(),
             ),
           )
         : isWhereDirectInput(input)
@@ -527,6 +534,14 @@ export class CollectionBase<
     return this.#cloneSelf<HasWhere>({
       filters: [...this.state.filters, filter],
     });
+  }
+
+  #callbackTools(): ModelCallbackTools<TContract, ModelName, State['nsId']> {
+    return createModelCallbackTools<TContract, ModelName, State['nsId']>(
+      this.ctx.context,
+      this.namespaceId,
+      this.modelName,
+    );
   }
 
   /**
@@ -1072,6 +1087,7 @@ export class CollectionBase<
             State['variantName'],
             State['nsId']
           >,
+          tools: ModelCallbackTools<TContract, ModelName, State['nsId']>,
         ) => OrderByItem)
       | ReadonlyArray<
           (
@@ -1081,6 +1097,7 @@ export class CollectionBase<
               State['variantName'],
               State['nsId']
             >,
+            tools: ModelCallbackTools<TContract, ModelName, State['nsId']>,
           ) => OrderByItem
         >,
   ): Ordered<Self>;
@@ -1093,6 +1110,7 @@ export class CollectionBase<
             State['variantName'],
             State['nsId']
           >,
+          tools: ModelCallbackTools<TContract, ModelName, State['nsId']>,
         ) => OrderByItem)
       | ReadonlyArray<
           (
@@ -1102,6 +1120,7 @@ export class CollectionBase<
               State['variantName'],
               State['nsId']
             >,
+            tools: ModelCallbackTools<TContract, ModelName, State['nsId']>,
           ) => OrderByItem
         >,
   ): Ordered<this> {
@@ -1111,8 +1130,9 @@ export class CollectionBase<
       this.modelName,
       this.state.variantName,
     );
+    const tools = this.#callbackTools();
     const selectors = Array.isArray(selection) ? selection : [selection];
-    const nextOrders = selectors.map((selector) => selector(accessor));
+    const nextOrders = selectors.map((selector) => selector(accessor, tools));
     const existing = this.state.orderBy ?? [];
     return this.#cloneSelf<HasOrderBy>({
       orderBy: [...existing, ...nextOrders],

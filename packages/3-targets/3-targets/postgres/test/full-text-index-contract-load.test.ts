@@ -15,7 +15,7 @@ function demoContractWithPostIndexes(
   const json = JSON.parse(readFileSync(demoContractPath, 'utf-8'));
   const post = json.storage.namespaces.public.entries.table.post;
   post.indexes = post.indexes.map((index: Record<string, unknown>) =>
-    index['type'] === 'fullText' ? edit(index) : index,
+    index['prefix'] === 'post_title_search' ? edit(index) : index,
   );
   return json;
 }

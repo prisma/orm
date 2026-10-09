@@ -1,15 +1,16 @@
 import type { StorageTable } from '@internal/sql-contract/types';
 import { type AnyFromSource, ColumnRef, type TableSource } from '@internal/sql-relational-core/ast';
+import { ExpressionImpl } from '@internal/sql-relational-core/expression';
+import type { Functions, Subquery } from '@internal/sql-relational-core/functions';
+import { createIndexReferences } from '@internal/sql-relational-core/index-reference';
 import { assertDefined } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
-import { structuredError } from '@internal/utils/structured-error';
 import type {
   AggregateFunctions,
   Expression,
   ExpressionBuilder,
   ExtractScopeFields,
   FieldProxy,
-  Functions,
   WithField,
   WithFields,
 } from '../expression';
@@ -26,17 +27,14 @@ import type {
   ScopeField,
   ScopeTable,
   StorageTableToScopeTable,
-  Subquery,
 } from '../scope';
 import type { NamespaceTable, TableProxyContract } from '../types/db';
-import type { IndexReference } from '../types/index-reference';
 import type { JoinedTables } from '../types/joined-tables';
 import type { DeleteQuery, InsertQuery, UpdateQuery } from '../types/mutation-query';
 import type { SelectQuery } from '../types/select-query';
 import type { LateralBuilder } from '../types/shared';
 import type { TableProxy } from '../types/table-proxy';
 import { BuilderBase, type BuilderContext, emptyState, tableToScope } from './builder-base';
-import { ExpressionImpl } from './expression-impl';
 import { JoinedTablesImpl } from './joined-tables-impl';
 import {
   buildParamValues,
@@ -123,49 +121,20 @@ export class TableProxyImpl<
   #indexReferences(): TableProxy<C, NsId, Name, Alias, AvailableScope, QC>['indexes'] {
     const fields = this.#scope.namespaces[this.#alias];
     assertDefined(fields, 'a table proxy scopes its own alias');
-    const byName = new Map<string, IndexReference[]>();
-    for (const index of this.#table.indexes) {
-      const authoredName = index.prefix ?? index.name;
-      const columns = Object.fromEntries(
-        (index.columns ?? []).map((column) => {
-          const field = fields[column];
-          assertDefined(field, `index "${index.name}" covers a column of its table`);
-          return [column, new ExpressionImpl(ColumnRef.of(this.#alias, column), field)];
-        }),
-      );
-      const reference = Object.freeze({
-        columns: Object.freeze(columns),
-        type: index.type,
-        options: index.options,
-      });
-      byName.set(authoredName, [...(byName.get(authoredName) ?? []), reference]);
-    }
-    const references = {};
-    for (const [authoredName, [reference, ...others]] of byName) {
-      Object.defineProperty(references, authoredName, {
-        enumerable: true,
-        get: () => {
-          if (others.length > 0) throw this.#ambiguousIndexName(authoredName);
-          return reference;
-        },
-      });
-    }
+    const references = createIndexReferences({
+      namespaceId: this.#namespaceId,
+      tableName: this.#tableName,
+      table: this.#table,
+      column: (column) => {
+        const field = fields[column];
+        assertDefined(field, `an index covers a column of table "${this.#tableName}"`);
+        return new ExpressionImpl(ColumnRef.of(this.#alias, column), field);
+      },
+    });
     return blindCast<
       TableProxy<C, NsId, Name, Alias, AvailableScope, QC>['indexes'],
       "the storage table states each index's name, columns, type and options at runtime; the declared type is the contract's own statement about the same indexes"
-    >(Object.freeze(references));
-  }
-
-  #ambiguousIndexName(authoredName: string) {
-    return structuredError(
-      'ORM.ARGUMENT_INVALID',
-      `Table "${this.#tableName}" has more than one index named "${authoredName}".`,
-      {
-        why: 'An index is read by the name its contract source gave it, and these indexes share that name.',
-        fix: `Give each of these indexes of table "${this.#tableName}" its own name in the contract source.`,
-        meta: { namespaceId: this.#namespaceId, tableName: this.#tableName, index: authoredName },
-      },
-    );
+    >(references);
   }
 
   lateralJoin = this._gate(

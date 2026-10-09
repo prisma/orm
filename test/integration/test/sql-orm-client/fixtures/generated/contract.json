@@ -1269,10 +1269,40 @@
               "indexes": [
                 {
                   "columns": [
+                    "email",
+                    "invited_by_id"
+                  ],
+                  "name": "users_invited_by_id_idx_3fd5d47f",
+                  "prefix": "users_invited_by_id_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
                     "invited_by_id"
                   ],
                   "name": "users_invited_by_id_idx_80b34397",
                   "prefix": "users_invited_by_id_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "name",
+                    "email"
+                  ],
+                  "name": "users_search_1d1ec8a9",
+                  "options": {
+                    "language": "english",
+                    "weightGroups": [
+                      [
+                        "name"
+                      ],
+                      [
+                        "email"
+                      ]
+                    ]
+                  },
+                  "prefix": "users_search",
+                  "type": "fullText",
                   "unique": false
                 }
               ],
@@ -1295,7 +1325,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "e3b0c8f8179cd7f34043bd807931a2c8da42d929b6636356078f801e0065b4a2"
+    "storageHash": "eb6f84b41a504f6321cee64830fa009008d86182fc00b541b4c9b6e8e457134d"
   },
   "execution": {
     "executionHash": "829773c079904c23ddf101be0289f11ed0567791abfb43e4a322833c60ba7aef",

@@ -45,6 +45,7 @@ export const contract = defineContract(
       fields: {
         id: field.id.uuidv4String(),
         title: field.text(),
+        body: field.text().optional(),
         userId: field.uuidString(),
         priority: field.namedType(Priority).default(Priority.members.Low),
         createdAt: field.temporal.createdAt(),
@@ -69,7 +70,10 @@ export const contract = defineContract(
           user: rel.belongsTo(User, { from: 'userId', to: 'id' }),
         }).sql(({ cols, constraints }) => ({
           table: 'post',
-          indexes: [fullTextIndex(cols.title, { name: 'post_title_search' })],
+          indexes: [
+            fullTextIndex(cols.title, { name: 'post_title_search' }),
+            fullTextIndex([[cols.title], cols.body], { name: 'post_search' }),
+          ],
           foreignKeys: [
             constraints.foreignKey(cols.userId, User.refs.id, {
               name: 'post_userId_fkey',

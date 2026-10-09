@@ -137,6 +137,13 @@
                   "kind": "scalar"
                 }
               },
+              "parentId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
               "subtitle": {
                 "nullable": true,
                 "type": {
@@ -152,7 +159,39 @@
                 }
               }
             },
-            "relations": {},
+            "relations": {
+              "children": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "parentId"
+                  ]
+                },
+                "to": {
+                  "model": "Document",
+                  "namespace": "public"
+                }
+              },
+              "parent": {
+                "cardinality": "N:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "parentId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Document",
+                  "namespace": "public"
+                }
+              }
+            },
             "storage": {
               "fields": {
                 "body": {
@@ -160,6 +199,9 @@
                 },
                 "id": {
                   "column": "id"
+                },
+                "parentId": {
+                  "column": "parent_id"
                 },
                 "subtitle": {
                   "column": "subtitle"
@@ -557,6 +599,11 @@
                   "dataType": "pg/int4",
                   "nullable": false
                 },
+                "parent_id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": true
+                },
                 "subtitle": {
                   "codecId": "pg/text@1",
                   "dataType": "pg/text",
@@ -706,7 +753,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "cc39ec65d731f934d15f8c51234782aed90989c29a9ba6cdba357fc6203aa29a"
+    "storageHash": "cec3a8f11aade5a9a7f03634db328c621e27176d7edb1b378e109b6bffa8faa6"
   },
   "execution": {
     "executionHash": "551678164cf11e55dbfa5b34642fb312efdfc63dfd0d165887eaa0d73bb2db84",

@@ -7,7 +7,14 @@ import {
 import { vector } from '@internal/extension-pgvector/column-types';
 import pgvector from '@internal/extension-pgvector/pack';
 import { uuidv4 } from '@internal/ids';
-import { defineContract, field, model, now, rel } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  fullTextIndex,
+  model,
+  now,
+  rel,
+} from '@internal/postgres/contract-builder';
 
 const UserBase = model('User', {
   fields: {
@@ -152,7 +159,13 @@ const User = UserBase.relations({
     from: 'userId',
     to: 'roleId',
   }),
-}).sql({ table: 'users' });
+}).sql(({ cols, constraints }) => ({
+  table: 'users',
+  indexes: [
+    fullTextIndex([[cols.name], cols.email], { name: 'users_search' }),
+    constraints.index([cols.email, cols.invitedById], { name: 'users_invited_by_id_idx' }),
+  ],
+}));
 
 const baseContract = defineContract({
   extensions: { pgvector },

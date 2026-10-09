@@ -55,13 +55,19 @@ const Comment = model('Comment', {
   ],
 }));
 
-const Document = model('Document', {
+const DocumentBase = model('Document', {
   fields: {
     id: field.column(int4Column).id(),
     title: field.column(textColumn),
     subtitle: field.column(textColumn).optional(),
     body: field.column(textColumn).optional(),
+    parentId: field.column(int4Column).optional().column('parent_id'),
   },
+});
+
+const Document = DocumentBase.relations({
+  parent: rel.belongsTo(DocumentBase, { from: 'parentId', to: 'id' }),
+  children: rel.hasMany(() => DocumentBase, { by: 'parentId' }),
 }).sql(({ cols }) => ({
   table: 'documents',
   indexes: [fullTextIndex([[cols.title, cols.subtitle], cols.body], { name: 'documents_search' })],

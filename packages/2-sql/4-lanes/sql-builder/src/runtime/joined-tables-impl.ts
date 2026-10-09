@@ -4,6 +4,7 @@ import {
   JoinAst,
   type TableSource,
 } from '@internal/sql-relational-core/ast';
+import { createFunctions, type Subquery } from '@internal/sql-relational-core/functions';
 import type {
   AggregateFunctions,
   Expression,
@@ -24,7 +25,6 @@ import type {
   Scope,
   ScopeField,
   ScopeTable,
-  Subquery,
 } from '../scope';
 import type { JoinedTables } from '../types/joined-tables';
 import type { SelectQuery } from '../types/select-query';
@@ -40,7 +40,6 @@ import {
   resolveSelectArgs,
 } from './builder-base';
 import { createFieldProxy } from './field-proxy';
-import { createFunctions } from './functions';
 import { SelectQueryImpl } from './query-impl';
 
 export class JoinedTablesImpl<QC extends QueryContext, AvailableScope extends Scope>

@@ -165,6 +165,10 @@ See [ADR 204 — Single-Path Async Codec Runtime](../../../../docs/architecture%
 - `SelectAst.selectAllIntent` — preserves select-all intent when normalized to explicit columns
 - `DeleteAst.where` and `UpdateAst.where` optional for mutation-without-WHERE lint support
 
+### Functions and index references (`exports/functions.ts`, `exports/index-reference.ts`)
+- `createFunctions` builds the `fns` surface both query lanes hand to their callbacks: the built-in functions (`eq`, `and`, `or`, `in`, `exists`, `raw`, …) and every registered query operation. `Functions<QC>` types it from a context's codec types and query operation types.
+- `createIndexReferences` builds a table's index references, keyed by authored name, with columns supplied by the lane so they are bound to the table reference the query uses. `TableIndexReferences<Table>` types them from the contract's storage table. A name more than one index shares throws `ORM.ARGUMENT_INVALID` when read.
+
 ### Type Definitions (`types.ts`)
 - Defines TypeScript types for column builders, operations, projections
 - Provides type inference utilities for extracting JavaScript types from codec types (e.g., `ExtractJsTypeFromColumnBuilder`)
@@ -181,6 +185,9 @@ This package follows the standard `exports/` directory pattern:
 - `src/exports/operations-registry.ts` - Re-exports operations registry
 - `src/exports/plan.ts` - Re-exports plan types and helpers
 - `src/exports/ast.ts` - Re-exports SQL AST types
+- `src/exports/expression.ts` - Re-exports expression types and helpers, and `ExpressionImpl`
+- `src/exports/functions.ts` - Re-exports the function surface
+- `src/exports/index-reference.ts` - Re-exports index reference types and construction
 - `src/index.ts` - Main entry point that re-exports from `exports/`
 
 This enables subpath imports like `@internal/sql-relational-core/schema`, `@internal/sql-relational-core/param`, `@internal/sql-relational-core/plan`, etc.

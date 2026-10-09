@@ -22,7 +22,7 @@ This package depends on:
 - `@internal/sql-contract` for contract shape and mappings
 - `@internal/contract` for the contract shape and `PlanMeta`
 - `@internal/framework-components` for `AsyncIterableResult`
-- `@internal/sql-relational-core` for SQL AST, plan types, and the `RuntimeScope` interface
+- `@internal/sql-relational-core` for SQL AST, plan types, the `RuntimeScope` interface, and the function surface and index references it shares with the SQL query builder
 
 This package should not depend on target adapters or drivers directly; execution is delegated to the runtime queryable interface.
 
@@ -60,6 +60,27 @@ const posts = await db.Post
   .all();
 ```
 
+## Functions and indexes in callbacks
+
+A `where` or `orderBy` callback receives a second argument, `{ fns, indexes }`. So do the filter of `first` and `firstOrThrow`, and these callbacks inside an include refinement, a fragment body and a relation filter (`some`, `every`, `none`, `count`).
+
+```ts
+const q = websearchToTsquery(input.search);
+
+db.Post
+  .where((p, { fns, indexes }) => fns.fullTextMatches(indexes.post_search, q))
+  .orderBy((p, { fns, indexes }) => fns.fullTextRank(indexes.post_search, q).desc())
+  .limit(20)
+  .all();
+```
+
+- `fns` is the SQL query builder's function surface for the contract: `eq`, `and`, `or`, `in`, `exists`, `raw` and every query operation the target and extensions register. It accepts ORM fields as expressions. Conditions combine in both directions: `and`, `or` and `not` from this package take ORM conditions such as `p.title.ilike('%x%')` and conditions from `fns`, and `fns.and` and `fns.or` take both too. `fns` has no `not`; use the package's `not`. A condition from `fns` also goes straight to `where`. A value it returns, and the result of `fns.raw`, has `asc()` and `desc()` for `orderBy`; a value keeps its own methods. `fns.raw` binds an interpolated value through the adapter's codec inferer, which the execution context carries when it is built from an execution stack, as a database client's `db.context` is.
+- `indexes` holds the indexes of the model's table, keyed by the name the contract source gave each, as the SQL query builder's `table.indexes` gives them. Each index's columns are bound to the table reference the query uses, so inside an include refinement or a relation filter they follow the alias the ORM gives the related table. A name that more than one index shares is left out of the type; at run time it is a key whose getter throws `ORM.ARGUMENT_INVALID` when read. On a collection narrowed by `variant`, `indexes` is the base model's table's indexes. The body of a fragment for any model receives an `indexes` with no members, since it does not know its model.
+
+A reusable condition types its second parameter as `ModelCallbackTools<Contract, 'Post'>`, beside `ModelAccessor<Contract, 'Post'>` for the first. `OrmFunctions<Contract>` and `ModelIndexReferences<Contract, 'Post'>` name its two members.
+
+Naming the index makes the query search the document the index was built over, so Postgres uses the index. See [ADR 270](../../../docs/architecture%20docs/adrs/ADR%20270%20-%20ORM%20queries%20use%20the%20query%20builder's%20functions%20and%20a%20model's%20indexes.md).
+
 ## Custom collections
 
 An application extends `Collection` with its own query methods and registers the class with `orm({ collections })`:
@@ -77,6 +98,8 @@ db.Post.include('user').withTitle('orm');
 ```
 
 `where`, `orderBy`, `limit`, `offset`, `distinct`, `distinctOn`, `cursor` and `include` return the collection they were called on, so the class's methods stay available. What a chain has established is added to the type as a fact: `where` gives `Filtered<Self>`, `orderBy` gives `Ordered<Self>`, and `include` gives `Including<Self, ...>`, whose rows also have the included relation. Write a filtered collection's type as `Filtered<C>`; it is `C & HasWhere`, and `HasWhere` is the name error messages print. `select` changes the row and `variant` changes the collection's type argument, so both return the base `Collection` type and the class's methods are gone after them.
+
+Inside an include refinement, the related collection is typed as the base `Collection`, so the registered class's methods are not available there in the types ([ADR 265](../../../docs/architecture%20docs/adrs/ADR%20265%20-%20A%20collection%20keeps%20its%20class%20through%20the%20chain.md), "Later decisions"). Write the shared part as a fragment for the model and apply it with `with`: `db.User.include('posts', (posts) => posts.with(search).limit(3))`.
 
 Inside a class body, a class method called on the result of another call loses what that call established, and so does `.prepared` after `.include(...)`: in `latest() { return this.withTitle('orm').newestFirst(); }` the result is known to be ordered but not filtered, for every caller of `latest()` (TML-3434). Inside the class, follow a class method with built-in methods (`this.withTitle('orm').orderBy(...)`), or chain the class methods from outside the class, where they keep every fact.
 

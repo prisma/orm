@@ -1,4 +1,3 @@
-import type { QueryOperationTypesBase } from '@internal/sql-contract/types';
 import type { OrderByNulls } from '@internal/sql-relational-core/ast';
 import type {
   CodecExpression,
@@ -6,11 +5,10 @@ import type {
   RawSqlTag,
   TraitExpression,
 } from '@internal/sql-relational-core/expression';
-import type { Expand, QueryContext, Scope, ScopeField, ScopeTable, Subquery } from './scope';
+import type { BooleanCodecType, Functions } from '@internal/sql-relational-core/functions';
+import type { Expand, QueryContext, Scope, ScopeField, ScopeTable } from './scope';
 
 export type { CodecExpression, Expression, RawSqlTag, TraitExpression };
-
-export type BooleanCodecType = { codecId: 'pg/bool@1'; nullable: boolean };
 
 export type WithField<Source, Field extends ScopeField, Alias extends string> = Expand<
   Source & { [K in Alias]: Field }
@@ -55,69 +53,6 @@ export type OrderByScope<
   topLevel: Expand<AvailableScope['topLevel'] & RowType>;
   namespaces: AvailableScope['namespaces'];
 };
-
-type DeriveExtFunctions<OT extends QueryOperationTypesBase> = {
-  [K in keyof OT]: OT[K]['impl'];
-};
-
-export type BuiltinFunctions<CT extends Record<string, { readonly input: unknown }>> = {
-  eq: <CodecId extends string>(
-    a: CodecExpression<CodecId, boolean, CT> | null,
-    b: CodecExpression<CodecId, boolean, CT> | null,
-  ) => Expression<BooleanCodecType>;
-  ne: <CodecId extends string, N extends boolean>(
-    a: CodecExpression<CodecId, N, CT> | null,
-    b: CodecExpression<CodecId, N, CT> | null,
-  ) => Expression<BooleanCodecType>;
-  gt: <CodecId extends string, N extends boolean>(
-    a: CodecExpression<CodecId, N, CT>,
-    b: CodecExpression<CodecId, N, CT>,
-  ) => Expression<BooleanCodecType>;
-  gte: <CodecId extends string, N extends boolean>(
-    a: CodecExpression<CodecId, N, CT>,
-    b: CodecExpression<CodecId, N, CT>,
-  ) => Expression<BooleanCodecType>;
-  lt: <CodecId extends string, N extends boolean>(
-    a: CodecExpression<CodecId, N, CT>,
-    b: CodecExpression<CodecId, N, CT>,
-  ) => Expression<BooleanCodecType>;
-  lte: <CodecId extends string, N extends boolean>(
-    a: CodecExpression<CodecId, N, CT>,
-    b: CodecExpression<CodecId, N, CT>,
-  ) => Expression<BooleanCodecType>;
-  and: (...ands: CodecExpression<'pg/bool@1', boolean, CT>[]) => Expression<BooleanCodecType>;
-  or: (...ors: CodecExpression<'pg/bool@1', boolean, CT>[]) => Expression<BooleanCodecType>;
-
-  exists: (subquery: Subquery<Record<string, ScopeField>>) => Expression<BooleanCodecType>;
-  notExists: (subquery: Subquery<Record<string, ScopeField>>) => Expression<BooleanCodecType>;
-
-  in: {
-    <CodecId extends string>(
-      expr: Expression<{ codecId: CodecId; nullable: boolean }>,
-      subquery: Subquery<Record<string, { codecId: CodecId; nullable: boolean }>>,
-    ): Expression<BooleanCodecType>;
-    <CodecId extends string>(
-      expr: Expression<{ codecId: CodecId; nullable: boolean }>,
-      values: Array<CodecExpression<CodecId, boolean, CT>>,
-    ): Expression<BooleanCodecType>;
-  };
-
-  notIn: {
-    <CodecId extends string>(
-      expr: Expression<{ codecId: CodecId; nullable: boolean }>,
-      subquery: Subquery<Record<string, { codecId: CodecId; nullable: boolean }>>,
-    ): Expression<BooleanCodecType>;
-    <CodecId extends string>(
-      expr: Expression<{ codecId: CodecId; nullable: boolean }>,
-      values: Array<CodecExpression<CodecId, boolean, CT>>,
-    ): Expression<BooleanCodecType>;
-  };
-
-  readonly raw: RawSqlTag;
-};
-
-export type Functions<QC extends QueryContext> = BuiltinFunctions<QC['codecTypes']> &
-  DeriveExtFunctions<QC['queryOperationTypes']>;
 
 /**
  * The field an aggregate produces, read from the contract's emitted aggregate map.

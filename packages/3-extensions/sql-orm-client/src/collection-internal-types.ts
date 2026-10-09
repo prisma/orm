@@ -1,6 +1,5 @@
 import type { Contract } from '@internal/contract/types';
 import type { ExtractAggregateTypes, SqlStorage } from '@internal/sql-contract/types';
-import type { WhereArg } from '@internal/sql-relational-core/ast';
 import type { Collection } from './collection';
 import type { CollectionRowOf, HasRow, RowType } from './collection-types';
 import type {
@@ -12,9 +11,11 @@ import type {
   IncludeCombineBranch,
   IncludeRelationValue,
   IncludeScalar,
+  ModelCallbackTools,
   RelationCardinality,
   ShorthandWhereFilter,
   VariantAwareModelAccessor,
+  WhereCallbackResult,
 } from './types';
 
 export interface CollectionInit<TContract extends Contract<SqlStorage>> {
@@ -152,7 +153,10 @@ export type WhereInput<
   ModelName extends string,
   VariantName extends string | undefined = undefined,
 > =
-  | ((model: VariantAwareModelAccessor<TContract, ModelName, VariantName, NsId>) => WhereArg)
+  | ((
+      model: VariantAwareModelAccessor<TContract, ModelName, VariantName, NsId>,
+      tools: ModelCallbackTools<TContract, ModelName, NsId>,
+    ) => WhereCallbackResult)
   | ShorthandWhereFilter<TContract, NsId, ModelName>;
 
 export interface IncludeRefinementEvaluation {

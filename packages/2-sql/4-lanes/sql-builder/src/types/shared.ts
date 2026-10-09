@@ -1,4 +1,5 @@
 import type { LockOptionCapabilities, LockWaitOptions } from '@internal/sql-relational-core/ast';
+import type { Subquery } from '@internal/sql-relational-core/functions';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type {
   AggregateFunctions,
@@ -23,7 +24,6 @@ import type {
   Scope,
   ScopeField,
   ScopeTable,
-  Subquery,
 } from '../scope';
 import type { JoinedTables } from './joined-tables';
 import type { SelectQuery } from './select-query';

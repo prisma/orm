@@ -8,7 +8,6 @@ import {
   type Direction,
   isOrderByDirection,
   type OrderByItem,
-  type WhereArg,
 } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { blindCast } from '@internal/utils/casts';
@@ -25,6 +24,8 @@ import type {
   FieldsOf,
   Orderable,
   OrderableFieldNames,
+  OrmFunctions,
+  WhereCallbackResult,
 } from './types';
 
 type FieldMultiplicity = false | { readonly elementNullable: boolean };
@@ -109,25 +110,40 @@ export interface FragmentFacts {
   readonly hasOrderBy: boolean;
 }
 
-type OrderSelector<Row> = (row: Row) => OrderByItem;
+/** The second argument of a `where` or `orderBy` callback in the body of a fragment for any model: every function, and no index, as the body does not know its model. */
+export interface DeclaredFieldsFragmentCallbackTools<TContract extends Contract<SqlStorage>> {
+  readonly fns: OrmFunctions<TContract>;
+  readonly indexes: Readonly<Record<never, never>>;
+}
+
+type OrderSelector<Row, TContract extends Contract<SqlStorage>> = (
+  row: Row,
+  tools: DeclaredFieldsFragmentCallbackTools<TContract>,
+) => OrderByItem;
 
 /** The collection the body of a fragment for any model receives: the methods that keep the row, on the declared fields, and what has been established so far. */
-export interface DeclaredFieldsFragmentCollection<Row, Facts extends FragmentFacts> {
+export interface DeclaredFieldsFragmentCollection<
+  Row,
+  Facts extends FragmentFacts,
+  TContract extends Contract<SqlStorage> = Contract<SqlStorage>,
+> {
   readonly [FragmentFactsType]: Facts;
   where(
-    fn: (row: Row) => WhereArg,
+    fn: (row: Row, tools: DeclaredFieldsFragmentCallbackTools<TContract>) => WhereCallbackResult,
   ): DeclaredFieldsFragmentCollection<
     Row,
-    { readonly hasWhere: true; readonly hasOrderBy: Facts['hasOrderBy'] }
+    { readonly hasWhere: true; readonly hasOrderBy: Facts['hasOrderBy'] },
+    TContract
   >;
   orderBy(
-    selection: OrderSelector<Row> | ReadonlyArray<OrderSelector<Row>>,
+    selection: OrderSelector<Row, TContract> | ReadonlyArray<OrderSelector<Row, TContract>>,
   ): DeclaredFieldsFragmentCollection<
     Row,
-    { readonly hasWhere: Facts['hasWhere']; readonly hasOrderBy: true }
+    { readonly hasWhere: Facts['hasWhere']; readonly hasOrderBy: true },
+    TContract
   >;
-  limit(n: number): DeclaredFieldsFragmentCollection<Row, Facts>;
-  offset(n: number): DeclaredFieldsFragmentCollection<Row, Facts>;
+  limit(n: number): DeclaredFieldsFragmentCollection<Row, Facts, TContract>;
+  offset(n: number): DeclaredFieldsFragmentCollection<Row, Facts, TContract>;
 }
 
 type ContractFieldMultiplicity<Field> = Field extends { readonly many: infer Many }
@@ -587,11 +603,13 @@ export function defineDeclaredFieldsFragment<
   body: (
     rows: DeclaredFieldsFragmentCollection<
       DeclaredFieldsFragmentModelAccessor<TContract, DeclaredFields<Declarations>>,
-      FragmentFacts
+      FragmentFacts,
+      TContract
     >,
   ) => DeclaredFieldsFragmentCollection<
     DeclaredFieldsFragmentModelAccessor<TContract, DeclaredFields<Declarations>>,
-    Facts
+    Facts,
+    TContract
   >,
 ): DeclaredFieldsFragment<TContract, DeclaredFields<Declarations>, Facts> {
   const fields = declaredFieldSpecs(declarations);
@@ -603,18 +621,69 @@ export function defineDeclaredFieldsFragment<
     const receiver: unknown = collection;
     assertFragmentReceiver(receiver);
     assertDeclaredFieldsFragmentFields(receiver, fields);
-    const result: unknown = body(
+    const returned: unknown = body(
       blindCast<
         DeclaredFieldsFragmentCollection<
           DeclaredFieldsFragmentModelAccessor<TContract, DeclaredFields<Declarations>>,
-          FragmentFacts
+          FragmentFacts,
+          TContract
         >,
         'a collection offers where, orderBy, limit and offset with these run-time shapes'
-      >(collection),
+      >(withoutIndexes(receiver)),
     );
+    const result = collectionBehind(returned);
     assertDeclaredFieldsFragmentResult(receiver, result);
     return result;
   });
+}
+
+const NO_INDEXES = Object.freeze({});
+
+const collectionsBehindViews = new WeakMap<object, unknown>();
+
+const BODY_CHAIN_METHODS: Readonly<
+  Record<
+    Exclude<
+      keyof DeclaredFieldsFragmentCollection<unknown, FragmentFacts>,
+      typeof FragmentFactsType
+    >,
+    true
+  >
+> = { where: true, orderBy: true, limit: true, offset: true };
+
+/**
+ * The collection as the body of a fragment for any model sees it: a `where` or `orderBy` callback receives `fns` and an `indexes` with no members, as the body does not know its model.
+ */
+function withoutIndexes(collection: object): object {
+  const view = new Proxy(collection, {
+    get(target, prop) {
+      const member: unknown = Reflect.get(target, prop, target);
+      if (typeof member !== 'function') return member;
+      if (!Object.hasOwn(BODY_CHAIN_METHODS, prop)) return member.bind(target);
+      return (...args: unknown[]) => {
+        const result: unknown = Reflect.apply(member, target, args.map(withoutIndexesInCallbacks));
+        return typeof result === 'object' && result !== null ? withoutIndexes(result) : result;
+      };
+    },
+  });
+  collectionsBehindViews.set(view, collection);
+  return view;
+}
+
+function withoutIndexesInCallbacks(argument: unknown): unknown {
+  if (Array.isArray(argument)) return argument.map(withoutIndexesInCallbacks);
+  if (typeof argument !== 'function') return argument;
+  return (row: unknown, tools: unknown) =>
+    Reflect.apply(argument, undefined, [
+      row,
+      { fns: Reflect.get(Object(tools), 'fns'), indexes: NO_INDEXES },
+    ]);
+}
+
+function collectionBehind(value: unknown): unknown {
+  return typeof value === 'object' && value !== null
+    ? (collectionsBehindViews.get(value) ?? value)
+    : value;
 }
 
 export interface ModelCollection<

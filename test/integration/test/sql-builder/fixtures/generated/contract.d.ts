@@ -20,7 +20,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'cc39ec65d731f934d15f8c51234782aed90989c29a9ba6cdba357fc6203aa29a'>;
+  StorageHashBase<'cec3a8f11aade5a9a7f03634db328c621e27176d7edb1b378e109b6bffa8faa6'>;
 export type ExecutionHash =
   ExecutionHashBase<'551678164cf11e55dbfa5b34642fb312efdfc63dfd0d165887eaa0d73bb2db84'>;
 export type ProfileHash =
@@ -247,6 +247,7 @@ export type FieldOutputTypes = {
     readonly Document: {
       readonly body: CodecTypes['pg/text@1']['output'] | null;
       readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly parentId: CodecTypes['pg/int4@1']['output'] | null;
       readonly subtitle: CodecTypes['pg/text@1']['output'] | null;
       readonly title: CodecTypes['pg/text@1']['output'];
     };
@@ -285,6 +286,7 @@ export type FieldInputTypes = {
     readonly Document: {
       readonly body: CodecTypes['pg/text@1']['input'] | null;
       readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly parentId: CodecTypes['pg/int4@1']['input'] | null;
       readonly subtitle: CodecTypes['pg/text@1']['input'] | null;
       readonly title: CodecTypes['pg/text@1']['input'];
     };
@@ -320,6 +322,7 @@ export type StorageColumnTypes = {
     readonly documents: {
       readonly body: CodecTypes['pg/text@1']['output'] | null;
       readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly parent_id: CodecTypes['pg/int4@1']['output'] | null;
       readonly subtitle: CodecTypes['pg/text@1']['output'] | null;
       readonly title: CodecTypes['pg/text@1']['output'];
     };
@@ -358,6 +361,7 @@ export type StorageColumnInputTypes = {
     readonly documents: {
       readonly body: CodecTypes['pg/text@1']['input'] | null;
       readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly parent_id: CodecTypes['pg/int4@1']['input'] | null;
       readonly subtitle: CodecTypes['pg/text@1']['input'] | null;
       readonly title: CodecTypes['pg/text@1']['input'];
     };
@@ -398,9 +402,12 @@ export namespace Models {
   export type public_Document = {
     body: CodecTypes['pg/text@1']['output'] | null;
     id: CodecTypes['pg/int4@1']['output'];
+    parentId: CodecTypes['pg/int4@1']['output'] | null;
     subtitle: CodecTypes['pg/text@1']['output'] | null;
     title: CodecTypes['pg/text@1']['output'];
-    readonly [RelationKeys]?: never;
+    children: public_Document[];
+    parent: public_Document | null;
+    readonly [RelationKeys]?: 'children' | 'parent';
   };
   export type public_Post = {
     embedding: Vector<3> | null;
@@ -561,6 +568,12 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly parent_id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: true;
                   readonly many: false;
                 };
                 readonly subtitle: {
@@ -785,6 +798,10 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
+              readonly parentId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
               readonly subtitle: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
@@ -794,13 +811,38 @@ type ContractBase = Omit<
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
             };
-            readonly relations: Record<string, never>;
+            readonly relations: {
+              readonly children: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Document';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['parentId'];
+                };
+              };
+              readonly parent: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Document';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: true;
+                readonly on: {
+                  readonly localFields: readonly ['parentId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
             readonly storage: {
               readonly table: 'documents';
               readonly namespaceId: 'public';
               readonly fields: {
                 readonly body: { readonly column: 'body' };
                 readonly id: { readonly column: 'id' };
+                readonly parentId: { readonly column: 'parent_id' };
                 readonly subtitle: { readonly column: 'subtitle' };
                 readonly title: { readonly column: 'title' };
               };

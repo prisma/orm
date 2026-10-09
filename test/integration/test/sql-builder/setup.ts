@@ -119,7 +119,8 @@ export function setupIntegrationTest() {
           id int4 PRIMARY KEY,
           title text NOT NULL,
           subtitle text,
-          body text
+          body text,
+          parent_id int4
         )
       `);
     });

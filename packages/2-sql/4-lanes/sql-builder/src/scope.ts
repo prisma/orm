@@ -3,8 +3,12 @@ import type {
   QueryOperationTypesBase,
   StorageTable,
 } from '@internal/sql-contract/types';
-import type { AnyFromSource, SelectAst } from '@internal/sql-relational-core/ast';
-import type { CodecTypesBase, ScopeField } from '@internal/sql-relational-core/expression';
+import type { AnyFromSource } from '@internal/sql-relational-core/ast';
+import type {
+  CodecTypesBase,
+  ScopeField,
+  StorageColumnScopeField,
+} from '@internal/sql-relational-core/expression';
 
 export type { ScopeField };
 
@@ -16,7 +20,6 @@ export type GatedMethod<Capabilities, Required, Method> = Capabilities extends R
   : never;
 
 export declare const JoinOuterScope: unique symbol;
-export declare const SubqueryMarker: unique symbol;
 
 export type Expand<T> = { [K in keyof T]: T[K] } & unknown;
 export type EmptyRow = Record<never, ScopeField>;
@@ -46,10 +49,7 @@ export type DefaultScope<Name extends string, Table extends StorageTable> = {
 };
 
 export type StorageTableToScopeTable<T extends StorageTable> = {
-  [K in keyof T['columns']]: {
-    codecId: T['columns'][K]['codecId'];
-    nullable: T['columns'][K]['nullable'];
-  } & (T['columns'][K] extends { many: true } ? { many: true } : Record<never, never>);
+  [K in keyof T['columns']]: StorageColumnScopeField<T['columns'][K]>;
 };
 
 export type MergeScopes<A extends Scope, B extends Scope> = {
@@ -73,12 +73,6 @@ export type NullableScope<S extends Scope> = {
   namespaces: {
     [TableName in keyof S['namespaces']]: NullableScopeTable<S['namespaces'][TableName]>;
   };
-};
-
-export type Subquery<RowType extends Record<string, ScopeField>> = {
-  [SubqueryMarker]: RowType;
-  buildAst(): SelectAst;
-  getRowFields(): Record<string, ScopeField>;
 };
 
 export type QueryContext = {

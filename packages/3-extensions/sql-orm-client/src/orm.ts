@@ -120,11 +120,13 @@ export interface OrmClientMembers<TContract extends Contract<SqlStorage>> {
     body: (
       rows: DeclaredFieldsFragmentCollection<
         DeclaredFieldsFragmentModelAccessor<TContract, DeclaredFields<Declarations>>,
-        FragmentFacts
+        FragmentFacts,
+        TContract
       >,
     ) => DeclaredFieldsFragmentCollection<
       DeclaredFieldsFragmentModelAccessor<TContract, DeclaredFields<Declarations>>,
-      Facts
+      Facts,
+      TContract
     >,
   ): DeclaredFieldsFragment<TContract, DeclaredFields<Declarations>, Facts>;
 }

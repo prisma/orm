@@ -74,6 +74,8 @@
  *                              Vector similarity search via ORM client
  * - repo-search-posts-text <query> [limit]
  *                              Full-text search over post titles via ORM client
+ * - repo-search-posts-weighted <query> [limit]
+ *                              Weighted full-text search over post title and body via ORM client
  * - users-paginate [cursor]    Cursor-based pagination
  * - similarity-search <vec>    Vector similarity search (pgvector)
  * - full-text-search <query> [limit]
@@ -160,6 +162,7 @@ import { ormClientGetUsers } from './orm-client/get-users';
 import { ormClientGetUsersBackwardCursor } from './orm-client/get-users-backward-cursor';
 import { ormClientGetUsersByIdCursor } from './orm-client/get-users-by-id-cursor';
 import { ormClientGetUsersCached } from './orm-client/get-users-cached';
+import { ormClientSearchPosts } from './orm-client/search-posts';
 import { ormClientSearchPostsByEmbedding } from './orm-client/search-posts-by-embedding';
 import { ormClientSearchPostsByTitle } from './orm-client/search-posts-by-title';
 import { ormClientUpsertUser } from './orm-client/upsert-user';
@@ -568,6 +571,16 @@ async function main() {
       const posts = await ormClientSearchPostsByTitle(query, limit, runtime);
 
       console.log(JSON.stringify(posts, null, 2));
+    } else if (cmd === 'repo-search-posts-weighted') {
+      const [query, limitStr] = args;
+      if (!query) {
+        console.error('Usage: pnpm start -- repo-search-posts-weighted <query> [limit]');
+        process.exit(1);
+      }
+      const limit = limitStr ? Number.parseInt(limitStr, 10) : 10;
+      const posts = await ormClientSearchPosts(query, limit, runtime);
+
+      console.log(JSON.stringify(posts, null, 2));
     } else if (cmd === 'users-paginate') {
       const [cursorStr, limitStr] = args;
       const cursor = cursorStr ?? null;
@@ -852,7 +865,8 @@ async function main() {
     } else {
       console.log(
         'Usage: pnpm start -- [users [limit] | user <userId> | posts <userId> | ' +
-          'repo-search-posts-text <query> [limit] | full-text-search <query> [limit] | ' +
+          'repo-search-posts-text <query> [limit] | repo-search-posts-weighted <query> [limit] | ' +
+          'full-text-search <query> [limit] | ' +
           'repo-users [limit] | repo-admins [limit] | ' +
           'repo-user <email> | repo-posts <userId> [limit] | orm-user-profile <id> | ' +
           'repo-dashboard <emailDomain> <postTitleTerm> [limit] [postsPerUser] | ' +
