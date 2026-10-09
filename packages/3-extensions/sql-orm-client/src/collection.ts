@@ -1906,6 +1906,7 @@ export class CollectionBase<
       const plans = compileInsertReturningSplit(
         this.contract,
         this.namespaceId,
+        this.modelName,
         this.tableName,
         mappedRows,
         selectedForInsert,
@@ -1931,6 +1932,7 @@ export class CollectionBase<
       compileInsertReturning(
         this.contract,
         this.namespaceId,
+        this.modelName,
         this.tableName,
         mappedRows,
         selectedForInsert,
@@ -2082,6 +2084,7 @@ export class CollectionBase<
           const baseCompiled = compileInsertReturning(
             contract,
             namespaceId,
+            modelName,
             tableName,
             [baseRow],
             undefined,
@@ -2119,6 +2122,7 @@ export class CollectionBase<
           const variantCompiled = compileInsertReturning(
             contract,
             namespaceId,
+            variant.modelName,
             variant.table,
             [variantRow],
             undefined,
@@ -2389,6 +2393,7 @@ export class CollectionBase<
       compileUpsertReturning(
         this.contract,
         this.namespaceId,
+        this.modelName,
         this.tableName,
         createValues,
         updateValues,
@@ -2614,6 +2619,7 @@ export class CollectionBase<
       compileUpdateReturning(
         this.contract,
         this.namespaceId,
+        this.modelName,
         this.tableName,
         mappedData,
         this.state.filters,
@@ -2784,6 +2790,7 @@ export class CollectionBase<
       compileDeleteReturning(
         this.contract,
         this.namespaceId,
+        this.modelName,
         this.tableName,
         this.state.filters,
         selectedForDelete,

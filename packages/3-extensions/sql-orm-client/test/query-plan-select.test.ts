@@ -86,7 +86,7 @@ describe('compileSelectWithIncludes', () => {
       filters: [BinaryExpr.eq(ColumnRef.of('users', 'email'), LiteralExpr.of('alice@example.com'))],
     };
 
-    const plan = compileSelect(baseContract, 'public', 'users', state);
+    const plan = compileSelect(baseContract, 'public', 'users', state, 'User');
 
     expectSelectAst(plan.ast);
     expect(plan.ast.where).toEqual(
@@ -110,6 +110,7 @@ describe('compileSelectWithIncludes', () => {
       'public',
       'users',
       state,
+      'User',
     );
     expect(plan.params).toEqual([100, 'Alice']);
     expect(paramCodecs(plan)).toEqual([
@@ -155,7 +156,7 @@ describe('compileSelectWithIncludes', () => {
       .offset(3)
       .select('id').state;
 
-    const plan = compileSelect(baseContract, 'public', 'users', state);
+    const plan = compileSelect(baseContract, 'public', 'users', state, 'User');
     expectSelectAst(plan.ast);
     expect(plan.params).toEqual(['Alice', 'Alice', 7]);
     expect(paramCodecs(plan)).toEqual([
@@ -187,7 +188,7 @@ describe('compileSelectWithIncludes', () => {
     const { collection } = createCollection();
     const state = collection.orderBy((user) => user.id.asc()).cursor({ id: 9 }).state;
 
-    const plan = compileSelect(baseContract, 'public', 'users', state);
+    const plan = compileSelect(baseContract, 'public', 'users', state, 'User');
     expectSelectAst(plan.ast);
     expect(plan.params).toEqual([9]);
     expect(paramCodecs(plan)).toEqual([codecForColumn('users', 'id')]);
@@ -199,7 +200,7 @@ describe('compileSelectWithIncludes', () => {
       ...collection.orderBy((user) => user.id.asc()).state,
       cursor: {},
     };
-    expect(() => compileSelect(baseContract, 'public', 'users', invalidState)).toThrow(
+    expect(() => compileSelect(baseContract, 'public', 'users', invalidState, 'User')).toThrow(
       'Missing cursor value for orderBy column "id"',
     );
   });
@@ -219,7 +220,7 @@ describe('compileSelectWithIncludes', () => {
       orderBy: [OrderByItem.asc(ColumnRef.of('posts', 'id')), OrderByItem.desc(opExpr)],
     };
 
-    const plan = compileSelect(baseContract, 'public', 'posts', state);
+    const plan = compileSelect(baseContract, 'public', 'posts', state, 'Post');
     expectSelectAst(plan.ast);
 
     expect(plan.ast.orderBy).toEqual([
@@ -249,7 +250,7 @@ describe('compileSelectWithIncludes', () => {
       cursor: { id: 5 },
     };
 
-    expect(() => compileSelect(baseContract, 'public', 'posts', state)).toThrow(
+    expect(() => compileSelect(baseContract, 'public', 'posts', state, 'Post')).toThrow(
       expect.objectContaining({
         code: 'ORM.ARGUMENT_INVALID',
         message: expect.stringContaining('orderBy item 2'),
@@ -274,7 +275,7 @@ describe('compileSelectWithIncludes', () => {
       filters: [whereExpr],
     };
 
-    const plan = compileSelect(baseContract, 'public', 'posts', state);
+    const plan = compileSelect(baseContract, 'public', 'posts', state, 'Post');
     expectSelectAst(plan.ast);
 
     expect(plan.params).toEqual([[1, 2, 3]]);
@@ -312,7 +313,7 @@ describe('compileSelectWithIncludes', () => {
       orderBy: [OrderByItem.asc(ColumnRef.of('posts', 'id')), OrderByItem.asc(orderOpExpr)],
     };
 
-    const plan = compileSelect(baseContract, 'public', 'posts', state);
+    const plan = compileSelect(baseContract, 'public', 'posts', state, 'Post');
     expectSelectAst(plan.ast);
 
     expect(plan.ast.orderBy).toEqual([
@@ -342,6 +343,7 @@ describe('compileSelectWithIncludes', () => {
       'public',
       'users',
       state,
+      'User',
     );
     expectSelectAst(plan.ast);
     expect(plan.ast.joins ?? []).toHaveLength(0);
@@ -371,7 +373,14 @@ describe('compileSelectWithIncludes', () => {
       posts.select('embedding').distinct('embedding'),
     ).state;
 
-    const plan = compileSelectWithIncludes(contract, getTestAggregates(), 'public', 'users', state);
+    const plan = compileSelectWithIncludes(
+      contract,
+      getTestAggregates(),
+      'public',
+      'users',
+      state,
+      'User',
+    );
     expectSelectAst(plan.ast);
 
     const postsProjection = plan.ast.projection.find((item) => item.alias === 'posts');
@@ -435,6 +444,7 @@ describe('compileSelectWithIncludes', () => {
         'public',
         'users',
         state,
+        'User',
       );
       const subquery = extractScalarCorrelatedSubquery(plan, 'posts');
 
@@ -460,6 +470,7 @@ describe('compileSelectWithIncludes', () => {
         'public',
         'users',
         state,
+        'User',
       );
       const subquery = extractScalarCorrelatedSubquery(plan, 'posts');
 
@@ -490,6 +501,7 @@ describe('compileSelectWithIncludes', () => {
         'public',
         'users',
         state,
+        'User',
       );
       const subquery = extractScalarCorrelatedSubquery(plan, 'posts');
       expect(subquery.orderBy).toBeUndefined();
@@ -513,6 +525,7 @@ describe('compileSelectWithIncludes', () => {
         'public',
         'users',
         state,
+        'User',
       );
       const subquery = extractScalarCorrelatedSubquery(plan, 'posts');
 
@@ -557,6 +570,7 @@ describe('compileSelectWithIncludes', () => {
         'public',
         'users',
         state,
+        'User',
       );
       const subquery = extractScalarCorrelatedSubquery(plan, 'posts');
 
@@ -613,6 +627,7 @@ describe('compileSelectWithIncludes', () => {
           'public',
           'users',
           state,
+          'User',
         );
         const subquery = extractScalarCorrelatedSubquery(plan, 'posts');
         expectAggregateProjection(subquery, 'posts', expected, resultCodecId);
@@ -633,6 +648,7 @@ describe('compileSelectWithIncludes', () => {
         'public',
         'users',
         state,
+        'User',
       );
       const postsSubquery = extractScalarCorrelatedSubquery(plan, 'posts');
       // The posts subquery's FROM is the child-rows derived table; its
@@ -688,6 +704,7 @@ describe('compileSelectWithIncludes', () => {
         'public',
         'users',
         state,
+        'User',
       );
       const subquery = extractCombineCorrelatedSubquery(plan, 'posts');
 
@@ -735,6 +752,7 @@ describe('compileSelectWithIncludes', () => {
         'public',
         'users',
         state,
+        'User',
       );
       const subquery = extractCombineCorrelatedSubquery(plan, 'posts');
 
@@ -786,6 +804,7 @@ describe('compileSelectWithIncludes', () => {
         'public',
         'users',
         state,
+        'User',
       );
       const subquery = extractCombineCorrelatedSubquery(plan, 'posts');
 
@@ -840,6 +859,7 @@ describe('M:N include correlated subquery', () => {
       'public',
       'users',
       state,
+      'User',
     );
 
     const tagRows = SelectAst.from(TableSource.named('tags', undefined, 'public'))
@@ -908,6 +928,7 @@ describe('M:N include correlated subquery', () => {
       'public',
       'projects',
       state,
+      'Project',
     );
 
     const relatedRows = SelectAst.from(TableSource.named('projects', 'related__child', 'public'))
@@ -1005,6 +1026,7 @@ describe('M:N include correlated subquery', () => {
       'public',
       'users',
       state,
+      'User',
     );
     expectSelectAst(plan.ast);
 
@@ -1041,6 +1063,7 @@ describe('M:N include correlated subquery', () => {
       'public',
       'projects',
       state,
+      'Project',
     );
 
     const junctionJoinOnto = (childRef: string): JoinAst =>

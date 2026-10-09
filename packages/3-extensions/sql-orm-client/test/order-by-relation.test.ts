@@ -26,8 +26,13 @@ import { fieldUnknown, getEmptyAggregates, getTestAggregates, getTestContext } f
 
 const adapter = createPostgresAdapter();
 
-function planOf(tableName: string, state: CollectionState): SqlQueryPlan<unknown> {
-  return compileSelect(baseContract, 'public', tableName, state);
+const modelOfTable = { posts: 'Post', users: 'User' } as const;
+
+function planOf(
+  tableName: keyof typeof modelOfTable,
+  state: CollectionState,
+): SqlQueryPlan<unknown> {
+  return compileSelect(baseContract, 'public', tableName, state, modelOfTable[tableName]);
 }
 
 function sqlOf(plan: SqlQueryPlan<unknown>): string {
@@ -290,6 +295,7 @@ describe('orderBy a relation inside an include', () => {
       'public',
       'users',
       state,
+      'User',
     );
 
     expect(sqlOf(plan)).toMatchInlineSnapshot(
@@ -309,6 +315,7 @@ describe('orderBy a relation inside an include', () => {
       'public',
       'users',
       state,
+      'User',
     );
 
     expect(sqlOf(plan)).toMatchInlineSnapshot(

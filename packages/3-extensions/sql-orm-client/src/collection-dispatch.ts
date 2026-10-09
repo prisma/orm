@@ -37,7 +37,6 @@ import { resolveAggregate } from './aggregate-codecs';
 import { emptyAggregateResult } from './aggregate-empty-result';
 import {
   getColumnToFieldMap,
-  getFieldToColumnMap,
   isToOneCardinality,
   resolvePolymorphismInfo,
   resolveRowIdentityColumns,
@@ -53,6 +52,7 @@ import {
 import { resolveColumn } from './column-codec';
 import { ormError } from './orm-errors';
 import { compileSelect, compileSelectWithIncludes } from './query-plan';
+import { resolveModelColumns } from './query-plan-meta';
 import { queryPlanRows } from './query-plan-rows';
 import {
   type CollectionContext,
@@ -217,15 +217,18 @@ function createPreparedIncludeConsumer(
     include.nested.variantName,
   );
   const bindings = deferResolution(() => {
-    const tables = contract.storage.namespaces[include.relatedNamespaceId]?.entries.table;
-    const keys = new Set(Object.keys(tables?.[include.relatedTableName]?.columns ?? {}));
-    const polyInfo = resolvePolymorphismInfo(
-      contract,
-      include.relatedNamespaceId,
-      include.relatedModelName,
+    const namespace = include.relatedNamespaceId;
+    const keys = new Set(
+      resolveModelColumns(contract, namespace, include.relatedModelName, include.relatedTableName),
     );
+    const polyInfo = resolvePolymorphismInfo(contract, namespace, include.relatedModelName);
     for (const variant of polyInfo?.mtiVariants ?? []) {
-      for (const column of Object.keys(tables?.[variant.table]?.columns ?? {})) {
+      for (const column of resolveModelColumns(
+        contract,
+        namespace,
+        variant.modelName,
+        variant.table,
+      )) {
         keys.add(`${variant.table}__${column}`);
       }
     }
@@ -278,7 +281,8 @@ function createPreparedIncludedRowDecoder(
   if (resolvePolymorphismInfo(contract, namespace, model)) return undefined;
   const columnToField = getColumnToFieldMap(contract, namespace, model);
   const columns =
-    include.nested.selectedFields ?? Object.values(getFieldToColumnMap(contract, namespace, model));
+    include.nested.selectedFields ??
+    resolveModelColumns(contract, namespace, model, include.relatedTableName);
   const aliases = include.nested.includes.map((child) => child.relationName);
   const table = contract.storage.namespaces[namespace]?.entries.table?.[include.relatedTableName];
   if (aliases.some((alias) => table?.columns[alias] !== undefined)) return undefined;

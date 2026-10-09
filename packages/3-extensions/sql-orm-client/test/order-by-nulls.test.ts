@@ -24,7 +24,7 @@ describe('orderBy null placement', () => {
       .orderBy((user) => user.id.asc({ nulls: 'first' }))
       .select('id').state;
 
-    const plan = compileSelect(baseContract, 'public', 'users', state);
+    const plan = compileSelect(baseContract, 'public', 'users', state, 'User');
 
     expect(orderByItemsIn(plan.ast)).toEqual([
       OrderByItem.desc(ColumnRef.of('users', 'name'), { nulls: 'last' }),
@@ -44,6 +44,7 @@ describe('orderBy null placement', () => {
       'public',
       'users',
       state,
+      'User',
     );
 
     expect(orderByItemsIn(plan.ast)).toEqual([
@@ -68,6 +69,7 @@ describe('orderBy null placement', () => {
       'public',
       'users',
       state,
+      'User',
     );
 
     expect(orderByItemsIn(plan.ast)).toEqual([
@@ -90,6 +92,7 @@ describe('orderBy null placement', () => {
       'public',
       'users',
       state,
+      'User',
     );
 
     expect(orderByItemsIn(plan.ast)).toEqual([
@@ -114,6 +117,7 @@ describe('orderBy null placement', () => {
       'public',
       'users',
       state,
+      'User',
     );
 
     expect(orderByItemsIn(plan.ast)).toEqual([

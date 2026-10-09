@@ -73,6 +73,7 @@ export function representativePlans(): ReadonlyArray<readonly [string, SelectAst
       'public',
       table,
       state,
+      table === 'users' ? 'User' : 'Project',
     );
     return [label, plan.ast as SelectAst] as const;
   });

@@ -29,7 +29,7 @@ import {
 } from './collection-contract';
 import { assertCursorCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
-import { resolveTableColumns } from './query-plan-meta';
+import { resolveModelColumns } from './query-plan-meta';
 import { tableSourceForContract } from './storage-resolution';
 import type { CollectionState } from './types';
 import { bindWhereExpr } from './where-binding';
@@ -328,7 +328,12 @@ function buildMtiJoins(
         : JoinAst.left(tableSourceForContract(contract, namespaceId, variant.table), joinOn);
     joins.push(join);
 
-    const variantColumns = resolveTableColumns(contract, namespaceId, variant.table);
+    const variantColumns = resolveModelColumns(
+      contract,
+      namespaceId,
+      variant.modelName,
+      variant.table,
+    );
     const selectedVariantColumns = selectedColumnsByTable?.get(variant.table);
     for (const col of variantColumns) {
       if (pkColumns.includes(col)) continue;
