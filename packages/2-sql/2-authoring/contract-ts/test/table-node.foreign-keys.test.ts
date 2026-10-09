@@ -51,7 +51,7 @@ describe('a foreign key that names its target table', () => {
       expect.objectContaining({
         code: 'CONTRACT.TABLE_UNKNOWN',
         message:
-          'Foreign key on model "User" references table "audit_rows" in namespace "public", which no model or table node declares',
+          'Foreign key on model "User" references table "audit_rows" in namespace "public", which no model or table node declares. Declare the table with a model or a table node, or correct the name.',
       }),
     );
   });
@@ -86,7 +86,7 @@ describe('a foreign key that names its target table', () => {
       expect.objectContaining({
         code: 'CONTRACT.TABLE_UNKNOWN',
         message:
-          'Foreign key on table "audit_rows" in namespace "public" references table "Ghost" in namespace "public", which no model or table node declares',
+          'Foreign key on table "audit_rows" in namespace "public" references table "Ghost" in namespace "public", which no model or table node declares. Declare the table with a model or a table node, or correct the name.',
         meta: {
           sourceTable: 'audit_rows',
           sourceNamespaceId: 'public',

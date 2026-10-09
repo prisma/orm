@@ -17,7 +17,7 @@ const definition: ContractDefinition = {
       tableName: 'audit_rows',
       columns: [
         { columnName: 'id', descriptor: int4Column, nullable: false },
-        { columnName: 'recorded_at', descriptor: timestamptzColumn, nullable: false },
+        { columnName: 'recorded_at', descriptor: timestamptzTemporalColumn, nullable: false },
       ],
       id: { columns: ['id'] },
     },

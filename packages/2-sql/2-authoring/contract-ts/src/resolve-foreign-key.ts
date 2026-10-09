@@ -74,7 +74,7 @@ export function resolveForeignKey(
     if (!context.declaredTables.has(tableKey(namespaceId, references.table))) {
       throw contractError(
         'CONTRACT.TABLE_UNKNOWN',
-        `Foreign key on ${referenceOwnerSubject(sourceTable.owner)} references table "${references.table}" in namespace "${namespaceId}", which no model or table node declares`,
+        `Foreign key on ${referenceOwnerSubject(sourceTable.owner)} references table "${references.table}" in namespace "${namespaceId}", which no model or table node declares. Declare the table with a model or a table node, or correct the name.`,
         {
           meta: {
             ...referenceOwnerMeta(sourceTable.owner),
