@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791538665333,
+  "lastUpdate": 1791540519158,
   "repoUrl": "https://github.com/prisma/orm",
   "entries": {
     "Benchmark.js Benchmark": [
@@ -453860,6 +453860,401 @@ window.BENCHMARK_DATA = {
             "range": "±1.35%",
             "unit": "ops/sec",
             "extra": "87 samples"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "lazerg2@gmail.com",
+            "name": "Lazizbek Ergashev",
+            "username": "lazerg"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "97ea359250335c1a174504c9b2b7e5fe030ab937",
+          "message": "fix(client): stop nested $transaction from mutating the caller's options object (#30368)\n\n## Problem\n\n`_transactionWithCallback` writes `newTxId` into the `options` object\nthe caller passed when the call is nested, then reads `newTxId` back off\nthat same object on every call, top-level ones included. An application\nthat keeps a shared options constant — `const TX_OPTIONS = { timeout:\n30_000, maxWait: 10_000 }` — and passes it to a nested\n`tx.$transaction(cb, TX_OPTIONS)` once leaves that object permanently\nstamped with the outer transaction's id. Every later top-level\n`prisma.$transaction(cb, TX_OPTIONS)` in the process is then sent to the\nengine as a nested start against that id: it fails with P2028 if the\nouter transaction has committed, or silently opens as a savepoint inside\nanother request's still-open transaction if it has not.\n\n## Change\n\nThe nested transaction id is no longer written into the caller's object.\n`optionsWithDefaults` derives `newTxId` from the itx scope context of\nthe client the method was called on, so it is set only when the call is\nactually nested and a polluted options object can no longer make a\nroot-client call join someone else's transaction.\n\n## Tests\n\nAdded `sql: nested transaction does not mutate the options object` to\n`packages/client/tests/functional/interactive-transactions`. It reuses\none options object across a nested transaction and a later top-level\none, asserting the object is unchanged and that both transactions\ncommitted. It fails on the current code (the object gains `newTxId`) and\npasses with the fix.\n\nThe full `interactive-transactions` suite passes on\nsqlite/better-sqlite3 (38 tests), as do the other transaction suites\n(47) and `@prisma/client-engine-runtime` (234).\n\nFixes #30367\n\n\n<!-- This is an auto-generated comment: release notes by coderabbit.ai\n-->\n## Summary by CodeRabbit\n\n* **Bug Fixes**\n* Improved nested transaction handling so shared transaction options\nremain unchanged.\n* Preserved reliable behavior for nested and top-level interactive\ntransactions, including safe transaction identifier handling.\n\n* **Tests**\n* Added coverage confirming transaction options can be reused safely\nacross nested and subsequent transactions.\n* Verified that multiple transactions using the same options complete\nsuccessfully and preserve all expected data.\n<!-- end of auto-generated comment: release notes by coderabbit.ai -->\n\n---------\n\nSigned-off-by: Lazizbek Ergashev <lazerg2@gmail.com>\nCo-authored-by: willbot <w.a.madden+machine@gmail.com>",
+          "timestamp": "2026-10-09T11:59:24+02:00",
+          "tree_id": "29f10e73a32f249108c4037fac092d6d1d2828a1",
+          "url": "https://github.com/prisma/orm/commit/97ea359250335c1a174504c9b2b7e5fe030ab937"
+        },
+        "date": 1791540485562,
+        "tool": "benchmarkjs",
+        "benches": [
+          {
+            "name": "interpreter: simple select",
+            "value": 156721,
+            "range": "±1.70%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "interpreter: findUnique",
+            "value": 147112,
+            "range": "±0.81%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "interpreter: join (1:N)",
+            "value": 84876,
+            "range": "±0.75%",
+            "unit": "ops/sec",
+            "extra": "89 samples"
+          },
+          {
+            "name": "interpreter: sequence",
+            "value": 86107,
+            "range": "±1.93%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "interpreter: deep nested join",
+            "value": 29336,
+            "range": "±0.39%",
+            "unit": "ops/sec",
+            "extra": "89 samples"
+          },
+          {
+            "name": "serializer: 10 rows x 3 cols",
+            "value": 1816774,
+            "range": "±0.41%",
+            "unit": "ops/sec",
+            "extra": "96 samples"
+          },
+          {
+            "name": "serializer: 50 rows x 8 cols",
+            "value": 157267,
+            "range": "±0.25%",
+            "unit": "ops/sec",
+            "extra": "98 samples"
+          },
+          {
+            "name": "serializer: 100 rows x 8 cols",
+            "value": 79788,
+            "range": "±0.09%",
+            "unit": "ops/sec",
+            "extra": "98 samples"
+          },
+          {
+            "name": "getBinaryTargetForCurrentPlatform",
+            "value": 1238,
+            "range": "±0.75%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "client generation ~50 Models",
+            "value": 1.7,
+            "range": "±15.74%",
+            "unit": "ops/sec",
+            "extra": "14 samples"
+          },
+          {
+            "name": "typescript compilation ~50 Models",
+            "value": 1.17,
+            "range": "±14.15%",
+            "unit": "ops/sec",
+            "extra": "11 samples"
+          },
+          {
+            "name": "@prisma/client size",
+            "value": 70.99864101409912,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": ".prisma/client size",
+            "value": 10.426462173461914,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": ".prisma/client/index.d.ts size",
+            "value": 2.372147560119629,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": ".prisma/client/index.js size",
+            "value": 0.17815494537353516,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": "dotPlusAtPrismaClientFolder.zip size",
+            "value": 28.707343101501465,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": "client generation 100 models with relations",
+            "value": 0.51,
+            "range": "±13.50%",
+            "unit": "ops/sec",
+            "extra": "7 samples"
+          },
+          {
+            "name": "compile findUnique (uncached baseline)",
+            "value": 12117,
+            "range": "±9.95%",
+            "unit": "ops/sec",
+            "extra": "94 samples"
+          },
+          {
+            "name": "compile findMany filtered (uncached baseline)",
+            "value": 9082,
+            "range": "±0.24%",
+            "unit": "ops/sec",
+            "extra": "94 samples"
+          },
+          {
+            "name": "compile blog post page (uncached baseline)",
+            "value": 2240,
+            "range": "±0.28%",
+            "unit": "ops/sec",
+            "extra": "97 samples"
+          },
+          {
+            "name": "parameterize findUnique",
+            "value": 598487,
+            "range": "±0.40%",
+            "unit": "ops/sec",
+            "extra": "97 samples"
+          },
+          {
+            "name": "parameterize findMany",
+            "value": 296083,
+            "range": "±0.38%",
+            "unit": "ops/sec",
+            "extra": "94 samples"
+          },
+          {
+            "name": "parameterize blog post page query",
+            "value": 208282,
+            "range": "±0.32%",
+            "unit": "ops/sec",
+            "extra": "98 samples"
+          },
+          {
+            "name": "findUnique by id",
+            "value": 6822,
+            "range": "±1.51%",
+            "unit": "ops/sec",
+            "extra": "82 samples"
+          },
+          {
+            "name": "findFirst with simple where",
+            "value": 7556,
+            "range": "±0.90%",
+            "unit": "ops/sec",
+            "extra": "89 samples"
+          },
+          {
+            "name": "findMany 10 records",
+            "value": 7093,
+            "range": "±1.38%",
+            "unit": "ops/sec",
+            "extra": "83 samples"
+          },
+          {
+            "name": "findMany with orderBy",
+            "value": 6742,
+            "range": "±1.09%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "findMany with filter",
+            "value": 6930,
+            "range": "±0.37%",
+            "unit": "ops/sec",
+            "extra": "89 samples"
+          },
+          {
+            "name": "findMany with pagination",
+            "value": 7856,
+            "range": "±0.34%",
+            "unit": "ops/sec",
+            "extra": "90 samples"
+          },
+          {
+            "name": "findUnique with 1:1 include",
+            "value": 4012,
+            "range": "±1.98%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "findUnique with 1:N include",
+            "value": 3538,
+            "range": "±0.71%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "findUnique with nested includes",
+            "value": 1893,
+            "range": "±1.56%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "findMany with includes",
+            "value": 1816,
+            "range": "±0.73%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "findMany with select",
+            "value": 11204,
+            "range": "±1.11%",
+            "unit": "ops/sec",
+            "extra": "90 samples"
+          },
+          {
+            "name": "findMany with nested select",
+            "value": 5448,
+            "range": "±0.68%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "findMany with OR filter",
+            "value": 5969,
+            "range": "±1.02%",
+            "unit": "ops/sec",
+            "extra": "89 samples"
+          },
+          {
+            "name": "findMany with complex filters",
+            "value": 4514,
+            "range": "±1.24%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "findMany with contains filter",
+            "value": 5274,
+            "range": "±1.00%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "count all",
+            "value": 12305,
+            "range": "±0.52%",
+            "unit": "ops/sec",
+            "extra": "89 samples"
+          },
+          {
+            "name": "count with filter",
+            "value": 10146,
+            "range": "±1.15%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "aggregate sum/avg",
+            "value": 9606,
+            "range": "±0.48%",
+            "unit": "ops/sec",
+            "extra": "90 samples"
+          },
+          {
+            "name": "groupBy with count",
+            "value": 9706,
+            "range": "±0.92%",
+            "unit": "ops/sec",
+            "extra": "91 samples"
+          },
+          {
+            "name": "create single record",
+            "value": 4568,
+            "range": "±0.52%",
+            "unit": "ops/sec",
+            "extra": "91 samples"
+          },
+          {
+            "name": "create with nested",
+            "value": 2484,
+            "range": "±1.33%",
+            "unit": "ops/sec",
+            "extra": "82 samples"
+          },
+          {
+            "name": "update single record",
+            "value": 6037,
+            "range": "±1.12%",
+            "unit": "ops/sec",
+            "extra": "89 samples"
+          },
+          {
+            "name": "updateMany",
+            "value": 8425,
+            "range": "±0.98%",
+            "unit": "ops/sec",
+            "extra": "80 samples"
+          },
+          {
+            "name": "transaction sequential",
+            "value": 2287,
+            "range": "±1.77%",
+            "unit": "ops/sec",
+            "extra": "81 samples"
+          },
+          {
+            "name": "transaction batch",
+            "value": 2382,
+            "range": "±1.64%",
+            "unit": "ops/sec",
+            "extra": "83 samples"
+          },
+          {
+            "name": "blog post page query",
+            "value": 1341,
+            "range": "±1.22%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "blog listing page query",
+            "value": 1934,
+            "range": "±1.26%",
+            "unit": "ops/sec",
+            "extra": "90 samples"
+          },
+          {
+            "name": "user profile page query",
+            "value": 1923,
+            "range": "±0.93%",
+            "unit": "ops/sec",
+            "extra": "90 samples"
+          },
+          {
+            "name": "order history query",
+            "value": 2914,
+            "range": "±1.01%",
+            "unit": "ops/sec",
+            "extra": "90 samples"
+          },
+          {
+            "name": "product search query",
+            "value": 5048,
+            "range": "±0.83%",
+            "unit": "ops/sec",
+            "extra": "91 samples"
           }
         ]
       }
