@@ -31,7 +31,8 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   "orderBy should fail"                   → non-ported: same as above
 //   "distinct should fail"                  → non-ported: same as above
 //   "select _count should fail"             → ported (passing): inline @ts-expect-error on
-//                                             select('_count'); the invalid column rejects at runtime
+//                                             select('_count'); building the query throws
+//                                             ORM.FIELD_UNKNOWN
 //   "include _count should fail"            → ported (it.fails): inline @ts-expect-error on
 //                                             include('_count'); Prisma 8 type-rejects but ignores
 //                                             the unknown relation at runtime (no throw)
@@ -175,10 +176,10 @@ describe('ports/prisma/functional/methods-updateManyAndReturn-supported', () => 
     () =>
       withUpdateManyAndReturn(async ({ db }) => {
         await db.public.User.create({ email: 'umar-select-count@example.com' });
-        await expect(
+        expect(() =>
           // @ts-expect-error `_count` is not a scalar field
           db.public.User.select('_count').where({}).updateAll({ name: 'x' }),
-        ).rejects.toThrow();
+        ).toThrow(expect.objectContaining({ code: 'ORM.FIELD_UNKNOWN' }));
       }),
     timeouts.spinUpPpgDev,
   );
