@@ -70,7 +70,7 @@ Because the lowering is the same, one equation holds: lowering a model with a fi
 
 The reader lowers an `@ignore` field to a column node on the model's table with the field's type, nullability and default, and an `@@ignore` model to a table node with its columns, keys, indexes and foreign keys. A relation field pointing at an ignored model is still left out of the domain, but the foreign key under it is kept, targeting the table by name, because Prisma 7 created that constraint. An index or unique over an ignored field is valid storage and is kept. A primary key over an ignored field is refused, because the model would then have no identity among its fields and could not be updated, deleted or related.
 
-A column whose Prisma 7 type has no Prisma 8 codec cannot become a column node, since every storage column carries a codec. The reader reports it as today and leaves it out, whether or not it is ignored; this is the one fidelity gap `@ignore` cannot close, and a column without a codec is its own decision.
+A column whose Prisma 7 type has no Prisma 8 codec cannot become a column node, since every storage column carries a codec. The reader refuses it, whether or not it is ignored, because a contract that left it out would describe a different table and a later migration could drop the column. `@ignore` and `@@ignore` are therefore no longer a way around a missing codec, and the reader's messages stop offering them. Supporting such columns is its own decision.
 
 `_prisma_migrations` is Prisma 7's record of applied migrations. The reader declares it from the target binding with the `observed` policy: present on a database Prisma 7 built and absent on a fresh one, never created, altered or dropped by Prisma 8, and any difference `db verify` finds is a warning, never a failure.
 
@@ -103,7 +103,7 @@ A junction table for an implicit many-to-many relation is a model. The lowering 
 ## Consequences
 
 - Adding or removing `@ignore` or `@@ignore` in a Prisma 7 source changes no storage, no hash and no migration history.
-- A contract read from a Prisma 7 source keeps every ignored object that has a codec and declares `_prisma_migrations`, so strict verify passes on the database Prisma 7 built.
+- A contract read from a Prisma 7 source keeps every ignored object and declares `_prisma_migrations`, so strict verify passes on the database Prisma 7 built. A schema with a column whose type has no codec, ignored or not, does not load.
 - A column name passed where a field name belongs is an error at runtime as well as in the types.
 - `ContractDefinition` carries column nodes and table nodes beside models, and one lowering produces every column and table.
 - A junction table is a model, which closes the question ADR 174 left open.
