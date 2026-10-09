@@ -25,6 +25,7 @@ pnpm --filter <pkg> lint        # biome check --error-on-warnings, per touched p
 pnpm lint:deps              # when imports/exports/architectural structure changes
 pnpm test:packages          # when source or test code changes (almost always)
 pnpm test:integration       # when changes affect PGlite / PG / mongo paths
+# when a command's behaviour changes: every integration and e2e file that runs that command, before queueing (F44)
 pnpm test:e2e               # when changes affect emit / migrate / run cycle
 pnpm fixtures:check         # when IR / emitter / serialiser changes
 pnpm check:upgrade-coverage --mode pr --prev <PR base sha> --head HEAD   # when packages/3-extensions/** or examples/** change

@@ -25,6 +25,7 @@ type ContractSubcode =
   | 'ENUM_INVALID'
   | 'CHECK_NAME_RESERVED'
   | 'CHECK_ON_STI_VARIANT'
+  | 'VARIANT_COLUMN_NOT_ON_BASE_TABLE'
   | 'CHECK_OPTOUT_INVALID'
   | 'TYPE_PARAMS_INVALID'
   | 'TYPE_UNKNOWN'
@@ -33,7 +34,9 @@ type ContractSubcode =
   | 'MODULE_EXPORT_MISSING'
   | 'ENTITY_KIND_UNKNOWN'
   | 'ENTITY_KIND_INVALID'
-  | 'TABLE_MISMATCH';
+  | 'TABLE_MISMATCH'
+  | 'TABLE_OWNED_BY_MODEL'
+  | 'TABLE_UNKNOWN';
 
 export function contractError(
   code: ContractCode,
