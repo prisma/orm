@@ -508,6 +508,20 @@ describe('a uniquely filtered collection among other collections', () => {
     expectTypeOf(plain.Post.whereUnique({ id: 1 })).toExtend<AnyPostCollection>();
   });
 
+  test('all after a row lock is not refused', () => {
+    const unique = Post.whereUnique({ id: 1 });
+    expectTypeOf(unique.forUpdate().all()).toEqualTypeOf<AsyncIterableResult<Row>>();
+    expectTypeOf(unique.forNoKeyUpdate().all()).toEqualTypeOf<AsyncIterableResult<Row>>();
+    expectTypeOf(unique.forShare().all()).toEqualTypeOf<AsyncIterableResult<Row>>();
+    expectTypeOf(unique.forKeyShare().all()).toEqualTypeOf<AsyncIterableResult<Row>>();
+  });
+
+  test('all after with() of a fragment made by collection.fragment is not refused', () => {
+    expectTypeOf(Post.whereUnique({ id: 1 }).with(summary).all()).toEqualTypeOf<
+      AsyncIterableResult<{ id: number; title: string }>
+    >();
+  });
+
   test('a conditional that mixes it with another collection keeps the many-record methods', () => {
     const either = flag ? Post.whereUnique({ id: 1 }) : Post.published();
     expectTypeOf(either.limit(1)).not.toBeAny();
