@@ -1274,6 +1274,27 @@
                   "name": "users_invited_by_id_idx_80b34397",
                   "prefix": "users_invited_by_id_idx",
                   "unique": false
+                },
+                {
+                  "columns": [
+                    "name",
+                    "email"
+                  ],
+                  "name": "users_search_1d1ec8a9",
+                  "options": {
+                    "language": "english",
+                    "weightGroups": [
+                      [
+                        "name"
+                      ],
+                      [
+                        "email"
+                      ]
+                    ]
+                  },
+                  "prefix": "users_search",
+                  "type": "fullText",
+                  "unique": false
                 }
               ],
               "primaryKey": {
@@ -1295,7 +1316,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "e3b0c8f8179cd7f34043bd807931a2c8da42d929b6636356078f801e0065b4a2"
+    "storageHash": "398f1617e88ac9c028979fbdc671a42ab4dae9096e6b1ebf557475fa0658586b"
   },
   "execution": {
     "executionHash": "829773c079904c23ddf101be0289f11ed0567791abfb43e4a322833c60ba7aef",

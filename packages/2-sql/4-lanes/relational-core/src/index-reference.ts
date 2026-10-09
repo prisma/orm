@@ -1,4 +1,4 @@
-import type { StorageTable } from '@internal/sql-contract/types';
+import type { Index } from '@internal/sql-contract/types';
 import { structuredError } from '@internal/utils/structured-error';
 import type { Expression, ScopeField } from './expression';
 
@@ -86,7 +86,11 @@ export type TableIndexReferences<Table> = Table extends {
 export interface IndexReferencesInput {
   readonly namespaceId: string;
   readonly tableName: string;
-  readonly table: StorageTable;
+  readonly table: {
+    readonly indexes: ReadonlyArray<
+      Pick<Index, 'name' | 'prefix' | 'columns' | 'type' | 'options'>
+    >;
+  };
   /** The column of the table as this query reads it: under the table's alias, with its codec. */
   readonly column: (columnName: string) => Expression<ScopeField>;
 }

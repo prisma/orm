@@ -8,6 +8,8 @@ import {
   NullCheckExpr,
   OrExpr,
 } from '@internal/sql-relational-core/ast';
+import type { Expression } from '@internal/sql-relational-core/expression';
+import type { BooleanCodecType } from '@internal/sql-relational-core/functions';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import {
   columnOfCallerField,
@@ -21,16 +23,24 @@ import { predicateComparison } from './predicate-comparison';
 import { predicateExpression } from './predicate-expression';
 import type { ShorthandWhereFilter } from './types';
 
-export function and(...exprs: AnyExpression[]): AndExpr {
-  return AndExpr.of(exprs);
+/** A condition: an ORM filter expression, or a condition from `fns`. */
+export type Condition = AnyExpression | Expression<BooleanCodecType>;
+
+/** The filter expression of a condition: a condition from `fns` becomes its AST. */
+export function conditionExpr(condition: Condition): AnyExpression {
+  return 'buildAst' in condition ? condition.buildAst() : condition;
 }
 
-export function or(...exprs: AnyExpression[]): OrExpr {
-  return OrExpr.of(exprs);
+export function and(...exprs: Condition[]): AndExpr {
+  return AndExpr.of(exprs.map(conditionExpr));
 }
 
-export function not(expr: AnyExpression): AnyExpression {
-  return expr.not();
+export function or(...exprs: Condition[]): OrExpr {
+  return OrExpr.of(exprs.map(conditionExpr));
+}
+
+export function not(expr: Condition): AnyExpression {
+  return conditionExpr(expr).not();
 }
 
 export function all(): AnyExpression {

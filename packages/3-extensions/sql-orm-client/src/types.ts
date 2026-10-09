@@ -21,8 +21,14 @@ import {
   type OrderByNulls,
   ParamRef,
   type AggregateFn as SqlAggregateFn,
+  type WhereArg,
 } from '@internal/sql-relational-core/ast';
-import type { Expression } from '@internal/sql-relational-core/expression';
+import type { Expression, RawCodecInferer } from '@internal/sql-relational-core/expression';
+import type { BooleanCodecType, BuiltinFunctions } from '@internal/sql-relational-core/functions';
+import type {
+  IndexReference,
+  TableIndexReferences,
+} from '@internal/sql-relational-core/index-reference';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { ComputeColumnJsType, RuntimeScope } from '@internal/sql-relational-core/types';
 import type { HasRow } from './collection-types';
@@ -193,6 +199,8 @@ export interface RuntimeQueryable extends RuntimeScope {
 export interface CollectionContext<TContract extends Contract<SqlStorage>> {
   readonly runtime: RuntimeQueryable;
   readonly context: ExecutionContext<TContract>;
+  /** The adapter's codec inferer, which `fns.raw` uses for an interpolated value. */
+  readonly rawCodecInferer?: RawCodecInferer;
 }
 
 type PredicateOperand<T, CodecId extends string> =
@@ -509,7 +517,10 @@ export type RelationPredicate<
   TContract extends Contract<SqlStorage>,
   NsId extends DomainNamespaceId<TContract>,
   ModelName extends string,
-> = (model: ModelAccessor<TContract, ModelName, NsId>) => AnyExpression;
+> = (
+  model: ModelAccessor<TContract, ModelName, NsId>,
+  tools: ModelCallbackTools<TContract, ModelName, NsId>,
+) => AnyExpression | Expression<BooleanCodecType>;
 
 export type RelationPredicateInput<
   TContract extends Contract<SqlStorage>,
@@ -640,6 +651,75 @@ export type VariantAwareModelAccessor<
         RelationModelAccessor<TContract, VariantName, NsId>
     : ModelAccessor<TContract, ModelName, NsId>
   : ModelAccessor<TContract, ModelName, NsId>;
+
+/** A condition a `where` callback may return: an ORM filter expression, or a condition from `fns`. */
+export type WhereCallbackResult = WhereArg | Expression<BooleanCodecType>;
+
+type IsBooleanCodec<
+  CodecId,
+  TCodecTypes extends Record<string, unknown>,
+> = CodecId extends keyof TCodecTypes
+  ? TCodecTypes[CodecId] extends { readonly traits: infer Traits }
+    ? 'boolean' extends Traits
+      ? true
+      : false
+    : false
+  : false;
+
+/** A function's result in the ORM: a value, as opposed to a condition, also has `asc()` and `desc()`. */
+type OrmFunctionResult<R, TCodecTypes extends Record<string, unknown>> =
+  R extends Expression<infer Field>
+    ? IsBooleanCodec<Field['codecId'], TCodecTypes> extends true
+      ? R
+      : R & Orderable
+    : R;
+
+type OrmOperation<Impl, TCodecTypes extends Record<string, unknown>> = Impl extends {
+  (...args: infer A1): infer R1;
+  (...args: infer A2): infer R2;
+}
+  ? {
+      (...args: A1): OrmFunctionResult<R1, TCodecTypes>;
+      (...args: A2): OrmFunctionResult<R2, TCodecTypes>;
+    }
+  : Impl extends (...args: infer A) => infer R
+    ? (...args: A) => OrmFunctionResult<R, TCodecTypes>
+    : Impl;
+
+/** The SQL query builder's functions for a contract, as the ORM's callbacks receive them. */
+export type OrmFunctions<TContract extends Contract<SqlStorage>> = BuiltinFunctions<
+  ExtractCodecTypes<TContract>
+> & {
+  readonly [K in keyof ExtractQueryOperationTypes<TContract>]: OrmOperation<
+    ExtractQueryOperationTypes<TContract>[K]['impl'],
+    ExtractCodecTypes<TContract>
+  >;
+};
+
+/** The indexes of the table a model is stored in, keyed by the name the contract source gave each. */
+export type ModelIndexReferences<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> = string extends NsId
+  ? Readonly<Record<string, IndexReference>>
+  : TableIndexReferences<
+      NamespaceTableDef<
+        TContract,
+        ModelTableName<TContract, ModelName, NsId> & string,
+        ResolvedNsId<TContract, ModelName, NsId>
+      >
+    >;
+
+/** The second argument of a `where` or `orderBy` callback: the SQL query builder's functions, and the model's indexes. */
+export interface ModelCallbackTools<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> {
+  readonly fns: OrmFunctions<TContract>;
+  readonly indexes: ModelIndexReferences<TContract, ModelName, NsId>;
+}
 
 /**
  * The flat default row of a single model: its own declared fields mapped to

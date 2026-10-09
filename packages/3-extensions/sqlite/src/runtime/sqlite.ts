@@ -233,6 +233,7 @@ export default function sqlite<TContract extends Contract<SqlStorage>>(
   const orm: UnboundOrm<TContract> = unboundOrm(
     ormBuilder({
       context,
+      rawCodecInferer: stack.adapter.rawCodecInferer,
       runtime: {
         query(plan) {
           return getRuntime().query(plan);
@@ -338,6 +339,7 @@ export default function sqlite<TContract extends Contract<SqlStorage>>(
               },
             },
             context,
+            rawCodecInferer,
           }),
         );
 

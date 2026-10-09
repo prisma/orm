@@ -15,11 +15,21 @@ import {
   type TableSource,
 } from '@internal/sql-relational-core/ast';
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
-import type { Expression, ScopeField } from '@internal/sql-relational-core/expression';
+import type {
+  Expression,
+  RawCodecInferer,
+  ScopeField,
+} from '@internal/sql-relational-core/expression';
+import {
+  createIndexReferences,
+  type IndexReference,
+} from '@internal/sql-relational-core/index-reference';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { blindCast } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { plainAggregateExpr } from './aggregate-codecs';
+import { createCallbackTools } from './callback-tools';
 import {
   addressedModelName,
   columnOfCallerField,
@@ -36,14 +46,15 @@ import {
 } from './collection-contract';
 import { assertModelFieldNames } from './collection-runtime';
 import { codecTraits, hasTrait, resolveColumn } from './column-codec';
-import { and, not } from './filters';
+import { and, type Condition, conditionExpr, not } from './filters';
 import { checkedOrderByItem } from './order-by-guards';
 import { ormError } from './orm-errors';
-import { tableSourceForContract } from './storage-resolution';
+import { resolveTableForContract, tableSourceForContract } from './storage-resolution';
 import {
   COMPARISON_METHODS_META,
   type ComparisonMethodFns,
   type ModelAccessor,
+  type ModelCallbackTools,
   type Orderable,
   type OrderOptions,
   type RelationFilterAccessor,
@@ -63,7 +74,12 @@ type RelationPredicateInput<
   TContract extends Contract<SqlStorage>,
   NsId extends string,
   ModelName extends string,
-> = ((model: ModelAccessor<TContract, ModelName, NsId>) => AnyExpression) | Record<string, unknown>;
+> =
+  | ((
+      model: ModelAccessor<TContract, ModelName, NsId>,
+      tools: ModelCallbackTools<TContract, ModelName, NsId>,
+    ) => Condition)
+  | Record<string, unknown>;
 
 type RelationFilterMode = 'some' | 'every' | 'none';
 type RelationFilterPlan =
@@ -208,6 +224,7 @@ export function createModelAccessor<
   namespaceId: NsId,
   modelName: ModelName,
   variantName?: VariantName,
+  rawCodecInferer?: RawCodecInferer,
 ): VariantAwareModelAccessor<TContract, ModelName, VariantName, NsId> {
   const tableName = resolveModelTableName(context.contract, namespaceId, modelName);
   return createModelAccessorInScope(
@@ -216,7 +233,88 @@ export function createModelAccessor<
     modelName,
     variantName,
     ModelAccessorScope.root(namespaceId, tableName),
+    rawCodecInferer,
   );
+}
+
+/**
+ * The second argument of a `where` or `orderBy` callback on a collection of the model: the SQL query builder's functions, and the indexes of the model's table.
+ */
+export function createModelCallbackTools<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string,
+>(
+  context: ExecutionContext<TContract>,
+  namespaceId: NsId,
+  modelName: ModelName,
+  rawCodecInferer: RawCodecInferer | undefined,
+): ModelCallbackTools<TContract, ModelName, NsId> {
+  const tableName = resolveModelTableName(context.contract, namespaceId, modelName);
+  return callbackToolsFor(
+    context,
+    namespaceId,
+    modelName,
+    ModelAccessorScope.root(namespaceId, tableName).current,
+    rawCodecInferer,
+  );
+}
+
+function callbackToolsFor<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string,
+>(
+  context: ExecutionContext<TContract>,
+  namespaceId: NsId,
+  modelName: ModelName,
+  binding: SqlTableBinding,
+  rawCodecInferer: RawCodecInferer | undefined,
+): ModelCallbackTools<TContract, ModelName, NsId> {
+  return createCallbackTools<TContract, ModelName, NsId>(context, rawCodecInferer, () =>
+    indexReferencesOf(context, namespaceId, modelName, binding),
+  );
+}
+
+function indexReferencesOf(
+  context: ExecutionContext,
+  namespaceId: string,
+  modelName: string,
+  binding: SqlTableBinding,
+): Readonly<Record<string, IndexReference>> {
+  const { contract } = context;
+  const tableName = resolveModelTableName(contract, namespaceId, modelName);
+  const resolved = resolveTableForContract(contract, namespaceId, tableName);
+  if (!resolved) {
+    throw new InternalError(
+      `Model "${modelName}" is stored in table "${tableName}", which the contract does not have`,
+    );
+  }
+  const { table } = resolved;
+  return createIndexReferences({
+    namespaceId,
+    tableName,
+    table,
+    column: (columnName) => {
+      const column = table.columns[columnName];
+      if (!column) {
+        throw new InternalError(
+          `An index of table "${tableName}" covers column "${columnName}", which the table does not have`,
+        );
+      }
+      return {
+        returnType: {
+          codecId: column.codecId,
+          nullable: column.nullable,
+          ...ifDefined(
+            'codec',
+            codecRefForStorageColumn(contract.storage, namespaceId, tableName, columnName),
+          ),
+        },
+        buildAst: () => binding.column(columnName),
+      };
+    },
+  });
 }
 
 function createModelAccessorInScope<
@@ -230,6 +328,7 @@ function createModelAccessorInScope<
   modelName: ModelName,
   variantName: VariantName | undefined,
   scope: ModelAccessorScope,
+  rawCodecInferer: RawCodecInferer | undefined,
 ): VariantAwareModelAccessor<TContract, ModelName, VariantName, NsId> {
   const contract = context.contract;
   const fieldColumns = getModelAndVariantFieldColumns(
@@ -310,13 +409,21 @@ function createModelAccessorInScope<
               variantCoordinates.name,
               scope.forJoinedSource(namespaceId, variantCoordinates.tableName),
               variantRelation,
+              rawCodecInferer,
             );
           }
         }
 
         const relation = Object.hasOwn(modelRelations, prop) ? modelRelations[prop] : undefined;
         if (relation) {
-          return createRelationFilterAccessor(context, namespaceId, modelName, scope, relation);
+          return createRelationFilterAccessor(
+            context,
+            namespaceId,
+            modelName,
+            scope,
+            relation,
+            rawCodecInferer,
+          );
         }
 
         const variantField = Object.hasOwn(variantFieldColumns, prop)
@@ -462,6 +569,7 @@ function createRelationFilterAccessor<
   parentModelName: ParentModelName,
   parentScope: ModelAccessorScope,
   relation: ResolvedModelRelation,
+  rawCodecInferer: RawCodecInferer | undefined,
 ): RelationAccessor<TContract> {
   const relatedTableName = resolveModelTableName(
     context.contract,
@@ -479,9 +587,12 @@ function createRelationFilterAccessor<
     );
 
   const filters: RelationFilterAccessor<TContract, string, string> = {
-    some: (predicate) => buildExistsExpr(context, relation, correlate(), 'some', predicate),
-    every: (predicate) => buildExistsExpr(context, relation, correlate(), 'every', predicate),
-    none: (predicate) => buildExistsExpr(context, relation, correlate(), 'none', predicate),
+    some: (predicate) =>
+      buildExistsExpr(context, relation, correlate(), 'some', predicate, rawCodecInferer),
+    every: (predicate) =>
+      buildExistsExpr(context, relation, correlate(), 'every', predicate, rawCodecInferer),
+    none: (predicate) =>
+      buildExistsExpr(context, relation, correlate(), 'none', predicate, rawCodecInferer),
   };
 
   if (isToOneCardinality(relation.cardinality)) {
@@ -507,7 +618,9 @@ function createRelationFilterAccessor<
   return {
     ...filters,
     count: (predicate: RelationPredicateInput<TContract, string, string> | undefined) =>
-      createOrderable(() => buildRelationCountExpr(context, relation, correlate(), predicate)),
+      createOrderable(() =>
+        buildRelationCountExpr(context, relation, correlate(), predicate, rawCodecInferer),
+      ),
   };
 }
 
@@ -565,6 +678,7 @@ function buildRelationCountExpr<TContract extends Contract<SqlStorage>>(
   relation: ResolvedModelRelation,
   rows: CorrelatedRelatedRows,
   predicate: RelationPredicateInput<TContract, string, string> | undefined,
+  rawCodecInferer: RawCodecInferer | undefined,
 ): AnyExpression {
   const childWhere = toRelationWhereExpr(
     context,
@@ -572,6 +686,7 @@ function buildRelationCountExpr<TContract extends Contract<SqlStorage>>(
     relation.to,
     predicate,
     rows.childScope,
+    rawCodecInferer,
   );
   return SubqueryExpr.of(
     rows.source
@@ -652,6 +767,7 @@ function buildExistsExpr<TContract extends Contract<SqlStorage>>(
   rows: CorrelatedRelatedRows,
   mode: RelationFilterMode,
   predicate: RelationPredicateInput<TContract, string, string> | undefined,
+  rawCodecInferer: RawCodecInferer | undefined,
 ): AnyExpression {
   const childWhere = toRelationWhereExpr(
     context,
@@ -659,6 +775,7 @@ function buildExistsExpr<TContract extends Contract<SqlStorage>>(
     relation.to,
     predicate,
     rows.childScope,
+    rawCodecInferer,
   );
 
   const filterPlan = planRelationFilterMode(rows.correlation, childWhere, mode);
@@ -743,6 +860,7 @@ function toRelationWhereExpr<TContract extends Contract<SqlStorage>>(
   relatedModelName: string,
   predicate: RelationPredicateInput<TContract, string, string> | undefined,
   scope: ModelAccessorScope,
+  rawCodecInferer: RawCodecInferer | undefined,
 ): AnyExpression | undefined {
   if (!predicate) {
     return undefined;
@@ -755,10 +873,22 @@ function toRelationWhereExpr<TContract extends Contract<SqlStorage>>(
     relatedModelName,
     undefined,
     scope,
+    rawCodecInferer,
   );
 
   if (typeof predicate === 'function') {
-    return predicate(accessor);
+    return conditionExpr(
+      predicate(
+        accessor,
+        callbackToolsFor(
+          context,
+          relatedNamespaceId,
+          relatedModelName,
+          scope.current,
+          rawCodecInferer,
+        ),
+      ),
+    );
   }
 
   // Shorthand object — skip fields without eq

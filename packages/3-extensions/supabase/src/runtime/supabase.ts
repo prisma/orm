@@ -370,6 +370,7 @@ export default async function supabase<TContract extends Contract<SqlStorage>>(
         connection: () => roleRuntime.openRoleSession(binding),
       },
       context: roleContext,
+      rawCodecInferer,
     });
 
     return {
@@ -440,6 +441,7 @@ export default async function supabase<TContract extends Contract<SqlStorage>>(
         connection: () => extRuntime.openRoleSession(serviceRoleBinding),
       },
       context: extContext,
+      rawCodecInferer,
     }),
     nativeEnums: extNativeEnums,
     query<Row>(

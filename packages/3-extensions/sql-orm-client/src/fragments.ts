@@ -8,7 +8,6 @@ import {
   type Direction,
   isOrderByDirection,
   type OrderByItem,
-  type WhereArg,
 } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { blindCast } from '@internal/utils/casts';
@@ -24,6 +23,8 @@ import type {
   FieldsOf,
   Orderable,
   OrderableFieldNames,
+  OrmFunctions,
+  WhereCallbackResult,
 } from './types';
 
 type FieldMultiplicity = false | { readonly elementNullable: boolean };
@@ -108,25 +109,40 @@ export interface FragmentFacts {
   readonly hasOrderBy: boolean;
 }
 
-type OrderSelector<Row> = (row: Row) => OrderByItem;
+/** The second argument of a `where` or `orderBy` callback in the body of a fragment for any model: every function, and no index, as the body does not know its model. */
+export interface DeclaredFieldsFragmentCallbackTools<TContract extends Contract<SqlStorage>> {
+  readonly fns: OrmFunctions<TContract>;
+  readonly indexes: Readonly<Record<never, never>>;
+}
+
+type OrderSelector<Row, TContract extends Contract<SqlStorage>> = (
+  row: Row,
+  tools: DeclaredFieldsFragmentCallbackTools<TContract>,
+) => OrderByItem;
 
 /** The collection the body of a fragment for any model receives: the methods that keep the row, on the declared fields, and what has been established so far. */
-export interface DeclaredFieldsFragmentCollection<Row, Facts extends FragmentFacts> {
+export interface DeclaredFieldsFragmentCollection<
+  Row,
+  Facts extends FragmentFacts,
+  TContract extends Contract<SqlStorage> = Contract<SqlStorage>,
+> {
   readonly [FragmentFactsType]: Facts;
   where(
-    fn: (row: Row) => WhereArg,
+    fn: (row: Row, tools: DeclaredFieldsFragmentCallbackTools<TContract>) => WhereCallbackResult,
   ): DeclaredFieldsFragmentCollection<
     Row,
-    { readonly hasWhere: true; readonly hasOrderBy: Facts['hasOrderBy'] }
+    { readonly hasWhere: true; readonly hasOrderBy: Facts['hasOrderBy'] },
+    TContract
   >;
   orderBy(
-    selection: OrderSelector<Row> | ReadonlyArray<OrderSelector<Row>>,
+    selection: OrderSelector<Row, TContract> | ReadonlyArray<OrderSelector<Row, TContract>>,
   ): DeclaredFieldsFragmentCollection<
     Row,
-    { readonly hasWhere: Facts['hasWhere']; readonly hasOrderBy: true }
+    { readonly hasWhere: Facts['hasWhere']; readonly hasOrderBy: true },
+    TContract
   >;
-  limit(n: number): DeclaredFieldsFragmentCollection<Row, Facts>;
-  offset(n: number): DeclaredFieldsFragmentCollection<Row, Facts>;
+  limit(n: number): DeclaredFieldsFragmentCollection<Row, Facts, TContract>;
+  offset(n: number): DeclaredFieldsFragmentCollection<Row, Facts, TContract>;
 }
 
 type ContractFieldMultiplicity<Field> = Field extends { readonly many: infer Many }
@@ -548,11 +564,13 @@ export function defineDeclaredFieldsFragment<
   body: (
     rows: DeclaredFieldsFragmentCollection<
       DeclaredFieldsFragmentModelAccessor<TContract, DeclaredFields<Declarations>>,
-      FragmentFacts
+      FragmentFacts,
+      TContract
     >,
   ) => DeclaredFieldsFragmentCollection<
     DeclaredFieldsFragmentModelAccessor<TContract, DeclaredFields<Declarations>>,
-    Facts
+    Facts,
+    TContract
   >,
 ): DeclaredFieldsFragment<TContract, DeclaredFields<Declarations>, Facts> {
   const fields = declaredFieldSpecs(declarations);
@@ -568,7 +586,8 @@ export function defineDeclaredFieldsFragment<
       blindCast<
         DeclaredFieldsFragmentCollection<
           DeclaredFieldsFragmentModelAccessor<TContract, DeclaredFields<Declarations>>,
-          FragmentFacts
+          FragmentFacts,
+          TContract
         >,
         'a collection offers where, orderBy, limit and offset with these run-time shapes'
       >(collection),
