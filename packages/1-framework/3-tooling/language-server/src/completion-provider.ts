@@ -35,6 +35,7 @@ import {
   type AttributeSpecSource,
   argumentRootGrammar,
   attributeSpecResolver,
+  type EntryBlockAst,
 } from './attribute-spec-resolution';
 import type {
   AttributeNameCompletionContext,
@@ -477,7 +478,7 @@ function provideGenericBlockKeyCompletionItems(
     return [];
   }
 
-  const existing = existingGenericBlockParameterNames(context.block, context.offset);
+  const existing = existingGenericBlockParameterNames(context.block, context.offset, source);
   const hasEquals = editedKeyHasEquals(context.block, context.offset);
   const replacementRange = {
     start: sourceFile.positionAt(context.replacementStartOffset),
@@ -514,7 +515,7 @@ function provideGenericBlockKeyCompletionItems(
     });
 }
 
-function editedKeyHasEquals(block: GenericBlockDeclarationAst, cursorOffset: number): boolean {
+function editedKeyHasEquals(block: EntryBlockAst, cursorOffset: number): boolean {
   for (const entry of block.entries()) {
     if (!entry.syntax.isOutside(cursorOffset)) return entry.equals() !== undefined;
   }
@@ -522,11 +523,15 @@ function editedKeyHasEquals(block: GenericBlockDeclarationAst, cursorOffset: num
 }
 
 function existingGenericBlockParameterNames(
-  block: GenericBlockDeclarationAst,
+  block: EntryBlockAst,
   cursorOffset: number,
+  source: PslCompletionCandidateSource,
 ): Set<string> {
   const names = new Set<string>();
-  for (const entry of block.entries()) {
+  const symbol = source.binder.declaredSymbol(block.syntax);
+  const entries =
+    symbol?.kind === 'block' || symbol?.kind === 'mixin' ? symbol.entries : block.entries();
+  for (const entry of entries) {
     if (!entry.syntax.isOutside(cursorOffset)) {
       continue;
     }

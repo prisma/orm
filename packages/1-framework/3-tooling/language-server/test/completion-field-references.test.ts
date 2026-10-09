@@ -191,3 +191,52 @@ namespace unrelated { model Target { unrelatedOnly String } }`;
     expect(edit.newText).toBe('remoteOnly');
   });
 });
+
+describe('field names offered inside a mixin body', () => {
+  const body = ['  first String', '  second String', '  other Target'];
+
+  it.each([
+    ['a block attribute', '  @@probe(local: [|])'],
+    ['a field attribute', '  third String @probe(local: [|])'],
+    ['a nested call of a field attribute', '  third String @probe(nested: fields(local: [|]))'],
+  ])(
+    'are the fields of the mixin, as a model with the same fields offers its own, in %s',
+    (_position, line) => {
+      const inMixin = complete(
+        ['model Target { remote String }', 'model mixin Probe {', ...body, line, '}'].join('\n'),
+      ).labels;
+      const inModel = complete(
+        ['model Target { remote String }', 'model Probe {', ...body, line, '}'].join('\n'),
+      ).labels;
+
+      expect(inMixin).toEqual(inModel);
+      expect(inMixin).toEqual(expect.arrayContaining(['first', 'second']));
+    },
+  );
+
+  it('are the fields of the referenced model for a referenced-field position', () => {
+    const line = '  link Target @probe(remote: [|])';
+    const inMixin = complete(
+      ['model Target { remote String }', 'model mixin Probe {', line, '}'].join('\n'),
+    ).labels;
+
+    expect(inMixin).toEqual(['remote']);
+  });
+
+  it('do not include the fields of a model that includes the mixin', () => {
+    const labels = complete(
+      [
+        'model mixin Probe {',
+        '  first String',
+        '  @@probe(local: [|])',
+        '}',
+        'model User {',
+        '  own String',
+        '  +Probe',
+        '}',
+      ].join('\n'),
+    ).labels;
+
+    expect(labels).toEqual(['first']);
+  });
+});
