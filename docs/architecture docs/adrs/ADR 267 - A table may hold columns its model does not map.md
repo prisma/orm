@@ -74,7 +74,7 @@ A column whose Prisma 7 type has no Prisma 8 codec cannot become a column node, 
 
 `_prisma_migrations` is Prisma 7's record of applied migrations, and it is not declared in the contract. It is the earlier tool's bookkeeping, not the application's schema, as Prisma 8's own `prisma_contract` schema is not: Prisma 7's `db pull` never introspects it either. The Postgres target names it as a tool table, and `db verify`, strict included, and `contract infer` leave it alone. Declaring it would put a table with no model into every Prisma 7 contract, change every such project's storage hash, and make `contract print` refuse every Prisma 7 contract at cutover.
 
-A contract read before this decision carries a storage hash computed without the ignored objects. The first plan after the reader starts declaring them contains no DDL and records the new hash.
+A contract read before this decision carries a storage hash computed without the ignored objects, so the hash changes when a project upgrades. Every existing database already holds those objects. While the earlier version still owns migrations, emitting the contract and signing each database is enough. After Prisma 8 has taken over migrations, the project plans one migration first, which records the creates so that a database rebuilt from `migrations/` gets the objects, and then signs each existing database instead of migrating it, because migrating would try to create tables that exist.
 
 ## Keeping the ORM to the domain
 
@@ -98,7 +98,7 @@ Who manages the storage is a separate question from whether the application sees
 
 ## Junction tables
 
-A junction table for an implicit many-to-many relation is a model. The lowering requires it to be a declared model, the relation's `through` resolves by model, and the ORM joins through its fields; the Prisma 7 reader synthesises that model with its two key fields. ADR 174 left open whether a junction appears as a model, leaning towards not. It does, and a table with no model is declared as a table node, never through a relation. Whether a junction model is an aggregate root follows ADR 174's root rules, unchanged.
+A junction table that a many-to-many relation goes through is a model. The lowering requires it to be a declared model, the relation's `through` resolves by model, and the ORM joins through its fields; the Prisma 7 reader synthesises that model with its two key fields. ADR 174 left open whether a junction appears as a model, leaning towards not. It does when a relation goes through it. A junction no relation goes through, such as the one Prisma 7 created for a many-to-many relation with an ignored side, is a table with no model, declared as a table node. Whether a junction model is an aggregate root follows ADR 174's root rules, unchanged.
 
 ## Consequences
 
@@ -106,7 +106,7 @@ A junction table for an implicit many-to-many relation is a model. The lowering 
 - A contract read from a Prisma 7 source keeps every ignored object, and the Postgres target leaves Prisma 7's `_prisma_migrations` alone, so strict verify passes on the database Prisma 7 built. A schema with a column whose type has no codec, ignored or not, does not load.
 - A column name passed where a field name belongs is an error at runtime as well as in the types.
 - `ContractDefinition` carries column nodes and table nodes beside models, and one lowering produces every column and table.
-- A junction table is a model, which closes the question ADR 174 left open.
+- A junction table a relation goes through is a model, which closes the question ADR 174 left open.
 - A column whose type has no codec is not covered. That is its own decision.
 - Prisma 8 PSL and the TypeScript DSL cannot yet declare an extra column or a table with no model. That is its own decision.
 - MongoDB's storage plane declares collections and indexes, not fields, so a field the application must not see has no storage representation to declare; this decision is SQL-only.
