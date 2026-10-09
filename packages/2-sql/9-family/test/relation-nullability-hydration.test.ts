@@ -65,7 +65,7 @@ function contractJson(input: {
     roots: { posts: crossRef('Post', UNBOUND_DOMAIN_NAMESPACE_ID) },
     models: {
       Post: {
-        fields: { id: int, authorId: int },
+        fields: input.authorIdColumn === 'missing' ? { id: int } : { id: int, authorId: int },
         relations: { author: input.relation },
         storage: {
           namespaceId: UNBOUND_NAMESPACE_ID,
