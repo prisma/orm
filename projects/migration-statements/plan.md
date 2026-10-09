@@ -49,7 +49,7 @@
 
 ### 3b — The remaining renames and deletes on Postgres and SQLite
 
-**Linear:** [TML-3477](https://linear.app/prisma-company/issue/TML-3477) · **Folder:** `slices/remaining-nouns/`
+**Linear:** [TML-3537](https://linear.app/prisma-company/issue/TML-3537) · **Folder:** `slices/remaining-nouns/`
 
 - `--rename` for enum values, namespaces and fields inside value objects. This slice builds the statement support for value objects, which 4b reuses.
 - Moving a model to another namespace (`alter table set schema` on Postgres).
@@ -64,7 +64,7 @@
 
 ### 4b — `--convert`, `--backfill` and value object renames on MongoDB
 
-**Linear:** [TML-3478](https://linear.app/prisma-company/issue/TML-3478) · **Folder:** `slices/mongo-convert-backfill/`
+**Linear:** [TML-3538](https://linear.app/prisma-company/issue/TML-3538) · **Folder:** `slices/mongo-convert-backfill/`
 
 - The same two flags as 3a, writing a data transform with a placeholder.
 - Making a field required on a collection with documents is no longer silent. It is answered with `--backfill`, or the command says the existing documents need the field.
