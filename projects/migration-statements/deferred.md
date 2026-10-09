@@ -65,3 +65,9 @@ Adding a required field to a populated collection, or making an optional field r
 
 `CLI.CONSENT_REQUIRED` lists one `user-choice` next action per flag form ("Run the command again with --delete Legacy", another for the rename form), not grouped by subject and not a complete runnable command, and its summary says "N subjects need a statement", which is project vocabulary. Grouping the forms per subject and printing a full command would need the engine to know the invocation; raise it on prisma/prisma-cli once the statement prompt has shipped.
 
+## SQL variants stored in their own tables
+
+**Found:** slice 4a design (2026-10-09). Will: SQL will need to handle multi-table storage of variants in the future.
+
+On MongoDB a variant's field rename touches only that variant's documents. On SQL today a variant's field is a column in the shared table, and a rename applies to every row. When SQL supports variants stored in their own tables, a variant's field statements must act on that variant's table only.
+

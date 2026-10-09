@@ -37,11 +37,13 @@ Without `--delete User.nickname`, both commands refuse, as they do on SQL:
 | Field removed | Validator updated, nothing asked. Every document that still holds the field then fails each update | Asked about. `--delete` removes the field from every document; `--rename` keeps its values |
 | Model removed | Asked about; `--delete` drops the collection | Same, and `--rename` is offered too |
 
-## Decisions to check
+## Decisions (settled with Will, 2026-10-09)
 
-1. **Removing a field now asks.** Today it is silent, but MongoDB's validator then rejects every update to a document that still holds the field.
-2. **Fields are named as stored.** `id @map("_id")` is `User._id` in a statement. The contract and the generated client already use that name. Naming the schema field instead would change the contract and its hashes.
-3. **The rewrites run under `db update`.** They are classed by what they do to data: a rename is `widening`, a removal is `destructive`. `db update` refuses the `data` class, so classing them `data`, as ADR 188 says today, would block `db update`. This slice amends ADR 188.
+1. **Removing a field is data loss.** It is asked about, and `--delete` removes it from every document. Today it is silent, and MongoDB's validator then rejects every update to a document that still holds the field.
+2. **Fields are named by their contract key, as on SQL.** MongoDB's contract keys fields by their stored name, so `id @map("_id")` is `User._id` in a statement. Naming the schema field instead would need MongoDB's contract to keep a field-to-stored-name map, as SQL's does. That is outside this project.
+3. **Rewrites are classed by what they do to data, as on SQL.** A field rename is `widening`, like a column rename. A field removal is `destructive`, like a column drop. The planner writes a `data` operation only as a placeholder scaffold. So `db update` runs these rewrites, as it runs SQL renames. ADR 188 changes one sentence: today it says every MongoDB data transform is `data`.
+4. **Without the old contract, a removed field is named `<collection>.<field>`,** for example `users.nickname`. SQL uses `<schema>.<table>.<column>`, or `<table>.<column>` on SQLite.
+5. **A variant's field rename touches only that variant's documents.** The rewrite filters on the variant's discriminator value, so another variant in the same collection that stores a field with the same name keeps it. This differs from SQL single-table storage, where a rename renames the shared column for every row.
 
 ## How it works
 
