@@ -87,6 +87,7 @@ export type IncludeRefinementCollection<
 > = Omit<
   Collection<TContract, ModelName, Row, State>,
   | IncludeRefinementTerminals
+  | 'whereUnique'
   | (IsToMany extends true ? never : IncludeRefinementScalarMethods<TContract>)
 >;
 

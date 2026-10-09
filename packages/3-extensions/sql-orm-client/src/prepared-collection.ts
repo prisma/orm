@@ -3,6 +3,7 @@ import type { AsyncIterableResult, MetaBuilder } from '@internal/framework-compo
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { Preparable } from '@internal/sql-relational-core/plan';
 import type { WhereInput } from './collection-internal-types';
+import type { HasNoUniqueFilter, HasTypeState } from './collection-types';
 import type {
   AggregateBuilder,
   AggregateResult,
@@ -15,12 +16,14 @@ export interface PreparedCollection<
   ModelName extends string,
   Row,
   State extends CollectionTypeState,
-> {
-  aggregate<Spec extends AggregateSpec>(
+> extends HasTypeState<State> {
+  aggregate<Spec extends AggregateSpec, Self = unknown>(
+    this: Self & HasNoUniqueFilter,
     selector: (aggregate: AggregateBuilder<TContract, ModelName, State['nsId']>) => Spec,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Preparable<Record<string, unknown>, Promise<AggregateResult<Spec>>>;
-  all(
+  all<Self>(
+    this: Self & HasNoUniqueFilter,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Preparable<Record<string, unknown>, AsyncIterableResult<Row>>;
   first(

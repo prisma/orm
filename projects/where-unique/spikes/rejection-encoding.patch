@@ -1,0 +1,416 @@
+diff --git a/examples/prisma-8-demo/test/collection-chaining.types.test-d.ts b/examples/prisma-8-demo/test/collection-chaining.types.test-d.ts
+index 12b2c7524e..2674eaa872 100644
+--- a/examples/prisma-8-demo/test/collection-chaining.types.test-d.ts
++++ b/examples/prisma-8-demo/test/collection-chaining.types.test-d.ts
+@@ -45,3 +45,9 @@ test('a conditional filter refuses deletes', () => {
+   // @ts-expect-error the collection may have no filter
+   posts.deleteAll();
+ });
++
++export const uniqueChain = plain.User.whereUnique({ id: 'u1' }).where({ kind: 'admin' });
++export const classUniqueChain = db.User.whereUnique({ id: 'u1' }).admins();
++export const uniqueOnly = plain.User.whereUnique({ id: 'u1' });
++export const uniqueInclude = plain.Post.whereUnique({ id: 'p1' }).include('user');
++export const filteredThenUnique = plain.User.where({ kind: 'admin' }).whereUnique({ id: 'u1' });
+diff --git a/packages/3-extensions/sql-orm-client/src/collection-types.ts b/packages/3-extensions/sql-orm-client/src/collection-types.ts
+index ecaf36b61a..0b5d77d74d 100644
+--- a/packages/3-extensions/sql-orm-client/src/collection-types.ts
++++ b/packages/3-extensions/sql-orm-client/src/collection-types.ts
+@@ -20,6 +20,15 @@ export interface HasWhere extends HasTypeState<{ readonly hasWhere: true }> {}
+ /** The fact that an order has been applied: the type-state flag `hasOrderBy` is `true`. Write `Ordered<C>` for an ordered collection; error messages print `HasOrderBy`. */
+ export interface HasOrderBy extends HasTypeState<{ readonly hasOrderBy: true }> {}
+ 
++export interface HasUniqueFilter extends HasTypeState<{ readonly uniqueFilter: true }> {}
++
++export interface AllowsManyRows
++  extends HasTypeState<{ readonly hasWhere: boolean; readonly uniqueFilter?: never }> {}
++
++export type ManyRowsOf<Self> = [Self] extends [HasUniqueFilter] ? never : unknown;
++
++export type UniquelyFiltered<C> = C & HasWhere & HasUniqueFilter;
++
+ /** A collection with a filter applied: `C & HasWhere`. */
+ export type Filtered<C> = C & HasWhere;
+ 
+diff --git a/packages/3-extensions/sql-orm-client/src/collection.ts b/packages/3-extensions/sql-orm-client/src/collection.ts
+index 9ec416fc62..77da52b70f 100644
+--- a/packages/3-extensions/sql-orm-client/src/collection.ts
++++ b/packages/3-extensions/sql-orm-client/src/collection.ts
+@@ -78,7 +78,11 @@ import type {
+   HasOrderBy,
+   HasRow,
+   HasTypeState,
++  AllowsManyRows,
++  HasUniqueFilter,
+   HasWhere,
++  ManyRowsOf,
++  UniquelyFiltered,
+   Including,
+   Ordered,
+   // biome-ignore lint/correctness/noUnusedImports: used in `declare` properties
+@@ -442,6 +446,28 @@ export class CollectionBase<
+     });
+   }
+ 
++  whereUnique<Self>(
++    this: Self,
++    criterion: UniqueConstraintCriterion<TContract, ModelName>,
++  ): UniquelyFiltered<Self>;
++  whereUnique(criterion: UniqueConstraintCriterion<TContract, ModelName>): UniquelyFiltered<this> {
++    const filter = normalizeWhereArg(
++      shorthandToWhereExpr(
++        this.ctx.context,
++        this.namespaceId,
++        this.modelName,
++        blindCast<
++          ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
++          'a unique criterion is a field-value record of the model'
++        >(criterion),
++      ),
++      { contract: this.contract, namespaceId: this.namespaceId },
++    );
++    return this.#cloneSelf<HasWhere & HasUniqueFilter>({
++      filters: filter ? [...this.state.filters, filter] : this.state.filters,
++    });
++  }
++
+   /**
+    * Call `fn` with this collection and return its result.
+    */
+@@ -927,7 +953,7 @@ export class CollectionBase<
+    *   .all();
+    * ```
+    */
+-  orderBy<Self>(
++  orderBy<Self extends ManyRowsOf<Self>>(
+     this: Self,
+     selection:
+       | ((
+@@ -949,6 +975,28 @@ export class CollectionBase<
+           ) => OrderByItem
+         >,
+   ): Ordered<Self>;
++  orderBy<Self>(
++    this: Self & AllowsManyRows,
++    selection:
++      | ((
++          model: VariantAwareModelAccessor<
++            TContract,
++            ModelName,
++            State['variantName'],
++            State['nsId']
++          >,
++        ) => OrderByItem)
++      | ReadonlyArray<
++          (
++            model: VariantAwareModelAccessor<
++              TContract,
++              ModelName,
++              State['variantName'],
++              State['nsId']
++            >,
++          ) => OrderByItem
++        >,
++  ): Ordered<Self>;
+   orderBy(
+     selection:
+       | ((
+@@ -1111,10 +1159,14 @@ export class CollectionBase<
+    *   .all();
+    * ```
+    */
+-  cursor<Self extends HasOrderBy>(
++  cursor<Self extends HasOrderBy & ManyRowsOf<Self>>(
+     this: Self,
+     cursorValues: Partial<Record<keyof DefaultModelRow<TContract, ModelName> & string, unknown>>,
+   ): Self;
++  cursor<Self extends HasOrderBy>(
++    this: Self & AllowsManyRows,
++    cursorValues: Partial<Record<keyof DefaultModelRow<TContract, ModelName> & string, unknown>>,
++  ): Self;
+   cursor(
+     cursorValues: Partial<Record<keyof DefaultModelRow<TContract, ModelName> & string, unknown>>,
+   ): this {
+@@ -1148,8 +1200,15 @@ export class CollectionBase<
+       keyof DefaultModelRow<TContract, ModelName> & string,
+       ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+     ],
+-    Self,
++    Self extends ManyRowsOf<Self>,
+   >(this: Self, ...fields: Fields): Self;
++  distinct<
++    Fields extends readonly [
++      keyof DefaultModelRow<TContract, ModelName> & string,
++      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
++    ],
++    Self,
++  >(this: Self & AllowsManyRows, ...fields: Fields): Self;
+   distinct<
+     Fields extends readonly [
+       keyof DefaultModelRow<TContract, ModelName> & string,
+@@ -1190,11 +1249,21 @@ export class CollectionBase<
+       keyof DefaultModelRow<TContract, ModelName> & string,
+       ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+     ],
+-    Self extends HasOrderBy,
++    Self extends HasOrderBy & ManyRowsOf<Self>,
+   >(
+     this: Self,
+     ...fields: TContract['capabilities'] extends { postgres: { distinctOn: true } } ? Fields : never
+   ): Self;
++  distinctOn<
++    Fields extends readonly [
++      keyof DefaultModelRow<TContract, ModelName> & string,
++      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
++    ],
++    Self extends HasOrderBy,
++  >(
++    this: Self & AllowsManyRows,
++    ...fields: TContract['capabilities'] extends { postgres: { distinctOn: true } } ? Fields : never
++  ): Self;
+   distinctOn<
+     Fields extends readonly [
+       keyof DefaultModelRow<TContract, ModelName> & string,
+@@ -1225,10 +1294,14 @@ export class CollectionBase<
+    * const firstTen = await db.orm.User.orderBy((u) => u.id.asc()).limit(10).all();
+    * ```
+    */
+-  limit<Self>(
++  limit<Self extends ManyRowsOf<Self>>(
+     this: Self,
+     n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
+   ): Self;
++  limit<Self>(
++    this: Self & AllowsManyRows,
++    n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
++  ): Self;
+   limit(
+     n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
+   ): this {
+@@ -1246,10 +1319,14 @@ export class CollectionBase<
+    *   .all();
+    * ```
+    */
+-  offset<Self>(
++  offset<Self extends ManyRowsOf<Self>>(
+     this: Self,
+     n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
+   ): Self;
++  offset<Self>(
++    this: Self & AllowsManyRows,
++    n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
++  ): Self;
+   offset(
+     n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
+   ): this {
+@@ -1292,10 +1369,13 @@ export class CollectionBase<
+    * ```
+    */
+   all<Self extends this>(
+-    this: Self,
++    this: Self & AllowsManyRows,
+     configure?: (meta: MetaBuilder<'read'>) => void,
+   ): AsyncIterableResult<CollectionRowOf<Self>>;
+-  all(configure?: (meta: MetaBuilder<'read'>) => void): AsyncIterableResult<CollectionRowOf<this>>;
++  all<Self>(
++    this: Self & AllowsManyRows,
++    configure?: (meta: MetaBuilder<'read'>) => void,
++  ): AsyncIterableResult<CollectionRowOf<this>>;
+   all(configure?: (meta: MetaBuilder<'read'>) => void): AsyncIterableResult<unknown> {
+     return this.#withAnnotationsFromMeta(configure, 'all').#dispatch();
+   }
+@@ -1421,6 +1501,11 @@ export class CollectionBase<
+    * `MetaBuilder<'read'>` for attaching typed annotations.
+    * Annotations are merged into the compiled plan's `meta.annotations`.
+    */
++  async aggregate<Spec extends AggregateSpec, Self = unknown>(
++    this: Self & AllowsManyRows,
++    fn: (aggregate: AggregateBuilder<TContract, ModelName, State['nsId']>) => Spec,
++    configure?: (meta: MetaBuilder<'read'>) => void,
++  ): Promise<AggregateResult<Spec>>;
+   async aggregate<Spec extends AggregateSpec>(
+     fn: (aggregate: AggregateBuilder<TContract, ModelName, State['nsId']>) => Spec,
+     configure?: (meta: MetaBuilder<'read'>) => void,
+@@ -2408,7 +2493,7 @@ export class CollectionBase<
+    * `MetaBuilder<'write'>` for attaching typed annotations.
+    */
+   updateAll<Self extends HasWhere>(
+-    this: Self,
++    this: Self & AllowsManyRows,
+     data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
+     configure?: (meta: MetaBuilder<'write'>) => void,
+   ): AsyncIterableResult<CollectionRowOf<Self & HasRow<CollectionRowOf<this>>>>;
+@@ -2484,7 +2569,7 @@ export class CollectionBase<
+    * ```
+    */
+   async updateAndCount<Self extends HasWhere>(
+-    this: Self,
++    this: Self & AllowsManyRows,
+     data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
+     configure?: (meta: MetaBuilder<'write'>) => void,
+   ): Promise<number>;
+@@ -2579,7 +2664,7 @@ export class CollectionBase<
+    * `MetaBuilder<'write'>` for attaching typed annotations.
+    */
+   deleteAll<Self extends HasWhere>(
+-    this: Self,
++    this: Self & AllowsManyRows,
+     configure?: (meta: MetaBuilder<'write'>) => void,
+   ): AsyncIterableResult<CollectionRowOf<Self & HasRow<CollectionRowOf<this>>>>;
+   deleteAll(configure?: (meta: MetaBuilder<'write'>) => void): AsyncIterableResult<unknown> {
+@@ -2690,7 +2775,7 @@ export class CollectionBase<
+    * ```
+    */
+   async deleteAndCount<Self extends HasWhere>(
+-    this: Self,
++    this: Self & AllowsManyRows,
+     configure?: (meta: MetaBuilder<'write'>) => void,
+   ): Promise<number>;
+   async deleteAndCount(configure?: (meta: MetaBuilder<'write'>) => void): Promise<number> {
+diff --git a/packages/3-extensions/sql-orm-client/src/exports/index.ts b/packages/3-extensions/sql-orm-client/src/exports/index.ts
+index a359936797..08241216a2 100644
+--- a/packages/3-extensions/sql-orm-client/src/exports/index.ts
++++ b/packages/3-extensions/sql-orm-client/src/exports/index.ts
+@@ -6,12 +6,14 @@ export type {
+   HasOrderBy,
+   HasRow,
+   HasTypeState,
++  HasUniqueFilter,
+   HasWhere,
+   Including,
+   Ordered,
+   RowType,
+   Scope,
+   TypeState,
++  UniquelyFiltered,
+ } from '../collection-types';
+ export { all, and, not, or } from '../filters';
+ export { GroupedCollection } from '../grouped-collection';
+diff --git a/packages/3-extensions/sql-orm-client/src/types.ts b/packages/3-extensions/sql-orm-client/src/types.ts
+index d5ed2b0faf..1836d97db9 100644
+--- a/packages/3-extensions/sql-orm-client/src/types.ts
++++ b/packages/3-extensions/sql-orm-client/src/types.ts
+@@ -144,7 +144,6 @@ export function emptyGroupPagingState(): GroupPagingState {
+ export interface CollectionTypeState {
+   readonly hasOrderBy: boolean;
+   readonly hasWhere: boolean;
+-  readonly hasUniqueFilter: boolean;
+   readonly variantName: string | undefined;
+   /**
+    * The namespace coordinate this collection resolves at — set by the
+@@ -162,7 +161,6 @@ export type RelationCardinalityTag = '1:1' | 'N:1' | '1:N' | 'N:M';
+ export type DefaultCollectionTypeState = {
+   readonly hasOrderBy: boolean;
+   readonly hasWhere: boolean;
+-  readonly hasUniqueFilter: boolean;
+   readonly variantName: undefined;
+   readonly nsId: never;
+ };
+diff --git a/packages/3-extensions/sql-orm-client/test/annotations.types.test-d.ts b/packages/3-extensions/sql-orm-client/test/annotations.types.test-d.ts
+index db8f623aec..2e11a3435e 100644
+--- a/packages/3-extensions/sql-orm-client/test/annotations.types.test-d.ts
++++ b/packages/3-extensions/sql-orm-client/test/annotations.types.test-d.ts
+@@ -182,7 +182,6 @@ declare const userCollectionWithWhere: Collection<
+   {
+     readonly hasOrderBy: boolean;
+     readonly hasWhere: true;
+-    readonly hasUniqueFilter: boolean;
+     readonly variantName: undefined;
+     readonly nsId: never;
+   }
+diff --git a/packages/3-extensions/sql-orm-client/test/where-unique-spike.types.test-d.ts b/packages/3-extensions/sql-orm-client/test/where-unique-spike.types.test-d.ts
+new file mode 100644
+index 0000000000..c3807f3386
+--- /dev/null
++++ b/packages/3-extensions/sql-orm-client/test/where-unique-spike.types.test-d.ts
+@@ -0,0 +1,90 @@
++import type { AsyncIterableResult } from '@internal/framework-components/runtime';
++import { describe, expectTypeOf, test } from 'vitest';
++import type { CollectionRowOf } from '../src/collection-types';
++import { Collection } from '../src/collection';
++import { createChainingOrm, type PostCollection } from './collection-chaining-fixture';
++import type { TestContract } from './helpers';
++
++const { db, plain } = createChainingOrm();
++const Post = db.Post;
++type Row = CollectionRowOf<PostCollection>;
++
++class ScopedPost extends Collection<TestContract, 'Post'> {
++  top() {
++    return this.orderBy((p) => p.views.desc()).limit(10).offset(0);
++  }
++  everything() {
++    return this.all();
++  }
++  total() {
++    return this.aggregate((a) => ({ n: a.count() }));
++  }
++  purge() {
++    return this.where({ id: 1 }).deleteAll();
++  }
++}
++
++describe('whereUnique spike', () => {
++  test('single-record operations keep their types', async () => {
++    const u = Post.whereUnique({ id: 1 });
++    expectTypeOf(await u.first()).toEqualTypeOf<Row | null>();
++    expectTypeOf(await u.update({ title: 'x' })).toEqualTypeOf<Row | null>();
++    expectTypeOf(await u.delete()).toEqualTypeOf<Row | null>();
++    expectTypeOf(await u.where({ title: 'x' }).first()).toEqualTypeOf<Row | null>();
++    expectTypeOf(await u.published().first()).toEqualTypeOf<Row | null>();
++    expectTypeOf(await u.select('id').first()).toEqualTypeOf<{ id: number } | null>();
++    const withAuthor = await u.include('author').first();
++    expectTypeOf(withAuthor).not.toBeAny();
++    expectTypeOf(withAuthor).toExtend<{ author: { name: string } } | null>();
++    expectTypeOf(await plain.Post.whereUnique({ id: 1 }).first()).not.toBeAny();
++  });
++
++  test('many-record operations are refused', () => {
++    const u = Post.whereUnique({ id: 1 });
++    // @ts-expect-error
++    u.all();
++    // @ts-expect-error
++    u.orderBy((p) => p.views.desc());
++    // @ts-expect-error
++    u.limit(1);
++    // @ts-expect-error
++    u.offset(1);
++    // @ts-expect-error
++    u.distinct('title');
++    // @ts-expect-error
++    u.aggregate((a) => ({ n: a.count() }));
++    // @ts-expect-error
++    u.updateAll({ title: 'x' });
++    // @ts-expect-error
++    u.updateAndCount({ title: 'x' });
++    // @ts-expect-error
++    u.deleteAll();
++    // @ts-expect-error
++    u.deleteAndCount();
++    // @ts-expect-error
++    u.where({ title: 'x' }).all();
++    // @ts-expect-error
++    u.include('author').all();
++    // @ts-expect-error
++    u.select('id').all();
++    // @ts-expect-error
++    u.published().all();
++    // @ts-expect-error
++    plain.Post.whereUnique({ id: 1 }).all();
++    // @ts-expect-error
++    Post.orderBy((p) => p.views.desc()).whereUnique({ id: 1 }).cursor({ views: 1 });
++  });
++
++  test('argument', () => {
++    // @ts-expect-error not a unique constraint
++    Post.whereUnique({ title: 'x' });
++    // @ts-expect-error object form only
++    Post.whereUnique((p) => p.id.eq(1));
++  });
++
++  test('collections without whereUnique are unchanged', () => {
++    expectTypeOf(Post.published().recent().limit(5).all()).toEqualTypeOf<AsyncIterableResult<Row>>();
++    expectTypeOf(Post.where({ id: 1 }).deleteAll()).toEqualTypeOf<AsyncIterableResult<Row>>();
++    expectTypeOf<ReturnType<ScopedPost['everything']>>().not.toBeAny();
++  });
++});

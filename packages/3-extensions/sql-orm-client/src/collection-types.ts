@@ -25,8 +25,27 @@ export interface HasOrderBy extends HasTypeState<{ readonly hasOrderBy: true }> 
 /** The fact that no variant has been selected: the type-state field `variantName` is `undefined`. `variant()` needs it; error messages print `HasNoVariant`. */
 export interface HasNoVariant extends HasTypeState<{ readonly variantName: undefined }> {}
 
+export declare const UniqueFilter: unique symbol;
+
+export interface HasUniqueFilter extends HasTypeState<{ readonly uniqueFilter: true }> {
+  readonly [UniqueFilter]: true;
+}
+
+export interface HasNoUniqueFilter
+  extends HasTypeState<{ readonly hasWhere: boolean; readonly uniqueFilter?: never }> {
+  readonly [UniqueFilter]?: never;
+}
+
+export type WithoutUniqueFilter<Self> = [Self] extends [
+  HasTypeState<{ readonly uniqueFilter: true }>,
+]
+  ? never
+  : unknown;
+
 /** A collection with a filter applied: `C & HasWhere`. */
 export type Filtered<C> = C & HasWhere;
+
+export type UniquelyFiltered<C> = C & HasWhere & HasUniqueFilter;
 
 /** A collection with an order applied: `C & HasOrderBy`. */
 export type Ordered<C> = C & HasOrderBy;
