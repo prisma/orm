@@ -40,7 +40,7 @@ The same two forms work for a block kind an extension defines. Row-level securit
 namespace public {
   policy_select mixin OwnerRead {
     roles = [authenticated]
-    using = "\"userId\"::uuid = auth.uid()"
+    using = sql`"userId"::uuid = auth.uid()`
   }
 
   policy_select profile_owner_read {
@@ -134,7 +134,7 @@ None. No target adapter changes.
 - **Consumers read block members from symbols, not from syntax nodes.** `BlockSymbol` holds only `name`, `keyword` and `node` today, and about fifteen call sites in the binder, `block-spec/interpret.ts`, the family interpreters and `sql-attribute-specs.ts` read `block.node.entries()` or `block.node.attributes()`. Three sites read `model.node.attributes()`. All of them move to member records on the symbol, and `BlockSymbol` gains those records. Without this, an inclusion in an enum or an extension block is invisible to its consumers.
 - **Inline equivalence.** For every block kind, a schema using a mixin and the same schema with the members written at the inclusion's position produce the same contract.
 - **One grammar for every block kind.** `<keyword> mixin X` and `+X` parse for any keyword from the first parser change; support is not added kind by kind.
-- **No interpreter knows about mixins.** No family interpreter, attribute spec or block spec tests for a mixin or an inclusion.
+- **No interpreter knows about mixins.** No family interpreter, attribute spec or block spec tests for a mixin or an inclusion. One exception: the family callbacks that word the binder's diagnostics (`describeUnsupportedAttribute`, `describeUnresolvedType`) receive the mixin as the owner of a member written in a mixin body, and may check its kind to choose the wording.
 - **Lossless round trip.** The parser keeps its lossless syntax tree for the new forms, and the formatter prints them.
 
 ## Transitional-shape constraints
