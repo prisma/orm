@@ -130,6 +130,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "ModelA_b_id_idx_fddc7dbe"
+                  },
                   "source": {
                     "columns": [
                       "b_id"
@@ -186,7 +189,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "a7bf2adf7a49579648add82fcf268479321b5bac6666d1547ba4766e04027523"
+    "storageHash": "147ba711ff497394252e8c9ecfc4ac94d778700fb944f3e936c4132b06b49ac4"
   },
   "capabilities": {
     "postgres": {

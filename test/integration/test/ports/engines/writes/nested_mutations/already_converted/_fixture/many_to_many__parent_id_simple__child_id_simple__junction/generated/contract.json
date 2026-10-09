@@ -387,6 +387,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "_ChildToParent_A_idx_b3f15882"
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -404,6 +407,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "_ChildToParent_B_idx_605fc892"
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -453,7 +459,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "1a654547f44adb5705eb1cd0337e8bcfbab7538b62dec828d4299c41ca3c4d27"
+    "storageHash": "396d2099dca390247fa1865626b709d8483980e54880612df8f8d65afb59799c"
   },
   "execution": {
     "executionHash": "39b21f30379f14fdf8e87e1eed26a63922a468a0216a0dd7c8c621edf450923b",

@@ -311,6 +311,12 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": [
+                      "child_c_1",
+                      "child_c_2"
+                    ]
+                  },
                   "source": {
                     "columns": [
                       "child_c_1",
@@ -361,7 +367,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "ee4b087e29d4f9a20f70c4e0f9180c1a97ecaba903116b956682009299753c34"
+    "storageHash": "631517e40353cda11dc7996d404b328ef9a191889d1b97f6eb57b2f5a67cf7fe"
   },
   "execution": {
     "executionHash": "853eb2d5a104ee97057fc12e071cdf5159656703457e4d83003c19ccacfb2d8e",

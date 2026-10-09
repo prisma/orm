@@ -292,6 +292,11 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": [
+                      "parent_c"
+                    ]
+                  },
                   "source": {
                     "columns": [
                       "parent_c"
@@ -339,7 +344,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "3c980a47410e758dd51bcbc3a879774ca80e91b2e9ddc298694e4339105095a0"
+    "storageHash": "d127c78157dcbbc8b70d7e906713b154d6e19f658c9338c4c83eb986c847ac1b"
   },
   "execution": {
     "executionHash": "853eb2d5a104ee97057fc12e071cdf5159656703457e4d83003c19ccacfb2d8e",

@@ -255,6 +255,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "Child_parent_id_1_parent_id_2_idx_0c925d99"
+                  },
                   "source": {
                     "columns": [
                       "parent_id_1",
@@ -364,7 +367,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "81aaee19cf72d82eec17b067c313872a7370fc3a1d0011b508a0b027b5857098"
+    "storageHash": "50eb3507f29b7c71cc9673df1a6391ade68851ce139f67ce466ff5ffbd39df61"
   },
   "execution": {
     "executionHash": "1401accf92d09c90791e42583b8c318dbeaf4d2f30e1995a37967b9b16eed38b",

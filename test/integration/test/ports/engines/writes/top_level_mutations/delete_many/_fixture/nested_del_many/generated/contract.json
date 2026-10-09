@@ -194,6 +194,9 @@
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "ZChild_parentId_idx_6a68f597"
+                  },
                   "source": {
                     "columns": [
                       "parentId"
@@ -239,7 +242,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "b6435b2d37735e630e9a04b9c8fce084e3276ea4c010897c7cb4e3256e731dc7"
+    "storageHash": "3f216a85845dc8c2e88ad3370a202d38ee08fedeb9b1540bd075c56e99497684"
   },
   "capabilities": {
     "postgres": {

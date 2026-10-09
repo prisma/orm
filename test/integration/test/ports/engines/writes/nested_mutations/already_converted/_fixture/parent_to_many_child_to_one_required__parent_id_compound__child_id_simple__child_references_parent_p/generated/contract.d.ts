@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'da5d50513a16b442c4dc2416b7e582d263c382d1ed38758551a81f556470817b'>;
+  StorageHashBase<'09450a757faf798be8b5c15e0919eb5f732e786063c591eb8c6b71b95e45b6a3'>;
 export type ExecutionHash =
   ExecutionHashBase<'1401accf92d09c90791e42583b8c318dbeaf4d2f30e1995a37967b9b16eed38b'>;
 export type ProfileHash =
