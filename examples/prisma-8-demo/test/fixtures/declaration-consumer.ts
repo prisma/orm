@@ -24,6 +24,7 @@ import {
   type PrivateLibrary,
   plainChain,
   type SubLibrary,
+  searched,
   type TaskLibrary,
   titleSummary,
   unexpired,
@@ -31,6 +32,7 @@ import {
 } from './declaration-library';
 
 type PostKey =
+  | 'body'
   | 'createdAt'
   | 'embedding'
   | 'expiresAt'
@@ -56,6 +58,10 @@ declare const subPosts: SubLibrary;
 export async function chainingMethods() {
   expectTypeOf(posts.filtered()).toEqualTypeOf<Filtered<PostLibrary>>();
   expectTypeOf(posts.ordered()).toEqualTypeOf<Ordered<PostLibrary>>();
+  expectTypeOf(posts.search('zebra')).toEqualTypeOf<Ordered<Filtered<PostLibrary>>>();
+  expectTypeOf(posts.with(searched('zebra'))).toEqualTypeOf<
+    ReturnType<ReturnType<typeof searched>>
+  >();
   expectTypeOf(posts.paged()).toEqualTypeOf<PostLibrary>();
   expectTypeOf(posts.distinctTitles()).toEqualTypeOf<PostLibrary>();
   expectTypeOf(posts.distinctOnTitle()).toEqualTypeOf<Ordered<PostLibrary>>();

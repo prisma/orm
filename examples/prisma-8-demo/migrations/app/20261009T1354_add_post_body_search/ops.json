@@ -1,0 +1,71 @@
+[
+  {
+    "id": "column.public.post.body",
+    "label": "Add column \"body\" to \"post\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "body",
+        "table": "post"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"body\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": ["public", "post", "body"]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"body\"",
+        "sql": "ALTER TABLE \"public\".\"post\" ADD COLUMN \"body\" text"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"body\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": ["public", "post", "body"]
+      }
+    ]
+  },
+  {
+    "id": "index.post.post_search_f03270be",
+    "label": "Create index \"post_search_f03270be\" on \"post\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "post_search_f03270be",
+        "table": "post"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"post_search_f03270be\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": ["\"public\".\"post_search_f03270be\""]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"post_search_f03270be\"",
+        "sql": "CREATE INDEX \"post_search_f03270be\" ON \"public\".\"post\" USING \"gin\" ((setweight(to_tsvector('english', coalesce(\"title\", '')), 'A') || setweight(to_tsvector('english', coalesce(\"body\", '')), 'B')))",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"post_search_f03270be\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": ["\"public\".\"post_search_f03270be\""]
+      }
+    ]
+  }
+]

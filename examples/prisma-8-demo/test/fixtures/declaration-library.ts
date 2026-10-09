@@ -9,6 +9,7 @@ import {
   orm,
 } from '@prisma/orm-postgres/orm-client';
 import type { ExecutionContext } from '@prisma/orm-postgres/relational-core/query-lane-context';
+import { websearchToTsquery } from '@prisma/orm-postgres/target/full-text';
 import type { Contract } from '../../src/prisma/contract.d';
 
 type ExpiresAt = CodecField<Contract, 'pg/timestamptz-temporal@1'>;
@@ -46,9 +47,25 @@ export const unexpired = (now: Temporal.Instant) =>
     rows.where((row) => row.expiresAt.gt(now)).orderBy((row) => row.expiresAt.asc()),
   );
 
+export const searched = (query: string) => {
+  const q = websearchToTsquery(query);
+  return client.public.Post.fragment((posts) =>
+    posts
+      .where((_post, { fns, indexes }) => fns.fullTextMatches(indexes.post_search, q))
+      .orderBy((_post, { fns, indexes }) => fns.fullTextRank(indexes.post_search, q).desc()),
+  );
+};
+
 export class PostLibrary extends Collection<Contract, 'Post'> {
   live(now: Temporal.Instant) {
     return this.where(notExpired(now));
+  }
+
+  search(query: string) {
+    const q = websearchToTsquery(query);
+    return this.where((_post, { fns, indexes }) =>
+      fns.fullTextMatches(indexes.post_search, q),
+    ).orderBy((_post, { fns, indexes }) => fns.fullTextRank(indexes.post_search, q).desc());
   }
 
   summaries() {
