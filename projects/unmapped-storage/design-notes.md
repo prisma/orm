@@ -23,15 +23,9 @@ The lowering merges a table's column nodes with the columns its model's fields i
 
 ## Open questions
 
-### An `@ignore` field whose type has no Prisma 8 codec
+### An `@ignore` field whose type has no Prisma 8 codec (decided)
 
-Prisma 7 users put `@ignore` on a field Prisma 8 cannot type, for example `legacy Decimal @db.Money`, because the reader's own error message tells them to. Today the reader drops the field without a word and the schema loads. Under this design a kept column needs a codec, and this one has none. Three options:
-
-1. Refuse it with an error. This follows ADR 252, but a schema that loads today stops loading after the upgrade, with no edit that fixes it until the codec-less column work ships.
-2. Keep today's behaviour: leave the column out silently. The schema keeps loading, but adding `@ignore` to such a field still drops the column, and ADR 252's rule stays broken for this case.
-3. Leave it out with a warning. ADR 252 and the Prisma 7 project spec forbid warnings: every construct is described or refused.
-
-Recommendation pending Will: option 2 for now, recorded as a known gap in ADR 267 and the reader's README, and the codec-less column item moves ahead of the deferred syntax item on the plan.
+Will, 2026-10-09: refuse to load the schema if the contract cannot express its contents. An `@ignore` field, or a column of an `@@ignore` model, whose type has no Prisma 8 codec is an error, like the same field without `@ignore`. The reader's messages stop offering `@ignore` and `@@ignore` as a way around a missing codec, because neither leaves the column out any more. A Prisma 7 project with such a column cannot load until Prisma 8 supports the column type (planning row "Columns whose type has no codec").
 
 ### `_prisma_migrations`
 
