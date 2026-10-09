@@ -1,0 +1,319 @@
+{
+  "cases": [
+    {
+      "id": "E.1",
+      "title": "a field named mixin, and a mixin whose only member is an inclusion target",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model mixin Flags {",
+        "  mixin String",
+        "}",
+        "",
+        "model User {",
+        "  id Int @id",
+        "  +Flags",
+        "}"
+      ],
+      "print": ["storage/namespaces/public/entries/table/User/columns/mixin/dataType"]
+    },
+    {
+      "id": "E.2",
+      "title": "a model whose whole body is one inclusion",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model mixin WithId {",
+        "  id Int @id",
+        "}",
+        "",
+        "model User {",
+        "  +WithId",
+        "}",
+        "",
+        "model Post {",
+        "  +WithId",
+        "}"
+      ],
+      "print": [
+        "storage/namespaces/public/entries/table/User/primaryKey",
+        "storage/namespaces/public/entries/table/Post/primaryKey"
+      ]
+    },
+    {
+      "id": "E.3",
+      "title": "an empty mixin",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model mixin Empty {",
+        "}",
+        "",
+        "model User {",
+        "  id Int @id",
+        "  +Empty",
+        "}"
+      ]
+    },
+    {
+      "id": "E.4",
+      "title": "a block on one line",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model mixin Stamp { createdAt DateTime @default(now()) }",
+        "",
+        "model User { id Int @id +Stamp }"
+      ],
+      "print": ["storage/namespaces/public/entries/table/User/columns/createdAt/default"]
+    },
+    {
+      "id": "E.5",
+      "title": "a comment after an inclusion and a doc comment before it",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model mixin Stamp {",
+        "  createdAt DateTime @default(now())",
+        "}",
+        "",
+        "model User {",
+        "  id Int @id",
+        "  /// the stamps",
+        "  +Stamp // trailing comment",
+        "}"
+      ]
+    },
+    {
+      "id": "E.6",
+      "title": "a mixin with @@map included by two models",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model mixin Mapped {",
+        "  note String",
+        "",
+        "  @@map(\"shared_table\")",
+        "}",
+        "",
+        "model A {",
+        "  id Int @id",
+        "  +Mapped",
+        "}",
+        "",
+        "model B {",
+        "  id Int @id",
+        "  +Mapped",
+        "}"
+      ]
+    },
+    {
+      "id": "E.7",
+      "title": "an unused mixin whose field type does not exist",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model mixin Unused {",
+        "  thing Nope",
+        "}",
+        "",
+        "model User {",
+        "  id Int @id",
+        "}"
+      ]
+    },
+    {
+      "id": "E.8",
+      "title": "an inclusion at the top level of the file",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model mixin Stamp {",
+        "  createdAt DateTime @default(now())",
+        "}",
+        "",
+        "+Stamp",
+        "",
+        "model User {",
+        "  id Int @id",
+        "}"
+      ]
+    },
+    {
+      "id": "E.9",
+      "title": "an inclusion in a types block",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model mixin Stamp {",
+        "  createdAt DateTime @default(now())",
+        "}",
+        "",
+        "types {",
+        "  Email = String",
+        "  +Stamp",
+        "}",
+        "",
+        "model User {",
+        "  id Int @id",
+        "}"
+      ]
+    },
+    {
+      "id": "E.10",
+      "title": "a block named mixin",
+      "schema": ["// use prisma-8", "", "model mixin {", "  id Int @id", "}"]
+    },
+    {
+      "id": "E.11",
+      "title": "a plus with nothing after it",
+      "schema": ["// use prisma-8", "", "model User {", "  id Int @id", "  +", "}"]
+    },
+    {
+      "id": "E.12",
+      "title": "a relation mixin with a back relation on the target",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model User {",
+        "  id    Int    @id",
+        "  posts Post[]",
+        "}",
+        "",
+        "model mixin Authored {",
+        "  authorId Int",
+        "  author   User @relation(fields: [authorId], references: [id])",
+        "}",
+        "",
+        "model Post {",
+        "  id Int @id",
+        "  +Authored",
+        "}"
+      ],
+      "print": [
+        "domain/namespaces/public/models/User/relations/posts/to",
+        "domain/namespaces/public/models/Post/relations/author/to"
+      ]
+    },
+    {
+      "id": "E.13",
+      "title": "a relation mixin included by two models, with one back relation",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model User {",
+        "  id    Int    @id",
+        "  posts Post[]",
+        "}",
+        "",
+        "model mixin Authored {",
+        "  authorId Int",
+        "  author   User @relation(fields: [authorId], references: [id])",
+        "}",
+        "",
+        "model Post {",
+        "  id Int @id",
+        "  +Authored",
+        "}",
+        "",
+        "model Comment {",
+        "  id Int @id",
+        "  +Authored",
+        "}"
+      ]
+    },
+    {
+      "id": "E.14",
+      "title": "a mixin attribute and a model attribute on the same field",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model mixin Tenanted {",
+        "  tenantId Int",
+        "",
+        "  @@index([tenantId])",
+        "}",
+        "",
+        "model User {",
+        "  id Int @id",
+        "  +Tenanted",
+        "",
+        "  @@index([tenantId])",
+        "  @@unique([tenantId, id])",
+        "}"
+      ],
+      "print": [
+        "storage/namespaces/public/entries/table/User/indexes",
+        "storage/namespaces/public/entries/table/User/uniques"
+      ]
+    },
+    {
+      "id": "E.15",
+      "title": "lower-case and hyphenated mixin names",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model mixin time-stamps {",
+        "  createdAt DateTime @default(now())",
+        "}",
+        "",
+        "model User {",
+        "  id Int @id",
+        "  +time-stamps",
+        "}"
+      ]
+    },
+    {
+      "id": "E.6c",
+      "title": "control for E.6: the same @@map written in two models",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model A {",
+        "  id   Int    @id",
+        "  note String",
+        "",
+        "  @@map(\"shared_table\")",
+        "}",
+        "",
+        "model B {",
+        "  id   Int    @id",
+        "  note String",
+        "",
+        "  @@map(\"shared_table\")",
+        "}"
+      ]
+    },
+    {
+      "id": "E.14c",
+      "title": "control for E.14: the same @@index written twice in one model",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model User {",
+        "  id       Int @id",
+        "  tenantId Int",
+        "",
+        "  @@index([tenantId])",
+        "  @@index([tenantId])",
+        "  @@unique([tenantId, id])",
+        "}"
+      ],
+      "print": ["storage/namespaces/public/entries/table/User/indexes"]
+    },
+    {
+      "id": "E.16",
+      "title": "a mixin in a file without the // use prisma-8 directive",
+      "schema": [
+        "model mixin Stamp {",
+        "  createdAt DateTime @default(now())",
+        "}",
+        "",
+        "model User {",
+        "  id Int @id",
+        "  +Stamp",
+        "}"
+      ]
+    }
+  ]
+}

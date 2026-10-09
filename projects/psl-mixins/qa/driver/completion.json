@@ -1,0 +1,210 @@
+{
+  "files": ["shared.prisma", "app.prisma", "policies.prisma"],
+  "steps": [
+    {
+      "id": "12.1",
+      "kind": "change",
+      "file": "app.prisma",
+      "replace": "  title String\n",
+      "with": "  title String\n  +\n"
+    },
+    {
+      "id": "12.2",
+      "kind": "completion",
+      "file": "app.prisma",
+      "at": "  +|\n",
+      "trigger": "+",
+      "present": ["SoftDelete", "Tenanted", "auth", "billing"],
+      "absent": [
+        "BaseRoles",
+        "ExtraRoles",
+        "OwnerRead",
+        "ToAppUser",
+        "Timestamps",
+        "Priced",
+        "User",
+        "Account"
+      ]
+    },
+    {
+      "id": "12.3",
+      "kind": "completion",
+      "file": "app.prisma",
+      "at": "  +|\n",
+      "present": ["SoftDelete", "Tenanted", "auth", "billing"],
+      "absent": ["BaseRoles", "Timestamps", "Priced"]
+    },
+    {
+      "id": "12.4",
+      "kind": "change",
+      "file": "app.prisma",
+      "replace": "  +\n",
+      "with": "  +auth.\n"
+    },
+    {
+      "id": "12.5",
+      "kind": "completion",
+      "file": "app.prisma",
+      "at": "  +auth.|\n",
+      "trigger": ".",
+      "present": ["Timestamps"],
+      "absent": ["User", "SoftDelete", "Priced"]
+    },
+    {
+      "id": "12.6",
+      "kind": "change",
+      "file": "app.prisma",
+      "replace": "  +auth.\n",
+      "with": "  +billing.\n"
+    },
+    {
+      "id": "12.7",
+      "kind": "completion",
+      "file": "app.prisma",
+      "at": "  +billing.|\n",
+      "trigger": ".",
+      "present": ["Priced"],
+      "absent": ["Timestamps", "SoftDelete"]
+    },
+    {
+      "id": "12.8",
+      "kind": "change",
+      "file": "app.prisma",
+      "replace": "  +billing.\n",
+      "with": "  +So\n"
+    },
+    {
+      "id": "12.9",
+      "kind": "completion",
+      "file": "app.prisma",
+      "at": "  +So|\n",
+      "present": ["SoftDelete"],
+      "absent": ["BaseRoles"]
+    },
+    {
+      "id": "12.10",
+      "kind": "change",
+      "file": "app.prisma",
+      "replace": "  +So\n",
+      "with": ""
+    },
+    {
+      "id": "12.11",
+      "kind": "change",
+      "file": "app.prisma",
+      "replace": "  amount Int\n",
+      "with": "  amount Int\n  +\n"
+    },
+    {
+      "id": "12.12",
+      "kind": "completion",
+      "file": "app.prisma",
+      "at": "  +|\n",
+      "trigger": "+",
+      "present": ["SoftDelete", "billing"],
+      "absent": ["Tenanted", "auth", "Timestamps", "BaseRoles", "Priced"]
+    },
+    {
+      "id": "12.13",
+      "kind": "change",
+      "file": "app.prisma",
+      "replace": "  amount Int\n  +\n",
+      "with": "  amount Int\n"
+    },
+    {
+      "id": "12.14",
+      "kind": "change",
+      "file": "app.prisma",
+      "replace": "  GUEST = \"guest\"\n",
+      "with": "  GUEST = \"guest\"\n  +\n"
+    },
+    {
+      "id": "12.15",
+      "kind": "completion",
+      "file": "app.prisma",
+      "at": "  +|\n",
+      "trigger": "+",
+      "present": ["ExtraRoles"],
+      "absent": ["BaseRoles", "SoftDelete", "Tenanted", "OwnerRead", "auth", "billing"]
+    },
+    {
+      "id": "12.16",
+      "kind": "change",
+      "file": "app.prisma",
+      "replace": "  GUEST = \"guest\"\n  +\n",
+      "with": "  GUEST = \"guest\"\n"
+    },
+    {
+      "id": "12.17",
+      "kind": "change",
+      "file": "policies.prisma",
+      "replace": "    target = Profile\n  }",
+      "with": "    target = Profile\n    +\n  }"
+    },
+    {
+      "id": "12.18",
+      "kind": "completion",
+      "file": "policies.prisma",
+      "at": "    +|\n",
+      "trigger": "+",
+      "present": ["OwnerRead", "ToAppUser"],
+      "absent": ["SoftDelete", "Tenanted", "BaseRoles", "auth", "billing"]
+    },
+    {
+      "id": "12.19",
+      "kind": "change",
+      "file": "policies.prisma",
+      "replace": "    target = Profile\n    +\n  }",
+      "with": "    target = Profile\n  }"
+    },
+    {
+      "id": "12.20",
+      "kind": "change",
+      "file": "policies.prisma",
+      "replace": "    +ToAppUser\n",
+      "with": "    +ToAppUser\n    +\n"
+    },
+    {
+      "id": "12.21",
+      "kind": "completion",
+      "file": "policies.prisma",
+      "at": "    +|\n",
+      "trigger": "+",
+      "present": ["OwnerRead"],
+      "absent": ["ToAppUser", "SoftDelete"]
+    },
+    {
+      "id": "12.22",
+      "kind": "change",
+      "file": "policies.prisma",
+      "replace": "    +ToAppUser\n    +\n",
+      "with": "    +ToAppUser\n"
+    },
+    {
+      "id": "12.23",
+      "kind": "change",
+      "file": "shared.prisma",
+      "replace": "  deletedAt DateTime?\n",
+      "with": "  deletedAt DateTime?\n  +\n"
+    },
+    {
+      "id": "12.24",
+      "kind": "completion",
+      "file": "shared.prisma",
+      "at": "  +|\n",
+      "trigger": "+",
+      "absent": ["SoftDelete", "Tenanted", "auth", "billing"]
+    },
+    {
+      "id": "12.25",
+      "kind": "change",
+      "file": "shared.prisma",
+      "replace": "  deletedAt DateTime?\n  +\n",
+      "with": "  deletedAt DateTime?\n"
+    },
+    {
+      "id": "12.26",
+      "kind": "diagnostics"
+    }
+  ]
+}

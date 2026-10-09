@@ -1,0 +1,418 @@
+{
+  "cases": [
+    {
+      "id": "3.1",
+      "title": "unknown mixin name",
+      "schema": ["// use prisma-8", "", "model User {", "  id Int @id", "  +Timestamp", "}"]
+    },
+    {
+      "id": "3.2",
+      "title": "the name is a model, not a mixin",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model Audit {",
+        "  id Int @id",
+        "}",
+        "",
+        "model User {",
+        "  id Int @id",
+        "  +Audit",
+        "}"
+      ]
+    },
+    {
+      "id": "3.3",
+      "title": "a mixin for another block keyword",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "enum mixin BaseRoles {",
+        "  ADMIN = \"admin\"",
+        "}",
+        "",
+        "model User {",
+        "  id Int @id",
+        "  +BaseRoles",
+        "}"
+      ]
+    },
+    {
+      "id": "3.4",
+      "title": "the same mixin included twice",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model mixin Timestamps {",
+        "  createdAt DateTime @default(now())",
+        "  updatedAt DateTime @default(now())",
+        "}",
+        "",
+        "model User {",
+        "  id Int @id",
+        "  +Timestamps",
+        "  email String",
+        "  +Timestamps",
+        "}"
+      ]
+    },
+    {
+      "id": "3.5",
+      "title": "a member the block already has; the inclusion is second",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model mixin Timestamps {",
+        "  createdAt DateTime @default(now())",
+        "  updatedAt DateTime @default(now())",
+        "}",
+        "",
+        "model User {",
+        "  id        Int      @id",
+        "  createdAt DateTime",
+        "  +Timestamps",
+        "}"
+      ]
+    },
+    {
+      "id": "3.6",
+      "title": "a member the block already has; the block's own member is second",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model mixin Timestamps {",
+        "  createdAt DateTime @default(now())",
+        "  updatedAt DateTime @default(now())",
+        "}",
+        "",
+        "model User {",
+        "  id        Int      @id",
+        "  +Timestamps",
+        "  createdAt DateTime",
+        "}"
+      ]
+    },
+    {
+      "id": "3.7",
+      "title": "an inclusion inside a mixin",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model mixin Timestamps {",
+        "  createdAt DateTime @default(now())",
+        "  updatedAt DateTime @default(now())",
+        "}",
+        "",
+        "model mixin Audited {",
+        "  +Timestamps",
+        "  auditedBy String",
+        "}",
+        "",
+        "model User {",
+        "  id Int @id",
+        "  +Audited",
+        "}"
+      ]
+    },
+    {
+      "id": "3.8",
+      "title": "mixin with no block keyword",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "mixin Timestamps {",
+        "  createdAt DateTime @default(now())",
+        "}",
+        "",
+        "model User {",
+        "  id Int @id",
+        "}"
+      ]
+    },
+    {
+      "id": "3.9",
+      "title": "mixin with no name",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model mixin {",
+        "  createdAt DateTime @default(now())",
+        "}",
+        "",
+        "model User {",
+        "  id Int @id",
+        "}"
+      ]
+    },
+    {
+      "id": "3.10",
+      "title": "a field typed with a mixin's name",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model mixin Timestamps {",
+        "  createdAt DateTime @default(now())",
+        "  updatedAt DateTime @default(now())",
+        "}",
+        "",
+        "model User {",
+        "  id    Int        @id",
+        "  stamp Timestamps",
+        "}"
+      ]
+    },
+    {
+      "id": "3.11",
+      "title": "a mixin attribute names a field of the including model",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model mixin Tenanted {",
+        "  tenantId Int",
+        "",
+        "  @@unique([tenantId, id])",
+        "}",
+        "",
+        "model User {",
+        "  id Int @id",
+        "  +Tenanted",
+        "}"
+      ]
+    },
+    {
+      "id": "3.12",
+      "title": "two mixins provide the same field",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model mixin Timestamps {",
+        "  createdAt DateTime @default(now())",
+        "  updatedAt DateTime @default(now())",
+        "}",
+        "",
+        "model mixin Created {",
+        "  createdAt DateTime",
+        "}",
+        "",
+        "model User {",
+        "  id Int @id",
+        "  +Timestamps",
+        "  +Created",
+        "}"
+      ]
+    },
+    {
+      "id": "3.13",
+      "title": "an enum mixin provides a member the enum already has",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "enum mixin BaseRoles {",
+        "  ADMIN = \"admin\"",
+        "  USER  = \"user\"",
+        "}",
+        "",
+        "enum Role {",
+        "  @@type(\"pg/text@1\")",
+        "  ADMIN = \"admin\"",
+        "  +BaseRoles",
+        "}",
+        "",
+        "model User {",
+        "  id   Int  @id",
+        "  role Role",
+        "}"
+      ]
+    },
+    {
+      "id": "3.14",
+      "title": "a policy mixin provides an entry the policy already has",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "namespace public {",
+        "  model Profile {",
+        "    id        Int    @id",
+        "    ownerName String",
+        "",
+        "    @@rls",
+        "  }",
+        "",
+        "  policy_select mixin OwnerRead {",
+        "    roles = [app_user]",
+        "    using = sql`\"ownerName\" = current_user`",
+        "  }",
+        "",
+        "  policy_select profile_owner_read {",
+        "    target = Profile",
+        "    roles  = [app_user]",
+        "    +OwnerRead",
+        "  }",
+        "}",
+        "",
+        "namespace unbound {",
+        "  role app_user {}",
+        "}"
+      ]
+    },
+    {
+      "id": "3.15",
+      "title": "a policy_select mixin included in a policy_update block",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "namespace public {",
+        "  model Profile {",
+        "    id        Int    @id",
+        "    ownerName String",
+        "",
+        "    @@rls",
+        "  }",
+        "",
+        "  policy_select mixin OwnerRead {",
+        "    roles = [app_user]",
+        "    using = sql`\"ownerName\" = current_user`",
+        "  }",
+        "",
+        "  policy_update profile_owner_write {",
+        "    target = Profile",
+        "    +OwnerRead",
+        "  }",
+        "}",
+        "",
+        "namespace unbound {",
+        "  role app_user {}",
+        "}"
+      ]
+    },
+    {
+      "id": "3.16",
+      "title": "a mixin of another namespace included without its qualifier",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "namespace auth {",
+        "  model mixin Timestamps {",
+        "    createdAt DateTime @default(now())",
+        "  }",
+        "}",
+        "",
+        "namespace public {",
+        "  model User {",
+        "    id Int @id",
+        "    +Timestamps",
+        "  }",
+        "}"
+      ]
+    },
+    {
+      "id": "3.17",
+      "title": "a qualified inclusion whose namespace has no such mixin",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "namespace auth {",
+        "  model Session {",
+        "    id Int @id",
+        "  }",
+        "}",
+        "",
+        "model mixin Timestamps {",
+        "  createdAt DateTime @default(now())",
+        "}",
+        "",
+        "model User {",
+        "  id Int @id",
+        "  +auth.Timestamps",
+        "}"
+      ]
+    },
+    {
+      "id": "3.18",
+      "title": "a mixin and a model with one name",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model mixin Timestamps {",
+        "  createdAt DateTime @default(now())",
+        "}",
+        "",
+        "model Timestamps {",
+        "  id Int @id",
+        "}"
+      ]
+    },
+    {
+      "id": "3.19",
+      "title": "a namespace mixin and a types mixin",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "namespace mixin Shared {",
+        "  model A {",
+        "    id Int @id",
+        "  }",
+        "}",
+        "",
+        "types mixin Aliases {",
+        "  Email = String",
+        "}",
+        "",
+        "model User {",
+        "  id Int @id",
+        "}"
+      ]
+    },
+    {
+      "id": "3.20",
+      "title": "an interpreter error on a mixed-in member, with two including models",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model mixin Broken {",
+        "  createdAt DateTime @default(nope())",
+        "}",
+        "",
+        "model User {",
+        "  id Int @id",
+        "  +Broken",
+        "}",
+        "",
+        "model Post {",
+        "  id Int @id",
+        "  +Broken",
+        "}"
+      ]
+    },
+    {
+      "id": "3.21",
+      "title": "the same broken mixin with no including block",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "model mixin Broken {",
+        "  createdAt DateTime @default(nope())",
+        "}",
+        "",
+        "model User {",
+        "  id Int @id",
+        "}"
+      ]
+    },
+    {
+      "id": "3.22",
+      "title": "mixin with no block keyword that a model includes",
+      "schema": [
+        "// use prisma-8",
+        "",
+        "mixin Timestamps {",
+        "}",
+        "",
+        "model User {",
+        "  id Int @id",
+        "  +Timestamps",
+        "}"
+      ]
+    }
+  ]
+}

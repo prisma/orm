@@ -1,0 +1,175 @@
+{
+  "files": ["shared.prisma", "app.prisma", "policies.prisma"],
+  "steps": [
+    {
+      "id": "X.1",
+      "kind": "rename",
+      "file": "shared.prisma",
+      "at": "namespace au|th",
+      "newName": "identity"
+    },
+    {
+      "id": "X.2",
+      "kind": "rename",
+      "file": "app.prisma",
+      "at": "+Soft|Delete",
+      "newName": "9x"
+    },
+    {
+      "id": "X.3",
+      "kind": "prepareRename",
+      "file": "shared.prisma",
+      "at": "model mi|xin SoftDelete"
+    },
+    {
+      "id": "X.4",
+      "kind": "definition",
+      "file": "shared.prisma",
+      "at": "@@index([created|At])"
+    },
+    {
+      "id": "X.5",
+      "kind": "references",
+      "file": "shared.prisma",
+      "at": "created|At DateTime",
+      "includeDeclaration": true
+    },
+    {
+      "id": "X.6",
+      "kind": "rename",
+      "file": "app.prisma",
+      "at": "+Soft|Delete",
+      "newName": "Tenanted"
+    },
+    {
+      "id": "X.7",
+      "kind": "change",
+      "file": "shared.prisma",
+      "replace": "enum mixin ExtraRoles {",
+      "with": "model \n\nenum mixin ExtraRoles {"
+    },
+    {
+      "id": "X.8",
+      "kind": "completion",
+      "file": "shared.prisma",
+      "at": "model |\n\nenum mixin ExtraRoles"
+    },
+    {
+      "id": "X.9",
+      "kind": "change",
+      "file": "shared.prisma",
+      "replace": "model \n\nenum mixin ExtraRoles {",
+      "with": "\n\nenum mixin ExtraRoles {"
+    },
+    {
+      "id": "X.10",
+      "kind": "completion",
+      "file": "shared.prisma",
+      "at": "|\n\nenum mixin ExtraRoles"
+    },
+    {
+      "id": "X.11",
+      "kind": "change",
+      "file": "shared.prisma",
+      "replace": "\n\nenum mixin ExtraRoles {",
+      "with": "enum mixin ExtraRoles {"
+    },
+    {
+      "id": "X.12",
+      "kind": "change",
+      "file": "app.prisma",
+      "replace": "  +SoftDelete\n  +Tenanted\n",
+      "with": "+   SoftDelete\n      +  Tenanted\n"
+    },
+    {
+      "id": "X.13",
+      "kind": "format",
+      "file": "app.prisma"
+    },
+    {
+      "id": "X.14",
+      "kind": "format",
+      "file": "app.prisma"
+    },
+    {
+      "id": "X.15",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "X.16",
+      "kind": "change",
+      "file": "app.prisma",
+      "replace": "  id     Int @id\n  amount Int\n",
+      "with": "  id     Int @id\n  amount Int\n  createdAt DateTime\n"
+    },
+    {
+      "id": "X.17",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "X.18",
+      "kind": "change",
+      "file": "app.prisma",
+      "replace": "  createdAt DateTime\n",
+      "with": ""
+    },
+    {
+      "id": "X.19",
+      "kind": "change",
+      "file": "shared.prisma",
+      "replace": "  deletedAt DateTime?\n",
+      "with": "  deletedAt DateTime?\n  +Tenanted\n"
+    },
+    {
+      "id": "X.20",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "X.21",
+      "kind": "definition",
+      "file": "shared.prisma",
+      "at": "deletedAt DateTime?\n  +Tenan|ted"
+    },
+    {
+      "id": "X.22",
+      "kind": "change",
+      "file": "shared.prisma",
+      "replace": "  deletedAt DateTime?\n  +Tenanted\n",
+      "with": "  deletedAt DateTime?\n"
+    },
+    {
+      "id": "X.23",
+      "kind": "change",
+      "file": "shared.prisma",
+      "replace": "model mixin Tenanted {",
+      "with": "mixin Tenanted {"
+    },
+    {
+      "id": "X.24",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "X.25",
+      "kind": "change",
+      "file": "shared.prisma",
+      "replace": "mixin Tenanted {",
+      "with": "model mixin Tenanted {"
+    },
+    {
+      "id": "X.26",
+      "kind": "diagnostics"
+    },
+    {
+      "id": "X.27",
+      "kind": "hover",
+      "file": "shared.prisma",
+      "at": "created|At DateTime"
+    },
+    {
+      "id": "X.28",
+      "kind": "hover",
+      "file": "shared.prisma",
+      "at": "@@in|dex([createdAt])"
+    }
+  ]
+}

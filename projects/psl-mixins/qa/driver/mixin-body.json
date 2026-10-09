@@ -1,0 +1,331 @@
+{
+  "files": ["shared.prisma", "app.prisma", "policies.prisma"],
+  "steps": [
+    {
+      "id": "13.1",
+      "kind": "change",
+      "file": "shared.prisma",
+      "replace": "  deletedAt DateTime?\n",
+      "with": "  deletedAt DateTime?\n  flag \n"
+    },
+    {
+      "id": "13.2",
+      "kind": "completion",
+      "file": "shared.prisma",
+      "at": "  flag |\n",
+      "present": ["Boolean", "DateTime", "Int", "String", "Account"],
+      "absent": ["model", "namespace", "enum", "type", "SoftDelete", "Tenanted", "mixin"]
+    },
+    {
+      "id": "13.3",
+      "kind": "change",
+      "file": "shared.prisma",
+      "replace": "  flag \n",
+      "with": "  flag Boolean @\n"
+    },
+    {
+      "id": "13.4",
+      "kind": "completion",
+      "file": "shared.prisma",
+      "at": "flag Boolean @|\n",
+      "trigger": "@",
+      "present": ["default", "map", "unique", "id"],
+      "absent": ["model", "namespace", "enum", "type"]
+    },
+    {
+      "id": "13.5",
+      "kind": "change",
+      "file": "shared.prisma",
+      "replace": "  flag Boolean @\n",
+      "with": "  flag Boolean @default()\n"
+    },
+    {
+      "id": "13.6",
+      "kind": "signatureHelp",
+      "file": "shared.prisma",
+      "at": "flag Boolean @default(|)"
+    },
+    {
+      "id": "13.7",
+      "kind": "completion",
+      "file": "shared.prisma",
+      "at": "flag Boolean @default(|)",
+      "trigger": "(",
+      "absent": ["model", "namespace", "enum", "type"]
+    },
+    {
+      "id": "13.8",
+      "kind": "change",
+      "file": "shared.prisma",
+      "replace": "  flag Boolean @default()\n",
+      "with": "  flag Boolean\n  @@\n"
+    },
+    {
+      "id": "13.9",
+      "kind": "completion",
+      "file": "shared.prisma",
+      "at": "  @@|\n",
+      "trigger": "@",
+      "present": ["index", "unique", "id", "map"],
+      "absent": ["model", "namespace", "enum", "type"]
+    },
+    {
+      "id": "13.10",
+      "kind": "change",
+      "file": "shared.prisma",
+      "replace": "  @@\n",
+      "with": "  @@index([])\n"
+    },
+    {
+      "id": "13.11",
+      "kind": "completion",
+      "file": "shared.prisma",
+      "at": "flag Boolean\n  @@index([|])",
+      "trigger": "[",
+      "present": ["deletedAt", "flag"],
+      "absent": ["model", "namespace", "enum", "type", "id", "tenantId", "createdAt"]
+    },
+    {
+      "id": "13.12",
+      "kind": "signatureHelp",
+      "file": "shared.prisma",
+      "at": "flag Boolean\n  @@index(|[])"
+    },
+    {
+      "id": "13.13",
+      "kind": "change",
+      "file": "shared.prisma",
+      "replace": "  flag Boolean\n  @@index([])\n",
+      "with": ""
+    },
+    {
+      "id": "13.14",
+      "kind": "completion",
+      "file": "shared.prisma",
+      "at": "@@index([|createdAt])",
+      "trigger": "[",
+      "present": ["createdAt", "updatedAt"],
+      "absent": ["model", "namespace", "enum", "type", "id", "deletedAt"]
+    },
+    {
+      "id": "13.15",
+      "kind": "signatureHelp",
+      "file": "shared.prisma",
+      "at": "createdAt DateTime @default(|now())"
+    },
+    {
+      "id": "13.16",
+      "kind": "change",
+      "file": "shared.prisma",
+      "replace": "  ADMIN = \"admin\"\n",
+      "with": "  ADMIN = \"admin\"\n  \n"
+    },
+    {
+      "id": "13.17",
+      "kind": "completion",
+      "file": "shared.prisma",
+      "at": "ADMIN = \"admin\"\n  |\n",
+      "absent": ["model", "namespace", "enum", "type"]
+    },
+    {
+      "id": "13.18",
+      "kind": "change",
+      "file": "shared.prisma",
+      "replace": "  ADMIN = \"admin\"\n  \n",
+      "with": "  ADMIN = \"admin\"\n"
+    },
+    {
+      "id": "13.19",
+      "kind": "change",
+      "file": "policies.prisma",
+      "replace": "  policy_select mixin ToAppUser {\n    roles = [app_user]\n",
+      "with": "  policy_select mixin ToAppUser {\n    roles = [app_user]\n    \n"
+    },
+    {
+      "id": "13.20",
+      "kind": "completion",
+      "file": "policies.prisma",
+      "at": "roles = [app_user]\n    |\n  }\n\n  policy_select profile_owner_read",
+      "present": ["target", "using"],
+      "absent": ["model", "namespace", "enum", "type", "roles"]
+    },
+    {
+      "id": "13.21",
+      "kind": "change",
+      "file": "policies.prisma",
+      "replace": "    roles = [app_user]\n    \n  }\n\n  policy_select profile_owner_read",
+      "with": "    roles = [app_user]\n    target = \n  }\n\n  policy_select profile_owner_read"
+    },
+    {
+      "id": "13.22",
+      "kind": "completion",
+      "file": "policies.prisma",
+      "at": "target = |\n  }\n\n  policy_select profile_owner_read",
+      "present": ["Profile", "Document"],
+      "absent": ["model", "namespace", "enum", "type"]
+    },
+    {
+      "id": "13.23",
+      "kind": "change",
+      "file": "policies.prisma",
+      "replace": "    roles = [app_user]\n    target = \n  }",
+      "with": "    roles = []\n  }"
+    },
+    {
+      "id": "13.24",
+      "kind": "completion",
+      "file": "policies.prisma",
+      "at": "roles = [|]\n  }",
+      "trigger": "[",
+      "present": ["unbound"],
+      "absent": ["model", "namespace", "enum", "type"]
+    },
+    {
+      "id": "13.25",
+      "kind": "change",
+      "file": "policies.prisma",
+      "replace": "    roles = []\n  }",
+      "with": "    roles = [app_user]\n  }"
+    },
+    {
+      "id": "13.26",
+      "kind": "hover",
+      "file": "policies.prisma",
+      "at": "policy_select mixin ToAppUser {\n    ro|les"
+    },
+    {
+      "id": "13.27",
+      "kind": "change",
+      "file": "app.prisma",
+      "replace": "  title String\n",
+      "with": "  title String\n  flag \n"
+    },
+    {
+      "id": "13.28",
+      "kind": "completion",
+      "file": "app.prisma",
+      "at": "  flag |\n",
+      "present": ["Boolean", "Account"],
+      "absent": ["SoftDelete", "Tenanted"]
+    },
+    {
+      "id": "13.29",
+      "kind": "change",
+      "file": "app.prisma",
+      "replace": "  title String\n  flag \n",
+      "with": "  title String\n"
+    },
+    {
+      "id": "13.30",
+      "kind": "change",
+      "file": "policies.prisma",
+      "replace": "    target = Profile\n  }",
+      "with": "    target = Profile\n    roles = []\n  }"
+    },
+    {
+      "id": "13.31",
+      "kind": "completion",
+      "file": "policies.prisma",
+      "at": "target = Profile\n    roles = [|]",
+      "trigger": "[",
+      "present": ["unbound"]
+    },
+    {
+      "id": "13.32",
+      "kind": "change",
+      "file": "policies.prisma",
+      "replace": "    target = Profile\n    roles = []\n  }",
+      "with": "    target = Profile\n  }"
+    },
+    {
+      "id": "13.33",
+      "kind": "change",
+      "file": "app.prisma",
+      "replace": "  GUEST = \"guest\"\n",
+      "with": "  GUEST = \"guest\"\n  \n"
+    },
+    {
+      "id": "13.34",
+      "kind": "completion",
+      "file": "app.prisma",
+      "at": "GUEST = \"guest\"\n  |\n",
+      "absent": ["model", "namespace", "enum", "type"]
+    },
+    {
+      "id": "13.35",
+      "kind": "change",
+      "file": "app.prisma",
+      "replace": "  GUEST = \"guest\"\n  \n",
+      "with": "  GUEST = \"guest\"\n"
+    },
+    {
+      "id": "14.1",
+      "kind": "change",
+      "file": "policies.prisma",
+      "replace": "    target = Profile\n    +OwnerRead\n",
+      "with": "    target = Profile\n    +OwnerRead\n    \n"
+    },
+    {
+      "id": "14.2",
+      "kind": "completion",
+      "file": "policies.prisma",
+      "at": "+OwnerRead\n    |\n",
+      "absent": ["roles", "using", "target", "model", "namespace", "enum", "type"]
+    },
+    {
+      "id": "14.3",
+      "kind": "change",
+      "file": "policies.prisma",
+      "replace": "    target = Profile\n    +OwnerRead\n    \n",
+      "with": "    target = Profile\n    +OwnerRead\n"
+    },
+    {
+      "id": "14.4",
+      "kind": "change",
+      "file": "policies.prisma",
+      "replace": "    target = Profile\n  }",
+      "with": "    target = Profile\n    \n  }"
+    },
+    {
+      "id": "14.5",
+      "kind": "completion",
+      "file": "policies.prisma",
+      "at": "target = Profile\n    |\n  }",
+      "present": ["roles", "using"],
+      "absent": ["target", "model", "namespace", "enum", "type"]
+    },
+    {
+      "id": "14.6",
+      "kind": "change",
+      "file": "policies.prisma",
+      "replace": "    target = Profile\n    \n  }",
+      "with": "    target = Profile\n  }"
+    },
+    {
+      "id": "14.7",
+      "kind": "change",
+      "file": "policies.prisma",
+      "replace": "    +ToAppUser\n    using  = sql`true`\n",
+      "with": "    +ToAppUser\n    \n"
+    },
+    {
+      "id": "14.8",
+      "kind": "completion",
+      "file": "policies.prisma",
+      "at": "+ToAppUser\n    |\n",
+      "present": ["using"],
+      "absent": ["roles", "target", "model", "namespace", "enum", "type"]
+    },
+    {
+      "id": "14.9",
+      "kind": "change",
+      "file": "policies.prisma",
+      "replace": "    +ToAppUser\n    \n",
+      "with": "    +ToAppUser\n    using  = sql`true`\n"
+    },
+    {
+      "id": "14.10",
+      "kind": "diagnostics"
+    }
+  ]
+}

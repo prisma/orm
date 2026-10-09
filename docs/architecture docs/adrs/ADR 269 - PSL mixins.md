@@ -84,7 +84,7 @@ An earlier team decision covered models only: `mixin Name { … }`, included wit
 
 **Mixins are namespace members.** A mixin shares its namespace's names with models, composite types and blocks, so a mixin and a model of one name are a duplicate declaration. An unqualified inclusion is looked up in the namespace of the including block, then at the top level. `+auth.Timestamps` is looked up in the namespace `auth` only.
 
-**Position decides order.** The mixin's members are placed where the inclusion is written. Field order, and with it column order, follows the source.
+**Position decides order.** The mixin's members are placed where the inclusion is written, and that is the order the symbol table, the binder and the interpreters read. Where the contract keeps order, the position shows: an enum's members are an ordered list, so moving an inclusion in an enum changes the emitted contract, and `contract print` lists fields in this order. A model's fields and a table's columns are keyed and sorted in the emitted `contract.json`, and tables are created with their columns in that order, so moving an inclusion in a model changes neither, with or without mixins.
 
 The grammar that reads the schema of an earlier Prisma version ([ADR 252](ADR%20252%20-%20An%20earlier%20Prisma%20version%27s%20schema%20is%20a%20contract%20source.md)) has neither form: there `model mixin { … }` is a model named `mixin`.
 
