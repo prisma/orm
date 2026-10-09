@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789568489119,
+  "lastUpdate": 1791538665333,
   "repoUrl": "https://github.com/prisma/orm",
   "entries": {
     "Benchmark.js Benchmark": [
@@ -453463,6 +453463,401 @@ window.BENCHMARK_DATA = {
             "name": "product search query",
             "value": 3813,
             "range": "±1.01%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "w.a.madden+machine@gmail.com",
+            "name": "willbot",
+            "username": "wmadden-electric"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d329959a35c1a5a4dec63853db124b607864bbe6",
+          "message": "fix(v7): repair CI on every v7 pull request, and update mariadb to 3.5.4 with its IPv6 parsing change (#30668)\n\nEvery pull request to `v7` currently fails CI, whatever it changes. Here\nis what [#30368](https://github.com/prisma/orm/pull/30368), a one-line\nclient fix, gets today:\n\n```\nLint             pnpm audit --prod  ->  7 vulnerabilities found (5 high, 2 moderate)\nmacOS (3 jobs)   brew install mysql ->  compiles MySQL 26.7.0 from source -> make: *** [all] Error 2\n```\n\nThis PR makes `v7` CI pass again in three ways:\n\n1. It updates the two vulnerable dependencies that have patched\nreleases: `mariadb` and `source-map-js`.\n2. It tells `pnpm audit` to ignore two advisories, for `braces` and\n`sprintf-js`. These have no patched release, and Prisma can't be\nattacked through them.\n3. It moves the macOS jobs from the deprecated `macos-14` runner to\n`macos-latest`.\n\nThe `mariadb` update reaches users. `@prisma/adapter-mariadb` now\ndepends on `mariadb` 3.5.4 instead of 3.5.3, and it stops rewriting IPv6\nhosts in connection strings, because 3.5.4 accepts them as written.\nWithout that second change, the update would break IPv6 connections.\n\n## Why CI broke without a code change\n\n`v7` last passed CI on 16 September. Nothing in the repository broke it.\nTwo things outside the repository changed after that date.\n\n### New security advisories fail the audit step\n\nThe Lint job ends with `pnpm audit --prod`. That step fails when any\nproduction dependency has a known advisory. Since 16 September,\nadvisories were published against four packages in our lockfile:\n\n| Package | Reached through | Advisories | What this PR does |\n| --- | --- | --- | --- |\n| `mariadb` 3.5.3 | `@prisma/adapter-mariadb`, a direct dependency | 4\n(3 high) | Bumps it to 3.5.4, a patch release with the fixes |\n| `source-map-js` 1.2.1 | `@prisma/config` > `c12` > `magicast` | 1\n(high) | Adds a pnpm override that forces at least 1.2.2 |\n| `braces` 3.0.3 | `@prisma/client-generator-ts` > `fast-glob` >\n`micromatch` |\n[GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)\n(high) | Ignores it |\n| `sprintf-js` 1.1.3 | `@prisma/adapter-mssql` > `mssql` > `tedious` |\n[GHSA-hp3w-g68c-fv3c](https://github.com/advisories/GHSA-hp3w-g68c-fv3c)\n(moderate) | Ignores it |\n\nThe first two have fixes, so we take them. The overrides follow the same\npattern as [#30314](https://github.com/prisma/orm/pull/30314), the\nprevious audit fix on `v7`.\n\nThe last two can't be fixed by upgrading. Their advisories name 3.0.4\nand 1.1.4 as the patched versions, but neither version exists on npm:\n3.0.3 and 1.1.3 are the latest releases. Both advisories describe a\ncrash that happens only when an attacker controls the input string, and\nin Prisma no attacker can:\n\n- The generator calls `fast-glob`, which uses `braces`, only with\npatterns built from the user's own output folder (`generateClient.ts`).\n- `tedious`, the SQL Server driver, calls `sprintf` only with its own\nfixed message templates, for debug output and error messages.\n\nSo `pnpm-workspace.yaml` now lists both advisory IDs under\n`auditConfig.ignoreGhsas`, with this reason written next to them. Once\nfixed releases exist, the ignores can go.\n\n### Updating `mariadb` needs a change to the adapter\n\n`mariadb` 3.5.3 parsed connection strings with a regular expression that\nrejected the colons in a bracketed IPv6 host such as `[::1]`. So\n`@prisma/adapter-mariadb` rewrote that host to a percent-encoded form,\nwhich the old parser decoded back into `::1`\n([#29026](https://github.com/prisma/orm/pull/29026)):\n\n```\nmariadb://user:pass@[::1]:3306/db  ->  mariadb://user:pass@%3A%3A1:3306/db\n```\n\n`mariadb` 3.5.4 parses connection strings with the standard `URL` parser\ninstead, and it accepts `[::1]` as written. It no longer decodes the\nhost, so the rewritten string made the driver look up a host literally\nnamed `%3A%3A1`. The adapter's IPv6 tests caught this. The adapter now\npasses the bracketed host through unchanged, and the tests check that\nthe driver accepts it and connects to a server listening on `::1`. The\nrelease notes for 3.5.4 don't mention this parser change. Its other\nchanges are security limits, such as the new `maxAllowedColumns` option,\nand bug fixes.\n\n### Homebrew dropped macOS 14\n\nThe cross-platform test jobs run on Windows and macOS, and on macOS they\ninstall MySQL with `brew install mysql`. Homebrew no longer ships\nprebuilt packages for macOS 14, so that command now compiles MySQL from\nsource, and the compile fails. GitHub has deprecated the `macos-14`\nrunner as well.\n\nWe pinned `macos-14` in\n[#22904](https://github.com/prisma/orm/pull/22904) in March 2024, when\nit was the newest runner, and nobody moved the pin after that. This PR\nswitches those jobs, and `build-engine-branch.yml`, to `macos-latest`,\nwhich is macOS 26 on Apple Silicon today. The same jobs already use\n`windows-latest`, and one other macOS job in `test-template.yml` already\nused `macos-latest`.\n\n## How it was checked\n\n- `pnpm audit --prod` exits 0 locally. The lockfile diff touches only\n`mariadb`, `source-map-js` and `iconv-lite`, which `mariadb` 3.5.4\ndepends on.\n- The `@prisma/adapter-mariadb` unit tests pass locally, including the\nIPv6 test that connects to a server on `::1`.\n- ESLint and Prettier pass on every changed file.\n- The macOS change can only be checked by this PR's own CI run.\n\nAgent: nestor-69\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\n---------\n\nSigned-off-by: willbot <w.a.madden+machine@gmail.com>\nSigned-off-by: Will Madden <madden@prisma.io>\nCo-authored-by: Claude Opus 5.5 <noreply@anthropic.com>",
+          "timestamp": "2026-10-09T11:27:31+02:00",
+          "tree_id": "2436597b5658ae25de6bff1449479d5733d3dfe6",
+          "url": "https://github.com/prisma/orm/commit/d329959a35c1a5a4dec63853db124b607864bbe6"
+        },
+        "date": 1791538625405,
+        "tool": "benchmarkjs",
+        "benches": [
+          {
+            "name": "interpreter: simple select",
+            "value": 121667,
+            "range": "±0.83%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "interpreter: findUnique",
+            "value": 100475,
+            "range": "±1.06%",
+            "unit": "ops/sec",
+            "extra": "82 samples"
+          },
+          {
+            "name": "interpreter: join (1:N)",
+            "value": 57678,
+            "range": "±1.23%",
+            "unit": "ops/sec",
+            "extra": "83 samples"
+          },
+          {
+            "name": "interpreter: sequence",
+            "value": 62828,
+            "range": "±1.60%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "interpreter: deep nested join",
+            "value": 20152,
+            "range": "±0.64%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "serializer: 10 rows x 3 cols",
+            "value": 1556858,
+            "range": "±0.55%",
+            "unit": "ops/sec",
+            "extra": "93 samples"
+          },
+          {
+            "name": "serializer: 50 rows x 8 cols",
+            "value": 134637,
+            "range": "±0.55%",
+            "unit": "ops/sec",
+            "extra": "95 samples"
+          },
+          {
+            "name": "serializer: 100 rows x 8 cols",
+            "value": 68324,
+            "range": "±0.45%",
+            "unit": "ops/sec",
+            "extra": "97 samples"
+          },
+          {
+            "name": "getBinaryTargetForCurrentPlatform",
+            "value": 915,
+            "range": "±0.62%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "client generation ~50 Models",
+            "value": 2.32,
+            "range": "±17.09%",
+            "unit": "ops/sec",
+            "extra": "17 samples"
+          },
+          {
+            "name": "typescript compilation ~50 Models",
+            "value": 0.89,
+            "range": "±18.10%",
+            "unit": "ops/sec",
+            "extra": "9 samples"
+          },
+          {
+            "name": "@prisma/client size",
+            "value": 70.99888706207275,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": ".prisma/client size",
+            "value": 10.426462173461914,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": ".prisma/client/index.d.ts size",
+            "value": 2.372147560119629,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": ".prisma/client/index.js size",
+            "value": 0.17815494537353516,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": "dotPlusAtPrismaClientFolder.zip size",
+            "value": 28.70742416381836,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": "client generation 100 models with relations",
+            "value": 0.46,
+            "range": "±12.36%",
+            "unit": "ops/sec",
+            "extra": "7 samples"
+          },
+          {
+            "name": "compile findUnique (uncached baseline)",
+            "value": 7803,
+            "range": "±11.96%",
+            "unit": "ops/sec",
+            "extra": "92 samples"
+          },
+          {
+            "name": "compile findMany filtered (uncached baseline)",
+            "value": 5963,
+            "range": "±1.59%",
+            "unit": "ops/sec",
+            "extra": "93 samples"
+          },
+          {
+            "name": "compile blog post page (uncached baseline)",
+            "value": 1643,
+            "range": "±0.64%",
+            "unit": "ops/sec",
+            "extra": "94 samples"
+          },
+          {
+            "name": "parameterize findUnique",
+            "value": 447315,
+            "range": "±0.63%",
+            "unit": "ops/sec",
+            "extra": "94 samples"
+          },
+          {
+            "name": "parameterize findMany",
+            "value": 220589,
+            "range": "±0.45%",
+            "unit": "ops/sec",
+            "extra": "94 samples"
+          },
+          {
+            "name": "parameterize blog post page query",
+            "value": 154063,
+            "range": "±0.24%",
+            "unit": "ops/sec",
+            "extra": "93 samples"
+          },
+          {
+            "name": "findUnique by id",
+            "value": 4430,
+            "range": "±2.28%",
+            "unit": "ops/sec",
+            "extra": "77 samples"
+          },
+          {
+            "name": "findFirst with simple where",
+            "value": 4908,
+            "range": "±1.17%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "findMany 10 records",
+            "value": 4852,
+            "range": "±1.48%",
+            "unit": "ops/sec",
+            "extra": "79 samples"
+          },
+          {
+            "name": "findMany with orderBy",
+            "value": 4717,
+            "range": "±1.13%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "findMany with filter",
+            "value": 4756,
+            "range": "±1.15%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "findMany with pagination",
+            "value": 5112,
+            "range": "±1.33%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "findUnique with 1:1 include",
+            "value": 2799,
+            "range": "±1.38%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "findUnique with 1:N include",
+            "value": 2468,
+            "range": "±1.78%",
+            "unit": "ops/sec",
+            "extra": "83 samples"
+          },
+          {
+            "name": "findUnique with nested includes",
+            "value": 1299,
+            "range": "±1.36%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "findMany with includes",
+            "value": 1281,
+            "range": "±1.22%",
+            "unit": "ops/sec",
+            "extra": "83 samples"
+          },
+          {
+            "name": "findMany with select",
+            "value": 7175,
+            "range": "±1.33%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "findMany with nested select",
+            "value": 3802,
+            "range": "±1.32%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "findMany with OR filter",
+            "value": 4103,
+            "range": "±1.02%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "findMany with complex filters",
+            "value": 3254,
+            "range": "±1.18%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "findMany with contains filter",
+            "value": 3753,
+            "range": "±1.09%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "count all",
+            "value": 7647,
+            "range": "±1.46%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "count with filter",
+            "value": 6660,
+            "range": "±1.34%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "aggregate sum/avg",
+            "value": 6353,
+            "range": "±1.04%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "groupBy with count",
+            "value": 6487,
+            "range": "±0.99%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "create single record",
+            "value": 3608,
+            "range": "±1.35%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "create with nested",
+            "value": 1857,
+            "range": "±1.43%",
+            "unit": "ops/sec",
+            "extra": "82 samples"
+          },
+          {
+            "name": "update single record",
+            "value": 4479,
+            "range": "±1.56%",
+            "unit": "ops/sec",
+            "extra": "81 samples"
+          },
+          {
+            "name": "updateMany",
+            "value": 5702,
+            "range": "±1.21%",
+            "unit": "ops/sec",
+            "extra": "80 samples"
+          },
+          {
+            "name": "transaction sequential",
+            "value": 1692,
+            "range": "±2.25%",
+            "unit": "ops/sec",
+            "extra": "82 samples"
+          },
+          {
+            "name": "transaction batch",
+            "value": 1607,
+            "range": "±1.43%",
+            "unit": "ops/sec",
+            "extra": "83 samples"
+          },
+          {
+            "name": "blog post page query",
+            "value": 951,
+            "range": "±1.34%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "blog listing page query",
+            "value": 1324,
+            "range": "±1.00%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "user profile page query",
+            "value": 1322,
+            "range": "±1.09%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "order history query",
+            "value": 2028,
+            "range": "±1.24%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "product search query",
+            "value": 3631,
+            "range": "±1.35%",
             "unit": "ops/sec",
             "extra": "87 samples"
           }
