@@ -1,6 +1,6 @@
 # Slice 3: the weighted full-text index is data in the contract
 
-**Project:** [spec](../../spec.md), [plan](../../plan.md). **Design:** [ADR 260](../../../../docs/architecture%20docs/adrs/ADR%20260%20-%20Packages%20offer%20collection%20scopes%20for%20their%20kinds%20of%20index.md), section "1. The author declares the index" and "3. What a scope does to the query".
+**Project:** [spec](../../spec.md), [plan](../../plan.md). **Design:** [ADR 210](../../../../docs/architecture%20docs/adrs/ADR%20210%20-%20Index-type%20registry.md) and [ADR 236](../../../../docs/architecture%20docs/adrs/ADR%20236%20-%20Target-contributed%20model%20attributes.md), amendment "a contributed attribute may produce a table index". Merged; this spec records what shipped.
 
 ## At a glance
 
@@ -25,7 +25,7 @@ model('Post', { fields: { id, title, subtitle, body } }).sql(({ cols }) => ({
 {
   "columns": ["title", "subtitle", "body"],
   "name": "post_search_033e8055",
-  "options": { "fields": [["title", "subtitle"], ["body"]], "language": "english" },
+  "options": { "language": "english", "weightGroups": [["title", "subtitle"], ["body"]] },
   "prefix": "post_search",
   "type": "fullText",
   "unique": false
@@ -33,9 +33,10 @@ model('Post', { fields: { id, title, subtitle, body } }).sql(({ cols }) => ({
 ```
 
 ```ts
-db.sql.public.post
-  .where((f, fns) => fns.fullTextMatches([[f.title, f.subtitle], [f.body]], q))
-  .orderBy((f, fns) => fns.fullTextRank([[f.title, f.subtitle], [f.body]], q), { direction: 'desc' });
+const post = db.sql.public.post;
+post
+  .where((f, fns) => fns.fullTextMatches(post.indexes.post_search, q))
+  .orderBy((f, fns) => fns.fullTextRank(post.indexes.post_search, q), { direction: 'desc' });
 ```
 
 ```sql
@@ -48,12 +49,12 @@ CREATE INDEX "post_search_033e8055" ON "post" USING gin ((
 ## Chosen design
 
 - **Authoring.** `@@fullTextIndex` and the TypeScript `fullTextIndex` helper take one field, a flat list, or a list whose items are fields or lists of fields. Each top-level item is a weight group; earlier groups weigh more, `A` to `D`, so at most four groups. A single field stays valid and has no weight.
-- **Contract.** The index has the type `fullText`, which the Postgres target registers in its index type registry; in the database it is a `gin` index. It is stored in the `columns` form: `columns` lists the covered columns flat, in order, and must equal `options.fields` read flat; `options` holds `fields` (the weight groups, as storage column names) and `language`, and nothing else. No SQL string is stored. `fullText` declares that it cannot back a foreign key, and cannot be unique.
+- **Contract.** The index has the type `fullText`, which the Postgres target registers in its index type registry; in the database it is a `gin` index. It is stored in the `columns` form: `columns` lists the covered columns flat, in order, and must equal `options.weightGroups` read flat; `options` holds `weightGroups` (the weight groups, as storage column names) and `language`, and nothing else. No SQL string is stored. A `fullText` index cannot be unique, is never identical to a plain index, and the build refuses a relation that names one as its foreign key's backing index (ADR 210, ADR 161).
 - **One renderer.** A single function in the Postgres target renders the search document from `{ fields, language }` and a way to reference each column. The index DDL, the contract-to-schema-node conversion, and the query operations all call it. `setweight` appears only when there is more than one weight group; in a document of more than one column every column is wrapped in `coalesce`, whether or not it is nullable, so nullability is not an input; fields are joined with `||`. A single field renders `to_tsvector(language, column)`, the expression the existing column operations use.
 - **Schema node.** `contract-to-postgres-database-schema-node.ts` produces the expression-form `SqlIndexIR` for such an index, with the rendered expression, and `dependsOn` naming exactly the covered columns rather than every column of the table.
-- **Query operations.** `fullTextMatches` and `fullTextRank` gain a form on the SQL builder's `fns` that takes weight groups of column expressions and the `tsquery`, with the same options as the column form. The column-method forms are unchanged. `fullTextHeadline` stays per column.
+- **Query operations.** `fullTextMatches` and `fullTextRank` on the SQL builder's `fns` take, as their document, an index reference (`table.indexes.<name>`, which reads the weight groups and language from the contract), a document built by hand with `fullTextDocument(...)`, or one column. The column-method forms are unchanged. `fullTextHeadline` stays per column.
 - **Existing single-field indexes** change representation in the contract and keep their DDL. Their generated name changes; `migration plan` from the previous contract renames them, and `db update` against a live database rebuilds them.
-- **Foreign-key backing.** Because the index now lists its columns, the rule for which indexes back a foreign key is decided per index type. That rule ships first, on its own (TML-3430), and this slice is stacked on it.
+- **Foreign-key backing.** Each foreign key names its backing index, and the contract build removes duplicate indexes (ADR 161, "A foreign key names its backing index"). That change shipped first, on its own, and this slice was stacked on it.
 
 ## Coherence rationale
 
@@ -61,7 +62,7 @@ One representation change with its three consumers: authoring, DDL and schema no
 
 ## Scope
 
-In: `packages/3-targets/3-targets/postgres` (authoring spec, index type options, renderer, DDL, schema-node conversion, query operations, operation types); `packages/3-extensions/postgres/src/contract/full-text-index.ts`; fixtures and examples that declare a full-text index; upgrade instructions; ADR 260's contract example (it gains `columns`); the skill reference for full-text search.
+In: `packages/3-targets/3-targets/postgres` (authoring spec, index type options, renderer, DDL, schema-node conversion, query operations, operation types); `packages/3-extensions/postgres/src/contract/full-text-index.ts`; fixtures and examples that declare a full-text index; upgrade instructions; the skill reference for full-text search.
 
 Out: anything in `sql-orm-client` (slices 1, 2 and 4); scope helpers; generated `tsvector` columns; `contract infer` producing the structured form from an existing database (an inferred index stays an opaque expression); MySQL, SQLite, MongoDB.
 

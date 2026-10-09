@@ -1,11 +1,10 @@
-# Collection chaining, query fragments, collection scopes and weighted full-text search
+# Collection chaining, query fragments and weighted full-text search
 
-**Linear:** TML-3403 (a custom collection class loses its methods in the types), TML-3397 (a ternary between two collections can allow `deleteAll()`). No Linear project yet.
-**Design records:** [ADR 258 — A collection keeps its class through the chain](../../docs/architecture%20docs/adrs/ADR%20258%20-%20A%20collection%20keeps%20its%20class%20through%20the%20chain.md), [ADR 259 — Query fragments are functions](../../docs/architecture%20docs/adrs/ADR%20259%20-%20Query%20fragments%20are%20functions.md), [ADR 260 — Packages offer collection scopes for their kinds of index](../../docs/architecture%20docs/adrs/ADR%20260%20-%20Packages%20offer%20collection%20scopes%20for%20their%20kinds%20of%20index.md). All Proposed.
+**Design records:** [ADR 265 — A collection keeps its class through the chain](../../docs/architecture%20docs/adrs/ADR%20265%20-%20A%20collection%20keeps%20its%20class%20through%20the%20chain.md) (Accepted), [ADR 259 — Query fragments are functions](../../docs/architecture%20docs/adrs/ADR%20259%20-%20Query%20fragments%20are%20functions.md) (Accepted), [ADR 270 — ORM queries use the query builder's functions and a model's indexes](../../docs/architecture%20docs/adrs/ADR%20270%20-%20ORM%20queries%20use%20the%20query%20builder's%20functions%20and%20a%20model's%20indexes.md) (Proposed).
 
 ## Purpose
 
-A developer writes named queries once, as methods of a collection class or as functions, and uses them anywhere a collection of the model appears, with the collection's type staying sound however the query is composed. A package that introduces a kind of index can give applications a typed search built from the index's own definition, so the search cannot miss the index. The first such search is Postgres full-text search over several weighted fields.
+A developer writes named queries once, as methods of a collection class or as functions, and uses them anywhere a collection of the model appears, with the collection's type staying sound however the query is composed. A query can search a weighted full-text index over several fields by naming the index, in the ORM as in the SQL query builder, so the search cannot miss the index.
 
 ## At a glance
 
@@ -21,12 +20,14 @@ model Post {
 ```
 
 ```ts
-const postScopes = fulltextSearchScopes<Contract, 'Post'>();
-
 class PostCollection extends Collection<Contract, 'Post'> {
   published()   { return this.where((p) => p.publishedAt.isNotNull()); }
   newestFirst() { return this.orderBy((p) => p.publishedAt.desc()); }
-  search(q: TsqueryArgument) { return this.with(postScopes.post_search(q)); }
+  search(q: TsqueryArgument) {
+    return this
+      .where((p, { fns, indexes }) => fns.fullTextMatches(indexes.post_search, q))
+      .orderBy((p, { fns, indexes }) => fns.fullTextRank(indexes.post_search, q).desc());
+  }
 }
 
 const posts = await db.Post
@@ -39,79 +40,77 @@ const posts = await db.Post
 
 - Class methods chain, before and after built-in methods.
 - `with` runs any function. The conditional yields a collection whose search filter is not known; `published()` already made it filtered, so `update` is allowed.
-- `postScopes.post_search(q)` is a scope built from the index's definition in the contract. The query it adds uses the index.
+- `search` names the index `post_search`. Its weights and language come from the contract, so the query uses the index.
 
-## Where things stand (grounded 2026-10-01)
+## Vocabulary
 
-- **A custom collection class loses its methods in the types after any chained call**, and inside include refinements. Every chaining method returns `Collection<TContract, ModelName, Row, State>`. The run time keeps the subclass. TML-3403.
-- **The collection's type state is not part of assignability.** It appears only in method parameter types, so a filtered and an unfiltered collection are assignable to each other, and a ternary between them may keep the filtered one. TML-3397.
-- **`Collection` has no `with` method.**
-- **Single-column full-text search works.** `fullTextMatches`, `fullTextRank` and `fullTextHeadline` are column operations taking a `tsquery`; `@@fullTextIndex([field])` and the TypeScript `fullTextIndex` helper author a GIN index over one field.
-- **The Postgres full-text index is stored as an opaque expression** in the contract. Nothing can recover the fields or language from it.
-- **Spikes on the `bot` remote** prove the collection typing (`spike-this-typed-chaining`), the fragment helpers (`spike-pipe-fragments`) and the scope builder in its collection-taking form (`spike-scope-helper-authoring`). Write-ups are under `spikes/`.
-- **There is no MySQL target.** The MongoDB ORM client is out of scope for delivery.
+- A **query fragment**, or **fragment**, is a function from a collection to a collection, run with `collection.with(fn)`.
+- A **scope** is a fragment that only imposes conditions on the query. The word is kept free for a later per-model default scope.
+- A **row fragment** is a function of the model accessor, which `where` and `orderBy` take.
+- Public names: `QueryFragment`, `DeclaredFieldsFragment`, `FragmentFacts`, `db.orm.fragment(fields, body)`, `collection.fragment(body)`, `collection.with(fn)`.
+
+## Where things stand (2026-10-09)
+
+- **Slice 1, a collection keeps its class through the chain:** merged (ADR 265).
+- **Slice 2, fragment helpers:** merged (ADR 259), then renamed: `apply` → `with`, `scope` → `fragment`, `Fragment` → `QueryFragment`, `FieldFragment` → `DeclaredFieldsFragment`.
+- **A foreign key names its backing index, and the contract build removes duplicate indexes:** merged (ADR 161, section "A foreign key names its backing index").
+- **Slice 3, the weighted full-text index:** merged. `@@fullTextIndex` takes weight groups, the contract stores `fullText` indexes as `{ weightGroups, language }`, one renderer produces the index and the query expression, and the SQL query builder names an index with `table.indexes.<name>` (ADR 210, ADR 236).
+- **The ORM cannot search several fields.** Its search operations attach to one field (`p.title.fullTextMatches(q)`), it has no `fns`, and it cannot name an index. Slice 4 closes this.
+- **Defects found on main** (TML-3543): the row-lock methods drop a custom class from the type, `where(x).fragment(body)` silently drops the `where`, and the pending upgrade instruction for the query fragment type names starts from the wrong release.
 
 ## Decided
 
-- **A chaining method has the shape of a scope, a function from a collection to a collection** (ADR 258). The type state and the row are declared properties; unknown flags are `boolean`. `where` returns `Filtered<Self>`, `orderBy` returns `Ordered<Self>`, `include` returns `Including<Self, Rel>`, `limit`, `offset`, `distinct` and `cursor` return `Self`, and `with(step)` returns `step(this)`. `select` and `variant` return the shared `Collection` type.
-- **A filtered collection is a subtype of an unfiltered one**, so a conditional reduces to the unfiltered type and any function body is sound. The query API has no control-flow methods.
-- **Query fragments are functions** (ADR 259): `db.orm.scope(fields, body)` for a scope on any model with the given fields, declared with the contract DSL's field builders or `CodecField`; `db.orm.public.Post.scope(body)` for a scope on one model; `orderByField` for an order field from a request.
-- **A scope is a `Step<Self, Filtered<Self>>` that a package builds from an index definition** (ADR 260). `fulltextSearchScopes<Contract, 'Post'>()` returns one scope per full-text index on the model, named after the index. The ORM client provides the builder `defineIndexScopes`.
-- **`@@fullTextIndex` takes fields in weight groups**, `name:` is the scope's name, and the contract records fields, weights and language as data. One renderer produces the index expression and the query expression.
-- **A scope's order is a default** that `orderBy` anywhere in the chain replaces.
-- **Nothing is added to the schema grammar or the contract's domain plane.** Scopes declared in the schema are a possible later step.
+- **A chaining method has the shape of a fragment** (ADR 265). The type state and the row are declared properties; unknown flags are `boolean`. A filtered collection is a subtype of an unfiltered one, so any function body is sound. The query API has no control-flow methods; `when()` is rejected.
+- **Query fragments are functions** (ADR 259): `db.orm.fragment(fields, body)` for any model with the given fields, `collection.fragment(body)` for one model, `orderByField` for an order field from a request. A fragment's fields are declared with the contract DSL's field builders or `{ codecId, nullable }`, never by pointing at a model's field.
+- **The weighted full-text index is data in the contract**, and a query names the index rather than restating it.
+- **ORM callbacks for `where` and `orderBy` receive a second argument, `{ fns, indexes }`** (ADR 270): the SQL query builder's functions, and the model's table's indexes as index references. Packages need no new mechanism.
+- **Nothing is added to the schema grammar, the contract's domain plane, or the `Collection` type's chaining methods.**
+
+## Later decision: collection scopes built from indexes
+
+The ORM offers each search index as a scope on the model's collection, so the application writes no query: `db.Post.scopes.search.fulltext(q).where(...)`. Designed and spiked in September 2026 (draft ADR "Collection scopes derived from indexes" on branch `spike-collection-scope-declared`; `spikes/type-composition.md`, `spikes/declared-scopes.md`): the package that owns an index type supplies scope operations through an ORM-defined interface, the ORM derives a model's scopes from its indexes, and the contract declares none. ADR 270 records it under "Later decision". It is designed after this project closes.
 
 ## Non-goals
 
-- **The class of a related model inside an include refinement.** It needs the class registry in every collection's type and is a decision of its own (ADR 258, "Later decisions").
-- **A default fragment per model** (a Rails default scope).
+- **Collection scopes built from indexes** (above).
+- **A default scope per model** (a Rails default scope).
+- **The class of a related model inside an include refinement** (ADR 265, "Later decisions").
 - **A run-time guard on `deleteAll` and `updateAll`.**
-- **Selecting fields by shape across models.** A scope for any model may filter and order on its declared fields; it does not select or include.
-- **Generated or stored `tsvector` columns.** Search documents are expression indexes.
-- **Combining relevance with another sort key**, highlighting a whole search document, scope kinds other than full-text, MongoDB scopes, searches that are not filters (such as MongoDB Atlas Search stages), a MySQL target, and changes to the ParadeDB extension.
+- **Selecting fields by shape across models.**
+- **Generated or stored `tsvector` columns, MongoDB, a MySQL target.**
 
 ## Place in the larger world
 
-- **ORM client (`sql-orm-client`).** The `Collection` type changes shape: state and row as declared properties, `this: Self` chaining methods, the named facts, `with`. It gains `CodecField`, `db.orm.scope`, `db.orm.public.Post.scope`, `orderByField`, and `defineIndexScopes`. Public names grow (ADR 258, "Consequences").
-- **Postgres target.** Owns the weighted full-text index: the attribute with weight groups, the structured index data, its DDL, `fullTextMatches` and `fullTextRank` over weight groups, and `fulltextSearchScopes`.
-- **Postgres facade (`@prisma/orm-postgres`).** Re-exports the new client surface and the scope helper.
-- **Contract and emitter.** Carry the full-text index as structured data; storage hashes of contracts that declare one change.
-- **Upgrades.** Instructions for: `DefaultCollectionTypeState` flags as `boolean`; reading type state and row with `CollectionTypeStateOf` and `CollectionRowOf`; `ReturnType<C['where']>` giving only `HasWhere`; explicit type arguments on `include`, `distinct` and `distinctOn`; the new index representation.
-- **Mongo ORM client.** Out of scope; ADR 260 records the MongoDB constraints.
+- **ORM client (`sql-orm-client`).** The second callback argument on `where` and `orderBy`, with `fns` and the model's index references.
+- **SQL query builder (`sql-builder`) and a package both lanes use.** The function surface and the index reference move to code both lanes share.
+- **Postgres target.** No change for slice 4: `fullTextMatches` and `fullTextRank` already accept an index reference.
+- **Postgres facade (`@prisma/orm-postgres`).** Re-exports whatever new public types the callback argument needs.
+- **Upgrades.** None expected for slice 4: the change is additive.
 
 ## Cross-cutting requirements
 
-- **Class methods are available after every method that keeps the model's rows**, on a root collection, a chained collection, after `include`, and inside `with`.
-- **Any function body yields a sound type.** A ternary in either order, an early return, a `switch`, a loop, and `let` with `if` all refuse `update`, `delete` and `cursor` unless every path sets the flag.
-- **Nothing that compiles on an unconditional chain today stops compiling**, apart from the patterns listed under Upgrades.
-- **Every fragment and scope works at every site**: a root collection, a chained collection, a collection after `select` where the fragment allows it, an include refinement, and `this` inside a custom collection class.
-- **The query expression and the index expression come from one renderer.** An integration test proves the planner uses the index, with sequential scans disabled and negative controls.
-- **User input stays safe.** Scope operations take a `tsquery`; `orderByField` rejects names outside the allowed list at run time.
-- **Type checking does not get more expensive for an application that uses none of this**, measured on `examples/prisma-8-demo`. The spike measured 9.6% fewer instantiations.
+- **Class methods are available after every method that keeps the model's rows**, including the row-lock methods.
+- **Any function body yields a sound type.**
+- **Nothing that compiles today stops compiling**, apart from patterns covered by upgrade instructions.
+- **A search written by naming an index works at every site**: a root collection, a chained collection, an include refinement, a relation filter, `this` in a custom class, and the body of a fragment for one model.
+- **The query expression and the index expression come from one renderer**, proven with `EXPLAIN` against a real database, with negative controls.
+- **User input stays safe.** Search operations take a `tsquery`; `orderByField` rejects names outside the allowed list.
+- **Type checking does not get more expensive for an application that uses none of this**, measured on `examples/prisma-8-demo`.
 - **Every negative type test fails for the stated reason**, checked by removing the directive and reading the error.
-
-## Transitional-shape constraints
-
-- **Green main between slices; each slice is one independently mergeable PR.**
-- **The structured full-text index lands before any scope reads it.**
-- **Spike branches are deleted after the ADRs are accepted.**
 
 ## Project Definition of Done
 
 - [ ] Team-DoD floor (repo checks, docs, upgrade instructions, Linear close-out).
-- [ ] ADR 258, ADR 259 and ADR 260 are Accepted and match what shipped, including their examples.
-- [ ] TML-3403 is closed by type tests for chaining class methods; the include refinement part is split into its own ticket.
-- [ ] TML-3397 is closed by a test: a ternary between a filtered and an unfiltered collection refuses `deleteAll`.
-- [ ] `examples/prisma-8-demo` chains its custom collection methods, has a conditional list query written with `with`, a shared filter typed with `CodecField`, and a sort field from a request.
-- [ ] A model with a weighted multi-field full-text index can be searched through a scope on a root collection, a chained collection, an include refinement, and a custom collection class, with whole-result assertions.
-- [ ] Results are ordered by relevance by default, a title match ranks above a body match in a test, and an explicit `orderBy` replaces that order.
-- [ ] `EXPLAIN` shows the planner using the declared index for a scope query.
-- [ ] A test on the built, published packages shows the chaining types, the fragment helpers and the scope helper are typed through `dist`.
-- [ ] A second, test-only kind of index gets a scope helper without any change to the ORM client.
+- [ ] ADR 265 and ADR 259 Accepted and matching what shipped (done); ADR 270 Accepted and matching what ships.
+- [ ] TML-3403 closed by type tests for chaining class methods; the include-refinement part filed as its own ticket.
+- [ ] TML-3397 closed by a test: a ternary between a filtered and an unfiltered collection refuses `deleteAll` (done).
+- [ ] TML-3543 merged: the lock methods keep the class, `fragment` refuses a receiver with query state, the upgrade instruction starts from rc.17.
+- [ ] `examples/prisma-8-demo` chains its custom collection methods (done), has a conditional list query written with `with`, a shared filter typed with `CodecField` in its source, a sort field from a request (done), and searches posts across weighted fields through the ORM by naming the index.
+- [ ] An ORM query that names a weighted full-text index works on a root collection, a chained collection, an include refinement, a relation filter and a custom class method, with whole-result assertions.
+- [ ] A title match ranks above a body match through the ORM.
+- [ ] `EXPLAIN` shows the planner using the declared index for an ORM query that names it.
+- [ ] A test on the built packages shows the chaining types, the fragment helpers and the second callback argument typed through `dist`.
 
 ## Open questions
 
-None. The two points left for the scope-contribution discussion are decided as ADR 260 states them:
-
-1. **The builder form** is `defineIndexScopes({ match, operation })`, or `operations` for several, as the authoring spike recommended (`spikes/helper-authoring.md`): a type guard for the package's kind of index and an ordinary function returning a filter and a default order. Only when an argument's type depends on the index does the author add the three-line interface that names `typeof operation<this['index']>`.
-2. **The index lookup reads the contract type and model name the application writes**, `fulltextSearchScopes<Contract, 'Post'>()`. That is what lets index names complete and be checked where the scopes are made, and what makes a scope a value. The step each scope returns reads the contract, model and namespace from the collection it receives only to refuse a collection of another model.
+None.
