@@ -1342,10 +1342,8 @@ describe('compileSelect MTI JOINs', () => {
       'id',
       'title',
       'type',
-      'severity',
       'project_id',
       'parent_id',
-      'assignee_id',
     ]);
     const featuresMtiProjection = [
       ProjectionItem.of(

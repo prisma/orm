@@ -188,3 +188,33 @@ describe('a query with no select reads only the model columns', () => {
     }
   });
 });
+
+describe('a query pinned to a variant reads the base fields and that variant fields only', () => {
+  function pinned(contractToUse: typeof contract, baseModel: string, variant: string) {
+    const base = new Collection(
+      {
+        runtime: createMockRuntime(),
+        context: buildTestContextFromContract(contractToUse),
+      } as never,
+      baseModel,
+      { namespaceId: 'public' },
+    ) as unknown as { variant(name: string): { state: CollectionState } };
+    return base.variant(variant).state;
+  }
+
+  it('leaves out a sibling single-table variant column', () => {
+    const poly = buildStiPolyContract();
+    const plan = compileSelect(poly, 'public', 'users', pinned(poly, 'User', 'admin'), 'User');
+    const columns = projectedColumns(selectAstOf(plan.ast).projection);
+    expect(columns).toContain('role');
+    expect(columns).not.toContain('plan');
+  });
+
+  it('leaves out a single-table variant column when pinned to a multi-table variant', () => {
+    const poly = buildMixedPolyContract();
+    const plan = compileSelect(poly, 'public', 'tasks', pinned(poly, 'Task', 'feature'), 'Task');
+    const columns = projectedColumns(selectAstOf(plan.ast).projection);
+    expect(columns).toContain('title');
+    expect(columns).not.toContain('severity');
+  });
+});

@@ -219,7 +219,12 @@ function createPreparedIncludeConsumer(
   const bindings = deferResolution(() => {
     const namespace = include.relatedNamespaceId;
     const keys = new Set(
-      resolveModelColumns(contract, namespace, include.relatedModelName, include.relatedTableName),
+      resolveModelColumns(
+        contract,
+        namespace,
+        include.nested.variantName ?? include.relatedModelName,
+        include.relatedTableName,
+      ),
     );
     const polyInfo = resolvePolymorphismInfo(contract, namespace, include.relatedModelName);
     for (const variant of polyInfo?.mtiVariants ?? []) {

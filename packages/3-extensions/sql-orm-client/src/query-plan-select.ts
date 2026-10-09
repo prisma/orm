@@ -647,7 +647,7 @@ function buildIncludeChildRowsSelect(
   const scalarProjection = buildProjection(
     contract,
     include.relatedNamespaceId,
-    include.relatedModelName,
+    include.nested.variantName ?? include.relatedModelName,
     include.relatedTableName,
     polyJoinsAndProjection.baseSelectedFields,
     childTableRef,
@@ -829,7 +829,7 @@ function buildDistinctNonLeafChildRowsSelect(options: {
   const innerScalarProjection = buildProjection(
     contract,
     include.relatedNamespaceId,
-    include.relatedModelName,
+    include.nested.variantName ?? include.relatedModelName,
     include.relatedTableName,
     queryPolyProjection.baseSelectedFields,
     childTableRef,
@@ -900,7 +900,7 @@ function buildDistinctNonLeafChildRowsSelect(options: {
   const outerScalarProjection = buildProjection(
     contract,
     include.relatedNamespaceId,
-    include.relatedModelName,
+    include.nested.variantName ?? include.relatedModelName,
     include.relatedTableName,
     visiblePolyProjection.baseSelectedFields,
     distinctAlias,
@@ -1403,7 +1403,7 @@ function buildSelectAst(
   const scalarProjection = buildProjection(
     contract,
     namespaceId,
-    modelName,
+    state.variantName ?? modelName,
     tableName,
     state.selectedFields,
     tableName,
