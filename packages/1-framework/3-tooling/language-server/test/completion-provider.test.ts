@@ -1971,7 +1971,10 @@ describe('providePslCompletionItems — after the plus of an inclusion', () => {
   it('leaves out a mixin the block already includes, by either spelling', () => {
     expect(
       offered(['model Invoice {', '  +Used', '  +billing.BillingStamps', '  +|', '}']),
-    ).toEqual([['TopStamps', 'model mixin'], ...namespaces].sort());
+    ).toEqual([
+      ['TopStamps', 'model mixin'],
+      ['auth', 'Namespace'],
+    ]);
     expect(offered(['model Invoice {', '  +Used', '  +billing.|', '}'])).toEqual([
       ['BillingStamps', 'model mixin'],
     ]);
