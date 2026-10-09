@@ -59,7 +59,7 @@ export function ignoredFieldInPrimaryKey(input: {
   const one = input.fieldNames.length === 1;
   return prisma7Diagnostic(
     'PSL.PRISMA7_IGNORED_FIELD_REFERENCED',
-    `${one ? 'Field' : 'Fields'} ${fields} ${one ? 'is' : 'are'} marked @ignore, but ${input.usedBy} uses ${one ? 'it' : 'them'}, and without ${one ? 'it' : 'them'} model "${input.modelName}" has no field that identifies a row, so Prisma 8 could not update, delete or relate its rows. Remove @ignore from ${fields}: Prisma 7's next migration is then empty, and ${one ? 'the field appears' : 'the fields appear'} in the Prisma 7 client again. Or replace ${one ? 'it' : 'them'} with @@ignore on model "${input.modelName}": Prisma 7's next migration is then empty, Prisma 8 keeps the model's table with its primary key, and the model disappears from both clients.`,
+    `${one ? 'Field' : 'Fields'} ${fields} ${one ? 'is' : 'are'} marked @ignore, but ${input.usedBy} uses ${one ? 'it' : 'them'}, and without ${one ? 'it' : 'them'} model "${input.modelName}" has no field that identifies a row, so Prisma 8 could not update, delete or relate its rows. Remove @ignore from ${fields}: Prisma 7's next migration is then empty, and ${one ? 'the field appears' : 'the fields appear'} in the Prisma 7 client again. Or replace ${one ? 'it' : 'them'} with @@ignore on model "${input.modelName}": Prisma 7 then requires @ignore on every relation field that points to the model, its next migration is empty, Prisma 8 keeps the model's table with its primary key, and the model disappears from both clients.`,
     input.sourceId,
     input.span,
   );

@@ -15,13 +15,12 @@ The contract read from a Prisma 7 schema now describes every table and column Pr
 
 ## A schema that loaded before can be refused
 
-An ignored field or model now becomes part of the contract, so it meets every rule the reader applies, not only to the fields Prisma 8 maps. `prisma contract emit` can refuse a schema that loaded before only because its ignored objects were dropped. Each diagnostic says what to change in the Prisma 7 schema:
+An ignored field or model now becomes part of the contract, so it meets every rule the reader applies, not only to the fields Prisma 8 maps. `prisma contract emit` can refuse a schema that loaded before only because its ignored objects were dropped. Each diagnostic says what to change in the Prisma 7 schema. Common examples, not every case:
 
-- `PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED` and `PSL.PRISMA7_UNSUPPORTED_TYPE`: a column type with no Prisma 8 codec, on an `@ignore` field or in an `@@ignore` model. `@ignore` no longer works around a missing codec; the schema cannot be read until Prisma 8 supports the type.
+- `PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED`: a `@db.*` column type with no Prisma 8 codec, on an `@ignore` field or in an `@@ignore` model. `PSL.PRISMA7_UNSUPPORTED_TYPE`: an `Unsupported("...")` field in an `@@ignore` model. `@ignore` and `@@ignore` no longer work around a missing codec; the schema cannot be read until Prisma 8 supports the type.
 - `PSL.PRISMA7_INDEX_ARGUMENT_UNSUPPORTED`: an index on an `@@ignore` model with `sort`, `length` or `ops` arguments, such as the `sort: Desc` that `prisma db pull` writes.
 - `PSL.PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED`: an `@ignore` relation with `onDelete: SetNull` or `SetDefault` over a required field that cannot take it.
 - `PSL.PRISMA7_JSON_NULL_DEFAULT_UNSUPPORTED`: an ignored `Json` field with `@default("null")`.
-- `PSL.PRISMA7_IGNORED_FIELD_REFERENCED`: an `@ignore` field in the model's primary key, or one that a relation which is not `@ignore` joins on.
 
 ## While Prisma 7 still applies the migrations
 

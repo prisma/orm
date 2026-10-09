@@ -81,6 +81,7 @@ async function upgradeAfterHandover(
     v8: Prisma8,
     hashes: Hashes,
     run: (...args: string[]) => ReturnType<typeof runAllowingFailure>,
+    dbRef: () => string,
   ) => Promise<void>,
 ): Promise<void> {
   const dir = copyExample();
@@ -112,6 +113,7 @@ async function upgradeAfterHandover(
         v8,
         { earlier: earlierHash, upgraded: upgradedHash },
         (...args) => runAllowingFailure(dir, connectionString, 'prisma', args),
+        () => dbRefHash(dir),
       );
       expect(dbRefHash(dir)).toBe(upgradedHash);
       await verifyHasNoFindings(dir, connectionString);
@@ -158,6 +160,21 @@ describe('upgrading a project whose Prisma 7 schema uses @ignore, after the hand
           markerHash: hashes.upgraded,
           advancedRef: { name: 'db', hash: hashes.upgraded },
         });
+      }),
+    timeouts.spinUpPpgDev * 2,
+  );
+
+  it(
+    'records the ignored objects in a migration, which plain migrating skips and signing then catches the db ref up to',
+    () =>
+      upgradeAfterHandover(async (v8, hashes, _prisma, dbRef) => {
+        expectRecordsIgnoredObjects(
+          await v8('migration', 'plan', '--name', 'keep-ignored-objects'),
+          hashes,
+        );
+        expect(await v8('db', 'migrate')).toMatchObject({ ok: true, markerHash: hashes.upgraded });
+        expect(dbRef()).toBe(hashes.earlier);
+        await v8('db', 'sign');
       }),
     timeouts.spinUpPpgDev * 2,
   );

@@ -127,6 +127,6 @@ A Prisma 7 schema that uses `@ignore` or `@@ignore` cannot take this step yet. I
 | `scripts/db-start.ts` | In-process Postgres for local runs. |
 | `test/adoption.test.ts` | Phases 1 to 3 on a fresh database, including the second Prisma 7 migration. |
 | `test/handover.test.ts` | Phase 4 on a fresh database: Prisma 8 plans, applies and verifies an additive, a destructive and a sequence edit, then adds and removes `@ignore` and `@@ignore` with no migration. |
-| `test/upgrade-ignore.test.ts` | A project signed by a Prisma 8 that left `@ignore` and `@@ignore` objects out of the contract upgrades: it plans a migration that records them, signs again with no findings, and then plans nothing. |
+| `test/upgrade-ignore.test.ts` | A project that Prisma 8 already migrates, signed by a Prisma 8 that left `@ignore` and `@@ignore` objects out of the contract, upgrades. It plans a migration that records the ignored objects, then brings the database to the new hash in each of four ways: `db sign`; `db migrate --advance-ref db`, which skips the creates because the objects exist; plain `db migrate` followed by `db sign`, because plain migrate leaves the `db` ref behind; and, after signing before planning, recovery with `migration plan --from <previous hash>`. Each time verify finds nothing and the next plan plans nothing. |
 | `test/handover/` | The edited schemas, the scripts each client runs after them, and the tsconfigs the test typechecks those scripts with once the edit is applied. |
 | `test/story.ts` | Helpers both tests share. |
