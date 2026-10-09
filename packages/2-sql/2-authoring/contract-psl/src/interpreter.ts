@@ -841,8 +841,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
   const checkNodes: CheckNode[] = [];
   const foreignKeyNodes: ForeignKeyNode[] = [];
 
-  const modelAttributeNodes = Array.from(model.node.attributes());
-  for (const [attributeIndex, modelAttribute] of model.attributes.entries()) {
+  for (const modelAttribute of model.attributes) {
     if (
       !Object.hasOwn(sqlAttributeSpecs.model, modelAttribute.name) &&
       !input.modelAttributesByName.has(modelAttribute.name)
@@ -868,10 +867,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         continue;
       }
       controlPolicyDeclared = true;
-      const node = modelAttributeNodes[attributeIndex];
-      if (node === undefined) {
-        continue;
-      }
+      const node = modelAttribute.node;
       const parsed = interpretModelAttribute({
         node,
         spec: sqlAttributeSpecs.model.control(specContext),
@@ -905,10 +901,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         blockPrimaryKeyDeclared = true;
         continue;
       }
-      const node = modelAttributeNodes[attributeIndex];
-      if (node === undefined) {
-        continue;
-      }
+      const node = modelAttribute.node;
       const parsed = interpretModelAttribute({
         node,
         spec: sqlAttributeSpecs.model.id(specContext),
@@ -951,10 +944,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       continue;
     }
     if (modelAttribute.name === 'unique') {
-      const node = modelAttributeNodes[attributeIndex];
-      if (node === undefined) {
-        continue;
-      }
+      const node = modelAttribute.node;
       const parsed = interpretModelAttribute({
         node,
         spec: sqlAttributeSpecs.model.unique(specContext),
@@ -986,10 +976,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       continue;
     }
     if (modelAttribute.name === 'index') {
-      const node = modelAttributeNodes[attributeIndex];
-      if (node === undefined) {
-        continue;
-      }
+      const node = modelAttribute.node;
       const parsed = interpretModelAttribute({
         node,
         spec: sqlAttributeSpecs.model.index(specContext),
@@ -1044,10 +1031,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       continue;
     }
     if (modelAttribute.name === 'check') {
-      const node = modelAttributeNodes[attributeIndex];
-      if (node === undefined) {
-        continue;
-      }
+      const node = modelAttribute.node;
       if (input.capabilities['sql']?.['checkConstraint'] !== true) {
         diagnostics.push({
           code: 'PSL_CHECK_UNSUPPORTED_TARGET',
@@ -1092,10 +1076,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         continue;
       }
       declaredContributedModelAttributes.add(modelAttribute.name);
-      const node = modelAttributeNodes[attributeIndex];
-      if (node === undefined) {
-        continue;
-      }
+      const node = modelAttribute.node;
       const specFactory = input.contributedModelAttributeSpecs[contributedModelAttribute.attribute];
       if (specFactory === undefined) {
         continue;
@@ -2667,13 +2648,13 @@ export function interpretPslDocumentToSqlContract(
       `stiVariantKeys is derived from baseDeclarations.keys(), so "${variantKey}" must have a base declaration`,
     );
     const variantName = baseDecl.model.name;
-    for (const attribute of baseDecl.model.node.attributes()) {
-      if (attribute.name()?.isSimpleName('check') !== true) continue;
+    for (const attribute of baseDecl.model.attributes) {
+      if (attribute.node.name()?.isSimpleName('check') !== true) continue;
       diagnostics.push({
         code: PSL_CHECK_ON_STI_VARIANT,
         message: `Model "${variantName}" declares "@@check", but it shares its base model "${baseDecl.base.model.name}"'s storage table (single-table inheritance via @@base) and has no table of its own to declare a check constraint on. Declare the check on "${baseDecl.base.model.name}" instead.`,
-        ...diagnosticSource(input.sources, attribute.syntax).at(
-          nodePslSpan(attribute.syntax, input.sources),
+        ...diagnosticSource(input.sources, attribute.node.syntax).at(
+          nodePslSpan(attribute.node.syntax, input.sources),
         ),
       });
     }

@@ -9,14 +9,17 @@ import { mapBlock, structBlock } from '../src/block-spec/constructors';
 import { interpretExtensionBlocks } from '../src/block-spec/interpret';
 import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
+import { ModelAttributeAst } from '../src/syntax/ast/attributes';
 import {
   CompositeTypeDeclarationAst,
   FieldDeclarationAst,
   GenericBlockDeclarationAst,
+  KeyValuePairAst,
   ModelDeclarationAst,
   NamedTypeDeclarationAst,
   NamespaceDeclarationAst,
 } from '../src/syntax/ast/declarations';
+import { printSyntax } from '../src/syntax/ast-helpers';
 import { ownEntry, supportBinder } from './support';
 
 function build(source: string, pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {}) {
@@ -995,5 +998,75 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
     const result = build(['gizmo Gear {', '  @@map("x")', '}'].join('\n'), {});
 
     expect(result.blocks.diagnostics).toEqual([]);
+  });
+});
+
+describe('buildSymbolTable() — block members', () => {
+  it('lists block entries in source order', () => {
+    const result = build(
+      ['policy Strict {', '  zeta = 1', '  alpha = 2', '  mid = 3', '}'].join('\n'),
+    );
+    const block = result.symbolTable.topLevel.blocks['Strict'];
+
+    expect(block?.entries.map((entry) => entry.key()?.name())).toEqual(['zeta', 'alpha', 'mid']);
+    expect(block?.entries.every((entry) => entry instanceof KeyValuePairAst)).toBe(true);
+  });
+
+  it('keeps both entries when a block repeats a key', () => {
+    const result = build(['hooks Lifecycle {', '  on = "a"', '  on = "b"', '}'].join('\n'));
+    const block = result.symbolTable.topLevel.blocks['Lifecycle'];
+
+    expect(block?.entries.map((entry) => entry.key()?.name())).toEqual(['on', 'on']);
+    expect(
+      block?.entries.map((entry) => {
+        const value = entry.value();
+        return value === undefined ? undefined : printSyntax(value.syntax).trim();
+      }),
+    ).toEqual(['"a"', '"b"']);
+  });
+
+  it('keeps the @ attributes of enum members', () => {
+    const result = build(['enum Role {', '  Admin @map("admin")', '  User', '}'].join('\n'));
+    const block = result.symbolTable.topLevel.blocks['Role'];
+
+    expect(
+      block?.entries.map((entry) =>
+        Array.from(entry.attributes(), (attribute) => attribute.name()?.path().join('.')),
+      ),
+    ).toEqual([['map'], []]);
+  });
+
+  it('resolves block @@ attributes in source order', () => {
+    const result = build(
+      ['widget Gear {', '  size = 1', '  @@map("gears")', '  @@vendor.tag(a: 1)', '}'].join('\n'),
+    );
+    const block = result.symbolTable.topLevel.blocks['Gear'];
+
+    expect(block?.attributes.map((attribute) => attribute.name)).toEqual(['map', 'vendor.tag']);
+    expect(block?.attributes[0]?.args.map((arg) => arg.value)).toEqual(['"gears"']);
+    expect(block?.attributes[1]?.args.map((arg) => arg.name)).toEqual(['a']);
+    expect(
+      block?.attributes.every((attribute) => attribute.node instanceof ModelAttributeAst),
+    ).toBe(true);
+  });
+
+  it('lists the members of a block declared in a namespace', () => {
+    const result = build(
+      ['namespace auth {', '  policy Strict {', '    level = 1', '    @@map("p")', '  }', '}'].join(
+        '\n',
+      ),
+    );
+    const block = result.symbolTable.topLevel.namespaces['auth']?.blocks['Strict'];
+
+    expect(block?.entries.map((entry) => entry.key()?.name())).toEqual(['level']);
+    expect(block?.attributes.map((attribute) => attribute.name)).toEqual(['map']);
+  });
+
+  it('has no entries and no attributes for an empty block', () => {
+    const result = build('policy Empty {}');
+    const block = result.symbolTable.topLevel.blocks['Empty'];
+
+    expect(block?.entries).toEqual([]);
+    expect(block?.attributes).toEqual([]);
   });
 });
