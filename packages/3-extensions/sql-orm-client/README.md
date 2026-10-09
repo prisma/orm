@@ -155,7 +155,7 @@ const renamed = await db.Post.whereUnique({ id }).where({ userId }).update({ tit
 const removed = await db.User.whereUnique({ email }).delete();
 ```
 
-It applies the same filter as `where` with the same object, and returns the collection it was called on, so a custom collection class keeps its methods. `first()`, `update()` and `delete()` return the record or `null`. A following `where` narrows further: `whereUnique({ id }).where({ userId })` is the record with that `id` if it also has that `userId`.
+It applies the same filter as `where` with the same object, and returns the collection it was called on, so a custom collection class keeps its methods. `first()`, `update()` and `delete()` return the record or `null`; `firstOrThrow()` returns the record, or rejects with `RUNTIME.NO_ROWS` when no record has the key. A following `where` narrows further: `whereUnique({ id }).where({ userId })` is the record with that `id` if it also has that `userId`.
 
 The argument is checked at compile time. These are refused:
 
@@ -170,7 +170,7 @@ After `whereUnique`:
 
 | Calls | |
 | --- | --- |
-| `where`, `variant`, `include`, `select`, `with`, `first`, `update`, `delete`, `prepared.first`, `forUpdate`, `forNoKeyUpdate`, `forShare`, `forKeyShare` | available |
+| `where`, `variant`, `include`, `select`, `with`, `first`, `firstOrThrow`, `update`, `delete`, `prepared.first`, `prepared.firstOrThrow`, `forUpdate`, `forNoKeyUpdate`, `forShare`, `forKeyShare` | available |
 | `create`, `createAll`, `createAndCount`, `upsert` | unchanged; they do not use the filter |
 | `orderBy`, `limit`, `offset`, `cursor`, `distinct`, `distinctOn`, `all`, `aggregate`, `groupBy`, `updateAll`, `updateAndCount`, `deleteAll`, `deleteAndCount`, `prepared.all`, `prepared.aggregate` | compile error |
 
@@ -194,7 +194,7 @@ These cases are not refused:
 - A method of a custom collection class is callable on a uniquely filtered collection whatever its body does, and so is a fragment made by the client's `fragment` method or by `collection.fragment`, run with `with`. One that adds an order or a limit is accepted; the query still matches at most one record. A function passed to `with` directly is checked: `db.Post.whereUnique({ id }).with((posts) => posts.limit(1))` is refused.
 - The result of `with(fragment)` for a fragment made by `collection.fragment` is the fragment's own result type and no longer records the unique filter, so the many-record methods compile on it.
 - Inside a method of a custom collection class, two results no longer record the unique filter: the result of another method of the class called after `this.whereUnique(...)`, and `.prepared` after `this.whereUnique(...)`, as `.prepared` after `.include(...)` loses what `include` established (see [Custom collections](#custom-collections)). `this.whereUnique({ id }).withTitle('orm').all()` and `this.whereUnique({ id }).prepared.all()` compile there, while the same calls from outside the class are refused. Every other many-record call after `this.whereUnique(...)` is refused inside the class as it is outside.
-- The row-lock methods return the plain `Collection` type for every receiver, so after `whereUnique(...).forUpdate()` the many-record methods compile again and `update` and `delete` do not. Read the locked record with `first()`.
+- The row-lock methods return the plain `Collection` type for every receiver, so after `whereUnique(...).forUpdate()` the many-record methods compile again and `update` and `delete` do not. Read the locked record with `first()` or `firstOrThrow()`.
 - A conditional that mixes a uniquely filtered collection with another one, such as `flag ? db.Post.whereUnique({ id }) : db.Post.where({ userId })`, has the many-record methods.
 
 ## Skipping rows that collide with a unique constraint

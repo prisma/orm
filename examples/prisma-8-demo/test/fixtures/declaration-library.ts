@@ -131,6 +131,10 @@ export class PostLibrary extends Collection<Contract, 'Post'> {
     return this.whereUnique({ id }).first();
   }
 
+  firstOrThrowById(id: string) {
+    return this.whereUnique({ id }).firstOrThrow();
+  }
+
   preparedById(id: string) {
     return this.whereUnique({ id }).prepared;
   }

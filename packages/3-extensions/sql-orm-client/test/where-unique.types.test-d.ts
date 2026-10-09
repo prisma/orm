@@ -55,6 +55,10 @@ class ScopedPostCollection extends Collection<TestContract, 'Post'> {
   preparedFirst() {
     return this.prepared.first();
   }
+
+  preparedFirstOrThrow() {
+    return this.prepared.firstOrThrow();
+  }
 }
 
 declare const flag: boolean;
@@ -90,6 +94,26 @@ describe('single-record calls after whereUnique', () => {
     expectTypeOf(unique.first()).resolves.toEqualTypeOf<Row | null>();
     expectTypeOf(unique.update({ title: 'x' })).resolves.toEqualTypeOf<Row | null>();
     expectTypeOf(unique.delete()).resolves.toEqualTypeOf<Row | null>();
+  });
+
+  test('firstOrThrow returns the row', () => {
+    expectTypeOf(unique.firstOrThrow()).resolves.toEqualTypeOf<Row>();
+    expectTypeOf(unique.where({ title: 'x' }).firstOrThrow()).resolves.toEqualTypeOf<Row>();
+    expectTypeOf(unique.firstOrThrow({ title: 'x' })).resolves.toEqualTypeOf<Row>();
+    expectTypeOf(unique.published().firstOrThrow()).resolves.toEqualTypeOf<Row>();
+    expectTypeOf(plain.Post.whereUnique({ id: 1 }).firstOrThrow()).resolves.toEqualTypeOf<Row>();
+    expectTypeOf(unique.select('id', 'title').firstOrThrow()).resolves.toEqualTypeOf<{
+      id: number;
+      title: string;
+    }>();
+    expectTypeOf(unique.include('author').firstOrThrow()).toEqualTypeOf(
+      Post.where({ id: 1 }).include('author').firstOrThrow(),
+    );
+    expectTypeOf(unique.forUpdate().firstOrThrow()).resolves.toEqualTypeOf<Row>();
+    expectTypeOf(unique.with(summary).firstOrThrow()).resolves.toEqualTypeOf<{
+      id: number;
+      title: string;
+    }>();
   });
 
   test('a following where keeps the class and the single-record calls', () => {
@@ -449,6 +473,44 @@ describe('prepared', () => {
     );
   });
 
+  test('firstOrThrow after whereUnique has the type it has after where', () => {
+    expectTypeOf(unique.prepared.firstOrThrow()).toEqualTypeOf(
+      Post.where({ id: 1 }).prepared.firstOrThrow(),
+    );
+    expectTypeOf(unique.prepared.firstOrThrow().consume).returns.toEqualTypeOf<Promise<Row>>();
+    expectTypeOf(unique.prepared.firstOrThrow({ title: 'x' }).consume).returns.toEqualTypeOf<
+      Promise<Row>
+    >();
+    expectTypeOf(
+      unique.where({ title: 'x' }).prepared.firstOrThrow().consume,
+    ).returns.toEqualTypeOf<Promise<Row>>();
+    expectTypeOf(unique.select('id').prepared.firstOrThrow()).toEqualTypeOf(
+      Post.where({ id: 1 }).select('id').prepared.firstOrThrow(),
+    );
+  });
+
+  test('first and firstOrThrow keep their types on every other collection', () => {
+    const either = flag ? Post.published() : Post.recent();
+    const partial: Omit<PostCollection, 'all'> = Post;
+    expectTypeOf(Post.prepared.firstOrThrow().consume).returns.toEqualTypeOf<Promise<Row>>();
+    expectTypeOf(either.prepared.firstOrThrow().consume).returns.toEqualTypeOf<Promise<Row>>();
+    expectTypeOf(partial.prepared.firstOrThrow().consume).returns.toEqualTypeOf<Promise<Row>>();
+    expectTypeOf(scoped.preparedFirstOrThrow().consume).returns.toEqualTypeOf<Promise<Row>>();
+  });
+
+  test('first and firstOrThrow are callable without the prepared object, all and aggregate are not', () => {
+    const { first, firstOrThrow, all, aggregate } = Post.prepared;
+    expectTypeOf(first().consume).returns.toEqualTypeOf<Promise<Row | null>>();
+    expectTypeOf(firstOrThrow().consume).returns.toEqualTypeOf<Promise<Row>>();
+    // @ts-expect-error all needs the prepared object as its receiver
+    all();
+    // @ts-expect-error aggregate needs the prepared object as its receiver
+    aggregate(count);
+    const uniquePrepared = unique.prepared;
+    expectTypeOf(uniquePrepared.first().consume).returns.toEqualTypeOf<Promise<Row | null>>();
+    expectTypeOf(uniquePrepared.firstOrThrow().consume).returns.toEqualTypeOf<Promise<Row>>();
+  });
+
   test('every call keeps its type on a collection without a unique filter', () => {
     const filtered = Post.where({ id: 1 });
     expectTypeOf(Post.prepared.all().consume).returns.toEqualTypeOf<AsyncIterableResult<Row>>();
@@ -624,6 +686,22 @@ class ClassBodyPostCollection extends Collection<TestContract, 'Post'> {
     return this.whereUnique({ id }).first();
   }
 
+  firstOrThrowById(id: number) {
+    return this.whereUnique({ id }).firstOrThrow();
+  }
+
+  idOfIdOrThrow(id: number) {
+    return this.whereUnique({ id }).select('id').firstOrThrow();
+  }
+
+  withAuthorByIdOrThrow(id: number) {
+    return this.whereUnique({ id }).include('author').firstOrThrow();
+  }
+
+  preparedFirstOrThrowById(id: number) {
+    return this.whereUnique({ id }).prepared.firstOrThrow();
+  }
+
   updateById(id: number) {
     return this.whereUnique({ id }).update({ title: 'y' });
   }
@@ -681,6 +759,13 @@ describe('whereUnique on this inside a class body', () => {
   test('single-record calls keep their types', () => {
     expectTypeOf(inClass.byId(1)).toEqualTypeOf<UniquelyFiltered<ClassBodyPostCollection>>();
     expectTypeOf(inClass.firstById(1)).resolves.toEqualTypeOf<Row | null>();
+    expectTypeOf(inClass.firstOrThrowById(1)).resolves.toEqualTypeOf<Row>();
+    expectTypeOf(inClass.idOfIdOrThrow(1)).resolves.toEqualTypeOf<{ id: number }>();
+    expectTypeOf(inClass.withAuthorByIdOrThrow(1)).resolves.toExtend<{
+      id: number;
+      author: { name: string };
+    }>();
+    expectTypeOf(inClass.preparedFirstOrThrowById(1).consume).returns.toEqualTypeOf<Promise<Row>>();
     expectTypeOf(inClass.updateById(1)).resolves.toEqualTypeOf<Row | null>();
     expectTypeOf(inClass.deleteById(1)).resolves.toEqualTypeOf<Row | null>();
     expectTypeOf(inClass.idOfId(1)).resolves.toEqualTypeOf<{ id: number } | null>();

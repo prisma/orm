@@ -66,6 +66,9 @@ test('a uniquely filtered chain keeps the class and refuses many-record calls', 
   const post = await classUniqueInclude.first();
   expectTypeOf(post!.user.email).toEqualTypeOf<string>();
   expectTypeOf(uniquePrepared.first()).not.toBeAny();
+  expectTypeOf(uniquePrepared.firstOrThrow()).not.toBeAny();
+  const user = await classUnique.firstOrThrow();
+  expectTypeOf(user.email).toEqualTypeOf<string>();
   // @ts-expect-error a uniquely filtered collection has at most one record
   classUnique.all();
   // @ts-expect-error a uniquely filtered collection has at most one record

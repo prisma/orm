@@ -147,6 +147,8 @@ export async function uniquelyFilteredChains() {
   expectTypeOf(posts.byId('p1').filtered()).toEqualTypeOf<UniquelyFiltered<PostLibrary>>();
   expectTypeOf(uniqueChain).toEqualTypeOf<UniquelyFiltered<PostLibrary>>();
   expectTypeOf(await posts.firstById('p1')).toEqualTypeOf<PostRow | null>();
+  expectTypeOf(await posts.firstOrThrowById('p1')).toEqualTypeOf<PostRow>();
+  expectTypeOf(await posts.byId('p1').firstOrThrow()).toEqualTypeOf<PostRow>();
   expectTypeOf(await posts.byId('p1').update({ title: 'y' })).toEqualTypeOf<PostRow | null>();
   expectTypeOf(await posts.byId('p1').delete()).toEqualTypeOf<PostRow | null>();
   expectTypeOf<keyof CollectionRowOf<ReturnType<PostLibrary['byIdWithUser']>>>().toEqualTypeOf<
@@ -155,6 +157,9 @@ export async function uniquelyFilteredChains() {
   expectTypeOf(
     await posts.preparedById('p1').first().consume,
   ).returns.resolves.toEqualTypeOf<PostRow | null>();
+  expectTypeOf(
+    await posts.preparedById('p1').firstOrThrow().consume,
+  ).returns.resolves.toEqualTypeOf<PostRow>();
   expectTypeOf(plainUniqueChain).not.toBeAny();
   expectTypeOf<keyof CollectionRowOf<typeof plainUniqueChain>>().toEqualTypeOf<PostKey>();
   expectTypeOf(plainUniqueInclude).not.toBeAny();

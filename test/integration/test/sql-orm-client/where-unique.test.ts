@@ -78,6 +78,49 @@ describe('integration/whereUnique', () => {
   );
 
   it(
+    'firstOrThrow() returns the row the key names and rejects, as after where(), when no row has the key',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime).select('id', 'name', 'email');
+        const userRoles = createReturningUserRolesCollection(runtime).select(
+          'userId',
+          'roleId',
+          'level',
+        );
+        await seedUserRoleRows(runtime);
+
+        expect(await users.whereUnique({ id: 2 }).firstOrThrow()).toEqual({
+          id: 2,
+          name: 'Bob',
+          email: 'bob@example.com',
+        });
+        expect(
+          await userRoles.whereUnique({ userId: 1, roleId: ROLE_EDITOR }).firstOrThrow(),
+        ).toEqual({ userId: 1, roleId: ROLE_EDITOR, level: 20 });
+        expect(await users.whereUnique({ id: 1 }).where({ name: 'Alice' }).firstOrThrow()).toEqual({
+          id: 1,
+          name: 'Alice',
+          email: 'alice@example.com',
+        });
+
+        const noRows = {
+          code: 'RUNTIME.NO_ROWS',
+          message: 'Expected at least one row, but none were returned',
+        };
+        await expect(users.where({ id: 999 }).firstOrThrow()).rejects.toMatchObject(noRows);
+        await expect(users.whereUnique({ id: 999 }).firstOrThrow()).rejects.toMatchObject(noRows);
+        await expect(
+          users.whereUnique({ id: 1 }).where({ name: 'Bob' }).firstOrThrow(),
+        ).rejects.toMatchObject(noRows);
+        await expect(
+          userRoles.whereUnique({ userId: 2, roleId: ROLE_EDITOR }).firstOrThrow(),
+        ).rejects.toMatchObject(noRows);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
     'update() changes and returns only the row the key names',
     async () => {
       await withCollectionRuntime(async (runtime) => {

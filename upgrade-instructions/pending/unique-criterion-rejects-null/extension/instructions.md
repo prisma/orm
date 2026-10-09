@@ -9,7 +9,7 @@ changes:
         - '\bconflictOn\b|\.(?:connect|disconnect)\s*\(|\bUniqueConstraintCriterion\b'
   - id: prepared-all-and-aggregate-need-their-receiver
     summary: |
-      On every collection of the SQL ORM client, `prepared.all` and `prepared.aggregate` no longer compile when called without the `prepared` object as their receiver, such as after `const { all } = collection.prepared`. Call them on the `prepared` object. `prepared.first` is not affected, and nothing changes at run time.
+      On every collection of the SQL ORM client, `prepared.all` and `prepared.aggregate` no longer compile when called without the `prepared` object as their receiver, such as after `const { all } = collection.prepared`. Call them on the `prepared` object. `prepared.first` and `prepared.firstOrThrow` are not affected, and nothing changes at run time.
     detection:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
@@ -78,4 +78,4 @@ prepared.all();
 prepared.aggregate((a) => ({ posts: a.count() }));
 ```
 
-These still compile and need no change: a destructured `first`, as in `const { first } = db.orm.Post.prepared; first()`, and `prepared.all` passed as a callback without being called. What the methods do at run time is unchanged.
+These still compile and need no change: a destructured `first` or `firstOrThrow`, as in `const { first, firstOrThrow } = db.orm.Post.prepared; first(); firstOrThrow()`, and `prepared.all` passed as a callback without being called. What the methods do at run time is unchanged.
