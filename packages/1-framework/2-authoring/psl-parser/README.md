@@ -58,6 +58,8 @@ Strongly typed AST classes wrap the tree for convenient reading. See [ADR 253](.
 
 `buildSymbolTable({ documents, sources })` collects the declarations of a schema's files: namespaces, models, composite types, named types, generic blocks and their fields. It reports duplicate declarations. It does not resolve references and does not interpret blocks.
 
+Each symbol carries the members of its declaration. A model or composite type symbol has its fields and attributes; a generic block symbol has its entries and its attributes, both in source order, and a repeated entry key appears once per occurrence. Consumers read a declaration's members from its symbol, not from the symbol's syntax node.
+
 ### Binder
 
 `createBinder({ sources, symbolTable, context })` resolves names. It decides which declaration a type reference, a field reference or an entity reference denotes, and it reports the ones it cannot resolve. Every consumer asks the binder instead of searching the symbol table, so the interpreters, the attribute specifications and the language server agree on what a name means, and an unresolved name is reported once.

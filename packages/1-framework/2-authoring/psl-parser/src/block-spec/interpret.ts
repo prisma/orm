@@ -16,7 +16,7 @@ import type { BlockAttributeCtx } from '../attribute-spec/types';
 import type { Binder } from '../binder';
 import { diagnosticSource, type PslDiagnostic } from '../diagnostic';
 import { findBlockDescriptor } from '../extension-block';
-import { nodePslSpan, readResolvedAttribute } from '../resolve';
+import { nodePslSpan } from '../resolve';
 import type { PslSources } from '../source-file';
 import type { BlockSymbol, SymbolTable } from '../symbol-table';
 import { NumberLiteralExprAst } from '../syntax/ast/expressions';
@@ -94,7 +94,7 @@ function interpretStructBlock(
   const numberTexts: Record<string, string> = Object.create(null);
   const seen = new Set<string>();
 
-  for (const entry of block.node.entries()) {
+  for (const entry of block.entries) {
     const key = entry.key()?.name();
     if (key === undefined) continue;
     const span = nodePslSpan(entry.syntax, ctx.sources);
@@ -166,7 +166,7 @@ function interpretMapBlock(
   const numberTexts: Record<string, string> = Object.create(null);
   const seen = new Set<string>();
 
-  for (const entry of block.node.entries()) {
+  for (const entry of block.entries) {
     const key = entry.key()?.name();
     if (key === undefined) continue;
     const span = nodePslSpan(entry.syntax, ctx.sources);
@@ -255,14 +255,13 @@ export function interpretExtensionBlockAttributes(input: InterpretExtensionBlock
   const diagnostics: PslDiagnostic[] = [];
   const seenNames = new Set<string>();
 
-  for (const attribute of block.node.attributes()) {
-    const name = attribute.name()?.path().join('.') ?? '';
-    const span = nodePslSpan(attribute.syntax, sources);
+  for (const attribute of block.attributes) {
+    const { name, span } = attribute;
     if (!Object.hasOwn(declared, name)) {
       diagnostics.push({
         code: 'PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE',
         message: `Unknown attribute "@@${name}" in "${block.keyword}" block "${block.name}"`,
-        ...diagnosticSource(sources, attribute.syntax).at(span),
+        ...diagnosticSource(sources, attribute.node.syntax).at(span),
       });
       continue;
     }
@@ -270,7 +269,7 @@ export function interpretExtensionBlockAttributes(input: InterpretExtensionBlock
       diagnostics.push({
         code: 'PSL_INVALID_EXTENSION_BLOCK_ATTRIBUTE',
         message: `Duplicate attribute "@@${name}" in "${block.keyword}" block "${block.name}"; first occurrence wins`,
-        ...diagnosticSource(sources, attribute.syntax).at(span),
+        ...diagnosticSource(sources, attribute.node.syntax).at(span),
       });
       continue;
     }
@@ -280,7 +279,7 @@ export function interpretExtensionBlockAttributes(input: InterpretExtensionBlock
       'framework core cannot name AttributeSpec, so block-attribute factories transit the descriptor erased as unknown; this is the single point that restores the factory type the descriptor surface documents'
     >(declared[name]);
     const spec = factory(blockSpecContext({ symbols, dataTypes }));
-    const result = interpretAttribute(attribute, spec, {
+    const result = interpretAttribute(attribute.node, spec, {
       sources,
       symbols,
       binder,
@@ -289,7 +288,7 @@ export function interpretExtensionBlockAttributes(input: InterpretExtensionBlock
     if (result.ok) {
       const argSpans: Record<string, PslSpan> = Object.create(null);
       let positionalSlot = 0;
-      for (const arg of readResolvedAttribute(attribute, sources).args) {
+      for (const arg of attribute.args) {
         const key = arg.name ?? spec.positional[positionalSlot++]?.key;
         if (key !== undefined) argSpans[key] = arg.span;
       }

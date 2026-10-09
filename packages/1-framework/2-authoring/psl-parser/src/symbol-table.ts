@@ -14,6 +14,7 @@ import {
   type DocumentAst,
   type FieldDeclarationAst,
   GenericBlockDeclarationAst,
+  type KeyValuePairAst,
   ModelDeclarationAst,
   type NamedTypeDeclarationAst,
   NamespaceDeclarationAst,
@@ -78,6 +79,8 @@ export interface BlockSymbol {
   readonly keyword: string;
   readonly node: GenericBlockDeclarationAst;
   readonly span: PslSpan;
+  readonly entries: readonly KeyValuePairAst[];
+  readonly attributes: readonly ResolvedAttribute<ModelAttributeAst>[];
 }
 
 export interface ResolvedNamedTypeBinding {
@@ -261,6 +264,8 @@ function buildBlock(
     keyword: node.keyword()?.text ?? '',
     node,
     span: nodePslSpan(node.syntax, sources),
+    entries: Array.from(node.entries()),
+    attributes: readResolvedAttributes(node.attributes(), sources),
   };
 }
 
