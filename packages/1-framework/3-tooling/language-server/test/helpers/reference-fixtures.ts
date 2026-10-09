@@ -2,8 +2,10 @@ import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-c
 import {
   type AssembledAuthoringContributions,
   assembleAuthoringContributions,
+  type ControlMutationDefaults,
 } from '@internal/framework-components/control';
 import {
+  type Binder,
   buildSymbolTable,
   entityRef,
   fieldAttribute,
@@ -11,13 +13,14 @@ import {
   list,
   modelAttribute,
   referencedFieldRef,
+  type SymbolTable,
   str,
   structBlock,
 } from '@internal/psl-parser';
-import { resolveFormatOptions } from '@internal/psl-parser/format';
-import { type PslSources, parse } from '@internal/psl-parser/syntax';
+import { type ResolvedFormatOptions, resolveFormatOptions } from '@internal/psl-parser/format';
+import { type DocumentAst, parse, type SourceFile } from '@internal/psl-parser/syntax';
+import type { Position } from 'vscode-languageserver';
 import type { ReferencesDocument } from '../../src/references';
-import type { ProvideRenameInput } from '../../src/rename';
 import { testBinder } from './binder';
 
 export type Files = Readonly<Record<string, string>>;
@@ -248,7 +251,18 @@ function project(files: Files, stack: FixtureStack) {
       sourceFile: file.sources.sourceFileFor(file.document.syntax),
     }),
   );
-  return { documents, binder, symbolTable, sources };
+  return { documents, binder, symbolTable };
+}
+
+export interface FixtureCursorInput extends FixtureStack {
+  readonly document: DocumentAst;
+  readonly sourceFile: SourceFile;
+  readonly position: Position;
+  readonly documents: readonly ReferencesDocument[];
+  readonly binder: Binder;
+  readonly symbolTable: SymbolTable;
+  readonly controlMutationDefaults: ControlMutationDefaults;
+  readonly formatOptions: ResolvedFormatOptions;
 }
 
 export function cursorInput(
@@ -256,8 +270,8 @@ export function cursorInput(
   name: string,
   marked: string,
   stack: FixtureStack = fixtureStack,
-): Omit<ProvideRenameInput, 'newName'> & { readonly sources: PslSources } {
-  const { documents, binder, symbolTable, sources } = project(files, stack);
+): FixtureCursorInput {
+  const { documents, binder, symbolTable } = project(files, stack);
   const current = documents.find((document) => document.sourceFile.filename === name);
   if (current === undefined) throw new Error(`no file ${name}`);
   const needle = marked.replace('|', '');
@@ -273,7 +287,6 @@ export function cursorInput(
     documents,
     binder,
     symbolTable,
-    sources,
     ...stack,
     controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
     formatOptions: resolveFormatOptions(undefined),

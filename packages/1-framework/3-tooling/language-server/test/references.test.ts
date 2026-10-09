@@ -3,6 +3,13 @@ import type { Location } from 'vscode-languageserver';
 import { provideReferences, type ReferencesDocument } from '../src/references';
 import { cursorInput, type Files, glance, kinds, sameName } from './helpers/reference-fixtures';
 
+const labelled: Files = {
+  'label.prisma': ['label Sticker {', '}', ''].join('\n'),
+  'item.prisma': ['model Item {', '  id   Int @id', '  kind ref.label(Sticker)', '}', ''].join(
+    '\n',
+  ),
+};
+
 function locationsAt(
   files: Files,
   name: string,
@@ -224,6 +231,19 @@ describe('provideReferences — other symbol kinds', () => {
     ]);
     expect(referencesAt(kinds, 'group.prisma', '@@guardedBy(Read|Own)')).toEqual([
       'group.prisma: @@guardedBy(<ReadOwn>)',
+    ]);
+  });
+
+  it('lists a type constructor argument as a usage of the block it names', () => {
+    expect(referencesAt(labelled, 'label.prisma', 'label Stic|ker')).toEqual([
+      'item.prisma: kind ref.label(<Sticker>)',
+    ]);
+  });
+
+  it('lists the declaration and the usage from a type constructor argument', () => {
+    expect(referencesAt(labelled, 'item.prisma', 'ref.label(Stic|ker)', true)).toEqual([
+      'label.prisma: label <Sticker> {',
+      'item.prisma: kind ref.label(<Sticker>)',
     ]);
   });
 
