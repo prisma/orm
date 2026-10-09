@@ -1,0 +1,38 @@
+import type { TsQuery } from '@prisma/orm-postgres/runtime';
+import { expectTypeOf, test } from 'vitest';
+import { db } from '../src/prisma/db';
+
+declare const q: TsQuery;
+
+test('the existing call types declared scopes from the facade and from an extension package', async () => {
+  expectTypeOf(db.orm.public.Post).not.toBeAny();
+  expectTypeOf(db.orm.public.Post.scopes).not.toBeAny();
+  expectTypeOf<keyof typeof db.orm.public.Post.scopes>().toEqualTypeOf<
+    'titleSearch' | 'titlePrefix'
+  >();
+  expectTypeOf(
+    db.orm.public.Post.scopes.titleSearch.expression,
+  ).toEqualTypeOf<'to_tsvector(\'english\', "title")'>();
+  expectTypeOf(
+    db.orm.public.Post.scopes.titlePrefix.physicalName,
+  ).toEqualTypeOf<'post_title_search_724b05e5'>();
+  // @ts-expect-error titleStartsWith belongs to the other contribution
+  db.orm.public.Post.scopes.titleSearch.titleStartsWith('a');
+  const chained = db.orm.public.Post.scopes.titleSearch
+    .fulltext(q)
+    .scopes.titlePrefix.titleStartsWith('a');
+  expectTypeOf(chained).not.toBeAny();
+  const rows = await chained.select('id', 'title').limit(3).all();
+  expectTypeOf(rows).toEqualTypeOf<{ id: string; title: string }[]>();
+  db.orm.public.User.where({ id: 'x' }).include('posts', (posts) => {
+    expectTypeOf(posts).not.toBeAny();
+    return posts.scopes.titleSearch.fulltext(q).include('tags').limit(3);
+  });
+  expectTypeOf(db.orm.public.User).not.toBeAny();
+  // biome-ignore lint/complexity/noBannedTypes: the empty object type is the assertion
+  expectTypeOf(db.orm.public.User.scopes).toEqualTypeOf<{}>();
+  // @ts-expect-error missing is not a scope
+  db.orm.public.Post.scopes.missing;
+  // @ts-expect-error the index name is not a scope name
+  db.orm.public.Post.scopes.post_title_search;
+});

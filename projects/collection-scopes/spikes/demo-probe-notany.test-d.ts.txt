@@ -1,0 +1,9 @@
+import { expectTypeOf, test } from 'vitest';
+import { db } from '../src/prisma/db';
+
+test('collections are typed', () => {
+  expectTypeOf(db.orm.public.Post).not.toBeAny();
+  expectTypeOf(db.orm.public.Post.scopes).not.toBeAny();
+  // @ts-expect-error not a member
+  db.orm.public.Post.definitelyNotAMember;
+});

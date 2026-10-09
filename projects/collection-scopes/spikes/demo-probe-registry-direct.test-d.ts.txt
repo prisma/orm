@@ -1,0 +1,29 @@
+import type { TsQuery } from '@prisma/orm-postgres/runtime';
+import { expectTypeOf, test } from 'vitest';
+import { db } from '../src/prisma/db';
+
+declare const q: TsQuery;
+
+test('the existing call types scopes from the facade and from an extension package', async () => {
+  expectTypeOf(db.orm.public.Post.scopes).not.toBeAny();
+  expectTypeOf<keyof typeof db.orm.public.Post.scopes>().toEqualTypeOf<'post_title_search'>();
+  expectTypeOf(
+    db.orm.public.Post.post_title_search.expression,
+  ).toEqualTypeOf<'to_tsvector(\'english\', "title")'>();
+  expectTypeOf(
+    db.orm.public.Post.post_title_search.physicalName,
+  ).toEqualTypeOf<'post_title_search_724b05e5'>();
+  const rows = await db.orm.public.Post.post_title_search
+    .fulltext(q)
+    .post_title_search.titleStartsWith('a')
+    .select('id', 'title')
+    .limit(3)
+    .all();
+  expectTypeOf(rows).toEqualTypeOf<{ id: string; title: string }[]>();
+  db.orm.public.User.where({ id: 'x' }).include('posts', (posts) =>
+    posts.post_title_search.fulltext(q).include('tags').limit(3),
+  );
+  expectTypeOf<keyof typeof db.orm.public.User.scopes>().toBeNever();
+  // @ts-expect-error missing is not a scope
+  db.orm.public.Post.missing;
+});

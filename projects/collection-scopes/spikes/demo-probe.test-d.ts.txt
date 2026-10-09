@@ -1,0 +1,55 @@
+import { defineCollectionScopes, type ScopeOperationsShape } from '@prisma/orm-postgres/orm-client';
+import postgres, { type PostgresClient } from '@prisma/orm-postgres/runtime';
+import { expectTypeOf, test } from 'vitest';
+import type { Contract } from '../src/prisma/contract.d';
+import contractJson from '../src/prisma/contract.json' with { type: 'json' };
+
+interface GinOperations<Index, Coll> {
+  readonly expression: Index extends { readonly expression: infer E } ? E : never;
+  fulltext(query: { readonly kind: 'tsquery' }): Coll;
+}
+
+interface GinScope extends ScopeOperationsShape {
+  readonly operations: GinOperations<this['index'], this['collection']>;
+}
+
+const ginScopes = defineCollectionScopes<
+  { readonly type: 'gin'; readonly expression: string },
+  GinScope
+>({
+  matches: (index) => index['type'] === 'gin',
+  operations: () => ({}),
+});
+
+declare const q: { readonly kind: 'tsquery' };
+declare const db: PostgresClient<Contract, readonly [typeof ginScopes]>;
+
+test('scopes come from the real contract index', async () => {
+  expectTypeOf<keyof typeof db.orm.public.Post.scopes>().toEqualTypeOf<'post_title_search'>();
+  expectTypeOf(
+    db.orm.public.Post.scopes.post_title_search.expression,
+  ).toEqualTypeOf<'to_tsvector(\'english\', "title")'>();
+  const rows = await db.orm.public.Post.post_title_search
+    .fulltext(q)
+    .select('id', 'title')
+    .limit(3)
+    .all();
+  expectTypeOf(rows).toEqualTypeOf<{ id: string; title: string }[]>();
+  db.orm.public.User.where({ id: 'x' }).include('posts', (posts) =>
+    posts.post_title_search.fulltext(q).include('tags').limit(3),
+  );
+  expectTypeOf<keyof typeof db.orm.public.User.scopes>().toBeNever();
+});
+
+test('an explicit contract type argument stops the scopes from being inferred', () => {
+  postgres<Contract>({
+    contractJson,
+    // @ts-expect-error Scopes falls back to its default because TContract was given explicitly
+    scopes: [ginScopes],
+  });
+  const explicit = postgres<Contract, readonly [typeof ginScopes]>({
+    contractJson,
+    scopes: [ginScopes],
+  });
+  explicit.orm.public.Post.post_title_search.fulltext(q);
+});

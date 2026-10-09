@@ -1,0 +1,24 @@
+import type { ScopeOperationsShape } from '@prisma/orm-postgres/orm-client';
+import { expectTypeOf, test } from 'vitest';
+import { db } from '../src/prisma/db';
+
+interface LocalOperations<Coll> {
+  local(): Coll;
+}
+
+interface LocalScope extends ScopeOperationsShape {
+  readonly match: { readonly type: 'gin' };
+  readonly operations: LocalOperations<this['collection']>;
+}
+
+declare module '@prisma/orm-postgres/orm-client' {
+  interface CollectionScopeRegistry {
+    readonly 'demo/local': LocalScope;
+  }
+}
+
+test('an augmentation that names the facade re-export reaches the registry', () => {
+  expectTypeOf(db.orm.public.Post.scopes.post_title_search.local).toBeFunction();
+  expectTypeOf(db.orm.public.Post.scopes.post_title_search.fulltext).toBeFunction();
+  db.orm.public.Post.scopes.post_title_search.local().limit(1);
+});
