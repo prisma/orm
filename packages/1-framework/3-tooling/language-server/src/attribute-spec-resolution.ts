@@ -15,12 +15,16 @@ import {
   blockSpecFactoryOf,
   EMPTY_DATA_TYPES,
   findBlockDescriptor,
+  type MixinSymbol,
+  type ModelSymbol,
+  type PslSymbol,
   type SymbolTable,
   typeReferenceNode,
 } from '@internal/psl-parser';
 import type {
   FieldDeclarationAst,
   GenericBlockDeclarationAst,
+  MixinDeclarationAst,
   ModelDeclarationAst,
 } from '@internal/psl-parser/syntax';
 import { blindCast } from '@internal/utils/casts';
@@ -38,7 +42,7 @@ export interface AttributeSpecSource {
 export interface FieldAttributeOwner {
   readonly ownerKind: 'field';
   readonly field: FieldDeclarationAst;
-  readonly model: ModelDeclarationAst;
+  readonly model: ModelDeclarationAst | MixinDeclarationAst;
 }
 
 export interface ModelAttributeOwner {
@@ -137,8 +141,8 @@ export function attributeSpecResolver(
     }
     case 'field': {
       if (source.authoringContributions === undefined) return () => undefined;
-      const model = source.binder.declaredSymbol(context.model.syntax);
-      if (model?.kind !== 'model' || source.controlMutationDefaults === undefined) {
+      const model = fieldSpecModel(source.binder.declaredSymbol(context.model.syntax));
+      if (model === undefined || source.controlMutationDefaults === undefined) {
         return () => undefined;
       }
       const field = source.binder.declaredSymbol(context.field.syntax);
@@ -155,4 +159,9 @@ export function attributeSpecResolver(
       return (name) => specs.field[name]?.({ ...specContext, field, typeResolution });
     }
   }
+}
+
+function fieldSpecModel(symbol: PslSymbol | undefined): ModelSymbol | MixinSymbol | undefined {
+  if (symbol?.kind === 'model') return symbol;
+  return symbol?.kind === 'mixin' && symbol.keyword === 'model' ? symbol : undefined;
 }

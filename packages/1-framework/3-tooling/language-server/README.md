@@ -59,9 +59,9 @@ The client controls tooltip presentation and the shortcut for an explicit signat
 
 ## Hover
 
-In an open, configured PSL input, clients can request hover over a model, composite type, field, named type, or generic block, at either its declaration or a reference to it. The tooltip shows the declaration line — `model User`, a field's full declaration, a named type's binding, or a block's keyword and name — followed by its `///` documentation comment, when one is present. Hovering a namespace, at the name of a `namespace` block or at a qualifier such as `auth` in `auth.User`, shows `namespace auth`.
+In an open, configured PSL input, clients can request hover over a model, composite type, field, named type, generic block, or mixin, at either its declaration or a reference to it. The tooltip shows the declaration line — `model User`, a field's full declaration, a named type's binding, a block's keyword and name, or `model mixin Timestamps` for a mixin — followed by its `///` documentation comment, when one is present. A reference to a mixin is the name in an inclusion such as `+Timestamps` or `+auth.Timestamps`. Hovering a namespace, at the name of a `namespace` block or at a qualifier such as `auth` in `auth.User`, shows `namespace auth`.
 
-Hovering a model, field, or block attribute shows the same signature label signature help renders for it, followed by the attribute's documentation; field attributes take the `@` prefix, model and block attributes take `@@`. Hovering a contributed type (a scalar constructor such as a database-specific type) shows its dotted path with its argument types, followed by the contributing extension's documentation for it. Hovering a generic block's keyword (`policy`, `view`, and similar) shows the extension's documentation for that kind of block, with no declaration line.
+Hovering a model, field, or block attribute shows the same signature label signature help renders for it, followed by the attribute's documentation; field attributes take the `@` prefix, model and block attributes take `@@`. Hovering a contributed type (a scalar constructor such as a database-specific type) shows its dotted path with its argument types, followed by the contributing extension's documentation for it. Hovering a generic block's keyword (`policy`, `view`, and similar) shows the extension's documentation for that kind of block, with no declaration line; the keyword of a mixin for such a block, as in `policy mixin Shared`, shows the same.
 
 Hovering a named argument's key — in an attribute call, a function call, or a struct-block entry — shows that key with its type, e.g. `fields: field name`, followed by the parameter's documentation. Hovering a function call's name, such as `autoincrement()` or `uuid((4 | 7)?)`, shows its signature label followed by the function's documentation. Hovering a fixed-identifier constant, such as `Cascade` in a referential-action argument, shows the constant's name followed by its documentation.
 
@@ -69,7 +69,7 @@ A declaration, attribute, contributed type, parameter, function, or constant wit
 
 ## Go to definition
 
-In an open, configured PSL input, clients can jump from a name to the declaration it refers to. A type reference leads to the model, composite type, named type, or generic block it names. A field or entity reference in an attribute argument or a generic block's value leads to that field or declaration. The qualifier of a qualified name, such as `auth` in `auth.User`, leads to every `namespace auth { … }` block, including those in other files of the project.
+In an open, configured PSL input, clients can jump from a name to the declaration it refers to. A type reference leads to the model, composite type, named type, or generic block it names. The name in an inclusion, such as `Timestamps` in `+auth.Timestamps`, leads to the mixin. A field or entity reference in an attribute argument or a generic block's value leads to that field or declaration. The qualifier of a qualified name, such as `auth` in `auth.User`, leads to every `namespace auth { … }` block, including those in other files of the project.
 
 A declaration's own name leads to that declaration: `User` in `model User` leads to the model itself, and the name of a `namespace` block leads to every block of that namespace. Editors that run find references when a definition is the position the cursor is already on, such as VS Code, show the usages from there.
 
@@ -77,7 +77,7 @@ A name with no declaration in the schema has no definition: a contributed type o
 
 ## Find references
 
-In an open, configured PSL input, clients can request the usages of a model, composite type, named type, generic block (including an enum), field, or namespace. The cursor can be on the declaration name or on any reference; both return the same list. Usages come from every schema file of the project, including files that are not open.
+In an open, configured PSL input, clients can request the usages of a model, composite type, named type, generic block (including an enum), mixin, field, or namespace. The usages of a mixin are its inclusions. The usages of a field declared in a mixin include the attributes of every block that includes the mixin and names the field. The cursor can be on the declaration name or on any reference; both return the same list. Usages come from every schema file of the project, including files that are not open.
 
 A usage is a name that resolves to the same declaration, so the result agrees with go-to-definition: two fields named `id` on different models have separate usage lists, and a longer name, a comment or a string that contains the name is not a usage. Each result is the range of one identifier: `User` alone in `auth.User` for the model, `auth` alone for the namespace.
 

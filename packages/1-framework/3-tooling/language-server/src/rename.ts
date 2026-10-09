@@ -11,6 +11,7 @@ import {
 import type { ResolvedFormatOptions } from '@internal/psl-parser/format';
 import {
   type AstNode,
+  MixinDeclarationAst,
   ModelDeclarationAst,
   type SourceFile,
   type SyntaxNode,
@@ -118,7 +119,7 @@ function modelTakesMap(model: ModelSymbol, source: AttributeSpecSource): boolean
 
 function fieldTakesMap(field: FieldSymbol, source: AttributeSpecSource): boolean {
   const owner = field.node.syntax.parent;
-  const model = owner === undefined ? undefined : ModelDeclarationAst.cast(owner);
+  const model = owner === undefined ? undefined : fieldOwnerWithMap(owner);
   if (model === undefined) return false;
   if (hasAttribute(field.attributes, 'map')) return false;
   const type = typeReferenceNode(field);
@@ -126,6 +127,15 @@ function fieldTakesMap(field: FieldSymbol, source: AttributeSpecSource): boolean
   if (typeKind === 'model' || typeKind === 'crossSpace') return false;
   const resolve = attributeSpecResolver({ ownerKind: 'field', field: field.node, model }, source);
   return resolve('map') !== undefined;
+}
+
+function fieldOwnerWithMap(
+  owner: SyntaxNode,
+): ModelDeclarationAst | MixinDeclarationAst | undefined {
+  const model = ModelDeclarationAst.cast(owner);
+  if (model !== undefined) return model;
+  const mixin = MixinDeclarationAst.cast(owner);
+  return mixin?.keyword()?.text === 'model' ? mixin : undefined;
 }
 
 function blockTakesMap(block: BlockSymbol, source: AttributeSpecSource): boolean {

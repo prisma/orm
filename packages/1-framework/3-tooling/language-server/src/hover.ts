@@ -11,6 +11,7 @@ import type {
   ContributedTypeSymbol,
   FieldSymbol,
   FunctionSymbol,
+  MixinSymbol,
   ModelSymbol,
   NamedTypeSymbol,
   NamespaceSymbol,
@@ -19,6 +20,7 @@ import type {
 import { findBlockDescriptor } from '@internal/psl-parser';
 import {
   GenericBlockDeclarationAst,
+  MixinDeclarationAst,
   type SyntaxNode,
   type SyntaxToken,
 } from '@internal/psl-parser/syntax';
@@ -41,7 +43,8 @@ type HoverEntitySymbol =
   | CompositeTypeSymbol
   | FieldSymbol
   | NamedTypeSymbol
-  | BlockSymbol;
+  | BlockSymbol
+  | MixinSymbol;
 
 type HoverResult =
   | { readonly kind: 'entity'; readonly symbol: HoverEntitySymbol }
@@ -84,6 +87,7 @@ function resolveHoverResult(binder: Binder, token: SyntaxToken): HoverResult | u
     case 'compositeType':
     case 'namedType':
     case 'block':
+    case 'mixin':
     case 'field':
       return { kind: 'entity', symbol: resolution.symbol };
     case 'namespace':
@@ -184,13 +188,15 @@ function blockKeywordDocumentationAt(
   token: SyntaxToken,
   pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace,
 ): string | undefined {
-  const declaration = GenericBlockDeclarationAst.cast(token.parent);
+  const declaration =
+    GenericBlockDeclarationAst.cast(token.parent) ?? MixinDeclarationAst.cast(token.parent);
   if (declaration === undefined || declaration.keyword()?.offset !== token.offset) return undefined;
   return findBlockDescriptor(pslBlockDescriptors, token.text)?.documentation;
 }
 
 function renderDeclarationLine(entity: HoverEntitySymbol): string {
   if (entity.kind === 'block') return `${entity.keyword} ${entity.name}`;
+  if (entity.kind === 'mixin') return `${entity.keyword} mixin ${entity.name}`;
   if (entity.kind === 'field' || entity.kind === 'namedType') {
     return collapseWhitespace(printSyntaxWithoutComments(entity.node.syntax));
   }
