@@ -49,6 +49,7 @@ import {
   documentScope,
   isNamespaceLike,
   lookupMember,
+  lookupMixinReference,
   namedTypeBaseScope,
   namespaceScope,
   type Scope,
@@ -59,6 +60,7 @@ import type {
   BlockSymbol,
   CompositeTypeSymbol,
   FieldSymbol,
+  MixinSymbol,
   ModelSymbol,
   NamedTypeSymbol,
   NamespaceSymbol,
@@ -77,6 +79,7 @@ import {
 } from './syntax/ast/expressions';
 import { IdentifierAst } from './syntax/ast/identifier';
 import type { QualifiedNameAst } from './syntax/ast/qualified-name';
+import { printSyntax } from './syntax/ast-helpers';
 import type { SyntaxNode } from './syntax/red';
 import { readWrittenScalar } from './written-scalar';
 
@@ -116,6 +119,7 @@ export type PslSymbol =
   | NamedTypeSymbol
   | BlockSymbol
   | NamespaceSymbol
+  | MixinSymbol
   | FieldSymbol;
 
 export type Resolution =
@@ -328,6 +332,14 @@ function bind(options: BindingInputs): BinderResult {
     const outcome = resolveTypeReference(name, baseScope, references);
     if (name === undefined || outcome === undefined) continue;
     references.set(name.syntax, outcome.resolution);
+    if (outcome.resolution.kind === 'mixin' && outcome.message !== undefined) {
+      diagnostics.push({
+        code: PSL_UNRESOLVED_REFERENCE,
+        message: outcome.message,
+        data: { reference: 'type', name: outcome.name, constructorCall: symbol.isConstructor },
+        ...diagnosticSource(sources, name.syntax).at(),
+      });
+    }
     bindEntityConstructorArgument(symbol, outcome.resolution, {
       scope: baseScope,
       sources,
@@ -339,6 +351,11 @@ function bind(options: BindingInputs): BinderResult {
     declarations.set(symbol.node.syntax, symbol);
     const declaredName = symbol.node.name()?.syntax;
     if (declaredName !== undefined) references.set(declaredName, { kind: 'block', symbol });
+  }
+  for (const symbol of Object.values(symbolTable.topLevel.mixins)) {
+    declarations.set(symbol.node.syntax, symbol);
+    const declaredName = symbol.node.name()?.syntax;
+    if (declaredName !== undefined) references.set(declaredName, { kind: 'mixin', symbol });
   }
   for (const namespace of Object.values(symbolTable.topLevel.namespaces)) {
     const scope = namespaceScope(namespace, document);
@@ -357,6 +374,17 @@ function bind(options: BindingInputs): BinderResult {
         references.set(declaredName, { kind: 'block', symbol, namespace });
       }
     }
+    for (const symbol of Object.values(namespace.mixins)) {
+      declarations.set(symbol.node.syntax, symbol);
+      const declaredName = symbol.node.name()?.syntax;
+      if (declaredName !== undefined) {
+        references.set(declaredName, { kind: 'mixin', symbol, namespace });
+      }
+    }
+  }
+  bindInclusions(symbolTable.topLevel, undefined, references);
+  for (const namespace of Object.values(symbolTable.topLevel.namespaces)) {
+    bindInclusions(symbolTable.topLevel, namespace, references);
   }
 
   // Attributes are parsed in a second walk once every field type is bound.
@@ -458,6 +486,44 @@ function bind(options: BindingInputs): BinderResult {
   }
 
   return { binder, diagnostics };
+}
+
+function bindInclusions(
+  topLevel: SymbolTable['topLevel'],
+  namespace: NamespaceSymbol | undefined,
+  references: ResolutionSink,
+): void {
+  const records = namespace ?? topLevel;
+  const holders = [
+    ...Object.values(records.models),
+    ...Object.values(records.compositeTypes),
+    ...Object.values(records.blocks),
+    ...Object.values(records.mixins),
+  ];
+  for (const holder of holders) {
+    for (const inclusion of holder.node.inclusions()) {
+      const reference = inclusion.name();
+      const name = reference?.identifier()?.name();
+      if (reference === undefined || name === undefined || reference.isOverQualified()) continue;
+      const qualifier = reference.namespace();
+      const namespaceId = qualifier?.name();
+      const qualifierSymbol =
+        namespaceId === undefined ? undefined : topLevel.namespaces[namespaceId];
+      if (qualifier !== undefined && qualifierSymbol !== undefined) {
+        references.set(qualifier.syntax, { kind: 'namespace', symbol: qualifierSymbol });
+      }
+      const resolution =
+        reference.space() === undefined
+          ? lookupMixinReference(topLevel, namespace, { namespaceId, name })
+          : undefined;
+      references.set(
+        reference.syntax,
+        resolution?.kind === 'mixin'
+          ? resolution
+          : { kind: 'unresolved', name: printSyntax(reference.syntax) },
+      );
+    }
+  }
 }
 
 interface ReferenceContext {
@@ -970,11 +1036,16 @@ function resolveTypeReference(
       name: found.qualifier,
     };
   }
-  if (found.kind === 'namespace' || found.kind === 'contributedNamespace') {
+  if (
+    found.kind === 'namespace' ||
+    found.kind === 'contributedNamespace' ||
+    found.kind === 'mixin'
+  ) {
     const written = namespaceId === undefined ? name : `${namespaceId}.${name}`;
+    const kind = found.kind === 'mixin' ? 'mixin' : 'namespace';
     return {
       resolution: found,
-      message: `"${written}" is a namespace; a type reference must name a model, composite type, enum, or named type`,
+      message: `"${written}" is a ${kind}; a type reference must name a model, composite type, enum, or named type`,
       name: written,
     };
   }

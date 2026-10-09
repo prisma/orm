@@ -535,6 +535,7 @@ export function resolveFieldTypeDescriptor(
     case 'unresolved':
     case 'namespace':
     case 'contributedNamespace':
+    case 'mixin':
       return NOT_RESOLVED;
     case 'contributedType': {
       const { descriptor, path } = resolution.symbol;

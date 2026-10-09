@@ -38,7 +38,7 @@ export function scopeCompletionItems(
   for (const [name, resolution] of entries) {
     if (selection !== undefined) {
       if (!offersEntity(resolution, selection)) continue;
-    } else if (resolution.kind === 'block') {
+    } else if (resolution.kind === 'block' || resolution.kind === 'mixin') {
       continue;
     }
     const item: CompletionItem = {
