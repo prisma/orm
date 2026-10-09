@@ -55,8 +55,6 @@ const expectedRefusals: ReadonlyMap<string, ExpectedRefusal> = new Map([
   ['ignore', storageWithNoModel],
   ['ignored-field-defaults', storageWithNoModel],
   ['ignored-field-in-index', storageWithNoModel],
-  ['ignored-field-in-references', storageWithNoModel],
-  ['ignored-field-in-relation', storageWithNoModel],
   ['ignored-relation-back-relations', storageWithNoModel],
   ['ignored-relation-field', storageWithNoModel],
   [

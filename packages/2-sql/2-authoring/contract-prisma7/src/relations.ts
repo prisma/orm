@@ -32,7 +32,13 @@ import {
   prisma7JunctionPrimaryKeyName,
   statedConstraintName,
 } from './constraint-names';
-import { andList, fieldList, type Prisma7DiagnosticCode, prisma7Diagnostic } from './diagnostics';
+import {
+  andList,
+  fieldList,
+  ignoredFieldJoined,
+  type Prisma7DiagnosticCode,
+  prisma7Diagnostic,
+} from './diagnostics';
 import { prisma7ConstraintName } from './indexes';
 import type { Prisma7TargetBinding } from './target-binding';
 
@@ -196,21 +202,6 @@ export function parseRelationAttribute(
 
 function storageColumn(model: RelationModel, fieldName: string): ColumnNode | undefined {
   return model.columns.get(fieldName) ?? model.ignoredColumns.get(fieldName);
-}
-
-/**
- * A relation field with a foreign key that only the table keeps: the field is `@ignore`, or its `fields:` or `references:` name an `@ignore` field, which the domain does not have.
- */
-function keepsOnlyForeignKey(
-  model: RelationModel,
-  relationField: RelationField,
-  target: RelationModel,
-): boolean {
-  return (
-    model.ignoredRelationFields.includes(relationField) ||
-    (relationField.attribute?.fields?.some((name) => model.ignoredFields.has(name)) ?? false) ||
-    (relationField.attribute?.references?.some((name) => target.ignoredFields.has(name)) ?? false)
-  );
 }
 
 function columnNames(
@@ -423,6 +414,30 @@ export function lowerRelations(
       if (isFkSide(relationField)) {
         const attribute = relationField.attribute;
         if (attribute === undefined || attribute.fields === undefined) continue;
+        const ignoredRelation = model.ignoredRelationFields.includes(relationField);
+        const joinedIgnored = ignoredRelation
+          ? []
+          : [
+              { owner: model, names: attribute.fields },
+              { owner: target, names: attribute.references ?? [] },
+            ].flatMap(({ owner, names }) => {
+              const ignored = names.filter((name) => owner.ignoredFields.has(name));
+              return ignored.length === 0
+                ? []
+                : [
+                    ignoredFieldJoined({
+                      modelName: owner.modelName,
+                      fieldNames: ignored,
+                      relationField: `${model.modelName}.${field.name}`,
+                      sourceId: model.sourceId,
+                      span: attribute.span,
+                    }),
+                  ];
+            });
+        if (joinedIgnored.length > 0) {
+          rejectFkSide(model, relationField, ...joinedIgnored);
+          continue;
+        }
         if (attribute.references === undefined) {
           rejectFkSide(
             model,
@@ -525,7 +540,7 @@ export function lowerRelations(
           onUpdate,
           index: false,
         });
-        if (keepsOnlyForeignKey(model, relationField, target)) continue;
+        if (ignoredRelation) continue;
         fkRelationMetadata.push({
           declaringModelName: model.modelName,
           declaringFieldName: field.name,
@@ -546,13 +561,6 @@ export function lowerRelations(
       if (
         target.ignoredRelationFields.some(
           (other) => other.targetModelName === model.modelName && sameName(other, relationField),
-        ) ||
-        target.relationFields.some(
-          (other) =>
-            other.targetModelName === model.modelName &&
-            isFkSide(other) &&
-            sameName(other, relationField) &&
-            keepsOnlyForeignKey(target, other, model),
         )
       ) {
         continue;

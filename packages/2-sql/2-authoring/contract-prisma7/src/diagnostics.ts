@@ -63,3 +63,22 @@ export function ignoredFieldReferenced(input: {
     input.span,
   );
 }
+
+/** A relation that is not `@ignore` joins on `@ignore` fields: Prisma 8 relations join on fields, and the domain has no ignored field. */
+export function ignoredFieldJoined(input: {
+  readonly modelName: string;
+  readonly fieldNames: readonly string[];
+  readonly relationField: string;
+  readonly sourceId: string;
+  readonly span: PslSpan;
+}): ContractSourceDiagnostic {
+  const fields = fieldList(input.modelName, input.fieldNames);
+  const one = input.fieldNames.length === 1;
+  const relation = `relation field "${input.relationField}"`;
+  return prisma7Diagnostic(
+    'PSL.PRISMA7_IGNORED_FIELD_REFERENCED',
+    `${one ? 'Field' : 'Fields'} ${fields} ${one ? 'is' : 'are'} marked @ignore, but ${relation} joins on ${one ? 'it' : 'them'}, and Prisma 8 relations join on fields. Remove @ignore from ${fields}: Prisma 7's next migration is then empty, and ${one ? 'the field appears' : 'the fields appear'} in the Prisma 7 client again. Or mark ${relation} @ignore as well: Prisma 7's next migration is then empty, the relation field disappears from the Prisma 7 client, and Prisma 8 keeps its foreign key while leaving the relation out of the contract's models.`,
+    input.sourceId,
+    input.span,
+  );
+}

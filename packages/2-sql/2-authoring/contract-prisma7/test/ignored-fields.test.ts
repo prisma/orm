@@ -50,17 +50,17 @@ describe('an @ignore scalar field', () => {
     ]);
   });
 
-  it('keeps the foreign key of a relation whose fields name it, and leaves the relation out of the domain', async () => {
-    const table = await loadFixtureTable('ignored-field-in-relation', 'Post');
-    const models = await domainModels('ignored-field-in-relation');
+  it('is refused when a relation that is not @ignore joins on it', async () => {
+    const codes = async (caseName: string) => {
+      const result = await loadFixtureSchema(caseName);
+      return result.ok ? [] : result.failure.diagnostics.map((diagnostic) => diagnostic.code);
+    };
     expect({
-      foreignKeys: table.foreignKeys.map(sourceColumns),
-      postRelations: Object.keys(models['Post']?.relations ?? {}),
-      userRelations: Object.keys(models['User']?.relations ?? {}),
+      fields: await codes('ignored-field-in-relation'),
+      references: await codes('ignored-field-in-references'),
     }).toEqual({
-      foreignKeys: [['authorId']],
-      postRelations: [],
-      userRelations: [],
+      fields: ['PSL.PRISMA7_IGNORED_FIELD_REFERENCED'],
+      references: ['PSL.PRISMA7_IGNORED_FIELD_REFERENCED'],
     });
   });
 });
