@@ -15,8 +15,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { POLYMORPHIC_DISCRIMINATOR_ALIAS } from '../src/collection-contract';
 import { compileSelectWithIncludes } from '../src/query-plan-select';
-import { emptyState } from '../src/types';
-import { buildMixedPolyContract, getTestAggregates } from './helpers';
+import { buildMixedPolyContract, getTestAggregates, tableSpecState } from './helpers';
 import {
   assigneeInclude,
   assigneeRows,
@@ -34,16 +33,17 @@ describe('nested variant-owned include correlation', () => {
     const contract = buildMixedPolyContract();
     const nested = {
       ...selectedState('id', 'title', 'type'),
-      includes: [assigneeInclude('features')],
+      includes: [assigneeInclude('Feature')],
       variantName: 'Feature',
     };
     const plan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
-      'public',
       'Project',
-      'projects_tbl',
-      { ...emptyState(), includes: [tasksInclude(nested)], selectedFields: ['name'] },
+      tableSpecState(contract, 'projects_tbl', {
+        includes: [tasksInclude(nested)],
+        selectedFields: ['name'],
+      }),
     );
     const childRows = childRowsFor(plan.ast, 'tasks');
     const assigneeAggregate = rowAggregate('assignee', assigneeRows('features', 'assignee_id'), [
@@ -71,16 +71,17 @@ describe('nested variant-owned include correlation', () => {
     const nested = {
       ...selectedState('title'),
       distinct: ['title'],
-      includes: [assigneeInclude('features')],
+      includes: [assigneeInclude('Feature')],
       variantName: 'Feature',
     };
     const plan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
-      'public',
       'Project',
-      'projects_tbl',
-      { ...emptyState(), includes: [tasksInclude(nested)], selectedFields: ['name'] },
+      tableSpecState(contract, 'projects_tbl', {
+        includes: [tasksInclude(nested)],
+        selectedFields: ['name'],
+      }),
     );
     const childRows = childRowsFor(plan.ast, 'tasks');
     const baseProjection = [
@@ -131,7 +132,6 @@ describe('nested variant-owned include correlation', () => {
       relationName: 'subtasks',
       relatedModelName: 'Task',
       relatedTableName: 'tasks',
-      localTableName: 'tasks',
       targetColumn: 'parent_id',
       localColumn: 'id',
       cardinality: '1:N',
@@ -145,10 +145,11 @@ describe('nested variant-owned include correlation', () => {
     const plan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
-      'public',
       'Project',
-      'projects_tbl',
-      { ...emptyState(), includes: [tasksInclude(nested)], selectedFields: ['name'] },
+      tableSpecState(contract, 'projects_tbl', {
+        includes: [tasksInclude(nested)],
+        selectedFields: ['name'],
+      }),
     );
     const childRows = childRowsFor(plan.ast, 'tasks');
 
@@ -175,7 +176,7 @@ describe('nested variant-owned include correlation', () => {
       relationName: 'labels',
       relatedModelName: 'Assignee',
       relatedTableName: 'assignees',
-      localTableName: 'features',
+      localVariantName: 'Feature',
       targetColumn: 'id',
       localColumn: 'priority',
       cardinality: 'N:M',
@@ -198,10 +199,11 @@ describe('nested variant-owned include correlation', () => {
     const plan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
-      'public',
       'Project',
-      'projects_tbl',
-      { ...emptyState(), includes: [tasksInclude(nested)], selectedFields: ['name'] },
+      tableSpecState(contract, 'projects_tbl', {
+        includes: [tasksInclude(nested)],
+        selectedFields: ['name'],
+      }),
     );
     const childRows = childRowsFor(plan.ast, 'tasks');
     const labelsProjection = childRows.projection.find((item) => item.alias === 'labels');

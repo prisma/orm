@@ -20,9 +20,8 @@ import {
   compileUpdateReturning,
   compileUpsertReturning,
 } from '../src/query-plan';
-import { emptyState } from '../src/types';
 import { baseContract, createCollectionFor } from './collection-fixtures';
-import { getTestAggregates } from './helpers';
+import { emptyTableState, getTestAggregates, tablesForTable } from './helpers';
 
 describe('SQL ORM rich AST query plans', () => {
   it('compiles include plans with AST classes and limit annotations', () => {
@@ -44,14 +43,7 @@ describe('SQL ORM rich AST query plans', () => {
       )
       .limit(5).state;
 
-    const plan = compileSelectWithIncludes(
-      baseContract,
-      getTestAggregates(),
-      'public',
-      'User',
-      'users',
-      state,
-    );
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), 'User', state);
 
     expect(plan.ast.kind).toBe('select');
     expect(plan.params).toEqual([100, 'Alice']);
@@ -98,9 +90,8 @@ describe('SQL ORM rich AST query plans', () => {
 
     const updatePlan = compileUpdateReturning(
       baseContract,
-      'public',
       'User',
-      'users',
+      tablesForTable(baseContract, 'users', 'public'),
       { email: 'b@example.com' },
       [BinaryExpr.eq(ColumnRef.of('users', 'id'), LiteralExpr.of(1))],
       ['id'],
@@ -110,9 +101,8 @@ describe('SQL ORM rich AST query plans', () => {
 
     const deletePlan = compileDeleteReturning(
       baseContract,
-      'public',
       'User',
-      'users',
+      tablesForTable(baseContract, 'users', 'public'),
       [BinaryExpr.eq(ColumnRef.of('users', 'id'), LiteralExpr.of(1))],
       ['id'],
     );
@@ -121,9 +111,7 @@ describe('SQL ORM rich AST query plans', () => {
     const groupedPlan = compileGroupedAggregate(
       baseContract,
       getTestAggregates(),
-      'public',
-      'posts',
-      emptyState(),
+      emptyTableState(baseContract, 'posts'),
       ['user_id'],
       {
         postCount: { kind: 'aggregate', fn: 'count' },

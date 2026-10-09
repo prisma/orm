@@ -25,11 +25,115 @@ import {
 } from '@internal/sql-runtime';
 import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { expect } from 'vitest';
-import type { RuntimeQueryable } from '../src/types';
+import { resolveIncludeRelation } from '../src/collection-contract';
+import {
+  type CollectionTables,
+  createCollectionTables,
+  createIncludeTables,
+  createStatementTables,
+} from '../src/collection-tables';
+import {
+  type CollectionState,
+  emptyState,
+  type IncludeExpr,
+  type RuntimeQueryable,
+} from '../src/types';
+import type { TableAliases } from '../src/where-binding';
 import { defineContract, field, model, rel, type ScalarFieldBuilder } from './contract-builder';
 import type { Contract } from './fixtures/generated/contract';
 import contractJson from './fixtures/generated/contract.json' with { type: 'json' };
 import { defineTestCodec } from './test-codec';
+
+export function publicTables(...tableNames: string[]): TableAliases {
+  return new Map(tableNames.map((tableName) => [tableName, { namespaceId: 'public', tableName }]));
+}
+
+export function tablesForTable(
+  contract: FrameworkContract<SqlStorage>,
+  tableName: string,
+  namespaceId = 'public',
+): CollectionTables {
+  const models = Object.entries(contract.domain.namespaces[namespaceId]?.models ?? {}).filter(
+    ([, model]) => model.storage['table'] === tableName,
+  );
+  const [modelName] = models.find(([, model]) => model.base === undefined) ?? models[0] ?? [];
+  return modelName === undefined
+    ? createStatementTables({ namespaceId, tableName })
+    : createCollectionTables(contract, namespaceId, modelName, tableName);
+}
+
+export type StateFields = Partial<Omit<CollectionState, 'tables'>>;
+
+export function tableState(
+  contract: FrameworkContract<SqlStorage>,
+  tableName: string,
+  fields: StateFields = {},
+  namespaceId = 'public',
+): CollectionState {
+  return { ...emptyState(tablesForTable(contract, tableName, namespaceId)), ...fields };
+}
+
+export type IncludeSpec = (parent: CollectionTables) => IncludeExpr;
+
+export interface StateSpec extends Omit<StateFields, 'includes'> {
+  readonly includes?: readonly IncludeSpec[];
+}
+
+export function specState(tables: CollectionTables, spec: StateSpec = {}): CollectionState {
+  const { includes = [], ...fields } = spec;
+  return {
+    ...emptyState(tables),
+    ...fields,
+    includes: includes.map((include) => include(tables)),
+  };
+}
+
+export function tableSpecState(
+  contract: FrameworkContract<SqlStorage>,
+  tableName: string,
+  spec: StateSpec,
+  namespaceId = 'public',
+): CollectionState {
+  return specState(tablesForTable(contract, tableName, namespaceId), spec);
+}
+
+export function relationInclude(
+  contract: FrameworkContract<SqlStorage>,
+  parentModel: string,
+  relationName: string,
+  nested: StateSpec = {},
+  namespaceId = 'public',
+): IncludeSpec {
+  const relation = resolveIncludeRelation(contract, namespaceId, parentModel, relationName);
+  return (parent) => {
+    const child = createIncludeTables(contract, parent, relation);
+    return {
+      relationName,
+      relatedModelName: relation.relatedModelName,
+      relatedTableName: relation.relatedTableName,
+      relatedNamespaceId: relation.relatedNamespaceId,
+      ...(relation.localVariantName === undefined
+        ? {}
+        : { localVariantName: relation.localVariantName }),
+      targetColumns: relation.targetColumns,
+      localColumns: relation.localColumns,
+      cardinality: relation.cardinality,
+      ...(relation.through === undefined ? {} : { through: relation.through }),
+      ...(child.junction === undefined ? {} : { junction: child.junction }),
+      nested: specState(child.tables, nested),
+      scalar: undefined,
+      combine: undefined,
+    };
+  };
+}
+
+export function emptyTableState(
+  contract: FrameworkContract<SqlStorage>,
+  tableName: string,
+  namespaceId = 'public',
+): CollectionState {
+  return tableState(contract, tableName, {}, namespaceId);
+}
 
 export function isSelectAst(ast: unknown): ast is SelectAst {
   return typeof ast === 'object' && ast !== null && 'kind' in ast && ast.kind === 'select';

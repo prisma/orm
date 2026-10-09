@@ -3,13 +3,13 @@ import {
   BinaryExpr,
   ColumnRef,
   ListExpression,
-  LiteralExpr,
   NotExpr,
   NullCheckExpr,
   OrExpr,
   ParamRef,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
+import { createCollectionTables } from '../src/collection-tables';
 import { all, and, not, or, shorthandToWhereExpr } from '../src/filters';
 import { createModelAccessor } from '../src/model-accessor';
 import { columnPassedForField, fieldUnknown, getTestContext } from './helpers';
@@ -28,7 +28,12 @@ describe('filters', () => {
   }
 
   it('and(), or(), not(), and all() use rich where objects', () => {
-    const user = createModelAccessor(context, 'public', 'User');
+    const user = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    );
 
     const andExpr = and(user['name']!.eq('Alice'), user['email']!.neq('bob@example.com'));
     expect(andExpr).toEqual(
@@ -73,7 +78,12 @@ describe('filters', () => {
   });
 
   it('wraps scalar binary operators in NotExpr', () => {
-    const user = createModelAccessor(context, 'public', 'User');
+    const user = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    );
 
     expect(not(user['id']!.neq(1))).toEqual(
       new NotExpr(BinaryExpr.neq(ColumnRef.of('users', 'id'), paramRef('users', 'id', 1))),
@@ -106,7 +116,12 @@ describe('filters', () => {
   });
 
   it('eq(null) / neq(null) lower to IS NULL / IS NOT NULL', () => {
-    const post = createModelAccessor(context, 'public', 'Post');
+    const post = createModelAccessor(
+      context,
+      'public',
+      'Post',
+      createCollectionTables(context.contract, 'public', 'Post'),
+    );
     const userId = post['userId']! as { eq: (v: unknown) => unknown; neq: (v: unknown) => unknown };
 
     expect(userId.eq(null)).toEqual(NullCheckExpr.isNull(ColumnRef.of('posts', 'user_id')));
@@ -114,7 +129,12 @@ describe('filters', () => {
   });
 
   it('wraps like in NotExpr', () => {
-    const user = createModelAccessor(context, 'public', 'User');
+    const user = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    );
 
     expect(not(user['name']!.like('%a%'))).toEqual(
       new NotExpr(BinaryExpr.like(ColumnRef.of('users', 'name'), paramRef('users', 'name', '%a%'))),
@@ -122,15 +142,21 @@ describe('filters', () => {
   });
 
   it('shorthandToWhereExpr() maps nulls, skips undefined, and combines multiple fields', () => {
-    const expr = shorthandToWhereExpr(context, 'public', 'Post', {
-      id: 1,
-      userId: null,
-      views: undefined,
-    });
+    const expr = shorthandToWhereExpr(
+      context,
+      'public',
+      'Post',
+      {
+        id: 1,
+        userId: null,
+        views: undefined,
+      },
+      createCollectionTables(context.contract, 'public', 'Post').root,
+    );
 
     expect(expr).toEqual(
       AndExpr.of([
-        BinaryExpr.eq(ColumnRef.of('posts', 'id'), LiteralExpr.of(1)),
+        BinaryExpr.eq(ColumnRef.of('posts', 'id'), paramRef('posts', 'id', 1)),
         NullCheckExpr.isNull(ColumnRef.of('posts', 'user_id')),
       ]),
     );
@@ -158,13 +184,25 @@ describe('filters', () => {
     } as unknown as typeof context;
 
     expect(() =>
-      shorthandToWhereExpr(stubbedContext, 'public', 'User', { email: 'a@b.com' }),
+      shorthandToWhereExpr(
+        stubbedContext,
+        'public',
+        'User',
+        { email: 'a@b.com' },
+        createCollectionTables(stubbedContext.contract, 'public', 'User').root,
+      ),
     ).toThrow(/does not support equality comparisons/);
   });
 
   it('shorthandToWhereExpr() refuses a relation name, which is not a field', () => {
     expect(() =>
-      shorthandToWhereExpr(context, 'public', 'User', { posts: 'oops' } as never),
+      shorthandToWhereExpr(
+        context,
+        'public',
+        'User',
+        { posts: 'oops' } as never,
+        createCollectionTables(context.contract, 'public', 'User').root,
+      ),
     ).toThrow(fieldUnknown('User', 'posts'));
   });
 
@@ -179,21 +217,52 @@ describe('filters', () => {
     } as unknown as typeof context;
 
     expect(() =>
-      shorthandToWhereExpr(stubbedContext, 'public', 'User', { email: 'a@b.com' }),
+      shorthandToWhereExpr(
+        stubbedContext,
+        'public',
+        'User',
+        { email: 'a@b.com' },
+        createCollectionTables(stubbedContext.contract, 'public', 'User').root,
+      ),
     ).toThrow(/does not support equality comparisons/);
   });
 
   it('shorthandToWhereExpr() maps fields and refuses a name that is not a field', () => {
-    expect(shorthandToWhereExpr(context, 'public', 'User', {})).toBeUndefined();
+    expect(
+      shorthandToWhereExpr(
+        context,
+        'public',
+        'User',
+        {},
+        createCollectionTables(context.contract, 'public', 'User').root,
+      ),
+    ).toBeUndefined();
 
     expect(
-      shorthandToWhereExpr(context, 'public', 'User', {
-        email: 'alice@example.com',
-      }),
-    ).toEqual(BinaryExpr.eq(ColumnRef.of('users', 'email'), LiteralExpr.of('alice@example.com')));
+      shorthandToWhereExpr(
+        context,
+        'public',
+        'User',
+        {
+          email: 'alice@example.com',
+        },
+        createCollectionTables(context.contract, 'public', 'User').root,
+      ),
+    ).toEqual(
+      BinaryExpr.eq(
+        ColumnRef.of('users', 'email'),
+        paramRef('users', 'email', 'alice@example.com'),
+      ),
+    );
 
     expect(() =>
-      shorthandToWhereExpr(context, 'public', 'User', { invited_by_id: null } as never),
+      shorthandToWhereExpr(
+        context,
+        'public',
+        'User',
+        { invited_by_id: null } as never,
+        createCollectionTables(context.contract, 'public', 'User').root,
+      ),
     ).toThrow(columnPassedForField('User', 'invited_by_id', 'invitedById'));
   });
 });

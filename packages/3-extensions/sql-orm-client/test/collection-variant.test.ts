@@ -5,6 +5,7 @@ import {
   ExistsExpr,
   type InsertAst,
   LiteralExpr,
+  ParamRef,
   type SelectAst,
 } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
@@ -119,8 +120,7 @@ describe('Collection.variant()', () => {
     const binExpr = filter as BinaryExpr;
     expect(binExpr.left).toBeInstanceOf(ColumnRef);
     expect((binExpr.left as ColumnRef).column).toBe('kind');
-    expect(binExpr.right).toBeInstanceOf(LiteralExpr);
-    expect((binExpr.right as LiteralExpr).value).toBe('admin');
+    expect(binExpr.right).toEqual(ParamRef.of('admin', { codec: { codecId: 'pg/text@1' } }));
   });
 
   it('sets variantName on state', () => {
@@ -206,7 +206,10 @@ describe('Collection.variant()', () => {
 
     expect(narrowed.state.filters).toEqual([
       ...withWhere.state.filters,
-      BinaryExpr.eq(ColumnRef.of('users', 'kind'), LiteralExpr.of('admin')),
+      BinaryExpr.eq(
+        ColumnRef.of('users', 'kind'),
+        ParamRef.of('admin', { codec: { codecId: 'pg/text@1' } }),
+      ),
     ]);
     expect(withWhere.state.filters).toHaveLength(1);
   });
@@ -320,6 +323,21 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toEqual({ id: 2, title: 'Dark mode', type: 'feature', priority: 1 });
+  });
+
+  it('where() binds a ready-made expression on an MTI variant table with the variant column codec', () => {
+    const { collection } = createMixedPolyCollection();
+
+    const filtered = collection.where(
+      BinaryExpr.gte(ColumnRef.of('features', 'priority'), LiteralExpr.of(3)),
+    );
+
+    expect(filtered.state.filters).toEqual([
+      BinaryExpr.gte(
+        ColumnRef.of('features', 'priority'),
+        ParamRef.of(3, { codec: { codecId: 'pg/int4@1' } }),
+      ),
+    ]);
   });
 
   it('first() after variant("feature") resolves the MTI variant field against the variant table', async () => {

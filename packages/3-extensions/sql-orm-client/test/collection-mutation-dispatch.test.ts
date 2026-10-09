@@ -11,7 +11,12 @@ import {
   dispatchSplitMutationRows,
   executeMutationReturningSingleRow,
 } from '../src/collection-mutation-dispatch';
-import { buildTestContextFromContract, createMockRuntime, getTestContract } from './helpers';
+import {
+  buildTestContextFromContract,
+  createMockRuntime,
+  getTestContract,
+  tablesForTable,
+} from './helpers';
 
 // These helpers own the no-include mutation read-back: execute the
 // `RETURNING` plan, map storage rows to model fields, and strip hidden
@@ -45,7 +50,7 @@ describe('collection-mutation-dispatch', () => {
       context,
       runtime,
       compiled: makeCompiled('insert into users ... returning *'),
-      tableName: 'users',
+      tables: tablesForTable(contract, 'users', 'public'),
       namespaceId: 'public',
       modelName: 'User',
       includes: [],
@@ -67,7 +72,7 @@ describe('collection-mutation-dispatch', () => {
       context,
       runtime,
       compiled: makeCompiled('delete from users returning *'),
-      tableName: 'users',
+      tables: tablesForTable(contract, 'users', 'public'),
       namespaceId: 'public',
       modelName: 'User',
       includes: [],
@@ -91,7 +96,7 @@ describe('collection-mutation-dispatch', () => {
       context,
       runtime,
       compiled: makeCompiled('update users set ... returning *'),
-      tableName: 'users',
+      tables: tablesForTable(contract, 'users', 'public'),
       namespaceId: 'public',
       modelName: 'User',
       includes: [],
@@ -119,7 +124,7 @@ describe('collection-mutation-dispatch', () => {
         context,
         runtime,
         plans: [makeCompiled('insert batch 1'), makeCompiled('insert batch 2')],
-        tableName: 'users',
+        tables: tablesForTable(contract, 'users', 'public'),
         namespaceId: 'public',
         modelName: 'User',
         includes: [],
@@ -145,7 +150,7 @@ describe('collection-mutation-dispatch', () => {
         context,
         runtime,
         plans: [makeCompiled('insert ...')],
-        tableName: 'users',
+        tables: tablesForTable(contract, 'users', 'public'),
         namespaceId: 'public',
         modelName: 'User',
         includes: [],
@@ -167,7 +172,7 @@ describe('collection-mutation-dispatch', () => {
         context,
         runtime,
         plans: [makeCompiled('insert batch 1'), makeCompiled('insert batch 2')],
-        tableName: 'users',
+        tables: tablesForTable(contract, 'users', 'public'),
         namespaceId: 'public',
         modelName: 'User',
         includes: [],

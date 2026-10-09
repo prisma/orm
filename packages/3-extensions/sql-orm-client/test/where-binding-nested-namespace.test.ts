@@ -44,7 +44,7 @@ function storageTable(columnCodecs: Record<string, string>) {
 // The SAME bare table name `users` exists in both namespaces, each with a
 // `token` column carrying a DIFFERENT codec. `public` is deliberately FIRST in
 // `Object.keys(storage.namespaces)` so the first-match namespace scan in
-// `createParamRef` resolves to `public` (the WRONG namespace) whenever the
+// the binder resolves to `public` (the WRONG namespace) whenever the
 // namespace coordinate is dropped on the recursive descent.
 const twoNamespaceContract = blindCast<Contract<SqlStorage>, 'hand-built multi-namespace fixture'>({
   target: 'postgres',
@@ -81,7 +81,11 @@ describe('bindWhereExpr nested-subquery namespace coordinate', () => {
       .withProjection([ProjectionItem.of('token', ColumnRef.of('users', 'token'))])
       .withWhere(BinaryExpr.eq(ColumnRef.of('users', 'token'), LiteralExpr.of('secret')));
 
-    const bound = bindWhereExpr(twoNamespaceContract, ExistsExpr.exists(subquery)) as ExistsExpr;
+    const bound = bindWhereExpr(
+      twoNamespaceContract,
+      ExistsExpr.exists(subquery),
+      new Map(),
+    ) as ExistsExpr;
 
     const innerWhere = (bound.subquery as SelectAst).where as BinaryExpr;
     const param = innerWhere.right as ParamRef;
@@ -103,7 +107,11 @@ describe('bindWhereExpr nested-subquery namespace coordinate', () => {
       .withProjection([ProjectionItem.of('token', ColumnRef.of('users', 'token'))])
       .withJoins([join]);
 
-    const bound = bindWhereExpr(twoNamespaceContract, ExistsExpr.exists(query)) as ExistsExpr;
+    const bound = bindWhereExpr(
+      twoNamespaceContract,
+      ExistsExpr.exists(query),
+      new Map(),
+    ) as ExistsExpr;
 
     const boundJoin = (bound.subquery as SelectAst).joins?.[0] as JoinAst;
     const onExpr = boundJoin.on as BinaryExpr;

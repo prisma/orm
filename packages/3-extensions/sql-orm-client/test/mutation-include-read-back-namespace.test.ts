@@ -9,7 +9,12 @@ import type {
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import { reloadMutationRowsByIdentities } from '../src/collection-dispatch';
-import { buildTestContextFromContract, createMockRuntime, type MockRuntime } from './helpers';
+import {
+  buildTestContextFromContract,
+  createMockRuntime,
+  type MockRuntime,
+  tablesForTable,
+} from './helpers';
 
 const DATA_TYPE_OF_CODEC: Readonly<Record<string, string>> = {
   'pg/int4@1': 'pg/int4',
@@ -86,7 +91,7 @@ async function readBackIdentityCodec(
   await reloadMutationRowsByIdentities<Record<string, unknown>>({
     context: twoNamespaceContext,
     runtime,
-    tableName: 'users',
+    tables: tablesForTable(twoNamespaceContext.contract, 'users', namespaceId),
     modelName: 'User',
     namespaceId,
     identityRows: [{ id: identityValue }],

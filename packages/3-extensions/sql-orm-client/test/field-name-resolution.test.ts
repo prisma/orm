@@ -2,9 +2,9 @@ import { int4Column, textColumn } from '@internal/adapter-postgres/column-types'
 import { BinaryExpr, ColumnRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { Collection } from '../src/collection';
+import { createCollectionTables } from '../src/collection-tables';
 import { createModelAccessor } from '../src/model-accessor';
 import { compileSelect } from '../src/query-plan-select';
-import type { CollectionState } from '../src/types';
 import { createCollectionFor, createReturningCollectionFor } from './collection-fixtures';
 import { defineContract, field, model } from './contract-builder';
 import {
@@ -15,6 +15,7 @@ import {
   fieldUnknown,
   getTestContext,
   getTestContract,
+  tableState,
 } from './helpers';
 
 const notAField = columnPassedForField('User', 'invited_by_id', 'invitedById');
@@ -160,17 +161,15 @@ describe('a name that is not a field of the variant in scope', () => {
 
   it('cannot reach the polymorphic projection as a column name', () => {
     const contract = buildMixedPolyContract();
-    const state = { selectedFields: ['parent_id_extra'] } as unknown as CollectionState;
     expect(() =>
-      compileSelect(contract, 'public', 'Task', 'tasks', { ...emptyState(), ...state }),
+      compileSelect(
+        contract,
+        'Task',
+        tableState(contract, 'tasks', { selectedFields: ['parent_id_extra'] }),
+      ),
     ).toThrow('Selected column "parent_id_extra" is mapped by no field of model "Task"');
   });
 });
-
-function emptyState(): CollectionState {
-  const { collection } = createCollectionFor('User');
-  return collection.state;
-}
 
 describe('the where and orderBy accessor', () => {
   function userAccessor(contract = getTestContract()) {
@@ -178,6 +177,7 @@ describe('the where and orderBy accessor', () => {
       { ...getTestContext(), contract } as never,
       'public',
       'User',
+      createCollectionTables(contract, 'public', 'User'),
     ) as unknown as Record<string, unknown>;
   }
 
@@ -218,6 +218,7 @@ describe('the where and orderBy accessor', () => {
       buildTestContextFromContract(contract) as never,
       'public',
       'Thing',
+      createCollectionTables(contract, 'public', 'Thing'),
     ) as unknown as Record<string, { eq(value: string): unknown }>;
     expect(thing['then']!.eq('x')).toEqual(
       new BinaryExpr('eq', ColumnRef.of('things', 'then'), expect.anything()),
@@ -230,6 +231,7 @@ describe('the where and orderBy accessor', () => {
       { ...getTestContext(), contract } as never,
       'public',
       'Task',
+      createCollectionTables(contract, 'public', 'Task'),
     ) as unknown as Record<string, unknown>;
     expect(() => tasks['priority']).toThrow(fieldUnknown('Task', 'priority'));
   });

@@ -25,10 +25,12 @@ import {
 import type { Expression } from '@internal/sql-relational-core/expression';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { ComputeColumnJsType, RuntimeScope } from '@internal/sql-relational-core/types';
+import type { CollectionTables } from './collection-tables';
 import type { HasRow } from './collection-types';
 import { checkedOrderByItem } from './order-by-guards';
 import { predicateComparison } from './predicate-comparison';
 import { predicateExpression } from './predicate-expression';
+import type { AliasedTable } from './table-scope';
 
 export interface IncludeScalar<Result> extends HasRow<Result> {
   readonly kind: 'includeScalar';
@@ -75,19 +77,21 @@ export interface IncludeExpr {
   readonly relatedModelName: string;
   readonly relatedNamespaceId: string;
   readonly relatedTableName: string;
-  readonly localTableName: string;
+  readonly localVariantName?: string;
   /** Target-side join columns, positionally paired with `localColumns`. */
   readonly targetColumns: readonly string[];
   /** Local-side join columns, positionally paired with `targetColumns`. */
   readonly localColumns: readonly string[];
   readonly cardinality: RelationCardinalityTag | undefined;
   readonly through?: IncludeThroughDescriptor;
+  readonly junction?: AliasedTable;
   readonly nested: CollectionState;
   readonly scalar: IncludeScalar<unknown> | undefined;
   readonly combine: Readonly<Record<string, IncludeCombineBranch>> | undefined;
 }
 
 export interface CollectionState {
+  readonly tables: CollectionTables;
   readonly filters: readonly AnyExpression[];
   readonly includes: readonly IncludeExpr[];
   readonly orderBy: readonly OrderByItem[] | undefined;
@@ -111,8 +115,9 @@ export interface CollectionState {
   readonly annotations: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>>;
 }
 
-export function emptyState(): CollectionState {
+export function emptyState(tables: CollectionTables): CollectionState {
   return {
+    tables,
     filters: [],
     includes: [],
     orderBy: undefined,

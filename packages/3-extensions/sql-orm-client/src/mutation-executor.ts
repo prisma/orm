@@ -1,12 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { isUniqueConstraintViolation } from '@internal/sql-errors';
-import {
-  type AnyExpression,
-  BinaryExpr,
-  ColumnRef,
-  LiteralExpr,
-} from '@internal/sql-relational-core/ast';
+import { type AnyExpression, BinaryExpr } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { RuntimeScope } from '@internal/sql-relational-core/types';
 import { castAs } from '@internal/utils/casts';
@@ -21,6 +16,7 @@ import {
   resolveRowIdentityColumns,
 } from './collection-contract';
 import { mapModelDataToStorageRow, mapStorageRowToModelFields } from './collection-runtime';
+import { type CollectionTables, createStatementTables } from './collection-tables';
 import { and, shorthandToWhereExpr } from './filters';
 import { ormError } from './orm-errors';
 import {
@@ -37,6 +33,7 @@ import {
   isRelationMutationCallback,
   isRelationMutationDescriptor,
 } from './relation-mutator';
+import type { AliasedTable } from './table-scope';
 import type {
   CollectionState,
   MutationCreateInput,
@@ -47,6 +44,7 @@ import type {
   RuntimeTransaction,
 } from './types';
 import { emptyState } from './types';
+import { paramRefForStorageColumn } from './where-binding';
 
 interface JunctionThrough {
   readonly table: string;
@@ -128,6 +126,7 @@ export async function executeNestedUpdateMutation(options: {
   runtime: RuntimeQueryable;
   namespaceId: string;
   modelName: string;
+  tables: CollectionTables;
   filters: readonly AnyExpression[];
   data: MutationUpdateInput<Contract<SqlStorage>, string>;
 }): Promise<Record<string, unknown> | null> {
@@ -137,6 +136,7 @@ export async function executeNestedUpdateMutation(options: {
       options.context,
       options.namespaceId,
       options.modelName,
+      options.tables,
       options.filters,
       options.data,
     ),
@@ -307,11 +307,19 @@ async function updateFirstGraph(
   context: ExecutionContext,
   namespaceId: string,
   modelName: string,
+  tables: CollectionTables,
   filters: readonly AnyExpression[],
   input: MutationUpdateInput<Contract<SqlStorage>, string>,
 ): Promise<Record<string, unknown> | null> {
   const contract = context.contract;
-  const existingRow = await findFirstByFilters(scope, contract, namespaceId, modelName, filters);
+  const existingRow = await findFirstByFilters(
+    scope,
+    contract,
+    namespaceId,
+    modelName,
+    tables,
+    filters,
+  );
   if (!existingRow) {
     return null;
   }
@@ -362,6 +370,7 @@ async function updateFirstGraph(
       namespaceId,
       modelName,
       castAs<MutationUpdateInput<Contract<SqlStorage>, string>>(identityFilter),
+      tables.root,
     );
     if (!identityWhere) {
       throw new InternalError(`Failed to build row identity filter for model "${modelName}"`);
@@ -369,9 +378,8 @@ async function updateFirstGraph(
 
     const compiled = compileUpdateReturning(
       contract,
-      namespaceId,
       modelName,
-      tableName,
+      tables,
       mappedUpdateData,
       [identityWhere],
       undefined,
@@ -659,11 +667,13 @@ async function applyChildOwnedMutation(
 
   if (mutation.kind === 'connect') {
     for (const criterion of mutation.criteria) {
+      const related = createRelatedTables(relation);
       const criterionWhere = shorthandToWhereExpr(
         context,
         relation.relatedNamespaceId,
         relation.relatedModelName,
         castAs<MutationUpdateInput<Contract<SqlStorage>, string>>(criterion),
+        related.root,
       );
       if (!criterionWhere) {
         throw ormError(
@@ -680,14 +690,7 @@ async function applyChildOwnedMutation(
         setValues[childColumn] = parentValue;
       }
 
-      await executeUpdateCount(
-        scope,
-        contract,
-        relation.relatedNamespaceId,
-        relation.relatedTableName,
-        setValues,
-        [criterionWhere],
-      );
+      await executeUpdateCount(scope, contract, related, setValues, [criterionWhere]);
     }
     return;
   }
@@ -698,24 +701,21 @@ async function applyChildOwnedMutation(
   }
 
   if (!mutation.criteria || mutation.criteria.length === 0) {
-    const parentJoinWhere = buildChildJoinWhere(relation, parentValues);
-    await executeUpdateCount(
-      scope,
-      contract,
-      relation.relatedNamespaceId,
-      relation.relatedTableName,
-      setValues,
-      [parentJoinWhere],
-    );
+    const related = createRelatedTables(relation);
+    await executeUpdateCount(scope, contract, related, setValues, [
+      buildChildJoinWhere(contract, related.root, parentValues),
+    ]);
     return;
   }
 
   for (const criterion of mutation.criteria) {
+    const related = createRelatedTables(relation);
     const criterionWhere = shorthandToWhereExpr(
       context,
       relation.relatedNamespaceId,
       relation.relatedModelName,
       castAs<MutationUpdateInput<Contract<SqlStorage>, string>>(criterion),
+      related.root,
     );
     if (!criterionWhere) {
       throw ormError(
@@ -727,15 +727,9 @@ async function applyChildOwnedMutation(
       );
     }
 
-    const parentJoinWhere = buildChildJoinWhere(relation, parentValues);
-    await executeUpdateCount(
-      scope,
-      contract,
-      relation.relatedNamespaceId,
-      relation.relatedTableName,
-      setValues,
-      [and(parentJoinWhere, criterionWhere)],
-    );
+    await executeUpdateCount(scope, contract, related, setValues, [
+      and(buildChildJoinWhere(contract, related.root, parentValues), criterionWhere),
+    ]);
   }
 }
 
@@ -1096,16 +1090,23 @@ async function deleteJunctionLink(
     writeJunctionColumn(junctionRow, through, column, value, relation.relationName);
   }
 
+  const junction = createStatementTables({
+    namespaceId: through.namespaceId,
+    tableName: through.table,
+  });
   const exprs: AnyExpression[] = [];
   for (const [column, value] of Object.entries(junctionRow)) {
-    exprs.push(BinaryExpr.eq(ColumnRef.of(through.table, column), LiteralExpr.of(value)));
+    exprs.push(
+      BinaryExpr.eq(
+        junction.root.column(column),
+        paramRefForStorageColumn(context.contract, junction.root.storage, column, value),
+      ),
+    );
   }
 
   const first = exprs[0];
   const where = exprs.length === 1 && first !== undefined ? first : and(...exprs);
-  const compiled = compileDeleteCount(context.contract, through.namespaceId, through.table, [
-    where,
-  ]);
+  const compiled = compileDeleteCount(context.contract, junction, [where]);
   await scope.execute(compiled);
 }
 
@@ -1139,8 +1140,16 @@ function readParentColumnValues(
   return values;
 }
 
+function createRelatedTables(relation: RelationDefinition): CollectionTables {
+  return createStatementTables({
+    namespaceId: relation.relatedNamespaceId,
+    tableName: relation.relatedTableName,
+  });
+}
+
 function buildChildJoinWhere(
-  relation: RelationDefinition,
+  contract: Contract<SqlStorage>,
+  related: AliasedTable,
   childValues: Map<string, unknown>,
 ): AnyExpression {
   const exprs: AnyExpression[] = [];
@@ -1148,8 +1157,8 @@ function buildChildJoinWhere(
   for (const [childColumn, parentValue] of childValues.entries()) {
     exprs.push(
       BinaryExpr.eq(
-        ColumnRef.of(relation.relatedTableName, childColumn),
-        LiteralExpr.of(parentValue),
+        related.column(childColumn),
+        paramRefForStorageColumn(contract, related.storage, childColumn, parentValue),
       ),
     );
   }
@@ -1214,11 +1223,16 @@ async function findRowByCriterion(
   criterion: Record<string, unknown>,
 ): Promise<Record<string, unknown> | null> {
   const contract = context.contract;
+  const tables = createStatementTables({
+    namespaceId,
+    tableName: resolveModelTableName(contract, namespaceId, modelName),
+  });
   const whereExpr = shorthandToWhereExpr(
     context,
     namespaceId,
     modelName,
     castAs<MutationUpdateInput<Contract<SqlStorage>, string>>(criterion),
+    tables.root,
   );
   if (!whereExpr) {
     throw ormError(
@@ -1228,13 +1242,12 @@ async function findRowByCriterion(
     );
   }
 
-  const tableName = resolveModelTableName(contract, namespaceId, modelName);
   const state: CollectionState = {
-    ...emptyState(),
+    ...emptyState(tables),
     filters: [whereExpr],
     limit: 1,
   };
-  const compiled = compileSelect(contract, namespaceId, modelName, tableName, state);
+  const compiled = compileSelect(contract, modelName, state);
   const rows = await queryPlanRows<Record<string, unknown>>(scope, compiled).toArray();
 
   const firstRow = rows[0];
@@ -1250,15 +1263,15 @@ async function findFirstByFilters(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   modelName: string,
+  tables: CollectionTables,
   filters: readonly AnyExpression[],
 ): Promise<Record<string, unknown> | null> {
-  const tableName = resolveModelTableName(contract, namespaceId, modelName);
   const state: CollectionState = {
-    ...emptyState(),
+    ...emptyState(tables),
     filters,
     limit: 1,
   };
-  const compiled = compileSelect(contract, namespaceId, modelName, tableName, state);
+  const compiled = compileSelect(contract, modelName, state);
   const rows = await queryPlanRows<Record<string, unknown>>(scope, compiled).toArray();
 
   const firstRow = rows[0];
@@ -1272,12 +1285,11 @@ async function findFirstByFilters(
 async function executeUpdateCount(
   scope: RuntimeScope,
   contract: Contract<SqlStorage>,
-  namespaceId: string,
-  tableName: string,
+  tables: CollectionTables,
   setValues: Record<string, unknown>,
   filters: readonly AnyExpression[],
 ): Promise<void> {
-  const compiled = compileUpdateCount(contract, namespaceId, tableName, setValues, filters);
+  const compiled = compileUpdateCount(contract, tables, setValues, filters);
   await scope.execute(compiled);
 }
 

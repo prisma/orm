@@ -9,6 +9,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { bindWhereExpr } from '../src/where-binding';
 import { baseContract, createCollectionFor } from './collection-fixtures';
+import { publicTables } from './helpers';
 
 describe('SQL ORM collections with rich AST plans', () => {
   it('stores direct where expressions and bound where payloads in collection state', () => {
@@ -17,7 +18,11 @@ describe('SQL ORM collections with rich AST plans', () => {
     const direct = collection.where(BinaryExpr.eq(ColumnRef.of('users', 'id'), LiteralExpr.of(1)));
     expect(direct.state.filters[0]).toBeInstanceOf(BinaryExpr);
     expect(
-      bindWhereExpr(baseContract, BinaryExpr.eq(ColumnRef.of('users', 'id'), LiteralExpr.of(1))),
+      bindWhereExpr(
+        baseContract,
+        BinaryExpr.eq(ColumnRef.of('users', 'id'), LiteralExpr.of(1)),
+        publicTables('users'),
+      ),
     ).toEqual(direct.state.filters[0]);
 
     const bound = collection.where({

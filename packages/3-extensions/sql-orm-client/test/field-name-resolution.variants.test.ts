@@ -5,10 +5,10 @@ import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import { Collection } from '../src/collection';
 import { mapSelectedFieldsToColumns } from '../src/collection-column-mapping';
+import { createCollectionTables } from '../src/collection-tables';
 import { createModelAccessor } from '../src/model-accessor';
 import { orm } from '../src/orm';
 import { compileSelect } from '../src/query-plan-select';
-import { createCollectionFor } from './collection-fixtures';
 import type { Contract as PolyContract } from './fixtures/polymorphism/generated/contract';
 import polyContractJson from './fixtures/polymorphism/generated/contract.json' with {
   type: 'json',
@@ -18,6 +18,7 @@ import {
   createMockRuntime,
   fieldUnknown,
   getTestContext,
+  tableState,
 } from './helpers';
 
 const poly = new PostgresContractSerializer().deserializeContract<PolyContract>(polyContractJson);
@@ -31,12 +32,10 @@ describe('a select of a field name two variants map to different columns', () =>
   });
 
   it('projects each column on its own table', () => {
-    const { collection } = createCollectionFor('User');
-    const state = {
-      ...collection.state,
+    const state = tableState(poly, 'tasks', {
       selectedFields: ['id', 'bug_assignee_person_id', 'feature_assignee_person_id'],
-    };
-    const sql = JSON.stringify(compileSelect(poly, 'public', 'Task', 'tasks', state).ast);
+    });
+    const sql = JSON.stringify(compileSelect(poly, 'Task', state).ast);
     expect(sql).toContain('"table":"tasks","column":"bug_assignee_person_id"');
     expect(sql).toContain('"table":"features","column":"feature_assignee_person_id"');
   });
@@ -50,10 +49,12 @@ describe('a select of a field name two variants map to different columns', () =>
 
 describe('a relation shorthand filter', () => {
   it('refuses names the JavaScript runtime probes before reading them through the accessor', () => {
-    const user = createModelAccessor(getTestContext(), 'public', 'User') as unknown as Record<
-      string,
-      { some(predicate: Record<string, unknown>): unknown }
-    >;
+    const user = createModelAccessor(
+      getTestContext(),
+      'public',
+      'User',
+      createCollectionTables(getTestContext().contract, 'public', 'User'),
+    ) as unknown as Record<string, { some(predicate: Record<string, unknown>): unknown }>;
     expect(() => user['posts']!.some(Object.fromEntries([['then', 1]]))).toThrow(
       fieldUnknown('Post', 'then'),
     );

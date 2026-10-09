@@ -29,15 +29,13 @@ const orders = new Collection({ runtime: createMockRuntime(), context }, 'Order'
   namespaceId: 'public',
 });
 
-const modelOfTable = { customers: 'Customer', orders: 'Order' } as const;
+const modelOfTable: Record<string, string> = { customers: 'Customer', orders: 'Order' };
 
-function compile(tableName: keyof typeof modelOfTable, state: CollectionState): SqlQueryPlan {
+function compile(state: CollectionState): SqlQueryPlan {
   return compileSelectWithIncludes(
     contract,
     context.aggregateDescriptors,
-    'public',
-    modelOfTable[tableName],
-    tableName,
+    modelOfTable[state.tables.root.storage.tableName]!,
     state,
   );
 }
@@ -73,7 +71,6 @@ describe('include over a composite foreign key', () => {
       relatedModelName: 'Customer',
       relatedNamespaceId: 'public',
       relatedTableName: 'customers',
-      localTableName: 'orders',
       targetColumns: ['tenant_id', 'id'],
       localColumns: ['tenant_id', 'customer_id'],
       cardinality: 'N:1',
@@ -82,7 +79,6 @@ describe('include over a composite foreign key', () => {
       relatedModelName: 'Order',
       relatedNamespaceId: 'public',
       relatedTableName: 'orders',
-      localTableName: 'customers',
       targetColumns: ['tenant_id', 'customer_id'],
       localColumns: ['tenant_id', 'id'],
       cardinality: '1:N',
@@ -90,7 +86,7 @@ describe('include over a composite foreign key', () => {
   });
 
   it('correlates a to-one include on every key column', () => {
-    const plan = compile('orders', orders.include('customer').state);
+    const plan = compile(orders.include('customer').state);
 
     expect(rowIncludeWhere(plan, 'customer')).toEqual(
       AndExpr.of([
@@ -101,7 +97,7 @@ describe('include over a composite foreign key', () => {
   });
 
   it('correlates a to-many include on every key column', () => {
-    const plan = compile('customers', customers.include('orders').state);
+    const plan = compile(customers.include('orders').state);
 
     expect(rowIncludeWhere(plan, 'orders')).toEqual(
       AndExpr.of([
@@ -116,10 +112,7 @@ describe('include over a composite foreign key', () => {
     // include refinement drops count() even though `orders` is to-many.
     const countRelated = (related: unknown): unknown =>
       (related as { count: () => unknown }).count();
-    const plan = compile(
-      'customers',
-      customers.include('orders', (o) => countRelated(o) as never).state,
-    );
+    const plan = compile(customers.include('orders', (o) => countRelated(o) as never).state);
 
     expect(includeSubquery(plan, 'orders').where).toEqual(
       AndExpr.of([
@@ -134,7 +127,7 @@ describe('include over a composite foreign key', () => {
     const include = state.includes[0]!;
 
     expect(() =>
-      compile('orders', { ...state, includes: [{ ...include, targetColumns: ['tenant_id'] }] }),
+      compile({ ...state, includes: [{ ...include, targetColumns: ['tenant_id'] }] }),
     ).toThrow("Include 'customer' has mismatched join column counts: 2 local, 1 target");
   });
 });

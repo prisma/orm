@@ -103,7 +103,6 @@ describe('collection-contract capability detection', () => {
       relatedModelName: 'Post',
       relatedNamespaceId: 'public',
       relatedTableName: 'posts',
-      localTableName: 'users',
       targetColumns: ['user_id'],
       localColumns: ['id'],
       cardinality: '1:N',

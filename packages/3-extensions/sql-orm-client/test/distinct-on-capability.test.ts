@@ -2,9 +2,20 @@ import { soleDomainNamespaceId } from '@internal/contract/types';
 import { ColumnRef, OrderByItem } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { Collection } from '../src/collection';
+import { createIncludeScalar } from '../src/include-descriptors';
+import { compileSelectWithIncludes } from '../src/query-plan-select';
 import { emptyState } from '../src/types';
 import { baseContract, createCollectionFor } from './collection-fixtures';
-import { createMockRuntime, getTestContext, withCapabilities } from './helpers';
+import {
+  createMockRuntime,
+  emptyTableState,
+  getTestAggregates,
+  getTestContext,
+  relationInclude,
+  tableSpecState,
+  tablesForTable,
+  withCapabilities,
+} from './helpers';
 
 // Mirrors the sql-builder lane's proof shape for the identical gate
 // (`test/e2e/framework/test/sqlite/sql-builder.test.ts:345-352`): a
@@ -46,7 +57,7 @@ describe('distinctOn() capability gate', () => {
     const collection = new Collection({ runtime, context }, 'Post', {
       namespaceId: soleDomainNamespaceId(contract.domain),
       state: {
-        ...emptyState(),
+        ...emptyTableState(contract, 'posts'),
         orderBy: [OrderByItem.asc(ColumnRef.of('posts', 'title'))],
         distinctOn: ['title'],
       },
@@ -67,7 +78,7 @@ describe('distinctOn() capability gate', () => {
     const collection = new Collection({ runtime, context }, 'Post', {
       namespaceId: soleDomainNamespaceId(contract.domain),
       state: {
-        ...emptyState(),
+        ...emptyTableState(contract, 'posts'),
         orderBy: [OrderByItem.asc(ColumnRef.of('posts', 'title'))],
         distinctOn: ['title'],
       },
@@ -87,7 +98,7 @@ describe('distinctOn() capability gate', () => {
     const userCollection = new Collection({ runtime, context }, 'User', {
       namespaceId: soleDomainNamespaceId(contract.domain),
       state: {
-        ...emptyState(),
+        ...emptyTableState(contract, 'users'),
         orderBy: [OrderByItem.asc(ColumnRef.of('users', 'name'))],
         distinctOn: ['name'],
       },
@@ -102,60 +113,56 @@ describe('distinctOn() capability gate', () => {
     );
   });
 
-  // `include()` accepts whatever the refinement callback returns as long as
-  // it carries a `.state` (`isCollectionStateCarrier`) — with no identity
-  // check against the collection the callback was actually handed. A
-  // refinement can return an unrelated, hand-built collection whose own
-  // state carries `distinctOn`.
-  it('throws when an include() refinement returns an unrelated collection whose state carries distinctOn', async () => {
+  it('throws when a hand-built include state carries distinctOn', () => {
+    const contract = withCapabilities(baseContract, { sql: { defaultInInsert: true } });
+    const state = tableSpecState(contract, 'users', {
+      includes: [
+        relationInclude(contract, 'User', 'posts', {
+          orderBy: [OrderByItem.asc(ColumnRef.of('posts', 'title'))],
+          distinctOn: ['title'],
+        }),
+      ],
+    });
+
+    expect(() => compileSelectWithIncludes(contract, getTestAggregates(), 'User', state)).toThrow(
+      'distinctOn() requires capability postgres.distinctOn',
+    );
+  });
+
+  it('throws when a hand-built include scalar captures a state carrying distinctOn', () => {
+    const contract = withCapabilities(baseContract, { sql: { defaultInInsert: true } });
+    const users = tablesForTable(contract, 'users');
+    const include = relationInclude(contract, 'User', 'posts', {
+      orderBy: [OrderByItem.asc(ColumnRef.of('posts', 'title'))],
+      distinctOn: ['title'],
+    })(users);
+    const state = {
+      ...emptyState(users),
+      includes: [{ ...include, scalar: createIncludeScalar<number>('count', include.nested) }],
+    };
+
+    expect(() => compileSelectWithIncludes(contract, getTestAggregates(), 'User', state)).toThrow(
+      'distinctOn() requires capability postgres.distinctOn',
+    );
+  });
+
+  it('rejects an include() refinement that returns an unrelated collection or its scalar', () => {
     const contract = withCapabilities(baseContract, { sql: { defaultInInsert: true } });
     const context = { ...getTestContext(), contract };
     const runtime = createMockRuntime();
     const unrelated = new Collection({ runtime, context }, 'Post', {
       namespaceId: soleDomainNamespaceId(contract.domain),
-      state: {
-        ...emptyState(),
-        orderBy: [OrderByItem.asc(ColumnRef.of('posts', 'title'))],
-        distinctOn: ['title'],
-      },
-    });
-    const userCollection = new Collection({ runtime, context }, 'User', {
-      namespaceId: soleDomainNamespaceId(contract.domain),
-    });
-
-    const withPosts = userCollection.include('posts', () => unrelated);
-
-    await expect(withPosts.all().toArray()).rejects.toThrow(
-      'distinctOn() requires capability postgres.distinctOn',
-    );
-  });
-
-  // `includeRefinementMode` is a public constructor option: a hand-built
-  // collection constructed with it can legitimately call a scalar reducer
-  // (`.count()`, `.sum()`, …) on itself, and `#includeScalarReducer`
-  // captures `this.state` into the resulting `IncludeScalar` with no gate
-  // in between.
-  it('throws when an include-scalar reducer captures a state carrying distinctOn', async () => {
-    const contract = withCapabilities(baseContract, { sql: { defaultInInsert: true } });
-    const context = { ...getTestContext(), contract };
-    const runtime = createMockRuntime();
-    const scalarSource = new Collection({ runtime, context }, 'Post', {
-      namespaceId: soleDomainNamespaceId(contract.domain),
       includeRefinementMode: true,
-      state: {
-        ...emptyState(),
-        orderBy: [OrderByItem.asc(ColumnRef.of('posts', 'title'))],
-        distinctOn: ['title'],
-      },
     });
     const userCollection = new Collection({ runtime, context }, 'User', {
       namespaceId: soleDomainNamespaceId(contract.domain),
     });
 
-    const withPostCount = userCollection.include('posts', () => scalarSource.count());
-
-    await expect(withPostCount.all().toArray()).rejects.toThrow(
-      'distinctOn() requires capability postgres.distinctOn',
+    expect(() => userCollection.include('posts', () => unrelated)).toThrow(
+      "include('posts') refinement must return a collection derived from the one it was handed",
+    );
+    expect(() => userCollection.include('posts', () => unrelated.count())).toThrow(
+      "include('posts') refinement must return a collection derived from the one it was handed",
     );
   });
 });

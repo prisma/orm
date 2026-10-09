@@ -1,0 +1,30 @@
+// use prisma-8
+
+model Task {
+  id       Int    @id
+  title    String
+  type     String
+  parentId Int?   @map("parent_id")
+
+  parent   Task?  @relation("Subtasks", fields: [parentId], references: [id])
+  subtasks Task[] @relation("Subtasks")
+
+  @@discriminator(type)
+  @@map("tasks")
+}
+
+model Bug {
+  severity String
+
+  @@base(Task, "bug")
+}
+
+model Feature {
+  priority    Int
+  blockedById Int? @map("blocked_by_id")
+
+  blockedBy Task? @relation(fields: [blockedById], references: [id])
+
+  @@base(Task, "feature")
+  @@map("features")
+}

@@ -1,15 +1,22 @@
 import { createPostgresAdapter } from '@internal/adapter-postgres/adapter';
-import { soleDomainNamespaceId } from '@internal/contract/types';
+import { LockingClause } from '@internal/sql-relational-core/ast';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { describe, expect, it } from 'vitest';
 import type { PostgresContract } from '../../../3-targets/6-adapters/postgres/src/core/types';
 import { Collection } from '../src/collection';
+import type { CollectionTables } from '../src/collection-tables';
+import { createIncludeScalar } from '../src/include-descriptors';
+import { compileSelectWithIncludes } from '../src/query-plan-select';
+import { emptyState, type IncludeExpr } from '../src/types';
 import { baseContract, createCollectionFor } from './collection-fixtures';
 import {
   buildMixedPolyContract,
   createMockRuntime,
+  getTestAggregates,
   getTestContext,
   type MockRuntime,
+  relationInclude,
+  tablesForTable,
 } from './helpers';
 
 const adapter = createPostgresAdapter();
@@ -198,55 +205,86 @@ describe('ORM row locking, refusals', () => {
     });
   });
 
-  describe('a locked state an include refinement returns is refused when lowered', () => {
-    const context = getTestContext();
-    const namespaceId = soleDomainNamespaceId(context.contract.domain);
-    const users = () => createCollectionFor('User').collection;
-    const lockedComments = () => createCollectionFor('Comment').collection.forUpdate();
-    const postsWithLockedComments = () =>
-      new Collection({ runtime: createMockRuntime(), context }, 'Post', {
-        namespaceId,
-        includeRefinementMode: true,
-        state: createCollectionFor('Post').collection.include('comments', () => lockedComments())
-          .state,
+  describe('a locked state inside a hand-built include is refused when lowered', () => {
+    const contract = baseContract;
+    const locking = [LockingClause.of('forUpdate', { of: ['posts'] })];
+    const lockedComments = relationInclude(contract, 'Post', 'comments', {
+      locking: [LockingClause.of('forUpdate', { of: ['comments'] })],
+    });
+    const compile = (include: IncludeExpr, users: CollectionTables) =>
+      compileSelectWithIncludes(contract, getTestAggregates(), 'User', {
+        ...emptyState(users),
+        includes: [include],
       });
     const refusal = lockIncompatible('includeRefinement');
 
-    it('as the include rows', async () => {
-      await expect(
-        users()
-          .include('posts', () => lockedPosts())
-          .all()
-          .toArray(),
-      ).rejects.toThrow(refusal);
+    it('as the include rows', () => {
+      const users = tablesForTable(contract, 'users');
+      const include = relationInclude(contract, 'User', 'posts', { locking })(users);
+
+      expect(() => compile(include, users)).toThrow(refusal);
     });
 
-    it('as an include nested under a scalar reducer', async () => {
-      await expect(
-        users()
-          .include('posts', () => postsWithLockedComments().count())
-          .all()
-          .toArray(),
-      ).rejects.toThrow(refusal);
+    it('as an include nested under a scalar reducer', () => {
+      const users = tablesForTable(contract, 'users');
+      const include = relationInclude(contract, 'User', 'posts', {
+        includes: [lockedComments],
+      })(users);
+
+      expect(() =>
+        compile(
+          { ...include, scalar: createIncludeScalar<number>('count', include.nested) },
+          users,
+        ),
+      ).toThrow(refusal);
     });
 
-    it('as a combine rows branch', async () => {
-      await expect(
-        users()
-          .include('posts', (posts) => posts.combine({ locked: lockedPosts() }))
-          .all()
-          .toArray(),
-      ).rejects.toThrow(refusal);
+    it('as a combine rows branch', () => {
+      const users = tablesForTable(contract, 'users');
+      const include = relationInclude(contract, 'User', 'posts', { locking })(users);
+
+      expect(() =>
+        compile(
+          {
+            ...include,
+            nested: { ...include.nested, locking: undefined },
+            combine: { locked: { kind: 'rows', state: include.nested } },
+          },
+          users,
+        ),
+      ).toThrow(refusal);
     });
 
-    it('as an include nested under a combine scalar branch', async () => {
-      await expect(
-        users()
-          .include('posts', (posts) => posts.combine({ count: postsWithLockedComments().count() }))
-          .all()
-          .toArray(),
-      ).rejects.toThrow(refusal);
+    it('as an include nested under a combine scalar branch', () => {
+      const users = tablesForTable(contract, 'users');
+      const include = relationInclude(contract, 'User', 'posts', {
+        includes: [lockedComments],
+      })(users);
+
+      expect(() =>
+        compile(
+          {
+            ...include,
+            nested: { ...include.nested, includes: [] },
+            combine: {
+              count: {
+                kind: 'scalar',
+                selector: createIncludeScalar<number>('count', include.nested),
+              },
+            },
+          },
+          users,
+        ),
+      ).toThrow(refusal);
     });
+  });
+
+  it('a locked collection returned from an include refinement is refused as a foreign collection', () => {
+    const { collection: users } = createCollectionFor('User');
+
+    expect(() => users.include('posts', () => lockedPosts())).toThrow(
+      "include('posts') refinement must return a collection derived from the one it was handed",
+    );
   });
 
   it('a lock with groupBy', async () => {

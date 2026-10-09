@@ -714,7 +714,7 @@ describe('integration/include', () => {
 
         const sql = runtime.executions[0]?.sql;
         expect(sql).not.toContain('LATERAL');
-        expect(sql).toContain('"invitedUsers__child"."invited_by_id" = "users"."id"');
+        expect(sql).toContain('"users_2"."invited_by_id" = "users"."id"');
       });
     },
     timeouts.spinUpPpgDev,
@@ -844,7 +844,7 @@ describe('integration/include', () => {
         );
 
         const sql = runtime.executions[0]?.sql;
-        expect(sql).toContain('"invitedUsers__child"."invited_by_id" = "users"."id"');
+        expect(sql).toContain('"users_2"."invited_by_id" = "users"."id"');
       });
     },
     timeouts.spinUpPpgDev,

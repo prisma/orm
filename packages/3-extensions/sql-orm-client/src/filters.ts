@@ -3,23 +3,18 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   AndExpr,
   type AnyExpression,
-  ColumnRef,
-  LiteralExpr,
   NullCheckExpr,
   OrExpr,
 } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
-import {
-  columnOfCallerField,
-  getModelFieldColumns,
-  modelOf,
-  resolveModelTableName,
-} from './collection-contract';
+import { columnOfCallerField, getModelFieldColumns, modelOf } from './collection-contract';
 import { hasTrait } from './column-codec';
 import { ormError } from './orm-errors';
 import { predicateComparison } from './predicate-comparison';
 import { predicateExpression } from './predicate-expression';
+import type { AliasedTable } from './table-scope';
 import type { ShorthandWhereFilter } from './types';
+import { paramRefForStorageColumn } from './where-binding';
 
 export function and(...exprs: AnyExpression[]): AndExpr {
   return AndExpr.of(exprs);
@@ -46,9 +41,9 @@ export function shorthandToWhereExpr<
   namespaceId: NsId,
   modelName: ModelName,
   filters: ShorthandWhereFilter<TContract, NsId, ModelName>,
+  table: AliasedTable,
 ): AnyExpression | undefined {
   const contract = context.contract;
-  const tableName = resolveModelTableName(contract, namespaceId, modelName);
   const fieldColumns = getModelFieldColumns(contract, namespaceId, modelName);
 
   const exprs: AnyExpression[] = [];
@@ -57,10 +52,14 @@ export function shorthandToWhereExpr<
       continue;
     }
 
-    const left = ColumnRef.of(
-      tableName,
-      columnOfCallerField(contract, namespaceId, fieldColumns, modelName, fieldName),
+    const columnName = columnOfCallerField(
+      contract,
+      namespaceId,
+      fieldColumns,
+      modelName,
+      fieldName,
     );
+    const left = table.column(columnName);
 
     if (value === null) {
       exprs.push(NullCheckExpr.isNull(left));
@@ -69,7 +68,12 @@ export function shorthandToWhereExpr<
 
     assertFieldHasEqualityTrait(context, namespaceId, modelName, fieldName);
     exprs.push(
-      predicateComparison('eq', left, predicateExpression(value) ?? LiteralExpr.of(value)),
+      predicateComparison(
+        'eq',
+        left,
+        predicateExpression(value) ??
+          paramRefForStorageColumn(contract, table.storage, columnName, value),
+      ),
     );
   }
 

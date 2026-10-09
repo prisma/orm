@@ -10,9 +10,7 @@ import {
   TableSource,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { createIncludeScalar } from '../src/include-descriptors';
 import { compileSelectWithIncludes } from '../src/query-plan-select';
-import { emptyState } from '../src/types';
 import { buildMixedPolyContract, getTestAggregates } from './helpers';
 import {
   assigneeInclude,
@@ -29,16 +27,14 @@ import {
 describe('variant-owned include parent correlation', () => {
   it('correlates an MTI relation from the joined variant table without base-key projection', () => {
     const contract = buildMixedPolyContract();
-    const include = assigneeInclude('features');
+    const include = assigneeInclude('Feature');
     const childRows = assigneeRows('features', 'assignee_id');
     const aggregate = rowAggregate('assignee', childRows, ['id', 'name']);
 
     const plan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
-      'public',
       'Task',
-      'tasks',
       rootState(include, 'Feature', 'title'),
     );
 
@@ -54,16 +50,14 @@ describe('variant-owned include parent correlation', () => {
 
   it('correlates an STI relation from the current parent table', () => {
     const contract = buildMixedPolyContract();
-    const include = assigneeInclude('tasks');
+    const include = assigneeInclude();
     const childRows = assigneeRows('tasks', 'assignee_id');
     const aggregate = rowAggregate('assignee', childRows, ['id', 'name']);
 
     const plan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
-      'public',
       'Task',
-      'tasks',
       rootState(include, 'Bug', 'title'),
     );
 
@@ -81,7 +75,6 @@ describe('variant-owned include parent correlation', () => {
       relationName: 'subtasks',
       relatedModelName: 'Task',
       relatedTableName: 'tasks',
-      localTableName: 'tasks',
       targetColumn: 'parent_id',
       localColumn: 'id',
       cardinality: '1:N',
@@ -91,15 +84,13 @@ describe('variant-owned include parent correlation', () => {
     const plan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
-      'public',
       'Task',
-      'tasks',
       rootState(include, 'Feature', 'title'),
     );
     const childRows = childRowsFor(plan.ast, 'subtasks');
 
     expect(childRows.where).toEqual(
-      BinaryExpr.eq(ColumnRef.of('subtasks__child', 'parent_id'), ColumnRef.of('tasks', 'id')),
+      BinaryExpr.eq(ColumnRef.of('tasks_2', 'parent_id'), ColumnRef.of('tasks', 'id')),
     );
   });
 });
@@ -111,30 +102,23 @@ describe('variant-owned include child alias collisions', () => {
       relationName: 'relatedFeature',
       relatedModelName: 'Feature',
       relatedTableName: 'features',
-      localTableName: 'features',
+      localVariantName: 'Feature',
       targetColumn: 'id',
       localColumn: 'assignee_id',
       cardinality: '1:N',
       nested: selectedState('id'),
     });
-    const childRows = SelectAst.from(
-      TableSource.named('features', 'relatedFeature__child', 'public'),
-    )
-      .withProjection([projection('id', 'relatedFeature__child', 'id', 'pg/int4@1')])
+    const childRows = SelectAst.from(TableSource.named('features', 'features_2', 'public'))
+      .withProjection([projection('id', 'features_2', 'id', 'pg/int4@1')])
       .withWhere(
-        BinaryExpr.eq(
-          ColumnRef.of('relatedFeature__child', 'id'),
-          ColumnRef.of('features', 'assignee_id'),
-        ),
+        BinaryExpr.eq(ColumnRef.of('features_2', 'id'), ColumnRef.of('features', 'assignee_id')),
       );
     const aggregate = rowAggregate('relatedFeature', childRows, ['id']);
 
     const plan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
-      'public',
       'Task',
-      'tasks',
       rootState(include, 'Feature', 'title'),
     );
 
@@ -150,20 +134,17 @@ describe('variant-owned include child alias collisions', () => {
 
   it('aliases a scalar child that shares the resolved MTI parent table', () => {
     const contract = buildMixedPolyContract();
-    const scalar = createIncludeScalar<number>('count', emptyState());
     const include = includeExpr({
       relationName: 'featureCount',
       relatedModelName: 'Feature',
       relatedTableName: 'features',
-      localTableName: 'features',
+      localVariantName: 'Feature',
       targetColumn: 'id',
       localColumn: 'assignee_id',
       cardinality: '1:N',
-      scalar,
+      scalar: 'count',
     });
-    const scalarSelect = SelectAst.from(
-      TableSource.named('features', 'featureCount__child', 'public'),
-    )
+    const scalarSelect = SelectAst.from(TableSource.named('features', 'features_2', 'public'))
       .withProjection([
         ProjectionItem.of(
           'featureCount',
@@ -178,18 +159,13 @@ describe('variant-owned include child alias collisions', () => {
         ),
       ])
       .withWhere(
-        BinaryExpr.eq(
-          ColumnRef.of('featureCount__child', 'id'),
-          ColumnRef.of('features', 'assignee_id'),
-        ),
+        BinaryExpr.eq(ColumnRef.of('features_2', 'id'), ColumnRef.of('features', 'assignee_id')),
       );
 
     const plan = compileSelectWithIncludes(
       contract,
       getTestAggregates(),
-      'public',
       'Task',
-      'tasks',
       rootState(include, 'Feature', 'title'),
     );
 

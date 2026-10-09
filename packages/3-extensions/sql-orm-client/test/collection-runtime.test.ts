@@ -16,6 +16,7 @@ import {
   mapStorageRowToModelFields,
   stripHiddenMappedFields,
 } from '../src/collection-runtime';
+import { createCollectionTables } from '../src/collection-tables';
 import {
   buildMixedPolyContract,
   columnPassedForField,
@@ -170,8 +171,21 @@ describe('mapPolymorphicRow()', () => {
     const contract = buildMixedPolyContract();
     const polyInfo = resolvePolymorphismInfo(contract, 'public', 'Task')!;
     const lookup = vi.spyOn(collectionContract, 'getModelColumnFields');
-    const map = createPolymorphicRowMapper(contract, 'public', 'Task', polyInfo);
-    const pinned = createPolymorphicRowMapper(contract, 'public', 'Task', polyInfo, 'Feature');
+    const map = createPolymorphicRowMapper(
+      contract,
+      'public',
+      'Task',
+      polyInfo,
+      createCollectionTables(contract, 'public', 'Task'),
+    );
+    const pinned = createPolymorphicRowMapper(
+      contract,
+      'public',
+      'Task',
+      polyInfo,
+      createCollectionTables(contract, 'public', 'Task'),
+      'Feature',
+    );
     expect(lookup).toHaveBeenCalledWith(contract, 'public', 'Task');
     const calls = lookup.mock.calls.length;
     for (let invocation = 0; invocation < 2; invocation++) {
@@ -210,7 +224,14 @@ describe('mapPolymorphicRow()', () => {
     const polyInfo = resolvePolymorphismInfo(contract, 'public', 'Task')!;
 
     const row = { id: 1, title: 'Crash', type: 'bug', severity: 'critical' };
-    const result = mapPolymorphicRow(contract, 'public', 'Task', polyInfo, row);
+    const result = mapPolymorphicRow(
+      contract,
+      'public',
+      'Task',
+      polyInfo,
+      createCollectionTables(contract, 'public', 'Task'),
+      row,
+    );
 
     expect(result).toEqual({ id: 1, title: 'Crash', type: 'bug', severity: 'critical' });
   });
@@ -220,7 +241,14 @@ describe('mapPolymorphicRow()', () => {
     const polyInfo = resolvePolymorphismInfo(contract, 'public', 'Task')!;
 
     const row = { id: 1, title: 'Crash', type: 'bug', severity: 'critical', priority: null };
-    const result = mapPolymorphicRow(contract, 'public', 'Task', polyInfo, row);
+    const result = mapPolymorphicRow(
+      contract,
+      'public',
+      'Task',
+      polyInfo,
+      createCollectionTables(contract, 'public', 'Task'),
+      row,
+    );
 
     expect(result).toEqual({ id: 1, title: 'Crash', type: 'bug', severity: 'critical' });
     expect(result).not.toHaveProperty('priority');
@@ -237,7 +265,14 @@ describe('mapPolymorphicRow()', () => {
       severity: null,
       features__priority: 1,
     };
-    const result = mapPolymorphicRow(contract, 'public', 'Task', polyInfo, row);
+    const result = mapPolymorphicRow(
+      contract,
+      'public',
+      'Task',
+      polyInfo,
+      createCollectionTables(contract, 'public', 'Task'),
+      row,
+    );
 
     expect(result).toEqual({ id: 2, title: 'Dark mode', type: 'feature', priority: 1 });
     expect(result).not.toHaveProperty('severity');
@@ -252,7 +287,14 @@ describe('mapPolymorphicRow()', () => {
       [POLYMORPHIC_DISCRIMINATOR_ALIAS]: 'feature',
       features__priority: 1,
     };
-    const result = mapPolymorphicRow(contract, 'public', 'Task', polyInfo, row);
+    const result = mapPolymorphicRow(
+      contract,
+      'public',
+      'Task',
+      polyInfo,
+      createCollectionTables(contract, 'public', 'Task'),
+      row,
+    );
 
     expect(result).toEqual({ id: 2, priority: 1 });
   });
@@ -262,7 +304,15 @@ describe('mapPolymorphicRow()', () => {
     const polyInfo = resolvePolymorphismInfo(contract, 'public', 'Task')!;
 
     const row = { id: 1, title: 'Crash', type: 'bug', severity: 'high' };
-    const result = mapPolymorphicRow(contract, 'public', 'Task', polyInfo, row, 'Bug');
+    const result = mapPolymorphicRow(
+      contract,
+      'public',
+      'Task',
+      polyInfo,
+      createCollectionTables(contract, 'public', 'Task'),
+      row,
+      'Bug',
+    );
 
     expect(result).toEqual({ id: 1, title: 'Crash', type: 'bug', severity: 'high' });
   });
@@ -278,7 +328,14 @@ describe('mapPolymorphicRow()', () => {
       severity: null,
       features__priority: null,
     };
-    const result = mapPolymorphicRow(contract, 'public', 'Task', polyInfo, row);
+    const result = mapPolymorphicRow(
+      contract,
+      'public',
+      'Task',
+      polyInfo,
+      createCollectionTables(contract, 'public', 'Task'),
+      row,
+    );
 
     expect(result).toEqual({ id: 3, title: 'Unknown', type: 'epic' });
   });

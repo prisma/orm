@@ -1,13 +1,23 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import type { AnyExpression, ToWhereExpr, WhereArg } from '@internal/sql-relational-core/ast';
-import { isWhereExpr } from '@internal/sql-relational-core/ast';
+import {
+  type AnyExpression,
+  type AstRewriter,
+  type ColumnRef,
+  EqColJoinOn,
+  isWhereExpr,
+  type SelectAst,
+  type ToWhereExpr,
+  type WhereArg,
+} from '@internal/sql-relational-core/ast';
 import { ormError } from './orm-errors';
-import { bindWhereExpr } from './where-binding';
+import type { AliasedTable } from './table-scope';
+import { bindWhereExpr, type TableAliases } from './where-binding';
 
 interface NormalizeWhereArgOptions {
-  readonly contract?: Contract<SqlStorage>;
-  readonly namespaceId?: string | undefined;
+  readonly contract: Contract<SqlStorage>;
+  readonly tables: TableAliases;
+  readonly rebaseOnto?: AliasedTable | undefined;
 }
 
 export function normalizeWhereArg(arg: undefined): undefined;
@@ -32,16 +42,56 @@ export function normalizeWhereArg(
     );
   }
 
-  if (isToWhereExpr(arg)) {
-    return arg.toWhereExpr();
+  const expr = isToWhereExpr(arg) ? arg.toWhereExpr() : arg;
+  if (!options) {
+    return expr;
   }
-
-  if (options?.contract) {
-    return bindWhereExpr(options.contract, arg, options.namespaceId);
-  }
-  return arg;
+  return bindWhereExpr(
+    options.contract,
+    options.rebaseOnto ? rebaseOntoRoot(expr, options.rebaseOnto) : expr,
+    options.tables,
+  );
 }
 
 function isToWhereExpr(arg: WhereArg): arg is ToWhereExpr {
   return typeof arg === 'object' && arg !== null && 'toWhereExpr' in arg && !isWhereExpr(arg);
+}
+
+function declaresTable(ast: SelectAst, tableName: string): boolean {
+  const sources = [
+    ...(ast.from === undefined ? [] : [ast.from]),
+    ...(ast.joins ?? []).map((join) => join.source),
+  ];
+  return sources.some(
+    (source) =>
+      (source.kind === 'table-source' && (source.alias ?? source.name) === tableName) ||
+      (source.kind === 'derived-table-source' && source.alias === tableName),
+  );
+}
+
+export function rebaseOntoRoot(expr: AnyExpression, root: AliasedTable): AnyExpression {
+  const { tableName } = root.storage;
+  if (root.alias === tableName) {
+    return expr;
+  }
+  const originals = new Map<ColumnRef, ColumnRef>();
+  const rebase = (column: ColumnRef): ColumnRef => {
+    if (column.table !== tableName) {
+      return column;
+    }
+    const rebased = root.column(column.column);
+    originals.set(rebased, column);
+    return rebased;
+  };
+  const restore = (column: ColumnRef): ColumnRef => originals.get(column) ?? column;
+  const restorer: AstRewriter = {
+    columnRef: restore,
+    eqColJoinOn: (on) => EqColJoinOn.of(restore(on.left), restore(on.right)),
+  };
+  const rebaser: AstRewriter = {
+    columnRef: rebase,
+    eqColJoinOn: (on) => EqColJoinOn.of(rebase(on.left), rebase(on.right)),
+    select: (ast) => (declaresTable(ast, tableName) ? ast.rewrite(restorer) : ast),
+  };
+  return expr.rewrite(rebaser);
 }

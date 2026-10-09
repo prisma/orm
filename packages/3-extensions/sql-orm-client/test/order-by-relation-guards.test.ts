@@ -76,7 +76,7 @@ describe('cursor() after an order it cannot key on', () => {
       .cursor({ id: 1 })
       .orderBy((post) => post.author.name.asc()).state;
 
-    expect(() => compileSelect(baseContract, 'public', 'Post', 'posts', state)).toThrow(
+    expect(() => compileSelect(baseContract, 'Post', state)).toThrow(
       expect.objectContaining({ code: 'ORM.ARGUMENT_INVALID' }),
     );
   });
@@ -88,7 +88,7 @@ describe('cursor() after an order it cannot key on', () => {
       .cursor({ id: 1 })
       .orderBy((post) => post.title.asc({ nulls: 'first' })).state;
 
-    expect(() => compileSelect(baseContract, 'public', 'Post', 'posts', state)).toThrow(
+    expect(() => compileSelect(baseContract, 'Post', state)).toThrow(
       expect.objectContaining({ code: 'ORM.ARGUMENT_INVALID' }),
     );
   });
@@ -116,7 +116,7 @@ describe('distinctOn() and the orders it needs', () => {
       .orderBy([(post) => post.title.asc(), (post) => post.author.name.asc()])
       .distinctOn('title').state;
 
-    expect(() => compileSelect(baseContract, 'public', 'Post', 'posts', state)).not.toThrow();
+    expect(() => compileSelect(baseContract, 'Post', state)).not.toThrow();
   });
 
   it('accepts column orders with null placement', () => {
@@ -143,15 +143,13 @@ describe('distinctOn() and the orders it needs', () => {
     const sum = { totalViews: { kind: 'aggregate' as const, fn: 'sum', column: 'views' } };
 
     it('refuses to build the select', () => {
-      expect(() => compileSelect(baseContract, 'public', 'Post', 'posts', postsState())).toThrow(
-        refusal,
-      );
+      expect(() => compileSelect(baseContract, 'Post', postsState())).toThrow(refusal);
     });
 
     it('refuses to build the aggregate', () => {
-      expect(() =>
-        compileAggregate(baseContract, getTestAggregates(), 'public', 'posts', postsState(), sum),
-      ).toThrow(refusal);
+      expect(() => compileAggregate(baseContract, getTestAggregates(), postsState(), sum)).toThrow(
+        refusal,
+      );
     });
 
     it('refuses to build the grouped aggregate', () => {
@@ -159,8 +157,6 @@ describe('distinctOn() and the orders it needs', () => {
         compileGroupedAggregate(
           baseContract,
           getTestAggregates(),
-          'public',
-          'posts',
           postsState(),
           ['user_id'],
           sum,
@@ -179,14 +175,7 @@ describe('distinctOn() and the orders it needs', () => {
       ).state;
 
       expect(() =>
-        compileSelectWithIncludes(
-          baseContract,
-          getTestAggregates(),
-          'public',
-          'User',
-          'users',
-          state,
-        ),
+        compileSelectWithIncludes(baseContract, getTestAggregates(), 'User', state),
       ).toThrow(refusal);
     });
 
@@ -201,14 +190,7 @@ describe('distinctOn() and the orders it needs', () => {
       ).state;
 
       expect(() =>
-        compileSelectWithIncludes(
-          baseContract,
-          getTestAggregates(),
-          'public',
-          'User',
-          'users',
-          state,
-        ),
+        compileSelectWithIncludes(baseContract, getTestAggregates(), 'User', state),
       ).toThrow(refusal);
     });
   });

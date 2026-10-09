@@ -9,7 +9,14 @@ import {
   getOwnColumnFields,
   POLYMORPHIC_DISCRIMINATOR_ALIAS,
   type PolymorphismInfo,
+  type PolymorphismVariantInfo,
 } from './collection-contract';
+import {
+  type CollectionTables,
+  requireVariantTable,
+  variantColumnLabel,
+} from './collection-tables';
+import type { AliasedTable } from './table-scope';
 import type { CollectionContext } from './types';
 
 export interface RowEnvelope {
@@ -74,9 +81,9 @@ function getMergedColumnToFieldMap(
   namespaceId: string,
   baseModelName: string,
   variantModelName: string,
-  variantTable: string | undefined,
+  variantTable: AliasedTable | undefined,
 ): Record<string, string> {
-  const cacheKey = `${namespaceId}:${baseModelName}:${variantModelName}:${variantTable ?? ''}`;
+  const cacheKey = `${namespaceId}:${baseModelName}:${variantModelName}:${variantTable?.alias ?? ''}`;
   let perContract = mergedColumnToFieldCache.get(contract);
   if (!perContract) {
     perContract = new Map();
@@ -91,7 +98,7 @@ function getMergedColumnToFieldMap(
   const merged: Record<string, string> = { ...baseMap };
   for (const [col, field] of Object.entries(variantMap)) {
     if (variantTable) {
-      merged[`${variantTable}__${col}`] = field;
+      merged[variantColumnLabel(variantTable, col)] = field;
     } else {
       merged[col] = field;
     }
@@ -101,11 +108,19 @@ function getMergedColumnToFieldMap(
   return merged;
 }
 
+function variantTableOf(
+  tables: CollectionTables,
+  variant: PolymorphismVariantInfo,
+): AliasedTable | undefined {
+  return variant.strategy === 'mti' ? requireVariantTable(tables, variant.modelName) : undefined;
+}
+
 export function mapPolymorphicRow(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   baseModelName: string,
   polyInfo: PolymorphismInfo,
+  tables: CollectionTables,
   row: Record<string, unknown>,
   variantName?: string,
 ): Record<string, unknown> {
@@ -121,13 +136,12 @@ export function mapPolymorphicRow(
     return mapKnownColumnNames(row, getModelColumnFields(contract, namespaceId, baseModelName));
   }
 
-  const mtiTable = variant.strategy === 'mti' ? variant.table : undefined;
   const mergedMap = getMergedColumnToFieldMap(
     contract,
     namespaceId,
     baseModelName,
     variant.modelName,
-    mtiTable,
+    variantTableOf(tables, variant),
   );
   return mapKnownColumnNames(row, mergedMap);
 }
@@ -137,6 +151,7 @@ export function createPolymorphicRowMapper(
   namespaceId: string,
   baseModelName: string,
   polyInfo: PolymorphismInfo,
+  tables: CollectionTables,
   variantName?: string,
 ): (row: Record<string, unknown>) => Record<string, unknown> {
   const baseMapper = captureColumnMapper(() =>
@@ -152,7 +167,7 @@ export function createPolymorphicRowMapper(
         namespaceId,
         baseModelName,
         variant.modelName,
-        variant.strategy === 'mti' ? variant.table : undefined,
+        variantTableOf(tables, variant),
       ),
     );
     if (variantName) pinnedMapper = mapper;

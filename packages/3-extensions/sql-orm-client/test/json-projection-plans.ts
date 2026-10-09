@@ -34,17 +34,15 @@ export function representativePlans(): ReadonlyArray<readonly [string, SelectAst
   const { collection: users } = createCollection();
   const { collection: projects } = createCollectionFor('Project');
   const cases = [
-    ['plain include', 'users', users.include('posts').state],
-    ['nested include', 'users', users.include('posts', (posts) => posts.include('comments')).state],
-    ['aggregate include', 'users', users.include('posts', (posts) => posts.count()).state],
+    ['plain include', users.include('posts').state],
+    ['nested include', users.include('posts', (posts) => posts.include('comments')).state],
+    ['aggregate include', users.include('posts', (posts) => posts.count()).state],
     [
       'aggregate include over a column',
-      'users',
       users.include('posts', (posts) => posts.sum('views')).state,
     ],
     [
       'combine of a row branch and a scalar branch',
-      'users',
       users.include('posts', (posts) =>
         posts.combine({
           recent: posts.orderBy((post) => post.id.desc()).limit(3),
@@ -52,27 +50,20 @@ export function representativePlans(): ReadonlyArray<readonly [string, SelectAst
         }),
       ).state,
     ],
-    [
-      'include with distinct',
-      'users',
-      users.include('posts', (posts) => posts.distinct('title')).state,
-    ],
+    ['include with distinct', users.include('posts', (posts) => posts.distinct('title')).state],
     [
       'distinct non-leaf include',
-      'users',
       users.include('posts', (posts) => posts.distinct('title').include('comments')).state,
     ],
-    ['many-to-many include', 'users', users.include('tags').state],
-    ['self-relation many-to-many include', 'projects', projects.include('related').state],
+    ['many-to-many include', users.include('tags').state],
+    ['self-relation many-to-many include', projects.include('related').state],
   ] as const;
 
-  return cases.map(([label, table, state]) => {
+  return cases.map(([label, state]) => {
     const plan = compileSelectWithIncludes(
       baseContract,
       getTestAggregates(),
-      'public',
-      table === 'users' ? 'User' : 'Project',
-      table,
+      state.tables.root.storage.tableName === 'users' ? 'User' : 'Project',
       state,
     );
     return [label, plan.ast as SelectAst] as const;

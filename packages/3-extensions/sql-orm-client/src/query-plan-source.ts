@@ -3,7 +3,6 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   AndExpr,
   type AnyExpression,
-  type AstRewriter,
   BinaryExpr,
   type BinaryOp,
   ColumnRef,
@@ -16,7 +15,7 @@ import {
   OrExpr,
   ProjectionItem,
   SelectAst,
-  TableSource,
+  type TableSource,
   WindowFuncExpr,
 } from '@internal/sql-relational-core/ast';
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
@@ -28,11 +27,16 @@ import {
   resolvePolymorphismInfo,
   resolvePrimaryKeyColumns,
 } from './collection-contract';
+import {
+  type CollectionTables,
+  requireVariantTable,
+  variantColumnLabel,
+} from './collection-tables';
 import { assertCursorCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
-import { tableSourceForContract } from './storage-resolution';
+import type { AliasedTable } from './table-scope';
 import type { CollectionState } from './types';
-import { bindWhereExpr } from './where-binding';
+import { paramRefForStorageColumn } from './where-binding';
 import { combineWhereExprs } from './where-utils';
 
 type CursorOrderEntry = {
@@ -41,17 +45,22 @@ type CursorOrderEntry = {
   readonly value: unknown;
 };
 
-function createBoundaryExpr(tableName: string, entry: CursorOrderEntry): AnyExpression {
+function createBoundaryExpr(
+  contract: Contract<SqlStorage>,
+  table: AliasedTable,
+  entry: CursorOrderEntry,
+): AnyExpression {
   const comparator: BinaryOp = entry.direction === 'asc' ? 'gt' : 'lt';
   return new BinaryExpr(
     comparator,
-    ColumnRef.of(tableName, entry.column),
-    LiteralExpr.of(entry.value),
+    table.column(entry.column),
+    paramRefForStorageColumn(contract, table.storage, entry.column, entry.value),
   );
 }
 
 function buildLexicographicCursorWhere(
-  tableName: string,
+  contract: Contract<SqlStorage>,
+  table: AliasedTable,
   entries: readonly CursorOrderEntry[],
 ): AnyExpression {
   const branches = entries.map((entry, index): AnyExpression => {
@@ -60,13 +69,13 @@ function buildLexicographicCursorWhere(
     for (const prefixEntry of entries.slice(0, index)) {
       branchExprs.push(
         BinaryExpr.eq(
-          ColumnRef.of(tableName, prefixEntry.column),
-          LiteralExpr.of(prefixEntry.value),
+          table.column(prefixEntry.column),
+          paramRefForStorageColumn(contract, table.storage, prefixEntry.column, prefixEntry.value),
         ),
       );
     }
 
-    branchExprs.push(createBoundaryExpr(tableName, entry));
+    branchExprs.push(createBoundaryExpr(contract, table, entry));
     if (branchExprs.length === 1) {
       const branch = branchExprs[0];
       assertDefined(branch, 'cursor branch contains its boundary expression');
@@ -86,7 +95,8 @@ function buildLexicographicCursorWhere(
 }
 
 function buildCursorWhere(
-  tableName: string,
+  contract: Contract<SqlStorage>,
+  table: AliasedTable,
   orderBy: readonly OrderByItem[] | undefined,
   cursor: Readonly<Record<string, unknown>> | undefined,
 ): AnyExpression | undefined {
@@ -120,62 +130,18 @@ function buildCursorWhere(
 
   const firstEntry = entries[0];
   if (entries.length === 1 && firstEntry !== undefined) {
-    return createBoundaryExpr(tableName, firstEntry);
+    return createBoundaryExpr(contract, table, firstEntry);
   }
 
-  return buildLexicographicCursorWhere(tableName, entries);
-}
-
-function createTableRefRemapper(fromTable: string, toTable: string): AstRewriter {
-  return {
-    columnRef: (col) => (col.table === fromTable ? ColumnRef.of(toTable, col.column) : col),
-    tableSource: (source) => {
-      if (source.alias === fromTable) {
-        return TableSource.named(source.name, toTable, source.namespaceId);
-      }
-      if (!source.alias && source.name === fromTable) {
-        return TableSource.named(source.name, toTable, source.namespaceId);
-      }
-      return source;
-    },
-    eqColJoinOn: (on) =>
-      EqColJoinOn.of(
-        on.left.table === fromTable ? ColumnRef.of(toTable, on.left.column) : on.left,
-        on.right.table === fromTable ? ColumnRef.of(toTable, on.right.column) : on.right,
-      ),
-  };
+  return buildLexicographicCursorWhere(contract, table, entries);
 }
 
 function buildStateWhere(
   contract: Contract<SqlStorage>,
-  tableName: string,
   state: CollectionState,
-  options?: {
-    readonly filterTableName?: string;
-    readonly namespaceId?: string | undefined;
-  },
 ): AnyExpression | undefined {
-  const filterTableName = options?.filterTableName;
-  const cursorTableName = filterTableName ?? tableName;
-  const cursorWhere = buildCursorWhere(cursorTableName, state.orderBy, state.cursor);
-  const boundFilters = state.filters.map((filter) =>
-    bindWhereExpr(contract, filter, options?.namespaceId),
-  );
-  const remappedFilters =
-    filterTableName && filterTableName !== tableName
-      ? boundFilters.map((filter) =>
-          filter.rewrite(createTableRefRemapper(filterTableName, tableName)),
-        )
-      : boundFilters;
-  const boundCursorWhere = cursorWhere
-    ? bindWhereExpr(contract, cursorWhere, options?.namespaceId)
-    : undefined;
-  const remappedCursorWhere =
-    boundCursorWhere && filterTableName && filterTableName !== tableName
-      ? boundCursorWhere.rewrite(createTableRefRemapper(filterTableName, tableName))
-      : boundCursorWhere;
-  const filters = remappedCursorWhere ? [...remappedFilters, remappedCursorWhere] : remappedFilters;
-  return combineWhereExprs(filters);
+  const cursorWhere = buildCursorWhere(contract, state.tables.root, state.orderBy, state.cursor);
+  return combineWhereExprs(cursorWhere ? [...state.filters, cursorWhere] : state.filters);
 }
 
 /**
@@ -237,12 +203,10 @@ function wrapWithRowNumberDedup(options: {
 
 /**
  * FROM source + WHERE for `state.distinct`: wraps in a `ROW_NUMBER`-ranked
- * derived table aliased back to `tableName`, so callers need no rewriting.
+ * derived table aliased back to the root alias, so callers need no rewriting.
  */
 function buildDedupedTableSource(
   contract: Contract<SqlStorage>,
-  namespaceId: string,
-  tableName: string,
   state: CollectionState,
   where: AnyExpression | undefined,
   wrapProjection: ReadonlyArray<ProjectionItem>,
@@ -251,18 +215,17 @@ function buildDedupedTableSource(
   readonly source: TableSource | DerivedTableSource;
   readonly where: AnyExpression | undefined;
 } {
+  const { root } = state.tables;
   if (!hasEntries(state.distinct)) {
-    return { source: tableSourceForContract(contract, namespaceId, tableName), where };
+    return { source: root.tableSource(contract), where };
   }
 
-  const distinctColumnRefs = state.distinct.map((column) => ColumnRef.of(tableName, column));
+  const distinctColumnRefs = state.distinct.map((column) => root.column(column));
   const rankingOrderBy = hasEntries(state.orderBy)
     ? state.orderBy
     : distinctColumnRefs.map((expr) => OrderByItem.asc(expr));
 
-  let inner = SelectAst.from(
-    tableSourceForContract(contract, namespaceId, tableName),
-  ).withProjection([
+  let inner = SelectAst.from(root.tableSource(contract)).withProjection([
     ...wrapProjection,
     ProjectionItem.of(
       '__prisma_distinct_rn',
@@ -277,36 +240,31 @@ function buildDedupedTableSource(
   }
 
   return {
-    source: DerivedTableSource.as(tableName, inner),
-    where: BinaryExpr.eq(ColumnRef.of(tableName, '__prisma_distinct_rn'), LiteralExpr.of(1)),
+    source: DerivedTableSource.as(root.alias, inner),
+    where: BinaryExpr.eq(root.column('__prisma_distinct_rn'), LiteralExpr.of(1)),
   };
 }
 
 function buildPrimaryKeyJoinOn(
-  leftTable: string,
-  rightTable: string,
+  left: AliasedTable,
+  right: AliasedTable,
   primaryKeyColumns: readonly string[],
 ): JoinOnExpr {
   const [firstColumn] = primaryKeyColumns;
   if (primaryKeyColumns.length === 1 && firstColumn !== undefined) {
-    return EqColJoinOn.of(
-      ColumnRef.of(leftTable, firstColumn),
-      ColumnRef.of(rightTable, firstColumn),
-    );
+    return EqColJoinOn.of(left.column(firstColumn), right.column(firstColumn));
   }
   return AndExpr.of(
-    primaryKeyColumns.map((column) =>
-      BinaryExpr.eq(ColumnRef.of(leftTable, column), ColumnRef.of(rightTable, column)),
-    ),
+    primaryKeyColumns.map((column) => BinaryExpr.eq(left.column(column), right.column(column))),
   );
 }
 
 function buildMtiJoins(
   contract: Contract<SqlStorage>,
-  namespaceId: string,
+  tables: CollectionTables,
   polyInfo: PolymorphismInfo,
   variantName: string | undefined,
-  selectedColumnsByTable: ReadonlyMap<string, ReadonlySet<string>> | undefined,
+  selectedColumnsByVariant: ReadonlyMap<string, ReadonlySet<string>> | undefined,
 ): { joins: JoinAst[]; projection: ProjectionItem[] } {
   const joins: JoinAst[] = [];
   const projection: ProjectionItem[] = [];
@@ -317,35 +275,40 @@ function buildMtiJoins(
   if (variantsToJoin.length === 0) {
     return { joins, projection };
   }
-  const pkColumns = resolvePrimaryKeyColumns(contract, namespaceId, polyInfo.baseTable);
+  const { root } = tables;
+  const pkColumns = resolvePrimaryKeyColumns(
+    contract,
+    root.storage.namespaceId,
+    root.storage.tableName,
+  );
 
   for (const variant of variantsToJoin) {
-    const joinType = variantName ? 'inner' : 'left';
-    const joinOn = buildPrimaryKeyJoinOn(polyInfo.baseTable, variant.table, pkColumns);
-    const join =
-      joinType === 'inner'
-        ? JoinAst.inner(tableSourceForContract(contract, namespaceId, variant.table), joinOn)
-        : JoinAst.left(tableSourceForContract(contract, namespaceId, variant.table), joinOn);
-    joins.push(join);
+    const variantTable = requireVariantTable(tables, variant.modelName);
+    const joinOn = buildPrimaryKeyJoinOn(root, variantTable, pkColumns);
+    joins.push(
+      variantName
+        ? JoinAst.inner(variantTable.tableSource(contract), joinOn)
+        : JoinAst.left(variantTable.tableSource(contract), joinOn),
+    );
 
+    const { namespaceId, tableName } = variantTable.storage;
     const variantColumns = getColumnsReadOnTable(
       contract,
       namespaceId,
       variant.modelName,
-      variant.table,
+      tableName,
     );
-    const selectedVariantColumns = selectedColumnsByTable?.get(variant.table);
+    const selectedVariantColumns = selectedColumnsByVariant?.get(variant.modelName);
     for (const col of variantColumns) {
       if (pkColumns.includes(col)) continue;
-      if (selectedColumnsByTable !== undefined && selectedVariantColumns?.has(col) !== true) {
+      if (selectedColumnsByVariant !== undefined && selectedVariantColumns?.has(col) !== true) {
         continue;
       }
-      const alias = `${variant.table}__${col}`;
       projection.push(
         ProjectionItem.of(
-          alias,
-          ColumnRef.of(variant.table, col),
-          codecRefForStorageColumn(contract.storage, namespaceId, variant.table, col),
+          variantColumnLabel(variantTable, col),
+          variantTable.column(col),
+          codecRefForStorageColumn(contract.storage, namespaceId, tableName, col),
         ),
       );
     }
@@ -359,34 +322,31 @@ function hasEntries<T>(value: ReadonlyArray<T> | undefined): value is ReadonlyAr
 }
 
 /**
- * The rows an aggregate reduces over, one SELECT aliased to `tableName` — an
+ * The rows an aggregate reduces over, one SELECT aliased to the root alias — an
  * aggregate has no outer level of its own, so where/joins/distinct/orderBy/
  * limit/offset all have to live in this one wrap.
  */
 function buildAggregateInput(
   contract: Contract<SqlStorage>,
-  namespaceId: string,
-  tableName: string,
   state: CollectionState,
   modelName: string | undefined,
   projection: ReadonlyArray<ProjectionItem>,
 ): { readonly source: DerivedTableSource } {
+  const { root } = state.tables;
   const polyInfo = modelName
-    ? resolvePolymorphismInfo(contract, namespaceId, modelName)
+    ? resolvePolymorphismInfo(contract, root.storage.namespaceId, modelName)
     : undefined;
   const variantJoins =
     polyInfo && polyInfo.mtiVariants.length > 0
-      ? buildMtiJoins(contract, namespaceId, polyInfo, state.variantName, undefined).joins
+      ? buildMtiJoins(contract, state.tables, polyInfo, state.variantName, undefined).joins
       : [];
 
-  const where = buildStateWhere(contract, tableName, state, { namespaceId });
+  const where = buildStateWhere(contract, state);
   const hiddenOrders = hasEntries(state.distinct)
-    ? projectExpressionOrders(tableName, state.orderBy)
+    ? projectExpressionOrders(root, state.orderBy)
     : undefined;
   const { source, where: effectiveWhere } = buildDedupedTableSource(
     contract,
-    namespaceId,
-    tableName,
     state,
     where,
     [...projection, ...(hiddenOrders?.projection ?? [])],
@@ -403,7 +363,7 @@ function buildAggregateInput(
   }
 
   if (hasEntries(state.distinctOn)) {
-    inner = inner.withDistinctOn(state.distinctOn.map((column) => ColumnRef.of(tableName, column)));
+    inner = inner.withDistinctOn(state.distinctOn.map((column) => root.column(column)));
   }
   const orderBy = hiddenOrders?.orderBy ?? state.orderBy;
   if (hasEntries(orderBy)) {
@@ -416,14 +376,14 @@ function buildAggregateInput(
     inner = inner.withOffset(state.offset);
   }
 
-  return { source: DerivedTableSource.as(tableName, inner) };
+  return { source: DerivedTableSource.as(root.alias, inner) };
 }
 
 /**
  * The dedup wrap exposes only its projection, so an order over an expression (a relation order, a count, an operation result) cannot be evaluated above it. Each such order is projected inside the wrap as a hidden `__order_N` column and the outer order reads that column.
  */
 function projectExpressionOrders(
-  tableName: string,
+  root: AliasedTable,
   orderBy: readonly OrderByItem[] | undefined,
 ): { readonly projection: ProjectionItem[]; readonly orderBy: OrderByItem[] } {
   const projection: ProjectionItem[] = [];
@@ -433,7 +393,7 @@ function projectExpressionOrders(
     }
     const alias = `__order_${index}`;
     projection.push(ProjectionItem.of(alias, item.expr));
-    return item.withExpr(ColumnRef.of(tableName, alias));
+    return item.withExpr(root.column(alias));
   });
   return { projection, orderBy: outerOrderBy };
 }
@@ -444,6 +404,5 @@ export {
   buildMtiJoins,
   buildPrimaryKeyJoinOn,
   buildStateWhere,
-  createTableRefRemapper,
   wrapWithRowNumberDedup,
 };

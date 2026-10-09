@@ -32,6 +32,7 @@ import {
   columnPassedForField,
   createMockRuntime,
   fieldUnknown,
+  tablesForTable,
   unmappedColumnPassed,
 } from './helpers';
 
@@ -176,20 +177,13 @@ describe('the refusal of a name that is not a field', () => {
 
 describe('a query with no select reads only the model columns', () => {
   it('in the default projection', () => {
-    const plan = compileSelect(contract, 'public', 'User', 'users', collection('User').state);
+    const plan = compileSelect(contract, 'User', collection('User').state);
     expect(projectedColumns(selectAstOf(plan.ast).projection)).not.toContain('legacy_key');
   });
 
   it('in an include child projection', () => {
     const state = collection('User').include('posts').state;
-    const plan = compileSelectWithIncludes(
-      contract,
-      context.aggregateDescriptors,
-      'public',
-      'User',
-      'users',
-      state,
-    );
+    const plan = compileSelectWithIncludes(contract, context.aggregateDescriptors, 'User', state);
     const ast = selectAstOf(plan.ast);
     expect(projectedColumns(ast.projection)).not.toContain('legacy_key');
     expect(projectedColumns(childRowsOf(ast, 'posts').projection)).not.toContain('internal_note');
@@ -199,7 +193,7 @@ describe('a query with no select reads only the model columns', () => {
     const state = collection('User')
       .distinct('email')
       .orderBy((user) => user['id']!.desc()).state;
-    const plan = compileSelect(contract, 'public', 'User', 'users', state);
+    const plan = compileSelect(contract, 'User', state);
     const ast = selectAstOf(plan.ast);
     const source = ast.from;
     if (!(source instanceof DerivedTableSource)) throw new TypeError('No ranked subquery');
@@ -214,14 +208,7 @@ describe('a query with no select reads only the model columns', () => {
     const state = collection('User').include('posts', (posts) =>
       posts.distinct('title').include('author'),
     ).state;
-    const plan = compileSelectWithIncludes(
-      contract,
-      context.aggregateDescriptors,
-      'public',
-      'User',
-      'users',
-      state,
-    );
+    const plan = compileSelectWithIncludes(contract, context.aggregateDescriptors, 'User', state);
     expect(JSON.stringify(plan.ast)).not.toContain('internal_note');
   });
 
@@ -236,14 +223,19 @@ describe('a query with no select reads only the model columns', () => {
     );
     const update = compileUpdateReturning(
       contract,
-      'public',
       'Post',
-      'posts',
+      tablesForTable(contract, 'posts'),
       { title: 'B' },
       [],
       undefined,
     );
-    const del = compileDeleteReturning(contract, 'public', 'Post', 'posts', [], undefined);
+    const del = compileDeleteReturning(
+      contract,
+      'Post',
+      tablesForTable(contract, 'posts'),
+      [],
+      undefined,
+    );
     const upsert = compileUpsertReturning(
       contract,
       'public',
@@ -275,7 +267,7 @@ describe('a query pinned to a variant reads the base fields and that variant fie
 
   it('leaves out a sibling single-table variant column', () => {
     const poly = buildStiPolyContract();
-    const plan = compileSelect(poly, 'public', 'User', 'users', pinned(poly, 'User', 'admin'));
+    const plan = compileSelect(poly, 'User', pinned(poly, 'User', 'admin'));
     const columns = projectedColumns(selectAstOf(plan.ast).projection);
     expect(columns).toContain('role');
     expect(columns).not.toContain('plan');
@@ -283,7 +275,7 @@ describe('a query pinned to a variant reads the base fields and that variant fie
 
   it('leaves out a single-table variant column when pinned to a multi-table variant', () => {
     const poly = buildMixedPolyContract();
-    const plan = compileSelect(poly, 'public', 'Task', 'tasks', pinned(poly, 'Task', 'feature'));
+    const plan = compileSelect(poly, 'Task', pinned(poly, 'Task', 'feature'));
     const columns = projectedColumns(selectAstOf(plan.ast).projection);
     expect(columns).toContain('title');
     expect(columns).not.toContain('severity');

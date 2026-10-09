@@ -17,67 +17,85 @@ import {
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { expect } from 'vitest';
-import {
-  type CollectionState,
-  emptyState,
-  type IncludeExpr,
-  type IncludeScalar,
-  type IncludeThroughDescriptor,
-  type RelationCardinalityTag,
+import { createIncludeTables } from '../src/collection-tables';
+import { createIncludeScalar } from '../src/include-descriptors';
+import type {
+  CollectionState,
+  IncludeThroughDescriptor,
+  RelationCardinalityTag,
 } from '../src/types';
-import { isSelectAst } from './helpers';
+import {
+  buildMixedPolyContract,
+  type IncludeSpec,
+  isSelectAst,
+  type StateSpec,
+  specState,
+  tableSpecState,
+} from './helpers';
+
+const fixtureContract = buildMixedPolyContract();
 
 export function includeExpr(options: {
   relationName: string;
   relatedModelName: string;
   relatedTableName: string;
-  localTableName: string;
+  localVariantName?: string;
   targetColumn: string;
   localColumn: string;
   cardinality: RelationCardinalityTag;
-  nested?: CollectionState;
-  scalar?: IncludeScalar<unknown>;
+  nested?: StateSpec;
+  scalar?: string;
   through?: IncludeThroughDescriptor;
-}): IncludeExpr {
-  return {
-    relationName: options.relationName,
-    relatedModelName: options.relatedModelName,
-    relatedNamespaceId: 'public',
-    relatedTableName: options.relatedTableName,
-    localTableName: options.localTableName,
-    targetColumns: [options.targetColumn],
-    localColumns: [options.localColumn],
-    cardinality: options.cardinality,
-    ...ifDefined('through', options.through),
-    nested: options.nested ?? emptyState(),
-    scalar: options.scalar,
-    combine: undefined,
+}): IncludeSpec {
+  return (parent) => {
+    const child = createIncludeTables(fixtureContract, parent, {
+      relatedNamespaceId: 'public',
+      relatedModelName: options.relatedModelName,
+      relatedTableName: options.relatedTableName,
+      through: options.through,
+    });
+    const nested = specState(child.tables, options.nested);
+    return {
+      relationName: options.relationName,
+      relatedModelName: options.relatedModelName,
+      relatedNamespaceId: 'public',
+      relatedTableName: options.relatedTableName,
+      ...ifDefined('localVariantName', options.localVariantName),
+      targetColumns: [options.targetColumn],
+      localColumns: [options.localColumn],
+      cardinality: options.cardinality,
+      ...ifDefined('through', options.through),
+      ...ifDefined('junction', child.junction),
+      nested,
+      scalar:
+        options.scalar === undefined ? undefined : createIncludeScalar(options.scalar, nested),
+      combine: undefined,
+    };
   };
 }
 
-export function selectedState(...fields: string[]): CollectionState {
-  return { ...emptyState(), selectedFields: fields };
+export function selectedState(...fields: string[]): StateSpec {
+  return { selectedFields: fields };
 }
 
 export function rootState(
-  include: IncludeExpr,
+  include: IncludeSpec,
   variantName: string,
   ...fields: string[]
 ): CollectionState {
-  return {
-    ...emptyState(),
+  return tableSpecState(fixtureContract, 'tasks', {
     includes: [include],
     selectedFields: fields,
     variantName,
-  };
+  });
 }
 
-export function assigneeInclude(localTableName: string): IncludeExpr {
+export function assigneeInclude(localVariantName?: string): IncludeSpec {
   return includeExpr({
     relationName: 'assignee',
     relatedModelName: 'Assignee',
     relatedTableName: 'assignees',
-    localTableName,
+    ...ifDefined('localVariantName', localVariantName),
     targetColumn: 'id',
     localColumn: 'assignee_id',
     cardinality: 'N:1',
@@ -85,12 +103,11 @@ export function assigneeInclude(localTableName: string): IncludeExpr {
   });
 }
 
-export function tasksInclude(nested: CollectionState): IncludeExpr {
+export function tasksInclude(nested: StateSpec): IncludeSpec {
   return includeExpr({
     relationName: 'tasks',
     relatedModelName: 'Task',
     relatedTableName: 'tasks',
-    localTableName: 'projects_tbl',
     targetColumn: 'project_id',
     localColumn: 'id',
     cardinality: '1:N',
