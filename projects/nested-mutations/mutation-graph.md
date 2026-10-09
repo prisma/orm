@@ -13,23 +13,31 @@ The question became: what explicit structure sits between the two, for every wri
 A write call is turned into a **mutation graph**. Nodes are database-level steps. Edges carry everything one node needs from another. A small runner executes the graph.
 
 ```ts
-// Nodes: frozen classes, static content only
-abstract class Node { peephole(graph: Graph): Node }
-class Find   extends Node { ast: SelectAst }
-class Insert extends Node { ast: InsertAst }
-class Update extends Node { ast: UpdateAst }
-class Delete extends Node { ast: DeleteAst }
-class Assert extends Node { error }              // throws when its input is empty
-class Merge  extends Node {}                      // one row from the rows of its inputs
-class State  extends Node { table; version }      // a version of a table
+type NodeId = number
 
-// Edges: every edge implies order
-abstract class Edge { from: Node; to: Node }
-class After      extends Edge {}                               // order only
-class PayloadData extends Edge { columns: [source, target][] }  // copy into values / set
-class FilterData  extends Edge { columns: [source, target][] }  // target = value; IN for many rows
+// An edge turns one row of its source into what its target consumes
+abstract class Edge<T> { from: NodeId; to: NodeId; abstract output(sourceRow): T }
+class FilterData  extends Edge<Expr>    { columns: [source, target][] }  // a condition for that row
+class PayloadData extends Edge<Payload> { columns: [source, target][] }  // a record of values for that row
+class After       { from: NodeId; to: NodeId }                            // order only, added with graph.after
 
-class Graph { add(node, ...inputs): Node; replace(old, next); result }
+// A node is a frozen class that holds its statement as SQL AST and executes it
+abstract class Node<Inputs> {
+  abstract execute(inputs: OutputsOf<Inputs>, run): AsyncIterableResult<Row> | Promise<number>
+  peephole(graph, id): Node
+}
+class Find   extends Node<{ filter: FilterData[] }>                         { ast: SelectAst }
+class Insert extends Node<{ payload: PayloadData[] }>                       { ast: InsertAst }
+class Update extends Node<{ filter: FilterData[]; payload: PayloadData[] }> { ast: UpdateAst }
+class Delete extends Node<{ filter: FilterData[] }>                         { ast: DeleteAst }
+class Assert, Merge, State                                                   // slices 2 and 3
+
+class Graph {
+  add<I>(node: Node<I>, inputs: I): NodeId
+  after(from: NodeId, to: NodeId): void
+  replace(id: NodeId, next: Node): void
+  result
+}
 ```
 
 Illustrative; names are settled only where a decision below says so.
@@ -74,6 +82,24 @@ Three edge classes: `After` (order only), `PayloadData` (copy columns into a wri
 - **Why.** The first build gave nodes their own fields (table identity, raw values, `where`, a copy of the read state) and the runner compiled them to AST with a switch on the node's class: two forms of one statement. The AST classes are already frozen and already have the operations the edges need. Inlining a `Find` into its consumer (D8) becomes a subquery over the `Find`'s AST.
 - **Assumes.** Everything the runner needs besides the AST (which model the result's rows are mapped to, the caller's selection and includes) belongs to the graph's result, not to a node. A result `Find` with includes returns identity columns and its rows are loaded with includes by identity, as writes with includes already are.
 
+### D2b. Edges resolve data, nodes execute
+
+An edge class has `output(sourceRow)`, which turns one row of its source into what its target consumes: `FilterData` a condition, `PayloadData` a record of values. A node class is generic over its inputs, a map from slot name to the edge class the slot accepts, and has `execute(inputs, run)`, which applies the inputs to its AST and runs the statement. `graph.add(node, inputs)` takes the node's inputs, typed by the node. The runner is a loop: for each node in position order, call `output` for every row of each input edge's source, call `execute`, keep what it returns.
+
+Rules that make this precise:
+
+- **Slots hold lists.** A node that takes several edges of one kind has one slot with a list (`payload: PayloadData[]`). One named slot per source is the fallback if combining a list inside `execute` gets complicated; it was not chosen because it needs a node class per relation layout.
+- **What `execute` receives for an edge:** `null` when the edge is absent; otherwise a list with one `output` per source row, which is empty when the source had no rows. Absent and empty are different values because confusing them would turn `update()` on a missing row into an update of every row.
+- **The node decides what an empty source means.** A write or a `Find` returns no rows without running its statement; `Assert` throws. The runner has no skip rule. (Replaces the runner-side rule of D6; the behaviour of D6 is unchanged.)
+- **A node combines filters as `AND` across edges and `OR` across the rows of one edge.** Many rows give `id = 5 OR id = 6`, not `IN`, because `output` sees one row. Many-to-many scoping does not go through this; D8 turns it into `IN (SELECT ...)`.
+- **Order-only edges are not inputs.** `graph.after(from, to)` adds one between two nodes already in the graph, `from` added before `to`. Table-state ordering (D4) gets its own edge class when `State` nodes arrive.
+- **Rows or count is decided by the node's AST.** A statement that returns columns is run as a row stream, one that returns nothing as an affected-row count; `execute` returns what the runtime gave it, and the runner collects a stream only when another node reads from the node. No second class per write and no parameter.
+- **The caller's rows are made in a step after `execute`,** described by the graph's result: model and variant for mapping, selected fields, includes. Every node, the result node included, returns storage rows, so any node can be read from.
+- **An edge is given what it needs to build a parameter for its target column** (the codec) when the builder creates it, because `output` only receives a row.
+
+- **Why.** In the first build the runner branched on edge classes to build conditions and on node classes to compile statements, so every new node or edge kind meant a change to the runner. With this split a new kind is a class, a wrong combination (a `PayloadData` into a `Delete`) does not compile, and an edge or a node can be tested alone.
+- **Assumes.** Typing is checked at `graph.add`; inside the graph nodes are stored with the widest input type. How a peephole reads and rewrites typed inputs is decided with the first rule that needs it (D8, slice 4).
+
 ### D3. Order comes only from edges
 
 No phases and no reliance on the order things were written in. The runner executes nodes one at a time in dependency order.
@@ -115,11 +141,12 @@ The translation emits a `Find` on the junction for this parent, with an `FilterD
 - **Why.** The base graph needs only plain edges, and the junction knowledge stays in the translation. Measured on 200,000 tags and 2,000 posts with 20 tags each: the `IN (SELECT ...)` form took 0.2 ms on Postgres and 0.06 ms on SQLite; the correlated `EXISTS` form the old executor used took 0.2-0.5 ms on Postgres and 9.5-25.8 ms on SQLite, because SQLite scans the whole target table.
 - **Assumes.** This peephole is required, not optional: without it the `IN` list is as long as the relation and exceeds bound-value limits. The SQL AST can express `IN` over a subquery for one column today (`BinaryExpr.in` with `SubqueryExpr`); the row-value form for composite keys is unverified.
 
-### D9. What a node returns is derived from the edges that read from it
+### D9. Adding a data edge makes its source return the columns the edge reads
 
-Nothing is stored on the node. The columns a node must return are the source columns of its outgoing data edges, plus the caller's selection when it is the result. A node nobody reads from uses the count-only statement form.
+When `graph.add` attaches a data edge, the graph replaces the source node in its slot with one whose AST also returns the edge's source columns. The builder sets the caller's selection on the result node the same way. A node has a method for "this node, also returning these columns" so the graph does not need to know its AST class.
 
-- **Why.** A stored list would repeat what the edges say and become wrong when a peephole removes an edge.
+- **Why.** `execute` then needs no list of columns passed in and edges need no second method; the AST alone says what a node returns and whether it is the count form. This reverses the first version of this decision, which derived the columns at run time from the outgoing edges: with nodes holding AST and `replace` being a write to one slot, updating the source is the simpler mechanism.
+- **Assumes.** If a peephole removes an edge, the source keeps returning a column nobody reads. That is accepted. Columns returned only for an edge are removed from the caller's row by the result step.
 
 ### D10. Nodes are frozen
 
@@ -186,6 +213,11 @@ Stage 1 builds the graph for what main does today. The bar is that every integra
 
 | Alternative | Why rejected |
 | --- | --- |
+| The runner decides that a node with an empty source is skipped, or the edge returns a "skip" value | The node decides; `Assert` needs the opposite of every other node, and that belongs in its own `execute` |
+| `output` called once with all source rows | "No rows" then needs a special expression for filters and has no value at all for payloads |
+| Two classes per write, or a rows/count parameter | The AST's returning already says it; a parameter can disagree with it |
+| A `Return` node that shapes the caller's rows | Its output is not storage rows, and a one-node graph would become two |
+| Deriving returned columns at run time from outgoing edges | A second method on every edge and an extra argument to `execute` |
 | Graph as an edge list, or edges that hold node objects | Lookups scan the graph; every replacement rebuilds the node's edges |
 | Adjacency list with input edges only | "Who reads from this node" is a scan, and rules that redirect a node's users need it |
 | Use-def and def-use arrays on the nodes (Simple, LLVM) | Nodes are mutated on every change and an edge has nowhere to carry its kind and column pairs |

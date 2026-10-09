@@ -24,8 +24,8 @@ The design is in [`../../mutation-graph.md`](../../mutation-graph.md) and the ru
 | Part | In this slice | Later |
 | --- | --- | --- |
 | Node classes | `Find`, `Update`, `Delete` | `Insert`, `Merge` (slice 2); `Assert`, `State` (slice 3) |
-| Edge classes | `After`, `FilterData` | `PayloadData` (slice 2) |
-| Graph | `add(node, ...inputs)`, `replace(old, next)`, `inputsOf(node)`, `usersOf(node)`, the result | |
+| Edge classes | `FilterData`; `After` through `graph.after` | `PayloadData` (slice 2); the table-state edge (slice 3) |
+| Graph | `add(node, inputs)`, `after(from, to)`, `replace(id, next)`, edges into and out of a position, the result | |
 | Peephole | the `peephole(graph)` hook called by `add`; one rule: an `Update` that sets nothing is removed | the inlining rule (slice 4) |
 | Printed form | one function that prints a graph as text, in the form shown above | |
 | Runner | one function that executes a graph | |
@@ -36,13 +36,12 @@ The design is in [`../../mutation-graph.md`](../../mutation-graph.md) and the ru
 - **A node holds its statement as SQL AST** (`Find` a `SelectAst`, `Update` an `UpdateAst`, `Delete` a `DeleteAst`), built by the graph builder. It holds nothing that comes from another node and nothing about what it returns; the runner applies edges and derived columns with the AST's `withWhere` and `withReturning`. Nodes are frozen; `peephole` returns the node itself or a replacement.
 - **The graph is a bidirectional adjacency list with stable positions** (design record D10a). `add` returns the node's position; an edge is one object with `from` and `to` as positions, listed at both of its nodes, and for `FilterData` a list of `[sourceColumn, targetColumn]` pairs; a removed node leaves its slot empty.
 - **The graph names its result**: a node, a form (rows, first row, or count), and the caller's selection and includes.
-- **The runner** takes a graph, the runtime, the execution context and the caller's annotations, and:
-  - executes nodes one at a time in dependency order;
-  - skips a node whose `FilterData` source produced no row, and treats it as empty;
-  - derives the columns a node returns from the edges that read from it, plus the caller's selection when it is the result;
-  - collects a node another node reads from; hands the result node to the existing dispatch functions (`dispatchMutationRows`, `dispatchCollectionRows`), so a bulk method still streams and includes are loaded by the existing read code;
+- **Edges resolve data, nodes execute** (design record D2b, D9). An edge class has `output(sourceRow)`; a node class is generic over its input slots and has `execute(inputs, run)`; `graph.add(node, inputs)` is typed by the node. `execute` receives `null` for an absent edge and otherwise a list with one output per source row, empty when the source had none, and decides itself what an empty list means. Adding a data edge makes its source return the columns the edge reads. Order-only edges are added with `graph.after(from, to)`.
+- **The runner** is a loop over the nodes in position order: resolve each input edge by calling `output` for every row of its source, call `execute`, keep what it returns. Besides that it:
+  - collects a node's row stream when another node reads from it, and passes the result node's stream through otherwise;
+  - turns the result node's storage rows into the caller's rows in a step described by the graph's result (model and variant, selected fields, includes loaded by the existing read code);
   - puts the caller's annotations on every statement;
-  - opens a transaction through the existing mutation scope when the graph will execute more than one statement, and executes a single statement directly.
+  - opens a transaction through the existing mutation scope when the graph has more than one node.
 - **The collection methods only build a graph and call the runner.** Argument checks that exist today (`assertLockCompatible`, `assertBulkWriteIgnoresNothing`, `assertReturningCapability`, `assertModelFieldNames`, unknown-field refusal, update defaults) keep running at the same point relative to the first statement.
 - **No relation knowledge anywhere in this slice.** There is no translation table yet; it arrives with the first relation operation in slice 3.
 
