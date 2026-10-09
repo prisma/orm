@@ -518,6 +518,7 @@ describe('mutation-executor', () => {
       >
     )[0]!;
     expect(Object.keys(link).sort()).toEqual(['child_id', 'parent_id']);
+    expect(junctionInsertConflict(runtime)).toBeUndefined();
     expect((runtime.executions.at(-1)!.plan as { params: readonly unknown[] }).params).toEqual([
       1, 20,
     ]);
