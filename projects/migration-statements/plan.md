@@ -69,6 +69,7 @@
 - The same two flags as 3a, writing a data transform with a placeholder.
 - Making a field required on a collection with documents is no longer silent. It is answered with `--backfill`, or the command says the existing documents need the field.
 - Renaming a field inside a value object rewrites the embedded documents, including lists, dictionaries and unions.
+- Removing a variant model is data loss: today its documents stay and fail every update. `--delete <Variant>` deletes the documents with that discriminator value, as 3b does for SQL rows.
 
 **Hands to:** close-out for MongoDB.
 
