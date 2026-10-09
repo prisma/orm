@@ -123,9 +123,9 @@ const POSTGRES_MARKER_TABLE = 'prisma_contract.marker';
 const POSTGRES_LEDGER_TABLE = 'prisma_contract.ledger';
 
 /**
- * Tables another migration tool keeps in an application schema. Introspection leaves them out unless the contract declares a table of that name in the same namespace.
+ * Tables another migration tool, not Prisma 8, keeps in an application schema: Prisma 7's ledger. `introspect` leaves them out unless the contract declares a table of that name in the same namespace.
  */
-const MIGRATION_TOOL_TABLES: ReadonlySet<string> = new Set(['_prisma_migrations']);
+const OTHER_TOOL_MIGRATION_TABLES: ReadonlySet<string> = new Set(['_prisma_migrations']);
 
 function markerRowDecodeWhy(detail: string): string {
   return `Invalid contract marker row: ${detail}`;
@@ -696,8 +696,6 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
    * runtime `search_path`. When no contract is passed, the adapter falls
    * back to introspecting the single `schema` argument (defaulting to
    * `'public'`).
-   *
-   * Leaves out the tables another migration tool keeps in an application schema (`_prisma_migrations`), unless the contract declares a table of that name in that namespace.
    *
    * Uses batched queries to minimize database round trips (6 queries per
    * schema walked).
@@ -1435,7 +1433,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
 
     const tables: Record<string, PostgresTableSchemaNode> = {};
     for (const [tableName, input] of Object.entries(tableInputs)) {
-      if (MIGRATION_TOOL_TABLES.has(tableName) && !declaredTables.has(tableName)) continue;
+      if (OTHER_TOOL_MIGRATION_TABLES.has(tableName) && !declaredTables.has(tableName)) continue;
       tables[tableName] = new PostgresTableSchemaNode({
         ...input,
         policies: policiesByTable.get(tableName) ?? [],

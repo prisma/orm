@@ -1,5 +1,5 @@
 /**
- * Prisma 7 keeps its applied migrations in `_prisma_migrations`, a table in the application schema that belongs to Prisma 7, not to the application. `contract infer` prints no model for it and `db verify --strict` does not report it as unclaimed. A contract that declares a table of that name gets it verified like any declared table.
+ * Prisma 7 keeps its applied migrations in `_prisma_migrations`, a table in the application schema that belongs to Prisma 7, not to the application. `contract infer` prints no model for it, `db schema` does not show it, and `db verify --strict` does not report it as unclaimed. A contract that declares a table of that name gets it verified like any declared table.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { withClient } from '@repo/test-utils';
@@ -11,6 +11,7 @@ import {
   engineDocument,
   runContractEmit,
   runContractInfer,
+  runDbSchema,
   runDbSign,
   runDbUpdate,
   runDbVerify,
@@ -83,6 +84,24 @@ withTempDir(({ createTempDir }) => {
         const inferred = readFileSync(join(ctx.testDir, 'contract.prisma'), 'utf-8');
         expect(inferred).toContain('@@map("user")');
         expect(inferred).not.toContain('_prisma_migrations');
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'db schema does not show it',
+      async () => {
+        const ctx = setupJourney({
+          connectionString: db.connectionString,
+          createTempDir,
+          contractMode: 'psl',
+        });
+
+        const schema = await runDbSchema(ctx, ['--json']);
+        const printed = JSON.stringify(engineDocument(schema));
+        expect(schema.exitCode, `db schema\n${output(schema)}`).toBe(0);
+        expect(printed).toContain('"user"');
+        expect(printed).not.toContain('_prisma_migrations');
       },
       timeouts.spinUpPpgDev,
     );

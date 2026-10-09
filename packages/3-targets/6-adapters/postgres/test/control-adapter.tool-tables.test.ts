@@ -1,3 +1,4 @@
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
@@ -34,6 +35,8 @@ function driverWithTables(
         rows = tables.map((name) => ({ table_name: name }));
       } else if (sql.includes('information_schema.columns')) {
         rows = tables.map((name) => column(name, 'id'));
+      } else if (sql.includes('current_schema()')) {
+        rows = [{ current_schema: 'public' }];
       } else if (sql.includes('version()')) {
         rows = [{ version: 'PostgreSQL 16.1' }];
       }
@@ -92,5 +95,18 @@ describe('PostgresControlAdapter introspection of migration tool tables', () => 
       public: Object.keys(result.namespaces['public']?.tables ?? {}),
       audit: Object.keys(result.namespaces['audit']?.tables ?? {}),
     }).toEqual({ public: ['_prisma_migrations', 'user'], audit: [] });
+  });
+
+  it('keeps _prisma_migrations declared in the unbound namespace that resolves to the same schema', async () => {
+    const result = await adapter.introspect(
+      driverWithTables({ public: ['_prisma_migrations', 'user'] }),
+      contractDeclaringTables({ [UNBOUND_NAMESPACE_ID]: ['_prisma_migrations'], public: ['user'] }),
+    );
+
+    expect(Object.keys(result.namespaces)).toEqual(['public']);
+    expect(Object.keys(result.namespaces['public']?.tables ?? {})).toEqual([
+      '_prisma_migrations',
+      'user',
+    ]);
   });
 });
