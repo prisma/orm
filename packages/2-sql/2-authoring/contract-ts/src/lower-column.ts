@@ -23,8 +23,8 @@ import { invariant } from '@internal/utils/assertions';
 import { ifDefined } from '@internal/utils/defined';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { columnCodec, encodeColumnDefault } from './column-defaults';
-import { type ColumnSite, columnSiteMeta, columnSiteSubject } from './column-site';
 import { contractError } from './contract-errors';
+import { type ColumnSite, columnSiteMeta, columnSiteSubject } from './declaration-sites';
 import { checkMemberValues, enumValueSetRefs } from './enum-members';
 import { type CollectedColumnEntities, collectEntityFromColumn } from './pack-entities';
 import type { ColumnDescription } from './storage-description';
@@ -197,7 +197,7 @@ export function lowerColumn(
           kinds: description.noCheck,
           many: many !== false,
           elementNullable,
-          isDomainEnum: description.domainEnum !== undefined,
+          isDomainEnum: description.enumTypeHandle !== undefined,
         })
       : undefined;
 
@@ -217,7 +217,7 @@ export function lowerColumn(
         )
       : undefined;
 
-  const enumRefs = enumValueSetRefs(description.domainEnum, context.defaultNamespaceId);
+  const enumRefs = enumValueSetRefs(description.enumTypeHandle, context.defaultNamespaceId);
   invariant(
     enumRefs === undefined || descriptor.valueSet === undefined,
     `${columnSiteSubject(site)} is typed by a domain enum and also carries a storage value set from its type constructor.`,
@@ -240,13 +240,14 @@ export function lowerColumn(
   if (render === undefined || !placement.derivesChecks) {
     return { column, derivedChecks: [] };
   }
-  const domainEnum = description.domainEnum;
+  const { enumTypeHandle } = description;
   const candidates = render({
     tableName: placement.tableName,
     columnName: description.columnName,
     many: many !== false,
     elementNullable,
-    memberValues: domainEnum !== undefined ? checkMemberValues(domainEnum, codecLookup) : undefined,
+    memberValues:
+      enumTypeHandle !== undefined ? checkMemberValues(enumTypeHandle, codecLookup) : undefined,
   }).filter((candidate) => !(noCheck?.includes(candidate.kind) ?? false));
   return { column, derivedChecks: lowerRenderedChecks(placement.tableName, candidates) };
 }

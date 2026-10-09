@@ -38,6 +38,29 @@ const rows: readonly Row[] = [
     fieldName: 'nickname',
   },
   {
+    kind: 'list column in the middle of a model',
+    definition: definitionOf([
+      user(
+        field('tags', 'pg/text@1', { many: true }),
+        field('labels', 'pg/text@1', { many: true }),
+      ),
+    ]),
+    fieldName: 'tags',
+  },
+  {
+    kind: 'enumType() column in the middle of a model',
+    definition: definitionOf(
+      [
+        user(
+          field('role', 'pg/text@1', { enumTypeHandle: Role }),
+          field('formerRole', 'pg/text@1', { enumTypeHandle: Role }),
+        ),
+      ],
+      { enums: { Role } },
+    ),
+    fieldName: 'role',
+  },
+  {
     kind: 'list',
     definition: definitionOf([user(field('tags', 'pg/text@1', { many: true }))]),
     fieldName: 'tags',

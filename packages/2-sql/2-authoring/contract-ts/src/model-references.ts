@@ -1,20 +1,11 @@
 import type { ContractDefinition, ModelNode } from './contract-definition';
 import { contractError } from './contract-errors';
-
-/** The declaration a reference starts from: a model, or a table node. Named in the errors that resolving the reference raises. */
-export type ReferenceOwner =
-  | { readonly kind: 'model'; readonly modelName: string }
-  | { readonly kind: 'table'; readonly tableName: string };
-
-export function referenceOwnerSubject(owner: ReferenceOwner): string {
-  return owner.kind === 'model' ? `model "${owner.modelName}"` : `table "${owner.tableName}"`;
-}
-
-export function referenceOwnerMeta(owner: ReferenceOwner): Record<string, string> {
-  return owner.kind === 'model'
-    ? { sourceModel: owner.modelName }
-    : { sourceTable: owner.tableName };
-}
+import {
+  type ReferenceOwner,
+  referenceOwnerMeta,
+  referenceOwnerSubject,
+} from './declaration-sites';
+import { namespaceIdOrDefault } from './namespace-id';
 
 export function assertKnownTargetModel(
   modelsByName: ReadonlyMap<string, ModelNode>,
@@ -73,9 +64,7 @@ export interface ModelLookups {
 }
 
 export function modelNamespaceId(model: ModelNode, defaultNamespaceId: string): string {
-  return model.namespaceId !== undefined && model.namespaceId.length > 0
-    ? model.namespaceId
-    : defaultNamespaceId;
+  return namespaceIdOrDefault(model.namespaceId, defaultNamespaceId);
 }
 
 export function modelLookupsOf(definition: ContractDefinition): ModelLookups {

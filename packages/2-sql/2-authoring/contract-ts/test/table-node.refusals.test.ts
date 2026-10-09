@@ -55,10 +55,11 @@ describe('table node refusals', () => {
     );
   });
 
-  const tableLevelProperties: ReadonlyArray<readonly [string, Partial<TableNode>]> = [
-    ['id', { id: { columns: ['legacy_key'] } }],
-    ['uniques', { uniques: [{ columns: ['legacy_key'] }] }],
+  const tableLevelProperties: ReadonlyArray<readonly [string, string, Partial<TableNode>]> = [
+    ['id', 'a primary key', { id: { columns: ['legacy_key'] } }],
+    ['uniques', 'unique constraints', { uniques: [{ columns: ['legacy_key'] }] }],
     [
+      'indexes',
       'indexes',
       {
         indexes: [columnIndex(['legacy_key'])],
@@ -66,20 +67,22 @@ describe('table node refusals', () => {
     ],
     [
       'checks',
+      'check constraints',
       { checks: [{ expression: "legacy_key <> ''", name: 'legacy_present', map: undefined }] },
     ],
     [
       'foreignKeys',
+      'foreign keys',
       {
         foreignKeys: [{ columns: ['legacy_key'], references: { table: 'User', columns: ['id'] } }],
       },
     ],
-    ['control', { control: 'external' }],
+    ['control', 'a control policy', { control: 'external' }],
   ];
 
   it.each(tableLevelProperties)(
     'refuses a table node that states %s for a table a model maps',
-    (property, extra) => {
+    (property, label, extra) => {
       expect(() =>
         build(
           definitionOf([user], { tables: [{ tableName: 'User', columns: [legacyKey], ...extra }] }),
@@ -87,7 +90,7 @@ describe('table node refusals', () => {
       ).toThrow(
         expect.objectContaining({
           code: 'CONTRACT.TABLE_OWNED_BY_MODEL',
-          message: `A table node for table "User" states ${property}, but model "User" maps that table and owns its table-level properties. A table node for a modelled table may only add columns.`,
+          message: `A table node for table "User" states ${label}, but model "User" maps that table and owns its table-level properties. A table node for a modelled table may only add columns.`,
           meta: { namespaceId: 'public', tableName: 'User', modelName: 'User', property },
         }),
       );
@@ -126,56 +129,6 @@ describe('table node refusals', () => {
     expect(contract.storage.namespaces['public']?.entries.table?.['audit_rows']).toBeDefined();
   });
 
-  it('refuses a foreign key to a table no model or table node declares', () => {
-    expect(() =>
-      build(
-        definitionOf([user], {
-          tables: [
-            {
-              tableName: 'audit_rows',
-              columns: [idColumn],
-              foreignKeys: [{ columns: ['id'], references: { table: 'Ghost', columns: ['id'] } }],
-            },
-          ],
-        }),
-      ),
-    ).toThrow(
-      expect.objectContaining({
-        code: 'CONTRACT.TABLE_UNKNOWN',
-        message:
-          'Foreign key on table "audit_rows" references table "Ghost" in namespace "public", which no model or table node declares',
-        meta: { sourceTable: 'audit_rows', referencedTable: 'Ghost', namespaceId: 'public' },
-      }),
-    );
-  });
-
-  it('names the table that owns a foreign key to an unknown model', () => {
-    expect(() =>
-      build(
-        definitionOf([user], {
-          tables: [
-            {
-              tableName: 'audit_rows',
-              columns: [idColumn],
-              foreignKeys: [
-                {
-                  columns: ['id'],
-                  references: { model: 'Ghost', table: 'ghost', columns: ['id'] },
-                },
-              ],
-            },
-          ],
-        }),
-      ),
-    ).toThrow(
-      expect.objectContaining({
-        code: 'CONTRACT.MODEL_UNKNOWN',
-        message: 'Foreign key on table "audit_rows" references unknown model "Ghost"',
-        meta: { sourceTable: 'audit_rows', targetModel: 'Ghost', context: 'Foreign key' },
-      }),
-    );
-  });
-
   it('adds a column node for a single-table variant table to the base model table, since only a table can be named', () => {
     const contract = build(
       definitionOf(
@@ -189,5 +142,65 @@ describe('table node refusals', () => {
     expect(
       Object.keys(contract.storage.namespaces['public']?.entries.table?.['task']?.columns ?? {}),
     ).toEqual(['id', 'legacy_key']);
+  });
+
+  it('refuses a column node for a column a single-table variant field maps, naming the variant field', () => {
+    expect(() =>
+      build(
+        definitionOf(
+          [
+            {
+              modelName: 'Task',
+              tableName: 'task',
+              fields: [field('id')],
+              id: { columns: ['id'] },
+            },
+            {
+              modelName: 'Bug',
+              tableName: 'task',
+              sharesBaseTable: true,
+              fields: [field('severity', 'pg/text@1')],
+            },
+          ],
+          { tables: [{ tableName: 'task', columns: [{ ...legacyKey, columnName: 'severity' }] }] },
+        ),
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.NAME_DUPLICATE',
+        message:
+          'Column "severity" of table "task" is declared by field "Bug.severity" and again by a table node.',
+        meta: { kind: 'column', name: 'severity', tableName: 'task', namespaceId: 'public' },
+      }),
+    );
+  });
+
+  it('names the variant field when the base table carries a copy of the variant column', () => {
+    expect(() =>
+      build(
+        definitionOf(
+          [
+            {
+              modelName: 'Task',
+              tableName: 'task',
+              fields: [field('id'), field('severity', 'pg/text@1', { nullable: true })],
+              id: { columns: ['id'] },
+            },
+            {
+              modelName: 'Bug',
+              tableName: 'task',
+              sharesBaseTable: true,
+              fields: [field('severity', 'pg/text@1')],
+            },
+          ],
+          { tables: [{ tableName: 'task', columns: [{ ...legacyKey, columnName: 'severity' }] }] },
+        ),
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        message:
+          'Column "severity" of table "task" is declared by field "Bug.severity" and again by a table node.',
+      }),
+    );
   });
 });

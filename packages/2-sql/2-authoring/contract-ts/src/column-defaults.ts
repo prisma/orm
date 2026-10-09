@@ -8,9 +8,9 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { isStructuredError, type StructuredError } from '@internal/utils/structured-error';
-import { type ColumnSite, columnSiteMeta, columnSiteSubject } from './column-site';
 import type { AuthoredColumnDefault } from './contract-definition';
 import { contractError } from './contract-errors';
+import { type ColumnSite, columnSiteMeta, columnSiteSubject } from './declaration-sites';
 
 /**
  * The codec that encodes one column's default, built with the column's own `typeParams`, because a parameterized codec checks its params when it encodes and reads a default. Only a column has params; every other encode site takes the representative instance.

@@ -72,7 +72,7 @@ export interface ScalarMemberNode {
 }
 
 /**
- * A column as storage describes it, with no field. A model field ({@link FieldNode}) is a column node plus its field part; a table node ({@link TableNode}) holds column nodes for columns no field maps.
+ * A column as storage describes it, with no field. A model field ({@link FieldNode}) is a column node that is also a scalar member; a table node ({@link TableNode}) holds column nodes for columns no field maps.
  */
 export interface ColumnNode {
   readonly columnName: string;
@@ -92,13 +92,11 @@ export interface ColumnNode {
   readonly enumTypeHandle?: EnumTypeHandle;
 }
 
-/** What a model field adds to its column: the field's name and the defaults the runtime fills. */
-export interface FieldPart {
-  readonly fieldName: string;
+/** A scalar model field: a scalar member with its column, and the defaults the runtime fills. */
+export interface FieldNode extends ScalarMemberNode, ColumnNode {
+  readonly descriptor: ColumnTypeDescriptor;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
 }
-
-export interface FieldNode extends ColumnNode, FieldPart {}
 
 export interface PrimaryKeyNode {
   readonly columns: readonly string[];
@@ -165,7 +163,7 @@ export interface ForeignKeyModelReference {
   readonly spaceId?: string;
 }
 
-/** A foreign key's target named by its table, which a model or a table node of this contract declares. Without `namespaceId` the table is in the default namespace. */
+/** A foreign key's target named by its table, which a model or a table node of this contract declares. Without `namespaceId`, or with an empty one, the table is in the default namespace. */
 export interface ForeignKeyTableReference {
   readonly model?: never;
   readonly table: string;
@@ -253,10 +251,9 @@ export interface ValueObjectMemberNode {
 /**
  * A model field typed by a value object. It is stored in one column of the storage type the target declares for value objects, carried in `descriptor`; a list of value objects is stored in that one column too.
  */
-export interface ValueObjectFieldNode extends ValueObjectMemberNode {
-  readonly columnName: string;
-  readonly descriptor: ColumnTypeDescriptor;
-  readonly default?: AuthoredColumnDefault;
+export interface ValueObjectFieldNode
+  extends ValueObjectMemberNode,
+    Pick<ColumnNode, 'columnName' | 'descriptor' | 'default'> {
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
 }
 
@@ -282,7 +279,17 @@ export function isValueObjectMember(
   return 'valueObjectName' in field;
 }
 
-export interface ModelNode {
+/** What a table declares besides its columns. A model states these for its table, and so does a table node for a table no model maps. */
+export interface TableProperties {
+  readonly id?: PrimaryKeyNode;
+  readonly uniques?: readonly UniqueConstraintNode[];
+  readonly indexes?: readonly IndexNode[];
+  readonly checks?: readonly CheckNode[];
+  readonly foreignKeys?: readonly ForeignKeyNode[];
+  readonly control?: ControlPolicy;
+}
+
+export interface ModelNode extends TableProperties {
   readonly modelName: string;
   readonly tableName: string;
   /**
@@ -297,13 +304,7 @@ export interface ModelNode {
    */
   readonly namespaceId?: string;
   readonly fields: readonly (FieldNode | ValueObjectFieldNode)[];
-  readonly id?: PrimaryKeyNode;
-  readonly uniques?: readonly UniqueConstraintNode[];
-  readonly indexes?: readonly IndexNode[];
-  readonly checks?: readonly CheckNode[];
-  readonly foreignKeys?: readonly ForeignKeyNode[];
   readonly relations?: readonly RelationNode[];
-  readonly control?: ControlPolicy;
   /**
    * Single-table-inheritance variants share their base model's storage table:
    * the variant's columns are materialised onto the base `ModelNode`, and this
@@ -317,17 +318,11 @@ export interface ModelNode {
 /**
  * A table's storage declared without a model. Naming a table a model maps adds columns to it and nothing else; naming any other table declares the whole table.
  */
-export interface TableNode {
-  /** Namespace coordinate of the table. Omitted means the target's default namespace. */
+export interface TableNode extends TableProperties {
+  /** Namespace coordinate of the table. Omitted or empty means the target's default namespace. */
   readonly namespaceId?: string;
   readonly tableName: string;
   readonly columns: readonly ColumnNode[];
-  readonly id?: PrimaryKeyNode;
-  readonly uniques?: readonly UniqueConstraintNode[];
-  readonly indexes?: readonly IndexNode[];
-  readonly checks?: readonly CheckNode[];
-  readonly foreignKeys?: readonly ForeignKeyNode[];
-  readonly control?: ControlPolicy;
 }
 
 export interface ContractDefinition {

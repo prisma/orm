@@ -851,8 +851,8 @@ describe('noCheck — enforcement opt-out', () => {
       noCheck: ['elementNotNull'],
     });
     expect(flatten(checksOf(contract))).toEqual([
-      wire('User_tags_elem_not_null', `array_position("tags", NULL) IS NULL`),
       wire('User_labels_elem_not_null', `array_position("labels", NULL) IS NULL`),
+      wire('User_tags_elem_not_null', `array_position("tags", NULL) IS NULL`),
     ]);
   });
 
@@ -891,8 +891,8 @@ describe('noCheck — enforcement opt-out', () => {
       many: { elementNullable: false },
     });
     expect(flatten(checksOf(contract))).toEqual([
-      wire('User_omittedResets_elem_not_null', `array_position("omittedResets", NULL) IS NULL`),
       wire('User_falseResets_elem_not_null', `array_position("falseResets", NULL) IS NULL`),
+      wire('User_omittedResets_elem_not_null', `array_position("omittedResets", NULL) IS NULL`),
     ]);
   });
 

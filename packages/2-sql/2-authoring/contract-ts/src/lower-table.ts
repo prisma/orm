@@ -86,8 +86,8 @@ export function lowerTable(
     ),
   }));
   checks.push(...lowerAuthoredChecks(tableName, Object.keys(columns), table.checks, context));
-  const primaryKey = table.primaryKey
-    ? { columns: table.primaryKey.columns, ...ifDefined('name', table.primaryKey.name) }
+  const primaryKey = table.id
+    ? { columns: table.id.columns, ...ifDefined('name', table.id.name) }
     : undefined;
   const { foreignKeys, indexes } = materializeForeignKeysAndIndexes({
     tableName,
@@ -109,8 +109,15 @@ export function lowerTable(
     indexes: indexes.map((i) => new Index(i)),
     foreignKeys,
     ...(primaryKey ? { primaryKey } : {}),
-    ...(checks.length > 0 ? { checks } : {}),
+    ...(checks.length > 0 ? { checks: inCanonicalOrder(checks) } : {}),
   };
+}
+
+/**
+ * The checks sorted by name in UTF-16 code-unit order, the order contract canonicalization gives them. The table's storage is then the same whichever declaration each column came from and in whatever order the columns were listed.
+ */
+function inCanonicalOrder(checks: readonly CheckConstraint[]): readonly CheckConstraint[] {
+  return [...checks].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
 function authoredIndexInput(index: IndexNode): AuthoredIndexInput {

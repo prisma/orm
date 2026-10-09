@@ -10,7 +10,7 @@ function column(modelName: string, columnName: string, nullable = true): ColumnD
     many: false,
     default: undefined,
     noCheck: undefined,
-    domainEnum: undefined,
+    enumTypeHandle: undefined,
     site: { kind: 'field', modelName, fieldName: columnName },
   };
 }
@@ -25,7 +25,7 @@ function table(
     tableName,
     columns,
     control: undefined,
-    primaryKey: undefined,
+    id: undefined,
     uniques: [],
     indexes: [],
     checks: [],
@@ -105,7 +105,7 @@ describe('mergeTables', () => {
       ),
     ).toThrow(
       expect.objectContaining({
-        code: 'CONTRACT.COLUMN_ON_STI_VARIANT',
+        code: 'CONTRACT.VARIANT_COLUMN_NOT_ON_BASE_TABLE',
         meta: {
           modelName: 'Bug',
           namespaceId: 'public',

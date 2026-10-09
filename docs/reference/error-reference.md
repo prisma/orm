@@ -281,10 +281,6 @@ A `@noCheck` / `.noCheck(...)` declaration is invalid. Either it does not apply 
 
 A Mongo model's collection attachment is wrong: the model declares `indexes`, `collectionOptions`, or `controlPolicy` but has no collection, or a single collection has `collectionOptions` / `controlPolicy` declared by more than one model. Raised by the Mongo `defineContract` builder. Payload: `modelName`, `collection`, `reason`.
 
-### CONTRACT.COLUMN_ON_STI_VARIANT
-
-A single-table-inheritance variant has a column that its base model's table does not have. The base model owns the shared table, so every column a variant uses must already be on that table; the PSL interpreter copies each variant column onto the base for this reason. Raised while building a SQL contract. The fix is to declare the column on the base model. Payload: `modelName`, `namespaceId`, `tableName`, `columnName`.
-
 ### CONTRACT.CONSTRAINT_INVALID
 
 A model declares an empty unique constraint (a unique with no fields), raised during SQL contract lowering (meta: `modelName`). Also raised when a CHECK constraint reaches SQLite migration DDL rendering: the SQLite target does not support CHECK constraints, and `sql.checkConstraint` is a Postgres-only capability. A `@@check` is refused earlier, by the PSL capability gate; a `check()` declared through the TypeScript builder is not, because capabilities reach the contract only after it is built, so this is where a SQLite `check()` is refused (meta: `constraintName`, and `tableName` where available).
@@ -519,7 +515,7 @@ An emitted model type name, formed as `<namespace>_<Model>`, is not a TypeScript
 
 ### CONTRACT.MODEL_UNKNOWN
 
-A relation, foreign key, junction (`through`) reference, or context declaration names a model that is not declared in the contract. Raised while lowering/building a SQL contract. Payload: `sourceModel` (or `sourceTable` when a table node owns the foreign key), `relationName`, `targetModel`.
+A relation, foreign key, junction (`through`) reference, or context declaration names a model that is not declared in the contract. Raised while lowering/building a SQL contract. Payload: `sourceModel` (or `sourceTable` and `sourceNamespaceId` when a table node owns the foreign key), `relationName`, `targetModel`.
 
 ### CONTRACT.MODEL_VARIANT_MISSING
 
@@ -531,7 +527,7 @@ The contract module at the configured path loads but exposes neither a `default`
 
 ### CONTRACT.NAME_DUPLICATE
 
-Two declarations claim the same name: duplicate namespace entries, model names, value objects, relations, tables (two models mapping to one table, two table nodes for one table, or duplicate table in a namespace), column mappings (two fields to one column, a field and a table node's column node for one column, or two column nodes for one column), indexes, value-sets (enum and pack entity minting the same value-set), or pack entities of the same kind and name in one namespace. Raised while authoring/building a contract. Payload: `kind`, `name`, `namespaceId`, `first`, `second`.
+Two declarations claim the same name: duplicate namespace entries, model names, value objects, relations, tables (two models mapping to one table, two table nodes for one table, or duplicate table in a namespace), column mappings (two fields to one column, a field and a table node's column node for one column, or two column nodes for one column), indexes, value-sets (enum and pack entity minting the same value-set), or pack entities of the same kind and name in one namespace. Raised while authoring/building a contract. Payload: `kind`, `name`, `namespaceId`, `tableName` (for a column), `first`, `second`.
 
 ### CONTRACT.NAMESPACE_INVALID
 
@@ -601,15 +597,15 @@ A storage table name resolves in more than one namespace of the contract and nee
 
 ### CONTRACT.TABLE_MISMATCH
 
-A foreign key or index references a table name that disagrees with the table the target model is actually mapped to. Raised while building a SQL contract. Payload: `sourceModel` (or `sourceTable` when a table node owns the foreign key), `referencedTable`, `mappedTable`.
+A foreign key or index references a table name that disagrees with the table the target model is actually mapped to. Raised while building a SQL contract. Payload: `sourceModel` (or `sourceTable` and `sourceNamespaceId` when a table node owns the foreign key), `referencedTable`, `mappedTable`.
 
 ### CONTRACT.TABLE_OWNED_BY_MODEL
 
-A table node names a table a model maps and also states a table-level property: a primary key (`id`), uniques, indexes, checks, foreign keys or a control policy. The model owns those properties for its table, so a table node for that table may only add columns. Raised while building a SQL contract. The fix is to declare the property on the model, or drop it from the table node. Payload: `namespaceId`, `tableName`, `modelName`, `property`.
+A table node names a table a model maps and also states a table-level property: a primary key (`id`), unique constraints, indexes, check constraints, foreign keys or a control policy. The model owns those properties for its table, so a table node for that table may only add columns. Raised while building a SQL contract. The fix is to declare the property on the model, or drop it from the table node. Payload: `namespaceId`, `tableName`, `modelName`, `property`.
 
 ### CONTRACT.TABLE_UNKNOWN
 
-A foreign key names its target by table, and no model or table node of the contract declares that table in that namespace. Raised while building a SQL contract. The fix is to declare the table, or correct the table name or namespace. Payload: `sourceModel` or `sourceTable`, `referencedTable`, `namespaceId`.
+A foreign key names its target by table, and no model or table node of the contract declares that table in that namespace. Raised while building a SQL contract. The fix is to declare the table, or correct the table name or namespace. Payload: `sourceModel`, or `sourceTable` and `sourceNamespaceId`, then `referencedTable`, `namespaceId`.
 
 ### CONTRACT.TARGET_MISMATCH
 
@@ -636,6 +632,10 @@ A command advancing a ref (`db sign`, `db init`, `db update`, `db migrate --adva
 ### CONTRACT.VALIDATION_FAILED
 
 Aggregate contract validation failed: structural validation of the contract JSON (`ContractValidationError` with a `phase` of structural/domain/storage), semantic validation during `buildContract`, or storage/model validators rejecting the built contract. Raised at emit/authoring time and whenever a contract is loaded and validated. Also raised by `migration new` when the emitted contract has no `storageHash`; that site has no meta. Payload: `errors` (aggregate site); the error class also carries `phase`.
+
+### CONTRACT.VARIANT_COLUMN_NOT_ON_BASE_TABLE
+
+A single-table-inheritance variant has a column that its base model's table does not have. The base model owns the shared table, so every column a variant uses must already be on that table; the PSL interpreter copies each variant column onto the base for this reason. Raised while building a SQL contract. The fix is to declare the column on the base model. Payload: `modelName`, `namespaceId`, `tableName`, `columnName`.
 
 ### CONTRACT.VERIFY_FAILED
 

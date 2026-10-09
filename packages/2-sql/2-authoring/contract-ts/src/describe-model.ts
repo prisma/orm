@@ -1,4 +1,8 @@
-import type { ContractField, ExecutionMutationDefault } from '@internal/contract/types';
+import type {
+  ContractField,
+  ContractModel,
+  ExecutionMutationDefault,
+} from '@internal/contract/types';
 import type { ForeignKeyAuthoringInput } from '@internal/sql-contract/foreign-key-materialization';
 import type { AuthoredStorageTypeInstance } from '@internal/sql-contract/types';
 import { ifDefined } from '@internal/utils/defined';
@@ -9,12 +13,12 @@ import {
   type ValueObjectFieldNode,
 } from './contract-definition';
 import { contractError } from './contract-errors';
-import { describeColumn } from './describe-table';
+import { describeColumn } from './describe-column';
 import { buildDomainField } from './domain-fields';
 import { modelNamespaceId } from './model-references';
 import { lowerRelations } from './model-relations';
 import { type ForeignKeyResolutionContext, resolveForeignKey } from './resolve-foreign-key';
-import type { ColumnDescription, ModelComponents, ModelStorage } from './storage-description';
+import type { ColumnDescription, ModelStorage } from './storage-description';
 import { type ColumnTypeQualifier, resolveColumnDescriptor } from './target-authoring-hooks';
 
 export interface ModelDescriptionContext extends ForeignKeyResolutionContext {
@@ -24,10 +28,27 @@ export interface ModelDescriptionContext extends ForeignKeyResolutionContext {
 
 type ModelField = FieldNode | ValueObjectFieldNode;
 
+/** The domain a model implies: the domain model, with its field-to-column bridge and relations, and the execution defaults of its fields. */
+export interface ModelDomain {
+  readonly namespaceId: string;
+  readonly modelName: string;
+  readonly model: ContractModel;
+  readonly executionDefaults: readonly ExecutionMutationDefault[];
+}
+
+/** A model converted on its own: the storage it implies and its domain. */
+export interface ModelDescription {
+  readonly storage: ModelStorage;
+  readonly domain: ModelDomain;
+}
+
 /**
  * Converts one model into the storage it implies and its domain model. Other models are read only to resolve the references this one makes to them.
  */
-export function describeModel(model: ModelNode, context: ModelDescriptionContext): ModelComponents {
+export function describeModel(
+  model: ModelNode,
+  context: ModelDescriptionContext,
+): ModelDescription {
   const namespaceId = modelNamespaceId(model, context.defaultNamespaceId);
   const { tableName } = model;
 
@@ -122,7 +143,7 @@ function describeModelStorage(
       tableName,
       columns,
       control: model.control,
-      primaryKey: model.id,
+      id: model.id,
       uniques: model.uniques ?? [],
       indexes: model.indexes ?? [],
       checks: model.checks ?? [],

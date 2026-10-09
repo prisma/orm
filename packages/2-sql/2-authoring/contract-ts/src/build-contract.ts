@@ -42,14 +42,15 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { ContractDefinition } from './contract-definition';
 import { contractError } from './contract-errors';
-import { describeModel } from './describe-model';
-import { describeTableNode, tableNodeNamespaceId } from './describe-table';
+import { describeModel, type ModelDescription } from './describe-model';
+import { describeTableNode } from './describe-table-node';
 import { buildDomainField } from './domain-fields';
 import { encodeEnumMembers } from './enum-members';
 import type { TypeLookups } from './lower-column';
 import { lowerTable, type TableLoweringContext } from './lower-table';
 import { mergeTables } from './merge-tables';
 import { modelLookupsOf, modelNamespaceId } from './model-references';
+import { namespaceIdOrDefault } from './namespace-id';
 import {
   assertNoManagedEntityKinds,
   type CollectedColumnEntities,
@@ -58,7 +59,7 @@ import {
   mergeColumnAndAttachedEntities,
   mergeNamespaceValueSets,
 } from './pack-entities';
-import { type ModelComponents, tableKey } from './storage-description';
+import { tableKey } from './storage-description';
 import {
   resolveCheckExpressionRenderer,
   resolveColumnTypeQualifier,
@@ -85,29 +86,17 @@ function assertStorageSemantics(
 }
 
 function collectStorageNamespaceCoordinateIds(definition: ContractDefinition): Set<string> {
-  const ids = new Set<string>();
-  ids.add(definition.target.defaultNamespaceId);
-  for (const id of definition.namespaces ?? []) {
-    if (id.length > 0) {
-      ids.add(id);
-    }
-  }
-  for (const model of definition.models) {
-    if (model.namespaceId !== undefined && model.namespaceId.length > 0) {
-      ids.add(model.namespaceId);
-    }
-  }
-  for (const table of definition.tables ?? []) {
-    if (table.namespaceId !== undefined && table.namespaceId.length > 0) {
-      ids.add(table.namespaceId);
-    }
-  }
-  for (const id of Object.keys(definition.attachedEntities ?? {})) {
-    if (id.length > 0) {
-      ids.add(id);
-    }
-  }
-  return ids;
+  const defaultNamespaceId = definition.target.defaultNamespaceId;
+  const declared = [
+    ...(definition.namespaces ?? []),
+    ...definition.models.map((model) => model.namespaceId),
+    ...(definition.tables ?? []).map((table) => table.namespaceId),
+    ...Object.keys(definition.attachedEntities ?? {}),
+  ];
+  return new Set([
+    defaultNamespaceId,
+    ...declared.map((id) => namespaceIdOrDefault(id, defaultNamespaceId)),
+  ]);
 }
 
 function ensureUnboundNamespaceSlot(
@@ -135,7 +124,7 @@ function declaredTableKeys(definition: ContractDefinition): ReadonlySet<string> 
       tableKey(modelNamespaceId(model, defaultNamespaceId), model.tableName),
     ),
     ...(definition.tables ?? []).map((table) =>
-      tableKey(tableNodeNamespaceId(table, defaultNamespaceId), table.tableName),
+      tableKey(namespaceIdOrDefault(table.namespaceId, defaultNamespaceId), table.tableName),
     ),
   ]);
 }
@@ -418,7 +407,7 @@ export function buildSqlContractFromDefinition(
 /**
  * Aggregate roots, one per model that owns a table, keyed by bare storage table name. When two models in different namespaces map to the same bare table name, the bare key would collide, so those entries fall back to a namespace-qualified key. Single-namespace contracts never collide and keep their bare keys.
  */
-function buildRoots(components: readonly ModelComponents[]): Record<string, CrossReference> {
+function buildRoots(components: readonly ModelDescription[]): Record<string, CrossReference> {
   const rootEntries = components.flatMap(({ storage, domain }) =>
     storage.kind === 'ownTable'
       ? [

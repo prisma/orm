@@ -6,14 +6,17 @@ import { ifDefined } from '@internal/utils/defined';
 import type { ForeignKeyNode } from './contract-definition';
 import { contractError } from './contract-errors';
 import {
+  type ReferenceOwner,
+  referenceOwnerMeta,
+  referenceOwnerSubject,
+} from './declaration-sites';
+import {
   assertKnownTargetModel,
   assertTargetTableMatches,
   type ModelLookups,
   modelNamespaceId,
-  type ReferenceOwner,
-  referenceOwnerMeta,
-  referenceOwnerSubject,
 } from './model-references';
+import { namespaceIdOrDefault } from './namespace-id';
 import { tableKey } from './storage-description';
 
 /** The table a foreign key starts from, and the declaration that owns it. */
@@ -67,7 +70,7 @@ export function resolveForeignKey(
 
   const { references } = fk;
   if (references.model === undefined) {
-    const namespaceId = references.namespaceId ?? context.defaultNamespaceId;
+    const namespaceId = namespaceIdOrDefault(references.namespaceId, context.defaultNamespaceId);
     if (!context.declaredTables.has(tableKey(namespaceId, references.table))) {
       throw contractError(
         'CONTRACT.TABLE_UNKNOWN',
