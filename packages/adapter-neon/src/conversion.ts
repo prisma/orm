@@ -32,6 +32,7 @@ const ArrayColumnType = {
   TEXT_ARRAY: 1009,
   TIMESTAMP_ARRAY: 1115,
   TIMESTAMPTZ_ARRAY: 1185,
+  TIMETZ_ARRAY: 1270,
   TIME_ARRAY: 1183,
   UUID_ARRAY: 2951,
   VARBIT_ARRAY: 1563,
@@ -238,6 +239,7 @@ export function fieldToColumnType(fieldTypeId: number): ColumnType {
     case ArrayColumnType.DATE_ARRAY:
       return ColumnTypeEnum.DateArray
     case ArrayColumnType.TIME_ARRAY:
+    case ArrayColumnType.TIMETZ_ARRAY:
       return ColumnTypeEnum.TimeArray
     case ArrayColumnType.TIMESTAMP_ARRAY:
       return ColumnTypeEnum.DateTimeArray
@@ -374,6 +376,9 @@ export const customParsers = {
   [ScalarColumnType.TIME]: normalize_time,
   [ArrayColumnType.TIME_ARRAY]: normalize_array(normalize_time),
   [ScalarColumnType.TIMETZ]: normalize_timez,
+  // Elements are normalized exactly like scalar TIMETZ, offset-stripping included, to keep
+  // array and scalar TIMETZ byte-for-byte consistent. See #7915/#7917 for the offset semantics.
+  [ArrayColumnType.TIMETZ_ARRAY]: normalize_array(normalize_timez),
   [ScalarColumnType.DATE]: normalize_date,
   [ArrayColumnType.DATE_ARRAY]: normalize_array(normalize_date),
   [ScalarColumnType.TIMESTAMP]: normalize_timestamp,
