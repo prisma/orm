@@ -132,7 +132,14 @@ A node whose data-edge source produced no row is skipped and is empty itself. An
 Each node class may override `peephole()`, which looks at the node and its inputs and returns the node or a replacement. `Graph.add` calls it. There are no passes and no worklist.
 
 - **Why.** A local rule owned by a node class is small and testable with a three-node graph, and rules that run as nodes are added have no order to choose. A worklist is added only when a rule can become applicable because of a later change (merging duplicate lookups would be one).
-- **Assumes.** The rules needed are local. The first two: inlining (D8) and removing an `Update` that sets nothing.
+- **Assumes.** The rules needed are local. The first is inlining (D8). Removing an `Update` that sets nothing was the first rule built and was withdrawn (D7a).
+
+### D7a. A write with nothing to set is a `Find`, and unread nodes are removed after building
+
+An `Update` node always has something to set. When the caller's data sets nothing, the builder adds a `Find` on the same rows in its place: children can read from it, and it can be the result. So `update({})`, `updateAll({})` and `update({ relation: ... })` return the rows they match, as the same call with data would, and `updateAndCount({})` resolves the number of rows matched. After the graph is built, one step removes every `Find` that no data edge reads and that is not the result, going from the last position to the first.
+
+- **Why.** The first build constructed an `Update` with an empty `set` and removed it with a peephole. That made a statement that is not valid depend on an optimisation for its removal, and it removed the node nested children need to read the parent's key from. Which rows a call matches does not depend on whether it sets anything, so what it returns should not either.
+- **Assumes.** This changes results on main, where `update({})` resolves `null`, `updateAll({})` yields no rows and `updateAndCount({})` resolves `0`. Removing unread nodes is a pass, the one exception to D7: a node's readers are added after it, so it cannot be done when the node is added.
 
 ### D8. Many-to-many scoping is a junction read plus a peephole
 

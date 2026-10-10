@@ -26,7 +26,8 @@ The design is in [`../../mutation-graph.md`](../../mutation-graph.md) and the ru
 | Node classes | `Find`, `Update`, `Delete` | `Insert`, `Merge` (slice 2); `Assert`, `State` (slice 3) |
 | Edge classes | `FilterData`; `After` through `graph.after` | `PayloadData` (slice 2); the table-state edge (slice 3) |
 | Graph | `add(node, inputs)`, `after(from, to)`, `replace(id, next)`, edges into and out of a position, the result | |
-| Peephole | the `peephole(graph)` hook called by `add`; one rule: an `Update` that sets nothing is removed | the inlining rule (slice 4) |
+| Peephole | nothing: no rule exists in this slice, so there is no hook | the hook and the inlining rule (slice 4) |
+| Removal of unread nodes | nothing: no graph in this slice can contain a `Find` nobody reads | the step (slice 3) |
 | Printed form | one function that prints a graph as text, in the form shown above | |
 | Runner | one function that executes a graph | |
 
@@ -73,7 +74,7 @@ One reviewer reads this as: a small data structure with its tests, a runner with
 
 | Case | Behaviour that must hold |
 | --- | --- |
-| `updateAll({})`, `updateAndCount({})`, `update({})` | No update statement. `updateAll` yields no rows, `updateAndCount` resolves `0`. For `update({})`, keep what main returns today. This is the peephole rule. |
+| `updateAll({})`, `updateAndCount({})`, `update({})` | No update statement. The builder adds a `Find` in place of the `Update` and it is the result: `updateAll({})` yields the matching rows, `update({})` the first matching row, `updateAndCount({})` the number of matching rows (design record D7a). Update defaults are not applied. |
 | `deleteAll()` with includes | The rows are read with their includes first and collected, then the delete runs, in one transaction; the read rows are the result. `Find` then `Delete` joined by `After`. The `Find` holds the read code's `SelectAst` with includes, so it is one statement and needs no identity columns. |
 | `updateAll` / `update` with includes | The write returns identity columns and the rows are loaded by the existing read code (`dispatchMutationRows` does this today). |
 | `update()` / `delete()` matching no row, or after `limit(0)` | Resolves `null`; the write is skipped. |
@@ -89,10 +90,11 @@ One reviewer reads this as: a small data structure with its tests, a runner with
 
 ## Differences from main found during the build
 
-None changes a result an integration test asserts. Each follows from a decided rule or from building the graph before the first statement.
+Apart from the first row, none changes a result an integration test asserts. Each follows from a decided rule or from building the graph before the first statement.
 
 | Difference | Cause |
 | --- | --- |
+| `update({})` resolves the first matching row, `updateAll({})` yields the matching rows, `updateAndCount({})` resolves their number. On main: `null`, no rows, `0` | A write with nothing to set is a `Find` on the same rows (design record D7a); decided by the project owner |
 | The matching read of `update()` / `delete()`, the read of `deleteAll()` with includes, and the reload read of a write with includes carry the caller's annotations | Annotations go on every statement of a call |
 | `updateAndCount({})` runs the `configure` callback before resolving `0` | The graph is built after annotations are collected, as `updateAll({})` already did |
 | `update()` maps fields and applies update defaults before the matching read, so a default generator runs even when no row matches | The graph is built before the first statement |
