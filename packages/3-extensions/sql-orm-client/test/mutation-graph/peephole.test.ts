@@ -103,10 +103,11 @@ describe('peephole on add', () => {
     it('gives a result that names an empty position when it was to be the result', () => {
       const graph = graphOfUsers();
 
-      graph.setResult(graph.add(updateUsers({}), { filter: [] }));
+      const id = graph.add(updateUsers({}), { filter: [] });
+      graph.setResult(id);
 
-      expect(graph.result.node).toBe(0);
-      expect(graph.nodeAt(0)).toBeUndefined();
+      expect(graph.result.node).toBe(id);
+      expect(graph.nodeAt(id)).toBeUndefined();
     });
   });
 });

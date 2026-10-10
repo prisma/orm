@@ -6,7 +6,7 @@ import {
   ParamRef,
 } from '@internal/sql-relational-core/ast';
 import { Delete } from '../../src/mutation-graph/delete';
-import type { ColumnPair, StorageRow } from '../../src/mutation-graph/edge';
+import type { ColumnPair, NodeId, StorageRow } from '../../src/mutation-graph/edge';
 import { Find } from '../../src/mutation-graph/find';
 import { Graph, type ResultForm } from '../../src/mutation-graph/graph';
 import type { Run, StatementAst } from '../../src/mutation-graph/node';
@@ -131,4 +131,18 @@ export function recordingRun(rows: readonly StorageRow[] = [], affectedRows = 0)
       return affectedRows;
     },
   };
+}
+
+export function positions(): [NodeId, NodeId, NodeId] {
+  const graph = graphOfUsers();
+  return [
+    graph.add(findUsers(), { filter: [] }),
+    graph.add(findUsers(), { filter: [] }),
+    graph.add(findUsers(), { filter: [] }),
+  ];
+}
+
+export function returnedAt(graph: Graph, index: number): string[] {
+  const [, node] = graph.nodes()[index] ?? [];
+  return (node?.returns ?? []).map((column) => column.alias);
 }

@@ -1,6 +1,7 @@
+import type { Brand } from '@internal/contract/types';
 import type { ProjectionItem } from '@internal/sql-relational-core/ast';
 
-export type NodeId = number;
+export type NodeId = number & Brand<'MutationGraphNodeId'>;
 
 export type StorageRow = Record<string, unknown>;
 

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { After } from '../../src/mutation-graph/after';
+import type { NodeId } from '../../src/mutation-graph/edge';
 import { FilterData, filterData } from '../../src/mutation-graph/filter-data';
+import type { Graph } from '../../src/mutation-graph/graph';
 import {
   columnPairs,
   deletePosts,
@@ -14,7 +16,7 @@ const sameId = columnPairs('users', 'users', [['id', 'id']]);
 const idToUserId = columnPairs('users', 'posts', [['id', 'user_id']]);
 const emailToTitle = columnPairs('users', 'posts', [['email', 'title']]);
 
-function returned(graph: ReturnType<typeof graphOfUsers>, id: number): string[] {
+function returned(graph: Graph, id: NodeId): string[] {
   return (graph.nodeAt(id)?.returns ?? []).map((column) => column.alias);
 }
 
@@ -25,11 +27,13 @@ describe('Graph', () => {
       const find = findUsers();
       const del = deleteUsers();
 
-      expect(graph.add(find, { filter: [] })).toBe(0);
-      expect(graph.add(del, { filter: [] })).toBe(1);
+      const findId = graph.add(find, { filter: [] });
+      const delId = graph.add(del, { filter: [] });
+
+      expect([findId, delId]).toEqual([0, 1]);
       expect(graph.nodes()).toEqual([
-        [0, find],
-        [1, del],
+        [findId, find],
+        [delId, del],
       ]);
     });
 
@@ -129,16 +133,16 @@ describe('Graph', () => {
       const find = findUsers();
       const del = deletePosts();
       const otherUpdate = updateUsers({ name: 'Grace' });
-      graph.add(find, { filter: [] });
+      const findId = graph.add(find, { filter: [] });
       const update = graph.add(updateUsers({ name: 'Ada' }), { filter: [] });
-      graph.add(del, { filter: [] });
+      const delId = graph.add(del, { filter: [] });
 
       graph.replace(update, otherUpdate);
 
       expect(graph.nodes()).toEqual([
-        [0, find],
-        [1, otherUpdate],
-        [2, del],
+        [findId, find],
+        [update, otherUpdate],
+        [delId, del],
       ]);
     });
 
@@ -168,16 +172,16 @@ describe('Graph', () => {
       const graph = graphOfUsers();
       const find = findUsers();
       const del = deletePosts();
-      graph.add(find, { filter: [] });
+      const findId = graph.add(find, { filter: [] });
       const update = graph.add(updateUsers({ name: 'Ada' }), { filter: [] });
-      graph.add(del, { filter: [] });
+      const delId = graph.add(del, { filter: [] });
 
       graph.remove(update);
 
       expect(graph.nodeAt(update)).toBeUndefined();
       expect(graph.nodes()).toEqual([
-        [0, find],
-        [2, del],
+        [findId, find],
+        [delId, del],
       ]);
     });
 

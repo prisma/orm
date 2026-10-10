@@ -8,10 +8,12 @@ import {
   findUsers,
   graphOfUsers,
   nameIsAda,
+  positions,
   recordingRun,
   updateUsers,
 } from './statements';
 
+const [position] = positions();
 const idIs = (value: number) => BinaryExpr.eq(ColumnRef.of('users', 'id'), ParamRef.of(value));
 const emailColumn = columnPairs('users', 'users', [['email', 'email']]).map(([source]) => source);
 
@@ -34,7 +36,7 @@ describe.each([
   it('is its own peephole result', () => {
     const node: Node = make();
 
-    expect(node.peephole(graphOfUsers(), 0)).toBe(node);
+    expect(node.peephole(graphOfUsers(), position)).toBe(node);
   });
 
   it('runs its statement as it is when the filter slot has no edge', async () => {

@@ -1,3 +1,4 @@
+import { blindCast } from '@internal/utils/casts';
 import type { DescribeCollectionRowsOptions } from '../collection-dispatch';
 import { After } from './after';
 import type { Edge, NodeId, Pending } from './edge';
@@ -18,6 +19,7 @@ export type PendingInputs<Inputs extends Slots> = {
 type DataEdge = Edge<unknown>;
 
 export class Graph {
+  #ids: NodeId[] = [];
   #nodes: (Node | undefined)[] = [];
   #inputs: Record<string, DataEdge[]>[] = [];
   #before: After[][] = [];
@@ -37,11 +39,12 @@ export class Graph {
   }
 
   add<Inputs extends Slots>(node: Node<Inputs>, inputs: PendingInputs<Inputs>): NodeId {
-    const id = this.#nodes.length;
+    const id = blindCast<NodeId, 'the position a node is added at is its id'>(this.#nodes.length);
     const slots: Record<string, DataEdge[]> = {};
     for (const slot in inputs) {
       slots[slot] = inputs[slot].map((pending) => pending(id));
     }
+    this.#ids.push(id);
     this.#nodes.push(node);
     this.#inputs.push(slots);
     this.#before.push([]);
@@ -94,7 +97,10 @@ export class Graph {
   }
 
   nodes(): readonly (readonly [NodeId, Node])[] {
-    return this.#nodes.flatMap((node, id) => (node === undefined ? [] : [[id, node] as const]));
+    return this.#ids.flatMap((id) => {
+      const node = this.#nodes[id];
+      return node === undefined ? [] : [[id, node] as const];
+    });
   }
 
   inputsOf(id: NodeId): Readonly<Record<string, readonly DataEdge[]>> {

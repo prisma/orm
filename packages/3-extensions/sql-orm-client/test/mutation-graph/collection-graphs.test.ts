@@ -9,6 +9,7 @@ import { printGraph } from '../../src/mutation-graph/print-graph';
 import type { CollectionState } from '../../src/types';
 import { createCollectionFor } from '../collection-fixtures';
 import { getTestContext } from '../helpers';
+import { returnedAt } from './statements';
 
 const users = createCollectionFor('User')
   .collection.where({ name: 'Ada' })
@@ -59,14 +60,14 @@ describe('updateAllGraph', () => {
     const rows = updateAllGraph(target, { email: 'ada@example.com' }, 'rows');
     const count = updateAllGraph(target, { email: 'ada@example.com' }, 'count');
 
-    expect(rows.nodeAt(0)?.returns.map((column) => column.alias)).toEqual(['id', 'name']);
-    expect(count.nodeAt(0)?.returns).toEqual([]);
+    expect(returnedAt(rows, 0)).toEqual(['id', 'name']);
+    expect(returnedAt(count, 0)).toEqual([]);
   });
 
   it('makes the Update return the identity columns when includes will be loaded', () => {
     const graph = updateAllGraph(targetWithIncludes, { email: 'ada@example.com' }, 'rows');
 
-    expect(graph.nodeAt(0)?.returns.map((column) => column.alias)).toEqual(['id']);
+    expect(returnedAt(graph, 0)).toEqual(['id']);
   });
 });
 
@@ -90,15 +91,15 @@ describe('deleteAllGraph', () => {
         'result: n1 rows',
       ].join('\n'),
     );
-    expect(graph.nodeAt(0)?.returns.map((column) => column.alias)).toEqual(['id', 'name', 'posts']);
-    expect(graph.nodeAt(1)?.returns).toEqual([]);
+    expect(returnedAt(graph, 0)).toEqual(['id', 'name', 'posts']);
+    expect(returnedAt(graph, 1)).toEqual([]);
     expect(graph.result.collection).toBe(targetWithIncludes);
   });
 
   it('does not make the Find of deleteAll with includes return identity columns', () => {
     const graph = deleteAllGraph(targetOf(users.select('name').include('posts').state), 'rows');
 
-    expect(graph.nodeAt(0)?.returns.map((column) => column.alias)).toEqual(['name', 'posts']);
+    expect(returnedAt(graph, 0)).toEqual(['name', 'posts']);
   });
 
   it('builds one Delete as the count result for deleteAndCount, with or without includes', () => {
@@ -120,8 +121,8 @@ describe('updateFirstGraph', () => {
         'result: n2 first row',
       ].join('\n'),
     );
-    expect(graph.nodeAt(0)?.returns.map((column) => column.alias)).toEqual(['id']);
-    expect(graph.nodeAt(1)?.returns.map((column) => column.alias)).toEqual(['id', 'name']);
+    expect(returnedAt(graph, 0)).toEqual(['id']);
+    expect(returnedAt(graph, 1)).toEqual(['id', 'name']);
     expect(graph.result.collection).toBe(target);
   });
 
@@ -206,15 +207,15 @@ describe('deleteFirstGraph', () => {
         'result: n1 first row',
       ].join('\n'),
     );
-    expect(graph.nodeAt(0)?.returns.map((column) => column.alias)).toEqual(['id', 'name', 'posts']);
-    expect(graph.nodeAt(1)?.returns).toEqual([]);
+    expect(returnedAt(graph, 0)).toEqual(['id', 'name', 'posts']);
+    expect(returnedAt(graph, 1)).toEqual([]);
     expect(graph.result.collection).toBe(targetWithIncludes);
   });
 
   it('makes that Find also return the identity columns the Delete reads', () => {
     const graph = deleteFirstGraph(targetOf(users.select('name').include('posts').state));
 
-    expect(graph.nodeAt(0)?.returns.map((column) => column.alias)).toEqual(['name', 'posts', 'id']);
+    expect(returnedAt(graph, 0)).toEqual(['name', 'posts', 'id']);
   });
 
   it('builds a graph with no node after limit(0) with includes', () => {
