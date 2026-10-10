@@ -74,7 +74,7 @@ One reviewer reads this as: a small data structure with its tests, a runner with
 
 | Case | Behaviour that must hold |
 | --- | --- |
-| `updateAll({})`, `updateAndCount({})`, `update({})` | No update statement. The builder adds a `Find` in place of the `Update` and it is the result: `updateAll({})` yields the matching rows, `update({})` the first matching row, `updateAndCount({})` the number of matching rows (design record D7a). Update defaults are not applied. |
+| `updateAll({})`, `updateAndCount({})`, `update({})` | No update statement. The builder adds a `Find` in place of the `Update` and it is the result: `updateAll({})` yields the matching rows and `update({})` the first matching row (design record D7a). `updateAndCount({})` resolves `0` as on main, since no row is affected; its graph has no node. Update defaults are not applied. |
 | `deleteAll()` with includes | The rows are read with their includes first and collected, then the delete runs, in one transaction; the read rows are the result. `Find` then `Delete` joined by `After`. The `Find` holds the read code's `SelectAst` with includes, so it is one statement and needs no identity columns. |
 | `updateAll` / `update` with includes | The write returns identity columns and the rows are loaded by the existing read code (`dispatchMutationRows` does this today). |
 | `update()` / `delete()` matching no row, or after `limit(0)` | Resolves `null`; the write is skipped. |
@@ -94,7 +94,7 @@ Apart from the first row, none changes a result an integration test asserts. Eac
 
 | Difference | Cause |
 | --- | --- |
-| `update({})` resolves the first matching row, `updateAll({})` yields the matching rows, `updateAndCount({})` resolves their number. On main: `null`, no rows, `0` | A write with nothing to set is a `Find` on the same rows (design record D7a); decided by the project owner |
+| `update({})` resolves the first matching row and `updateAll({})` yields the matching rows. On main: `null` and no rows | A write with nothing to set is a `Find` on the same rows (design record D7a); decided by the project owner |
 | The matching read of `update()` / `delete()`, the read of `deleteAll()` with includes, and the reload read of a write with includes carry the caller's annotations | Annotations go on every statement of a call |
 | `updateAndCount({})` runs the `configure` callback before resolving `0` | The graph is built after annotations are collected, as `updateAll({})` already did |
 | `update()` maps fields and applies update defaults before the matching read, so a default generator runs even when no row matches | The graph is built before the first statement |

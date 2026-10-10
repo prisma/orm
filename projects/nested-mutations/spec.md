@@ -176,7 +176,7 @@ Postgres and SQLite adapters: both render the insert conflict clause and must re
 
 ## Transitional-shape constraints
 
-- Stage 1 changes no behaviour a caller can observe through results: every integration test on main passes unedited on Postgres and SQLite after each stage 1 slice. SQL statements may change; unit tests that assert statements or statement counts are rewritten. One exception in slice `graph-core`: `update({})`, `updateAll({})` and `updateAndCount({})` return what they match. Three more, all in slice `graph-nested`: junction `connect` takes its decided behaviour; invalid nested input is rejected even when the filter matches no row; a relation field that is not a callback is rejected with `ORM.RELATION_MUTATION_INVALID`.
+- Stage 1 changes no behaviour a caller can observe through results: every integration test on main passes unedited on Postgres and SQLite after each stage 1 slice. SQL statements may change; unit tests that assert statements or statement counts are rewritten. One exception in slice `graph-core`: `update({})` and `updateAll({})` return the rows they match. Three more, all in slice `graph-nested`: junction `connect` takes its decided behaviour; invalid nested input is rejected even when the filter matches no row; a relation field that is not a callback is rejected with `ORM.RELATION_MUTATION_INVALID`.
 - After each stage 1 slice, a write method is either wholly on the graph or wholly on main's code. The executor is removed in the slice that moves the last method that uses it.
 - No stage 2 slice starts before stage 1 is merged, except `has-one-unique`, which does not touch the ORM client.
 - Existing relation callbacks that return a single `create`, `connect` or `disconnect` keep working unchanged after every slice.
