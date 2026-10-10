@@ -79,6 +79,9 @@ export function updateFirstGraph(
   const { context, namespaceId, tableName } = collection;
   const graph = new Graph('first row', collection);
   const nothingToSet = Object.keys(set).length === 0;
+  if (!nothingToSet) {
+    requireIdentityColumns(collection);
+  }
   const find = addFindOfFirstRow(
     graph,
     collection,
@@ -106,6 +109,7 @@ export function deleteFirstGraph(collection: DescribeCollectionRowsOptions): Gra
   const { context, namespaceId, tableName, state } = collection;
   const withIncludes = state.includes.length > 0;
   const graph = new Graph('first row', collection);
+  requireIdentityColumns(collection);
   const find = addFindOfFirstRow(
     graph,
     collection,
@@ -127,9 +131,18 @@ export function deleteFirstGraph(collection: DescribeCollectionRowsOptions): Gra
 function addFindOfFirstRow(
   graph: Graph,
   collection: DescribeCollectionRowsOptions,
-  select: typeof selectIdentityAst = selectIdentityAst,
+  select: typeof selectIdentityAst,
 ): NodeId | undefined {
-  const { modelName, tableName, state } = collection;
+  const { state } = collection;
+  checkLimitOffset('limit', state.limit);
+  if (state.limit === 0) {
+    return undefined;
+  }
+  return graph.add(new Find(select(collection, { ...state, limit: 1 })), { filter: [] });
+}
+
+function requireIdentityColumns(collection: DescribeCollectionRowsOptions): void {
+  const { modelName, tableName } = collection;
   if (identityColumnsOf(collection).length === 0) {
     throw ormError(
       'ORM.ROW_IDENTITY_MISSING',
@@ -137,11 +150,6 @@ function addFindOfFirstRow(
       { meta: { model: modelName, table: tableName } },
     );
   }
-  checkLimitOffset('limit', state.limit);
-  if (state.limit === 0) {
-    return undefined;
-  }
-  return graph.add(new Find(select(collection, { ...state, limit: 1 })), { filter: [] });
 }
 
 function selectIdentityAst(

@@ -17,7 +17,10 @@ const idToUserId = columnPairs('users', 'posts', [['id', 'user_id']]);
 const emailToTitle = columnPairs('users', 'posts', [['email', 'title']]);
 
 function returned(graph: Graph, id: NodeId): string[] {
-  return (graph.nodeAt(id)?.returns ?? []).map((column) => column.alias);
+  return graph
+    .nodes()
+    .filter(([position]) => position === id)
+    .flatMap(([, node]) => node.returns.map((column) => column.alias));
 }
 
 describe('Graph', () => {
@@ -56,6 +59,22 @@ describe('Graph', () => {
       expect(graph.inputsOf(graph.add(findUsers(), { filter: [] }))).toEqual({ filter: [] });
     });
 
+    it('lists a data edge at the position it comes from, as the same object', () => {
+      const graph = graphOfUsers();
+      const find = graph.add(findUsers(), { filter: [] });
+      const update = graph.add(updateUsers({ name: 'Ada' }), {
+        filter: [filterData(find, sameId)],
+      });
+      const del = graph.add(deletePosts(), { filter: [filterData(find, idToUserId)] });
+
+      expect(graph.edgesOutOf(find)).toEqual([
+        new FilterData(find, update, sameId),
+        new FilterData(find, del, idToUserId),
+      ]);
+      expect(graph.edgesOutOf(find)[0]).toBe(graph.inputsOf(update)['filter']?.[0]);
+      expect(graph.edgesOutOf(del)).toEqual([]);
+    });
+
     it('makes the source of a data edge also return the columns the edge reads', () => {
       const graph = graphOfUsers();
       const update = graph.add(updateUsers({ name: 'Ada' }), { filter: [] });
@@ -68,17 +87,30 @@ describe('Graph', () => {
 
       expect(returned(graph, update)).toEqual(['id', 'email']);
     });
+
+    it('leaves the edges of a node whose statement it widens as they were', () => {
+      const graph = graphOfUsers();
+      const find = graph.add(findUsers(), { filter: [] });
+      const update = graph.add(updateUsers({ name: 'Ada' }), {
+        filter: [filterData(find, sameId)],
+      });
+      const [into] = graph.inputsOf(update)['filter'] ?? [];
+
+      graph.add(deletePosts(), { filter: [filterData(update, idToUserId)] });
+
+      expect(graph.inputsOf(update)['filter']?.[0]).toBe(into);
+      expect(graph.edgesOutOf(find)[0]).toBe(into);
+    });
   });
 
   describe('after', () => {
-    it('adds an order-only edge between two nodes of the graph', () => {
+    it('adds an order-only edge that is not an input of the node it goes to', () => {
       const graph = graphOfUsers();
       const find = graph.add(findUsers(), { filter: [] });
       const del = graph.add(deleteUsers(), { filter: [] });
 
       graph.after(find, del);
 
-      expect(graph.edgesInto(del)).toEqual([new After(find, del)]);
       expect(graph.edgesOutOf(find)).toEqual([new After(find, del)]);
       expect(graph.inputsOf(del)).toEqual({ filter: [] });
     });
@@ -91,79 +123,6 @@ describe('Graph', () => {
       graph.after(update, del);
 
       expect(returned(graph, update)).toEqual([]);
-    });
-  });
-
-  describe('edgesInto and edgesOutOf', () => {
-    it('give the edges that go to a position, data edges first, and the edges that come from it', () => {
-      const graph = graphOfUsers();
-      const find = graph.add(findUsers(), { filter: [] });
-      const update = graph.add(updateUsers({ name: 'Ada' }), {
-        filter: [filterData(find, sameId)],
-      });
-      const del = graph.add(deletePosts(), { filter: [filterData(find, idToUserId)] });
-      graph.after(update, del);
-
-      expect(graph.edgesInto(find)).toEqual([]);
-      expect(graph.edgesInto(update)).toEqual([new FilterData(find, update, sameId)]);
-      expect(graph.edgesInto(del)).toEqual([
-        new FilterData(find, del, idToUserId),
-        new After(update, del),
-      ]);
-      expect(graph.edgesOutOf(find)).toEqual([
-        new FilterData(find, update, sameId),
-        new FilterData(find, del, idToUserId),
-      ]);
-      expect(graph.edgesOutOf(update)).toEqual([new After(update, del)]);
-      expect(graph.edgesOutOf(del)).toEqual([]);
-    });
-
-    it('list one edge object at both of its positions', () => {
-      const graph = graphOfUsers();
-      const find = graph.add(findUsers(), { filter: [] });
-      const del = graph.add(deleteUsers(), { filter: [filterData(find, sameId)] });
-
-      expect(graph.edgesOutOf(find)[0]).toBe(graph.edgesInto(del)[0]);
-    });
-  });
-
-  describe('replace', () => {
-    it('puts the new node at the position', () => {
-      const graph = graphOfUsers();
-      const find = findUsers();
-      const del = deletePosts();
-      const otherUpdate = updateUsers({ name: 'Grace' });
-      const findId = graph.add(find, { filter: [] });
-      const update = graph.add(updateUsers({ name: 'Ada' }), { filter: [] });
-      const delId = graph.add(del, { filter: [] });
-
-      graph.replace(update, otherUpdate);
-
-      expect(graph.nodes()).toEqual([
-        [findId, find],
-        [update, otherUpdate],
-        [delId, del],
-      ]);
-    });
-
-    it('touches no edge', () => {
-      const graph = graphOfUsers();
-      const find = graph.add(findUsers(), { filter: [] });
-      const update = graph.add(updateUsers({ name: 'Ada' }), {
-        filter: [filterData(find, sameId)],
-      });
-      const del = graph.add(deletePosts(), { filter: [] });
-      graph.after(update, del);
-      const [into] = graph.edgesInto(update);
-      const [outOf] = graph.edgesOutOf(update);
-
-      graph.replace(update, updateUsers({ name: 'Grace' }));
-
-      expect(graph.edgesInto(update)).toEqual([into]);
-      expect(graph.edgesInto(update)[0]).toBe(into);
-      expect(graph.edgesOutOf(update)[0]).toBe(outOf);
-      expect(graph.edgesOutOf(find)[0]).toBe(into);
-      expect(graph.edgesInto(del)[0]).toBe(outOf);
     });
   });
 
@@ -190,18 +149,6 @@ describe('Graph', () => {
       graph.setResult(find);
 
       expect(graph.result).toMatchObject({ node: find, form: 'count' });
-    });
-
-    it('still names its position after the node there is replaced', () => {
-      const graph = graphOfUsers();
-      const otherUpdate = updateUsers({ name: 'Grace' });
-      const update = graph.add(updateUsers({ name: 'Ada' }), { filter: [] });
-      graph.setResult(update);
-
-      graph.replace(update, otherUpdate);
-
-      expect(graph.nodeAt(update)).toBe(otherUpdate);
-      expect(graph.result.node).toBe(update);
     });
   });
 });

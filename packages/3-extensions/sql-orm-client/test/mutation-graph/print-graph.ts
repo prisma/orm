@@ -100,10 +100,11 @@ function printResult(names: NodeNames, graph: Graph): string {
 export function printGraph(graph: Graph): string {
   const nodes = graph.nodes();
   const names: NodeNames = new Map(nodes.map(([id], index) => [id, `n${index + 1}`]));
-  const lines = nodes.map(
-    ([id, node]) =>
-      `${names.get(id)} ${printStatement(node.ast)}${printInputs(names, graph.edgesInto(id))}`,
-  );
+  const edges = nodes.flatMap(([id]) => graph.edgesOutOf(id));
+  const lines = nodes.map(([id, node]) => {
+    const inputs = edges.filter((edge) => edge.to === id);
+    return `${names.get(id)} ${printStatement(node.ast)}${printInputs(names, inputs)}`;
+  });
   lines.push(printResult(names, graph));
   return lines.join('\n');
 }
