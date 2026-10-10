@@ -167,67 +167,6 @@ describe('Graph', () => {
     });
   });
 
-  describe('remove', () => {
-    it('empties the position and leaves the other positions as they were', () => {
-      const graph = graphOfUsers();
-      const find = findUsers();
-      const del = deletePosts();
-      const findId = graph.add(find, { filter: [] });
-      const update = graph.add(updateUsers({ name: 'Ada' }), { filter: [] });
-      const delId = graph.add(del, { filter: [] });
-
-      graph.remove(update);
-
-      expect(graph.nodeAt(update)).toBeUndefined();
-      expect(graph.nodes()).toEqual([
-        [findId, find],
-        [delId, del],
-      ]);
-    });
-
-    it('takes the edges of the node out of the positions at their other ends', () => {
-      const graph = graphOfUsers();
-      const find = graph.add(findUsers(), { filter: [] });
-      const update = graph.add(updateUsers({ name: 'Ada' }), {
-        filter: [filterData(find, sameId)],
-      });
-      const del = graph.add(deletePosts(), {
-        filter: [filterData(find, idToUserId), filterData(update, idToUserId)],
-      });
-      graph.after(update, del);
-
-      graph.remove(update);
-
-      expect(graph.edgesInto(update)).toEqual([]);
-      expect(graph.edgesOutOf(update)).toEqual([]);
-      expect(graph.edgesOutOf(find)).toEqual([new FilterData(find, del, idToUserId)]);
-      expect(graph.edgesInto(del)).toEqual([new FilterData(find, del, idToUserId)]);
-      expect(graph.inputsOf(del)).toEqual({ filter: [new FilterData(find, del, idToUserId)] });
-    });
-
-    it('leaves the edges between the other nodes intact', () => {
-      const graph = graphOfUsers();
-      const find = graph.add(findUsers(), { filter: [] });
-      const update = graph.add(updateUsers({ name: 'Ada' }), { filter: [] });
-      graph.after(find, update);
-      const del = graph.add(deletePosts(), { filter: [filterData(find, idToUserId)] });
-      const [kept] = graph.edgesInto(del);
-
-      graph.remove(update);
-
-      expect(graph.edgesOutOf(find)).toEqual([kept]);
-      expect(graph.edgesInto(del)[0]).toBe(kept);
-    });
-
-    it('gives the next node the next position, not the emptied one', () => {
-      const graph = graphOfUsers();
-      const find = graph.add(findUsers(), { filter: [] });
-      graph.remove(find);
-
-      expect(graph.add(deleteUsers(), { filter: [] })).toBe(1);
-    });
-  });
-
   describe('result', () => {
     it('has the form and the collection the graph was made with, and no node', () => {
       const graph = graphOfUsers('first row', { selectedFields: ['id'] });
@@ -263,16 +202,6 @@ describe('Graph', () => {
 
       expect(graph.nodeAt(update)).toBe(otherUpdate);
       expect(graph.result.node).toBe(update);
-    });
-
-    it('names an empty position after its node is removed', () => {
-      const graph = graphOfUsers();
-      const update = graph.add(updateUsers({ name: 'Ada' }), { filter: [] });
-      graph.setResult(update);
-
-      graph.remove(update);
-
-      expect(graph.nodeAt(update)).toBeUndefined();
     });
   });
 });

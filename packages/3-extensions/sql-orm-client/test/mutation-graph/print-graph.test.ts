@@ -77,29 +77,11 @@ describe('printGraph', () => {
     );
   });
 
-  it('prints none for a result with no node and for one that names an empty position', () => {
-    const empty = graphOfUsers();
-    const removed = graphOfUsers('first row');
-    removed.add(findUsers(), { filter: [] });
-    removed.setResult(removed.add(updateUsers({}), { filter: [] }));
+  it('prints none for a result with no node', () => {
+    const graph = graphOfUsers('first row');
+    graph.add(findUsers(), { filter: [] });
 
-    expect(printGraph(empty)).toBe('result: none');
-    expect(printGraph(removed)).toBe(['n1 Find users', 'result: none'].join('\n'));
-  });
-
-  it('numbers the nodes that remain, without gaps', () => {
-    const graph = graphOfUsers('rows');
-    const first = graph.add(findUsers([nameIsAda]), { filter: [] });
-    const removed = graph.add(findUsers(), { filter: [] });
-    const del = graph.add(deleteUsers(), { filter: [] });
-    graph.after(first, del);
-    graph.remove(removed);
-    graph.setResult(del);
-
-    expect(printGraph(graph)).toBe(
-      ["n1 Find users where name = 'Ada'", 'n2 Delete users <- After n1', 'result: n2 rows'].join(
-        '\n',
-      ),
-    );
+    expect(printGraph(graphOfUsers())).toBe('result: none');
+    expect(printGraph(graph)).toBe(['n1 Find users', 'result: none'].join('\n'));
   });
 });

@@ -1,19 +1,15 @@
 import { BinaryExpr, ColumnRef, ParamRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import type { Node } from '../../src/mutation-graph/node';
 import { printExpression } from './print-expression';
 import {
   columnPairs,
   deleteUsers,
   findUsers,
-  graphOfUsers,
   nameIsAda,
-  positions,
   recordingRun,
   updateUsers,
 } from './statements';
 
-const [position] = positions();
 const idIs = (value: number) => BinaryExpr.eq(ColumnRef.of('users', 'id'), ParamRef.of(value));
 const emailColumn = columnPairs('users', 'users', [['email', 'email']]).map(([source]) => source);
 
@@ -31,12 +27,6 @@ describe.each([
 
     expect(node.ast.kind).toBe(kind);
     expect(Object.isFrozen(node)).toBe(true);
-  });
-
-  it('is its own peephole result', () => {
-    const node: Node = make();
-
-    expect(node.peephole(graphOfUsers(), position)).toBe(node);
   });
 
   it('runs its statement as it is when the filter slot has no edge', async () => {

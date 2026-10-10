@@ -55,13 +55,6 @@ export class Graph {
         edge.columns.map(([source]) => source),
       );
     }
-
-    const next = node.peephole(this, id);
-    if (next === undefined) {
-      this.remove(id);
-    } else {
-      this.replace(id, next);
-    }
     return id;
   }
 
@@ -73,23 +66,6 @@ export class Graph {
 
   replace(id: NodeId, next: Node): void {
     this.#nodes[id] = next;
-  }
-
-  remove(id: NodeId): void {
-    for (const edge of this.edgesInto(id)) {
-      this.#out[edge.from] = this.edgesOutOf(edge.from).filter((other) => other !== edge);
-    }
-    for (const edge of this.edgesOutOf(id)) {
-      const slots = this.#inputs[edge.to] ?? {};
-      for (const slot in slots) {
-        slots[slot] = (slots[slot] ?? []).filter((other) => other !== edge);
-      }
-      this.#before[edge.to] = (this.#before[edge.to] ?? []).filter((other) => other !== edge);
-    }
-    this.#nodes[id] = undefined;
-    this.#inputs[id] = {};
-    this.#before[id] = [];
-    this.#out[id] = [];
   }
 
   nodeAt(id: NodeId): Node | undefined {

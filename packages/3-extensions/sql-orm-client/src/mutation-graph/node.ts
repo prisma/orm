@@ -5,8 +5,7 @@ import type {
   SelectAst,
   UpdateAst,
 } from '@internal/sql-relational-core/ast';
-import type { Edge, NodeId, StorageRow } from './edge';
-import type { Graph } from './graph';
+import type { Edge, StorageRow } from './edge';
 
 export type StatementAst = SelectAst | UpdateAst | DeleteAst;
 
@@ -33,8 +32,4 @@ export abstract class Node<Inputs extends Slots = Slots> {
   abstract execute(inputs: OutputsOf<Inputs>, run: Run): Executed;
 
   abstract alsoReturning(columns: readonly ProjectionItem[]): Node<Inputs>;
-
-  peephole(_graph: Graph, _id: NodeId): Node | undefined {
-    return this;
-  }
 }

@@ -179,16 +179,6 @@ describe('running a graph', () => {
       expect(await runForFirstRow(graph, runtime, undefined)).toBeNull();
       expect(statements(runtime)).toEqual(['query select']);
     });
-
-    it('gives the empty result for a result that names an empty position', async () => {
-      const runtime = createMockRuntime();
-      const graph = graphOfUsers('first row');
-      const find = graph.add(findUsers([nameIsAda]), { filter: [] });
-      graph.setResult(graph.add(updateUsers({}), { filter: [filterData(find, idToUserId)] }));
-
-      expect(await runForFirstRow(graph, runtime, undefined)).toBeNull();
-      expect(statements(runtime)).toEqual(['query select']);
-    });
   });
 
   describe('with a Find and a Delete after it', () => {

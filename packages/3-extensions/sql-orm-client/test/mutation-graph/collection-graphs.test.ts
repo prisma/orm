@@ -51,8 +51,22 @@ describe('updateAllGraph', () => {
     );
   });
 
-  it('builds a graph with no node and an empty result when nothing is set', () => {
-    expect(printGraph(updateAllGraph(target, {}, 'rows'))).toBe('result: none');
+  it('builds a Find of the same rows as the result when updateAll sets nothing', () => {
+    const graph = updateAllGraph(target, {}, 'rows');
+
+    expect(printGraph(graph)).toBe(
+      ["n1 Find users where name = 'Ada' order by id asc", 'result: n1 rows'].join('\n'),
+    );
+    expect(returnedAt(graph, 0)).toEqual(['id', 'name']);
+  });
+
+  it('gives that Find the includes of the caller', () => {
+    const graph = updateAllGraph(targetWithIncludes, {}, 'rows');
+
+    expect(returnedAt(graph, 0)).toEqual(['id', 'name', 'posts']);
+  });
+
+  it('builds a graph with no node when updateAndCount sets nothing', () => {
     expect(printGraph(updateAllGraph(target, {}, 'count'))).toBe('result: none');
   });
 
@@ -147,10 +161,25 @@ describe('updateFirstGraph', () => {
     );
   });
 
-  it('builds the Find alone with an empty result when nothing is set', () => {
-    expect(printGraph(updateFirstGraph(target, {}))).toBe(
-      ["n1 Find users where name = 'Ada' order by id asc limit 1", 'result: none'].join('\n'),
+  it('builds the Find of the first row as the result when nothing is set', () => {
+    const graph = updateFirstGraph(target, {});
+
+    expect(printGraph(graph)).toBe(
+      ["n1 Find users where name = 'Ada' order by id asc limit 1", 'result: n1 first row'].join(
+        '\n',
+      ),
     );
+    expect(returnedAt(graph, 0)).toEqual(['id', 'name']);
+  });
+
+  it('gives that Find the includes of the caller', () => {
+    const graph = updateFirstGraph(targetWithIncludes, {});
+
+    expect(returnedAt(graph, 0)).toEqual(['id', 'name', 'posts']);
+  });
+
+  it('builds a graph with no node after limit(0) when nothing is set', () => {
+    expect(printGraph(updateFirstGraph(targetOf(users.limit(0).state), {}))).toBe('result: none');
   });
 
   it('builds a graph with no node after limit(0)', () => {

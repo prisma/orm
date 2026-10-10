@@ -31,8 +31,15 @@ export function updateAllGraph(
   set: Readonly<Record<string, unknown>>,
   form: 'rows' | 'count',
 ): Graph {
-  const { context, namespaceId, tableName } = collection;
+  const { context, namespaceId, tableName, state } = collection;
   const graph = new Graph(form, collection);
+  if (Object.keys(set).length === 0) {
+    if (form === 'rows') {
+      graph.setResult(graph.add(new Find(selectRowsAst(collection, state)), { filter: [] }));
+    }
+    return graph;
+  }
+
   const update = updateAst(
     context.contract,
     namespaceId,
@@ -58,7 +65,7 @@ export function deleteAllGraph(
     return graph;
   }
 
-  const find = graph.add(new Find(selectWithIncludesAst(collection, state)), { filter: [] });
+  const find = graph.add(new Find(selectRowsAst(collection, state)), { filter: [] });
   const del = deleteAst(context.contract, namespaceId, tableName, whereOf(collection, 'count'));
   graph.after(find, graph.add(new Delete(del), { filter: [] }));
   graph.setResult(find);
@@ -71,8 +78,17 @@ export function updateFirstGraph(
 ): Graph {
   const { context, namespaceId, tableName } = collection;
   const graph = new Graph('first row', collection);
-  const find = addFindOfFirstRow(graph, collection);
+  const nothingToSet = Object.keys(set).length === 0;
+  const find = addFindOfFirstRow(
+    graph,
+    collection,
+    nothingToSet ? selectRowsAst : selectIdentityAst,
+  );
   if (find === undefined) {
+    return graph;
+  }
+  if (nothingToSet) {
+    graph.setResult(find);
     return graph;
   }
 
@@ -93,7 +109,7 @@ export function deleteFirstGraph(collection: DescribeCollectionRowsOptions): Gra
   const find = addFindOfFirstRow(
     graph,
     collection,
-    withIncludes ? selectWithIncludesAst : selectIdentityAst,
+    withIncludes ? selectRowsAst : selectIdentityAst,
   );
   if (find === undefined) {
     return graph;
@@ -140,11 +156,14 @@ function selectIdentityAst(
   });
 }
 
-function selectWithIncludesAst(
+function selectRowsAst(
   collection: DescribeCollectionRowsOptions,
   state: CollectionState,
 ): SelectAst {
   const { context, namespaceId, modelName, tableName } = collection;
+  if (state.includes.length === 0) {
+    return collectionSelectAst(context.contract, namespaceId, modelName, tableName, state);
+  }
   return collectionSelectWithIncludesAst(
     context.contract,
     context.aggregateDescriptors,
