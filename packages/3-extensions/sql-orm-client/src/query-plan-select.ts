@@ -1456,13 +1456,13 @@ function buildSelectAst(
   return ast;
 }
 
-export function compileSelect(
+export function collectionSelectAst(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   modelName: string,
   tableName: string,
   state: CollectionState,
-): SqlQueryPlan<Record<string, unknown>> {
+): SelectAst {
   assertLockCompatible(state);
   if (state.distinctOn !== undefined && state.distinctOn.length > 0) {
     assertDistinctOnCapability(contract, 'distinctOn');
@@ -1496,7 +1496,7 @@ export function compileSelect(
         )
       : [];
 
-  const ast = buildSelectAst(
+  return buildSelectAst(
     contract,
     modelName,
     tableName,
@@ -1507,19 +1507,28 @@ export function compileSelect(
       namespaceId,
     },
   );
+}
 
+export function compileSelect(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  modelName: string,
+  tableName: string,
+  state: CollectionState,
+): SqlQueryPlan<Record<string, unknown>> {
+  const ast = collectionSelectAst(contract, namespaceId, modelName, tableName, state);
   const { params } = deriveParamsFromAst(ast);
   return buildOrmQueryPlan(contract, ast, params, state.annotations);
 }
 
-export function compileSelectWithIncludes(
+export function collectionSelectWithIncludesAst(
   contract: Contract<SqlStorage>,
   aggregates: SqlAggregateDescriptorRegistry,
   namespaceId: string,
   modelName: string,
   tableName: string,
   state: CollectionState,
-): SqlQueryPlan<Record<string, unknown>> {
+): SelectAst {
   assertLockCompatible(state);
   const includeJoins: JoinAst[] = [];
   const includeProjection: ProjectionItem[] = [];
@@ -1565,7 +1574,7 @@ export function compileSelectWithIncludes(
     includeProjection.push(artifact.projection);
   }
 
-  const ast = buildSelectAst(
+  return buildSelectAst(
     contract,
     modelName,
     tableName,
@@ -1580,7 +1589,24 @@ export function compileSelectWithIncludes(
       ...ifDefined('where', topLevelWhere),
     },
   );
+}
 
+export function compileSelectWithIncludes(
+  contract: Contract<SqlStorage>,
+  aggregates: SqlAggregateDescriptorRegistry,
+  namespaceId: string,
+  modelName: string,
+  tableName: string,
+  state: CollectionState,
+): SqlQueryPlan<Record<string, unknown>> {
+  const ast = collectionSelectWithIncludesAst(
+    contract,
+    aggregates,
+    namespaceId,
+    modelName,
+    tableName,
+    state,
+  );
   const { params } = deriveParamsFromAst(ast);
   return buildOrmQueryPlan(contract, ast, params, state.annotations);
 }

@@ -350,18 +350,19 @@ describe('integration/update', () => {
   );
 
   it(
-    'updateAll({}) and updateAndCount({}) are no-ops',
+    'updateAll({}) reads the matching rows and updateAndCount({}) changes none',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         const users = createReturningUsersCollection(runtime);
+        await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
 
         runtime.resetExecutions();
-        const updated = await users.where({ id: 1 }).updateAll({});
+        const updated = await users.where({ id: 1 }).select('id', 'name', 'email').updateAll({});
         const count = await users.where({ id: 1 }).updateAndCount({});
 
-        expect(updated).toEqual([]);
+        expect(updated).toEqual([{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
         expect(count).toBe(0);
-        expect(runtime.executions).toHaveLength(0);
+        expect(runtime.executions).toHaveLength(1);
       });
     },
     timeouts.spinUpPpgDev,

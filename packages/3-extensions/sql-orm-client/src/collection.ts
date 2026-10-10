@@ -7,10 +7,8 @@ import type {
 import { AsyncIterableResult, createMetaBuilder } from '@internal/framework-components/runtime';
 import type { ExtractCodecTypes, SqlStorage } from '@internal/sql-contract/types';
 import {
-  type AnyExpression,
   BinaryExpr,
   ColumnRef,
-  checkLimitOffset,
   isWhereExpr,
   LiteralExpr,
   LockingClause,
@@ -62,7 +60,6 @@ import {
   resolveModelTableName,
   resolvePolymorphismInfo,
   resolvePrimaryKeyColumns,
-  resolveRowIdentityColumns,
   resolveUpsertConflictColumns,
 } from './collection-contract';
 import {
@@ -88,6 +85,7 @@ import {
   dispatchMutationRows,
   dispatchSplitMutationRows,
   executeMutationReturningSingleRow,
+  mutationReturningColumns,
 } from './collection-mutation-dispatch';
 import {
   assertModelFieldNames,
@@ -137,19 +135,22 @@ import {
   hasNestedMutationCallbacks,
   withMutationScope,
 } from './mutation-executor';
+import {
+  deleteAllGraph,
+  deleteFirstGraph,
+  updateAllGraph,
+  updateFirstGraph,
+} from './mutation-graph/collection-graphs';
+import { runForCount, runForFirstRow, runForRows } from './mutation-graph/run-graph';
 import { assertCursorCompatibleOrder, assertDistinctOnCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
 import type { PreparedCollection } from './prepared-collection';
 import {
   compileAggregate,
-  compileDeleteCount,
-  compileDeleteReturning,
   compileInsertCount,
   compileInsertCountSplit,
   compileInsertReturning,
   compileInsertReturningSplit,
-  compileUpdateCount,
-  compileUpdateReturning,
   compileUpsertReturning,
   type InsertConflictSkip,
   mergeAnnotations,
@@ -182,7 +183,6 @@ import {
   type RelationTargetNamespace,
   type ResolvedCreateInput,
   type ResolvedScalarCreateInput,
-  type RuntimeQueryable,
   type ShorthandWhereFilter,
   type UniqueConstraintCriterion,
   type VariantAwareIncludeRelationNames,
@@ -2607,22 +2607,14 @@ export class CollectionBase<
       this.modelName,
       blindCast<Record<string, unknown>, 'scalar update input is a model-field record'>(data),
     );
-    return withMutationScope(this.ctx.runtime, async (scope) => {
-      const scoped = this.#withRuntime(scope);
-      const identityWhere = await scoped.#findFirstMatchingRowIdentityWhere();
-      if (!identityWhere) {
-        return null;
-      }
-      const narrowed = scoped.#clone({ filters: [identityWhere] });
-      const rows = await narrowed.#updateAllWithAnnotations(
-        blindCast<
-          Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
-          'absence of nested callbacks selects the scalar update input'
-        >(data),
-        annotationsMap,
-      );
-      return rows[0] ?? null;
-    });
+    const values = this.#updateValues(
+      blindCast<
+        Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
+        'absence of nested callbacks selects the scalar update input'
+      >(data),
+    );
+    const graph = updateFirstGraph(this.#descriptionOptions(), values);
+    return runForFirstRow(graph, this.ctx.runtime, annotationsMap);
   }
 
   /**
@@ -2661,58 +2653,10 @@ export class CollectionBase<
   ): AsyncIterableResult<unknown> {
     assertBulkWriteIgnoresNothing(this.state, this.modelName, 'updateAll');
     assertLockCompatible(this.state, 'mutation');
-    return this.#updateAllWithAnnotations(
-      data,
-      this.#collectAnnotationsFromMeta(configure, 'write', 'updateAll'),
-    );
-  }
-
-  #updateAllWithAnnotations(
-    data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
-    annotationsMap: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined,
-  ): AsyncIterableResult<Row> {
+    const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'updateAll');
     assertReturningCapability(this.contract, 'updateAll()');
-
-    const mappedData = mapModelDataToStorageRow(
-      this.contract,
-      this.namespaceId,
-      this.modelName,
-      data,
-    );
-    if (Object.keys(mappedData).length === 0) {
-      const generator = async function* (): AsyncGenerator<Row, void, unknown> {};
-      return new AsyncIterableResult(generator());
-    }
-
-    applyUpdateDefaults(this.ctx, this.namespaceId, this.tableName, mappedData);
-
-    const { selectedForQuery: selectedForUpdate, hiddenColumns } = this.#augmentMutationSelection();
-    const compiled = mergeAnnotations(
-      compileUpdateReturning(
-        this.contract,
-        this.namespaceId,
-        this.modelName,
-        this.tableName,
-        mappedData,
-        this.state.filters,
-        selectedForUpdate,
-      ),
-      annotationsMap,
-    );
-    return dispatchMutationRows<Row>({
-      context: this.ctx.context,
-      runtime: this.ctx.runtime,
-      compiled,
-      tableName: this.tableName,
-      modelName: this.modelName,
-      namespaceId: this.namespaceId,
-      variantName: this.state.variantName,
-      includes: this.state.includes,
-      selectedFields: this.state.selectedFields,
-      hiddenColumns,
-      mapRow: (mapped) =>
-        blindCast<Row, 'mapped update storage row matches the collection generic row'>(mapped),
-    });
+    const graph = updateAllGraph(this.#descriptionOptions(), this.#updateValues(data), 'rows');
+    return runForRows(graph, this.ctx.runtime, annotationsMap);
   }
 
   /**
@@ -2740,34 +2684,9 @@ export class CollectionBase<
   ): Promise<number> {
     assertBulkWriteIgnoresNothing(this.state, this.modelName, 'updateAndCount');
     assertLockCompatible(this.state, 'mutation');
-    const mappedData = mapModelDataToStorageRow(
-      this.contract,
-      this.namespaceId,
-      this.modelName,
-      data,
-    );
-    if (Object.keys(mappedData).length === 0) {
-      return 0;
-    }
-
-    applyUpdateDefaults(this.ctx, this.namespaceId, this.tableName, mappedData);
-
+    const graph = updateAllGraph(this.#descriptionOptions(), this.#updateValues(data), 'count');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'updateAndCount');
-
-    const compiled = mergeAnnotations(
-      compileUpdateCount(
-        this.contract,
-        this.namespaceId,
-        this.tableName,
-        mappedData,
-        this.state.filters,
-        this.state.variantName,
-        this.modelName,
-      ),
-      annotationsMap,
-    );
-    const stats = await this.ctx.runtime.execute(compiled);
-    return stats.affectedRows;
+    return runForCount(graph, this.ctx.runtime, annotationsMap);
   }
 
   /**
@@ -2792,20 +2711,8 @@ export class CollectionBase<
     assertLockCompatible(this.state, 'mutation');
     assertReturningCapability(this.contract, 'delete()');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'delete');
-    return withMutationScope(this.ctx.runtime, async (scope) => {
-      const scoped = this.#withRuntime(scope);
-      const identityWhere = await scoped.#findFirstMatchingRowIdentityWhere();
-      if (!identityWhere) {
-        return null;
-      }
-      const narrowed = scoped.#clone({
-        filters: [identityWhere],
-        limit: undefined,
-        offset: undefined,
-      });
-      const rows = await narrowed.#executeDeleteReturning(annotationsMap).toArray();
-      return rows[0] ?? null;
-    });
+    const graph = deleteFirstGraph(this.#descriptionOptions());
+    return runForFirstRow(graph, this.ctx.runtime, annotationsMap);
   }
 
   /**
@@ -2838,99 +2745,10 @@ export class CollectionBase<
   deleteAll(configure?: (meta: MetaBuilder<'write'>) => void): AsyncIterableResult<unknown> {
     assertBulkWriteIgnoresNothing(this.state, this.modelName, 'deleteAll');
     assertLockCompatible(this.state, 'mutation');
-    return this.#deleteAllWithAnnotations(
-      this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAll'),
-    );
-  }
-
-  #deleteAllWithAnnotations(
-    annotationsMap: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined,
-  ): AsyncIterableResult<Row> {
+    const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAll');
     assertReturningCapability(this.contract, 'deleteAll()');
-    return this.#executeDeleteReturning(annotationsMap);
-  }
-
-  #executeDeleteReturning(
-    annotationsMap: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined,
-  ): AsyncIterableResult<Row> {
-    if (this.state.includes.length > 0) {
-      return this.#executeDeleteReturningWithIncludes(annotationsMap);
-    }
-
-    const { selectedForQuery: selectedForDelete, hiddenColumns } = this.#augmentMutationSelection();
-    const compiled = mergeAnnotations(
-      compileDeleteReturning(
-        this.contract,
-        this.namespaceId,
-        this.modelName,
-        this.tableName,
-        this.state.filters,
-        selectedForDelete,
-      ),
-      annotationsMap,
-    );
-    return dispatchMutationRows<Row>({
-      context: this.ctx.context,
-      runtime: this.ctx.runtime,
-      compiled,
-      tableName: this.tableName,
-      modelName: this.modelName,
-      namespaceId: this.namespaceId,
-      variantName: this.state.variantName,
-      includes: this.state.includes,
-      selectedFields: this.state.selectedFields,
-      hiddenColumns,
-      mapRow: (mapped) =>
-        blindCast<Row, 'mapped delete storage row matches the collection generic row'>(mapped),
-    });
-  }
-
-  /**
-   * Delete read-back with includes.
-   *
-   * A parent-anchored single-query include read can't observe a row
-   * that has already been deleted, so this reads the rows together with
-   * their relations BEFORE issuing the DELETE. The snapshot is fully
-   * drained into a plain array with `.toArray()` while the rows still
-   * exist; only then does the DELETE run. The yielded `for..of` walks
-   * that in-memory array, not a live cursor, so nothing reads from the
-   * deleted rows after the fact. Snapshot read and delete share one
-   * `withMutationScope` so they are atomic; the returned relations
-   * reflect the row's state at delete time.
-   */
-  #executeDeleteReturningWithIncludes(
-    annotationsMap: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined,
-  ): AsyncIterableResult<Row> {
-    const collection = this;
-    const generator = async function* (): AsyncGenerator<Row, void, unknown> {
-      const snapshot = await withMutationScope(collection.ctx.runtime, async (scope) => {
-        const rows = await dispatchCollectionRows<Row>({
-          context: collection.ctx.context,
-          runtime: scope,
-          state: collection.state,
-          tableName: collection.tableName,
-          modelName: collection.modelName,
-          namespaceId: collection.namespaceId,
-        }).toArray();
-        const deletePlan = mergeAnnotations(
-          compileDeleteCount(
-            collection.contract,
-            collection.namespaceId,
-            collection.tableName,
-            collection.state.filters,
-            collection.state.variantName,
-            collection.modelName,
-          ),
-          annotationsMap,
-        );
-        await scope.execute(deletePlan);
-        return rows;
-      });
-      for (const row of snapshot) {
-        yield row;
-      }
-    };
-    return new AsyncIterableResult(generator());
+    const graph = deleteAllGraph(this.#descriptionOptions(), 'rows');
+    return runForRows(graph, this.ctx.runtime, annotationsMap);
   }
 
   /**
@@ -2953,20 +2771,18 @@ export class CollectionBase<
     assertBulkWriteIgnoresNothing(this.state, this.modelName, 'deleteAndCount');
     assertLockCompatible(this.state, 'mutation');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAndCount');
+    const graph = deleteAllGraph(this.#descriptionOptions(), 'count');
+    return runForCount(graph, this.ctx.runtime, annotationsMap);
+  }
 
-    const compiled = mergeAnnotations(
-      compileDeleteCount(
-        this.contract,
-        this.namespaceId,
-        this.tableName,
-        this.state.filters,
-        this.state.variantName,
-        this.modelName,
-      ),
-      annotationsMap,
-    );
-    const stats = await this.ctx.runtime.execute(compiled);
-    return stats.affectedRows;
+  #updateValues(
+    data: Partial<DefaultModelRow<TContract, ModelName, State['nsId']>>,
+  ): Record<string, unknown> {
+    const values = mapModelDataToStorageRow(this.contract, this.namespaceId, this.modelName, data);
+    if (Object.keys(values).length > 0) {
+      applyUpdateDefaults(this.ctx, this.namespaceId, this.tableName, values);
+    }
+    return values;
   }
 
   #buildUpsertConflictCriterion(
@@ -3009,77 +2825,15 @@ export class CollectionBase<
     selectedForQuery: readonly string[] | undefined;
     hiddenColumns: readonly string[];
   } {
-    if (this.state.includes.length > 0) {
-      const identityColumns = resolveRowIdentityColumns(
-        this.contract,
-        this.namespaceId,
-        this.tableName,
-      );
-      if (identityColumns.length === 0) {
-        throw ormError(
-          'ORM.ROW_IDENTITY_MISSING',
-          `Cannot load includes for the mutation result on model "${this.modelName}": table "${this.tableName}" has no primary key or unique constraint to key the include read-back on.`,
-          { meta: { model: this.modelName, table: this.tableName } },
-        );
-      }
-      return { selectedForQuery: identityColumns, hiddenColumns: [] };
-    }
-    return { selectedForQuery: this.state.selectedFields, hiddenColumns: [] };
-  }
-
-  async #findFirstMatchingRowIdentityWhere(): Promise<AnyExpression | null> {
-    const identityColumns = resolveRowIdentityColumns(
+    const selectedForQuery = mutationReturningColumns(
       this.contract,
       this.namespaceId,
+      this.modelName,
       this.tableName,
+      this.state.selectedFields,
+      this.state.includes,
     );
-    if (identityColumns.length === 0) {
-      throw ormError(
-        'ORM.ROW_IDENTITY_MISSING',
-        `update()/delete() on model "${this.modelName}" requires the table to have a primary key or unique constraint`,
-        { meta: { model: this.modelName, table: this.tableName } },
-      );
-    }
-    checkLimitOffset('limit', this.state.limit);
-    if (this.state.limit === 0) {
-      return null;
-    }
-    const firstRow = await this.#clone({
-      selectedFields: [...identityColumns],
-      includes: [],
-    }).first();
-    if (!firstRow) {
-      return null;
-    }
-    const criterion: Record<string, unknown> = {};
-    for (const column of identityColumns) {
-      const fieldName = fieldOfColumn(
-        getModelColumnFields(this.contract, this.namespaceId, this.modelName),
-        this.modelName,
-        column,
-      );
-      const value = blindCast<
-        Record<string, unknown>,
-        'selected collection rows are model-field records used for identity lookup'
-      >(firstRow)[fieldName];
-      if (value === undefined) {
-        throw new InternalError(
-          `Missing identity field "${fieldName}" while resolving single-row scope for model "${this.modelName}"`,
-        );
-      }
-      criterion[fieldName] = value;
-    }
-    return (
-      shorthandToWhereExpr(
-        this.ctx.context,
-        this.namespaceId,
-        this.modelName,
-        blindCast<
-          ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
-          'identity columns were resolved from this model before building the shorthand filter'
-        >(criterion),
-      ) ?? null
-    );
+    return { selectedForQuery, hiddenColumns: [] };
   }
 
   async #reloadMutationRowByIdentity(criterion: Record<string, unknown>): Promise<Row | null> {
@@ -3170,25 +2924,6 @@ export class CollectionBase<
       this & Flags,
       'the clone is built by this constructor, so it is an instance of the same class'
     >(this.#createSelf<Row, State>({ ...this.state, ...overrides }));
-  }
-
-  #withRuntime(runtime: RuntimeQueryable): CollectionBase<TContract, ModelName, Row, State> {
-    const Ctor = blindCast<
-      CollectionConstructor<TContract>,
-      'runtime collection subclasses preserve the Collection constructor contract'
-    >(this.constructor);
-    return blindCast<
-      CollectionBase<TContract, ModelName, Row, State>,
-      'runtime collection construction erases model row and state generics'
-    >(
-      new Ctor({ ...this.ctx, runtime }, this.modelName, {
-        tableName: this.tableName,
-        namespaceId: this.namespaceId,
-        state: this.state,
-        registry: this.registry,
-        includeRefinementMode: this.includeRefinementMode,
-      }),
-    );
   }
 
   #cloneWithRow<NextRow, NextState extends CollectionTypeState = State>(

@@ -1,8 +1,12 @@
 import type { Contract } from '@internal/contract/types';
-import { AsyncIterableResult } from '@internal/framework-components/runtime';
+import {
+  type AnnotationValue,
+  AsyncIterableResult,
+  type OperationKind,
+} from '@internal/framework-components/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
-import { resolvePolymorphismInfo } from './collection-contract';
+import { resolvePolymorphismInfo, resolveRowIdentityColumns } from './collection-contract';
 import { reloadMutationRowsByIdentities } from './collection-dispatch';
 import {
   mapPolymorphicRow,
@@ -26,10 +30,31 @@ function createMutationRowMapper(
     : (row) => mapStorageRowToModelFields(contract, namespaceId, modelName, row);
 }
 
-interface DispatchMutationRowsOptions<Row> {
+export function mutationReturningColumns(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  modelName: string,
+  tableName: string,
+  selectedFields: readonly string[] | undefined,
+  includes: readonly IncludeExpr[],
+): readonly string[] | undefined {
+  if (includes.length === 0) {
+    return selectedFields;
+  }
+  const identityColumns = resolveRowIdentityColumns(contract, namespaceId, tableName);
+  if (identityColumns.length === 0) {
+    throw ormError(
+      'ORM.ROW_IDENTITY_MISSING',
+      `Cannot load includes for the mutation result on model "${modelName}": table "${tableName}" has no primary key or unique constraint to key the include read-back on.`,
+      { meta: { model: modelName, table: tableName } },
+    );
+  }
+  return identityColumns;
+}
+
+interface MapMutationRowsOptions<Row> {
   readonly context: CollectionContext<Contract<SqlStorage>>['context'];
   readonly runtime: CollectionContext<Contract<SqlStorage>>['runtime'];
-  readonly compiled: SqlQueryPlan<Record<string, unknown>>;
   readonly tableName: string;
   readonly modelName: string;
   readonly namespaceId: string;
@@ -38,15 +63,29 @@ interface DispatchMutationRowsOptions<Row> {
   readonly selectedFields: readonly string[] | undefined;
   readonly hiddenColumns: readonly string[];
   readonly mapRow: (mapped: Record<string, unknown>) => Row;
+  readonly annotations?: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined;
+}
+
+interface DispatchMutationRowsOptions<Row> extends MapMutationRowsOptions<Row> {
+  readonly compiled: SqlQueryPlan<Record<string, unknown>>;
 }
 
 export function dispatchMutationRows<Row>(
   options: DispatchMutationRowsOptions<Row>,
 ): AsyncIterableResult<Row> {
+  return mapMutationRows(
+    () => queryPlanRows<Record<string, unknown>>(options.runtime, options.compiled),
+    options,
+  );
+}
+
+export function mapMutationRows<Row>(
+  storageRows: () => AsyncIterableResult<Record<string, unknown>>,
+  options: MapMutationRowsOptions<Row>,
+): AsyncIterableResult<Row> {
   const {
     context,
     runtime,
-    compiled,
     tableName,
     modelName,
     namespaceId,
@@ -55,14 +94,13 @@ export function dispatchMutationRows<Row>(
     selectedFields,
     hiddenColumns,
     mapRow,
+    annotations,
   } = options;
   const { contract } = context;
   const mapStorageRow = createMutationRowMapper(contract, namespaceId, modelName, variantName);
 
   if (includes.length === 0) {
-    const source = queryPlanRows<Record<string, unknown>>(runtime, compiled);
-
-    return mapResultRows(source, (rawRow) => {
+    return mapResultRows(storageRows(), (rawRow) => {
       const mapped = mapStorageRow(rawRow);
       if (hiddenColumns.length > 0) {
         stripHiddenMappedFields(contract, namespaceId, modelName, mapped, hiddenColumns);
@@ -77,7 +115,7 @@ export function dispatchMutationRows<Row>(
   // path uses — no parallel read-back implementation. The reload streams;
   // only the small set of identities is buffered to key it.
   const generator = async function* (): AsyncGenerator<Row, void, unknown> {
-    const identityRows = await queryPlanRows<Record<string, unknown>>(runtime, compiled).toArray();
+    const identityRows = await storageRows().toArray();
     yield* reloadMutationRowsByIdentities<Row>({
       context,
       runtime,
@@ -87,6 +125,7 @@ export function dispatchMutationRows<Row>(
       identityRows,
       selectedFields,
       includes,
+      annotations,
     });
   };
 
