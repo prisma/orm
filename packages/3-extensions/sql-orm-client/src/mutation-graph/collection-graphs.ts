@@ -19,9 +19,12 @@ import { collectionSelectAst, collectionSelectWithIncludesAst } from '../query-p
 import { tableSourceForContract } from '../storage-resolution';
 import type { CollectionState } from '../types';
 import { combineWhereExprs } from '../where-utils';
-import { type FilterData, filterData, type NodeId, type Pending } from './edges';
+import { Delete } from './delete';
+import type { NodeId, Pending } from './edge';
+import { type FilterData, filterData } from './filter-data';
+import { Find } from './find';
 import { Graph } from './graph';
-import { Delete, Find, Update } from './nodes';
+import { Update } from './update';
 
 export function updateAllGraph(
   collection: DescribeCollectionRowsOptions,

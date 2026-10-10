@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { After, FilterData, filterData } from '../../src/mutation-graph/edges';
+import { FilterData, filterData } from '../../src/mutation-graph/filter-data';
 import { printExpression } from '../../src/mutation-graph/print-expression';
 import { columnPairs } from './statements';
 
@@ -51,15 +51,5 @@ describe('FilterData', () => {
 
   it('is made by filterData once it is told where it goes', () => {
     expect(filterData(0, idToUserId)(3)).toEqual(new FilterData(0, 3, idToUserId));
-  });
-});
-
-describe('After', () => {
-  it('holds the position it comes from and the position it goes to', () => {
-    expect(new After(0, 1)).toMatchObject({ from: 0, to: 1 });
-  });
-
-  it('is frozen', () => {
-    expect(Object.isFrozen(new After(0, 1))).toBe(true);
   });
 });

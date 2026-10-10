@@ -5,9 +5,12 @@ import {
   ColumnRef,
   ParamRef,
 } from '@internal/sql-relational-core/ast';
-import type { ColumnPair, StorageRow } from '../../src/mutation-graph/edges';
+import { Delete } from '../../src/mutation-graph/delete';
+import type { ColumnPair, StorageRow } from '../../src/mutation-graph/edge';
+import { Find } from '../../src/mutation-graph/find';
 import { Graph, type ResultForm } from '../../src/mutation-graph/graph';
-import { Delete, Find, type Run, type StatementAst, Update } from '../../src/mutation-graph/nodes';
+import type { Run, StatementAst } from '../../src/mutation-graph/node';
+import { Update } from '../../src/mutation-graph/update';
 import { deleteAst, projectTableColumns, updateAst } from '../../src/query-plan-mutations';
 import { collectionSelectAst, collectionSelectWithIncludesAst } from '../../src/query-plan-select';
 import { tableSourceForContract } from '../../src/storage-resolution';

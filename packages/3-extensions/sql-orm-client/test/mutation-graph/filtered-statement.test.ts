@@ -1,6 +1,6 @@
 import { BinaryExpr, ColumnRef, ParamRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import type { Node } from '../../src/mutation-graph/nodes';
+import type { Node } from '../../src/mutation-graph/node';
 import { printExpression } from '../../src/mutation-graph/print-expression';
 import {
   columnPairs,
@@ -104,11 +104,5 @@ describe.each([
 
     expect(rows).toEqual([{ email: 'a@b.c' }]);
     expect(run.executed).toEqual([]);
-  });
-});
-
-describe('Update', () => {
-  it('has no peephole result when it sets nothing', () => {
-    expect(updateUsers({}, nameIsAda).peephole(graphOfUsers(), 0)).toBeUndefined();
   });
 });

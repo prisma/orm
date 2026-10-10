@@ -5,9 +5,10 @@ import type {
   SelectAst,
   UpdateAst,
 } from '@internal/sql-relational-core/ast';
-import { After, type Edge, type NodeId } from './edges';
+import { After } from './after';
+import type { Edge, NodeId } from './edge';
 import type { Graph } from './graph';
-import type { StatementAst } from './nodes';
+import type { StatementAst } from './node';
 import { printExpression } from './print-expression';
 
 type NodeNames = ReadonlyMap<NodeId, string>;

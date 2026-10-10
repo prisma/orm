@@ -12,9 +12,9 @@ import { withMutationScope } from '../mutation-executor';
 import { buildOrmQueryPlan, deriveParamsFromAst, mergeAnnotations } from '../query-plan-meta';
 import { queryPlanRows } from '../query-plan-rows';
 import type { RuntimeQueryable } from '../types';
-import type { NodeId, StorageRow } from './edges';
+import type { NodeId, StorageRow } from './edge';
 import type { Graph } from './graph';
-import type { Executed, Node, OutputsOf, Run, Slots, StatementAst } from './nodes';
+import type { Executed, Node, OutputsOf, Run, Slots, StatementAst } from './node';
 
 type Annotations = ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined;
 type Collected = readonly (readonly StorageRow[] | number)[];

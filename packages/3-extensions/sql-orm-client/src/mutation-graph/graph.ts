@@ -1,6 +1,7 @@
 import type { DescribeCollectionRowsOptions } from '../collection-dispatch';
-import { After, type Edge, type NodeId, type Pending } from './edges';
-import type { Node, Slots } from './nodes';
+import { After } from './after';
+import type { Edge, NodeId, Pending } from './edge';
+import type { Node, Slots } from './node';
 
 export type ResultForm = 'rows' | 'first row' | 'count';
 

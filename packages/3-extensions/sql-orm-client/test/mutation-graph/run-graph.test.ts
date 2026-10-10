@@ -1,6 +1,6 @@
 import { defineAnnotation } from '@internal/framework-components/runtime';
 import { describe, expect, it, vi } from 'vitest';
-import { filterData } from '../../src/mutation-graph/edges';
+import { filterData } from '../../src/mutation-graph/filter-data';
 import type { Graph } from '../../src/mutation-graph/graph';
 import { printExpression } from '../../src/mutation-graph/print-expression';
 import { runForCount, runForFirstRow, runForRows } from '../../src/mutation-graph/run-graph';

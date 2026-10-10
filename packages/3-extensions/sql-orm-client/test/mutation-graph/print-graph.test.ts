@@ -18,9 +18,13 @@ import {
   UpdateAst,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { type ColumnPair, filterData } from '../../src/mutation-graph/edges';
-import { Delete, Find, type Node, Update } from '../../src/mutation-graph/nodes';
+import { Delete } from '../../src/mutation-graph/delete';
+import type { ColumnPair } from '../../src/mutation-graph/edge';
+import { filterData } from '../../src/mutation-graph/filter-data';
+import { Find } from '../../src/mutation-graph/find';
+import type { Node } from '../../src/mutation-graph/node';
 import { printGraph } from '../../src/mutation-graph/print-graph';
+import { Update } from '../../src/mutation-graph/update';
 import { graphOfUsers } from './statements';
 
 const user = TableSource.named('user');

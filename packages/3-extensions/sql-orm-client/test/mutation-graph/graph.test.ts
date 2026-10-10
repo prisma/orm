@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { After, FilterData, filterData } from '../../src/mutation-graph/edges';
+import { After } from '../../src/mutation-graph/after';
+import { FilterData, filterData } from '../../src/mutation-graph/filter-data';
 import {
   columnPairs,
   deletePosts,

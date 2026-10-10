@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { After, FilterData, filterData } from '../../src/mutation-graph/edges';
-import type { Node } from '../../src/mutation-graph/nodes';
-import { Find } from '../../src/mutation-graph/nodes';
+import { After } from '../../src/mutation-graph/after';
+import { FilterData, filterData } from '../../src/mutation-graph/filter-data';
+import { Find } from '../../src/mutation-graph/find';
+import type { Node } from '../../src/mutation-graph/node';
 import { columnPairs, deleteUsers, findUsers, graphOfUsers, updateUsers } from './statements';
 
 const sameId = columnPairs('users', 'users', [['id', 'id']]);
