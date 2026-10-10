@@ -2,10 +2,10 @@ import { defineAnnotation } from '@internal/framework-components/runtime';
 import { describe, expect, it, vi } from 'vitest';
 import { filterData } from '../../src/mutation-graph/filter-data';
 import type { Graph } from '../../src/mutation-graph/graph';
-import { printExpression } from '../../src/mutation-graph/print-expression';
 import { runForCount, runForFirstRow, runForRows } from '../../src/mutation-graph/run-graph';
 import { createCollectionFor } from '../collection-fixtures';
 import { createMockRuntime, type MockExecution, type MockRuntime } from '../helpers';
+import { printExpression } from './print-expression';
 import {
   columnPairs,
   deletePosts,

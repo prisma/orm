@@ -1,7 +1,7 @@
 import { BinaryExpr, ColumnRef, ParamRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import type { Node } from '../../src/mutation-graph/node';
-import { printExpression } from '../../src/mutation-graph/print-expression';
+import { printExpression } from './print-expression';
 import {
   columnPairs,
   deleteUsers,

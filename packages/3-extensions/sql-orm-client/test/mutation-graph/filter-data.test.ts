@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FilterData, filterData } from '../../src/mutation-graph/filter-data';
-import { printExpression } from '../../src/mutation-graph/print-expression';
+import { printExpression } from './print-expression';
 import { columnPairs, positions } from './statements';
 
 const [from, to, other] = positions();

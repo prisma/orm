@@ -5,10 +5,10 @@ import type {
   SelectAst,
   UpdateAst,
 } from '@internal/sql-relational-core/ast';
-import { After } from './after';
-import type { Edge, NodeId } from './edge';
-import type { Graph } from './graph';
-import type { StatementAst } from './node';
+import { After } from '../../src/mutation-graph/after';
+import type { Edge, NodeId } from '../../src/mutation-graph/edge';
+import type { Graph } from '../../src/mutation-graph/graph';
+import type { StatementAst } from '../../src/mutation-graph/node';
 import { printExpression } from './print-expression';
 
 type NodeNames = ReadonlyMap<NodeId, string>;

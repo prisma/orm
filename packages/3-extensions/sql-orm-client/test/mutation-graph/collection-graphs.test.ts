@@ -5,10 +5,10 @@ import {
   updateAllGraph,
   updateFirstGraph,
 } from '../../src/mutation-graph/collection-graphs';
-import { printGraph } from '../../src/mutation-graph/print-graph';
 import type { CollectionState } from '../../src/types';
 import { createCollectionFor } from '../collection-fixtures';
 import { getTestContext } from '../helpers';
+import { printGraph } from './print-graph';
 import { returnedAt } from './statements';
 
 const users = createCollectionFor('User')
