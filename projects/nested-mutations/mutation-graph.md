@@ -80,7 +80,7 @@ Three edge classes: `After` (order only), `PayloadData` (copy columns into a wri
 `Find` holds a `SelectAst`, `Update` an `UpdateAst`, `Delete` a `DeleteAst`, `Insert` an `InsertAst`. The graph builder creates the AST; the runner applies a node's edges with the AST's own `withWhere`, `withRows` and `withReturning` and builds the plan from the result. A node has no description of its statement besides the AST.
 
 - **Why.** The first build gave nodes their own fields (table identity, raw values, `where`, a copy of the read state) and the runner compiled them to AST with a switch on the node's class: two forms of one statement. The AST classes are already frozen and already have the operations the edges need. Inlining a `Find` into its consumer (D8) becomes a subquery over the `Find`'s AST.
-- **Assumes.** Everything the runner needs besides the AST (which model the result's rows are mapped to, the caller's selection and includes) belongs to the graph's result, not to a node. A result `Find` with includes returns identity columns and its rows are loaded with includes by identity, as writes with includes already are.
+- **Assumes.** Everything the runner needs besides the AST (which model the result's rows are mapped to, the caller's selection and includes) belongs to the graph's result, not to a node. A `Find` with includes holds the single `SelectAst` the read code already builds for a read with includes (base table plus one joined JSON column per include), and the result step decodes it with the read code's own consumer. Only writes with includes return identity columns and have their rows loaded by identity, because a write's returning clause cannot join related rows.
 
 ### D2b. Edges resolve data, nodes execute
 

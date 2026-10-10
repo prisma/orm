@@ -74,7 +74,7 @@ One reviewer reads this as: a small data structure with its tests, a runner with
 | Case | Behaviour that must hold |
 | --- | --- |
 | `updateAll({})`, `updateAndCount({})`, `update({})` | No update statement. `updateAll` yields no rows, `updateAndCount` resolves `0`. For `update({})`, keep what main returns today. This is the peephole rule. |
-| `deleteAll()` with includes | The rows are read with their includes first and collected, then the delete runs, in one transaction; the read rows are the result. `Find` then `Delete` joined by `After`. |
+| `deleteAll()` with includes | The rows are read with their includes first and collected, then the delete runs, in one transaction; the read rows are the result. `Find` then `Delete` joined by `After`. The `Find` holds the read code's `SelectAst` with includes, so it is one statement and needs no identity columns. |
 | `updateAll` / `update` with includes | The write returns identity columns and the rows are loaded by the existing read code (`dispatchMutationRows` does this today). |
 | `update()` / `delete()` matching no row, or after `limit(0)` | Resolves `null`; the write is skipped. |
 | A caller-supplied transaction | The runner uses it and does not open another. |
