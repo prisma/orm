@@ -91,45 +91,42 @@ function describeExecutionRows<Row>(
 ): Preparable<Record<string, unknown>, AsyncIterableResult<Row>> {
   const { context, state, tableName, modelName, namespaceId } = options;
   const { contract } = context;
-  const polyInfo = resolvePolymorphismInfo(contract, namespaceId, modelName);
+  const plan =
+    state.includes.length === 0
+      ? compileSelect(contract, namespaceId, modelName, tableName, state)
+      : compileSelectWithIncludes(
+          contract,
+          context.aggregateDescriptors,
+          namespaceId,
+          modelName,
+          tableName,
+          state,
+        );
+  return { plan, consume: (rows) => consumeCollectionRows<Row>(options, rows) };
+}
 
-  if (state.includes.length === 0) {
-    const compiled = compileSelect(contract, namespaceId, modelName, tableName, state);
-    const mapper = polyInfo
-      ? (rawRow: Record<string, unknown>) =>
-          blindCast<
-            Row,
-            'collection row generic is supplied by the caller and matched to the selected model shape'
-          >(
-            mapPolymorphicRow(
-              contract,
-              namespaceId,
-              modelName,
-              polyInfo,
-              rawRow,
-              state.variantName,
-            ),
-          )
-      : (rawRow: Record<string, unknown>) =>
-          blindCast<
-            Row,
-            'collection row generic is supplied by the caller and matched to the selected model shape'
-          >(mapStorageRowToModelFields(contract, namespaceId, modelName, rawRow));
-    return { plan: compiled, consume: (rows) => mapResultRows(rows, mapper) };
+export function consumeCollectionRows<Row>(
+  options: DescribeCollectionRowsOptions,
+  rows: AsyncIterableResult<Record<string, unknown>>,
+): AsyncIterableResult<Row> {
+  const { context, state, modelName, namespaceId } = options;
+  const { contract } = context;
+  if (state.includes.length > 0) {
+    return consumeIncludeRows<Row>(context, state, namespaceId, modelName, rows);
   }
-
-  const plan = compileSelectWithIncludes(
-    contract,
-    context.aggregateDescriptors,
-    namespaceId,
-    modelName,
-    tableName,
-    state,
-  );
-  return {
-    plan,
-    consume: (rows) => consumeIncludeRows<Row>(context, state, namespaceId, modelName, rows),
-  };
+  const polyInfo = resolvePolymorphismInfo(contract, namespaceId, modelName);
+  const mapper = polyInfo
+    ? (rawRow: Record<string, unknown>) =>
+        blindCast<
+          Row,
+          'collection row generic is supplied by the caller and matched to the selected model shape'
+        >(mapPolymorphicRow(contract, namespaceId, modelName, polyInfo, rawRow, state.variantName))
+    : (rawRow: Record<string, unknown>) =>
+        blindCast<
+          Row,
+          'collection row generic is supplied by the caller and matched to the selected model shape'
+        >(mapStorageRowToModelFields(contract, namespaceId, modelName, rawRow));
+  return mapResultRows(rows, mapper);
 }
 
 function deferResolution<T>(resolve: () => T): () => T {
@@ -462,7 +459,6 @@ export function reloadMutationRowsByIdentities<Row>(options: {
   selectedFields: readonly string[] | undefined;
   includes: readonly IncludeExpr[];
   annotations?: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined;
-  readState?: Pick<CollectionState, 'orderBy' | 'variantName'> | undefined;
 }): AsyncIterableResult<Row> {
   const {
     context,
@@ -474,7 +470,6 @@ export function reloadMutationRowsByIdentities<Row>(options: {
     selectedFields,
     includes,
     annotations,
-    readState,
   } = options;
   const { contract } = context;
   if (identityRows.length === 0) {
@@ -510,7 +505,6 @@ export function reloadMutationRowsByIdentities<Row>(options: {
       selectedFields,
       includes,
       ...ifDefined('annotations', annotations),
-      ...readState,
     },
     tableName,
     modelName,

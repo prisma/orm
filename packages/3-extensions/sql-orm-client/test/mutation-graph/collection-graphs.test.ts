@@ -80,7 +80,7 @@ describe('deleteAllGraph', () => {
     expect(graph.result.collection).toBe(target);
   });
 
-  it('builds a Find of the identity columns and a Delete after it for deleteAll with includes', () => {
+  it('builds a Find with the includes and a Delete after it for deleteAll with includes', () => {
     const graph = deleteAllGraph(targetWithIncludes, 'rows');
 
     expect(printGraph(graph)).toBe(
@@ -90,9 +90,15 @@ describe('deleteAllGraph', () => {
         'result: n1 rows',
       ].join('\n'),
     );
-    expect(graph.nodeAt(0)?.returns.map((column) => column.alias)).toEqual(['id']);
+    expect(graph.nodeAt(0)?.returns.map((column) => column.alias)).toEqual(['id', 'name', 'posts']);
     expect(graph.nodeAt(1)?.returns).toEqual([]);
     expect(graph.result.collection).toBe(targetWithIncludes);
+  });
+
+  it('does not make the Find of deleteAll with includes return identity columns', () => {
+    const graph = deleteAllGraph(targetOf(users.select('name').include('posts').state), 'rows');
+
+    expect(graph.nodeAt(0)?.returns.map((column) => column.alias)).toEqual(['name', 'posts']);
   });
 
   it('builds one Delete as the count result for deleteAndCount, with or without includes', () => {
@@ -190,7 +196,7 @@ describe('deleteFirstGraph', () => {
     expect(graph.result.collection).toBe(target);
   });
 
-  it('makes the Find the result when there are includes', () => {
+  it('makes the Find carry the includes and be the result when there are includes', () => {
     const graph = deleteFirstGraph(targetWithIncludes);
 
     expect(printGraph(graph)).toBe(
@@ -200,7 +206,21 @@ describe('deleteFirstGraph', () => {
         'result: n1 first row',
       ].join('\n'),
     );
+    expect(graph.nodeAt(0)?.returns.map((column) => column.alias)).toEqual(['id', 'name', 'posts']);
+    expect(graph.nodeAt(1)?.returns).toEqual([]);
     expect(graph.result.collection).toBe(targetWithIncludes);
+  });
+
+  it('makes that Find also return the identity columns the Delete reads', () => {
+    const graph = deleteFirstGraph(targetOf(users.select('name').include('posts').state));
+
+    expect(graph.nodeAt(0)?.returns.map((column) => column.alias)).toEqual(['name', 'posts', 'id']);
+  });
+
+  it('builds a graph with no node after limit(0) with includes', () => {
+    const limited = targetOf(users.include('posts').limit(0).state);
+
+    expect(printGraph(deleteFirstGraph(limited))).toBe('result: none');
   });
 
   it('builds a graph with no node after limit(0)', () => {

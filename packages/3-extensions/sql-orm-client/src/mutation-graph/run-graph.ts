@@ -5,7 +5,9 @@ import {
 } from '@internal/framework-components/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { getColumnsReadOnTable } from '../collection-contract';
-import { mapMutationRows, mutationReturningColumns } from '../collection-mutation-dispatch';
+import { consumeCollectionRows } from '../collection-dispatch';
+import { mapMutationRows } from '../collection-mutation-dispatch';
+import { mapResultRows, stripHiddenMappedFields } from '../collection-runtime';
 import { withMutationScope } from '../mutation-executor';
 import { buildOrmQueryPlan, deriveParamsFromAst, mergeAnnotations } from '../query-plan-meta';
 import { queryPlanRows } from '../query-plan-rows';
@@ -32,7 +34,7 @@ export function runForRows<Row>(
     const [id, node] = only;
     const run = runOn(graph, runtime, annotations);
     const storageRows = () => rowStream(node.execute(inputsOf(graph, id, []), run));
-    return callerRows<Row>(graph, node, storageRows, runtime, annotations);
+    return callerRows<Row>(graph, id, node, storageRows, runtime, annotations);
   }
   const generator = async function* (): AsyncGenerator<Row, void, unknown> {
     const outcome = await runAllNodes<Row>(graph, runtime, annotations);
@@ -90,7 +92,7 @@ async function runNodesInOrder<Row>(
     count = typeof executed === 'number' ? executed : storageRows.length;
     if (graph.result.form !== 'count') {
       const stream = () => streamOf(storageRows);
-      rows = await callerRows<Row>(graph, node, stream, scope, annotations).toArray();
+      rows = await callerRows<Row>(graph, id, node, stream, scope, annotations).toArray();
     }
   }
 
@@ -125,22 +127,28 @@ function runOn(graph: Graph, scope: RuntimeQueryable, annotations: Annotations):
 
 function callerRows<Row>(
   graph: Graph,
+  id: NodeId,
   node: Node,
   storageRows: () => AsyncIterableResult<StorageRow>,
   runtime: RuntimeQueryable,
   annotations: Annotations,
 ): AsyncIterableResult<Row> {
-  const { context, namespaceId, tableName, modelName, state } = graph.result.collection;
+  const { collection } = graph.result;
+  const { context, namespaceId, tableName, modelName, state } = collection;
   const { contract } = context;
   const selected =
-    mutationReturningColumns(
-      contract,
-      namespaceId,
-      modelName,
-      tableName,
-      state.selectedFields,
-      state.includes,
-    ) ?? getColumnsReadOnTable(contract, namespaceId, modelName, tableName);
+    state.selectedFields ?? getColumnsReadOnTable(contract, namespaceId, modelName, tableName);
+  const hiddenColumns = graph
+    .edgesOutOf(id)
+    .flatMap((edge) => edge.columns.map(([source]) => source.alias))
+    .filter((column) => !selected.includes(column));
+
+  if (node.rowsAre === 'read') {
+    return mapResultRows(consumeCollectionRows<StorageRow>(collection, storageRows()), (row) => {
+      stripHiddenMappedFields(contract, namespaceId, modelName, row, hiddenColumns);
+      return blindCast<Row, 'the row the read code shaped is the row the caller selected'>(row);
+    });
+  }
   return mapMutationRows<Row>(storageRows, {
     context,
     runtime,
@@ -150,14 +158,8 @@ function callerRows<Row>(
     variantName: state.variantName,
     includes: state.includes,
     selectedFields: state.selectedFields,
-    hiddenColumns: node.returns
-      .map((column) => column.alias)
-      .filter((column) => !selected.includes(column)),
+    hiddenColumns,
     annotations,
-    readState:
-      node.ast.kind === 'select'
-        ? { orderBy: node.ast.orderBy, variantName: state.variantName }
-        : undefined,
     mapRow: (mapped) =>
       blindCast<Row, 'the mapped row of the result node is the row the caller selected'>(mapped),
   });

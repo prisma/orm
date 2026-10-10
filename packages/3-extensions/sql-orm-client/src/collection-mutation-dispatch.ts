@@ -16,7 +16,7 @@ import {
 } from './collection-runtime';
 import { ormError } from './orm-errors';
 import { queryPlanRows } from './query-plan-rows';
-import type { CollectionContext, CollectionState, IncludeExpr } from './types';
+import type { CollectionContext, IncludeExpr } from './types';
 
 function createMutationRowMapper(
   contract: Contract<SqlStorage>,
@@ -64,7 +64,6 @@ interface MapMutationRowsOptions<Row> {
   readonly hiddenColumns: readonly string[];
   readonly mapRow: (mapped: Record<string, unknown>) => Row;
   readonly annotations?: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined;
-  readonly readState?: Pick<CollectionState, 'orderBy' | 'variantName'> | undefined;
 }
 
 interface DispatchMutationRowsOptions<Row> extends MapMutationRowsOptions<Row> {
@@ -96,7 +95,6 @@ export function mapMutationRows<Row>(
     hiddenColumns,
     mapRow,
     annotations,
-    readState,
   } = options;
   const { contract } = context;
   const mapStorageRow = createMutationRowMapper(contract, namespaceId, modelName, variantName);
@@ -128,7 +126,6 @@ export function mapMutationRows<Row>(
       selectedFields,
       includes,
       annotations,
-      readState,
     });
   };
 

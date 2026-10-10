@@ -1,9 +1,7 @@
 import { defineAnnotation } from '@internal/framework-components/runtime';
-import { ColumnRef, OrderByItem } from '@internal/sql-relational-core/ast';
 import { describe, expect, it, vi } from 'vitest';
 import { filterData } from '../../src/mutation-graph/edges';
 import type { Graph } from '../../src/mutation-graph/graph';
-import { Find } from '../../src/mutation-graph/nodes';
 import { printExpression } from '../../src/mutation-graph/print-expression';
 import { runForCount, runForFirstRow, runForRows } from '../../src/mutation-graph/run-graph';
 import { createCollectionFor } from '../collection-fixtures';
@@ -13,6 +11,7 @@ import {
   deletePosts,
   deleteUsers,
   findUsers,
+  findUsersWith,
   graphOfPosts,
   graphOfUsers,
   nameIsAda,
@@ -382,32 +381,41 @@ describe('running a graph', () => {
       ]);
     });
 
-    it('loads the rows of a Find result with their includes before the next node runs', async () => {
+    it('reads a Find result with its includes in one statement and shapes it with the read code', async () => {
       const runtime = createMockRuntime();
-      runtime.setNextResults([[{ id: 1 }], [{ id: 1, name: 'Ada', posts: [] }]]);
-      const graph = graphOfUsers('rows', { includes: userIncludes() });
-      const find = graph.add(findUsers([nameIsAda]), { filter: [] });
+      runtime.setNextResults([[{ id: 1, name: 'Ada', posts: [] }]]);
+      const state = { includes: userIncludes(), selectedFields: ['id', 'name'] };
+      const graph = graphOfUsers('rows', state);
+      const find = graph.add(findUsersWith({ ...state, filters: [nameIsAda] }), { filter: [] });
       graph.after(find, graph.add(deleteUsers(nameIsAda), { filter: [] }));
       graph.setResult(find);
 
-      const rows = await runForRows(graph, runtime, undefined);
+      const rows = await runForRows(graph, runtime, auditAnnotations);
 
       expect(rows).toEqual([{ id: 1, name: 'Ada', posts: [] }]);
-      expect(statements(runtime)).toEqual(['query select', 'query select', 'execute delete']);
-      expect(whereText(runtime.executions[1]!, 'users')).toBe('id in (1)');
+      expect(statements(runtime)).toEqual(['query select', 'execute delete']);
+      expect(returnedColumns(runtime.executions[0]!)).toEqual(['id', 'name', 'posts']);
+      expect(runtime.executions.map((execution) => auditAnnotation.read(execution.plan))).toEqual([
+        { actor: 'system' },
+        { actor: 'system' },
+      ]);
     });
 
-    it('orders the load by the order of the Find', async () => {
+    it('leaves a column a Find result returns only for an edge out of the rows', async () => {
       const runtime = createMockRuntime();
-      runtime.setNextResults([[{ id: 1 }], []]);
-      const orderBy = [OrderByItem.desc(ColumnRef.of('users', 'name'))];
-      const graph = graphOfUsers('rows', { includes: userIncludes() });
-      const find = new Find(findUsers([nameIsAda]).ast.withOrderBy(orderBy));
-      graph.setResult(graph.add(find, { filter: [] }));
+      runtime.setNextResults([[{ name: 'Ada', posts: [], id: 1 }]]);
+      const state = { includes: userIncludes(), selectedFields: ['name'] };
+      const graph = graphOfUsers('first row', state);
+      const find = graph.add(findUsersWith({ ...state, filters: [nameIsAda] }), { filter: [] });
+      const sameId = columnPairs('users', 'users', [['id', 'id']]);
+      graph.add(deleteUsers(), { filter: [filterData(find, sameId)] });
+      graph.setResult(find);
 
-      await runForRows(graph, runtime, undefined);
+      const row = await runForFirstRow(graph, runtime, undefined);
 
-      expect(astOf(runtime.executions[1]!)).toMatchObject({ kind: 'select', orderBy });
+      expect(row).toEqual({ name: 'Ada', posts: [] });
+      expect(returnedColumns(runtime.executions[0]!)).toEqual(['name', 'posts', 'id']);
+      expect(whereText(runtime.executions[1]!, 'users')).toBe('id = 1');
     });
   });
 });

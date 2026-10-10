@@ -15,7 +15,7 @@ import {
   returningProjection,
   updateAst,
 } from '../query-plan-mutations';
-import { collectionSelectAst } from '../query-plan-select';
+import { collectionSelectAst, collectionSelectWithIncludesAst } from '../query-plan-select';
 import { tableSourceForContract } from '../storage-resolution';
 import type { CollectionState } from '../types';
 import { combineWhereExprs } from '../where-utils';
@@ -55,10 +55,7 @@ export function deleteAllGraph(
     return graph;
   }
 
-  const identityColumns = resultColumns(collection).map((column) => column.alias);
-  const find = graph.add(new Find(selectColumnsAst(collection, state, identityColumns)), {
-    filter: [],
-  });
+  const find = graph.add(new Find(selectWithIncludesAst(collection, state)), { filter: [] });
   const del = deleteAst(context.contract, namespaceId, tableName, whereOf(collection, 'count'));
   graph.after(find, graph.add(new Delete(del), { filter: [] }));
   graph.setResult(find);
@@ -88,28 +85,33 @@ export function updateFirstGraph(
 
 export function deleteFirstGraph(collection: DescribeCollectionRowsOptions): Graph {
   const { context, namespaceId, tableName, state } = collection;
+  const withIncludes = state.includes.length > 0;
   const graph = new Graph('first row', collection);
-  const find = addFindOfFirstRow(graph, collection);
+  const find = addFindOfFirstRow(
+    graph,
+    collection,
+    withIncludes ? selectWithIncludesAst : selectIdentityAst,
+  );
   if (find === undefined) {
     return graph;
   }
 
   const del = deleteAst(context.contract, namespaceId, tableName, undefined);
-  const returning = state.includes.length > 0 ? [] : resultColumns(collection);
+  const returning = withIncludes ? [] : resultColumns(collection);
   const deleted = graph.add(new Delete(del.withReturning(returning)), {
     filter: [sameRow(find, collection)],
   });
-  graph.setResult(state.includes.length > 0 ? find : deleted);
+  graph.setResult(withIncludes ? find : deleted);
   return graph;
 }
 
 function addFindOfFirstRow(
   graph: Graph,
   collection: DescribeCollectionRowsOptions,
+  select: typeof selectIdentityAst = selectIdentityAst,
 ): NodeId | undefined {
   const { modelName, tableName, state } = collection;
-  const identityColumns = identityColumnsOf(collection);
-  if (identityColumns.length === 0) {
+  if (identityColumnsOf(collection).length === 0) {
     throw ormError(
       'ORM.ROW_IDENTITY_MISSING',
       `update()/delete() on model "${modelName}" requires the table to have a primary key or unique constraint`,
@@ -120,21 +122,34 @@ function addFindOfFirstRow(
   if (state.limit === 0) {
     return undefined;
   }
-  const select = selectColumnsAst(collection, { ...state, limit: 1 }, identityColumns);
-  return graph.add(new Find(select), { filter: [] });
+  return graph.add(new Find(select(collection, { ...state, limit: 1 })), { filter: [] });
 }
 
-function selectColumnsAst(
+function selectIdentityAst(
   collection: DescribeCollectionRowsOptions,
   state: CollectionState,
-  columns: readonly string[],
 ): SelectAst {
   const { context, namespaceId, modelName, tableName } = collection;
   return collectionSelectAst(context.contract, namespaceId, modelName, tableName, {
     ...state,
     includes: [],
-    selectedFields: columns,
+    selectedFields: identityColumnsOf(collection),
   });
+}
+
+function selectWithIncludesAst(
+  collection: DescribeCollectionRowsOptions,
+  state: CollectionState,
+): SelectAst {
+  const { context, namespaceId, modelName, tableName } = collection;
+  return collectionSelectWithIncludesAst(
+    context.contract,
+    context.aggregateDescriptors,
+    namespaceId,
+    modelName,
+    tableName,
+    state,
+  );
 }
 
 function identityColumnsOf(collection: DescribeCollectionRowsOptions): readonly string[] {

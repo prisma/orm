@@ -31,6 +31,7 @@ export interface Run {
 export abstract class Node<Inputs extends Slots = Slots> {
   abstract readonly ast: StatementAst;
   abstract readonly returns: readonly ProjectionItem[];
+  abstract readonly rowsAre: 'read' | 'written';
 
   abstract execute(inputs: OutputsOf<Inputs>, run: Run): Executed;
 
@@ -45,6 +46,7 @@ type Filtered = { filter: FilterData[] };
 
 export class Find extends Node<Filtered> {
   readonly ast: SelectAst;
+  readonly rowsAre = 'read';
 
   constructor(ast: SelectAst) {
     super();
@@ -67,6 +69,7 @@ export class Find extends Node<Filtered> {
 
 export class Update extends Node<Filtered> {
   readonly ast: UpdateAst;
+  readonly rowsAre = 'written';
 
   constructor(ast: UpdateAst) {
     super();
@@ -93,6 +96,7 @@ export class Update extends Node<Filtered> {
 
 export class Delete extends Node<Filtered> {
   readonly ast: DeleteAst;
+  readonly rowsAre = 'written';
 
   constructor(ast: DeleteAst) {
     super();

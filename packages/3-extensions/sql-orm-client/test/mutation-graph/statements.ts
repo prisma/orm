@@ -9,12 +9,12 @@ import type { ColumnPair, StorageRow } from '../../src/mutation-graph/edges';
 import { Graph, type ResultForm } from '../../src/mutation-graph/graph';
 import { Delete, Find, type Run, type StatementAst, Update } from '../../src/mutation-graph/nodes';
 import { deleteAst, projectTableColumns, updateAst } from '../../src/query-plan-mutations';
-import { collectionSelectAst } from '../../src/query-plan-select';
+import { collectionSelectAst, collectionSelectWithIncludesAst } from '../../src/query-plan-select';
 import { tableSourceForContract } from '../../src/storage-resolution';
 import { type CollectionState, emptyState } from '../../src/types';
 import { getTestContext } from '../helpers';
 
-const { contract } = getTestContext();
+const { contract, aggregateDescriptors } = getTestContext();
 
 export const nameIsAda = BinaryExpr.eq(ColumnRef.of('users', 'name'), ParamRef.of('Ada'));
 
@@ -24,6 +24,15 @@ export function findUsers(where: readonly AnyExpression[] = [], columns = ['id']
       ...emptyState(),
       filters: where,
       selectedFields: columns,
+    }),
+  );
+}
+
+export function findUsersWith(state: Partial<CollectionState>): Find {
+  return new Find(
+    collectionSelectWithIncludesAst(contract, aggregateDescriptors, 'public', 'User', 'users', {
+      ...emptyState(),
+      ...state,
     }),
   );
 }

@@ -313,12 +313,17 @@ describe('update and delete change the row first() returns', () => {
     expect(runtime.executions).toEqual([]);
   });
 
-  it('delete with an include reads the row it deletes without the offset', async () => {
+  it('delete with an include reads the row first() returns with its include, then deletes it', async () => {
     const { plain, runtime } = createFragmentsOrm();
-    runtime.setNextResults([[{ id: 7 }], [{ id: 7, title: 'x', user: null }]]);
-    await thirdByViews(plain).include('user').delete();
-    const [, readBack] = runtime.executions;
-    expect(readBack?.plan.ast).toMatchObject({ offset: undefined });
+    runtime.setNextResults([[{ id: 7, title: 'x', user: null }]]);
+
+    const deleted = await thirdByViews(plain).select('id', 'title').include('user').delete();
+
+    expect(deleted).toEqual({ id: 7, title: 'x', user: null });
+    expect(runtime.executions.map((execution) => execution.plan.ast)).toMatchObject([
+      { kind: 'select', limit: 1, offset: 2 },
+      { kind: 'delete', where: { right: { value: 7 } } },
+    ]);
   });
 
   it.each([
