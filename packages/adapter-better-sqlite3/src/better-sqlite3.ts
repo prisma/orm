@@ -43,6 +43,8 @@ class BetterSQLite3Queryable<ClientT extends StdClient> implements SqlQueryable 
   readonly provider = 'sqlite'
   readonly adapterName = packageName
 
+  protected readonly lock = new Mutex()
+
   constructor(
     protected readonly client: ClientT,
     protected readonly adapterOptions?: PrismaBetterSqlite3Options,
@@ -84,15 +86,16 @@ class BetterSQLite3Queryable<ClientT extends StdClient> implements SqlQueryable 
    * Should the query fail due to a connection error, the connection is
    * marked as unhealthy.
    */
-  private executeIO(query: SqlQuery): Promise<BetterSQLite3Meta> {
+  private async executeIO(query: SqlQuery): Promise<BetterSQLite3Meta> {
+    const release = await this.lock.acquire()
     try {
       const args = query.args.map((arg, i) => mapArg(arg, query.argTypes[i], this.adapterOptions))
       const stmt = this.client.prepare(query.sql).bind(args)
-      const result = stmt.run()
-
-      return Promise.resolve(result)
+      return stmt.run()
     } catch (e) {
       this.onError(e)
+    } finally {
+      release()
     }
   }
 
@@ -101,7 +104,8 @@ class BetterSQLite3Queryable<ClientT extends StdClient> implements SqlQueryable 
    * Should the query fail due to a connection error, the connection is
    * marked as unhealthy.
    */
-  private performIO(query: SqlQuery): Promise<BetterSQLite3ResultSet> {
+  private async performIO(query: SqlQuery): Promise<BetterSQLite3ResultSet> {
+    const release = await this.lock.acquire()
     try {
       const args = query.args.map((arg, i) => mapArg(arg, query.argTypes[i], this.adapterOptions))
       const stmt = this.client.prepare(query.sql).bind(args)
@@ -109,24 +113,24 @@ class BetterSQLite3Queryable<ClientT extends StdClient> implements SqlQueryable 
       // Queries that do not return data (e.g. inserts) cannot call stmt.raw()/stmt.columns(). => Use stmt.run() instead.
       if (!stmt.reader) {
         stmt.run()
-        return Promise.resolve({
+        return {
           columnNames: [],
           declaredTypes: [],
           values: [],
-        })
+        }
       }
 
       const columns = stmt.columns()
 
-      const resultSet = {
+      return {
         declaredTypes: columns.map((column) => column.type),
         columnNames: columns.map((column) => column.name),
         values: stmt.raw().all() as unknown[][],
       }
-
-      return Promise.resolve(resultSet)
     } catch (e) {
       this.onError(e)
+    } finally {
+      release()
     }
   }
 
@@ -175,19 +179,19 @@ class BetterSQLite3Transaction extends BetterSQLite3Queryable<StdClient> impleme
 }
 
 export class PrismaBetterSqlite3Adapter extends BetterSQLite3Queryable<StdClient> implements SqlDriverAdapter {
-  #mutex = new Mutex()
-
   constructor(client: StdClient, adapterOptions?: PrismaBetterSqlite3Options) {
     super(client, adapterOptions)
   }
 
-  executeScript(script: string): Promise<void> {
+  async executeScript(script: string): Promise<void> {
+    const release = await this.lock.acquire()
     try {
       this.client.exec(script)
     } catch (e) {
       this.onError(e)
+    } finally {
+      release()
     }
-    return Promise.resolve()
   }
 
   async startTransaction(isolationLevel?: IsolationLevel): Promise<Transaction> {
@@ -205,13 +209,16 @@ export class PrismaBetterSqlite3Adapter extends BetterSQLite3Queryable<StdClient
     const tag = '[js::startTransaction]'
     debug('%s options: %O', tag, options)
 
-    try {
-      const release = await this.#mutex.acquire()
+    const release = await this.lock.acquire()
 
+    try {
       this.client.prepare('BEGIN').run()
 
       return new BetterSQLite3Transaction(this.client, options, this.adapterOptions, release)
     } catch (e) {
+      // the lock must stay held on success, until the transaction is committed or rolled back,
+      // hence `catch` and not `finally`.
+      release()
       this.onError(e)
     }
   }
