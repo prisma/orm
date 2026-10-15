@@ -6,7 +6,6 @@ import { supportsDefaultInInsert } from '../collection-contract';
 import { mapModelDataToStorageRow } from '../collection-runtime';
 import { type CollectionTables, createStatementTables } from '../collection-tables';
 import { shorthandToWhereExpr } from '../filters';
-import { ormError } from '../orm-errors';
 import {
   deleteAst,
   groupRowsByColumnSignature,
@@ -14,7 +13,8 @@ import {
   insertAst,
   projectTableColumn,
   updateAst,
-} from '../query-plan-mutations';
+} from '../mutation-statements';
+import { ormError } from '../orm-errors';
 import { collectionSelectAst } from '../query-plan-select';
 import {
   assertJunctionMetadataShape,
@@ -297,7 +297,12 @@ function addJunctionOwned(
   }
   for (const criterion of criteria) {
     const target = addFindAndAssert(t, related, relation, 'disconnect', criterion, fromTarget);
-    const unlink = graph.add(new Delete(deleteAst(contract, junction, undefined)));
+    const unlink = graph.add(
+      new Delete(deleteAst(contract, junction, undefined), {
+        relation: relation.relationName,
+        junction: through.table,
+      }),
+    );
     graph.addFilterDataEdge(parent, unlink, fromParent);
     graph.addFilterDataEdge(target, unlink, fromTarget);
   }
