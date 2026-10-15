@@ -3,8 +3,6 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { InternalError } from '@internal/utils/internal-error';
 import {
   columnOfContractField,
-  fieldOfColumn,
-  getModelColumnFields,
   resolveModelRelations,
   resolveModelTableName,
   resolveRelationTargetColumns,
@@ -22,7 +20,7 @@ import type {
   RelationMutation,
 } from './types';
 
-export interface JunctionThrough {
+interface JunctionThrough {
   readonly table: string;
   readonly namespaceId: string;
   readonly parentColumns: readonly string[];
@@ -55,7 +53,7 @@ export interface ParsedRelationMutation {
   readonly mutation: RelationMutation<Contract<SqlStorage>, string>;
 }
 
-export interface ParsedMutationInput {
+interface ParsedMutationInput {
   readonly scalarData: Record<string, unknown>;
   readonly relationMutations: readonly ParsedRelationMutation[];
 }
@@ -118,7 +116,7 @@ export function parseMutationInput(
   };
 }
 
-export interface JunctionParsedRelationMutation extends ParsedRelationMutation {
+interface JunctionParsedRelationMutation extends ParsedRelationMutation {
   readonly relation: JunctionRelationDefinition;
 }
 
@@ -198,7 +196,7 @@ function assertJunctionMetadataLength(
   );
 }
 
-export function assertJunctionParentMetadataLength(relation: JunctionRelationDefinition): void {
+function assertJunctionParentMetadataLength(relation: JunctionRelationDefinition): void {
   assertJunctionMetadataLength(
     relation,
     'parentColumns',
@@ -208,7 +206,7 @@ export function assertJunctionParentMetadataLength(relation: JunctionRelationDef
   );
 }
 
-export function assertJunctionTargetMetadataLength(relation: JunctionRelationDefinition): void {
+function assertJunctionTargetMetadataLength(relation: JunctionRelationDefinition): void {
   assertJunctionMetadataLength(
     relation,
     'childColumns',
@@ -225,7 +223,7 @@ export function assertJunctionMetadataShape(relation: JunctionRelationDefinition
 
 const relationDefsCache = new WeakMap<object, Map<string, RelationDefinition[]>>();
 
-export function getRelationDefinitions(
+function getRelationDefinitions(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   modelName: string,
@@ -268,19 +266,6 @@ export function getRelationDefinitions(
 
   perContract.set(cacheKey, definitions);
   return definitions;
-}
-
-export function toFieldName(
-  contract: Contract<SqlStorage>,
-  namespaceId: string,
-  modelName: string,
-  columnName: string,
-): string {
-  return fieldOfColumn(
-    getModelColumnFields(contract, namespaceId, modelName),
-    modelName,
-    columnName,
-  );
 }
 
 export function hasRelationFields(

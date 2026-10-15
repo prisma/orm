@@ -11,7 +11,6 @@ import {
   supportsDefaultInInsert,
 } from '../collection-contract';
 import type { DescribeCollectionRowsOptions } from '../collection-dispatch';
-import { ormError } from '../orm-errors';
 import {
   countMutationWhere,
   deleteAst,
@@ -24,7 +23,8 @@ import {
   updateAssignments,
   updateAst,
   upsertAst,
-} from '../query-plan-mutations';
+} from '../mutation-statements';
+import { ormError } from '../orm-errors';
 import { collectionSelectAst, collectionSelectWithIncludesAst } from '../query-plan-select';
 import { variantReturning } from '../query-plan-source';
 import type { ParsedRelationMutation } from '../relation-mutations';

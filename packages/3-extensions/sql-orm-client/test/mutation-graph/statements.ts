@@ -21,7 +21,7 @@ import { State } from '../../src/mutation-graph/state';
 import { StatementNode } from '../../src/mutation-graph/statement-node';
 import { UnionAll } from '../../src/mutation-graph/union-all';
 import { Update } from '../../src/mutation-graph/update';
-import { deleteAst, projectTableColumns, updateAst } from '../../src/query-plan-mutations';
+import { deleteAst, projectTableColumns, updateAst } from '../../src/mutation-statements';
 import { collectionSelectAst, collectionSelectWithIncludesAst } from '../../src/query-plan-select';
 import type { AliasedTable } from '../../src/table-scope';
 import {

@@ -2,7 +2,7 @@ import { ParamRef } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
 import { type ColumnPair, DataEdge, type NodeId, type StorageRow } from './edge';
 
-export type Payload = Readonly<Record<string, ParamRef>>;
+type Payload = Readonly<Record<string, ParamRef>>;
 
 export class PayloadData extends DataEdge<Payload> {
   constructor(from: NodeId, columns: readonly ColumnPair[]) {
