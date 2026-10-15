@@ -15,7 +15,7 @@ describe('InsertReportingKeys', () => {
       modelName: 'User',
     });
 
-    expect(await insert.execute({}, run)).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }]);
+    expect(await insert.execute({ state: null }, run)).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }]);
     expect({
       executed: run.executed,
       queried: run.queried,
@@ -30,7 +30,7 @@ describe('InsertReportingKeys', () => {
       modelName: 'User',
     });
 
-    expect(await insert.execute({}, run)).toEqual([{ tenant: 'a', id: 7 }]);
+    expect(await insert.execute({ state: null }, run)).toEqual([{ tenant: 'a', id: 7 }]);
   });
 
   it.each([
@@ -42,7 +42,7 @@ describe('InsertReportingKeys', () => {
       modelName: 'User',
     });
 
-    await expect(insert.execute({}, run)).rejects.toMatchObject({
+    await expect(insert.execute({ state: null }, run)).rejects.toMatchObject({
       code: 'ORM.MUTATION_ROW_MISSING',
       message:
         'create() for model "User" cannot find the row it inserted: the insert\'s result carried no insert id for key column "id". A middleware may have answered the statement in place of the database without one.',

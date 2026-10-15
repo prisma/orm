@@ -7,7 +7,7 @@ import type {
   UpdateAst,
 } from '@internal/sql-relational-core/ast';
 import { Delete } from '../../src/mutation-graph/delete';
-import type { Edge, NodeId } from '../../src/mutation-graph/edge';
+import { type ColumnPair, DataEdge, type Edge, type NodeId } from '../../src/mutation-graph/edge';
 import { FilterData } from '../../src/mutation-graph/filter-data';
 import { Find } from '../../src/mutation-graph/find';
 import { FindByKeys } from '../../src/mutation-graph/find-by-keys';
@@ -17,6 +17,7 @@ import { InsertChunked } from '../../src/mutation-graph/insert-chunked';
 import { InsertReportingKeys } from '../../src/mutation-graph/insert-reporting-keys';
 import type { Node } from '../../src/mutation-graph/node';
 import { Rows } from '../../src/mutation-graph/rows';
+import { State, StateEdge } from '../../src/mutation-graph/state';
 import { Update } from '../../src/mutation-graph/update';
 import { printExpression } from './print-expression';
 
@@ -121,6 +122,9 @@ function printNode(node: Node): string {
     const count = node.asts.length;
     return `InsertChunked ${node.asts[0]?.table.name} (${count} ${count === 1 ? 'statement' : 'statements'})`;
   }
+  if (node instanceof State) {
+    return `State ${node.table.name}`;
+  }
   return node instanceof Delete ? printDelete(node.ast) : node.constructor.name;
 }
 
@@ -128,7 +132,12 @@ function printEdge(names: NodeNames, edge: Edge<unknown>): string {
   if (edge instanceof Rows) {
     return `Rows ${names.get(edge.from)}`;
   }
-  const pairs = edge.columns.map(([source, target]) => `${source.alias}->${target.alias}`);
+  if (!(edge instanceof DataEdge)) {
+    return `state ${names.get(edge.from)}`;
+  }
+  const pairs = edge.columns.map(
+    ([source, target]: ColumnPair) => `${source.alias}->${target.alias}`,
+  );
   const changed =
     edge instanceof FilterData && Object.keys(edge.changed).length > 0
       ? ` with ${JSON.stringify(edge.changed)}`
@@ -148,11 +157,17 @@ function printResult(names: NodeNames, graph: Graph): string {
   return `result: ${name ?? 'none'}`;
 }
 
-export function printGraph(graph: Graph): string {
-  const nodes = graph.nodes();
+export interface PrintOptions {
+  readonly state: boolean;
+}
+
+export function printGraph(graph: Graph, options: PrintOptions = { state: false }): string {
+  const nodes = graph.nodes().filter(([, node]) => options.state || !(node instanceof State));
   const names: NodeNames = new Map(nodes.map(([id], index) => [id, `n${index + 1}`]));
   const lines = nodes.map(([id, node]) => {
-    const inputs = Object.values(graph.inputsOf(id)).flat();
+    const inputs = Object.values(graph.inputsOf(id))
+      .flat()
+      .filter((edge) => options.state || !(edge instanceof StateEdge));
     return `${names.get(id)} ${printNode(node)}${printInputs(names, inputs)}`;
   });
   lines.push(printResult(names, graph));

@@ -33,9 +33,9 @@ describe('FindByKeys', () => {
     const run = recordingRun([{ id: 1, email: 'Bob@x.com' }]);
     const find = new FindByKeys(findUsers([nameIsAda]).ast, idsAndEmails, create);
 
-    expect(await find.execute({ keys: [{ id: 1, email: 'bob@x.com' }] }, run)).toEqual([
-      { id: 1, email: 'Bob@x.com' },
-    ]);
+    expect(await find.execute({ keys: [{ id: 1, email: 'bob@x.com' }], state: null }, run)).toEqual(
+      [{ id: 1, email: 'Bob@x.com' }],
+    );
     expect({ where: run.queried.map(whereOf), order: run.queried.map(orderOf) }).toEqual({
       where: ["(name = 'Ada' and (id = 1 and email = 'bob@x.com'))"],
       order: [[]],
@@ -46,7 +46,7 @@ describe('FindByKeys', () => {
     const run = recordingRun([{ id: 11 }, { id: 10 }]);
     const find = new FindByKeys(findUsers().ast, ids, create);
 
-    expect(await find.execute({ keys: [{ id: 11 }, { id: 10 }] }, run)).toEqual([
+    expect(await find.execute({ keys: [{ id: 11 }, { id: 10 }], state: null }, run)).toEqual([
       { id: 11 },
       { id: 10 },
     ]);
@@ -69,7 +69,7 @@ describe('FindByKeys', () => {
     };
     const find = new FindByKeys(findUsers().ast, ids, create);
 
-    expect(await find.execute({ keys }, run)).toEqual(keys);
+    expect(await find.execute({ keys, state: null }, run)).toEqual(keys);
     expect(
       queried.map((ast) => {
         const [order] = ast.orderBy ?? [];
@@ -81,22 +81,24 @@ describe('FindByKeys', () => {
   it('runs nothing when there is no key', async () => {
     const run = recordingRun([{ id: 1 }]);
 
-    expect(await new FindByKeys(findUsers().ast, ids, create).execute({ keys: [] }, run)).toEqual(
-      [],
-    );
+    expect(
+      await new FindByKeys(findUsers().ast, ids, create).execute({ keys: [], state: null }, run),
+    ).toEqual([]);
     expect(run.queried).toEqual([]);
   });
 
   it('fails with ORM.MUTATION_ROW_MISSING when it finds fewer rows than keys', async () => {
     const find = new FindByKeys(findUsers().ast, ids, { operation: 'upsert', modelName: 'User' });
 
-    await expect(find.execute({ keys: [{ id: 1 }] }, recordingRun())).rejects.toMatchObject({
+    await expect(
+      find.execute({ keys: [{ id: 1 }], state: null }, recordingRun()),
+    ).rejects.toMatchObject({
       code: 'ORM.MUTATION_ROW_MISSING',
       message: 'upsert() for model "User" did not find the row it wrote',
       meta: { operation: 'upsert', model: 'User', phase: 'read-back' },
     });
     await expect(
-      find.execute({ keys: [{ id: 1 }, { id: 2 }] }, recordingRun([{ id: 1 }])),
+      find.execute({ keys: [{ id: 1 }, { id: 2 }], state: null }, recordingRun([{ id: 1 }])),
     ).rejects.toMatchObject({ code: 'ORM.MUTATION_ROW_MISSING' });
   });
 

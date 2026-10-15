@@ -12,12 +12,13 @@ import type { WrittenRowOwner } from '../written-keys';
 import type { ColumnPair, StorageRow } from './edge';
 import { keyCondition } from './filter-data';
 import { anyOf, withColumns } from './filtered-statement';
-import type { Executed, OutputsOf, Run } from './node';
+import type { Executed, OutputsOf, Run, StatementAst } from './node';
 import type { Rows } from './rows';
 import { rowsResult } from './run-statement';
+import type { StateEdge } from './state';
 import { StatementNode } from './statement-node';
 
-type Keyed = { keys: Rows };
+type Keyed = { keys: Rows; state: StateEdge[] };
 
 /** Keys per read-back statement. The `ORDER BY CASE` costs the database the number of keys times the number of rows it returns, so the keys are read in chunks of this size. */
 const KEYS_PER_STATEMENT = 500;
@@ -28,6 +29,7 @@ const KEYS_PER_STATEMENT = 500;
  * A `Find` with a `FilterData` edge cannot do this: the edge hands the `Find` conditions, not the key values, so the `Find` cannot order the rows by key or count the keys. The database does both comparisons, with its own rules for collation and precision: each key's condition both selects its row and, in an `ORDER BY CASE`, places it.
  */
 export class FindByKeys extends StatementNode<Keyed> {
+  readonly slots = { keys: 'one', state: 'list' } as const;
   readonly ast: SelectAst;
   readonly keyColumns: readonly ColumnPair[];
   readonly owner: WrittenRowOwner;
@@ -38,6 +40,10 @@ export class FindByKeys extends StatementNode<Keyed> {
     this.keyColumns = Object.freeze([...keyColumns]);
     this.owner = owner;
     Object.freeze(this);
+  }
+
+  get statements(): readonly StatementAst[] {
+    return [this.ast];
   }
 
   get returns(): readonly ProjectionItem[] {
