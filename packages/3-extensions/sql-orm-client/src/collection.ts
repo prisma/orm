@@ -28,7 +28,6 @@ import { type TraitExpression, toExpr } from '@internal/sql-relational-core/expr
 import type { Preparable, SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { InternalError } from '@internal/utils/internal-error';
 import type { SimplifyDeep } from '@internal/utils/simplify-deep';
 import type { Simplify } from '@internal/utils/types';
 import { createAggregateBuilder, isAggregateSelector } from './aggregate-builder';
@@ -66,7 +65,6 @@ import {
   describeCollectionFirstOrThrow,
   describeCollectionQuery,
   describeCollectionRows,
-  dispatchCollectionRows,
   runQuery,
 } from './collection-dispatch';
 import type {
@@ -135,7 +133,6 @@ import {
 } from './include-descriptors';
 import { assertLockCompatible } from './lock-guards';
 import { createModelAccessor, createModelCallbackTools } from './model-accessor';
-import { buildRowIdentityFilterFromRow, executeNestedUpdateMutation } from './mutation-executor';
 import {
   createAllGraph,
   createAllVariantGraph,
@@ -164,7 +161,7 @@ import {
 import { ormError } from './orm-errors';
 import type { PreparedCollection } from './prepared-collection';
 import { compileAggregate, type InsertConflictSkip } from './query-plan';
-import { hasNestedMutationCallbacks } from './relation-mutations';
+import { hasRelationFields, parseMutationInput } from './relation-mutations';
 import type { AliasedTable } from './table-scope';
 import {
   type AggregateBuilder,
@@ -2001,24 +1998,12 @@ export class CollectionBase<
       | ResolvedCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>
       | MutationCreateInputWithRelations<TContract, ModelName, State['nsId']>,
   ): Promise<Row> {
-    if (
-      hasNestedMutationCallbacks(
-        this.contract,
-        this.namespaceId,
-        this.modelName,
-        blindCast<
-          Record<string, unknown>,
-          'create overload inputs are model-field records inspected for relation callbacks'
-        >(data),
-      )
-    ) {
-      const graph = createGraph(
-        this.#descriptionOptions(),
-        blindCast<
-          Record<string, unknown>,
-          'nested callback detection selects the relation-mutation create input'
-        >(data),
-      );
+    const input = blindCast<
+      Record<string, unknown>,
+      'create overload inputs are model-field records inspected for relation callbacks'
+    >(data);
+    if (hasRelationFields(this.contract, this.namespaceId, this.modelName, input)) {
+      const graph = createGraph(this.#descriptionOptions(), input);
       const [created] = await queryGraph<Row>(
         graph,
         this.#on(queryable),
@@ -2621,56 +2606,24 @@ export class CollectionBase<
     queryable: RuntimeQueryable,
     data: MutationUpdateInput<TContract, ModelName, State['nsId']>,
   ): Promise<Row | null> {
-    if (
-      hasNestedMutationCallbacks(
-        this.contract,
-        this.namespaceId,
-        this.modelName,
-        blindCast<
-          Record<string, unknown>,
-          'update input is a model-field record inspected for relation callbacks'
-        >(data),
-      )
-    ) {
+    const input = blindCast<
+      MutationUpdateInput<Contract<SqlStorage>, string>,
+      'update input is a model-field record whose relation fields are callbacks'
+    >(data);
+    const parsed = hasRelationFields(this.contract, this.namespaceId, this.modelName, input)
+      ? parseMutationInput(this.contract, this.namespaceId, this.modelName, input)
+      : { scalarData: input, relationMutations: [] };
+    if (parsed.relationMutations.length > 0) {
       assertRelationUpdateIgnoresNothing(this.state, this.modelName);
-      const updatedRow = await executeNestedUpdateMutation({
-        context: this.ctx.context,
-        runtime: queryable,
-        namespaceId: this.namespaceId,
-        modelName: this.modelName,
-        tables: this.state.tables,
-        filters: this.state.filters,
-        data: blindCast<
-          MutationUpdateInput<Contract<SqlStorage>, string>,
-          'nested callback detection selects the relation-mutation update input'
-        >(data),
-      });
-      if (!updatedRow) {
-        return null;
-      }
-
-      const identityCriterion = buildRowIdentityFilterFromRow(
-        this.contract,
-        this.namespaceId,
-        this.modelName,
-        updatedRow,
-      );
-      return this.#reloadMutationRowByIdentity(queryable, identityCriterion);
     }
-
-    assertModelFieldNames(
-      this.contract,
-      this.namespaceId,
-      this.modelName,
-      blindCast<Record<string, unknown>, 'scalar update input is a model-field record'>(data),
-    );
+    assertModelFieldNames(this.contract, this.namespaceId, this.modelName, parsed.scalarData);
     const values = this.#updateValues(
       blindCast<
         ScalarUpdateInput<TContract, ModelName, State['nsId']>,
-        'absence of nested callbacks selects the scalar update input'
-      >(data),
+        'the fields that are not relations are the scalar update input'
+      >(parsed.scalarData),
     );
-    const graph = updateFirstGraph(this.#descriptionOptions(), values);
+    const graph = updateFirstGraph(this.#descriptionOptions(), values, parsed.relationMutations);
     return consumeFirstRow(queryGraph<Row>(graph, this.#on(queryable), this.#descriptionOptions()));
   }
 
@@ -2862,52 +2815,6 @@ export class CollectionBase<
       applyUpdateDefaults(this.ctx, this.namespaceId, this.tableName, values);
     }
     return values;
-  }
-
-  async #reloadMutationRowByIdentity(
-    queryable: RuntimeQueryable,
-    criterion: Record<string, unknown>,
-  ): Promise<Row | null> {
-    return this.#reloadMutationRowByCriterion(queryable, criterion, 'row identity');
-  }
-
-  async #reloadMutationRowByCriterion(
-    queryable: RuntimeQueryable,
-    criterion: Record<string, unknown>,
-    criterionLabel: string,
-  ): Promise<Row | null> {
-    const whereExpr = shorthandToWhereExpr(
-      this.ctx.context,
-      this.namespaceId,
-      this.modelName,
-      blindCast<
-        ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
-        'mutation reload criterion contains resolved fields for this model'
-      >(criterion),
-      this.state.tables.root,
-    );
-    if (!whereExpr) {
-      throw new InternalError(
-        `Failed to build ${criterionLabel} filter for mutation result on model "${this.modelName}"`,
-      );
-    }
-
-    const resultState: CollectionState = {
-      ...emptyState(this.state.tables),
-      filters: [whereExpr],
-      includes: this.state.includes,
-      selectedFields: this.state.selectedFields,
-      limit: 1,
-    };
-
-    const rows = await dispatchCollectionRows<Row>({
-      context: this.ctx.context,
-      runtime: queryable,
-      state: resultState,
-      modelName: this.modelName,
-      namespaceId: this.namespaceId,
-    });
-    return rows[0] ?? null;
   }
 
   #assertIncludeRefinementMode(action: string): void {

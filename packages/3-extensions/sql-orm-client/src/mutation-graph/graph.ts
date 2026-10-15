@@ -12,6 +12,7 @@ import type { ColumnPair, Edge, NodeId, StorageRow } from './edge';
 import { FilterData } from './filter-data';
 import type { Node, Slot, Slots, StatementAst } from './node';
 import { PayloadData } from './payload-data';
+import { Requires } from './requires';
 import { Rows } from './rows';
 import { State, StateEdge } from './state';
 import { StatementNode } from './statement-node';
@@ -89,6 +90,10 @@ export class Graph {
   ): void {
     this.#read(from, columns);
     this.#connect(to, slot, new Rows(from, columns));
+  }
+
+  addRequiresEdge(from: NodeId, to: NodeId<{ requires: Requires[] }>): void {
+    this.#connect(to, 'requires', new Requires(from));
   }
 
   sameState(a: NodeId, b: NodeId, table: TableCoordinate): boolean {

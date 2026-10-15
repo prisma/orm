@@ -33,9 +33,12 @@ describe('FindByKeys', () => {
     const run = recordingRun([{ id: 1, email: 'Bob@x.com' }]);
     const find = new FindByKeys(findUsers([nameIsAda]).ast, idsAndEmails, create);
 
-    expect(await find.execute({ keys: [{ id: 1, email: 'bob@x.com' }], state: null }, run)).toEqual(
-      [{ id: 1, email: 'Bob@x.com' }],
-    );
+    expect(
+      await find.execute(
+        { keys: [{ id: 1, email: 'bob@x.com' }], state: null, requires: null },
+        run,
+      ),
+    ).toEqual([{ id: 1, email: 'Bob@x.com' }]);
     expect({ where: run.queried.map(whereOf), order: run.queried.map(orderOf) }).toEqual({
       where: ["(name = 'Ada' and (id = 1 and email = 'bob@x.com'))"],
       order: [[]],
@@ -46,10 +49,9 @@ describe('FindByKeys', () => {
     const run = recordingRun([{ id: 11 }, { id: 10 }]);
     const find = new FindByKeys(findUsers().ast, ids, create);
 
-    expect(await find.execute({ keys: [{ id: 11 }, { id: 10 }], state: null }, run)).toEqual([
-      { id: 11 },
-      { id: 10 },
-    ]);
+    expect(
+      await find.execute({ keys: [{ id: 11 }, { id: 10 }], state: null, requires: null }, run),
+    ).toEqual([{ id: 11 }, { id: 10 }]);
     expect({ where: run.queried.map(whereOf), order: run.queried.map(orderOf) }).toEqual({
       where: ['id in (11, 10)'],
       order: [['case when id = 11 then 0 when id = 10 then 1 end asc']],
@@ -69,7 +71,7 @@ describe('FindByKeys', () => {
     };
     const find = new FindByKeys(findUsers().ast, ids, create);
 
-    expect(await find.execute({ keys, state: null }, run)).toEqual(keys);
+    expect(await find.execute({ keys, state: null, requires: null }, run)).toEqual(keys);
     expect(
       queried.map((ast) => {
         const [order] = ast.orderBy ?? [];
@@ -82,7 +84,10 @@ describe('FindByKeys', () => {
     const run = recordingRun([{ id: 1 }]);
 
     expect(
-      await new FindByKeys(findUsers().ast, ids, create).execute({ keys: [], state: null }, run),
+      await new FindByKeys(findUsers().ast, ids, create).execute(
+        { keys: [], state: null, requires: null },
+        run,
+      ),
     ).toEqual([]);
     expect(run.queried).toEqual([]);
   });
@@ -91,14 +96,17 @@ describe('FindByKeys', () => {
     const find = new FindByKeys(findUsers().ast, ids, { operation: 'upsert', modelName: 'User' });
 
     await expect(
-      find.execute({ keys: [{ id: 1 }], state: null }, recordingRun()),
+      find.execute({ keys: [{ id: 1 }], state: null, requires: null }, recordingRun()),
     ).rejects.toMatchObject({
       code: 'ORM.MUTATION_ROW_MISSING',
       message: 'upsert() for model "User" did not find the row it wrote',
       meta: { operation: 'upsert', model: 'User', phase: 'read-back' },
     });
     await expect(
-      find.execute({ keys: [{ id: 1 }, { id: 2 }], state: null }, recordingRun([{ id: 1 }])),
+      find.execute(
+        { keys: [{ id: 1 }, { id: 2 }], state: null, requires: null },
+        recordingRun([{ id: 1 }]),
+      ),
     ).rejects.toMatchObject({ code: 'ORM.MUTATION_ROW_MISSING' });
   });
 

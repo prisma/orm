@@ -5,6 +5,7 @@ import { FilterData } from '../../src/mutation-graph/filter-data';
 import type { Graph } from '../../src/mutation-graph/graph';
 import { Insert } from '../../src/mutation-graph/insert';
 import { PayloadData } from '../../src/mutation-graph/payload-data';
+import { Requires } from '../../src/mutation-graph/requires';
 import { Rows } from '../../src/mutation-graph/rows';
 import { StateEdge } from '../../src/mutation-graph/state';
 import { StatementNode } from '../../src/mutation-graph/statement-node';
@@ -165,6 +166,20 @@ describe('Graph', () => {
 
       expect(graph.nodes().find(([id]) => id === unionId)?.[1]).toBe(union);
       expect(returned(graph, find)).toEqual(['email', 'id']);
+    });
+  });
+
+  describe('addRequiresEdge', () => {
+    it('puts a Requires edge into the requires slot and leaves what the source returns as it was', () => {
+      const graph = newGraph();
+      const find = graph.add(findUsers([], ['email']));
+      const update = graph.add(updateUsers({ name: 'Ada' }));
+
+      graph.addRequiresEdge(find, update);
+
+      expect(graph.inputsOf(update)['requires']).toEqual([new Requires(find)]);
+      expect(returned(graph, find)).toEqual(['email']);
+      expect(graph.columnsReadFrom(find)).toEqual([]);
     });
   });
 

@@ -3,16 +3,18 @@ import type { InsertAst, ProjectionItem } from '@internal/sql-relational-core/as
 import { type GeneratedKey, reportedInsertId, type WrittenRowOwner } from '../written-keys';
 import type { StorageRow } from './edge';
 import type { Executed, OutputsOf, Run, StatementAst } from './node';
+import { type Requires, requirementUnmet } from './requires';
+import { rowsResult } from './run-statement';
 import type { StateEdge } from './state';
 import { StatementNode } from './statement-node';
 
-type StateOnly = { state: StateEdge[] };
+type StateOnly = { state: StateEdge[]; requires: Requires[] };
 
 /**
  * Inserts without `RETURNING` and reports the key of each row it inserted: the values the client wrote, and, for a one-row insert, the value the database generated, which the driver reports as `insertId`. When it reports none, the insert fails, so the transaction it runs in rolls back.
  */
 export class InsertReportingKeys extends StatementNode<StateOnly> {
-  readonly slots = { state: 'list' } as const;
+  readonly slots = { state: 'list', requires: 'list' } as const;
   readonly asts: readonly InsertAst[];
   readonly keys: readonly StorageRow[];
   readonly generated: GeneratedKey | undefined;
@@ -40,7 +42,10 @@ export class InsertReportingKeys extends StatementNode<StateOnly> {
     return [];
   }
 
-  override execute(_inputs: OutputsOf<StateOnly>, run: Run): Executed {
+  override execute(inputs: OutputsOf<StateOnly>, run: Run): Executed {
+    if (requirementUnmet(inputs.requires)) {
+      return rowsResult([]);
+    }
     const { asts, keys, generated, owner } = this;
     const generator = async function* (): AsyncGenerator<StorageRow, void, unknown> {
       for (const ast of asts) {

@@ -36,7 +36,10 @@ describe.each([
     const node = make();
     const run = recordingRun([{ id: 1 }]);
 
-    const rows = await node.execute({ filter: null, payload: null, state: null }, run);
+    const rows = await node.execute(
+      { filter: null, payload: null, state: null, requires: null },
+      run,
+    );
 
     expect(rows).toEqual([{ id: 1 }]);
     expect(run.queried).toEqual([node.ast]);
@@ -45,7 +48,10 @@ describe.each([
   it('adds the conditions of one edge to its where, as an IN list when each compares one column with a value', async () => {
     const run = recordingRun();
 
-    await make().execute({ filter: [[idIs(7), idIs(8)]], payload: null, state: null }, run);
+    await make().execute(
+      { filter: [[idIs(7), idIs(8)]], payload: null, state: null, requires: null },
+      run,
+    );
 
     expect(run.queried.map(whereOf)).toEqual(["(name = 'Ada' and id in (7, 8))"]);
   });
@@ -55,8 +61,14 @@ describe.each([
     const emailIs = BinaryExpr.eq(ColumnRef.of('users', 'email'), ParamRef.of('a'));
     const idIsName = BinaryExpr.eq(ColumnRef.of('users', 'id'), ColumnRef.of('users', 'name'));
 
-    await make().execute({ filter: [[idIs(7), emailIs]], payload: null, state: null }, run);
-    await make().execute({ filter: [[idIs(7), idIsName]], payload: null, state: null }, run);
+    await make().execute(
+      { filter: [[idIs(7), emailIs]], payload: null, state: null, requires: null },
+      run,
+    );
+    await make().execute(
+      { filter: [[idIs(7), idIsName]], payload: null, state: null, requires: null },
+      run,
+    );
 
     expect(run.queried.map(whereOf)).toEqual([
       "(name = 'Ada' and (id = 7 or email = 'a'))",
@@ -68,7 +80,7 @@ describe.each([
     const run = recordingRun();
 
     await make().execute(
-      { filter: [[idIs(7)], [idIs(8), idIs(9)]], payload: null, state: null },
+      { filter: [[idIs(7)], [idIs(8), idIs(9)]], payload: null, state: null, requires: null },
       run,
     );
 
@@ -78,11 +90,23 @@ describe.each([
   it('returns no rows and runs nothing when an edge has no source row', async () => {
     const run = recordingRun([{ id: 1 }]);
 
-    const rows = await make().execute({ filter: [[idIs(7)], []], payload: null, state: null }, run);
+    const rows = await make().execute(
+      { filter: [[idIs(7)], []], payload: null, state: null, requires: null },
+      run,
+    );
 
     expect(rows).toEqual([]);
     expect(run.queried).toEqual([]);
     expect(run.executed).toEqual([]);
+  });
+
+  it('returns no rows and runs nothing when a node it requires produced no row', async () => {
+    const run = recordingRun([{ id: 1 }]);
+
+    expect(
+      await make().execute({ filter: null, payload: null, state: null, requires: [[]] }, run),
+    ).toEqual([]);
+    expect(run).toMatchObject({ queried: [], executed: [] });
   });
 
   it('gives a node that also returns the columns it is asked for, once each', () => {
@@ -104,7 +128,9 @@ describe.each([
     const node = make();
     const run = recordingRun([], 3);
 
-    expect(await node.execute({ filter: null, payload: null, state: null }, run)).toEqual({ affectedRows: 3 });
+    expect(
+      await node.execute({ filter: null, payload: null, state: null, requires: null }, run),
+    ).toEqual({ affectedRows: 3 });
     expect(run.executed).toEqual([node.ast]);
     expect(run.queried).toEqual([]);
   });
@@ -114,7 +140,7 @@ describe.each([
 
     const rows = await make()
       .withReturning(emailColumn)
-      .execute({ filter: null, payload: null, state: null }, run);
+      .execute({ filter: null, payload: null, state: null, requires: null }, run);
 
     expect(rows).toEqual([{ email: 'a@b.c' }]);
     expect(run.executed).toEqual([]);

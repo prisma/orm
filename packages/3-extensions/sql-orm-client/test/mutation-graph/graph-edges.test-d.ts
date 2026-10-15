@@ -27,5 +27,8 @@ describe('graph edge methods', () => {
     graph.addRowsEdge(find, join, 'rows', sameId);
     // @ts-expect-error a Find has no slot for Rows edges
     graph.addRowsEdge(find, find, 'filter', sameId);
+    graph.addRequiresEdge(find, insert);
+    // @ts-expect-error a CrossJoin has no requires slot
+    graph.addRequiresEdge(find, join);
   });
 });

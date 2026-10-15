@@ -144,7 +144,7 @@ describe('integration/mn-nested-write', () => {
   );
 
   it(
-    'update(): connect to an already-linked tag rejects and preserves the junction link',
+    'update(): connect to an already-linked tag keeps the one junction link',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         const users = createReturningUsersCollection(runtime);
@@ -153,15 +153,15 @@ describe('integration/mn-nested-write', () => {
         await seedTags(runtime, [{ id: TAG_RUST, name: 'Rust' }]);
         await seedUserTags(runtime, [{ userId: 1, tagId: TAG_RUST }]);
 
-        await expect(
-          users
-            .where({ id: 1 })
-            .select('id', 'name')
-            .include('tags', (tags) => tags.select('id', 'name'))
-            .update({
-              tags: (t) => t.connect({ id: TAG_RUST }),
-            }),
-        ).rejects.toThrow(/violated a unique constraint on junction "user_tags"/);
+        const updated = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('tags', (tags) => tags.select('id', 'name'))
+          .update({
+            tags: (t) => t.connect({ id: TAG_RUST }),
+          });
+
+        expect(updated).toEqual({ id: 1, name: 'Alice', tags: [{ id: TAG_RUST, name: 'Rust' }] });
 
         const junctionRows = await runtime.query<{ user_id: number; tag_id: string }>(
           'select user_id, tag_id from user_tags',

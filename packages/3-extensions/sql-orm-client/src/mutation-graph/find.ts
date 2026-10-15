@@ -22,7 +22,7 @@ export class Find extends StatementNode<Filtered> {
   }
 
   override execute(inputs: OutputsOf<Filtered>, run: Run): Executed {
-    return executeFiltered(this.ast, inputs.filter, run);
+    return executeFiltered(this.ast, inputs, run);
   }
 
   override withReturning(columns: readonly ProjectionItem[]): Find {

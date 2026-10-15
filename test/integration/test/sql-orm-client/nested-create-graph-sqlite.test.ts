@@ -219,3 +219,73 @@ describe('integration/nested create() through the mutation graph on SQLite', () 
     timeouts.databaseOperation,
   );
 });
+
+describe('integration/nested update() through the mutation graph on SQLite', () => {
+  it(
+    'connects an author, links and unlinks tags, and disconnects a child',
+    async () => {
+      await withDatabase(async ({ users, posts, rows }) => {
+        await users.create({
+          id: 1,
+          name: 'Ada',
+          posts: (children) => children.create([{ id: 10, title: 'First' }]),
+          tags: (tags) => tags.connect({ id: 1 }),
+        });
+        await users.create({
+          id: 2,
+          name: 'Grace',
+          tags: (tags) => tags.create([{ id: 2, name: 'Rust' }]),
+        });
+
+        const post = await posts
+          .where({ id: 10 })
+          .select('id', 'userId')
+          .update({ author: (author) => author.connect({ id: 2 }) });
+        const user = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('tags', (tags) => tags.select('id').orderBy((tag) => tag['id']!.asc()))
+          .update({
+            name: 'Ada L.',
+            tags: (tags) => tags.connect([{ id: 2 }, { id: 1 }]),
+          });
+
+        expect(post).toEqual({ id: 10, userId: 2 });
+        expect(user).toEqual({ id: 1, name: 'Ada L.', tags: [{ id: 1 }, { id: 2 }] });
+
+        const unlinked = await users
+          .where({ id: 1 })
+          .select('id')
+          .update({ tags: (tags) => tags.disconnect([{ name: 'SQL' }]) });
+        const orphaned = await users
+          .where({ id: 2 })
+          .select('id')
+          .update({ posts: (children) => children.disconnect() });
+
+        expect([unlinked, orphaned]).toEqual([{ id: 1 }, { id: 2 }]);
+        expect(rows('select user_id, tag_id from user_tags order by user_id, tag_id')).toEqual([
+          { user_id: 1, tag_id: 2 },
+          { user_id: 2, tag_id: 2 },
+        ]);
+        expect(rows('select id, user_id from posts')).toEqual([{ id: 10, user_id: null }]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'resolves null and writes nothing when no row matches',
+    async () => {
+      await withDatabase(async ({ users, rows }) => {
+        const updated = await users
+          .where({ id: 9 })
+          .update({ tags: (tags) => tags.create([{ id: 3, name: 'Go' }]) });
+
+        expect(updated).toBeNull();
+        expect(rows('select id from tags order by id')).toEqual([{ id: 1 }]);
+        expect(rows('select user_id from user_tags')).toEqual([]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+});

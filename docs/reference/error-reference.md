@@ -1131,19 +1131,15 @@ The Mongo ORM client was asked to operate on a model name that is not in the con
 
 ### ORM.MUTATION_ROW_MISSING
 
-A mutation that expected the database to return a row got none: `create()`/`upsert()` read-back, MTI base or variant INSERT, or a nested create. On a contract without the `returning` capability, also raised inside the transaction, which then rolls back, when the `SELECT` that reads a created or upserted row back by key finds none, for example because an upsert collided on a unique index the contract does not list while no row has the conflict values (`phase: 'read-back'`; when such a row exists, the database can update the row the unlisted index matched and the call succeeds, so the contract must list every unique index); and when an insert whose key the database generates reports no `insertId`, so the ORM cannot read the row back (`phase: 'insert-id'`, with `column` and `affectedRows`). The driver reports the value for a one-row insert; a middleware that answers the insert's statement with an `intercept.onExecute` result of its own may leave it out. The Prisma-classic analogue of P2025. Payload: `operation`, `model`, `tableName`, `phase`.
+A mutation that expected the database to return a row got none: `create()`/`upsert()`, including `create()` with nested relation mutations, or an MTI base or variant INSERT. On a contract without the `returning` capability, also raised inside the transaction, which then rolls back, when the `SELECT` that reads a created or upserted row back by key finds none, for example because an upsert collided on a unique index the contract does not list while no row has the conflict values (`phase: 'read-back'`; when such a row exists, the database can update the row the unlisted index matched and the call succeeds, so the contract must list every unique index); and when an insert whose key the database generates reports no `insertId`, so the ORM cannot read the row back (`phase: 'insert-id'`, with `column` and `affectedRows`). The driver reports the value for a one-row insert; a middleware that answers the insert's statement with an `intercept.onExecute` result of its own may leave it out. The Prisma-classic analogue of P2025. Payload: `operation`, `model`, `tableName`, `phase`.
 
 ### ORM.OPERATION_UNSUPPORTED
 
 A valid ORM method was called in a configuration that does not support it: mutating an MTI variant collection with a method that requires `createAll()`, passing `onConflict: 'skip'` to `createAll()` on an MTI variant collection, Mongo `upsert()` with dot-path field operations, a Mongo `upsert()` whose `create` sets a field that has an update default and whose update pulls by a match document (that upsert runs as one update pipeline, which can pull only a single value), a Mongo mutation carrying windowing (`orderBy`/`offset`/`limit`) or includes, or `variant()` called on a collection that already has a variant selected (SQL and Mongo ORMs; call it on the base collection instead; `reason: 'variant-already-selected'`, with `variant` and `selectedValue` naming the selected variant model and its discriminator value). Payload: `method`, `model`, `reason`, `field`.
 
-### ORM.RELATION_LINK_DUPLICATE
-
-A `connect()` nested mutation violated a unique constraint on the junction table: the junction link is likely already present. The original driver error is preserved as `cause`. Payload: `relation`, `junction`.
-
 ### ORM.RELATION_MUTATION_INVALID
 
-A nested relation mutation's input is malformed: a relation field without a mutator callback or returning an invalid descriptor, `create` without data, `connect`/`disconnect` with a missing or empty criterion, duplicate connect criteria resolving to the same junction link, or conflicting values for a junction column. Payload: `kind`, `relation`, `model`, `problem`, `junction`, `column`.
+A nested relation mutation's input is malformed: a relation field without a mutator callback or returning an invalid descriptor, `create` without data, `connect`/`disconnect` with a missing or empty criterion, or conflicting values for a junction column. Payload: `kind`, `relation`, `model`, `problem`, `junction`, `column`.
 
 ### ORM.RELATION_MUTATION_UNSUPPORTED
 
@@ -1159,7 +1155,7 @@ A referenced relation name does not exist on the model, in `include()` (SQL and 
 
 ### ORM.ROW_IDENTITY_MISSING
 
-The operation needs a primary key or unique constraint the table does not have: `update()`/`delete()` targeting a single row, a `create()` or `update()` with nested relation mutations (which updates and reloads the row by that key), keying the include read-back after a mutation, or, on a contract without the `returning` capability, reading the written rows back by key after `create()`, `createAll()` or `updateAll()`. Payload: `model`, `table`.
+The operation needs a primary key or unique constraint the table does not have: `update()`/`delete()` targeting a single row, an `update()` with nested relation mutations (which updates the row by that key), keying the include read-back after a mutation, or, on a contract without the `returning` capability, reading the written rows back by key after `create()`, `createAll()` or `updateAll()`. Payload: `model`, `table`.
 
 ### ORM.TABLE_UNKNOWN
 
