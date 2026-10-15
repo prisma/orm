@@ -17,7 +17,7 @@ describe('InsertChunked', () => {
   it('runs its statements in order and gives their rows one statement after another', async () => {
     const run = recordingRun([{ id: 1 }]);
 
-    const rows = await new InsertChunked([first, second]).execute({}, run);
+    const rows = await new InsertChunked([first, second]).execute({ state: null }, run);
 
     expect(rows).toEqual([{ id: 1 }, { id: 1 }]);
     expect(run.queried).toEqual([first, second]);
@@ -30,7 +30,7 @@ describe('InsertChunked', () => {
       insertInto('users', [{ name: 'Grace', email: 'g@h.io' }]),
     ]);
 
-    expect(await counted.execute({}, run)).toBe(4);
+    expect(await counted.execute({ state: null }, run)).toBe(4);
     expect(run.executed).toEqual(counted.asts);
     expect(run.queried).toEqual([]);
   });

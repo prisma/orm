@@ -5,9 +5,9 @@ import {
   ParamRef,
 } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
-import { type ColumnPair, Edge, type NodeId, type StorageRow } from './edge';
+import { type ColumnPair, DataEdge, type NodeId, type StorageRow } from './edge';
 
-export class FilterData extends Edge<AnyExpression> {
+export class FilterData extends DataEdge<AnyExpression> {
   constructor(from: NodeId, columns: readonly ColumnPair[]) {
     super(from, columns);
     Object.freeze(this);

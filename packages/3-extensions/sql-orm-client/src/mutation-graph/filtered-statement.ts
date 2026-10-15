@@ -10,8 +10,11 @@ import { combineWhereExprs } from '../where-utils';
 import type { FilterData } from './filter-data';
 import type { Executed, OutputsOf, Run } from './node';
 import { executeStatement, rowsResult } from './run-statement';
+import type { StateEdge } from './state';
 
-export type Filtered = { filter: FilterData[] };
+export type Filtered = { filter: FilterData[]; state: StateEdge[] };
+
+export const filteredSlots = { filter: 'list', state: 'list' } as const;
 
 export function executeFiltered(
   ast: SelectAst | UpdateAst | DeleteAst,

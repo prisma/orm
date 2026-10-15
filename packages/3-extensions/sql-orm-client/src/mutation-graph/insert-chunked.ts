@@ -2,12 +2,14 @@ import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { InsertAst, ProjectionItem } from '@internal/sql-relational-core/ast';
 import type { StorageRow } from './edge';
 import { withColumns } from './filtered-statement';
-import type { Executed, OutputsOf, Run } from './node';
+import type { Executed, OutputsOf, Run, StatementAst } from './node';
+import type { StateEdge } from './state';
 import { StatementNode } from './statement-node';
 
-type NoInputs = Record<never, never>;
+type StateOnly = { state: StateEdge[] };
 
-export class InsertChunked extends StatementNode<NoInputs> {
+export class InsertChunked extends StatementNode<StateOnly> {
+  readonly slots = { state: 'list' } as const;
   readonly asts: readonly InsertAst[];
 
   constructor(asts: readonly InsertAst[]) {
@@ -16,11 +18,15 @@ export class InsertChunked extends StatementNode<NoInputs> {
     Object.freeze(this);
   }
 
+  get statements(): readonly StatementAst[] {
+    return this.asts;
+  }
+
   get returns(): readonly ProjectionItem[] {
     return this.asts[0]?.returning ?? [];
   }
 
-  override execute(_inputs: OutputsOf<NoInputs>, run: Run): Executed {
+  override execute(_inputs: OutputsOf<StateOnly>, run: Run): Executed {
     if (this.returns.length === 0) {
       return this.#sumOfCounts(run);
     }

@@ -1,19 +1,25 @@
 import type { InsertAst, ProjectionItem } from '@internal/sql-relational-core/ast';
 import { withColumns } from './filtered-statement';
-import type { Executed, OutputsOf, Run } from './node';
+import type { Executed, OutputsOf, Run, StatementAst } from './node';
 import type { PayloadData } from './payload-data';
 import { executeStatement, rowsResult } from './run-statement';
+import type { StateEdge } from './state';
 import { StatementNode } from './statement-node';
 
-type Payloads = { payload: PayloadData[] };
+type Payloads = { payload: PayloadData[]; state: StateEdge[] };
 
 export class Insert extends StatementNode<Payloads> {
+  readonly slots = { payload: 'list', state: 'list' } as const;
   readonly ast: InsertAst;
 
   constructor(ast: InsertAst) {
     super();
     this.ast = ast;
     Object.freeze(this);
+  }
+
+  get statements(): readonly StatementAst[] {
+    return [this.ast];
   }
 
   get returns(): readonly ProjectionItem[] {

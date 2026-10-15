@@ -18,7 +18,7 @@ describe('Insert', () => {
     const insert = new Insert(insertInto('posts', [{ title: 'Hello' }], ['id']));
     const run = recordingRun([{ id: 1 }]);
 
-    expect(await insert.execute({ payload: null }, run)).toEqual([{ id: 1 }]);
+    expect(await insert.execute({ payload: null, state: null }, run)).toEqual([{ id: 1 }]);
     expect(run.queried).toEqual([insert.ast]);
   });
 
@@ -27,7 +27,7 @@ describe('Insert', () => {
     const run = recordingRun();
     const titleOfEdge = { views: ParamRef.of(3, { name: 'views' }) };
 
-    await insert.execute({ payload: [[userIdOf7], [titleOfEdge]] }, run);
+    await insert.execute({ payload: [[userIdOf7], [titleOfEdge]], state: null }, run);
 
     expect(run.queried).toHaveLength(1);
     expect(run.queried[0]).toMatchObject({
@@ -46,7 +46,7 @@ describe('Insert', () => {
     const insert = new Insert(insertInto('posts', [{ title: 'Hello' }], ['id']));
     const run = recordingRun([{ id: 1 }]);
 
-    expect(await insert.execute({ payload: [[userIdOf7], []] }, run)).toEqual([]);
+    expect(await insert.execute({ payload: [[userIdOf7], []], state: null }, run)).toEqual([]);
     expect(run.queried).toEqual([]);
     expect(run.executed).toEqual([]);
   });
@@ -55,7 +55,7 @@ describe('Insert', () => {
     const insert = new Insert(insertInto('posts', [{ title: 'a' }, { title: 'b' }]));
     const run = recordingRun([], 2);
 
-    expect(await insert.execute({ payload: null }, run)).toBe(2);
+    expect(await insert.execute({ payload: null, state: null }, run)).toBe(2);
     expect(run.executed).toEqual([insert.ast]);
   });
 
