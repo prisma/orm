@@ -27,7 +27,7 @@ const UserTag = model('UserTag', {
   }))
   .sql({ table: 'user_tags' });
 const Tag = model('Tag', {
-  fields: { id: field.column(integerColumn).id(), name: field.column(textColumn) },
+  fields: { id: field.column(integerColumn).id(), name: field.column(textColumn).unique() },
 }).sql({ table: 'tags' });
 const UserBase = model('User', {
   fields: { id: field.column(integerColumn).id(), name: field.column(textColumn) },
