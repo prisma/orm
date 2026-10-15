@@ -3,11 +3,12 @@ import { ormError } from '../orm-errors';
 import { withColumns } from './filtered-statement';
 import type { Executed, OutputsOf, Run, StatementAst } from './node';
 import type { Payload, PayloadData } from './payload-data';
+import { type Requires, requirementUnmet } from './requires';
 import { executeStatement, rowsResult } from './run-statement';
 import type { StateEdge } from './state';
 import { StatementNode } from './statement-node';
 
-type Payloads = { payload: PayloadData[]; state: StateEdge[] };
+type Payloads = { payload: PayloadData[]; state: StateEdge[]; requires: Requires[] };
 
 export interface InsertJunction {
   readonly relation: string;
@@ -15,7 +16,7 @@ export interface InsertJunction {
 }
 
 export class Insert extends StatementNode<Payloads> {
-  readonly slots = { payload: 'list', state: 'list' } as const;
+  readonly slots = { payload: 'list', state: 'list', requires: 'list' } as const;
   readonly ast: InsertAst;
   readonly junction: InsertJunction | undefined;
 
@@ -35,6 +36,9 @@ export class Insert extends StatementNode<Payloads> {
   }
 
   override execute(inputs: OutputsOf<Payloads>, run: Run): Executed {
+    if (requirementUnmet(inputs.requires)) {
+      return rowsResult([]);
+    }
     // No PayloadData edge reaches this insert, so it runs with the values it was built with.
     if (inputs.payload === null) {
       return executeStatement(this.ast, run);

@@ -7,13 +7,13 @@ import { blindCast } from '@internal/utils/casts';
 import { getColumnsReadOnTable } from '../collection-contract';
 import { consumeCollectionRows, type DescribeCollectionRowsOptions } from '../collection-dispatch';
 import { mapResultRows, stripHiddenMappedFields } from '../collection-runtime';
-import { withMutationScope } from '../mutation-executor';
 import { buildOrmQueryPlan, deriveParamsFromAst } from '../query-plan-meta';
 import { returningProjection } from '../query-plan-mutations';
 import { queryPlanRows } from '../query-plan-rows';
 import type { CollectionContext } from '../types';
 import type { Edge, NodeId, StorageRow } from './edge';
 import type { Graph } from './graph';
+import { withMutationScope } from './mutation-scope';
 import type { Executed, Node, OutputsOf, Run, Slots, StatementAst } from './node';
 import { StatementNode } from './statement-node';
 

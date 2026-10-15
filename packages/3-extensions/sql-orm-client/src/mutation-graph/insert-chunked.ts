@@ -3,13 +3,15 @@ import type { InsertAst, ProjectionItem } from '@internal/sql-relational-core/as
 import type { StorageRow } from './edge';
 import { withColumns } from './filtered-statement';
 import type { Executed, OutputsOf, Run, StatementAst } from './node';
+import { type Requires, requirementUnmet } from './requires';
+import { rowsResult } from './run-statement';
 import type { StateEdge } from './state';
 import { StatementNode } from './statement-node';
 
-type StateOnly = { state: StateEdge[] };
+type StateOnly = { state: StateEdge[]; requires: Requires[] };
 
 export class InsertChunked extends StatementNode<StateOnly> {
-  readonly slots = { state: 'list' } as const;
+  readonly slots = { state: 'list', requires: 'list' } as const;
   readonly asts: readonly InsertAst[];
 
   constructor(asts: readonly InsertAst[]) {
@@ -26,7 +28,10 @@ export class InsertChunked extends StatementNode<StateOnly> {
     return this.asts[0]?.returning ?? [];
   }
 
-  override execute(_inputs: OutputsOf<StateOnly>, run: Run): Executed {
+  override execute(inputs: OutputsOf<StateOnly>, run: Run): Executed {
+    if (requirementUnmet(inputs.requires)) {
+      return rowsResult([]);
+    }
     if (this.returns.length === 0) {
       return this.#sumOfCounts(run);
     }

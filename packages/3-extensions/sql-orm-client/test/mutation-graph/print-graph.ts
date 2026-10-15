@@ -13,6 +13,7 @@ import type { Graph } from '../../src/mutation-graph/graph';
 import { Insert } from '../../src/mutation-graph/insert';
 import { InsertChunked } from '../../src/mutation-graph/insert-chunked';
 import type { Node } from '../../src/mutation-graph/node';
+import { Requires } from '../../src/mutation-graph/requires';
 import { Rows } from '../../src/mutation-graph/rows';
 import { State, StateEdge } from '../../src/mutation-graph/state';
 import { Update } from '../../src/mutation-graph/update';
@@ -111,6 +112,9 @@ function printEdge(names: NodeNames, edge: Edge<unknown>): string {
   if (edge instanceof Rows) {
     return `Rows ${names.get(edge.from)}`;
   }
+  if (edge instanceof Requires) {
+    return `Requires ${names.get(edge.from)}`;
+  }
   if (!(edge instanceof DataEdge)) {
     return `state ${names.get(edge.from)}`;
   }
@@ -140,8 +144,9 @@ export function printGraph(graph: Graph, options: PrintOptions = { state: false 
   const nodes = graph.nodes().filter(([, node]) => options.state || !(node instanceof State));
   const names: NodeNames = new Map(nodes.map(([id], index) => [id, `n${index + 1}`]));
   const lines = nodes.map(([id, node]) => {
-    const inputs = Object.values(graph.inputsOf(id))
-      .flat()
+    const slots = graph.inputsOf(id);
+    const inputs = Object.keys(node.slots)
+      .flatMap((name) => [slots[name] ?? []].flat())
       .filter((edge) => options.state || !(edge instanceof StateEdge));
     return `${names.get(id)} ${printNode(node)}${printInputs(names, inputs)}`;
   });

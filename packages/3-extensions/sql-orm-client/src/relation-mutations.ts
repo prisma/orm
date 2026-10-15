@@ -84,6 +84,9 @@ export function parseMutationInput(
       scalarData[fieldName] = value;
       continue;
     }
+    if (value === undefined) {
+      continue;
+    }
 
     if (!isRelationMutationCallback(value)) {
       throw ormError(
@@ -280,27 +283,26 @@ export function toFieldName(
   );
 }
 
+export function hasRelationFields(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  modelName: string,
+  data: Readonly<Record<string, unknown>>,
+): boolean {
+  const relationNames = Object.keys(resolveModelRelations(contract, namespaceId, modelName));
+  return relationNames.some((name) => data[name] !== undefined);
+}
+
 export function hasNestedMutationCallbacks(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   modelName: string,
   data: Record<string, unknown>,
 ): boolean {
-  // Only the base model's relation names are needed to detect nested-mutation
-  // callbacks; resolving relation targets here would eagerly resolve
-  // cross-namespace targets (and throw on a non-existent target namespace),
-  // so enumerate names directly without target resolution.
   const relationNames = new Set(
     Object.keys(resolveModelRelations(contract, namespaceId, modelName)),
   );
-  for (const [fieldName, value] of Object.entries(data)) {
-    if (!relationNames.has(fieldName)) {
-      continue;
-    }
-    if (isRelationMutationCallback(value)) {
-      return true;
-    }
-  }
-
-  return false;
+  return Object.entries(data).some(
+    ([fieldName, value]) => relationNames.has(fieldName) && isRelationMutationCallback(value),
+  );
 }

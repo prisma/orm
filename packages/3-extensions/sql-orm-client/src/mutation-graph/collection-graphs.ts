@@ -27,6 +27,7 @@ import {
 } from '../query-plan-mutations';
 import { collectionSelectAst, collectionSelectWithIncludesAst } from '../query-plan-select';
 import { variantReturning } from '../query-plan-source';
+import type { ParsedRelationMutation } from '../relation-mutations';
 import type { AliasedTable } from '../table-scope';
 import { type CollectionState, emptyState } from '../types';
 import { CrossJoin } from './cross-join';
@@ -36,7 +37,13 @@ import { Find } from './find';
 import { Graph } from './graph';
 import { Insert } from './insert';
 import { InsertChunked } from './insert-chunked';
-import { addCreateWithRelations } from './nested-create';
+import {
+  addAfterWrite,
+  addBeforeWrite,
+  addCreateWithRelations,
+  type BeforeWrite,
+  type KeySource,
+} from './nested-mutations';
 import { UnionAll } from './union-all';
 import { Update } from './update';
 
@@ -75,7 +82,11 @@ export function deleteAllGraph(collection: DescribeCollectionRowsOptions): Graph
 export function updateFirstGraph(
   collection: DescribeCollectionRowsOptions,
   set: Readonly<Record<string, unknown>>,
+  relationMutations: readonly ParsedRelationMutation[] = [],
 ): Graph {
+  if (relationMutations.length > 0) {
+    return updateFirstWithRelationsGraph(collection, set, relationMutations);
+  }
   const { context, state } = collection;
   const graph = new Graph(context.contract);
   const nothingToSet = Object.keys(set).length === 0;
@@ -101,6 +112,69 @@ export function updateFirstGraph(
   graph.addFilterDataEdge(find, updated, sameRowColumns(collection));
   graph.setResult(addWithIncludes(graph, collection, updated));
   return graph;
+}
+
+function updateFirstWithRelationsGraph(
+  collection: DescribeCollectionRowsOptions,
+  set: Readonly<Record<string, unknown>>,
+  relationMutations: readonly ParsedRelationMutation[],
+): Graph {
+  const { context, modelName, namespaceId, state } = collection;
+  const graph = new Graph(context.contract);
+  requireIdentityColumns(collection);
+  requireIdentityColumnsForIncludes(collection);
+  const model = { namespaceId, modelName, tables: state.tables };
+  const find = graph.add(new Find(selectIdentityAst(collection, { ...state, limit: 1 })));
+  const t = { graph, context, gate: find };
+  const before = addBeforeWrite(t, model, relationMutations);
+  const values = withUpdateDefaults(collection, set, before);
+  const parent =
+    Object.keys(values).length === 0 && before.keys.length === 0
+      ? find
+      : addParentUpdate(graph, collection, find, values, before.keys);
+  addAfterWrite(t, model, parent, relationMutations);
+  graph.setResult(addWithIncludes(graph, collection, parent));
+  return graph;
+}
+
+function addParentUpdate(
+  graph: Graph,
+  collection: DescribeCollectionRowsOptions,
+  find: NodeId,
+  values: Readonly<Record<string, unknown>>,
+  keys: readonly KeySource[],
+): NodeId {
+  const { context, state } = collection;
+  const updated = graph.add(
+    new Update(updateAst(context.contract, state.tables, values, undefined)),
+  );
+  graph.addFilterDataEdge(find, updated, sameRowColumns(collection));
+  for (const { from, columns } of keys) {
+    graph.addPayloadDataEdge(from, updated, columns);
+  }
+  return updated;
+}
+
+function withUpdateDefaults(
+  collection: DescribeCollectionRowsOptions,
+  set: Readonly<Record<string, unknown>>,
+  before: BeforeWrite,
+): Readonly<Record<string, unknown>> {
+  const values: Record<string, unknown> = { ...set, ...before.nullColumns };
+  const setNothingBefore = Object.keys(set).length === 0;
+  const changesNow = Object.keys(values).length > 0 || before.keys.length > 0;
+  if (setNothingBefore && changesNow) {
+    const { namespaceId, tableName } = collection.state.tables.root.storage;
+    for (const applied of collection.context.applyMutationDefaults({
+      op: 'update',
+      entry: tableName,
+      namespace: namespaceId,
+      values,
+    })) {
+      values[applied.field] = applied.value;
+    }
+  }
+  return values;
 }
 
 export function deleteFirstGraph(collection: DescribeCollectionRowsOptions): Graph {
@@ -158,8 +232,7 @@ export function createGraph(
   const graph = new Graph(context.contract);
   requireIdentityColumnsForIncludes(collection);
   const created = addCreateWithRelations(
-    graph,
-    context,
+    { graph, context, gate: undefined },
     { namespaceId, modelName, tables: state.tables },
     data,
     [],

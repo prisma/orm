@@ -10,14 +10,17 @@ import { printGraph } from './print-graph';
 type Mutator = RelationMutator<Contract<SqlStorage>, string>;
 type Callback = (mutator: Mutator) => unknown;
 
-function targetOf(modelName: 'User' | 'Post', withPosts = false) {
+function targetOf(modelName: 'User' | 'Post' | 'Project', withPosts = false) {
   const state = withPosts
     ? createCollectionFor('User').collection.include('posts').state
     : createCollectionFor(modelName).collection.state;
   return { context: getTestContext(), state, modelName, namespaceId: 'public' };
 }
 
-function printCreate(modelName: 'User' | 'Post', data: Record<string, unknown>): string {
+function printCreate(
+  modelName: 'User' | 'Post' | 'Project',
+  data: Record<string, unknown>,
+): string {
   return printGraph(createGraph(targetOf(modelName), data));
 }
 
@@ -148,6 +151,25 @@ describe('createGraph', () => {
       );
     });
 
+    it('copies every column of a composite key into the junction row', () => {
+      expect(
+        printCreate('Project', {
+          id: 1,
+          tenantId: 7,
+          name: 'Core',
+          related: (related: Mutator) => related.connect({ tenantId: 7, id: 2 }),
+        }),
+      ).toBe(
+        [
+          'n1 Insert projects',
+          'n2 Find projects where tenant_id = 7 and id = 2 limit 1',
+          'n3 Assert <- Rows n2',
+          'n4 Insert project_links on conflict (src_tenant_id, src_id, dst_tenant_id, dst_id) do nothing <- PayloadData n1 (tenant_id->src_tenant_id, id->src_id), PayloadData n2 (tenant_id->dst_tenant_id, id->dst_id)',
+          'result: n1',
+        ].join('\n'),
+      );
+    });
+
     it('rejects a junction with a required column the relation cannot fill', () => {
       expect(() =>
         createGraph(targetOf('User'), {
@@ -237,6 +259,17 @@ describe('createGraph', () => {
           code: 'ORM.RELATION_MUTATION_INVALID',
           message: 'Relation field "posts" on model "User" expects a mutator callback',
           meta: { relation: 'posts', model: 'User', problem: 'missing-callback' },
+        }),
+      );
+    });
+
+    it('rejects a callback that returns no relation operation', () => {
+      expect(() =>
+        createGraph(targetOf('User'), { ...ada, posts: () => ({ invalid: true }) }),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'ORM.RELATION_MUTATION_INVALID',
+          meta: { relation: 'posts', model: 'User', problem: 'invalid-descriptor' },
         }),
       );
     });

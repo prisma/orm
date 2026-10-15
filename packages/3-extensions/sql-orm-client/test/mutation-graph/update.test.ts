@@ -11,7 +11,10 @@ describe('Update with a payload', () => {
     const views = { views: ParamRef.of(3, { name: 'views' }) };
 
     expect(
-      await update.execute({ filter: null, payload: [[userIdOf7], [views]], state: null }, run),
+      await update.execute(
+        { filter: null, payload: [[userIdOf7], [views]], state: null, requires: null },
+        run,
+      ),
     ).toBe(2);
     expect(run.executed[0]).toMatchObject({
       kind: 'update',
@@ -24,7 +27,10 @@ describe('Update with a payload', () => {
     const run = recordingRun([{ id: 1 }]);
 
     expect(
-      await update.execute({ filter: null, payload: [[userIdOf7], []], state: null }, run),
+      await update.execute(
+        { filter: null, payload: [[userIdOf7], []], state: null, requires: null },
+        run,
+      ),
     ).toEqual([]);
     expect(run).toMatchObject({ queried: [], executed: [] });
   });
