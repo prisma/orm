@@ -1,5 +1,3 @@
-import type { Contract } from '@internal/contract/types';
-import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   type AnyExpression,
   ColumnRef,
@@ -7,7 +5,11 @@ import {
   type ProjectionItem,
   type SelectAst,
 } from '@internal/sql-relational-core/ast';
-import { resolvePrimaryKeyColumns, resolveRowIdentityColumns } from '../collection-contract';
+import {
+  resolvePrimaryKeyColumns,
+  resolveRowIdentityColumns,
+  supportsDefaultInInsert,
+} from '../collection-contract';
 import type { DescribeCollectionRowsOptions } from '../collection-dispatch';
 import { ormError } from '../orm-errors';
 import {
@@ -34,6 +36,7 @@ import { Find } from './find';
 import { Graph } from './graph';
 import { Insert } from './insert';
 import { InsertChunked } from './insert-chunked';
+import { addCreateWithRelations } from './nested-create';
 import { UnionAll } from './union-all';
 import { Update } from './update';
 
@@ -147,8 +150,22 @@ export function createAllGraph(
   return graph;
 }
 
-function supportsDefaultInInsert(contract: Contract<SqlStorage>): boolean {
-  return contract.capabilities['sql']?.['defaultInInsert'] === true;
+export function createGraph(
+  collection: DescribeCollectionRowsOptions,
+  data: Readonly<Record<string, unknown>>,
+): Graph {
+  const { context, modelName, namespaceId, state } = collection;
+  const graph = new Graph(context.contract);
+  requireIdentityColumnsForIncludes(collection);
+  const created = addCreateWithRelations(
+    graph,
+    context,
+    { namespaceId, modelName, tables: state.tables },
+    data,
+    [],
+  );
+  graph.setResult(addWithIncludes(graph, collection, created));
+  return graph;
 }
 
 export interface VariantCreateRow {

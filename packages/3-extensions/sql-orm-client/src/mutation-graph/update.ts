@@ -1,10 +1,14 @@
 import type { ProjectionItem, UpdateAst } from '@internal/sql-relational-core/ast';
-import { executeFiltered, type Filtered, filteredSlots, withColumns } from './filtered-statement';
+import { executeFiltered, type Filtered, withColumns } from './filtered-statement';
 import type { Executed, OutputsOf, Run, StatementAst } from './node';
+import type { PayloadData } from './payload-data';
+import { rowsResult } from './run-statement';
 import { StatementNode } from './statement-node';
 
-export class Update extends StatementNode<Filtered> {
-  readonly slots = filteredSlots;
+type Inputs = Filtered & { payload: PayloadData[] };
+
+export class Update extends StatementNode<Inputs> {
+  readonly slots = { filter: 'list', payload: 'list', state: 'list' } as const;
   readonly ast: UpdateAst;
 
   constructor(ast: UpdateAst) {
@@ -21,8 +25,15 @@ export class Update extends StatementNode<Filtered> {
     return this.ast.returning ?? [];
   }
 
-  override execute(inputs: OutputsOf<Filtered>, run: Run): Executed {
-    return executeFiltered(this.ast, inputs.filter, run);
+  override execute(inputs: OutputsOf<Inputs>, run: Run): Executed {
+    if (inputs.payload === null) {
+      return executeFiltered(this.ast, inputs.filter, run);
+    }
+    if (inputs.payload.some((records) => records.length === 0)) {
+      return rowsResult([]);
+    }
+    const payload = Object.assign({}, ...inputs.payload.map(([record]) => record));
+    return executeFiltered(this.ast.withSet({ ...this.ast.set, ...payload }), inputs.filter, run);
   }
 
   override withReturning(columns: readonly ProjectionItem[]): Update {

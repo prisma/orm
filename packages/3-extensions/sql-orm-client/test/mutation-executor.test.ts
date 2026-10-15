@@ -10,14 +10,16 @@ import {
 import { describe, expect, it, vi } from 'vitest';
 import { createCollectionTables } from '../src/collection-tables';
 import {
-  assertJunctionParentMetadataLength,
-  assertJunctionTargetMetadataLength,
   buildRowIdentityFilterFromRow,
   executeNestedCreateMutation,
   executeNestedUpdateMutation,
+} from '../src/mutation-executor';
+import {
+  assertJunctionParentMetadataLength,
+  assertJunctionTargetMetadataLength,
   hasNestedMutationCallbacks,
   type JunctionRelationDefinition,
-} from '../src/mutation-executor';
+} from '../src/relation-mutations';
 import { defineContract, field, model } from './contract-builder';
 import type { MockRuntime } from './helpers';
 import {

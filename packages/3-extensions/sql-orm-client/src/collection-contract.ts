@@ -1004,6 +1004,10 @@ export function assertLockCapability(
   });
 }
 
+export function supportsDefaultInInsert(contract: Contract<SqlStorage>): boolean {
+  return contract.capabilities['sql']?.['defaultInInsert'] === true;
+}
+
 export function hasContractCapability(contract: Contract<SqlStorage>, capability: string): boolean {
   const capabilities = contract.capabilities;
   const value = capabilities[capability];

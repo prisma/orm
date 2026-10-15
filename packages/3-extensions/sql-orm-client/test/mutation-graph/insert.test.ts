@@ -51,6 +51,35 @@ describe('Insert', () => {
     expect(run.executed).toEqual([]);
   });
 
+  it('refuses two edges that give one column of a junction different values, before running', () => {
+    const insert = new Insert(insertInto('posts', [{ title: 'Hello' }]), {
+      relation: 'tags',
+      junction: 'post_tags',
+    });
+    const run = recordingRun();
+    const userIdOf8 = { user_id: ParamRef.of(8, { name: 'user_id' }) };
+
+    expect(() => insert.execute({ payload: [[userIdOf7], [userIdOf8]], state: null }, run)).toThrow(
+      expect.objectContaining({
+        code: 'ORM.RELATION_MUTATION_INVALID',
+        message:
+          'Cannot write junction "post_tags": conflicting values for junction column "user_id"',
+        meta: { relation: 'tags', junction: 'post_tags', column: 'user_id' },
+      }),
+    );
+    expect(run).toMatchObject({ queried: [], executed: [] });
+  });
+
+  it('accepts two edges that give one column of a junction the same value', async () => {
+    const insert = new Insert(insertInto('posts', [{ title: 'Hello' }]), {
+      relation: 'tags',
+      junction: 'post_tags',
+    });
+    const run = recordingRun([], 1);
+
+    expect(await insert.execute({ payload: [[userIdOf7], [userIdOf7]], state: null }, run)).toBe(1);
+  });
+
   it('gives the affected row count when its statement returns no column', async () => {
     const insert = new Insert(insertInto('posts', [{ title: 'a' }, { title: 'b' }]));
     const run = recordingRun([], 2);
