@@ -135,15 +135,11 @@ import {
 } from './include-descriptors';
 import { assertLockCompatible } from './lock-guards';
 import { createModelAccessor, createModelCallbackTools } from './model-accessor';
-import {
-  buildRowIdentityFilterFromRow,
-  executeNestedCreateMutation,
-  executeNestedUpdateMutation,
-  hasNestedMutationCallbacks,
-} from './mutation-executor';
+import { buildRowIdentityFilterFromRow, executeNestedUpdateMutation } from './mutation-executor';
 import {
   createAllGraph,
   createAllVariantGraph,
+  createGraph,
   deleteAllGraph,
   deleteFirstGraph,
   updateAllGraph,
@@ -168,6 +164,7 @@ import {
 import { ormError } from './orm-errors';
 import type { PreparedCollection } from './prepared-collection';
 import { compileAggregate, type InsertConflictSkip } from './query-plan';
+import { hasNestedMutationCallbacks } from './relation-mutations';
 import type { AliasedTable } from './table-scope';
 import {
   type AggregateBuilder,
@@ -191,7 +188,6 @@ import {
   type IncludeScalar,
   type InferRootRow,
   type ModelCallbackTools,
-  type MutationCreateInput,
   type MutationCreateInputWithRelations,
   type MutationUpdateInput,
   type RelatedModelName,
@@ -2016,32 +2012,26 @@ export class CollectionBase<
         >(data),
       )
     ) {
-      const createdRow = await executeNestedCreateMutation({
-        context: this.ctx.context,
-        runtime: queryable,
-        namespaceId: this.namespaceId,
-        modelName: this.modelName,
-        data: blindCast<
-          MutationCreateInput<Contract<SqlStorage>, string>,
+      const graph = createGraph(
+        this.#descriptionOptions(),
+        blindCast<
+          Record<string, unknown>,
           'nested callback detection selects the relation-mutation create input'
         >(data),
-      });
-
-      const identityCriterion = buildRowIdentityFilterFromRow(
-        this.contract,
-        this.namespaceId,
-        this.modelName,
-        createdRow,
       );
-      const reloaded = await this.#reloadMutationRowByIdentity(queryable, identityCriterion);
-      if (!reloaded) {
+      const [created] = await queryGraph<Row>(
+        graph,
+        this.#on(queryable),
+        this.#descriptionOptions(),
+      ).toArray();
+      if (created === undefined) {
         throw ormError(
           'ORM.MUTATION_ROW_MISSING',
           `create() for model "${this.modelName}" did not return a row`,
           { meta: { operation: 'create', model: this.modelName } },
         );
       }
-      return reloaded;
+      return created;
     }
 
     const rows = await this.#createAllRows([
