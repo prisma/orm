@@ -109,6 +109,9 @@
       "minimatch@3.1.2": "3.1.3",
       "minimatch@9.0.5": "9.0.7",
       "rollup": "4.59.0"
+    },
+    "patchedDependencies": {
+      "@prisma/cli-engine": "patches/@prisma__cli-engine.patch"
     }
   }
 }
