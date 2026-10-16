@@ -8,11 +8,7 @@
 
 import { validateSqlContractFully } from '@internal/sql-contract/validators';
 import { buildSqlAggregateDescriptorRegistry } from '@internal/sql-relational-core/aggregate-descriptor-registry';
-import {
-  type AnyExpression,
-  FunctionCallExpr,
-  IdentifierRef,
-} from '@internal/sql-relational-core/ast';
+import { type AnyExpression, ColumnRef, FunctionCallExpr } from '@internal/sql-relational-core/ast';
 import { buildCodecDescriptorRegistry } from '@internal/sql-relational-core/codec-descriptor-registry';
 import type { ExpressionImpl } from '@internal/sql-relational-core/expression';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
@@ -153,7 +149,7 @@ describe('derived aggregate surface', () => {
     const result = fns().median(f().id) as ExpressionImpl;
 
     expect(result.buildProjectionAst()).toEqual(
-      FunctionCallExpr.of('median', [IdentifierRef.of('id')]),
+      FunctionCallExpr.of('median', [ColumnRef.of('users', 'id')]),
     );
     expect(result.returnType).toEqual({
       codecId: 'lib/float8@1',
@@ -194,7 +190,7 @@ describe('projection-only operations', () => {
       .buildAst();
 
     const item = ast.projection[0]!;
-    expect(item.expr).toEqual(FunctionCallExpr.of('median', [IdentifierRef.of('id')]));
+    expect(item.expr).toEqual(FunctionCallExpr.of('median', [ColumnRef.of('users', 'id')]));
     expect(item.codec).toEqual({ codecId: 'lib/float8@1' });
   });
 

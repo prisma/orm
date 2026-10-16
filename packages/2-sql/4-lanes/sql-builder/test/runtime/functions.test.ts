@@ -1,10 +1,5 @@
 import { buildSqlAggregateDescriptorRegistry } from '@internal/sql-relational-core/aggregate-descriptor-registry';
-import {
-  AggregateExpr,
-  BinaryExpr,
-  ColumnRef,
-  IdentifierRef,
-} from '@internal/sql-relational-core/ast';
+import { AggregateExpr, BinaryExpr, ColumnRef } from '@internal/sql-relational-core/ast';
 import { buildCodecDescriptorRegistry } from '@internal/sql-relational-core/codec-descriptor-registry';
 import { ExpressionImpl } from '@internal/sql-relational-core/expression';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -132,7 +127,7 @@ describe('createAggregateFunctions', () => {
     const ast = result.buildAst() as AggregateExpr;
 
     expect(ast.fn).toBe('count');
-    expect(ast.expr).toBeInstanceOf(IdentifierRef);
+    expect(ast.expr).toBeInstanceOf(ColumnRef);
   });
 
   // SQLite computes `sum` over a text column — reading leading numbers where
@@ -160,7 +155,7 @@ describe('createAggregateFunctions', () => {
 
     expect(ast).toBeInstanceOf(AggregateExpr);
     expect(ast.fn).toBe('sum');
-    expect(ast.expr).toBeInstanceOf(IdentifierRef);
+    expect(ast.expr).toBeInstanceOf(ColumnRef);
     // A sum over an int4 widens; the lane states what the registry answered,
     // not the input it was given.
     expect((result as ExpressionImpl).returnType).toEqual({

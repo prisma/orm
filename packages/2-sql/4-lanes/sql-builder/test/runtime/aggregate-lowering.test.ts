@@ -12,7 +12,7 @@ import {
   AggregateExpr,
   type BinaryExpr,
   CastExpr,
-  IdentifierRef,
+  ColumnRef,
 } from '@internal/sql-relational-core/ast';
 import { buildCodecDescriptorRegistry } from '@internal/sql-relational-core/codec-descriptor-registry';
 import type { ExpressionImpl } from '@internal/sql-relational-core/expression';
@@ -132,7 +132,7 @@ describe('descriptor lowering sites', () => {
       .buildAst();
 
     const item = ast.projection[0]!;
-    expect(item.expr).toEqual(CastExpr.as(AggregateExpr.sum(IdentifierRef.of('id')), 'text'));
+    expect(item.expr).toEqual(CastExpr.as(AggregateExpr.sum(ColumnRef.of('users', 'id')), 'text'));
     expect(item.codec).toEqual({ codecId: 'lib/int8@1' });
   });
 

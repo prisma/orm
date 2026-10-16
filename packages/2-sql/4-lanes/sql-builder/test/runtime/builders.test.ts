@@ -8,7 +8,7 @@ import { validateSqlContractFully } from '@internal/sql-contract/validators';
 import {
   AndExpr,
   BinaryExpr,
-  type ColumnRef,
+  ColumnRef,
   DerivedTableSource,
   ExistsExpr,
   IdentifierRef,
@@ -141,7 +141,9 @@ describe('select', () => {
     const ast = getAst(db().public.users.select('upper_name', (f, _fns) => f.name));
     expect(ast.projection).toHaveLength(1);
     expect(ast.projection[0]!.alias).toBe('upper_name');
-    expect(ast.projection[0]!.expr).toBeInstanceOf(IdentifierRef);
+    // callback field access produces a qualified ColumnRef, not a bare IdentifierRef
+    expect(ast.projection[0]!.expr).toBeInstanceOf(ColumnRef);
+    expect((ast.projection[0]!.expr as ColumnRef).column).toBe('name');
   });
 
   it('select with callback record', () => {
@@ -349,8 +351,10 @@ describe('orderBy', () => {
         .orderBy((f) => f.id, { direction: 'desc', nulls: 'first' }),
     );
     expect(ast.orderBy).toEqual([
+      // string-based orderBy stays as a bare IdentifierRef (select-list alias)
       OrderByItem.asc(IdentifierRef.of('name'), { nulls: 'last' }),
-      OrderByItem.desc(IdentifierRef.of('id'), { nulls: 'first' }),
+      // callback-based orderBy now emits a qualified ColumnRef
+      OrderByItem.desc(ColumnRef.of('users', 'id'), { nulls: 'first' }),
     ]);
   });
 
@@ -382,7 +386,7 @@ describe('orderBy', () => {
         .orderBy((f) => f.id),
     );
     expect(ast.orderBy).toHaveLength(1);
-    expect(ast.orderBy![0]!.expr).toBeInstanceOf(IdentifierRef);
+    expect(ast.orderBy![0]!.expr).toBeInstanceOf(ColumnRef);
   });
 
   it('multiple orderBy calls accumulate', () => {
@@ -534,6 +538,25 @@ describe('subquery in exists/in', () => {
         ),
     );
     expect(ast.where).toBeInstanceOf(ExistsExpr);
+  });
+
+  it('outer top-level field used inside correlated subquery emits a qualified ColumnRef', () => {
+    // Regression for: a bare IdentifierRef for f.id resolved against the inner
+    // table inside the subquery, silently binding to the wrong column.
+    const d = db();
+    const ast = getAst(
+      d.public.users
+        .select('id')
+        .where((f, fns) =>
+          fns.exists(d.public.posts.select('id').where((pf, pfns) => pfns.eq(pf.user_id, f.id))),
+        ),
+    );
+    const subAst = (ast.where as ExistsExpr).subquery;
+    const subWhere = subAst.where as BinaryExpr;
+    // The right-hand side is f.id from the outer query — must be ColumnRef, not IdentifierRef
+    expect(subWhere.right).toBeInstanceOf(ColumnRef);
+    expect((subWhere.right as ColumnRef).table).toBe('users');
+    expect((subWhere.right as ColumnRef).column).toBe('id');
   });
 });
 
@@ -773,7 +796,7 @@ describe('UPDATE callback overload', () => {
     const nameValue = ast.set['name'];
     expect(nameValue).toBeDefined();
     expect(nameValue).not.toBeInstanceOf(ParamRef);
-    expect(nameValue!.kind).toBe('identifier-ref');
+    expect(nameValue!.kind).toBe('column-ref');
   });
 
   it('mutation defaults hook fires once with op update for callback overload', () => {

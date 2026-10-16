@@ -1,7 +1,7 @@
 import { coreHash } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageTable } from '@internal/sql-contract/types';
-import { ColumnRef, IdentifierRef } from '@internal/sql-relational-core/ast';
+import { ColumnRef } from '@internal/sql-relational-core/ast';
 import { codecOf, ExpressionImpl } from '@internal/sql-relational-core/expression';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../../1-core/contract/test/test-support';
@@ -10,14 +10,15 @@ import { createFieldProxy } from '../../src/runtime/field-proxy';
 import { joinedScope, usersScope } from './test-helpers';
 
 describe('createFieldProxy', () => {
-  it('top-level field access produces IdentifierRef', () => {
+  it('top-level field access for a namespaced column produces a qualified ColumnRef', () => {
     const proxy = createFieldProxy(usersScope);
     const idExpr = proxy.id;
 
     expect(idExpr).toBeInstanceOf(ExpressionImpl);
-    const ref = idExpr.buildAst();
-    expect(ref).toBeInstanceOf(IdentifierRef);
-    expect((ref as IdentifierRef).name).toBe('id');
+    const ref = idExpr.buildAst() as ColumnRef;
+    expect(ref).toBeInstanceOf(ColumnRef);
+    expect(ref.table).toBe('users');
+    expect(ref.column).toBe('id');
     expect((idExpr as ExpressionImpl).returnType).toEqual({
       codecId: 'pg/int4@1',
       nullable: false,
