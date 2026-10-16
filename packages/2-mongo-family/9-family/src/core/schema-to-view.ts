@@ -19,6 +19,12 @@ export function mongoSchemaToView(schema: MongoSchemaIR): CoreSchemaView {
   };
 }
 
+function bsonTypeLabel(bsonType: unknown): string {
+  if (bsonType === undefined) return 'any';
+  if (Array.isArray(bsonType)) return bsonType.join(' | ');
+  return String(bsonType);
+}
+
 function collectionToSchemaNode(name: string, collection: MongoSchemaCollection): SchemaTreeNode {
   const children: SchemaTreeNode[] = [];
 
@@ -67,7 +73,7 @@ function collectionToSchemaNode(name: string, collection: MongoSchemaCollection)
 
     if (properties) {
       for (const [propName, propDef] of Object.entries(properties)) {
-        const bsonType = propDef.bsonType === undefined ? 'any' : String(propDef.bsonType);
+        const bsonType = bsonTypeLabel(propDef.bsonType);
         const suffix = required.has(propName) ? ' (required)' : '';
         validatorChildren.push(
           new SchemaTreeNode({
