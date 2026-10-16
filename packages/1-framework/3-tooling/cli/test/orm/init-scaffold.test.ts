@@ -91,6 +91,34 @@ describe('init scaffold', () => {
     );
 
     it(
+      'leaves a nodenext project on nodenext and scaffolds a db.ts that resolves there',
+      async () => {
+        writeFileSync(
+          join(projectDir, 'tsconfig.json'),
+          JSON.stringify(
+            { compilerOptions: { module: 'nodenext', moduleResolution: 'nodenext' } },
+            null,
+            2,
+          ),
+          'utf-8',
+        );
+
+        const run = await harness().run(scaffoldArgv(...SKIP_ALL), { cwd: projectDir });
+        const merged = JSON.parse(readFileSync(join(projectDir, 'tsconfig.json'), 'utf-8'));
+        const db = readFileSync(join(projectDir, 'src/prisma/db.ts'), 'utf-8');
+
+        expect(run.exitCode).toBe(0);
+        expect(merged.compilerOptions).toMatchObject({
+          module: 'nodenext',
+          moduleResolution: 'nodenext',
+          resolveJsonModule: true,
+        });
+        expect(db).toContain("from './contract.js'");
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
       'synthesises a manifest for a bare directory and says so',
       async () => {
         const run = await harness().run(scaffoldArgv(...SKIP_ALL), { cwd: projectDir });

@@ -82,6 +82,39 @@ describe('mergeTsConfig', () => {
     expect(merged.compilerOptions.types).toEqual(['node']);
   });
 
+  it.each([
+    { module: 'nodenext', moduleResolution: 'nodenext' },
+    { module: 'NodeNext', moduleResolution: 'NodeNext' },
+    { module: 'node18', moduleResolution: 'node16' },
+    { module: 'node20', moduleResolution: 'node16' },
+    { module: 'node18', moduleResolution: 'nodenext' },
+    { module: 'node20', moduleResolution: 'nodenext' },
+  ])('keeps a pair the scaffold already typechecks under: %j', (compilerOptions) => {
+    const merged = JSON.parse(mergeTsConfig(JSON.stringify({ compilerOptions }))) as {
+      compilerOptions: Record<string, unknown>;
+    };
+    expect(merged.compilerOptions).toMatchObject({
+      ...compilerOptions,
+      resolveJsonModule: true,
+    });
+  });
+
+  it.each([
+    { module: 'commonjs', moduleResolution: 'node' },
+    { moduleResolution: 'nodenext' },
+    { module: 'esnext', moduleResolution: 'nodenext' },
+    { module: 'commonjs', moduleResolution: 'bundler' },
+    { module: 'node16', moduleResolution: 'node16' },
+  ])('replaces a pair the scaffold cannot typecheck under: %j', (compilerOptions) => {
+    const merged = JSON.parse(mergeTsConfig(JSON.stringify({ compilerOptions }))) as {
+      compilerOptions: Record<string, unknown>;
+    };
+    expect(merged.compilerOptions).toMatchObject({
+      module: 'preserve',
+      moduleResolution: 'bundler',
+    });
+  });
+
   it('is idempotent on a previously-merged config', () => {
     const first = mergeTsConfig(JSON.stringify({ compilerOptions: { strict: true } }));
     const second = mergeTsConfig(first);
