@@ -72,8 +72,8 @@ describe('decodeRow — SqlCodecCallContext threading', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/observe@1',
-        encode: (v: string) => v,
-        decode: (w: string, ctx?: SqlCodecCallContext) => {
+        toWire: (v: string) => v,
+        fromWire: (w: string, ctx?: SqlCodecCallContext) => {
           if (ctx?.signal) observed.push(ctx.signal);
           return w;
         },
@@ -103,8 +103,8 @@ describe('decodeRow — SqlCodecCallContext threading', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/observe-col@1',
-        encode: (v: string) => v,
-        decode: (w: string, ctx?: SqlCodecCallContext) => {
+        toWire: (v: string) => v,
+        fromWire: (w: string, ctx?: SqlCodecCallContext) => {
           observed.push({ alias: w, column: ctx?.column });
           return w;
         },
@@ -133,8 +133,8 @@ describe('decodeRow — SqlCodecCallContext threading', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/observe-projection@1',
-        encode: (v: string) => v,
-        decode: (w: string, ctx?: SqlCodecCallContext) => {
+        toWire: (v: string) => v,
+        fromWire: (w: string, ctx?: SqlCodecCallContext) => {
           observed = ctx;
           return w;
         },
@@ -159,8 +159,8 @@ describe('decodeRow — SqlCodecCallContext threading', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/observe-undef@1',
-        encode: (v: string) => v,
-        decode: (w: string, ctx?: SqlCodecCallContext) => {
+        toWire: (v: string) => v,
+        fromWire: (w: string, ctx?: SqlCodecCallContext) => {
           observed = ctx;
           return w;
         },
@@ -193,8 +193,8 @@ describe('decodeRow — SqlCodecCallContext threading', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/observe-no-ref@1',
-        encode: (v: string) => v,
-        decode: (w: string, ctx?: SqlCodecCallContext) => {
+        toWire: (v: string) => v,
+        fromWire: (w: string, ctx?: SqlCodecCallContext) => {
           observed = ctx;
           return w;
         },
@@ -226,8 +226,8 @@ describe('decodeRow — SqlCodecCallContext threading', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/single-arg-author@1',
-        encode: (v: string) => v,
-        decode: (w: string) => {
+        toWire: (v: string) => v,
+        fromWire: (w: string) => {
           invoked += 1;
           receivedWire = w;
           return w;
@@ -252,8 +252,8 @@ describe('decodeRow — SqlCodecCallContext threading', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/counter@1',
-        encode: (v: string) => v,
-        decode: (w: string) => {
+        toWire: (v: string) => v,
+        fromWire: (w: string) => {
           callCount += 1;
           return w;
         },
@@ -286,8 +286,8 @@ describe('decodeRow — SqlCodecCallContext threading', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/blocking@1',
-        encode: (v: string) => v,
-        decode: (w: string) => release.promise.then((suffix) => `${w}:${suffix}`),
+        toWire: (v: string) => v,
+        fromWire: (w: string) => release.promise.then((suffix) => `${w}:${suffix}`),
       }),
     ];
 
@@ -317,8 +317,8 @@ describe('decodeRow — SqlCodecCallContext threading', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/explody@1',
-        encode: (v: string) => v,
-        decode: () => {
+        toWire: (v: string) => v,
+        fromWire: () => {
           throw cause;
         },
       }),
@@ -342,8 +342,8 @@ describe('decodeRow — SqlCodecCallContext threading', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/recorder@1',
-        encode: (v: string) => v,
-        decode: (w: string, ctx?: SqlCodecCallContext) => {
+        toWire: (v: string) => v,
+        fromWire: (w: string, ctx?: SqlCodecCallContext) => {
           observedColumns.push(ctx?.column);
           return w;
         },

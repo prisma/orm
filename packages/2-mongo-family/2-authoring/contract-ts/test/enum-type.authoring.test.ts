@@ -1,5 +1,10 @@
-import type { AnyCodecDescriptor, Codec } from '@internal/framework-components/codec';
-import { dataTypeId } from '@internal/framework-components/codec';
+import type { JsonValue } from '@internal/contract/types';
+import type {
+  AnyCodecDescriptor,
+  Codec,
+  DataTypeValue,
+} from '@internal/framework-components/codec';
+import { dataType, dataTypeId } from '@internal/framework-components/codec';
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { MongoContractSchema } from '@internal/mongo-contract';
@@ -15,6 +20,8 @@ const mongoFamilyPack = {
   version: '0.0.1',
 } as const satisfies FamilyPackRef<'mongo'>;
 
+const fixtureType = dataType('demo/fixture', { read: (json) => json });
+
 const identityDescriptor = (id: string): AnyCodecDescriptor => ({
   codecId: id,
   dataType: dataTypeId('demo/fixture'),
@@ -24,11 +31,12 @@ const identityDescriptor = (id: string): AnyCodecDescriptor => ({
   factory: () => () =>
     ({
       id,
-      encode: async (v: unknown) => v,
-      decode: async (v: unknown) => v,
-      encodeJson: (v: unknown) => v,
-      decodeJson: (j: unknown) => j,
-    }) as unknown as Codec,
+      dataType: fixtureType,
+      toWire: async (v: unknown) => v,
+      fromWire: async (v: unknown) => v,
+      toDataTypeValue: (v: unknown) => fixtureType.valueFrom(v as JsonValue, {}),
+      fromDataTypeValue: (value: DataTypeValue) => value.value,
+    }) satisfies Codec,
 });
 
 const mongoTargetPack = {
@@ -205,11 +213,12 @@ describe('defineContract() — members compared as the codec stores them', () =>
     factory: () => () =>
       ({
         id: 'test/date@1',
-        encode: async (v: unknown) => v,
-        decode: async (v: unknown) => v,
-        encodeJson: (v: unknown) => (v as Date).toISOString(),
-        decodeJson: (j: unknown) => new Date(j as string),
-      }) as unknown as Codec,
+        dataType: fixtureType,
+        toWire: async (v: unknown) => v,
+        fromWire: async (v: unknown) => v,
+        toDataTypeValue: (v: unknown) => fixtureType.valueFrom((v as Date).toISOString(), {}),
+        fromDataTypeValue: (value: DataTypeValue) => new Date(String(value.value)),
+      }) satisfies Codec,
   };
   const target = {
     ...mongoTargetPack,
@@ -353,6 +362,7 @@ describe('defineContract() — enum declaration key mismatch', () => {
 
 describe('defineContract() — codec-encoded value set', () => {
   const upperCodec = { codecId: 'test/upper@1' as const } as const;
+  const upperType = dataType('test/upper', { read: (json) => json });
   const upperDescriptor: AnyCodecDescriptor = {
     codecId: 'test/upper@1',
     dataType: dataTypeId('test/upper'),
@@ -362,11 +372,12 @@ describe('defineContract() — codec-encoded value set', () => {
     factory: () => () =>
       ({
         id: 'test/upper@1',
-        encode: async (v: unknown) => v,
-        decode: async (v: unknown) => v,
-        encodeJson: (v: unknown) => (v as string).toUpperCase(),
-        decodeJson: (j: unknown) => (j as string).toLowerCase(),
-      }) as unknown as Codec,
+        dataType: upperType,
+        toWire: async (v: unknown) => v,
+        fromWire: async (v: unknown) => v,
+        toDataTypeValue: (v: unknown) => upperType.valueFrom(String(v).toUpperCase(), {}),
+        fromDataTypeValue: (value: DataTypeValue) => String(value.value).toLowerCase(),
+      }) satisfies Codec,
   };
   const packWithEncoders = {
     ...mongoTargetPack,

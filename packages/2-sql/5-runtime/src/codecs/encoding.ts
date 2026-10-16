@@ -127,7 +127,7 @@ async function encodeParamValue(
         continue;
       }
       try {
-        encoded.push(await codec.encode(elem, ctx));
+        encoded.push(await codec.toWire(elem, ctx));
       } catch (error) {
         if (isStructuredError(error)) throw error;
         wrapEncodeFailure(error, metadata, paramIndex, codec.id);
@@ -137,7 +137,7 @@ async function encodeParamValue(
   }
 
   try {
-    return await codec.encode(value, ctx);
+    return await codec.toWire(value, ctx);
   } catch (error) {
     // Any structured envelope (dotted `code` per `isStructuredError`) is
     // stable by construction — let it pass through unchanged. This covers

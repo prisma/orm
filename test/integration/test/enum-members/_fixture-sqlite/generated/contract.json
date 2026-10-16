@@ -57,11 +57,11 @@
             "members": [
               {
                 "name": "Launch",
-                "value": "2024-01-01T00:00:00Z"
+                "value": "2024-01-01T00:00:00.000Z"
               },
               {
                 "name": "Sunset",
-                "value": "2025-06-30T12:00:00Z"
+                "value": "2025-06-30T12:00:00.000Z"
               }
             ]
           }
@@ -203,7 +203,7 @@
                 },
                 "when": {
                   "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/text",
+                  "dataType": "sqlite/datetime",
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -248,8 +248,8 @@
             "WhenLevel": {
               "kind": "valueSet",
               "values": [
-                "2024-01-01T00:00:00Z",
-                "2025-06-30T12:00:00Z"
+                "2024-01-01T00:00:00.000Z",
+                "2025-06-30T12:00:00.000Z"
               ]
             }
           }
@@ -257,7 +257,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "73aeab611cbe82524b5388c8f8db1981ef1415dbd49508f11ce6a7eb52ec00c7"
+    "storageHash": "d5cad1234972d613b97cf4c6b1469ee2273c23fc70fc8a07bc853c14ab00179b"
   },
   "capabilities": {
     "sql": {

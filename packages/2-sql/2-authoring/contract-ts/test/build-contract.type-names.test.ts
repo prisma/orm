@@ -14,12 +14,14 @@ import { documentScopedTypes } from './cross-ref-helpers';
 import { unboundTables } from './unbound-tables';
 
 const int4 = sqlDataType('t/int4', {
+  read: (json) => json,
   texts: [
     { text: 'int4', written: true },
     { text: 'integer', catalog: true },
   ],
 });
 const varchar = sqlDataType('t/varchar', {
+  read: (json) => json,
   params: type({ 'length?': 'number.integer >= 1' }),
   texts: [
     { text: 'character varying', written: true },
@@ -27,6 +29,7 @@ const varchar = sqlDataType('t/varchar', {
   ],
 });
 const enumType = sqlDataType('t/enum', {
+  read: (json) => json,
   params: type({ typeName: 'string > 0' }),
   claimsKind: 'enum',
   render: ({ typeName }) => `"${typeName}"`,

@@ -10,15 +10,9 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import {
-  type DataTypeId,
-  isNonFiniteText,
-  type ToCanonicalForm,
-} from '@internal/framework-components/codec';
+import { type DataTypeId, isNonFiniteText } from '@internal/framework-components/codec';
 import { structuredError } from '@internal/utils/structured-error';
-import { numeralText } from './numeral-text';
 
-const INTEGER_TEXT = /^-?\d+$/;
 const WRITTEN_INTEGER_TEXT = /^[+-]?\d+$/;
 const WRITTEN_DECIMAL_TEXT = /^[+-]?\d+\.\d+$/;
 const DECIMAL_NUMERAL = /^([+-]?)0*(\d+)(\.\d+)?$/;
@@ -32,29 +26,13 @@ export function isNumeralText(text: string): boolean {
  * A written numeral as the contract stores it. Leading zeros and the sign of zero never change a
  * number, so they go; trailing zeros stay, because a type without a scale keeps them.
  */
-export function canonicalNumeralText(text: string): string {
+export function storedNumeralText(text: string): string {
   const numeral = DECIMAL_NUMERAL.exec(text);
   if (numeral === null) return text;
   const [, sign = '', whole = '', fraction = ''] = numeral;
   const digits = `${whole}${fraction}`;
   return sign !== '-' || /^[0.]+$/.test(digits) ? digits : `-${digits}`;
 }
-
-/**
- * The canonical form of a 64-bit integer type: digit text. A database reads an integer default back as a number when it is a safe integer, so a safe integer reads as its digit text too; any other number may already have lost digits and is refused.
- */
-export const integerTextCanonicalForm: ToCanonicalForm = (value) => {
-  if (typeof value === 'number' && Number.isSafeInteger(value)) return numeralText(value);
-  if (typeof value === 'string' && INTEGER_TEXT.test(value)) return BigInt(value).toString();
-  throw structuredError(
-    'CONTRACT.CAST_REFUSED',
-    `Expected digit text or a safe integer, got ${JSON.stringify(value)}.`,
-    {
-      why: 'A 64-bit integer type stores its value as digit text, and a number past the safe integer range may already have lost digits.',
-      fix: 'Write the value as digit text.',
-    },
-  );
-};
 
 /** A string as a contract source writes it, with the escapes its string reader resolves. */
 export function escapePslString(value: string): string {
@@ -96,7 +74,7 @@ export interface NumberClassifierSpec {
 
 /**
  * The classifier one target's plain-number authoring entry carries: it reads the digits and says
- * which of the target's types the value is, in that type's canonical form. `undefined` means no
+ * which of the target's types the value is, in that type's stored form. `undefined` means no
  * type of this target holds the number.
  */
 export function createNumberClassifier(
@@ -113,7 +91,7 @@ export function createNumberClassifier(
       return as(spec.words, spec.words?.form === 'number' ? Number(text) : text);
     }
     if (WRITTEN_DECIMAL_TEXT.test(text)) {
-      const canonical = canonicalNumeralText(text);
+      const canonical = storedNumeralText(text);
       return as(spec.fraction, spec.fraction?.form === 'number' ? Number(canonical) : canonical);
     }
     if (!WRITTEN_INTEGER_TEXT.test(text)) return undefined;

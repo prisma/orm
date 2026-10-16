@@ -330,7 +330,7 @@
               "columns": {
                 "createdAt": {
                   "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/text",
+                  "dataType": "sqlite/datetime",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
@@ -526,7 +526,7 @@
               "columns": {
                 "createdAt": {
                   "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/text",
+                  "dataType": "sqlite/datetime",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
@@ -566,7 +566,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "c05a77e8c5dd486ddf723889af22c7e63f374689edce17c326101688d5d6d02a",
+    "storageHash": "e429c73ec99d27b790baaacc9d16734cea79a2a64169dde8b8a1dd7fcccbac57",
     "types": {
       "BigIntNumber": {
         "codecId": "sqlite/bigintnumber@1",

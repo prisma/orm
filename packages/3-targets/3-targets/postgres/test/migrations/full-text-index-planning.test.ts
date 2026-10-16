@@ -36,7 +36,6 @@ import { postgresCreateNamespace } from '../../src/core/postgres-schema';
 import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
-import { postgresRenderDefault } from '../../src/exports/control';
 import { postgresDataTypeSupport } from '../fixtures/postgres-data-type-support';
 import { postgresTypeComponents, postgresTypeLookups } from '../postgres-type-lookups';
 
@@ -204,7 +203,6 @@ describe('a single-field index authored before full-text indexes were stored as 
       contract: authoredContract(TYPED_ATTRIBUTE_SCHEMA),
       schema: contractToPostgresDatabaseSchemaNode(previous, {
         annotationNamespace: 'pg',
-        renderDefault: postgresRenderDefault,
         ...postgresTypeLookups,
       }),
       policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
@@ -242,7 +240,6 @@ describe('a weighted full-text index over a column whose nullability changes', (
       contract: after,
       schema: contractToPostgresDatabaseSchemaNode(before, {
         annotationNamespace: 'pg',
-        renderDefault: postgresRenderDefault,
         ...postgresTypeLookups,
       }),
       policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
@@ -264,7 +261,6 @@ describe('a weighted full-text index over a column whose nullability changes', (
     const expressionOf = (contract: Parameters<typeof contractToPostgresDatabaseSchemaNode>[0]) =>
       contractToPostgresDatabaseSchemaNode(contract, {
         annotationNamespace: 'pg',
-        renderDefault: postgresRenderDefault,
         ...postgresTypeLookups,
       }).namespaces['public']?.tables['Message']?.indexes[0]?.expression;
     expect(expressionOf(blindCast<typeof before, 'a Postgres contract'>(after))).toBe(
@@ -286,7 +282,6 @@ async function plannedLabels(beforeSchema: string, afterSchema: string): Promise
     contract: authoredContract(afterSchema),
     schema: contractToPostgresDatabaseSchemaNode(before, {
       annotationNamespace: 'pg',
-      renderDefault: postgresRenderDefault,
       ...postgresTypeLookups,
     }),
     policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },

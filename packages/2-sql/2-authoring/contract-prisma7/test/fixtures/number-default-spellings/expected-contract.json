@@ -227,7 +227,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "ba222ca8ddf750638d6573491f8401f729021bdafc318619de0f6932d56a40f3",
+    "storageHash": "e1f6e82af8ecbe4fe610b497a7114ff097423803d97428ad0dbb5b90d50dcda4",
     "namespaces": {
       "public": {
         "id": "public",
@@ -253,7 +253,7 @@
                   },
                   "default": {
                     "kind": "literal",
-                    "value": "7"
+                    "value": "7.000000000000000000000000000000"
                   }
                 },
                 "negativeZero": {
@@ -267,7 +267,7 @@
                   },
                   "default": {
                     "kind": "literal",
-                    "value": "0"
+                    "value": "0.000000000000000000000000000000"
                   }
                 },
                 "leadingZeroFraction": {
@@ -281,7 +281,7 @@
                   },
                   "default": {
                     "kind": "literal",
-                    "value": "0.10"
+                    "value": "0.100000000000000000000000000000"
                   }
                 },
                 "bareLeadingZeros": {

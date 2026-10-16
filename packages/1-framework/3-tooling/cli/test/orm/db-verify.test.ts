@@ -497,10 +497,10 @@ describe('db verify', () => {
       ]);
     });
 
-    describe('a contract default its data type refuses', () => {
-      const REFUSAL =
-        'The contract holds this default in a form its data type does not store: pg/timestamptz needs a UTC offset, but "2024-01-01 00:00:00" has none. Re-emit the contract, then try again.';
-      const REFUSED = schemaResult({
+    describe('a database default the column codec cannot read', () => {
+      const UNREADABLE =
+        "The column codec pg/timestamptz-temporal@1 cannot read the default the database reports, 'infinity'::timestamp with time zone: the codec refused it.";
+      const UNREAD = schemaResult({
         ok: false,
         code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED',
         summary: 'Database schema does not satisfy contract',
@@ -512,30 +512,36 @@ describe('db verify', () => {
             >({
               path: ['public', 'event', 'at', 'default'],
               expected: { id: 'default', nodeKind: 'sql-column-default' },
-              explanation: REFUSAL,
+              actual: { id: 'default', nodeKind: 'sql-column-default' },
+              explanation: UNREADABLE,
             }),
           ],
         },
       });
 
-      it('offers only re-emitting the contract', async () => {
+      it('offers the actions for any drift', async () => {
         const dir = await projectDir();
-        mocks.dbVerify.mockResolvedValue(aggregateOk({ perSpace: [['app', REFUSED]] }));
+        mocks.dbVerify.mockResolvedValue(aggregateOk({ perSpace: [['app', UNREAD]] }));
 
         const run = await harness(ormConfig()).run(['db', 'verify', '--json'], { cwd: dir });
 
         expect(diagnosticsOf(run)[0]?.nextActions).toEqual([
           {
             kind: 'run-command',
-            label: 'Re-emit the contract, which stores the refused default as its type holds it',
-            command: 'prisma-test contract emit',
+            label: 'Change the database to match the contract, then verify again',
+            command: 'prisma-test db update',
+          },
+          {
+            kind: 'user-choice',
+            label:
+              'Or change the contract source to describe the database as it is, re-run contract emit, then verify again',
           },
         ]);
       });
 
-      it('prints the refusal on the missing default', async () => {
+      it('prints the codec message on the mismatched default', async () => {
         const dir = await projectDir();
-        mocks.dbVerify.mockResolvedValue(aggregateOk({ perSpace: [['app', REFUSED]] }));
+        mocks.dbVerify.mockResolvedValue(aggregateOk({ perSpace: [['app', UNREAD]] }));
 
         const run = await harness(ormConfig()).run(['db', 'verify'], {
           cwd: dir,
@@ -543,9 +549,7 @@ describe('db verify', () => {
         });
         const shown = stripAnsi(`${run.stderr}\n${run.stdout}`);
 
-        expect(shown).toContain(`missing: public/event/at/default. ${REFUSAL}`);
-        expect(shown).toContain('contract emit');
-        expect(shown).not.toContain('db update');
+        expect(shown).toContain(`mismatch: public/event/at/default. ${UNREADABLE}`);
       });
     });
 

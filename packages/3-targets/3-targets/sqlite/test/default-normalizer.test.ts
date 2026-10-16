@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { SQLITE_NOW_EXPRESSION } from '../src/core/datetime-text';
-import { parseSqliteDefault, sqliteResolveDefault } from '../src/core/default-normalizer';
+import { readSqliteDefault, sqliteResolveDefault } from '../src/core/default-normalizer';
+
+const literal = (body: string | number) => ({
+  kind: 'literal',
+  literal: { kind: 'value', body },
+});
 
 describe('sqliteResolveDefault', () => {
-  it('a literal default passes through unchanged', () => {
-    const literal = { kind: 'literal' as const, value: 'draft' };
-    expect(sqliteResolveDefault(literal, 'text')).toBe(literal);
+  it('passes a literal default through unchanged', () => {
+    const stored = { kind: 'literal' as const, value: 'draft' };
+    expect(sqliteResolveDefault(stored, 'text')).toBe(stored);
   });
 
   it.each([
@@ -13,17 +18,17 @@ describe('sqliteResolveDefault', () => {
     ["datetime('now')"],
     ['(CURRENT_TIMESTAMP)'],
     ["strftime('%Y-%m-%dT%H:%M:%fZ','now')"],
-  ])('resolves the authored expression %j to now(), as introspection does', (expression) => {
+  ])('names the authored expression %j now(), as introspection does', (expression) => {
     expect(sqliteResolveDefault({ kind: 'function', expression }, 'text')).toEqual({
       kind: 'function',
       expression: 'now()',
     });
   });
 
-  it('resolves an authored literal-shaped expression to the literal introspection reads', () => {
+  it('keeps an expression that writes a literal as the expression', () => {
     expect(sqliteResolveDefault({ kind: 'function', expression: "'draft'" }, 'text')).toEqual({
-      kind: 'literal',
-      value: 'draft',
+      kind: 'function',
+      expression: "'draft'",
     });
   });
 
@@ -35,67 +40,60 @@ describe('sqliteResolveDefault', () => {
   });
 });
 
-describe('parseSqliteDefault on an integer column', () => {
+describe('readSqliteDefault', () => {
   it.each([
-    ['a bare integer', '7', '7'],
-    ['a quoted integer', "'7'", '7'],
-    ['an integer past the safe range', '9007199254740993', '9007199254740993'],
-    ['a negative integer in parentheses', '(-42)', '-42'],
-  ])('reads %s as digit text', (_name, raw, digits) => {
-    expect(parseSqliteDefault(raw, 'integer')).toEqual({ kind: 'literal', value: digits });
-  });
-
-  it('reads a number with a fraction as a number', () => {
-    expect(parseSqliteDefault('1.5', 'integer')).toEqual({ kind: 'literal', value: 1.5 });
-  });
-});
-
-describe('parseSqliteDefault', () => {
-  it('reads the expression a now() default is rendered as back as now()', () => {
-    expect(parseSqliteDefault(SQLITE_NOW_EXPRESSION, 'text')).toEqual({
-      kind: 'function',
-      expression: 'now()',
-    });
+    ['a quoted string on a text column', "'O''Reilly'", 'TEXT', "O'Reilly"],
+    ['a numeral on a text column, which stores its text', '42', 'TEXT', '42'],
+    ['a bare integer on an integer column', '7', 'INTEGER', 7],
+    ['a quoted integer on an integer column, which stores the number', "'7'", 'INTEGER', 7],
+    ['a negative integer in parentheses', '(-42)', 'INTEGER', -42],
+    [
+      'an integer past the safe range, as digit text',
+      '9007199254740993',
+      'INTEGER',
+      '9007199254740993',
+    ],
+    ['a fraction on a real column', '1.5', 'REAL', 1.5],
+    ['a number past the range of a double', '9e999', 'REAL', Number.POSITIVE_INFINITY],
+    ['a quoted string on a blob column, which stays text', "'7'", 'BLOB', '7'],
+    ['a date and time on a text column', "'2024-01-01T00:00:00Z'", 'TEXT', '2024-01-01T00:00:00Z'],
+  ])('takes the body out of %s', (_name, raw, declaredType, body) => {
+    expect(readSqliteDefault(raw, declaredType)).toEqual(literal(body));
   });
 
   it.each([
-    ["strftime('%Y-%m-%dT%H:%M:%fZ','now')"],
+    [SQLITE_NOW_EXPRESSION],
     ["(strftime('%Y-%m-%dT%H:%M:%fZ','now'))"],
     ["STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'NOW')"],
     ["  strftime (  '%Y-%m-%dT%H:%M:%fZ' ,\n 'now'  )  "],
     ['strftime("%Y-%m-%dT%H:%M:%fZ","now")'],
-    ['strftime("%Y-%m-%dT%H:%M:%fZ", \'now\')'],
-  ])('reads the codec-text expression %j as now()', (raw) => {
-    expect(parseSqliteDefault(raw, 'text')).toEqual({ kind: 'function', expression: 'now()' });
+    ['CURRENT_TIMESTAMP'],
+  ])('reads %j as now()', (raw) => {
+    expect(readSqliteDefault(raw, 'TEXT')).toEqual({ kind: 'function', expression: 'now()' });
+  });
+
+  it.each([
+    ["X'6869'", [0x68, 0x69]],
+    ["x'00ff'", [0x00, 0xff]],
+    ["X''", []],
+  ])('reads the blob literal %j as the bytes a blob row carries', (raw, bytes) => {
+    expect(readSqliteDefault(raw, 'BLOB')).toEqual({
+      kind: 'literal',
+      literal: { kind: 'value', body: new Uint8Array(bytes) },
+    });
   });
 
   it.each([
     ["strftime('%Y-%m-%d','now')"],
-    ["strftime('%y-%m-%dt%h:%m:%fz','now')"],
     ["strftime('%Y-%m-%dT%H:%M:%fZ','now','+1 day')"],
-    ["strftime('%Y-%m-%dT%H:%M:%fZ',\"now')"],
-  ])('keeps the other strftime expression %j as a function default', (raw) => {
-    expect(parseSqliteDefault(raw, 'text')).toEqual({ kind: 'function', expression: raw });
+    ['random()'],
+    ['CURRENT_DATE'],
+    ['CURRENT_TIME'],
+  ])('keeps %j as a function default', (raw) => {
+    expect(readSqliteDefault(raw, 'TEXT')).toEqual({ kind: 'function', expression: raw });
   });
 
-  it.each([
-    ['9e999', 'Infinity'],
-    ['-9e999', '-Infinity'],
-    ['(9e999)', 'Infinity'],
-    ['1.5e400', 'Infinity'],
-    ['-1e309', '-Infinity'],
-  ])(
-    'reads the number %j, which only an infinity holds, as the text the float codecs store',
-    (raw, value) => {
-      expect(parseSqliteDefault(raw, 'real')).toEqual({ kind: 'literal', value });
-    },
-  );
-
-  it.each([
-    ['1e5', 100000],
-    ['1.5', 1.5],
-    ['-2', -2],
-  ])('reads the number %j as the number it is', (raw, value) => {
-    expect(parseSqliteDefault(raw, 'real')).toEqual({ kind: 'literal', value });
+  it('reads NULL as SQL NULL', () => {
+    expect(readSqliteDefault('NULL', 'TEXT')).toEqual({ kind: 'null' });
   });
 });

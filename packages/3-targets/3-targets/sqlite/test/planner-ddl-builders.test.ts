@@ -5,7 +5,6 @@ import {
   buildCreateIndexSql,
   buildDropIndexSql,
   isInlineAutoincrementPrimaryKey,
-  renderDefaultLiteral,
 } from '../src/core/migrations/planner-ddl-builders';
 import { sqliteTestTypes } from './sqlite-test-types';
 
@@ -59,33 +58,6 @@ describe('buildColumnTypeSql', () => {
       },
     });
     expect(sql).toBe('TEXT');
-  });
-});
-
-describe('renderDefaultLiteral', () => {
-  it('renders Date as ISO8601 string', () => {
-    const d = new Date('2024-01-15T10:30:00.000Z');
-    expect(renderDefaultLiteral(d)).toBe("'2024-01-15T10:30:00.000Z'");
-  });
-
-  it('renders JSON objects', () => {
-    expect(renderDefaultLiteral({ key: 'val' })).toBe('\'{"key":"val"}\'');
-  });
-
-  it.each([
-    ['digit text', '7', '7'],
-    ['negative digit text', '-42', '-42'],
-    ['digit text past the safe range', '9007199254740993', '9007199254740993'],
-  ])('renders an integer column’s %s as an integer', (_name, value, sql) => {
-    expect(
-      renderDefaultLiteral(value, { codecId: 'sqlite/integer@1', dataType: 'sqlite/integer' }),
-    ).toBe(sql);
-  });
-
-  it('renders digit text on a text column as text', () => {
-    expect(renderDefaultLiteral('7', { codecId: 'sqlite/text@1', dataType: 'sqlite/text' })).toBe(
-      "'7'",
-    );
   });
 });
 

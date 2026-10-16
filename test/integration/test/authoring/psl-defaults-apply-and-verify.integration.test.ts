@@ -233,7 +233,7 @@ describe('a TypeScript numeric or inet default in a spelling Postgres prints dif
 
 describe('a Char default with trailing spaces or a trailing tab', () => {
   it(
-    'is stored and applied as written, then verifies with no issue and plans no change',
+    'is stored without the spaces that pad it and with its tab, then verifies with no issue and plans no change',
     async () => {
       expect(
         await applyAndVerify(
@@ -248,7 +248,7 @@ model Tag {
         ),
       ).toEqual({
         defaults: [
-          { kind: 'literal', value: 'a  ' },
+          { kind: 'literal', value: 'a' },
           { kind: 'literal', value: 'a\t' },
         ],
         applied: true,

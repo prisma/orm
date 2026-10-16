@@ -2,31 +2,19 @@
  * Database-backed conformance harness for PostgreSQL codec JSON projections.
  *
  * For one codec descriptor and one representative application value the harness
- * encodes the value through the codec, stores it in a column of the codec's
- * native type, projects the stored column through `descriptor.projectJson()`,
- * renders the projection inside a JSON constructor, executes it, and parses the
- * JSON text the database produced.
+ * writes the value through the codec's `toWire`, stores it in a column of the
+ * codec's native type, and reads the column back twice: as an ordinary row, and
+ * through `descriptor.projectJson()` inside a JSON constructor, the way an
+ * `include` reads it.
  *
- * A projection conforms when both of these hold:
+ * A projection conforms when the codec's `fromWire` reads the projected value to
+ * the same application value it reads the ordinary row's value to (ADR 254,
+ * "Rows the database returns as JSON"), and that value is the one the case
+ * started from. The row is compared with the case's value by the case's `valueEquality` when it has
+ * one, and the projection with the row by its `projectionEquality`, or exactly.
  *
- * 1. the parsed value, in the canonical form of the codec's data type when the
- *    type declares one (ADR 254), deep-equals `codec.encodeJson(value)` — the
- *    codec's current `encodeJson` is the yardstick and the projection is its SQL
- *    realization; and
- * 2. `codec.decodeJson` turns the parsed value back into the application value
- *    the case started from.
- *
- * Both conditions are measured against the codec's methods as they stand.
- * Conformance is therefore agreement with today's `encodeJson` / `decodeJson`,
- * not a claim that either is already in its final form: a codec that still owes
- * a change to its own JSON representation conforms here until that change
- * lands.
- *
- * The second condition is what makes the harness an oracle rather than a
- * tautology: a codec whose `encodeJson` loses information the same way the
- * database's native JSON conversion does satisfies condition 1 while still
- * failing to carry the value. Arbitrary-precision `numeric` is exactly that
- * case.
+ * For every case the harness also checks that `toDataTypeValue(fromDataTypeValue(v))`
+ * equals `v`, where `v` is the value `toDataTypeValue` gives for the case.
  *
  * `projectJson()` is called directly rather than reached through a
  * query-planning or rendering path, which is what lets the harness measure
@@ -36,7 +24,7 @@
  * assertion style and case enumeration stay with the caller.
  */
 
-import { isDeepStrictEqual } from 'node:util';
+import { inspect, isDeepStrictEqual } from 'node:util';
 import { postgresAdapterCapabilities } from '@internal/adapter-postgres/adapter';
 import { renderLoweredSql } from '@internal/adapter-postgres/sql-renderer';
 import type { PostgresContract } from '@internal/adapter-postgres/types';
@@ -46,12 +34,14 @@ import type { JsonValue } from '@internal/contract/types';
 import { UNBOUND_DOMAIN_NAMESPACE_ID } from '@internal/contract/types';
 import type { CodecRef } from '@internal/framework-components/codec';
 import {
-  canonicalFormOf,
   createDataTypeLookup,
   type DataType,
+  type DataTypeValue,
+  dataTypeParams,
+  dataTypeValuesEqual,
   validateCodecTypeParams,
 } from '@internal/framework-components/codec';
-import { dataTypeParams, sqlBaseName, sqlDataTypeOfCodec } from '@internal/sql-contract/data-type';
+import { sqlBaseName, sqlDataTypeOfCodec } from '@internal/sql-contract/data-type';
 import { SqlStorage } from '@internal/sql-contract/types';
 import {
   CastExpr,
@@ -60,10 +50,14 @@ import {
   NativeJsonValueProjection,
   ProjectionItem,
   SelectAst,
+  type SqlCodecCallContext,
   TableSource,
 } from '@internal/sql-relational-core/ast';
 import type { AnyPostgresCodecDescriptor } from '@internal/target-postgres/codec-descriptor';
-import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
+import {
+  parsePostgresListText,
+  postgresCodecDescriptorRegistry,
+} from '@internal/target-postgres/codecs';
 import {
   createPostgresBuiltinDataTypeLookup,
   postgresDataTypes,
@@ -73,29 +67,34 @@ import { structuredError } from '@internal/utils/structured-error';
 
 /**
  * Minimal execution surface the harness needs from a live database. A caller
- * adapts whichever client it already owns.
+ * adapts whichever client it already owns, as long as each row carries its
+ * values as the runtime driver returns them: the wire values `fromWire` reads,
+ * PostgreSQL's text for every type.
  */
 export interface ConformanceConnection {
   query(sql: string, params?: readonly unknown[]): Promise<ReadonlyArray<Record<string, unknown>>>;
 }
 
 /**
- * How a projection can disagree with its codec's current `encodeJson` /
- * `decodeJson`. The kinds are materially different — a projection whose SQL
+ * How a case can fail. The kinds are materially different — a projection whose SQL
  * will not execute and one that merely rounds a digit are not the same defect —
  * so a case that records one kind is not satisfied by another.
  */
 export type ProjectionFailureKind =
   /** The projection SQL did not execute. */
   | 'execution'
-  /** `encodeJson` refused the application value. */
-  | 'encode-json-rejects'
-  /** The parsed value disagrees with `encodeJson`. */
-  | 'mismatch'
-  /** `decodeJson` refused the projected value. */
-  | 'decode-json-rejects'
-  /** The parsed value agrees with `encodeJson` but does not carry the application value back. */
-  | 'lossy-round-trip';
+  /** `toDataTypeValue` refused the application value. */
+  | 'to-data-type-value-rejects'
+  /** `toDataTypeValue(fromDataTypeValue(v))` is not `v`. */
+  | 'value-round-trip'
+  /** `fromWire` refused the ordinary row's value. */
+  | 'row-from-wire-rejects'
+  /** `fromWire` of the ordinary row's value is not the application value the case wrote. */
+  | 'lossy-round-trip'
+  /** `fromWire` refused the projected value. */
+  | 'projection-from-wire-rejects'
+  /** `fromWire` reads the projected value to another application value than the ordinary row's, or a NULL column projected as a value. */
+  | 'mismatch';
 
 export interface ProjectionFailure {
   readonly kind: ProjectionFailureKind;
@@ -124,7 +123,7 @@ export interface PostgresCodecConformanceCase {
   readonly columnType?: string;
   /** Identifies the value under test within its codec's cases. */
   readonly label: string;
-  /** Application-level value handed to `codec.encode` and `codec.encodeJson`. */
+  /** Application-level value handed to `codec.toWire` and `codec.toDataTypeValue`. */
   readonly value: unknown;
   /** Codec type params, for parameterized codecs. */
   readonly typeParams?: JsonValue;
@@ -146,19 +145,21 @@ export interface PostgresCodecConformanceCase {
    * in the column, which is a different thing from the column being empty. A
    * mode is the only shape that expresses the column state for every codec.
    *
-   * The runtime never calls `decodeJson` for a null (`collection-dispatch`
+   * The runtime never reads a null as a value of the column's type (`collection-dispatch`
    * short-circuits it), so neither does the harness; what a null case measures
    * is that the projection carries absence through as absence.
    */
   readonly nullValue?: true;
   /**
-   * How this case's projection currently disagrees with the codec's
-   * `encodeJson` / `decodeJson`, when it does. The suite asserts that a marked
+   * How this case currently fails, when it does. The suite asserts that a marked
    * case still fails *and still fails this way*, so neither the marker nor its
    * recorded kind can rot as projections change.
    */
   readonly notYetCanonical?: ExpectedProjectionFailure;
-  readonly valueEquality?: (roundTripped: unknown, value: unknown) => boolean;
+  /** Compares the application value the row reads to with the case's value, for a value that is not deep-equal to its copy. */
+  readonly valueEquality?: (left: unknown, right: unknown) => boolean;
+  /** Compares the application value the projection reads to with the row's, for a value that is not deep-equal to its copy. The comparison is otherwise exact. */
+  readonly projectionEquality?: (left: unknown, right: unknown) => boolean;
 }
 
 export interface CodecProjectionOutcome {
@@ -168,12 +169,9 @@ export interface CodecProjectionOutcome {
   readonly rawJson: string | undefined;
   /** The projected value parsed out of that document. */
   readonly projected: JsonValue | undefined;
-  /** What `codec.encodeJson` specifies the projected value must equal. */
-  readonly expected: JsonValue | undefined;
-  /**
-   * How the projection disagreed with the codec's current `encodeJson` /
-   * `decodeJson`, or `undefined` when it agreed and the value round-tripped.
-   */
+  /** The value the ordinary row carried, as the connection returned it. */
+  readonly rowWire: unknown;
+  /** How the case failed, or `undefined` when it conforms. */
   readonly failure: ProjectionFailure | undefined;
 }
 
@@ -301,10 +299,14 @@ export function buildProjectionSql(conformanceCase: PostgresCodecConformanceCase
   ).sql;
 }
 
+const CALL_CONTEXT: SqlCodecCallContext = { column: { table: STORAGE_TABLE, name: VALUE_COLUMN } };
+
 type ElementCodec = {
-  encode(value: unknown, ctx: Record<string, never>): Promise<unknown>;
-  encodeJson(value: unknown): JsonValue;
-  decodeJson(json: JsonValue): unknown;
+  readonly dataType: DataType;
+  toWire(value: unknown, ctx: Record<string, never>): Promise<unknown>;
+  fromWire(wire: unknown, ctx: SqlCodecCallContext): Promise<unknown>;
+  toDataTypeValue(value: unknown): DataTypeValue;
+  fromDataTypeValue(value: DataTypeValue): unknown;
 };
 
 /** Maps `mapper` over an array case's elements, leaving nulls alone; a null array stays null. */
@@ -324,53 +326,56 @@ async function encodeValue(
   codec: ElementCodec,
   conformanceCase: PostgresCodecConformanceCase,
 ): Promise<unknown> {
-  if (conformanceCase.many !== true) return codec.encode(conformanceCase.value, {});
+  if (conformanceCase.many !== true) return codec.toWire(conformanceCase.value, {});
   if (conformanceCase.value === null) return null;
   const elements = overElements(conformanceCase.value, (element) => element) ?? [];
   return Promise.all(
     elements.map(async (element) =>
-      element === null ? null : toDriverParam(await codec.encode(element, {})),
+      element === null ? null : toDriverParam(await codec.toWire(element, {})),
     ),
   );
 }
 
-function expectedJson(
+/** The case's values that `toDataTypeValue(fromDataTypeValue(v))` does not give back, as text for a report. */
+function valuesNotRoundTripped(
   codec: ElementCodec,
   conformanceCase: PostgresCodecConformanceCase,
-): JsonValue {
-  if (conformanceCase.many !== true) return codec.encodeJson(conformanceCase.value);
-  return overElements(conformanceCase.value, (element) =>
-    element === null ? null : codec.encodeJson(element),
-  );
+): readonly string[] {
+  const elements =
+    conformanceCase.many === true
+      ? (overElements(conformanceCase.value, (element) => element) ?? [])
+      : [conformanceCase.value];
+  return elements.flatMap((element) => {
+    if (element === null && conformanceCase.many === true) return [];
+    const value = codec.toDataTypeValue(element);
+    const again = codec.toDataTypeValue(codec.fromDataTypeValue(value));
+    return dataTypeValuesEqual(again, value)
+      ? []
+      : [`${JSON.stringify(value.value)} came back as ${JSON.stringify(again.value)}`];
+  });
 }
 
 /**
- * The projected value in the canonical form of the codec's values, element by element for an
- * array case, so that PostgreSQL's text and `encodeJson` compare as values, not as spellings.
+ * Reads a wire value with `fromWire`, element by element for an array case. `elements` gives the
+ * elements of an array value: the ordinary row carries PostgreSQL's array text, the projection a
+ * JSON array.
  */
-function projectedInCanonicalForm(
-  projected: JsonValue,
-  descriptor: AnyPostgresCodecDescriptor,
-  conformanceCase: PostgresCodecConformanceCase,
-): JsonValue {
-  const toCanonicalForm = canonicalFormOf(descriptor, {
-    get: (id) =>
-      postgresDataTypeLookup.get(id) ??
-      (conformanceCase.dataType?.id === id ? conformanceCase.dataType : undefined),
-  });
-  if (toCanonicalForm === undefined) return projected;
-  if (conformanceCase.many !== true) return toCanonicalForm(projected);
-  if (!Array.isArray(projected)) return projected;
-  return projected.map((element) => (element === null ? null : toCanonicalForm(element)));
-}
-
-function roundTripValue(
+async function readWire(
   codec: ElementCodec,
   conformanceCase: PostgresCodecConformanceCase,
-  projected: JsonValue,
-): unknown {
-  if (conformanceCase.many !== true) return codec.decodeJson(projected);
-  if (projected === null) return null;
+  wire: unknown,
+  elements: (wire: unknown) => readonly unknown[],
+): Promise<unknown> {
+  if (conformanceCase.many !== true) return codec.fromWire(wire, CALL_CONTEXT);
+  if (wire === null) return null;
+  return Promise.all(
+    elements(wire).map((element) =>
+      element === null ? null : codec.fromWire(element, CALL_CONTEXT),
+    ),
+  );
+}
+
+function projectedElements(projected: unknown): readonly unknown[] {
   if (!Array.isArray(projected)) {
     throw structuredError(
       'TESTKIT.PROJECTION_MALFORMED',
@@ -378,7 +383,15 @@ function roundTripValue(
       { why: 'The projected JSON does not have the shape the codec descriptor declares.' },
     );
   }
-  return projected.map((element) => (element === null ? null : codec.decodeJson(element)));
+  return projected;
+}
+
+function valuesAgree(
+  equality: ((left: unknown, right: unknown) => boolean) | undefined,
+  left: unknown,
+  right: unknown,
+): boolean {
+  return equality === undefined ? isDeepStrictEqual(left, right) : equality(left, right);
 }
 
 export async function runPostgresCodecProjection(
@@ -411,6 +424,8 @@ export async function runPostgresCodecProjection(
     ]);
   }
 
+  const [row] = await connection.query(`SELECT "${VALUE_COLUMN}" FROM "${STORAGE_TABLE}"`);
+  const rowWire = row?.[VALUE_COLUMN];
   const sql = buildProjectionSql(conformanceCase);
 
   let rawJson: string;
@@ -422,7 +437,7 @@ export async function runPostgresCodecProjection(
       sql,
       rawJson: undefined,
       projected: undefined,
-      expected: undefined,
+      rowWire,
       failure: {
         kind: 'execution',
         detail: `the projection failed to execute: ${describeError(error)}`,
@@ -440,12 +455,13 @@ export async function runPostgresCodecProjection(
     );
   }
 
+  const base = { sql, rawJson, projected, rowWire } as const;
+
   if (conformanceCase.nullValue === true) {
-    const nullBase = { sql, rawJson, projected, expected: null } as const;
     return projected === null
-      ? { ...nullBase, failure: undefined }
+      ? { ...base, failure: undefined }
       : {
-          ...nullBase,
+          ...base,
           failure: {
             kind: 'mismatch',
             detail: `a NULL column projected as ${JSON.stringify(projected)} rather than null`,
@@ -453,70 +469,68 @@ export async function runPostgresCodecProjection(
         };
   }
 
-  let expected: JsonValue;
+  let notRoundTripped: readonly string[];
   try {
-    expected = expectedJson(codec, conformanceCase);
-  } catch (error) {
-    return {
-      sql,
-      rawJson,
-      projected,
-      expected: undefined,
-      failure: {
-        kind: 'encode-json-rejects',
-        detail: `encodeJson rejects the value: ${describeError(error)}`,
-      },
-    };
-  }
-
-  const base = { sql, rawJson, projected, expected } as const;
-
-  let canonical: JsonValue;
-  try {
-    canonical = projectedInCanonicalForm(projected, descriptor, conformanceCase);
+    notRoundTripped = valuesNotRoundTripped(codec, conformanceCase);
   } catch (error) {
     return {
       ...base,
       failure: {
-        kind: 'mismatch',
-        detail: `the data type ${descriptor.dataType} refuses the projected ${JSON.stringify(projected)}: ${describeError(error)}`,
+        kind: 'to-data-type-value-rejects',
+        detail: `toDataTypeValue rejects the value: ${describeError(error)}`,
       },
     };
   }
-  if (!isDeepStrictEqual(canonical, expected)) {
+  if (notRoundTripped.length > 0) {
     return {
       ...base,
       failure: {
-        kind: 'mismatch',
-        detail: `projected ${JSON.stringify(projected)} but encodeJson specifies ${JSON.stringify(expected)}`,
+        kind: 'value-round-trip',
+        detail: `toDataTypeValue(fromDataTypeValue(v)) is not v: ${notRoundTripped.join('; ')}`,
       },
     };
   }
 
-  let roundTripped: unknown;
+  let fromRow: unknown;
   try {
-    roundTripped = roundTripValue(codec, conformanceCase, projected);
+    fromRow = await readWire(codec, conformanceCase, rowWire, parsePostgresListText);
   } catch (error) {
     return {
       ...base,
       failure: {
-        kind: 'decode-json-rejects',
-        detail: `decodeJson rejects the projected value: ${describeError(error)}`,
+        kind: 'row-from-wire-rejects',
+        detail: `fromWire rejects the row's ${inspect(rowWire)}: ${describeError(error)}`,
       },
     };
   }
-
-  const roundTripAgrees =
-    conformanceCase.valueEquality === undefined
-      ? isDeepStrictEqual(roundTripped, conformanceCase.value)
-      : conformanceCase.valueEquality(roundTripped, conformanceCase.value);
-
-  if (!roundTripAgrees) {
+  if (!valuesAgree(conformanceCase.valueEquality, fromRow, conformanceCase.value)) {
     return {
       ...base,
       failure: {
         kind: 'lossy-round-trip',
-        detail: `the projection loses information: decodeJson returned ${String(roundTripped)} for an application value of ${String(conformanceCase.value)}`,
+        detail: `fromWire read the row's ${inspect(rowWire)} as ${inspect(fromRow)} for an application value of ${inspect(conformanceCase.value)}`,
+      },
+    };
+  }
+
+  let fromProjection: unknown;
+  try {
+    fromProjection = await readWire(codec, conformanceCase, projected, projectedElements);
+  } catch (error) {
+    return {
+      ...base,
+      failure: {
+        kind: 'projection-from-wire-rejects',
+        detail: `fromWire rejects the projected ${inspect(projected)}: ${describeError(error)}`,
+      },
+    };
+  }
+  if (!valuesAgree(conformanceCase.projectionEquality, fromProjection, fromRow)) {
+    return {
+      ...base,
+      failure: {
+        kind: 'mismatch',
+        detail: `fromWire read the projected ${inspect(projected)} as ${inspect(fromProjection)} and the row's ${inspect(rowWire)} as ${inspect(fromRow)}`,
       },
     };
   }

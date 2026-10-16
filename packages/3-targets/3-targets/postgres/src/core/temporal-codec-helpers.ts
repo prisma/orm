@@ -1,3 +1,4 @@
+import { refuseJsonValue } from '@internal/framework-components/codec';
 import {
   PG_DATE_TEMPORAL_CODEC_ID,
   PG_TIME_TEMPORAL_CODEC_ID,
@@ -9,34 +10,10 @@ import {
   errorTemporalUnrepresentable,
   errorTemporalWrongType,
 } from './errors';
+import { isoYearText, postgresYearText } from './postgres-year-text';
 import { requireTemporal, type TemporalImplementation } from './require-temporal';
 
 const POSTGRES_TEMPORAL_SENTINELS: ReadonlySet<string> = new Set(['infinity', '-infinity']);
-
-const EXPANDED_YEAR_DIGITS = 6;
-const ORDINARY_YEAR_DIGITS = 4;
-const BC_SUFFIX = ' BC';
-
-function adaptPostgresEra(text: string): string {
-  const isBc = text.endsWith(BC_SUFFIX);
-  const body = isBc ? text.slice(0, -BC_SUFFIX.length) : text;
-  const yearEnd = body.indexOf('-');
-  if (yearEnd <= 0) {
-    return text;
-  }
-  const yearText = body.slice(0, yearEnd);
-  if (!isBc && yearText.length <= ORDINARY_YEAR_DIGITS) {
-    return text;
-  }
-  const year = Number(yearText);
-  if (!Number.isInteger(year)) {
-    return text;
-  }
-  const proleptic = isBc ? 1 - year : year;
-  const sign = proleptic < 0 ? '-' : '+';
-  const digits = String(Math.abs(proleptic)).padStart(EXPANDED_YEAR_DIGITS, '0');
-  return `${sign}${digits}${body.slice(yearEnd)}`;
-}
 
 interface TemporalCodecIdentity {
   readonly codecId: string;
@@ -48,7 +25,6 @@ function decodeTemporalText<T>(
   identity: TemporalCodecIdentity,
   wire: string,
   parse: (temporal: TemporalImplementation, text: string) => T,
-  adapt: (text: string) => string,
 ): T {
   const temporal = requireTemporal({ codecId: identity.codecId, operation: 'decode' });
   if (POSTGRES_TEMPORAL_SENTINELS.has(wire)) {
@@ -60,7 +36,7 @@ function decodeTemporalText<T>(
     });
   }
   try {
-    return parse(temporal, adapt(wire));
+    return parse(temporal, isoYearText(wire));
   } catch (cause) {
     throw errorTemporalUnrepresentable({
       ...identity,
@@ -91,7 +67,7 @@ function encodeTemporalValue(
   if (value.calendarId !== undefined && value.calendarId !== 'iso8601') {
     throw errorTemporalNonIsoCalendar(identity.codecId, value.calendarId);
   }
-  return value.toString();
+  return postgresYearText(value.toString());
 }
 
 function describeEncodeInput(value: unknown, tag: unknown): string {
@@ -105,6 +81,17 @@ function describeEncodeInput(value: unknown, tag: unknown): string {
     return 'null';
   }
   return `a ${typeof value}`;
+}
+
+/** Refuses `infinity` and `-infinity` in a stored value, which no Temporal value or `Date` holds, naming the text codec of the type that does. */
+export function refuseInfinity(
+  codecId: string,
+  holds: string,
+  textCodecId: string,
+  text: string,
+): void {
+  if (!POSTGRES_TEMPORAL_SENTINELS.has(text)) return;
+  refuseJsonValue(codecId, `${holds}, not infinity or -infinity, which ${textCodecId} holds`, text);
 }
 
 const DATE_TEMPORAL: TemporalCodecIdentity = {
@@ -128,48 +115,28 @@ const TIME_TEMPORAL: TemporalCodecIdentity = {
   temporalTag: 'Temporal.PlainTime',
 };
 
-const unadapted = (text: string): string => text;
-
 export const pgDateTemporalDecode = (wire: string): Temporal.PlainDate =>
-  decodeTemporalText(
-    DATE_TEMPORAL,
-    wire,
-    (temporal, text) => temporal.PlainDate.from(text),
-    adaptPostgresEra,
-  );
+  decodeTemporalText(DATE_TEMPORAL, wire, (temporal, text) => temporal.PlainDate.from(text));
 
 export const pgDateTemporalEncode = (value: Temporal.PlainDate): string =>
   encodeTemporalValue(DATE_TEMPORAL, value);
 
 export const pgTimestampTemporalDecode = (wire: string): Temporal.PlainDateTime =>
-  decodeTemporalText(
-    TIMESTAMP_TEMPORAL,
-    wire,
-    (temporal, text) => temporal.PlainDateTime.from(text),
-    adaptPostgresEra,
+  decodeTemporalText(TIMESTAMP_TEMPORAL, wire, (temporal, text) =>
+    temporal.PlainDateTime.from(text),
   );
 
 export const pgTimestampTemporalEncode = (value: Temporal.PlainDateTime): string =>
   encodeTemporalValue(TIMESTAMP_TEMPORAL, value);
 
 export const pgTimestamptzTemporalDecode = (wire: string): Temporal.Instant =>
-  decodeTemporalText(
-    TIMESTAMPTZ_TEMPORAL,
-    wire,
-    (temporal, text) => temporal.Instant.from(text),
-    adaptPostgresEra,
-  );
+  decodeTemporalText(TIMESTAMPTZ_TEMPORAL, wire, (temporal, text) => temporal.Instant.from(text));
 
 export const pgTimestamptzTemporalEncode = (value: Temporal.Instant): string =>
   encodeTemporalValue(TIMESTAMPTZ_TEMPORAL, value);
 
 export const pgTimeTemporalDecode = (wire: string): Temporal.PlainTime =>
-  decodeTemporalText(
-    TIME_TEMPORAL,
-    wire,
-    (temporal, text) => temporal.PlainTime.from(text),
-    unadapted,
-  );
+  decodeTemporalText(TIME_TEMPORAL, wire, (temporal, text) => temporal.PlainTime.from(text));
 
 export const pgTimeTemporalEncode = (value: Temporal.PlainTime): string =>
   encodeTemporalValue(TIME_TEMPORAL, value);
@@ -185,11 +152,8 @@ function utcText(value: Date, codecId: string, zone: '' | 'Z'): string {
       `${codecId} writes a Date as UTC text and needs a valid Date on or after 4714-11-24 BC, the earliest timestamp PostgreSQL holds; got ${String(value)}`,
     );
   }
-  const year = value.getUTCFullYear();
   const iso = value.toISOString();
-  const monthOnward = iso.slice(iso.indexOf('-', 1), -1);
-  const yearText = String(year <= 0 ? 1 - year : year).padStart(ORDINARY_YEAR_DIGITS, '0');
-  return `${yearText}${monthOnward}${zone}${year <= 0 ? BC_SUFFIX : ''}`;
+  return postgresYearText(zone === 'Z' ? iso : iso.slice(0, -1));
 }
 
 export const utcTimestampText = (value: Date, codecId: string): string =>

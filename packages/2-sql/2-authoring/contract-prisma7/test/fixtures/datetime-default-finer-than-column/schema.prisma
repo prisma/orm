@@ -1,0 +1,15 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model M {
+  id      Int        @id
+  plain   DateTime   @default("2024-01-02T03:04:05.1234Z")
+  micro   DateTime   @default("2024-01-02T03:04:05.1234565Z") @db.Timestamptz(6)
+  carried DateTime   @default("2024-12-31T23:59:59.9995Z") @db.Timestamptz(3)
+  early   DateTime   @default("1999-12-31T23:59:59.9995Z")
+  whole   DateTime   @default("2024-01-02T03:04:05.5+02:00") @db.Time(0)
+  list    DateTime[] @default(["2024-01-01T00:00:00Z", "2024-01-02T03:04:05.1235Z"])
+  held    DateTime   @default("2024-01-02T03:04:05.123Z")
+  day     DateTime   @default("2024-01-02T03:04:05.1234Z") @db.Date
+}

@@ -142,11 +142,11 @@ const rows: readonly Row[] = [
     fieldName: 'plan',
   },
   {
-    kind: 'canonical literal default',
+    kind: 'literal default in its stored form',
     definition: definitionOf([
       user(
         field('plan', 'pg/text@1', {
-          default: { kind: 'literal', value: 'free', canonical: true },
+          default: { kind: 'literal', value: 'free', inStoredForm: true },
         }),
       ),
     ]),

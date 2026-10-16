@@ -1,5 +1,6 @@
 import postgresAdapter from '@internal/adapter-postgres/control';
 import sqliteAdapter from '@internal/adapter-sqlite/control';
+import type { JsonValue } from '@internal/contract/types';
 import sql from '@internal/family-sql/control';
 import { dataTypeId } from '@internal/framework-components/codec';
 import {
@@ -86,6 +87,8 @@ describe.each([
     fraction: 'sqlite/real',
   },
 ])('dataTypeValue on the assembled $name stack', ({ stack, integer, canonicalEight, fraction }) => {
+  const typedValue = (type: string, json: JsonValue) =>
+    stack.dataTypes.lookup.get(type)?.fromContract(json, {});
   const read = (type: string, source: string) => {
     const { argument, ctx } = parseArgument(source);
     return dataTypeValue(dataTypeId(type), stack.dataTypes).parse(argument, ctx);
@@ -93,7 +96,7 @@ describe.each([
 
   it('takes a number for the integer type', () => {
     expect(read(integer, '8')).toEqual(
-      ok({ type: integer, value: canonicalEight, span: span('8') }),
+      ok({ value: typedValue(integer, canonicalEight), span: span('8') }),
     );
   });
 
@@ -133,7 +136,7 @@ describe.each([
 
   it('takes a sql literal for sql/expression', () => {
     expect(read('sql/expression', 'sql`x`')).toEqual(
-      ok({ type: 'sql/expression', value: 'x', span: span('sql`x`') }),
+      ok({ value: typedValue('sql/expression', 'x'), span: span('sql`x`') }),
     );
   });
 });

@@ -45,8 +45,8 @@ function makeVectorDescriptor(): RuntimeParameterizedCodecDescriptor<VectorParam
     factory: (params) => (ctx) => {
       const codec = defineTestCodec({
         typeId: 'pg/vector@1',
-        encode: (v: number[]) => v,
-        decode: (w: number[]) => w,
+        toWire: (v: number[]) => v,
+        fromWire: (w: number[]) => w,
       });
       return Object.assign({}, codec, { meta: { length: params.length, name: ctx.name } }) as Codec;
     },
@@ -63,8 +63,8 @@ function makeScalarDescriptor(): CodecDescriptor {
     factory: () => () =>
       defineTestCodec({
         typeId: 'test/scalar@1',
-        encode: (v: string) => v,
-        decode: (w: string) => w,
+        toWire: (v: string) => v,
+        fromWire: (w: string) => w,
       }),
   };
 }
@@ -151,8 +151,8 @@ describe('createAstCodecResolver', () => {
       factory: (_params) => (_ctx) =>
         defineTestCodec({
           typeId: 'async/vector@1',
-          encode: (v: number[]) => v,
-          decode: (w: number[]) => w,
+          toWire: (v: number[]) => v,
+          fromWire: (w: number[]) => w,
         }),
     };
     const resolver = createAstCodecResolver(

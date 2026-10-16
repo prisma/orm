@@ -1,11 +1,12 @@
-import type { JsonValue } from '@internal/contract/types';
 import {
   type CodecCallContext,
-  type CodecDescriptor,
   CodecDescriptorImpl,
+  type CodecDescriptorTemplate,
   CodecImpl,
   type CodecInstanceContext,
   type CodecTrait,
+  type DataType,
+  type DataTypeValue,
   dataType,
   dataTypeId,
 } from '@internal/framework-components/codec';
@@ -22,6 +23,8 @@ interface VectorParams {
   readonly length: number;
 }
 
+const fixtureType = dataType('demo/fixture', { read: (json) => json });
+
 const vectorParamsSchema: StandardSchemaV1<VectorParams> = {
   '~standard': {
     version: 1,
@@ -37,26 +40,27 @@ class VectorCodec<N extends number> extends CodecImpl<
   ReadonlyArray<number>
 > {
   constructor(
-    descriptor: CodecDescriptor<VectorParams>,
+    descriptor: CodecDescriptorTemplate<VectorParams>,
+    dataType: DataType,
     readonly length: N,
   ) {
-    super(descriptor);
+    super(descriptor, dataType);
   }
 
-  async encode(value: ReadonlyArray<number>, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: ReadonlyArray<number>, _ctx: CodecCallContext): Promise<string> {
     return `[${value.join(',')}]`;
   }
 
-  async decode(wire: string, _ctx: CodecCallContext): Promise<ReadonlyArray<number>> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<ReadonlyArray<number>> {
     return wire.slice(1, -1).split(',').map(Number);
   }
 
-  encodeJson(value: ReadonlyArray<number>): JsonValue {
-    return [...value];
+  toDataTypeValue(value: ReadonlyArray<number>): DataTypeValue {
+    return this.dataTypeValueOf([...value]);
   }
 
-  decodeJson(json: JsonValue): ReadonlyArray<number> {
-    return json as unknown as ReadonlyArray<number>;
+  fromDataTypeValue(value: DataTypeValue): ReadonlyArray<number> {
+    return value.value as unknown as ReadonlyArray<number>;
   }
 }
 
@@ -74,7 +78,7 @@ class GenericVectorDescriptor extends CodecDescriptorImpl<VectorParams> {
   override factory<N extends number>(params: {
     readonly length: N;
   }): (ctx: CodecInstanceContext) => VectorCodec<N> {
-    return () => new VectorCodec(this, params.length);
+    return () => new VectorCodec(this, fixtureType, params.length);
   }
 }
 
@@ -94,14 +98,15 @@ class DirectVectorDescriptor extends SqliteCodecDescriptor<VectorParams> {
   override factory<N extends number>(params: {
     readonly length: N;
   }): (ctx: CodecInstanceContext) => VectorCodec<N> {
-    return () => new VectorCodec(this, params.length);
+    return () => new VectorCodec(this, fixtureType, params.length);
   }
 }
 
 const genericDescriptor = new GenericVectorDescriptor();
 const directDescriptor = new DirectVectorDescriptor();
 const adaptedDescriptor = sqliteCodec(genericDescriptor, {
-  dataType: dataType('demo/fixture', {}),
+  dataType: fixtureType,
+  factory: (descriptor, type, params) => () => new VectorCodec(descriptor, type, params.length),
   jsonProjection(expression, params) {
     expectTypeOf(expression).toEqualTypeOf<ProjectionExpr>();
     expectTypeOf(params).toEqualTypeOf<VectorParams>();
@@ -159,7 +164,7 @@ class MissingJsonProjection extends SqliteCodecDescriptor<VectorParams> {
   override readonly traits: readonly CodecTrait[] = [];
   override readonly paramsSchema = vectorParamsSchema;
   override factory(): (ctx: CodecInstanceContext) => VectorCodec<number> {
-    return () => new VectorCodec(this, 1);
+    return () => new VectorCodec(this, fixtureType, 1);
   }
 }
 

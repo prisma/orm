@@ -315,6 +315,7 @@ describe('createComposedAuthoringHelpers', () => {
 
   describe('type helpers read the codec’s data type', () => {
     const varchar = sqlDataType('t/varchar', {
+      read: (json) => json,
       params: type({ 'length?': 'number.integer >= 1 & number.integer <= 10485760' }),
       texts: [
         { text: 'character varying', written: true },

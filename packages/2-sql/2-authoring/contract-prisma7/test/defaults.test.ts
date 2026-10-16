@@ -13,7 +13,7 @@ import {
 } from './support';
 
 describe('DateTime string defaults', () => {
-  it('carry the default Postgres stores for each native type, not the text Prisma 7 writes', async () => {
+  it('store the value Postgres stores for each native type, read through the type tag', async () => {
     const { columns } = await loadFixtureTable('datetime-defaults', 'Scalars');
     const expressionOf = (column: string) => columns[column]?.['default'];
     expect({
@@ -23,17 +23,17 @@ describe('DateTime string defaults', () => {
       tMs: expressionOf('tMs'),
       ttzPlus: expressionOf('ttzPlus'),
     }).toEqual({
-      tsPlus: { kind: 'function', expression: "'2024-01-02 03:04:05'" },
-      tzPlus: { kind: 'function', expression: "'2024-01-02 01:04:05+00'" },
-      dMinus: { kind: 'function', expression: "'2024-01-02'" },
-      tMs: { kind: 'function', expression: "'12:34:56.789'" },
-      ttzPlus: { kind: 'function', expression: "'03:04:05+02'" },
+      tsPlus: { kind: 'literal', value: '2024-01-02T03:04:05' },
+      tzPlus: { kind: 'literal', value: '2024-01-02T01:04:05Z' },
+      dMinus: { kind: 'literal', value: '2024-01-02' },
+      tMs: { kind: 'literal', value: '12:34:56.789' },
+      ttzPlus: { kind: 'literal', value: '03:04:05+02:00' },
     });
   });
 });
 
 describe('Bytes[] and DateTime[] list defaults', () => {
-  it('carry an ARRAY literal of the elements Postgres stores, cast to the column type', async () => {
+  it('store each element as the value Postgres stores', async () => {
     const { columns } = await loadFixtureTable('list-defaults', 'Lists');
     expect(
       Object.fromEntries(
@@ -42,21 +42,15 @@ describe('Bytes[] and DateTime[] list defaults', () => {
         ),
       ),
     ).toEqual({
-      bl: { kind: 'function', expression: "ARRAY['\\x68656c6c6f', '\\x776f726c64']::BYTEA[]" },
-      blEmpty: { kind: 'function', expression: 'ARRAY[]::BYTEA[]' },
-      dl: {
-        kind: 'function',
-        expression: "ARRAY['2024-01-01 00:00:00', '2024-01-02 03:04:05.123']::TIMESTAMP(3)[]",
-      },
-      dlEmpty: { kind: 'function', expression: 'ARRAY[]::TIMESTAMP(3)[]' },
-      tzl: { kind: 'function', expression: "ARRAY['2024-01-02 03:04:05+00']::TIMESTAMPTZ(6)[]" },
-      datel: { kind: 'function', expression: "ARRAY['2024-01-02']::DATE[]" },
-      timel: { kind: 'function', expression: "ARRAY['12:34:56']::TIME(6)[]" },
-      timetzl: { kind: 'function', expression: "ARRAY['12:34:56+00']::TIMETZ(6)[]" },
-      ts6l: {
-        kind: 'function',
-        expression: "ARRAY['2024-01-02 03:04:05.123456']::TIMESTAMP(6)[]",
-      },
+      bl: { kind: 'literal', value: ['aGVsbG8=', 'd29ybGQ='] },
+      blEmpty: { kind: 'literal', value: [] },
+      dl: { kind: 'literal', value: ['2024-01-01T00:00:00', '2024-01-02T03:04:05.123'] },
+      dlEmpty: { kind: 'literal', value: [] },
+      tzl: { kind: 'literal', value: ['2024-01-02T03:04:05Z'] },
+      datel: { kind: 'literal', value: ['2024-01-02'] },
+      timel: { kind: 'literal', value: ['12:34:56'] },
+      timetzl: { kind: 'literal', value: ['12:34:56Z'] },
+      ts6l: { kind: 'literal', value: ['2024-01-02T03:04:05.123456'] },
     });
   });
 });
@@ -114,7 +108,7 @@ describe('dbgenerated() with no expression', () => {
 });
 
 describe('Decimal and BigInt number defaults', () => {
-  it('keep the number exactly as written, as decimal text', async () => {
+  it("keep the number as decimal text, spelled with the column's scale", async () => {
     const { columns } = await loadFixtureTable('number-defaults', 'Decimals');
     expect(
       Object.fromEntries(
@@ -132,20 +126,27 @@ describe('Decimal and BigInt number defaults', () => {
         ].map((column) => [column, columns[column]?.['default']]),
       ),
     ).toEqual({
-      long: { kind: 'literal', value: '12345678901234567890.123456789' },
-      tiny: { kind: 'literal', value: '0.000000000000000001' },
-      negative: { kind: 'literal', value: '-1.5' },
-      whole: { kind: 'literal', value: '42' },
+      long: { kind: 'literal', value: '12345678901234567890.123456789000000000000000000000' },
+      tiny: { kind: 'literal', value: '0.000000000000000001000000000000' },
+      negative: { kind: 'literal', value: '-1.500000000000000000000000000000' },
+      whole: { kind: 'literal', value: '42.000000000000000000000000000000' },
       zerosBare: { kind: 'literal', value: '1.50' },
       zerosScaled: { kind: 'literal', value: '1.50' },
-      zerosDefault: { kind: 'literal', value: '1.50' },
-      list: { kind: 'literal', value: ['1.50', '-2', '0.000000000000000001'] },
+      zerosDefault: { kind: 'literal', value: '1.500000000000000000000000000000' },
+      list: {
+        kind: 'literal',
+        value: [
+          '1.500000000000000000000000000000',
+          '-2.000000000000000000000000000000',
+          '0.000000000000000001000000000000',
+        ],
+      },
       bigLong: { kind: 'literal', value: '9007199254740993' },
       bigList: { kind: 'literal', value: ['9007199254740993', '-1'] },
     });
   });
 
-  it('drop leading zeros and the sign of zero and keep trailing zeros, as Prisma 7 writes the SQL default', async () => {
+  it("drop leading zeros and the sign of zero, keep trailing zeros and pad to the column's scale, as PostgreSQL prints the value", async () => {
     const { columns } = await loadFixtureTable('number-default-spellings', 'Spellings');
     expect(
       Object.fromEntries(
@@ -154,9 +155,9 @@ describe('Decimal and BigInt number defaults', () => {
         ),
       ),
     ).toEqual({
-      leadingZeros: { kind: 'literal', value: '7' },
-      negativeZero: { kind: 'literal', value: '0' },
-      leadingZeroFraction: { kind: 'literal', value: '0.10' },
+      leadingZeros: { kind: 'literal', value: '7.000000000000000000000000000000' },
+      negativeZero: { kind: 'literal', value: '0.000000000000000000000000000000' },
+      leadingZeroFraction: { kind: 'literal', value: '0.100000000000000000000000000000' },
       bareLeadingZeros: { kind: 'literal', value: '7' },
       bareNegativeZero: { kind: 'literal', value: '0' },
       bareLeadingZeroFraction: { kind: 'literal', value: '0.10' },
@@ -214,8 +215,8 @@ describe('Number defaults on String, Bytes, DateTime and Boolean fields', () => 
   it('are refused, naming the data type and the casts the column type has', async () => {
     expect(await diagnosticsOf('number-default-spellings', 'other-types.prisma')).toEqual([
       'Field "OtherTypes.name": @default holds a pg/int2 value, which pg/text has no cast from; it casts from nothing.',
-      'Field "OtherTypes.payload": @default holds a pg/int2 value, which pg/bytea has no cast from; it casts from pg/text.',
-      'Field "OtherTypes.at": @default holds a pg/int2 value, which pg/timestamp has no cast from; it casts from pg/text.',
+      'Field "OtherTypes.payload": @default holds a pg/int2 value, which pg/bytea has no cast from; it casts from nothing.',
+      'Field "OtherTypes.at": @default holds a pg/int2 value, which pg/timestamp has no cast from; it casts from nothing.',
       'Field "OtherTypes.flag": @default holds a pg/int2 value, which pg/bool has no cast from; it casts from nothing.',
     ]);
   });
@@ -285,7 +286,7 @@ describe('Json, Decimal, BigInt and Float literal defaults', () => {
       ),
     ).toEqual({
       jsonLiteral: { kind: 'literal', value: { a: 1 } },
-      decimalLiteral: { kind: 'literal', value: '12.34' },
+      decimalLiteral: { kind: 'literal', value: '12.340000000000000000000000000000' },
       bigIntLiteral: { kind: 'literal', value: '9007199254740993' },
       floatLiteral: { kind: 'literal', value: 1.5 },
       intLiteral: { kind: 'literal', value: 42 },

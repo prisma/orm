@@ -6,6 +6,7 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ifDefined } from '@internal/utils/defined';
 import type { Diagnostic, NextAction, StructuredError } from '@internal/utils/structured-error';
 import { docsUrlFor } from '@internal/utils/structured-error';
+import { APP_UPGRADE_GUIDES_URL } from './upgrade-guides';
 
 /**
  * CLI error envelope for output formatting.
@@ -223,13 +224,24 @@ export function errorContractValidationFailed(
   options?: {
     readonly where?: { readonly path?: string; readonly line?: number };
     readonly cause?: unknown;
+    /** What the refusal is about, such as the columns whose defaults were refused. */
+    readonly meta?: Record<string, unknown> | undefined;
   },
 ): CliStructuredError {
   return new CliStructuredError('CONTRACT.VALIDATION_FAILED', 'Contract validation failed', {
     why: reason,
-    fix: 'Re-run `{bin} contract emit`, or fix the contract file and try again',
+    fix: `If an earlier release emitted this contract, follow the app upgrade instructions of each release since, which rewrite the contract and its migration snapshots: ${APP_UPGRADE_GUIDES_URL}. If this release emitted it, re-run \`{bin} contract emit\`, or fix the contract file if you edited it, and try again`,
     nextActions: [
-      { kind: 'run-command', label: 'Re-emit the contract', command: '{bin} contract emit' },
+      {
+        kind: 'open-url',
+        label: 'If an earlier release emitted the contract, follow the app upgrade instructions',
+        url: APP_UPGRADE_GUIDES_URL,
+      },
+      {
+        kind: 'run-command',
+        label: 'If this release emitted the contract, re-emit it',
+        command: '{bin} contract emit',
+      },
       {
         kind: 'edit-file',
         label: 'Fix the contract file, then re-run the command',
@@ -239,6 +251,7 @@ export function errorContractValidationFailed(
     docsUrl: docsUrlFor('CONTRACT.VALIDATION_FAILED'),
     ...(options?.where ? { where: options.where } : {}),
     ...ifDefined('cause', options?.cause),
+    ...ifDefined('meta', options?.meta),
   });
 }
 

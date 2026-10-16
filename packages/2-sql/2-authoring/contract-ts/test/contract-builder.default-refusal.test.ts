@@ -1,9 +1,13 @@
-import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type { TargetPackRef } from '@internal/framework-components/components';
 import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { withTestTypes } from '../../../1-core/contract/test/test-type-lookups';
+import {
+  type TestCodecConversions,
+  testCodec,
+  withTestTypes,
+} from '../../../1-core/contract/test/test-type-lookups';
 import { buildSqlContractFromDefinition } from '../src/contract-builder';
 import { withDescriptors } from './with-descriptors';
 
@@ -23,32 +27,20 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
 const refusingJsonb: CodecLookupWithDescriptors = withDescriptors({
   get: (id) =>
     id === 'pg/jsonb@1'
-      ? {
-          id,
-          encode: async (value: unknown) => value,
-          decode: async (wire: unknown) => wire,
-          encodeJson: () => {
+      ? testCodec(id, {
+          toDataTypeValue: () => {
             throw new Error('Expected a Money value');
           },
-          decodeJson: (json: unknown) => json,
-        }
+        })
       : undefined,
   renderOutputTypeFor: () => undefined,
 });
 
-function lookupOf(codecs: Record<string, Pick<Codec, 'encodeJson'>>): CodecLookupWithDescriptors {
+function lookupOf(codecs: Record<string, TestCodecConversions>): CodecLookupWithDescriptors {
   return withDescriptors({
     get: (id) => {
-      const codec = codecs[id];
-      return codec === undefined
-        ? undefined
-        : {
-            id,
-            encode: async (value: unknown) => value,
-            decode: async (wire: unknown) => wire,
-            decodeJson: (json: unknown) => json,
-            ...codec,
-          };
+      const conversions = codecs[id];
+      return conversions === undefined ? undefined : testCodec(id, conversions);
     },
     renderOutputTypeFor: () => undefined,
   });
@@ -128,7 +120,7 @@ describe('a scalar default on a list field', () => {
     expect(() =>
       buildWithDefault(
         { codecId: 'pg/int8@1', value: 1n, many: true },
-        lookupOf({ 'pg/int8@1': { encodeJson: (value) => String(value) } }),
+        lookupOf({ 'pg/int8@1': { toDataTypeValue: (value) => String(value) } }),
       ),
     ).toThrow(
       expect.objectContaining({
@@ -154,7 +146,7 @@ describe('an internal error thrown while a default is encoded', () => {
         { codecId: 'pg/int8@1', value: 1n },
         lookupOf({
           'pg/int8@1': {
-            encodeJson: () => {
+            toDataTypeValue: () => {
               throw bug;
             },
           },

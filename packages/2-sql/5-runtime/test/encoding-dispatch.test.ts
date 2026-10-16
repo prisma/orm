@@ -11,13 +11,13 @@ describe('encodeParam — CodecRef dispatch', () => {
   it('resolves via forCodecRef when paramRef.codec is populated', async () => {
     const codec1024 = defineTestCodec({
       typeId: 'pgvector/vector@1',
-      encode: (v: number[]) => `enc1024:${v.join(',')}`,
-      decode: (wire: string) => wire.split(',').map(Number),
+      toWire: (v: number[]) => `enc1024:${v.join(',')}`,
+      fromWire: (wire: string) => wire.split(',').map(Number),
     });
     const codec1536 = defineTestCodec({
       typeId: 'pgvector/vector@1',
-      encode: (v: number[]) => `enc1536:${v.join(',')}`,
-      decode: (wire: string) => wire.split(',').map(Number),
+      toWire: (v: number[]) => `enc1536:${v.join(',')}`,
+      fromWire: (wire: string) => wire.split(',').map(Number),
     });
 
     const calls: Array<['forCodecRef', string, unknown]> = [];
@@ -66,8 +66,8 @@ describe('encodeParam — CodecRef dispatch', () => {
   it('resolves via forCodecRef when codec has no typeParams', async () => {
     const scalarCodec = defineTestCodec({
       typeId: 'test/scalar@1',
-      encode: (v: string) => `enc:${v}`,
-      decode: (wire: string) => wire,
+      toWire: (v: string) => `enc:${v}`,
+      fromWire: (wire: string) => wire,
     });
 
     const calls: Array<['forCodecRef', string]> = [];
@@ -105,11 +105,11 @@ describe('encodeParam — CodecRef dispatch', () => {
     let invoked = false;
     const codec: Codec = defineTestCodec({
       typeId: 'pgvector/vector@1',
-      encode: (v: number[]) => {
+      toWire: (v: number[]) => {
         invoked = true;
         return v;
       },
-      decode: (w: number[]) => w,
+      fromWire: (w: number[]) => w,
     });
 
     const contractCodecs: ContractCodecRegistry = {
@@ -138,11 +138,11 @@ describe('encodeParam — CodecRef dispatch', () => {
     let invoked = false;
     const codec: Codec = defineTestCodec({
       typeId: 'pgvector/vector@1',
-      encode: (v: number[]) => {
+      toWire: (v: number[]) => {
         invoked = true;
         return v;
       },
-      decode: (w: number[]) => w,
+      fromWire: (w: number[]) => w,
     });
 
     const contractCodecs: ContractCodecRegistry = {

@@ -1,7 +1,6 @@
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
-import { parsePostgresDefault } from '@internal/target-postgres/default-normalizer';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { PostgresControlAdapter } from '../src/core/control-adapter';
@@ -236,314 +235,108 @@ describe('PostgresControlAdapter column defaults', () => {
   });
 });
 
-describe('parsePostgresDefault normalizer', () => {
-  it('normalizes common default expressions', () => {
-    // Autoincrement patterns
-    expect(parsePostgresDefault("nextval('user_id_seq'::regclass)")).toEqual({
-      kind: 'function',
-      expression: 'autoincrement()',
-    });
-
-    // Timestamp functions
-    expect(parsePostgresDefault('now()')).toEqual({
-      kind: 'function',
-      expression: 'now()',
-    });
-    expect(parsePostgresDefault('CURRENT_TIMESTAMP')).toEqual({
-      kind: 'function',
-      expression: 'now()',
-    });
-    // clock_timestamp() is distinct from now() — returns wall-clock time, not transaction time
-    expect(parsePostgresDefault('clock_timestamp()')).toEqual({
-      kind: 'function',
-      expression: 'clock_timestamp()',
-    });
-
-    // UUID function
-    expect(parsePostgresDefault('gen_random_uuid()')).toEqual({
-      kind: 'function',
-      expression: 'gen_random_uuid()',
-    });
-
-    // Boolean literals
-    expect(parsePostgresDefault('true')).toEqual({
-      kind: 'literal',
-      value: true,
-    });
-    expect(parsePostgresDefault('false')).toEqual({
-      kind: 'literal',
-      value: false,
-    });
-
-    // Numeric literals
-    expect(parsePostgresDefault('42')).toEqual({
-      kind: 'literal',
-      value: 42,
-    });
-    expect(parsePostgresDefault('3.14')).toEqual({
-      kind: 'literal',
-      value: 3.14,
-    });
-    expect(parsePostgresDefault('-123.45')).toEqual({
-      kind: 'literal',
-      value: -123.45,
-    });
-
-    // String literals (type casts are stripped)
-    expect(parsePostgresDefault("'hello'::text")).toEqual({
-      kind: 'literal',
-      value: 'hello',
-    });
-    expect(parsePostgresDefault('\'ok\'::"BillingState"')).toEqual({
-      kind: 'literal',
-      value: 'ok',
-    });
-    expect(parsePostgresDefault("'Hello''s'::text")).toEqual({
-      kind: 'literal',
-      value: "Hello's",
-    });
-    expect(parsePostgresDefault("'plain text'")).toEqual({
-      kind: 'literal',
-      value: 'plain text',
-    });
-
-    // uuid_generate_v4() from uuid-ossp extension is normalized to gen_random_uuid()
-    expect(parsePostgresDefault('uuid_generate_v4()')).toEqual({
-      kind: 'function',
-      expression: 'gen_random_uuid()',
-    });
+describe('PostgresControlAdapter reads a literal default with the column codec', () => {
+  const column = (
+    name: string,
+    udtName: string,
+    columnDefault: string,
+    precision: number | null = null,
+    scale: number | null = null,
+  ) => ({
+    column_name: name,
+    data_type: udtName,
+    udt_name: udtName,
+    is_nullable: 'NO',
+    character_maximum_length: null,
+    numeric_precision: precision,
+    numeric_scale: scale,
+    column_default: columnDefault,
   });
-});
+  const contract = {
+    storage: {
+      namespaces: {
+        public: {
+          entries: {
+            table: {
+              user: {
+                columns: {
+                  count: { codecId: 'pg/int4@1' },
+                  ratio: { codecId: 'pg/numeric@1', typeParams: { precision: 10, scale: 2 } },
+                  active: { codecId: 'pg/bool@1' },
+                  meta: { codecId: 'pg/jsonb@1' },
+                  bad: { codecId: 'pg/int4@1' },
+                  created: { codecId: 'pg/timestamptz-temporal@1' },
+                  blob: {
+                    codecId: 'pg/bytea@1',
+                    default: { kind: 'function', expression: "'hello'::bytea" },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
 
-describe('parsePostgresDefault strips type casts from string literals', () => {
-  it('strips ::text cast from simple string literal', () => {
-    expect(parsePostgresDefault("'ready'::text")).toEqual({
-      kind: 'literal',
-      value: 'ready',
+  it('holds the value and the stored JSON of each default, and the value of a contract expression that writes a literal', {
+    timeout: timeouts.databaseOperation,
+  }, async () => {
+    const adapter = new PostgresControlAdapter(
+      createPostgresBuiltinCodecLookup(),
+      createPostgresBuiltinDataTypeLookup(),
+    );
+    const driver = createMockDriver([
+      column('count', 'int4', '42'),
+      column('ratio', 'numeric', '3.1', 10, 2),
+      column('active', 'bool', 'true'),
+      column('meta', 'jsonb', `'{"b": 1, "a": 2}'::jsonb`),
+      column('bad', 'int4', "'x'::integer"),
+      column('created', 'timestamptz', 'now()'),
+      column('blob', 'bytea', "'\\x68656c6c6f'::bytea"),
+    ]);
+
+    const result = await adapter.introspect(driver, contract);
+    const columns = result.namespaces['public']?.tables['user']?.columns ?? {};
+    const read = (name: string) => ({
+      resolved: columns[name]?.resolvedDefault,
+      value: columns[name]?.defaultValue,
     });
-  });
 
-  it('strips ::character varying cast', () => {
-    expect(parsePostgresDefault("'hello'::character varying")).toEqual({
-      kind: 'literal',
-      value: 'hello',
+    expect({
+      count: read('count'),
+      ratio: read('ratio'),
+      active: read('active').resolved,
+      meta: read('meta').resolved,
+      created: read('created'),
+    }).toMatchObject({
+      count: {
+        resolved: { kind: 'literal', value: 42 },
+        value: { type: 'pg/int4', value: 42 },
+      },
+      ratio: {
+        resolved: { kind: 'literal', value: '3.10' },
+        value: { type: 'pg/numeric', params: { precision: 10, scale: 2 }, value: '3.10' },
+      },
+      active: { kind: 'literal', value: true },
+      meta: { kind: 'literal', value: { a: 2, b: 1 } },
+      created: { resolved: { kind: 'function', expression: 'now()' } },
     });
-  });
-
-  it('strips ::character varying(255) cast with length', () => {
-    expect(parsePostgresDefault("'hello'::character varying(255)")).toEqual({
-      kind: 'literal',
-      value: 'hello',
+    expect({
+      reported: columns['blob']?.defaultValue,
+      written: columns['blob']?.defaultExpressionValue,
+    }).toEqual({
+      reported: expect.objectContaining({ type: 'pg/bytea', value: 'aGVsbG8=' }),
+      written: expect.objectContaining({ type: 'pg/bytea', value: 'aGVsbG8=' }),
     });
-  });
-
-  it('strips quoted enum cast like ::"MyEnum"', () => {
-    expect(parsePostgresDefault('\'active\'::"StatusEnum"')).toEqual({
-      kind: 'literal',
-      value: 'active',
-    });
-  });
-
-  it('strips quoted camelCase enum cast like ::"EnvironmentModelKind"', () => {
-    expect(parsePostgresDefault('\'ready\'::"EnvironmentModelKind"')).toEqual({
-      kind: 'literal',
-      value: 'ready',
-    });
-  });
-
-  it('preserves plain string literal without cast', () => {
-    expect(parsePostgresDefault("'plain text'")).toEqual({
-      kind: 'literal',
-      value: 'plain text',
-    });
-  });
-
-  it('strips cast from string with escaped quotes', () => {
-    expect(parsePostgresDefault("'it''s ready'::text")).toEqual({
-      kind: 'literal',
-      value: "it's ready",
-    });
-  });
-
-  it('strips ::varchar cast', () => {
-    expect(parsePostgresDefault("'default_value'::varchar")).toEqual({
-      kind: 'literal',
-      value: 'default_value',
-    });
-  });
-
-  it('strips ::bpchar cast (blank-padded char)', () => {
-    expect(parsePostgresDefault("'Y'::bpchar")).toEqual({
-      kind: 'literal',
-      value: 'Y',
-    });
-  });
-
-  it('strips cast from empty string literal', () => {
-    expect(parsePostgresDefault("''::text")).toEqual({
-      kind: 'literal',
-      value: '',
-    });
-  });
-});
-
-describe('parsePostgresDefault normalizes cast-wrapped timestamp defaults', () => {
-  it.each([
-    { input: "('now'::text)::timestamp without time zone" },
-    { input: "('now'::text)::timestamp with time zone" },
-    { input: "('now'::text)::timestamptz" },
-    { input: 'now()::timestamp without time zone' },
-    { input: 'now()::timestamptz' },
-    { input: 'CURRENT_TIMESTAMP::timestamp without time zone' },
-    { input: 'CURRENT_TIMESTAMP::timestamptz' },
-    { input: '(CURRENT_TIMESTAMP)::timestamptz' },
-    { input: '(now())::timestamp without time zone' },
-    { input: 'current_timestamp' },
-  ])('normalizes "$input" to now()', ({ input }) => {
-    expect(parsePostgresDefault(input)).toEqual({
-      kind: 'function',
-      expression: 'now()',
-    });
-  });
-
-  it.each([
-    { input: 'clock_timestamp()::timestamptz' },
-    { input: 'clock_timestamp()::timestamp without time zone' },
-    { input: '(clock_timestamp())::timestamptz' },
-  ])('normalizes "$input" to clock_timestamp()', ({ input }) => {
-    expect(parsePostgresDefault(input)).toEqual({
-      kind: 'function',
-      expression: 'clock_timestamp()',
-    });
-  });
-});
-
-describe('parsePostgresDefault rejects non-timestamp expressions with timestamp casts', () => {
-  it.each([
-    { input: 'random()::timestamptz', expectedExpr: 'random()::timestamptz' },
-    { input: "'yesterday'::timestamp without time zone", expectedValue: 'yesterday' },
-    { input: "'2024-01-01'::timestamp without time zone", expectedValue: '2024-01-01' },
-  ])('does not normalize "$input" to now()', ({ input, expectedExpr, expectedValue }) => {
-    const result = parsePostgresDefault(input);
-    if (expectedExpr) {
-      expect(result).toEqual({ kind: 'function', expression: expectedExpr });
-    } else {
-      expect(result).toEqual({ kind: 'literal', value: expectedValue });
-    }
-  });
-});
-
-describe('parsePostgresDefault normalizes NULL defaults', () => {
-  it.each([
-    { input: 'NULL' },
-    { input: 'null' },
-    { input: 'NULL::text' },
-    { input: 'NULL::integer' },
-    { input: 'NULL::character varying' },
-    { input: 'NULL::character varying(255)' },
-    { input: 'NULL::"MyEnum"' },
-    { input: 'NULL::jsonb' },
-  ])('normalizes "$input" to null literal', ({ input }) => {
-    expect(parsePostgresDefault(input)).toEqual({
-      kind: 'literal',
-      value: null,
-    });
-  });
-});
-
-describe('parsePostgresDefault handles extension type defaults', () => {
-  it('parses citext string literal with cast', () => {
-    expect(parsePostgresDefault("'hello'::citext", 'citext')).toEqual({
-      kind: 'literal',
-      value: 'hello',
-    });
-  });
-
-  it('parses ltree string literal with cast', () => {
-    expect(parsePostgresDefault("'root.child'::ltree", 'ltree')).toEqual({
-      kind: 'literal',
-      value: 'root.child',
-    });
-  });
-
-  it('parses gen_random_uuid() for uuid columns', () => {
-    expect(parsePostgresDefault('gen_random_uuid()', 'uuid')).toEqual({
-      kind: 'function',
-      expression: 'gen_random_uuid()',
-    });
-  });
-
-  it('parses empty jsonb object default', () => {
-    expect(parsePostgresDefault("'{}'::jsonb", 'jsonb')).toEqual({
-      kind: 'literal',
-      value: {},
-    });
-  });
-
-  it('parses empty jsonb array default', () => {
-    expect(parsePostgresDefault("'[]'::jsonb", 'jsonb')).toEqual({
-      kind: 'literal',
-      value: [],
-    });
-  });
-});
-
-describe('parsePostgresDefault parses JSON literals for json/jsonb columns', () => {
-  it('parses object literal for jsonb native type', () => {
-    expect(parsePostgresDefault('\'{"key": "default"}\'::jsonb', 'jsonb')).toEqual({
-      kind: 'literal',
-      value: { key: 'default' },
-    });
-  });
-
-  it('parses array literal for jsonb native type', () => {
-    expect(parsePostgresDefault('\'["alpha", "beta"]\'::jsonb', 'jsonb')).toEqual({
-      kind: 'literal',
-      value: ['alpha', 'beta'],
-    });
-  });
-
-  it('parses object literal for json native type', () => {
-    expect(parsePostgresDefault('\'{"ok": true}\'::json', 'json')).toEqual({
-      kind: 'literal',
-      value: { ok: true },
-    });
-  });
-
-  it('falls back to string when JSON parsing fails', () => {
-    expect(parsePostgresDefault("'not-json'::jsonb", 'jsonb')).toEqual({
-      kind: 'literal',
-      value: 'not-json',
-    });
-  });
-});
-
-describe('parsePostgresDefault handles bigint defaults', () => {
-  it('parses a bare integer for int8 as decimal text', () => {
-    expect(parsePostgresDefault('42', 'int8')).toEqual({
-      kind: 'literal',
-      value: '42',
-    });
-  });
-
-  it('parses a bare integer past the safe range for int8 as decimal text', () => {
-    expect(parsePostgresDefault('9999999999999999999', 'bigint')).toEqual({
-      kind: 'literal',
-      value: '9999999999999999999',
-    });
-  });
-
-  it('parses a quoted integer for int8 as decimal text', () => {
-    expect(parsePostgresDefault("'42'::bigint", 'bigint')).toEqual({
-      kind: 'literal',
-      value: '42',
-    });
-  });
-
-  it('parses a quoted integer past the safe range for int8 as decimal text', () => {
-    expect(parsePostgresDefault("'9999999999999999999'::bigint", 'int8')).toEqual({
-      kind: 'literal',
-      value: '9999999999999999999',
+    expect({
+      resolved: columns['bad']?.resolvedDefault,
+      unreadable: columns['bad']?.defaultUnreadable,
+    }).toEqual({
+      resolved: undefined,
+      unreadable: expect.stringContaining(
+        "The column codec pg/int4@1 cannot read the default the database reports, 'x'::integer: ",
+      ),
     });
   });
 });

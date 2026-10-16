@@ -907,7 +907,7 @@
               "columns": {
                 "createdAt": {
                   "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/text",
+                  "dataType": "sqlite/datetime",
                   "nullable": false
                 },
                 "cuid2": {
@@ -957,7 +957,7 @@
                 },
                 "seenAt": {
                   "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/text",
+                  "dataType": "sqlite/datetime",
                   "nullable": false
                 },
                 "shortNanoid": {
@@ -978,7 +978,7 @@
                 },
                 "updatedAt": {
                   "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/text",
+                  "dataType": "sqlite/datetime",
                   "nullable": false
                 }
               },
@@ -1021,7 +1021,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "c27652056bef0a563d8f4d4a71aea0a9d021e2e03455f0a550e93b4355d19aa6"
+    "storageHash": "61f45717d58063c164b53696498c9bb6823230363cbbf5b6ebcad72797501deb"
   },
   "execution": {
     "executionHash": "2fd552b8b15a3551234178e075fd25d6a5c4eff1d93bc4e236730b63e646f7d3",

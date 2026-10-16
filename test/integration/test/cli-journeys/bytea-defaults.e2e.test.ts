@@ -1,8 +1,5 @@
 /**
- * Journey: a `Bytes` default is stored in the contract as base64, written in PSL as base64 or as
- * PostgreSQL hex. PostgreSQL prints the default back in hex, and the schema check reads that hex as
- * the same bytes, so `db init` and `db migrate` succeed and strict `db verify` is clean.
- * `contract infer` prints a `bytea` default as a base64 literal.
+ * Journey: a `Bytes` default is written in PSL with the `bytea` tag, whose body is the hex PostgreSQL prints, and stored in the contract as base64. PostgreSQL prints the default back in hex, and the schema check reads that hex as the same bytes, so `db init` and `db migrate` succeed and strict `db verify` is clean. `contract infer` prints a `bytea` default with the tag.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { withClient } from '@repo/test-utils';
@@ -33,9 +30,9 @@ function schema(defaults: boolean): string {
 
 model Doc {
   id    Int     @id
-  blob  Bytes${withDefault('@default("aGVsbG8=")')}
-  blobs Bytes[]${withDefault('@default(["aGVsbG8="])')}
-  hex   Bytes${withDefault('@default("\\\\x68656c6c6f")')}
+  blob  Bytes${withDefault('@default(bytea`\\x68656c6c6f`)')}
+  blobs Bytes[]${withDefault('@default([bytea`\\x68656c6c6f`])')}
+  hex   Bytes${withDefault('@default(bytea`\\x68656c6c6f`)')}
 
   @@map("doc")
 }
@@ -191,8 +188,8 @@ withTempDir(({ createTempDir }) => {
           .filter((line) => line.includes('@default('))
           .map((line) => line.trim().split(/\s+/).join(' '));
         expect(printed).toEqual([
-          'blob Bytes @default("aGVsbG8=")',
-          'blobs Bytes?[] @default(["aGVsbG8="])',
+          'blob Bytes @default(bytea`\\x68656c6c6f`)',
+          'blobs Bytes?[] @default([bytea`\\x68656c6c6f`])',
         ]);
 
         const emit = await runContractEmit(ctx);

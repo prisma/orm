@@ -4,10 +4,16 @@ import type {
   LedgerEntryRecord,
 } from '@internal/contract/types';
 import { parseMarkerRowSafely, withMarkerReadErrorHandling } from '@internal/errors/execution';
-import { checkSqlDefaultText } from '@internal/family-sql/control';
+import {
+  type ContractColumn,
+  checkSqlDefaultText,
+  contractColumns,
+  type ReadColumnDefault,
+  readColumnDefault,
+} from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { parseContractMarkerRow } from '@internal/family-sql/verify';
-import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import { type CodecLookupWithDescriptors, codecForRef } from '@internal/framework-components/codec';
 import { APP_SPACE_ID, type SchemaNodeRef } from '@internal/framework-components/control';
 import { ledgerOriginFromStored } from '@internal/migration-tools/ledger-origin';
 import { REFERENTIAL_ACTION_SQL } from '@internal/sql-contract/referential-action-sql';
@@ -47,7 +53,7 @@ import {
   buildSignMarkerBootstrapQueries,
 } from '@internal/target-sqlite/contract-free';
 import type { SqliteCreateTable, SqliteDdlNode } from '@internal/target-sqlite/ddl';
-import { parseSqliteDefault } from '@internal/target-sqlite/default-normalizer';
+import { readSqliteDefault } from '@internal/target-sqlite/default-normalizer';
 import { normalizeSqliteNativeType } from '@internal/target-sqlite/native-type-normalizer';
 import { escapeLiteral, quoteIdentifier } from '@internal/target-sqlite/sql-utils';
 import { blindCast } from '@internal/utils/casts';
@@ -132,8 +138,6 @@ export class SqliteControlAdapter implements SqlControlAdapter<'sqlite'> {
   constructor(codecRegistry: SqliteCodecRegistry) {
     this.codecRegistry = codecRegistry;
   }
-
-  readonly normalizeDefault = parseSqliteDefault;
 
   bootstrapControlTableQueries(): readonly DdlNode[] {
     return buildControlTableBootstrapQueries();
@@ -531,10 +535,37 @@ export class SqliteControlAdapter implements SqlControlAdapter<'sqlite'> {
     };
   }
 
+  /**
+   * Reads a column's reported default: a function or SQL NULL as itself, and a literal with the column's codec, when the contract declares the column. A literal of a column the contract does not declare keeps only its raw text. When the contract's default is an expression that writes a literal, the codec reads that literal too, for the diff to compare the two values.
+   */
+  private async readReportedDefault(
+    rawDefault: string,
+    declaredType: string,
+    column: ContractColumn | undefined,
+  ): Promise<ReadColumnDefault | { readonly resolvedDefault?: ColumnDefault }> {
+    const reported = readSqliteDefault(rawDefault, declaredType);
+    if (reported.kind === 'function') return { resolvedDefault: reported };
+    if (reported.kind === 'null') return { resolvedDefault: { kind: 'literal', value: null } };
+    const codec =
+      column === undefined ? undefined : codecForRef(this.codecRegistry, column.codecRef);
+    if (codec === undefined) return {};
+    const expression = column?.defaultExpression;
+    const written =
+      expression === undefined ? undefined : readSqliteDefault(expression, declaredType);
+    return readColumnDefault(
+      codec,
+      { literal: reported.literal, raw: rawDefault },
+      expression !== undefined && written?.kind === 'literal'
+        ? { literal: written.literal, expression }
+        : undefined,
+    );
+  }
+
   async introspect(
     driver: SqlControlDriverInstance<'sqlite'>,
-    _contract?: unknown,
+    contract?: unknown,
   ): Promise<SqlSchemaIR> {
+    const contractColumnsOf = contractColumns(contract);
     // Filter out runner-managed control tables (`_prisma_marker`,
     // `_prisma_ledger`) — they're an implementation detail of the migration
     // runner, not part of the user-authored contract, so they must not
@@ -570,24 +601,27 @@ export class SqliteControlAdapter implements SqlControlAdapter<'sqlite'> {
 
       for (const col of columnsResult.rows) {
         // Resolved values comparable against the contract-derived expected
-        // side: the normalized native type and the structured parse of the
-        // raw default. Raw fields stay untouched alongside — the relational
-        // walk still reads and normalizes them itself.
+        // side: the normalized native type and the default read with the
+        // column's codec. The raw default stays alongside.
         const resolvedNativeType = normalizeSqliteNativeType(col.type);
         const rawDefault = col.dflt_value ?? undefined;
-        const resolvedDefault =
+        const readDefault =
           col.name === autoincrementColumn
-            ? AUTOINCREMENT_DEFAULT
-            : rawDefault !== undefined
-              ? parseSqliteDefault(rawDefault, resolvedNativeType)
-              : undefined;
+            ? { resolvedDefault: AUTOINCREMENT_DEFAULT }
+            : rawDefault === undefined
+              ? {}
+              : await this.readReportedDefault(
+                  rawDefault,
+                  col.type,
+                  contractColumnsOf.columnOf(undefined, tableName, col.name),
+                );
         columns[col.name] = {
           name: col.name,
           nativeType: col.type.toLowerCase(),
           nullable: col.notnull === 0 && col.pk === 0,
           ...ifDefined('default', rawDefault),
           resolvedNativeType,
-          ...ifDefined('resolvedDefault', resolvedDefault),
+          ...readDefault,
           reportedType: { text: col.type, kind: undefined, schema: undefined, name: undefined },
         };
         if (col.pk > 0) {

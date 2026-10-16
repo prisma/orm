@@ -1,7 +1,8 @@
 import type { JsonValue } from '@internal/contract/types';
 import { notOk, ok } from '@internal/utils/result';
+import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
-import { createDataTypeLookup, dataType, dataTypeId } from '../src/shared/data-type';
+import { createDataTypeLookup, type DataType, dataType, dataTypeId } from '../src/shared/data-type';
 import type { DataTypeAuthoringEntry } from '../src/shared/framework-authoring';
 import {
   admittedForms,
@@ -23,14 +24,18 @@ import {
 
 const unchanged = (value: JsonValue) => value;
 
-const sqlExpression = dataType('sql/expression', {});
-const text = dataType('t/text', {});
-const bool = dataType('t/bool', {});
-const small = dataType('t/small', {});
-const big = dataType('t/big', { casts: { [small.id]: (value) => `${String(value)}n` } });
-const json = dataType('t/json', {});
-const jsonb = dataType('t/jsonb', { casts: { [json.id]: unchanged } });
+const sqlExpression = dataType('sql/expression', { read: (json) => json });
+const text = dataType('t/text', { read: (json) => json });
+const bool = dataType('t/bool', { read: (json) => json });
+const small = dataType('t/small', { read: (json) => json });
+const big = dataType('t/big', {
+  read: (json) => json,
+  casts: { [small.id]: (value) => `${String(value)}n` },
+});
+const json = dataType('t/json', { read: (json) => json });
+const jsonb = dataType('t/jsonb', { read: (json) => json, casts: { [json.id]: unchanged } });
 const uuid = dataType('t/uuid', {
+  read: (json) => json,
   casts: {
     [text.id]: (value) => {
       if (typeof value === 'string' && value.length === 36) return value;
@@ -38,7 +43,33 @@ const uuid = dataType('t/uuid', {
     },
   },
 });
-const geometry = dataType('t/geometry', { casts: { [text.id]: unchanged, [json.id]: unchanged } });
+const geometry = dataType('t/geometry', {
+  read: (json) => json,
+  casts: { [text.id]: unchanged, [json.id]: unchanged },
+});
+const readLetters = (json: JsonValue): JsonValue => {
+  if (typeof json === 'string' && /^[a-z]*$/i.test(json)) return json;
+  throw new Error(`${JSON.stringify(json)} is not letters.`);
+};
+const letters = dataType('t/letters', {
+  read: readLetters,
+  spell: (json) => String(json).toUpperCase(),
+});
+const word = dataType('t/word', {
+  read: readLetters,
+  spell: (json) => String(json).toLowerCase(),
+  casts: { [text.id]: unchanged, [letters.id]: unchanged },
+});
+
+const sized = dataType('t/sized', {
+  params: type({ 'length?': 'number' }),
+  read: (json, params) => {
+    const length = typeof params['length'] === 'number' ? params['length'] : 1;
+    if (typeof json === 'string' && json.length <= length) return json;
+    throw new Error(`${JSON.stringify(json)} is longer than ${length}`);
+  },
+  casts: { [text.id]: unchanged },
+});
 
 const entries: Readonly<Record<string, DataTypeAuthoringEntry>> = {
   [sqlExpression.id]: {
@@ -82,6 +113,11 @@ const entries: Readonly<Record<string, DataTypeAuthoringEntry>> = {
     print: (value) => JSON.stringify(value),
     documentation: 'A JSON document.',
   },
+  [letters.id]: {
+    written: { kind: 'tag', tag: 'letters', parse: (value) => value },
+    print: (value) => String(value),
+    documentation: 'Letters.',
+  },
 };
 
 const support: DataTypeSupport = {
@@ -96,7 +132,11 @@ const support: DataTypeSupport = {
     jsonb,
     uuid,
     geometry,
+    letters,
+    word,
+    sized,
   ]),
+  dataTypeOfCodec: () => undefined,
 };
 
 describe('entryForTag', () => {
@@ -117,52 +157,56 @@ describe('entryForPlain', () => {
   });
 
   it('finds nothing when no entry reads the syntax', () => {
-    expect(entryForPlain({ entries: {}, lookup: support.lookup }, 'string')).toBeUndefined();
+    expect(entryForPlain({ ...support, entries: {} }, 'string')).toBeUndefined();
   });
 });
 
 describe('knownTags', () => {
   it('lists every tag in the order the entries were merged', () => {
-    expect(knownTags(support)).toEqual(['sql', 'json']);
+    expect(knownTags(support)).toEqual(['sql', 'json', 'letters']);
   });
 });
 
 describe('readWrittenValue', () => {
   it('reads a tag through its entry', () => {
     expect(readWrittenValue(support, { kind: 'tag', tag: 'json', text: '[1]' })).toEqual(
-      ok({ type: json.id, value: [1] }),
+      ok(json.fromContract([1], {})),
     );
   });
 
   it('reads a string through the plain string entry', () => {
     expect(readWrittenValue(support, { kind: 'string', text: 'a' })).toEqual(
-      ok({ type: text.id, value: 'a' }),
+      ok(text.fromContract('a', {})),
     );
   });
 
   it('reads a boolean through the plain boolean entry', () => {
     expect(readWrittenValue(support, { kind: 'boolean', value: false })).toEqual(
-      ok({ type: bool.id, value: false }),
+      ok(bool.fromContract(false, {})),
     );
   });
 
   it('reads a number into the type its classifier picks', () => {
     expect(readWrittenValue(support, { kind: 'number', text: '7' })).toEqual(
-      ok({ type: small.id, value: 7 }),
+      ok(small.fromContract(7, {})),
     );
     expect(readWrittenValue(support, { kind: 'number', text: '700' })).toEqual(
-      ok({ type: big.id, value: 700 }),
+      ok(big.fromContract(700, {})),
     );
   });
 
   it('refuses a tag no entry names, listing the known tags', () => {
     expect(readWrittenValue(support, { kind: 'tag', tag: 'pg.sql', text: 'x' })).toEqual(
-      notOk({ kind: 'unknown-tag', tag: 'pg.sql', known: ['sql', 'json'] }),
+      notOk({ kind: 'unknown-tag', tag: 'pg.sql', known: ['sql', 'json', 'letters'] }),
     );
   });
 
   it('refuses a plain syntax no entry reads', () => {
-    const noEntries: DataTypeSupport = { entries: {}, lookup: support.lookup };
+    const noEntries: DataTypeSupport = {
+      entries: {},
+      lookup: support.lookup,
+      dataTypeOfCodec: () => undefined,
+    };
     expect(readWrittenValue(noEntries, { kind: 'string', text: 'a' })).toEqual(
       notOk({ kind: 'unwritable', syntax: 'string' }),
     );
@@ -180,6 +224,18 @@ describe('readWrittenValue', () => {
     );
   });
 
+  it('constructs the value through its type, which spells it', () => {
+    expect(readWrittenValue(support, { kind: 'tag', tag: 'letters', text: 'ab' })).toEqual(
+      ok(letters.fromContract('AB', {})),
+    );
+  });
+
+  it("refuses text its type does not hold, with the type's message", () => {
+    expect(readWrittenValue(support, { kind: 'tag', tag: 'letters', text: 'a1' })).toEqual(
+      notOk({ kind: 'unreadable', message: expect.stringContaining('"a1" is not letters.') }),
+    );
+  });
+
   it('refuses text the entry cannot parse, with the parse error message', () => {
     expect(readWrittenValue(support, { kind: 'tag', tag: 'json', text: '{' })).toEqual(
       notOk({ kind: 'unreadable', message: expect.stringContaining('JSON') }),
@@ -189,29 +245,69 @@ describe('readWrittenValue', () => {
 
 describe('castTypedValue', () => {
   it('takes a value of the receiving type unchanged', () => {
-    expect(castTypedValue(support, text.id, { type: text.id, value: 'a' })).toEqual(
-      ok({ type: text.id, value: 'a' }),
-    );
+    const value = text.fromContract('a', {});
+    expect(castTypedValue(support, text.id, {}, value)).toEqual(ok(value));
   });
 
   it('casts a value through the cast the receiving type declares, returning the cast value', () => {
-    expect(castTypedValue(support, big.id, { type: small.id, value: 7 })).toEqual(
-      ok({ type: big.id, value: '7n' }),
+    expect(castTypedValue(support, big.id, {}, small.fromContract(7, {}))).toEqual(
+      ok(big.fromContract('7n', {})),
     );
   });
 
   it('refuses a value the receiving type has no cast from, listing its casts', () => {
-    expect(castTypedValue(support, big.id, { type: text.id, value: 'a' })).toEqual(
-      notOk({ kind: 'no-cast', receivingType: big.id, valueType: text.id, casts: [small.id] }),
+    expect(castTypedValue(support, big.id, {}, text.fromContract('a', {}))).toEqual(
+      notOk({
+        kind: 'no-cast',
+        receivingType: big.id,
+        receivingParams: {},
+        valueType: text.id,
+        casts: [small.id],
+      }),
     );
-    expect(castTypedValue(support, sqlExpression.id, { type: text.id, value: 'a' })).toEqual(
-      notOk({ kind: 'no-cast', receivingType: sqlExpression.id, valueType: text.id, casts: [] }),
+    expect(castTypedValue(support, sqlExpression.id, {}, text.fromContract('a', {}))).toEqual(
+      notOk({
+        kind: 'no-cast',
+        receivingType: sqlExpression.id,
+        receivingParams: {},
+        valueType: text.id,
+        casts: [],
+      }),
     );
   });
 
   it('refuses a value the cast throws on, with the error message', () => {
-    expect(castTypedValue(support, uuid.id, { type: text.id, value: 'a' })).toEqual(
+    expect(castTypedValue(support, uuid.id, {}, text.fromContract('a', {}))).toEqual(
       notOk({ kind: 'unreadable', message: '"a" is not a UUID.' }),
+    );
+  });
+
+  it('constructs the cast value through the receiving type, which spells it', () => {
+    expect(castTypedValue(support, word.id, {}, letters.fromContract('AB', {}))).toEqual(
+      ok(word.fromContract('ab', {})),
+    );
+  });
+
+  it("refuses a cast value the receiving type does not hold, with the type's message", () => {
+    expect(castTypedValue(support, word.id, {}, text.fromContract('a b', {}))).toEqual(
+      notOk({
+        kind: 'refused-by-type',
+        receivingType: word.id,
+        message: expect.stringContaining('"a b" is not letters.'),
+      }),
+    );
+  });
+
+  it('constructs the value under the parameters of the position that receives it', () => {
+    expect(castTypedValue(support, sized.id, { length: 2 }, text.fromContract('ab', {}))).toEqual(
+      ok(sized.fromContract('ab', { length: 2 })),
+    );
+    expect(castTypedValue(support, sized.id, { length: 2 }, text.fromContract('abc', {}))).toEqual(
+      notOk({
+        kind: 'refused-by-type',
+        receivingType: sized.id,
+        message: expect.stringContaining('longer than 2'),
+      }),
     );
   });
 });
@@ -236,7 +332,7 @@ describe('admittedTags', () => {
   });
 
   it('lists the own tag first, then the tags of its cast sources', () => {
-    const geo = dataType('t/geo', { casts: { [json.id]: unchanged } });
+    const geo = dataType('t/geo', { read: (json) => json, casts: { [json.id]: unchanged } });
     const withGeo: DataTypeSupport = {
       entries: {
         ...entries,
@@ -247,6 +343,7 @@ describe('admittedTags', () => {
         },
       },
       lookup: createDataTypeLookup([json, geo]),
+      dataTypeOfCodec: () => undefined,
     };
     expect(admittedTags(withGeo, geo.id)).toEqual(['geo', 'json']);
   });
@@ -356,33 +453,35 @@ describe('describeRefusedValueType', () => {
   });
 });
 
+const at = (receiving: DataType) => ({ receivingType: receiving.id, receivingParams: {} });
+
 describe('exactRewrite', () => {
   it('rewrites a quoted string as a literal of the first tag the receiving type admits', () => {
-    expect(exactRewrite(support, sqlExpression.id, { kind: 'string', text: 'now()' })).toBe(
+    expect(exactRewrite(support, at(sqlExpression), { kind: 'string', text: 'now()' })).toBe(
       'sql`now()`',
     );
-    expect(exactRewrite(support, jsonb.id, { kind: 'string', text: '{}' })).toBe('json`{}`');
+    expect(exactRewrite(support, at(jsonb), { kind: 'string', text: '{}' })).toBe('json`{}`');
   });
 
   it('offers nothing for a value that is not a quoted string', () => {
-    expect(exactRewrite(support, sqlExpression.id, { kind: 'number', text: '8' })).toBeUndefined();
+    expect(exactRewrite(support, at(sqlExpression), { kind: 'number', text: '8' })).toBeUndefined();
     expect(
-      exactRewrite(support, sqlExpression.id, { kind: 'boolean', value: true }),
+      exactRewrite(support, at(sqlExpression), { kind: 'boolean', value: true }),
     ).toBeUndefined();
   });
 
   it('offers nothing for a receiving type without a tag', () => {
-    expect(exactRewrite(support, big.id, { kind: 'string', text: '8' })).toBeUndefined();
+    expect(exactRewrite(support, at(big), { kind: 'string', text: '8' })).toBeUndefined();
   });
 
   it('offers nothing when the printed literal would not read back as the same text', () => {
     expect(
-      exactRewrite(support, sqlExpression.id, { kind: 'string', text: '  now()' }),
+      exactRewrite(support, at(sqlExpression), { kind: 'string', text: '  now()' }),
     ).toBeUndefined();
   });
 
   it('offers nothing when the receiving type would refuse the rewrite too', () => {
-    expect(exactRewrite(support, jsonb.id, { kind: 'string', text: 'plan' })).toBeUndefined();
+    expect(exactRewrite(support, at(jsonb), { kind: 'string', text: 'plan' })).toBeUndefined();
   });
 });
 
@@ -424,7 +523,13 @@ describe('describeRefusal', () => {
   it('words a value of another form by the forms to write', () => {
     expect(
       describeRefusal(
-        { kind: 'no-cast', receivingType: big.id, valueType: text.id, casts: [small.id] },
+        {
+          kind: 'no-cast',
+          receivingType: big.id,
+          receivingParams: {},
+          valueType: text.id,
+          casts: [small.id],
+        },
         support,
         forms(NUMBER),
       ),
@@ -434,7 +539,13 @@ describe('describeRefusal', () => {
   it('joins several forms with or', () => {
     expect(
       describeRefusal(
-        { kind: 'no-cast', receivingType: geometry.id, valueType: bool.id, casts: [] },
+        {
+          kind: 'no-cast',
+          receivingType: geometry.id,
+          receivingParams: {},
+          valueType: bool.id,
+          casts: [],
+        },
         support,
         forms(QUOTED_STRING, JSON_FORM),
       ),
@@ -447,7 +558,13 @@ describe('describeRefusal', () => {
   it('adds the exact rewrite when there is one', () => {
     expect(
       describeRefusal(
-        { kind: 'no-cast', receivingType: sqlExpression.id, valueType: text.id, casts: [] },
+        {
+          kind: 'no-cast',
+          receivingType: sqlExpression.id,
+          receivingParams: {},
+          valueType: text.id,
+          casts: [],
+        },
         support,
         { forms: [SQL], rewrite: 'sql`(archived_at IS NULL)`' },
       ),
@@ -460,7 +577,13 @@ describe('describeRefusal', () => {
   it('names both types when the value has a form the position admits', () => {
     expect(
       describeRefusal(
-        { kind: 'no-cast', receivingType: small.id, valueType: big.id, casts: [] },
+        {
+          kind: 'no-cast',
+          receivingType: small.id,
+          receivingParams: {},
+          valueType: big.id,
+          casts: [],
+        },
         support,
         forms(NUMBER),
       ),

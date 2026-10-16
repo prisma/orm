@@ -6,7 +6,11 @@ import {
   CrossReferenceSchema,
 } from '@internal/contract/types';
 import { validateContractDomain } from '@internal/contract/validate-domain';
-import { DATA_TYPE_ID_PATTERN } from '@internal/framework-components/codec';
+import {
+  createDataTypeLookup,
+  DATA_TYPE_ID_PATTERN,
+  type DataTypeLookup,
+} from '@internal/framework-components/codec';
 import {
   type AnyEntityKindDescriptor,
   isPlainRecord,
@@ -21,6 +25,7 @@ import { contractError } from './contract-errors';
 import { composeSqlEntityKinds } from './entity-kinds';
 import { sameColumns, startsWithColumns } from './index-equivalence';
 import { resolveSqlToOneRelationStorage } from './relation-storage';
+import { sqlStorageTypeId } from './sql-data-type';
 
 export {
   CheckConstraintSchema,
@@ -1085,6 +1090,8 @@ export interface ValidateSqlContractFullyOptions {
    * `SqlContractSchema` when omitted.
    */
   readonly contractSchema?: Type<unknown>;
+  /** The target's data types, which say what each column is stored as. Without them every column is stored as its own data type. */
+  readonly dataTypes?: Pick<DataTypeLookup, 'get'>;
 }
 
 /**
@@ -1130,7 +1137,7 @@ export function validateSqlContractFully<T extends Contract<SqlStorage>>(
   validateModelStorageReferences(validated);
   validateExecutionDefaultsTargetMappedColumns(validated);
   validateRelationJoinFields(validated);
-  validateRelationThroughConsistency(validated);
+  validateRelationThroughConsistency(validated, options?.dataTypes ?? createDataTypeLookup([]));
   validateToOneRelationNullabilityAgainstStorage(validated);
   return validated;
 }
@@ -1196,12 +1203,16 @@ function lookupStorageColumn(
 }
 
 /**
- * Two storage columns share a type when their `dataType` and `typeParams` match. `codecId` and
+ * Two storage columns share a type when the types their `dataType`s are stored as and their `typeParams` match. `codecId` and
  * `nullable` are not compared: they do not change the database type that governs a join.
  */
-function sameStorageType(a: StorageColumn, b: StorageColumn): boolean {
+function sameStorageType(
+  a: StorageColumn,
+  b: StorageColumn,
+  dataTypes: Pick<DataTypeLookup, 'get'>,
+): boolean {
   return (
-    a.dataType === b.dataType &&
+    sqlStorageTypeId(a.dataType, dataTypes) === sqlStorageTypeId(b.dataType, dataTypes) &&
     canonicalizeJson(a.typeParams ?? {}) === canonicalizeJson(b.typeParams ?? {})
   );
 }
@@ -1251,6 +1262,7 @@ function validateThroughJoinSide(input: {
   readonly junctionColumnsLabel: string;
   readonly junctionNamespaceId: string;
   readonly junctionTable: string;
+  readonly dataTypes: Pick<DataTypeLookup, 'get'>;
 }): void {
   const fail = (detail: string): ContractValidationError =>
     new ContractValidationError(
@@ -1306,7 +1318,7 @@ function validateThroughJoinSide(input: {
         `${input.modelColumnsLabel} references column "${modelColumnName}" absent from table "${model.namespaceId}.${model.table}".`,
       );
     }
-    if (!sameStorageType(junctionColumn, modelColumn)) {
+    if (!sameStorageType(junctionColumn, modelColumn, input.dataTypes)) {
       throw fail(
         `joins "${input.junctionTable}.${junctionColumnName}" (${describeColumnType(junctionColumn)}) with "${model.table}.${modelColumnName}" (${describeColumnType(modelColumn)}) of differing storage type; junction columns must match the type of the column they reference.`,
       );
@@ -1321,7 +1333,10 @@ function validateThroughJoinSide(input: {
  * storage type. Without this, a `through` that disagrees with storage surfaces
  * as a silently wrong JOIN at query time rather than a validation error here.
  */
-function validateRelationThroughConsistency(contract: Contract<SqlStorage>): void {
+function validateRelationThroughConsistency(
+  contract: Contract<SqlStorage>,
+  dataTypes: Pick<DataTypeLookup, 'get'>,
+): void {
   for (const [namespaceId, namespace] of Object.entries(contract.domain.namespaces)) {
     for (const [modelName, model] of Object.entries(namespace.models)) {
       for (const [relationName, relation] of Object.entries(model.relations)) {
@@ -1334,6 +1349,7 @@ function validateRelationThroughConsistency(contract: Contract<SqlStorage>): voi
         // Parent side: the owning model's localFields (domain field names) join
         // the junction's parentColumns (storage columns).
         validateThroughJoinSide({
+          dataTypes,
           contract,
           qualifiedName,
           modelColumns: on.localFields,
@@ -1365,6 +1381,7 @@ function validateRelationThroughConsistency(contract: Contract<SqlStorage>): voi
                   .table,
               };
         validateThroughJoinSide({
+          dataTypes,
           contract,
           qualifiedName,
           modelColumns: through.targetColumns,

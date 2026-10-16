@@ -46,12 +46,12 @@ export type AuthoredColumnDefault =
       readonly kind: 'literal';
       readonly value: AuthoredColumnDefaultLiteralValue;
       /**
-       * Whether the value is already the canonical form the contract stores. A text contract source
-       * reads a written default into the canonical form itself, through the column's data type and
+       * Whether the value is already in the form the contract stores. A text contract source
+       * reads a written default into the stored form itself, through the column's data type and
        * its casts, so the build stores it as it stands; a TypeScript `.default(value)` hands over an
        * application value, which the column's codec encodes. ADR 254.
        */
-      readonly canonical?: boolean;
+      readonly inStoredForm?: boolean;
     };
 
 /** The type of a scalar: a codec and its type parameters, the domain's `ScalarFieldType` without its kind. */

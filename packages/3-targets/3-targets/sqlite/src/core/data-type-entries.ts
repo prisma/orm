@@ -3,11 +3,12 @@
  *
  * SQLite stores every whole number of up to 64 bits as an `integer` and has no type at all for a
  * wider one or for a non-finite number, so its classifier returns nothing for those and the value is
- * refused. A JSON document is stored as text, so the `json` tag yields `sqlite/text`. ADR 254.
+ * refused. The `json` tag yields `sqlite/json` and the `datetime` tag `sqlite/datetime`, each
+ * stored as text. ADR 254.
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import { type DataTypeAuthoringEntry, tagEntryKey } from '@internal/framework-components/authoring';
+import type { DataTypeAuthoringEntry } from '@internal/framework-components/authoring';
 import { canonicalizeJson } from '@internal/framework-components/utils';
 import { numeralText } from '@internal/sql-contract/data-type';
 import {
@@ -15,7 +16,16 @@ import {
   parseJsonText,
   signedRange,
 } from '@internal/sql-contract/data-type-support';
-import { sqliteInteger, sqliteReal, sqliteText } from './data-types';
+import {
+  sqliteBlob,
+  sqliteBlobFromHexText,
+  sqliteDatetime,
+  sqliteDatetimeText,
+  sqliteInteger,
+  sqliteJson,
+  sqliteReal,
+  sqliteText,
+} from './data-types';
 
 const classifySqliteNumber = createNumberClassifier({
   integers: [{ type: sqliteInteger.id, form: 'text', ...signedRange(64) }],
@@ -43,16 +53,27 @@ export function sqliteDataTypeEntries(): Readonly<Record<string, DataTypeAuthori
       print: printNumber,
       documentation: 'A number, whose type comes from its own size and precision.',
     },
-    [tagEntryKey('json')]: {
+    [sqliteJson.id]: {
       written: {
         kind: 'tag',
         tag: 'json',
-        type: sqliteText.id,
         parse: (text) => canonicalizeJson(parseJsonText(text)),
       },
       print: (value) => String(value),
       documentation:
         'Reads the text as a JSON document and stores its JSON text as the default value.',
+    },
+    [sqliteBlob.id]: {
+      written: { kind: 'tag', tag: 'blob', parse: sqliteBlobFromHexText },
+      print: (value) => String(value).toLowerCase(),
+      documentation:
+        'Bytes, written as hex text, two digits for each byte, as in blob`68656c6c6f`.',
+    },
+    [sqliteDatetime.id]: {
+      written: { kind: 'tag', tag: 'datetime', parse: sqliteDatetimeText },
+      print: (value) => String(value),
+      documentation:
+        'An instant, as in datetime`2024-01-01T00:00:00Z`. Reads ISO 8601 with a UTC offset and stores the instant in UTC with three fraction digits, the text every row holds.',
     },
   };
 }

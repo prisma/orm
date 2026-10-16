@@ -29,6 +29,7 @@ import {
   typeReferenceNode,
 } from '@internal/psl-parser';
 import type { PslSources } from '@internal/psl-parser/syntax';
+import { type AuthoredStorageTypeInstance, resolvedTypeParams } from '@internal/sql-contract/types';
 import {
   type AuthoredColumnDefault,
   type EnumTypeHandle,
@@ -179,6 +180,8 @@ export interface CollectResolvedFieldsInput {
   readonly symbolTable: SymbolTable;
   readonly enumTypeDescriptors: ReadonlyMap<BlockSymbol, ColumnDescriptor>;
   readonly namedTypeDescriptors: ReadonlyMap<NamedTypeSymbol, ColumnDescriptor>;
+  /** The storage types the named types declare, by name, whose parameters a column declared with one takes. */
+  readonly namedTypes: Readonly<Record<string, AuthoredStorageTypeInstance>>;
   /** The value objects the composite types declare, by name. */
   readonly valueObjectTypes: ValueObjectTypes;
   readonly authoringContributions: AuthoringContributions | undefined;
@@ -509,6 +512,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             sources: input.sources,
             binder: input.binder,
             columnDescriptor: descriptor,
+            columnTypeParams: resolvedTypeParams(descriptor, input.namedTypes),
             isListColumn,
             valueObjectDefault:
               valueObjectName === undefined

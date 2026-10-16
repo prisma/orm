@@ -93,61 +93,59 @@ flowchart TD
 
 ### Codec authoring (class form)
 
-SQL codec authors extend the framework `CodecImpl` base (and pair the codec with a `CodecDescriptorImpl` registration) per [ADR 208 — Higher-order codecs for parameterized types](../../../../docs/architecture%20docs/adrs/ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md). Each codec class declares `encode`, `decode`, `encodeJson`, and `decodeJson`. The JSON methods use the exact scalar shape produced by the corresponding database inside JSON values; include decoding calls `decodeJson`, while ordinary column decoding calls `decode`. `decodeJson` follows the rule on [`Codec.decodeJson`](../../../1-framework/1-core/framework-components/src/shared/codec.ts): it reads a stored JSON form of the type and throws on anything else. The readers in `@internal/framework-components/codec` implement it for the common forms. The DDL renderers read and encode a literal default with `encodeLiteralDefault` (`src/ast/ddl-default.ts`), and each element of a list default with `encodeListLiteralDefault`; both report a value the column's codec refuses as `CONTRACT.DEFAULT_INVALID`, naming the column.
+SQL codec authors extend the framework `CodecImpl` base (and pair the codec with a `CodecDescriptorImpl` registration) per [ADR 208 — Higher-order codecs for parameterized types](../../../../docs/architecture%20docs/adrs/ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md). Each codec class declares `toWire`, `fromWire`, `toDataTypeValue`, and `fromDataTypeValue`, and passes its descriptor, its data type and the column's parameters to `CodecImpl` ([ADR 254](../../../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#codecs)). `fromWire` reads both an ordinary row and an include's JSON payload, because each column's JSON projection writes the value a row of it carries. The data type reads every stored value, so `fromDataTypeValue` only converts it, and `toDataTypeValue` builds its result with `this.dataTypeValueOf(json)`. The DDL renderers read and write a literal default with `encodeLiteralDefault` (`src/ast/ddl-default.ts`), `fromDataTypeValue` then `toWire`, and each element of a list default with `encodeListLiteralDefault`; both report a value the column's codec refuses as `CONTRACT.DEFAULT_INVALID`, naming the column.
 
-- Query-time methods (`encode` / `decode`) are typed as `Promise<…>`-returning at the public boundary; sync method bodies are accepted via TypeScript bivariance and the runtime always awaits.
-- Build-time methods (`encodeJson` / `decodeJson` / `renderOutputType?`) stay synchronous so contract validation and client construction stay synchronous.
-- Both `encode` and `decode` must be implemented — there is no identity-default fallback.
+- Query-time methods (`toWire` / `fromWire`) are typed as `Promise<…>`-returning at the public boundary; sync method bodies are accepted via TypeScript bivariance and the runtime always awaits.
+- Build-time methods (`toDataTypeValue` / `fromDataTypeValue` / `renderOutputType?`) stay synchronous so contract validation and client construction stay synchronous.
+- All four must be implemented — there is no identity-default fallback.
 
 ```ts
 // Non-parameterized codec (P = void) — see packages/3-targets/3-targets/postgres/src/core/codecs.ts
 // for the production form.
 import {
-  CodecDescriptorImpl,
   CodecImpl,
   type CodecCallContext,
   type CodecInstanceContext,
-  decodeJsonString,
+  type DataTypeValue,
 } from '@internal/framework-components/codec';
-import type { JsonValue } from '@internal/contract/types';
+import { PostgresCodecDescriptor } from '@internal/target-postgres/codec-descriptor';
+import { pgText } from '@internal/target-postgres/data-types';
 
 class PgTextCodec extends CodecImpl<'pg/text@1', readonly ['equality'], string, string> {
-  override readonly id = 'pg/text@1';
-  override readonly traits = ['equality'] as const;
-  encode(v: string, _ctx: CodecCallContext): Promise<string> { return Promise.resolve(v); }
-  decode(w: string, _ctx: CodecCallContext): Promise<string> { return Promise.resolve(w); }
-  encodeJson(v: string) { return v; }
-  decodeJson(json: JsonValue) { return decodeJsonString('pg/text@1', json); }
+  async toWire(v: string, _ctx: CodecCallContext) { return v; }
+  async fromWire(w: string, _ctx: CodecCallContext) { return w; }
+  fromDataTypeValue(value: DataTypeValue<string>) { return value.value; }
+  toDataTypeValue(input: string) { return this.dataTypeValueOf(input); }
 }
 
-class PgTextDescriptor extends CodecDescriptorImpl<void> {
+class PgTextDescriptor extends PostgresCodecDescriptor<void> {
+  override readonly dataType = pgText.id;
   override readonly codecId = 'pg/text@1';
   override readonly traits = ['equality'] as const;
   override readonly paramsSchema = undefined;
-  override readonly factory = () => (_ctx: CodecInstanceContext) => new PgTextCodec();
+  override factory() { return (_ctx: CodecInstanceContext) => new PgTextCodec(this, pgText); }
+  // jsonProjection follows
 }
 ```
 
 #### Codec call context (`ctx`)
 
-Codecs receive a second `ctx` options argument; you may ignore it. The runtime allocates one `SqlCodecCallContext` per `runtime.query(plan, { signal })` or `runtime.execute(plan, { signal })` call and threads the same reference to every codec dispatch site as a non-optional argument — when no `signal` is supplied the runtime still threads an empty `{}`, never `undefined`. The internal `Codec` interface declares the parameter as required (`encode(value, ctx: SqlCodecCallContext)` / `decode(wire, ctx: SqlCodecCallContext)`); single-arg method bodies continue to compile via TypeScript's bivariance for trailing parameters, so codec ergonomics are unchanged.
+Codecs receive a second `ctx` options argument; you may ignore it. The runtime allocates one `SqlCodecCallContext` per `runtime.query(plan, { signal })` or `runtime.execute(plan, { signal })` call and threads the same reference to every codec dispatch site as a non-optional argument — when no `signal` is supplied the runtime still threads an empty `{}`, never `undefined`. The internal `Codec` interface declares the parameter as required (`toWire(value, ctx: SqlCodecCallContext)` / `fromWire(wire, ctx: SqlCodecCallContext)`); single-arg method bodies continue to compile via TypeScript's bivariance for trailing parameters, so codec ergonomics are unchanged.
 
 - **`ctx.signal`** — the same `AbortSignal` reference at every codec call in one query or execute operation. Forward it to network SDKs so aborted queries stop talking to the underlying service.
-- **`ctx.column`** (decode-side only) — `{ table, name }` for cells the runtime can resolve to a single column ref; `undefined` for aggregate aliases, computed projections, and other unresolvable cells. Encode-side `ctx.column` is always `undefined` (encode-time column enrichment is the middleware's domain).
+- **`ctx.column`** (`fromWire` only) — `{ table, name }` for cells the runtime can resolve to a single column ref; `undefined` for aggregate aliases, computed projections, and other unresolvable cells. In `toWire`, `ctx.column` is always `undefined` (write-time column enrichment is the middleware's domain).
 
 ```ts
 // Forward ctx.signal to a network call so aborted queries stop the SDK.
 class PgKmsSecretCodec extends CodecImpl<'pg/kms-secret@1', readonly [], string, string> {
-  override readonly id = 'pg/kms-secret@1';
-  override readonly traits = [] as const;
-  override async encode(v: string, ctx: SqlCodecCallContext): Promise<string> {
+  override async toWire(v: string, ctx: SqlCodecCallContext): Promise<string> {
     return kms.encrypt({ plaintext: v }, { signal: ctx.signal });
   }
-  override async decode(w: string, ctx: SqlCodecCallContext): Promise<string> {
+  override async fromWire(w: string, ctx: SqlCodecCallContext): Promise<string> {
     return kms.decrypt({ ciphertext: w }, { signal: ctx.signal });
   }
-  encodeJson(v: string) { return v; }
-  decodeJson(json: JsonValue) { return decodeJsonString('pg/kms-secret@1', json); }
+  fromDataTypeValue(value: DataTypeValue<string>) { return value.value; }
+  toDataTypeValue(input: string) { return this.dataTypeValueOf(input); }
 }
 ```
 

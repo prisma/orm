@@ -6,12 +6,9 @@ import {
   findAuthoringTypeConstructorCall,
 } from '@internal/framework-components/authoring';
 import type { DataTypeLookup } from '@internal/framework-components/codec';
+import { dataTypeParams } from '@internal/framework-components/codec';
 import type { PslTypeConstructorCall } from '@internal/framework-components/psl-ast';
-import {
-  dataTypeParams,
-  isSqlDataType,
-  unquotedSqlBaseName,
-} from '@internal/sql-contract/data-type';
+import { isSqlDataType, unquotedSqlBaseName } from '@internal/sql-contract/data-type';
 import type { StorageColumn } from '@internal/sql-contract/types';
 import { PG_ENUM_CODEC_ID } from '../codec-ids';
 import { positionalArg, SYNTHETIC_SPAN } from '../psl-build/psl-literals';

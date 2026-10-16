@@ -1,8 +1,15 @@
-import { type CodecCallContext, decodeJsonString } from '@internal/framework-components/codec';
+import {
+  type CodecCallContext,
+  type DataTypeValue,
+  dataType,
+  readJsonString,
+} from '@internal/framework-components/codec';
 import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import { MongoParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
 import { resolveValue } from '../src/resolve-value';
+
+const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
 
 function deferred<T>(): {
   promise: Promise<T>;
@@ -19,18 +26,19 @@ function deferred<T>(): {
 }
 
 describe('resolveValue — CodecCallContext threading', () => {
-  it('forwards the same ctx instance to every codec.encode (root-level leaf)', async () => {
+  it('forwards the same ctx instance to every codec.toWire (root-level leaf)', async () => {
     const observed: (CodecCallContext | undefined)[] = [];
     const registry = newMongoCodecRegistry();
     registry.register(
       mongoCodec({
         typeId: 'test/observe@1',
-        decode: (w: string) => w,
-        encode: (v: string, ctx?: CodecCallContext) => {
+        fromWire: (w: string) => w,
+        toWire: (v: string, ctx?: CodecCallContext) => {
           observed.push(ctx);
           return v;
         },
-        decodeJson: (json) => decodeJsonString('test/observe@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       }),
     );
 
@@ -46,12 +54,13 @@ describe('resolveValue — CodecCallContext threading', () => {
     registry.register(
       mongoCodec({
         typeId: 'test/observe-recursive@1',
-        decode: (w: string) => w,
-        encode: (v: string, ctx?: CodecCallContext) => {
+        fromWire: (w: string) => w,
+        toWire: (v: string, ctx?: CodecCallContext) => {
           observed.push(ctx);
           return v;
         },
-        decodeJson: (json) => decodeJsonString('test/observe-recursive@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       }),
     );
 
@@ -82,13 +91,14 @@ describe('resolveValue — CodecCallContext threading', () => {
     registry.register(
       mongoCodec({
         typeId: 'test/single-arg-author@1',
-        decode: (w: string) => w,
-        encode: (v: string) => {
+        fromWire: (w: string) => w,
+        toWire: (v: string) => {
           invoked += 1;
           receivedValue = v;
           return v;
         },
-        decodeJson: (json) => decodeJsonString('test/single-arg-author@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       }),
     );
 
@@ -108,12 +118,13 @@ describe('resolveValue — CodecCallContext threading', () => {
     registry.register(
       mongoCodec({
         typeId: 'test/counter@1',
-        decode: (w: string) => w,
-        encode: (v: string) => {
+        fromWire: (w: string) => w,
+        toWire: (v: string) => {
           callCount += 1;
           return v;
         },
-        decodeJson: (json) => decodeJsonString('test/counter@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       }),
     );
 
@@ -140,9 +151,10 @@ describe('resolveValue — CodecCallContext threading', () => {
     registry.register(
       mongoCodec({
         typeId: 'test/blocking@1',
-        decode: (w: string) => w,
-        encode: (v: string) => release.promise.then((suffix) => `${v}:${suffix}`),
-        decodeJson: (json) => decodeJsonString('test/blocking@1', json),
+        fromWire: (w: string) => w,
+        toWire: (v: string) => release.promise.then((suffix) => `${v}:${suffix}`),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       }),
     );
 
@@ -171,11 +183,12 @@ describe('resolveValue — CodecCallContext threading', () => {
     registry.register(
       mongoCodec({
         typeId: 'test/explody@1',
-        decode: (w: string) => w,
-        encode: () => {
+        fromWire: (w: string) => w,
+        toWire: () => {
           throw cause;
         },
-        decodeJson: (json) => decodeJsonString('test/explody@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       }),
     );
 
@@ -195,9 +208,10 @@ describe('resolveValue — CodecCallContext threading', () => {
     registry.register(
       mongoCodec({
         typeId: 'test/level-blocker@1',
-        decode: (w: string) => w,
-        encode: (v: string) => blockingLeaf.promise.then((s) => `${v}:${s}`),
-        decodeJson: (json) => decodeJsonString('test/level-blocker@1', json),
+        fromWire: (w: string) => w,
+        toWire: (v: string) => blockingLeaf.promise.then((s) => `${v}:${s}`),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       }),
     );
 
@@ -228,9 +242,10 @@ describe('resolveValue — CodecCallContext threading', () => {
     registry.register(
       mongoCodec({
         typeId: 'test/array-blocker@1',
-        decode: (w: string) => w,
-        encode: (v: string) => blockingLeaf.promise.then((s) => `${v}:${s}`),
-        decodeJson: (json) => decodeJsonString('test/array-blocker@1', json),
+        fromWire: (w: string) => w,
+        toWire: (v: string) => blockingLeaf.promise.then((s) => `${v}:${s}`),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       }),
     );
 

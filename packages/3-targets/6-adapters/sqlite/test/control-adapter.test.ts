@@ -2,7 +2,6 @@ import { DatabaseSync } from 'node:sqlite';
 import type { CliStructuredError } from '@internal/errors/control';
 import { PrimaryKey } from '@internal/sql-schema-ir/types';
 import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
-import { parseSqliteDefault } from '@internal/target-sqlite/default-normalizer';
 import { normalizeSqliteNativeType } from '@internal/target-sqlite/native-type-normalizer';
 import { describe, expect, it } from 'vitest';
 import { SqliteControlAdapter } from '../src/core/control-adapter';
@@ -59,20 +58,51 @@ describe('SqliteControlAdapter.introspect', () => {
     await driver.close();
   });
 
-  it('stamps normalized resolvedNativeType and parsed resolvedDefault on columns', async () => {
+  it('stamps normalized resolvedNativeType, and a literal default read with the contract codec', async () => {
     const driver = createMemoryDriver();
     driver.db.exec(
-      "CREATE TABLE docs (status TEXT NOT NULL DEFAULT 'draft', n INTEGER DEFAULT 5, note TEXT)",
+      "CREATE TABLE docs (status TEXT NOT NULL DEFAULT 'draft', n INTEGER DEFAULT 5, at TEXT DEFAULT '2024-01-01T00:00:00Z', note TEXT DEFAULT 'kept')",
     );
+    const contract = {
+      storage: {
+        namespaces: {
+          main: {
+            entries: {
+              table: {
+                docs: {
+                  columns: {
+                    status: { codecId: 'sqlite/text@1' },
+                    n: { codecId: 'sqlite/integer@1' },
+                    at: { codecId: 'sqlite/datetime@1' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
     const adapter = new SqliteControlAdapter(createSqliteBuiltinCodecLookup());
-    const schema = await adapter.introspect(driver);
+    const schema = await adapter.introspect(driver, contract);
     const columns = schema.tables['docs']!.columns;
 
-    expect(columns['status']!.resolvedNativeType).toBe('text');
-    expect(columns['status']!.resolvedDefault).toEqual({ kind: 'literal', value: 'draft' });
-    expect(columns['n']!.resolvedNativeType).toBe('integer');
-    expect(columns['n']!.resolvedDefault).toEqual({ kind: 'literal', value: '5' });
-    expect(columns['note']!.resolvedDefault).toBeUndefined();
+    expect({
+      statusType: columns['status']!.resolvedNativeType,
+      status: columns['status']!.resolvedDefault,
+      nType: columns['n']!.resolvedNativeType,
+      n: columns['n']!.resolvedDefault,
+      at: columns['at']!.resolvedDefault,
+      atValue: columns['at']!.defaultValue,
+      note: columns['note']!.resolvedDefault,
+    }).toMatchObject({
+      statusType: 'text',
+      status: { kind: 'literal', value: 'draft' },
+      nType: 'integer',
+      n: { kind: 'literal', value: '5' },
+      at: { kind: 'literal', value: '2024-01-01T00:00:00.000Z' },
+      atValue: { type: 'sqlite/datetime', value: '2024-01-01T00:00:00.000Z' },
+      note: undefined,
+    });
     await driver.close();
   });
 
@@ -228,70 +258,6 @@ describe('SqliteControlAdapter.introspect', () => {
     expect(schema.tables['t']!.columns['name']!.default).toBe("'anon'");
     expect(schema.tables['t']!.columns['active']!.default).toBe('1');
     await driver.close();
-  });
-});
-
-describe('parseSqliteDefault', () => {
-  it('normalizes CURRENT_TIMESTAMP to now()', () => {
-    expect(parseSqliteDefault('CURRENT_TIMESTAMP')).toEqual({
-      kind: 'function',
-      expression: 'now()',
-    });
-  });
-
-  it("normalizes datetime('now') to now()", () => {
-    expect(parseSqliteDefault("(datetime('now'))")).toEqual({
-      kind: 'function',
-      expression: 'now()',
-    });
-  });
-
-  it('preserves CURRENT_DATE distinctly', () => {
-    expect(parseSqliteDefault('CURRENT_DATE')).toEqual({
-      kind: 'function',
-      expression: 'CURRENT_DATE',
-    });
-  });
-
-  it('preserves CURRENT_TIME distinctly', () => {
-    expect(parseSqliteDefault('CURRENT_TIME')).toEqual({
-      kind: 'function',
-      expression: 'CURRENT_TIME',
-    });
-  });
-
-  it('parses NULL default', () => {
-    expect(parseSqliteDefault('NULL')).toEqual({ kind: 'literal', value: null });
-  });
-
-  it('reads an integer column default as digit text, the stored form of sqlite/integer', () => {
-    expect(parseSqliteDefault('42', 'integer')).toEqual({ kind: 'literal', value: '42' });
-    expect(parseSqliteDefault('-0', 'INTEGER')).toEqual({ kind: 'literal', value: '0' });
-    expect(parseSqliteDefault("'42'", 'integer')).toEqual({ kind: 'literal', value: '42' });
-    const big = '9223372036854775807';
-    expect(parseSqliteDefault(big, 'integer')).toEqual({ kind: 'literal', value: big });
-  });
-
-  it('returns number for real nativeType', () => {
-    expect(parseSqliteDefault('3.14', 'real')).toEqual({ kind: 'literal', value: 3.14 });
-    expect(parseSqliteDefault('0xFF', 'real')).toEqual({ kind: 'literal', value: 255 });
-    expect(parseSqliteDefault('1.5e3', 'real')).toEqual({ kind: 'literal', value: 1500 });
-  });
-
-  it('returns number when nativeType is unknown', () => {
-    expect(parseSqliteDefault('42')).toEqual({ kind: 'literal', value: 42 });
-  });
-
-  it('parses string literal default', () => {
-    expect(parseSqliteDefault("'hello'")).toEqual({ kind: 'literal', value: 'hello' });
-  });
-
-  it('preserves unrecognized expressions as function', () => {
-    expect(parseSqliteDefault('abs(-5)')).toEqual({ kind: 'function', expression: 'abs(-5)' });
-  });
-
-  it('strips outer parentheses', () => {
-    expect(parseSqliteDefault('(42)')).toEqual({ kind: 'literal', value: 42 });
   });
 });
 

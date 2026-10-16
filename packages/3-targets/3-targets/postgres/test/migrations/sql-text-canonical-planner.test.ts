@@ -28,7 +28,6 @@ import { PostgresRlsEnablement } from '../../src/core/postgres-rls-enablement';
 import { PostgresRlsPolicy } from '../../src/core/postgres-rls-policy';
 import { type PostgresContract, PostgresSchema } from '../../src/core/postgres-schema';
 import { computeContentHash } from '../../src/core/rls/canonicalize';
-import { postgresRenderDefault } from '../../src/exports/control';
 import { postgresTypeComponents, postgresTypeLookups } from '../postgres-type-lookups';
 
 const TABLE = 'posts';
@@ -127,7 +126,6 @@ function plan(kind: Naming, objects: readonly SqlObject[] = EVERY_OBJECT) {
     contract: to,
     schema: contractToPostgresDatabaseSchemaNode(from, {
       annotationNamespace: 'pg',
-      renderDefault: postgresRenderDefault,
       codecLookup: postgresTypeLookups.codecLookup,
       dataTypeLookup: postgresTypeLookups.dataTypeLookup,
     }),

@@ -58,14 +58,14 @@ function createJsonCodecs(): ReadonlyArray<Codec<string>> {
   return [
     defineTestCodec({
       typeId: 'pg/jsonb@1',
-      encode: (value: string | JsonValue): string => JSON.stringify(value),
-      decode: (wire: string | JsonValue): JsonValue =>
+      toWire: (value: string | JsonValue): string => JSON.stringify(value),
+      fromWire: (wire: string | JsonValue): JsonValue =>
         typeof wire === 'string' ? (JSON.parse(wire) as JsonValue) : wire,
     }),
     defineTestCodec({
       typeId: 'pg/int4@1',
-      encode: (v: number) => v,
-      decode: (w: number) => w,
+      toWire: (v: number) => v,
+      fromWire: (w: number) => w,
     }),
   ];
 }

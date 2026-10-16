@@ -56,7 +56,10 @@ const fixtureTypeId = (codecId: string) => dataTypeId(codecId.split('@')[0] ?? c
 const writtenFixtureTypes = new Map<string, DataType>();
 
 function fixtureSqlDataType(codecId: string, name: string): DataType {
-  const type = sqlDataType(fixtureTypeId(codecId), { texts: [{ text: name, written: true }] });
+  const type = sqlDataType(fixtureTypeId(codecId), {
+    read: (json) => json,
+    texts: [{ text: name, written: true }],
+  });
   writtenFixtureTypes.set(type.id, type);
   return type;
 }
@@ -64,7 +67,7 @@ function fixtureSqlDataType(codecId: string, name: string): DataType {
 const fixtureDataTypes = (descriptors: readonly { readonly dataType?: string }[]) =>
   [...new Set(descriptors.map((descriptor) => descriptor.dataType))]
     .filter((id): id is string => id !== undefined)
-    .map((id) => writtenFixtureTypes.get(id) ?? dataType(id, {}));
+    .map((id) => writtenFixtureTypes.get(id) ?? dataType(id, { read: (json) => json }));
 
 const contract = new SqlContractSerializer().deserializeContract({
   target: 'postgres',
@@ -104,11 +107,12 @@ const contract = new SqlContractSerializer().deserializeContract({
   domain: applicationDomainOf({ models: {} }),
 }) as PostgresContract;
 
-function genericDescriptor(codecId: string): AnyCodecDescriptorTemplate {
+function genericDescriptor(codecId: string, type?: DataType): AnyCodecDescriptorTemplate {
   const codec = defineTestCodec({
     typeId: codecId,
-    encode: (value: JsonValue): JsonValue => value,
-    decode: (wire: JsonValue): JsonValue => wire,
+    dataType: type,
+    toWire: (value: JsonValue): JsonValue => value,
+    fromWire: (wire: JsonValue): JsonValue => wire,
   });
   return {
     codecId,
@@ -124,12 +128,15 @@ function postgresDescriptor(
   nativeType: string,
   onProjection?: () => void,
 ): AnyPostgresCodecDescriptor {
-  return postgresCodec(genericDescriptor(codecId), {
-    dataType: fixtureSqlDataType(codecId, nativeType),
+  const type = fixtureSqlDataType(codecId, nativeType);
+  const template = genericDescriptor(codecId, type);
+  return postgresCodec(template, {
+    dataType: type,
     jsonProjection(expression: ProjectionExpr): ProjectionExpr {
       onProjection?.();
       return expression;
     },
+    factory: (_descriptor, _type, params) => template.factory(params),
   });
 }
 
@@ -138,10 +145,12 @@ function transformingPostgresDescriptor(
   nativeType: string,
   onMaterialize?: () => void,
 ): AnyPostgresCodecDescriptor {
+  const type = fixtureSqlDataType(codecId, nativeType);
   const codec = defineTestCodec({
     typeId: codecId,
-    encode: (value: string): string => `encoded:${value}`,
-    decode: (wire: string): string => wire,
+    dataType: type,
+    toWire: (value: string): string => `encoded:${value}`,
+    fromWire: (wire: string): string => wire,
   });
   const descriptor: AnyCodecDescriptorTemplate = {
     codecId,
@@ -154,8 +163,9 @@ function transformingPostgresDescriptor(
     },
   };
   return postgresCodec(descriptor, {
-    dataType: fixtureSqlDataType(codecId, nativeType),
+    dataType: type,
     jsonProjection: (expression: ProjectionExpr) => expression,
+    factory: (_descriptor, _type, params) => descriptor.factory(params),
   });
 }
 

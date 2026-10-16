@@ -1,40 +1,23 @@
-import { canonicalFormOf, type DataType } from '@internal/framework-components/codec';
 import { SqlColumnDefaultIR, SqlColumnIR } from '@internal/sql-schema-ir/types';
-import { ifDefined } from '@internal/utils/defined';
 import { describe, expect, it } from 'vitest';
-import {
-  pgDate,
-  pgInterval,
-  pgTime,
-  pgTimestamp,
-  pgTimestamptz,
-  pgTimetz,
-} from '../../src/core/data-types';
+import { pgTimestamptz } from '../../src/core/data-types';
 import {
   buildSetDefaultColumn,
   renderColumnDdl,
 } from '../../src/core/migrations/column-ddl-rendering';
 import { postgresTypeLookups as types } from '../postgres-type-lookups';
 
-function column(
-  nativeType: string,
-  codecId: string,
-  dataType: DataType,
-  value: string | readonly (string | null)[],
-): SqlColumnIR {
-  const many = Array.isArray(value);
-  const codec = types.codecLookup.descriptorFor(codecId);
+function column(value: string | readonly (string | null)[] | null, many: boolean): SqlColumnIR {
   return new SqlColumnIR({
     name: 'v',
-    nativeType,
-    nullable: false,
+    nativeType: 'timestamptz',
+    nullable: true,
     ...(many ? { many: true } : {}),
     authoredDefault: { kind: 'literal', value },
     resolvedDefault: { kind: 'literal', value },
-    codecRef: { codecId, ...(many ? { many: true } : {}) },
-    codecBaseNativeType: nativeType,
-    dataType,
-    ...ifDefined('toCanonicalForm', codec && canonicalFormOf(codec, types.dataTypeLookup)),
+    codecRef: { codecId: 'pg/timestamptz-temporal@1', ...(many ? { many: true } : {}) },
+    codecBaseNativeType: 'timestamptz',
+    dataType: pgTimestamptz,
   });
 }
 
@@ -48,126 +31,20 @@ function defaultNode(node: SqlColumnIR): SqlColumnDefaultIR {
 
 describe('a date or time default written by the planner', () => {
   it.each([
-    [
-      'timestamptz',
-      'pg/timestamptz-temporal@1',
-      pgTimestamptz,
-      '2024-01-01T00:00:00Z',
-      '2024-01-01T00:00:00Z',
-    ],
-    [
-      'timestamptz',
-      'pg/timestamptz-temporal@1',
-      pgTimestamptz,
-      '2024-01-01T00:00:00.000Z',
-      '2024-01-01T00:00:00Z',
-    ],
-    [
-      'timestamptz',
-      'pg/timestamptz-string@1',
-      pgTimestamptz,
-      '2024-01-01 01:00:00+01',
-      '2024-01-01T00:00:00Z',
-    ],
-    [
-      'timestamptz',
-      'pg/timestamptz-temporal@1',
-      pgTimestamptz,
-      '0044-03-15 00:00:00+00 BC',
-      '-000043-03-15T00:00:00Z',
-    ],
-    [
-      'timestamptz',
-      'pg/timestamptz-temporal@1',
-      pgTimestamptz,
-      '0000-06-15T00:00:00Z',
-      '0000-06-15T00:00:00Z',
-    ],
-    [
-      'timestamptz',
-      'pg/timestamptz-string@1',
-      pgTimestamptz,
-      '12026-01-02 03:04:05+00',
-      '+012026-01-02T03:04:05Z',
-    ],
-    [
-      'timestamp',
-      'pg/timestamp-temporal@1',
-      pgTimestamp,
-      '2024-01-01 12:00:00',
-      '2024-01-01T12:00:00',
-    ],
-    ['date', 'pg/date-temporal@1', pgDate, '0044-03-15 BC', '-000043-03-15'],
-    ['time', 'pg/time-temporal@1', pgTime, '12:34:56.500', '12:34:56.5'],
-    ['timetz', 'pg/timetz@1', pgTimetz, '12:34:56+02', '12:34:56+02:00'],
-    ['interval', 'pg/interval@1', pgInterval, 'P13M', 'P1Y1M'],
+    ['a value', '2024-01-01T00:00:00Z', false],
+    ['a list with a null element', ['2024-01-01T00:00:00Z', null], true],
+    ['a null list', null, true],
   ])(
-    'hands DDL a %s default through %s, given %s, as %s, in CREATE TABLE and SET DEFAULT alike',
-    (nativeType, codecId, dataType, written, canonical) => {
-      const node = column(nativeType, codecId, dataType, written);
+    'hands DDL %s as the contract stores it, in CREATE TABLE and SET DEFAULT alike, for the adapter to write through the codec',
+    (_name, value, many) => {
+      const node = column(value, many);
       expect({
         createTable: renderColumnDdl('v', node, types).default,
         setDefault: buildSetDefaultColumn('v', defaultNode(node), types)?.default,
       }).toEqual({
-        createTable: { kind: 'literal', value: canonical },
-        setDefault: { kind: 'literal', value: canonical },
+        createTable: { kind: 'literal', value },
+        setDefault: { kind: 'literal', value },
       });
     },
   );
-
-  it('preserves a nullable list container default in CREATE TABLE and SET DEFAULT', () => {
-    const node = new SqlColumnIR({
-      name: 'v',
-      nativeType: 'timestamptz[]',
-      nullable: true,
-      many: true,
-      authoredDefault: { kind: 'literal', value: null },
-      resolvedDefault: { kind: 'literal', value: null },
-      codecRef: { codecId: 'pg/timestamptz-temporal@1', many: true },
-      codecBaseNativeType: 'timestamptz',
-      dataType: pgTimestamptz,
-    });
-    expect({
-      createTable: renderColumnDdl('v', node, types).default,
-      setDefault: buildSetDefaultColumn('v', defaultNode(node), types)?.default,
-    }).toEqual({
-      createTable: { kind: 'literal', value: null },
-      setDefault: { kind: 'literal', value: null },
-    });
-  });
-
-  it('canonicalizes list defaults while preserving null elements', () => {
-    const node = column('timestamptz', 'pg/timestamptz-temporal@1', pgTimestamptz, [
-      '2024-01-01T00:00:00.000Z',
-      null,
-      '0044-03-15 00:00:00+00 BC',
-    ]);
-    const canonical = {
-      kind: 'literal',
-      value: ['2024-01-01T00:00:00Z', null, '-000043-03-15T00:00:00Z'],
-    };
-    expect({
-      createTable: renderColumnDdl('v', node, types).default,
-      setDefault: buildSetDefaultColumn('v', defaultNode(node), types),
-    }).toEqual({
-      createTable: canonical,
-      setDefault: expect.objectContaining({ type: 'timestamptz[]', default: canonical }),
-    });
-  });
-
-  it('refuses to write a contract default its data type does not hold, and says to re-emit', () => {
-    const node = column(
-      'timestamptz',
-      'pg/timestamptz-temporal@1',
-      pgTimestamptz,
-      '2024-01-01 00:00:00',
-    );
-    const refusal = expect.objectContaining({
-      code: 'CONTRACT.DEFAULT_INVALID',
-      message:
-        'Column "v": The contract holds this default in a form its data type does not store: pg/timestamptz needs a UTC offset, but "2024-01-01 00:00:00" has none. Add Z for UTC or an offset such as +02:00, as in "2024-01-01T12:34:56Z". Re-emit the contract, then try again.',
-    });
-    expect(() => renderColumnDdl('v', node, types)).toThrow(refusal);
-    expect(() => buildSetDefaultColumn('v', defaultNode(node), types)).toThrow(refusal);
-  });
 });

@@ -1,24 +1,27 @@
 import type { JsonValue } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import { sqliteJsonDescriptor } from '../src/core/codecs';
+import { sqliteJson } from '../src/core/data-types';
+import { fromContractJson, toContractJson } from './contract-json';
 
-describe('sqlite/json@1 canonical form', () => {
-  it.each([
-    ['{ "b": 1, "a": [true, null] }', '{"a":[true,null],"b":1}'],
-    ['{"a":{"d":1,"c":2}}', '{"a":{"c":2,"d":1}}'],
-    [' "plain" ', '"plain"'],
-    ['null', 'null'],
-    ['1.50', '1.5'],
-  ])('turns the JSON text %s into %s, the JSON text of the same document', (text, canonical) => {
-    expect(sqliteJsonDescriptor.toCanonicalForm?.(text)).toBe(canonical);
+const codec = sqliteJsonDescriptor.factory()({ name: '<test>' });
+
+describe('the value of sqlite/json', () => {
+  it.each<readonly [JsonValue, string]>([
+    [{ b: 1, a: [true, null] }, '{"a":[true,null],"b":1}'],
+    [{ a: { d: 1, c: 2 } }, '{"a":{"c":2,"d":1}}'],
+    ['plain', '"plain"'],
+    [null, 'null'],
+    [1.5, '1.5'],
+  ])('is the JSON text of %j with sorted keys and no added whitespace: %s', (document, stored) => {
+    expect(toContractJson(codec, document)).toBe(stored);
   });
 
-  it.each<readonly [string, JsonValue]>([
-    ['text that is not JSON', 'hello'],
-    ['a value that is not text', { a: 1 }],
-  ])('refuses %s with a cast-level code', (_name, value) => {
-    expect(() => sqliteJsonDescriptor.toCanonicalForm?.(value)).toThrow(
-      expect.objectContaining({ code: 'CONTRACT.CAST_REFUSED' }),
-    );
+  it('reads back as the document', () => {
+    expect(fromContractJson(codec, '{"a":[true,null],"b":1}')).toEqual({ a: [true, null], b: 1 });
+  });
+
+  it('is owned by sqlite/json, which sqlite/json@1 represents', () => {
+    expect(sqliteJsonDescriptor.dataType).toBe(sqliteJson.id);
   });
 });

@@ -19,7 +19,7 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'c05a77e8c5dd486ddf723889af22c7e63f374689edce17c326101688d5d6d02a'>;
+  StorageHashBase<'e429c73ec99d27b790baaacc9d16734cea79a2a64169dde8b8a1dd7fcccbac57'>;
 export type ExecutionHash =
   ExecutionHashBase<'a6bd95c41e717d2a7dd3d556af8befa35950b61ccf39569e36ab3a357b40457e'>;
 export type ProfileHash =
@@ -226,7 +226,7 @@ type ContractBase = Omit<
             readonly post: {
               columns: {
                 readonly createdAt: {
-                  readonly dataType: 'sqlite/text';
+                  readonly dataType: 'sqlite/datetime';
                   readonly codecId: 'sqlite/datetime@1';
                   readonly nullable: false;
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
@@ -381,7 +381,7 @@ type ContractBase = Omit<
             readonly user: {
               columns: {
                 readonly createdAt: {
-                  readonly dataType: 'sqlite/text';
+                  readonly dataType: 'sqlite/datetime';
                   readonly codecId: 'sqlite/datetime@1';
                   readonly nullable: false;
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };

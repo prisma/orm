@@ -10,9 +10,9 @@ import type {
   CodecLookupWithDescriptors,
   DataTypeLookup,
 } from '@internal/framework-components/codec';
+import { dataTypeParams } from '@internal/framework-components/codec';
 import { canonicalizeJson } from '@internal/framework-components/utils';
 import {
-  dataTypeParams,
   isSqlDataType,
   type SqlDataType,
   type SqlTypeParams,

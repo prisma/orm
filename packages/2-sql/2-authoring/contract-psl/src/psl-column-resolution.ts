@@ -63,7 +63,7 @@ import type { PslSources } from '@internal/psl-parser/syntax';
 import {
   SQL_EXPRESSION_DATA_TYPE_ID,
   SQL_EXPRESSION_TAG,
-  sqlTextFromCanonical,
+  sqlTextFromStored,
 } from '@internal/sql-contract/sql-expression';
 import { checkSqlDefaultText, reservedSqlDefaultText } from '@internal/sql-contract/validators';
 import type { AuthoredColumnDefault } from '@internal/sql-contract-ts/contract-builder';
@@ -676,6 +676,8 @@ export function lowerDefaultForField(input: {
   readonly sources: PslSources;
   readonly binder: Binder;
   readonly columnDescriptor: ColumnDescriptor;
+  /** The column's parameters: its own, or those of the named type it is declared with. */
+  readonly columnTypeParams: Record<string, unknown> | undefined;
   /** Whether the field is stored in a list column. A list of value objects is not: its one column holds the whole list as one JSON array. */
   readonly isListColumn: boolean;
   /** For a field typed by a value object, the value objects a literal default is checked against. */
@@ -726,7 +728,7 @@ export function lowerDefaultForField(input: {
       });
       return {};
     }
-    return { defaultValue: { kind: 'literal', value: null, canonical: true } };
+    return { defaultValue: { kind: 'literal', value: null, inStoredForm: true } };
   }
   if (
     value.kind === 'list' &&
@@ -748,7 +750,7 @@ export function lowerDefaultForField(input: {
       spans,
       sourceElementIndexes,
       isList: readsListElements(written),
-      column: input.columnDescriptor,
+      column: { codecId: input.columnDescriptor.codecId, typeParams: input.columnTypeParams },
       codecLookup: input.codecLookup,
       dataTypes: input.dataTypes,
       fieldPath: `${input.modelName}.${input.fieldName}`,
@@ -794,9 +796,9 @@ export function lowerDefaultForField(input: {
         input.diagnostics.push({ code, message, ...source.at() });
       }
       if (mismatches.length > 0) return {};
-      return { defaultValue: { kind: 'literal' as const, value: stored, canonical: true } };
+      return { defaultValue: { kind: 'literal' as const, value: stored, inStoredForm: true } };
     }
-    return { defaultValue: { kind: 'literal' as const, value: restoredValue, canonical: true } };
+    return { defaultValue: { kind: 'literal' as const, value: restoredValue, inStoredForm: true } };
   };
 
   const canonicalized = (scalar: ParsedWrittenScalar): WrittenScalar | undefined => {
@@ -878,7 +880,7 @@ export function lowerDefaultForField(input: {
     if (written.kind !== 'tag') return readAsLiteral(written, spans);
     const read = readWrittenValue(input.dataTypes, written);
     if (read.ok && read.value.type === SQL_EXPRESSION_DATA_TYPE_ID) {
-      return sqlExpressionDefault(sqlTextFromCanonical(read.value.value), value.span);
+      return sqlExpressionDefault(sqlTextFromStored(read.value.value), value.span);
     }
     return readAsLiteral(written, spans);
   }

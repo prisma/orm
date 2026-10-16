@@ -196,7 +196,7 @@ async function runMigration(
         ],
       });
       if (!run.ok) throw new Error(`Origin runner failed: ${formatFailure(run.failure)}`);
-      currentSchema = await adapter.introspect(driver);
+      currentSchema = await adapter.introspect(driver, options.destination);
     }
     if (options.seed) await options.seed(driver);
 
@@ -236,7 +236,7 @@ async function runMigration(
       return;
     }
 
-    const freshSchema = await adapter.introspect(driver);
+    const freshSchema = await adapter.introspect(driver, options.destination);
     const vr = familyInstance.verifySchema({
       contract: options.destination,
       schema: freshSchema,

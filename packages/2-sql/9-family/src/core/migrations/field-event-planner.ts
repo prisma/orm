@@ -23,7 +23,9 @@
  */
 
 import type { Contract } from '@internal/contract/types';
+import type { DataTypeLookup } from '@internal/framework-components/codec';
 import type { OpFactoryCall } from '@internal/framework-components/control';
+import { sqlStorageTypeId } from '@internal/sql-contract/data-type';
 import { type SqlStorage, type StorageColumn, StorageTable } from '@internal/sql-contract/types';
 import type { ColumnRename } from './resolve-column-rename';
 import type { TableRename } from './resolve-table-rename';
@@ -49,6 +51,8 @@ export interface PlanFieldEventOperationsOptions {
    * `RawSqlCall`.
    */
   readonly codecHooks: ReadonlyMap<string, CodecControlHooks>;
+  /** The stack's data types, which say what each column is stored as. */
+  readonly dataTypes: Pick<DataTypeLookup, 'get'>;
   /**
    * The table renames the plan applies. A column under a renamed table's old name is the same
    * column under its new name, so a rename alone fires no event.
@@ -155,7 +159,7 @@ export function planFieldEventCalls(
         } else if (priorField !== undefined && newField === undefined) {
           dropped.push(entry);
         } else if (priorField !== undefined && newField !== undefined) {
-          if (isAlteration(priorField, newField)) altered.push(entry);
+          if (isAlteration(priorField, newField, options.dataTypes)) altered.push(entry);
         }
       }
     }
@@ -254,14 +258,24 @@ function buildContext(event: FieldEvent, entry: FieldEntry): FieldEventContext {
  * For non-`codecId` diffs, returns `true` iff any other column property
  * differs.
  */
-function isAlteration(prior: StorageColumn, current: StorageColumn): boolean {
+function isAlteration(
+  prior: StorageColumn,
+  current: StorageColumn,
+  dataTypes: Pick<DataTypeLookup, 'get'>,
+): boolean {
   if (prior.codecId !== current.codecId) return false;
-  return !sameStorageColumn(prior, current);
+  return !sameStorageColumn(prior, current, dataTypes);
 }
 
-function sameStorageColumn(a: StorageColumn, b: StorageColumn): boolean {
+function sameStorageColumn(
+  a: StorageColumn,
+  b: StorageColumn,
+  dataTypes: Pick<DataTypeLookup, 'get'>,
+): boolean {
   if (a === b) return true;
-  if (a.dataType !== b.dataType) return false;
+  if (sqlStorageTypeId(a.dataType, dataTypes) !== sqlStorageTypeId(b.dataType, dataTypes)) {
+    return false;
+  }
   if (a.nullable !== b.nullable) return false;
   if (a.typeRef !== b.typeRef) return false;
   if (!sameJson(a.typeParams, b.typeParams)) return false;

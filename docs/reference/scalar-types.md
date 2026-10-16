@@ -100,7 +100,7 @@ These are the current names. The Postgres and SQLite rename project will change 
 | `Bytes` | `field.bytes()` | `pg/bytea@1` | `bytea` | `Uint8Array` |
 | `pg.enum(Name)` | — | `pg/enum@1` | the native enum type | `string` |
 
-A literal default of a date or time type is stored in the type's canonical form, whichever codec the column uses and however the default was written; [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states each form.
+A literal default of a date, time, interval or bytes type is written with the tag of its type, as in `@default(timestamptz`2024-01-01T00:00:00Z`)` or `@default(bytea`\x0102`)`; a quoted string is refused with a message that shows the tag. It is stored in the one form its data type stores, whichever codec the column uses and however the default was written, and a default with more fraction digits or more scale than its column holds is refused rather than rounded; [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states each form.
 
 The tools that write a schema for you use the text date and time types. In a PSL schema, `prisma orm init` writes `createdAt TimestamptzString @default(now())` and `updatedAt temporal.updatedAtString()`. In a TypeScript contract, it writes `field.temporal.createdAtString()` and `field.temporal.updatedAtString()`. All of these are `TimestamptzString` columns. `prisma contract infer` and `prisma7Schema(...)` write `TimestampString(p)`, `TimestamptzString(p)`, `DateString` and `TimeString(p)`. Four types read and write `Temporal` values: `Timestamptz` (also written `DateTime`), `Timestamp`, `Date` and `Time`. An application that uses them needs a global `Temporal`: on a runtime without one, such as Node.js 24, install it, for example with `import 'temporal-polyfill/full/global'`.
 
@@ -120,7 +120,7 @@ These are the current names; the Postgres and SQLite rename project will update 
 | `Json` | — | `sqlite/json@1` | `text` | `JsonValue` |
 | `Bytes` | — | `sqlite/blob@1` | `blob` | `Uint8Array` |
 
-A `DateTime` default is stored in the canonical form its codec `sqlite/datetime@1` declares, however it was written; [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states the form and the text it takes.
+A `DateTime` default is written with the `datetime` tag, as in `@default(datetime`2024-01-01T00:00:00Z`)`, and a `Json` default with the `json` tag. A `DateTime` column has the data type `sqlite/datetime` and a `Json` column `sqlite/json`, both stored as `text`. A `DateTime` default is stored as the instant in UTC with three fraction digits, the text every row holds, however it was written; [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states the form and the text it takes.
 
 ## Across targets
 

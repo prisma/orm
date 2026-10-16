@@ -17,6 +17,7 @@ import {
   planFieldEventCalls,
   plannerFailure,
   planStatements,
+  sqlTypeLookupsOf,
   subjectsOfCalls,
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
@@ -246,6 +247,7 @@ export class SqliteMigrationPlanner
       codecHooks,
       tableRenames: statements.value.tableRenames,
       columnRenames: statements.value.columnRenames,
+      dataTypes: sqlTypeLookupsOf(options.frameworkComponents).dataTypeLookup,
     });
     const fieldEventOps = fieldEventCalls.map(({ call }) => call);
     // Codec-emitted calls already conform to `OpFactoryCall` — render +

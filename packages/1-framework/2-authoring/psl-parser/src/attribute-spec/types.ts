@@ -1,9 +1,6 @@
 import type { JsonValue } from '@internal/contract/types';
-import type {
-  TaggedLiteralCanonicalization,
-  TypedValue,
-} from '@internal/framework-components/authoring';
-import type { DataTypeId } from '@internal/framework-components/codec';
+import type { TaggedLiteralCanonicalization } from '@internal/framework-components/authoring';
+import type { DataTypeId, DataTypeValue } from '@internal/framework-components/codec';
 import type { PslSpan } from '@internal/framework-components/psl-ast';
 import type { Result } from '@internal/utils/result';
 import type { Simplify, UnionToIntersection } from '@internal/utils/types';
@@ -258,8 +255,9 @@ export interface TaggedLiteralArgType<Ctx extends AttributeCtx = AttributeCtx>
   readonly documentation: string;
 }
 
-/** A typed value parsed from an argument, with the argument's span. */
-export interface ParsedTypedValue extends TypedValue {
+/** A value of a data type parsed from an argument, with the argument's span. */
+export interface ParsedTypedValue {
+  readonly value: DataTypeValue;
   readonly span: PslSpan;
 }
 

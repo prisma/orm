@@ -25,14 +25,18 @@ import { supportBinder } from './support';
 
 const unchanged = (value: JsonValue) => value;
 
-const sqlExpression = dataType('sql/expression', {});
-const pgText = dataType('pg/text', {});
-const pgBool = dataType('pg/bool', {});
-const pgInt2 = dataType('pg/int2', {});
-const pgInt4 = dataType('pg/int4', { casts: { [pgInt2.id]: (value) => String(value) } });
-const pgNumeric = dataType('pg/numeric', {});
-const pgJson = dataType('pg/json', {});
+const sqlExpression = dataType('sql/expression', { read: (json) => json });
+const pgText = dataType('pg/text', { read: (json) => json });
+const pgBool = dataType('pg/bool', { read: (json) => json });
+const pgInt2 = dataType('pg/int2', { read: (json) => json });
+const pgInt4 = dataType('pg/int4', {
+  read: (json) => json,
+  casts: { [pgInt2.id]: (value) => String(value) },
+});
+const pgNumeric = dataType('pg/numeric', { read: (json) => json });
+const pgJson = dataType('pg/json', { read: (json) => json });
 const pgUuid = dataType('pg/uuid', {
+  read: (json) => json,
   casts: {
     [pgText.id]: (value) => {
       if (typeof value === 'string' && value.length === 36) return value;
@@ -94,6 +98,7 @@ const support: DataTypeSupport = {
     pgJson,
     pgUuid,
   ]),
+  dataTypeOfCodec: () => undefined,
 };
 
 function argOf(source: string): { expr: ExpressionAst; ctx: AttributeCtx } {
@@ -198,7 +203,7 @@ describe('dataTypeValue', () => {
   });
 
   it('labels a type by its own tag before the tags of its cast sources', () => {
-    const geo = dataType('pg/geo', { casts: { [pgJson.id]: unchanged } });
+    const geo = dataType('pg/geo', { read: (json) => json, casts: { [pgJson.id]: unchanged } });
     const withGeo: DataTypeSupport = {
       entries: {
         ...entries,
@@ -209,6 +214,7 @@ describe('dataTypeValue', () => {
         },
       },
       lookup: createDataTypeLookup([pgJson, geo]),
+      dataTypeOfCodec: () => undefined,
     };
     const type = dataTypeValue(geo.id, withGeo);
     expect({ label: type.label, tags: type.tags }).toEqual({
@@ -217,11 +223,10 @@ describe('dataTypeValue', () => {
     });
   });
 
-  it('returns the canonical value, its type and the span of the argument', () => {
+  it('returns the value its type constructs and the span of the argument', () => {
     expect(parse(sqlExpression.id, 'sql`\n  now()\n`')).toEqual(
       ok({
-        type: 'sql/expression',
-        value: 'now()',
+        value: sqlExpression.fromContract('now()', {}),
         span: { start: { offset: 3, line: 1, column: 4 }, end: { offset: 17, line: 3, column: 2 } },
       }),
     );
@@ -230,8 +235,7 @@ describe('dataTypeValue', () => {
   it('takes a value of a type the receiving type casts from, returning the cast value', () => {
     expect(parse(pgInt4.id, '8')).toEqual(
       ok({
-        type: 'pg/int4',
-        value: '8',
+        value: pgInt4.fromContract('8', {}),
         span: { start: { offset: 3, line: 1, column: 4 }, end: { offset: 4, line: 1, column: 5 } },
       }),
     );
@@ -298,6 +302,7 @@ describe('dataTypeValue', () => {
     const noText: DataTypeSupport = {
       entries: { [sqlExpression.id]: entries[sqlExpression.id] ?? fail() },
       lookup: support.lookup,
+      dataTypeOfCodec: () => undefined,
     };
     const source = '"x"';
     expect(parse(sqlExpression.id, source, noText)).toEqual(
@@ -405,8 +410,12 @@ describe('dataTypeValue', () => {
   });
 
   it('throws an internal error when parsing for a registered type that nothing writes', () => {
-    const pgBlob = dataType('pg/blob', {});
-    const withBlob: DataTypeSupport = { entries, lookup: createDataTypeLookup([pgBlob]) };
+    const pgBlob = dataType('pg/blob', { read: (json) => json });
+    const withBlob: DataTypeSupport = {
+      entries,
+      lookup: createDataTypeLookup([pgBlob]),
+      dataTypeOfCodec: () => undefined,
+    };
     const { expr, ctx } = argOf('"x"');
     expect(() => dataTypeValue(pgBlob.id, withBlob).parse(expr, ctx)).toThrow(
       new InternalError(
@@ -426,7 +435,7 @@ describe('dataTypeValue', () => {
     const [, rewrite] = message.split('; write ');
     expect(rewrite).toBeDefined();
     expect(parse(sqlExpression.id, rewrite ?? '')).toMatchObject(
-      ok({ type: 'sql/expression', value: text }),
+      ok({ value: sqlExpression.fromContract(text, {}) }),
     );
   });
 
@@ -456,8 +465,7 @@ describe('dataTypeValue', () => {
           },
           args: {
             length: {
-              type: 'pg/int4',
-              value: '8',
+              value: pgInt4.fromContract('8', {}),
               span: {
                 start: { offset: 10, line: 1, column: 11 },
                 end: { offset: 11, line: 1, column: 12 },
@@ -527,8 +535,7 @@ describe('oneOf given a call to a function one arm names', () => {
         },
         args: {
           length: {
-            type: 'pg/int4',
-            value: '8',
+            value: pgInt4.fromContract('8', {}),
             span: {
               start: { offset: 10, line: 1, column: 11 },
               end: { offset: 11, line: 1, column: 12 },

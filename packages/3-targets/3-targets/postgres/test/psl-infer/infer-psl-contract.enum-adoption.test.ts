@@ -96,11 +96,11 @@ function tree(namespaces: Record<string, PostgresNamespaceSchemaNode>) {
   });
 }
 
-function inferAndPrint(
+async function inferAndPrint(
   dbTree: PostgresDatabaseSchemaNode,
   describedContracts?: readonly SqlDescribedContractSpace[],
-): string {
-  return printPsl(inferFromFixtureTree(dbTree, inferBuildContext, describedContracts), {
+): Promise<string> {
+  return printPsl(await inferFromFixtureTree(dbTree, inferBuildContext, describedContracts), {
     pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
   });
 }
@@ -241,7 +241,11 @@ function interpret(source: string) {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
       codecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypes: { entries: assembled.dataTypes, lookup: postgresDataTypeLookup },
+      dataTypes: {
+        entries: assembled.dataTypes,
+        lookup: postgresDataTypeLookup,
+        dataTypeOfCodec: () => undefined,
+      },
       resolvedInputs: [],
       capabilities: {},
     },
@@ -265,8 +269,8 @@ function interpret(source: string) {
 // ---------------------------------------------------------------------------
 
 describe('native enum adoption — happy path', () => {
-  it('emits a namespace-wrapped native_enum block and pg.enum column (public)', () => {
-    const output = inferAndPrint(tree({ public: sessionsNamespace('public') }));
+  it('emits a namespace-wrapped native_enum block and pg.enum column (public)', async () => {
+    const output = await inferAndPrint(tree({ public: sessionsNamespace('public') }));
 
     expect(output).toContain('namespace public {');
     expect(output).toContain('native_enum AalLevel {');
@@ -275,19 +279,19 @@ describe('native enum adoption — happy path', () => {
     expect(output).toContain('pg.enum(AalLevel)?');
   });
 
-  it('wraps in the introspected schema name for a non-public schema (the auth shape)', () => {
-    const output = inferAndPrint(tree({ auth: sessionsNamespace('auth') }));
+  it('wraps in the introspected schema name for a non-public schema (the auth shape)', async () => {
+    const output = await inferAndPrint(tree({ auth: sessionsNamespace('auth') }));
 
     expect(output).toContain('namespace auth {');
     expect(output).toContain('native_enum AalLevel {');
     expect(output).toContain('pg.enum(AalLevel)?');
   });
 
-  it('resolves a schema-qualified column nativeType (live introspection reports auth.aal_level)', () => {
+  it('resolves a schema-qualified column nativeType (live introspection reports auth.aal_level)', async () => {
     // `format_type` schema-qualifies a type outside the connection's
     // search_path, so a live auth-schema column carries `auth.aal_level`
     // while `pg_type.typname` (the definitions key) stays bare.
-    const output = inferAndPrint(
+    const output = await inferAndPrint(
       tree({
         auth: namespaceNode(
           'auth',
@@ -305,8 +309,8 @@ describe('native enum adoption — happy path', () => {
     expect(output).toContain('pg.enum(AalLevel)?');
   });
 
-  it('runs enum type names through the top-level name transforms', () => {
-    const output = inferAndPrint(
+  it('runs enum type names through the top-level name transforms', async () => {
+    const output = await inferAndPrint(
       tree({
         public: namespaceNode(
           'public',
@@ -328,29 +332,29 @@ describe('native enum adoption — happy path', () => {
 });
 
 describe('enum-free output stays flat', () => {
-  it('keeps the unspecified top-level bucket and no namespace wrapper', () => {
+  it('keeps the unspecified top-level bucket and no namespace wrapper', async () => {
     const enumFree = tree({
       public: namespaceNode('public', { user: table('user', { id: idColumn }) }),
     });
 
-    const ast = inferFromFixtureTree(enumFree, inferBuildContext);
+    const ast = await inferFromFixtureTree(enumFree, inferBuildContext);
     expect(ast.namespaces).toHaveLength(1);
     expect(ast.namespaces[0]?.name).toBe(UNSPECIFIED_PSL_NAMESPACE_ID);
 
-    const output = inferAndPrint(enumFree);
+    const output = await inferAndPrint(enumFree);
     expect(output).not.toContain('namespace ');
     expect(output).toContain('model User {');
   });
 });
 
 describe('single-namespace stopgap guard', () => {
-  it('throws when enums survive and content spans multiple schemas', () => {
+  it('throws when enums survive and content spans multiple schemas', async () => {
     const multi = tree({
       public: namespaceNode('public', { user: table('user', { id: idColumn }) }),
       auth: sessionsNamespace('auth'),
     });
 
-    expect(() => inferFromFixtureTree(multi, inferBuildContext)).toThrow(
+    await expect(inferFromFixtureTree(multi, inferBuildContext)).rejects.toThrow(
       /adopting native enums or RLS policies with content across multiple schemas/,
     );
   });
@@ -364,7 +368,7 @@ describe('pack-owned enum subtraction (by type name)', () => {
     tables: ['sessions'],
   });
 
-  it('omits a pack-owned enum type; enum-free remainder stays flat', () => {
+  it('omits a pack-owned enum type; enum-free remainder stays flat', async () => {
     const dbTree = tree({
       auth: namespaceNode(
         'auth',
@@ -376,7 +380,7 @@ describe('pack-owned enum subtraction (by type name)', () => {
       ),
     });
 
-    const output = inferAndPrint(dbTree, [pack]);
+    const output = await inferAndPrint(dbTree, [pack]);
 
     expect(output).not.toContain('native_enum');
     expect(output).not.toContain('namespace ');
@@ -384,19 +388,19 @@ describe('pack-owned enum subtraction (by type name)', () => {
     expect(output).not.toContain('model Sessions {');
   });
 
-  it('matching is namespace-scoped: a pack owning the type elsewhere does not subtract', () => {
+  it('matching is namespace-scoped: a pack owning the type elsewhere does not subtract', async () => {
     const otherPack = describedContractWithNativeEnum({
       namespaceId: 'other',
       typeName: 'aal_level',
       members: ['aal1'],
     });
 
-    const output = inferAndPrint(tree({ auth: sessionsNamespace('auth') }), [otherPack]);
+    const output = await inferAndPrint(tree({ auth: sessionsNamespace('auth') }), [otherPack]);
 
     expect(output).toContain('native_enum AalLevel {');
   });
 
-  it('throws an actionable error when a surviving column is typed by a pack-owned enum type', () => {
+  it('throws an actionable error when a surviving column is typed by a pack-owned enum type', async () => {
     const dbTree = tree({
       auth: namespaceNode(
         'auth',
@@ -410,7 +414,7 @@ describe('pack-owned enum subtraction (by type name)', () => {
       ),
     });
 
-    expect(() => inferFromFixtureTree(dbTree, inferBuildContext, [pack])).toThrow(
+    await expect(inferFromFixtureTree(dbTree, inferBuildContext, [pack])).rejects.toThrow(
       /aal_level.*(pack|space "pack")/i,
     );
 
@@ -427,7 +431,7 @@ describe('pack-owned enum subtraction (by type name)', () => {
       ),
     });
 
-    expect(() => inferFromFixtureTree(qualifiedTree, inferBuildContext, [pack])).toThrow(
+    await expect(inferFromFixtureTree(qualifiedTree, inferBuildContext, [pack])).rejects.toThrow(
       /aal_level.*(pack|space "pack")/i,
     );
   });
@@ -451,14 +455,14 @@ describe('pack-owned enum subtraction from a serialized+hydrated described contr
     }),
   );
 
-  it('the hydrated contract exposes the native_enum entity as a PostgresNativeEnum (subtraction precondition)', () => {
+  it('the hydrated contract exposes the native_enum entity as a PostgresNativeEnum (subtraction precondition)', async () => {
     const authNs = hydratedPack.contract.storage.namespaces['auth'] as PostgresSchema;
     const entity = authNs.entries.native_enum?.['aal_level'];
     expect(entity).toBeInstanceOf(PostgresNativeEnum);
     expect(entity?.typeName).toBe('aal_level');
   });
 
-  it('subtracts the pack-owned type while emitting a non-pack-owned enum in the same run', () => {
+  it('subtracts the pack-owned type while emitting a non-pack-owned enum in the same run', async () => {
     const dbTree = tree({
       auth: namespaceNode(
         'auth',
@@ -472,7 +476,7 @@ describe('pack-owned enum subtraction from a serialized+hydrated described contr
       ),
     });
 
-    const output = inferAndPrint(dbTree, [hydratedPack]);
+    const output = await inferAndPrint(dbTree, [hydratedPack]);
 
     // Pack owns aal_level → omitted.
     expect(output).not.toContain('native_enum AalLevel {');
@@ -487,8 +491,8 @@ describe('pack-owned enum subtraction from a serialized+hydrated described contr
 });
 
 describe('enum-typed column defaults', () => {
-  it('parses a bare-cast string default to a literal @default', () => {
-    const output = inferAndPrint(
+  it('parses a bare-cast string default to a literal @default', async () => {
+    const output = await inferAndPrint(
       tree({
         public: namespaceNode(
           'public',
@@ -511,8 +515,8 @@ describe('enum-typed column defaults', () => {
     expect(output).toContain('@default("aal1")');
   });
 
-  it('reads a schema-qualified cast default as the member literal, which interprets', () => {
-    const output = inferAndPrint(
+  it('reads a schema-qualified cast default as the member literal, which interprets', async () => {
+    const output = await inferAndPrint(
       tree({
         auth: namespaceNode(
           'auth',
@@ -545,8 +549,8 @@ describe('enum-typed column defaults', () => {
 });
 
 describe('adopted output lowers through the production interpret chain', () => {
-  it('the public shape interprets: pg/enum@1 column with valueSet ref and bare nativeType', () => {
-    const output = inferAndPrint(tree({ public: sessionsNamespace('public') }));
+  it('the public shape interprets: pg/enum@1 column with valueSet ref and bare nativeType', async () => {
+    const output = await inferAndPrint(tree({ public: sessionsNamespace('public') }));
 
     const result = interpret(output);
     expect(result.ok).toBe(true);
@@ -568,8 +572,8 @@ describe('adopted output lowers through the production interpret chain', () => {
     });
   });
 
-  it('the auth shape interprets with the schema-qualified nativeType', () => {
-    const output = inferAndPrint(tree({ auth: sessionsNamespace('auth') }));
+  it('the auth shape interprets with the schema-qualified nativeType', async () => {
+    const output = await inferAndPrint(tree({ auth: sessionsNamespace('auth') }));
 
     const result = interpret(output);
     expect(result.ok).toBe(true);
@@ -583,7 +587,7 @@ describe('adopted output lowers through the production interpret chain', () => {
     });
   });
 
-  it('namespace-wrapped models coordinate identically to the flat form (public)', () => {
+  it('namespace-wrapped models coordinate identically to the flat form (public)', async () => {
     const enumFree = tree({
       public: namespaceNode('public', { user: table('user', { id: idColumn }) }),
     });
@@ -591,8 +595,8 @@ describe('adopted output lowers through the production interpret chain', () => {
       public: namespaceNode('public', { user: table('user', { id: idColumn }) }, [AAL_LEVEL]),
     });
 
-    const flatResult = interpret(inferAndPrint(enumFree));
-    const wrappedResult = interpret(inferAndPrint(enumBearing));
+    const flatResult = interpret(await inferAndPrint(enumFree));
+    const wrappedResult = interpret(await inferAndPrint(enumBearing));
 
     expect(flatResult.ok).toBe(true);
     expect(wrappedResult.ok).toBe(true);
@@ -629,8 +633,8 @@ describe('mixed-case enum type names (Prisma-ORM-created types)', () => {
     );
   }
 
-  it('preserves the PascalCase type name verbatim through infer and print', () => {
-    const output = inferAndPrint(tree({ public: ordersNamespace('public') }));
+  it('preserves the PascalCase type name verbatim through infer and print', async () => {
+    const output = await inferAndPrint(tree({ public: ordersNamespace('public') }));
 
     // The block name already equals the type name, so no @@map is emitted —
     // the interpret test below proves the nativeType still round-trips.
@@ -640,8 +644,8 @@ describe('mixed-case enum type names (Prisma-ORM-created types)', () => {
     expect(output).not.toContain('holdtype');
   });
 
-  it('interprets with the mixed-case typeName in typeParams — the input the cast-quoting policy keys on', () => {
-    const result = interpret(inferAndPrint(tree({ public: ordersNamespace('public') })));
+  it('interprets with the mixed-case typeName in typeParams — the input the cast-quoting policy keys on', async () => {
+    const result = interpret(await inferAndPrint(tree({ public: ordersNamespace('public') })));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -672,23 +676,23 @@ describe('an enum column whose type has no adopted block', () => {
       meta: { columns: [column] },
     });
 
-  it('fails when no block declares the enum', () => {
+  it('fails when no block declares the enum', async () => {
     const dbTree = tree({
       public: namespaceNode('public', { t: table('t', { id: idColumn, m: moodColumn('other') }) }),
     });
-    expect(() => inferAndPrint(dbTree)).toThrow(unclaimed('public.t.m: other.mood'));
+    await expect(inferAndPrint(dbTree)).rejects.toThrow(unclaimed('public.t.m: other.mood'));
   });
 
-  it('fails when the block of that name is in another schema', () => {
+  it('fails when the block of that name is in another schema', async () => {
     const dbTree = tree({
       public: namespaceNode('public', { t: table('t', { id: idColumn, m: moodColumn('other') }) }, [
         MOOD,
       ]),
     });
-    expect(() => inferAndPrint(dbTree)).toThrow(unclaimed('public.t.m: other.mood'));
+    await expect(inferAndPrint(dbTree)).rejects.toThrow(unclaimed('public.t.m: other.mood'));
   });
 
-  it('prints the enum when the block is in the schema the column reports', () => {
+  it('prints the enum when the block is in the schema the column reports', async () => {
     const dbTree = tree({
       public: namespaceNode(
         'public',
@@ -696,6 +700,6 @@ describe('an enum column whose type has no adopted block', () => {
         [MOOD],
       ),
     });
-    expect(inferAndPrint(dbTree)).toContain('pg.enum(Mood)?');
+    expect(await inferAndPrint(dbTree)).toContain('pg.enum(Mood)?');
   });
 });

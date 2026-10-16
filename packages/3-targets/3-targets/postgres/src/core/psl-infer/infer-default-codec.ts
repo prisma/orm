@@ -18,6 +18,7 @@ import {
   type AnyCodecDescriptor,
   type CodecRef,
   codecForRef,
+  readContractValue,
 } from '@internal/framework-components/codec';
 import { parsePslPositionalArgs } from '@internal/psl-parser/interpret';
 import { blindCast } from '@internal/utils/casts';
@@ -35,6 +36,8 @@ export interface InferredPslType {
 export interface InferredColumnDefaults {
   /** The column's codec, whose data type a default is written in. */
   codecOf(pslType: InferredPslType, isEnum: boolean): AnyCodecDescriptor | undefined;
+  /** The type parameters the column's codec is built with. */
+  typeParamsOf(pslType: InferredPslType, isEnum: boolean): JsonValue | undefined;
   /** Whether the column's codec, built with the column's type parameters, reads the default back. */
   readsBack(
     value: ColumnDefaultLiteralInputValue,
@@ -49,7 +52,7 @@ export interface InferredColumnDefaults {
  * constructor names, with the type parameters the call's arguments give. An enum column's default
  * is a member name, which is text either way, so it reads through the text codec.
  */
-function inferredCodecRef(
+export function inferredCodecRef(
   context: SqlPslBuildContext,
   pslType: InferredPslType,
   isEnum: boolean,
@@ -95,14 +98,27 @@ export function inferredColumnDefaults(context: SqlPslBuildContext): InferredCol
         return undefined;
       }
     },
+    typeParamsOf(pslType, isEnum) {
+      try {
+        return inferredCodecRef(context, pslType, isEnum)?.typeParams;
+      } catch (error) {
+        if (isInternalError(error)) throw error;
+        return undefined;
+      }
+    },
     readsBack(value, pslType, isEnum, isList) {
       const values = isList && Array.isArray(value) ? value : [value];
       try {
         const ref = inferredCodecRef(context, pslType, isEnum);
-        const codec = ref === undefined ? undefined : codecForRef(context.codecLookup, ref);
+        if (ref === undefined) return false;
+        const codec = codecForRef(context.codecLookup, ref);
         if (codec === undefined) return false;
         for (const element of values) {
-          codec.decodeJson(blindCast<JsonValue, 'a stored literal default is JSON'>(element));
+          readContractValue(
+            codec,
+            blindCast<JsonValue, 'a stored literal default is JSON'>(element),
+            ref.typeParams,
+          );
         }
         return true;
       } catch (error) {
@@ -116,5 +132,6 @@ export function inferredColumnDefaults(context: SqlPslBuildContext): InferredCol
 /** For a table whose columns have no literal default, such as a many-to-many junction table. */
 export const noColumnDefaults: InferredColumnDefaults = {
   codecOf: () => undefined,
+  typeParamsOf: () => undefined,
   readsBack: () => false,
 };

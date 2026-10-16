@@ -27,7 +27,6 @@ import { describe, expect, it } from 'vitest';
 import { postgresResolveDefault } from '../../src/core/default-normalizer';
 import { contractToPostgresDatabaseSchemaNode } from '../../src/core/migrations/contract-to-postgres-database-schema-node';
 import { createPostgresMigrationPlanner } from '../../src/core/migrations/planner';
-import { postgresRenderDefault } from '../../src/core/migrations/postgres-contract-to-schema';
 import { PostgresMigration } from '../../src/core/migrations/postgres-migration';
 import { PostgresContractSerializer } from '../../src/core/postgres-contract-serializer';
 import { type PostgresContract, postgresCreateNamespace } from '../../src/core/postgres-schema';
@@ -298,7 +297,6 @@ function planMigration(from: PostgresContract, to: PostgresContract) {
     schema: contractToPostgresDatabaseSchemaNode(from, {
       annotationNamespace: 'pg',
       ...postgresTypeLookups,
-      renderDefault: postgresRenderDefault,
       resolveDefault: postgresResolveDefault,
     }),
     policy: DESTRUCTIVE_POLICY,

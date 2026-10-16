@@ -9,7 +9,7 @@ const duplicateText: ExtensionPackRef<'sql', 'postgres'> = {
   familyId: 'sql',
   targetId: 'postgres',
   version: '0.0.1',
-  dataTypes: [dataType('pg/text', {})],
+  dataTypes: [dataType('pg/text', { read: (json) => json })],
 };
 
 describe('postgres defineContract data types', () => {

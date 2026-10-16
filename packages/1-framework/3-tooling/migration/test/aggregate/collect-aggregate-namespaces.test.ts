@@ -76,4 +76,13 @@ describe('collectAggregateNamespaces', () => {
       'secret',
     ]);
   });
+
+  it('carries each space contract, so a table is read with the contract of its own space', () => {
+    const app = makeSpace('app', { public: { table: { user: {} } } });
+    const ext = makeSpace('cipher', { vault: { table: { secret: {} } } });
+
+    const collected = collectAggregateNamespaces(makeAggregate(app, [ext]));
+
+    expect(collected.contracts).toEqual([app.contract(), ext.contract()]);
+  });
 });

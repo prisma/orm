@@ -1559,7 +1559,7 @@ type ParameterizedOutputTypesFromDefinition<Definition> = {
 type ColumnSpecCodecOutput<Descriptor> = Descriptor extends {
   readonly codecFactory: (...args: never[]) => infer Codec;
 }
-  ? Codec extends { decode(...args: never[]): Promise<infer Output> }
+  ? Codec extends { fromWire(...args: never[]): Promise<infer Output> }
     ? Output
     : never
   : never;

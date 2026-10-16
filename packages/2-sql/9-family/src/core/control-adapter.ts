@@ -10,7 +10,6 @@ import type {
   SqlExecuteRequest,
 } from '@internal/sql-relational-core/ast';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
-import type { DefaultNormalizer } from './diff/sql-schema-diff';
 
 /**
  * Structural interface for anything that can lower a SQL/DDL AST node to a
@@ -191,13 +190,6 @@ export interface SqlControlAdapter<TTarget extends string = string>
     contract?: unknown,
     schema?: string,
   ): Promise<SqlSchemaIRNode>;
-
-  /**
-   * Optional target-specific normalizer for raw database default expressions.
-   * When provided, schema defaults (raw strings) are normalized before comparison
-   * with contract defaults (ColumnDefault objects) during schema verification.
-   */
-  readonly normalizeDefault?: DefaultNormalizer;
 
   /**
    * Ordered DDL queries that bootstrap marker/ledger control tables for migration

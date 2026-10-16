@@ -20,8 +20,8 @@ import { createStubAdapter, createTestContext } from './utils';
 function vectorCodecInstance(meta?: Record<string, unknown>): Codec {
   const baseCodec = defineTestCodec({
     typeId: 'pg/vector@1',
-    encode: (v: number[]) => v,
-    decode: (w: number[]) => w,
+    toWire: (v: number[]) => v,
+    fromWire: (w: number[]) => w,
   });
   if (!meta) return baseCodec;
   // The narrow `Codec` shape is conversion-only (TML-2357). The `meta` here is a test-side sentinel attached to the codec object so a downstream assertion can verify that the runtime materialization path threads the *exact same instance* the factory returned (via `toBe(taggedCodec)`); it is intentionally not part of the codec's declared shape. Cast through `unknown` to keep the augmentation visible to the assertion

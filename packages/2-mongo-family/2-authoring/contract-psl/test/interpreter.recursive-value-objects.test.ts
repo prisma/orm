@@ -24,7 +24,7 @@ function interpretMenu() {
     ]),
     defaultFunctionRegistry: new Map(),
     codecLookup: mongoCodecLookup,
-    dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
+    dataTypes: { entries: {}, lookup: mongoDataTypeLookup, dataTypeOfCodec: () => undefined },
   });
   if (!result.ok) throw new Error(JSON.stringify(result.failure));
   return result.value;

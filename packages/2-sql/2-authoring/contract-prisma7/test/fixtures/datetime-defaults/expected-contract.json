@@ -254,7 +254,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "df80016cb23a5782ec3462471c551fbca83be48f591e80bca6ca2fe1b8168f8d",
+    "storageHash": "feda26d6f6cfb7e3e2fd75cf177cc4e5c1e7ff60deff04d5ab208cf114426e02",
     "namespaces": {
       "public": {
         "id": "public",
@@ -278,8 +278,8 @@
                     "precision": 3
                   },
                   "default": {
-                    "kind": "function",
-                    "expression": "'2024-01-02 03:04:05'"
+                    "kind": "literal",
+                    "value": "2024-01-02T03:04:05"
                   }
                 },
                 "tsMs": {
@@ -291,8 +291,8 @@
                     "precision": 3
                   },
                   "default": {
-                    "kind": "function",
-                    "expression": "'2024-01-02 03:04:05.123'"
+                    "kind": "literal",
+                    "value": "2024-01-02T03:04:05.123"
                   }
                 },
                 "tsPlus": {
@@ -304,8 +304,8 @@
                     "precision": 3
                   },
                   "default": {
-                    "kind": "function",
-                    "expression": "'2024-01-02 03:04:05'"
+                    "kind": "literal",
+                    "value": "2024-01-02T03:04:05"
                   }
                 },
                 "tsMinus": {
@@ -317,8 +317,8 @@
                     "precision": 3
                   },
                   "default": {
-                    "kind": "function",
-                    "expression": "'2024-01-02 23:04:05'"
+                    "kind": "literal",
+                    "value": "2024-01-02T23:04:05"
                   }
                 },
                 "tsMicro": {
@@ -330,8 +330,8 @@
                     "precision": 6
                   },
                   "default": {
-                    "kind": "function",
-                    "expression": "'2024-01-02 03:04:05.123456'"
+                    "kind": "literal",
+                    "value": "2024-01-02T03:04:05.123456"
                   }
                 },
                 "tzZ": {
@@ -343,8 +343,8 @@
                     "precision": 6
                   },
                   "default": {
-                    "kind": "function",
-                    "expression": "'2024-01-02 03:04:05+00'"
+                    "kind": "literal",
+                    "value": "2024-01-02T03:04:05Z"
                   }
                 },
                 "tzPlus": {
@@ -356,8 +356,8 @@
                     "precision": 6
                   },
                   "default": {
-                    "kind": "function",
-                    "expression": "'2024-01-02 01:04:05+00'"
+                    "kind": "literal",
+                    "value": "2024-01-02T01:04:05Z"
                   }
                 },
                 "dZ": {
@@ -366,8 +366,8 @@
                   "nullable": false,
                   "many": false,
                   "default": {
-                    "kind": "function",
-                    "expression": "'2024-01-02'"
+                    "kind": "literal",
+                    "value": "2024-01-02"
                   }
                 },
                 "dMidnight": {
@@ -376,8 +376,8 @@
                   "nullable": false,
                   "many": false,
                   "default": {
-                    "kind": "function",
-                    "expression": "'2024-01-02'"
+                    "kind": "literal",
+                    "value": "2024-01-02"
                   }
                 },
                 "dMinus": {
@@ -386,8 +386,8 @@
                   "nullable": false,
                   "many": false,
                   "default": {
-                    "kind": "function",
-                    "expression": "'2024-01-02'"
+                    "kind": "literal",
+                    "value": "2024-01-02"
                   }
                 },
                 "tZ": {
@@ -399,8 +399,8 @@
                     "precision": 6
                   },
                   "default": {
-                    "kind": "function",
-                    "expression": "'12:34:56'"
+                    "kind": "literal",
+                    "value": "12:34:56"
                   }
                 },
                 "tMs": {
@@ -412,8 +412,8 @@
                     "precision": 6
                   },
                   "default": {
-                    "kind": "function",
-                    "expression": "'12:34:56.789'"
+                    "kind": "literal",
+                    "value": "12:34:56.789"
                   }
                 },
                 "tPlus": {
@@ -425,8 +425,8 @@
                     "precision": 6
                   },
                   "default": {
-                    "kind": "function",
-                    "expression": "'03:04:05'"
+                    "kind": "literal",
+                    "value": "03:04:05"
                   }
                 },
                 "ttzZ": {
@@ -438,8 +438,8 @@
                     "precision": 6
                   },
                   "default": {
-                    "kind": "function",
-                    "expression": "'12:34:56+00'"
+                    "kind": "literal",
+                    "value": "12:34:56Z"
                   }
                 },
                 "ttzPlus": {
@@ -451,8 +451,8 @@
                     "precision": 6
                   },
                   "default": {
-                    "kind": "function",
-                    "expression": "'03:04:05+02'"
+                    "kind": "literal",
+                    "value": "03:04:05+02:00"
                   }
                 },
                 "bytes": {
@@ -461,8 +461,8 @@
                   "nullable": false,
                   "many": false,
                   "default": {
-                    "kind": "function",
-                    "expression": "'\\x68656c6c6f'"
+                    "kind": "literal",
+                    "value": "aGVsbG8="
                   }
                 }
               },

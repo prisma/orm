@@ -1,7 +1,7 @@
 import { Temporal } from 'temporal-polyfill';
 import { describe, expect, it } from 'vitest';
-import { pgIntervalCanonical } from '../src/core/codec-helpers';
-import { pgTimeCanonical, pgTimetzCanonical } from '../src/core/data-types';
+import { pgIntervalStoredText } from '../src/core/data-type-values';
+import { pgTimeStoredText, pgTimetzStoredText } from '../src/core/data-types';
 
 describe('pg/time canonical form', () => {
   const accepted: ReadonlyArray<readonly [string, string]> = [
@@ -13,11 +13,11 @@ describe('pg/time canonical form', () => {
   ];
 
   it.each(accepted)('turns %s into its canonical form %s', (written, canonical) => {
-    expect(pgTimeCanonical(written)).toBe(canonical);
+    expect(pgTimeStoredText(written)).toBe(canonical);
   });
 
   it.each(accepted)('agrees with Temporal.PlainTime on %s', (written) => {
-    expect(pgTimeCanonical(written)).toBe(Temporal.PlainTime.from(written).toString());
+    expect(pgTimeStoredText(written)).toBe(Temporal.PlainTime.from(written).toString());
   });
 
   it.each([
@@ -47,7 +47,7 @@ describe('pg/time canonical form', () => {
     ],
     ['infinity', 'pg/time cannot read "infinity". Write a time of day, as in "12:34:56".'],
   ])('refuses %s', (written, message) => {
-    expect(() => pgTimeCanonical(written)).toThrow(
+    expect(() => pgTimeStoredText(written)).toThrow(
       expect.objectContaining({ code: 'CONTRACT.CAST_REFUSED', message }),
     );
   });
@@ -65,7 +65,7 @@ describe('pg/timetz canonical form', () => {
     ['12:34-08:00', '12:34:00-08:00'],
     ['12:00:00+15:59', '12:00:00+15:59'],
   ])('turns %s into its canonical form %s', (written, canonical) => {
-    expect(pgTimetzCanonical(written)).toBe(canonical);
+    expect(pgTimetzStoredText(written)).toBe(canonical);
   });
 
   it.each([
@@ -82,7 +82,7 @@ describe('pg/timetz canonical form', () => {
       '"12:00:00+16:00" has a UTC offset outside -15:59 to +15:59, which pg/timetz does not hold. Write a smaller offset, as in "12:34:56+02:00".',
     ],
   ])('refuses %s', (written, message) => {
-    expect(() => pgTimetzCanonical(written)).toThrow(
+    expect(() => pgTimetzStoredText(written)).toThrow(
       expect.objectContaining({ code: 'CONTRACT.CAST_REFUSED', message }),
     );
   });
@@ -104,7 +104,7 @@ describe('pg/interval canonical form', () => {
     ['-01:00:00', 'PT-1H'],
     ['25:00:00', 'PT25H'],
   ])('turns %s into its canonical form %s', (written, canonical) => {
-    expect(pgIntervalCanonical(written)).toBe(canonical);
+    expect(pgIntervalStoredText(written)).toBe(canonical);
   });
 
   it.each([
@@ -118,7 +118,7 @@ describe('pg/interval canonical form', () => {
       '"PT1.1234567S" has 7 digits after the decimal point, but pg/interval holds microseconds, so at most 6. Round it, as in "PT1.123456S".',
     ],
   ])('refuses %s', (written, message) => {
-    expect(() => pgIntervalCanonical(written)).toThrow(
+    expect(() => pgIntervalStoredText(written)).toThrow(
       expect.objectContaining({ code: 'CONTRACT.CAST_REFUSED', message }),
     );
   });

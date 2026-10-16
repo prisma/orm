@@ -84,15 +84,18 @@ function parseDataTypeValue(
     return refuse(describeRefusal(read.failure, support, { forms, rewrite: undefined }));
   }
 
-  const cast = castTypedValue(support, dataType, read.value);
+  const cast = castTypedValue(support, dataType, {}, read.value);
   if (!cast.ok) {
-    const rewrite = exactRewrite(support, dataType, literal.written);
+    const rewrite = exactRewrite(
+      support,
+      { receivingType: dataType, receivingParams: {} },
+      literal.written,
+    );
     return refuse(describeRefusal(cast.failure, support, { forms, rewrite }));
   }
 
   return ok({
-    type: dataType,
-    value: cast.value.value,
+    value: cast.value,
     span: nodePslSpan(arg.syntax, ctx.sources),
   });
 }

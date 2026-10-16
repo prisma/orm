@@ -11,7 +11,6 @@
  * Negative coverage uses `// @ts-expect-error` so a regression in the round-trip mapping (e.g. trait widening, Wire/Input drift, codec id mismatch) breaks the test type-check rather than passing silently.
  */
 
-import type { JsonValue } from '@internal/contract/types';
 import {
   type Codec,
   type CodecCallContext,
@@ -19,7 +18,8 @@ import {
   CodecImpl,
   type CodecInstanceContext,
   type CodecTrait,
-  dataTypeId,
+  type DataTypeValue,
+  dataType,
 } from '@internal/framework-components/codec';
 import { expectTypeOf, test } from 'vitest';
 import type {
@@ -51,28 +51,30 @@ test('parameterized SQL base codec — sqlVarchar round-trips to typed Codec', (
   >();
 });
 
+const testVectorType = dataType('test/vector', { read: (json) => json });
+
 class TestVectorCodec extends CodecImpl<'test/vector@1', readonly ['equality'], string, number[]> {
-  async encode(value: number[], _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: number[], _ctx: CodecCallContext): Promise<string> {
     return `[${value.join(',')}]`;
   }
-  async decode(_wire: string, _ctx: CodecCallContext): Promise<number[]> {
+  async fromWire(_wire: string, _ctx: CodecCallContext): Promise<number[]> {
     return [];
   }
-  encodeJson(value: number[]): JsonValue {
-    return value;
+  fromDataTypeValue(value: DataTypeValue): number[] {
+    return value.value as number[];
   }
-  decodeJson(json: JsonValue): number[] {
-    return json as number[];
+  toDataTypeValue(value: number[]): DataTypeValue {
+    return this.dataTypeValueOf(value);
   }
 }
 
 class TestVectorDescriptor extends CodecDescriptorImpl<void> {
-  override readonly dataType = dataTypeId('test/vector');
+  override readonly dataType = testVectorType.id;
   override readonly codecId = 'test/vector@1' as const;
   override readonly traits = ['equality'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => TestVectorCodec {
-    return () => new TestVectorCodec(this);
+    return () => new TestVectorCodec(this, testVectorType);
   }
 }
 

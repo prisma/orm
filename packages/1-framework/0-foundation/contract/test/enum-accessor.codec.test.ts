@@ -7,34 +7,35 @@ import {
   type EnumMemberCodec,
 } from '../src/enum-accessor';
 import type { JsonValue } from '../src/types';
+import { enumMemberCodec } from './support/enum-member-codec';
 
 const DECIMAL_INTEGER = /^-?\d+$/;
 
 // Stores a bigint as decimal text and, like `pg/int8@1`, also stores a safe-integer number.
-const bigintTextCodec: EnumMemberCodec = {
-  decodeJson(json: JsonValue) {
+const bigintTextCodec: EnumMemberCodec = enumMemberCodec({
+  fromStored(json: JsonValue) {
     if (typeof json !== 'string' || !DECIMAL_INTEGER.test(json)) {
       throw new Error(`not decimal text: ${JSON.stringify(json)}`);
     }
     return BigInt(json);
   },
-  encodeJson(value: unknown) {
+  toStored(value: unknown) {
     if (typeof value === 'bigint') return value.toString();
     if (typeof value === 'number' && Number.isSafeInteger(value)) return String(value);
     throw new Error(`not an integer: ${String(value)}`);
   },
-};
+});
 
-const dateCodec: EnumMemberCodec = {
-  decodeJson(json: JsonValue) {
+const dateCodec: EnumMemberCodec = enumMemberCodec({
+  fromStored(json: JsonValue) {
     if (typeof json !== 'string') throw new Error('not a date string');
     return new Date(json);
   },
-  encodeJson(value: unknown) {
+  toStored(value: unknown) {
     if (!(value instanceof Date)) throw new Error('not a Date');
     return value.toISOString();
   },
-};
+});
 
 const levelEnum: ContractEnum = {
   codecId: 'test/bigint@1',
@@ -121,13 +122,13 @@ describe('createEnumAccessor() with the enum codec', () => {
 
   it('passes on an internal error the codec raises', () => {
     const broken = new Date(0);
-    const failing: EnumMemberCodec = {
-      decodeJson: (json) => new Date(json as string),
-      encodeJson: (value) => {
+    const failing = enumMemberCodec({
+      fromStored: (json) => new Date(json as string),
+      toStored: (value) => {
         if (value === broken) throw new InternalError('codec bug');
         return (value as Date).toISOString();
       },
-    };
+    });
     const accessor = createEnumAccessor(launchEnum, failing);
     expect(() => accessor.has(broken)).toThrow(InternalError);
   });

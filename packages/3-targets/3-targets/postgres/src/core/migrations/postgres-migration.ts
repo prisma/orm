@@ -680,7 +680,7 @@ export abstract class PostgresMigration<
    * Whether the column, found by schema, table and column name in the start contract after this migration's earlier renames, has a default.
    */
   private columnHasDefaultAfterRenames(schema: string, table: string, column: string): boolean {
-    return this.startColumnAfterRenames(schema, table, column)?.default !== undefined;
+    return this.startColumnAfterRenames(schema, table, column)?.resolvedDefault !== undefined;
   }
 
   protected dropDefault(options: {

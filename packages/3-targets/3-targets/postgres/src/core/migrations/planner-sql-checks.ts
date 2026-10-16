@@ -1,7 +1,10 @@
-import { assembleDataTypes, type DataType } from '@internal/framework-components/codec';
+import {
+  assembleDataTypes,
+  type DataType,
+  dataTypeParams,
+} from '@internal/framework-components/codec';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import {
-  dataTypeParams,
   isSqlDataType,
   type ResolvedSqlType,
   renderSqlCatalogText,

@@ -35,6 +35,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok } from '@internal/utils/result';
 import { structuredError } from '@internal/utils/structured-error';
+import { contractValidationMeta } from '../utils/contract-validation-meta';
 import { assertFrameworkComponentsCompatible } from '../utils/framework-components';
 import { snapshotVerifierFor } from '../utils/snapshot-content-verification';
 import { enrichContract } from './contract-enrichment';
@@ -44,7 +45,6 @@ import { executeDbUpdate } from './operations/db-update';
 import { type ExecuteDbVerifyResult, executeDbVerify } from './operations/db-verify';
 import { loadContractSourceWithStack } from './operations/load-contract-source';
 import { executeMigrate } from './operations/migrate';
-
 import type { RenderContractDtsOptions, RenderContractDtsResult } from './render-contract-dts';
 import type {
   ControlActionName,
@@ -253,7 +253,10 @@ class ControlClientImpl implements ControlClient {
       contract = familyInstance.deserializeContract(options.contract);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw structuredError('CONTRACT.VALIDATION_FAILED', message, { cause: error });
+      throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
+        cause: error,
+        ...ifDefined('meta', contractValidationMeta(error)),
+      });
     }
 
     // Emit verify span
@@ -306,7 +309,10 @@ class ControlClientImpl implements ControlClient {
       contract = familyInstance.deserializeContract(options.contract);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw structuredError('CONTRACT.VALIDATION_FAILED', message, { cause: error });
+      throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
+        cause: error,
+        ...ifDefined('meta', contractValidationMeta(error)),
+      });
     }
 
     // Emit schemaVerify span
@@ -368,7 +374,10 @@ class ControlClientImpl implements ControlClient {
       contract = familyInstance.deserializeContract(options.contract);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw structuredError('CONTRACT.VALIDATION_FAILED', message, { cause: error });
+      throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
+        cause: error,
+        ...ifDefined('meta', contractValidationMeta(error)),
+      });
     }
 
     return executeDbInit({
@@ -406,7 +415,10 @@ class ControlClientImpl implements ControlClient {
       contract = familyInstance.deserializeContract(options.contract);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw structuredError('CONTRACT.VALIDATION_FAILED', message, { cause: error });
+      throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
+        cause: error,
+        ...ifDefined('meta', contractValidationMeta(error)),
+      });
     }
 
     return executeDbUpdate({
@@ -505,7 +517,10 @@ class ControlClientImpl implements ControlClient {
       contract = familyInstance.deserializeContract(options.contract);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw structuredError('CONTRACT.VALIDATION_FAILED', message, { cause: error });
+      throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
+        cause: error,
+        ...ifDefined('meta', contractValidationMeta(error)),
+      });
     }
 
     return executeMigrate({
@@ -572,7 +587,7 @@ class ControlClientImpl implements ControlClient {
     return undefined;
   }
 
-  inferPslContract(schemaIR: unknown): PslDocumentAst | undefined {
+  async inferPslContract(schemaIR: unknown): Promise<PslDocumentAst | undefined> {
     this.init();
     if (this.familyInstance && hasPslContractInfer(this.familyInstance)) {
       return this.familyInstance.inferPslContract(schemaIR);

@@ -14,11 +14,9 @@ function captureError(fn: () => void): unknown {
 }
 
 describe('sql family instance structured error codes', () => {
-  it('raises CONTRACT.INFER_UNSUPPORTED when the target descriptor has no inferPslContract', () => {
+  it('raises CONTRACT.INFER_UNSUPPORTED when the target descriptor has no inferPslContract', async () => {
     const instance = createSqlFamilyInstance(makeStack());
-    const error = captureError(() => instance.inferPslContract?.(undefined as never));
-    expect(isStructuredError(error)).toBe(true);
-    expect(error).toMatchObject({
+    await expect(instance.inferPslContract?.(undefined as never)).rejects.toMatchObject({
       code: 'CONTRACT.INFER_UNSUPPORTED',
       meta: { targetId: 'postgres' },
     });

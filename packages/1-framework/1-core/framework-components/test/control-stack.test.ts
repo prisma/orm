@@ -1,3 +1,4 @@
+import type { JsonValue } from '@internal/contract/types';
 import { InternalError } from '@internal/utils/internal-error';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { describe, expect, it } from 'vitest';
@@ -15,7 +16,7 @@ import {
 } from '../src/control/control-stack';
 import type { Codec } from '../src/shared/codec';
 import type { AnyCodecDescriptor } from '../src/shared/codec-descriptor';
-import { dataType, dataTypeId } from '../src/shared/data-type';
+import { type DataTypeValue, dataType, dataTypeId } from '../src/shared/data-type';
 import type { ComponentDescriptor } from '../src/shared/framework-components';
 import { isRuntimeError } from '../src/shared/runtime-error';
 
@@ -32,7 +33,7 @@ function createDescriptor<K extends string = 'target'>(
   } as ComponentDescriptor<K>;
 }
 
-const stubDataType = dataType('demo/stub', {});
+const stubDataType = dataType('demo/stub', { read: (json) => json });
 
 function registeredCodec(codecId: string): AnyCodecDescriptor {
   return {
@@ -44,11 +45,12 @@ function registeredCodec(codecId: string): AnyCodecDescriptor {
     factory: () => () =>
       ({
         id: codecId,
-        encode: async (v: unknown) => v,
-        decode: async (v: unknown) => v,
-        encodeJson: (v: unknown) => v,
-        decodeJson: (j: unknown) => j,
-      }) as unknown as Codec,
+        dataType: stubDataType,
+        toWire: async (v: unknown) => v,
+        fromWire: async (v: unknown) => v,
+        toDataTypeValue: (v: unknown) => stubDataType.valueFrom(v as JsonValue, {}),
+        fromDataTypeValue: (value: DataTypeValue) => value.value,
+      }) satisfies Codec,
   };
 }
 
@@ -1192,11 +1194,12 @@ describe('extractCodecLookup', () => {
   const stubCodec = (id: string) =>
     ({
       id,
-      encode: async (v: unknown) => v,
-      decode: async (v: unknown) => v,
-      encodeJson: (v: unknown) => v,
-      decodeJson: (j: unknown) => j,
-    }) as unknown as Codec;
+      dataType: stubDataType,
+      toWire: async (v: unknown) => v,
+      fromWire: async (v: unknown) => v,
+      toDataTypeValue: (v: unknown) => stubDataType.valueFrom(v as JsonValue, {}),
+      fromDataTypeValue: (value: DataTypeValue) => value.value,
+    }) satisfies Codec;
 
   const stubDescriptor = (id: string): AnyCodecDescriptor => ({
     codecId: id,

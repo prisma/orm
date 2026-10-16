@@ -6,6 +6,7 @@ import {
   type CodecInstanceContext,
   type CodecLookupWithDescriptors,
   createDataTypeLookup,
+  type DataTypeValue,
   dataType,
 } from '@internal/framework-components/codec';
 import { structuredError } from '@internal/utils/structured-error';
@@ -13,24 +14,24 @@ import { describe, expect, it } from 'vitest';
 import { readStoredValue } from '../src/data-type-default';
 
 const zoned = dataType('demo/zoned', {
-  toCanonicalForm: (value) => {
-    if (typeof value === 'string' && value.endsWith('Z')) return value;
-    throw structuredError('CONTRACT.CAST_REFUSED', `"${String(value)}" has no zone.`);
+  read: (json) => {
+    if (typeof json === 'string' && json.endsWith('Z')) return json;
+    throw structuredError('CONTRACT.CAST_REFUSED', `"${String(json)}" has no zone.`);
   },
 });
 
 class ZonedTextCodec extends CodecImpl<'demo/zoned-text@1', readonly ['equality'], string, string> {
-  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
     return wire;
   }
-  encodeJson(value: string): JsonValue {
-    return value;
+  toDataTypeValue(value: string): DataTypeValue {
+    return this.dataTypeValueOf(value);
   }
-  decodeJson(json: JsonValue): string {
-    return String(json);
+  fromDataTypeValue(value: DataTypeValue): string {
+    return String(value.value);
   }
 }
 
@@ -41,7 +42,7 @@ class ZonedTextDescriptor extends CodecDescriptorImpl<void> {
   override readonly traits = ['equality'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => ZonedTextCodec {
-    return () => new ZonedTextCodec(this);
+    return () => new ZonedTextCodec(this, zoned);
   }
 }
 
@@ -53,7 +54,7 @@ const codecLookup: CodecLookupWithDescriptors = {
 };
 
 describe('readStoredValue', () => {
-  it("reads a stored value through the canonical form of its codec's data type", () => {
+  it("reads a stored value through its codec's data type", () => {
     const read = (value: JsonValue) =>
       readStoredValue({
         value,
@@ -66,7 +67,7 @@ describe('readStoredValue', () => {
       zoned: { ok: true, value: '12:00Z' },
       unzoned: {
         ok: false,
-        code: 'PSL_INVALID_LITERAL',
+        code: 'PSL_INVALID_DEFAULT_LITERAL',
         message: 'Field "T.at": "12:00" has no zone.',
       },
     });

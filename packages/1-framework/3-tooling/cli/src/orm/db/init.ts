@@ -16,6 +16,7 @@ import {
 import type { CreateControlClient, DbInitSuccess } from '../../control-api/types';
 import { CliStructuredError, errorContractValidationFailed } from '../../utils/cli-errors';
 import { closeQuietly } from '../../utils/command-helpers';
+import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import { mapDbInitFailure } from '../../utils/db-init-failure';
 import type { MigrationCommandResult } from '../../utils/formatters/migrations';
 import { type CliInvocation, cliCommand, cliInvocation } from '../../utils/printed-command';
@@ -222,6 +223,7 @@ export function createDbInitCommand(createClient: CreateControlClient) {
             normalizeError(
               errorContractValidationFailed(`Contract validation failed: ${error.message}`, {
                 where: { path: contractPath },
+                meta: contractValidationMeta(error),
               }),
             ),
           );

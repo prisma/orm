@@ -1,25 +1,28 @@
-import { tagEntryKey } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import sqliteTargetPack from '../src/exports/pack';
 
 describe('the target descriptor authoring data types', () => {
   const registered = sqliteTargetPack.authoring.dataTypes;
 
-  it('registers the json tag and leaves sql/expression and its tag to the family', () => {
+  it('registers the json, datetime and blob tags and leaves sql/expression and its tag to the family', () => {
     expect({
       hasSqlExpression: Object.hasOwn(registered, 'sql/expression'),
       tags: Object.values(registered).flatMap((entry) =>
         entry.written.kind === 'tag' ? [entry.written.tag] : [],
       ),
-    }).toEqual({ hasSqlExpression: false, tags: ['json'] });
+    }).toEqual({ hasSqlExpression: false, tags: ['json', 'blob', 'datetime'] });
   });
 
-  it('registers json under its tag key, read as text, with no prefixed alias', () => {
+  it('registers each tag under the data type it reads, with no prefixed alias', () => {
     expect({
-      json: registered[tagEntryKey('json')]?.written,
+      json: registered['sqlite/json']?.written,
+      datetime: registered['sqlite/datetime']?.written,
+      blob: registered['sqlite/blob']?.written,
       prefixed: registered['sqlite.json'],
     }).toMatchObject({
-      json: { kind: 'tag', tag: 'json', type: 'sqlite/text' },
+      json: { kind: 'tag', tag: 'json' },
+      datetime: { kind: 'tag', tag: 'datetime' },
+      blob: { kind: 'tag', tag: 'blob' },
       prefixed: undefined,
     });
   });

@@ -174,16 +174,16 @@ function asDriverWrites(value: unknown): unknown {
 /**
  * Canonical Extended JSON for a BSON value, recording each JavaScript number and `Uint8Array` as the BSON type the driver writes for it: an integer outside the int32 range as a `double`, and bytes as `binData`.
  */
-export function encodeBsonJson(value: BsonInputValue): JsonValue {
+export function bsonToJson(value: BsonInputValue): JsonValue {
   return blindCast<JsonValue, 'canonical Extended JSON is plain JSON'>(
     EJSON.serialize(asDriverWrites(value), { relaxed: false }),
   );
 }
 
 /**
- * Reads the canonical Extended JSON `encodeBsonJson` writes. The `bson` reader also takes forms that are not canonical, some of them silently wrong (`{ "$numberInt": "abc" }` reads as 0), so a value that does not write back to the same JSON is refused.
+ * Reads the canonical Extended JSON `bsonToJson` writes. The `bson` reader also takes forms that are not canonical, some of them silently wrong (`{ "$numberInt": "abc" }` reads as 0), so a value that does not write back to the same JSON is refused, naming `owner`.
  */
-export function decodeBsonJson(json: JsonValue): BsonInputValue {
+export function readBsonJson(owner: string, json: JsonValue): BsonInputValue {
   let value: BsonInputValue;
   try {
     value = EJSON.deserialize(
@@ -194,10 +194,10 @@ export function decodeBsonJson(json: JsonValue): BsonInputValue {
       { relaxed: false },
     );
   } catch {
-    return refuseJsonValue(MONGO_BSON_CODEC_ID, 'canonical Extended JSON', json);
+    return refuseJsonValue(owner, 'canonical Extended JSON', json);
   }
   if (!isDeepStrictEqual(EJSON.serialize(value, { relaxed: false }), json)) {
-    return refuseJsonValue(MONGO_BSON_CODEC_ID, 'canonical Extended JSON', json);
+    return refuseJsonValue(owner, 'canonical Extended JSON', json);
   }
   return value;
 }

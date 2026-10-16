@@ -1,14 +1,13 @@
 import { dataTypeId } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import {
-  canonicalNumeralText,
   createNumberClassifier,
   escapePslString,
-  integerTextCanonicalForm,
   isNumeralText,
   parseJsonText,
   printJsonText,
   signedRange,
+  storedNumeralText,
 } from '../src/data-type-support';
 
 const small = dataTypeId('demo/small');
@@ -27,7 +26,7 @@ describe('signedRange', () => {
   });
 });
 
-describe('canonicalNumeralText', () => {
+describe('storedNumeralText', () => {
   it.each([
     ['drops leading zeros', '007', '7'],
     ['keeps trailing zeros', '-007.50', '-7.50'],
@@ -38,31 +37,7 @@ describe('canonicalNumeralText', () => {
     ['drops a plus sign and leading zeros and keeps trailing zeros', '+007.50', '7.50'],
     ['drops the plus sign of zero', '+0.0', '0.0'],
   ])('%s', (_name, text, canonical) => {
-    expect(canonicalNumeralText(text)).toBe(canonical);
-  });
-});
-
-describe('integerTextCanonicalForm', () => {
-  it.each([
-    ['digit text past the safe integer range', '9007199254740993', '9007199254740993'],
-    ['digit text with leading zeros', '-007', '-7'],
-    ['a safe integer', 42, '42'],
-  ])('reads %s as its digit text', (_name, value, canonical) => {
-    expect(integerTextCanonicalForm(value)).toBe(canonical);
-  });
-
-  it.each([
-    ['a number past the safe integer range', Number.MAX_SAFE_INTEGER + 2],
-    ['a fraction', 1.5],
-    ['text that is not an integer', '1.5'],
-    ['digit text with a plus sign', '+7'],
-  ])('refuses %s', (_name, value) => {
-    expect(() => integerTextCanonicalForm(value)).toThrow(
-      expect.objectContaining({
-        code: 'CONTRACT.CAST_REFUSED',
-        message: `Expected digit text or a safe integer, got ${JSON.stringify(value)}.`,
-      }),
-    );
+    expect(storedNumeralText(text)).toBe(canonical);
   });
 });
 

@@ -110,7 +110,7 @@ function interpret(
       scalarTypeCodecIds: mongoScalarTypeDescriptors,
       defaultFunctionRegistry: new Map(),
       codecLookup: mongoCodecLookup,
-      dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
+      dataTypes: { entries: {}, lookup: mongoDataTypeLookup, dataTypeOfCodec: () => undefined },
       ...overrides,
     },
     'test.prisma',
@@ -241,7 +241,7 @@ model Item {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
       codecLookup: mongoCodecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
+      dataTypes: { entries: {}, lookup: mongoDataTypeLookup, dataTypeOfCodec: () => undefined },
       resolvedInputs: [],
       capabilities: {},
     };

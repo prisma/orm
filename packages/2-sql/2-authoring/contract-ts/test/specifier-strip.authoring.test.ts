@@ -106,7 +106,7 @@ const stubContext: ContractSourceContext = {
     modelAttributes: {},
     attributeSpecs: { model: {}, field: {} },
   },
-  dataTypes: { entries: {}, lookup: createDataTypeLookup([]) },
+  dataTypes: { entries: {}, lookup: createDataTypeLookup([]), dataTypeOfCodec: () => undefined },
   codecLookup: {
     get: () => undefined,
     renderOutputTypeFor: () => undefined,

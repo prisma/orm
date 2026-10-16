@@ -156,10 +156,10 @@ describe('PSL number defaults keep every digit', () => {
         count: defaultOf('count'),
         ratio: defaultOf('ratio'),
       }).toEqual({
-        long: { kind: 'literal', value: '12345678901234567890.123456789' },
-        tiny: { kind: 'literal', value: '0.000000000000000001' },
-        negative: { kind: 'literal', value: '-1.25' },
-        whole: { kind: 'literal', value: '10' },
+        long: { kind: 'literal', value: '12345678901234567890.123456789000000000000000000000' },
+        tiny: { kind: 'literal', value: '0.000000000000000001000000000000' },
+        negative: { kind: 'literal', value: '-1.250000000000000000000000000000' },
+        whole: { kind: 'literal', value: '10.000000000000000000000000000000' },
         scaledTrailingZeros: { kind: 'literal', value: '1.50' },
         bareTrailingZeros: { kind: 'literal', value: '1.50' },
         bareLong: { kind: 'literal', value: '12345678901234567890.123456789' },
@@ -171,7 +171,11 @@ describe('PSL number defaults keep every digit', () => {
         safeBig: { kind: 'literal', value: '42' },
         decimals: {
           kind: 'literal',
-          value: ['12345678901234567890.123456789', '-0.000000000000000001', '1.50'],
+          value: [
+            '12345678901234567890.123456789000000000000000000000',
+            '-0.000000000000000001000000000000',
+            '1.500000000000000000000000000000',
+          ],
         },
         bareDecimals: { kind: 'literal', value: ['1.50', '0', '7'] },
         bigs: { kind: 'literal', value: ['9007199254740993', '-1'] },
@@ -225,13 +229,13 @@ describe('PSL number defaults on columns whose data type casts from no number', 
       diagnostics: [
         expect.objectContaining({
           code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
-          message: 'Field "Payload.data": Expected a quoted string',
+          message: 'Field "Payload.data": Expected bytea`...`',
         }),
       ],
     });
   });
 
-  it('refuse a number on a SQLite datetime column, whose text type casts from nothing', async () => {
+  it('refuse a number on a SQLite datetime column, whose type casts from nothing', async () => {
     const result = await authorSqliteContractFromPsl(
       'model Event {\n  id Int @id\n  at DateTime @default(0)\n}',
     );
@@ -239,7 +243,7 @@ describe('PSL number defaults on columns whose data type casts from no number', 
     expect(result.ok ? [] : result.failure.diagnostics).toEqual([
       expect.objectContaining({
         code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
-        message: 'Field "Event.at": Expected a quoted string',
+        message: 'Field "Event.at": Expected datetime`...`',
       }),
     ]);
   });

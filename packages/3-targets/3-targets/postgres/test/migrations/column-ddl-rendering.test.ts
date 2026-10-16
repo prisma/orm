@@ -116,7 +116,6 @@ describe('buildSetDefaultColumn', () => {
   it('carries a scalar literal default with the column type and codec, for the adapter to write', () => {
     const defaultNode = new SqlColumnDefaultIR({
       resolved: { kind: 'literal', value: 'hello' },
-      nativeTypeContext: 'text',
       codecRef: { codecId: 'pg/text@1' },
       codecBaseNativeType: 'text',
     });
@@ -131,7 +130,6 @@ describe('buildSetDefaultColumn', () => {
     (nativeType) => {
       const defaultNode = new SqlColumnDefaultIR({
         resolved: { kind: 'function', expression: 'autoincrement()' },
-        nativeTypeContext: nativeType,
         codecRef: { codecId: `pg/${nativeType}@1` },
         codecBaseNativeType: nativeType,
       });
@@ -148,7 +146,6 @@ describe('buildSetDefaultColumn', () => {
   it('carries an autoincrement default on a column that is not an integer, for setDefault to refuse', () => {
     const defaultNode = new SqlColumnDefaultIR({
       resolved: { kind: 'function', expression: 'autoincrement()' },
-      nativeTypeContext: 'text',
       codecRef: { codecId: 'pg/text@1' },
       codecBaseNativeType: 'text',
     });
@@ -168,7 +165,6 @@ describe('buildSetDefaultColumn', () => {
     ({ typeName, cast }) => {
       const defaultNode = new SqlColumnDefaultIR({
         resolved: { kind: 'literal', value: ['asc'] },
-        nativeTypeContext: `${typeName}[]`,
         many: true,
         codecRef: { codecId: 'pg/enum@1', typeParams: { typeName }, many: true },
         codecBaseNativeType: typeName,
@@ -181,7 +177,6 @@ describe('buildSetDefaultColumn', () => {
   it('throws when a default to render carries no codec identity', () => {
     const defaultNode = new SqlColumnDefaultIR({
       resolved: { kind: 'literal', value: 42 },
-      nativeTypeContext: 'int4',
     });
 
     expect(() => buildSetDefaultColumn('v', defaultNode, types)).toThrow(

@@ -48,11 +48,11 @@ export type AggregateOutputCodec = SelfAggregateOutput | NamedAggregateOutput;
 /**
  * Whether the result can be null — declared, never inferred from the input's nullability — and, where it cannot, the value the operation answers with.
  *
- * A database answers an empty input set itself, so the declared value is read only where no result row reached the caller at all: an absent aggregate alias, or a nested envelope that never arrived. It is stated in the result codec's canonical JSON and decoded through it, so the application value's shape stays the codec's to define while the answer stays the operation's to declare — `count` over nothing is a zero whatever type the codec reads a zero as, and an operation whose identity element is not zero declares that instead.
+ * A database answers an empty input set itself, so the declared value is read only where no result row reached the caller at all: an absent aggregate alias, or a nested envelope that never arrived. It is stated as a wire value of the result codec, the value the database would have returned, and read with the codec's `fromWire`, so the application value's shape stays the codec's to define while the answer stays the operation's to declare — `count` over nothing is a zero whatever type the codec reads a zero as, and an operation whose identity element is not zero declares that instead.
  */
 export type AggregateResultNullability =
   | { readonly nullable: true }
-  | { readonly nullable: false; readonly emptyResultJson: JsonValue };
+  | { readonly nullable: false; readonly emptyResultWire: unknown };
 
 type AggregateDescriptorBase = AggregateResultNullability & {
   /** The aggregate operation this descriptor resolves (e.g. `count`, `sum`). */
@@ -169,7 +169,7 @@ export function isAggregateDescriptor(value: unknown): value is AggregateDescrip
   if (!('nullable' in value) || typeof value.nullable !== 'boolean') return false;
   if (
     value.nullable === false &&
-    (!('emptyResultJson' in value) || value.emptyResultJson === undefined)
+    (!('emptyResultWire' in value) || value.emptyResultWire === undefined)
   ) {
     return false;
   }

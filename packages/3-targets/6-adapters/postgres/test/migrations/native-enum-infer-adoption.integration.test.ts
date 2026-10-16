@@ -50,7 +50,7 @@ describe('native enum inference adoption — end-to-end PGlite', { concurrent: f
     await driver!.query(`CREATE TABLE "User" (id text PRIMARY KEY, role role_t NOT NULL)`);
 
     const schemaIR = await familyInstance.introspect({ driver: driver!, contract });
-    const ast = familyInstance.inferPslContract(schemaIR);
+    const ast = await familyInstance.inferPslContract(schemaIR);
 
     const namespace = ast.namespaces.find((ns) => ns.name === 'public');
     expect(namespace).toBeDefined();
@@ -78,7 +78,7 @@ describe('native enum inference adoption — end-to-end PGlite', { concurrent: f
     );
 
     const schemaIR = await familyInstance.introspect({ driver: driver!, contract });
-    const ast = familyInstance.inferPslContract(schemaIR);
+    const ast = await familyInstance.inferPslContract(schemaIR);
 
     const namespace = ast.namespaces.find((ns) => ns.name === 'public');
     expect(namespace).toBeDefined();
@@ -94,7 +94,7 @@ describe('native enum inference adoption — end-to-end PGlite', { concurrent: f
     );
 
     const schemaIR = await familyInstance.introspect({ driver: driver!, contract });
-    const ast = familyInstance.inferPslContract(schemaIR);
+    const ast = await familyInstance.inferPslContract(schemaIR);
 
     expect(ast.namespaces).toHaveLength(1);
     expect(ast.namespaces[0]?.name).toBe('__unspecified__');

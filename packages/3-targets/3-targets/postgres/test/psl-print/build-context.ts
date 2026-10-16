@@ -26,6 +26,9 @@ const citextTemplate: CodecDescriptorTemplate = {
 export const extensionCodec: AnyPostgresCodecDescriptor = postgresCodec(citextTemplate, {
   dataType: pgText,
   jsonProjection: (expression) => expression,
+  factory: () => () => {
+    throw new Error('the printer never builds a codec');
+  },
 });
 
 /**
@@ -57,6 +60,7 @@ export function testBuildContext(
     dataTypes: {
       entries: postgresDataTypeEntries(),
       lookup: createDataTypeLookup([...postgresDataTypes, ...(extra.dataTypes ?? [])]),
+      dataTypeOfCodec: () => undefined,
     },
   };
 }

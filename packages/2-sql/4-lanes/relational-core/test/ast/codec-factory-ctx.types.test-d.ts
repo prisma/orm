@@ -14,25 +14,25 @@ test('SqlCodecCallContext extends framework CodecCallContext (signal) and adds c
   void fw;
 });
 
-test('SQL Codec.encode/decode narrow ctx to SqlCodecCallContext (non-optional at the interface)', () => {
+test('SQL Codec.toWire/fromWire narrow ctx to SqlCodecCallContext (non-optional at the interface)', () => {
   type SqlCodec = Codec<'demo/x@1', readonly [], string, string>;
-  type EncodeParams = Parameters<SqlCodec['encode']>;
-  type DecodeParams = Parameters<SqlCodec['decode']>;
+  type EncodeParams = Parameters<SqlCodec['toWire']>;
+  type DecodeParams = Parameters<SqlCodec['fromWire']>;
   expectTypeOf<EncodeParams[1]>().toEqualTypeOf<SqlCodecCallContext>();
   expectTypeOf<DecodeParams[1]>().toEqualTypeOf<SqlCodecCallContext>();
 });
 
-test('Codec.encode and Codec.decode require a ctx argument', () => {
+test('Codec.toWire and Codec.fromWire require a ctx argument', () => {
   const c = defineTestCodec({
     typeId: 'demo/require-ctx@1',
-    encode: (value: string) => value,
-    decode: (wire: string) => wire,
+    toWire: (value: string) => value,
+    fromWire: (wire: string) => wire,
   });
   // @ts-expect-error — ctx is non-optional on the Codec interface
-  c.encode('x');
+  c.toWire('x');
   // @ts-expect-error — ctx is non-optional on the Codec interface
-  c.decode('x');
+  c.fromWire('x');
   // Legal: explicit ctx (signal is the only field today and is optional inside the ctx).
-  void c.encode('x', {});
-  void c.decode('x', {});
+  void c.toWire('x', {});
+  void c.fromWire('x', {});
 });

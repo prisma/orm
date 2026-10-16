@@ -234,7 +234,7 @@
                 },
                 "datetime": {
                   "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/text",
+                  "dataType": "sqlite/datetime",
                   "nullable": false
                 },
                 "id": {
@@ -253,7 +253,7 @@
                 },
                 "json": {
                   "codecId": "sqlite/json@1",
-                  "dataType": "sqlite/text",
+                  "dataType": "sqlite/json",
                   "nullable": false
                 },
                 "real": {
@@ -310,7 +310,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "6515756055b17590a23a99f06ae0ac6cf3b2dc642eeea25f10c3ad4a4d085607",
+    "storageHash": "79b20e2c4ed3decb2dd7e26a3380f65f3d70711c9421d72f4e3e683f5bf4143c",
     "types": {
       "ShortText": {
         "codecId": "sql/varchar@1",

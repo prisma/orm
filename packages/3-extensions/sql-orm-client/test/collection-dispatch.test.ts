@@ -138,7 +138,7 @@ describe('collection-dispatch', () => {
       .include('posts', (posts) => posts.select('title', 'views'));
     const viewsCodec = collection.ctx.context.contractCodecs.forColumn('public', 'posts', 'views');
     if (!viewsCodec) throw new Error('Missing views codec');
-    const decodeJson = vi.spyOn(viewsCodec, 'decodeJson');
+    const fromWire = vi.spyOn(viewsCodec, 'fromWire');
     const forColumn = vi.spyOn(collection.ctx.context.contractCodecs, 'forColumn');
 
     for (let execution = 0; execution < 2; execution++) {
@@ -172,8 +172,13 @@ describe('collection-dispatch', () => {
         },
       ]);
       expect(forColumn).toHaveBeenCalledTimes((execution + 1) * 2);
-      expect(decodeJson).toHaveBeenCalledTimes((execution + 1) * 3);
+      expect(fromWire).toHaveBeenCalledTimes((execution + 1) * 3);
     }
+    expect(fromWire.mock.calls.slice(0, 3)).toEqual([
+      [1, { column: { table: 'posts', name: 'views' } }],
+      [2, { column: { table: 'posts', name: 'views' } }],
+      [3, { column: { table: 'posts', name: 'views' } }],
+    ]);
     expect(forColumn.mock.calls).toEqual([
       ['public', 'posts', 'views'],
       ['public', 'posts', 'title'],
@@ -182,16 +187,16 @@ describe('collection-dispatch', () => {
     ]);
   });
 
-  it('preserves failure details when a later included value fails synchronous JSON decoding', async () => {
+  it('preserves failure details when a later included value fails the fromWire of its codec', async () => {
     const contract = withEmittedSqlCapabilities(getTestContract());
     const { collection, runtime } = createCollectionFor('User', contract);
     const scoped = collection.select('name').include('posts', (posts) => posts.select('views'));
     const codec = collection.ctx.context.contractCodecs.forColumn('public', 'posts', 'views');
     if (!codec) throw new Error('Missing views codec');
     const cause = new Error('invalid views');
-    const decodeJson = vi.spyOn(codec, 'decodeJson').mockImplementation((value) => {
-      if (value === 2) throw cause;
-      return value;
+    const fromWire = vi.spyOn(codec, 'fromWire').mockImplementation(async (wire) => {
+      if (wire === 2) throw cause;
+      return wire;
     });
     runtime.setNextResults([[{ name: 'Alice', posts: [{ views: 1 }, { views: 2 }] }]]);
     await expect(
@@ -207,7 +212,7 @@ describe('collection-dispatch', () => {
       details: { table: 'posts', column: 'views', codec: 'pg/int4@1' },
       cause,
     });
-    expect(decodeJson.mock.calls).toEqual([[1], [2]]);
+    expect(fromWire.mock.calls.map(([wire]) => wire)).toEqual([1, 2]);
   });
 
   it('rethrows an InternalError from decoding an included value unchanged', async () => {
@@ -217,10 +222,10 @@ describe('collection-dispatch', () => {
     const codec = collection.ctx.context.contractCodecs.forColumn('public', 'posts', 'views');
     if (!codec) throw new Error('Missing views codec');
     const original = new InternalError('codec invariant broke');
-    const decodeJson = vi.spyOn(codec, 'decodeJson').mockImplementation(() => {
+    const fromWire = vi.spyOn(codec, 'fromWire').mockImplementation(async () => {
       throw original;
     });
-    onTestFinished(() => decodeJson.mockRestore());
+    onTestFinished(() => fromWire.mockRestore());
     runtime.setNextResults([[{ name: 'Alice', posts: [{ views: 1 }] }]]);
     await expect(
       dispatchCollectionRows<Record<string, unknown>>({

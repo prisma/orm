@@ -24,7 +24,7 @@ it('writes policy expressions as sql literals without changing references or rol
     target: { expression: 'public.Widget', span: expect.any(Object) },
     roles: { expression: '[writer, reader]', span: expect.any(Object) },
     using: {
-      expression: 'sql`\n"owner" = \'a\\\\b\'\nOR "id" = 1\n`',
+      expression: 'sql`\n"owner" = \'a\\b\'\nOR "id" = 1\n`',
       span: expect.any(Object),
     },
     withCheck: { expression: 'sql`"active" = true`', span: expect.any(Object) },

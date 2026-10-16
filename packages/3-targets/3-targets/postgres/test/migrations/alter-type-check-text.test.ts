@@ -1,5 +1,5 @@
+import { dataTypeParams } from '@internal/framework-components/codec';
 import {
-  dataTypeParams,
   isSqlDataType,
   renderSqlTypeName,
   type SqlDataType,

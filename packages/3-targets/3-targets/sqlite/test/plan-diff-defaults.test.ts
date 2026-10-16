@@ -6,7 +6,7 @@ import { SqlSchemaIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { ifDefined } from '@internal/utils/defined';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { parseSqliteDefault } from '../src/core/default-normalizer';
+import { readSqliteDefault } from '../src/core/default-normalizer';
 import { columnSpecFromNode, ddlColumnFromNode } from '../src/core/migrations/column-ddl-rendering';
 import { buildSqlitePlanDiff } from '../src/core/migrations/diff-database-schema';
 import { sqliteCreateNamespace } from '../src/core/sqlite-unbound-database';
@@ -24,7 +24,7 @@ function liveSchema(rawDefault: string): SqlSchemaIR {
             nullable: false,
             default: rawDefault,
             resolvedNativeType: 'text',
-            ...ifDefined('resolvedDefault', parseSqliteDefault(rawDefault, 'text')),
+            ...ifDefined('resolvedDefault', functionDefaultOf(rawDefault)),
           },
         },
         foreignKeys: [],
@@ -93,15 +93,16 @@ describe('buildSqlitePlanDiff derives the expected default like verify does', ()
     },
   );
 
-  it('renders now() as the expression that stores the datetime codec text', () => {
+  it('names a now() default as introspection names it', () => {
     const diff = buildSqlitePlanDiff({
       contract: contractWithDefault({ kind: 'function', expression: 'now()' }),
       actualSchema: new SqlSchemaIR({ tables: {} }),
       frameworkComponents: sqliteTestComponents,
     });
-    expect(diff.expected.tables['event']?.columns['at']?.default).toBe(
-      "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
-    );
+    expect(diff.expected.tables['event']?.columns['at']?.resolvedDefault).toEqual({
+      kind: 'function',
+      expression: 'now()',
+    });
   });
 
   it("sees no change for a literal-shaped body sql`'x'` against the literal the database stores", () => {
@@ -133,3 +134,9 @@ describe('buildSqlitePlanDiff derives the expected default like verify does', ()
     },
   );
 });
+
+/** The function default introspection reads from `rawDefault`; a literal needs the column codec, which these schemas have none of. */
+function functionDefaultOf(rawDefault: string) {
+  const read = readSqliteDefault(rawDefault, 'text');
+  return read.kind === 'function' ? read : undefined;
+}

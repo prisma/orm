@@ -1671,7 +1671,11 @@ describe('the binder calls the real spec factories', () => {
 
 describe('the binder gives spec factories the data types of the stack', () => {
   it('passes the same data types to model and field factories', () => {
-    const dataTypes = { entries: {}, lookup: createDataTypeLookup([]) };
+    const dataTypes = {
+      entries: {},
+      lookup: createDataTypeLookup([]),
+      dataTypeOfCodec: () => undefined,
+    };
     const seen: unknown[] = [];
     const { sources, symbolTable } = build(
       ['model User {', '  id Int', '  name String @contextual', '  @@index([id])', '}'].join('\n'),

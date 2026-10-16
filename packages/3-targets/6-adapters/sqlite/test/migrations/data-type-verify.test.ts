@@ -1,27 +1,14 @@
 /**
- * Verify on SQLite compares the type text a column's data type renders with the text the catalog
- * reports. Each of the six data types is created by the planner, read back, and verified; and a
+ * Verify on SQLite compares the type text a column's data type renders, from the type it is stored
+ * as, with the text the catalog reports. Each data type, `sqlite/datetime` and `sqlite/json`
+ * included, is created by the planner, read back, and verified; and a
  * database whose integer and JSON defaults were written before their stored form changed still
  * verifies.
  */
 
 import { DatabaseSync } from 'node:sqlite';
-import {
-  type ColumnDefault,
-  type Contract,
-  coreHash,
-  type JsonValue,
-  profileHash,
-} from '@internal/contract/types';
+import { type ColumnDefault, type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
-import {
-  type CodecCallContext,
-  CodecDescriptorImpl,
-  CodecImpl,
-  type CodecInstanceContext,
-  dataTypeId,
-} from '@internal/framework-components/codec';
-import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageColumn } from '@internal/sql-contract/types';
@@ -80,7 +67,13 @@ const columns: Readonly<Record<string, StorageColumn>> = {
     nullable: false,
     default: literal(1.5),
   },
-  blob_col: { many: false, dataType: 'sqlite/blob', codecId: 'sqlite/blob@1', nullable: true },
+  blob_col: {
+    many: false,
+    dataType: 'sqlite/blob',
+    codecId: 'sqlite/blob@1',
+    nullable: true,
+    default: literal('6869'),
+  },
   character_col: {
     many: false,
     dataType: 'sqlite/character',
@@ -99,7 +92,7 @@ const columns: Readonly<Record<string, StorageColumn>> = {
   },
   json_col: {
     many: false,
-    dataType: 'sqlite/text',
+    dataType: 'sqlite/json',
     codecId: 'sqlite/json@1',
     nullable: false,
     default: literal('{"a":1}'),
@@ -110,6 +103,13 @@ const columns: Readonly<Record<string, StorageColumn>> = {
     codecId: 'sqlite/bigint@1',
     nullable: false,
     default: literal('9007199254740993'),
+  },
+  datetime_col: {
+    many: false,
+    dataType: 'sqlite/datetime',
+    codecId: 'sqlite/datetime@1',
+    nullable: false,
+    default: literal('2024-01-01T00:00:00.000Z'),
   },
 };
 
@@ -163,50 +163,14 @@ function documentContractWith(body: StorageColumn): Contract<SqlStorage> {
 
 const documentContract = documentContractWith({
   many: false,
-  dataType: 'sqlite/text',
+  dataType: 'sqlite/json',
   codecId: 'sqlite/json@1',
   nullable: false,
   default: literal('{"a":1,"b":[1,2]}'),
 });
 
-class LowerCaseCodec extends CodecImpl<'demo/lower-case@1', readonly ['equality'], string, string> {
-  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
-    return value;
-  }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
-    return wire;
-  }
-  encodeJson(value: string): JsonValue {
-    return value;
-  }
-  decodeJson(json: JsonValue): string {
-    return String(json);
-  }
-}
-
-/** An extension codec over `sqlite/text` whose values have a finer canonical form than the text type's. */
-class LowerCaseDescriptor extends CodecDescriptorImpl<void> {
-  override readonly dataType = dataTypeId('sqlite/text');
-  override readonly codecId = 'demo/lower-case@1' as const;
-  override readonly traits = ['equality'] as const;
-  override readonly paramsSchema = undefined;
-  override readonly toCanonicalForm = (value: JsonValue): JsonValue => String(value).toLowerCase();
-  override factory(): (ctx: CodecInstanceContext) => LowerCaseCodec {
-    return () => new LowerCaseCodec(this);
-  }
-}
-
-const lowerCaseExtension = {
-  kind: 'extension',
-  id: 'demo-lower-case',
-  familyId: 'sql',
-  targetId: 'sqlite',
-  version: '0.0.0',
-  types: { codecTypes: { codecDescriptors: [new LowerCaseDescriptor()] } },
-} satisfies TargetBoundComponentDescriptor<'sql', 'sqlite'>;
-
 async function verify(driver: ReturnType<typeof createMemoryDriver>) {
-  const schema = await introspector.introspect(driver);
+  const schema = await introspector.introspect(driver, contract);
   return familyInstance.verifySchema({
     contract,
     schema,
@@ -242,6 +206,9 @@ describe('verify on SQLite, for each data type', () => {
         '"bigint_col" INTEGER NOT NULL DEFAULT 9007199254740993',
       );
       expect(statements.join('\n')).toContain('"json_col" TEXT NOT NULL DEFAULT \'{"a":1}\'');
+      expect(statements.join('\n')).toContain(
+        '"datetime_col" TEXT NOT NULL DEFAULT \'2024-01-01T00:00:00.000Z\'',
+      );
 
       const schema = await introspector.introspect(driver);
       expect(
@@ -260,6 +227,7 @@ describe('verify on SQLite, for each data type', () => {
         character_varying_col: 'character varying',
         json_col: 'text',
         bigint_col: 'integer',
+        datetime_col: 'text',
       });
       expect((await verify(driver)).ok).toBe(true);
     } finally {
@@ -274,11 +242,12 @@ describe('verify on SQLite, for each data type', () => {
         "text_col" TEXT NOT NULL DEFAULT 'x',
         "integer_col" INTEGER NOT NULL DEFAULT 7,
         "real_col" REAL NOT NULL DEFAULT 1.5,
-        "blob_col" BLOB,
+        "blob_col" BLOB DEFAULT X'6869',
         "character_col" CHARACTER NOT NULL DEFAULT 'a',
         "character_varying_col" CHARACTER VARYING NOT NULL DEFAULT 'b',
         "json_col" TEXT NOT NULL DEFAULT '{"a":1}',
-        "bigint_col" INTEGER NOT NULL DEFAULT '9007199254740993'
+        "bigint_col" INTEGER NOT NULL DEFAULT '9007199254740993',
+        "datetime_col" TEXT NOT NULL DEFAULT '2024-01-01T00:00:00Z'
       )`);
       expect(await verify(driver)).toMatchObject({ ok: true });
     } finally {
@@ -297,37 +266,9 @@ describe('verify on SQLite, for each data type', () => {
         await driver.query(`CREATE TABLE "doc" ("body" TEXT NOT NULL DEFAULT ${sqlDefault})`);
         const result = familyInstance.verifySchema({
           contract: documentContract,
-          schema: await introspector.introspect(driver),
+          schema: await introspector.introspect(driver, documentContract),
           strict: true,
           frameworkComponents,
-        });
-        expect(result.ok).toBe(ok);
-      } finally {
-        await driver.close();
-      }
-    },
-  );
-
-  it.each([
-    ['in another form of the same value', `'ABC'`, true],
-    ['with a different value', `'ABD'`, false],
-  ])(
-    'compares a default of an extension codec that declares a canonical form, written %s',
-    async (_name, sqlDefault, ok) => {
-      const driver = createMemoryDriver();
-      try {
-        await driver.query(`CREATE TABLE "doc" ("body" TEXT NOT NULL DEFAULT ${sqlDefault})`);
-        const result = familyInstance.verifySchema({
-          contract: documentContractWith({
-            many: false,
-            dataType: 'sqlite/text',
-            codecId: 'demo/lower-case@1',
-            nullable: false,
-            default: literal('abc'),
-          }),
-          schema: await introspector.introspect(driver),
-          strict: true,
-          frameworkComponents: [...frameworkComponents, lowerCaseExtension],
         });
         expect(result.ok).toBe(ok);
       } finally {
@@ -340,15 +281,16 @@ describe('verify on SQLite, for each data type', () => {
     const driver = createMemoryDriver();
     try {
       await driver.query(`CREATE TABLE "doc" ("body" TEXT DEFAULT 'null')`);
+      const nullDocument = documentContractWith({
+        many: false,
+        dataType: 'sqlite/json',
+        codecId: 'sqlite/json@1',
+        nullable: true,
+        default: literal('null'),
+      });
       const result = familyInstance.verifySchema({
-        contract: documentContractWith({
-          many: false,
-          dataType: 'sqlite/text',
-          codecId: 'sqlite/json@1',
-          nullable: true,
-          default: literal('null'),
-        }),
-        schema: await introspector.introspect(driver),
+        contract: nullDocument,
+        schema: await introspector.introspect(driver, nullDocument),
         strict: true,
         frameworkComponents,
       });

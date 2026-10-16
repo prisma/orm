@@ -76,7 +76,7 @@ export interface SqlControlTargetDescriptor<
     schema: SqlSchemaIRNode,
     context: SqlPslBuildContext,
     describedContracts?: readonly SqlDescribedContractSpace[],
-  ) => PslDocumentAst;
+  ) => Promise<PslDocumentAst>;
   /**
    * Builds the PSL document of a contract, which `contract print` renders as text. `contract` must be one `contractSerializer.deserializeContract` accepted; the hook does not check its structure again. Like {@link inferPslContract} it produces a PSL document, but from an assembled contract and the stack parts in `context`. The document reads back as the same contract; the hook throws `CONTRACT.PRINT_UNSUPPORTED` for a contract PSL cannot express. The implementation sits in the target, though most of it inverts this family's PSL reader; only its column types, defaults, native enums, derived checks and row-level security are dialect logic. Optional: targets without `contract print` omit it, and the family instance throws when it is absent.
    */

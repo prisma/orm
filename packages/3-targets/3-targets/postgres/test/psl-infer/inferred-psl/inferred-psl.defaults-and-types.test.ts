@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { printPslFromFlat as printPslFromSql } from '../fixtures';
 
 describe('printPsl', () => {
-  it('schema with defaults (autoincrement, now, boolean, string, number)', () => {
+  it('schema with defaults (autoincrement, now, boolean, string, number)', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         post: {
@@ -47,7 +47,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -65,7 +65,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('prints parameterized native constructors in field position', () => {
+  it('prints parameterized native constructors in field position', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         contact: {
@@ -90,7 +90,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -106,7 +106,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('prints each native constructor independently of column-name collisions', () => {
+  it('prints each native constructor independently of column-name collisions', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         price: {
@@ -141,7 +141,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -163,7 +163,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('prints repeated native constructors directly on each field', () => {
+  it('prints repeated native constructors directly on each field', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         account: {
@@ -199,7 +199,7 @@ describe('printPsl', () => {
       },
     });
 
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -221,7 +221,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('does not alias native constructors that share scalar or model names', () => {
+  it('does not alias native constructors that share scalar or model names', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         user: {
@@ -247,7 +247,7 @@ describe('printPsl', () => {
       },
     });
 
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -263,7 +263,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('refuses every column whose type no data type in the stack claims', () => {
+  it('refuses every column whose type no data type in the stack claims', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         geo_data: {
@@ -288,7 +288,7 @@ describe('printPsl', () => {
         },
       },
     });
-    expect(() => printPslFromSql(schemaIR)).toThrow(
+    await expect(printPslFromSql(schemaIR)).rejects.toThrow(
       expect.objectContaining({
         code: 'CONTRACT.INFER_COLUMN_TYPE_UNCLAIMED',
         meta: {
@@ -298,7 +298,7 @@ describe('printPsl', () => {
     );
   });
 
-  it('uuid default', () => {
+  it('uuid default', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         item: {
@@ -318,7 +318,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -332,7 +332,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('preserves non-default native types in field position', () => {
+  it('preserves non-default native types in field position', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         schedule: {
@@ -368,7 +368,7 @@ describe('printPsl', () => {
       },
     });
 
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -386,7 +386,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('preserves raw Postgres defaults as sql tagged literals', () => {
+  it('preserves raw Postgres defaults as sql tagged literals', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         data: {
@@ -419,7 +419,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.

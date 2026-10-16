@@ -22,7 +22,6 @@ export type {
 } from '../core/control-target-descriptor';
 export type {
   ContractToSchemaIROptions,
-  DefaultRenderer,
   DefaultResolver,
 } from '../core/migrations/contract-to-schema-ir';
 // Contract → SchemaIR conversion for offline migration planning
@@ -169,6 +168,19 @@ export {
   convertedColumnOf,
   unconvertedFieldOf,
 } from '../core/migrations/unconverted-field';
+export type {
+  ContractColumn,
+  ContractColumns,
+  ReadColumnDefault,
+  ReadReportedDefault,
+  ReportedBody,
+  ReportedLiteralDefault,
+} from '../core/reported-defaults';
+export {
+  contractColumns,
+  readColumnDefault,
+  readReportedDefault,
+} from '../core/reported-defaults';
 export {
   temporalCodecPresetWithPrecision,
   temporalStringAuthoringPresets,

@@ -13,6 +13,7 @@ import {
 } from '../../src/core/psl-build/inferred-type-constructors';
 
 const numeric = sqlDataType('t/numeric', {
+  read: (json) => json,
   params: type({
     'precision?': 'number.integer >= 1',
     'scale?': 'number.integer >= 0',
@@ -26,9 +27,13 @@ const numeric = sqlDataType('t/numeric', {
     params.precision !== undefined && params.scale === undefined ? { ...params, scale: 0 } : params,
 });
 
-const text = sqlDataType('t/text', { texts: [{ text: 'text', written: true, catalog: true }] });
+const text = sqlDataType('t/text', {
+  read: (json) => json,
+  texts: [{ text: 'text', written: true, catalog: true }],
+});
 
 const labelled = sqlDataType('t/labelled', {
+  read: (json) => json,
   params: type({ label: 'string' }),
   claimsKind: 'labelled',
   fromReported: (reported) => ({ label: reported.name ?? '' }),

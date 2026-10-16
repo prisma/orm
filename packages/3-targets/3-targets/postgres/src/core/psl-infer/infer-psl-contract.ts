@@ -20,7 +20,6 @@ import {
   UNSPECIFIED_PSL_NAMESPACE_ID,
 } from '@internal/framework-components/psl-ast';
 import { type SqlColumnIR, SqlSchemaIR, SqlTableIR } from '@internal/sql-schema-ir/types';
-import { parsePostgresDefault } from '../default-normalizer';
 import { postgresError } from '../errors';
 import { SYNTHETIC_SPAN } from '../psl-build/psl-literals';
 import type { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
@@ -39,6 +38,7 @@ import {
 import { buildModel } from './infer-model-blocks';
 import { buildFieldNamesByTable, buildTopLevelNameMap, topologicalSort } from './infer-names';
 import { buildIntrospectedPolicyBlocks } from './infer-policy-blocks';
+import { type InferredDefaultOf, readInferredDefaults } from './infer-read-defaults';
 import { createPostgresDefaultMapping } from './postgres-default-mapping';
 
 /**
@@ -46,8 +46,7 @@ import { createPostgresDefaultMapping } from './postgres-default-mapping';
  *
  * Target-owned inference: it walks the `PostgresDatabaseSchemaNode` tree and
  * owns the Postgres dialect knowledge — native enums and the default map.
- * It reads raw defaults with `parsePostgresDefault`, the parser introspection
- * and verify use. A column's type is the SQL family's: the constructor marked
+ * It reads each reported default with the codec of the type constructor it prints for the column (`readInferredDefaults`). A column's type is the SQL family's: the constructor marked
  * `inferred` for the data type that claims the type the database reported.
  * Relation inference, name transforms, and generic default mapping are
  * shape-neutral utilities imported from the SQL family as well.
@@ -72,11 +71,11 @@ import { createPostgresDefaultMapping } from './postgres-default-mapping';
  * dropped: {@link resolveForeignKeys} rewrites it into a relation qualified
  * with the pack's space id (`<spaceId>:<namespaceId>.<Model>`) instead.
  */
-export function inferPostgresPslContract(
+export async function inferPostgresPslContract(
   tree: PostgresDatabaseSchemaNode,
   context: SqlPslBuildContext,
   describedContracts?: readonly SqlDescribedContractSpace[],
-): PslDocumentAst {
+): Promise<PslDocumentAst> {
   const namespaces = Object.values(tree.namespaces);
   const owners = describedContractOwners(describedContracts ?? []);
 
@@ -217,19 +216,21 @@ export function inferPostgresPslContract(
   const schemaIR = new SqlSchemaIR({ tables: resolvedTables });
 
   const enumInfo: EnumInfo = { definitions: enumDefinitions };
-  const options: PostgresPslInferOptions = {
-    columnTypes: inferColumnTypes({
-      tables: introspectedTables,
-      constructors: inferredTypeConstructors({
-        authoringTypes: context.authoringContributions.type,
-        codecLookup: context.codecLookup,
-        dataTypeLookup: context.dataTypes.lookup,
-      }),
-      isEnumColumn: (column) =>
-        adoptedEnumTypeName(column, enumInfo.definitions, wrapNamespaceName) !== undefined,
+  const isEnumColumn = (column: SqlColumnIR) =>
+    adoptedEnumTypeName(column, enumInfo.definitions, wrapNamespaceName) !== undefined;
+  const columnTypes = inferColumnTypes({
+    tables: introspectedTables,
+    constructors: inferredTypeConstructors({
+      authoringTypes: context.authoringContributions.type,
+      codecLookup: context.codecLookup,
+      dataTypeLookup: context.dataTypes.lookup,
     }),
+    isEnumColumn,
+  });
+  const options: PostgresPslInferOptions = {
+    columnTypes,
     defaultMapping: createPostgresDefaultMapping(),
-    parseRawDefault: parsePostgresDefault,
+    defaultOf: await readInferredDefaults(schemaIR, columnTypes, isEnumColumn, context),
     columnDefaults: inferredColumnDefaults(context),
     ...(enumDefinitions.size > 0 ? { enumInfo } : {}),
   };
@@ -257,6 +258,8 @@ export interface RlsEmissionExtras {
 export type PostgresPslInferOptions = PslPrinterOptions & {
   readonly columnTypes: ColumnTypeOf;
   readonly columnDefaults: InferredColumnDefaults;
+  /** The default each column prints, as `readInferredDefaults` read it. */
+  readonly defaultOf: InferredDefaultOf;
 };
 
 /**
@@ -287,7 +290,7 @@ export function buildPslDocumentAst(
   rlsExtras?: RlsEmissionExtras,
   topLevelExtensionBlocks: readonly PslExtensionBlock[] = [],
 ): PslDocumentAst {
-  const { columnTypes, defaultMapping, parseRawDefault: rawDefaultParser } = options;
+  const { columnTypes, defaultMapping, defaultOf } = options;
   const { extraRelationsByTable, crossSpaceFieldNamesByTable, danglingForeignKeysByTable } =
     foreignKeyExtras;
 
@@ -368,7 +371,7 @@ export function buildPslDocumentAst(
         enumNameOf,
         fieldNamesByTable,
         defaultMapping,
-        rawDefaultParser,
+        defaultOf,
         options.columnDefaults,
         [
           ...(relationsByTable.get(table.name) ?? []),

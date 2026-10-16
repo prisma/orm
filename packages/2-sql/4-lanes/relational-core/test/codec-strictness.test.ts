@@ -1,18 +1,15 @@
-import type { CodecInstanceContext } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
-import { sqlFloatDescriptor } from '../src/ast/sql-codecs';
+import { readStored, sqlFloatCodec } from './template-codecs';
 
-const ctx: CodecInstanceContext = { name: 'codec-strictness' };
-
-describe('sql/float@1 decodeJson', () => {
-  const codec = sqlFloatDescriptor.factory()(ctx);
+describe('sql/float@1 fromDataTypeValue', () => {
+  const codec = sqlFloatCodec();
 
   it('reads a finite JSON number', () => {
-    expect(codec.decodeJson(1.5)).toBe(1.5);
+    expect(readStored(codec, 1.5)).toBe(1.5);
   });
 
   it('reads the text PostgreSQL writes for NaN and the infinities', () => {
-    expect(['NaN', 'Infinity', '-Infinity'].map((json) => codec.decodeJson(json))).toEqual([
+    expect(['NaN', 'Infinity', '-Infinity'].map((json) => readStored(codec, json))).toEqual([
       Number.NaN,
       Number.POSITIVE_INFINITY,
       Number.NEGATIVE_INFINITY,
@@ -27,7 +24,7 @@ describe('sql/float@1 decodeJson', () => {
     ['null', null],
     ['an infinite number', Number.POSITIVE_INFINITY],
   ])('refuses %s', (_name, json) => {
-    expect(() => codec.decodeJson(json)).toThrow(
+    expect(() => readStored(codec, json)).toThrow(
       'sql/float@1 JSON value must be a finite number or the text NaN, Infinity or -Infinity',
     );
   });

@@ -95,7 +95,11 @@ function pslIndexes() {
       },
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
       codecLookup: postgresCodecLookup,
-      dataTypes: { entries: assembled.dataTypes, lookup: postgresDataTypeLookup },
+      dataTypes: {
+        entries: assembled.dataTypes,
+        lookup: postgresDataTypeLookup,
+        dataTypeOfCodec: () => undefined,
+      },
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
       resolvedInputs: [],
       capabilities: {},

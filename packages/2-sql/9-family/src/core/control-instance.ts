@@ -268,7 +268,7 @@ export interface SqlControlFamilyInstance
     readonly contract?: unknown;
   }): Promise<SqlSchemaIRNode>;
 
-  inferPslContract(schemaIR: SqlSchemaIRNode): PslDocumentAst;
+  inferPslContract(schemaIR: SqlSchemaIRNode): Promise<PslDocumentAst>;
 
   lowerAst(
     ast: AnyQueryAst | DdlNode,
@@ -921,7 +921,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
       return getControlAdapter().introspect(options.driver, options.contract);
     },
 
-    inferPslContract(schemaIR: SqlSchemaIRNode): PslDocumentAst {
+    async inferPslContract(schemaIR: SqlSchemaIRNode): Promise<PslDocumentAst> {
       if (!targetInferPslContract) {
         throw sqlFamilyError(
           'CONTRACT.INFER_UNSUPPORTED',

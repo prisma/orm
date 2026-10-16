@@ -46,6 +46,7 @@ describe('Prisma 7 fixtures', () => {
     expect(cases).toEqual([
       'block-dotted-value',
       'constraint-names',
+      'datetime-default-finer-than-column',
       'datetime-defaults',
       'dbgenerated-without-expression',
       'dbgenerated-without-expression-optional',

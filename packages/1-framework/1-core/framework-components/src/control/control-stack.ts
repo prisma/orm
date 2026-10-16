@@ -25,16 +25,13 @@ import type {
 import {
   assertNoCrossRegistryCollisions,
   assertResolvableTypeConstructorTemplates,
-  authoringEntryType,
   collectContributedDescriptorPaths,
   collectScalarTypeConstructors,
   isAuthoringArgRef,
   isAuthoringFieldPresetDescriptor,
   isAuthoringTypeConstructorDescriptor,
-  isTagEntryKey,
   mergeAuthoringAttributeSpecs,
   mergeAuthoringNamespaces,
-  tagEntryKey,
 } from '../shared/framework-authoring';
 import type { ComponentMetadata } from '../shared/framework-components';
 import type {
@@ -512,21 +509,6 @@ export function enforceDataTypeInvariants(input: DataTypeInvariantInput): void {
   }
 
   for (const { key, entry, contributedBy } of input.authoringEntries) {
-    const written = entry.written;
-    const tagType = written.kind === 'tag' && 'type' in written ? written.type : undefined;
-    if (isTagEntryKey(key) || tagType !== undefined) {
-      if (written.kind !== 'tag' || tagType === undefined || key !== tagEntryKey(written.tag)) {
-        throw runtimeError(
-          'CONTRACT.DATA_TYPE_ENTRY_KEY_INVALID',
-          `Authoring entry "${key}" contributed by "${contributedBy}" must sit under its tag's key and name the data type its body is, or sit under that data type's id and name none.`,
-          { key, contributedBy },
-        );
-      }
-      if (!input.lookup.has(tagType)) {
-        unregistered(contributedBy, tagType, `Authoring entry "${key}"`);
-      }
-      continue;
-    }
     if (!input.lookup.has(key)) {
       unregistered(contributedBy, key, 'Authoring entry');
     }
@@ -543,7 +525,7 @@ export function enforceDataTypeInvariants(input: DataTypeInvariantInput): void {
   // entry that reads it is keyed under another type.
   const writable = new Set(
     input.authoringEntries.flatMap(({ key, entry }) => [
-      authoringEntryType(key, entry),
+      key,
       ...(entry.written.kind === 'plain' && entry.written.syntax === 'number'
         ? entry.written.types
         : []),
@@ -655,8 +637,8 @@ export function collectAggregateDescriptors(
           'CONTRACT.AGGREGATE_DESCRIPTOR_INVALID',
           `Malformed aggregate descriptor contributed by "${descriptorId}". ` +
             'A descriptor declares a non-empty `operation`, an `input` match of kind `none`/`any`/`codec`/`trait`, ' +
-            'an `output` of kind `self`/`codec`, and a boolean `nullable` — plus `emptyResultJson`, ' +
-            "in the result codec's canonical JSON, where `nullable` is false; a `self` output needs an input to reuse.",
+            'an `output` of kind `self`/`codec`, and a boolean `nullable` — plus `emptyResultWire`, ' +
+            'a wire value of the result codec, where `nullable` is false; a `self` output needs an input to reuse.',
           { contributedBy: descriptorId, descriptor: contributed },
         );
       }
@@ -729,7 +711,7 @@ export function extractCodecLookup(
       if (typeof codecDescriptor.renderValueLiteral === 'function') {
         valueLiteralRenderersById.set(codecDescriptor.codecId, codecDescriptor.renderValueLiteral);
       }
-      // Materialize a representative `Codec` instance for `byId.get()` so consumers reading the lookup's instance side (e.g. SQL renderer's cast-policy lookup, or the contract emitter's literal-default `encodeJson` resolver) keep finding the codec.
+      // Materialize a representative `Codec` instance for `byId.get()` so consumers reading the lookup's instance side (e.g. SQL renderer's cast-policy lookup, or the contract emitter's literal-default resolver) keep finding the codec.
       //
       // Two cohorts:
       // - Non-parameterized descriptors: factory must succeed; any throw is a real bug and we let it propagate (no silent try/catch).
@@ -925,7 +907,11 @@ export function createControlStack<TFamilyId extends string, TTargetId extends s
     extensionIds: extractComponentIds(family, target, adapter, orderedExtensions),
     codecLookup,
     codecDescriptors,
-    dataTypes: { entries: authoringContributions.dataTypes, lookup: dataTypes.lookup },
+    dataTypes: {
+      entries: authoringContributions.dataTypes,
+      lookup: dataTypes.lookup,
+      dataTypeOfCodec: (codecId) => codecLookup.descriptorFor?.(codecId)?.dataType,
+    },
     declaredDataTypes: dataTypes.declared,
     aggregateDescriptors: collectAggregateDescriptors(allDescriptors),
     authoringContributions,

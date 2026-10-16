@@ -3,7 +3,6 @@ import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import {
   assertNothingCastsFromSqlExpression,
-  canonicalSqlText,
   isSqlExpression,
   printSqlExpressionLiteral,
   requireSqlExpression,
@@ -13,8 +12,9 @@ import {
   sqlExpressionAuthoringEntry,
   sqlExpressionDataType,
   sqlExpressionRegistration,
-  sqlTextFromCanonical,
+  sqlTextFromStored,
   sqlTextsReadBack,
+  storedSqlText,
 } from '../src/sql-expression';
 
 describe('sqlExpressionAuthoringEntry', () => {
@@ -26,13 +26,13 @@ describe('sqlExpressionAuthoringEntry', () => {
   });
 });
 
-describe('sqlTextFromCanonical', () => {
+describe('sqlTextFromStored', () => {
   it('returns a string', () => {
-    expect(sqlTextFromCanonical('now()')).toBe('now()');
+    expect(sqlTextFromStored('now()')).toBe('now()');
   });
 
   it.each([[1], [null], [{ text: 'x' }], [['x']]])('throws for %j', (value) => {
-    expect(() => sqlTextFromCanonical(value)).toThrow(
+    expect(() => sqlTextFromStored(value)).toThrow(
       `A sql/expression value is a string, got ${JSON.stringify(value)}.`,
     );
   });
@@ -52,29 +52,29 @@ describe('printSqlExpressionLiteral', () => {
   it.each(['\n\n(a > 0)', '(a > 0)\n\n', '\n  \n(a > 0)', '\r\n\r\n(a)', '  a\n  \n    b\n'])(
     'prints the canonical text of %j without throwing',
     (text) => {
-      const canonical = canonicalSqlText(text);
+      const canonical = storedSqlText(text);
       expect(canonical).toBeDefined();
       expect(() => printSqlExpressionLiteral(canonical ?? '')).not.toThrow();
     },
   );
 });
 
-describe('canonicalSqlText', () => {
+describe('storedSqlText', () => {
   it('is the canonical text of a SQL body', () => {
-    expect(canonicalSqlText('\n  a = 1\n    AND b = 2\n')).toBe('a = 1\n  AND b = 2');
+    expect(storedSqlText('\n  a = 1\n    AND b = 2\n')).toBe('a = 1\n  AND b = 2');
   });
 
   it('is undefined for a body that has no canonical text', () => {
-    expect(canonicalSqlText('a\u0000')).toBeUndefined();
+    expect(storedSqlText('a\u0000')).toBeUndefined();
   });
 });
 
 describe('assertNothingCastsFromSqlExpression', () => {
-  const text = { type: dataType('pg/text', {}), contributedBy: 'postgres' };
+  const text = { type: dataType('pg/text', { read: (json) => json }), contributedBy: 'postgres' };
 
   it('accepts data types that do not cast from sql/expression', () => {
     const json = {
-      type: dataType('pg/jsonb', { casts: { 'pg/text': (value) => value } }),
+      type: dataType('pg/jsonb', { read: (json) => json, casts: { 'pg/text': (value) => value } }),
       contributedBy: 'postgres',
     };
     const sqlExpression = { type: sqlExpressionDataType, contributedBy: 'sql' };
@@ -84,6 +84,7 @@ describe('assertNothingCastsFromSqlExpression', () => {
   it('refuses a data type with a cast from sql/expression', () => {
     const geometry = {
       type: dataType('postgis/geometry', {
+        read: (json) => json,
         casts: { [SQL_EXPRESSION_DATA_TYPE_ID]: (value) => value },
       }),
       contributedBy: 'postgis',
@@ -101,6 +102,7 @@ describe('assertNothingCastsFromSqlExpression', () => {
   it('refuses a data type with a list cast from sql/expression', () => {
     const vector = {
       type: dataType('pgvector/vector', {
+        read: (json) => json,
         listCast: { of: [SQL_EXPRESSION_DATA_TYPE_ID], cast: (elements) => elements },
       }),
       contributedBy: 'pgvector',
@@ -258,7 +260,7 @@ describe('sql', () => {
       AND deleted_at IS NULL
     `;
     expect(composed.text).toBe(
-      canonicalSqlText(`
+      storedSqlText(`
       (
         "userId" = auth.uid()
           OR is_admin()

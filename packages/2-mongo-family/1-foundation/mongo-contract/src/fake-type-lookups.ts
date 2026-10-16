@@ -1,9 +1,11 @@
+import type { JsonValue } from '@internal/contract/types';
 import {
   type AnyCodecDescriptor,
   type Codec,
   type CodecLookupWithDescriptors,
   createDataTypeLookup,
   type DataTypeLookup,
+  type DataTypeValue,
 } from '@internal/framework-components/codec';
 import { blindCast } from '@internal/utils/casts';
 import { type MongoTypeLookups, mongoDataType } from './mongo-data-type';
@@ -36,7 +38,7 @@ function dataTypeIdOf(codecId: string): string {
  */
 export const mongoDataTypeLookup: DataTypeLookup = createDataTypeLookup(
   Object.entries(bsonTypesByCodecId).map(([codecId, bsonTypes]) =>
-    mongoDataType(dataTypeIdOf(codecId), { bsonTypes }),
+    mongoDataType(dataTypeIdOf(codecId), { read: (json) => json, bsonTypes }),
   ),
 );
 
@@ -46,13 +48,21 @@ export const mongoDataTypeLookup: DataTypeLookup = createDataTypeLookup(
 export const mongoCodecLookup: CodecLookupWithDescriptors = {
   get(id: string) {
     if (!(id in bsonTypesByCodecId)) return undefined;
-    return blindCast<Codec, 'an identity codec needs no other members in tests'>({
+    const dataType = mongoDataTypeLookup.get(dataTypeIdOf(id));
+    if (dataType === undefined) return undefined;
+    const codec: Codec = {
       id,
-      encode: async (v: unknown) => v,
-      decode: async (w: unknown) => w,
-      encodeJson: (v: unknown) => v,
-      decodeJson: (j: unknown) => j,
-    });
+      dataType,
+      toWire: async (v: unknown) => v,
+      fromWire: async (w: unknown) => w,
+      toDataTypeValue: (v: unknown) =>
+        dataType.valueFrom(
+          blindCast<JsonValue, 'the test codecs hand over JSON application values'>(v),
+          {},
+        ),
+      fromDataTypeValue: (value: DataTypeValue) => value.value,
+    };
+    return codec;
   },
   descriptorFor(id: string) {
     if (!(id in bsonTypesByCodecId)) return undefined;

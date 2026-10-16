@@ -18,7 +18,7 @@ describe('the DEFAULT clause the SQLite adapter writes in every DDL statement', 
     [
       'a datetime, as the text its codec writes for every row',
       col('c', 'TEXT', {
-        default: lit('2024-01-01T00:00:00Z'),
+        default: lit('2024-01-01T00:00:00.000Z'),
         codecRef: { codecId: 'sqlite/datetime@1' },
       }),
       "DEFAULT '2024-01-01T00:00:00.000Z'",
@@ -26,7 +26,7 @@ describe('the DEFAULT clause the SQLite adapter writes in every DDL statement', 
     [
       'a datetime before Christ',
       col('c', 'TEXT', {
-        default: lit('-000043-03-15T00:00:00.5Z'),
+        default: lit('-000043-03-15T00:00:00.500Z'),
         codecRef: { codecId: 'sqlite/datetime@1' },
       }),
       "DEFAULT '-000043-03-15T00:00:00.500Z'",

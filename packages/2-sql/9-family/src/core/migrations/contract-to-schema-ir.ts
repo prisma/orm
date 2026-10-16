@@ -1,15 +1,23 @@
 import type { ColumnDefault, Contract, JsonValue } from '@internal/contract/types';
-import { type CodecRef, canonicalFormOf } from '@internal/framework-components/codec';
+import {
+  type Codec,
+  type CodecRef,
+  codecForRef,
+  type DataType,
+  type DataTypeParams,
+  type DataTypeValue,
+  dataTypeParams,
+} from '@internal/framework-components/codec';
 import type {
   MigrationPlannerConflict,
   SchemaNodeRef,
 } from '@internal/framework-components/control';
 import {
-  dataTypeParams,
   renderSqlTypeName,
   type SqlDataType,
   type SqlTypeLookups,
   sqlDataTypeOfCodec,
+  sqlStorageType,
   unquotedSqlBaseName,
 } from '@internal/sql-contract/data-type';
 import {
@@ -28,6 +36,7 @@ import {
   RelationalSchemaNodeKind,
   type SqlCheckConstraintIRInput,
   type SqlColumnIRInput,
+  type SqlDefaultValue,
   type SqlForeignKeyIRInput,
   type SqlIndexIRInput,
   SqlSchemaIR,
@@ -36,51 +45,31 @@ import {
 } from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { InternalError } from '@internal/utils/internal-error';
+import { InternalError, isInternalError } from '@internal/utils/internal-error';
 import { isStructuredError, structuredError } from '@internal/utils/structured-error';
 import { sqlFamilyError } from '../errors';
 
 /**
- * Target-specific callback that renders a `ColumnDefault` into the raw SQL literal
- * string stored in `SqlColumnIR.default`.
- *
- * Default value serialization is target-specific (quoting, casting, type syntax vary
- * between Postgres, MySQL, SQLite, …). The target provides its renderer when calling
- * `contractToSchemaIR`, keeping the family layer target-agnostic. `type.dataType` is the id of
- * the data type the column's codec represents, and `type.baseTypeName` its base name.
- */
-export type DefaultRenderer = (
-  def: ColumnDefault,
-  column: StorageColumn,
-  type: { readonly dataType: string; readonly baseTypeName: string },
-) => string;
-
-/**
- * Target-supplied hook (same IoC seam as `DefaultRenderer`)
- * that normalizes a contract-declared `ColumnDefault` into the resolved shape
- * the target's introspection parses from the live database — e.g. a
- * sql`'{}'::jsonb` raw default and the literal Postgres reports
- * are the same value in different shapes, and `resolvedDefaultsEqual`
- * compares `kind` before content. When omitted, the contract's raw default
- * is the resolved default unchanged.
+ * Target-supplied hook that names a contract's expression default the way the target's introspection names the same database function, such as `now()` for `CURRENT_TIMESTAMP`, so the two compare equal. When omitted, the contract's default is the resolved default unchanged.
  */
 export type DefaultResolver = (def: ColumnDefault, resolvedNativeType: string) => ColumnDefault;
+
+type DefaultHooks = Pick<ContractToSchemaIROptions, 'resolveDefault'>;
 
 function convertColumn(
   name: string,
   column: StorageColumn,
   storageTypes: ResolvedStorageTypes,
   types: SqlTypeLookups,
-  renderDefault: DefaultRenderer | undefined,
-  resolveDefault: DefaultResolver | undefined,
+  hooks: DefaultHooks,
 ): SqlColumnIRInput {
   // A `typeRef` column is written exactly as a column of the referenced
   // `storage.types` entry's codec and parameters.
   const resolved = resolveColumnTypeMetadata(column, storageTypes);
   const dataType = sqlDataTypeOfCodec(resolved.codecId, types);
-  const codec = types.codecLookup.descriptorFor(resolved.codecId);
-  const baseTypeName = unquotedSqlBaseName(dataType, dataTypeParams(dataType, resolved.typeParams));
-  const baseNativeType = schemaTypeText(dataType, resolved.typeParams);
+  const storage = sqlStorageType(dataType, types.dataTypeLookup);
+  const baseTypeName = unquotedSqlBaseName(storage, dataTypeParams(storage, resolved.typeParams));
+  const baseNativeType = schemaTypeText(storage, resolved.typeParams);
   // `many: true` columns keep `nativeType` as the bare element type (matching
   // how the introspected/"actual" side reports it — see the postgres control
   // adapter's own `many`-stripping normalization) and carry the array-ness in
@@ -97,20 +86,14 @@ function convertColumn(
   const resolvedNativeType = many ? `${baseNativeType}[]` : baseNativeType;
   const rawColumnDefault = column.default ?? undefined;
   const resolvedColumnDefault =
-    rawColumnDefault !== undefined && resolveDefault
-      ? resolveDefault(rawColumnDefault, resolvedNativeType)
+    rawColumnDefault !== undefined && hooks.resolveDefault
+      ? hooks.resolveDefault(rawColumnDefault, resolvedNativeType)
       : rawColumnDefault;
   return {
     name,
     nativeType,
     nullable: column.nullable,
     ...ifDefined('many', many ? true : undefined),
-    ...ifDefined(
-      'default',
-      column.default != null && renderDefault
-        ? renderDefault(column.default, column, { dataType: dataType.id, baseTypeName })
-        : undefined,
-    ),
     // Contract-derived columns are resolved by construction: the computed
     // full native type doubles as the resolved value. The contract's raw
     // structured default becomes the resolved default after passing through
@@ -128,12 +111,66 @@ function convertColumn(
     codecRef: buildColumnCodecRef(resolved, many ? true : undefined),
     codecBaseNativeType: baseTypeName,
     dataType,
-    ...ifDefined('toCanonicalForm', codec && canonicalFormOf(codec, types.dataTypeLookup)),
+    ...ifDefined(
+      'defaultValue',
+      rawColumnDefault?.kind === 'literal' && rawColumnDefault.value instanceof Date
+        ? dateDefaultValue(
+            rawColumnDefault.value,
+            codecForRef(types.codecLookup, buildColumnCodecRef(resolved, undefined)),
+          )
+        : contractDefaultValue(
+            rawColumnDefault,
+            dataType,
+            dataTypeParams(dataType, resolved.typeParams),
+            many,
+          ),
+    ),
   };
 }
 
 /**
- * The column's type as the database reports it: the written name with its normal-form parameters (`character(1)` for a bare `character`), or for a
+ * A `Date` default, which an in-memory contract can hold, as the value of the column's type the column's codec reads it as. `undefined` when the codec refuses it or no codec is registered, and the default then compares unequal to any other.
+ */
+function dateDefaultValue(value: Date, codec: Codec | undefined): DataTypeValue | undefined {
+  if (codec === undefined) return undefined;
+  try {
+    return codec.toDataTypeValue(value);
+  } catch (error) {
+    if (isInternalError(error)) throw error;
+    return undefined;
+  }
+}
+
+/**
+ * A literal default as a value of the column's type, read from the JSON the contract stores, element by element for a list column. A `null` is a value of a type that stores one, such as a JSON type, and SQL NULL otherwise, as DDL writes it. Loading a contract refuses a value its type does not hold, so a refusal here only means no value, and the comparison falls back to the stored JSON.
+ */
+function contractDefaultValue(
+  columnDefault: ColumnDefault | undefined,
+  type: DataType,
+  params: DataTypeParams,
+  many: boolean,
+): SqlDefaultValue | undefined {
+  if (columnDefault?.kind !== 'literal' || columnDefault.value instanceof Date) return undefined;
+  const stored = columnDefault.value;
+  const read = (json: JsonValue): DataTypeValue | null => {
+    try {
+      return type.fromContract(json, params);
+    } catch (error) {
+      if (isStructuredError(error) && json === null) return null;
+      throw error;
+    }
+  };
+  try {
+    if (many && Array.isArray(stored)) return stored.map(read);
+    return read(stored) ?? undefined;
+  } catch (error) {
+    if (isStructuredError(error)) return undefined;
+    throw error;
+  }
+}
+
+/**
+ * The column's type as the database reports it, from the type it is stored as: the written name with its normal-form parameters (`character(1)` for a bare `character`), or for a
  * type that claims a kind (an enum), its type name as stored.
  */
 function schemaTypeText(
@@ -338,14 +375,13 @@ function convertTable(
   table: StorageTable,
   storageTypes: ResolvedStorageTypes,
   types: SqlTypeLookups,
-  renderDefault: DefaultRenderer | undefined,
-  resolveDefault: DefaultResolver | undefined,
+  hooks: DefaultHooks,
   storage: SqlStorage,
 ): SqlTableIR {
   const columns: Record<string, SqlColumnIRInput> = {};
   for (const [colName, colDef] of Object.entries(table.columns)) {
     columns[colName] = withColumnInErrors(name, colName, () =>
-      convertColumn(colName, colDef, storageTypes, types, renderDefault, resolveDefault),
+      convertColumn(colName, colDef, storageTypes, types, hooks),
     );
   }
 
@@ -440,7 +476,6 @@ export function detectDestructiveChanges(
 /** Each column's type is written from the data type its codec represents, found through the lookups. */
 export interface ContractToSchemaIROptions extends SqlTypeLookups {
   readonly annotationNamespace: string;
-  readonly renderDefault?: DefaultRenderer;
   readonly resolveDefault?: DefaultResolver;
 }
 
@@ -487,8 +522,7 @@ export function contractNamespaceToSchemaIR(
       tableDefRaw,
       storageTypes,
       options,
-      options.renderDefault,
-      options.resolveDefault,
+      options,
       storage,
     );
   }
@@ -551,8 +585,7 @@ export function contractToSchemaIR(
         tableDef,
         storageTypes,
         options,
-        options.renderDefault,
-        options.resolveDefault,
+        options,
         storage,
       );
     }

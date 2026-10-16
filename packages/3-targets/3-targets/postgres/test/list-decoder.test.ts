@@ -14,11 +14,11 @@ const instanceCtx = { name: '<test>' };
 const callCtx = {};
 
 type NumericWireDecoder = {
-  decode: (wire: string | number, ctx: typeof callCtx) => Promise<number>;
+  fromWire: (wire: string | number, ctx: typeof callCtx) => Promise<number>;
 };
 
 type BooleanWireDecoder = {
-  decode: (wire: string | boolean, ctx: typeof callCtx) => Promise<boolean>;
+  fromWire: (wire: string | boolean, ctx: typeof callCtx) => Promise<boolean>;
 };
 
 describe('parsePostgresListText', () => {
@@ -79,15 +79,17 @@ describe('decodePostgresListText', () => {
     const intAlias = pgIntDescriptor.factory()(instanceCtx) as NumericWireDecoder;
 
     await expect(
-      decodePostgresListText('{-32768,0,32767}', (value) => int2.decode(value as string, callCtx)),
+      decodePostgresListText('{-32768,0,32767}', (value) =>
+        int2.fromWire(value as string, callCtx),
+      ),
     ).resolves.toEqual([-32768, 0, 32767]);
     await expect(
       decodePostgresListText('{-2147483648,0,2147483647}', (value) =>
-        int4.decode(value as string, callCtx),
+        int4.fromWire(value as string, callCtx),
       ),
     ).resolves.toEqual([-2147483648, 0, 2147483647]);
     await expect(
-      decodePostgresListText('{1,2}', (value) => intAlias.decode(value as string, callCtx)),
+      decodePostgresListText('{1,2}', (value) => intAlias.fromWire(value as string, callCtx)),
     ).resolves.toEqual([1, 2]);
   });
 
@@ -97,13 +99,13 @@ describe('decodePostgresListText', () => {
     const floatAlias = pgFloatDescriptor.factory()(instanceCtx) as NumericWireDecoder;
 
     const decodedFloat4 = await decodePostgresListText('{1.5,NaN,Infinity,-Infinity}', (value) =>
-      float4.decode(value as string, callCtx),
+      float4.fromWire(value as string, callCtx),
     );
     const decodedFloat8 = await decodePostgresListText('{-2.25,NaN,Infinity,-Infinity}', (value) =>
-      float8.decode(value as string, callCtx),
+      float8.fromWire(value as string, callCtx),
     );
     const decodedFloatAlias = await decodePostgresListText('{6.25,NaN}', (value) =>
-      floatAlias.decode(value as string, callCtx),
+      floatAlias.fromWire(value as string, callCtx),
     );
 
     expect(decodedFloat4[0]).toBe(1.5);
@@ -120,7 +122,7 @@ describe('decodePostgresListText', () => {
     const bool = pgBoolDescriptor.factory()(instanceCtx) as BooleanWireDecoder;
 
     await expect(
-      decodePostgresListText('{t,f,t}', (value) => bool.decode(value as string, callCtx)),
+      decodePostgresListText('{t,f,t}', (value) => bool.fromWire(value as string, callCtx)),
     ).resolves.toEqual([true, false, true]);
   });
 });

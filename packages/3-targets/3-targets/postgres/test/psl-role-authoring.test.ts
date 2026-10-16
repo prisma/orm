@@ -98,7 +98,11 @@ function interpret(source: string) {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
       codecLookup: postgresCodecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypes: { entries: assembled.dataTypes, lookup: postgresDataTypeLookup },
+      dataTypes: {
+        entries: assembled.dataTypes,
+        lookup: postgresDataTypeLookup,
+        dataTypeOfCodec: () => undefined,
+      },
       resolvedInputs: [],
       capabilities: { sql: { scalarList: true } },
     },

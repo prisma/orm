@@ -4,7 +4,11 @@ import type {
   AuthoringEntityTypeDescriptor,
   ParsedPslExtensionBlock,
 } from '@internal/framework-components/authoring';
-import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import type {
+  Codec,
+  CodecLookupWithDescriptors,
+  DataTypeValue,
+} from '@internal/framework-components/codec';
 import { prisma6MongoBinding } from '@internal/target-mongo/prisma6-binding';
 import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
@@ -18,6 +22,12 @@ const nativeTypeSchema = join(
   'native-type',
   'schema.prisma',
 );
+
+function storedString(text: string): DataTypeValue {
+  const stringCodec = mongoStack.codecLookup.get('mongo/string@1');
+  if (stringCodec === undefined) throw new Error('the Mongo stack has no mongo/string@1 codec');
+  return stringCodec.dataType.valueFrom(text, {});
+}
 
 function lookupWithStringCodec(overrides: Partial<Codec>): CodecLookupWithDescriptors {
   const stringCodec = Object.assign(
@@ -87,7 +97,9 @@ async function diagnosticsOf(
 
 describe('Prisma 6 MongoDB enum members its codec cannot store as written', () => {
   it('reports each member the codec reads back as another value, with the value to write', async () => {
-    const shouting = lookupWithStringCodec({ encodeJson: (v: unknown) => String(v).toUpperCase() });
+    const shouting = lookupWithStringCodec({
+      toDataTypeValue: (v: unknown) => storedString(String(v).toUpperCase()),
+    });
     expect(await diagnosticsOf({ codecLookup: shouting })).toEqual([
       {
         code: 'PSL_EXTENSION_INVALID_VALUE',
@@ -108,9 +120,9 @@ describe('Prisma 6 MongoDB enum members its codec cannot store as written', () =
 
   it('reports a member its codec refuses, at the member', async () => {
     const refusing = lookupWithStringCodec({
-      encodeJson: (v: unknown) => {
+      toDataTypeValue: (v: unknown) => {
         if (v === 'bad') throw new Error('bad is not allowed');
-        return String(v);
+        return storedString(String(v));
       },
     });
     const diagnostics = await diagnosticsOf({
@@ -137,7 +149,9 @@ describe('Prisma 6 MongoDB enum members its codec cannot store as written', () =
   });
 
   it('still reports a native type on a field typed by a refused enum', async () => {
-    const shouting = lookupWithStringCodec({ encodeJson: (v: unknown) => String(v).toUpperCase() });
+    const shouting = lookupWithStringCodec({
+      toDataTypeValue: (v: unknown) => storedString(String(v).toUpperCase()),
+    });
     expect(
       await diagnosticsOf({
         codecLookup: shouting,

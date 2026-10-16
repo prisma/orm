@@ -6,6 +6,7 @@ import {
   profileHash,
 } from '@internal/contract/types';
 import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
+import { readContractValue } from '@internal/framework-components/codec';
 import {
   APP_SPACE_ID,
   type MigrationOperationPolicy,
@@ -50,7 +51,14 @@ const listDefaults: readonly ListDefaultCase[] = [
       codecId: 'pg/numeric@1',
       typeParams: { precision: 65, scale: 30 },
     },
-    default: { kind: 'literal', value: ['1.5', '-2.25', '12345678901234567890.123456789'] },
+    default: {
+      kind: 'literal',
+      value: [
+        '1.500000000000000000000000000000',
+        '-2.250000000000000000000000000000',
+        '12345678901234567890.123456789000000000000000000000',
+      ],
+    },
   },
   {
     column: 'unscaledDecimals',
@@ -218,7 +226,9 @@ function assertCodecReadsLiteral(defaultCase: ListDefaultCase): void {
   if (defaultCase.default.kind !== 'literal' || !Array.isArray(defaultCase.default.value)) return;
   const codec = codecs.get(defaultCase.type.codecId);
   if (codec === undefined) throw new Error(`no codec ${defaultCase.type.codecId}`);
-  for (const element of defaultCase.default.value) codec.decodeJson(element);
+  for (const element of defaultCase.default.value) {
+    readContractValue(codec, element, defaultCase.type.typeParams);
+  }
 }
 
 function buildContract(withDefaults: boolean): Contract<SqlStorage> {

@@ -1,6 +1,7 @@
+import { dataType } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
-
 import { SqlColumnDefaultIR } from '../src/ir/sql-column-default-ir';
+import type { SqlColumnIRInput } from '../src/ir/sql-column-ir';
 import { SqlColumnIR } from '../src/ir/sql-column-ir';
 
 describe('SqlColumnIR', () => {
@@ -26,7 +27,6 @@ describe('SqlColumnIR', () => {
       expect(column.children()).toEqual([
         new SqlColumnDefaultIR({
           resolved: { kind: 'literal', value: 'draft' },
-          nativeTypeContext: 'text',
         }),
       ]);
     });
@@ -54,7 +54,27 @@ describe('SqlColumnIR', () => {
       }).toEqual({
         codecRef,
         codecBaseNativeType: 'order',
-        enumerableKeys: ['nodeKind', 'resolved', 'nativeTypeContext'],
+        enumerableKeys: ['nodeKind', 'resolved'],
+      });
+    });
+
+    it('gives the default node the value read for it, or why it could not be read', () => {
+      const value = dataType('t/text', { read: (json) => json }).fromContract('draft', {});
+      const node = (input: Partial<SqlColumnIRInput>) =>
+        new SqlColumnIR({
+          name: 'status',
+          nativeType: 'text',
+          nullable: false,
+          ...input,
+        }).children()[0] as SqlColumnDefaultIR;
+      const read = node({
+        resolvedDefault: { kind: 'literal', value: 'draft' },
+        defaultValue: value,
+      });
+      const unread = node({ default: "'draft'::text", defaultUnreadable: 'refused' });
+      expect({ value: read.value, unreadable: unread.unreadable }).toEqual({
+        value,
+        unreadable: 'refused',
       });
     });
 

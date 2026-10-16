@@ -1,4 +1,5 @@
 import { type Contract, profileHash, type StorageHashBase } from '@internal/contract/types';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import type { OpFactoryCall } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageColumn, type StorageTable } from '@internal/sql-contract/types';
@@ -10,8 +11,12 @@ import type {
   SqlMigrationPlanOperation,
 } from '../src/core/migrations/types';
 
+/** A lookup that registers no data type: every column is stored as its own data type. */
+export const noDataTypes = createDataTypeLookup([]);
+
 const DATA_TYPE_OF_CODEC: Readonly<Record<string, string>> = {
   'cs/string@1': 'cs/string',
+  'sqlite/datetime@1': 'sqlite/datetime',
   'pg/text@1': 'pg/text',
   'pg/varchar@1': 'pg/varchar',
 };

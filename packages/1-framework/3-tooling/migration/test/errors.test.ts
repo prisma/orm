@@ -1,3 +1,4 @@
+import { ContractValidationError } from '@internal/contract/contract-validation-error';
 import { CliStructuredError } from '@internal/errors/control';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
@@ -267,5 +268,24 @@ describe('MigrationToolsError base type', () => {
       expect(err.fix).toBeTypeOf('string');
       expect(err.fix).not.toBe(err.why);
     }
+  });
+});
+
+describe('errorContractDeserializationFailed', () => {
+  const refusedDefaults = [{ namespaceId: 'public', table: 'Token', column: 'value' }];
+
+  it('keeps the refused defaults of a contract the family refused', () => {
+    const cause = new ContractValidationError('refused', 'storage', { refusedDefaults });
+    expect(
+      errorContractDeserializationFailed('/m/snapshots/x/contract.json', 'refused', { cause }).meta,
+    ).toEqual({ refusedDefaults, filePath: '/m/snapshots/x/contract.json', message: 'refused' });
+  });
+
+  it('carries only the file and message for any other failure', () => {
+    expect(
+      errorContractDeserializationFailed('/m/contract.json', 'bad shape', {
+        cause: new Error('bad shape'),
+      }).meta,
+    ).toEqual({ filePath: '/m/contract.json', message: 'bad shape' });
   });
 });

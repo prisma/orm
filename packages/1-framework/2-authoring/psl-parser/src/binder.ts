@@ -200,8 +200,15 @@ export function contributedTypeOf(
   resolution: Resolution | undefined,
   binder: Binder,
 ): ContributedTypeSymbol | undefined {
+  return contributedTypeOfResolution(resolution, (base) => binder.symbolForNode(base));
+}
+
+function contributedTypeOfResolution(
+  resolution: Resolution | undefined,
+  resolve: (node: SyntaxNode) => Resolution | undefined,
+): ContributedTypeSymbol | undefined {
   const base = resolution?.kind === 'namedType' ? typeReferenceNode(resolution.symbol) : undefined;
-  const target = base === undefined ? resolution : binder.symbolForNode(base);
+  const target = base === undefined ? resolution : resolve(base);
   return target?.kind === 'contributedType' ? target.symbol : undefined;
 }
 
@@ -486,7 +493,10 @@ function bind(options: BindingInputs): BinderResult {
           if (specContext === undefined) return undefined;
           const node = typeReferenceNode(field);
           const typeResolution = node === undefined ? undefined : references.get(node);
-          return factory({ ...specContext, field, typeResolution });
+          const typeConstructor = contributedTypeOfResolution(typeResolution, (base) =>
+            references.get(base),
+          );
+          return factory({ ...specContext, field, typeResolution, typeConstructor });
         },
         { ...context, field },
       );

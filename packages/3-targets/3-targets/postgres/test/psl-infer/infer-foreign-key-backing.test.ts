@@ -51,9 +51,9 @@ describe('contract infer and the backing index of a foreign key', () => {
   it.each([
     ['no access method', undefined],
     ['btree', 'btree'],
-  ])('leaves index unset beside a live index with %s', (_label, type) => {
+  ])('leaves index unset beside a live index with %s', async (_label, type) => {
     expect(
-      relationLine(printPslFromFlat(schemaWithIndexOnForeignKey({ type, where: undefined }))),
+      relationLine(await printPslFromFlat(schemaWithIndexOnForeignKey({ type, where: undefined }))),
     ).not.toContain('index:');
   });
 
@@ -61,16 +61,16 @@ describe('contract infer and the backing index of a foreign key', () => {
     ['a hash index', { type: 'hash', where: undefined }],
     ['a gin index', { type: 'gin', where: undefined }],
     ['a partial index', { type: undefined, where: '(id > 0)' }],
-  ])('writes index: false beside %s, the only index on the columns', (_label, index) => {
-    expect(relationLine(printPslFromFlat(schemaWithIndexOnForeignKey(index)))).toContain(
+  ])('writes index: false beside %s, the only index on the columns', async (_label, index) => {
+    expect(relationLine(await printPslFromFlat(schemaWithIndexOnForeignKey(index)))).toContain(
       'index: false',
     );
   });
 
-  it('names a live index whose first columns are the foreign key columns', () => {
+  it('names a live index whose first columns are the foreign key columns', async () => {
     expect(
       relationLine(
-        printPslFromFlat(
+        await printPslFromFlat(
           schemaWithIndexOnForeignKey({
             type: undefined,
             where: undefined,

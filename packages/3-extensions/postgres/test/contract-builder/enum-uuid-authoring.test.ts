@@ -82,7 +82,7 @@ describe('uuid-backed enum authoring against the real Postgres pack', () => {
       expect.objectContaining({
         code: 'CONTRACT.ENUM_INVALID',
         message:
-          'enumType("Ratio") member "Half" has a value its codec pg/numeric@1 refuses: pg/numeric@1 JSON value must be a decimal string',
+          'enumType("Ratio") member "Half" has a value its codec pg/numeric@1 refuses: pg/numeric JSON value must be a decimal string',
       }),
     );
   });

@@ -72,7 +72,7 @@ async function runMigrationTs(ctx: JourneyContext, packageDir: string) {
 const NEW_TABLE = `model Note {
   id  Int      @id
   big BigInt   @default(9007199254740993)
-  at  DateTime @default("2020-01-01T00:00:00Z")
+  at  DateTime @default(datetime\`2020-01-01T00:00:00Z\`)
 }
 `;
 
@@ -100,12 +100,12 @@ withTempDir(({ createTempDir }) => {
         const ctx = sqliteJourney(createTempDir);
         writeSchema(ctx, NEW_TABLE);
         const packageDir = await emitAndPlan(ctx, 'init');
-        editMigrationTs(packageDir, "lit('2020-01-01T00:00:00Z')", "lit('not a date')");
+        editMigrationTs(packageDir, "lit('2020-01-01T00:00:00.000Z')", "lit('not a date')");
 
         expect(await runMigrationTs(ctx, packageDir)).toEqual({
           exitCode: 1,
           firstErrorLine:
-            'CONTRACT.DEFAULT_INVALID: Column "Note"."at" has a default its codec sqlite/datetime@1 refuses: sqlite/datetime@1 JSON value must be a date and time string',
+            'CONTRACT.DEFAULT_INVALID: Column "Note"."at" has a default its codec sqlite/datetime@1 refuses: sqlite/datetime JSON value must be ISO 8601 date and time text with a UTC offset and at most three fraction digits, as in "2024-01-01T00:00:00Z"',
         });
       },
       timeouts.spinUpPpgDev,

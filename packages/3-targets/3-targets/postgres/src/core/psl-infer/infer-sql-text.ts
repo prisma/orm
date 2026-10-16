@@ -1,4 +1,4 @@
-import { canonicalSqlText, sqlTextsReadBack } from '@internal/sql-contract/sql-expression';
+import { sqlTextsReadBack, storedSqlText } from '@internal/sql-contract/sql-expression';
 import { detectIndexNaming, type IndexAttributeSource } from '../psl-build/index-attributes';
 
 /** Why `contract infer` skips an exact-named object whose SQL a `sql` literal would change. */
@@ -19,9 +19,8 @@ export function printableIndex<Index extends IndexAttributeSource>(
   index: Index,
 ): Index | undefined {
   if (sqlTextsReadBack([index.expression, index.where])) return index;
-  const expression =
-    index.expression === undefined ? undefined : canonicalSqlText(index.expression);
-  const where = index.where === undefined ? undefined : canonicalSqlText(index.where);
+  const expression = index.expression === undefined ? undefined : storedSqlText(index.expression);
+  const where = index.where === undefined ? undefined : storedSqlText(index.where);
   if (expression === undefined && index.expression !== undefined) return undefined;
   if (where === undefined && index.where !== undefined) return undefined;
   const canonical: Index = {

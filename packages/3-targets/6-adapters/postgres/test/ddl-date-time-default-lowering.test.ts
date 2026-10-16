@@ -32,7 +32,12 @@ async function createTableDefault(
 describe('a date or time default in CREATE TABLE', () => {
   it.each([
     ['timestamptz', 'pg/timestamptz-temporal@1', '2024-01-01T00:00:00Z', "'2024-01-01T00:00:00Z'"],
-    ['timestamptz', 'pg/timestamptz-date@1', '2024-01-01T00:00:00.5Z', "'2024-01-01T00:00:00.5Z'"],
+    [
+      'timestamptz',
+      'pg/timestamptz-date@1',
+      '2024-01-01T00:00:00.5Z',
+      "'2024-01-01T00:00:00.500Z'",
+    ],
     ['timestamptz', 'pg/timestamptz-string@1', '2024-01-01T00:00:00Z', "'2024-01-01T00:00:00Z'"],
     [
       'timestamptz',

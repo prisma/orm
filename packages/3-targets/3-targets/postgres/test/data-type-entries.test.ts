@@ -128,13 +128,13 @@ describe('what each entry reads and writes', () => {
 });
 
 describe('the target descriptor', () => {
-  it('contributes these entries, with json as the only tag', () => {
+  it('contributes these entries, with a tag for JSON, each date and time type, and bytes', () => {
     const contributed = postgresTargetPack.authoring.dataTypes;
     expect(Object.keys(contributed)).toEqual(Object.keys(entries));
     expect(
       Object.values(contributed).flatMap((entry) =>
         entry.written.kind === 'tag' ? [entry.written.tag] : [],
       ),
-    ).toEqual(['json']);
+    ).toEqual(['json', 'date', 'time', 'timetz', 'timestamp', 'timestamptz', 'interval', 'bytea']);
   });
 });

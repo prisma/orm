@@ -516,7 +516,7 @@
                 },
                 "created_at": {
                   "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/text",
+                  "dataType": "sqlite/datetime",
                   "nullable": false
                 },
                 "id": {
@@ -531,7 +531,7 @@
                 },
                 "metadata": {
                   "codecId": "sqlite/json@1",
-                  "dataType": "sqlite/text",
+                  "dataType": "sqlite/json",
                   "nullable": true
                 }
               },
@@ -577,7 +577,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "510b859cf27e09d6b3daa5284cd5356d78b5c4d2e355a3241ea25395c8ba6b6d"
+    "storageHash": "1156c66d9347736c6a9d711596aa066afcca16ac51dde115b60a6602c073302f"
   },
   "capabilities": {
     "sql": {

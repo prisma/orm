@@ -19,7 +19,7 @@ import { classifyPslCompletionContext } from '../src/completion-context';
 import { providePslCompletionItems } from '../src/completion-provider';
 import { testBinder } from './helpers/binder';
 
-const fixtureExpression = dataType('fixture/expression', {});
+const fixtureExpression = dataType('fixture/expression', { read: (json) => json });
 
 const fixtureDataTypes: DataTypeSupport = {
   entries: {
@@ -30,6 +30,7 @@ const fixtureDataTypes: DataTypeSupport = {
     },
   },
   lookup: createDataTypeLookup([fixtureExpression]),
+  dataTypeOfCodec: () => undefined,
 };
 
 function recordingDescriptors(seen: BlockSpecContext[]): AuthoringPslBlockDescriptorNamespace {

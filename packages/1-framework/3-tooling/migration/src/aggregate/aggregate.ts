@@ -43,7 +43,7 @@ function deserializeContractAtPath(
       throw error;
     }
     const message = error instanceof Error ? error.message : String(error);
-    throw errorContractDeserializationFailed(filePath, message);
+    throw errorContractDeserializationFailed(filePath, message, { cause: error });
   }
 }
 
@@ -259,8 +259,9 @@ export function createAggregateContractSpace(args: {
 /**
  * Collect the union of every namespace declared across all contract spaces of an
  * aggregate (app + extensions) and return a minimal object with the shape
- * `{ storage: { namespaces } }` suitable for passing to
- * `familyInstance.introspect`.
+ * `{ storage: { namespaces }, contracts }` suitable for passing to
+ * `familyInstance.introspect`. `contracts` holds each space's contract, app first, so
+ * introspection reads a table with the contract of the space that declares it.
  *
  * Callers invoke this after the integrity gate (`buildContractSpaceAggregate`
  * with `checkContracts: true`), so every `space.contract()` call is safe —
@@ -268,6 +269,7 @@ export function createAggregateContractSpace(args: {
  */
 export function collectAggregateNamespaces(aggregate: ContractSpaceAggregate): {
   readonly storage: { readonly namespaces: Readonly<Record<string, StorageNamespace>> };
+  readonly contracts: readonly Contract[];
 } {
   const merged: Record<string, StorageNamespace> = {};
   for (const space of aggregate.spaces()) {
@@ -276,7 +278,10 @@ export function collectAggregateNamespaces(aggregate: ContractSpaceAggregate): {
       merged[key] = existing === undefined ? ns : mergeNamespaceEntries(existing, ns);
     }
   }
-  return { storage: { namespaces: merged } };
+  return {
+    storage: { namespaces: merged },
+    contracts: aggregate.spaces().map((space) => space.contract()),
+  };
 }
 
 /**

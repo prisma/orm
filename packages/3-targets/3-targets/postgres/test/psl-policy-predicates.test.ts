@@ -145,7 +145,7 @@ describe('policy predicates', () => {
     [
       'pg.sql`x`',
       'PSL_UNKNOWN_LITERAL_TAG',
-      'Unknown literal tag "pg.sql". Known tags: sql, json.',
+      'Unknown literal tag "pg.sql". Known tags: sql, json, date, time, timetz, timestamp, timestamptz, interval, bytea.',
     ],
   ])('refuses %s in using and withCheck at the value', (value, code, message) => {
     const source = schemaWith(`  policy_update owner_write {

@@ -3,6 +3,7 @@ import { createDataTypeLookup } from '@internal/framework-components/codec';
 import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
 import type { Resolution } from '../binder';
 import type { BlockSpecContext } from '../block-spec/types';
+import type { ContributedTypeSymbol } from '../contributed-type-scope';
 import type { FieldSymbol, MixinSymbol, ModelSymbol, SymbolTable } from '../symbol-table';
 import type {
   AttributeSpec,
@@ -19,11 +20,17 @@ export interface AttributeSpecContext {
 }
 
 /** The data types of a stack that registers none. */
-export const EMPTY_DATA_TYPES: DataTypeSupport = { entries: {}, lookup: createDataTypeLookup([]) };
+export const EMPTY_DATA_TYPES: DataTypeSupport = {
+  entries: {},
+  lookup: createDataTypeLookup([]),
+  dataTypeOfCodec: () => undefined,
+};
 
 export interface FieldAttributeSpecContext extends AttributeSpecContext {
   readonly field: FieldSymbol;
   readonly typeResolution: Resolution | undefined;
+  /** The type constructor or field preset the field's type resolves to, through a named type when it is declared with one. */
+  readonly typeConstructor: ContributedTypeSymbol | undefined;
 }
 
 export type ModelAttributeSpecFactory = (

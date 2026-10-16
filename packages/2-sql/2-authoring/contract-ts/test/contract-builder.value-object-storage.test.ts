@@ -2,7 +2,11 @@ import type { CodecLookup, ColumnTypeDescriptor } from '@internal/framework-comp
 import type { TargetPackRef } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { testTypeLookups, withTestTypes } from '../../../1-core/contract/test/test-type-lookups';
+import {
+  testCodec,
+  testTypeLookups,
+  withTestTypes,
+} from '../../../1-core/contract/test/test-type-lookups';
 import { buildSqlContractFromDefinition } from '../src/contract-builder';
 import type { ContractDefinition } from '../src/contract-definition';
 import { unboundTables } from './unbound-tables';
@@ -113,11 +117,8 @@ describe('value-object fields are stored in one column of the descriptor they ca
           return undefined;
         }
 
-        return {
-          id,
-          encode: async (value: unknown) => value,
-          decode: async (wire: unknown) => wire,
-          encodeJson: (value: unknown) => {
+        return testCodec(id, {
+          toDataTypeValue: (value: unknown) => {
             if (!isMoneyValue(value)) {
               throw new Error('Expected a Money value');
             }
@@ -127,8 +128,7 @@ describe('value-object fields are stored in one column of the descriptor they ca
               currency: value.currency,
             };
           },
-          decodeJson: (json: unknown) => json,
-        };
+        });
       },
       renderOutputTypeFor: () => undefined,
     };

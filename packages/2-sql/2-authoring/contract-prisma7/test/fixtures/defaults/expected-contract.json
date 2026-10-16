@@ -254,7 +254,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "bc8d8d9a1dfe065b5f9f3ba306791c2915b6f337f4285a611e1296d1ff4c341a",
+    "storageHash": "df40eca2aa7086780f4e2e2bb1ad623cc60b7c5253a32cd076be318e8ae69c27",
     "namespaces": {
       "public": {
         "id": "public",
@@ -370,7 +370,7 @@
                   },
                   "default": {
                     "kind": "literal",
-                    "value": "12.34"
+                    "value": "12.340000000000000000000000000000"
                   }
                 },
                 "booleanLiteral": {
@@ -392,8 +392,8 @@
                     "precision": 3
                   },
                   "default": {
-                    "kind": "function",
-                    "expression": "'2024-01-01 00:00:00'"
+                    "kind": "literal",
+                    "value": "2024-01-01T00:00:00"
                   }
                 },
                 "jsonLiteral": {
@@ -414,8 +414,8 @@
                   "nullable": false,
                   "many": false,
                   "default": {
-                    "kind": "function",
-                    "expression": "'\\x68656c6c6f'"
+                    "kind": "literal",
+                    "value": "aGVsbG8="
                   }
                 },
                 "stringList": {

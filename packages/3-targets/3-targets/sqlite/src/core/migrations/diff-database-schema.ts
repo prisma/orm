@@ -1,4 +1,4 @@
-import type { ColumnDefault, Contract, ControlPolicy } from '@internal/contract/types';
+import type { Contract, ControlPolicy } from '@internal/contract/types';
 import type { SqlSchemaDiffResult } from '@internal/family-sql/control';
 import { contractToSchemaIR, sqlTypeLookupsOf } from '@internal/family-sql/control';
 import { verifySqlSchemaByDiff } from '@internal/family-sql/diff';
@@ -10,7 +10,7 @@ import type {
 import { diffSchemas } from '@internal/framework-components/control';
 import { entityAt } from '@internal/framework-components/ir';
 import type { SqlTypeLookups } from '@internal/sql-contract/data-type';
-import type { SqlStorage, StorageColumn, StorageTable } from '@internal/sql-contract/types';
+import type { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import type {
   SqlColumnIRInput,
   SqlSchemaIRInput,
@@ -19,26 +19,13 @@ import type {
 } from '@internal/sql-schema-ir/types';
 import { relationalNodeGranularity, SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
-import { SQLITE_NOW_EXPRESSION } from '../datetime-text';
 import { sqliteResolveDefault } from '../default-normalizer';
-import { renderDefaultLiteral } from './planner-ddl-builders';
 
 interface SqliteDiffDatabaseSchemaInput {
   readonly contract: Contract<SqlStorage>;
   readonly actualSchema: SqlSchemaIRNode;
   readonly strict: boolean;
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>;
-}
-
-/** Renders a column default for the SQLite dialect. */
-export function sqliteRenderDefault(def: ColumnDefault, column: StorageColumn): string {
-  if (def.kind === 'function') {
-    if (def.expression === 'now()') {
-      return SQLITE_NOW_EXPRESSION;
-    }
-    return def.expression;
-  }
-  return renderDefaultLiteral(def.value, column);
 }
 
 /**
@@ -59,7 +46,6 @@ export function sqliteContractToSchema(
   // introspected counterpart by construction. No pre-diff pass, no flag.
   return contractToSchemaIR(contract, {
     annotationNamespace: 'sqlite',
-    renderDefault: sqliteRenderDefault,
     resolveDefault: sqliteResolveDefault,
     dataTypeLookup: types.dataTypeLookup,
     codecLookup: types.codecLookup,

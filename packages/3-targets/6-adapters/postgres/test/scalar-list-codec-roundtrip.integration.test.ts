@@ -491,15 +491,15 @@ describe('scalar-list decode — malformed element surfaces RUNTIME.DECODE_FAILE
   it('wraps an element-level decode failure in RUNTIME.DECODE_FAILED with column/codec context', async () => {
     const codec = defineTestCodec({
       typeId: 'test/strict-string@1',
-      encode: (v: string) => v,
-      decode: (wire: unknown) => {
+      toWire: (v: string) => v,
+      fromWire: (wire: unknown) => {
         if (typeof wire !== 'string') {
           throw new Error(`expected string, got ${typeof wire}`);
         }
         return wire;
       },
-      encodeJson: (v: string) => v,
-      decodeJson: (json) => String(json),
+      toDataTypeValue: (v: string) => v,
+      fromDataTypeValue: (value) => String(value.value),
     });
     const registry = buildTestContractCodecs([codec]);
 

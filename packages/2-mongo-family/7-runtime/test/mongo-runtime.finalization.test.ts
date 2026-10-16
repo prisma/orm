@@ -1,5 +1,5 @@
 import type { PlanMeta } from '@internal/contract/types';
-import { decodeJsonString } from '@internal/framework-components/codec';
+import { type DataTypeValue, dataType, readJsonString } from '@internal/framework-components/codec';
 import type {
   ActivityEndedResult,
   ActivityFinalizedResult,
@@ -16,6 +16,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { MongoExecutionContext } from '../src/mongo-execution-stack';
 import type { MongoMiddleware, MongoMiddlewareContext } from '../src/mongo-middleware';
 import { createMongoRuntime } from '../src/mongo-runtime';
+
+const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
 
 interface HookEvent {
   readonly name: 'ended' | 'finalized';
@@ -50,11 +52,12 @@ function codecsWithFailingDecode() {
   registry.register(
     mongoCodec({
       typeId: 'test/failing-decode@1',
-      decode: (): string => {
+      fromWire: (): string => {
         throw new Error('decode failed');
       },
-      encode: (value: string) => value,
-      decodeJson: (json) => decodeJsonString('test/failing-decode@1', json),
+      toWire: (value: string) => value,
+      dataType: textType,
+      fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
     }),
   );
   return registry;

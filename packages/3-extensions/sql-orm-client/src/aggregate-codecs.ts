@@ -52,7 +52,7 @@ export function resolveAggregate(query: AggregateCodecQuery): ResolvedAggregate 
   if (resolved === undefined) throw unsupportedAggregate(query, input);
   const nullability: AggregateResultNullability = resolved.nullable
     ? { nullable: true }
-    : { nullable: false, emptyResultJson: resolved.emptyResultJson };
+    : { nullable: false, emptyResultWire: resolved.emptyResultWire };
   return { codec: resolved.output, ...nullability, input, lower: resolved.lower };
 }
 

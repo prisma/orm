@@ -1,0 +1,13 @@
+[
+  {
+    "id": "migration.20260101T0000_initial",
+    "label": "Fixture operation",
+    "operationClass": "additive",
+    "execute": [
+      {
+        "description": "fixture",
+        "sql": "SELECT 1"
+      }
+    ]
+  }
+]

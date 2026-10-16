@@ -53,22 +53,22 @@ function schemaWithCheck(hash: string | undefined): SqlSchemaIR {
   });
 }
 
-describe('printPsl — list element nullability', () => {
-  it('writes T[] when a live check has exactly the derived wire name', () => {
-    const psl = printPslFromFlat(schemaWithCheck(derivedHash));
+describe('printPsl — list element nullability', async () => {
+  it('writes T[] when a live check has exactly the derived wire name', async () => {
+    const psl = await printPslFromFlat(schemaWithCheck(derivedHash));
     expect(formatWireName(derivedPrefix, derivedHash)).toMatch(
       /^users_tags_elem_not_null_[0-9a-f]{8}$/,
     );
     expect(psl).toMatch(/tags\s+String\[\]\s*$/m);
   });
 
-  it('writes T?[] when a live check has the derived prefix but a different hash', () => {
-    const psl = printPslFromFlat(schemaWithCheck('deadbeef'));
+  it('writes T?[] when a live check has the derived prefix but a different hash', async () => {
+    const psl = await printPslFromFlat(schemaWithCheck('deadbeef'));
     expect(psl).toMatch(/tags\s+String\?\[\]\s*$/m);
   });
 
-  it('writes T?[] when there is no live check', () => {
-    const psl = printPslFromFlat(schemaWithCheck(undefined));
+  it('writes T?[] when there is no live check', async () => {
+    const psl = await printPslFromFlat(schemaWithCheck(undefined));
     expect(psl).toMatch(/tags\s+String\?\[\]\s*$/m);
   });
 });

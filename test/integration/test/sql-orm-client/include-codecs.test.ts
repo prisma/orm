@@ -5,13 +5,13 @@ import {
   timestamptzTemporalColumn,
 } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
-import type { JsonValue } from '@internal/contract/types';
 import {
   type CodecCallContext,
   CodecDescriptorImpl,
   CodecImpl,
   type CodecInstanceContext,
   type ColumnTypeDescriptor,
+  type DataTypeValue,
 } from '@internal/framework-components/codec';
 import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
@@ -37,26 +37,23 @@ class IncludedTextCodec extends CodecImpl<
   string,
   string
 > {
-  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
 
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
-    return wire;
-  }
-
-  encodeJson(value: string): JsonValue {
-    return value;
-  }
-
-  decodeJson(json: JsonValue): string {
-    if (typeof json !== 'string') {
-      throw new TypeError(`expected included text JSON value, got ${typeof json}`);
-    }
-    if (json === SENSITIVE_DATABASE_VALUE) {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
+    if (wire === SENSITIVE_DATABASE_VALUE) {
       throw new Error('intentional included text decode failure');
     }
-    return `decoded-json:${json}`;
+    return `decoded-wire:${wire}`;
+  }
+
+  toDataTypeValue(value: string): DataTypeValue {
+    return this.dataTypeValueOf(value);
+  }
+
+  fromDataTypeValue(value: DataTypeValue<string>): string {
+    return value.value;
   }
 }
 
@@ -67,7 +64,7 @@ class IncludedTextDescriptor extends CodecDescriptorImpl<void> {
   override readonly paramsSchema = undefined;
 
   override factory(): (ctx: CodecInstanceContext) => IncludedTextCodec {
-    return () => new IncludedTextCodec(this);
+    return () => new IncludedTextCodec(this, pgText);
   }
 }
 
@@ -79,6 +76,7 @@ class IncludedTextDescriptor extends CodecDescriptorImpl<void> {
 const includedTextDescriptor = postgresCodec(new IncludedTextDescriptor(), {
   dataType: pgText,
   jsonProjection: (expression) => expression,
+  factory: (descriptor, dataType) => () => new IncludedTextCodec(descriptor, dataType),
 });
 const includedTextColumn = {
   codecId: TEST_INCLUDED_TEXT_CODEC_ID,
@@ -154,7 +152,7 @@ async function setupCodecTables(runtime: PgIntegrationRuntime): Promise<void> {
 
 describe('integration/include codecs', () => {
   it(
-    'delegates JSON values to codec.decodeJson',
+    'reads JSON values with codec.fromWire',
     async () => {
       await withCollectionRuntime(
         async (runtime) => {
@@ -212,7 +210,7 @@ describe('integration/include codecs', () => {
                 wrappedDek: new Uint8Array([1, 2, 3, 4]),
                 deletedAt: Temporal.PlainDateTime.from('2026-07-09T15:23:33.037'),
                 deletedAtTz: Temporal.Instant.from('2026-07-09T15:23:33.037Z'),
-                customText: 'decoded-json:extension value',
+                customText: 'decoded-wire:extension value',
               },
             },
           ]);

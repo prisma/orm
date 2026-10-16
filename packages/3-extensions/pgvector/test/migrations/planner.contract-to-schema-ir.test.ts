@@ -24,7 +24,7 @@ import {
   type StorageTable,
 } from '@internal/sql-contract/types';
 import { SqlForeignKeyIR } from '@internal/sql-schema-ir/types';
-import postgresTargetDescriptor, { postgresRenderDefault } from '@internal/target-postgres/control';
+import postgresTargetDescriptor from '@internal/target-postgres/control';
 import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { createPostgresMigrationPlanner } from '@internal/target-postgres/planner';
 import type { PostgresPlanTargetDetails } from '@internal/target-postgres/planner-target-details';
@@ -193,7 +193,6 @@ function planFromStorages(
   const toContract = createTestContract(to);
   const fromSchemaIR = contractToSchemaIR(from ? createTestContract(from) : null, {
     ...postgresTypeOptions,
-    renderDefault: postgresRenderDefault,
   });
   const planner = createPostgresMigrationPlanner(testAdapter);
   return planner.plan({
@@ -231,7 +230,6 @@ describe('contractToSchemaIR → planner round-trip', () => {
     const contract = createTestContract(storage);
     const schemaIR = contractToSchemaIR(createTestContract(storage), {
       ...postgresTypeOptions,
-      renderDefault: postgresRenderDefault,
     });
     const planner = createPostgresMigrationPlanner(testAdapter);
 
@@ -273,7 +271,6 @@ describe('contractToSchemaIR → planner round-trip', () => {
     const contract = createTestContract(storage);
     const emptySchemaIR = contractToSchemaIR(null, {
       ...postgresTypeOptions,
-      renderDefault: postgresRenderDefault,
     });
     const planner = createPostgresMigrationPlanner(testAdapter);
 
@@ -344,7 +341,6 @@ describe('contractToSchemaIR → planner round-trip', () => {
     const contract = createTestContract(toStorage);
     const fromSchemaIR = contractToSchemaIR(createTestContract(fromStorage), {
       ...postgresTypeOptions,
-      renderDefault: postgresRenderDefault,
     });
     const planner = createPostgresMigrationPlanner(testAdapter);
 
@@ -405,7 +401,6 @@ describe('contractToSchemaIR → planner round-trip', () => {
     const contract = createTestContract(storage);
     const schemaIR = contractToSchemaIR(createTestContract(storage), {
       ...postgresTypeOptions,
-      renderDefault: postgresRenderDefault,
     });
     const planner = createPostgresMigrationPlanner(testAdapter);
 
@@ -909,7 +904,6 @@ describe('incremental migration with full contract surface (enums, FKs)', () => 
 
     const fromSchemaIR = contractToSchemaIR(createDemoContract(DEMO_BASE_STORAGE), {
       ...demoTypeOptions,
-      renderDefault: postgresRenderDefault,
     });
     const toContract = createDemoContract(toStorage);
     const planner = createPostgresMigrationPlanner(testAdapter);
@@ -944,7 +938,6 @@ describe('incremental migration with full contract surface (enums, FKs)', () => 
   it('produces no ops when from and to storages are identical (with types)', () => {
     const fromSchemaIR = contractToSchemaIR(createDemoContract(DEMO_BASE_STORAGE), {
       ...demoTypeOptions,
-      renderDefault: postgresRenderDefault,
     });
     const toContract = createDemoContract(DEMO_BASE_STORAGE);
     const planner = createPostgresMigrationPlanner(testAdapter);
@@ -973,7 +966,6 @@ describe('incremental migration with full contract surface (enums, FKs)', () => 
   it('emits all ops on initial migration from empty state', async () => {
     const fromSchemaIR = contractToSchemaIR(null, {
       ...demoTypeOptions,
-      renderDefault: postgresRenderDefault,
     });
     const toContract = createDemoContract(DEMO_BASE_STORAGE);
     const planner = createPostgresMigrationPlanner(testAdapter);

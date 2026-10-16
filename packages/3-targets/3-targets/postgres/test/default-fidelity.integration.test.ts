@@ -12,11 +12,12 @@ import { timeouts, withClient, withDevDatabase } from '@repo/test-utils';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { PG_TEXT_CODEC_ID } from '../src/core/codec-ids';
 import { postgresDataTypes } from '../src/core/data-types';
-import { parsePostgresDefault, postgresResolveDefault } from '../src/core/default-normalizer';
 import { parsePostgresListText } from '../src/core/list-decoder';
 import { type CatalogColumnType, introspectedNativeType } from '../src/core/native-type-normalizer';
+import { readDefaultWithCodec } from '../src/core/psl-infer/infer-read-defaults';
 import { postgresCodecDescriptorRegistry } from '../src/core/registry';
 import { postgresPslTypeConstructors } from '../src/core/type-constructors';
+import { toContractJson } from './contract-json';
 import { enumTypes, type FidelityRow, rows } from './default-fidelity.rows';
 
 type Compared = JsonValue | ColumnDefault | undefined;
@@ -74,7 +75,7 @@ function columnCodec({ nativeType, reportedType }: FidelityColumn): Codec {
   if (ref === undefined || descriptor === undefined) {
     throw new Error(`no codec for ${elementType}`);
   }
-  return materializeCodec(
+  const codec = materializeCodec(
     descriptor,
     {
       codecId: ref.codecId,
@@ -82,7 +83,16 @@ function columnCodec({ nativeType, reportedType }: FidelityColumn): Codec {
     },
     { name: `<fidelity:${ref.codecId}>` },
   );
+  return codec;
 }
+function codecOrUndefined(column: FidelityColumn): Codec | undefined {
+  try {
+    return columnCodec(column);
+  } catch {
+    return undefined;
+  }
+}
+
 type PgClient = Parameters<Parameters<typeof withClient>[1]>[0];
 
 interface Oracle {
@@ -122,10 +132,13 @@ async function storedValue(
     return elements;
   }
   const codec = columnCodec(column);
-  if (!many) return inColumn(oracle, codec.encodeJson(await codec.decode(stored, {})), storageType);
+  if (!many)
+    return inColumn(oracle, toContractJson(codec, await codec.fromWire(stored, {})), storageType);
   const elements: JsonValue[] = [];
   for (const element of parsePostgresListText(stored)) {
-    elements.push(element === null ? null : codec.encodeJson(await codec.decode(element, {})));
+    elements.push(
+      element === null ? null : toContractJson(codec, await codec.fromWire(element, {})),
+    );
   }
   return inColumn(oracle, elements, storageType);
 }
@@ -134,7 +147,6 @@ async function parsedValue(
   oracle: Oracle,
   parsed: ColumnDefault | undefined,
   storageType: string,
-  column: FidelityColumn,
   stored: JsonValue,
 ): Promise<Compared> {
   if (parsed?.kind !== 'literal') return parsed;
@@ -142,7 +154,7 @@ async function parsedValue(
   if (value instanceof Date) return parsed;
   try {
     if (!JSON_ELEMENT_TYPES.has(elementTypeOf(storageType))) {
-      return await inColumn(oracle, literalAsJson(value, column), storageType);
+      return await inColumn(oracle, value, storageType);
     }
     if (!storageType.endsWith('[]') || !Array.isArray(value)) {
       return await jsonbMatching(oracle, value, stored);
@@ -157,17 +169,6 @@ async function parsedValue(
   } catch (error) {
     return { rejected: error instanceof Error ? error.message : String(error) };
   }
-}
-
-function literalAsJson(value: JsonValue, column: FidelityColumn): JsonValue {
-  if (value === null) return null;
-  const codec = columnCodec(column);
-  if (!column.nativeType.endsWith('[]') || !Array.isArray(value)) {
-    return codec.encodeJson(codec.decodeJson(value));
-  }
-  return value.map((element) =>
-    element === null ? null : codec.encodeJson(codec.decodeJson(element)),
-  );
 }
 
 async function inColumn(oracle: Oracle, json: JsonValue, storageType: string): Promise<JsonValue> {
@@ -287,17 +288,15 @@ async function observe(): Promise<ReadonlyMap<string, Observation>> {
             name: column.reportedName,
           },
         };
-        const live = parsePostgresDefault(column.columnDefault, nativeType);
-        const contract = postgresResolveDefault(
-          { kind: 'function', expression: row.written },
-          nativeType,
-        );
+        const codec = codecOrUndefined(fidelityColumn);
+        const live = await readDefaultWithCodec(column.columnDefault, nativeType, codec);
+        const contract = await readDefaultWithCodec(row.written, nativeType, codec);
         let values: ComparedValues | undefined;
         if (row.expect === 'literal' || row.expect === 'refused-by-codec') {
           const stored = await storedValue(oracle, storedText, row.storageType, fidelityColumn);
           values = {
-            live: await parsedValue(oracle, live, row.storageType, fidelityColumn, stored),
-            contract: await parsedValue(oracle, contract, row.storageType, fidelityColumn, stored),
+            live: await parsedValue(oracle, live, row.storageType, stored),
+            contract: await parsedValue(oracle, contract, row.storageType, stored),
             stored,
           };
         }
@@ -313,7 +312,7 @@ async function observe(): Promise<ReadonlyMap<string, Observation>> {
   );
 }
 
-describe('default parser against the value Postgres stores', () => {
+describe('a reported default read with the codec contract infer prints, against the value Postgres stores', () => {
   let observations: ReadonlyMap<string, Observation> = new Map();
 
   beforeAll(async () => {
@@ -336,12 +335,10 @@ describe('default parser against the value Postgres stores', () => {
       return;
     }
     if (row.expect === 'refused-by-codec') {
-      if (values === undefined) throw new Error(`no compared values for ${row.name}`);
-      expect({ live: values.live, contract: values.contract }).toEqual({
-        live: { rejected: expect.any(String) },
-        contract: { rejected: expect.any(String) },
+      expect({ live, contract }).toEqual({
+        live: { kind: 'function', expression: columnDefault },
+        contract: { kind: 'function', expression: row.written },
       });
-      expect(values.stored).not.toHaveProperty('rejected');
       return;
     }
     if (row.expect !== 'literal') {

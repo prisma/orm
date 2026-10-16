@@ -14,7 +14,7 @@ import { buildSymbolTable } from '../src/symbol-table';
 import { binderContext } from './support';
 
 function dataTypeSupport(): DataTypeSupport {
-  return { entries: {}, lookup: createDataTypeLookup([]) };
+  return { entries: {}, lookup: createDataTypeLookup([]), dataTypeOfCodec: () => undefined };
 }
 
 function recordingDescriptor(seen: { spec: BlockSpecContext[]; attribute: BlockSpecContext[] }) {

@@ -3,6 +3,8 @@
 **Status:** Accepted; amended by [ADR 262 — Block specs bind top-level block values](ADR%20262%20-%20Block%20specs%20bind%20top-level%20block%20values.md). The registration SPI stands — descriptors claim keywords, pair a `discriminator` with an `entityTypes` factory, and keep the framework as the only parser — but a descriptor no longer carries a typed parameter table. The four parameter value-kinds, the descriptor-data validator, the codec-JSON value medium, and descriptor-driven printing described below are superseded: a descriptor declares its value grammar as a `spec` factory built from the shared argument combinators, validation happens by interpreting that spec after complete declaration collection, and the printer renders producer-built print documents (parsed source is never converted to text). The superseded sections are preserved as a historical record.
 **Date:** 2026-06-08
 
+> **Retrospective note — the codec's JSON methods are renamed.** [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md#codecs) replaces `encodeJson` and `decodeJson` with `toDataTypeValue` and `fromDataTypeValue`, and a value of a data type is read from its stored form by the data type, not the codec. Where this ADR says a `value` parameter rides the codec JSON medium, the value is now a value of the parameter's data type.
+
 ---
 
 ## Decision

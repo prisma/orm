@@ -1,6 +1,5 @@
 import { generateContractDts } from '@internal/emitter';
 import {
-  type CodecLookup,
   type CodecLookupWithDescriptors,
   createDataTypeLookup,
   renderTsLiteral,
@@ -12,7 +11,7 @@ import {
   type FieldValueSets,
 } from '@internal/mongo-contract';
 import { mongoEmission } from '@internal/mongo-emitter';
-import { mongoDescriptorById } from '@internal/target-mongo/codecs';
+import { mongoDescriptorById, mongoStandardCodecs } from '@internal/target-mongo/codecs';
 import { mongoDataTypes } from '@internal/target-mongo/data-types';
 import { blindCast } from '@internal/utils/casts';
 import { timeouts } from '@repo/test-utils';
@@ -57,16 +56,8 @@ const contract = defineContract({
 const knownCodecIds = new Set(['mongo/string@1', 'mongo/objectId@1']);
 
 const codecLookup: CodecLookupWithDescriptors = {
-  get: (id: string) => {
-    if (!knownCodecIds.has(id)) return undefined;
-    return {
-      id,
-      encode: async (v: unknown) => v,
-      decode: async (w: unknown) => w,
-      encodeJson: (v: unknown) => v,
-      decodeJson: (j: unknown) => j,
-    } as ReturnType<CodecLookup['get']>;
-  },
+  get: (id: string) =>
+    knownCodecIds.has(id) ? mongoStandardCodecs.find((codec) => codec.id === id) : undefined,
   descriptorFor: (id: string) => (knownCodecIds.has(id) ? mongoDescriptorById(id) : undefined),
   renderOutputTypeFor: () => undefined,
   // Enum field types are produced through the codec seam (TML-2952): the emitter

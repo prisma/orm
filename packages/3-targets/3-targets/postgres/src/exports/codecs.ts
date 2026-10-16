@@ -1,4 +1,3 @@
-export type { PgInterval } from '../core/codec-helpers';
 export {
   assemblePostgresCodecRegistry,
   assemblePostgresCodecRegistryWithBuiltins,
@@ -59,6 +58,7 @@ export {
   pgVarbitColumn,
   pgVarcharColumn,
 } from '../core/codecs';
+export type { PgInterval } from '../core/data-type-values';
 export {
   PgTimestamptzDateCodec,
   PgTimestamptzDateDescriptor,

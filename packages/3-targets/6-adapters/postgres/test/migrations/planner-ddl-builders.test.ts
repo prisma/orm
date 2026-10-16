@@ -10,11 +10,7 @@ import {
   createPostgresBuiltinDataTypeLookup,
   postgresDataTypes,
 } from '@internal/target-postgres/data-types';
-import {
-  buildColumnTypeSql,
-  type DefaultColumn,
-  renderDefaultLiteral,
-} from '@internal/target-postgres/planner-ddl-builders';
+import { buildColumnTypeSql } from '@internal/target-postgres/planner-ddl-builders';
 import { describe, expect, it } from 'vitest';
 import { PostgresControlAdapter } from '../../src/core/control-adapter';
 
@@ -27,10 +23,6 @@ type TypedColumn = Parameters<typeof buildColumnTypeSql>[0];
 
 function col(overrides: Partial<TypedColumn> = {}): TypedColumn {
   return { many: false, codecId: 'pg/text@1', ...overrides };
-}
-
-function listColumn(baseTypeName: string): DefaultColumn {
-  return { baseTypeName, dataType: 'pg/text', many: { elementNullable: false } };
 }
 
 // ---------------------------------------------------------------------------
@@ -176,45 +168,5 @@ describe('the DEFAULT clause the Postgres adapter writes in every DDL statement'
       code: 'CONTRACT.DEFAULT_INVALID',
       meta: { expression: 'now(); DROP TABLE users' },
     });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// renderDefaultLiteral
-// ---------------------------------------------------------------------------
-
-describe('renderDefaultLiteral', () => {
-  it('renders string', () => {
-    expect(renderDefaultLiteral('hello')).toBe("'hello'");
-  });
-
-  it('renders number', () => {
-    expect(renderDefaultLiteral(42)).toBe('42');
-  });
-
-  it('renders boolean', () => {
-    expect(renderDefaultLiteral(false)).toBe('false');
-  });
-
-  it('renders null', () => {
-    expect(renderDefaultLiteral(null)).toBe('NULL');
-  });
-
-  it('renders JSON object for jsonb column', () => {
-    const result = renderDefaultLiteral(
-      { key: 'val' },
-      { baseTypeName: 'jsonb', dataType: 'pg/jsonb', many: false },
-    );
-    expect(result).toBe(`'{"key":"val"}'::jsonb`);
-  });
-
-  it('renders JSON object without cast for non-json column', () => {
-    const result = renderDefaultLiteral({ key: 'val' });
-    expect(result).toBe(`'{"key":"val"}'`);
-  });
-
-  it('renders a mixed-type array literal element-by-element', () => {
-    const result = renderDefaultLiteral([1, true, null], listColumn('int4'));
-    expect(result).toBe('ARRAY[1, true, NULL]::int4[]');
   });
 });

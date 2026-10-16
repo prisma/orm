@@ -161,7 +161,7 @@ function escapeQuotedText(text: string): string {
  */
 export function printTaggedLiteral(tag: string, text: string): string {
   if (text.includes('`')) return `${tag}"${escapeQuotedText(text)}"`;
-  const fenced = text.replace(/\\/g, '\\\\');
+  const fenced = text.replace(/\\(?=\\|$)/g, '\\\\');
   return isPrintedOnOwnLines(text) ? `${tag}\`\n${fenced}\n\`` : `${tag}\`${fenced}\``;
 }
 

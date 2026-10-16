@@ -441,16 +441,16 @@ model T {
 `,
       );
 
-      const reason =
-        'pg/uuid@1 JSON value must be a UUID as PostgreSQL writes it, in lower case and hyphenated 8-4-4-4-12';
+      const reason = (stored: string) =>
+        `pg/uuid JSON value must be "${stored}", as pg/uuid stores this value`;
       expect(emitted.ok ? [] : emitted.failure.diagnostics?.diagnostics).toEqual([
         expect.objectContaining({
           code: 'PSL_EXTENSION_INVALID_VALUE',
-          message: `enum "Key" member "Upper" was rejected by codec "pg/uuid@1": ${reason}`,
+          message: `enum "Key" member "Upper" was rejected by codec "pg/uuid@1": ${reason('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11')}`,
         }),
         expect.objectContaining({
           code: 'PSL_EXTENSION_INVALID_VALUE',
-          message: `enum "Key" member "Braced" was rejected by codec "pg/uuid@1": ${reason}`,
+          message: `enum "Key" member "Braced" was rejected by codec "pg/uuid@1": ${reason('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11')}`,
         }),
       ]);
     });

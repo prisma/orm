@@ -23,8 +23,6 @@ import {
   postgresDiffSubjectGranularity,
 } from '../core/schema-ir/schema-node-kinds';
 
-export { postgresRenderDefault } from '../core/migrations/postgres-contract-to-schema';
-
 function createPostgresTargetDescriptor(): SqlControlTargetDescriptor<
   'postgres',
   PostgresPlanTargetDetails

@@ -86,7 +86,7 @@ import {
 } from '@internal/sql-contract/entity-handle-lowering-hook';
 import { FOREIGN_KEY_INDEX_UNRESOLVED } from '@internal/sql-contract/foreign-key-materialization';
 import { isAuthoredIndexInput } from '@internal/sql-contract/index-naming';
-import { sqlTextFromCanonical } from '@internal/sql-contract/sql-expression';
+import { sqlTextFromStored } from '@internal/sql-contract/sql-expression';
 import {
   type AuthoredStorageTypeInstance,
   resolvedTypeParams,
@@ -524,6 +524,8 @@ interface BuildModelNodeInput {
   readonly valueObjectTypes: ValueObjectTypes;
   readonly enumTypeDescriptors: ReadonlyMap<BlockSymbol, ColumnDescriptor>;
   readonly namedTypeDescriptors: ReadonlyMap<NamedTypeSymbol, ColumnDescriptor>;
+  /** The storage types the named types declare, by name, whose parameters a column declared with one takes. */
+  readonly namedTypes: Record<string, AuthoredStorageTypeInstance>;
   /** Extension contracts keyed by space ID for cross-space FK table-name resolution. */
   readonly composedExtensionContracts: ReadonlyMap<string, Contract>;
   readonly familyId: string;
@@ -647,6 +649,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     symbolTable: input.symbolTable,
     enumTypeDescriptors: input.enumTypeDescriptors,
     namedTypeDescriptors: input.namedTypeDescriptors,
+    namedTypes: input.namedTypes,
     valueObjectTypes: input.valueObjectTypes,
     authoringContributions: input.authoringContributions,
     targetId: input.targetId,
@@ -955,9 +958,10 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
             'expression',
             parsed.expression === undefined
               ? undefined
-              : sqlTextFromCanonical(parsed.expression.value),
+              : sqlTextFromStored(parsed.expression.value.value),
           ),
-          where: parsed.where === undefined ? undefined : sqlTextFromCanonical(parsed.where.value),
+          where:
+            parsed.where === undefined ? undefined : sqlTextFromStored(parsed.where.value.value),
           unique: parsed.unique,
           name: parsed.name,
           map: parsed.map,
@@ -990,7 +994,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         continue;
       }
       checkNodes.push({
-        expression: sqlTextFromCanonical(parsed.expression.value),
+        expression: sqlTextFromStored(parsed.expression.value.value),
         name: parsed.name,
         map: parsed.map,
       });
@@ -2396,6 +2400,7 @@ export function interpretPslDocumentToSqlContract(
       valueObjectTypes,
       enumTypeDescriptors: allEnumTypeDescriptors,
       namedTypeDescriptors: namedTypeResult.namedTypeDescriptors,
+      namedTypes: namedTypeResult.storageTypes,
       composedExtensionContracts,
       familyId: input.target.familyId,
       targetId: input.target.targetId,

@@ -1,6 +1,7 @@
 import { timeouts, withClient, withDevDatabase } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { pgNumericDescriptor } from '../src/core/codecs';
+import { type PgNumericCodec, pgNumericDescriptor } from '../src/core/codecs';
+import { fromContractJson, toContractJson } from './contract-json';
 
 const ctx = { name: 'canonical-numeric' };
 
@@ -22,6 +23,8 @@ const spellings = [
   '-Infinity',
 ];
 
+type NumericParams = { readonly precision?: number; readonly scale?: number };
+
 /** Each column type, with values written in it and the text Postgres prints for each. */
 const scaledColumns: readonly (readonly [
   { readonly precision: number; readonly scale?: number },
@@ -37,9 +40,9 @@ const scaledColumns: readonly (readonly [
 const typeName = ({ precision, scale }: { readonly precision: number; readonly scale?: number }) =>
   scale === undefined ? `numeric(${precision})` : `numeric(${precision},${scale})`;
 
-function reads(codec: { decodeJson(json: string): unknown }, json: string): boolean {
+function reads(codec: PgNumericCodec, params: NumericParams, json: string): boolean {
   try {
-    codec.decodeJson(json);
+    fromContractJson(codec, json, params);
     return true;
   } catch {
     return false;
@@ -62,8 +65,8 @@ describe('pg/numeric@1 against Postgres', () => {
           }
           const codec = pgNumericDescriptor.factory({})(ctx);
           expect({
-            written: Object.fromEntries(spellings.map((s) => [s, codec.encodeJson(s)])),
-            read: Object.fromEntries(spellings.map((s) => [s, reads(codec, s)])),
+            written: Object.fromEntries(spellings.map((s) => [s, toContractJson(codec, s)])),
+            read: Object.fromEntries(spellings.map((s) => [s, reads(codec, {}, s)])),
           }).toEqual({
             written: printed,
             read: Object.fromEntries(spellings.map((s) => [s, printed[s] === s])),
@@ -88,7 +91,7 @@ describe('pg/numeric@1 against Postgres', () => {
                 [value],
               );
               const printed = result.rows[0]?.printed ?? '';
-              readBack[`${typeName(params)} ${printed}`] = reads(codec, printed);
+              readBack[`${typeName(params)} ${printed}`] = reads(codec, params, printed);
             }
           }
           expect(readBack).toEqual({

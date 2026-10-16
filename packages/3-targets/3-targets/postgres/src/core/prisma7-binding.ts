@@ -1,9 +1,4 @@
-import {
-  dataTypeParams,
-  renderSqlTypeName,
-  type SqlDataType,
-  sqlBaseName,
-} from '@internal/sql-contract/data-type';
+import { postgresDataTypeEntries } from './data-type-entries';
 import {
   pgBytea,
   pgDate,
@@ -21,18 +16,31 @@ import {
 } from './migrations/default-constraint-names';
 import { postgresNowGeneratorIdFor } from './now-generators';
 import { postgresCreateNamespace } from './postgres-schema';
-import { storedTemporalText } from './prisma7-temporal-defaults';
+import { prisma7TemporalStored, prisma7TemporalTagBody } from './prisma7-temporal-defaults';
 import { prisma7PostgresTypeMap } from './prisma7-type-map';
 import { junctionRelationFieldNames } from './psl-infer/junction-relation-field-names';
 
-const TEMPORAL_TYPES: ReadonlyMap<string, SqlDataType> = new Map(
-  [pgTimestamp, pgTimestamptz, pgDate, pgTime, pgTimetz].map((type) => [type.id, type]),
-);
+/** The date and time types a Prisma 7 `DateTime` default can be written on. */
+const DATE_TIME_TYPES: ReadonlySet<string> = new Set([
+  pgTimestamp.id,
+  pgTimestamptz.id,
+  pgDate.id,
+  pgTime.id,
+  pgTimetz.id,
+]);
 
-const BYTEA_LIST_TYPE = sqlBaseName(pgBytea, {}).toUpperCase();
+const ENTRIES = postgresDataTypeEntries();
 
-function sqlStringLiteral(value: string | undefined): string | undefined {
-  return value === undefined ? undefined : `'${value.replace(/'/g, "''")}'`;
+/** The tag the authoring entry of `dataType` writes its values with. */
+function tagOf(dataType: string): string | undefined {
+  const written = ENTRIES[dataType]?.written;
+  return written?.kind === 'tag' ? written.tag : undefined;
+}
+
+/** A date or time column without a precision holds microseconds. */
+function precisionOf(typeParams: Readonly<Record<string, unknown>> | undefined): number {
+  const precision = typeParams?.['precision'];
+  return typeof precision === 'number' ? precision : 6;
 }
 
 function base64ToHex(base64: string): string | undefined {
@@ -40,18 +48,12 @@ function base64ToHex(base64: string): string | undefined {
   return `\\x${Buffer.from(base64, 'base64').toString('hex')}`;
 }
 
-function arrayLiteral(literals: readonly string[], typeName: string): string {
-  return `ARRAY[${literals.join(', ')}]::${typeName}[]`;
-}
-
 /**
  * What the Postgres target supplies to the Prisma 7 interpreter. A `Bytes` or
- * `DateTime` default is carried as the SQL literal of the default Postgres
- * stores (`'\x68656c6c6f'`, `'2024-01-02 03:04:05'`), and a list default as an
- * `ARRAY[...]` of those literals cast to the column type, rather than as the
- * column codec's JSON form (base64, ISO 8601 text). Verify reads both forms as
- * the same value; the reader keeps the SQL literal because storing the value
- * instead changes the contract hash of every such schema (TML-3455).
+ * `DateTime` default is read through the tag its column type's authoring entry
+ * writes, as the current schema language reads it: a `Bytes` default's base64
+ * as the hex body of `bytea`, and a `DateTime` default as the body of the date
+ * or time tag that keeps what the written value means on the column.
  */
 export const prisma7PostgresBinding = {
   target: postgresTargetDescriptorMeta,
@@ -80,20 +82,19 @@ export const prisma7PostgresBinding = {
     readonly typeParams?: Readonly<Record<string, unknown>> | undefined;
   }) => {
     if (dataType === pgJson.id || dataType === pgJsonb.id) return { kind: 'json' } as const;
-    if (dataType === pgBytea.id) {
-      return {
-        kind: 'sqlExpression',
-        literal: (text: string) => sqlStringLiteral(base64ToHex(text)),
-        list: (literals: readonly string[]) => arrayLiteral(literals, BYTEA_LIST_TYPE),
-      } as const;
-    }
-    const type = TEMPORAL_TYPES.get(dataType);
-    if (type === undefined) return undefined;
-    const typeName = renderSqlTypeName(type, dataTypeParams(type, typeParams)).toUpperCase();
+    const tag = tagOf(dataType);
+    if (tag === undefined) return undefined;
+    if (dataType === pgBytea.id) return { kind: 'tag', tag, body: base64ToHex } as const;
+    if (!DATE_TIME_TYPES.has(dataType)) return undefined;
     return {
-      kind: 'sqlExpression',
-      literal: (text: string) => sqlStringLiteral(storedTemporalText(text, type.id)),
-      list: (literals: readonly string[]) => arrayLiteral(literals, typeName),
+      kind: 'tag',
+      tag,
+      body: (text: string) => prisma7TemporalTagBody(text, dataType),
+      finerThanColumn: (text: string) => {
+        const heldDigits = precisionOf(typeParams);
+        const stored = prisma7TemporalStored(text, dataType, heldDigits);
+        return stored === undefined ? undefined : { heldDigits, stored };
+      },
     } as const;
   },
 } as const;

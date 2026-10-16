@@ -179,11 +179,15 @@ export const migrationCheckCommand = defineOrmCommand({
       if (!checked.ok) {
         return notOk(normalizeError(checked.failure));
       }
-      const violations = await loadAggregateIntegrityViolations(
+      const loadedViolations = await loadAggregateIntegrityViolations(
         ctx.config,
         migrationsDir,
         verifySnapshotContent,
       );
+      if (!loadedViolations.ok) {
+        return notOk(normalizeError(loadedViolations.failure));
+      }
+      const violations = loadedViolations.value;
       const scoped =
         spaceFilter === undefined
           ? violations

@@ -2,6 +2,7 @@ import type { JsonValue } from '@internal/contract/types';
 import {
   type AnyCodecDescriptorTemplate,
   createDataTypeLookup,
+  type DataType,
 } from '@internal/framework-components/codec';
 import type { RuntimeExtensionDescriptor } from '@internal/framework-components/execution';
 import { sqlDataType } from '@internal/sql-contract/data-type';
@@ -34,11 +35,12 @@ import { defineTestCodec } from './test-codec';
 
 const emptyRegistry = buildPostgresCodecDescriptorRegistry([]);
 
-function genericDescriptor(codecId: string): AnyCodecDescriptorTemplate {
+function genericDescriptor(codecId: string, type?: DataType): AnyCodecDescriptorTemplate {
   const codec = defineTestCodec({
     typeId: codecId,
-    encode: (value: JsonValue): JsonValue => value,
-    decode: (wire: JsonValue): JsonValue => wire,
+    dataType: type,
+    toWire: (value: JsonValue): JsonValue => value,
+    fromWire: (wire: JsonValue): JsonValue => wire,
   });
   return {
     codecId,
@@ -50,7 +52,10 @@ function genericDescriptor(codecId: string): AnyCodecDescriptorTemplate {
 }
 
 function fixtureDataType(name: string) {
-  return sqlDataType(`demo/${name}`, { texts: [{ text: name, written: true }] });
+  return sqlDataType(`demo/${name}`, {
+    read: (json) => json,
+    texts: [{ text: name, written: true }],
+  });
 }
 
 const dataTypes = createDataTypeLookup([
@@ -59,9 +64,12 @@ const dataTypes = createDataTypeLookup([
 ]);
 
 function descriptorFor(codecId: string, name: string): AnyPostgresCodecDescriptor {
-  return postgresCodec(genericDescriptor(codecId), {
-    dataType: fixtureDataType(name),
+  const type = fixtureDataType(name);
+  const template = genericDescriptor(codecId, type);
+  return postgresCodec(template, {
+    dataType: type,
     jsonProjection: (expression: ProjectionExpr) => expression,
+    factory: (_descriptor, _type, params) => template.factory(params),
   });
 }
 

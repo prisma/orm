@@ -108,23 +108,9 @@ export function lowerPrisma7Default(
     return lowerFunction(call, input, label, unknown);
   }
 
-  const rawLiteral =
-    input.literalForm?.kind === 'sqlExpression'
-      ? sqlExpressionDefault(expression, input.literalForm, input.field.list)
-      : undefined;
-  if (rawLiteral === 'unreadable') {
-    return unknown('holds a value this contract source does not read.', attribute.span);
-  }
-  if (rawLiteral !== undefined) {
-    return {
-      storage: { kind: 'function', expression: rawLiteral.expression },
-      onCreate: undefined,
-    };
-  }
-
   const scalar = scalarValue(expression, input, unknown);
   if (scalar === undefined) return undefined;
-  return { storage: { kind: 'literal', value: scalar, canonical: true }, onCreate: undefined };
+  return { storage: { kind: 'literal', value: scalar, inStoredForm: true }, onCreate: undefined };
 }
 
 /**
@@ -155,6 +141,9 @@ function scalarValue(
     return values;
   }
 
+  const finer = finerThanColumn(elements ?? [expression], elements !== undefined, input);
+  if (finer !== undefined) return unknown(finer, span);
+
   const written = writtenLiteralFor(expression, elements, input);
   if (written === undefined) return unreadableValue(expression, input, unknown);
 
@@ -170,6 +159,29 @@ function scalarValue(
     fieldPath: `${input.modelName}.${input.field.name}`,
   });
   return read.ok ? read.value : unknown(refusalReason(read.refusal), span);
+}
+
+/**
+ * Why a written date and time is refused when it has more fraction digits than the column holds:
+ * Prisma 7 let the database round it, so the reason names the value the database stores.
+ */
+function finerThanColumn(
+  values: readonly ExpressionAst[],
+  isList: boolean,
+  input: LowerPrisma7DefaultInput,
+): string | undefined {
+  const form = input.literalForm;
+  if (form?.kind !== 'tag' || form.finerThanColumn === undefined) return undefined;
+  for (const [index, value] of values.entries()) {
+    const text = StringLiteralExprAst.cast(value.syntax)?.value();
+    const finer = text === undefined ? undefined : form.finerThanColumn(text);
+    if (text === undefined || finer === undefined) continue;
+    const at = isList ? ` at element ${index + 1}` : '';
+    const writtenDigits = /\.(\d+)/.exec(text)?.[1]?.length ?? 0;
+    const held = finer.heldDigits === 0 ? 'none' : String(finer.heldDigits);
+    return `holds "${text}"${at}, with ${writtenDigits} ${writtenDigits === 1 ? 'digit' : 'digits'} after the decimal point, but the column holds ${held}. PostgreSQL stores it as "${finer.stored}"; write that instead.`;
+  }
+  return undefined;
 }
 
 /** The storage value of an enum member name, when the field is typed by a Prisma 7 enum. */
@@ -243,28 +255,6 @@ function unreadableValue(
   return unknown('holds a value this contract source does not read.', span);
 }
 
-function sqlExpressionDefault(
-  expression: ExpressionAst,
-  form: Extract<Prisma7LiteralDefaultForm, { readonly kind: 'sqlExpression' }>,
-  isList: boolean,
-): { readonly expression: string } | 'unreadable' | undefined {
-  const array = isList ? ArrayLiteralAst.cast(expression.syntax) : undefined;
-  if (array === undefined) {
-    const text = StringLiteralExprAst.cast(expression.syntax)?.value();
-    if (text === undefined) return undefined;
-    const literal = form.literal(text);
-    return literal === undefined ? 'unreadable' : { expression: literal };
-  }
-  const literals: string[] = [];
-  for (const element of array.elements()) {
-    const text = StringLiteralExprAst.cast(element.syntax)?.value();
-    const literal = text === undefined ? undefined : form.literal(text);
-    if (literal === undefined) return 'unreadable';
-    literals.push(literal);
-  }
-  return { expression: form.list(literals) };
-}
-
 /** The written literal a Prisma 7 expression is, or `undefined` when it is not a literal at all. */
 function writtenLiteral(
   expression: ExpressionAst,
@@ -272,9 +262,13 @@ function writtenLiteral(
 ): WrittenValue | undefined {
   const text = StringLiteralExprAst.cast(expression.syntax)?.value();
   if (text !== undefined) {
-    return input.literalForm?.kind === 'json'
-      ? { kind: 'tag', tag: 'json', text }
-      : { kind: 'string', text };
+    const form = input.literalForm;
+    if (form?.kind === 'json') return { kind: 'tag', tag: 'json', text };
+    if (form?.kind === 'tag') {
+      const body = form.body(text);
+      return body === undefined ? undefined : { kind: 'tag', tag: form.tag, text: body };
+    }
+    return { kind: 'string', text };
   }
   const number = NumberLiteralExprAst.cast(expression.syntax)?.token()?.text;
   if (number !== undefined) return { kind: 'number', text: number };
@@ -325,7 +319,7 @@ function refusalReason(refusal: DefaultRefusal): string {
       return `holds a list, which ${refusal.receivingType} has no cast from; ${describeCasts(refusal.casts)}.`;
     case 'no-element-cast':
       return `holds a ${refusal.valueType} value${at}, which the list cast of ${refusal.receivingType} does not take; it takes ${refusal.elementTypes.join(', ')}.`;
-    case 'refused-by-codec':
+    case 'refused-by-column':
       return `holds a value${at} that ${refusal.codecId} does not read: ${refusal.message}`;
   }
 }

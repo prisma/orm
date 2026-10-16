@@ -14,7 +14,7 @@ const COUNT: AggregateDescriptor = {
   input: { kind: 'any' },
   output: { kind: 'codec', codecId: 'pg/int8@1' },
   nullable: false,
-  emptyResultJson: '0',
+  emptyResultWire: '0',
 };
 
 const SUM_INT2: AggregateDescriptor = {

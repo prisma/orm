@@ -1,5 +1,6 @@
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
 import { type ContractModel, type ContractRelation, crossRef } from '@internal/contract/types';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { computeCheckContentHash } from '@internal/sql-schema-ir/naming';
 import { blindCast } from '@internal/utils/casts';
@@ -13,6 +14,7 @@ import { Index } from '../src/ir/sql-index';
 import { StorageColumn } from '../src/ir/storage-column';
 import { StorageTable } from '../src/ir/storage-table';
 import { indexInputFromSerialized, type SerializedIndex } from '../src/serialized-index';
+import { sqlDataType } from '../src/sql-data-type';
 import type { ReferentialAction, SqlModelFieldStorage, SqlStorage } from '../src/types';
 import {
   createSqlContractSchema,
@@ -992,6 +994,22 @@ describe('SQL contract validators', () => {
         }),
       );
       expect(() => validateSqlContractFully(c)).not.toThrow();
+    });
+
+    it('joins a column of a type stored as another with a column of that other type', () => {
+      const text = sqlDataType('sqlite/text', {
+        read: (json) => json,
+        texts: [{ text: 'text', written: true, catalog: true }],
+      });
+      const datetime = sqlDataType('sqlite/datetime', { read: (json) => json, storedAs: text.id });
+      const c = junctionContract(
+        col('sqlite/datetime', 'sqlite/datetime@1'),
+        col('sqlite/text', 'sqlite/text@1'),
+      );
+      expect(() => validateSqlContractFully(c)).toThrow(/differing storage type/);
+      expect(() =>
+        validateSqlContractFully(c, { dataTypes: createDataTypeLookup([text, datetime]) }),
+      ).not.toThrow();
     });
 
     it('names both data types when junction columns differ', () => {

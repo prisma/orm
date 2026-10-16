@@ -4,10 +4,12 @@ import type { ContractSourceContext } from '@internal/config/config-types';
 import type { JsonValue } from '@internal/contract/types';
 import { enumType, member } from '@internal/contract-authoring';
 import type { ParsedPslExtensionBlock } from '@internal/framework-components/authoring';
-import type {
-  AnyCodecDescriptor,
-  Codec,
-  CodecLookupWithDescriptors,
+import {
+  type AnyCodecDescriptor,
+  type Codec,
+  type CodecLookupWithDescriptors,
+  dataType,
+  readJsonString,
 } from '@internal/framework-components/codec';
 import { mongoCodecLookup } from '@internal/mongo-contract/test';
 import { jsonValue, mapBlock } from '@internal/psl-parser';
@@ -31,12 +33,17 @@ const mongoScalarAuthoringTypes = {
   },
 } as const;
 
+const stringType = dataType('mongo/string', {
+  read: (json) => readJsonString('mongo/string', json),
+});
+
 const stringCodec: Codec = {
   id: 'mongo/string@1',
-  encode: async (value: unknown) => value,
-  decode: async (wire: unknown) => wire,
-  encodeJson: (value) => value as JsonValue,
-  decodeJson: (json) => json,
+  dataType: stringType,
+  toWire: async (value: unknown) => value,
+  fromWire: async (wire: unknown) => wire,
+  toDataTypeValue: (value) => stringType.valueFrom(value as JsonValue, {}),
+  fromDataTypeValue: (value) => value.value,
 };
 
 function codecLookupOf(codec: Codec): CodecLookupWithDescriptors {

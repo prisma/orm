@@ -1,11 +1,13 @@
 import { introspectSchema, MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
+import type { JsonValue } from '@internal/contract/types';
 import { MongoControlDriver } from '@internal/driver-mongo/control';
 import { verifyMongoSchema } from '@internal/family-mongo/schema-verify';
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
 import {
-  type CodecLookup,
+  type Codec,
   type CodecLookupWithDescriptors,
   createDataTypeLookup,
+  type DataTypeValue,
 } from '@internal/framework-components/codec';
 import type { MigrationPlan } from '@internal/framework-components/control';
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
@@ -33,6 +35,20 @@ import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 const mongoDataTypeLookup = createDataTypeLookup(mongoDataTypes);
+
+function identityCodec(id: string): Codec | undefined {
+  const descriptor = mongoDescriptorById(id);
+  const type = descriptor === undefined ? undefined : mongoDataTypeLookup.get(descriptor.dataType);
+  if (type === undefined) return undefined;
+  return {
+    id,
+    dataType: type,
+    toWire: async (v: unknown) => v,
+    fromWire: async (w: unknown) => w,
+    toDataTypeValue: (v: unknown) => type.valueFrom(v as JsonValue, {}),
+    fromDataTypeValue: (value: DataTypeValue) => value.value,
+  };
+}
 
 let replSet: MongoMemoryReplSet;
 let client: MongoClient;
@@ -77,14 +93,7 @@ const mongoCodecIds: ReadonlySet<string> = new Set(mongoScalarTypeDescriptors.va
 // the production emission path also supplies.
 const mongoCodecLookup: CodecLookupWithDescriptors = {
   get(id: string) {
-    if (!mongoCodecIds.has(id)) return undefined;
-    return {
-      id,
-      encode: async (v: unknown) => v,
-      decode: async (w: unknown) => w,
-      encodeJson: (v: unknown) => v,
-      decodeJson: (j: unknown) => j,
-    } as ReturnType<CodecLookup['get']>;
+    return mongoCodecIds.has(id) ? identityCodec(id) : undefined;
   },
   descriptorFor: (id: string) => (mongoCodecIds.has(id) ? mongoDescriptorById(id) : undefined),
   renderOutputTypeFor: () => undefined,
@@ -144,7 +153,7 @@ function makeContractFromPsl(): MongoContract {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
       codecLookup: mongoCodecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
+      dataTypes: { entries: {}, lookup: mongoDataTypeLookup, dataTypeOfCodec: () => undefined },
       resolvedInputs: [],
       capabilities: {},
     },

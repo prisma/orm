@@ -1,4 +1,3 @@
-import type { JsonValue } from '@internal/contract/types';
 import {
   type CodecCallContext,
   type CodecDescriptor,
@@ -6,6 +5,8 @@ import {
   CodecImpl,
   type CodecInstanceContext,
   type CodecTrait,
+  type DataType,
+  type DataTypeValue,
   dataType,
   dataTypeId,
 } from '@internal/framework-components/codec';
@@ -30,6 +31,8 @@ const vectorParamsSchema: StandardSchemaV1<VectorParams> = {
   },
 };
 
+const fixtureType = dataType('demo/fixture', { read: (json) => json });
+
 class VectorCodec<N extends number> extends CodecImpl<
   'demo/vector@1',
   readonly ['equality'],
@@ -38,25 +41,26 @@ class VectorCodec<N extends number> extends CodecImpl<
 > {
   constructor(
     descriptor: CodecDescriptor<VectorParams>,
+    type: DataType,
     readonly length: N,
   ) {
-    super(descriptor);
+    super(descriptor, type, { length });
   }
 
-  async encode(value: ReadonlyArray<number>, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: ReadonlyArray<number>, _ctx: CodecCallContext): Promise<string> {
     return `[${value.join(',')}]`;
   }
 
-  async decode(wire: string, _ctx: CodecCallContext): Promise<ReadonlyArray<number>> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<ReadonlyArray<number>> {
     return wire.slice(1, -1).split(',').map(Number);
   }
 
-  encodeJson(value: ReadonlyArray<number>): JsonValue {
-    return [...value];
+  toDataTypeValue(input: ReadonlyArray<number>): DataTypeValue {
+    return this.dataTypeValueOf([...input]);
   }
 
-  decodeJson(json: JsonValue): ReadonlyArray<number> {
-    return json as unknown as ReadonlyArray<number>;
+  fromDataTypeValue(value: DataTypeValue<number[]>): ReadonlyArray<number> {
+    return value.value;
   }
 }
 
@@ -74,7 +78,7 @@ class GenericVectorDescriptor extends CodecDescriptorImpl<VectorParams> {
   override factory<N extends number>(params: {
     readonly length: N;
   }): (ctx: CodecInstanceContext) => VectorCodec<N> {
-    return () => new VectorCodec(this, params.length);
+    return () => new VectorCodec(this, fixtureType, params.length);
   }
 }
 
@@ -94,14 +98,15 @@ class DirectVectorDescriptor extends PostgresCodecDescriptor<VectorParams> {
   override factory<N extends number>(params: {
     readonly length: N;
   }): (ctx: CodecInstanceContext) => VectorCodec<N> {
-    return () => new VectorCodec(this, params.length);
+    return () => new VectorCodec(this, fixtureType, params.length);
   }
 }
 
 const genericDescriptor = new GenericVectorDescriptor();
 const directDescriptor = new DirectVectorDescriptor();
 const adaptedDescriptor = postgresCodec(genericDescriptor, {
-  dataType: dataType('demo/fixture', {}),
+  dataType: fixtureType,
+  factory: (descriptor, type, params) => () => new VectorCodec(descriptor, type, params.length),
   jsonProjection(expression, params) {
     expectTypeOf(expression).toEqualTypeOf<ProjectionExpr>();
     expectTypeOf(params).toEqualTypeOf<VectorParams>();
@@ -146,35 +151,38 @@ test('definePostgresCodecs rejects an unadapted generic descriptor', () => {
 
 test('postgresCodec requires explicit scalar projection behavior', () => {
   // @ts-expect-error -- jsonProjection is mandatory
-  postgresCodec(genericDescriptor, { dataType: dataType('demo/fixture', {}) });
+  postgresCodec(genericDescriptor, {
+    dataType: fixtureType,
+    factory: (descriptor, type, params) => () => new VectorCodec(descriptor, type, params.length),
+  });
 });
 
 class TextCodec extends CodecImpl<'demo/text@1', readonly ['equality'], string, string> {
-  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
     return wire;
   }
-  encodeJson(value: string): JsonValue {
-    return value;
+  toDataTypeValue(input: string): DataTypeValue {
+    return this.dataTypeValueOf(input);
   }
-  decodeJson(json: JsonValue): string {
-    return String(json);
+  fromDataTypeValue(value: DataTypeValue<string>): string {
+    return value.value;
   }
 }
 
 test('a factory option builds a codec of the family codec it adapts', () => {
   postgresCodec(genericDescriptor, {
-    dataType: dataType('demo/fixture', {}),
+    dataType: fixtureType,
     jsonProjection: (expression) => expression,
-    factory: (descriptor, params) => () => new VectorCodec(descriptor, params.length),
+    factory: (descriptor, type, params) => () => new VectorCodec(descriptor, type, params.length),
   });
   postgresCodec(genericDescriptor, {
-    dataType: dataType('demo/fixture', {}),
+    dataType: fixtureType,
     jsonProjection: (expression) => expression,
     // @ts-expect-error -- the adapted descriptor's factory promises the family codec, so the option cannot build another
-    factory: (descriptor) => () => new TextCodec(descriptor),
+    factory: (descriptor, type) => () => new TextCodec(descriptor, type),
   });
 });
 
@@ -185,7 +193,7 @@ class MissingJsonProjection extends PostgresCodecDescriptor<VectorParams> {
   override readonly traits: readonly CodecTrait[] = [];
   override readonly paramsSchema = vectorParamsSchema;
   override factory(): (ctx: CodecInstanceContext) => VectorCodec<number> {
-    return () => new VectorCodec(this, 1);
+    return () => new VectorCodec(this, fixtureType, 1);
   }
 }
 

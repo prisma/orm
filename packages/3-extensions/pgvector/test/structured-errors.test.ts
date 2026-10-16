@@ -1,6 +1,7 @@
 import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { PgVectorCodec, pgVectorDescriptor } from '../src/core/codecs';
+import { fromContractJson } from './contract-json';
 
 const codecCtx = {};
 
@@ -25,7 +26,7 @@ async function catchAsyncError(fn: () => Promise<unknown>): Promise<unknown> {
 describe('pgvector structured error codes', () => {
   it('RUNTIME.ENCODE_FAILED on encode with a length mismatch', async () => {
     const codec = new PgVectorCodec(pgVectorDescriptor, 3);
-    const err = await catchAsyncError(() => codec.encode([1, 2], codecCtx));
+    const err = await catchAsyncError(() => codec.toWire([1, 2], codecCtx));
     expect(isStructuredError(err)).toBe(true);
     expect(err).toMatchObject({
       code: 'RUNTIME.ENCODE_FAILED',
@@ -34,9 +35,9 @@ describe('pgvector structured error codes', () => {
     });
   });
 
-  it('RUNTIME.ENCODE_FAILED on encodeJson with a non-array value', () => {
+  it('RUNTIME.ENCODE_FAILED on toDataTypeValue with a non-array value', () => {
     const codec = new PgVectorCodec(pgVectorDescriptor, 3);
-    const err = catchError(() => codec.encodeJson('nope' as unknown as number[]));
+    const err = catchError(() => codec.toDataTypeValue('nope' as unknown as number[]));
     expect(isStructuredError(err)).toBe(true);
     expect(err).toMatchObject({
       code: 'RUNTIME.ENCODE_FAILED',
@@ -46,7 +47,7 @@ describe('pgvector structured error codes', () => {
 
   it('RUNTIME.DECODE_FAILED on decode of a malformed wire string', async () => {
     const codec = new PgVectorCodec(pgVectorDescriptor, 3);
-    const err = await catchAsyncError(() => codec.decode('not a vector', codecCtx));
+    const err = await catchAsyncError(() => codec.fromWire('not a vector', codecCtx));
     expect(isStructuredError(err)).toBe(true);
     expect(err).toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
@@ -57,7 +58,7 @@ describe('pgvector structured error codes', () => {
 
   it('RUNTIME.DECODE_FAILED (not ENCODE_FAILED) on decode with a length mismatch', async () => {
     const codec = new PgVectorCodec(pgVectorDescriptor, 3);
-    const err = await catchAsyncError(() => codec.decode('[1,2]', codecCtx));
+    const err = await catchAsyncError(() => codec.fromWire('[1,2]', codecCtx));
     expect(isStructuredError(err)).toBe(true);
     expect(err).toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
@@ -65,14 +66,14 @@ describe('pgvector structured error codes', () => {
     });
   });
 
-  it('RUNTIME.DECODE_FAILED on decodeJson of a non-array value', () => {
+  it('RUNTIME.DECODE_FAILED on reading a non-array contract value', () => {
     const codec = new PgVectorCodec(pgVectorDescriptor, 3);
-    const err = catchError(() => codec.decodeJson(123));
+    const err = catchError(() => fromContractJson(codec, 123, { length: 3 }));
     expect(isStructuredError(err)).toBe(true);
     expect(err).toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
-      message: 'pg/vector@1 JSON value must be an array of 3 finite numbers',
-      meta: { codecId: 'pg/vector@1', received: '123' },
+      message: 'pgvector/vector JSON value must be an array of 3 finite numbers',
+      meta: { dataType: 'pgvector/vector', received: '123' },
     });
   });
 });

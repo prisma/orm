@@ -2,6 +2,7 @@ import { ContractValidationError } from '@internal/contract/contract-validation-
 import { isPlainRecord } from '@internal/contract/is-plain-record';
 import type { Contract } from '@internal/contract/types';
 import { withDerivedToOneRelationNullability } from '@internal/contract-authoring';
+import type { DataTypeLookup } from '@internal/framework-components/codec';
 import type { ContractSerializer } from '@internal/framework-components/control';
 import {
   type AnyEntityKindDescriptor,
@@ -95,6 +96,7 @@ export abstract class SqlContractSerializerBase<TContract extends Contract<SqlSt
       SqlEntityHydrationFactory
     > = new Map(),
     packEntityKinds: readonly AnyEntityKindDescriptor[] = [],
+    private readonly dataTypes: Pick<DataTypeLookup, 'get'> | undefined = undefined,
   ) {
     this.entryKinds = composeSqlEntityKinds(packEntityKinds);
     this.contractSchema =
@@ -124,10 +126,10 @@ export abstract class SqlContractSerializerBase<TContract extends Contract<SqlSt
   hashCanonicalizationHooks = sqlContractCanonicalizationHooks;
 
   protected parseSqlContractStructure(json: unknown): Contract<SqlStorage> {
-    return validateSqlContractFully<Contract<SqlStorage>>(
-      json,
-      this.contractSchema !== undefined ? { contractSchema: this.contractSchema } : undefined,
-    );
+    return validateSqlContractFully<Contract<SqlStorage>>(json, {
+      ...ifDefined('contractSchema', this.contractSchema),
+      ...ifDefined('dataTypes', this.dataTypes),
+    });
   }
 
   protected hydrateSqlStorage(validated: Contract<SqlStorage>): Contract<SqlStorage> {

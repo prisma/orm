@@ -31,12 +31,12 @@ export {
   createSqliteBuiltinCodecLookup,
   createSqliteCodecRegistryWithBuiltins,
 } from '@internal/target-sqlite/codecs';
-// `parseSqliteDefault`, `normalizeSqliteNativeType`, `quoteIdentifier`,
+// `readSqliteDefault`, `normalizeSqliteNativeType`, `quoteIdentifier`,
 // and `escapeLiteral` live target-side (one-way `adapter → target` edge,
 // matching Postgres). Re-exported from the adapter so consumers — both
 // internal and downstream — see the same adapter-shaped surface across
 // SQL targets.
-export { parseSqliteDefault } from '@internal/target-sqlite/default-normalizer';
+export { readSqliteDefault } from '@internal/target-sqlite/default-normalizer';
 export { normalizeSqliteNativeType } from '@internal/target-sqlite/native-type-normalizer';
 export { escapeLiteral, quoteIdentifier } from '@internal/target-sqlite/sql-utils';
 // `SqlControlAdapterDescriptor` is declared in two places in the codebase

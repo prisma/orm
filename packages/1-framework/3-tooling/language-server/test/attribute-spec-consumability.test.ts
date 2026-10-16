@@ -188,6 +188,7 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       model,
       field,
       typeResolution: undefined,
+      typeConstructor: undefined,
       defaultFunctionRegistry:
         interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
       dataTypes: interpretation.context.dataTypes,

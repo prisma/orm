@@ -17,6 +17,7 @@ import {
   modelSpecContext,
   sqlAttributeSpecs,
 } from '../src/sql-attribute-specs';
+import { fixtureTypeLookups } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   buildSymbolTableInput,
@@ -257,6 +258,95 @@ describe('sqlAttributeSpecs', () => {
   });
 });
 
+describe('the tags @default offers at a value position', () => {
+  const { symbolTable, model, binder } = project(
+    'model Post {\n  id Int @id\n  meta Jsonb\n  metas Jsonb[]\n  title String\n}\n',
+    'Post',
+  );
+  const knowingCodecs = {
+    ...fixtureDataTypeSupport,
+    dataTypeOfCodec: (codecId: string) =>
+      fixtureTypeLookups.codecLookup.descriptorFor(codecId)?.dataType,
+  };
+  const tagsOffered = (name: string, dataTypes = knowingCodecs) => {
+    const value = oneOfMetadata(
+      positionalType(
+        sqlAttributeSpecs.field.default(
+          fieldSpecContext({
+            symbols: symbolTable,
+            model,
+            field: field(model, name),
+            binder,
+            defaultFunctionRegistry,
+            dataTypes,
+          }),
+        ),
+      ),
+    );
+    const listArm = value.alternatives.find((alt) => alt.kind === 'list');
+    const elements =
+      listArm === undefined ? [] : oneOfMetadata(listMetadata(listArm).of).alternatives;
+    const tags = (alternatives: readonly { readonly kind: string }[]) =>
+      alternatives.flatMap((alt) =>
+        alt.kind === 'taggedLiteral' ? (Reflect.get(alt, 'tags') as readonly string[]) : [],
+      );
+    return { value: tags(value.alternatives), element: tags(elements) };
+  };
+
+  it('offers sql and the tags whose type the column type is or casts from', () => {
+    expect({
+      meta: tagsOffered('meta'),
+      title: tagsOffered('title'),
+      id: tagsOffered('id'),
+    }).toEqual({
+      meta: { value: ['sql', 'json'], element: ['json'] },
+      title: { value: ['sql'], element: [] },
+      id: { value: ['sql'], element: [] },
+    });
+  });
+
+  it('offers a column declared with a named type the tags of the type it names', () => {
+    const aliased = project(
+      'types {\n  Doc = Jsonb\n  Title = String\n}\n\nmodel Note {\n  id Int @id\n  meta Doc\n  title Title\n}\n',
+      'Note',
+    );
+    const offered = (name: string) => {
+      const value = oneOfMetadata(
+        positionalType(
+          sqlAttributeSpecs.field.default(
+            fieldSpecContext({
+              symbols: aliased.symbolTable,
+              model: aliased.model,
+              field: field(aliased.model, name),
+              binder: aliased.binder,
+              defaultFunctionRegistry,
+              dataTypes: knowingCodecs,
+            }),
+          ),
+        ),
+      );
+      return value.alternatives.flatMap((alt) =>
+        alt.kind === 'taggedLiteral' ? (Reflect.get(alt, 'tags') as readonly string[]) : [],
+      );
+    };
+    expect({ meta: offered('meta'), title: offered('title') }).toEqual({
+      meta: ['sql', 'json'],
+      title: ['sql'],
+    });
+  });
+
+  it('offers a list column the tags of its element type, and no sql in the list', () => {
+    expect(tagsOffered('metas')).toEqual({ value: ['sql'], element: ['json'] });
+  });
+
+  it('offers every tag when the stack cannot say which type the column has', () => {
+    expect(tagsOffered('title', fixtureDataTypeSupport)).toEqual({
+      value: ['sql', 'json'],
+      element: ['json'],
+    });
+  });
+});
+
 describe('sqlAttributeSpecs.field.default', () => {
   const { symbolTable, model, binder } = project(
     'model Post {\n  id Int @id\n  tags String[]\n}\n',
@@ -322,7 +412,7 @@ describe('sqlAttributeSpecs.field.default', () => {
     expect(value.label).not.toContain('`...`');
   });
 
-  it('exposes list default alternatives without hiding registry function calls', () => {
+  it('exposes list default alternatives without hiding registry function calls, and only sql as a single value', () => {
     const listCtx = fieldSpecContext({
       symbols: symbolTable,
       model,
@@ -345,11 +435,6 @@ describe('sqlAttributeSpecs.field.default', () => {
         tags: ['sql'],
         documentation:
           "A SQL expression in the target database's language. Prisma passes it to the database unchanged.",
-      },
-      {
-        label: 'json`...`',
-        tags: ['json'],
-        documentation: 'Reads the text as a JSON document and stores it as the default value.',
       },
     ]);
   });

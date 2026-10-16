@@ -22,7 +22,7 @@ Prisma 8 separates `family → target → adapter → driver`. For D1 we add a s
 - **PSL type mappings** (`control-mutation-defaults.ts` from PR #341) — maps PSL scalars to SQLite native types; identical for D1.
 - **Schema introspection** (`control-adapter.ts` from PR #341). Uses `SELECT FROM sqlite_master` plus read-only PRAGMAs (`table_info`, `foreign_key_list`, `index_list`, `index_info`), all of which D1 honors as regular queries.
 - **Migration planner + DDL builders** (`planner.ts`, `planner-ddl-builders.ts`, `statement-builders.ts` from PR #341). The planner takes a contract and a schema IR and produces operations; it never touches the driver. DDL builders emit pure SQL strings.
-- **Default parsing** (`parseSqliteDefault`), **native type normalization** (`normalizeSqliteNativeType`).
+- **Default parsing** (`readSqliteDefault`), **native type normalization** (`normalizeSqliteNativeType`).
 - **Control tables** `_prisma_marker` and `_prisma_ledger` — schema is SQLite-compatible and works unchanged on D1.
 
 ### What's new for D1

@@ -11,7 +11,6 @@ import {
   ColumnRef,
   FunctionCallExpr,
   LiteralExpr,
-  NullCheckExpr,
   sqlCharDescriptor,
   sqlFloatDescriptor,
   sqlIntDescriptor,
@@ -42,6 +41,7 @@ import {
   sqliteReal,
 } from '../src/core/data-types';
 import { sqliteCodecDescriptorRegistry, sqliteCodecRegistry } from '../src/core/registry';
+import { fromContractJson, toContractJson } from './contract-json';
 
 const EXPECTED_CODEC_IDS = [
   'sql/char@1',
@@ -146,17 +146,24 @@ describe('SQLite built-in codec descriptors', () => {
   it('replaces the native conversion where it cannot carry the value', () => {
     const expression = ColumnRef.of('records', 'value');
 
-    // SQLite's JSON functions reject a BLOB argument outright. `hex()` is
-    // guarded on NULL because `hex(NULL)` is `''`, which is also the hex of an
-    // empty blob — so without the guard an absent blob and an empty one would
-    // be indistinguishable, and `decodeJson` accepts `''` as a valid empty one.
+    // SQLite's JSON functions reject a BLOB argument outright. A blob is carried as its hex text inside a
+    // one-element array, which no row holds, so text in a BLOB column stays text. NULL and any other
+    // value pass through as themselves.
     expect(sqliteBlobDescriptor.projectJson(expression, refFor(sqliteBlobDescriptor))).toEqual(
       CaseExpr.of(
-        [{ condition: NullCheckExpr.isNull(expression), value: LiteralExpr.of(null) }],
-        FunctionCallExpr.of('hex', [expression]),
+        [
+          {
+            condition: BinaryExpr.eq(
+              FunctionCallExpr.of('typeof', [expression]),
+              LiteralExpr.of('blob'),
+            ),
+            value: FunctionCallExpr.of('json_array', [FunctionCallExpr.of('hex', [expression])]),
+          },
+        ],
+        expression,
       ),
     );
-    // SQLite writes an infinity in JSON as 9.0e+999; both float codecs write the text their encodeJson writes.
+    // SQLite writes an infinity in JSON as 9.0e+999; both float codecs write the text their toDataTypeValue writes.
     const infinityAsText = CaseExpr.of(
       [
         {
@@ -219,27 +226,29 @@ describe('SQLite built-in codec descriptors', () => {
 
   it('writes and reads each data type’s canonical form', () => {
     const blobCodec = sqliteBlobDescriptor.factory()(codecContext);
-    expect(blobCodec.encodeJson(new Uint8Array([0x0a, 0xbc]))).toBe('0ABC');
-    expect(blobCodec.decodeJson('0ABC')).toEqual(new Uint8Array([0x0a, 0xbc]));
-    expect(() => blobCodec.decodeJson('0abc')).toThrow(/uppercase hexadecimal/);
+    expect(toContractJson(blobCodec, new Uint8Array([0x0a, 0xbc]))).toBe('0ABC');
+    expect(fromContractJson(blobCodec, '0ABC')).toEqual(new Uint8Array([0x0a, 0xbc]));
+    expect(() => fromContractJson(blobCodec, '0abc')).toThrow(
+      'sqlite/blob JSON value must be uppercase hexadecimal text',
+    );
 
     const bigintCodec = sqliteBigintDescriptor.factory()(codecContext);
-    expect(bigintCodec.encodeJson(42n)).toBe('42');
-    expect(bigintCodec.decodeJson('42')).toBe(42n);
-    expect(bigintCodec.encodeJson(9_007_199_254_740_993n)).toBe('9007199254740993');
+    expect(toContractJson(bigintCodec, 42n)).toBe('42');
+    expect(fromContractJson(bigintCodec, '42')).toBe(42n);
+    expect(toContractJson(bigintCodec, 9_007_199_254_740_993n)).toBe('9007199254740993');
 
     const realCodec = sqliteRealDescriptor.factory()(codecContext);
-    expect(realCodec.encodeJson(1.25)).toBe(1.25);
-    expect(realCodec.decodeJson(1.25)).toBe(1.25);
+    expect(toContractJson(realCodec, 1.25)).toBe(1.25);
+    expect(fromContractJson(realCodec, 1.25)).toBe(1.25);
 
     const datetimeCodec = sqliteDatetimeDescriptor.factory()(codecContext);
     const date = new Date('2026-07-23T12:34:56.789Z');
-    expect(datetimeCodec.encodeJson(date)).toBe('2026-07-23T12:34:56.789Z');
-    expect(datetimeCodec.decodeJson('2026-07-23T12:34:56.789Z')).toEqual(date);
+    expect(toContractJson(datetimeCodec, date)).toBe('2026-07-23T12:34:56.789Z');
+    expect(fromContractJson(datetimeCodec, '2026-07-23T12:34:56.789Z')).toEqual(date);
 
     const jsonCodec = sqliteJsonDescriptor.factory()(codecContext);
     const value = { nested: ['value', 1, true, null] };
-    expect(jsonCodec.encodeJson(value)).toBe('{"nested":["value",1,true,null]}');
-    expect(jsonCodec.decodeJson('{"nested":["value",1,true,null]}')).toEqual(value);
+    expect(toContractJson(jsonCodec, value)).toBe('{"nested":["value",1,true,null]}');
+    expect(fromContractJson(jsonCodec, '{"nested":["value",1,true,null]}')).toEqual(value);
   });
 });

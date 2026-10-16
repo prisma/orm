@@ -16,12 +16,12 @@ import type { SqlTableIRInput } from '@internal/sql-schema-ir/types';
 import { SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import { describe, expect, it } from 'vitest';
 import { postgresAuthoringPslBlockDescriptors } from '../../../src/core/authoring';
-import { parsePostgresDefault } from '../../../src/core/default-normalizer';
 import { inferredColumnDefaults } from '../../../src/core/psl-infer/infer-default-codec';
 import {
   buildPslDocumentAst,
   type PostgresPslInferOptions,
 } from '../../../src/core/psl-infer/infer-psl-contract';
+import { noInferredDefaults } from '../../../src/core/psl-infer/infer-read-defaults';
 import { createPostgresDefaultMapping } from '../../../src/core/psl-infer/postgres-default-mapping';
 import {
   fixtureEnums,
@@ -54,7 +54,7 @@ function printWithEnums(
     columnDefaults: inferredColumnDefaults(inferBuildContext),
     columnTypes: inferredColumnTypesOf(schemaIR.tables, enums),
     defaultMapping: createPostgresDefaultMapping(),
-    parseRawDefault: parsePostgresDefault,
+    defaultOf: noInferredDefaults,
     enumInfo,
   };
   const ast = buildPslDocumentAst(schemaIR, options, {
@@ -78,7 +78,7 @@ const sessionsTable: SqlTableIRInput = {
 };
 
 describe('native_enum block emission', () => {
-  it('emits a block with @@map and declaration-ordered members (the auth.aal_level shape)', () => {
+  it('emits a block with @@map and declaration-ordered members (the auth.aal_level shape)', async () => {
     const output = printWithEnums(
       { sessions: sessionsTable },
       { aal_level: ['aal1', 'aal2', 'aal3'] },
@@ -89,14 +89,14 @@ describe('native_enum block emission', () => {
     );
   });
 
-  it('omits @@map when the type name already is the PSL name', () => {
+  it('omits @@map when the type name already is the PSL name', async () => {
     const output = printWithEnums({}, { Status: ['draft', 'done'] });
 
     expect(output).toContain('native_enum Status {\n  draft = "draft"\n  done = "done"\n}');
     expect(output).not.toContain('@@map');
   });
 
-  it('emits a block for an enum type no column references', () => {
+  it('emits a block for an enum type no column references', async () => {
     const output = printWithEnums(
       {
         user: {
@@ -115,7 +115,7 @@ describe('native_enum block emission', () => {
     expect(output).toContain('@@map("orphan_enum")');
   });
 
-  it('preserves declaration order, not alphabetical order', () => {
+  it('preserves declaration order, not alphabetical order', async () => {
     const output = printWithEnums({}, { priority: ['low', 'high', 'medium'] });
 
     const lowAt = output.indexOf('low = "low"');
@@ -128,7 +128,7 @@ describe('native_enum block emission', () => {
 });
 
 describe('member-name sanitization with explicit values', () => {
-  it('sanitizes non-identifier values while the string value carries the truth', () => {
+  it('sanitizes non-identifier values while the string value carries the truth', async () => {
     const output = printWithEnums({}, { ticket_priority: ['low', 'high-priority', '2nd', 'enum'] });
 
     expect(output).toContain('low = "low"');
@@ -137,14 +137,14 @@ describe('member-name sanitization with explicit values', () => {
     expect(output).toContain('_enum = "enum"');
   });
 
-  it('deduplicates sanitized member names that collide', () => {
+  it('deduplicates sanitized member names that collide', async () => {
     const output = printWithEnums({}, { weird: ['a-b', 'a b'] });
 
     expect(output).toContain('aB = "a-b"');
     expect(output).toContain('aB2 = "a b"');
   });
 
-  it('escapes quotes and backslashes in member values', () => {
+  it('escapes quotes and backslashes in member values', async () => {
     const output = printWithEnums({}, { quoted: ['say "hi"', 'back\\slash'] });
 
     expect(output).toContain('= "say \\"hi\\""');
@@ -153,7 +153,7 @@ describe('member-name sanitization with explicit values', () => {
 });
 
 describe('name collision against a model of the same name', () => {
-  it('renames the enum away from the model and keeps @@map carrying the type name', () => {
+  it('renames the enum away from the model and keeps @@map carrying the type name', async () => {
     const output = printWithEnums(
       {
         status: {
@@ -179,7 +179,7 @@ describe('name collision against a model of the same name', () => {
 });
 
 describe('pg.enum(Name) column emission', () => {
-  it('emits the call syntax with optionality composing like any other field type', () => {
+  it('emits the call syntax with optionality composing like any other field type', async () => {
     const output = printWithEnums(
       {
         sessions: {
@@ -198,7 +198,7 @@ describe('pg.enum(Name) column emission', () => {
     expect(output).toMatch(/aalRequired\s+pg\.enum\(AalLevel\)\s/);
   });
 
-  it('emits the list form for an enum array column', () => {
+  it('emits the list form for an enum array column', async () => {
     const output = printWithEnums(
       {
         user: {
@@ -219,7 +219,7 @@ describe('pg.enum(Name) column emission', () => {
     expect(output).toContain('pg.enum(UserRole)?[]');
   });
 
-  it('types an enum column by its enum, not through a data type', () => {
+  it('types an enum column by its enum, not through a data type', async () => {
     const output = printWithEnums(
       { sessions: sessionsTable },
       { aal_level: ['aal1', 'aal2', 'aal3'] },
@@ -240,7 +240,7 @@ describe('emitted PSL parses', () => {
     return diagnostics;
   }
 
-  it('the @@map + sanitized-member shape parses with zero diagnostics', () => {
+  it('the @@map + sanitized-member shape parses with zero diagnostics', async () => {
     const output = printWithEnums(
       { sessions: sessionsTable },
       { aal_level: ['aal1', 'aal2', 'aal3'], ticket_priority: ['low', 'high-priority', '2nd'] },
@@ -249,7 +249,7 @@ describe('emitted PSL parses', () => {
     expect(parseDiagnostics(output)).toEqual([]);
   });
 
-  it('the model-collision + array shape parses with zero diagnostics', () => {
+  it('the model-collision + array shape parses with zero diagnostics', async () => {
     const output = printWithEnums(
       {
         status: {

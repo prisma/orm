@@ -1,9 +1,11 @@
 import type { Contract } from '@internal/contract/types';
 import { SqlContractSerializerBase } from '@internal/family-sql/ir';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import type { Namespace } from '@internal/framework-components/ir';
 import type { SqlNamespaceInput, SqlStorage } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import type { JsonObject } from '@internal/utils/json';
+import { sqliteDataTypes } from './data-types';
 import { buildSqliteNamespace } from './sqlite-unbound-database';
 
 /**
@@ -14,7 +16,7 @@ import { buildSqliteNamespace } from './sqlite-unbound-database';
  */
 export class SqliteContractSerializer extends SqlContractSerializerBase<Contract<SqlStorage>> {
   constructor() {
-    super(new Map());
+    super(new Map(), [], createDataTypeLookup(sqliteDataTypes));
   }
 
   protected override hydrateSqlNamespaceEntry(

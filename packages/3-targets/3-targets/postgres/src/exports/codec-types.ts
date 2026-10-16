@@ -17,7 +17,7 @@ export type CodecTypes = Resolve<ExtractedCodecTypes>;
  * consumer's emitted `.d.mts` must reach it through a public entry point rather
  * than through a hash-named internal chunk (the `TS2742` family).
  */
-export type { PgInterval } from '../core/codec-helpers';
+export type { PgInterval } from '../core/data-type-values';
 export type { JsonValue };
 
 type Branded<T, Shape extends Record<string, unknown>> = T & {

@@ -30,14 +30,14 @@ export const testContract = createTestContract({ targetFamily: 'sql', target: 'p
 
 export const doublingCodec = defineTestCodec({
   typeId: 'test/doubling@1',
-  encode: (value: number) => value * 2,
-  decode: (wire: number) => wire / 2,
+  toWire: (value: number) => value * 2,
+  fromWire: (wire: number) => wire / 2,
 });
 
 const failingDecodeCodec = defineTestCodec({
   typeId: 'test/failing-decode@1',
-  encode: (value: number) => value,
-  decode: (): number => {
+  toWire: (value: number) => value,
+  fromWire: (): number => {
     throw new Error('decode failed');
   },
 });

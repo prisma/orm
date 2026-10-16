@@ -903,7 +903,7 @@ describe('ControlClient progress emission', () => {
   });
 
   describe('inferPslContract()', () => {
-    it('delegates to family instance when capability is implemented', () => {
+    it('delegates to family instance when capability is implemented', async () => {
       const fakeAst = { kind: 'document', namespaces: [] } as unknown;
       const { mockFamily, mockTarget, mockAdapter, mockFamilyInstance } = createMockComponents();
       (mockFamilyInstance as unknown as { inferPslContract: (ir: unknown) => unknown })[
@@ -919,11 +919,11 @@ describe('ControlClient progress emission', () => {
         adapter: mockAdapter,
       });
 
-      const result = client.inferPslContract({ tables: {} });
+      const result = await client.inferPslContract({ tables: {} });
       expect(result).toBe(fakeAst);
     });
 
-    it('returns undefined when family does not implement the capability', () => {
+    it('returns undefined when family does not implement the capability', async () => {
       const { mockFamily, mockTarget, mockAdapter } = createMockComponents();
 
       const client = createControlClient({
@@ -932,13 +932,13 @@ describe('ControlClient progress emission', () => {
         adapter: mockAdapter,
       });
 
-      const result = client.inferPslContract({ tables: {} });
+      const result = await client.inferPslContract({ tables: {} });
       expect(result).toBeUndefined();
     });
   });
 
   describe('toOperationPreview()', () => {
-    it('delegates to family instance when capability is implemented', () => {
+    it('delegates to family instance when capability is implemented', async () => {
       const fakePreview = {
         statements: [{ text: 'CREATE TABLE x (id int)', language: 'sql' }],
       };
@@ -962,7 +962,7 @@ describe('ControlClient progress emission', () => {
       expect(result).toBe(fakePreview);
     });
 
-    it('returns undefined when family does not implement the capability', () => {
+    it('returns undefined when family does not implement the capability', async () => {
       const { mockFamily, mockTarget, mockAdapter } = createMockComponents();
 
       const client = createControlClient({

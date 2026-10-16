@@ -17,7 +17,7 @@ const writtenAndCatalog = (text: string): readonly SqlTypeText[] => [
   { text, written: true, catalog: true },
 ];
 
-/** The six SQLite data types, each written and printed by one text (ADR 254). */
+/** The six SQLite data types written and printed by one text each (ADR 254). */
 const EXPECTED: Readonly<Record<string, readonly SqlTypeText[]>> = {
   'sqlite/text': writtenAndCatalog('text'),
   'sqlite/integer': writtenAndCatalog('integer'),
@@ -27,7 +27,11 @@ const EXPECTED: Readonly<Record<string, readonly SqlTypeText[]>> = {
   'sqlite/character-varying': writtenAndCatalog('character varying'),
 };
 
+/** The two types stored as `sqlite/text`, which declare no texts of their own. */
+const STORED_AS_TEXT: readonly string[] = ['sqlite/datetime', 'sqlite/json'];
+
 const registered: readonly DataType[] = sqliteTargetDescriptorMeta.dataTypes;
+const withTexts = registered.filter((type) => !STORED_AS_TEXT.includes(type.id));
 
 function sqlTypeOf(id: string): SqlDataType {
   const type = registered.find((candidate) => candidate.id === id);
@@ -38,7 +42,18 @@ function sqlTypeOf(id: string): SqlDataType {
 }
 
 describe('the SQLite data type declarations', () => {
-  it.each(registered.map((type) => [type.id] as const))(
+  it.each(STORED_AS_TEXT.map((id) => [id] as const))(
+    '%s is stored as sqlite/text and declares no texts, so it claims no reported type',
+    (id) => {
+      const { sql } = sqlTypeOf(id);
+      expect({ storedAs: sql.storedAs, texts: sql.texts }).toEqual({
+        storedAs: 'sqlite/text',
+        texts: [],
+      });
+    },
+  );
+
+  it.each(withTexts.map((type) => [type.id] as const))(
     '%s is declared with its one written and catalog text',
     (id) => {
       expect(EXPECTED).toHaveProperty([id]);

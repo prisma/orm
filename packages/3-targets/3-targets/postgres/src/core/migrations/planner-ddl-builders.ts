@@ -1,16 +1,11 @@
+import { dataTypeParams } from '@internal/framework-components/codec';
 import {
-  dataTypeParams,
   renderSqlTypeName,
   type SqlTypeLookups,
   sqlDataTypeOfCodec,
 } from '@internal/sql-contract/data-type';
 import type { StorageColumn, StorageTypeInstance } from '@internal/sql-contract/types';
-import { pgJson, pgJsonb } from '../data-types';
-import { postgresDateTimeDdlText } from '../date-time-ddl-text';
-import { escapeLiteral } from '../sql-utils';
 import { autoincrementWidthOfDataType } from './autoincrement-widths';
-
-const JSON_DATA_TYPES: ReadonlySet<string> = new Set([pgJson.id, pgJsonb.id]);
 
 /**
  * Renders the SQL type for a column in DDL context: the name its codec's data type is written
@@ -41,62 +36,4 @@ export function buildColumnTypeSql(
 
 function isAutoincrement(columnDefault: StorageColumn['default']): boolean {
   return columnDefault?.kind === 'function' && columnDefault.expression === 'autoincrement()';
-}
-
-/**
- * The column a default is written for: whether it is a list, the id of its data type, which decides
- * whether a JSON value is cast and the text a date or time value is written as, and the base name a
- * JSON value or a list is cast to. The value arrives in canonical form.
- */
-export type DefaultColumn = Pick<StorageColumn, 'many'> & {
-  readonly baseTypeName: string;
-  readonly dataType: string;
-};
-
-export function renderDefaultLiteral(value: unknown, column?: DefaultColumn): string {
-  if (column?.many && Array.isArray(value)) {
-    return renderArrayLiteralDefault(value, column.baseTypeName, column.dataType);
-  }
-  const isJsonColumn = column !== undefined && JSON_DATA_TYPES.has(column.dataType);
-  if (isJsonColumn && typeof value === 'object' && value !== null && !(value instanceof Date)) {
-    return `'${escapeLiteral(JSON.stringify(value))}'::${column.baseTypeName}`;
-  }
-  return renderScalarLiteral(value, column?.dataType);
-}
-
-/** A date or time value is written through the one function every DDL path uses for it. */
-function renderScalarLiteral(value: unknown, dataType: string | undefined): string {
-  if (value instanceof Date) {
-    return `'${escapeLiteral(value.toISOString())}'`;
-  }
-  if (typeof value === 'string') {
-    return `'${escapeLiteral(postgresDateTimeDdlText(value, dataType))}'`;
-  }
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-  if (value === null) {
-    return 'NULL';
-  }
-  return `'${escapeLiteral(JSON.stringify(value))}'`;
-}
-
-/**
- * An `ARRAY[...]` of quoted elements has type `text[]`, which Postgres does not assign to a list of
- * numbers, decimals, timestamps or enums, so the constructor is cast to the list type. Each element
- * is the text Postgres reads for its type: an `int8` or `numeric` value as decimal text, a date or
- * time value in its type's canonical form. The cast is `baseTypeName` with `[]` appended unless it
- * already ends in `[]`; the name is not quoted here.
- */
-function renderArrayLiteralDefault(
-  elements: unknown[],
-  baseTypeName: string,
-  dataType: string | undefined,
-): string {
-  if (elements.length === 0) {
-    return "'{}'";
-  }
-  const rendered = `ARRAY[${elements.map((el) => renderScalarLiteral(el, dataType)).join(', ')}]`;
-  if (baseTypeName === '') return rendered;
-  return `${rendered}::${baseTypeName.endsWith('[]') ? baseTypeName : `${baseTypeName}[]`}`;
 }

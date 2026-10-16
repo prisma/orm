@@ -203,7 +203,7 @@ describe('integration/sqlite include canonical JSON', () => {
     });
   });
 
-  // An empty blob and an absent one both hex to `''`, and `decodeJson` accepts
+  // An empty blob and an absent one both hex to `''`, and `fromDataTypeValue` accepts
   // `''` as a valid zero-length blob — so this is the pair the NULL guard on the
   // hex projection exists to keep apart, asserted where a user would see it.
   it('keeps an empty blob apart from an absent one', async () => {
@@ -279,17 +279,16 @@ describe('integration/sqlite include canonical JSON', () => {
     const exactTotal = (WIDE_BIGINT + 2n).toString();
     expect(shape).toEqual({
       name: 'RuntimeError',
-      message: `Failed to decode column canon_stations.stations with codec 'sqlite/bigintnumber@1': sqlite/bigintnumber@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991`,
+      message: `Failed to decode column canon_stations.stations with codec 'sqlite/bigintnumber@1': sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${exactTotal}`,
       code: 'RUNTIME.DECODE_FAILED',
       category: 'RUNTIME',
       severity: 'error',
       details: { table: 'canon_stations', column: 'stations', codec: 'sqlite/bigintnumber@1' },
       cause: {
         name: 'StructuredError',
-        message:
-          'sqlite/bigintnumber@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
+        message: `sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${exactTotal}`,
         code: 'RUNTIME.DECODE_FAILED',
-        meta: { codecId: 'sqlite/bigintnumber@1', received: JSON.stringify(exactTotal) },
+        meta: { codecId: 'sqlite/bigintnumber@1', received: exactTotal },
       },
     });
   });

@@ -1,20 +1,12 @@
-import type { ColumnDefault } from '@internal/contract/types';
 import type { CodecControlHooks } from '@internal/family-sql/control';
-import type { ToCanonicalForm } from '@internal/framework-components/codec';
 import type { SqlTypeLookups } from '@internal/sql-contract/data-type';
 import type { StorageColumn } from '@internal/sql-contract/types';
 import type { DdlColumn } from '@internal/sql-relational-core/ast';
 import * as contractFree from '@internal/sql-relational-core/contract-free';
-import {
-  contractDefaultRefusal,
-  defaultInCanonicalForm,
-  type SqlColumnDefaultIR,
-  type SqlColumnIR,
-} from '@internal/sql-schema-ir/types';
+import type { SqlColumnDefaultIR, SqlColumnIR } from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
-import { postgresError } from '../errors';
 import { postgresDefaultToDdlColumnDefault } from './op-factory-call';
 import { buildColumnTypeSql } from './planner-ddl-builders';
 import { resolveIdentityValue } from './planner-identity-values';
@@ -69,30 +61,6 @@ function columnTypeLike(
 }
 
 /**
- * A literal default in the canonical form of the column's values, which DDL writes (ADR 254). A
- * default the form refuses, which a contract emitted by an earlier version can hold, is refused
- * here rather than written, since the database would never hold the text the contract states.
- */
-function inCanonicalForm(
-  columnName: string,
-  columnDefault: ColumnDefault | undefined,
-  toCanonicalForm: ToCanonicalForm | undefined,
-  many: boolean,
-): ColumnDefault | undefined {
-  if (columnDefault?.kind !== 'literal') return columnDefault;
-  const refusal = contractDefaultRefusal(columnDefault, toCanonicalForm, many);
-  if (refusal !== undefined) {
-    throw postgresError('CONTRACT.DEFAULT_INVALID', `Column "${columnName}": ${refusal}`, {
-      meta: { reason: 'default-not-canonical', column: columnName },
-    });
-  }
-  return {
-    kind: 'literal',
-    value: defaultInCanonicalForm(columnDefault.value, toCanonicalForm, many).value,
-  };
-}
-
-/**
  * Builds the `CREATE TABLE` / `ADD COLUMN` DDL column for an expected column
  * node, writing its type from the data type the node's codec represents.
  */
@@ -103,9 +71,7 @@ export function renderColumnDdl(
 ): DdlColumn {
   const like = columnLike(column);
   const typeSql = buildColumnTypeSql(like, types);
-  const ddlDefault = postgresDefaultToDdlColumnDefault(
-    inCanonicalForm(name, like.default, column.toCanonicalForm, like.many !== false),
-  );
+  const ddlDefault = postgresDefaultToDdlColumnDefault(like.default);
   return contractFree.col(name, typeSql, {
     ...(!column.nullable ? { notNull: true } : {}),
     ...ifDefined('default', ddlDefault),
@@ -152,9 +118,7 @@ export function buildSetDefaultColumn(
       ...ifDefined('codecRef', defaultNode.codecRef),
     });
   }
-  const ddlDefault = postgresDefaultToDdlColumnDefault(
-    inCanonicalForm(columnName, authored, defaultNode.toCanonicalForm, typeLike.many !== false),
-  );
+  const ddlDefault = postgresDefaultToDdlColumnDefault(authored);
   if (ddlDefault === undefined) return undefined;
   return contractFree.col(columnName, buildColumnTypeSql(typeLike, types, {}, false), {
     default: ddlDefault,

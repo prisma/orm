@@ -101,6 +101,7 @@ describe('resolveReportedSqlType', () => {
 
   it('returns the normal form of the parameters a kind claim reads', () => {
     const range = sqlDataType<{ readonly precision?: number }>('t/range', {
+      read: (json) => json,
       params: type({ 'precision?': 'number.integer >= 0' }),
       claimsKind: 'range',
       fromReported: () => ({}),
@@ -115,6 +116,7 @@ describe('resolveReportedSqlType', () => {
 
   it('reads a leading minus in a placeholder whose schema allows a negative integer', () => {
     const signedNumeric = sqlDataType('t/signed-numeric', {
+      read: (json) => json,
       params: type({
         precision: 'number.integer >= 1 & number.integer <= 1000',
         scale: 'number.integer >= -1000 & number.integer <= 1000',
@@ -147,7 +149,7 @@ describe('resolveReportedSqlType', () => {
   });
 
   it('passes over data types that are not SQL data types', () => {
-    const plain = dataType('t/plain', {});
+    const plain = dataType('t/plain', { read: (json) => json });
     expect(resolveReportedSqlType(reported('integer'), [plain, ...allTypes])?.dataType).toBe(
       't/int4',
     );

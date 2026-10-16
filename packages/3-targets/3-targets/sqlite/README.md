@@ -17,7 +17,7 @@ Provides the SQLite target descriptor for runtime use and pack refs for contract
 - **Runtime Target Descriptor**: Exports `SqlRuntimeTargetDescriptor<'sqlite'>` with codec registry and factory
 - **Pack Ref Export**: Exports `TargetPackRef<'sql', 'sqlite'>` for `defineContract().target(sqlitePack)` contract authoring
 - **Descriptor Metadata**: Defines target identity (`familyId: 'sql'`, `targetId: 'sqlite'`, `id: 'sqlite'`) and version
-- **Datetime canonical form**: the codec `sqlite/datetime@1` declares its canonical form ([ADR 254](../../../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types)) with `sqliteDatetimeCanonical` in `src/core/codecs.ts`, because its data type, `sqlite/text`, declares none. DDL writes a datetime default as the text the codec writes for every row, through `encodeSqliteDatetime` in `src/core/codecs.ts`, so a default compares equal to an application-written value for the same instant.
+- **Datetime and JSON types**: `sqlite/datetime` and `sqlite/json` are data types stored as `sqlite/text` ([ADR 254](../../../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#sqlites-types)), declared in `src/core/data-types.ts`. Each owns its value: a datetime is the instant in UTC with three fraction digits, the text `toISOString()` writes for every row (`sqliteDatetimeText`), and a JSON value is the document's JSON text with sorted keys. PSL writes them with the `datetime` and `json` tags. DDL writes a datetime default as the text the codec writes for every row, through `encodeSqliteDatetime` in `src/core/codecs.ts`, so a default compares equal to an application-written value for the same instant.
 
 **Non-goals:**
 - Migration planner/runner (future milestone)

@@ -2,7 +2,7 @@ import type { JsonValue } from '@internal/contract/types';
 import { canonicalStringify } from '@internal/utils/canonical-stringify';
 import { isInternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
-import type { Codec } from './codec';
+import { type Codec, readContractValue } from './codec';
 import { enumRefusalOf } from './codec-descriptor';
 import type { CodecLookupWithDescriptors } from './codec-types';
 import { type DuplicateStoredValue, duplicateStoredMembers } from './enum-stored-members';
@@ -61,8 +61,8 @@ function encodeEnumMember(
   codec: Codec,
 ): Result<{ readonly stored: JsonValue; readonly readBack: unknown }, CodecRefusedMember> {
   try {
-    const stored = codec.encodeJson(member.value);
-    return ok({ stored, readBack: codec.decodeJson(stored) });
+    const stored = codec.dataType.toContract(codec.toDataTypeValue(member.value));
+    return ok({ stored, readBack: readContractValue(codec, stored, undefined) });
   } catch (cause) {
     if (isInternalError(cause)) throw cause;
     return notOk({

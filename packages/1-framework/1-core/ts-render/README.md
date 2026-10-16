@@ -16,10 +16,10 @@ Two small pieces:
 `jsonToTsSource` is deliberately the **second** stage of a two-stage pipeline:
 
 ```text
-jsValue  →  codec.encodeJson  →  JsonValue  →  jsonToTsSource  →  TS source text
+jsValue  →  codec.toDataTypeValue  →  value.value (JsonValue)  →  jsonToTsSource  →  TS source text
 ```
 
-Stage 1 (`codec.encodeJson`) is a codec responsibility — date serialization, opaque domain types (vector, bigint, uuid), JSON canonicalization. Stage 2 (this module) is a pure printer that must never grow type-specific branches. To render a non-JSON JS value (`Date`, `Vector`, `BigInt`, `Buffer`, …), encode it through the relevant codec's `encodeJson` first.
+Stage 1 (`codec.toDataTypeValue`) is a codec and data type responsibility — date serialization, opaque domain types (vector, bigint, uuid), JSON canonicalization. Stage 2 (this module) is a pure printer that must never grow type-specific branches. To render a non-JSON JS value (`Date`, `Vector`, `BigInt`, `Buffer`, …), convert it through the relevant codec's `toDataTypeValue` first and print the value's JSON.
 
 ## Usage
 

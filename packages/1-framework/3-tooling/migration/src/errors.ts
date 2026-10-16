@@ -1,6 +1,7 @@
 import { CliStructuredError } from '@internal/errors/control';
 import { ifDefined } from '@internal/utils/defined';
 import type { NextAction } from '@internal/utils/structured-error';
+import { isStructuredError } from '@internal/utils/structured-error';
 import { basename, dirname, relative } from 'pathe';
 import type { MigrationGraph } from './graph';
 
@@ -468,6 +469,9 @@ export function errorBundleNotFoundForGraphNode(
   });
 }
 
+/**
+ * A contract at `filePath` that failed to load. When the family refused it for its contents, such as defaults its column types do not hold, the refusal's meta (`refusedDefaults`) is kept beside the file path.
+ */
 export function errorContractDeserializationFailed(
   filePath: string,
   message: string,
@@ -479,10 +483,16 @@ export function errorContractDeserializationFailed(
     {
       why: `Contract at "${filePath}" failed to deserialize: ${message}`,
       fix: reemitHint(dirname(filePath), 'or restore the directory from version control.'),
-      meta: { filePath, message },
+      meta: { ...refusalMetaOf(options?.cause), filePath, message },
       ...ifDefined('cause', options?.cause),
     },
   );
+}
+
+function refusalMetaOf(cause: unknown): Readonly<Record<string, unknown>> | undefined {
+  return isStructuredError(cause) && cause.code === 'CONTRACT.VALIDATION_FAILED'
+    ? cause.meta
+    : undefined;
 }
 
 export function errorHashNotInGraph(hash: string, graph: MigrationGraph): MigrationToolsError {

@@ -1,9 +1,10 @@
 import { isPlainRecord } from '@internal/contract/is-plain-record';
 import type { JsonValue } from '@internal/contract/types';
 import type { CodecRef, DataTypeLookup } from '@internal/framework-components/codec';
+import { dataTypeParams } from '@internal/framework-components/codec';
 import type { CapabilityMatrix } from '@internal/framework-components/components';
 import { runtimeError } from '@internal/framework-components/runtime';
-import { dataTypeParams, sqlBaseName, sqlDataTypeOfCodec } from '@internal/sql-contract/data-type';
+import { sqlBaseName, sqlDataTypeOfCodec } from '@internal/sql-contract/data-type';
 import {
   type AggregateExpr,
   type AnyExpression,

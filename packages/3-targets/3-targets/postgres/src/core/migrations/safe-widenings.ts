@@ -1,5 +1,5 @@
+import { dataTypeParams } from '@internal/framework-components/codec';
 import {
-  dataTypeParams,
   resolveWrittenSqlTypes,
   type SqlTypeLookups,
   type SqlTypeParams,

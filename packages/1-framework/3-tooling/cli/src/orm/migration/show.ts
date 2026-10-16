@@ -28,6 +28,7 @@ import {
   errorMigrationPackageNotFound,
   errorNoMigrations,
 } from '../../utils/cli-errors';
+import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import { previewBlockHeader, renderPreviewStatement } from '../../utils/formatters/migrations';
 import {
   findPackageByDirPath,
@@ -265,7 +266,7 @@ export const migrationShowCommand = defineOrmCommand({
         normalizeError(
           errorContractValidationFailed(
             `Contract at ${contractPath} failed to deserialize: ${error instanceof Error ? error.message : String(error)}`,
-            { where: { path: contractPath } },
+            { where: { path: contractPath }, meta: contractValidationMeta(error) },
           ),
         ),
       );

@@ -106,7 +106,7 @@ async function inferAuthPsl(connectionString: string): Promise<string> {
       driver,
       contract: authIntrospectionContract,
     });
-    const ast = familyInstance.inferPslContract(schemaIR);
+    const ast = await familyInstance.inferPslContract(schemaIR);
     return printPsl(ast, {
       pslBlockDescriptors: controlStack.authoringContributions.pslBlockDescriptors,
     });

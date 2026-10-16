@@ -76,8 +76,8 @@ function inferFrom(
 const claimed = { area: 'geometry', located: 'geometry(Geometry,4326)' };
 
 describe('contract infer over PostGIS columns', () => {
-  it('prints postgis.Geometry with its srid when the pack is configured', () => {
-    const fields = flatPslModels(inferFrom([postgisControl], claimed)())[0]?.fields ?? [];
+  it('prints postgis.Geometry with its srid when the pack is configured', async () => {
+    const fields = flatPslModels(await inferFrom([postgisControl], claimed)())[0]?.fields ?? [];
     expect(
       fields.map((field) => ({
         name: field.name,
@@ -91,8 +91,10 @@ describe('contract infer over PostGIS columns', () => {
     ]);
   });
 
-  it('fails on a geometry subtype, which no data type claims, even with the pack', () => {
-    expect(inferFrom([postgisControl], { ...claimed, point: 'geometry(Point,4326)' })).toThrow(
+  it('fails on a geometry subtype, which no data type claims, even with the pack', async () => {
+    await expect(
+      inferFrom([postgisControl], { ...claimed, point: 'geometry(Point,4326)' })(),
+    ).rejects.toThrow(
       expect.objectContaining({
         code: 'CONTRACT.INFER_COLUMN_TYPE_UNCLAIMED',
         meta: { columns: ['public.place.point: geometry(Point,4326)'] },
@@ -100,8 +102,8 @@ describe('contract infer over PostGIS columns', () => {
     );
   });
 
-  it('fails and names each geometry column when the pack is not configured', () => {
-    expect(inferFrom([], claimed)).toThrow(
+  it('fails and names each geometry column when the pack is not configured', async () => {
+    await expect(inferFrom([], claimed)()).rejects.toThrow(
       expect.objectContaining({
         code: 'CONTRACT.INFER_COLUMN_TYPE_UNCLAIMED',
         meta: {

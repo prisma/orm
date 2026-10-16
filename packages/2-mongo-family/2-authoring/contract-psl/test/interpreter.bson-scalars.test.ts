@@ -28,7 +28,7 @@ function interpretPost() {
       scalarTypeCodecIds,
       defaultFunctionRegistry: new Map(),
       codecLookup: mongoCodecLookup,
-      dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
+      dataTypes: { entries: {}, lookup: mongoDataTypeLookup, dataTypeOfCodec: () => undefined },
     },
     'bson-scalars.prisma',
   );

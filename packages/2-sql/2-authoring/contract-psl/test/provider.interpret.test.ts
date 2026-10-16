@@ -239,6 +239,7 @@ model Other {
       symbolTable: input.symbolTable,
       sources: input.sources,
       columnDescriptor: { codecId: 'pg/text@1' },
+      columnTypeParams: undefined,
       isListColumn: false,
       valueObjectDefault: undefined,
       generatorDescriptorById: new Map(),

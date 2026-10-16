@@ -137,9 +137,18 @@ describe('printTaggedLiteral', () => {
     );
   });
 
-  it('doubles a backslash in the backtick form', () => {
-    expect(printTaggedLiteral('sql', "E'a\\nb'")).toBe("sql`E'a\\\\nb'`");
-  });
+  it.each([
+    ['a backslash that escapes nothing', 'sql', "E'a\\nb'", "sql`E'a\\nb'`"],
+    ['the hex text of bytes', 'bytea', '\\x68656c6c6f', 'bytea`\\x68656c6c6f`'],
+    ['a trailing backslash', 'sql', 'a\\', 'sql`a\\\\`'],
+    ['a run of two backslashes', 'sql', 'a\\\\b', 'sql`a\\\\\\b`'],
+    ['a run of three backslashes at the end', 'sql', 'a\\\\\\', 'sql`a\\\\\\\\\\\\`'],
+  ])(
+    'in the backtick form, doubles a backslash only before another or at the end: %s',
+    (_name, tag, text, printed) => {
+      expect(printTaggedLiteral(tag, text)).toBe(printed);
+    },
+  );
 
   it('prints a text holding a backtick in the double-quote form', () => {
     expect(printTaggedLiteral('json', '{"a":"`"}')).toBe('json"{\\"a\\":\\"`\\"}"');
@@ -153,6 +162,11 @@ describe('printTaggedLiteral', () => {
     ['single-line', 'md5(random()::text)'],
     ['multi-line', "(now()\n  + '1 day'::interval)"],
     ['a backslash', "E'a\\nb'"],
+    ['the hex text of bytes', '\\x68656c6c6f'],
+    ['a trailing backslash', 'a\\'],
+    ['a run of backslashes', 'a\\\\b\\\\\\c'],
+    ['a run of backslashes at the end', 'a\\\\\\'],
+    ['a multi-line text ending in a backslash', 'a\nb\\'],
     ['an internal empty line', 'a\n\nb'],
   ])('reads %s text back unchanged from the backtick form', (_name, text) => {
     const printed = printTaggedLiteral('sql', text);

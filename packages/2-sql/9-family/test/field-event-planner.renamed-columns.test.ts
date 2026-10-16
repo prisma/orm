@@ -4,7 +4,7 @@ import { planFieldEventOperations } from '../src/core/migrations/field-event-pla
 import type { ColumnRename } from '../src/core/migrations/resolve-column-rename';
 import type { TableRename } from '../src/core/migrations/resolve-table-rename';
 import type { CodecControlHooks } from '../src/core/migrations/types';
-import { col, contract, recordingHook, table } from './field-event-fixtures';
+import { col, contract, noDataTypes, recordingHook, table } from './field-event-fixtures';
 
 const string = col({ codecId: 'cs/string@1' });
 
@@ -21,6 +21,7 @@ function eventsWith(
     codecHooks: new Map<string, CodecControlHooks>([['cs/string@1', cs.hook]]),
     tableRenames,
     columnRenames,
+    dataTypes: noDataTypes,
   });
   return cs.calls.map((call) => `${call.event} ${call.tableName}.${call.fieldName}`);
 }

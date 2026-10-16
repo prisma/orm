@@ -1045,7 +1045,7 @@ export interface ControlClient {
    * @param schemaIR - The schema IR from introspect()
    * @returns PslDocumentAst if the family supports the capability, undefined otherwise
    */
-  inferPslContract(schemaIR: unknown): PslDocumentAst | undefined;
+  inferPslContract(schemaIR: unknown): Promise<PslDocumentAst | undefined>;
 
   /**
    * Returns the assembled PSL block descriptors from the control stack — the full

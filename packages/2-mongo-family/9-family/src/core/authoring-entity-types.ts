@@ -106,7 +106,10 @@ export const mongoFamilyEnumEntityDescriptor = {
 
       let unlistedMember = false;
       for (const member of members) {
-        const refusal = validatorEnumMemberRefusalOf(bsonTypes, codec.encodeJson(member.value));
+        const refusal = validatorEnumMemberRefusalOf(
+          bsonTypes,
+          codec.dataType.toContract(codec.toDataTypeValue(member.value)),
+        );
         if (refusal === undefined) continue;
         diagnostics?.push({
           code: 'PSL_EXTENSION_INVALID_VALUE',

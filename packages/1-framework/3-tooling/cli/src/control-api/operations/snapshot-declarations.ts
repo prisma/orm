@@ -2,6 +2,7 @@ import type { ImportSpecifierResolver } from '@internal/framework-components/emi
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { CliStructuredError, errorContractValidationFailed } from '../../utils/cli-errors';
+import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import type { RenderContractDtsFailure } from '../render-contract-dts';
 import type { ControlClient } from '../types';
 
@@ -13,7 +14,11 @@ function errorContractDtsRenderFailed(
   if (failure.code === 'CONTRACT_VALIDATION_FAILED') {
     return errorContractValidationFailed(
       `Contract at ${contractJsonPath} failed to deserialize: ${why}`,
-      { where: { path: contractJsonPath }, ...ifDefined('cause', failure.cause) },
+      {
+        where: { path: contractJsonPath },
+        ...ifDefined('cause', failure.cause),
+        meta: contractValidationMeta(failure.cause),
+      },
     );
   }
   return new CliStructuredError('CONTRACT.TYPES_RENDER_FAILED', 'Failed to render contract types', {

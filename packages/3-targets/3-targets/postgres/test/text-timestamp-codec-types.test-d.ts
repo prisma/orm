@@ -13,8 +13,8 @@ test('the text timestamp codecs take a Date on encode but publish string as thei
 
   const timestamp = pgTimestampStringDescriptor.factory({})({ name: 'at' });
   const timestamptz = pgTimestamptzStringDescriptor.factory({})({ name: 'at' });
-  expectTypeOf(timestamp.encode(new Date(), {})).resolves.toEqualTypeOf<string>();
-  expectTypeOf(timestamp.encode('2024-01-02 03:04:05', {})).resolves.toEqualTypeOf<string>();
-  expectTypeOf(timestamptz.encode(new Date(), {})).resolves.toEqualTypeOf<string>();
-  expectTypeOf(timestamptz.encode('2024-01-02 03:04:05+00', {})).resolves.toEqualTypeOf<string>();
+  expectTypeOf(timestamp.toWire(new Date(), {})).resolves.toEqualTypeOf<string>();
+  expectTypeOf(timestamp.toWire('2024-01-02 03:04:05', {})).resolves.toEqualTypeOf<string>();
+  expectTypeOf(timestamptz.toWire(new Date(), {})).resolves.toEqualTypeOf<string>();
+  expectTypeOf(timestamptz.toWire('2024-01-02 03:04:05+00', {})).resolves.toEqualTypeOf<string>();
 });

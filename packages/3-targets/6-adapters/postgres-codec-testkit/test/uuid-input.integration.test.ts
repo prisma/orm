@@ -1,4 +1,5 @@
 import postgresControlDriverDescriptor from '@internal/driver-postgres/control';
+import { readContractValue } from '@internal/framework-components/codec';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
 import { pgText, pgUuid } from '@internal/target-postgres/data-types';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
@@ -29,7 +30,7 @@ const candidates: readonly (readonly [text: string, isUuid: boolean])[] = [
   ['(a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11)', false],
 ];
 
-describe('the text to uuid cast and pg/uuid@1 decodeJson', { concurrent: false }, () => {
+describe('the text to uuid cast and reading pg/uuid contract JSON', { concurrent: false }, () => {
   let database: Awaited<ReturnType<typeof createDevDatabase>> | undefined;
   let driver: Awaited<ReturnType<typeof postgresControlDriverDescriptor.create>> | undefined;
 
@@ -44,7 +45,7 @@ describe('the text to uuid cast and pg/uuid@1 decodeJson', { concurrent: false }
   }, timeouts.spinUpPpgDev);
 
   it(
-    'the cast writes what PostgreSQL writes for each uuid it reads, and decodeJson reads only that form',
+    'the cast writes what PostgreSQL writes for each uuid it reads, and the pg/uuid type reads only that form',
     async () => {
       const codec = postgresCodecDescriptorRegistry.descriptorFor('pg/uuid@1')!.factory(undefined)({
         name: 'uuid-input',
@@ -65,7 +66,7 @@ describe('the text to uuid cast and pg/uuid@1 decodeJson', { concurrent: false }
           text,
           postgres,
           cast: resultOrNull(() => castFromText(text)),
-          decodeJson: resultOrNull(() => codec.decodeJson(text)),
+          readsJson: resultOrNull(() => readContractValue(codec, text, undefined)),
         });
       }
 
@@ -75,7 +76,7 @@ describe('the text to uuid cast and pg/uuid@1 decodeJson', { concurrent: false }
           text,
           postgres: isUuid ? canonical : null,
           cast: isUuid ? canonical : null,
-          decodeJson: text === canonical ? canonical : null,
+          readsJson: text === canonical ? canonical : null,
         })),
       );
     },

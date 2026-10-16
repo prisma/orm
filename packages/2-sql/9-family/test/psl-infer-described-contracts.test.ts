@@ -190,21 +190,21 @@ function modelNames(ast: PslDocumentAst): readonly string[] {
 }
 
 describe('SqlFamilyInstance#inferPslContract — describedContracts threading', () => {
-  it('threads the stack extension packs’ contracts into the target hook, omitting a pack-described table', () => {
+  it('threads the stack extension packs’ contracts into the target hook, omitting a pack-described table', async () => {
     const pack = buildExtensionWithPublicTable('supabase', 'auth_users');
     const familyInstance = createSqlFamilyInstance(makeStack([pack]));
     const tree = new TestSchemaTree(['app_table', 'auth_users']);
 
-    const ast = familyInstance.inferPslContract(tree);
+    const ast = await familyInstance.inferPslContract(tree);
 
     expect(modelNames(ast)).toEqual(['app_table']);
   });
 
-  it('keeps every table when no extension pack describes it', () => {
+  it('keeps every table when no extension pack describes it', async () => {
     const familyInstance = createSqlFamilyInstance(makeStack([]));
     const tree = new TestSchemaTree(['app_table']);
 
-    const ast = familyInstance.inferPslContract(tree);
+    const ast = await familyInstance.inferPslContract(tree);
 
     expect(modelNames(ast)).toEqual(['app_table']);
   });

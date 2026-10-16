@@ -391,7 +391,7 @@ async function introspectSchema(
   const rawSchemaNode = await controlAdapter.introspect(driver, undefined, schemaName);
   PostgresDatabaseSchemaNode.assert(rawSchemaNode);
 
-  const ast = sqlFamilyDescriptor.create(controlStack).inferPslContract(rawSchemaNode);
+  const ast = await sqlFamilyDescriptor.create(controlStack).inferPslContract(rawSchemaNode);
   const namespace = ast.namespaces.find((ns) => ns.name === schemaName);
   if (!namespace) {
     throw new Error(

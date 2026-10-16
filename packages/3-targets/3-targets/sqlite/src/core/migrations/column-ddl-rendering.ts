@@ -7,11 +7,7 @@ import {
   PrimaryKeyConstraint,
   UniqueConstraint,
 } from '@internal/sql-relational-core/ast';
-import {
-  contractDefaultRefusal,
-  type SqlColumnIR,
-  type SqlTableIR,
-} from '@internal/sql-schema-ir/types';
+import type { SqlColumnIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -56,27 +52,8 @@ function columnLike(
         }
       : {}),
     // DDL writes the default as authored; `resolvedDefault` exists for the diff comparison only.
-    ...ifDefined('default', plannableDefault(column)),
+    ...ifDefined('default', column.authoredDefault ?? column.resolvedDefault),
   };
-}
-
-/**
- * The default DDL writes. A contract default the canonical form of the column's values refuses,
- * which a contract emitted by an earlier version can hold, is refused rather than written.
- */
-function plannableDefault(column: SqlColumnIR): StorageColumn['default'] {
-  const columnDefault = column.authoredDefault ?? column.resolvedDefault;
-  const refusal = contractDefaultRefusal(
-    columnDefault,
-    column.toCanonicalForm,
-    (column.many ?? column.codecRef?.many) === true,
-  );
-  if (refusal !== undefined) {
-    throw sqliteError('CONTRACT.DEFAULT_INVALID', `Column "${column.name}": ${refusal}`, {
-      meta: { reason: 'default-not-canonical', column: column.name },
-    });
-  }
-  return columnDefault;
 }
 
 /**

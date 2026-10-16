@@ -9,12 +9,19 @@ import {
   rethrowMarkerReadError,
   withMarkerReadErrorHandling,
 } from '@internal/errors/execution';
-import { checkSqlDefaultText } from '@internal/family-sql/control';
+import {
+  type ContractColumn,
+  checkSqlDefaultText,
+  contractColumns,
+  type ReadColumnDefault,
+  readColumnDefault,
+} from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { parseContractMarkerRow } from '@internal/family-sql/verify';
-import type {
-  CodecLookupWithDescriptors,
-  DataTypeLookup,
+import {
+  type CodecLookupWithDescriptors,
+  codecForRef,
+  type DataTypeLookup,
 } from '@internal/framework-components/codec';
 import { APP_SPACE_ID, type SchemaNodeRef } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
@@ -85,14 +92,10 @@ import type {
   PostgresDropType,
   RlsPolicyOperation,
 } from '@internal/target-postgres/ddl';
-import { parsePostgresDefault } from '@internal/target-postgres/default-normalizer';
+import { readPostgresDefault } from '@internal/target-postgres/default-normalizer';
 import { postgresError } from '@internal/target-postgres/errors';
 import { MARKER_LOCK_KEY, MARKER_LOCK_SQL } from '@internal/target-postgres/marker-lock';
 import { introspectedNativeType } from '@internal/target-postgres/native-type-normalizer';
-import {
-  isPostgresDateTimeDataType,
-  postgresDateTimeDdlText,
-} from '@internal/target-postgres/planner-ddl-builders';
 import { POLICY_COMMAND_SQL, policyRoleList } from '@internal/target-postgres/rls-canonicalize';
 import { escapeLiteral, quoteIdentifier } from '@internal/target-postgres/sql-utils';
 import {
@@ -197,12 +200,6 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     private readonly codecRegistry: PostgresCodecRegistry,
     private readonly dataTypeLookup: DataTypeLookup,
   ) {}
-
-  /**
-   * Target-specific normalizer for raw Postgres default expressions.
-   * Used by schema verification to normalize raw defaults before comparison.
-   */
-  readonly normalizeDefault = parsePostgresDefault;
 
   bootstrapControlTableQueries(): readonly DdlNode[] {
     return buildControlTableBootstrapQueries();
@@ -719,18 +716,20 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       const declaredTablesBySchema =
         declaredTables.size > 0
           ? await this.resolveNamespaceSchemas(driver, declaredTables)
-          : new Map([[schema, new Set<string>()]]);
+          : new Map([[schema, { tables: new Set<string>(), namespaceIds: [] }]]);
+      const contractColumnsOf = contractColumns(contract);
 
       // Walk schemas sequentially: every introspectSchema call shares the one
       // control connection, so a parallel walk only serialises behind the wire
       // protocol and trips pg's "already executing a query" deprecation.
       const namespaces: Record<string, PostgresNamespaceSchemaNode> = {};
       let pgVersion = 'unknown';
-      for (const [resolved, tablesDeclaredHere] of declaredTablesBySchema) {
+      for (const [resolved, declaredHere] of declaredTablesBySchema) {
         const { namespace, pgVersion: version } = await this.introspectSchema(
           driver,
           resolved,
-          tablesDeclaredHere,
+          declaredHere.tables,
+          (table, column) => contractColumnsOf.columnOf(declaredHere.namespaceIds, table, column),
         );
         namespaces[resolved] = namespace;
         pgVersion = version;
@@ -789,25 +788,44 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   }
 
   /**
-   * Resolves the declared namespace ids to their live DDL schema names,
-   * mapping `UNBOUND_NAMESPACE_ID` to the connection's `current_schema()`
-   * and merging the table names declared for each schema. The caller
-   * introspects one namespace node per resolved schema — there is no flat
-   * cross-schema merge, so two schemas holding a same-named table no longer
-   * collide.
+   * Reads a column's reported default: a function or SQL NULL as itself, and a literal with the column's codec, when the contract declares the column. A literal of a column the contract does not declare keeps only its raw text. When the contract's default is an expression that writes a literal, the codec reads that literal too, for the diff to compare the two values.
    */
+  private async readReportedDefault(
+    rawDefault: string,
+    resolvedNativeType: string,
+    column: ContractColumn | undefined,
+  ): Promise<ReadDefault> {
+    const reported = readPostgresDefault(rawDefault, resolvedNativeType);
+    if (reported.kind === 'function') return { resolvedDefault: reported };
+    if (reported.kind === 'null') return { resolvedDefault: { kind: 'literal', value: null } };
+    const codec =
+      column === undefined ? undefined : codecForRef(this.codecRegistry, column.codecRef);
+    if (codec === undefined) return {};
+    const expression = column?.defaultExpression;
+    const written =
+      expression === undefined ? undefined : readPostgresDefault(expression, resolvedNativeType);
+    return readColumnDefault(
+      codec,
+      { literal: reported.literal, raw: rawDefault },
+      expression !== undefined && written?.kind === 'literal'
+        ? { literal: written.literal, expression }
+        : undefined,
+    );
+  }
+
   private async resolveNamespaceSchemas(
     driver: SqlControlDriverInstance<'postgres'>,
     declaredTables: ReadonlyMap<string, readonly string[]>,
-  ): Promise<ReadonlyMap<string, ReadonlySet<string>>> {
-    const tablesBySchema = new Map<string, Set<string>>();
+  ): Promise<ReadonlyMap<string, DeclaredInSchema>> {
+    const bySchema = new Map<string, { tables: Set<string>; namespaceIds: string[] }>();
     for (const [id, tableNames] of declaredTables) {
       const resolved = id === UNBOUND_NAMESPACE_ID ? await this.currentSchema(driver) : id;
-      const tables = tablesBySchema.get(resolved) ?? new Set<string>();
-      for (const name of tableNames) tables.add(name);
-      tablesBySchema.set(resolved, tables);
+      const declared = bySchema.get(resolved) ?? { tables: new Set<string>(), namespaceIds: [] };
+      for (const name of tableNames) declared.tables.add(name);
+      declared.namespaceIds.push(id);
+      bySchema.set(resolved, declared);
     }
-    return tablesBySchema;
+    return bySchema;
   }
 
   private async currentSchema(driver: SqlControlDriverInstance<'postgres'>): Promise<string> {
@@ -827,6 +845,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     driver: SqlControlDriverInstance<'postgres'>,
     schema: string,
     declaredTables: ReadonlySet<string>,
+    contractColumnOf: (table: string, column: string) => ContractColumn | undefined,
   ): Promise<{ readonly namespace: PostgresNamespaceSchemaNode; readonly pgVersion: string }> {
     // Issue the schema-wide queries one at a time. A single control connection
     // serialises queries anyway, so Promise.all buys no parallelism here and
@@ -1167,11 +1186,15 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
         // there is no `SqlColumnIR.identity` field; every consumer compares
         // `resolvedDefault` instead.
         const isIdentityColumn = colRow.attidentity === 'a' || colRow.attidentity === 'd';
-        const resolvedDefault: ColumnDefault | undefined = isIdentityColumn
-          ? { kind: 'function', expression: 'autoincrement()' }
+        const readDefault: ReadDefault = isIdentityColumn
+          ? { resolvedDefault: { kind: 'function', expression: 'autoincrement()' } }
           : rawDefault !== undefined
-            ? parsePostgresDefault(rawDefault, resolvedNativeType)
-            : undefined;
+            ? await this.readReportedDefault(
+                rawDefault,
+                resolvedNativeType,
+                contractColumnOf(tableName, colRow.column_name),
+              )
+            : {};
         columns[colRow.column_name] = {
           name: colRow.column_name,
           nativeType,
@@ -1179,7 +1202,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
           ...ifDefined('default', rawDefault),
           ...ifDefined('many', many),
           resolvedNativeType,
-          ...ifDefined('resolvedDefault', resolvedDefault),
+          ...readDefault,
           ...ifDefined(
             'reportedType',
             colRow.reported_text
@@ -1543,6 +1566,15 @@ function freezeStringArray(values: readonly string[]): readonly string[] {
   return Object.freeze([...values]);
 }
 
+/** What introspection holds of a column's reported default. */
+type ReadDefault = ReadColumnDefault | { readonly resolvedDefault?: ColumnDefault };
+
+/** The tables a contract declares in one database schema, and the ids of the contract namespaces that resolve to it. */
+interface DeclaredInSchema {
+  readonly tables: ReadonlySet<string>;
+  readonly namespaceIds: readonly string[];
+}
+
 /**
  * The table names a contract's storage declares, keyed by namespace id. Empty when no contract (or no storage / namespaces) is present, which makes `PostgresControlAdapter.introspect` fall back to the single-schema walk.
  */
@@ -1890,26 +1922,16 @@ async function pgRenderDdlColumnDefault(
     }
     return `DEFAULT (${renderOpaqueSql(def.expression)})`;
   }
-  const dataTypeId =
-    codecRef === undefined ? undefined : codecLookup.descriptorFor(codecRef.codecId)?.dataType;
-  const written = await pgWrittenDefault(
-    def.value,
-    nativeType,
-    dataTypeId,
-    codecLookup,
-    codecRef,
-    where,
-  );
+  const written = await pgWrittenDefault(def.value, nativeType, codecLookup, codecRef, where);
   return `DEFAULT ${pgInlineLiteral(written, nativeType, where)}`;
 }
 
 /**
- * The value DDL writes for a literal default, and for each element of a list default: a date or time value as the text PostgreSQL reads for its type, a value the codec reads as SQL NULL as `null`, and anything else as the codec's wire value. Without a codec, the value as written.
+ * The value DDL writes for a literal default, and for each element of a list default: a value the codec reads as SQL NULL as `null`, and anything else as the codec's wire value (`fromDataTypeValue`, then `toWire`). Without a codec, the value as written.
  */
 async function pgWrittenDefault(
   value: ColumnDefaultLiteralInputValue,
   nativeType: string,
-  dataTypeId: string | undefined,
   codecLookup: CodecLookupWithDescriptors,
   codecRef: CodecRef | undefined,
   where: LiteralDefaultColumn,
@@ -1920,23 +1942,19 @@ async function pgWrittenDefault(
       codecRef === undefined
         ? undefined
         : await encodeListLiteralDefault(codecLookup, codecRef, value, where);
-    return value.map((element, index) => pgWrittenValue(element, encoded?.[index], dataTypeId));
+    return value.map((element, index) => pgWrittenValue(element, encoded?.[index]));
   }
   const encoded =
     codecRef === undefined
       ? undefined
       : await encodeLiteralDefault(codecLookup, codecRef, value, where);
-  return pgWrittenValue(value, encoded, dataTypeId);
+  return pgWrittenValue(value, encoded);
 }
 
 function pgWrittenValue(
   value: ColumnDefaultLiteralInputValue,
   encoded: EncodedLiteralDefault | undefined,
-  dataTypeId: string | undefined,
 ): unknown {
-  if (typeof value === 'string' && isPostgresDateTimeDataType(dataTypeId)) {
-    return postgresDateTimeDdlText(value, dataTypeId);
-  }
   if (encoded === undefined) return value;
   return encoded.kind === 'sql-null' ? null : encoded.wire;
 }

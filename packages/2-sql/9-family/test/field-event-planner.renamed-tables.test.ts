@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { planFieldEventOperations } from '../src/core/migrations/field-event-planner';
 import type { TableRename } from '../src/core/migrations/resolve-table-rename';
 import type { CodecControlHooks } from '../src/core/migrations/types';
-import { col, contract, recordingHook, table } from './field-event-fixtures';
+import { col, contract, noDataTypes, recordingHook, table } from './field-event-fixtures';
 
 const priorContract = contract({
   Profile: table({ id: col({ codecId: 'cs/string@1' }), email: col({ codecId: 'cs/string@1' }) }),
@@ -24,6 +24,7 @@ function eventsWith(tableRenames: readonly TableRename[]) {
     codecHooks: new Map<string, CodecControlHooks>([['cs/string@1', cs.hook]]),
     tableRenames,
     columnRenames: [],
+    dataTypes: noDataTypes,
   });
   return cs.calls.map((call) => `${call.event} ${call.tableName}.${call.fieldName}`);
 }

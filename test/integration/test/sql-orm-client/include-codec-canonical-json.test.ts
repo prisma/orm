@@ -167,7 +167,7 @@ describe('integration/include canonical JSON', () => {
 
   /**
    * The slice recorded scale-padding as a tripwire: `numeric(p,s)` pads, so
-   * `col::text` might disagree with `encodeJson`. Probed against a live
+   * `col::text` might disagree with `toDataTypeValue`. Probed against a live
    * server, the padding happens on **write** — `'1.5'` inserted into
    * `numeric(10,2)` is stored as `1.50` — so the projection reports what is
    * stored, exactly, and there is nothing for it to disagree with. The same

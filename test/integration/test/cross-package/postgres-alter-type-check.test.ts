@@ -3,8 +3,8 @@ import paradedbControl from '@internal/extension-paradedb/control';
 import pgvectorControl from '@internal/extension-pgvector/control';
 import postgisControl from '@internal/extension-postgis/control';
 import { sqlTypeLookupsOf } from '@internal/family-sql/control';
+import { dataTypeParams } from '@internal/framework-components/codec';
 import {
-  dataTypeParams,
   isSqlDataType,
   renderSqlTypeName,
   type SqlDataType,

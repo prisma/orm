@@ -355,14 +355,14 @@ const expectedRefusals: ReadonlyMap<string, ExpectedRefusal> = new Map<string, E
 ]);
 
 /**
- * Contracts emitted before a date or time default had one canonical form, each with the schema it
- * was emitted from. Such a contract prints each default in canonical form, so it reads back as
- * the contract that schema emits now, not as itself.
+ * Contracts emitted before a date or time default had one canonical form, which loading through the
+ * stack refuses, naming each column whose default its data type does not hold. Kept as evidence that
+ * such a contract is refused.
  */
-const emittedBeforeCanonicalForm: ReadonlyMap<string, string> = new Map([
+const refusedAtLoad: ReadonlyMap<string, readonly string[]> = new Map([
   [
     'test/integration/test/date-time-defaults/_fixture-before-canonical-form/emitted-before/contract.json',
-    'test/integration/test/date-time-defaults/_fixture-before-canonical-form/contract.prisma',
+    ['b', 'c', 'clock', 'history', 'localAt', 'zoned'],
   ],
 ]);
 
@@ -377,6 +377,22 @@ describe('every Postgres contract in the repo prints as PSL that reads back as t
     const json: unknown = JSON.parse(readFileSync(join(repoRoot, file), 'utf-8'));
     const contract = serializer.deserializeContract(json);
     const composition = compositionFor(contract);
+    const refusedColumns = refusedAtLoad.get(file);
+    if (refusedColumns !== undefined) {
+      expect(() =>
+        composition.stack.family.create(composition.stack).deserializeContract(json),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.VALIDATION_FAILED',
+          meta: {
+            refusedDefaults: refusedColumns.map((column) =>
+              expect.objectContaining({ namespaceId: 'public', table: 'event', column }),
+            ),
+          },
+        }),
+      );
+      return;
+    }
     const refusal = expectedRefusals.get(file);
     if (refusal !== undefined) {
       expect(() => printContract(contract, composition.stack)).toThrow(
@@ -390,16 +406,6 @@ describe('every Postgres contract in the repo prints as PSL that reads back as t
     }
     const { text, sourceSettings } = printContract(contract, composition.stack);
     const printed = await readPsl(text, { ...composition, sourceSettings });
-    const source = emittedBeforeCanonicalForm.get(file);
-    if (source === undefined) {
-      expect(comparable(printed)).toEqual(comparable(contract));
-      return;
-    }
-    const emittedNow = await readPsl(readFileSync(join(repoRoot, source), 'utf-8'), {
-      ...composition,
-      sourceSettings,
-    });
-    expect(comparable(emittedNow)).not.toEqual(comparable(contract));
-    expect(comparable(printed)).toEqual(comparable(emittedNow));
+    expect(comparable(printed)).toEqual(comparable(contract));
   });
 });

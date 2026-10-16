@@ -70,8 +70,8 @@ function inferFrom(extensions: readonly (typeof pgvectorControl)[]) {
 }
 
 describe('contract infer over a pgvector column', () => {
-  it('prints pgvector.Vector(3) when the pack is configured', () => {
-    const fields = flatPslModels(inferFrom([pgvectorControl])())[0]?.fields ?? [];
+  it('prints pgvector.Vector(3) when the pack is configured', async () => {
+    const fields = flatPslModels(await inferFrom([pgvectorControl])())[0]?.fields ?? [];
     expect(
       fields.map((field) => ({
         name: field.name,
@@ -86,8 +86,8 @@ describe('contract infer over a pgvector column', () => {
     ]);
   });
 
-  it('fails and names each vector column when the pack is not configured', () => {
-    expect(inferFrom([])).toThrow(
+  it('fails and names each vector column when the pack is not configured', async () => {
+    await expect(inferFrom([])()).rejects.toThrow(
       expect.objectContaining({
         code: 'CONTRACT.INFER_COLUMN_TYPE_UNCLAIMED',
         meta: { columns: ['public.item.embedding: vector(3)', 'public.item.history: vector(3)[]'] },

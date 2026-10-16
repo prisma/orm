@@ -84,7 +84,7 @@ describe('contract infer — cross-space FK into the Supabase pack', () => {
       try {
         await client.connect(connectionString);
         const schema = await client.introspect({});
-        const ast = client.inferPslContract(schema);
+        const ast = await client.inferPslContract(schema);
         if (!ast) {
           throw new Error('Expected inferPslContract to return a PSL document');
         }

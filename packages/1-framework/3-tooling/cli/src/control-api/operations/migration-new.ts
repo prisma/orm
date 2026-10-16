@@ -29,6 +29,7 @@ import {
   resolveContractPath,
   resolveMigrationPaths,
 } from '../../utils/command-helpers';
+import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import { assertFrameworkComponentsCompatible } from '../../utils/framework-components';
 import { createProjectSpecifierResolver } from '../../utils/project-import-root';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
@@ -103,6 +104,7 @@ export async function executeMigrationNewCommand(
         why: `Failed to deserialize ${contractPathAbsolute}: ${error instanceof Error ? error.message : String(error)}`,
         fix: 'Run `{bin} contract emit` to regenerate the contract',
         cause: error,
+        ...ifDefined('meta', contractValidationMeta(error)),
       }),
     );
   }

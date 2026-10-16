@@ -119,7 +119,7 @@ async function junctionFieldNames(
         driver,
         contract: new PostgresContractSerializer().serializeContract(contract),
       });
-      return flatPslModels(family.inferPslContract(schema));
+      return flatPslModels(await family.inferPslContract(schema));
     });
     return {
       interpreted: interpretedJunctionFields(contract, namespaceIds),

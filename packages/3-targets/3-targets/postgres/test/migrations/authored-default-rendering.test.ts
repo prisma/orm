@@ -10,7 +10,6 @@ import {
   renderColumnDdl,
 } from '../../src/core/migrations/column-ddl-rendering';
 import { buildPostgresPlanDiff } from '../../src/core/migrations/diff-database-schema';
-import { renderDefaultLiteral } from '../../src/core/migrations/planner-ddl-builders';
 import { PostgresSchema } from '../../src/core/postgres-schema';
 import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
 import { postgresTypeComponents, postgresTypeLookups } from '../postgres-type-lookups';
@@ -108,20 +107,10 @@ describe('a sql`...` default on Postgres renders as authored', () => {
   });
 });
 
-describe("a literal-shaped sql`'{}'::jsonb` body on Postgres", () => {
-  it("resolves to the literal introspection reads, which renders as '{}'::jsonb", () => {
-    const resolved = postgresResolveDefault(
-      { kind: 'function', expression: "'{}'::jsonb" },
-      'jsonb',
-    );
-    expect(resolved).toEqual({ kind: 'literal', value: {} });
-    if (resolved.kind !== 'literal') throw new Error('literal expected');
+describe("a literal-shaped sql`'{}'::jsonb` default on Postgres", () => {
+  it('stays an expression on the contract side', () => {
     expect(
-      renderDefaultLiteral(resolved.value, {
-        baseTypeName: 'jsonb',
-        dataType: 'pg/jsonb',
-        many: false,
-      }),
-    ).toBe("'{}'::jsonb");
+      postgresResolveDefault({ kind: 'function', expression: "'{}'::jsonb" }, 'jsonb'),
+    ).toEqual({ kind: 'function', expression: "'{}'::jsonb" });
   });
 });

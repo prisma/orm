@@ -1,4 +1,4 @@
-import { type DataType, dataType } from '@internal/framework-components/codec';
+import { type DataType, dataType, dataTypeId } from '@internal/framework-components/codec';
 import { sqlDataType } from '@internal/sql-contract/data-type';
 import {
   SQL_EXPRESSION_DATA_TYPE_ID,
@@ -12,9 +12,11 @@ import { enforceSqlDataTypeInvariants } from '../src/core/assembly';
 import { createSqlFamilyInstance } from '../src/core/control-instance';
 
 const int4 = sqlDataType('pg/int4', {
+  read: (json) => json,
   texts: [{ text: 'int4', written: true }, { text: 'integer', catalog: true }, { text: 'int' }],
 });
 const numeric = sqlDataType('pg/numeric', {
+  read: (json) => json,
   params: type({ 'precision?': 'number.integer >= 1' }),
   texts: [
     { text: 'numeric', written: true, catalog: true },
@@ -22,6 +24,7 @@ const numeric = sqlDataType('pg/numeric', {
   ],
 });
 const enumType = sqlDataType('pg/enum', {
+  read: (json) => json,
   params: type({ typeName: 'string > 0' }),
   claimsKind: 'enum',
   render: ({ typeName }) => `"${typeName}"`,
@@ -40,13 +43,17 @@ describe('enforceSqlDataTypeInvariants', () => {
   describe('claims', () => {
     it('passes data types whose claiming texts are distinct', () => {
       const other = sqlDataType('ext/int', {
+        read: (json) => json,
         texts: [{ text: 'int16', written: true, catalog: true }],
       });
       expect(() => enforceSqlDataTypeInvariants(declaredWith([other]), [])).not.toThrow();
     });
 
     it('refuses two data types whose claiming texts are equal, naming both contributors and ids', () => {
-      const other = sqlDataType('ext/integer', { texts: [{ text: 'integer', catalog: true }] });
+      const other = sqlDataType('ext/integer', {
+        read: (json) => json,
+        texts: [{ text: 'integer', catalog: true }],
+      });
       expect(() => enforceSqlDataTypeInvariants(declaredWith([other]), [])).toThrow(InternalError);
       expect(() => enforceSqlDataTypeInvariants(declaredWith([other]), [])).toThrow(
         /pg\/int4.*postgres.*ext\/integer.*ext|ext\/integer.*ext.*pg\/int4.*postgres/s,
@@ -54,19 +61,26 @@ describe('enforceSqlDataTypeInvariants', () => {
     });
 
     it('refuses a claiming text whose pattern matches another type’s text with its placeholders as 1', () => {
-      const other = sqlDataType('ext/numeric-one', { texts: [{ text: 'numeric(1)' }] });
+      const other = sqlDataType('ext/numeric-one', {
+        read: (json) => json,
+        texts: [{ text: 'numeric(1)' }],
+      });
       expect(() => enforceSqlDataTypeInvariants(declaredWith([other]), [])).toThrow(
         /pg\/numeric.*ext\/numeric-one|ext\/numeric-one.*pg\/numeric/s,
       );
     });
 
     it('ignores texts that are only written', () => {
-      const other = sqlDataType('ext/int4', { texts: [{ text: 'int4', written: true }] });
+      const other = sqlDataType('ext/int4', {
+        read: (json) => json,
+        texts: [{ text: 'int4', written: true }],
+      });
       expect(() => enforceSqlDataTypeInvariants(declaredWith([other]), [])).not.toThrow();
     });
 
     it('refuses two data types claiming one kind, naming both contributors and ids', () => {
       const other = sqlDataType('ext/enum', {
+        read: (json) => json,
         params: type({ typeName: 'string > 0' }),
         claimsKind: 'enum',
         render: ({ typeName }) => typeName,
@@ -78,7 +92,10 @@ describe('enforceSqlDataTypeInvariants', () => {
 
     it("ignores data types that are not SQL data types, such as the family's sql/expression", () => {
       expect(() =>
-        enforceSqlDataTypeInvariants(declaredWith([dataType('ext/plain', {})]), []),
+        enforceSqlDataTypeInvariants(
+          declaredWith([dataType('ext/plain', { read: (json) => json })]),
+          [],
+        ),
       ).not.toThrow();
     });
   });
@@ -86,6 +103,7 @@ describe('enforceSqlDataTypeInvariants', () => {
   describe('casts from sql/expression', () => {
     it('refuses a data type that casts from sql/expression, naming it and its contributor', () => {
       const geometry = dataType('ext/geometry', {
+        read: (json) => json,
         casts: { [SQL_EXPRESSION_DATA_TYPE_ID]: (value) => value },
       });
       expect(() => enforceSqlDataTypeInvariants(declaredWith([geometry]), [])).toThrow(
@@ -93,6 +111,48 @@ describe('enforceSqlDataTypeInvariants', () => {
           code: 'CONTRACT.DATA_TYPE_CASTS_FROM_SQL_EXPRESSION',
           details: { dataType: 'ext/geometry', contributedBy: 'ext' },
         }),
+      );
+    });
+  });
+
+  describe('stored as', () => {
+    it('passes a type stored as a registered SQL data type', () => {
+      const stored = sqlDataType('ext/stamp', { read: (json) => json, storedAs: int4.id });
+      expect(() => enforceSqlDataTypeInvariants(declaredWith([stored]), [])).not.toThrow();
+    });
+
+    it('refuses a type stored as a data type no component registers, naming the contributor and the id', () => {
+      const stored = sqlDataType('ext/stamp', {
+        read: (json) => json,
+        storedAs: dataTypeId('ext/gone'),
+      });
+      expect(() => enforceSqlDataTypeInvariants(declaredWith([stored]), [])).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.DATA_TYPE_UNREGISTERED',
+          message:
+            'Data type "ext/stamp" is stored as data type "ext/gone", which no component registers. Contributed by "ext".',
+          details: { dataType: 'ext/gone', contributedBy: 'ext' },
+        }),
+      );
+    });
+
+    it('refuses a type stored as a type that is itself stored as another, naming the three', () => {
+      const stamp = sqlDataType('ext/stamp', { read: (json) => json, storedAs: int4.id });
+      const moment = sqlDataType('ext/moment', { read: (json) => json, storedAs: stamp.id });
+      expect(() => enforceSqlDataTypeInvariants(declaredWith([stamp, moment]), [])).toThrow(
+        new InternalError(
+          'Data type "ext/moment" contributed by "ext" is stored as "ext/stamp", which is itself stored as "pg/int4". Name "pg/int4" as the type it is stored as.',
+        ),
+      );
+    });
+
+    it('refuses a type stored as a data type that is not a SQL data type', () => {
+      const stored = sqlDataType('ext/stamp', {
+        read: (json) => json,
+        storedAs: SQL_EXPRESSION_DATA_TYPE_ID,
+      });
+      expect(() => enforceSqlDataTypeInvariants(declaredWith([stored]), [])).toThrow(
+        expect.objectContaining({ code: 'CONTRACT.DATA_TYPE_UNREGISTERED' }),
       );
     });
   });
@@ -106,13 +166,13 @@ describe('enforceSqlDataTypeInvariants', () => {
 
     it.each([
       ['the family’s sql/expression', sqlExpressionDataType, 'sql'],
-      ['a plain data type', dataType('ext/plain', {}), 'ext'],
+      ['a plain data type', dataType('ext/plain', { read: (json) => json }), 'ext'],
     ])(
       'refuses a codec of %s, which no column can have, naming the codec, the data type and its contributor',
       (_, represented, contributedBy) => {
         expect(() =>
           enforceSqlDataTypeInvariants(
-            declaredWith([dataType('ext/plain', {})]),
+            declaredWith([dataType('ext/plain', { read: (json) => json })]),
             codecsOf(represented),
           ),
         ).toThrow(
@@ -135,7 +195,10 @@ describe('createSqlFamilyInstance', () => {
     );
 
   it('refuses a stack whose SQL data types collide, before building anything', () => {
-    const other = sqlDataType('ext/integer', { texts: [{ text: 'integer', catalog: true }] });
+    const other = sqlDataType('ext/integer', {
+      read: (json) => json,
+      texts: [{ text: 'integer', catalog: true }],
+    });
     expect(() =>
       createSqlFamilyInstance(
         stackWith({ declaredDataTypes: declaredWith([other]), codecDescriptors: [] }),

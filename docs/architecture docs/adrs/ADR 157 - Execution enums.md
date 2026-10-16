@@ -2,6 +2,8 @@
 
 **Status: Partially superseded.** The idea stands: an enum is a set of allowed values plus an explicit enforcement mechanism, and execution derives the allowed values from the contract. How the contract realizes it is superseded by the [October 12, 2026 amendment](#amendment-october-12-2026--how-enums-are-realized). The contract has no `storage.sets` and no structured `inSet` checks, and a native enum is not a `storage.types` entry with `typeParams.values`. The sections it replaces carry a note and are kept as a record.
 
+> **Retrospective note — the codec's JSON methods are renamed.** [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md#codecs) replaces `decodeJson` with `fromDataTypeValue`: `db.enums` reads each member's stored value with `fromDataTypeValue`.
+
 We want enum-like behavior that is explicit in storage and reusable in execution.
 
 ## Summary

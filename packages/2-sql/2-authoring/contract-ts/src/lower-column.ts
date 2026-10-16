@@ -2,8 +2,8 @@ import type {
   CodecLookupWithDescriptors,
   DataTypeLookup,
 } from '@internal/framework-components/codec';
+import { dataTypeParams } from '@internal/framework-components/codec';
 import {
-  dataTypeParams,
   type SqlDataType,
   sqlDataTypeOfCodec,
   validateSqlTypeParams,

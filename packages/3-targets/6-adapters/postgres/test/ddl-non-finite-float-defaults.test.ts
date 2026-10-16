@@ -10,7 +10,8 @@ const lookup = createPostgresBuiltinCodecLookup();
 const adapter = new PostgresControlAdapter(lookup, createPostgresBuiltinDataTypeLookup());
 
 async function defaultClause(codecId: string, typeText: string, value: number): Promise<string> {
-  const stored = lookup.get(codecId)!.encodeJson(value);
+  const codec = lookup.get(codecId)!;
+  const stored = codec.dataType.toContract(codec.toDataTypeValue(value));
   const table = new PostgresCreateTable({
     table: 't',
     columns: [col('c', typeText, { default: lit(stored), codecRef: { codecId } })],

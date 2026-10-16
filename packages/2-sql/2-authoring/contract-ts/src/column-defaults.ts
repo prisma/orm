@@ -34,12 +34,12 @@ export function columnCodec(
   });
 }
 
-/** Encodes a value the contract stores, and reads it back with the codec, which refuses a value its column would not hold. */
+/** The JSON the contract stores for a value: the codec gives the value of its data type under the column's parameters, which the type refuses when they exclude it, and the codec reads it back, refusing a value its application value cannot hold. */
 export function encodeViaCodec(value: unknown, codec: Codec | undefined): JsonValue {
   if (codec) {
-    const json = codec.encodeJson(value);
-    codec.decodeJson(json);
-    return json;
+    const stored = codec.toDataTypeValue(value);
+    codec.fromDataTypeValue(stored);
+    return codec.dataType.toContract(stored);
   }
   return blindCast<
     JsonValue,
@@ -143,12 +143,12 @@ export function encodeColumnDefault(
   if (defaultInput.kind === 'function') {
     return { kind: 'function', expression: defaultInput.expression };
   }
-  if ('canonical' in defaultInput && defaultInput.canonical === true) {
+  if ('inStoredForm' in defaultInput && defaultInput.inStoredForm === true) {
     return {
       kind: 'literal',
       value: blindCast<
         ColumnDefault extends { kind: 'literal'; value: infer V } ? V : never,
-        'a text contract source stores the canonical form its data type produced'
+        'a text contract source stores the form its data type produced'
       >(defaultInput.value),
     };
   }

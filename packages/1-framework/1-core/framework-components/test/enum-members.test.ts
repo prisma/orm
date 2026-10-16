@@ -1,8 +1,10 @@
+import type { JsonValue } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import type { Codec } from '../src/shared/codec';
 import type { AnyCodecDescriptor } from '../src/shared/codec-descriptor';
 import type { CodecLookupWithDescriptors } from '../src/shared/codec-types';
 import { emptyCodecLookup } from '../src/shared/codec-types';
+import { dataType } from '../src/shared/data-type';
 import { type DecodedEnum, encodeEnumMembers } from '../src/shared/enum-members';
 
 function encode(decodedEnum: DecodedEnum, codecLookup: CodecLookupWithDescriptors) {
@@ -10,14 +12,21 @@ function encode(decodedEnum: DecodedEnum, codecLookup: CodecLookupWithDescriptor
   return result.ok ? { ok: true, value: result.value } : { ok: false, failure: result.failure };
 }
 
-function codecOf(id: string, encodeJson: Codec['encodeJson'], decodeJson: Codec['decodeJson']) {
+const anyJsonType = dataType('test/any-json', { read: (json) => json });
+
+function codecOf(
+  id: string,
+  toStored: (value: unknown) => JsonValue,
+  fromStored: (json: JsonValue) => unknown,
+): Codec {
   return {
     id,
-    encode: async (v: unknown) => v,
-    decode: async (w: unknown) => w,
-    encodeJson,
-    decodeJson,
-  } as Codec;
+    dataType: anyJsonType,
+    toWire: async (v: unknown) => v,
+    fromWire: async (w: unknown) => w,
+    toDataTypeValue: (value) => anyJsonType.valueFrom(toStored(value), {}),
+    fromDataTypeValue: (value) => fromStored(value.value),
+  };
 }
 
 const prefixed = codecOf(

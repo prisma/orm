@@ -47,7 +47,7 @@ describe('pg/interval@1 reads interval values the runtime driver returns', () =>
     async () => {
       const { v } = await readRow();
 
-      expect(await codec.decode(v, {})).toEqual({
+      expect(await codec.fromWire(v, {})).toEqual({
         months: 14,
         days: 3,
         micros: 14_706_500_000n,
@@ -62,7 +62,7 @@ describe('pg/interval@1 reads interval values the runtime driver returns', () =>
       const { vs } = await readRow();
       const elements = parsePostgresListText(vs);
 
-      expect(await Promise.all(elements.map((element) => codec.decode(element, {})))).toEqual([
+      expect(await Promise.all(elements.map((element) => codec.fromWire(element, {})))).toEqual([
         { months: 0, days: 1, micros: 7_384_000_000n },
         { months: -14, days: 3, micros: -14_400_000_000n },
       ]);

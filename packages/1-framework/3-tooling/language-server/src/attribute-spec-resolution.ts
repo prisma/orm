@@ -13,6 +13,7 @@ import {
   type BlockAttributeSpecFactory,
   blockSpecContext,
   blockSpecFactoryOf,
+  contributedTypeOf,
   EMPTY_DATA_TYPES,
   findBlockDescriptor,
   type MixinSymbol,
@@ -188,7 +189,9 @@ export function attributeSpecResolver(
       };
       const node = typeReferenceNode(field);
       const typeResolution = node === undefined ? undefined : source.binder.symbolForNode(node);
-      return (name) => specs.field[name]?.({ ...specContext, field, typeResolution });
+      const typeConstructor = contributedTypeOf(typeResolution, source.binder);
+      return (name) =>
+        specs.field[name]?.({ ...specContext, field, typeResolution, typeConstructor });
     }
   }
 }

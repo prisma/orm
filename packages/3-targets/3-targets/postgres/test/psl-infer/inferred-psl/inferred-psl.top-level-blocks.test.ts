@@ -49,13 +49,13 @@ import {
 } from '../../../src/core/authoring';
 import { createPostgresBuiltinCodecLookup } from '../../../src/core/codec-registry';
 import { postgresDataTypeEntries } from '../../../src/core/data-type-entries';
-import { parsePostgresDefault } from '../../../src/core/default-normalizer';
 import { isPostgresSchema, postgresCreateNamespace } from '../../../src/core/postgres-schema';
 import { inferredColumnDefaults } from '../../../src/core/psl-infer/infer-default-codec';
 import {
   buildPslDocumentAst,
   type PostgresPslInferOptions,
 } from '../../../src/core/psl-infer/infer-psl-contract';
+import { noInferredDefaults } from '../../../src/core/psl-infer/infer-read-defaults';
 import { createPostgresDefaultMapping } from '../../../src/core/psl-infer/postgres-default-mapping';
 import { inferBuildContext, inferPslAstFromFlat, inferredColumnTypesOf } from '../fixtures';
 
@@ -126,7 +126,11 @@ function parseAndInterpret(source: string) {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
       codecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypes: { entries: assembled.dataTypes, lookup: postgresDataTypeLookup },
+      dataTypes: {
+        entries: assembled.dataTypes,
+        lookup: postgresDataTypeLookup,
+        dataTypeOfCodec: () => undefined,
+      },
       resolvedInputs: [],
       capabilities: {},
     },
@@ -225,7 +229,7 @@ describe('a document with both a flat top-level bucket and a named namespace', (
     span: ZERO_SPAN,
   };
 
-  it('prints the top-level enum before the namespace block, with no __unspecified__ wrapper', () => {
+  it('prints the top-level enum before the namespace block, with no __unspecified__ wrapper', async () => {
     const printed = print(ast);
     expect(printed).toContain('enum ItemStatus {');
     expect(printed).toContain('namespace billing {');
@@ -235,7 +239,7 @@ describe('a document with both a flat top-level bucket and a named namespace', (
     expect(printed).not.toMatch(/namespace\s+__unspecified__/);
   });
 
-  it('re-parses and re-interprets, with the enum recovered as a value set', () => {
+  it('re-parses and re-interprets, with the enum recovered as a value set', async () => {
     const { interpreted, sourceDiagnostics } = parseAndInterpret(print(ast));
     expect(sourceDiagnostics.map((d) => `${d.code}: ${d.message}`)).toEqual([]);
     if (!interpreted.ok) {
@@ -251,7 +255,7 @@ describe('a document with both a flat top-level bucket and a named namespace', (
 });
 
 describe('two flat buckets in one document', () => {
-  it('prints text that re-parses cleanly, with the shared enum declared once', () => {
+  it('prints text that re-parses cleanly, with the shared enum declared once', async () => {
     // The shape a producer reaches by splitting one logical bucket in two.
     // Printing each entry separately would declare `ItemStatus` twice, which
     // parses to a duplicate-declaration diagnostic rather than to a contract.
@@ -274,7 +278,7 @@ describe('two flat buckets in one document', () => {
 });
 
 describe('an empty flat bucket beside a populated named namespace', () => {
-  it('prints identically to a document with no flat bucket at all', () => {
+  it('prints identically to a document with no flat bucket at all', async () => {
     const named = namedBucket('billing', [idModel('Item')]);
     const withEmptyFlatBucket: PslDocumentAst = {
       kind: 'document',
@@ -310,7 +314,7 @@ describe('buildPslDocumentAst and the top-level bucket', () => {
     columnDefaults: inferredColumnDefaults(inferBuildContext),
     columnTypes: inferredColumnTypesOf(schemaIR.tables),
     defaultMapping: createPostgresDefaultMapping(),
-    parseRawDefault: parsePostgresDefault,
+    defaultOf: noInferredDefaults,
   };
 
   const foreignKeyExtras = {
@@ -319,13 +323,13 @@ describe('buildPslDocumentAst and the top-level bucket', () => {
     danglingForeignKeysByTable: new Map(),
   };
 
-  it('emits exactly one namespace when no top-level blocks are passed', () => {
-    const ast = inferPslAstFromFlat(schemaIR);
+  it('emits exactly one namespace when no top-level blocks are passed', async () => {
+    const ast = await inferPslAstFromFlat(schemaIR);
     expect(ast.namespaces).toHaveLength(1);
     expect(ast.namespaces[0]?.name).toBe(UNSPECIFIED_PSL_NAMESPACE_ID);
   });
 
-  it('keeps one namespace when the top-level block list is empty, wrap or no wrap', () => {
+  it('keeps one namespace when the top-level block list is empty, wrap or no wrap', async () => {
     const wrapped = buildPslDocumentAst(
       schemaIR,
       printerOptions,
@@ -349,7 +353,7 @@ describe('buildPslDocumentAst and the top-level bucket', () => {
     expect(flat.namespaces[0]?.name).toBe(UNSPECIFIED_PSL_NAMESPACE_ID);
   });
 
-  it('does not split when the wrap name is itself the flat bucket name', () => {
+  it('does not split when the wrap name is itself the flat bucket name', async () => {
     // A live schema may be called `__unspecified__`. Splitting on it would put
     // two same-named buckets in one document, and the printed output would
     // carry no wrapper at all — so its tables would read back as `public`.
@@ -365,7 +369,7 @@ describe('buildPslDocumentAst and the top-level bucket', () => {
     expect(Object.keys(ast.namespaces[0]?.entries?.['enum'] ?? {})).toEqual(['WidgetKind']);
   });
 
-  it('refuses a top-level block whose name a model already claims', () => {
+  it('refuses a top-level block whose name a model already claims', async () => {
     expect(() =>
       buildPslDocumentAst(schemaIR, printerOptions, foreignKeyExtras, 'app', undefined, [
         enumBlock('Widget', { small: 'small' }),
@@ -373,7 +377,7 @@ describe('buildPslDocumentAst and the top-level bucket', () => {
     ).toThrow(/collides with a model, a native enum, a PSL scalar type/);
   });
 
-  it('refuses two top-level blocks that share a name', () => {
+  it('refuses two top-level blocks that share a name', async () => {
     expect(() =>
       buildPslDocumentAst(schemaIR, printerOptions, foreignKeyExtras, 'app', undefined, [
         enumBlock('Kind', { small: 'small' }),
@@ -382,7 +386,7 @@ describe('buildPslDocumentAst and the top-level bucket', () => {
     ).toThrow(/another recovered declaration/);
   });
 
-  it('refuses a top-level block named after a PSL scalar type', () => {
+  it('refuses a top-level block named after a PSL scalar type', async () => {
     expect(() =>
       buildPslDocumentAst(schemaIR, printerOptions, foreignKeyExtras, 'app', undefined, [
         enumBlock('Int', { small: 'small' }),
@@ -390,7 +394,7 @@ describe('buildPslDocumentAst and the top-level bucket', () => {
     ).toThrow(/collides with a model, a native enum, a PSL scalar type/);
   });
 
-  it('splits into a flat bucket and a named one when both have content', () => {
+  it('splits into a flat bucket and a named one when both have content', async () => {
     const ast = buildPslDocumentAst(schemaIR, printerOptions, foreignKeyExtras, 'app', undefined, [
       enumBlock('WidgetKind', { small: 'small', large: 'large' }),
     ]);
@@ -399,7 +403,7 @@ describe('buildPslDocumentAst and the top-level bucket', () => {
     expect(Object.keys(ast.namespaces[1]?.entries?.['model'] ?? {})).toEqual(['Widget']);
   });
 
-  it('puts top-level blocks in the single flat bucket when there is no wrap to escape', () => {
+  it('puts top-level blocks in the single flat bucket when there is no wrap to escape', async () => {
     const ast = buildPslDocumentAst(
       schemaIR,
       printerOptions,
@@ -413,7 +417,7 @@ describe('buildPslDocumentAst and the top-level bucket', () => {
     expect(Object.keys(ast.namespaces[0]?.entries?.['enum'] ?? {})).toEqual(['WidgetKind']);
   });
 
-  it('prints the block unwrapped on both sides of the split, above the wrap and below the models', () => {
+  it('prints the block unwrapped on both sides of the split, above the wrap and below the models', async () => {
     // Position differs between the two paths because a single bucket prints
     // its models before its blocks. Both keep the block top-level, which is
     // what a wrap would have broken; pinned here so the difference stays

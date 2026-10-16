@@ -201,8 +201,8 @@ export function createRecordingDriver(
 function createStubAdapter() {
   const codec: Codec<string> = {
     id: 'pg/int4@1',
-    encode: (v: number) => v,
-    decode: (w: number) => w,
+    toWire: (v: number) => v,
+    fromWire: (w: number) => w,
   } as unknown as Codec<string>;
   const codecs = [codec];
 

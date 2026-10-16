@@ -1,5 +1,5 @@
 import type { JsonValue } from '@internal/contract/types';
-import { type DataTypeAuthoringEntry, tagEntryKey } from '@internal/framework-components/authoring';
+import type { DataTypeAuthoringEntry } from '@internal/framework-components/authoring';
 import type { Cast, DataType } from '@internal/framework-components/codec';
 import {
   createDataTypeLookup,
@@ -32,32 +32,39 @@ const toFloat: Cast = (value) => {
   return isNonFiniteText(value) ? value : Number(value);
 };
 
-const text = dataType('pg/text', {});
-const bool = dataType('pg/bool', {});
-const int2 = dataType('pg/int2', {});
-const int4 = dataType('pg/int4', { casts: { [int2.id]: unchanged } });
+const text = dataType('pg/text', { read: (json) => json });
+const bool = dataType('pg/bool', { read: (json) => json });
+const int2 = dataType('pg/int2', { read: (json) => json });
+const int4 = dataType('pg/int4', { read: (json) => json, casts: { [int2.id]: unchanged } });
 const int8 = dataType('pg/int8', {
+  read: (json) => json,
   casts: { [int2.id]: toNumeralText, [int4.id]: toNumeralText },
 });
 const numeric = dataType('pg/numeric', {
+  read: (json) => json,
   casts: { [int2.id]: toNumeralText, [int4.id]: toNumeralText, [int8.id]: unchanged },
 });
 const float8 = dataType('pg/float8', {
+  read: (json) => json,
   casts: { [int2.id]: toFloat, [int4.id]: toFloat, [int8.id]: toFloat, [numeric.id]: toFloat },
 });
-const json = dataType('pg/json', {});
-const jsonb = dataType('pg/jsonb', { casts: { [json.id]: unchanged } });
+const json = dataType('pg/json', { read: (json) => json });
+const jsonb = dataType('pg/jsonb', { read: (json) => json, casts: { [json.id]: unchanged } });
 const vector = dataType('pg/vector', {
+  read: (json) => {
+    if (Array.isArray(json) && json.length <= 3) return json;
+    throw new Error('a vector holds at most three numbers');
+  },
   listCast: {
     of: [int2.id, int4.id, int8.id, numeric.id],
     cast: (elements) => elements.map(Number),
   },
 });
-const blob = dataType('pg/bytea', {});
+const blob = dataType('pg/bytea', { read: (json) => json });
 const canonicalDate: Cast = (value) =>
   typeof value === 'string' ? value.replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3') : value;
 const date = dataType('pg/date', {
-  toCanonicalForm: canonicalDate,
+  read: (json) => json,
   casts: { [text.id]: canonicalDate },
 });
 
@@ -126,7 +133,7 @@ function forColumn(
   shape: { readonly list?: true } = {},
 ): DefaultMappingOptions {
   return {
-    dataTypes: { entries, lookup: createDataTypeLookup(types) },
+    dataTypes: { entries, lookup: createDataTypeLookup(types), dataTypeOfCodec: () => undefined },
     columnCodec: { dataType: columnDataType.id },
     ...(shape.list === true ? { list: true } : {}),
   };
@@ -158,7 +165,7 @@ describe('mapDefault function defaults', () => {
     ['a database function', 'gen_random_uuid()'],
     ['a cast literal the column does not take as a value', "'{}'::jsonb"],
     ['an expression', "(now() + '00:03:00'::interval)"],
-    ['a body with a backslash, doubled inside the backtick fence', "E'\\n'", "E'\\\\n'"],
+    ['a body with a backslash, which escapes nothing inside the backtick fence', "E'\\n'"],
   ])('prints %s as a sql tagged literal', (_name, expression, body = expression) => {
     expect(mapDefault({ kind: 'function', expression })).toEqual({
       attribute: sqlLiteral(body),
@@ -229,6 +236,17 @@ describe('mapDefault prints a stored value as the literal its column takes', () 
     expect(mapDefault({ kind: 'literal', value }, forColumn(column))).toEqual({ attribute });
   });
 
+  it.each([
+    ['a number', 42, '@default(json`42`)'],
+    ['a boolean', true, '@default(json`true`)'],
+    ['null', null, '@default(json`null`)'],
+  ] as [string, JsonValue, string][])(
+    'prints a JSON document that is %s with the json tag',
+    (_name, value, attribute) => {
+      expect(mapDefault({ kind: 'literal', value }, forColumn(jsonb))).toEqual({ attribute });
+    },
+  );
+
   it('prints a JSON text holding a backtick in the double-quote form', () => {
     expect(mapDefault({ kind: 'literal', value: { a: BACKTICK } }, forColumn(jsonb))).toEqual({
       attribute: `@default(json"{\\"a\\":\\"${BACKTICK}\\"}")`,
@@ -245,6 +263,12 @@ describe('mapDefault prints a stored value as the literal its column takes', () 
     expect(mapDefault({ kind: 'literal', value: [0.1, 0.2, 0.3] }, forColumn(vector))).toEqual({
       attribute: '@default([0.1, 0.2, 0.3])',
     });
+  });
+
+  it('writes nothing for a written list the column type does not hold once its list cast takes it', () => {
+    expect(
+      mapDefault({ kind: 'literal', value: [0.1, 0.2, 0.3, 0.4] }, forColumn(vector)),
+    ).toBeUndefined();
   });
 
   it('prints a list column element by element against the column type', () => {
@@ -286,65 +310,5 @@ describe('mapDefault prints a stored value as the literal its column takes', () 
 
   it('writes nothing for a literal when no data types are given at all', () => {
     expect(mapDefault({ kind: 'literal', value: 'hello' })).toBeUndefined();
-  });
-});
-
-describe('mapDefault with a tag entry that names the type its body is', () => {
-  const storedText = dataType('demo/text', {});
-  const textEntries: Readonly<Record<string, DataTypeAuthoringEntry>> = {
-    [tagEntryKey('json')]: {
-      written: {
-        kind: 'tag',
-        tag: 'json',
-        type: storedText.id,
-        parse: (body) => JSON.stringify(parseJsonText(body)),
-      },
-      print: (value) => String(value),
-      documentation: 'A JSON document stored as its text.',
-    },
-    [storedText.id]: {
-      written: { kind: 'plain', syntax: 'string', parse: (body) => body },
-      print: (value) => String(value),
-      documentation: 'Text.',
-    },
-  };
-
-  it('prints the stored JSON text as a string, the plain form of the type the tag names', () => {
-    expect(
-      mapDefault(
-        { kind: 'literal', value: '{"a":1}' },
-        {
-          dataTypes: { entries: textEntries, lookup: createDataTypeLookup([storedText]) },
-          columnCodec: { dataType: storedText.id },
-        },
-      ),
-    ).toEqual({ attribute: '@default("{\\"a\\":1}")' });
-  });
-});
-
-describe('mapDefault on a type with a canonical form', () => {
-  it('prints a stored value in its canonical form, element by element for a list', () => {
-    expect({
-      scalar: mapDefault({ kind: 'literal', value: '20240101' }, forColumn(date))?.attribute,
-      list: mapDefault(
-        { kind: 'literal', value: ['20240101', '2024-06-30'] },
-        forColumn(date, { list: true }),
-      )?.attribute,
-    }).toEqual({
-      scalar: '@default("2024-01-01")',
-      list: '@default(["2024-01-01", "2024-06-30"])',
-    });
-  });
-
-  it("prints a stored value in the canonical form its codec declares, before its data type's", () => {
-    expect(
-      mapDefault(
-        { kind: 'literal', value: '20240101' },
-        {
-          ...forColumn(date),
-          columnCodec: { dataType: date.id, toCanonicalForm: (value) => `${String(value)}Z` },
-        },
-      )?.attribute,
-    ).toBe('@default("20240101Z")');
   });
 });

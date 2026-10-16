@@ -12,6 +12,7 @@ import {
   type CodecLookupWithDescriptors,
   codecForRef,
   type DataTypeLookup,
+  readContractValue,
 } from '@internal/framework-components/codec';
 import {
   isValueObjectMember,
@@ -68,7 +69,7 @@ export function valueObjectDefaultDocument(input: {
   if (codec === undefined) return { document: input.stored, stored: input.stored };
   if (input.elementwise && Array.isArray(input.stored)) {
     const document = input.stored.map((element) => readDocument(codec, element));
-    return { document, stored: codec.encodeJson(document) };
+    return { document, stored: codec.dataType.toContract(codec.toDataTypeValue(document)) };
   }
   return { document: readDocument(codec, input.stored), stored: input.stored };
 }
@@ -79,7 +80,7 @@ function readDocument(codec: Codec, stored: JsonValue): JsonValue {
   return blindCast<
     JsonValue,
     'a value-object column codec reads its stored form into a JSON document'
-  >(codec.decodeJson(stored));
+  >(readContractValue(codec, stored, undefined));
 }
 
 /** Each way the default does not match the composite type. */
@@ -212,7 +213,7 @@ function enumValueMismatch(
   if (handle === undefined) return undefined;
   const codec = codecLookup.get(handle.codecId);
   const stored = handle.values.map((enumValue) =>
-    codec === undefined ? enumValue : codec.encodeJson(enumValue),
+    codec === undefined ? enumValue : codec.dataType.toContract(codec.toDataTypeValue(enumValue)),
   );
   if (stored.some((storedValue) => storedValue === value)) return undefined;
   return {

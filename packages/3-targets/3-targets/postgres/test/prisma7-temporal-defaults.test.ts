@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { pgDate, pgTime, pgTimestamp, pgTimestamptz, pgTimetz } from '../src/core/data-types';
-import { storedTemporalText } from '../src/core/prisma7-temporal-defaults';
+import {
+  pgDate,
+  pgDateStoredText,
+  pgTime,
+  pgTimeStoredText,
+  pgTimestamp,
+  pgTimestampStoredText,
+  pgTimestamptz,
+  pgTimestamptzStoredText,
+  pgTimetz,
+  pgTimetzStoredText,
+} from '../src/core/data-types';
+import {
+  prisma7TemporalStored,
+  prisma7TemporalTagBody,
+} from '../src/core/prisma7-temporal-defaults';
 
 /**
  * Each row is a `@default("...")` Prisma 7 accepts for a `DateTime` field, and
@@ -285,16 +299,56 @@ const storedByPostgres: readonly (readonly [
   ],
 ];
 
-describe('storedTemporalText', () => {
-  it.each(storedByPostgres)('gives the default Postgres stores for %s', (written, stored) => {
-    expect({
-      timestamp: storedTemporalText(written, pgTimestamp.id),
-      timestamptz: storedTemporalText(written, pgTimestamptz.id),
-      date: storedTemporalText(written, pgDate.id),
-      time: storedTemporalText(written, pgTime.id),
-      timetz: storedTemporalText(written, pgTimetz.id),
-    }).toEqual(stored);
-  });
+type Kind = 'timestamp' | 'timestamptz' | 'date' | 'time' | 'timetz';
+
+/** Each type with its tag's reader, which reads the text Postgres prints as well as ISO 8601. */
+const types: readonly (readonly [Kind, string, (text: string) => string])[] = [
+  ['timestamp', pgTimestamp.id, pgTimestampStoredText],
+  ['timestamptz', pgTimestamptz.id, pgTimestamptzStoredText],
+  ['date', pgDate.id, pgDateStoredText],
+  ['time', pgTime.id, pgTimeStoredText],
+  ['timetz', pgTimetz.id, pgTimetzStoredText],
+];
+
+/**
+ * A written value Postgres rounds or carries before storing it: more than six fraction digits, or
+ * second 60. The tag holds only what the type stores, so it refuses these instead of rounding.
+ */
+function postgresRounds(written: string): boolean {
+  return /\.\d{7,}/.test(written) || /:60(?:[.Zz+-]|$)/.test(written);
+}
+
+function read(parse: (text: string) => string, text: string | undefined): string {
+  if (text === undefined) return 'unread';
+  try {
+    return parse(text);
+  } catch {
+    return 'refused';
+  }
+}
+
+describe('prisma7TemporalTagBody, read by the type tag', () => {
+  it.each(storedByPostgres)(
+    'stores the value Postgres stores for %s, or refuses one Postgres rounds',
+    (written, stored) => {
+      const rounds = postgresRounds(written);
+      expect(
+        Object.fromEntries(
+          types.map(([kind, id, parse]) => [
+            kind,
+            read(parse, prisma7TemporalTagBody(written, id)),
+          ]),
+        ),
+      ).toEqual(
+        Object.fromEntries(
+          types.map(([kind, , parse]) => [
+            kind,
+            rounds && kind !== 'date' ? 'refused' : read(parse, stored[kind]),
+          ]),
+        ),
+      );
+    },
+  );
 
   it('reads nothing from text that is not an RFC 3339 date and time', () => {
     expect(
@@ -304,7 +358,71 @@ describe('storedTemporalText', () => {
         '2024-01-02T03:04Z',
         '2024-01-02T03:04:05+0200',
         '+002024-01-02T03:04:05Z',
-      ].map((text) => storedTemporalText(text, pgTimestamp.id)),
+      ].map((text) => prisma7TemporalTagBody(text, pgTimestamp.id)),
     ).toEqual([undefined, undefined, undefined, undefined, undefined]);
+  });
+
+  it('gives no body for a type that is not a date or time type', () => {
+    expect(prisma7TemporalTagBody('2024-01-02T03:04:05Z', 'pg/interval')).toBeUndefined();
+  });
+});
+
+/** Rows whose written fraction has more digits than a microsecond column holds. */
+const finerThanMicroseconds = storedByPostgres.filter(([written]) => /\.\d{7,}/.test(written));
+
+describe('prisma7TemporalStored', () => {
+  it.each(finerThanMicroseconds)(
+    'names the value Postgres stores for %s at microsecond precision',
+    (written, stored) => {
+      expect(
+        Object.fromEntries(
+          types.flatMap(([kind, id, parse]) =>
+            kind === 'date' || stored[kind].startsWith('24:')
+              ? []
+              : [
+                  [
+                    kind,
+                    read(
+                      parse,
+                      prisma7TemporalTagBody(prisma7TemporalStored(written, id, 6) ?? '', id),
+                    ),
+                  ],
+                ],
+          ),
+        ),
+      ).toEqual(
+        Object.fromEntries(
+          types.flatMap(([kind, , parse]) =>
+            kind === 'date' || stored[kind].startsWith('24:')
+              ? []
+              : [[kind, read(parse, stored[kind])]],
+          ),
+        ),
+      );
+    },
+  );
+
+  it.each([
+    ['2024-01-02T03:04:05.1234Z', pgTimestamp.id, 3, '2024-01-02T03:04:05.123Z'],
+    ['2024-01-02T03:04:05.1235Z', pgTimestamp.id, 3, '2024-01-02T03:04:05.124Z'],
+    ['2000-01-01T00:00:00.0005Z', pgTimestamp.id, 3, '2000-01-01T00:00:00.001Z'],
+    ['1999-12-31T23:59:59.9995Z', pgTimestamp.id, 3, '1999-12-31T23:59:59.999Z'],
+    ['2000-01-01T00:59:59.9995+01:00', pgTimestamptz.id, 3, '2000-01-01T00:59:59.999+01:00'],
+    ['2000-01-01T00:59:59.9995+01:00', pgTimestamp.id, 3, '2000-01-01T01:00:00.000+01:00'],
+    ['2024-12-31T23:59:59.9995Z', pgTimestamptz.id, 3, '2025-01-01T00:00:00.000Z'],
+    ['2024-01-02T03:04:05.5+02:00', pgTime.id, 0, '2024-01-02T03:04:06+02:00'],
+    ['2024-01-02T03:04:05.25-05:00', pgTimetz.id, 1, '2024-01-02T03:04:05.3-05:00'],
+    ['0999-06-15T10:20:30.125Z', pgTimestamp.id, 2, '0999-06-15T10:20:30.12Z'],
+  ])('rounds %s on %s(%i) to %s', (written, dataType, precision, stored) => {
+    expect(prisma7TemporalStored(written, dataType, precision)).toBe(stored);
+  });
+
+  it('names nothing for text the column holds as written, or a date', () => {
+    expect([
+      prisma7TemporalStored('2024-01-02T03:04:05.123Z', pgTimestamp.id, 3),
+      prisma7TemporalStored('2024-01-02T03:04:05Z', pgTime.id, 0),
+      prisma7TemporalStored('2024-01-02T03:04:05.1234Z', pgDate.id, 0),
+      prisma7TemporalStored('not a date', pgTimestamp.id, 3),
+    ]).toEqual([undefined, undefined, undefined, undefined]);
   });
 });

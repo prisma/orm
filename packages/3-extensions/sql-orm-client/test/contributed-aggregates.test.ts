@@ -29,7 +29,7 @@ const countAny: SqlAggregateDescriptor = {
   input: { kind: 'any' },
   output: { kind: 'codec', codecId: 'pg/int8@1' },
   nullable: false,
-  emptyResultJson: '0',
+  emptyResultWire: '0',
 };
 
 /** A tally whose result codec produces a JavaScript number from the digit text `pg/int8` stores. */
@@ -38,7 +38,7 @@ const headcountAny: SqlAggregateDescriptor = {
   input: { kind: 'any' },
   output: { kind: 'codec', codecId: 'pg/int8number@1' },
   nullable: false,
-  emptyResultJson: '0',
+  emptyResultWire: '0',
   lower: ({ expr }) => new AggregateExpr('count', expr),
 };
 
@@ -55,7 +55,7 @@ const tallyWithoutInput: SqlAggregateDescriptor = {
   input: { kind: 'none' },
   output: { kind: 'codec', codecId: 'pg/int8@1' },
   nullable: false,
-  emptyResultJson: '0',
+  emptyResultWire: '0',
   lower: () => FunctionCallExpr.of('tally', []),
 };
 
@@ -148,10 +148,10 @@ describe('empty-input answers', () => {
     const context = contextWith([{ ...headcountAny, lower }]);
     const resolve = vi.spyOn(context.aggregateDescriptors, 'resolve');
     const original = context.contractCodecs.forCodecRef.bind(context.contractCodecs);
-    const decodeJson = vi.fn(() => ({ value: 0 }));
+    const fromWire = vi.fn(async () => ({ value: 0 }));
     const codecs = vi.spyOn(context.contractCodecs, 'forCodecRef').mockImplementation((ref) => ({
       ...original(ref),
-      decodeJson,
+      fromWire,
     }));
     const posts = new Collection({ runtime, context }, 'Post', { namespaceId: 'public' });
     const description = posts.prepared.aggregate((agg) => ({
@@ -162,7 +162,7 @@ describe('empty-input answers', () => {
     expect(resolutions).toBeGreaterThan(0);
     expect(bindings).toBeGreaterThan(0);
     expect(lower).toHaveBeenCalledOnce();
-    expect(decodeJson).not.toHaveBeenCalled();
+    expect(fromWire).not.toHaveBeenCalled();
     const rows = (values: Record<string, unknown>[]) =>
       new AsyncIterableResult(
         (async function* () {
@@ -176,10 +176,10 @@ describe('empty-input answers', () => {
     expect(a).toEqual({ total: { value: 0 } });
     expect(b).toEqual(a);
     expect(a.total).not.toBe(b.total);
-    expect(decodeJson).toHaveBeenCalledTimes(2);
+    expect(fromWire).toHaveBeenCalledTimes(2);
     const decoded = { value: 7 };
     expect(await description.consume(rows([{ total: decoded }]))).toEqual({ total: decoded });
-    expect(decodeJson).toHaveBeenCalledTimes(2);
+    expect(fromWire).toHaveBeenCalledTimes(2);
     expect(resolve).toHaveBeenCalledTimes(resolutions);
     expect(codecs).toHaveBeenCalledTimes(bindings);
     expect(lower).toHaveBeenCalledOnce();
@@ -188,11 +188,9 @@ describe('empty-input answers', () => {
     resolve.mockRestore();
   });
 
-  // Each non-nullable row declares its empty answer in its own result codec's
-  // canonical JSON, so the two rows below answer in different forms from the
-  // same zero: decimal text reads back as a `bigint`, a JSON number as a
-  // `number`. Reading either through the other's form is what the declaration
-  // exists to prevent.
+  // Each non-nullable row declares its empty answer as a wire value of its own
+  // result codec, read with that codec's `fromWire`, so the same zero reads back
+  // as a `bigint` through one codec and as a `number` through the other.
   it('derive from the declared row: its own zero for a non-nullable result, null for a nullable one', async () => {
     const runtime = createMockRuntime();
     const context = contextWith([countAny, headcountAny, medianOverNumeric]);
@@ -243,7 +241,7 @@ describe('reserved operation names', () => {
     input: { kind: 'any' },
     output: { kind: 'codec', codecId: 'pg/int8@1' },
     nullable: false,
-    emptyResultJson: '0',
+    emptyResultWire: '0',
     lower: ({ expr }) => FunctionCallExpr.of('shadow', expr === undefined ? [] : [expr]),
   };
   const shadowingInstanceMember: SqlAggregateDescriptor = {

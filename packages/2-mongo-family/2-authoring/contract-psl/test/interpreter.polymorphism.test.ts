@@ -38,7 +38,7 @@ function interpret(schema: string) {
       scalarTypeCodecIds: mongoScalarTypeDescriptors,
       defaultFunctionRegistry: new Map(),
       codecLookup: mongoCodecLookup,
-      dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
+      dataTypes: { entries: {}, lookup: mongoDataTypeLookup, dataTypeOfCodec: () => undefined },
     },
     'test.prisma',
   );

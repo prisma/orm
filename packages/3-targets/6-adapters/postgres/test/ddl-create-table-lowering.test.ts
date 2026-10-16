@@ -252,7 +252,7 @@ describe('PostgresCreateTable DDL lowering', () => {
     await expect(lower('A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11')).rejects.toMatchObject({
       code: 'CONTRACT.DEFAULT_INVALID',
       message:
-        'Column "tokens"."u" has a default its codec pg/uuid@1 refuses: pg/uuid@1 JSON value must be a UUID as PostgreSQL writes it, in lower case and hyphenated 8-4-4-4-12',
+        'Column "tokens"."u" has a default its codec pg/uuid@1 refuses: pg/uuid JSON value must be "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", as pg/uuid stores this value',
       meta: {
         table: 'tokens',
         column: 'u',
@@ -397,7 +397,7 @@ describe('PostgresCreateTable DDL lowering', () => {
           codecRef: { codecId: 'pg/int8@1', many: true },
         }),
         col('amounts', 'numeric(10,2)[]', {
-          default: lit(['1.5', '-2.25']),
+          default: lit(['1.50', '-2.25']),
           codecRef: {
             codecId: 'pg/numeric@1',
             typeParams: { precision: 10, scale: 2 },
@@ -424,7 +424,7 @@ describe('PostgresCreateTable DDL lowering', () => {
       `"ids" int8[] DEFAULT ARRAY['1', '-2', '9007199254740993']::int8[]`,
     );
     expect(lowered.sql).toContain(
-      `"amounts" numeric(10,2)[] DEFAULT ARRAY['1.5', '-2.25']::numeric(10,2)[]`,
+      `"amounts" numeric(10,2)[] DEFAULT ARRAY['1.50', '-2.25']::numeric(10,2)[]`,
     );
     expect(lowered.sql).toContain(
       `"stamps" timestamp(3)[] DEFAULT ARRAY['2024-01-01T00:00:00']::timestamp(3)[]`,

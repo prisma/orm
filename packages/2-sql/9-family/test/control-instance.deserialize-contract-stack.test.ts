@@ -14,18 +14,45 @@ import type {
 } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { createContract } from '@repo/test-utils';
+import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
 import { createSqlFamilyInstance } from '../src/core/control-instance';
 
-const int4 = sqlDataType('t/int4', { texts: [{ text: 'int4', written: true }] });
-const jsonb = sqlDataType('t/jsonb', { texts: [{ text: 'jsonb', written: true }] });
-const text = sqlDataType('t/text', { texts: [{ text: 'text', written: true }] });
+const int4 = sqlDataType('t/int4', {
+  read: (json) => json,
+  texts: [{ text: 'int4', written: true }],
+});
+const jsonb = sqlDataType('t/jsonb', {
+  read: (json) => json,
+  texts: [{ text: 'jsonb', written: true }],
+});
+const text = sqlDataType('t/text', {
+  read: (json) => json,
+  texts: [{ text: 'text', written: true }],
+});
+/** Two fraction digits under a scale of 2, as PostgreSQL prints a numeric(10,2) value. */
+const numeric = sqlDataType('t/numeric', {
+  read: (json, params) => {
+    if (params['scale'] === 2 && !/^-?\d+\.\d{2}$/.test(String(json))) {
+      throw new Error(
+        `t/numeric JSON value must have two fraction digits, got ${JSON.stringify(json)}`,
+      );
+    }
+    return json;
+  },
+  params: type({ 'precision?': 'number', 'scale?': 'number' }),
+  texts: [
+    { text: 'numeric', written: true },
+    { text: 'numeric({precision},{scale})', written: true },
+  ],
+});
 
 const codecDataTypes: Readonly<Record<string, AnyCodecDescriptor['dataType']>> = {
   't/int4@1': int4.id,
   't/jsonb@1': jsonb.id,
   't/text@1': text.id,
+  't/numeric@1': numeric.id,
 };
 
 const codecLookup: CodecLookupWithDescriptors = {
@@ -62,7 +89,11 @@ function familyInstance(valueObjectStorageType: string | undefined) {
     codecTypeImports: [],
     extensionIds: [],
     codecLookup,
-    dataTypeLookup: createDataTypeLookup([int4, jsonb, text]),
+    dataTypes: {
+      entries: {},
+      lookup: createDataTypeLookup([int4, jsonb, text, numeric]),
+      dataTypeOfCodec: (codecId: string) => codecDataTypes[codecId],
+    },
     declaredDataTypes: [],
     codecDescriptors: [],
     authoringContributions: {
@@ -141,6 +172,100 @@ describe('deserializeContract checks each column against the stack', () => {
     expect(() => familyInstance('Jsonb').deserializeContract(contract)).toThrow(
       'storage.types.Code: codec t/text@1 represents t/text, not t/int4',
     );
+  });
+
+  describe('a literal default', () => {
+    const priced = (
+      value: unknown,
+      typeParams: Record<string, unknown> = { precision: 10, scale: 2 },
+    ) =>
+      contractWith({
+        user: table({
+          id: col('t/int4', 't/int4@1'),
+          price: {
+            ...col('t/numeric', 't/numeric@1'),
+            typeParams,
+            default: { kind: 'literal', value },
+          } as never,
+        }),
+      });
+
+    it('is accepted when the column type holds it under the column parameters', () => {
+      expect(() => familyInstance('Jsonb').deserializeContract(priced('1.50'))).not.toThrow();
+    });
+
+    it('is not read when the column type refuses the column parameters, which the parameters check reports', () => {
+      expect(() =>
+        familyInstance('Jsonb').deserializeContract(priced('1.5', { precision: 'ten', scale: 2 })),
+      ).not.toThrow();
+    });
+
+    it('is accepted when it is null, which is SQL NULL', () => {
+      expect(() => familyInstance('Jsonb').deserializeContract(priced(null))).not.toThrow();
+    });
+
+    it('is refused when the column type does not hold it, naming the table and column, and the namespace in its meta', () => {
+      expect(() => familyInstance('Jsonb').deserializeContract(priced('1.5'))).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.VALIDATION_FAILED',
+          message: `Table "user", column "price": the default "1.5" is not a value of t/numeric: t/numeric JSON value must have two fraction digits, got "1.5"`,
+          meta: {
+            refusedDefaults: [
+              {
+                namespaceId: UNBOUND_NAMESPACE_ID,
+                table: 'user',
+                column: 'price',
+                dataType: 't/numeric',
+                value: '1.5',
+                message: 't/numeric JSON value must have two fraction digits, got "1.5"',
+                reason: 'type-refused-default',
+              },
+            ],
+          },
+        }),
+      );
+    });
+
+    it('is read element by element on a list column', () => {
+      const listed = contractWith({
+        user: table({
+          id: col('t/int4', 't/int4@1'),
+          prices: {
+            ...col('t/numeric', 't/numeric@1'),
+            many: true,
+            typeParams: { precision: 10, scale: 2 },
+            default: { kind: 'literal', value: ['1.50', '2.5'] },
+          } as never,
+        }),
+      });
+      expect(() => familyInstance('Jsonb').deserializeContract(listed)).toThrow(
+        expect.objectContaining({
+          message: `Table "user", column "prices": the default "2.5" at element 2 is not a value of t/numeric: t/numeric JSON value must have two fraction digits, got "2.5"`,
+          meta: {
+            refusedDefaults: [
+              expect.objectContaining({ column: 'prices', value: '2.5', elementIndex: 1 }),
+            ],
+          },
+        }),
+      );
+    });
+
+    it('refuses a default that is not a list on a list column', () => {
+      const scalar = contractWith({
+        user: table({
+          id: col('t/int4', 't/int4@1'),
+          prices: {
+            ...col('t/numeric', 't/numeric@1'),
+            many: true,
+            typeParams: { precision: 10, scale: 2 },
+            default: { kind: 'literal', value: '1.50' },
+          } as never,
+        }),
+      });
+      expect(() => familyInstance('Jsonb').deserializeContract(scalar)).toThrow(
+        'Table "user", column "prices": the default "1.50" is not a list, and the column holds a list of t/numeric',
+      );
+    });
   });
 
   describe('a value-object column', () => {

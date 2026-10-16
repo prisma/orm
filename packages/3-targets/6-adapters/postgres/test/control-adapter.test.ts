@@ -1782,7 +1782,8 @@ describe('PostgresControlAdapter', () => {
 
       expect(columns?.['status']?.default).toBe("'draft'::text");
       expect(columns?.['status']?.resolvedNativeType).toBe('text');
-      expect(columns?.['status']?.resolvedDefault).toEqual({ kind: 'literal', value: 'draft' });
+      // With no contract there is no codec to read a literal with, so only the raw text stays.
+      expect(columns?.['status']?.resolvedDefault).toBeUndefined();
 
       expect(columns?.['created_at']?.resolvedNativeType).toBe('timestamptz');
       expect(columns?.['created_at']?.resolvedDefault).toEqual({

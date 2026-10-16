@@ -10,52 +10,27 @@
 
 import type { JsonValue } from '@internal/contract/types';
 import {
-  decodeJsonIntegerText,
-  decodeJsonMatching,
+  readJsonIntegerText,
   SAFE_INTEGER_BIGINT_RANGE,
 } from '@internal/framework-components/codec';
 import { numeralText } from '@internal/sql-contract/data-type';
-import { structuredError } from '@internal/utils/structured-error';
-import { withoutTrailing } from '@internal/utils/text';
+import {
+  BYTEA_TEXT,
+  formatIsoDuration,
+  ISO_DURATION,
+  intervalFieldsOf,
+  MICROS_PER_SECOND,
+  microsFromFraction,
+  type PgInterval,
+  postgresIntervalFields,
+} from './data-type-values';
 import { postgresError } from './errors';
-
-/**
- * Whether text fits `length` characters, counted as PostgreSQL counts them: code points. A `character` value is padded with spaces, and spaces past its length are dropped, so they do not count.
- */
-export function fitsCharacterLength(text: string, length: number, blankPadded: boolean): boolean {
-  const significant = blankPadded ? withoutTrailing(text, ' ') : text;
-  return significant.length <= length || [...significant].length <= length;
-}
-
-/** The uuid input PostgreSQL reads: 32 hex digits in either case, a hyphen allowed after any group of four but the last, and the whole optionally in braces. */
-const UUID_INPUT = /^(?:\{[0-9a-f]{4}(?:-?[0-9a-f]{4}){7}\}|[0-9a-f]{4}(?:-?[0-9a-f]{4}){7})$/i;
-
-/** A UUID as PostgreSQL writes it: lower case, hyphenated 8-4-4-4-12. */
-export const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-
-/**
- * Text in any form PostgreSQL reads as a UUID (either case, a hyphen after any group of four digits, optionally in braces), written the way PostgreSQL writes it; `undefined` for text it does not read as one.
- */
-export function canonicalUuid(text: string): string | undefined {
-  if (!UUID_INPUT.test(text)) return undefined;
-  const hex = text.replace(/[{}-]/g, '').toLowerCase();
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
-
-/** The largest finite float4. */
-export const FLOAT4_MAX = 3.4028234663852886e38;
-
-/** Whether float4 holds a finite number: it neither overflows to an infinity nor rounds to 0, both of which PostgreSQL refuses. */
-export function fitsFloat4(value: number): boolean {
-  const single = Math.fround(value);
-  return Number.isFinite(single) && (value === 0 || single !== 0);
-}
 
 export type PrecisionParams = { readonly precision?: number };
 
 /**
  * A `numeric` value as its canonical decimal text. A number is written out without an exponent,
- * because `numeric` text has no exponent syntax and `encodeJson` refuses one.
+ * because `numeric` text has no exponent syntax and `toDataTypeValue` refuses one.
  */
 export const pgNumericDecode = (wire: string | number): string => {
   if (typeof wire === 'number') return numeralText(wire);
@@ -98,7 +73,7 @@ export const pgBigintEncode = (codecId: string, value: bigint): string => {
  * not the value meant — which this refuses rather than minting an exact-looking
  * total from it. A non-integral number is refused on the same terms.
  */
-export const pgBigintEncodeJson = (codecId: string, value: bigint | number): string => {
+export const pgBigintDigits = (codecId: string, value: bigint | number): string => {
   if (typeof value !== 'number') return pgBigintEncode(codecId, value);
   if (!Number.isSafeInteger(value)) {
     throw postgresError(
@@ -149,7 +124,7 @@ export const pgUnboundedIntDecode = (wire: string | number | bigint): bigint =>
 /**
  * A SQL number literal has no form for `NaN` or the infinities; PostgreSQL reads and writes them as
  * the text `NaN`, `Infinity`, `-Infinity`, so the float codecs carry them as that text on the wire,
- * as `encodeJsonFloat` does in JSON.
+ * as `floatToJson` does in JSON.
  */
 export const pgFloatEncode = (value: number): string | number =>
   Number.isFinite(value) ? value : String(value);
@@ -178,8 +153,6 @@ export const pgInt8NumberEncode = (value: number): string => {
   return String(pgInt8NumberGuard('RUNTIME.ENCODE_FAILED', value));
 };
 
-export const pgInt8NumberEncodeJson = (value: number): string => pgInt8NumberEncode(value);
-
 /**
  * Reads an `int8` wire value as a `number`, throwing outside ±(2^53 − 1) and on
  * non-integral input. Decimal text goes through `BigInt` before the range check
@@ -198,8 +171,9 @@ export const pgInt8NumberDecode = (wire: string | number | bigint): number => {
   return Number(value);
 };
 
-export const pgInt8NumberDecodeJson = (json: JsonValue): number =>
-  Number(decodeJsonIntegerText('pg/int8number@1', json, SAFE_INTEGER_BIGINT_RANGE));
+/** A `number` holds an integer exactly only within the safe integer range, so digit text past it is refused. */
+export const pgInt8NumberFromDigits = (digits: JsonValue): number =>
+  Number(readJsonIntegerText('pg/int8number@1', digits, SAFE_INTEGER_BIGINT_RANGE));
 
 /**
  * Renders a decimal-text default as a `bigint` literal, for the codecs whose
@@ -218,194 +192,129 @@ export const floatNumberLiteral = (value: JsonValue): string | undefined =>
 export const decimalTextNumberLiteral = (value: JsonValue): string | undefined =>
   typeof value === 'string' && DECIMAL_INTEGER.test(value) ? value : undefined;
 
-/**
- * The application value of a `pg/interval@1` column.
- *
- * A PostgreSQL interval is three independent fields — months, days and
- * microseconds — not a single duration. `1 month` and `30 days` are different
- * intervals because a month has no fixed length, so the three fields are carried
- * separately and never collapsed into one another. Reading a value is therefore
- * reading these three numbers, not parsing a string.
- *
- * `months` and `days` are `number` because PostgreSQL stores each as a 32-bit
- * integer, which a JS number holds exactly. `micros` is `bigint` because
- * PostgreSQL stores it as a 64-bit integer, whose range a JS number does not
- * cover — the same reason `pg/int8@1` carries `bigint`.
- *
- * The canonical JSON of this codec is the ISO-8601 duration string, not this
- * object: the value and its representation are independent, as they are for
- * `pg/bytea@1` (`Uint8Array` / base64) and `pg/int8@1` (`bigint` / decimal text).
- */
-export interface PgInterval {
-  readonly months: number;
-  readonly days: number;
-  readonly micros: bigint;
-}
-
-const ISO_DURATION =
-  /^P(?!$)(-?\d+Y)?(-?\d+M)?(-?\d+D)?(?:T(?!$)(-?\d+H)?(-?\d+M)?(-?\d+(?:\.\d+)?S)?)?$/;
-
-const MICROS_PER_SECOND = 1_000_000n;
-
-/**
- * Converts a fractional-seconds digit string to microseconds, rounding rather
- * than truncating past the sixth digit.
- *
- * PostgreSQL rounds: `INTERVAL '1.1234567 seconds'` is `1.123457`, and
- * `'1.9999999 seconds'` carries into `2`. Truncating here made the parsed value
- * disagree with the database for any input past microsecond resolution.
- *
- * Ties round toward positive infinity, matching `Math.round` on the sibling path
- * that reads the driver's component object — so the two agree. PostgreSQL's own
- * tie behaviour is unobservable, because it parses the literal into a double
- * first and an exact half never survives that.
- */
-const microsFromFraction = (fraction: string, negative: boolean): bigint => {
-  if (fraction === '') return 0n;
-  const kept = BigInt(fraction.slice(0, 6).padEnd(6, '0'));
-  const rest = fraction.slice(6).replace(/0+$/, '');
-  if (rest === '') return kept;
-  const half = rest[0] === '5' && rest.length === 1;
-  const roundsUp = rest > '5' || (half && !negative);
-  return roundsUp ? kept + 1n : kept;
-};
-
-const intervalFieldsOf = (text: string): PgInterval => {
-  const match = ISO_DURATION.exec(text);
-  if (match === null) {
-    throw postgresError(
-      'RUNTIME.DECODE_FAILED',
-      `pg/interval@1 value must be an ISO-8601 duration, got ${text}`,
-      { meta: { codecId: 'pg/interval@1', received: text } },
-    );
-  }
-  const [, years, months, days, hours, minutes, seconds] = match;
-  const wholeNumber = (part: string | undefined): number =>
-    part === undefined ? 0 : Number(part.slice(0, -1));
-  const secondsLiteral = seconds === undefined ? '0' : seconds.slice(0, -1);
-  const negative = secondsLiteral.startsWith('-');
-  const [whole = '0', fraction = ''] = secondsLiteral.replace('-', '').split('.');
-  const magnitude = BigInt(whole) * MICROS_PER_SECOND + microsFromFraction(fraction, negative);
-
-  return {
-    months: wholeNumber(years) * 12 + wholeNumber(months),
-    days: wholeNumber(days),
-    micros:
-      BigInt(wholeNumber(hours)) * 3_600n * MICROS_PER_SECOND +
-      BigInt(wholeNumber(minutes)) * 60n * MICROS_PER_SECOND +
-      (negative ? -magnitude : magnitude),
-  };
-};
-
-const secondsText = (micros: bigint): string => {
-  const sign = micros < 0n ? '-' : '';
-  const magnitude = micros < 0n ? -micros : micros;
-  const whole = (magnitude / MICROS_PER_SECOND) % 60n;
-  const fraction = magnitude % MICROS_PER_SECOND;
-  const fractionText =
-    fraction === 0n ? '' : `.${fraction.toString().padStart(6, '0').replace(/0+$/, '')}`;
-  return `${sign}${whole}${fractionText}`;
-};
-
-/**
- * Renders {@link PgInterval} the way PostgreSQL spells an interval under
- * `IntervalStyle = 'iso_8601'`: zero components omitted, `T` present only when a
- * time component is, each component carrying its own sign, and an all-zero
- * interval written `PT0S`.
- */
-const formatIsoDuration = ({ months, days, micros }: PgInterval): string => {
-  const years = Math.trunc(months / 12);
-  const restMonths = months % 12;
-  const sign = micros < 0n ? '-' : '';
-  const magnitude = micros < 0n ? -micros : micros;
-  const hours = magnitude / (3_600n * MICROS_PER_SECOND);
-  const minutes = (magnitude / (60n * MICROS_PER_SECOND)) % 60n;
-  const hasSeconds = magnitude % (60n * MICROS_PER_SECOND) !== 0n;
-
-  const parts = [
-    years === 0 ? '' : `${years}Y`,
-    restMonths === 0 ? '' : `${restMonths}M`,
-    days === 0 ? '' : `${days}D`,
-  ];
-  const time = [
-    hours === 0n ? '' : `${sign}${hours}H`,
-    minutes === 0n ? '' : `${sign}${minutes}M`,
-    hasSeconds ? `${secondsText(micros)}S` : '',
-  ].join('');
-
-  const rendered = `P${parts.join('')}${time === '' ? '' : `T${time}`}`;
-  return rendered === 'P' ? 'PT0S' : rendered;
-};
-
-/**
- * An interval as PostgreSQL prints it under `IntervalStyle = 'postgres'`: `1 year 2 mons 3 days
- * 04:05:06.5`, `-1 years -2 mons +3 days -04:00:00`, `00:00:00`.
- */
-const POSTGRES_INTERVAL =
-  /^(?:([+-]?\d+) years? ?)?(?:([+-]?\d+) mons? ?)?(?:([+-]?\d+) days? ?)?(?:([+-])?(\d+):(\d{2}):(\d{2})(?:\.(\d+))?)?$/;
-
-function postgresIntervalFields(text: string): PgInterval | undefined {
-  const match = POSTGRES_INTERVAL.exec(text);
-  if (match === null || text === '' || text.endsWith(' ')) return undefined;
-  const [, years = '0', months = '0', days = '0', sign, hours = '0', minutes = '0', seconds = '0'] =
-    match;
-  const fraction = match[8] ?? '';
-  const magnitude =
-    (BigInt(hours) * 3_600n + BigInt(minutes) * 60n + BigInt(seconds)) * MICROS_PER_SECOND +
-    microsFromFraction(fraction, sign === '-');
-  return {
-    months: Number(years) * 12 + Number(months),
-    days: Number(days),
-    micros: sign === '-' ? -magnitude : magnitude,
-  };
-}
-
-function intervalRefused(message: string): never {
-  throw structuredError('CONTRACT.CAST_REFUSED', message, {
-    why: 'pg/interval stores one canonical form for each interval (ADR 254), and reads ISO 8601 durations and the text PostgreSQL prints.',
-    fix: 'Write an ISO 8601 duration, as the message shows.',
-  });
-}
-
-/**
- * The canonical form of `pg/interval` (ADR 254), from an ISO 8601 duration or the text PostgreSQL
- * prints under `IntervalStyle = 'postgres'`.
- */
-export function pgIntervalCanonical(text: string): string {
-  const fractionDigits = /\.(\d+)/.exec(text)?.[1]?.length ?? 0;
-  if (fractionDigits > 6) {
-    intervalRefused(
-      `"${text}" has ${fractionDigits} digits after the decimal point, but pg/interval holds microseconds, so at most 6. Round it, as in "PT1.123456S".`,
-    );
-  }
-  if (ISO_DURATION.test(text)) return formatIsoDuration(intervalFieldsOf(text));
-  const fields = postgresIntervalFields(text);
-  if (fields === undefined) {
-    intervalRefused(
-      `pg/interval cannot read "${text}". Write an ISO 8601 duration, as in "P1Y2M3DT4H5M6S".`,
-    );
-  }
-  return formatIsoDuration(fields);
-}
-
 /** Parses an ISO-8601 duration into the application value. */
 export const pgIntervalFromIso = (text: string): PgInterval => intervalFieldsOf(text);
 
 /** Renders the application value as its canonical ISO-8601 duration. */
 export const pgIntervalToIso = (value: PgInterval): string => formatIsoDuration(value);
 
-export const pgIntervalEncodeJson = (value: PgInterval): JsonValue => formatIsoDuration(value);
+const ZERO_INTERVAL: PgInterval = { months: 0, days: 0, micros: 0n };
 
-export const pgIntervalDecodeJson = (json: JsonValue): PgInterval =>
-  intervalFieldsOf(decodeJsonMatching('pg/interval@1', json, ISO_DURATION, 'an ISO-8601 duration'));
+/** `count` with the sign `negative` gives it, never `-0`. */
+const signed = (negative: boolean, count: number): number =>
+  negative && count !== 0 ? -count : count;
 
-const intervalTextFields = (text: string): PgInterval => {
-  if (ISO_DURATION.test(text)) return intervalFieldsOf(text);
-  const fields = postgresIntervalFields(text);
+const negated = ({ months, days, micros }: PgInterval): PgInterval => ({
+  months: signed(true, months),
+  days: signed(true, days),
+  micros: -micros,
+});
+
+/** Hours, minutes, seconds and a fraction of a second, with one sign for all of them. */
+function timeMicros(
+  negative: boolean,
+  hours: string,
+  minutes: string,
+  seconds: string,
+  fraction: string,
+): bigint {
+  const magnitude =
+    (BigInt(hours) * 3_600n + BigInt(minutes) * 60n + BigInt(seconds)) * MICROS_PER_SECOND +
+    microsFromFraction(fraction, negative);
+  return negative ? -magnitude : magnitude;
+}
+
+const VERBOSE_FIELD = /^(-?)(\d+)(?:\.(\d+))? (year|mon|day|hour|min|sec)s?$/;
+
+/**
+ * An interval as PostgreSQL prints it under `IntervalStyle = 'postgres_verbose'`: `@ 1 year 2 mons
+ * -3 days 4 hours 5 mins 6.5 secs`, each field with its own sign, and ` ago` negating the whole; `@ 0`
+ * for zero.
+ */
+function verboseIntervalFields(text: string): PgInterval | undefined {
+  if (!text.startsWith('@ ')) return undefined;
+  const ago = text.endsWith(' ago');
+  const body = text.slice(2, ago ? -4 : undefined);
+  if (body === '0') return ZERO_INTERVAL;
+  const words = body.split(' ');
+  if (words.length === 0 || words.length % 2 !== 0) return undefined;
+  let months = 0;
+  let days = 0;
+  let micros = 0n;
+  for (let index = 0; index < words.length; index += 2) {
+    const match = VERBOSE_FIELD.exec(`${words[index]} ${words[index + 1]}`);
+    if (match === null) return undefined;
+    const [, sign = '', whole = '0', fraction, unit] = match;
+    if (fraction !== undefined && unit !== 'sec') return undefined;
+    const negative = sign === '-';
+    const count = signed(negative, Number(whole));
+    if (unit === 'year') months += count * 12;
+    else if (unit === 'mon') months += count;
+    else if (unit === 'day') days += count;
+    else if (unit === 'hour') micros += BigInt(count) * 3_600n * MICROS_PER_SECOND;
+    else if (unit === 'min') micros += BigInt(count) * 60n * MICROS_PER_SECOND;
+    else micros += timeMicros(negative, '0', '0', whole, fraction ?? '');
+  }
+  const fields = { months, days, micros };
+  return ago ? negated(fields) : fields;
+}
+
+const SQL_MIXED = /^([+-])(\d+)-(\d+) ([+-])(\d+) ([+-])(\d+):(\d{2}):(\d{2})(?:\.(\d+))?$/;
+const SQL_YEAR_MONTH = /^(-?)(\d+)-(\d+)$/;
+const SQL_DAY_TIME = /^(-?)(?:(\d+) )?(\d+):(\d{2}):(\d{2})(?:\.(\d+))?$/;
+
+/**
+ * An interval as PostgreSQL prints it under `IntervalStyle = 'sql_standard'`. A value with fields of
+ * one sign and of one kind, year-month or day-time, has a single leading sign for all of them:
+ * `-1-2`, `-1 2:03:04`, `-0:00:01.5`. Any other value signs each part: `+1-2 -3 +4:05:06.5`. Zero is
+ * `0`.
+ */
+function sqlStandardIntervalFields(text: string): PgInterval | undefined {
+  if (text === '0') return ZERO_INTERVAL;
+  const mixed = SQL_MIXED.exec(text);
+  if (mixed !== null) {
+    const [, yearSign, years = '0', months = '0', daySign, days = '0', timeSign] = mixed;
+    const monthCount = Number(years) * 12 + Number(months);
+    return {
+      months: signed(yearSign === '-', monthCount),
+      days: signed(daySign === '-', Number(days)),
+      micros: timeMicros(
+        timeSign === '-',
+        mixed[7] ?? '0',
+        mixed[8] ?? '0',
+        mixed[9] ?? '0',
+        mixed[10] ?? '',
+      ),
+    };
+  }
+  const yearMonth = SQL_YEAR_MONTH.exec(text);
+  if (yearMonth !== null) {
+    const [, sign, years = '0', months = '0'] = yearMonth;
+    const monthCount = Number(years) * 12 + Number(months);
+    return { months: signed(sign === '-', monthCount), days: 0, micros: 0n };
+  }
+  const dayTime = SQL_DAY_TIME.exec(text);
+  if (dayTime === null) return undefined;
+  const [, sign, days = '0', hours = '0', minutes = '0', seconds = '0', fraction = ''] = dayTime;
+  const negative = sign === '-';
+  return {
+    months: 0,
+    days: signed(negative, Number(days)),
+    micros: timeMicros(negative, hours, minutes, seconds, fraction),
+  };
+}
+
+/** Reads the interval text PostgreSQL prints under any `IntervalStyle`. */
+export const intervalTextFields = (text: string): PgInterval => {
+  const fields = ISO_DURATION.test(text)
+    ? intervalFieldsOf(text)
+    : (postgresIntervalFields(text) ??
+      verboseIntervalFields(text) ??
+      sqlStandardIntervalFields(text));
   if (fields === undefined) {
     throw postgresError(
       'RUNTIME.DECODE_FAILED',
-      `pg/interval@1 value must be an ISO-8601 duration or PostgreSQL interval text, got ${text}`,
+      `pg/interval@1 value must be interval text PostgreSQL prints under an IntervalStyle, got ${text}`,
       { meta: { codecId: 'pg/interval@1', received: text } },
     );
   }
@@ -429,46 +338,27 @@ export const pgIntervalDecode = (wire: string | Record<string, unknown>): PgInte
   };
 };
 
-const BASE64_TEXT = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+export const pgByteaToBase64 = (value: Uint8Array): string => Buffer.from(value).toString('base64');
 
-export const pgByteaEncodeJson = (value: Uint8Array): JsonValue =>
-  Buffer.from(value).toString('base64');
+export const pgByteaFromBase64 = (base64: string): Uint8Array =>
+  new Uint8Array(Buffer.from(base64, 'base64'));
 
-export const pgByteaDecodeJson = (json: JsonValue): Uint8Array =>
-  new Uint8Array(
-    Buffer.from(decodeJsonMatching('pg/bytea@1', json, BASE64_TEXT, 'a base64 string'), 'base64'),
-  );
+/** The text PostgreSQL prints for `bytea` under `bytea_output = 'escape'`: `\\` for a backslash, `\nnn` in octal for a byte outside printable ASCII, and every other byte as itself. */
+const BYTEA_ESCAPE_TEXT = /^(?:[ -[\]-~]|\\\\|\\[0-3][0-7]{2})*$/;
+const BYTEA_ESCAPE = /\\\\|\\([0-3][0-7]{2})|[ -[\]-~]/g;
 
-const BYTEA_TEXT = /^\\x(?:[0-9A-Fa-f]{2})*$/;
-
-const BYTEA_FORMS = String.raw`Write base64, as in "aGVsbG8=", or PostgreSQL hex, written "\\x68656c6c6f" in a PSL string.`;
-
-function byteaRefused(message: string): never {
-  throw structuredError('CONTRACT.CAST_REFUSED', message, {
-    why: 'pg/bytea stores its bytes as base64 (ADR 254), and reads base64 and the hex text PostgreSQL prints.',
-    fix: BYTEA_FORMS,
-  });
-}
-
-/**
- * The canonical form of `pg/bytea` (ADR 254), the base64 its codec writes, from base64 or the hex
- * text PostgreSQL prints under `bytea_output = 'hex'`.
- */
-export function pgByteaCanonical(text: string): string {
-  if (text.startsWith('\\x')) {
-    if (!BYTEA_TEXT.test(text)) {
-      byteaRefused(
-        `${JSON.stringify(text)} is not PostgreSQL hex, which has two hexadecimal digits for each byte. ${BYTEA_FORMS}`,
-      );
-    }
-    return Buffer.from(text.slice(2), 'hex').toString('base64');
-  }
-  if (!BASE64_TEXT.test(text)) {
-    byteaRefused(
-      `pg/bytea cannot read ${JSON.stringify(text)}. Write base64 with its padding, as in "aGVsbG8=", or PostgreSQL hex, written "\\\\x68656c6c6f" in a PSL string.`,
+function byteaOfEscapeText(text: string): Uint8Array {
+  const bytes: number[] = [];
+  for (const [token, octal] of text.matchAll(BYTEA_ESCAPE)) {
+    bytes.push(
+      octal !== undefined
+        ? Number.parseInt(octal, 8)
+        : token === '\\\\'
+          ? 0x5c
+          : token.charCodeAt(0),
     );
   }
-  return Buffer.from(text, 'base64').toString('base64');
+  return Uint8Array.from(bytes);
 }
 
 export const pgByteaDecodeWire = (wire: Uint8Array | string): Uint8Array => {
@@ -477,14 +367,13 @@ export const pgByteaDecodeWire = (wire: Uint8Array | string): Uint8Array => {
       ? wire
       : new Uint8Array(wire.buffer, wire.byteOffset, wire.byteLength);
   }
-  if (!BYTEA_TEXT.test(wire)) {
-    throw postgresError(
-      'RUNTIME.DECODE_FAILED',
-      'pg/bytea@1 wire value must be a bytea hex string or Uint8Array',
-      { meta: { codecId: 'pg/bytea@1', received: wire } },
-    );
-  }
-  return new Uint8Array(Buffer.from(wire.slice(2), 'hex'));
+  if (BYTEA_TEXT.test(wire)) return new Uint8Array(Buffer.from(wire.slice(2), 'hex'));
+  if (!wire.startsWith('\\x') && BYTEA_ESCAPE_TEXT.test(wire)) return byteaOfEscapeText(wire);
+  throw postgresError(
+    'RUNTIME.DECODE_FAILED',
+    "pg/bytea@1 wire value must be a Uint8Array or bytea text, as PostgreSQL prints it under bytea_output 'hex' or 'escape'",
+    { meta: { codecId: 'pg/bytea@1', received: wire } },
+  );
 };
 
 const parseJsonWire: (text: string) => JsonValue = JSON.parse;

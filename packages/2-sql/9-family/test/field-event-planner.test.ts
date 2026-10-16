@@ -1,12 +1,14 @@
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import type { MigrationPlanOperation } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { sqlDataType } from '@internal/sql-contract/data-type';
 import { describe, expect, it } from 'vitest';
 import {
   planFieldEventCalls,
   planFieldEventOperations,
 } from '../src/core/migrations/field-event-planner';
 import type { CodecControlHooks } from '../src/core/migrations/types';
-import { col, contract, makeOp, recordingHook, table } from './field-event-fixtures';
+import { col, contract, makeOp, noDataTypes, recordingHook, table } from './field-event-fixtures';
 
 describe('planFieldEventCalls', () => {
   it('returns each call with the column of the field event it was returned for', () => {
@@ -26,6 +28,7 @@ describe('planFieldEventCalls', () => {
       codecHooks: new Map<string, CodecControlHooks>([['cs/string@1', cs.hook]]),
       tableRenames: [],
       columnRenames: [],
+      dataTypes: noDataTypes,
     });
 
     expect(
@@ -73,6 +76,7 @@ describe('planFieldEventOperations', () => {
       codecHooks,
       tableRenames: [],
       columnRenames: [],
+      dataTypes: noDataTypes,
     });
 
     expect(cs.calls).toEqual([
@@ -112,6 +116,7 @@ describe('planFieldEventOperations', () => {
       codecHooks,
       tableRenames: [],
       columnRenames: [],
+      dataTypes: noDataTypes,
     });
 
     expect(cs.calls).toEqual([
@@ -148,6 +153,7 @@ describe('planFieldEventOperations', () => {
       codecHooks,
       tableRenames: [],
       columnRenames: [],
+      dataTypes: noDataTypes,
     });
 
     expect(cs.calls).toHaveLength(1);
@@ -178,6 +184,7 @@ describe('planFieldEventOperations', () => {
       codecHooks,
       tableRenames: [],
       columnRenames: [],
+      dataTypes: noDataTypes,
     });
 
     expect(cs.calls.map((c) => c.event)).toEqual(['altered']);
@@ -205,10 +212,37 @@ describe('planFieldEventOperations', () => {
       codecHooks,
       tableRenames: [],
       columnRenames: [],
+      dataTypes: noDataTypes,
     });
 
     expect(cs.calls.map((c) => c.event)).toEqual(['altered']);
     expect(ops).toHaveLength(1);
+  });
+
+  it("does not fire 'altered' when a column's data type changes to one stored as the old one", () => {
+    const text = sqlDataType('sqlite/text', {
+      read: (json) => json,
+      texts: [{ text: 'text', written: true, catalog: true }],
+    });
+    const datetime = sqlDataType('sqlite/datetime', { read: (json) => json, storedAs: text.id });
+    const fromContract = contract({
+      Event: table({ at: col({ codecId: 'sqlite/datetime@1', dataType: text.id }) }),
+    });
+    const newContract = contract({
+      Event: table({ at: col({ codecId: 'sqlite/datetime@1', dataType: datetime.id }) }),
+    });
+
+    const hook = recordingHook([makeOp('rotate')]);
+    planFieldEventOperations({
+      priorContract: fromContract,
+      newContract,
+      codecHooks: new Map<string, CodecControlHooks>([['sqlite/datetime@1', hook.hook]]),
+      tableRenames: [],
+      columnRenames: [],
+      dataTypes: createDataTypeLookup([text, datetime]),
+    });
+
+    expect(hook.calls).toEqual([]);
   });
 
   it("does not fire 'altered' when only codecId changes", () => {
@@ -232,6 +266,7 @@ describe('planFieldEventOperations', () => {
       codecHooks,
       tableRenames: [],
       columnRenames: [],
+      dataTypes: noDataTypes,
     });
 
     expect(text.calls).toHaveLength(0);
@@ -253,6 +288,7 @@ describe('planFieldEventOperations', () => {
       codecHooks,
       tableRenames: [],
       columnRenames: [],
+      dataTypes: noDataTypes,
     });
 
     expect(cs.calls).toHaveLength(0);
@@ -276,6 +312,7 @@ describe('planFieldEventOperations', () => {
       codecHooks,
       tableRenames: [],
       columnRenames: [],
+      dataTypes: noDataTypes,
     });
 
     expect(cs.calls.map((c) => c.event)).toEqual(['added']);
@@ -300,6 +337,7 @@ describe('planFieldEventOperations', () => {
       codecHooks,
       tableRenames: [],
       columnRenames: [],
+      dataTypes: noDataTypes,
     });
 
     expect(ops).toHaveLength(0);
@@ -319,6 +357,7 @@ describe('planFieldEventOperations', () => {
       codecHooks,
       tableRenames: [],
       columnRenames: [],
+      dataTypes: noDataTypes,
     });
 
     expect(ops).toHaveLength(0);
@@ -339,6 +378,7 @@ describe('planFieldEventOperations', () => {
       codecHooks,
       tableRenames: [],
       columnRenames: [],
+      dataTypes: noDataTypes,
     });
 
     expect(ops.map((o) => (o.toOp() as MigrationPlanOperation).id)).toEqual([
@@ -363,6 +403,7 @@ describe('planFieldEventOperations', () => {
       codecHooks,
       tableRenames: [],
       columnRenames: [],
+      dataTypes: noDataTypes,
     });
 
     expect(cs.calls).toHaveLength(1);
@@ -392,6 +433,7 @@ describe('planFieldEventOperations', () => {
       codecHooks,
       tableRenames: [],
       columnRenames: [],
+      dataTypes: noDataTypes,
     });
 
     expect(cs.calls.map((c) => c.event)).toEqual(['added', 'dropped', 'altered']);
@@ -424,6 +466,7 @@ describe('planFieldEventOperations', () => {
       codecHooks,
       tableRenames: [],
       columnRenames: [],
+      dataTypes: noDataTypes,
     });
 
     expect(cs.calls.map((c) => `${c.tableName}.${c.fieldName}`)).toEqual([
@@ -456,6 +499,7 @@ describe('planFieldEventOperations', () => {
       codecHooks,
       tableRenames: [],
       columnRenames: [],
+      dataTypes: noDataTypes,
     });
 
     expect(cs.calls.map((c) => c.fieldName)).toEqual(['secret']);
@@ -492,6 +536,7 @@ describe('planFieldEventOperations', () => {
       codecHooks,
       tableRenames: [],
       columnRenames: [],
+      dataTypes: noDataTypes,
     });
     const opsB = planFieldEventOperations({
       priorContract: fromContract,
@@ -499,6 +544,7 @@ describe('planFieldEventOperations', () => {
       codecHooks,
       tableRenames: [],
       columnRenames: [],
+      dataTypes: noDataTypes,
     });
 
     // Materialise each `OpFactoryCall` rather than `JSON.stringify`-ing
@@ -535,6 +581,7 @@ describe('planFieldEventOperations', () => {
       codecHooks,
       tableRenames: [],
       columnRenames: [],
+      dataTypes: noDataTypes,
     });
 
     expect(ops.map((o) => (o.toOp() as MigrationPlanOperation).id)).toEqual([

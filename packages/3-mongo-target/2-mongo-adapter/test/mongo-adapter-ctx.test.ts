@@ -1,4 +1,9 @@
-import { type CodecCallContext, decodeJsonString } from '@internal/framework-components/codec';
+import {
+  type CodecCallContext,
+  type DataTypeValue,
+  dataType,
+  readJsonString,
+} from '@internal/framework-components/codec';
 import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import {
   AggregateCommand,
@@ -14,6 +19,8 @@ import { MongoParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
 import { _unstable_createMongoAdapterWithCodecs } from '../src/mongo-adapter';
 
+const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
+
 const baseMeta = {
   target: 'mongo' as const,
   storageHash: 'test',
@@ -26,12 +33,13 @@ function recordingRegistry(observed: (CodecCallContext | undefined)[]) {
   registry.register(
     mongoCodec({
       typeId: 'test/recorder@1',
-      decode: (w: string) => w,
-      encode: (v: string, ctx?: CodecCallContext) => {
+      fromWire: (w: string) => w,
+      toWire: (v: string, ctx?: CodecCallContext) => {
         observed.push(ctx);
         return v;
       },
-      decodeJson: (json) => decodeJsonString('test/recorder@1', json),
+      dataType: textType,
+      fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
     }),
   );
   return registry;
@@ -197,12 +205,13 @@ describe('MongoAdapter — CodecCallContext threading', () => {
         reg.register(
           mongoCodec({
             typeId: 'test/counter@1',
-            decode: (w: string) => w,
-            encode: (v: string) => {
+            fromWire: (w: string) => w,
+            toWire: (v: string) => {
               callCount += 1;
               return v;
             },
-            decodeJson: (json) => decodeJsonString('test/counter@1', json),
+            dataType: textType,
+            fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
           }),
         );
         return reg;

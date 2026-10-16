@@ -43,6 +43,7 @@ import type {
 import { errorContractValidationFailed } from '../utils/cli-errors';
 import { closeQuietly, maskConnectionUrl } from '../utils/command-helpers';
 import { ALL_CONTRACT_REF_FORMS } from '../utils/contract-ref-forms';
+import { contractValidationMeta } from '../utils/contract-validation-meta';
 import { toDeclaredExtensionsFromRaw } from '../utils/extension-pack-inputs';
 import {
   migrateShowRunListRows,
@@ -340,7 +341,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           normalizeError(
             errorContractValidationFailed(
               `Contract at ${contractPath} failed to deserialize: ${error instanceof Error ? error.message : String(error)}`,
-              { where: { path: contractPath } },
+              { where: { path: contractPath }, meta: contractValidationMeta(error) },
             ),
           ),
         );

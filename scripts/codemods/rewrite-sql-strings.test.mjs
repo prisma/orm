@@ -90,10 +90,10 @@ describe('rewriteSqlStrings', () => {
     );
   });
 
-  it('doubles a backslash in the backtick form', () => {
+  it('keeps a backslash that no escape reads as written in the backtick form', () => {
     strictEqual(
       rewriteSqlStrings('  @@check(expression: "a ~ \'\\\\d\'", name: "c")'),
-      '  @@check(expression: sql`a ~ \'\\\\d\'`, name: "c")',
+      '  @@check(expression: sql`a ~ \'\\d\'`, name: "c")',
     );
   });
 
@@ -234,6 +234,8 @@ describe('printSqlLiteral', () => {
     "a <> '`'",
     '"quoted" = 1',
     "a ~ '\\\\d'",
+    "a = '\\\\\\\\'",
+    'ends in \\\\',
     'a > 0\nAND b > 0',
     'a\n\nb',
     'x`y\nz',

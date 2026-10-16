@@ -10,7 +10,7 @@ This package provides a high-level ORM client surface on top of the runtime. Ord
 - Build filter/order/include state from fluent APIs (`where`, `include`, `orderBy`, `limit`, `offset`)
 - Accept lane-agnostic `WhereArg` filter inputs (`WhereExpr` or `ToWhereExpr`) and normalize bound payloads inside ORM while preserving bound params/descriptors for runtime encoding and adapter lowering
 - Compile collection state into SQL AST query plans (`SqlQueryPlan`) without rendering SQL in ORM
-- Buffer SELECT include results and decode embedded include payloads in the ORM consumer
+- Buffer SELECT include results and read embedded include payloads in the ORM consumer
 - Orchestrate multi-statement mutations, such as nested creates
 - Map storage-column rows back to model-field row shapes
 - Expose an `orm()` client with typed collection keys (for example `db.Post`)
@@ -375,12 +375,12 @@ Every table a collection chain puts in a statement gets its alias from that scop
 
 ## Codec Roundtrip
 
-Included JSON payloads use synchronous `codec.decodeJson`, including nested relations and scalar/combine branches. Their consumers do not introduce per-include async boundaries. Prepared descriptions precompute nested codec bindings and row mappers. Fixed non-polymorphic child selections decode directly into model-field names, without an intermediate decoded storage object. Polymorphic or unexpected row shapes retain generic decoding and mapping. Envelope snapshots remain intact; root-row `codec.decode` retains asynchronous support in SQL runtime.
+Included JSON payloads are read with each column's `codec.fromWire`, the method that reads an ordinary row, including nested relations and scalar/combine branches; each column's JSON projection writes the value a row of it carries ([ADR 254](../../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#reading-and-writing-a-stored-value)). An aggregate over no rows answers with its descriptor's `emptyResultWire`, read with the same `fromWire`. Prepared descriptions precompute nested codec bindings and row mappers. Fixed non-polymorphic child selections are read directly into model-field names, without an intermediate storage object. Polymorphic or unexpected row shapes retain generic reading and mapping. Envelope snapshots remain intact.
 
 The runtime always awaits codec query-time methods, but rows yielded to user code carry **plain field values** — no `Promise`-typed fields ever reach `.first()` / `.all()` / streaming consumers, regardless of whether a column's codec is sync or async. This is true for both one-shot and streaming usage:
 
 ```ts
-// Even if `secretCodec.decode` is async, `posts[0].secret` is a plain string here.
+// Even if `secretCodec.fromWire` is async, `posts[0].secret` is a plain string here.
 const posts = await db.Post.where((p) => p.userId.eq(userId)).all();
 posts[0].secret.length;
 

@@ -11,7 +11,6 @@ import {
   PostgresControlAdapter,
 } from '@internal/adapter-postgres/control';
 import { fullTextIndex } from '@internal/postgres/contract-builder';
-import { postgresRenderDefault } from '@internal/target-postgres/control';
 import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { CreateIndexCall } from '@internal/target-postgres/op-factory-call';
 import { contractToPostgresDatabaseSchemaNode } from '@internal/target-postgres/planner';
@@ -61,7 +60,6 @@ async function createIndexStatements(contract: unknown): Promise<readonly string
   >(new PostgresContractSerializer().deserializeContract(contract));
   const root = contractToPostgresDatabaseSchemaNode(validated, {
     annotationNamespace: 'pg',
-    renderDefault: postgresRenderDefault,
     ...postgresTypeLookups,
   });
   const [index] = root.namespaces['public']?.tables['post']?.indexes ?? [];

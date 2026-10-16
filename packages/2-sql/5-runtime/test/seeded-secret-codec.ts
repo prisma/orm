@@ -76,7 +76,7 @@ export async function decryptSecret(wire: string, seed: string): Promise<string>
 }
 
 /**
- * Build a `Codec` whose query-time `encode` / `decode` are async crypto operations. Authors pass the underlying async functions directly to `defineTestCodec({...})`; the single-path runtime always awaits them, so the codec needs no async marker.
+ * Build a `Codec` whose query-time `toWire` / `fromWire` are async crypto operations. Authors pass the underlying async functions directly to `defineTestCodec({...})`; the single-path runtime always awaits them, so the codec needs no async marker.
  */
 export function createAsyncSecretCodec({
   seed,
@@ -87,7 +87,7 @@ export function createAsyncSecretCodec({
 }) {
   return defineTestCodec({
     typeId,
-    encode: (value: string) => encryptSecret(value, seed),
-    decode: (wire: string) => decryptSecret(wire, seed),
+    toWire: (value: string) => encryptSecret(value, seed),
+    fromWire: (wire: string) => decryptSecret(wire, seed),
   });
 }

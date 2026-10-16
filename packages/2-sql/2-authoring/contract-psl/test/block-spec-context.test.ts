@@ -60,7 +60,11 @@ function recordingContributions(seen: BlockSpecContext[]): AuthoringContribution
 }
 
 function stackDataTypes(): DataTypeSupport {
-  return { entries: fixtureDataTypeSupport.entries, lookup: fixtureDataTypeSupport.lookup };
+  return {
+    entries: fixtureDataTypeSupport.entries,
+    lookup: fixtureDataTypeSupport.lookup,
+    dataTypeOfCodec: () => undefined,
+  };
 }
 
 describe('block spec context', () => {

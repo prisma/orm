@@ -2,24 +2,11 @@
  * Representative application values for every built-in PostgreSQL codec
  * descriptor, exercised against a real database by the conformance suite.
  *
- * `notYetCanonical` marks a case whose projection disagrees with the codec's
- * **current** `encodeJson` / `decodeJson` — the projection will not execute, or
- * the parsed value differs from what `encodeJson` produces, or the value does
- * not survive the round trip back. The suite asserts a marked case still fails
- * and still fails the recorded way, so a projection cannot be brought into
- * agreement without updating this file.
- *
- * A green run is therefore not a claim that every codec's JSON is canonical.
- * Both conditions are measured against the codec's own two methods, so a codec
- * whose `encodeJson` is itself not canonical conforms here: its projection
- * faithfully realizes a representation that is simply not the one the codec ends
- * up with. Such a codec conforms, then transits through a failing state when its
- * canonical form lands, then conforms again.
- *
- * Which codecs are in that position is deliberately not listed here — that list
- * lives in the plan, and a copy of it in this header would go stale every time
- * one of them landed. What this file names is narrower and self-maintaining: the
- * cases that fail *today*, each carrying its own `notYetCanonical` reason.
+ * `notYetCanonical` marks a case that fails today: the projection will not
+ * execute, or `fromWire` refuses the row's or the projection's value, or reads
+ * them to different application values. The suite asserts a marked case still
+ * fails and still fails the recorded way, so a case cannot be fixed without
+ * updating this file.
  *
  * A case is only as good as the boundary it crosses. A value chosen for being
  * typical is the one least likely to expose a format defect — see the base64
@@ -186,7 +173,7 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
   },
   { codecId: 'pg/bool@1', label: 'true', value: true },
   { codecId: 'pg/bit@1', label: 'single bit', value: '1' },
-  // Values at the limit their type parameters set, which decodeJson checks. The harness stores a value in a
+  // Values at the limit their type parameters set, which the data type checks. The harness stores a value in a
   // column of the codec's native type without its type parameters, and a bare char or bit holds one character
   // or bit, so type-params.integration.test.ts covers those two.
   {
@@ -229,13 +216,26 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     label: 'byte string one past the base64 line break',
     value: Uint8Array.from({ length: 57 }, (_, index) => index),
   },
+  // `bytea_output` decides the text PostgreSQL prints for a row and for the projection alike.
+  {
+    codecId: 'pg/bytea@1',
+    label: 'bytes, a backslash and a quote under bytea_output escape',
+    value: Uint8Array.from([0x00, 0xff, 0x41, 0x20, 0x5c, 0x27, 0x7e, 0x7f]),
+    setupSql: ["SET bytea_output = 'escape'"],
+  },
+  {
+    codecId: 'pg/bytea@1',
+    label: 'no bytes under bytea_output escape',
+    value: new Uint8Array([]),
+    setupSql: ["SET bytea_output = 'escape'"],
+  },
   {
     codecId: 'pg/bytea@1',
     label: 'byte string spanning several base64 line breaks',
     value: Uint8Array.from({ length: 200 }, (_, index) => (index * 7) % 256),
   },
   // The Temporal-backed codecs' application value is a `Temporal.*`, so a case is written as the
-  // value itself rather than as text. `encodeJson` writes the data type's canonical form and the
+  // value itself rather than as text. `toDataTypeValue` writes the data type's canonical form and the
   // projection renders whatever PostgreSQL emits for the column; the harness compares the two in
   // canonical form. A `Temporal` value is not deep-equal to its copy, so these cases give the
   // round trip its own equality.
@@ -250,6 +250,7 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     value: Temporal.PlainDateTime.from('2026-01-02T03:04:05.123456'),
     typeParams: { precision: 6 },
     valueEquality: plainDateTimesEqual,
+    projectionEquality: plainDateTimesEqual,
   },
   {
     codecId: 'pg/timestamptz-temporal@1',
@@ -257,6 +258,7 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     value: Temporal.Instant.from('2026-01-02T03:04:05.123456Z'),
     typeParams: { precision: 6 },
     valueEquality: instantsEqual,
+    projectionEquality: instantsEqual,
   },
   {
     codecId: 'pg/time-temporal@1',
@@ -270,6 +272,8 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     value: new Date('2026-01-02T03:04:05.123Z'),
     typeParams: { precision: 3 },
     valueEquality: (left, right) =>
+      left instanceof Date && right instanceof Date && left.getTime() === right.getTime(),
+    projectionEquality: (left, right) =>
       left instanceof Date && right instanceof Date && left.getTime() === right.getTime(),
   },
   // The `*-string` codecs' application value is PostgreSQL's own rendering, so each case is written
@@ -358,6 +362,23 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     value: interval({ months: -1, days: -1, micros: -1_250_000n }),
   },
   { codecId: 'pg/interval@1', label: 'zero', value: interval({}) },
+  // An include reads the text PostgreSQL prints, as a row does, so `fromWire` reads every IntervalStyle.
+  ...(['postgres_verbose', 'sql_standard', 'iso_8601'] as const).flatMap((style) =>
+    (
+      [
+        ['every component', interval({ months: 14, days: 3, micros: 14_706_500_000n })],
+        ['mixed signs', interval({ months: 14, days: -3, micros: 14_400_000_000n })],
+        ['wholly negative', interval({ days: -1, micros: -7_384_000_000n })],
+        ['a negative time', interval({ micros: -1_500_000n })],
+        ['zero', interval({})],
+      ] as const
+    ).map(([label, value]) => ({
+      codecId: 'pg/interval@1',
+      label: `${label} under IntervalStyle ${style}`,
+      value,
+      setupSql: [`SET IntervalStyle = '${style}'`],
+    })),
+  ),
   {
     codecId: 'pg/interval@1',
     label: 'months past a year, which the ISO rendering normalises but the value keeps',
@@ -377,6 +398,12 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
   },
   { codecId: 'pg/json@1', label: 'document', value: { a: 1, b: ['x'] } },
   { codecId: 'pg/jsonb@1', label: 'document', value: { a: 1, b: ['x'] } },
+  // A document that is a string is where a JSON value and the JSON text of a document differ: the
+  // projection has to carry the text, which `fromWire` parses, or `"42"` would come back as `42`.
+  { codecId: 'pg/json@1', label: 'string document that reads as a number', value: '42' },
+  { codecId: 'pg/jsonb@1', label: 'string document that reads as a number', value: '42' },
+  { codecId: 'pg/json@1', label: 'string document that is not JSON text', value: 'hello' },
+  { codecId: 'pg/jsonb@1', label: 'string document that is not JSON text', value: 'hello' },
   {
     codecId: 'pg/uuid@1',
     label: 'uuid',

@@ -2,7 +2,11 @@ import type { ContractEnum } from '@internal/contract/types';
 import type { SqlPslBuildContext } from '@internal/family-sql/control';
 import { mapDefault } from '@internal/family-sql/psl-build';
 import type { PslFieldAttribute } from '@internal/framework-components/psl-ast';
-import type { StorageColumn } from '@internal/sql-contract/types';
+import {
+  resolvedTypeParams,
+  type SqlStorage,
+  type StorageColumn,
+} from '@internal/sql-contract/types';
 import { PG_TEXT_CODEC_ID } from '../codec-ids';
 import {
   buildAttribute,
@@ -39,6 +43,8 @@ export function buildColumnDefault(input: {
   readonly tableName: string;
   readonly columnName: string;
   readonly context: SqlPslBuildContext;
+  /** The contract's named types, whose parameters a column declared through one reads under. */
+  readonly namedTypes: NonNullable<SqlStorage['types']>;
 }): PslFieldAttribute | undefined {
   const columnDefault = input.column.default;
   if (columnDefault === undefined) {
@@ -74,6 +80,7 @@ export function buildColumnDefault(input: {
     columnCodec: context.codecLookup.descriptorFor(
       input.isEnum ? PG_TEXT_CODEC_ID : input.column.codecId,
     ),
+    typeParams: resolvedTypeParams(input.column, input.namedTypes),
     list: input.column.many !== false,
   });
   if (result === undefined) {

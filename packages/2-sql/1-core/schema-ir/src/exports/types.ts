@@ -1,11 +1,11 @@
 export type {
-  DefaultInCanonicalForm,
   PrimaryKeyInput,
   ReportedSqlType,
   SqlAnnotations,
   SqlCheckConstraintIRInput,
   SqlColumnDefaultIRInput,
   SqlColumnIRInput,
+  SqlDefaultValue,
   SqlForeignKeyIRInput,
   SqlIndexIRInput,
   SqlReferentialAction,
@@ -16,8 +16,6 @@ export type {
 
 export {
   assertNode,
-  contractDefaultRefusal,
-  defaultInCanonicalForm,
   defineNonEnumerable,
   PrimaryKey,
   RelationalSchemaNodeKind,
@@ -32,4 +30,5 @@ export {
   SqlSchemaIRNode,
   SqlTableIR,
   SqlUniqueIR,
+  sqlDefaultValuesEqual,
 } from '../types';

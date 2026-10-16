@@ -1,6 +1,6 @@
 import type { ColumnDefaultLiteralInputValue, JsonValue } from '@internal/contract/types';
 import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
-import { codecForRef } from '@internal/framework-components/codec';
+import { codecForRef, readContractValue } from '@internal/framework-components/codec';
 import { ifDefined } from '@internal/utils/defined';
 import { isInternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
@@ -18,9 +18,9 @@ export interface LiteralDefaultColumn {
 }
 
 /**
- * Reads a column's literal default with the column's codec, built with its type parameters, and encodes it for the DDL renderer to inline. `undefined` when no codec descriptor has the column's codec id, so the renderer inlines the value as written.
+ * Reads a column's literal default as a value of the column's data type, converts it with the column's codec, built with its type parameters, and writes it with `toWire` for the DDL renderer to inline. `undefined` when no codec descriptor has the column's codec id, so the renderer inlines the value as written.
  *
- * A `Date` is the one authored value JSON has no notation for, so it is encoded as it is. A `null` the codec refuses is SQL NULL, because SQL NULL has no stored form of its own; a codec that reads `null` (a JSON codec) makes it the JSON value null. Any other value the codec refuses is a `CONTRACT.DEFAULT_INVALID` naming the column.
+ * A `Date` is the one authored value JSON has no notation for, so the codec reads it into a value of the column's type with `toDataTypeValue`, and the Date it reads back from that value is encoded: the type and the codec check it as they check any other default. A `null` the type or codec refuses is SQL NULL, because SQL NULL has no stored form of its own; a type that stores `null` (a JSON type) makes it the JSON value null. Any other value either refuses is a `CONTRACT.DEFAULT_INVALID` naming the column.
  */
 export async function encodeLiteralDefault(
   codecLookup: Pick<CodecLookupWithDescriptors, 'descriptorFor'>,
@@ -30,10 +30,25 @@ export async function encodeLiteralDefault(
 ): Promise<EncodedLiteralDefault | undefined> {
   const codec = codecForRef(codecLookup, codecRef);
   if (codec === undefined) return undefined;
-  if (value instanceof Date) return { kind: 'wire', wire: await codec.encode(value, {}) };
-  return encodeWithCodec(codec, value, (cause) =>
-    refusedDefault(where, codecRef.codecId, value, undefined, cause),
-  );
+  const refused = (cause: unknown) =>
+    refusedDefault(where, codecRef.codecId, value, undefined, cause);
+  if (value instanceof Date) return encodeDate(codec, value, refused);
+  return encodeWithCodec(codec, codecRef, value, refused);
+}
+
+async function encodeDate(
+  codec: Codec,
+  value: Date,
+  refused: (cause: unknown) => Error,
+): Promise<EncodedLiteralDefault> {
+  let decoded: unknown;
+  try {
+    decoded = codec.fromDataTypeValue(codec.toDataTypeValue(value));
+  } catch (error) {
+    if (isInternalError(error)) throw error;
+    throw refused(error);
+  }
+  return { kind: 'wire', wire: await codec.toWire(decoded, {}) };
 }
 
 /**
@@ -49,7 +64,7 @@ export async function encodeListLiteralDefault(
   if (codec === undefined) return undefined;
   return Promise.all(
     elements.map((element, index) =>
-      encodeWithCodec(codec, element, (cause) =>
+      encodeWithCodec(codec, codecRef, element, (cause) =>
         refusedDefault(where, codecRef.codecId, element, index + 1, cause),
       ),
     ),
@@ -58,24 +73,25 @@ export async function encodeListLiteralDefault(
 
 async function encodeWithCodec(
   codec: Codec,
+  codecRef: CodecRef,
   value: JsonValue,
   refused: (cause: unknown) => Error,
 ): Promise<EncodedLiteralDefault> {
   let decoded: unknown;
   try {
-    decoded = codec.decodeJson(value);
+    decoded = readContractValue(codec, value, codecRef.typeParams);
   } catch (error) {
     if (isInternalError(error)) throw error;
     if (value === null) return { kind: 'sql-null' };
     throw refused(error);
   }
-  return { kind: 'wire', wire: await codec.encode(decoded, {}) };
+  return { kind: 'wire', wire: await codec.toWire(decoded, {}) };
 }
 
 function refusedDefault(
   where: LiteralDefaultColumn,
   codecId: string,
-  value: JsonValue,
+  value: ColumnDefaultLiteralInputValue,
   elementPosition: number | undefined,
   cause: unknown,
 ): Error {

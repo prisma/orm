@@ -19,7 +19,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'73aeab611cbe82524b5388c8f8db1981ef1415dbd49508f11ce6a7eb52ec00c7'>;
+  StorageHashBase<'d5cad1234972d613b97cf4c6b1469ee2273c23fc70fc8a07bc853c14ab00179b'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
@@ -224,7 +224,7 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly when: {
-                  readonly dataType: 'sqlite/text';
+                  readonly dataType: 'sqlite/datetime';
                   readonly codecId: 'sqlite/datetime@1';
                   readonly nullable: false;
                   readonly many: false;
@@ -248,7 +248,7 @@ type ContractBase = Omit<
             };
             readonly WhenLevel: {
               readonly kind: 'valueSet';
-              readonly values: readonly ['2024-01-01T00:00:00Z', '2025-06-30T12:00:00Z'];
+              readonly values: readonly ['2024-01-01T00:00:00.000Z', '2025-06-30T12:00:00.000Z'];
             };
           };
         };
@@ -332,8 +332,8 @@ type ContractBase = Omit<
           readonly WhenLevel: {
             readonly codecId: 'sqlite/datetime@1';
             readonly members: readonly [
-              { readonly name: 'Launch'; readonly value: '2024-01-01T00:00:00Z' },
-              { readonly name: 'Sunset'; readonly value: '2025-06-30T12:00:00Z' },
+              { readonly name: 'Launch'; readonly value: '2024-01-01T00:00:00.000Z' },
+              { readonly name: 'Sunset'; readonly value: '2025-06-30T12:00:00.000Z' },
             ];
           };
         };

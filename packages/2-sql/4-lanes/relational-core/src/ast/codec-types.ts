@@ -7,6 +7,7 @@ import type {
   CodecInstanceContext,
   CodecRef,
   CodecTrait,
+  DataTypeValue,
 } from '@internal/framework-components/codec';
 import { ifDefined } from '@internal/utils/defined';
 
@@ -87,7 +88,7 @@ export interface SqlCodecInstanceContext extends CodecInstanceContext {
 /**
  * SQL codec — extends the framework codec base by narrowing the per-call context to the SQL-family {@link SqlCodecCallContext} (adds `column?: SqlColumnRef`). TypeScript treats method-syntax declarations bivariantly, so the SQL narrowing is structurally compatible with the framework {@link BaseCodec} super-interface.
  *
- * Codec-id-keyed static metadata (`traits`, `paramsSchema`, `renderOutputType`) lives on the unified {@link import('@internal/framework-components/codec').CodecDescriptor} — the codec instance itself only carries `id` plus the four conversion methods.
+ * Codec-id-keyed static metadata (`traits`, `paramsSchema`, `renderOutputType`) lives on the unified {@link import('@internal/framework-components/codec').CodecDescriptor} — the codec instance itself carries `id`, its data type and the four conversion methods.
  *
  * See `Codec` in `@internal/framework-components/codec` for the codec contract that this interface extends.
  */
@@ -97,8 +98,8 @@ export interface Codec<
   TWire = unknown,
   TInput = unknown,
 > extends BaseCodec<Id, TTraits, TWire, TInput> {
-  encode(value: TInput, ctx: SqlCodecCallContext): Promise<TWire>;
-  decode(wire: TWire, ctx: SqlCodecCallContext): Promise<TInput>;
+  toWire(value: TInput, ctx: SqlCodecCallContext): Promise<TWire>;
+  fromWire(wire: TWire, ctx: SqlCodecCallContext): Promise<TInput>;
 }
 
 /**
@@ -146,24 +147,15 @@ export type DescriptorCodecInput<D> =
     : never;
 
 /**
- * Resolve the JSON type for a descriptor `D` — what the codec's `encodeJson`
- * produces, and therefore what a `contract.json` holds for a value of this
- * codec.
+ * Resolve the JSON type for a descriptor `D`: the JSON of the value the codec's `toDataTypeValue` returns, and therefore what a `contract.json` holds for a value of this codec.
  *
- * This is a distinct channel from {@link DescriptorCodecInput} because the two
- * diverge wherever a codec's canonical JSON is not the value it hands the
- * application — a wide integer carried as a decimal string, say. Reading the
- * application type where the JSON type is meant produces a contract type that
- * describes a value the file cannot contain.
- *
- * The type is read off the codec's declared `encodeJson` return, so a codec that
- * narrows that return (`encodeJson(value: bigint): string`) publishes its JSON
- * type without a new type parameter, and one that does not stays at the
- * `JsonValue` the base signature promises.
+ * This is a distinct channel from {@link DescriptorCodecInput} because the two diverge wherever the stored form is not the value the codec hands the application, such as a wide integer stored as decimal text. A codec that narrows its return (`toDataTypeValue(value: bigint): DataTypeValue<string>`) publishes its JSON type this way, and one that does not stays at `JsonValue`.
  */
 export type DescriptorCodecJson<D> =
   DescriptorResolvedCodec<D> extends BaseCodec<string, readonly CodecTrait[], unknown, unknown>
-    ? ReturnType<DescriptorResolvedCodec<D>['encodeJson']>
+    ? ReturnType<DescriptorResolvedCodec<D>['toDataTypeValue']> extends DataTypeValue<infer J>
+      ? J
+      : never
     : never;
 
 /**

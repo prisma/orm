@@ -69,7 +69,7 @@ describe('createFixtureControlClient', () => {
 
     expect(await client.introspect()).toBeDefined();
     expect(client.toSchemaView({})).toBeUndefined();
-    expect(client.inferPslContract({})).toBeUndefined();
+    expect(await client.inferPslContract({})).toBeUndefined();
     expect(client.getPslBlockDescriptors()).toEqual({});
     expect(client.toOperationPreview([])).toBeUndefined();
 
@@ -236,7 +236,7 @@ describe('createFixtureControlClient', () => {
     const client = createFixtureControlClient();
 
     expect(client.toSchemaView({})).toBeUndefined();
-    expect(client.inferPslContract({})).toBeUndefined();
+    expect(await client.inferPslContract({})).toBeUndefined();
     expect(client.getPslBlockDescriptors()).toEqual({});
     expect(client.toOperationPreview([])).toBeUndefined();
     const emit = await client.emit({

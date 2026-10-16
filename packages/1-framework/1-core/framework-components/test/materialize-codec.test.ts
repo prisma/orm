@@ -1,4 +1,3 @@
-import type { JsonValue } from '@internal/contract/types';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { test } from 'vitest';
 import {
@@ -12,32 +11,36 @@ import {
   type CodecRef,
   type CodecTrait,
   codecForRef,
-  dataTypeId,
+  type DataTypeValue,
+  dataType,
   materializeCodec,
 } from '../src/exports/codec';
 
+const int4Type = dataType('demo/int4', { read: (json) => json });
+const vectorType = dataType('demo/vector', { read: (json) => json });
+
 class Int4FixtureCodec extends CodecImpl<'demo/int4@1', readonly ['equality'], number, number> {
-  async encode(value: number, _ctx: CodecCallContext): Promise<number> {
+  async toWire(value: number, _ctx: CodecCallContext): Promise<number> {
     return value;
   }
-  async decode(wire: number, _ctx: CodecCallContext): Promise<number> {
+  async fromWire(wire: number, _ctx: CodecCallContext): Promise<number> {
     return wire;
   }
-  encodeJson(value: number): JsonValue {
-    return value;
+  toDataTypeValue(value: number): DataTypeValue {
+    return this.dataTypeValueOf(value);
   }
-  decodeJson(json: JsonValue): number {
-    return json as number;
+  fromDataTypeValue(value: DataTypeValue): number {
+    return value.value as number;
   }
 }
 
 class Int4FixtureDescriptor extends CodecDescriptorImpl<void> {
-  override readonly dataType = dataTypeId('demo/int4');
+  override readonly dataType = int4Type.id;
   override readonly codecId = 'demo/int4@1' as const;
   override readonly traits: readonly CodecTrait[] = ['equality'];
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => Int4FixtureCodec {
-    return () => new Int4FixtureCodec(this);
+    return () => new Int4FixtureCodec(this, int4Type);
   }
 }
 
@@ -62,24 +65,24 @@ class VectorFixtureCodec<N extends number> extends CodecImpl<
     descriptor: CodecDescriptor<VectorParams>,
     public readonly dimension: N,
   ) {
-    super(descriptor);
+    super(descriptor, vectorType);
   }
-  async encode(value: number[], _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: number[], _ctx: CodecCallContext): Promise<string> {
     return `[${value.join(',')}]`;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<number[]> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<number[]> {
     return wire.slice(1, -1).split(',').map(Number);
   }
-  encodeJson(value: number[]): JsonValue {
-    return value;
+  toDataTypeValue(value: number[]): DataTypeValue {
+    return this.dataTypeValueOf(value);
   }
-  decodeJson(json: JsonValue): number[] {
-    return json as number[];
+  fromDataTypeValue(value: DataTypeValue): number[] {
+    return value.value as number[];
   }
 }
 
 class VectorFixtureDescriptor extends CodecDescriptorImpl<VectorParams> {
-  override readonly dataType = dataTypeId('demo/vector');
+  override readonly dataType = vectorType.id;
   override readonly codecId = 'demo/vector@1' as const;
   override readonly traits: readonly CodecTrait[] = ['equality'];
   override readonly paramsSchema = vectorFixtureParamsSchema;
@@ -138,9 +141,9 @@ test('materializeCodec produces a codec whose encode/decode still run through th
 }) => {
   const ref: CodecRef = { codecId: 'demo/vector@1', typeParams: { length: 3 } };
   const codec = materializeCodec(descriptorFor(ref), ref, stubCtx);
-  const wire = await codec.encode([1, 2, 3], {});
+  const wire = await codec.toWire([1, 2, 3], {});
   expect(wire).toBe('[1,2,3]');
-  expect(await codec.decode(wire, {})).toEqual([1, 2, 3]);
+  expect(await codec.fromWire(wire, {})).toEqual([1, 2, 3]);
 });
 
 /**

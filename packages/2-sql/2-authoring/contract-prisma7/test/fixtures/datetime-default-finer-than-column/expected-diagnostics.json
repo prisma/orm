@@ -1,0 +1,38 @@
+[
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"M.plain\": @default holds \"2024-01-02T03:04:05.1234Z\", with 4 digits after the decimal point, but the column holds 3. PostgreSQL stores it as \"2024-01-02T03:04:05.123Z\"; write that instead."
+  },
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Field \"M.micro\": @default holds \"2024-01-02T03:04:05.1234565Z\", with 7 digits after the decimal point, but the column holds 6. PostgreSQL stores it as \"2024-01-02T03:04:05.123456Z\"; write that instead."
+  },
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 9,
+    "message": "Field \"M.carried\": @default holds \"2024-12-31T23:59:59.9995Z\", with 4 digits after the decimal point, but the column holds 3. PostgreSQL stores it as \"2025-01-01T00:00:00.000Z\"; write that instead."
+  },
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 10,
+    "message": "Field \"M.early\": @default holds \"1999-12-31T23:59:59.9995Z\", with 4 digits after the decimal point, but the column holds 3. PostgreSQL stores it as \"1999-12-31T23:59:59.999Z\"; write that instead."
+  },
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 11,
+    "message": "Field \"M.whole\": @default holds \"2024-01-02T03:04:05.5+02:00\", with 1 digit after the decimal point, but the column holds none. PostgreSQL stores it as \"2024-01-02T03:04:06+02:00\"; write that instead."
+  },
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 12,
+    "message": "Field \"M.list\": @default holds \"2024-01-02T03:04:05.1235Z\" at element 2, with 4 digits after the decimal point, but the column holds 3. PostgreSQL stores it as \"2024-01-02T03:04:05.124Z\"; write that instead."
+  }
+]

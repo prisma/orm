@@ -29,8 +29,8 @@ import { RuntimeCore, runQueryWithMiddleware, runExecuteWithMiddleware, type Run
 
 The base `Codec` interface lands on the seam between **query-time** methods (per-row, IO-relevant) and **build-time** methods (per-contract-load):
 
-- Query-time: `encode(value): Promise<TWire>` and `decode(wire): Promise<TInput>` are required and **Promise-returning at the public boundary**. Codec authors extend `CodecImpl` (per [ADR 208 — Higher-order codecs for parameterized types](../../../../../docs/architecture%20docs/adrs/ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md)); a logically synchronous body still has to return a `Promise`-compatible value (mark the method `async`, or return `Promise.resolve(...)` explicitly). The runtime always awaits the result.
-- Build-time: `encodeJson`, `decodeJson`, and the optional `renderOutputType` are **synchronous** so `family.deserializeContract` and client construction stay synchronous.
+- Query-time: `toWire(value): Promise<TWire>` and `fromWire(wire): Promise<TInput>` are required and **Promise-returning at the public boundary**. Codec authors extend `CodecImpl` (per [ADR 208 — Higher-order codecs for parameterized types](../../../../../docs/architecture%20docs/adrs/ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md)); a logically synchronous body still has to return a `Promise`-compatible value (mark the method `async`, or return `Promise.resolve(...)` explicitly). The runtime always awaits the result.
+- Build-time: `toDataTypeValue`, `fromDataTypeValue`, and the optional `renderOutputType` are **synchronous** so `family.deserializeContract` and client construction stay synchronous. `toDataTypeValue` and `fromDataTypeValue` convert between the application value and a `DataTypeValue` of the codec's data type, which reads and constructs every stored value ([ADR 254](../../../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#codecs)).
 
 There is no `runtime` / `kind` / equivalent async marker on the interface and no `TRuntime` generic. The runtime always awaits the query-time methods. See [ADR 204 — Single-Path Async Codec Runtime](../../../../../docs/architecture%20docs/adrs/ADR%20204%20-%20Single-Path%20Async%20Codec%20Runtime.md) for the full design.
 
@@ -47,8 +47,8 @@ export interface CodecCallContext {
 The internal `Codec` interface declares the parameter as required:
 
 ```ts
-encode(value: TInput, ctx: CodecCallContext): Promise<TWire>;
-decode(wire: TWire, ctx: CodecCallContext): Promise<TInput>;
+toWire(value: TInput, ctx: CodecCallContext): Promise<TWire>;
+fromWire(wire: TWire, ctx: CodecCallContext): Promise<TInput>;
 ```
 
 Codec authors who write `(value) => …` continue to compile via TypeScript's bivariance for trailing parameters; nothing at the author surface changes.
@@ -57,12 +57,12 @@ Family layers extend the context where they have a per-call concept that doesn't
 
 ```ts
 // Sketch — codec authors extend `CodecImpl`; class methods receive `(value, ctx)`.
-async encode(v: string, ctx: CodecCallContext): Promise<EncryptedWire> {
+async toWire(v: string, ctx: CodecCallContext): Promise<EncryptedWire> {
   return kms.encrypt({ plaintext: v }, { signal: ctx.signal });
 }
 ```
 
-Aborts surface to the caller as `RUNTIME.ABORTED` with `details.phase ∈ { 'encode', 'decode', 'stream' }`. Codec bodies that ignore the signal complete in the background (cooperative cancellation). The `runtimeAborted(phase, cause?)` envelope helper and the `raceAgainstAbort(work, signal, phase)` race helper are exported from `@internal/framework-components/runtime`.
+Aborts surface to the caller as `RUNTIME.ABORTED` with `details.phase ∈ { 'encode', 'decode', 'stream' }`; `encode` is the phase of `toWire` and `decode` the phase of `fromWire`. Codec bodies that ignore the signal complete in the background (cooperative cancellation). The `runtimeAborted(phase, cause?)` envelope helper and the `raceAgainstAbort(work, signal, phase)` race helper are exported from `@internal/framework-components/runtime`.
 
 See [ADR 207 — Codec call context: per-query `AbortSignal` and column metadata](../../../../docs/architecture%20docs/adrs/ADR%20207%20-%20Codec%20call%20context%20per-query%20AbortSignal%20and%20column%20metadata.md) for the full design.
 

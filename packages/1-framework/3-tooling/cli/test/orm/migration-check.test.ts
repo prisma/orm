@@ -1,4 +1,5 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { ContractValidationError } from '@internal/contract/contract-validation-error';
 import type { MigrationPlanOperation } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
@@ -431,6 +432,35 @@ describe('migration check', () => {
   });
 
   describe('could not run the check', () => {
+    it('errors at exit 2, with the refused defaults, when the emitted contract cannot be loaded', async () => {
+      const dir = await projectDir();
+      await seedMigration(join(dir, 'migrations'));
+      await mkdir(join(dir, 'output'), { recursive: true });
+      await writeFile(join(dir, 'output', 'contract.json'), JSON.stringify(TEST_CONTRACT), 'utf-8');
+      const refusedDefaults = [{ namespaceId: 'public', table: 'user', column: 'id' }];
+      const config = ormConfig({
+        family: {
+          ...(ormConfig()['family'] as Record<string, unknown>),
+          create: () => ({
+            deserializeContract: () => {
+              throw new ContractValidationError('refused', 'storage', { refusedDefaults });
+            },
+          }),
+        },
+      });
+
+      const run = await harness(config).run(['migration', 'check', '--json'], { cwd: dir });
+
+      expect(run.exitCode).toBe(2);
+      expect(run.json.at(-1)).toMatchObject({
+        kind: 'result',
+        envelope: {
+          ok: false,
+          error: { code: 'CONTRACT.VALIDATION_FAILED', meta: { refusedDefaults } },
+        },
+      });
+    });
+
     it('errors at exit 2 when --space names no on-disk space', async () => {
       const dir = await projectDir();
       await seedMigration(join(dir, 'migrations'));

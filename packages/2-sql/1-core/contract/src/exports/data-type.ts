@@ -10,7 +10,6 @@ export type {
   SqlTypeText,
 } from '../sql-data-type';
 export {
-  dataTypeParams,
   findSqlDataTypeCollision,
   isSqlDataType,
   renderSqlCatalogText,
@@ -20,6 +19,9 @@ export {
   sqlBaseName,
   sqlDataType,
   sqlDataTypeOfCodec,
+  sqlStorageType,
+  sqlStorageTypeId,
+  sqlStorageTypeOfCodec,
   unquotedSqlBaseName,
   unquotedSqlBaseNameOfCodec,
   validateSqlTypeParams,

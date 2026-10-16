@@ -4,6 +4,7 @@ import {
   coreHash,
   profileHash,
 } from '@internal/contract/types';
+import { readContractValue } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageColumnInput } from '@internal/sql-contract/types';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
@@ -86,8 +87,8 @@ const cases: readonly DefaultCase[] = [
     column: 'negDecimal',
     ddl: '"negDecimal" DECIMAL(65,30) NOT NULL DEFAULT -0.5',
     type: decimal,
-    literal: '-0.5',
-    differentLiteral: '-0.6',
+    literal: '-0.500000000000000000000000000000',
+    differentLiteral: '-0.600000000000000000000000000000',
   },
   {
     column: 'negBigInt',
@@ -100,15 +101,15 @@ const cases: readonly DefaultCase[] = [
     column: 'longDecimal',
     ddl: '"longDecimal" DECIMAL(65,30) NOT NULL DEFAULT 12345678901234567890.123456789',
     type: decimal,
-    literal: '12345678901234567890.123456789',
-    differentLiteral: '12345678901234567000',
+    literal: '12345678901234567890.123456789000000000000000000000',
+    differentLiteral: '12345678901234567000.000000000000000000000000000000',
   },
   {
     column: 'tinyDecimal',
     ddl: '"tinyDecimal" DECIMAL(65,30) NOT NULL DEFAULT 0.000000000000000001',
     type: decimal,
-    literal: '0.000000000000000001',
-    differentLiteral: '0.000000000000000002',
+    literal: '0.000000000000000001000000000000',
+    differentLiteral: '0.000000000000000002000000000000',
   },
   {
     column: 'unscaledDecimal',
@@ -169,8 +170,8 @@ const cases: readonly DefaultCase[] = [
     column: 'decimals',
     ddl: '"decimals" DECIMAL(65,30)[] DEFAULT ARRAY[1.5]::DECIMAL(65,30)[]',
     type: { ...decimal, ...list },
-    literal: ['1.5'],
-    differentLiteral: ['2.5'],
+    literal: ['1.500000000000000000000000000000'],
+    differentLiteral: ['2.500000000000000000000000000000'],
   },
   {
     column: 'unscaledDecimals',
@@ -216,10 +217,12 @@ const table = 'Defaults';
 
 const codecs = createPostgresBuiltinCodecLookup();
 
-function readByCodec(codecId: string, value: ColumnDefaultLiteralInputValue): void {
-  const codec = codecs.get(codecId);
-  if (codec === undefined) throw new Error(`No codec ${codecId}`);
-  for (const element of Array.isArray(value) ? value : [value]) codec.decodeJson(element);
+function readByCodec(type: DefaultCase['type'], value: ColumnDefaultLiteralInputValue): void {
+  const codec = codecs.get(type.codecId);
+  if (codec === undefined) throw new Error(`No codec ${type.codecId}`);
+  for (const element of Array.isArray(value) ? value : [value]) {
+    readContractValue(codec, element, type.typeParams);
+  }
 }
 
 function buildContract(
@@ -228,7 +231,7 @@ function buildContract(
   const columns = Object.fromEntries(
     cases.map((defaultCase) => {
       const value = defaultOf(defaultCase);
-      readByCodec(defaultCase.type.codecId, value);
+      readByCodec(defaultCase.type, value);
       return [defaultCase.column, { ...defaultCase.type, default: { kind: 'literal', value } }];
     }),
   );

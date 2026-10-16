@@ -277,7 +277,7 @@ export interface AuthoringEntityContext {
   /** Push channel for non-fatal authoring-time warnings emitted by the factory. */
   readonly warnings?: AuthoringWarningSink;
   /**
-   * Reads a number literal written in the contract source, such as an enum member's value, from its source text the way a column default is read: the literal gives a value of a data type, the codec's data type takes it directly or through a cast, and the codec checks it. Returns the value's stored form, or why it is refused, worded for `subject`. Without it, or when it returns `undefined` for a codec the stack registers no descriptor for, the codec's `decodeJson` reads the number.
+   * Reads a number literal written in the contract source, such as an enum member's value, from its source text the way a column default is read: the literal gives a value of a data type, the codec's data type takes it directly or through a cast, and the codec checks it. Returns the value's stored form, or why it is refused, worded for `subject`. Without it, or when it returns `undefined` for a codec the stack registers no descriptor for, the codec's data type and then the codec read the number.
    */
   readonly readWrittenNumber?: (input: {
     readonly text: string;
@@ -556,20 +556,14 @@ export interface AuthoringAttributeSpecContributions {
  * the three pieces of syntax read without a tag: a quoted string, `true`/`false`, and a number.
  *
  * A number is the one plain form that yields several types, so instead of `parse` its arm carries a
- * classifier, which picks the type from the digits and returns the canonical form with it, and
+ * classifier, which picks the type from the digits and returns JSON of that type with it, and
  * `types`, every type the classifier can return — which is how assembly knows those types can be
- * written. ADR 254.
+ * written. The type constructs its value from what `parse` or the classifier returns. ADR 254.
  */
 export type DataTypeWrittenForm =
   | {
       readonly kind: 'tag';
       readonly tag: string;
-      /**
-       * The data type the body is a value of, for an entry under {@link tagEntryKey}: a tag that
-       * yields a type whose own entry reads another syntax. An entry under a data type id leaves it
-       * out.
-       */
-      readonly type?: DataTypeId;
       readonly parse: (text: string) => JsonValue;
     }
   | {
@@ -590,35 +584,13 @@ export type DataTypeWrittenForm =
  * PSL support for one data type, keyed by its id and contributed by the component that registers
  * the type.
  *
- * The written form reads text into the type's canonical form, throwing a structured error for text
- * it cannot read; `print` is the reverse.
+ * The written form reads text into JSON the type constructs its value from, throwing a structured
+ * error for text it cannot read; `print` is the reverse.
  */
 export interface DataTypeAuthoringEntry {
   readonly written: DataTypeWrittenForm;
   readonly print: (value: JsonValue) => string;
   readonly documentation: string;
-}
-
-const TAG_ENTRY_PREFIX = 'tag:';
-
-/**
- * The key an entry sits under when its tag yields a type whose own key is taken by the entry for
- * another syntax: SQLite's `json` tag yields `sqlite/text`, whose entry reads a plain string. A data
- * type id is `owner/name`, so this key never collides with one.
- */
-export function tagEntryKey(tag: string): string {
-  return `${TAG_ENTRY_PREFIX}${tag}`;
-}
-
-export function isTagEntryKey(key: string): boolean {
-  return key.startsWith(TAG_ENTRY_PREFIX);
-}
-
-/** The data type a value entry reads its written form as: its tag's `type`, or else its key. */
-export function authoringEntryType(key: string, entry: DataTypeAuthoringEntry): string {
-  return entry.written.kind === 'tag' && entry.written.type !== undefined
-    ? entry.written.type
-    : key;
 }
 
 export interface AuthoringContributions {

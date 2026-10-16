@@ -3,7 +3,7 @@
  *
  * Each codec ships as three artifacts:
  *
- * 1. A `SqliteXCodec` class extending {@link CodecImpl} that wraps the encode/decode/encodeJson/decodeJson conversions inline. SQLite's runtime conversions are simple enough that there is no shared helper module; the class bodies are the single source of truth. 2. A `SqliteXDescriptor` class extending {@link SqliteCodecDescriptor} declaring the codec id, traits, target types, params schema, and canonical JSON projection. SQLite declares no per-target native type, and every SQLite codec is non-parameterized. 3. A per-codec column helper (`sqliteXColumn`) that calls `descriptor.factory()` directly and packages the result into a {@link ColumnSpec} via the framework {@link column} packager. The helper is tied to its descriptor with `satisfies ColumnHelperFor` + `ColumnHelperForStrict` (every SQLite codec's resolved type is well-defined).
+ * 1. A `SqliteXCodec` class extending {@link CodecImpl} that wraps the wire and value conversions inline. SQLite's runtime conversions are simple enough that there is no shared helper module; the class bodies are the single source of truth. 2. A `SqliteXDescriptor` class extending {@link SqliteCodecDescriptor} declaring the codec id, traits, target types, params schema, and canonical JSON projection. SQLite declares no per-target native type, and every SQLite codec is non-parameterized. 3. A per-codec column helper (`sqliteXColumn`) that calls `descriptor.factory()` directly and packages the result into a {@link ColumnSpec} via the framework {@link column} packager. The helper is tied to its descriptor with `satisfies ColumnHelperFor` + `ColumnHelperForStrict` (every SQLite codec's resolved type is well-defined).
  *
  * After TML-2357 this is the canonical source of SQLite codec metadata and runtime behaviour — the legacy `mkCodec` / `defineCodec` carriers (and the parallel `byScalar` / `codecDescriptorDefinitions` collection exports) retired with the deletion sweep.
  *
@@ -18,35 +18,30 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
-  decodeJsonFloat,
-  decodeJsonIntegerText,
-  decodeJsonMatching,
-  decodeJsonString,
-  encodeJsonFloat,
-  INT64_RANGE,
+  type DataTypeValue,
+  floatToJson,
+  readJsonFloat,
+  readJsonIntegerText,
   refuseJsonValue,
   SAFE_INTEGER_BIGINT_RANGE,
-  type ToCanonicalForm,
 } from '@internal/framework-components/codec';
-import { canonicalizeJson } from '@internal/framework-components/utils';
-import { canonicalDateTime } from '@internal/sql-contract/data-type-support';
 import {
   BinaryExpr,
   CaseExpr,
   CastExpr,
   FunctionCallExpr,
   LiteralExpr,
-  NullCheckExpr,
   type ProjectionExpr,
+  SqlCharCodec,
   SqlFloatCodec,
   SqlIntCodec,
-  SqlIntDescriptor,
+  SqlVarcharCodec,
   sqlCharDescriptor,
   sqlFloatDescriptor,
+  sqlIntDescriptor,
   sqlVarcharDescriptor,
 } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
-import { structuredError } from '@internal/utils/structured-error';
 import { defineSqliteCodecs, SqliteCodecDescriptor, sqliteCodec } from './codec-descriptor';
 import {
   SQLITE_BIGINT_CODEC_ID,
@@ -62,7 +57,9 @@ import {
   sqliteBlob,
   sqliteCharacter,
   sqliteCharacterVarying,
+  sqliteDatetime,
   sqliteInteger,
+  sqliteJson,
   sqliteReal,
   sqliteText,
 } from './data-types';
@@ -91,26 +88,29 @@ const decimalTextJsonProjection = (expression: ProjectionExpr): ProjectionExpr =
   CastExpr.as(expression, 'TEXT');
 
 /**
- * Projects a BLOB as hexadecimal text.
+ * Projects a blob as a one-element array of its hexadecimal text.
  *
- * SQLite's JSON functions reject a BLOB argument outright, so the encoding has
- * to replace the native conversion rather than post-process it. `hex()` emits
- * uppercase and never wraps at any length, which is the spelling `encodeJson`
- * pins.
- *
- * `hex(NULL)` is `''` rather than NULL, and `''` is the hex of an empty blob —
- * so without the NULL check an absent blob and an empty one would both project
- * as `''`, and `decodeJson` accepts `''` because zero hex pairs is a valid
- * empty blob. The check keeps the two distinguishable.
+ * SQLite's JSON functions reject a BLOB argument outright, so the encoding has to replace the native
+ * conversion rather than post-process it. `hex()` emits uppercase and never wraps. The array is what
+ * tells a blob from text: outside a STRICT table a BLOB column may hold text, which passes through as
+ * text, as a row carries it, and so does NULL and any other value.
  */
 const hexJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
   CaseExpr.of(
-    [{ condition: NullCheckExpr.isNull(expression), value: LiteralExpr.of(null) }],
-    FunctionCallExpr.of('hex', [expression]),
+    [
+      {
+        condition: BinaryExpr.eq(
+          FunctionCallExpr.of('typeof', [expression]),
+          LiteralExpr.of('blob'),
+        ),
+        value: FunctionCallExpr.of('json_array', [FunctionCallExpr.of('hex', [expression])]),
+      },
+    ],
+    expression,
   );
 
 /**
- * Projects a REAL as SQLite writes it in JSON, except an infinity, which SQLite writes as `9.0e+999` and which becomes the text `Infinity` or `-Infinity` that `encodeJson` writes. The test is equality with an infinity, so text or a blob that a REAL column holds outside a STRICT table passes through unchanged.
+ * Projects a REAL as SQLite writes it in JSON, except an infinity, which SQLite writes as `9.0e+999` and which becomes the text `Infinity` or `-Infinity` that the codec stores. The test is equality with an infinity, so text or a blob that a REAL column holds outside a STRICT table passes through unchanged.
  */
 const floatJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
   CaseExpr.of(
@@ -159,7 +159,6 @@ const isJsonRetag = (expression: ProjectionExpr): boolean =>
   expression.args.length === 1;
 
 const DECIMAL_INTEGER = /^-?\d+$/;
-const UPPERCASE_HEX = /^(?:[0-9A-F]{2})*$/;
 
 /** Renders the decimal text `sqlite/bigintnumber@1` carries, whose application type is `number`, as a number literal. */
 const decimalTextNumberLiteral = (value: JsonValue): string | undefined =>
@@ -180,8 +179,8 @@ function refuseNaN(codecId: string, value: number): number {
 }
 
 /** Reads a float's JSON form, which on SQLite has no NaN. */
-function decodeJsonFloatWithoutNaN(codecId: string, json: JsonValue): number {
-  const value = decodeJsonFloat(codecId, json);
+function readJsonFloatWithoutNaN(codecId: string, json: JsonValue): number {
+  const value = readJsonFloat(codecId, json);
   if (Number.isNaN(value)) {
     return refuseJsonValue(
       codecId,
@@ -194,14 +193,17 @@ function decodeJsonFloatWithoutNaN(codecId: string, json: JsonValue): number {
 
 /** `sql/float@1` as SQLite stores it: without NaN. */
 export class SqliteFloatCodec extends SqlFloatCodec {
-  override async encode(value: number, ctx: CodecCallContext): Promise<number> {
-    return super.encode(refuseNaN(this.id, value), ctx);
+  override async toWire(value: number, ctx: CodecCallContext): Promise<number> {
+    return super.toWire(refuseNaN(this.id, value), ctx);
   }
-  override encodeJson(value: number): JsonValue {
-    return super.encodeJson(refuseNaN(this.id, value));
+  override async fromWire(wire: number | string, _ctx: CodecCallContext): Promise<number> {
+    return floatWire(this.id, wire);
   }
-  override decodeJson(json: JsonValue): number {
-    return decodeJsonFloatWithoutNaN(this.id, json);
+  override fromDataTypeValue(value: DataTypeValue): number {
+    return readJsonFloatWithoutNaN(this.id, value.value);
+  }
+  override toDataTypeValue(input: number): DataTypeValue {
+    return super.toDataTypeValue(refuseNaN(this.id, input));
   }
 }
 
@@ -290,13 +292,45 @@ const safeIntegerFromBigint = (codecId: string, value: bigint): number => {
   return Number(value);
 };
 
-/** `sqlite/integer`'s canonical form, read into a `number`: digit text within the safe integer range. */
+/** `sqlite/integer`'s stored form, read into a `number`: digit text within the safe integer range. */
 const safeIntegerFromDigitText = (codecId: string, json: JsonValue): number =>
-  Number(decodeJsonIntegerText(codecId, json, SAFE_INTEGER_BIGINT_RANGE));
+  Number(readJsonIntegerText(codecId, json, SAFE_INTEGER_BIGINT_RANGE));
 
-/** A `number` written as `sqlite/integer`'s canonical form. */
+/** A `number` written as `sqlite/integer`'s stored form. */
 const digitTextOfSafeInteger = (codecId: string, value: number): string =>
   String(encodableSafeInteger(codecId, value));
+
+/**
+ * Reads an INTEGER's wire value into a `number`: the number the driver returns for a row, or the decimal text an include carries, because its projection casts the integer to text so that no digit is lost in JSON.
+ */
+function safeIntegerWire(codecId: string, wire: number | string): number {
+  if (typeof wire === 'number') return wire;
+  if (!DECIMAL_INTEGER.test(wire)) {
+    throw sqliteError(
+      'RUNTIME.DECODE_FAILED',
+      `${codecId} wire value must be an integer or its decimal text`,
+      { meta: { codecId, received: wire } },
+    );
+  }
+  return safeIntegerFromBigint(codecId, BigInt(wire));
+}
+
+/**
+ * Reads a REAL's wire value: the number the driver returns for a row, or the text `Infinity` or `-Infinity` an include carries, because JSON has no infinity.
+ */
+function floatWire(codecId: string, wire: number | string): number {
+  if (typeof wire === 'number') return wire;
+  if (wire === 'Infinity') return Number.POSITIVE_INFINITY;
+  if (wire === '-Infinity') return Number.NEGATIVE_INFINITY;
+  throw sqliteError(
+    'RUNTIME.DECODE_FAILED',
+    `${codecId} wire value must be a number, or the text Infinity or -Infinity`,
+    { meta: { codecId, received: wire } },
+  );
+}
+
+/** The hex text SQLite's `hex()` writes: two uppercase digits for each byte. */
+const BLOB_HEX_TEXT = /^(?:[0-9A-F]{2})*$/;
 
 /**
  * Projects a `sql/char@1` value without trailing spaces, as its `decode` reads it on a flat read, so an include reads the same value. SQLite does not pad the value; the rule is the family codec's.
@@ -307,38 +341,39 @@ const unpaddedCharJsonProjection = (expression: ProjectionExpr): ProjectionExpr 
 export const sqliteSqlCharDescriptor = sqliteCodec(sqlCharDescriptor, {
   dataType: sqliteCharacter,
   jsonProjection: unpaddedCharJsonProjection,
+  factory: (descriptor, dataType, params) => () => new SqlCharCodec(descriptor, dataType, params),
 });
 
 export const sqliteSqlVarcharDescriptor = sqliteCodec(sqlVarcharDescriptor, {
   dataType: sqliteCharacterVarying,
   jsonProjection: identityJsonProjection,
+  factory: (descriptor, dataType, params) => () =>
+    new SqlVarcharCodec(descriptor, dataType, params),
 });
 
-/** `sql/int@1` as SQLite stores it: its canonical form is `sqlite/integer`'s digit text. */
+/** `sql/int@1` as SQLite stores it: its stored form is `sqlite/integer`'s digit text. */
 export class SqliteSqlIntCodec extends SqlIntCodec {
-  override encodeJson(value: number): JsonValue {
-    return digitTextOfSafeInteger(this.id, value);
+  override async fromWire(wire: number | string, _ctx: CodecCallContext): Promise<number> {
+    return safeIntegerWire(this.id, wire);
   }
-  override decodeJson(json: JsonValue): number {
-    return safeIntegerFromDigitText(this.id, json);
+  override fromDataTypeValue(value: DataTypeValue): number {
+    return safeIntegerFromDigitText(this.id, value.value);
   }
-}
-
-class SqliteSqlIntTemplate extends SqlIntDescriptor {
-  override factory(): (ctx: CodecInstanceContext) => SqliteSqlIntCodec {
-    return () => new SqliteSqlIntCodec(this);
+  override toDataTypeValue(input: number): DataTypeValue {
+    return this.dataTypeValueOf(digitTextOfSafeInteger(this.id, input));
   }
 }
 
-export const sqliteSqlIntDescriptor = sqliteCodec(new SqliteSqlIntTemplate(), {
+export const sqliteSqlIntDescriptor = sqliteCodec(sqlIntDescriptor, {
   dataType: sqliteInteger,
   jsonProjection: decimalTextJsonProjection,
+  factory: (descriptor, dataType) => () => new SqliteSqlIntCodec(descriptor, dataType),
 });
 
 export const sqliteSqlFloatDescriptor = sqliteCodec(sqlFloatDescriptor, {
   dataType: sqliteReal,
   jsonProjection: floatJsonProjection,
-  factory: (descriptor) => () => new SqliteFloatCodec(descriptor),
+  factory: (descriptor, dataType) => () => new SqliteFloatCodec(descriptor, dataType),
 });
 
 export class SqliteTextCodec extends CodecImpl<
@@ -347,17 +382,17 @@ export class SqliteTextCodec extends CodecImpl<
   string,
   string
 > {
-  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
     return wire;
   }
-  encodeJson(value: string): JsonValue {
-    return value;
+  fromDataTypeValue(value: DataTypeValue<string>): string {
+    return value.value;
   }
-  decodeJson(json: JsonValue): string {
-    return decodeJsonString(SQLITE_TEXT_CODEC_ID, json);
+  toDataTypeValue(input: string): DataTypeValue {
+    return this.dataTypeValueOf(input);
   }
 }
 
@@ -370,7 +405,7 @@ export class SqliteTextDescriptor extends SqliteCodecDescriptor<void> {
   override readonly traits = ['equality', 'order', 'textual'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqliteTextCodec {
-    return () => new SqliteTextCodec(this);
+    return () => new SqliteTextCodec(this, sqliteText);
   }
 }
 
@@ -385,20 +420,20 @@ sqliteTextColumn satisfies ColumnHelperForStrict<SqliteTextDescriptor>;
 export class SqliteIntegerCodec extends CodecImpl<
   typeof SQLITE_INTEGER_CODEC_ID,
   readonly ['equality', 'order', 'numeric'],
-  number,
+  number | string,
   number
 > {
-  async encode(value: number, _ctx: CodecCallContext): Promise<number> {
+  async toWire(value: number, _ctx: CodecCallContext): Promise<number> {
     return value;
   }
-  async decode(wire: number, _ctx: CodecCallContext): Promise<number> {
-    return wire;
+  async fromWire(wire: number | string, _ctx: CodecCallContext): Promise<number> {
+    return safeIntegerWire(SQLITE_INTEGER_CODEC_ID, wire);
   }
-  encodeJson(value: number): JsonValue {
-    return digitTextOfSafeInteger(SQLITE_INTEGER_CODEC_ID, value);
+  fromDataTypeValue(value: DataTypeValue<string>): number {
+    return safeIntegerFromDigitText(SQLITE_INTEGER_CODEC_ID, value.value);
   }
-  decodeJson(json: JsonValue): number {
-    return safeIntegerFromDigitText(SQLITE_INTEGER_CODEC_ID, json);
+  toDataTypeValue(input: number): DataTypeValue {
+    return this.dataTypeValueOf(digitTextOfSafeInteger(SQLITE_INTEGER_CODEC_ID, input));
   }
 }
 
@@ -411,7 +446,7 @@ export class SqliteIntegerDescriptor extends SqliteCodecDescriptor<void> {
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqliteIntegerCodec {
-    return () => new SqliteIntegerCodec(this);
+    return () => new SqliteIntegerCodec(this, sqliteInteger);
   }
 }
 
@@ -426,20 +461,20 @@ sqliteIntegerColumn satisfies ColumnHelperForStrict<SqliteIntegerDescriptor>;
 export class SqliteRealCodec extends CodecImpl<
   typeof SQLITE_REAL_CODEC_ID,
   readonly ['equality', 'order', 'numeric'],
-  number,
+  number | string,
   number
 > {
-  async encode(value: number, _ctx: CodecCallContext): Promise<number> {
+  async toWire(value: number, _ctx: CodecCallContext): Promise<number> {
     return refuseNaN(SQLITE_REAL_CODEC_ID, value);
   }
-  async decode(wire: number, _ctx: CodecCallContext): Promise<number> {
-    return wire;
+  async fromWire(wire: number | string, _ctx: CodecCallContext): Promise<number> {
+    return floatWire(SQLITE_REAL_CODEC_ID, wire);
   }
-  encodeJson(value: number): JsonValue {
-    return encodeJsonFloat(refuseNaN(SQLITE_REAL_CODEC_ID, value));
+  fromDataTypeValue(value: DataTypeValue<JsonValue>): number {
+    return readJsonFloatWithoutNaN(SQLITE_REAL_CODEC_ID, value.value);
   }
-  decodeJson(json: JsonValue): number {
-    return decodeJsonFloatWithoutNaN(SQLITE_REAL_CODEC_ID, json);
+  toDataTypeValue(input: number): DataTypeValue {
+    return this.dataTypeValueOf(floatToJson(refuseNaN(SQLITE_REAL_CODEC_ID, input)));
   }
 }
 
@@ -452,7 +487,7 @@ export class SqliteRealDescriptor extends SqliteCodecDescriptor<void> {
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqliteRealCodec {
-    return () => new SqliteRealCodec(this);
+    return () => new SqliteRealCodec(this, sqliteReal);
   }
 }
 
@@ -467,26 +502,33 @@ sqliteRealColumn satisfies ColumnHelperForStrict<SqliteRealDescriptor>;
 export class SqliteBlobCodec extends CodecImpl<
   typeof SQLITE_BLOB_CODEC_ID,
   readonly ['equality'],
-  Uint8Array,
+  Uint8Array | readonly string[],
   Uint8Array
 > {
-  async encode(value: Uint8Array, _ctx: CodecCallContext): Promise<Uint8Array> {
+  async toWire(value: Uint8Array, _ctx: CodecCallContext): Promise<Uint8Array> {
     return value;
   }
-  async decode(wire: Uint8Array, _ctx: CodecCallContext): Promise<Uint8Array> {
-    return wire;
-  }
-  encodeJson(value: Uint8Array): JsonValue {
-    return Buffer.from(value).toString('hex').toUpperCase();
-  }
-  decodeJson(json: JsonValue): Uint8Array {
-    const hex = decodeJsonMatching(
-      SQLITE_BLOB_CODEC_ID,
-      json,
-      UPPERCASE_HEX,
-      'uppercase hexadecimal text',
-    );
+  /** A row carries the blob's bytes; an include carries the array of their hex text that its projection writes, because SQLite's JSON functions refuse a blob. Anything else a BLOB column holds is refused. */
+  async fromWire(
+    wire: Uint8Array | readonly string[],
+    _ctx: CodecCallContext,
+  ): Promise<Uint8Array> {
+    if (wire instanceof Uint8Array) return wire;
+    const [hex] = Array.isArray(wire) && wire.length === 1 ? wire : [];
+    if (typeof hex !== 'string' || !BLOB_HEX_TEXT.test(hex)) {
+      throw sqliteError(
+        'RUNTIME.DECODE_FAILED',
+        'sqlite/blob@1 wire value must be bytes, or the array of their hex text an include carries',
+        { meta: { codecId: SQLITE_BLOB_CODEC_ID, received: String(wire) } },
+      );
+    }
     return new Uint8Array(Buffer.from(hex, 'hex'));
+  }
+  fromDataTypeValue(value: DataTypeValue<string>): Uint8Array {
+    return new Uint8Array(Buffer.from(value.value, 'hex'));
+  }
+  toDataTypeValue(input: Uint8Array): DataTypeValue {
+    return this.dataTypeValueOf(Buffer.from(input).toString('hex').toUpperCase());
   }
 }
 
@@ -499,7 +541,7 @@ export class SqliteBlobDescriptor extends SqliteCodecDescriptor<void> {
   override readonly traits = ['equality'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqliteBlobCodec {
-    return () => new SqliteBlobCodec(this);
+    return () => new SqliteBlobCodec(this, sqliteBlob);
   }
 }
 
@@ -512,32 +554,28 @@ sqliteBlobColumn satisfies ColumnHelperFor<SqliteBlobDescriptor>;
 sqliteBlobColumn satisfies ColumnHelperForStrict<SqliteBlobDescriptor>;
 
 /**
- * The canonical form of a `sqlite/datetime@1` value (ADR 254): the instant in UTC, from ISO 8601
- * text with a UTC offset. The range and the millisecond precision are those of a JavaScript `Date`,
- * the codec's value.
+ * Reads what SQLite holds for an instant as `Date` reads it, with text without a UTC offset read as UTC, as SQLite's own date and time functions read it, never in the machine's time zone. A number is milliseconds since 1970, as the Prisma ORM query engine wrote a `DateTime`. Digits below a millisecond are cut, as `Date` cuts them.
  */
-export const sqliteDatetimeCanonical = (text: string): string =>
-  canonicalDateTime(text, {
-    shape: 'instant',
-    ownerId: SQLITE_DATETIME_CODEC_ID,
-    maxFractionDigits: 3,
-    range: { earliest: '-271821-04-20T00:00:00Z', latest: '+275760-09-13T00:00:00Z' },
-  });
-
-/**
- * Reads the text SQLite holds for an instant. Rejects `Invalid Date` (NaN-time) at every decode
- * ingress so consumers never receive a Date whose downstream operations silently produce NaN.
- */
-export function decodeSqliteDatetime(value: string): Date {
-  const date = new Date(value);
+export function decodeSqliteDatetime(value: string | number): Date {
+  const date = new Date(typeof value === 'number' ? value : asUtcWhenUnmarked(value));
   if (Number.isNaN(date.getTime())) {
     throw sqliteError(
       'RUNTIME.DECODE_FAILED',
-      `sqlite/datetime@1 value must be a valid ISO-8601 string: ${value}`,
-      { meta: { codecId: SQLITE_DATETIME_CODEC_ID, received: value } },
+      `sqlite/datetime@1 wire value must be a date and time as text, or a number of milliseconds since 1970: ${String(value)}`,
+      { meta: { codecId: SQLITE_DATETIME_CODEC_ID, received: String(value) } },
     );
   }
   return date;
+}
+
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const DATE_TIME_WITHOUT_OFFSET = /^(\d{4}-\d{2}-\d{2})[Tt ](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)$/;
+
+/** A date alone as its midnight in UTC, and a date and time without an offset as UTC. */
+function asUtcWhenUnmarked(text: string): string {
+  if (DATE_ONLY.test(text)) return `${text}T00:00:00Z`;
+  const unmarked = DATE_TIME_WITHOUT_OFFSET.exec(text);
+  return unmarked === null ? text : `${unmarked[1]}T${unmarked[2]}Z`;
 }
 
 /** The text SQLite holds for an instant: what the codec writes for every row, and for a default. */
@@ -551,47 +589,30 @@ export class SqliteDatetimeCodec extends CodecImpl<
   string,
   Date
 > {
-  async encode(value: Date, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: Date, _ctx: CodecCallContext): Promise<string> {
     return encodeSqliteDatetime(value);
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<Date> {
+  async fromWire(wire: string | number, _ctx: CodecCallContext): Promise<Date> {
     return decodeSqliteDatetime(wire);
   }
-  encodeJson(value: Date): JsonValue {
-    return sqliteDatetimeCanonical(value.toISOString());
+  fromDataTypeValue(value: DataTypeValue<string>): Date {
+    return new Date(value.value);
   }
-  decodeJson(json: JsonValue): Date {
-    const date = new Date(decodeJsonString(SQLITE_DATETIME_CODEC_ID, json));
-    if (Number.isNaN(date.getTime())) {
-      return refuseJsonValue(SQLITE_DATETIME_CODEC_ID, 'a date and time string', json);
-    }
-    return date;
+  toDataTypeValue(input: Date): DataTypeValue {
+    return this.dataTypeValueOf(input.toISOString());
   }
 }
-
-/**
- * `sqlite/text` stores this codec's values as text and declares no canonical form for them, so the
- * codec declares it: written text with a UTC offset becomes the instant in UTC.
- */
-const datetimeCanonicalForm: ToCanonicalForm = (value) => {
-  if (typeof value === 'string') return sqliteDatetimeCanonical(value);
-  throw structuredError('CONTRACT.CAST_REFUSED', `Expected text, got ${JSON.stringify(value)}.`, {
-    why: 'A SQLite datetime is stored as text.',
-    fix: 'Write the date and time as text with a UTC offset, as in "2024-01-01T12:34:56Z".',
-  });
-};
 
 export class SqliteDatetimeDescriptor extends SqliteCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
-  override readonly toCanonicalForm = datetimeCanonicalForm;
-  override readonly dataType = sqliteText.id;
+  override readonly dataType = sqliteDatetime.id;
   override readonly codecId = SQLITE_DATETIME_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqliteDatetimeCodec {
-    return () => new SqliteDatetimeCodec(this);
+    return () => new SqliteDatetimeCodec(this, sqliteDatetime);
   }
 }
 
@@ -609,72 +630,38 @@ export class SqliteJsonCodec extends CodecImpl<
   string | JsonValue,
   JsonValue
 > {
-  async encode(value: JsonValue, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: JsonValue, _ctx: CodecCallContext): Promise<string> {
     return JSON.stringify(value);
   }
-  async decode(wire: string | JsonValue, _ctx: CodecCallContext): Promise<JsonValue> {
+  async fromWire(wire: string | JsonValue, _ctx: CodecCallContext): Promise<JsonValue> {
     return typeof wire === 'string'
       ? blindCast<JsonValue, 'JSON.parse of stored JSON text yields a JSON value'>(JSON.parse(wire))
       : wire;
   }
-  encodeJson(value: JsonValue): JsonValue {
-    return canonicalizeJson(value);
-  }
-  decodeJson(json: JsonValue): JsonValue {
-    const document = typeof json === 'string' ? parseJsonText(json) : undefined;
-    if (document === undefined) {
-      throw sqliteError(
-        'RUNTIME.DECODE_FAILED',
-        'sqlite/json@1 contract value must be the JSON text of a document',
-        { meta: { codecId: SQLITE_JSON_CODEC_ID, received: typeof json } },
-      );
-    }
-    return document.value;
-  }
-}
-
-function parseJsonText(text: string): { readonly value: JsonValue } | undefined {
-  try {
-    return { value: JSON.parse(text) };
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * `sqlite/text` declares no canonical form, so the codec declares the one of its values: the JSON
- * text of the document, with sorted keys and no added whitespace.
- */
-const jsonTextCanonicalForm: ToCanonicalForm = (value) => {
-  const document = typeof value === 'string' ? parseJsonText(value) : undefined;
-  if (document === undefined) {
-    throw structuredError(
-      'CONTRACT.CAST_REFUSED',
-      `Expected the JSON text of a document, got ${JSON.stringify(value)}.`,
-      {
-        why: 'A SQLite JSON column stores the JSON text of its document.',
-        fix: 'Write the document as JSON text, as in {"plan": "free"}.',
-      },
+  fromDataTypeValue(value: DataTypeValue<string>): JsonValue {
+    return blindCast<JsonValue, 'sqlite/json stores the JSON text of a document'>(
+      JSON.parse(value.value),
     );
   }
-  return canonicalizeJson(document.value);
-};
+  toDataTypeValue(input: JsonValue): DataTypeValue {
+    return this.dataTypeValueOf(JSON.stringify(input));
+  }
+}
 
 /**
- * The column stores the document's JSON text and the canonical form is that text, so the stored
+ * The column stores the document's JSON text and the stored form is that text, so the stored
  * value is projected as it is: a string the enclosing JSON constructor embeds as a string.
  */
 export class SqliteJsonDescriptor extends SqliteCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
-  override readonly toCanonicalForm = jsonTextCanonicalForm;
-  override readonly dataType = sqliteText.id;
+  override readonly dataType = sqliteJson.id;
   override readonly codecId = SQLITE_JSON_CODEC_ID;
   override readonly traits = ['equality'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqliteJsonCodec {
-    return () => new SqliteJsonCodec(this);
+    return () => new SqliteJsonCodec(this, sqliteJson);
   }
 }
 
@@ -692,7 +679,7 @@ export class SqliteBigintCodec extends CodecImpl<
   number | bigint | string,
   bigint
 > {
-  async encode(value: bigint, _ctx: CodecCallContext): Promise<number | bigint> {
+  async toWire(value: bigint, _ctx: CodecCallContext): Promise<number | bigint> {
     requireJsType(SQLITE_BIGINT_CODEC_ID, 'bigint', value);
     return value;
   }
@@ -704,7 +691,7 @@ export class SqliteBigintCodec extends CodecImpl<
    * integer — past ±(2^53 − 1) it has already rounded, and converting it would
    * mint a spuriously-exact `bigint` that need not equal the stored value.
    */
-  async decode(wire: number | bigint | string, _ctx: CodecCallContext): Promise<bigint> {
+  async fromWire(wire: number | bigint | string, _ctx: CodecCallContext): Promise<bigint> {
     if (typeof wire === 'number' && !Number.isSafeInteger(wire)) {
       throw sqliteError(
         'RUNTIME.DECODE_FAILED',
@@ -721,11 +708,11 @@ export class SqliteBigintCodec extends CodecImpl<
     }
     return BigInt(wire);
   }
-  encodeJson(value: bigint): JsonValue {
-    return bigintEncodeJson(SQLITE_BIGINT_CODEC_ID, value);
+  fromDataTypeValue(value: DataTypeValue<string>): bigint {
+    return BigInt(value.value);
   }
-  decodeJson(json: JsonValue): bigint {
-    return decodeJsonIntegerText(SQLITE_BIGINT_CODEC_ID, json, INT64_RANGE);
+  toDataTypeValue(input: bigint): DataTypeValue {
+    return this.dataTypeValueOf(bigintEncodeJson(SQLITE_BIGINT_CODEC_ID, input));
   }
 }
 
@@ -738,7 +725,7 @@ export class SqliteBigintDescriptor extends SqliteCodecDescriptor<void> {
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqliteBigintCodec {
-    return () => new SqliteBigintCodec(this);
+    return () => new SqliteBigintCodec(this, sqliteInteger);
   }
 }
 
@@ -763,7 +750,7 @@ export class SqliteBigintNumberCodec extends CodecImpl<
   number | bigint | string,
   number
 > {
-  async encode(value: number, _ctx: CodecCallContext): Promise<number> {
+  async toWire(value: number, _ctx: CodecCallContext): Promise<number> {
     return encodableSafeInteger(SQLITE_BIGINT_NUMBER_CODEC_ID, value);
   }
   /**
@@ -771,7 +758,7 @@ export class SqliteBigintNumberCodec extends CodecImpl<
    * `bigint`; a bigint (or decimal text) is range-checked exactly before any
    * conversion to `number`, so an out-of-range value throws rather than rounds.
    */
-  async decode(wire: number | bigint | string, _ctx: CodecCallContext): Promise<number> {
+  async fromWire(wire: number | bigint | string, _ctx: CodecCallContext): Promise<number> {
     if (typeof wire === 'number') {
       return safeIntegerNumber(SQLITE_BIGINT_NUMBER_CODEC_ID, wire, 'RUNTIME.DECODE_FAILED');
     }
@@ -784,11 +771,11 @@ export class SqliteBigintNumberCodec extends CodecImpl<
     }
     return safeIntegerFromBigint(SQLITE_BIGINT_NUMBER_CODEC_ID, BigInt(wire));
   }
-  encodeJson(value: number): JsonValue {
-    return digitTextOfSafeInteger(SQLITE_BIGINT_NUMBER_CODEC_ID, value);
+  fromDataTypeValue(value: DataTypeValue<string>): number {
+    return safeIntegerFromDigitText(SQLITE_BIGINT_NUMBER_CODEC_ID, value.value);
   }
-  decodeJson(json: JsonValue): number {
-    return safeIntegerFromDigitText(SQLITE_BIGINT_NUMBER_CODEC_ID, json);
+  toDataTypeValue(input: number): DataTypeValue {
+    return this.dataTypeValueOf(digitTextOfSafeInteger(SQLITE_BIGINT_NUMBER_CODEC_ID, input));
   }
 }
 
@@ -804,7 +791,7 @@ export class SqliteBigintNumberDescriptor extends SqliteCodecDescriptor<void> {
     return decimalTextNumberLiteral(value);
   }
   override factory(): (ctx: CodecInstanceContext) => SqliteBigintNumberCodec {
-    return () => new SqliteBigintNumberCodec(this);
+    return () => new SqliteBigintNumberCodec(this, sqliteInteger);
   }
 }
 

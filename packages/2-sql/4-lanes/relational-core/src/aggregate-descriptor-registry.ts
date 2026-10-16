@@ -41,7 +41,7 @@ function namedOutputRef(output: NamedAggregateOutput, input: CodecRef | undefine
 function resultNullability(descriptor: SqlAggregateDescriptor): AggregateResultNullability {
   return descriptor.nullable
     ? { nullable: true }
-    : { nullable: false, emptyResultJson: descriptor.emptyResultJson };
+    : { nullable: false, emptyResultWire: descriptor.emptyResultWire };
 }
 
 /**
@@ -63,7 +63,7 @@ export function buildSqlAggregateDescriptorRegistry(
         `Contributed value ${describeCandidate(candidate)} is not a valid SQL aggregate descriptor.`,
         {
           why: 'Aggregate resolution reads a declared operation, input match, result codec, and nullability — plus, for a non-nullable result, the empty-result value; a lowering hook, where present, must be callable.',
-          fix: 'Declare `operation`, `input` (`none` / `any` / `codec` / `trait`), `output` (`self` / `codec`), and `nullable` on the descriptor, adding `emptyResultJson` where `nullable` is false.',
+          fix: 'Declare `operation`, `input` (`none` / `any` / `codec` / `trait`), `output` (`self` / `codec`), and `nullable` on the descriptor, adding `emptyResultWire` where `nullable` is false.',
           meta: { descriptor: describeCandidate(candidate) },
         },
       );

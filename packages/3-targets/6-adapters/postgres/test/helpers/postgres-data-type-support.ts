@@ -10,4 +10,5 @@ export const postgresDataTypeSupport: DataTypeSupport = {
     ...postgresDataTypeEntries(),
   },
   lookup: createDataTypeLookup([...sqlExpressionRegistration.dataTypes, ...postgresDataTypes]),
+  dataTypeOfCodec: () => undefined,
 };

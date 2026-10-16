@@ -33,6 +33,25 @@ describe('column defaults', () => {
     ).toBe('@default(1.50)');
   });
 
+  it.each([
+    ['-0.500000000000000000000000000000', 'numeric(65, 30)', '-0.5', { precision: 65, scale: 30 }],
+    ['10.000000000000000000000000000000', 'numeric(65, 30)', '10', { precision: 65, scale: 30 }],
+    ['1.50', 'numeric(10, 2)', '1.5', { precision: 10, scale: 2 }],
+  ])(
+    'prints %s on %s as %s, the shortest number that reads back as it',
+    (value, _type, written, typeParams) => {
+      expect(
+        defaultOf({
+          dataType: 'pg/numeric',
+          codecId: 'pg/numeric@1',
+          nullable: false,
+          typeParams,
+          default: { kind: 'literal', value },
+        }),
+      ).toBe(`@default(${written})`);
+    },
+  );
+
   it('prints an integer default unquoted', () => {
     expect(defaultOf({ ...INT_COLUMN, default: { kind: 'literal', value: 42 } })).toBe(
       '@default(42)',

@@ -46,7 +46,11 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
       capabilities: { sql: { scalarList: true } },
       controlMutationDefaults: builtinControlMutationDefaults,
       codecLookup: fixtureTypeLookups.codecLookup,
-      dataTypes: { entries, lookup: fixtureTypeLookups.dataTypeLookup },
+      dataTypes: {
+        entries,
+        lookup: fixtureTypeLookups.dataTypeLookup,
+        dataTypeOfCodec: () => undefined,
+      },
     });
   };
   const columnDefault = (

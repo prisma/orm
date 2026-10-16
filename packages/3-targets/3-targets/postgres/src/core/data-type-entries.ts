@@ -19,7 +19,28 @@ import {
   signedRange,
 } from '@internal/sql-contract/data-type-support';
 import { structuredError } from '@internal/utils/structured-error';
-import { pgBool, pgInt2, pgInt4, pgInt8, pgJson, pgNumeric, pgText } from './data-types';
+import { pgByteaFromHexText, pgByteaHexText, pgIntervalStoredText } from './data-type-values';
+import {
+  pgBool,
+  pgBytea,
+  pgDate,
+  pgDateStoredText,
+  pgInt2,
+  pgInt4,
+  pgInt8,
+  pgInterval,
+  pgJson,
+  pgNumeric,
+  pgText,
+  pgTime,
+  pgTimeStoredText,
+  pgTimestamp,
+  pgTimestampStoredText,
+  pgTimestamptz,
+  pgTimestamptzStoredText,
+  pgTimetz,
+  pgTimetzStoredText,
+} from './data-types';
 
 /**
  * PostgreSQL's own rule for a written number: a whole number takes the narrowest of `int2`, `int4`
@@ -43,6 +64,19 @@ function readBoolean(text: string): JsonValue {
     why: 'The only text a boolean reads is true or false.',
     fix: 'Use true or false.',
   });
+}
+
+/** A tag whose body is a date or time in ISO 8601 or the text PostgreSQL prints, read into the value its type stores. */
+function dateTimeTag(
+  tag: string,
+  parse: (text: string) => string,
+  documentation: string,
+): DataTypeAuthoringEntry {
+  return {
+    written: { kind: 'tag', tag, parse },
+    print: (value) => String(value),
+    documentation,
+  };
 }
 
 /** The text of a number-shaped stored value: a number written out, or text taken as it stands. */
@@ -76,6 +110,42 @@ export function postgresDataTypeEntries(): Readonly<Record<string, DataTypeAutho
       written: { kind: 'tag', tag: 'json', parse: parseJsonText },
       print: printJsonText,
       documentation: 'Reads the text as a JSON document and stores it as the default value.',
+    },
+    [pgDate.id]: dateTimeTag(
+      'date',
+      pgDateStoredText,
+      'A date, as in date`2024-01-01`. Reads ISO 8601 and the text PostgreSQL prints, such as 0044-03-15 BC, infinity and -infinity.',
+    ),
+    [pgTime.id]: dateTimeTag(
+      'time',
+      pgTimeStoredText,
+      'A time of day without a UTC offset, as in time`12:34:56`.',
+    ),
+    [pgTimetz.id]: dateTimeTag(
+      'timetz',
+      pgTimetzStoredText,
+      'A time of day with its UTC offset, as in timetz`12:34:56+02:00`.',
+    ),
+    [pgTimestamp.id]: dateTimeTag(
+      'timestamp',
+      pgTimestampStoredText,
+      'A date and time of day without a UTC offset, as in timestamp`2024-01-01 12:34:56`. Reads ISO 8601 and the text PostgreSQL prints, including infinity and -infinity.',
+    ),
+    [pgTimestamptz.id]: dateTimeTag(
+      'timestamptz',
+      pgTimestamptzStoredText,
+      'An instant, as in timestamptz`2024-01-01T00:00:00Z`, stored in UTC. Reads ISO 8601 and the text PostgreSQL prints, including infinity and -infinity.',
+    ),
+    [pgInterval.id]: dateTimeTag(
+      'interval',
+      pgIntervalStoredText,
+      'A duration, as in interval`P1Y2M3DT4H5M6S` or interval`1 year 2 mons`, stored as an ISO 8601 duration.',
+    ),
+    [pgBytea.id]: {
+      written: { kind: 'tag', tag: 'bytea', parse: pgByteaFromHexText },
+      print: (value) => pgByteaHexText(String(value)),
+      documentation:
+        'Bytes, written as the hex text PostgreSQL prints, as in bytea`\\x68656c6c6f`.',
     },
   };
 }

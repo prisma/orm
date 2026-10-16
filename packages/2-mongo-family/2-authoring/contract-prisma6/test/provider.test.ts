@@ -19,7 +19,7 @@ function lookupWithFailingEncode(codecId: string, failure: Error): CodecLookupWi
       const codec = base.get(id);
       if (id !== codecId || codec === undefined) return codec;
       return Object.assign(Object.create(codec) as Codec, {
-        encodeJson: () => {
+        toDataTypeValue: () => {
           throw failure;
         },
       });

@@ -75,14 +75,16 @@ function printedFieldTypes(printed: string): Record<string, string> {
 }
 
 describe('contract infer picks each column type through its data type', () => {
-  it('prints the marked constructor with the fewest arguments, for a scalar and a list', () => {
+  it('prints the marked constructor with the fewest arguments, for a scalar and a list', async () => {
     const columns = Object.fromEntries(
       COLUMN_TYPES.flatMap(([text], index) => [
         [`c${index * 2}`, { reportedType: reported(text) }],
         [`c${index * 2 + 1}`, { reportedType: reported(text), many: true as const }],
       ]),
     );
-    const printed = printPslFromFlat(new SqlSchemaIR({ tables: { sample: tableWith(columns) } }));
+    const printed = await printPslFromFlat(
+      new SqlSchemaIR({ tables: { sample: tableWith(columns) } }),
+    );
 
     expect(printedFieldTypes(printed)).toEqual(
       Object.fromEntries(
@@ -94,7 +96,7 @@ describe('contract infer picks each column type through its data type', () => {
     );
   });
 
-  it('fails on every column no data type claims, listing them sorted, and prints nothing', () => {
+  it('fails on every column no data type claims, listing them sorted, and prints nothing', async () => {
     const schema = new SqlSchemaIR({
       tables: {
         zeta: {
@@ -112,7 +114,7 @@ describe('contract infer picks each column type through its data type', () => {
       },
     });
 
-    expect(() => printPslFromFlat(schema)).toThrow(
+    await expect(printPslFromFlat(schema)).rejects.toThrow(
       expect.objectContaining({
         code: 'CONTRACT.INFER_COLUMN_TYPE_UNCLAIMED',
         message: [

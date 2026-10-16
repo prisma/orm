@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import { renderFullTextIndexDocument } from '../../src/core/full-text-search-document';
 import { contractToPostgresDatabaseSchemaNode } from '../../src/core/migrations/contract-to-postgres-database-schema-node';
 import { type PostgresContract, PostgresSchema } from '../../src/core/postgres-schema';
-import { postgresRenderDefault } from '../../src/exports/control';
 import { postgresTypeLookups } from '../postgres-type-lookups';
 
 const fullTextOptions = {
@@ -64,7 +63,6 @@ function contractWithIndex(index: {
 function indexNodeOf(contract: PostgresContract) {
   const root = contractToPostgresDatabaseSchemaNode(contract, {
     annotationNamespace: 'pg',
-    renderDefault: postgresRenderDefault,
     ...postgresTypeLookups,
   });
   const index = root.namespaces['public']?.tables['post']?.indexes[0];

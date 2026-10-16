@@ -11,10 +11,11 @@ import {
   type AuthoringTypeNamespace,
   isAuthoringTypeConstructorDescriptor,
 } from '@internal/framework-components/authoring';
+import { dataTypeParams } from '@internal/framework-components/codec';
 import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
 import { printPsl } from '@internal/psl-printer';
-import { dataTypeParams, isSqlDataType } from '@internal/sql-contract/data-type';
+import { isSqlDataType } from '@internal/sql-contract/data-type';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import postgres from '@internal/target-postgres/control';
 import { createDevDatabase, type DevDatabase, timeouts, withClient } from '@repo/test-utils';
@@ -147,7 +148,7 @@ async function inferPsl(connectionString: string): Promise<string> {
   const driver = await postgresControlDriver.create(connectionString);
   try {
     const schema = await familyInstance.introspect({ driver });
-    return printPsl(familyInstance.inferPslContract(schema), {
+    return printPsl(await familyInstance.inferPslContract(schema), {
       pslBlockDescriptors: controlStack.authoringContributions.pslBlockDescriptors,
     });
   } finally {

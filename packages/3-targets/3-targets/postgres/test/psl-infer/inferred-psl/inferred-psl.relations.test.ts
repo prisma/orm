@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { printPslFromFlat as printPslFromSql } from '../fixtures';
 
 describe('printPsl', () => {
-  it('schema with 1:N relation', () => {
+  it('schema with 1:N relation', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         user: {
@@ -50,7 +50,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -76,7 +76,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('stamps index: false when the FK column has no live backing index, unique, or PK', () => {
+  it('stamps index: false when the FK column has no live backing index, unique, or PK', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         user: {
@@ -108,7 +108,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -131,7 +131,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('schema with 1:1 relation (FK column is unique)', () => {
+  it('schema with 1:1 relation (FK column is unique)', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         user: {
@@ -164,7 +164,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -188,7 +188,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('schema with 1:1 relation from a composite unique foreign key', () => {
+  it('schema with 1:1 relation from a composite unique foreign key', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         account: {
@@ -234,7 +234,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -261,7 +261,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('self-referencing FK', () => {
+  it('self-referencing FK', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         employee: {
@@ -288,7 +288,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -306,7 +306,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('multiple FKs to same table (named relations)', () => {
+  it('multiple FKs to same table (named relations)', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         user: {
@@ -354,7 +354,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -380,7 +380,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('composite FK relation fields use table name', () => {
+  it('composite FK relation fields use table name', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         product: {
@@ -430,7 +430,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -456,7 +456,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('onDelete and onUpdate referential actions', () => {
+  it('onDelete and onUpdate referential actions', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         parent: {
@@ -494,7 +494,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -517,7 +517,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('preserves foreign key constraint names with relation map arguments', () => {
+  it('preserves foreign key constraint names with relation map arguments', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         team: {
@@ -551,7 +551,7 @@ describe('printPsl', () => {
       },
     });
 
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -574,7 +574,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('orders cyclic table dependencies deterministically', () => {
+  it('orders cyclic table dependencies deterministically', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         alpha: {
@@ -610,7 +610,7 @@ describe('printPsl', () => {
       },
     });
 
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     const betaIndex = result.indexOf('model Beta');
     const alphaIndex = result.indexOf('model Alpha');
 

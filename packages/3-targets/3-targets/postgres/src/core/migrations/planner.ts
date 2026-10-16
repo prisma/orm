@@ -428,6 +428,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       codecHooks,
       tableRenames: statements.value.tableRenames,
       columnRenames: statements.value.columnRenames,
+      dataTypes: types.dataTypeLookup,
     });
     const fieldEventOps = fieldEventCalls.map(({ call }) => call);
     // Codec hook ops are target-agnostic `OpFactoryCall`; Postgres planning

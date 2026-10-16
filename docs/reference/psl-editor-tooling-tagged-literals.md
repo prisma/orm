@@ -12,7 +12,16 @@ A `sql` literal writes a value of the data type `sql/expression` ([ADR 268](../a
 - `@@check(expression:)`;
 - a policy block's `using` and `withCheck`.
 
-A `json` literal writes a value of the target's JSON type and is taken by `@default`.
+The other tags write a default value of a type whose text has its own grammar, and are taken by `@default`:
+
+| Tag | Data type | Registered by |
+| --- | --- | --- |
+| `json` | `pg/json`; `sqlite/json` | each SQL target |
+| `date`, `time`, `timetz`, `timestamp`, `timestamptz`, `interval` | the Postgres type of the same name | the Postgres target |
+| `bytea` | `pg/bytea`; the body is the hex text PostgreSQL prints, `` bytea`\x68656c6c6f` `` | the Postgres target |
+| `datetime` | `sqlite/datetime` | the SQLite target |
+
+A quoted string on a column of one of these types is refused with `PSL_VALUE_TYPE_INCOMPATIBLE`, and the message shows the tag to write, as in ``Expected timestamptz`...`; write timestamptz`2024-01-01T00:00:00Z` ``.
 
 ## What the parser does
 
@@ -22,7 +31,7 @@ The parser (`packages/1-framework/2-authoring/psl-parser/src/parse.ts`) produces
 
 ## How specs take a tagged literal
 
-The tags are not a registry of their own. They come from the data type authoring entries in the spec context's `dataTypes`: `AttributeSpecContext.dataTypes` (`packages/1-framework/2-authoring/psl-parser/src/attribute-spec/spec-context.ts`) for attributes and `BlockSpecContext.dataTypes` (`src/block-spec/types.ts`) for blocks. An entry whose written form is `{ kind: 'tag', tag }` registers that tag. The SQL family registers `sql`, the tag of `sql/expression`, which it defines in `packages/2-sql/1-core/contract/src/sql-expression.ts`. Every SQL target registers `json`, and no component registers a prefixed tag.
+The tags are not a registry of their own. They come from the data type authoring entries in the spec context's `dataTypes`: `AttributeSpecContext.dataTypes` (`packages/1-framework/2-authoring/psl-parser/src/attribute-spec/spec-context.ts`) for attributes and `BlockSpecContext.dataTypes` (`src/block-spec/types.ts`) for blocks. An entry whose written form is `{ kind: 'tag', tag }` registers that tag. The SQL family registers `sql`, the tag of `sql/expression`, which it defines in `packages/2-sql/1-core/contract/src/sql-expression.ts`. Every SQL target registers `json`; the Postgres target registers the date and time tags and `bytea`, and the SQLite target `datetime`. No component registers a prefixed tag.
 
 Two combinators take a tagged literal:
 

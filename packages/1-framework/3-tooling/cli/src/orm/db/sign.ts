@@ -30,6 +30,7 @@ import {
 } from '../../utils/cli-errors';
 import { closeQuietly, maskConnectionUrl } from '../../utils/command-helpers';
 import { RECORDED_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
+import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import { type CliInvocation, cliCommand, cliInvocation } from '../../utils/printed-command';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
@@ -305,7 +306,7 @@ function hydrateContract(
     return notOkResult(
       errorContractValidationFailed(
         `Contract JSON is invalid: ${error instanceof Error ? error.message : String(error)}`,
-        { where: { path } },
+        { where: { path }, meta: contractValidationMeta(error) },
       ),
     );
   }
@@ -610,7 +611,6 @@ export function createDbSignCommand(
                   nextActions: schemaDriftNextActions({
                     verb: 'sign',
                     contractRef,
-                    issues: outcome.schema.schema.issues,
                   }),
                 }),
               ];

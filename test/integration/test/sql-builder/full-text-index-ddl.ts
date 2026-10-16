@@ -5,7 +5,7 @@ import postgresAdapterControl, {
 import pgvector from '@internal/extension-pgvector/control';
 import sqlFamilyControl from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
-import postgresTargetControl, { postgresRenderDefault } from '@internal/target-postgres/control';
+import postgresTargetControl from '@internal/target-postgres/control';
 import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { CreateIndexCall } from '@internal/target-postgres/op-factory-call';
 import { contractToPostgresDatabaseSchemaNode } from '@internal/target-postgres/planner';
@@ -46,7 +46,6 @@ export async function plannedExpressionIndexes(
     >(contract),
     {
       annotationNamespace: 'pg',
-      renderDefault: postgresRenderDefault,
       codecLookup: fixtureStack.codecLookup,
       dataTypeLookup: fixtureStack.dataTypes.lookup,
     },

@@ -1,5 +1,4 @@
 import type { DataTypeAuthoringEntry } from '@internal/framework-components/authoring';
-import { tagEntryKey } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { sqliteDataTypeEntries } from '../src/core/data-type-entries';
 
@@ -20,8 +19,14 @@ const classify = (text: string) => {
 };
 
 describe('the authoring entries this target contributes', () => {
-  it('keys a value entry by data type and the json entry by its tag', () => {
-    expect(Object.keys(entries).sort()).toEqual(['sqlite/real', 'sqlite/text', 'tag:json']);
+  it('keys every entry by the data type it reads', () => {
+    expect(Object.keys(entries).sort()).toEqual([
+      'sqlite/blob',
+      'sqlite/datetime',
+      'sqlite/json',
+      'sqlite/real',
+      'sqlite/text',
+    ]);
   });
   it('names every type its classifier returns', () => {
     const written = entry('sqlite/real').written;
@@ -64,7 +69,7 @@ describe('the classifier this target contributes', () => {
 });
 
 describe('the json tag this target contributes', () => {
-  const json = entry(tagEntryKey('json'));
+  const json = entry('sqlite/json');
   const parse = (body: string) => {
     if (json.written.kind !== 'tag') throw new Error('the json entry is a tag entry');
     return json.written.parse(body);
@@ -88,5 +93,64 @@ describe('the json tag this target contributes', () => {
 
   it('prints the stored text as the body', () => {
     expect(json.print('{"a":1}')).toBe('{"a":1}');
+  });
+});
+
+describe('the datetime tag this target contributes', () => {
+  const datetime = entry('sqlite/datetime');
+  const parse = (body: string) => {
+    if (datetime.written.kind !== 'tag') throw new Error('the datetime entry is a tag entry');
+    return datetime.written.parse(body);
+  };
+
+  it.each([
+    ['2024-01-01T00:00:00Z', '2024-01-01T00:00:00.000Z'],
+    ['2024-01-01 01:00:00.5+01:00', '2024-01-01T00:00:00.500Z'],
+    ['2024-01-01T00:00:00.123Z', '2024-01-01T00:00:00.123Z'],
+  ])('reads %s as the instant with three fraction digits, %s', (body, stored) => {
+    expect(parse(body)).toBe(stored);
+  });
+
+  it('refuses a body with no UTC offset', () => {
+    expect(() => parse('2024-01-01 00:00:00')).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.CAST_REFUSED' }),
+    );
+  });
+
+  it('prints the stored text as the body', () => {
+    expect(datetime.print('2024-01-01T00:00:00.000Z')).toBe('2024-01-01T00:00:00.000Z');
+  });
+});
+
+describe('the blob tag this target contributes', () => {
+  const blob = entry('sqlite/blob');
+  const parse = (body: string) => {
+    if (blob.written.kind !== 'tag') throw new Error('the blob entry is a tag entry');
+    return blob.written.parse(body);
+  };
+
+  it('reads a body of hex digits as the upper-case hex sqlite/blob stores', () => {
+    expect({ lower: parse('68656c6c6f'), upper: parse('68656C6C6F'), empty: parse('') }).toEqual({
+      lower: '68656C6C6F',
+      upper: '68656C6C6F',
+      empty: '',
+    });
+  });
+
+  it.each([
+    ['an odd number of digits', '686'],
+    ['a character that is not hex', '6g'],
+    ['a prefix', "X'68'"],
+  ])('refuses %s, saying how to write bytes', (_case, body) => {
+    expect(() => parse(body)).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.CAST_REFUSED',
+        message: `"${body}" is not hex text: write two hexadecimal digits for each byte, as in blob\`68656c6c6f\`.`,
+      }),
+    );
+  });
+
+  it('prints the stored hex as the body, in lower case', () => {
+    expect(blob.print('68656C6C6F')).toBe('68656c6c6f');
   });
 });

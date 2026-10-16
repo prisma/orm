@@ -177,14 +177,14 @@ export const postgresAggregateDescriptors = [
     input: { kind: 'any' },
     output: { kind: 'codec', codecId: PG_INT8_NUMBER_CODEC_ID },
     nullable: false,
-    emptyResultJson: '0',
+    emptyResultWire: '0',
   },
   {
     operation: 'countBigInt',
     input: { kind: 'any' },
     output: { kind: 'codec', codecId: PG_INT8_CODEC_ID },
     nullable: false,
-    emptyResultJson: '0',
+    emptyResultWire: '0',
     lower: computedWith('count'),
   },
 

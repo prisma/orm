@@ -578,6 +578,37 @@ describe('createBinder — binding a mixin body once', () => {
     });
   });
 
+  it('gives a field attribute the type constructor of its type, through a named type', () => {
+    const fieldContexts: FieldAttributeSpecContext[] = [];
+    const { diagnostics } = bindWith(
+      {
+        fieldSpecs: {
+          contextual: (ctx) => {
+            fieldContexts.push(ctx);
+            return fieldAttribute('contextual', { documentation: 'fixture' });
+          },
+        },
+      },
+      lines(
+        'types {',
+        '  Count = Int',
+        '}',
+        'model A {',
+        '  direct Int @contextual',
+        '  aliased Count @contextual',
+        '  other A? @contextual',
+        '}',
+      ),
+    );
+
+    expect(diagnostics).toEqual([]);
+    expect(fieldContexts.map((ctx) => ctx.typeConstructor?.name)).toEqual([
+      'Int',
+      'Int',
+      undefined,
+    ]);
+  });
+
   it('passes the mixin as the owner to the unsupported-attribute and unresolved-type callbacks, once', () => {
     const unsupported: UnsupportedAttribute[] = [];
     const unresolved: UnresolvedTypeReference[] = [];

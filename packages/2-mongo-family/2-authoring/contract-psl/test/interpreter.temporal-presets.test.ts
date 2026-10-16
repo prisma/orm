@@ -38,7 +38,7 @@ function interpret(
     scalarTypeCodecIds,
     defaultFunctionRegistry: new Map(),
     codecLookup: mongoCodecLookup,
-    dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
+    dataTypes: { entries: {}, lookup: mongoDataTypeLookup, dataTypeOfCodec: () => undefined },
     authoringContributions: options?.authoringContributions ?? authoringContributions,
     ...(options?.reportWarning ? { reportWarning: options.reportWarning } : {}),
   });

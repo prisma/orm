@@ -1,90 +1,96 @@
-import { pgDate, pgTime, pgTimestamptz, pgTimetz } from './data-types';
+import { pgDate, pgTime, pgTimestamp, pgTimestamptz, pgTimetz } from './data-types';
 
-const RFC_3339 =
-  /^(\d{4})-(\d{2})-(\d{2})[Tt ](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(?:[Zz]|([+-])(\d{2}):(\d{2}))$/;
-
-const MICROS_PER_SECOND = 1_000_000;
-
-function pad(value: number, width = 2): string {
-  return String(value).padStart(width, '0');
-}
+const RFC_3339 = /^(\d{4}-\d{2}-\d{2})[Tt ](\d{2}:\d{2}:\d{2}(?:\.\d+)?)([Zz]|[+-]\d{2}:\d{2})$/;
 
 /**
- * The microseconds Postgres keeps for a fraction-of-a-second digit string. Every digit counts:
- * `.1234565` is an exact tie, and C's `rint` takes the even neighbour 123456, while `.1234565001`
- * is above the tie and rounds up to 123457.
+ * What a Prisma 7 `DateTime` default, such as `2024-01-02T03:04:05.123+02:00`, means on a column of `dataType`, as the body of the type's tag: `date` keeps the written date, `time` and `timestamp` the written wall-clock time without the offset, `timetz` the time with the written offset, and `timestamptz` the written instant, offset included. The tag reads the body as Postgres reads the default Prisma 7 writes. `undefined` for text that is not an RFC 3339 date and time, or a type that is not a date or time type.
  */
-function fractionMicros(fraction: string): number {
-  const micros = Number(`${fraction}000000`.slice(0, 6));
-  const beyondTie = fraction.slice(6).replace(/0+$/, '');
-  if (beyondTie === '') return micros;
-  if (beyondTie === '5') return micros % 2 === 0 ? micros : micros + 1;
-  return beyondTie > '5' ? micros + 1 : micros;
-}
-
-function fractionText(micros: number): string {
-  return micros === 0 ? '' : `.${pad(micros, 6).replace(/0+$/, '')}`;
-}
-
-function offsetText(minutes: number): string {
-  const magnitude = Math.abs(minutes);
-  const rest = magnitude % 60;
-  return `${minutes < 0 ? '-' : '+'}${pad(Math.floor(magnitude / 60))}${rest === 0 ? '' : `:${pad(rest)}`}`;
-}
-
-/**
- * The text of the column default Postgres stores for a Prisma 7 `DateTime`
- * default, which Prisma 7 writes as `'2024-01-02 03:04:05.123 +02:00'`:
- * `date` keeps the written date, `time` and `timestamp` the written wall-clock
- * time without the offset, and `timetz` the time with the written offset.
- * `timestamptz` is carried in its UTC form, the text a session in UTC prints
- * (`2024-01-02 01:04:05+00`, and `0001-12-31 23:30:00+00 BC` before year 1);
- * a session in another time zone prints the same instant differently.
- * Fractional seconds are rounded to microseconds; the column's own precision
- * does not change a stored default.
- */
-export function storedTemporalText(text: string, dataType: string): string | undefined {
+export function prisma7TemporalTagBody(text: string, dataType: string): string | undefined {
   const match = RFC_3339.exec(text);
   if (match === null) return undefined;
-  const [
-    ,
-    year = '',
-    month = '',
-    day = '',
-    hour,
-    minute,
-    second,
-    fraction = '',
-    sign,
-    offsetHours,
-    offsetMinutes,
-  ] = match;
-  if (dataType === pgDate.id) return `${year}-${month}-${day}`;
-
-  const micros = fractionMicros(fraction);
-  const clockSeconds =
-    Number(hour) * 3600 +
-    Number(minute) * 60 +
-    Number(second) +
-    Math.floor(micros / MICROS_PER_SECOND);
-  const fractional = fractionText(micros % MICROS_PER_SECOND);
-  const offsetMinutesTotal =
-    sign === undefined
-      ? 0
-      : (sign === '-' ? -1 : 1) * (Number(offsetHours) * 60 + Number(offsetMinutes));
-
-  if (dataType === pgTime.id || dataType === pgTimetz.id) {
-    const clock = `${pad(Math.floor(clockSeconds / 3600))}:${pad(Math.floor(clockSeconds / 60) % 60)}:${pad(clockSeconds % 60)}${fractional}`;
-    return dataType === pgTime.id ? clock : `${clock}${offsetText(offsetMinutesTotal)}`;
+  const [, date = '', clock = '', zone = ''] = match;
+  const offset = zone.toUpperCase();
+  switch (dataType) {
+    case pgDate.id:
+      return date;
+    case pgTime.id:
+      return clock;
+    case pgTimetz.id:
+      return `${clock}${offset}`;
+    case pgTimestamp.id:
+      return `${date}T${clock}`;
+    case pgTimestamptz.id:
+      return `${date}T${clock}${offset}`;
+    default:
+      return undefined;
   }
+}
 
-  const midnight = new Date(0);
-  midnight.setUTCFullYear(Number(year), Number(month) - 1, Number(day));
-  const utcShift = dataType === pgTimestamptz.id ? offsetMinutesTotal * 60 : 0;
-  const stamp = new Date(midnight.getTime() + (clockSeconds - utcShift) * 1000);
-  const astronomicalYear = stamp.getUTCFullYear();
-  const eraYear = astronomicalYear > 0 ? astronomicalYear : 1 - astronomicalYear;
-  const wallClock = `${pad(eraYear, 4)}-${pad(stamp.getUTCMonth() + 1)}-${pad(stamp.getUTCDate())} ${pad(stamp.getUTCHours())}:${pad(stamp.getUTCMinutes())}:${pad(stamp.getUTCSeconds())}${fractional}`;
-  const era = astronomicalYear > 0 ? '' : ' BC';
-  return dataType === pgTimestamptz.id ? `${wallClock}+00${era}` : `${wallClock}${era}`;
+const MICROSECONDS_PER_SECOND = 1_000_000n;
+const POSTGRES_EPOCH_MS = Date.UTC(2000, 0, 1);
+
+/**
+ * The value PostgreSQL stores for a Prisma 7 `DateTime` default with more fraction digits than a column of `dataType` with `precision` holds, written in the same RFC 3339 form: the fraction is first rounded to microseconds as PostgreSQL reads text, then to `precision` digits as it rounds a value for its column, a tie going away from midnight on 2000-01-01, PostgreSQL's epoch. `undefined` when the column holds the text as written, or for a date column, which keeps only the date.
+ */
+export function prisma7TemporalStored(
+  text: string,
+  dataType: string,
+  precision: number,
+): string | undefined {
+  const match = RFC_3339.exec(text);
+  if (match === null || dataType === pgDate.id) return undefined;
+  const [, date = '', clock = '', zone = ''] = match;
+  const [hms = '', fraction = ''] = clock.split('.');
+  if (fraction.length <= precision) return undefined;
+  const [year, month, day] = date.split('-').map(Number);
+  const [hour, minute, second] = hms.split(':').map(Number);
+  const wallMs = new Date(0).setUTCFullYear(year ?? 0, (month ?? 1) - 1, day ?? 1);
+  const wall =
+    (BigInt(wallMs - POSTGRES_EPOCH_MS) / 1000n +
+      BigInt((hour ?? 0) * 3600 + (minute ?? 0) * 60 + (second ?? 0))) *
+      MICROSECONDS_PER_SECOND +
+    microsecondsOf(fraction);
+  const instant = dataType === pgTimestamptz.id ? wall - offsetMicroseconds(zone) : wall;
+  const tieGoesEarlier =
+    (dataType === pgTimestamp.id || dataType === pgTimestamptz.id) && instant < 0n;
+  const stored = roundedTo(wall, 10n ** BigInt(6 - precision), tieGoesEarlier);
+  return `${printedWall(stored, precision)}${zone}`;
+}
+
+/** PostgreSQL reads the fraction of a second as a double and rounds it to whole microseconds. */
+function microsecondsOf(fraction: string): bigint {
+  if (fraction.length <= 6) return BigInt(fraction.padEnd(6, '0'));
+  const scaled = Number(`0.${fraction}`) * 1e6;
+  const floor = Math.floor(scaled);
+  const rest = scaled - floor;
+  const rounded = rest > 0.5 || (rest === 0.5 && floor % 2 === 1) ? floor + 1 : floor;
+  return BigInt(rounded);
+}
+
+function offsetMicroseconds(zone: string): bigint {
+  const offset = /^([+-])(\d{2}):(\d{2})$/.exec(zone);
+  if (offset === null) return 0n;
+  const [, sign, hours = '0', minutes = '0'] = offset;
+  const seconds = BigInt(Number(hours) * 3600 + Number(minutes) * 60);
+  return (sign === '-' ? -seconds : seconds) * MICROSECONDS_PER_SECOND;
+}
+
+function roundedTo(value: bigint, step: bigint, tieGoesEarlier: boolean): bigint {
+  const rest = ((value % step) + step) % step;
+  const below = value - rest;
+  const twice = rest * 2n;
+  if (twice > step || (twice === step && !tieGoesEarlier)) return below + step;
+  return below;
+}
+
+function printedWall(microseconds: bigint, precision: number): string {
+  const rest =
+    ((microseconds % MICROSECONDS_PER_SECOND) + MICROSECONDS_PER_SECOND) % MICROSECONDS_PER_SECOND;
+  const seconds = (microseconds - rest) / MICROSECONDS_PER_SECOND;
+  const at = new Date(POSTGRES_EPOCH_MS + Number(seconds) * 1000);
+  const two = (n: number) => String(n).padStart(2, '0');
+  const day = `${String(at.getUTCFullYear()).padStart(4, '0')}-${two(at.getUTCMonth() + 1)}-${two(at.getUTCDate())}`;
+  const clock = `${two(at.getUTCHours())}:${two(at.getUTCMinutes())}:${two(at.getUTCSeconds())}`;
+  const fraction = precision === 0 ? '' : `.${String(rest).padStart(6, '0').slice(0, precision)}`;
+  return `${day}T${clock}${fraction}`;
 }

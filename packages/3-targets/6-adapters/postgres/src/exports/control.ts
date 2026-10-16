@@ -37,7 +37,6 @@ export {
   createPostgresBuiltinCodecLookup,
   createPostgresCodecRegistryWithBuiltins,
 } from '@internal/target-postgres/codecs';
-export { parsePostgresDefault } from '@internal/target-postgres/default-normalizer';
 export { normalizeSchemaNativeType } from '@internal/target-postgres/native-type-normalizer';
 export { PostgresControlAdapter } from '../core/control-adapter';
 export { escapeLiteral, qualifyName, quoteIdentifier };

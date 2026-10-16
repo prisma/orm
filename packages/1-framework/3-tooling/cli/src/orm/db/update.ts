@@ -40,6 +40,7 @@ import {
 } from '../../utils/cli-errors';
 import { closeQuietly } from '../../utils/command-helpers';
 import { RECORDED_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
+import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import { mapDbUpdateFailure } from '../../utils/db-update-failure';
 import type { MigrationCommandResult } from '../../utils/formatters/migrations';
 import { type CliInvocation, cliCommand, cliInvocation } from '../../utils/printed-command';
@@ -415,6 +416,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
             normalizeError(
               errorContractValidationFailed(`Contract validation failed: ${error.message}`, {
                 where: { path: contractPath },
+                meta: contractValidationMeta(error),
               }),
             ),
           );

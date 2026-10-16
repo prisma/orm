@@ -13,12 +13,12 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import { type CodecRef, createDataTypeLookup } from '@internal/framework-components/codec';
 import {
+  type CodecRef,
+  createDataTypeLookup,
   dataTypeParams,
-  renderSqlTypeName,
-  sqlDataTypeOfCodec,
-} from '@internal/sql-contract/data-type';
+} from '@internal/framework-components/codec';
+import { renderSqlTypeName, sqlDataTypeOfCodec } from '@internal/sql-contract/data-type';
 import { buildSqlAggregateDescriptorRegistry } from '@internal/sql-relational-core/aggregate-descriptor-registry';
 import { postgresAggregateDescriptors } from '@internal/target-postgres/aggregates';
 import {

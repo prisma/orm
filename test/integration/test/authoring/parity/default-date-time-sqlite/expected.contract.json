@@ -62,10 +62,10 @@
                 },
                 "instant": {
                   "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/text",
+                  "dataType": "sqlite/datetime",
                   "default": {
                     "kind": "literal",
-                    "value": "2024-01-01T00:00:00.5Z"
+                    "value": "2024-01-01T00:00:00.500Z"
                   },
                   "nullable": false
                 }
@@ -82,7 +82,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "9bb4818341af35a3b5cc8a240e8b12cb6b9f29f28057775f3b57859a63d5779e"
+    "storageHash": "162c4355c902a58dd8018b9beae41ec9945a1a45e74cc21f214e98786ade8246"
   },
   "capabilities": {
     "sql": {

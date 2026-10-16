@@ -1,52 +1,53 @@
-import type { JsonValue } from '@internal/contract/types';
 import { expectTypeOf, test } from 'vitest';
 import type { Codec } from '../src/shared/codec';
 import type { CodecTrait } from '../src/shared/codec-types';
+import type { DataTypeValue } from '../src/shared/data-type';
 
-test('encodeJson is required and synchronous', () => {
-  expectTypeOf<Codec>().toHaveProperty('encodeJson');
-  expectTypeOf<Codec['encodeJson']>().toBeFunction();
-  type EncodeJsonReturn = ReturnType<Codec['encodeJson']>;
-  expectTypeOf<EncodeJsonReturn>().toEqualTypeOf<JsonValue>();
+test('toDataTypeValue is required, synchronous and returns a data type value', () => {
+  expectTypeOf<Codec>().toHaveProperty('toDataTypeValue');
+  expectTypeOf<Codec['toDataTypeValue']>().toBeFunction();
+  type ToDataTypeValueReturn = ReturnType<Codec['toDataTypeValue']>;
+  expectTypeOf<ToDataTypeValueReturn>().toEqualTypeOf<DataTypeValue>();
 });
 
-test('decodeJson is required and synchronous', () => {
-  expectTypeOf<Codec>().toHaveProperty('decodeJson');
-  expectTypeOf<Codec['decodeJson']>().toBeFunction();
-  type DecodeJsonReturn = ReturnType<Codec['decodeJson']>;
-  // synchronous: not a Promise
-  expectTypeOf<DecodeJsonReturn>().not.toExtend<Promise<unknown>>();
+test('fromDataTypeValue is required, synchronous and takes a data type value', () => {
+  expectTypeOf<Codec>().toHaveProperty('fromDataTypeValue');
+  expectTypeOf<Codec['fromDataTypeValue']>().toBeFunction();
+  expectTypeOf<Parameters<Codec['fromDataTypeValue']>[0]>().toEqualTypeOf<DataTypeValue>();
+  type FromDataTypeValueReturn = ReturnType<Codec['fromDataTypeValue']>;
+  expectTypeOf<FromDataTypeValueReturn>().not.toExtend<Promise<unknown>>();
 });
 
-test('Codec instance carries only id + the four conversion methods (plus phantom)', () => {
+test('Codec instance carries only id, its data type and the four conversion methods (plus phantom)', () => {
   // The runtime instance is narrowed to id + behavior (TML-2357); codec-id-keyed static metadata (`traits`, `renderOutputType`) lives on `CodecDescriptor` keyed by codecId. The `__codecTraits` slot is a type-only phantom carrier (always `undefined` at runtime) and double-underscored to signal that it is not part of the consumer-facing API surface.
   type CodecStringKeys = Extract<keyof Codec, string>;
   const expectedKeys = [
     'id',
-    'encode',
-    'decode',
-    'encodeJson',
-    'decodeJson',
+    'dataType',
+    'toWire',
+    'fromWire',
+    'toDataTypeValue',
+    'fromDataTypeValue',
     '__codecTraits',
   ] as const;
   type ExpectedKeys = (typeof expectedKeys)[number];
   expectTypeOf<CodecStringKeys>().toEqualTypeOf<ExpectedKeys>();
 });
 
-test('Codec carries four generics: encode TInput → TWire, decode TWire → TInput', () => {
+test('Codec carries four generics: toWire TInput → TWire, fromWire TWire → TInput', () => {
   type StringTextCodec = Codec<'demo/text@1', readonly CodecTrait[], string, string>;
-  expectTypeOf<Parameters<StringTextCodec['encode']>[0]>().toEqualTypeOf<string>();
-  expectTypeOf<ReturnType<StringTextCodec['encode']>>().toExtend<Promise<string>>();
-  expectTypeOf<Parameters<StringTextCodec['decode']>[0]>().toEqualTypeOf<string>();
-  expectTypeOf<ReturnType<StringTextCodec['decode']>>().toExtend<Promise<string>>();
-  expectTypeOf<Parameters<StringTextCodec['encodeJson']>[0]>().toEqualTypeOf<string>();
-  expectTypeOf<ReturnType<StringTextCodec['decodeJson']>>().toEqualTypeOf<string>();
+  expectTypeOf<Parameters<StringTextCodec['toWire']>[0]>().toEqualTypeOf<string>();
+  expectTypeOf<ReturnType<StringTextCodec['toWire']>>().toExtend<Promise<string>>();
+  expectTypeOf<Parameters<StringTextCodec['fromWire']>[0]>().toEqualTypeOf<string>();
+  expectTypeOf<ReturnType<StringTextCodec['fromWire']>>().toExtend<Promise<string>>();
+  expectTypeOf<Parameters<StringTextCodec['toDataTypeValue']>[0]>().toEqualTypeOf<string>();
+  expectTypeOf<ReturnType<StringTextCodec['fromDataTypeValue']>>().toEqualTypeOf<string>();
 });
 
 test('TInput drives both write input and read output (no asymmetric output)', () => {
   type WireSeparateFromInput = Codec<'demo/distinct-wire@1', readonly CodecTrait[], number, string>;
-  expectTypeOf<Parameters<WireSeparateFromInput['encode']>[0]>().toEqualTypeOf<string>();
-  expectTypeOf<ReturnType<WireSeparateFromInput['encode']>>().toExtend<Promise<number>>();
-  expectTypeOf<Parameters<WireSeparateFromInput['decode']>[0]>().toEqualTypeOf<number>();
-  expectTypeOf<ReturnType<WireSeparateFromInput['decode']>>().toExtend<Promise<string>>();
+  expectTypeOf<Parameters<WireSeparateFromInput['toWire']>[0]>().toEqualTypeOf<string>();
+  expectTypeOf<ReturnType<WireSeparateFromInput['toWire']>>().toExtend<Promise<number>>();
+  expectTypeOf<Parameters<WireSeparateFromInput['fromWire']>[0]>().toEqualTypeOf<number>();
+  expectTypeOf<ReturnType<WireSeparateFromInput['fromWire']>>().toExtend<Promise<string>>();
 });

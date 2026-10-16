@@ -4,7 +4,7 @@ Database-backed conformance harness for SQLite codec JSON projections.
 
 ## Purpose
 
-A codec descriptor's `projectJson()` renders SQL that reproduces `codec.encodeJson()` inside the database. This package runs that claim against a live SQLite: it stores a representative value in a column of the case's declared storage type, projects the stored column, executes the projection, and checks that the parsed result agrees with `encodeJson` and round-trips back through `decodeJson`.
+A codec descriptor's `projectJson()` renders SQL whose JSON value the codec's `fromWire` reads as it reads an ordinary row of the column. This package runs that claim against a live SQLite: it writes a representative value through `toWire`, stores it in a column of the case's declared storage type, reads it back as an ordinary row and through the projection inside a JSON constructor, and checks that `fromWire` reads both to the value the case started from. For every case it also checks that `toDataTypeValue(fromDataTypeValue(v))` equals `v`.
 
 It is dev-only tooling, not a runtime dependency — extension authors install it to verify their own codec descriptors the same way this package's own `test/` suite verifies every built-in SQLite codec descriptor.
 
@@ -28,7 +28,7 @@ const outcome = await runSqliteCodecProjection(connection, conformanceCase);
 // outcome.failure is undefined when the projection conforms.
 ```
 
-`connection` is any object satisfying `ConformanceConnection` — `{ query(sql, params?) }` — so the caller supplies whichever SQLite client it already owns.
+`connection` is any object satisfying `ConformanceConnection` — `{ query(sql, params?) }` — so the caller supplies whichever SQLite client it already owns. Its rows must carry each value as the runtime driver returns it, because the harness reads an ordinary row with the codec's `fromWire` and compares it with the projected value.
 
 ## Scope
 

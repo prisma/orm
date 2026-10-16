@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { printPslFromFlat as printPslFromSql } from '../fixtures';
 
 describe('printPsl', () => {
-  it('escapes inferred relation field names that would start with a digit', () => {
+  it('escapes inferred relation field names that would start with a digit', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         account: {
@@ -41,7 +41,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -64,7 +64,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('disambiguates colliding normalized field names and preserves relation references', () => {
+  it('disambiguates colliding normalized field names and preserves relation references', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         account: {
@@ -109,7 +109,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -133,7 +133,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('disambiguates more than two colliding normalized field names', () => {
+  it('disambiguates more than two colliding normalized field names', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         account: {
@@ -163,7 +163,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -180,7 +180,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('composite unique constraint and index', () => {
+  it('composite unique constraint and index', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         record: {
@@ -210,7 +210,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -229,7 +229,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('preserves named non-unique indexes', () => {
+  it('preserves named non-unique indexes', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         record: {
@@ -258,7 +258,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -275,7 +275,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('preserves a non-default index access method (e.g. hash)', () => {
+  it('preserves a non-default index access method (e.g. hash)', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         record: {
@@ -303,7 +303,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -319,7 +319,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('preserves named primary keys and unique constraints', () => {
+  it('preserves named primary keys and unique constraints', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         record: {
@@ -340,7 +340,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -358,7 +358,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('reserved word table names are escaped', () => {
+  it('reserved word table names are escaped', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         type: {
@@ -374,7 +374,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -389,7 +389,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('throws when model names collide after normalization', () => {
+  it('throws when model names collide after normalization', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         user_profile: {
@@ -415,13 +415,13 @@ describe('printPsl', () => {
       },
     });
 
-    expect(() => printPslFromSql(schemaIR)).toThrowErrorMatchingInlineSnapshot(`
+    await expect(printPslFromSql(schemaIR)).rejects.toThrowErrorMatchingInlineSnapshot(`
       [StructuredError: PSL model name collisions detected:
       - model "UserProfile" from tables "user_profile", "UserProfile"]
     `);
     let caught: unknown;
     try {
-      printPslFromSql(schemaIR);
+      await printPslFromSql(schemaIR);
     } catch (error) {
       caught = error;
     }
@@ -429,7 +429,7 @@ describe('printPsl', () => {
     expect(caught).toMatchObject({ code: 'CONTRACT.NAME_DUPLICATE' });
   });
 
-  it('renames an adopted enum away from a same-named model, @@map carrying the type name', () => {
+  it('renames an adopted enum away from a same-named model, @@map carrying the type name', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         user_role: {
@@ -450,13 +450,13 @@ describe('printPsl', () => {
       },
     });
 
-    const output = printPslFromSql(schemaIR);
+    const output = await printPslFromSql(schemaIR);
     expect(output).toContain('model UserRole {');
     expect(output).toContain('native_enum UserRole2 {');
     expect(output).toContain('@@map("user_role")');
   });
 
-  it('throws on enum type names that normalize to the same PSL name', () => {
+  it('throws on enum type names that normalize to the same PSL name', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {},
       annotations: {
@@ -469,6 +469,6 @@ describe('printPsl', () => {
       },
     });
 
-    expect(() => printPslFromSql(schemaIR)).toThrow(/enum name collisions detected/i);
+    await expect(printPslFromSql(schemaIR)).rejects.toThrow(/enum name collisions detected/i);
   });
 });

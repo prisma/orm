@@ -156,7 +156,7 @@ function describedContractWithModel(options: {
 }
 
 describe('inferPostgresPslContract — described-contract omission', () => {
-  it('omits a table a described contract declares, keeps the rest', () => {
+  it('omits a table a described contract declares, keeps the rest', async () => {
     const database = tree({
       public: namespaceNode('public', {
         app_table: idColumnTable('app_table'),
@@ -164,7 +164,7 @@ describe('inferPostgresPslContract — described-contract omission', () => {
       }),
     });
 
-    const ast = inferFromFixtureTree(database, inferBuildContext, [
+    const ast = await inferFromFixtureTree(database, inferBuildContext, [
       describedContract({ public: ['t_owned'] }),
     ]);
     const modelNames = flatPslModels(ast).map((m) => m.name);
@@ -173,7 +173,7 @@ describe('inferPostgresPslContract — described-contract omission', () => {
     expect(modelNames).not.toContain('TOwned');
   });
 
-  it('produces byte-identical output for empty and absent describedContracts', () => {
+  it('produces byte-identical output for empty and absent describedContracts', async () => {
     const database = tree({
       public: namespaceNode('public', {
         app_table: idColumnTable('app_table'),
@@ -181,25 +181,25 @@ describe('inferPostgresPslContract — described-contract omission', () => {
       }),
     });
 
-    const withoutArgument = printPsl(inferFromFixtureTree(database, inferBuildContext));
-    const withEmptyList = printPsl(inferFromFixtureTree(database, inferBuildContext, []));
+    const withoutArgument = printPsl(await inferFromFixtureTree(database, inferBuildContext));
+    const withEmptyList = printPsl(await inferFromFixtureTree(database, inferBuildContext, []));
 
     expect(withEmptyList).toBe(withoutArgument);
   });
 
-  it('keeps a table when a described contract declares a same-named table in a different namespace', () => {
+  it('keeps a table when a described contract declares a same-named table in a different namespace', async () => {
     const database = tree({
       public: namespaceNode('public', { users: idColumnTable('users') }),
     });
 
-    const ast = inferFromFixtureTree(database, inferBuildContext, [
+    const ast = await inferFromFixtureTree(database, inferBuildContext, [
       describedContract({ auth: ['users'] }),
     ]);
 
     expect(flatPslModels(ast).map((m) => m.name)).toContain('Users');
   });
 
-  it('is entity-kind-precise: a non-table entity of the same name in the same namespace does not omit the table', () => {
+  it('is entity-kind-precise: a non-table entity of the same name in the same namespace does not omit the table', async () => {
     // The described contract declares "widgets" under a pack-contributed
     // entity kind, not `table`. The coordinate key includes `entityKind`, so
     // this must never suppress the introspected `widgets` table — proving
@@ -224,12 +224,14 @@ describe('inferPostgresPslContract — described-contract omission', () => {
       },
     };
 
-    const ast = inferFromFixtureTree(database, inferBuildContext, [contractWithNonTableEntity]);
+    const ast = await inferFromFixtureTree(database, inferBuildContext, [
+      contractWithNonTableEntity,
+    ]);
 
     expect(flatPslModels(ast).map((m) => m.name)).toContain('Widgets');
   });
 
-  it('an rls marker entity in a described contract does not omit the same-named table', () => {
+  it('an rls marker entity in a described contract does not omit the same-named table', async () => {
     // The marker is keyed by table name (`entries.rls[tableName]`), so a
     // described contract marking a table RLS-controlled must not suppress the
     // introspected table itself — only a `table`-kind entry omits tables.
@@ -254,12 +256,12 @@ describe('inferPostgresPslContract — described-contract omission', () => {
       },
     };
 
-    const ast = inferFromFixtureTree(database, inferBuildContext, [contractWithRlsMarker]);
+    const ast = await inferFromFixtureTree(database, inferBuildContext, [contractWithRlsMarker]);
 
     expect(flatPslModels(ast).map((m) => m.name)).toContain('Profile');
   });
 
-  it('resolves a cross-space FK into a described contract as the qualified relation, omitting the target table', () => {
+  it('resolves a cross-space FK into a described contract as the qualified relation, omitting the target table', async () => {
     const database = tree({
       public: namespaceNode('public', {
         profile: new PostgresTableSchemaNode({
@@ -294,7 +296,7 @@ describe('inferPostgresPslContract — described-contract omission', () => {
       fields: { id: 'id', email: 'email' },
     });
 
-    const ast = inferFromFixtureTree(database, inferBuildContext, [pack]);
+    const ast = await inferFromFixtureTree(database, inferBuildContext, [pack]);
     const modelNames = flatPslModels(ast).map((m) => m.name);
     const profileModel = flatPslModels(ast).find((m) => m.name === 'Profile');
 
@@ -318,7 +320,7 @@ describe('inferPostgresPslContract — described-contract omission', () => {
     );
   });
 
-  it('resolves the cross-space FK even when a same-bare-named local table survives (pack-owned coordinate wins over the local shadow)', () => {
+  it('resolves the cross-space FK even when a same-bare-named local table survives (pack-owned coordinate wins over the local shadow)', async () => {
     const database = tree({
       public: namespaceNode('public', {
         users: idColumnTable('users'),
@@ -354,7 +356,7 @@ describe('inferPostgresPslContract — described-contract omission', () => {
       fields: { id: 'id', email: 'email' },
     });
 
-    const ast = inferFromFixtureTree(database, inferBuildContext, [pack]);
+    const ast = await inferFromFixtureTree(database, inferBuildContext, [pack]);
     const models = flatPslModels(ast);
     const modelNames = models.map((m) => m.name);
     const profileModel = models.find((m) => m.name === 'Profile');
@@ -373,7 +375,7 @@ describe('inferPostgresPslContract — described-contract omission', () => {
     expect(printed).toContain('supabase:auth.AuthUser');
   });
 
-  it('throws when a described contract owns the referenced storage coordinate but declares no domain model mapped to it', () => {
+  it('throws when a described contract owns the referenced storage coordinate but declares no domain model mapped to it', async () => {
     const database = tree({
       public: namespaceNode('public', {
         profile: new PostgresTableSchemaNode({
@@ -400,12 +402,12 @@ describe('inferPostgresPslContract — described-contract omission', () => {
       }),
     });
 
-    expect(() =>
+    await expect(
       inferFromFixtureTree(database, inferBuildContext, [describedContract({ auth: ['users'] })]),
-    ).toThrow(/owns storage coordinate "auth\.users" but declares no domain model/);
+    ).rejects.toThrow(/owns storage coordinate "auth\.users" but declares no domain model/);
   });
 
-  it('drops a genuinely dangling FK (target neither in the tree nor owned by any described contract), keeping the scalar column and explaining the drop with a comment', () => {
+  it('drops a genuinely dangling FK (target neither in the tree nor owned by any described contract), keeping the scalar column and explaining the drop with a comment', async () => {
     const database = tree({
       public: namespaceNode('public', {
         posts: new PostgresTableSchemaNode({
@@ -431,7 +433,7 @@ describe('inferPostgresPslContract — described-contract omission', () => {
       }),
     });
 
-    const ast = inferFromFixtureTree(database, inferBuildContext, []);
+    const ast = await inferFromFixtureTree(database, inferBuildContext, []);
     const modelNames = flatPslModels(ast).map((m) => m.name);
     const postsModel = flatPslModels(ast).find((m) => m.name === 'Posts');
 
@@ -449,7 +451,7 @@ describe('inferPostgresPslContract — described-contract omission', () => {
     );
   });
 
-  it('keeps a legitimate FK to a surviving same-named table when a different namespace omits that name', () => {
+  it('keeps a legitimate FK to a surviving same-named table when a different namespace omits that name', async () => {
     const database = tree({
       auth: namespaceNode('auth', { users: idColumnTable('users') }),
       public: namespaceNode('public', {
@@ -472,7 +474,7 @@ describe('inferPostgresPslContract — described-contract omission', () => {
       }),
     });
 
-    const ast = inferFromFixtureTree(database, inferBuildContext, [
+    const ast = await inferFromFixtureTree(database, inferBuildContext, [
       describedContract({ auth: ['users'] }),
     ]);
     const modelNames = flatPslModels(ast).map((m) => m.name);
@@ -488,17 +490,17 @@ describe('inferPostgresPslContract — described-contract omission', () => {
     expect(postsModel?.comment).toBeUndefined();
   });
 
-  it('omits a described-contract-claimed table before the cross-schema duplicate-name check', () => {
+  it('omits a described-contract-claimed table before the cross-schema duplicate-name check', async () => {
     const database = tree({
       public: namespaceNode('public', { t_owned: idColumnTable('t_owned') }),
       other: namespaceNode('other', { t_owned: idColumnTable('t_owned') }),
     });
     const describedContracts = [describedContract({ other: ['t_owned'] })];
 
-    expect(() =>
+    await expect(
       inferFromFixtureTree(database, inferBuildContext, describedContracts),
-    ).not.toThrow();
-    const ast = inferFromFixtureTree(database, inferBuildContext, describedContracts);
+    ).resolves.toBeDefined();
+    const ast = await inferFromFixtureTree(database, inferBuildContext, describedContracts);
     expect(flatPslModels(ast).map((m) => m.name)).toContain('TOwned');
   });
 });
@@ -576,7 +578,7 @@ function makeRealPostgresStack(
 }
 
 describe('SqlFamilyInstance#inferPslContract — real postgres descriptor + real family instance', () => {
-  it('omits an extension-owned table from a real introspected Postgres tree', () => {
+  it('omits an extension-owned table from a real introspected Postgres tree', async () => {
     const pack = buildExtensionWithPublicTable('pack', 't_owned');
     const familyInstance = sqlFamilyDescriptor.create(makeRealPostgresStack([pack]));
 
@@ -587,7 +589,7 @@ describe('SqlFamilyInstance#inferPslContract — real postgres descriptor + real
       }),
     });
 
-    const ast = familyInstance.inferPslContract(withReportedTypesInTree(database));
+    const ast = await familyInstance.inferPslContract(withReportedTypesInTree(database));
     const modelNames = flatPslModels(ast).map((m) => m.name);
 
     expect(modelNames).toContain('AppTable');

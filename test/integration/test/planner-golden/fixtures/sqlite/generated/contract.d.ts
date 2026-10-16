@@ -19,7 +19,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'6515756055b17590a23a99f06ae0ac6cf3b2dc642eeea25f10c3ad4a4d085607'>;
+  StorageHashBase<'79b20e2c4ed3decb2dd7e26a3380f65f3d70711c9421d72f4e3e683f5bf4143c'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
@@ -242,7 +242,7 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly datetime: {
-                  readonly dataType: 'sqlite/text';
+                  readonly dataType: 'sqlite/datetime';
                   readonly codecId: 'sqlite/datetime@1';
                   readonly nullable: false;
                   readonly many: false;
@@ -264,7 +264,7 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly json: {
-                  readonly dataType: 'sqlite/text';
+                  readonly dataType: 'sqlite/json';
                   readonly codecId: 'sqlite/json@1';
                   readonly nullable: false;
                   readonly many: false;

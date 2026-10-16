@@ -29,7 +29,6 @@ import { describe, expect, it } from 'vitest';
 import { testTypeLookups } from '../../1-core/contract/test/test-type-lookups';
 import { extractCodecControlHooks } from '../src/core/assembly';
 import { computeSqlDiffVerdict, computeStorageTypeVerdict } from '../src/core/diff/schema-verify';
-import type { DefaultNormalizer } from '../src/core/diff/sql-schema-diff';
 import { contractToSchemaIR } from '../src/core/migrations/contract-to-schema-ir';
 import {
   createContractTable,
@@ -38,7 +37,7 @@ import {
   createTestSchemaIR,
 } from './schema-verify.helpers';
 
-const testNormalizer: DefaultNormalizer = (rawDefault: string): ColumnDefault | undefined => {
+const testNormalizer = (rawDefault: string, _nativeType: string): ColumnDefault | undefined => {
   const trimmed = rawDefault.trim();
   if (/^(now\s*\(\s*\)|CURRENT_TIMESTAMP)$/i.test(trimmed)) {
     return { kind: 'function', expression: 'now()' };

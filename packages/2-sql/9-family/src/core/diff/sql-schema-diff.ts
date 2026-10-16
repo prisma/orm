@@ -7,17 +7,6 @@
  * verify verdict (`schema-verify.ts`) and the control adapters.
  */
 
-import type { ColumnDefault } from '@internal/contract/types';
-
-/**
- * Function type for normalizing raw database default expressions into ColumnDefault.
- * Target-specific implementations handle database dialect differences.
- */
-export type DefaultNormalizer = (
-  rawDefault: string,
-  nativeType: string,
-) => ColumnDefault | undefined;
-
 /**
  * Compares two arrays of strings for equality (order-sensitive).
  */

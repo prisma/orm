@@ -43,7 +43,10 @@ function policyNode(fixture: PolicyFixture): PostgresPolicySchemaNode {
   });
 }
 
-function pslWithPolicies(policies: readonly PostgresPolicySchemaNode[], rlsEnabled = true): string {
+async function pslWithPolicies(
+  policies: readonly PostgresPolicySchemaNode[],
+  rlsEnabled = true,
+): Promise<string> {
   const tree = new PostgresDatabaseSchemaNode({
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
@@ -69,26 +72,26 @@ function pslWithPolicies(policies: readonly PostgresPolicySchemaNode[], rlsEnabl
     existingSchemas: ['public'],
     pgVersion: '',
   });
-  return printPsl(inferFromFixtureTree(tree, inferBuildContext), {
+  return printPsl(await inferFromFixtureTree(tree, inferBuildContext), {
     pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
   });
 }
 
 describe('@@rls emission', () => {
-  it('a model backed by an rlsEnabled table carries @@rls', () => {
-    const psl = pslWithPolicies([]);
+  it('a model backed by an rlsEnabled table carries @@rls', async () => {
+    const psl = await pslWithPolicies([]);
     expect(psl).toContain('@@rls');
   });
 
-  it('an RLS-disabled table emits no @@rls', () => {
-    const psl = pslWithPolicies([], false);
+  it('an RLS-disabled table emits no @@rls', async () => {
+    const psl = await pslWithPolicies([], false);
     expect(psl).not.toContain('@@rls');
   });
 });
 
 describe('policy block emission', () => {
-  it('a wire-named policy emits its parsed prefix as the head, @@map always', () => {
-    const psl = pslWithPolicies([
+  it('a wire-named policy emits its parsed prefix as the head, @@map always', async () => {
+    const psl = await pslWithPolicies([
       policyNode({ name: 'p_read_ab12cd34', prefix: 'p_read', using: '(owner_id = 1)' }),
     ]);
     expect(psl).toContain('policy_select p_read {');
@@ -99,15 +102,15 @@ describe('policy block emission', () => {
     expect(psl).not.toContain('permissive');
   });
 
-  it('policy-bearing output wraps in the namespace block', () => {
-    const psl = pslWithPolicies([
+  it('policy-bearing output wraps in the namespace block', async () => {
+    const psl = await pslWithPolicies([
       policyNode({ name: 'p_read_ab12cd34', prefix: 'p_read', using: '(owner_id = 1)' }),
     ]);
     expect(psl).toContain('namespace public {');
   });
 
-  it('a RESTRICTIVE policy emits permissive = false', () => {
-    const psl = pslWithPolicies([
+  it('a RESTRICTIVE policy emits permissive = false', async () => {
+    const psl = await pslWithPolicies([
       policyNode({
         name: 'p_block_all',
         using: '(owner_id = 1)',
@@ -117,8 +120,8 @@ describe('policy block emission', () => {
     expect(psl).toContain('permissive = false');
   });
 
-  it('withCheck and multi-role lists emit as introspected', () => {
-    const psl = pslWithPolicies([
+  it('withCheck and multi-role lists emit as introspected', async () => {
+    const psl = await pslWithPolicies([
       policyNode({
         name: 'p_write_ab12cd34',
         prefix: 'p_write',
@@ -134,21 +137,23 @@ describe('policy block emission', () => {
     expect(psl).toContain('withCheck = sql`(owner_id = 2)`');
   });
 
-  it('a non-wire physical name sanitizes into the head with @@map carrying the truth', () => {
-    const psl = pslWithPolicies([
+  it('a non-wire physical name sanitizes into the head with @@map carrying the truth', async () => {
+    const psl = await pslWithPolicies([
       policyNode({ name: 'Tenant members can read', using: '(owner_id = 1)' }),
     ]);
     expect(psl).toContain('policy_select Tenant_members_can_read {');
     expect(psl).toContain('@@map("Tenant members can read")');
   });
 
-  it('a head starting with an invalid character gains a leading underscore', () => {
-    const psl = pslWithPolicies([policyNode({ name: '2fast policy', using: '(owner_id = 1)' })]);
+  it('a head starting with an invalid character gains a leading underscore', async () => {
+    const psl = await pslWithPolicies([
+      policyNode({ name: '2fast policy', using: '(owner_id = 1)' }),
+    ]);
     expect(psl).toContain('policy_select _2fast_policy {');
   });
 
-  it('within-namespace head collisions disambiguate numerically by sorted physical name', () => {
-    const psl = pslWithPolicies([
+  it('within-namespace head collisions disambiguate numerically by sorted physical name', async () => {
+    const psl = await pslWithPolicies([
       policyNode({ name: 'tenant read', using: '(owner_id = 1)' }),
       policyNode({ name: 'tenant.read', operation: 'update', using: '(owner_id = 2)' }),
     ]);
@@ -160,8 +165,8 @@ describe('policy block emission', () => {
     expect(psl).toContain('@@map("tenant.read")');
   });
 
-  it('an unauthorable policy (ungrammatical role name) skips with a model comment note', () => {
-    const psl = pslWithPolicies([
+  it('an unauthorable policy (ungrammatical role name) skips with a model comment note', async () => {
+    const psl = await pslWithPolicies([
       policyNode({ name: 'odd role policy', roles: ['my role'], using: '(owner_id = 1)' }),
     ]);
     expect(psl).not.toContain('policy_select');
@@ -204,10 +209,10 @@ function policyOn(tableName: string, fixture: PolicyFixture): PostgresPolicySche
   });
 }
 
-function pslFromTables(
+async function pslFromTables(
   tables: Record<string, PostgresTableSchemaNode>,
   nativeEnums: readonly PostgresNativeEnumSchemaNode[] = [],
-): string {
+): Promise<string> {
   const tree = new PostgresDatabaseSchemaNode({
     namespaces: {
       public: new PostgresNamespaceSchemaNode({ schemaName: 'public', tables, nativeEnums }),
@@ -216,14 +221,14 @@ function pslFromTables(
     existingSchemas: ['public'],
     pgVersion: '',
   });
-  return printPsl(inferFromFixtureTree(tree, inferBuildContext), {
+  return printPsl(await inferFromFixtureTree(tree, inferBuildContext), {
     pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
   });
 }
 
 describe('policy head namespace and ordering across blocks', () => {
-  it('identically-named policies on two tables order by table, then disambiguate', () => {
-    const psl = pslFromTables({
+  it('identically-named policies on two tables order by table, then disambiguate', async () => {
+    const psl = await pslFromTables({
       post: tableNode('post', [policyOn('post', { name: 'tenant read', using: '(id = 1)' })]),
       profile: tableNode('profile', [
         policyOn('profile', { name: 'tenant read', using: '(id = 2)' }),
@@ -240,8 +245,8 @@ describe('policy head namespace and ordering across blocks', () => {
     expect(psl.slice(second)).toContain('target = Profile');
   });
 
-  it('a policy head colliding with a native_enum block name takes the numeric suffix', () => {
-    const psl = pslFromTables(
+  it('a policy head colliding with a native_enum block name takes the numeric suffix', async () => {
+    const psl = await pslFromTables(
       {
         profile: tableNode(
           'profile',
@@ -262,8 +267,8 @@ describe('policy head namespace and ordering across blocks', () => {
     expect(psl).toContain('@@map("TenantRead")');
   });
 
-  it('a policy head colliding with a model name takes the numeric suffix', () => {
-    const psl = pslFromTables({
+  it('a policy head colliding with a model name takes the numeric suffix', async () => {
+    const psl = await pslFromTables({
       profile: tableNode('profile', [policyOn('profile', { name: 'Profile', using: '(id = 1)' })]),
     });
     expect(psl).toContain('model Profile {');

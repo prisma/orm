@@ -3,11 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { printPslFromFlat as printPslFromSql } from '../fixtures';
 
 describe('printPsl', () => {
-  it('empty schema', () => {
+  it('empty schema', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {},
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -15,7 +15,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('simple schema with single table', () => {
+  it('simple schema with single table', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         user: {
@@ -32,7 +32,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -48,7 +48,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('table without primary key', () => {
+  it('table without primary key', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         audit_log: {
@@ -67,7 +67,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -83,7 +83,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('composite primary key', () => {
+  it('composite primary key', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         order_item: {
@@ -104,7 +104,7 @@ describe('printPsl', () => {
         },
       },
     });
-    const result = printPslFromSql(schemaIR);
+    const result = await printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
       "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
@@ -121,7 +121,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('deterministic output: same input always produces same output', () => {
+  it('deterministic output: same input always produces same output', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         b_table: {
@@ -146,8 +146,8 @@ describe('printPsl', () => {
         },
       },
     });
-    const result1 = printPslFromSql(schemaIR);
-    const result2 = printPslFromSql(schemaIR);
+    const result1 = await printPslFromSql(schemaIR);
+    const result2 = await printPslFromSql(schemaIR);
     expect(result1).toBe(result2);
     expect(result1.indexOf('ATable')).toBeLessThan(result1.indexOf('BTable'));
   });

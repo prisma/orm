@@ -331,7 +331,6 @@ function driftDiagnostics(inputs: {
         nextActions: schemaDriftNextActions({
           verb: 'verify',
           contractRef: undefined,
-          issues: result.schema.issues,
         }),
       }),
     );

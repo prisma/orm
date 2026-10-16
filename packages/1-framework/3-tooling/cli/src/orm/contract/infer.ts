@@ -134,7 +134,7 @@ export function createContractInferCommand({
           connection: dbConnection,
           onProgress: controlProgressReporter(ctx.report),
         });
-        const pslContractAst = client.inferPslContract(schema);
+        const pslContractAst = await client.inferPslContract(schema);
         if (pslContractAst === undefined) {
           return notOk(
             normalizeError(

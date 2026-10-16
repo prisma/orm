@@ -45,6 +45,7 @@ import {
   resolveContractPath,
   resolveMigrationPaths,
 } from '../../utils/command-helpers';
+import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import { toExtensionInputs } from '../../utils/extension-pack-inputs';
 import { assertFrameworkComponentsCompatible } from '../../utils/framework-components';
 import { type CliInvocation, selfEmitCommand } from '../../utils/printed-command';
@@ -528,7 +529,7 @@ async function executeMigrationPlanCommandInner(
     return notOk(
       errorContractValidationFailed(
         `Contract at ${contractPathAbsolute} failed to deserialize: ${error instanceof Error ? error.message : String(error)}`,
-        { where: { path: contractPathAbsolute } },
+        { where: { path: contractPathAbsolute }, meta: contractValidationMeta(error) },
       ),
     );
   }

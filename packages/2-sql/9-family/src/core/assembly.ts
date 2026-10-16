@@ -1,5 +1,8 @@
 import type { AnyCodecDescriptor, DataType } from '@internal/framework-components/codec';
-import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
+import {
+  runtimeError,
+  type TargetBoundComponentDescriptor,
+} from '@internal/framework-components/components';
 import { assertUniqueCodecOwner } from '@internal/framework-components/control';
 import { findSqlDataTypeCollision, isSqlDataType } from '@internal/sql-contract/data-type';
 import { assertNothingCastsFromSqlExpression } from '@internal/sql-contract/sql-expression';
@@ -66,7 +69,8 @@ interface DeclaredDataType {
 /**
  * The SQL family's checks of the stack's data types and codecs, each naming the contributor:
  * no two SQL data types would both recognise one reported type, by colliding claiming texts or by
- * claiming the same kind; no data type casts from `sql/expression`; and every codec represents a
+ * claiming the same kind; no data type casts from `sql/expression`; every type stored as another
+ * names a registered SQL data type; and every codec represents a
  * SQL data type, because a codec represents a column's type and `sql/expression` is the one data
  * type no column has.
  */
@@ -75,6 +79,7 @@ export function enforceSqlDataTypeInvariants(
   codecDescriptors: ReadonlyArray<Pick<AnyCodecDescriptor, 'codecId' | 'dataType'>>,
 ): void {
   const declaredById = new Map(declaredDataTypes.map((declared) => [declared.type.id, declared]));
+  const capitalized = (text: string): string => `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
   const describe = (type: DataType): string =>
     `data type "${type.id}" contributed by "${declaredById.get(type.id)?.contributedBy ?? '<unknown>'}"`;
 
@@ -92,6 +97,23 @@ export function enforceSqlDataTypeInvariants(
   }
 
   assertNothingCastsFromSqlExpression(declaredDataTypes);
+
+  for (const { type, contributedBy } of declaredDataTypes) {
+    if (!isSqlDataType(type) || type.sql.storedAs === undefined) continue;
+    const storage = declaredById.get(type.sql.storedAs)?.type;
+    if (storage !== undefined && isSqlDataType(storage)) {
+      const further = storage.sql.storedAs;
+      if (further === undefined) continue;
+      throw new InternalError(
+        `${capitalized(describe(type))} is stored as "${storage.id}", which is itself stored as "${further}". Name "${further}" as the type it is stored as.`,
+      );
+    }
+    throw runtimeError(
+      'CONTRACT.DATA_TYPE_UNREGISTERED',
+      `Data type "${type.id}" is stored as data type "${type.sql.storedAs}", which no component registers. Contributed by "${contributedBy}".`,
+      { dataType: type.sql.storedAs, contributedBy },
+    );
+  }
 
   for (const codec of codecDescriptors) {
     const represented = declaredById.get(codec.dataType)?.type;

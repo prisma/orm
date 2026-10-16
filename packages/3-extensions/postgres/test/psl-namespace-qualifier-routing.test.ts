@@ -60,7 +60,7 @@ function emit(schema: string) {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
       codecLookup: postgresCodecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypes: { entries: {}, lookup: postgresDataTypeLookup },
+      dataTypes: { entries: {}, lookup: postgresDataTypeLookup, dataTypeOfCodec: () => undefined },
       resolvedInputs: [],
       capabilities: { sql: { scalarList: true } },
     },

@@ -37,7 +37,7 @@ function loweringAggregateRegistry() {
         input: { kind: 'any' },
         output: { kind: 'codec', codecId: 'lib/int8@1' },
         nullable: false,
-        emptyResultJson: '0',
+        emptyResultWire: '0',
         lower: ({ expr }: { expr?: AggregateExpr['expr'] }) =>
           CastExpr.as(new AggregateExpr('count', expr), 'text'),
       },

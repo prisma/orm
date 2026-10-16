@@ -142,7 +142,7 @@ function parseAndEmit(source: string) {
 }
 
 describe('Postgres PSL inference round trip', () => {
-  it('preserves unparameterized, parameterized, json, jsonb, and date and time storage', () => {
+  it('preserves unparameterized, parameterized, json, jsonb, and date and time storage', async () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         sample: {
@@ -169,7 +169,7 @@ describe('Postgres PSL inference round trip', () => {
       },
     });
 
-    const inferred = printPslFromFlat(schemaIR);
+    const inferred = await printPslFromFlat(schemaIR);
     expect(inferred).not.toContain('types {');
     expect(inferred).toMatch(/uuidValue\s+Uuid/);
     expect(inferred).toMatch(/ipAddress\s+Inet/);
@@ -278,7 +278,7 @@ describe('Postgres PSL inference round trip', () => {
     });
   });
 
-  it('leaves out an exact-named index whose where would not read back and keeps a wire-named one by name', () => {
+  it('leaves out an exact-named index whose where would not read back and keeps a wire-named one by name', async () => {
     const where = '(owner_id > 0)\n';
     const wireName = formatWireName(
       'sample_owner_idx',
@@ -311,7 +311,7 @@ describe('Postgres PSL inference round trip', () => {
       },
     });
 
-    const inferred = printPslFromFlat(schemaIR);
+    const inferred = await printPslFromFlat(schemaIR);
     expect(inferred).toContain(
       '// prisma: skipped index "sample_adopted": its SQL cannot be written as a sql literal that reads back unchanged. It is not in this schema, so migration plan will drop it. A sql literal written by hand holds different text, so migration plan then stops with a conflict for an index or check, or drops and recreates a policy. Either change the SQL in the database to the text of the literal, or add the object without map: or @@map so Prisma names it.',
     );

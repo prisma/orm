@@ -5,7 +5,11 @@ import type {
 import type { TargetPackRef } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { testTypeLookups, withTestTypes } from '../../../1-core/contract/test/test-type-lookups';
+import {
+  testCodec,
+  testTypeLookups,
+  withTestTypes,
+} from '../../../1-core/contract/test/test-type-lookups';
 import { buildSqlContractFromDefinition } from '../src/contract-builder';
 import { modelsOf } from './contract-test-helpers';
 import { crossRef, documentScopedTypes } from './cross-ref-helpers';
@@ -201,14 +205,11 @@ describe('shared contract definition lowering', () => {
           return undefined;
         }
 
-        return {
-          id,
-          encode: async (value: unknown) => value,
-          decode: async (wire: unknown) => wire,
-          encodeJson: (value: unknown) =>
+        return testCodec(id, {
+          toDataTypeValue: (value: unknown) =>
             value instanceof Date ? value.toISOString() : (value as string),
-          decodeJson: (json: unknown) => new Date(json as string),
-        };
+          fromDataTypeValue: (value) => new Date(value.value as string),
+        });
       },
       renderOutputTypeFor: () => undefined,
     });
@@ -259,18 +260,15 @@ describe('shared contract definition lowering', () => {
       paramsSchema: {
         '~standard': { version: 1, vendor: 'test', validate: (value: unknown) => ({ value }) },
       },
-      factory: (params: { readonly length: number }) => () => ({
-        id: 'test/vector@1',
-        encode: async (value: unknown) => value,
-        decode: async (wire: unknown) => wire,
-        encodeJson: (value: unknown) => {
-          if (!Array.isArray(value) || value.length !== params.length) {
-            throw new Error(`length mismatch: expected ${params.length}, got ${String(value)}`);
-          }
-          return [...value];
-        },
-        decodeJson: (json: unknown) => json,
-      }),
+      factory: (params: { readonly length: number }) => () =>
+        testCodec('test/vector@1', {
+          toDataTypeValue: (value: unknown) => {
+            if (!Array.isArray(value) || value.length !== params.length) {
+              throw new Error(`length mismatch: expected ${params.length}, got ${String(value)}`);
+            }
+            return [...value];
+          },
+        }),
     } as unknown as AnyCodecDescriptor;
 
     const codecLookup: CodecLookupWithDescriptors = {
@@ -321,16 +319,12 @@ describe('shared contract definition lowering', () => {
     const codecLookup: CodecLookupWithDescriptors = withDescriptors({
       get: (id) =>
         id === 'app/value@1'
-          ? {
-              id,
-              encode: async (value: unknown) => value,
-              decode: async (wire: unknown) => wire,
-              encodeJson: (value: unknown) => {
+          ? testCodec(id, {
+              toDataTypeValue: (value: unknown) => {
                 encoded.push(value);
                 return `encoded:${String(value)}`;
               },
-              decodeJson: (json: unknown) => json,
-            }
+            })
           : undefined,
       renderOutputTypeFor: () => undefined,
     });

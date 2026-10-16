@@ -1,6 +1,6 @@
 import type { JsonValue } from '@internal/contract/types';
 import postgresControlDriverDescriptor from '@internal/driver-postgres/control';
-import { validateCodecTypeParams } from '@internal/framework-components/codec';
+import { readContractValue, validateCodecTypeParams } from '@internal/framework-components/codec';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
 import { ifDefined } from '@internal/utils/defined';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
@@ -18,7 +18,7 @@ interface TypeCase {
   readonly numeric?: true;
 }
 
-// Each candidate is stored in a column of the type and compared with itself as written: decodeJson must take exactly the values PostgreSQL stores without changing them, and the JSON PostgreSQL writes for each stored value.
+// Each candidate is stored in a column of the type and compared with itself as written: reading it as contract JSON (the data type, then `fromDataTypeValue`) must take exactly the values PostgreSQL stores without changing them and in the spelling PostgreSQL writes for them, and the JSON PostgreSQL writes for each stored value.
 const typeCases: readonly TypeCase[] = [
   {
     codecId: 'sql/varchar@1',
@@ -230,7 +230,7 @@ const typeCases: readonly TypeCase[] = [
   },
 ];
 
-describe('decodeJson checks the type parameters PostgreSQL enforces', { concurrent: false }, () => {
+describe('the data types check the parameters PostgreSQL enforces', { concurrent: false }, () => {
   let database: Awaited<ReturnType<typeof createDevDatabase>> | undefined;
   let driver: Awaited<ReturnType<typeof postgresControlDriverDescriptor.create>> | undefined;
 
@@ -269,7 +269,7 @@ describe('decodeJson checks the type parameters PostgreSQL enforces', { concurre
 
   for (const typeCase of typeCases) {
     it(
-      `${typeCase.codecId} ${JSON.stringify(typeCase.typeParams ?? {})} takes exactly the values ${typeCase.columnType} stores unchanged`,
+      `${typeCase.codecId} ${JSON.stringify(typeCase.typeParams ?? {})} takes exactly the values ${typeCase.columnType} stores unchanged, as PostgreSQL spells them`,
       async () => {
         const descriptor = postgresCodecDescriptorRegistry.descriptorFor(typeCase.codecId)!;
         const codec = descriptor.factory(
@@ -280,29 +280,31 @@ describe('decodeJson checks the type parameters PostgreSQL enforces', { concurre
         )({ name: 'type-params' });
         const decodes = (json: JsonValue): boolean => {
           try {
-            codec.decodeJson(json);
+            readContractValue(codec, json, typeCase.typeParams);
             return true;
           } catch {
             return false;
           }
         };
         const results = [];
+        const spelledAsStored: boolean[] = [];
         for (const [value] of typeCase.candidates) {
           const written = typeCase.numeric === true ? Number(value) : value;
           const stored = await store(typeCase, value);
+          spelledAsStored.push(typeCase.numeric === true || stored.json === written);
           results.push({
             value,
             postgres: stored.unchanged,
-            decodeJson: decodes(written),
+            readsJson: decodes(written),
             databaseJson: stored.json === undefined ? undefined : decodes(stored.json),
           });
         }
 
         expect(results).toEqual(
-          typeCase.candidates.map(([value, unchanged]) => ({
+          typeCase.candidates.map(([value, unchanged], index) => ({
             value,
             postgres: unchanged,
-            decodeJson: unchanged,
+            readsJson: unchanged && spelledAsStored[index] === true,
             databaseJson: unchanged ? true : undefined,
           })),
         );

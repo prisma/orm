@@ -54,6 +54,7 @@ function scalarFieldAttributes(input: {
   readonly domainEnum: ContractEnum | undefined;
   readonly generatedDefault: PslFieldAttribute | undefined;
   readonly context: SqlPslBuildContext;
+  readonly namedTypes: NonNullable<SqlStorage['types']>;
 }): readonly PslFieldAttribute[] {
   const attributes: PslFieldAttribute[] = [];
   if (input.isSingleColumnId) {
@@ -78,6 +79,7 @@ function scalarFieldAttributes(input: {
       tableName: input.tableName,
       columnName: input.columnName,
       context: input.context,
+      namedTypes: input.namedTypes,
     });
   if (columnDefault !== undefined) {
     attributes.push(columnDefault);
@@ -204,6 +206,7 @@ export function buildScalarFields(input: {
             : domainEnums[column.valueSet.entityName],
         generatedDefault,
         context,
+        namedTypes: input.namedTypes,
       }),
       span: SYNTHETIC_SPAN,
     });

@@ -2,6 +2,8 @@
 
 > **Update — `targetTypes` is removed** by [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md): a codec names the data type it represents, and the data type declares how the database names the type. Where this ADR names `targetTypes`, it describes the codec shape of its time.
 
+> **Retrospective note — the methods are renamed.** [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md#codecs) renames the query-time methods this ADR threads the context into: `encode` is `toWire` and `decode` is `fromWire`. Both still take the per-call context as their second argument. The examples' `encodeJson` and `decodeJson` are `toDataTypeValue` and `fromDataTypeValue`, which convert a value of the codec's data type and take no context.
+
 ## Status
 
 Accepted. Apr 30, 2026.

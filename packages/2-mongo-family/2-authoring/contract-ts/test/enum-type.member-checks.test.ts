@@ -1,5 +1,6 @@
+import type { JsonValue } from '@internal/contract/types';
 import type { AnyCodecDescriptor, Codec } from '@internal/framework-components/codec';
-import { dataTypeId } from '@internal/framework-components/codec';
+import { dataType, dataTypeId } from '@internal/framework-components/codec';
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
 import { defineContract, field, model } from '../src/contract-builder';
@@ -12,10 +13,12 @@ const mongoFamilyPack = {
   version: '0.0.1',
 } as const satisfies FamilyPackRef<'mongo'>;
 
+const fixtureType = dataType('demo/fixture', { read: (json) => json });
+
 function descriptorOf(
   codecId: string,
-  encodeJson: (v: unknown) => unknown,
-  decodeJson: (j: unknown) => unknown,
+  toStored: (value: unknown) => JsonValue,
+  fromStored: (json: JsonValue) => unknown,
 ): AnyCodecDescriptor {
   return {
     codecId,
@@ -26,11 +29,12 @@ function descriptorOf(
     factory: () => () =>
       ({
         id: codecId,
-        encode: async (v: unknown) => v,
-        decode: async (v: unknown) => v,
-        encodeJson,
-        decodeJson,
-      }) as unknown as Codec,
+        dataType: fixtureType,
+        toWire: async (v: unknown) => v,
+        fromWire: async (v: unknown) => v,
+        toDataTypeValue: (value: unknown) => fixtureType.valueFrom(toStored(value), {}),
+        fromDataTypeValue: (value) => fromStored(value.value),
+      }) satisfies Codec,
   };
 }
 
@@ -48,7 +52,7 @@ const target = {
           'test/refusing@1',
           (v) => {
             if (v === 'bad') throw new Error('bad is not allowed');
-            return v;
+            return String(v);
           },
           (j) => j,
         ),

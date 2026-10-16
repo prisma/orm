@@ -1197,7 +1197,7 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
             dataType: 'pg/timestamptz',
             codecId: 'pg/timestamptz-temporal@1',
             nullable: false,
-            default: { kind: 'literal', value: '2023-01-01T00:00:00.000Z' },
+            default: { kind: 'literal', value: '2023-01-01T00:00:00Z' },
           },
         }),
       },
