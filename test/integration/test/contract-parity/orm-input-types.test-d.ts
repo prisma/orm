@@ -1,5 +1,7 @@
 import postgres from '@internal/postgres/runtime';
+import { contractFromJson as postgresContractFromJson } from '@internal/postgres/static';
 import sqlite from '@internal/sqlite/runtime';
+import { contractFromJson as sqliteContractFromJson } from '@internal/sqlite/static';
 import type { Char, Numeric, Varchar } from '@internal/target-postgres/codec-types';
 import { describe, expectTypeOf, test } from 'vitest';
 import { contract as postgresScalarSource } from '../planner-golden/fixtures/postgres/contract';
@@ -22,19 +24,23 @@ import sqliteParityJson from './fixtures/sqlite/generated/contract.json' with { 
 declare const idFromRequest: string;
 
 const postgresScalar = {
-  emitted: postgres<PostgresScalarEmitted>({ contractJson: postgresScalarJson }),
+  emitted: postgres({
+    contract: postgresContractFromJson<PostgresScalarEmitted>(postgresScalarJson),
+  }),
   built: postgres({ contract: postgresScalarSource }),
 };
 const postgresParity = {
-  emitted: postgres<PostgresParityEmitted>({ contractJson: postgresParityJson }),
+  emitted: postgres({
+    contract: postgresContractFromJson<PostgresParityEmitted>(postgresParityJson),
+  }),
   built: postgres({ contract: postgresParitySource }),
 };
 const sqliteScalar = {
-  emitted: sqlite<SqliteScalarEmitted>({ contractJson: sqliteScalarJson }),
+  emitted: sqlite({ contract: sqliteContractFromJson<SqliteScalarEmitted>(sqliteScalarJson) }),
   built: sqlite({ contract: sqliteScalarSource }),
 };
 const sqliteParity = {
-  emitted: sqlite<SqliteParityEmitted>({ contractJson: sqliteParityJson }),
+  emitted: sqlite({ contract: sqliteContractFromJson<SqliteParityEmitted>(sqliteParityJson) }),
   built: sqlite({ contract: sqliteParitySource }),
 };
 

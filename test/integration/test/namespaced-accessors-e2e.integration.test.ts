@@ -20,6 +20,7 @@
 
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
 import postgres from '@internal/postgres/runtime';
+import { contractFromJson } from '@internal/postgres/static';
 import type { ForeignKey, SqlStorage } from '@internal/sql-contract/types';
 import type { Runtime } from '@internal/sql-runtime';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
@@ -94,7 +95,7 @@ describe('explicit namespaced accessors end-to-end (PGlite)', () => {
       await withDevDatabase(async ({ connectionString }) => {
         const client = new Client({ connectionString });
         await client.connect();
-        const db = postgres<Contract>({ contractJson });
+        const db = postgres({ contract: contractFromJson<Contract>(contractJson) });
         try {
           await client.query('create schema if not exists auth');
           await client.query(

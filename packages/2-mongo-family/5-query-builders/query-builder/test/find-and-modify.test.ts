@@ -8,9 +8,9 @@ import type { PipelineChain } from '../src/builder';
 import { mongoQuery } from '../src/query';
 import type { ModelToDocShape } from '../src/types';
 import type { TContract } from './fixtures/test-contract';
-import { testContractJson } from './fixtures/test-contract';
+import { testContract } from './fixtures/test-contract';
 
-const orders = () => mongoQuery<TContract>({ contractJson: testContractJson }).from('orders');
+const orders = () => mongoQuery({ contract: testContract }).from('orders');
 
 /**
  * After A25 (`CollectionHandle`/`FilteredCollection` start with

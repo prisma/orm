@@ -7,6 +7,7 @@
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import sqlite from '@internal/sqlite/runtime';
+import { contractFromJson } from '@internal/sqlite/static';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { withTempDir, writeProjectManifest } from './utils/cli-test-helpers';
@@ -62,7 +63,11 @@ async function readThroughOrm(ctx: SqliteJourney): Promise<unknown> {
   const contractJson: unknown = JSON.parse(
     readFileSync(join(ctx.testDir, 'contract.json'), 'utf-8'),
   );
-  const client = sqlite({ contractJson, path: ctx.dbPath, verifyMarker: false });
+  const client = sqlite({
+    contract: contractFromJson(contractJson),
+    path: ctx.dbPath,
+    verifyMarker: false,
+  });
   try {
     await client.connect();
     const users = client.orm['User'];

@@ -1,10 +1,10 @@
-import mongoStatic from '@internal/mongo/static';
+import mongoStatic, { contractFromJson } from '@internal/mongo/static';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { timeouts, withMongoPort } from '../_harness/mongo';
 import type { Contract } from './_fixture-mongo/generated/contract';
 import contractJson from './_fixture-mongo/generated/contract.json' with { type: 'json' };
 
-const { enums } = mongoStatic<Contract>({ contractJson });
+const { enums } = mongoStatic({ contract: contractFromJson<Contract>(contractJson) });
 
 describe('db.enums on a Mongo contract emitted from PSL', () => {
   it(

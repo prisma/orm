@@ -11,7 +11,7 @@ A declaration-merging registry is an interface a lower package declares and othe
 
 ## When to use
 
-- A package contributes types that a computation in another package must see, and the application cannot pass them as a type argument. For example, the facade's `postgres<Contract>(...)` takes `Contract` explicitly, so TypeScript infers no further type argument.
+- A package contributes types that a computation in another package must see, and the application cannot pass them as a type argument. For example, when `CollectionMethodRegistry` was added, the facade's `postgres<Contract>(...)` took `Contract` explicitly, so TypeScript inferred no further type argument. Since [ADR 274](../adrs/ADR%20274%20-%20A%20client%20takes%20a%20typed%20contract%20value%2C%20so%20every%20other%20option%20is%20inferred.md) the clients infer every type argument from `{ contract }`.
 - The contribution only takes effect for data that its own package introduces, such as fields of its codecs or indexes of its index types, or that every contract of its target has. Then loading a registration the contract does not use is harmless: no contract without the package has that data. A contribution keyed on data any contract can hold would show its entries in programs that never installed the package.
 - The augmentation can live in a module that every program which needs it already loads, such as the entry point the application imports to use the package.
 

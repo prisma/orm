@@ -5,9 +5,9 @@ import type { PipelineChain } from '../src/builder';
 import { mongoQuery } from '../src/query';
 import type { ModelToDocShape } from '../src/types';
 import type { TContract } from './fixtures/test-contract';
-import { testContractJson } from './fixtures/test-contract';
+import { testContract, testContractJson } from './fixtures/test-contract';
 
-const orders = () => mongoQuery<TContract>({ contractJson: testContractJson }).from('orders');
+const orders = () => mongoQuery({ contract: testContract }).from('orders');
 
 type FamReachableChain = PipelineChain<
   TContract,
@@ -51,7 +51,7 @@ describe('structured error codes', () => {
   });
 
   it('raises ORM.MODEL_UNKNOWN for an unknown root', () => {
-    const p = mongoQuery<TContract>({ contractJson: testContractJson });
+    const p = mongoQuery({ contract: testContract });
     expect(codeOf(() => p.from('nonexistent' as 'orders'))).toBe('ORM.MODEL_UNKNOWN');
   });
 
@@ -63,12 +63,12 @@ describe('structured error codes', () => {
         orders: { $ref: '#/domain/models/Ghost', model: 'Ghost' },
       },
     };
-    const p = mongoQuery<TContract>({ contractJson: patched });
+    const p = mongoQuery({ contract: patched as unknown as TContract });
     expect(codeOf(() => p.from('orders'))).toBe('CONTRACT.MODEL_UNKNOWN');
   });
 
   it('raises CONTRACT.VALIDATION_FAILED when the contract has no storageHash', () => {
-    const p = mongoQuery<TContract>({ contractJson: { ...testContractJson, storage: {} } });
+    const p = mongoQuery({ contract: { ...testContract, storage: {} } as unknown as TContract });
     expect(codeOf(() => p.rawCommand(new InsertOneCommand('orders', { status: 'new' })))).toBe(
       'CONTRACT.VALIDATION_FAILED',
     );

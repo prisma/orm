@@ -19,6 +19,7 @@ import {
   TableSource,
 } from '@prisma/orm-sqlite/relational-core/ast';
 import sqlite from '@prisma/orm-sqlite/runtime';
+import { contractFromJson } from '@prisma/orm-sqlite/static';
 import { expect, expectTypeOf, it, vi } from 'vitest';
 import type { Contract } from './fixtures/generated/contract.d';
 import contractJson from './fixtures/generated/contract.json' with { type: 'json' };
@@ -51,8 +52,8 @@ it('prepares ORM predicates and pagination through the public SQLite facade with
       },
     };
   });
-  const db = sqlite<Contract>({
-    contractJson,
+  const db = sqlite({
+    contract: contractFromJson<Contract>(contractJson),
     path,
     verifyMarker: false,
     middleware: [

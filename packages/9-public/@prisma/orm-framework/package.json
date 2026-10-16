@@ -74,6 +74,7 @@
     "./contract/resolve-domain-model": "./dist/contract__resolve-domain-model.mjs",
     "./contract/types": "./dist/contract__types.mjs",
     "./contract/validate-domain": "./dist/contract__validate-domain.mjs",
+    "./contract/validate-once": "./dist/contract__validate-once.mjs",
     "./contract-authoring": "./dist/contract-authoring.mjs",
     "./errors": "./dist/errors.mjs",
     "./errors/control": "./dist/errors__control.mjs",

@@ -1,5 +1,6 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
 import mongo from '@internal/mongo/runtime';
+import { contractFromJson } from '@internal/mongo/static';
 import { newMongoCodecRegistry } from '@internal/mongo-codec';
 import type { CreateInput } from '@internal/mongo-orm';
 import { createMongoExecutionContext, createMongoExecutionStack } from '@internal/mongo-runtime';
@@ -204,8 +205,8 @@ describe('Mongo temporal presets end to end', () => {
     'mongo() fills generated fields through the facade',
     () =>
       withMongoPort<Contract>({ contractJson }, async ({ client, mongoDb }) => {
-        const facade = mongo<Contract>({
-          contractJson,
+        const facade = mongo({
+          contract: contractFromJson<Contract>(contractJson),
           mongoClient: client,
           dbName: mongoDb.databaseName,
         });

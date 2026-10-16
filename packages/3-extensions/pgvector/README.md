@@ -136,7 +136,7 @@ type Row = ResultType<typeof plan>;
 The runtime extension contributes a collection method for each vector field of a model, named `<field>_nearest` ([ADR 272](../../../docs/architecture%20docs/adrs/ADR%20272%20-%20Packages%20contribute%20collection%20methods%20computed%20from%20a%20model.md)). It orders the rows by cosine distance to the vector, nearest first:
 
 ```typescript
-const db = postgres<Contract>({ contractJson, extensions: [pgvector] });
+const db = postgres({ contract, extensions: [pgvector] });
 
 await db.orm.public.Post.using.embedding_nearest(queryVector, 0.5).limit(10).all();
 ```

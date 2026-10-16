@@ -124,12 +124,7 @@ import postgresTarget from '@internal/target-postgres/control';
 const contract = postgresTarget.contractSerializer.deserializeContract(contractJson);
 ```
 
-`deserializeContract` parses the on-disk envelope, hydrates the SQL
-Contract IR class hierarchy (`SqlStorage` → `StorageTable` → `StorageColumn`
-/ `PrimaryKey` / …), and validates model-to-storage cross-references in
-one pass. End-user app code typically calls the canonical façade instead
-(e.g. `postgres<Contract>({ contractJson, … })`), which threads the same
-SPI internally.
+`deserializeContract` parses the on-disk envelope, hydrates the SQL Contract IR class hierarchy (`SqlStorage` → `StorageTable` → `StorageColumn` / `PrimaryKey` / …), and validates model-to-storage cross-references in one pass. End-user app code typically calls the canonical façade instead (e.g. `contractFromJson<Contract>(contractJson)` from `@internal/postgres/static`, passed to `postgres({ contract })`), which threads the same SPI internally.
 
 ### Factories
 

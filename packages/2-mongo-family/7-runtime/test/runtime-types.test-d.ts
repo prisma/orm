@@ -82,10 +82,11 @@ type PlanRow<P extends MongoQueryPlan> = P extends MongoQueryPlan<infer R> ? R :
 
 type OrderRow = { readonly _id: string; readonly status: string; readonly amount: number };
 
+declare const contract: TContract;
+
 describe('runtime type safety', () => {
   it('query() returns AsyncIterableResult<Row> where Row matches build() row type', () => {
-    const contractJson = {} as unknown;
-    const plan = mongoQuery<TContract>({ contractJson }).from('orders').build();
+    const plan = mongoQuery({ contract }).from('orders').build();
     type Row = PlanRow<typeof plan>;
     expectTypeOf<Row>().toEqualTypeOf<OrderRow>();
 
@@ -95,8 +96,7 @@ describe('runtime type safety', () => {
   });
 
   it('query() result awaits to Row[]', () => {
-    const contractJson = {} as unknown;
-    const plan = mongoQuery<TContract>({ contractJson }).from('orders').build();
+    const plan = mongoQuery({ contract }).from('orders').build();
     type Row = PlanRow<typeof plan>;
 
     const runtime = {} as MongoRuntime;

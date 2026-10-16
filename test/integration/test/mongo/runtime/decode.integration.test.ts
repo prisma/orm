@@ -36,7 +36,7 @@ describe('Mongo runtime decode integration', { timeout: timeouts.spinUpMongoMemo
       });
 
       // User-facing path: build the plan through the query-builder so the Row type is contract-derived (no explicit annotation on execute).
-      const plan = mongoQuery<TDecodeFixtureContract>({ contractJson: contract })
+      const plan = mongoQuery({ contract })
         .from('users')
         .match((f) =>
           f['_id']!.eq(MongoParamRef.of(insert.insertedId, { codecId: 'mongo/objectId@1' })),

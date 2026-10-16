@@ -5,11 +5,11 @@ import { instantiateExecutionStack } from '@internal/framework-components/execut
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { Runtime } from '@internal/sql-runtime';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
-import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
-import { blindCast } from '@internal/utils/casts';
+import postgresTarget from '@internal/target-postgres/runtime';
 import { InternalError } from '@internal/utils/internal-error';
 import { type Client, Pool } from 'pg';
 import { postgresError } from '../errors';
+import { validatePostgresContract } from '../static/contract-from-json';
 import { buildPostgresStaticContext } from '../static/postgres-static';
 import {
   type PostgresBinding,
@@ -53,44 +53,10 @@ export interface PostgresBindingOptions {
   readonly pg?: Pool | Client;
 }
 
-export type PostgresOptionsWithContract<TContract extends Contract<SqlStorage>> =
-  PostgresBindingOptions &
-    PostgresOptionsBase & {
-      readonly contract: TContract;
-      readonly contractJson?: never;
-    };
-
-export type PostgresOptionsWithContractJson<TContract extends Contract<SqlStorage>> =
-  PostgresBindingOptions &
-    PostgresOptionsBase & {
-      readonly contractJson: unknown;
-      readonly contract?: never;
-      readonly _contract?: TContract;
-    };
-
-export type PostgresOptions<TContract extends Contract<SqlStorage>> =
-  | PostgresOptionsWithContract<TContract>
-  | PostgresOptionsWithContractJson<TContract>;
-
-function hasContractJson<TContract extends Contract<SqlStorage>>(
-  options: PostgresOptions<TContract>,
-): options is PostgresOptionsWithContractJson<TContract> {
-  return 'contractJson' in options;
-}
-
-const contractSerializer = new PostgresContractSerializer();
-
-function resolveContract<TContract extends Contract<SqlStorage>>(
-  options: PostgresOptions<TContract>,
-): TContract {
-  const contractJson = hasContractJson(options)
-    ? options.contractJson
-    : contractSerializer.serializeContract(options.contract);
-  return blindCast<
-    TContract,
-    'validated contract JSON corresponds to the caller supplied contract type'
-  >(contractSerializer.deserializeContract(contractJson));
-}
+export type PostgresOptions<TContract extends Contract<SqlStorage>> = PostgresBindingOptions &
+  PostgresOptionsBase & {
+    readonly contract: TContract;
+  };
 
 function toRuntimeBinding<TContract extends Contract<SqlStorage>>(
   binding: PostgresBinding,
@@ -114,23 +80,27 @@ function toRuntimeBinding<TContract extends Contract<SqlStorage>>(
 }
 
 /**
- * Creates a lazy Postgres client from either `contractJson` or a TypeScript-authored `contract`.
- * Static query surfaces are available immediately, while `runtime()` instantiates the driver/pool on first call.
+ * Creates a lazy Postgres client. The client infers its contract type from `contract`: a value from
+ * `contractFromJson` for an emitted contract, or a TypeScript-authored contract. A contract is
+ * validated once, however many clients are built from it. The static query surfaces are available
+ * at once; the pool is created on the first query or `connect()`.
  *
- * - No-emit: pass a TypeScript-authored contract. Example: postgres({ contract })
- * - Emitted: pass Contract type explicitly. Example: postgres<Contract>({ contractJson, url })
+ * @example
+ * ```ts
+ * import { contractFromJson } from '@prisma/orm-postgres/static';
+ * import postgres from '@prisma/orm-postgres/runtime';
+ * import type { Contract } from './contract.d';
+ * import contractJson from './contract.json' with { type: 'json' };
+ *
+ * export const contract = contractFromJson<Contract>(contractJson);
+ * export const db = postgres({ contract, url: process.env['DATABASE_URL']! });
+ * ```
  */
-export default function postgres<TContract extends Contract<SqlStorage>>(
-  options: PostgresOptionsWithContract<TContract>,
-): PostgresClient<TContract>;
-export default function postgres<TContract extends Contract<SqlStorage>>(
-  options: PostgresOptionsWithContractJson<TContract>,
-): PostgresClient<TContract>;
 export default function postgres<TContract extends Contract<SqlStorage>>(
   options: PostgresOptions<TContract>,
 ): PostgresClient<TContract> {
   const cursor = validateCursorOptions(options.cursor, 'postgres');
-  const contract = resolveContract(options);
+  const contract = validatePostgresContract(options.contract);
   let binding = resolveOptionalPostgresBinding(options);
 
   const stack = createSqlExecutionStack({
@@ -150,7 +120,7 @@ export default function postgres<TContract extends Contract<SqlStorage>>(
     raw: rawSqlTag,
     enums,
     nativeEnums,
-  } = buildPostgresStaticContext<TContract>(context, stack.adapter.rawCodecInferer);
+  } = buildPostgresStaticContext<TContract>(contract, context, stack.adapter.rawCodecInferer);
 
   let runtimeInstance: Runtime | undefined;
   let runtimeDriver: { connect(binding: unknown): Promise<void> } | undefined;

@@ -7,7 +7,7 @@ A typed CRUD query builder for MongoDB contracts. Reads, writes, pipeline aggreg
 ```typescript
 import { mongoQuery } from '@internal/mongo-query-builder';
 
-const q = mongoQuery<TContract>({ contractJson: contract });
+const q = mongoQuery({ contract });
 
 // Read — aggregation pipeline
 const analytics = q

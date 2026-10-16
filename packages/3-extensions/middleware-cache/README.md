@@ -20,13 +20,14 @@ The package depends on no SQL or Mongo package: its runtime dependencies are `@i
 
 ```typescript
 import postgres from '@internal/postgres/runtime';
+import { contractFromJson } from '@internal/postgres/static';
 import { cacheAnnotation, createCacheMiddleware } from '@internal/middleware-cache';
 import type { Contract } from './contract.d';
 import contractJson from './contract.json' with { type: 'json' };
 
 const cache = createCacheMiddleware(); // default store: in memory, 1000 entries, 60 s
-const db = postgres<Contract>({
-  contractJson,
+const db = postgres({
+  contract: contractFromJson<Contract>(contractJson),
   url: process.env['DATABASE_URL']!,
   middleware: [cache],
 });

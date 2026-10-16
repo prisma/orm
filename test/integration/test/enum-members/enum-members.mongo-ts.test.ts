@@ -1,6 +1,6 @@
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import { defineContract, enumType, field, member, model } from '@internal/mongo/contract-builder';
-import mongoStatic from '@internal/mongo/static';
+import mongoStatic, { contractFromJson } from '@internal/mongo/static';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { timeouts, withMongoPort } from '../_harness/mongo';
 
@@ -39,7 +39,7 @@ const contract = defineContract({
 });
 type Contract = typeof contract;
 const contractJson = new MongoContractSerializer().serializeContract(contract);
-const { enums } = mongoStatic<Contract>({ contractJson });
+const { enums } = mongoStatic({ contract: contractFromJson<Contract>(contractJson) });
 
 describe('db.enums on a Mongo contract built with TypeScript', () => {
   it(

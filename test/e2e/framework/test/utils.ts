@@ -15,6 +15,7 @@ import type { ExecutionContext, Runtime } from '@prisma/orm-postgres/family-runt
 import { materialiseMigrationPackage } from '@prisma/orm-postgres/migration-tools/io';
 import { emitContractSpaceArtifacts } from '@prisma/orm-postgres/migration-tools/spaces';
 import postgres from '@prisma/orm-postgres/runtime';
+import { contractFromJson } from '@prisma/orm-postgres/static';
 import { PostgresContractSerializer } from '@prisma/orm-postgres/target/runtime';
 import { withClient, withDevDatabase } from '@repo/test-utils';
 import type { Client } from 'pg';
@@ -255,8 +256,8 @@ export async function withTestRuntime<TContract extends Contract<SqlStorage>>(
       await runDbInit({ connectionString, contractJsonPath, migrationsDir });
 
       await withClient(connectionString, async (client: Client) => {
-        const postgresClient = postgres<TContract>({
-          contractJson,
+        const postgresClient = postgres({
+          contract: contractFromJson<TContract>(contractJson),
           pg: client,
           extensions: [pgvectorRuntime, arktypeJsonRuntime],
         });

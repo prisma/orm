@@ -7,15 +7,15 @@ import postgresStatic from '../src/static/postgres-static';
 
 const contract = createContract<SqlStorage>();
 
-describe('postgresStatic({ contractJson })', () => {
+describe('postgresStatic({ contract })', () => {
   it('context carries the contract (merged capabilities view)', () => {
-    const result = postgresStatic<typeof contract>({ contractJson: contract });
+    const result = postgresStatic({ contract });
     expect(result.context.contract).toBeDefined();
     expect(result.context.contract.target).toBe(contract.target);
   });
 
-  it('contract matches the deserialized contractJson', () => {
-    const result = postgresStatic<typeof contract>({ contractJson: contract });
+  it('contract matches the validated contract', () => {
+    const result = postgresStatic({ contract });
     expect(result.contract.target).toBe(contract.target);
     expect(result.contract.targetFamily).toBe(contract.targetFamily);
     expect(result.contract.domain).toEqual(contract.domain);
@@ -23,7 +23,7 @@ describe('postgresStatic({ contractJson })', () => {
   });
 
   it('enums matches what buildNamespacedEnums produces', () => {
-    const result = postgresStatic<typeof contract>({ contractJson: contract });
+    const result = postgresStatic({ contract });
     const allNamespaced = buildNamespacedEnums(contract.domain, (codecId) =>
       result.context.contractCodecs.forCodecRef({ codecId }),
     ) as NamespacedEnums<Contract<SqlStorage>>;

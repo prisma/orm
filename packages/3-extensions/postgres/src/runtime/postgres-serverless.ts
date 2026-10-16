@@ -5,12 +5,12 @@ import { instantiateExecutionStack } from '@internal/framework-components/execut
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { Runtime } from '@internal/sql-runtime';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
-import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
-import { blindCast } from '@internal/utils/casts';
+import postgresTarget from '@internal/target-postgres/runtime';
 import { InternalError } from '@internal/utils/internal-error';
 import { redactDatabaseUrl } from '@internal/utils/redact-db-url';
 import { Client } from 'pg';
 import { postgresError } from '../errors';
+import { validatePostgresContract } from '../static/contract-from-json';
 import { buildPostgresStaticContext } from '../static/postgres-static';
 import { validatePostgresUrl } from './binding';
 import {
@@ -41,42 +41,10 @@ export interface PostgresServerlessClient<TContract extends Contract<SqlStorage>
 
 export interface PostgresServerlessOptionsBase extends PostgresExecutionOptions {}
 
-export type PostgresServerlessOptionsWithContract<TContract extends Contract<SqlStorage>> =
+export type PostgresServerlessOptions<TContract extends Contract<SqlStorage>> =
   PostgresServerlessOptionsBase & {
     readonly contract: TContract;
-    readonly contractJson?: never;
   };
-
-export type PostgresServerlessOptionsWithContractJson<TContract extends Contract<SqlStorage>> =
-  PostgresServerlessOptionsBase & {
-    readonly contractJson: unknown;
-    readonly contract?: never;
-    readonly _contract?: TContract;
-  };
-
-export type PostgresServerlessOptions<TContract extends Contract<SqlStorage>> =
-  | PostgresServerlessOptionsWithContract<TContract>
-  | PostgresServerlessOptionsWithContractJson<TContract>;
-
-function hasContractJson<TContract extends Contract<SqlStorage>>(
-  options: PostgresServerlessOptions<TContract>,
-): options is PostgresServerlessOptionsWithContractJson<TContract> {
-  return 'contractJson' in options;
-}
-
-const contractSerializer = new PostgresContractSerializer();
-
-function resolveContract<TContract extends Contract<SqlStorage>>(
-  options: PostgresServerlessOptions<TContract>,
-): TContract {
-  const contractJson = hasContractJson(options)
-    ? options.contractJson
-    : contractSerializer.serializeContract(options.contract);
-  return blindCast<
-    TContract,
-    'caller supplies the generic contract type that matches the serialized Postgres contract'
-  >(contractSerializer.deserializeContract(contractJson));
-}
 
 function closedConnectionError() {
   return postgresError('DRIVER.NOT_CONNECTED', 'Postgres connection is closed', {
@@ -105,9 +73,12 @@ function connectionFailedError(url: string, cause: unknown) {
  * `DRIVER.CONNECTION_FAILED` when the database refuses the connection, rejects the credentials,
  * or does not answer within 20 seconds. Close the connection with `await using` or `close()`.
  *
+ * The client infers its contract type from `contract` and validates it once, when the client is
+ * created; connections reuse it.
+ *
  * @example
  * ```ts
- * const postgres = postgresServerless<Contract>({ contractJson });
+ * const postgres = postgresServerless({ contract: contractFromJson<Contract>(contractJson) });
  *
  * export default {
  *   async fetch(_req: Request, env: Env): Promise<Response> {
@@ -119,16 +90,10 @@ function connectionFailedError(url: string, cause: unknown) {
  * ```
  */
 export default function postgresServerless<TContract extends Contract<SqlStorage>>(
-  options: PostgresServerlessOptionsWithContract<TContract>,
-): PostgresServerlessClient<TContract>;
-export default function postgresServerless<TContract extends Contract<SqlStorage>>(
-  options: PostgresServerlessOptionsWithContractJson<TContract>,
-): PostgresServerlessClient<TContract>;
-export default function postgresServerless<TContract extends Contract<SqlStorage>>(
   options: PostgresServerlessOptions<TContract>,
 ): PostgresServerlessClient<TContract> {
   const cursor = validateCursorOptions(options.cursor, 'postgresServerless');
-  const contract = resolveContract(options);
+  const contract = validatePostgresContract(options.contract);
   const stack = createSqlExecutionStack({
     target: postgresTarget,
     adapter: postgresAdapter,
@@ -143,6 +108,7 @@ export default function postgresServerless<TContract extends Contract<SqlStorage
   });
   const rawCodecInferer = stack.adapter.rawCodecInferer;
   const { sql, raw, enums, nativeEnums } = buildPostgresStaticContext<TContract>(
+    contract,
     context,
     rawCodecInferer,
   );

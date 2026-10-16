@@ -11,11 +11,12 @@ This document covers standard patterns for working with Prisma 8 queries, includ
 ```typescript
 // src/prisma/db.ts
 import postgres from '@internal/postgres/runtime';
-import type { Contract, TypeMaps } from './contract.d';
+import { contractFromJson } from '@internal/postgres/static';
+import type { Contract } from './contract.d';
 import contractJson from './contract.json' with { type: 'json' };
 
-export const db = postgres<Contract, TypeMaps>({
-  contractJson,
+export const db = postgres({
+  contract: contractFromJson<Contract>(contractJson),
   url: process.env['DATABASE_URL']!,
 });
 ```

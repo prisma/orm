@@ -6,7 +6,7 @@ Shared concepts (result consumption, script teardown, cross-target pitfalls, cap
 
 ## Key Concepts
 
-**Mongo** (`mongo<Contract>(...)` from `@internal/mongo/runtime`):
+**Mongo** (`mongo({ contract, ... })` from `@internal/mongo/runtime`):
 
 - **`db.orm.<root>`** — ORM, lowercased plural contract root (`db.orm.users`, `db.orm.posts`). Same fluent chaining; `.where({ field: value })` object equality is the idiomatic filter form.
 - **`db.query`** — typed aggregation-pipeline builder. Start with `db.query.from('<root>')`, chain `.match(...)` / `.project(...)` / `.group(...)` / `.lookup(...)`, terminal with `.build()`. Run via `(await db.runtime()).query(plan)` for anything that returns documents; `execute(plan)` is only for a write you want an affected count from, and it throws `RUNTIME.MONGO_STATISTICS_UNSUPPORTED` on a find or aggregate.

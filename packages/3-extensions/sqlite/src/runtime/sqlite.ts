@@ -30,14 +30,13 @@ import {
   delegatingActivitySource,
   withTransaction,
 } from '@internal/sql-runtime';
-import sqliteTarget, {
-  SqliteContractSerializer as SqlContractSerializer,
-} from '@internal/target-sqlite/runtime';
+import sqliteTarget from '@internal/target-sqlite/runtime';
 import { assertDefined } from '@internal/utils/assertions';
 import { blindCast, castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { sqliteError } from '../errors';
+import { validateSqliteContract } from '../static/contract-from-json';
 import { buildSqliteStaticContext, type SqliteStaticContext } from '../static/sqlite-static';
 import { resolveOptionalSqliteBinding, resolveSqliteBinding } from './binding';
 import { SqliteRuntimeImpl } from './sqlite-runtime';
@@ -98,53 +97,32 @@ export interface SqliteOptionsBase {
   readonly log?: Log;
 }
 
-export type SqliteOptionsWithContract<TContract extends Contract<SqlStorage>> = {
+export type SqliteOptions<TContract extends Contract<SqlStorage>> = SqliteOptionsBase & {
+  readonly contract: TContract;
   readonly path?: string;
-} & SqliteOptionsBase & {
-    readonly contract: TContract;
-    readonly contractJson?: never;
-  };
+};
 
-export type SqliteOptionsWithContractJson<TContract extends Contract<SqlStorage>> = {
-  readonly path?: string;
-  readonly _contract?: TContract;
-} & SqliteOptionsBase & {
-    readonly contractJson: unknown;
-    readonly contract?: never;
-  };
-
-export type SqliteOptions<TContract extends Contract<SqlStorage>> =
-  | SqliteOptionsWithContract<TContract>
-  | SqliteOptionsWithContractJson<TContract>;
-
-function resolveContract<TContract extends Contract<SqlStorage>>(
-  options: SqliteOptions<TContract>,
-): TContract {
-  const serializer = new SqlContractSerializer();
-  if ('contractJson' in options && options.contractJson !== undefined) {
-    return blindCast<
-      TContract,
-      'validated contract JSON corresponds to the caller supplied contract type'
-    >(serializer.deserializeContract(options.contractJson));
-  }
-  const contract = options.contract;
-  assertDefined(contract, 'a contract or contractJson is required');
-  return blindCast<
-    TContract,
-    'serialized and validated contract retains the authored contract type'
-  >(serializer.deserializeContract(serializer.serializeContract(contract)));
-}
-
-export default function sqlite<TContract extends Contract<SqlStorage>>(
-  options: SqliteOptionsWithContract<TContract>,
-): SqliteClient<TContract>;
-export default function sqlite<TContract extends Contract<SqlStorage>>(
-  options: SqliteOptionsWithContractJson<TContract>,
-): SqliteClient<TContract>;
+/**
+ * Creates a lazy SQLite client. The client infers its contract type from `contract`: a value from
+ * `contractFromJson` for an emitted contract, or a TypeScript-authored contract. A contract is
+ * validated once, however many clients are built from it. The database opens on the first query
+ * or `connect()`.
+ *
+ * @example
+ * ```ts
+ * import { contractFromJson } from '@prisma/orm-sqlite/static';
+ * import sqlite from '@prisma/orm-sqlite/runtime';
+ * import type { Contract } from './contract.d';
+ * import contractJson from './contract.json' with { type: 'json' };
+ *
+ * export const contract = contractFromJson<Contract>(contractJson);
+ * export const db = sqlite({ contract, path: './dev.db' });
+ * ```
+ */
 export default function sqlite<TContract extends Contract<SqlStorage>>(
   options: SqliteOptions<TContract>,
 ): SqliteClient<TContract> {
-  const contract = resolveContract(options);
+  const contract = validateSqliteContract(options.contract);
   let binding = resolveOptionalSqliteBinding(options);
 
   const stack = createSqlExecutionStack({
@@ -164,6 +142,7 @@ export default function sqlite<TContract extends Contract<SqlStorage>>(
     raw: rawSqlTag,
     enums,
   }: SqliteStaticContext<TContract> = buildSqliteStaticContext<TContract>(
+    contract,
     context,
     stack.adapter.rawCodecInferer,
   );

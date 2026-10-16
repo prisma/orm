@@ -85,12 +85,12 @@ pnpm fixtures:check        # Use this rather than ad-hoc emit-and-diff
 
 1. **Authoring**: Write `schema.psl` or use TypeScript builders → canonicalized Contract IR
 2. **Emission**: Emitter validates and generates `contract.json` + `contract.d.ts`
-3. **Hydration**: the client factory (or a family `ContractSerializer`) validates `contract.json` into the typed contract
+3. **Hydration**: `contractFromJson` (facade `/static`) validates `contract.json` into the typed contract
 4. **Usage**: DSL functions (`sql()`, `schema()`) accept the contract and propagate types
 
 ### Key Patterns
 
-- **Type Parameter Pattern**: JSON imports lose literal types. Name the `contract.d.ts` type where the JSON enters — `postgres<Contract>({ contractJson, url })`, or `validateSqlContractFully<Contract>(contractJson)` in tests. Never a generic like `SqlContract<SqlStorage>`.
+- **Type Parameter Pattern**: JSON imports lose literal types. Name the `contract.d.ts` type where the JSON enters — `contractFromJson<Contract>(contractJson)`, then `postgres({ contract, url })`; `validateSqlContractFully<Contract>(contractJson)` in client-less tests. Never a generic like `SqlContract<SqlStorage>`.
 - **ExecutionContext**: Encapsulates contract, codecs, operations, and types. Pass to `schema()`, `sql()`, `orm()`.
 - **Interface + factory pattern for stateful services**: Stateful services (registries, runtimes, adapters, drivers) expose an interface plus a `createX()` factory; the implementing class stays package-private and consumers depend on the interface, never it. Pattern reference: [`docs/architecture docs/patterns/interface-plus-factory.md`](docs/architecture%20docs/patterns/interface-plus-factory.md).
 - **Three-layer polymorphic IR for AST/IR class hierarchies**: AST/IR nodes (Contract IR, Schema IR, migration ops) go framework interface → family abstract base → target concrete classes. Concrete classes are the target's exported IR alphabet and call `freezeNode(this)` in their constructor; target packs add entity kinds via `AuthoringContributions.entityTypes` (see [`docs/reference/typescript-patterns.md`](docs/reference/typescript-patterns.md) § "AST/IR class hierarchies"). Pattern references: [`three-layer-polymorphic-ir.md`](docs/architecture%20docs/patterns/three-layer-polymorphic-ir.md), [`frozen-class-ast.md`](docs/architecture%20docs/patterns/frozen-class-ast.md), [`json-canonical-class-in-memory.md`](docs/architecture%20docs/patterns/json-canonical-class-in-memory.md).

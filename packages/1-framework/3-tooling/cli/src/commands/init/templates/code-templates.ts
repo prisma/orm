@@ -358,26 +358,18 @@ export function dbFile(
   resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
 ): string {
   const runtime = targetEntrypoint(target, 'runtime', resolveImportSpecifier);
-  if (target === 'postgres') {
-    return `import 'dotenv/config';
-import postgres from '${runtime}';
-import type { Contract } from './contract.d';
-import contractJson from './contract.json' with { type: 'json' };
-
-export const db = postgres<Contract>({
-  contractJson,
-  url: process.env['DATABASE_URL']!,
-});
-`;
-  }
-
+  const staticEntry = targetEntrypoint(target, 'static', resolveImportSpecifier);
+  const factory = target === 'postgres' ? 'postgres' : 'mongo';
   return `import 'dotenv/config';
-import mongo from '${runtime}';
+import ${factory} from '${runtime}';
+import { contractFromJson } from '${staticEntry}';
 import type { Contract } from './contract.d';
 import contractJson from './contract.json' with { type: 'json' };
 
-export const db = mongo<Contract>({
-  contractJson,
+export const contract = contractFromJson<Contract>(contractJson);
+
+export const db = ${factory}({
+  contract,
   url: process.env['DATABASE_URL']!,
 });
 `;

@@ -6,7 +6,7 @@ Shared concepts (result consumption, script teardown, cross-target pitfalls, cap
 
 ## Key Concepts
 
-**Postgres** (`postgres<Contract>(...)` from `@internal/postgres/runtime`):
+**Postgres** (`postgres({ contract, ... })` from `@internal/postgres/runtime`):
 
 - **`db.orm.<ns>.<Model>`** — ORM, PascalCase model name (`db.orm.public.User`). Fluent `.where(...).select(...).orderBy(...).all()`, fully typed against `Contract`. Default lane for CRUD with relations.
 - **`db.sql.<ns>.<table>`** — SQL builder, lowercase storage name (`db.sql.public.user`). Produces a *plan*. A plan that returns rows (`select`, or a write with `.returning(...)`) runs through `db.runtime().query(plan)`; a write with no `RETURNING` runs through `db.runtime().execute(plan)`, which resolves `{ affectedRows }`. Use when the ORM is too high-level — explicit `JOIN`, computed projections, set operations, window functions.

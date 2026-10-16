@@ -263,17 +263,18 @@ MigrationCLI.run(import.meta.url, M);
 
 Replace both `placeholder(...)` calls with query-plan closures built from `endContract`. The `check` closure must return a **rowset query whose presence of any row signals "work remains"** — conventionally `<table>.select('id').where(<violation predicate>).limit(1)`. Scalar/aggregate shapes (`count(*)`, `bool_and(...)`) silently break the contract: the runner wraps `check` twice (`EXISTS(...)` for precheck, `NOT EXISTS(...)` for postcheck), and a query that always returns one row makes `EXISTS` always true and `NOT EXISTS` always false.
 
-Build the query builder against `endContract` so the storage hashes line up — using a different contract reference raises `MIGRATION.DATA_TRANSFORM_CONTRACT_MISMATCH`. The cheapest way to get a typed SQL builder over the end contract is the façade itself: `postgres<End>({ contractJson: endContract })` connects lazily, so constructing it inside `migration.ts` opens no connection; its `sql` is the builder and its `contract` is the validated contract to hand to `this.dataTransform`. The filled-in shape is the rendered scaffold above with only the two `placeholder(...)` arrows replaced (the operation list, including the `this.setNotNull({...})` the planner rendered after the transform, stays as rendered):
+Build the query builder against `endContract` so the storage hashes line up — using a different contract reference raises `MIGRATION.DATA_TRANSFORM_CONTRACT_MISMATCH`. The cheapest way to get a typed SQL builder over the end contract is the façade itself: `postgres({ contract: contractFromJson<End>(endContract) })` connects lazily, so constructing it inside `migration.ts` opens no connection; its `sql` is the builder and its `contract` is the validated contract to hand to `this.dataTransform`. The filled-in shape is the rendered scaffold above with only the two `placeholder(...)` arrows replaced (the operation list, including the `this.setNotNull({...})` the planner rendered after the transform, stays as rendered):
 
 ```typescript
 import { col, Migration, MigrationCLI } from '@internal/postgres/migration';
 import postgres from '@internal/postgres/runtime';
+import { contractFromJson } from '@internal/postgres/static';
 import type { Contract as End } from '../../snapshots/93f07d1b…c9e1e5a2/contract';
 import endContract from '../../snapshots/93f07d1b…c9e1e5a2/contract.json' with { type: 'json' };
 import type { Contract as Start } from '../../snapshots/f62a4154…d07dddc/contract';
 import startContract from '../../snapshots/f62a4154…d07dddc/contract.json' with { type: 'json' };
 
-const { sql: db, contract } = postgres<End>({ contractJson: endContract });
+const { sql: db, contract } = postgres({ contract: contractFromJson<End>(endContract) });
 
 export default class M extends Migration<Start, End> {
   override readonly startContractJson = startContract;

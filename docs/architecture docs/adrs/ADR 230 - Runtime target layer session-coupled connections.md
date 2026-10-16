@@ -5,7 +5,7 @@
 A Supabase app wants every query to run *as the user who made the request*, so that Postgres Row-Level Security filters rows automatically:
 
 ```ts
-const db = await supabase({ contractJson, url, jwtSecret });
+const db = await supabase({ contract, url, jwtSecret });
 const rows = await db.asUser(jwt).orm.public.Profile.find(/* … */);
 // runs as the authenticated user; RLS returns only the rows that user may see
 ```

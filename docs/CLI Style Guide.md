@@ -261,7 +261,7 @@ Concrete examples (from the migration CLI verb refactor, TML-2546). Each entry b
 - Scaffolds (all colocated; no `src/prisma/` split):
   - `prisma.config.ts` at the project root — the engine envelope: `definePrismaConfig` from `@prisma/cli-engine` wrapping the target facade's `defineConfig` (e.g. `@prisma/orm-postgres/config`) under an `orm` key.
   - `prisma/contract.prisma` (PSL) — starter schema with two related models so the user has something to query immediately.
-  - `prisma/db.ts` — runtime client (e.g. `postgres<Contract>({ contractJson })`) typed against the emitted contract.
+  - `prisma/db.ts` — runtime client typed against the emitted contract (e.g. `contractFromJson<Contract>(contractJson)` passed to `postgres({ contract, url })`).
   - `prisma/contract.json` and `prisma/contract.d.ts` — emitted by the post-install `contract emit` step.
   - `prisma-8.md` — short human-facing quick reference (file locations, common commands, minimal query example).
   - `.agents/skills/prisma-8/SKILL.md` — agent skill so AI tooling in the project knows the layout and conventions.

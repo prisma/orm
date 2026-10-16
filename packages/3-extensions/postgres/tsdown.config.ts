@@ -1,15 +1,16 @@
 import { defineConfig } from '@repo/tsdown';
 
 export default defineConfig({
-  entry: [
-    'src/exports/config.ts',
-    'src/exports/contract-builder.ts',
-    'src/exports/control.ts',
-    'src/exports/family.ts',
-    'src/exports/migration.ts',
-    'src/exports/runtime.ts',
-    'src/exports/serverless.ts',
-    'src/exports/static.ts',
-    'src/exports/target.ts',
-  ],
+  entry: {
+    config: 'src/exports/config.ts',
+    'contract-builder': 'src/exports/contract-builder.ts',
+    control: 'src/exports/control.ts',
+    family: 'src/exports/family.ts',
+    migration: 'src/exports/migration.ts',
+    runtime: 'src/exports/runtime.ts',
+    serverless: 'src/exports/serverless.ts',
+    static: 'src/exports/static.ts',
+    target: 'src/exports/target.ts',
+    'internal/validate-contract': 'src/exports/internal-validate-contract.ts',
+  },
 });

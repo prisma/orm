@@ -23,15 +23,15 @@ const contract: Contract<SqlStorage> = {
   meta: {},
 };
 
-describe('sqliteStatic({ contractJson })', () => {
+describe('sqliteStatic({ contract })', () => {
   it('context carries the contract (merged capabilities view)', () => {
-    const result = sqliteStatic<typeof contract>({ contractJson: contract });
+    const result = sqliteStatic({ contract });
     expect(result.context.contract).toBeDefined();
     expect(result.context.contract.target).toBe(contract.target);
   });
 
-  it('contract matches the deserialized contractJson', () => {
-    const result = sqliteStatic<typeof contract>({ contractJson: contract });
+  it('contract matches the validated contract', () => {
+    const result = sqliteStatic({ contract });
     expect(result.contract.target).toBe(contract.target);
     expect(result.contract.targetFamily).toBe(contract.targetFamily);
     expect(result.contract.domain).toEqual(contract.domain);

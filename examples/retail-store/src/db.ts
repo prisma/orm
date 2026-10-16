@@ -1,11 +1,10 @@
 import { createCacheMiddleware } from '@prisma/orm-extension-middleware-cache';
 import mongo from '@prisma/orm-mongo/runtime';
-import type { Contract } from './contract';
-import contractJson from './contract.json' with { type: 'json' };
+import { contract } from './contract-value';
 
 export function createClient(connectionUri: string, dbName: string) {
-  return mongo<Contract>({
-    contractJson,
+  return mongo({
+    contract,
     url: connectionUri,
     dbName,
     middleware: [createCacheMiddleware()],

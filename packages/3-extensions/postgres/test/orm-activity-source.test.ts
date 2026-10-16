@@ -1,7 +1,7 @@
-import { validateSqlContractFully } from '@internal/sql-contract/validators';
 import type { SqlMiddleware } from '@internal/sql-runtime';
 import { findActivitySource, startActivityOn } from '@internal/sql-runtime';
 import { describe, expect, it, vi } from 'vitest';
+import { contractFromJson } from '../src/static/contract-from-json';
 import type { Contract } from './fixtures/generated/contract';
 import fixtureContractJson from './fixtures/generated/contract.json' with { type: 'json' };
 
@@ -50,7 +50,7 @@ vi.mock('pg', () => {
 
 import postgres from '../src/runtime/postgres';
 
-const fixtureContract = validateSqlContractFully<Contract>(fixtureContractJson);
+const fixtureContract = contractFromJson<Contract>(fixtureContractJson);
 
 function tracer(started: Array<{ kind: string; parentKind: string | undefined }>): SqlMiddleware {
   const kindKey = Symbol('kind');
@@ -72,8 +72,8 @@ describe('the ORM objects a postgres client builds', () => {
   it('start activities on the client runtime, and inside db.transaction beneath the transaction', async () => {
     const started: Array<{ kind: string; parentKind: string | undefined }> = [];
     ormRuntimes.length = 0;
-    const db = postgres<Contract>({
-      contractJson: fixtureContract,
+    const db = postgres({
+      contract: fixtureContract,
       url: 'postgres://localhost:5432/db',
       verifyMarker: false,
       middleware: [tracer(started)],
@@ -102,8 +102,8 @@ describe('the ORM objects a postgres client builds', () => {
   });
 
   it('db.runtime() carries an activity source, so orm({ runtime: db.runtime() }) can start activities', async () => {
-    const db = postgres<Contract>({
-      contractJson: fixtureContract,
+    const db = postgres({
+      contract: fixtureContract,
       url: 'postgres://localhost:5432/db',
       verifyMarker: false,
     });

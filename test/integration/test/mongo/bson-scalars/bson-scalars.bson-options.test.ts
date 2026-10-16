@@ -1,4 +1,5 @@
 import mongo from '@internal/mongo/runtime';
+import { contractFromJson } from '@internal/mongo/static';
 import { timeouts } from '@repo/test-utils';
 import { MongoClient, type MongoClientOptions } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
@@ -32,7 +33,11 @@ describe('Mongo Binary fields under the client`s BSON options', {
   ])('return and read back a plain Uint8Array with %s', async (name, options) => {
     const dbName = `bson_options_${name.replace(/\W+/g, '_')}`;
     const client = new MongoClient(replSet.getUri(), options);
-    const db = mongo<Contract>({ contractJson, mongoClient: client, dbName });
+    const db = mongo({
+      contract: contractFromJson<Contract>(contractJson),
+      mongoClient: client,
+      dbName,
+    });
     try {
       const created = await db.orm.posts.create({
         views: 1n,

@@ -58,11 +58,14 @@ The `/runtime` subpath exports the `supabase(...)` factory. It returns a `Supaba
 ```ts
 // db.ts
 import { supabase } from '@internal/extension-supabase/runtime';
+import { contractFromJson } from '@internal/postgres/static';
 import type { Contract } from './contract';
 import contractJson from './contract.json' with { type: 'json' };
 
-export const db = await supabase<Contract>({
-  contractJson,
+export const contract = contractFromJson<Contract>(contractJson);
+
+export const db = await supabase({
+  contract,
   url: process.env['DATABASE_URL']!, // direct Postgres connection
   jwksUrl: process.env['SUPABASE_JWKS_URL']!, // xor jwtSecret (legacy HS256) — see "JWT validation"
 });

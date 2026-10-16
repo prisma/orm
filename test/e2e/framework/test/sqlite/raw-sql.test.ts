@@ -11,6 +11,7 @@ import type { Runtime, SqlMiddleware } from '@prisma/orm-sqlite/family-runtime';
 import { param } from '@prisma/orm-sqlite/relational-core/expression';
 import type { SqlParamRefMutator } from '@prisma/orm-sqlite/relational-core/middleware';
 import sqlite from '@prisma/orm-sqlite/runtime';
+import { contractFromJson } from '@prisma/orm-sqlite/static';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Contract } from './fixtures/generated/contract.d';
@@ -30,8 +31,8 @@ async function buildHarness(middleware?: readonly SqlMiddleware[]): Promise<Harn
   const testDir = mkdtempSync(join(tmpdir(), 'prisma-sqlite-rawsql-'));
   const dbPath = join(testDir, 'test.db');
 
-  const client = sqlite<Contract>({
-    contractJson,
+  const client = sqlite({
+    contract: contractFromJson<Contract>(contractJson),
     path: dbPath,
     verifyMarker: false,
     ...(middleware ? { middleware } : {}),

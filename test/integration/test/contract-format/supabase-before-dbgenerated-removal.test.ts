@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import postgres from '@internal/postgres/runtime';
+import { contractFromJson } from '@internal/postgres/static';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
@@ -41,7 +42,12 @@ describe('a contract emitted before columns named their data type', () => {
 
   it('is refused when a runtime client is created from it', () => {
     const contractJson: unknown = JSON.parse(readFileSync(fixturePath, 'utf8'));
-    expect(() => postgres({ contractJson, url: 'postgres://localhost:1/never-connected' })).toThrow(
+    expect(() =>
+      postgres({
+        contract: contractFromJson(contractJson),
+        url: 'postgres://localhost:1/never-connected',
+      }),
+    ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.VALIDATION_FAILED',
         message: expect.stringContaining(

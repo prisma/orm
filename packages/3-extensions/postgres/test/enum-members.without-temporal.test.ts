@@ -1,6 +1,7 @@
 import 'temporal-polyfill/full/global';
 import { describe, expect, it } from 'vitest';
 import { defineContract, enumType, member } from '../src/exports/contract-builder';
+import { contractFromJson } from '../src/static/contract-from-json';
 import postgresStatic from '../src/static/postgres-static';
 
 const TextLevel = enumType(
@@ -43,7 +44,7 @@ function withoutTemporal<T>(body: () => T): T {
 describe('a client whose contract has a Temporal enum, in a runtime without Temporal', () => {
   it('builds, reads its other enums, and fails only when the Temporal enum is read', () => {
     const observed = withoutTemporal(() => {
-      const { enums } = postgresStatic({ contractJson });
+      const { enums } = postgresStatic({ contract: contractFromJson(contractJson) });
       const levels =
         enums['public'] ?? expect.unreachable('the TS builder registers enums in public');
       let instantError: unknown;

@@ -104,7 +104,7 @@ The transaction API (`db.transaction(...)`) is on the roadmap and tracked under 
 The ORM covers the common cases. For the rest, two escape hatches are designed in:
 
 - **Typed raw aggregations — `db.query`.** The facade exposes `db.query`, a typed builder for aggregation pipelines that runs through the same runtime + middleware + codec stack as `db.orm`. Reach for it when the ORM can't express a `$lookup`/`$facet`/`$graphLookup`/window-function pipeline.
-- **Direct `mongodb` driver control — `mongoClient` binding.** Construct your own `MongoClient` and pass it to `mongo({ mongoClient, dbName, contractJson })`. Your code keeps the `MongoClient` reference and uses it directly (transactions, change streams, sessions, anything Prisma ORM doesn't surface yet); the same `db` object continues to give you the typed ORM.
+- **Direct `mongodb` driver control — `mongoClient` binding.** Construct your own `MongoClient` and pass it to `mongo({ contract, mongoClient, dbName })`. Your code keeps the `MongoClient` reference and uses it directly (transactions, change streams, sessions, anything Prisma ORM doesn't surface yet); the same `db` object continues to give you the typed ORM.
 
 `db.runtime()` is **not** the escape hatch — it returns the internal executor (`MongoRuntime`), not a `mongodb` `MongoClient` or `Db`. Use `db.query` for raw aggregations and the `mongoClient` binding for direct driver control.
 

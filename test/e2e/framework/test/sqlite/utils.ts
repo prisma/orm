@@ -9,6 +9,7 @@ import type { SqlStorage } from '@prisma/orm-sqlite/family-contract/types';
 import type { Runtime } from '@prisma/orm-sqlite/family-runtime';
 import { orm } from '@prisma/orm-sqlite/orm-client';
 import sqlite from '@prisma/orm-sqlite/runtime';
+import { contractFromJson } from '@prisma/orm-sqlite/static';
 
 export interface SqliteTestContext<TContract extends Contract<SqlStorage>> {
   readonly db: Db<TContract>;
@@ -30,7 +31,7 @@ export async function withSqliteTestRuntime<TContract extends Contract<SqlStorag
   rawDb.exec('PRAGMA foreign_keys = ON');
 
   try {
-    const client = sqlite<TContract>({ contractJson, path: dbPath });
+    const client = sqlite({ contract: contractFromJson<TContract>(contractJson), path: dbPath });
     createSchema(rawDb, client.contract);
     seedData(rawDb);
 

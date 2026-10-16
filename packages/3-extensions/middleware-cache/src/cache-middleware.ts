@@ -97,7 +97,7 @@ function isPendingMiss(value: unknown): value is PendingMiss {
  * @example
  * ```typescript
  * const cache = createCacheMiddleware();
- * const db = postgres<Contract>({ contractJson, url, middleware: [cache] });
+ * const db = postgres({ contract, url, middleware: [cache] });
  *
  * const user = await db.orm.public.User.first(
  *   { id: 1 },

@@ -9,11 +9,12 @@ This page is a working reference: a concrete example to ground the mental model,
 Imagine an `orders` collection where each document has `customerId`, `amount`, and `status`. We want the top ten customers by total spend on active orders:
 
 ```ts
+import { contractFromJson } from '@internal/mongo/static';
 import { mongoQuery } from '@internal/mongo-query-builder';
 import type { Contract } from './contract';
 import contractJson from './contract.json' with { type: 'json' };
 
-const query = mongoQuery<Contract>({ contractJson });
+const query = mongoQuery({ contract: contractFromJson<Contract>(contractJson) });
 
 const plan = query
   .from('orders')

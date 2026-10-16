@@ -25,9 +25,8 @@ import { timeouts, withClient } from '@repo/test-utils';
 import { SignJWT } from 'jose';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { Contract } from '../src/contract';
 import contractJson from '../src/contract.json' with { type: 'json' };
-import { createDb } from '../src/prisma/db';
+import { contract, createDb } from '../src/prisma/db';
 
 function requireEnv(name: 'DATABASE_URL' | 'SUPABASE_JWT_SECRET'): string {
   const value = process.env[name];
@@ -352,8 +351,8 @@ describe.skipIf(!process.env['DATABASE_URL'] || !process.env['SUPABASE_JWT_SECRE
             );
           });
 
-          const db = await supabase<Contract>({
-            contractJson,
+          const db = await supabase({
+            contract,
             url: connectionString,
             jwksUrl: `${supabaseUrl}/auth/v1/.well-known/jwks.json`,
           });

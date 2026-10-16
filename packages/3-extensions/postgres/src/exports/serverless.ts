@@ -5,7 +5,5 @@ export type {
   PostgresServerlessConnection,
   PostgresServerlessOptions,
   PostgresServerlessOptionsBase,
-  PostgresServerlessOptionsWithContract,
-  PostgresServerlessOptionsWithContractJson,
 } from '../runtime/postgres-serverless';
 export { default } from '../runtime/postgres-serverless';

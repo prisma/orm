@@ -14,19 +14,17 @@ import { ormClientGetPostsByTagFilter } from '../src/orm-client/get-posts-by-tag
 import { ormClientGetTagPosts } from '../src/orm-client/get-tag-posts';
 import { ormClientGetUserProfile } from '../src/orm-client/get-user-profile';
 import type { Contract } from '../src/prisma/contract.d';
-import contractJson from '../src/prisma/contract.json' with { type: 'json' };
-import { db } from '../src/prisma/db';
+import { contract, db } from '../src/prisma/db';
 import { initTestDatabase } from './utils/control-client';
 
 const context = db.context;
-const { contract } = context;
 const Priority = db.enums.public.Priority;
 
 type PostId = DefaultModelRow<Contract, 'Post'>['id'];
 
 async function getRuntime(connectionString: string): Promise<Runtime> {
-  const client = postgres<Contract>({
-    contractJson,
+  const client = postgres({
+    contract,
     url: connectionString,
     extensions: db.stack.extensions,
   });

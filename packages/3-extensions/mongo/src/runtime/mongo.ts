@@ -1,5 +1,4 @@
 import { MongoDriverImpl } from '@internal/driver-mongo';
-import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type {
   AnyMongoTypeMaps,
@@ -10,8 +9,8 @@ import type { MongoOrmClient, MongoQueryPlan, MongoRawClient } from '@internal/m
 import { mongoOrm } from '@internal/mongo-orm';
 import type { MongoMiddleware, MongoRuntime } from '@internal/mongo-runtime';
 import { createMongoRuntime, type MongoExecutionContext } from '@internal/mongo-runtime';
-import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { validateMongoContract } from '../static/contract-from-json';
 import { buildMongoStaticContext, type MongoStaticContext } from '../static/mongo-static';
 import {
   type MongoBinding,
@@ -57,70 +56,34 @@ export interface MongoBindingOptions {
   readonly mongoClient?: import('mongodb').MongoClient;
 }
 
-export type MongoOptionsWithContract<
+export type MongoOptions<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
 > = MongoBindingOptions &
   MongoOptionsBase & {
     readonly contract: TContract;
-    readonly contractJson?: never;
   };
 
 /**
- * `TContract` is a phantom parameter that drives explicit-type inference at the
- * call site (e.g. `mongo<Contract>({ contractJson })`). It is not referenced in
- * the type body — the contract value comes through `contractJson` at runtime.
- */
-export type MongoOptionsWithContractJson<
-  TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
-> = MongoBindingOptions &
-  MongoOptionsBase & {
-    readonly contractJson: unknown;
-    readonly contract?: never;
-    /**
-     * @internal phantom field; never set at runtime, only references TContract
-     * so that strict tsc/biome don't flag the type parameter as unused.
-     */
-    readonly __contractPhantom?: TContract;
-  };
-
-export type MongoOptions<
-  TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
-> = MongoOptionsWithContract<TContract> | MongoOptionsWithContractJson<TContract>;
-
-function hasContractJson<
-  TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
->(options: MongoOptions<TContract>): options is MongoOptionsWithContractJson<TContract> {
-  return 'contractJson' in options;
-}
-
-function resolveContract<
-  TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
->(options: MongoOptions<TContract>): TContract {
-  const contractInput = hasContractJson(options) ? options.contractJson : options.contract;
-  return blindCast<
-    TContract,
-    'serializer validates the runtime contract while the caller supplies the named generated contract type'
-  >(new MongoContractSerializer().deserializeContract(contractInput));
-}
-
-/**
- * Creates a lazy Mongo client from either `contractJson` or a TypeScript-authored `contract`.
- * The `orm` and `query` surfaces are available immediately; the underlying driver is connected
- * on the first query (or the first explicit `connect()` call), mirroring the Postgres facade.
+ * Creates a lazy Mongo client. The client infers its contract type from `contract`: a value from
+ * `contractFromJson` for an emitted contract, or a TypeScript-authored contract. A contract is
+ * validated once, however many clients are built from it. The `orm` and `query` surfaces are
+ * available at once; the driver connects on the first query or `connect()`.
  *
- * - No-emit: pass a TypeScript-authored contract. Example: `mongo({ contract, url })`
- * - Emitted: pass `Contract` type explicitly. Example: `mongo<Contract>({ contractJson, url })`
+ * @example
+ * ```ts
+ * import { contractFromJson } from '@prisma/orm-mongo/static';
+ * import mongo from '@prisma/orm-mongo/runtime';
+ * import type { Contract } from './contract.d';
+ * import contractJson from './contract.json' with { type: 'json' };
+ *
+ * export const contract = contractFromJson<Contract>(contractJson);
+ * export const db = mongo({ contract, url: process.env['MONGODB_URL']! });
+ * ```
  */
-export default function mongo<
-  TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
->(options: MongoOptionsWithContract<TContract>): MongoClient<TContract>;
-export default function mongo<
-  TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
->(options: MongoOptionsWithContractJson<TContract>): MongoClient<TContract>;
 export default function mongo<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
 >(options: MongoOptions<TContract>): MongoClient<TContract> {
-  const contract = resolveContract(options);
+  const contract = validateMongoContract(options.contract);
   let binding = resolveOptionalMongoBinding(options);
 
   const { context, query, enums, enumsByNamespace, raw } =

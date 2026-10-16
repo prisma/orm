@@ -2,7 +2,6 @@ import type { CacheAnnotationOptions } from '@prisma/orm-extension-middleware-ca
 import { cacheAnnotation, createCacheMiddleware } from '@prisma/orm-extension-middleware-cache';
 import mongoRuntimeAdapter from '@prisma/orm-mongo/adapter/runtime';
 import { createMongoDriver } from '@prisma/orm-mongo/driver';
-import { MongoContractSerializer } from '@prisma/orm-mongo/family/ir';
 import {
   buildMongoEnums,
   createMongoExecutionContext,
@@ -17,11 +16,8 @@ import { timeouts } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Contract } from '../src/contract';
-import contractJson from '../src/contract.json' with { type: 'json' };
+import { contract } from '../src/db';
 import { seed } from '../src/seed';
-
-const contract = new MongoContractSerializer().deserializeContract<Contract>(contractJson);
 
 /**
  * End-to-end check that a real Mongo runtime + the cross-family
@@ -85,7 +81,7 @@ describe('mongo-demo cache middleware integration', {
       executor: runtime,
       enums: buildMongoEnums(contract, context.codecs),
     });
-    const query = mongoQuery<Contract>({ contractJson });
+    const query = mongoQuery({ contract });
     return { runtime, orm, query, driver, driverExecuteSpy };
   }
 

@@ -6,7 +6,7 @@ This example mirrors `examples/prisma-8-demo` (the Node demo), minus pgvector â€
 
 ## What this example demonstrates
 
-- **Serverless client `postgres`** at module scope, built once per isolate via `postgresServerless<Contract>({ contractJson, middleware })`. It holds no database connection.
+- **Serverless client `postgres`** at module scope, built once per isolate via `postgresServerless({ contract, middleware })`, where `contract` is `contractFromJson<Contract>(contractJson)` from `@prisma/orm-postgres/static`. The streaming client is built from the same `contract` value, so the contract is validated once. It holds no database connection.
 - **Connection `db`**, opened in each request via `await using db = await postgres.connect({ url: env.HYPERDRIVE.connectionString })`. `db` has the members of a `postgres()` client except `connect`. The `[Symbol.asyncDispose]` ensures the underlying `pg.Client` is `end()`-ed when the `fetch` handler returns.
 - **All query surfaces** through the connection `db`:
   - SQL DSL: `db.runtime().query(db.sql.public.user.select(...).build())`

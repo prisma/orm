@@ -1,12 +1,12 @@
-import { validateSqlContractFully } from '@internal/sql-contract/validators';
 import { type ParamRef, RawQueryAst } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
+import { contractFromJson } from '../src/static/contract-from-json';
 import postgresStatic from '../src/static/postgres-static';
 import type { Contract } from './fixtures/generated/contract';
 import contractJson from './fixtures/generated/contract.json' with { type: 'json' };
 
-const contract = validateSqlContractFully<Contract>(contractJson);
-const db = () => postgresStatic<Contract>({ contractJson: contract });
+const contract = contractFromJson<Contract>(contractJson);
+const db = () => postgresStatic({ contract });
 
 /** Interpolated values ride the node's param refs. A plan lists them once lowered. */
 const paramValues = (ast: RawQueryAst): unknown[] =>

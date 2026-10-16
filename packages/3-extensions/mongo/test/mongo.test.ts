@@ -12,7 +12,7 @@ type AnyMongoContract = MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMap
 // Hoisted mocks so they are observable from inside vi.mock() factories.
 const mocks = vi.hoisted(() => ({
   mongoRuntimeAdapter: { id: 'mongo-runtime-adapter' },
-  mongoRuntimeTarget: { id: 'mongo-runtime-target' },
+  mongoRuntimeTarget: { id: 'mongo-runtime-target', targetId: 'mongo' },
   createMongoExecutionStack: vi.fn(),
   createMongoExecutionContext: vi.fn(),
   createMongoRuntime: vi.fn(),

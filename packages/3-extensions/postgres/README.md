@@ -37,10 +37,12 @@ The default export must be the value `definePrismaConfig` returns, with the ORM 
 ```typescript
 // db.ts
 import postgres from '@internal/postgres/runtime';
+import { contractFromJson } from '@internal/postgres/static';
 import type { Contract } from './contract.d';
 import contractJson from './contract.json' with { type: 'json' };
 
-export const db = postgres<Contract>({ contractJson });
+export const contract = contractFromJson<Contract>(contractJson);
+export const db = postgres({ contract });
 ```
 
 ### Serverless / per-request runtimes
@@ -48,10 +50,12 @@ export const db = postgres<Contract>({ contractJson });
 ```typescript
 // db.ts — module scope: the serverless client holds no database connection.
 import postgresServerless from '@internal/postgres/serverless';
+import { contractFromJson } from '@internal/postgres/static';
 import type { Contract } from './contract.d';
 import contractJson from './contract.json' with { type: 'json' };
 
-export const postgres = postgresServerless<Contract>({ contractJson });
+const contract = contractFromJson<Contract>(contractJson);
+export const postgres = postgresServerless({ contract });
 
 // worker.ts — per request: open a connection, close it with `await using`.
 export default {
@@ -262,6 +266,10 @@ Re-exports the Postgres target pack (the value passed as `target:` to `defineCon
 `PostgresServerlessConnection<Contract>` is `PostgresClient<Contract>` without `connect`: `sql`, `raw`, `enums`, `nativeEnums`, `context`, `contract` and `stack` (the same objects as on the serverless client), plus `orm`, `runtime()`, `transaction(fn)`, `prepare(...)`, `close()` and `[Symbol.asyncDispose]`.
 
 Each `connect()` call creates a fresh `pg.Client`, connects it to the database, and wraps it in a fresh runtime. When the database refuses the connection, rejects the credentials, or does not answer within 20 seconds, `connect()` rejects with `DRIVER.CONNECTION_FAILED` and ends the `pg.Client`. No `pg.Pool` is allocated. `close()` and `[Symbol.asyncDispose]` close the runtime once, which ends its `pg.Client`. After that, `db.runtime()` throws `DRIVER.NOT_CONNECTED` ("Postgres connection is closed"). ORM queries, `db.transaction(...)` and `db.prepare(...)` go through the runtime: `close()` waits until the runtime has been idle for one turn of the event loop, then ends the `pg.Client`, and work that starts after that rejects with `DRIVER.NOT_CONNECTED` ("Runtime is closed"). A connection has one database connection, a `pg.Client`, so inside `db.transaction(async (tx) => ...)` run every query through `tx`. Reads are buffered by default. To stream on some paths only, create a second serverless client with `cursor: { batchSize }` and open connections from it only on those paths; they read through `pg-cursor` in batches. On such a connection, finish or `break` a `for await` over a read before sending another query through `db`: the cursor holds the only database connection until the loop ends, so a query inside the loop waits forever. For the same reason, an iterator started by hand with `next()` and never finished or returned holds the client query lock, and `close()` waits for it for ever, as it does for a `db.runtime().connection()` that is never released. Behind Cloudflare Hyperdrive, reads with cursors on hang, so those paths hang there and the paths whose connections come from the serverless client without the option do not.
+
+### `@internal/postgres/static`
+
+`contractFromJson<Contract>(json)` validates an emitted `contract.json` and returns it as the `Contract` type from `contract.d.ts`. Pass the result to `postgres({ contract })`, `postgresServerless({ contract })` or `postgresStatic({ contract })`. It is validated once, however many clients use it. A contract written in TypeScript with `defineContract` is already a typed value and goes to the client directly. The default export, `postgresStatic({ contract })`, builds the static members (`sql`, `raw`, `enums`, `nativeEnums`, `context`, `contract`, `stack`) without loading the database driver.
 
 ## Responsibilities
 

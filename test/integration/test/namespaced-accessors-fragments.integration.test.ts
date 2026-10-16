@@ -1,5 +1,6 @@
 import { field } from '@internal/postgres/contract-builder';
 import postgres from '@internal/postgres/runtime';
+import { contractFromJson } from '@internal/postgres/static';
 import type { CollectionRowOf } from '@internal/sql-orm-client';
 import { timeouts, withDevDatabase } from '@repo/test-utils';
 import { Client } from 'pg';
@@ -16,7 +17,7 @@ describe('fragments on a contract with the same model name in two namespaces', (
       await withDevDatabase(async ({ connectionString }) => {
         const client = new Client({ connectionString });
         await client.connect();
-        const db = postgres<Contract>({ contractJson });
+        const db = postgres({ contract: contractFromJson<Contract>(contractJson) });
         try {
           await client.query('create schema if not exists auth');
           await client.query(

@@ -178,25 +178,27 @@ describe('templates', () => {
     it('generates postgres db.ts with lazy facade and DATABASE_URL binding', () => {
       const db = dbFile('postgres');
 
-      expect(db).toContain("from '@internal/postgres/runtime'");
-      expect(db).toContain('postgres<Contract>({');
-      expect(db).toContain('contractJson,');
+      expect(db).toContain("import postgres from '@internal/postgres/runtime'");
+      expect(db).toContain("import { contractFromJson } from '@internal/postgres/static'");
+      expect(db).toContain('export const contract = contractFromJson<Contract>(contractJson);');
+      expect(db).toContain('postgres({\n  contract,\n');
       expect(db).toContain("url: process.env['DATABASE_URL']!,");
       expect(db).not.toContain('await db.connect');
       const prismaNextImports = db.split('\n').filter((l) => l.includes("from '@internal/"));
-      expect(prismaNextImports).toHaveLength(1);
+      expect(prismaNextImports).toHaveLength(2);
     });
 
     it('generates mongo db.ts with lazy facade and DATABASE_URL binding', () => {
       const db = dbFile('mongo');
 
-      expect(db).toContain("from '@internal/mongo/runtime'");
-      expect(db).toContain('mongo<Contract>({');
-      expect(db).toContain('contractJson,');
+      expect(db).toContain("import mongo from '@internal/mongo/runtime'");
+      expect(db).toContain("import { contractFromJson } from '@internal/mongo/static'");
+      expect(db).toContain('export const contract = contractFromJson<Contract>(contractJson);');
+      expect(db).toContain('mongo({\n  contract,\n');
       expect(db).toContain("url: process.env['DATABASE_URL']!,");
       expect(db).not.toContain('await db.connect');
       const prismaNextImports = db.split('\n').filter((l) => l.includes("from '@internal/"));
-      expect(prismaNextImports).toHaveLength(1);
+      expect(prismaNextImports).toHaveLength(2);
     });
   });
 

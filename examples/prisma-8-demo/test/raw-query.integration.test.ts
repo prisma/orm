@@ -10,9 +10,7 @@ import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import postgres from '@prisma/orm-postgres/runtime';
 import { timeouts, withDevDatabase } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import type { Contract } from '../src/prisma/contract';
-import contractJson from '../src/prisma/contract.json' with { type: 'json' };
-import { db } from '../src/prisma/db';
+import { contract, db } from '../src/prisma/db';
 import {
   rawQueryActiveAuthors,
   rawQueryBumpViews,
@@ -22,11 +20,10 @@ import {
 import { initTestDatabase } from './utils/control-client';
 
 const context = db.context;
-const { contract } = context;
 
 async function getRuntime(connectionString: string): Promise<Runtime> {
-  const client = postgres<Contract>({
-    contractJson,
+  const client = postgres({
+    contract,
     url: connectionString,
     extensions: db.stack.extensions,
   });

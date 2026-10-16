@@ -9,7 +9,7 @@ describe('ports/prisma/functional/enums (mongo)', () => {
     'fails at runtime when an invalid entry is entered manually in Mongo',
     () =>
       withMongoPort<Contract>({ contractJson }, async ({ client, contract, db }) => {
-        const raw = mongo<Contract>({ contract, mongoClient: client, dbName: 'test' });
+        const raw = mongo({ contract, mongoClient: client, dbName: 'test' });
         await (await raw.runtime())
           .query(raw.raw.collection('User').insertOne({ _id: '2', plan: 'NONFREE' }).build())
           .toArray();

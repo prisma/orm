@@ -72,12 +72,15 @@ pnpm prisma db init         # CREATE EXTENSION postgis + CREATE TABLE
 ```typescript
 // src/prisma/db.ts
 import postgres from '@internal/postgres/runtime';
+import { contractFromJson } from '@internal/postgres/static';
 import postgis from '@internal/extension-postgis/runtime';
 import type { Contract } from './contract.d';
 import contractJson from './contract.json' with { type: 'json' };
 
-export const db = postgres<Contract>({
-  contractJson,
+export const contract = contractFromJson<Contract>(contractJson);
+
+export const db = postgres({
+  contract,
   extensions: [postgis],
   url: process.env['DATABASE_URL']!,
 });

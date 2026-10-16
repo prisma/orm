@@ -31,6 +31,6 @@ Prisma 8 does not require `NodeNext`. Under `"module": "NodeNext"` with `"type":
 
 Tested on Node 24.13 with TypeScript 5.9.3 against the workspace build:
 
-- At runtime, a plain `.cjs` file can `require("./contract.json")` and `require("@prisma/orm-postgres/runtime")`, and `postgres({ contractJson, url })` constructs the client. Node's `require(esm)` loads the ESM-only package because it has no top-level `await`.
+- At runtime, a plain `.cjs` file can `require("./contract.json")`, `require("@prisma/orm-postgres/runtime")` and `require("@prisma/orm-postgres/static")`, and `postgres({ contract: contractFromJson(contractJson), url })` constructs the client. This was checked again on Node 24.16 after the clients started taking a contract value. Node's `require(esm)` loads the ESM-only package because it has no top-level `await`.
 - For types, a `.cts` file, or a `.ts` file in a package without `"type": "module"`, that imports `@prisma/orm-postgres/runtime` and `./contract.json` typechecks under `"module": "nodenext"` with no import attribute and no `.js` extensions.
 - `"module": "node16"` rejects the same file with TS1479, and `"moduleResolution": "node10"` cannot resolve the package at all.

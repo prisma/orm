@@ -83,7 +83,7 @@ Naming the index makes the query search the document the index was built over, s
 
 ## Collection methods packages contribute
 
-A package can contribute collection methods. For each model, it reads the model's definition in the contract and returns the methods it offers, under names it chooses. Every collection offers them under `using`. With `db` from `postgres<Contract>(…)`:
+A package can contribute collection methods. For each model, it reads the model's definition in the contract and returns the methods it offers, under names it chooses. Every collection offers them under `using`. With `db` from `postgres({ contract })`:
 
 ```ts
 const q = websearchToTsquery(input.search);

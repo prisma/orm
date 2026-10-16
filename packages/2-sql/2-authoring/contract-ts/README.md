@@ -29,7 +29,7 @@ This package is part of the SQL family namespace (`packages/2-sql/2-authoring/co
 
 ## Package Status
 
-This is the current SQL TypeScript authoring implementation. Shared descriptor types live in `@internal/contract-authoring`. Contract validation flows through the per-target descriptor's `contractSerializer` SPI (e.g. `postgresTarget.contractSerializer.deserializeContract`), or via the canonical façade (`postgres<Contract>(...)`).
+This is the current SQL TypeScript authoring implementation. Shared descriptor types live in `@internal/contract-authoring`. Contract validation flows through the per-target descriptor's `contractSerializer` SPI (e.g. `postgresTarget.contractSerializer.deserializeContract`), or via the canonical façade (`contractFromJson<Contract>(...)` from `@internal/postgres/static`).
 
 ## Architecture
 
@@ -303,18 +303,16 @@ A contract definition's table nodes (`tables`) declare columns and tables no mod
 
 ### Validating Contracts
 
-Contract JSON validation flows through the per-target descriptor's
-`contractSerializer` SPI; this package focuses on authoring and lowering.
-End-user app code typically goes through the canonical façade
-(`postgres<Contract>(...)`), which threads the descriptor SPI internally.
+Contract JSON validation flows through the per-target descriptor's `contractSerializer` SPI; this package focuses on authoring and lowering. End-user app code typically goes through the canonical façade: `contractFromJson<Contract>(...)` validates the emitted JSON once, through the descriptor SPI, and the client takes the result. A contract this package builds with `defineContract` is already a typed value and goes to the client directly.
 
 ```typescript
 import postgres from '@internal/postgres/runtime';
+import { contractFromJson } from '@internal/postgres/static';
 import contractJson from './contract.json' with { type: 'json' };
-import type { Contract, TypeMaps } from './contract.d';
+import type { Contract } from './contract.d';
 
-const db = postgres<Contract, TypeMaps>({
-  contractJson,
+const db = postgres({
+  contract: contractFromJson<Contract>(contractJson),
   url: process.env['DATABASE_URL']!,
 });
 ```

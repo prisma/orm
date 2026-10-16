@@ -9,8 +9,6 @@ export type {
   SupabaseDb,
   SupabaseInternalDb,
   SupabaseOptions,
-  SupabaseOptionsWithContract,
-  SupabaseOptionsWithContractJson,
   SupabaseTargetId,
 } from '../runtime/supabase';
 export { default as supabase } from '../runtime/supabase';

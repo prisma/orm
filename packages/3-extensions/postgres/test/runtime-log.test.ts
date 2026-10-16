@@ -1,6 +1,6 @@
-import { validateSqlContractFully } from '@internal/sql-contract/validators';
 import { lints } from '@internal/sql-runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { contractFromJson } from '../src/static/contract-from-json';
 import type { Contract } from './fixtures/generated/contract';
 import fixtureContractJson from './fixtures/generated/contract.json' with { type: 'json' };
 
@@ -32,7 +32,7 @@ vi.mock('pg', () => {
 import postgres from '../src/runtime/postgres';
 import postgresServerless from '../src/runtime/postgres-serverless';
 
-const fixtureContract = validateSqlContractFully<Contract>(fixtureContractJson);
+const fixtureContract = contractFromJson<Contract>(fixtureContractJson);
 const url = 'postgres://localhost:5432/db';
 const markerMissing = expect.objectContaining({
   code: 'CONTRACT.MARKER_MISSING',
@@ -50,7 +50,7 @@ beforeEach(() => {
 describe('postgres log option', () => {
   it('receives the marker-verification warning when the database has no marker', async () => {
     const log = spyLog();
-    const db = postgres<Contract>({ contractJson: fixtureContract, url, log });
+    const db = postgres({ contract: fixtureContract, url, log });
 
     await db.orm.public.User.first();
 
@@ -60,8 +60,8 @@ describe('postgres log option', () => {
 
   it('receives the lints() warning for an ORM read with no limit', async () => {
     const log = spyLog();
-    const db = postgres<Contract>({
-      contractJson: fixtureContract,
+    const db = postgres({
+      contract: fixtureContract,
       url,
       middleware: [lints()],
       log,
@@ -74,7 +74,7 @@ describe('postgres log option', () => {
   });
 
   it('without a log, a read on a database with no marker still succeeds', async () => {
-    const db = postgres<Contract>({ contractJson: fixtureContract, url });
+    const db = postgres({ contract: fixtureContract, url });
 
     await expect(db.orm.public.User.first()).resolves.toBeNull();
     await db.close();
@@ -84,7 +84,7 @@ describe('postgres log option', () => {
 describe('postgresServerless log option', () => {
   it('receives the marker-verification warning when the database has no marker', async () => {
     const log = spyLog();
-    const db = await postgresServerless<Contract>({ contractJson: fixtureContract, log }).connect({
+    const db = await postgresServerless({ contract: fixtureContract, log }).connect({
       url,
     });
 
@@ -95,7 +95,7 @@ describe('postgresServerless log option', () => {
   });
 
   it('without a log, a read on a database with no marker still succeeds', async () => {
-    const db = await postgresServerless<Contract>({ contractJson: fixtureContract }).connect({
+    const db = await postgresServerless({ contract: fixtureContract }).connect({
       url,
     });
 

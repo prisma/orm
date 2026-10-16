@@ -39,12 +39,14 @@ Execute SQL query Plans with deterministic verification, guardrails, and feedbac
 
 ```typescript
 import postgres from '@internal/postgres';
+import { contractFromJson } from '@internal/postgres/static';
 import { budgets } from '@internal/sql-runtime';
 import type { Contract } from './src/contract';
 import contractJson from './src/contract.json' with { type: 'json' };
 
-const db = postgres<Contract>({
-  contractJson,
+const contract = contractFromJson<Contract>(contractJson);
+const db = postgres({
+  contract,
   url: process.env.DATABASE_URL,
   middleware: [budgets()],
 });
@@ -57,8 +59,8 @@ for await (const row of db.runtime().execute(plan)) {
 Pass `verifyMarker: false` to skip the marker read entirely — e.g. during a known-skewed deploy window where contract drift is expected and tolerated.
 
 ```typescript
-const db = postgres<Contract>({
-  contractJson,
+const db = postgres({
+  contract,
   url: process.env.DATABASE_URL,
   verifyMarker: false,
   middleware: [budgets()],
@@ -136,8 +138,8 @@ When `plan.ast` is missing, the middleware falls back to raw heuristic guardrail
 import postgres from '@internal/postgres';
 import { lints } from '@internal/sql-runtime';
 
-const db = postgres<Contract>({
-  contractJson,
+const db = postgres({
+  contract,
   url: process.env.DATABASE_URL,
   middleware: [lints({ severities: { noLimit: 'error' } })],
 });

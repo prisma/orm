@@ -1,10 +1,10 @@
 import type { SqlStorage } from '@internal/sql-contract/types';
-import { validateSqlContractFully } from '@internal/sql-contract/validators';
 import type { SqlAggregateDescriptor } from '@internal/sql-relational-core/aggregate-descriptor-registry';
 import { FunctionCallExpr } from '@internal/sql-relational-core/ast';
 import type { SqlMiddleware, SqlRuntimeExtensionDescriptor } from '@internal/sql-runtime';
 import { createContract } from '@repo/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { contractFromJson } from '../src/static/contract-from-json';
 import type { Contract } from './fixtures/generated/contract';
 import fixtureContractJson from './fixtures/generated/contract.json' with { type: 'json' };
 
@@ -60,12 +60,12 @@ import postgres from '../src/runtime/postgres';
 import postgresServerless from '../src/runtime/postgres-serverless';
 
 const contract = createContract<SqlStorage>();
-const fixtureContract = validateSqlContractFully<Contract>(fixtureContractJson);
+const fixtureContract = contractFromJson<Contract>(fixtureContractJson);
 const url = 'postgres://localhost:5432/db';
 
 function fixtureServerless() {
-  return postgresServerless<Contract>({
-    contractJson: fixtureContract,
+  return postgresServerless({
+    contract: fixtureContract,
     verifyMarker: false,
   });
 }
@@ -114,11 +114,8 @@ describe('the serverless client', () => {
     expect(recorded.poolCount).toBe(0);
   });
 
-  it('validates contractJson input', () => {
-    expect(() => postgresServerless({ contractJson: { target: 'postgres' } })).toThrow();
-    expect(postgresServerless<Contract>({ contractJson: fixtureContract }).contract.target).toBe(
-      'postgres',
-    );
+  it('takes a contractFromJson contract', () => {
+    expect(postgresServerless({ contract: fixtureContract }).contract.target).toBe('postgres');
   });
 
   it('validates direct contract input', () => {
@@ -498,8 +495,8 @@ describe('postgresServerless options', () => {
         queried.push(plan.sql);
       },
     };
-    const serverless = postgresServerless<Contract>({
-      contractJson: fixtureContract,
+    const serverless = postgresServerless({
+      contract: fixtureContract,
       verifyMarker: false,
       middleware: [spyMiddleware],
     });

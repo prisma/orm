@@ -30,7 +30,7 @@ const contract = defineContract({ enums: { Level, When } }, ({ field, model }) =
   },
 }));
 
-const { enums } = sqliteStatic<typeof contract>({ contractJson: contract });
+const { enums } = sqliteStatic({ contract });
 
 describe('db.enums on SQLite', () => {
   it('holds each member as its codec reads it and finds an equal value', () => {

@@ -117,15 +117,18 @@ The samples use extensionless relative imports and `./contract.d`, which need `m
 ```ts
 // src/prisma/db.ts
 import postgresServerless from '@prisma/orm-postgres/serverless';
+import { contractFromJson } from '@prisma/orm-postgres/static';
 import type { Contract } from './contract.d';
 import contractJson from './contract.json' with { type: 'json' };
+
+export const contract = contractFromJson<Contract>(contractJson);
 
 // Constructed once per isolate. Holds no database connection: only the
 // static members (sql / raw / enums / nativeEnums / context / contract /
 // stack), which are pure functions of the contract. Each fetch opens its
 // own connection with postgres.connect(...).
-export const postgres = postgresServerless<Contract>({
-  contractJson,
+export const postgres = postgresServerless({
+  contract,
   // middleware: [...],   // optional — telemetry, lints, budgets, ...
   // extensions: [...],   // optional
 });
@@ -205,13 +208,13 @@ Reads are buffered by default. To stream on one route, create a second serverles
 
 ```ts
 // src/prisma/db.ts
-export const postgres = postgresServerless<Contract>({ contractJson });
+export const postgres = postgresServerless({ contract });
 
 /**
  * Serverless client with cursors on, used only by the `/cursor/large` route to stream a large result. Reads through its connections hang behind Cloudflare Hyperdrive.
  */
-export const streamingPostgres = postgresServerless<Contract>({
-  contractJson,
+export const streamingPostgres = postgresServerless({
+  contract,
   cursor: { batchSize: 100 },
 });
 

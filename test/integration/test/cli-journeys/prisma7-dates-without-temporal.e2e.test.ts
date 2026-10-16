@@ -76,9 +76,10 @@ registerHooks({
 });
 
 const { default: postgres } = await import('@prisma/orm-postgres/runtime');
+const { contractFromJson } = await import('@prisma/orm-postgres/static');
 const writes = JSON.parse(process.env.APP_WRITES);
 const db = postgres({
-  contractJson: JSON.parse(readFileSync('contract.json', 'utf8')),
+  contract: contractFromJson(JSON.parse(readFileSync('contract.json', 'utf8'))),
   url: process.env.JOURNEY_DB_URL,
 });
 try {

@@ -6,7 +6,6 @@ import type {
   RootModelName,
 } from '@internal/mongo-contract';
 import type { AnyMongoCommand, MongoQueryPlan } from '@internal/mongo-query-ast/execution';
-import { blindCast } from '@internal/utils/casts';
 import { contractError } from './contract-errors';
 import { asMongoContract, type CollectionHandle, createCollectionHandle } from './state-classes';
 
@@ -32,11 +31,8 @@ export interface QueryRoot<
 
 export function mongoQuery<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
->(options: { contractJson: unknown }): QueryRoot<TContract> {
-  const contract = blindCast<
-    TContract,
-    'mongoQuery accepts validated contract JSON with domain.namespaces'
-  >(options.contractJson);
+>(options: { readonly contract: TContract }): QueryRoot<TContract> {
+  const { contract } = options;
   return {
     from<K extends keyof TContract['roots'] & string>(rootName: K) {
       return createCollectionHandle(contract, rootName);

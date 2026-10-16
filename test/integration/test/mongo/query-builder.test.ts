@@ -1,4 +1,5 @@
 import { crossRef, type NamespaceId } from '@internal/contract/types';
+import { contractFromJson } from '@internal/mongo/static';
 import type {
   MongoContract,
   MongoContractWithTypeMaps,
@@ -165,7 +166,7 @@ const contractJson = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const query = mongoQuery<TContract>({ contractJson });
+const query = mongoQuery({ contract: contractFromJson<TContract>(contractJson) });
 
 function products() {
   return query.from('products');

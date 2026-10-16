@@ -6,6 +6,7 @@ import type { Vector } from '@prisma/orm-extension-pgvector/codec-types';
 import pgvector from '@prisma/orm-extension-pgvector/runtime';
 import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import postgres from '@prisma/orm-postgres/runtime';
+import { contractFromJson } from '@prisma/orm-postgres/static';
 import { timeouts, withDevDatabase } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import type { Contract } from './fixtures/generated/contract.d';
@@ -36,8 +37,8 @@ async function withPostgresClient(
   const contractJson = await loadContractJson();
   await withDevDatabase(async ({ connectionString }) => {
     await runDbInit({ connectionString, contractJsonPath });
-    const db = postgres<Contract>({
-      contractJson,
+    const db = postgres({
+      contract: contractFromJson<Contract>(contractJson),
       url: connectionString,
       extensions: [pgvector, arktypeJson],
     });

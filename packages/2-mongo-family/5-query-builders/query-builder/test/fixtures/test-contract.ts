@@ -9,6 +9,7 @@ import type {
   MongoContractWithTypeMaps,
   MongoTypeMaps,
 } from '@internal/mongo-contract';
+import { blindCast } from '@internal/utils/casts';
 
 type TestModels = {
   readonly Order: {
@@ -435,3 +436,8 @@ export const testContractJson = {
   profileHash: 'test-profile',
   meta: {},
 };
+
+export const testContract = blindCast<
+  TContract,
+  'query-builder fixture JSON carries domain.namespaces envelope'
+>(testContractJson);

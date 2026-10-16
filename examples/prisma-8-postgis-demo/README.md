@@ -285,7 +285,8 @@ extensions: [postgis];
 ```typescript
 // src/prisma/db.ts (runtime)
 import postgis from '@internal/extension-postgis/runtime';
-export const db = postgres<Contract>({ contractJson, extensions: [postgis] });
+export const contract = contractFromJson<Contract>(contractJson);
+export const db = postgres({ contract, extensions: [postgis] });
 ```
 
 The control descriptor declares `CREATE EXTENSION IF NOT EXISTS postgis`

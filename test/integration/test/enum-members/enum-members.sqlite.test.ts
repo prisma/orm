@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { defineContract, enumType, member } from '@internal/sqlite/contract-builder';
 import sqlite from '@internal/sqlite/runtime';
+import { contractFromJson } from '@internal/sqlite/static';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it } from 'vitest';
 import type { Contract } from './_fixture-sqlite/generated/contract';
@@ -66,7 +67,11 @@ afterEach(() => {
 
 describe('db.enums on SQLite, against node:sqlite', () => {
   it('finds every value read from a PSL contract, and holds each member as the value read', async () => {
-    const client = sqlite<Contract>({ contractJson, path, verifyMarker: false });
+    const client = sqlite({
+      contract: contractFromJson<Contract>(contractJson),
+      path,
+      verifyMarker: false,
+    });
     try {
       await client.connect();
       const levels = client.enums;
@@ -125,7 +130,11 @@ describe('db.enums on SQLite, against node:sqlite', () => {
   });
 
   it('types each member as the value a query returns for it', () => {
-    const psl = sqlite<Contract>({ contractJson, path, verifyMarker: false }).enums;
+    const psl = sqlite({
+      contract: contractFromJson<Contract>(contractJson),
+      path,
+      verifyMarker: false,
+    }).enums;
     expectTypeOf(psl.TextLevel.members.Low).toEqualTypeOf<'low'>();
     expectTypeOf(psl.BigLevel.members.Low).toEqualTypeOf<1n>();
     expectTypeOf(psl.WhenLevel.members.Launch).toEqualTypeOf<Date>();

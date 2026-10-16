@@ -75,6 +75,7 @@
     "./contract-builder": "./dist/contract-builder.mjs",
     "./control": "./dist/control.mjs",
     "./family": "./dist/family.mjs",
+    "./internal/validate-contract": "./dist/internal/validate-contract.mjs",
     "./migration": "./dist/migration.mjs",
     "./runtime": "./dist/runtime.mjs",
     "./serverless": "./dist/serverless.mjs",

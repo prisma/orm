@@ -14,6 +14,7 @@ import {
   model,
 } from '@internal/postgres/contract-builder';
 import postgresClient from '@internal/postgres/runtime';
+import { contractFromJson } from '@internal/postgres/static';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
@@ -412,7 +413,7 @@ model T {
         );
         expect(result).toEqual({ ...initializedAndVerified, stored: storedKeyRows });
 
-        const db = postgresClient({ contractJson });
+        const db = postgresClient({ contract: contractFromJson(contractJson) });
         try {
           expect(accessorAgainst(db.enums['public']?.['Key'], storedKeyRows)).toEqual(
             accessorAgreeing,

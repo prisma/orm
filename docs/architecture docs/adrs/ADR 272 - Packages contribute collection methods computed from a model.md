@@ -159,7 +159,7 @@ The application creates its client as usual and passes the packages it uses:
 ```ts
 import pgvector from '@prisma/orm-extension-pgvector/runtime';
 
-const db = postgres<Contract>({ contractJson, extensions: [pgvector] });
+const db = postgres({ contract, extensions: [pgvector] });
 ```
 
 The type half reaches the type checker through that import. Relational core (`@internal/sql-relational-core/collection-methods`, published as `@prisma/orm-family-sql/relational-core/collection-methods`) defines an interface, `CollectionMethodRegistry`, and each package adds its type half to it with TypeScript's declaration merging:

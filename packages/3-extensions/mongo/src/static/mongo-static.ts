@@ -1,6 +1,5 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
 import type { NamespacedEnums } from '@internal/contract/enum-accessor';
-import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type {
   AnyMongoTypeMaps,
@@ -20,6 +19,7 @@ import {
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { assertDefined } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
+import { validateMongoContract } from './contract-from-json';
 
 type UnboundEnums<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>> =
   NamespacedEnums<TContract>[typeof UNBOUND_NAMESPACE_ID];
@@ -56,17 +56,22 @@ export function buildMongoStaticContext<
     UnboundEnums<TContract>,
     'built from this contract domain; the mapped-type shape cannot be proven statically'
   >(unbound);
-  const query = mongoQuery<TContract>({ contractJson: contract });
+  const query = mongoQuery({ contract });
   const raw = mongoRaw<TContract>({ contract });
   return { context, contract, enums, enumsByNamespace, query, raw };
 }
 
+/**
+ * The query surfaces of a Mongo client without a driver: `query`, `raw` and `enums`. Use it where
+ * loading `mongodb` is not wanted.
+ *
+ * @example
+ * ```ts
+ * const { enums } = mongoStatic({ contract: contractFromJson<Contract>(contractJson) });
+ * ```
+ */
 export default function mongoStatic<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
->(options: { readonly contractJson: unknown }): MongoStaticContext<TContract> {
-  const contract = blindCast<
-    TContract,
-    'MongoContractSerializer validates and returns a typed contract'
-  >(new MongoContractSerializer().deserializeContract(options.contractJson));
-  return buildMongoStaticContext(contract);
+>(options: { readonly contract: TContract }): MongoStaticContext<TContract> {
+  return buildMongoStaticContext(validateMongoContract(options.contract));
 }

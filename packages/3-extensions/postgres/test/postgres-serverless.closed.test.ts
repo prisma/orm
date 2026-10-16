@@ -1,5 +1,5 @@
-import { validateSqlContractFully } from '@internal/sql-contract/validators';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { contractFromJson } from '../src/static/contract-from-json';
 import type { Contract } from './fixtures/generated/contract';
 import fixtureContractJson from './fixtures/generated/contract.json' with { type: 'json' };
 
@@ -60,7 +60,7 @@ vi.mock('pg', () => {
 
 import postgresServerless from '../src/runtime/postgres-serverless';
 
-const fixtureContract = validateSqlContractFully<Contract>(fixtureContractJson);
+const fixtureContract = contractFromJson<Contract>(fixtureContractJson);
 const url = 'postgres://localhost:5432/db';
 
 const runtimeClosedError = {
@@ -136,8 +136,8 @@ function expectOneEndAndNoQueryAfterIt(): void {
 
 describe('a promise returned from an await using scope without await', () => {
   describe.each(variants)('with %s', (_variant, { verifyMarker, warm }) => {
-    const serverless = postgresServerless<Contract>({
-      contractJson: fixtureContract,
+    const serverless = postgresServerless({
+      contract: fixtureContract,
       ...(verifyMarker ? {} : { verifyMarker: false }),
     });
 
@@ -175,9 +175,9 @@ describe('a promise returned from an await using scope without await', () => {
 
 describe('two connections from two serverless clients', () => {
   it('stream.orm.public.User.first() returned without await from the inner scope resolves', async () => {
-    const serverless = postgresServerless<Contract>({ contractJson: fixtureContract });
-    const streaming = postgresServerless<Contract>({
-      contractJson: fixtureContract,
+    const serverless = postgresServerless({ contract: fixtureContract });
+    const streaming = postgresServerless({
+      contract: fixtureContract,
       cursor: { batchSize: 10 },
     });
 
@@ -198,8 +198,8 @@ describe('two connections from two serverless clients', () => {
 
 describe('an unawaited started query that fails for its own reason', () => {
   it('is an ordinary unawaited failure: the caller gets its error, and Node reports it as unhandled while the close is pending', async () => {
-    const serverless = postgresServerless<Contract>({
-      contractJson: fixtureContract,
+    const serverless = postgresServerless({
+      contract: fixtureContract,
       verifyMarker: false,
     });
     const failure = new Error('simulated statement failure');
@@ -262,7 +262,7 @@ const busyChainReturns: ReadonlyArray<[...UnawaitedReturn, unknown]> = [
 
 // The database answers on a later turn of the event loop, as a real socket does, so each query of a chain starts after the previous one has answered.
 describe('a promise returned without await, with a database that answers on a later turn of the event loop', () => {
-  const serverless = postgresServerless<Contract>({ contractJson: fixtureContract });
+  const serverless = postgresServerless({ contract: fixtureContract });
 
   async function returnWithoutAwait(run: (db: Connection) => PromiseLike<unknown>) {
     await using db = await serverless.connect({ url });

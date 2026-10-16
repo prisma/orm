@@ -7,10 +7,11 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import type { RawCodecInferer } from '@internal/sql-relational-core/expression';
 import type { ExecutionContext, SqlRuntimeExtensionDescriptor } from '@internal/sql-runtime';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
-import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
+import postgresTarget from '@internal/target-postgres/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { buildNamespacedNativeEnums, type NamespacedNativeEnums } from '../runtime/native-enums';
 import type { PostgresTargetId } from '../runtime/postgres-target-id';
+import { validatePostgresContract } from './contract-from-json';
 
 export interface PostgresStaticContext<TContract extends Contract<SqlStorage>> {
   readonly context: ExecutionContext<TContract>;
@@ -22,6 +23,7 @@ export interface PostgresStaticContext<TContract extends Contract<SqlStorage>> {
 }
 
 export function buildPostgresStaticContext<TContract extends Contract<SqlStorage>>(
+  contract: TContract,
   context: ExecutionContext<TContract>,
   rawCodecInferer: RawCodecInferer,
 ): PostgresStaticContext<TContract> {
@@ -36,22 +38,29 @@ export function buildPostgresStaticContext<TContract extends Contract<SqlStorage
     NamespacedNativeEnums<TContract>,
     'buildNamespacedNativeEnums returns the namespace-keyed accessor map this contract types'
   >(Object.freeze(buildNamespacedNativeEnums(context.contract.storage, context.contract.domain)));
-  return { context, contract: context.contract, enums, nativeEnums, sql: sqlDb, raw };
+  return { context, contract, enums, nativeEnums, sql: sqlDb, raw };
 }
 
+/**
+ * The query surfaces of a Postgres client without a driver: `sql`, `raw`, `enums` and
+ * `nativeEnums`. Use it where loading `pg` is not wanted, for example in browser code that reads
+ * enums.
+ *
+ * @example
+ * ```ts
+ * const { enums } = postgresStatic({ contract: contractFromJson<Contract>(contractJson) });
+ * ```
+ */
 export default function postgresStatic<TContract extends Contract<SqlStorage>>(options: {
-  readonly contractJson: unknown;
+  readonly contract: TContract;
   readonly extensions?: readonly SqlRuntimeExtensionDescriptor<PostgresTargetId>[];
 }): PostgresStaticContext<TContract> {
-  const contract = blindCast<
-    TContract,
-    'PostgresContractSerializer validates and returns a typed contract'
-  >(new PostgresContractSerializer().deserializeContract(options.contractJson));
+  const contract = validatePostgresContract(options.contract);
   const stack = createSqlExecutionStack({
     target: postgresTarget,
     adapter: postgresAdapter,
     extensions: options.extensions ?? [],
   });
   const context = createExecutionContext({ contract, stack });
-  return buildPostgresStaticContext(context, stack.adapter.rawCodecInferer);
+  return buildPostgresStaticContext(contract, context, stack.adapter.rawCodecInferer);
 }

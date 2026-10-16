@@ -10,10 +10,9 @@ import {
 } from '@internal/mongo-query-ast/execution';
 import { describe, expect, it } from 'vitest';
 import { mongoQuery } from '../src/query';
-import type { TContract } from './fixtures/test-contract';
-import { testContractJson } from './fixtures/test-contract';
+import { testContract } from './fixtures/test-contract';
 
-const orders = () => mongoQuery<TContract>({ contractJson: testContractJson }).from('orders');
+const orders = () => mongoQuery({ contract: testContract }).from('orders');
 
 describe('M2 write terminals', () => {
   describe('inserts (CollectionHandle)', () => {

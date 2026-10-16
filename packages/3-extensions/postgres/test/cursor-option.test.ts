@@ -1,6 +1,6 @@
-import { validateSqlContractFully } from '@internal/sql-contract/validators';
 import { ifDefined } from '@internal/utils/defined';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { contractFromJson } from '../src/static/contract-from-json';
 import type { Contract } from './fixtures/generated/contract';
 import fixtureContractJson from './fixtures/generated/contract.json' with { type: 'json' };
 
@@ -70,7 +70,7 @@ import postgres from '../src/runtime/postgres';
 import type { PostgresCursorOptions } from '../src/runtime/postgres-options';
 import postgresServerless from '../src/runtime/postgres-serverless';
 
-const fixtureContract = validateSqlContractFully<Contract>(fixtureContractJson);
+const fixtureContract = contractFromJson<Contract>(fixtureContractJson);
 const url = 'postgres://localhost:5432/db';
 
 function cursorQueryCount(): number {
@@ -84,8 +84,8 @@ function cursorQueryCount(): number {
 }
 
 async function readUsersThroughPostgres(cursor?: PostgresCursorOptions): Promise<void> {
-  await using db = postgres<Contract>({
-    contractJson: fixtureContract,
+  await using db = postgres({
+    contract: fixtureContract,
     url,
     verifyMarker: false,
     ...ifDefined('cursor', cursor),
@@ -94,8 +94,8 @@ async function readUsersThroughPostgres(cursor?: PostgresCursorOptions): Promise
 }
 
 async function readUsersThroughServerless(cursor?: PostgresCursorOptions): Promise<void> {
-  const serverless = postgresServerless<Contract>({
-    contractJson: fixtureContract,
+  const serverless = postgresServerless({
+    contract: fixtureContract,
     verifyMarker: false,
     ...ifDefined('cursor', cursor),
   });
@@ -142,32 +142,32 @@ describe('the cursor option is checked when the factory is called', () => {
     });
 
   it('postgres() rejects { disabled: true } passed through a cast', () => {
-    expect(() =>
-      postgres<Contract>({ contractJson: fixtureContract, url, cursor: disabledFlag }),
-    ).toThrow(invalidCursor({ disabled: true }, 'postgres'));
+    expect(() => postgres({ contract: fixtureContract, url, cursor: disabledFlag })).toThrow(
+      invalidCursor({ disabled: true }, 'postgres'),
+    );
   });
 
   it('postgresServerless() rejects { disabled: true } passed through a cast', () => {
-    expect(() =>
-      postgresServerless<Contract>({ contractJson: fixtureContract, cursor: disabledFlag }),
-    ).toThrow(invalidCursor({ disabled: true }, 'postgresServerless'));
+    expect(() => postgresServerless({ contract: fixtureContract, cursor: disabledFlag })).toThrow(
+      invalidCursor({ disabled: true }, 'postgresServerless'),
+    );
   });
 
   it('postgres() rejects a batchSize that is not a positive integer', () => {
-    expect(() =>
-      postgres<Contract>({ contractJson: fixtureContract, url, cursor: { batchSize: 0 } }),
-    ).toThrow(invalidCursor({ batchSize: 0 }, 'postgres'));
-    expect(() =>
-      postgres<Contract>({ contractJson: fixtureContract, url, cursor: { batchSize: 1.5 } }),
-    ).toThrow(invalidCursor({ batchSize: 1.5 }, 'postgres'));
+    expect(() => postgres({ contract: fixtureContract, url, cursor: { batchSize: 0 } })).toThrow(
+      invalidCursor({ batchSize: 0 }, 'postgres'),
+    );
+    expect(() => postgres({ contract: fixtureContract, url, cursor: { batchSize: 1.5 } })).toThrow(
+      invalidCursor({ batchSize: 1.5 }, 'postgres'),
+    );
   });
 
   it('postgresServerless() rejects a batchSize that is not a positive integer', () => {
     expect(() =>
-      postgresServerless<Contract>({ contractJson: fixtureContract, cursor: { batchSize: 0 } }),
+      postgresServerless({ contract: fixtureContract, cursor: { batchSize: 0 } }),
     ).toThrow(invalidCursor({ batchSize: 0 }, 'postgresServerless'));
     expect(() =>
-      postgresServerless<Contract>({ contractJson: fixtureContract, cursor: { batchSize: 1.5 } }),
+      postgresServerless({ contract: fixtureContract, cursor: { batchSize: 1.5 } }),
     ).toThrow(invalidCursor({ batchSize: 1.5 }, 'postgresServerless'));
   });
 

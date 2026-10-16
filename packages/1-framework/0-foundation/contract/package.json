@@ -51,6 +51,7 @@
     "./resolve-domain-model": "./dist/resolve-domain-model.mjs",
     "./types": "./dist/types.mjs",
     "./validate-domain": "./dist/validate-domain.mjs",
+    "./validate-once": "./dist/validate-once.mjs",
     "./package.json": "./package.json"
   },
   "engines": {

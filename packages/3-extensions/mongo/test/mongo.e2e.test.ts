@@ -6,6 +6,9 @@ import contractJson from '../../../2-mongo-family/1-foundation/mongo-contract/te
   type: 'json',
 };
 import mongo from '../src/runtime/mongo';
+import { contractFromJson } from '../src/static/contract-from-json';
+
+const contract = contractFromJson<Contract>(contractJson);
 
 // End-to-end smoke test for the lazy mongo() facade. Exercises the full
 // orm → executor → runtime → driver chain against a real (in-memory) replica
@@ -36,8 +39,8 @@ describe('mongo() facade — e2e (replica set)', {
   }, timeouts.spinUpMongoMemoryServer);
 
   it('orm and query are available before any connection is made', () => {
-    const db = mongo<Contract>({
-      contractJson,
+    const db = mongo({
+      contract,
       uri: replSet.getUri(),
       dbName: 'facade_eager',
     });
@@ -50,8 +53,8 @@ describe('mongo() facade — e2e (replica set)', {
   it(
     'createAll + where().first() round-trips through the lazy facade',
     async () => {
-      const db = mongo<Contract>({
-        contractJson,
+      const db = mongo({
+        contract,
         uri: replSet.getUri(),
         dbName: 'facade_first',
       });
@@ -90,7 +93,7 @@ describe('mongo() facade — e2e (replica set)', {
   it(
     'connect() is callable explicitly and drives the same lazy runtime',
     async () => {
-      const db = mongo<Contract>({ contractJson });
+      const db = mongo({ contract });
       try {
         await db.connect({ uri: replSet.getUri(), dbName: 'facade_explicit' });
         const users = await db.orm.users.all();
@@ -105,8 +108,8 @@ describe('mongo() facade — e2e (replica set)', {
   it(
     'connect() rejects when called twice',
     async () => {
-      const db = mongo<Contract>({
-        contractJson,
+      const db = mongo({
+        contract,
         uri: replSet.getUri(),
         dbName: 'facade_twice',
       });

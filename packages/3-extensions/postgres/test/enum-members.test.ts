@@ -89,7 +89,7 @@ const contract = defineContract(
   }),
 );
 
-const { enums } = postgresStatic<typeof contract>({ contractJson: contract });
+const { enums } = postgresStatic({ contract });
 const levels = enums['public'] ?? expect.unreachable('the TS builder registers enums in public');
 
 const isMember = (accessor: { has(value: unknown): boolean }, value: unknown) =>

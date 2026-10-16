@@ -1,4 +1,5 @@
 import mongo from '@internal/mongo/runtime';
+import { contractFromJson } from '@internal/mongo/static';
 import { timeouts } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
@@ -31,7 +32,11 @@ describe('Mongo upsert that keeps a create value for a field with an update defa
   }, timeouts.spinUpMongoMemoryServer);
 
   it('applies every update operator the way a plain upsert does, in one command', async () => {
-    const db = mongo<Contract>({ contractJson, mongoClient: client, dbName: 'upsert_pipeline' });
+    const db = mongo({
+      contract: contractFromJson<Contract>(contractJson),
+      mongoClient: client,
+      dbName: 'upsert_pipeline',
+    });
     const commands: string[] = [];
     const listen = (event: { commandName: string }) => commands.push(event.commandName);
     const upsert = () =>

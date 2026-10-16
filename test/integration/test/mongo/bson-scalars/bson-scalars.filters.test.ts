@@ -1,4 +1,5 @@
 import mongo from '@internal/mongo/runtime';
+import { contractFromJson } from '@internal/mongo/static';
 import {
   MongoFieldFilter,
   type MongoFilterExpr,
@@ -53,8 +54,8 @@ describe('Mongo where filters on a Bson field', () => {
         const created = await db.posts.create({ ...post, raw: { owner: objectId, count: long } });
         await db.posts.create({ ...post, raw: { owner: new ObjectId() } });
 
-        const facade = mongo<Contract>({
-          contractJson,
+        const facade = mongo({
+          contract: contractFromJson<Contract>(contractJson),
           mongoClient: client,
           dbName: mongoDb.databaseName,
         });

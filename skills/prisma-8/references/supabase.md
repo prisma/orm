@@ -108,11 +108,14 @@ The concept: instead of the stock `postgres()` factory, a Supabase app builds it
 ```typescript
 // src/prisma/db.ts
 import { supabase } from '@internal/extension-supabase/runtime';
+import { contractFromJson } from '@internal/postgres/static';
 import type { Contract } from './contract.d';
 import contractJson from './contract.json' with { type: 'json' };
 
-export const db = await supabase<Contract>({
-  contractJson,
+export const contract = contractFromJson<Contract>(contractJson);
+
+export const db = await supabase({
+  contract,
   url: process.env['DATABASE_URL'],        // direct Postgres connection — see pitfalls
   jwksUrl: process.env['SUPABASE_JWKS_URL'], // https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json
   // Legacy HS256 projects use jwtSecret: process.env['SUPABASE_JWT_SECRET'] instead — exactly one of the two.
@@ -223,7 +226,7 @@ The concept: the runtime needs a **direct, session-capable** Postgres connection
 - [ ] `extensions: [supabasePack]` (the `pack` export) in `ormConfig({...})` inside `definePrismaConfig({ orm: ... })`.
 - [ ] Cross-space FK typed `supabase:auth.AuthUser` with explicit `fields` / `references` (+ `onDelete` if wanted).
 - [ ] Every policy target model carries `@@rls`; predicates quote camelCase columns and cast for `auth.uid()`.
-- [ ] `db.ts` uses `await supabase<Contract>({ contractJson, url, jwksUrl | jwtSecret })` — exactly one JWT key source; `jwksUrl` for current projects, `jwtSecret` only for legacy HS256.
+- [ ] `db.ts` uses `await supabase({ contract, url, jwksUrl | jwtSecret })`, with `contract` from `contractFromJson<Contract>(contractJson)` of `@internal/postgres/static` — exactly one JWT key source; `jwksUrl` for current projects, `jwtSecret` only for legacy HS256.
 - [ ] Queries go through a `RoleBoundDb` from `asUser` / `asAnon` / `asServiceRole`; `asUser` is awaited.
 - [ ] `auth.*` / `storage.*` reads go through `asServiceRole().supabase` only, after the one-time narrow grant (`GRANT USAGE ON SCHEMA auth` + `GRANT SELECT` on the tables you read).
 - [ ] No per-table grants added for your own `public` tables — Supabase default privileges cover them; RLS does the protecting.

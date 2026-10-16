@@ -1,4 +1,3 @@
-import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import { createMongoCollection, type MongoQueryExecutor, mongoOrm } from '@internal/mongo-orm';
 import { buildMongoEnums } from '@internal/mongo-runtime';
@@ -57,8 +56,7 @@ const contract = defineContract({
   },
 });
 
-const contractJson = new MongoContractSerializer().serializeContract(contract);
-const { enums, context } = mongoStatic<typeof contract>({ contractJson });
+const { enums, context } = mongoStatic({ contract });
 
 const unreachableDatabase: MongoQueryExecutor = {
   query: () =>

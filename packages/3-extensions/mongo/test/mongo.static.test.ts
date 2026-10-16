@@ -1,5 +1,4 @@
 import { buildNamespacedEnums, type NamespacedEnums } from '@internal/contract/enum-accessor';
-import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type {
   AnyMongoTypeMaps,
@@ -32,46 +31,42 @@ const contract = defineContract({
   models: { Account },
 });
 
-type TestContract = typeof contract;
-
-const contractJson = new MongoContractSerializer().serializeContract(contract);
-
-describe('mongoStatic({ contractJson })', () => {
+describe('mongoStatic({ contract })', () => {
   it('context carries the deserialized contract', () => {
-    const result = mongoStatic<TestContract>({ contractJson });
+    const result = mongoStatic({ contract });
     expect(result.context.contract).toBe(result.contract);
   });
 
   it('context carries the codec registry (standard codecs present)', () => {
-    const result = mongoStatic<TestContract>({ contractJson });
+    const result = mongoStatic({ contract });
     expect(result.context.codecs.has('mongo/string@1')).toBe(true);
     expect(result.context.codecs.has('mongo/objectId@1')).toBe(true);
   });
 
   it('context is frozen', () => {
-    const result = mongoStatic<TestContract>({ contractJson });
+    const result = mongoStatic({ contract });
     expect(Object.isFrozen(result.context)).toBe(true);
   });
 
   it('enums exposes the Role accessor without the namespace key', () => {
-    const result = mongoStatic<TestContract>({ contractJson });
+    const result = mongoStatic({ contract });
     expect(result.enums.Role).toBeDefined();
     expect(result.enums.Role.values).toEqual(['user', 'admin']);
   });
 
   it('enums.Role.members.User is "user"', () => {
-    const result = mongoStatic<TestContract>({ contractJson });
+    const result = mongoStatic({ contract });
     expect(result.enums.Role.members.User).toBe('user');
   });
 
   it('enums.Role.ordinalOf returns declaration-order indices', () => {
-    const result = mongoStatic<TestContract>({ contractJson });
+    const result = mongoStatic({ contract });
     expect(result.enums.Role.ordinalOf('user')).toBe(0);
     expect(result.enums.Role.ordinalOf('admin')).toBe(1);
   });
 
   it('enums matches what buildNamespacedEnums produces for the unbound namespace', () => {
-    const result = mongoStatic<TestContract>({ contractJson });
+    const result = mongoStatic({ contract });
     const allNamespaced = buildNamespacedEnums(
       contract.domain,
       (codecId) => result.context.codecs.get(codecId) ?? expect.unreachable(codecId),
@@ -82,8 +77,8 @@ describe('mongoStatic({ contractJson })', () => {
     expect(result.enums.Role.names).toEqual(expectedEnums?.['Role']?.names);
   });
 
-  it('contract matches the deserialized contractJson', () => {
-    const result = mongoStatic<TestContract>({ contractJson });
+  it('contract matches the validated contract', () => {
+    const result = mongoStatic({ contract });
     expect(result.contract.target).toBe(contract.target);
     expect(result.contract.domain).toEqual(contract.domain);
   });

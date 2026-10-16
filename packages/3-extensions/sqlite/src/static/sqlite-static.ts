@@ -8,10 +8,11 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import type { RawCodecInferer } from '@internal/sql-relational-core/expression';
 import type { ExecutionContext, SqlRuntimeExtensionDescriptor } from '@internal/sql-runtime';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
-import sqliteTarget, { SqliteContractSerializer } from '@internal/target-sqlite/runtime';
+import sqliteTarget from '@internal/target-sqlite/runtime';
 import { assertDefined } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import type { SqliteTargetId } from '../runtime/sqlite';
+import { validateSqliteContract } from './contract-from-json';
 
 type UnboundSql<TContract extends Contract<SqlStorage>> =
   Db<TContract>[typeof UNBOUND_NAMESPACE_ID];
@@ -27,6 +28,7 @@ export interface SqliteStaticContext<TContract extends Contract<SqlStorage>> {
 }
 
 export function buildSqliteStaticContext<TContract extends Contract<SqlStorage>>(
+  contract: TContract,
   context: ExecutionContext<TContract>,
   rawCodecInferer: RawCodecInferer,
 ): SqliteStaticContext<TContract> {
@@ -43,22 +45,28 @@ export function buildSqliteStaticContext<TContract extends Contract<SqlStorage>>
     ),
   )[UNBOUND_NAMESPACE_ID];
   assertDefined(enums, 'the unbound namespace always exists on a sqlite builder output');
-  return { context, contract: context.contract, enums, sql: sqlDb, raw };
+  return { context, contract, enums, sql: sqlDb, raw };
 }
 
+/**
+ * The query surfaces of a SQLite client without a driver: `sql`, `raw` and `enums`. Use it where
+ * loading `node:sqlite` is not wanted.
+ *
+ * @example
+ * ```ts
+ * const { enums } = sqliteStatic({ contract: contractFromJson<Contract>(contractJson) });
+ * ```
+ */
 export default function sqliteStatic<TContract extends Contract<SqlStorage>>(options: {
-  readonly contractJson: unknown;
+  readonly contract: TContract;
   readonly extensions?: readonly SqlRuntimeExtensionDescriptor<SqliteTargetId>[];
 }): SqliteStaticContext<TContract> {
-  const contract = blindCast<
-    TContract,
-    'SqliteContractSerializer validates and returns a typed contract'
-  >(new SqliteContractSerializer().deserializeContract(options.contractJson));
+  const contract = validateSqliteContract(options.contract);
   const stack = createSqlExecutionStack({
     target: sqliteTarget,
     adapter: sqliteAdapter,
     extensions: options.extensions ?? [],
   });
   const context = createExecutionContext({ contract, stack });
-  return buildSqliteStaticContext(context, stack.adapter.rawCodecInferer);
+  return buildSqliteStaticContext(contract, context, stack.adapter.rawCodecInferer);
 }

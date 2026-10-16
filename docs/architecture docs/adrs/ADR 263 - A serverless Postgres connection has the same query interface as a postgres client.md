@@ -10,10 +10,12 @@ A Node server creates one `db` when the process starts and uses it for every req
 ```ts
 import { createServer } from 'node:http';
 import postgres from '@prisma/orm-postgres/runtime';
+import { contractFromJson } from '@prisma/orm-postgres/static';
 import type { Contract } from './prisma/contract.d';
 import contractJson from './prisma/contract.json' with { type: 'json' };
 
-const db = postgres<Contract>({ contractJson, url: process.env['DATABASE_URL']! });
+const contract = contractFromJson<Contract>(contractJson);
+const db = postgres({ contract, url: process.env['DATABASE_URL']! });
 
 createServer(async (_request, response) => {
   const posts = await db.orm.public.Post.orderBy((post) => post.createdAt.desc())
@@ -27,6 +29,7 @@ A Cloudflare Worker opens a new `db` inside each request, and `await using` clos
 
 ```ts
 import postgresServerless from '@prisma/orm-postgres/serverless';
+import { contractFromJson } from '@prisma/orm-postgres/static';
 import type { Contract } from './prisma/contract.d';
 import contractJson from './prisma/contract.json' with { type: 'json' };
 
@@ -34,7 +37,7 @@ interface Env {
   HYPERDRIVE: { connectionString: string };
 }
 
-const postgres = postgresServerless<Contract>({ contractJson });
+const postgres = postgresServerless({ contract: contractFromJson<Contract>(contractJson) });
 
 export default {
   async fetch(_request: Request, env: Env): Promise<Response> {
@@ -170,8 +173,8 @@ The default is off because, with cursors on, every read hangs behind Cloudflare 
 A Worker that needs streaming on one route creates a second serverless client with the option and opens that route's connection from it. Every other route keeps the serverless client without the option:
 
 ```ts
-const postgres = postgresServerless<Contract>({ contractJson });
-const streamingPostgres = postgresServerless<Contract>({ contractJson, cursor: { batchSize: 100 } });
+const postgres = postgresServerless({ contract });
+const streamingPostgres = postgresServerless({ contract, cursor: { batchSize: 100 } });
 ```
 
 ## Three rules that follow from one database connection
@@ -262,7 +265,7 @@ Two functions build the members for both:
 
 A client and a connection differ only in the two functions they pass. `getRuntime` returns the runtime for `runtime()` and throws once the owner is closed. `getRuntimeForWork` returns the runtime for the ORM, `transaction()` and `prepare()`. A client passes the same function for both. A connection's `getRuntimeForWork` returns its runtime even after `close()`, so the runtime's shutdown rule decides.
 
-`postgres()` and `postgresServerless()` share one declaration of the options that say how queries run: `extensions`, `middleware`, `verifyMarker`, `log` and `cursor`. Both also take `contractJson` or `contract`. `postgres()` alone takes `url`, `pg` or `binding`, because a connection gets its URL from each `connect` call, and `poolOptions`, because a connection has no pool. A connection's `pg.Client` gets the same 20 second connect timeout that a client's pool gets by default, and there is no option to change it. A type test checks that the two option types differ in exactly `binding`, `url`, `pg` and `poolOptions`, so an option added to one factory's options and not the other's fails the build. Both compose the same execution stack of `postgresTarget`, `postgresAdapter` and `postgresDriver`.
+`postgres()` and `postgresServerless()` share one declaration of the options that say how queries run: `extensions`, `middleware`, `verifyMarker`, `log` and `cursor`. Both also take `contract`. `postgres()` alone takes `url`, `pg` or `binding`, because a connection gets its URL from each `connect` call, and `poolOptions`, because a connection has no pool. A connection's `pg.Client` gets the same 20 second connect timeout that a client's pool gets by default, and there is no option to change it. A type test checks that the two option types differ in exactly `binding`, `url`, `pg` and `poolOptions`, so an option added to one factory's options and not the other's fails the build. Both compose the same execution stack of `postgresTarget`, `postgresAdapter` and `postgresDriver`.
 
 ## Consequences
 

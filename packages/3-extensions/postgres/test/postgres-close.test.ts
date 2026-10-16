@@ -1,7 +1,7 @@
 import type { SqlStorage } from '@internal/sql-contract/types';
-import { validateSqlContractFully } from '@internal/sql-contract/validators';
 import { createContract } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { contractFromJson } from '../src/static/contract-from-json';
 import type { Contract } from './fixtures/generated/contract';
 import fixtureContractJson from './fixtures/generated/contract.json' with { type: 'json' };
 
@@ -51,7 +51,7 @@ import { Client, Pool } from 'pg';
 import postgres from '../src/runtime/postgres';
 
 const contract = createContract<SqlStorage>();
-const fixtureContract = validateSqlContractFully<Contract>(fixtureContractJson);
+const fixtureContract = contractFromJson<Contract>(fixtureContractJson);
 
 const runtimeClosedError = {
   code: 'DRIVER.NOT_CONNECTED',
@@ -162,7 +162,7 @@ describe('postgres close()', () => {
     const pool = new Pool({ connectionString: 'postgres://localhost:5432/db' });
     const ownEndSpy = vi.fn().mockResolvedValue(undefined);
     (pool as unknown as { end: typeof vi.fn }).end = ownEndSpy;
-    const db = postgres<Contract>({ contractJson: fixtureContract, pg: pool, verifyMarker: false });
+    const db = postgres({ contract: fixtureContract, pg: pool, verifyMarker: false });
     const runtime = db.runtime();
 
     await db.close();
@@ -270,8 +270,8 @@ describe('a promise pending when close() is called on a client that owns its poo
   });
 
   async function connectedClient() {
-    const db = postgres<Contract>({
-      contractJson: fixtureContract,
+    const db = postgres({
+      contract: fixtureContract,
       url: 'postgres://localhost:5432/db',
     });
     await db.connect();

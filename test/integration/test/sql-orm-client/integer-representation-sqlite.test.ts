@@ -5,6 +5,7 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { orm } from '@internal/sql-orm-client';
 import type { SqliteClient } from '@internal/sqlite/runtime';
 import sqlite from '@internal/sqlite/runtime';
+import { contractFromJson } from '@internal/sqlite/static';
 import { join } from 'pathe';
 import { afterAll, beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
 import { rejectionShape } from './error-shape';
@@ -53,7 +54,11 @@ describe('integration/integer representation type on sqlite', () => {
       );
     `);
 
-    client = sqlite<Contract>({ contractJson, path, verifyMarker: false });
+    client = sqlite({
+      contract: contractFromJson<Contract>(contractJson),
+      path,
+      verifyMarker: false,
+    });
     const runtime = await client.connect();
     db = orm({
       context: client.context,

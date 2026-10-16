@@ -1,7 +1,10 @@
 import postgres, { type PostgresClient } from '@prisma/orm-postgres/runtime';
+import { contractFromJson } from '@prisma/orm-postgres/static';
 import { Pool } from 'pg';
 import type { Contract } from '../../src/prisma/contract.d';
 import contractJson from '../../src/prisma/contract.json' with { type: 'json' };
+
+export const contract = contractFromJson<Contract>(contractJson);
 
 type Db = PostgresClient<Contract>;
 
@@ -31,7 +34,7 @@ export function getDb(): Db {
       console.error('[react-router-demo] pg pool error:', err.message);
     });
     cached = {
-      db: postgres<Contract>({ contractJson, pg: pool }),
+      db: postgres({ contract, pg: pool }),
       pool,
     };
   }

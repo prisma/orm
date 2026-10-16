@@ -6,6 +6,7 @@
 
 import { crossRef, type NamespaceId } from '@internal/contract/types';
 import mongoFamilyPack from '@internal/family-mongo/pack';
+import { contractFromJson } from '@internal/mongo/static';
 import type {
   AnyMongoTypeMaps,
   MongoContract,
@@ -149,7 +150,7 @@ const contract = defineContract({
 });
 
 describe('pipeline builder integration', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
-  const p = mongoQuery<TContract>({ contractJson });
+  const p = mongoQuery({ contract: contractFromJson<TContract>(contractJson) });
 
   it('match → group → sort → limit analytics query', async () => {
     await withMongod(async (ctx) => {
@@ -327,7 +328,7 @@ describe('pipeline builder integration', { timeout: timeouts.spinUpMongoMemorySe
         },
       ]);
 
-      const plan = mongoQuery<typeof contract>({ contractJson: contract })
+      const plan = mongoQuery({ contract })
         .from('tasks')
         .group((f) => ({
           _id: f.type,

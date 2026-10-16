@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import type { Contract } from '@prisma/orm-postgres/contract/types';
 import type { SqlStorage } from '@prisma/orm-postgres/family-contract/types';
 import postgres from '@prisma/orm-postgres/runtime';
+import { contractFromJson } from '@prisma/orm-postgres/static';
 import { withClient } from '@repo/test-utils';
 import stripAnsi from 'strip-ansi';
 import { describe, expect, it } from 'vitest';
@@ -144,7 +145,10 @@ withTempDir(({ createTempDir }) => {
           client.query(`insert into "${key}" default values`),
         );
 
-        const client = postgres<Contract<SqlStorage>>({ contractJson, url: db.connectionString });
+        const client = postgres({
+          contract: contractFromJson<Contract<SqlStorage>>(contractJson),
+          url: db.connectionString,
+        });
         const runtime = await client.connect();
         try {
           const sqlNamespace = (

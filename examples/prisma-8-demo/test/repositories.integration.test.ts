@@ -37,18 +37,15 @@ import { ormClientSearchPostsByEmbedding } from '../src/orm-client/search-posts-
 import { ormClientSearchPostsByTitle } from '../src/orm-client/search-posts-by-title';
 import { ormClientUpdateUserEmail } from '../src/orm-client/update-user-email';
 import { ormClientUpsertUser } from '../src/orm-client/upsert-user';
-import type { Contract } from '../src/prisma/contract.d';
-import contractJson from '../src/prisma/contract.json' with { type: 'json' };
-import { db } from '../src/prisma/db';
+import { contract, db } from '../src/prisma/db';
 import { initTestDatabase } from './utils/control-client';
 
 const context = db.context;
-const { contract } = context;
 const Priority = db.enums.public.Priority;
 
 async function getRuntime(connectionString: string): Promise<Runtime> {
-  const client = postgres<Contract>({
-    contractJson,
+  const client = postgres({
+    contract,
     url: connectionString,
     extensions: db.stack.extensions,
   });
@@ -59,8 +56,8 @@ async function getRuntimeWithMiddleware(
   connectionString: string,
   middleware: readonly SqlMiddleware[],
 ): Promise<{ runtime: Runtime; driver: SqlDriver<unknown> }> {
-  const client = postgres<Contract>({
-    contractJson,
+  const client = postgres({
+    contract,
     url: connectionString,
     middleware,
     extensions: db.stack.extensions,

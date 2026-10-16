@@ -164,6 +164,7 @@ describe.each(ALL_CELLS.map((cell) => ({ cell, label: cellLabel(cell) })))(
           [
             "import { createPostgresControlClient } from '@prisma/orm-postgres/control';",
             "import postgres from '@prisma/orm-postgres/runtime';",
+            "import { contractFromJson } from '@prisma/orm-postgres/static';",
             "import type { Contract } from './src/prisma/contract.d';",
             "import contractJson from './src/prisma/contract.json' with { type: 'json' };",
             '',
@@ -173,7 +174,7 @@ describe.each(ALL_CELLS.map((cell) => ({ cell, label: cellLabel(cell) })))(
             '  process.exit(2);',
             '}',
             '',
-            'const db = postgres<Contract>({ contractJson, url });',
+            'const db = postgres({ contract: contractFromJson<Contract>(contractJson), url });',
             // String concatenation (not a template literal) to avoid
             // biome's `noTemplateCurlyInString` rule in this fixture
             // string — the generated user code is functionally

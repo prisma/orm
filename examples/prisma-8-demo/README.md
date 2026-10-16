@@ -25,7 +25,7 @@ This demo includes two runtime implementations demonstrating different approache
 
 ### 1. Emit Workflow (Default)
 
-Uses emitted `contract.json` and `contract.d.ts` files with the Postgres one-liner client. The emitted workflow passes the `Contract` type explicitly: `postgres<Contract>({ contractJson, url })`.
+Uses emitted `contract.json` and `contract.d.ts` files with the Postgres one-liner client. `src/prisma/db.ts` turns the emitted JSON into a typed value with `contractFromJson<Contract>(contractJson)` from `@prisma/orm-postgres/static`, and the client infers its types from it: `postgres({ contract, url })`.
 
 - **Files**: `src/prisma/db.ts`, `src/main.ts`
 - **Contract source**: `src/prisma/contract.json` (emitted from `src/prisma/contract.prisma`)

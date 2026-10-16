@@ -6,7 +6,7 @@ import { mongoQuery } from '../src/query';
 import type { CollectionHandle, FilteredCollection } from '../src/state-classes';
 import type { TContract } from './fixtures/test-contract';
 
-const contractJson = {} as unknown;
+declare const contract: TContract;
 
 /**
  * Extract the `UpdateEnabled` marker from any `PipelineChain` (or subclass).
@@ -25,19 +25,19 @@ type GetF<T> =
 
 describe('state machine', () => {
   it('from(name) returns CollectionHandle (root state) inheriting PipelineChain', () => {
-    const handle = mongoQuery<TContract>({ contractJson }).from('orders');
+    const handle = mongoQuery({ contract }).from('orders');
     expectTypeOf(handle).toExtend<CollectionHandle<TContract, 'Order'>>();
   });
 
   it('CollectionHandle.match(...) transitions to FilteredCollection', () => {
-    const filtered = mongoQuery<TContract>({ contractJson })
+    const filtered = mongoQuery({ contract })
       .from('orders')
       .match(MongoFieldFilter.eq('status', 'active'));
     expectTypeOf(filtered).toExtend<FilteredCollection<TContract, 'Order'>>();
   });
 
   it('FilteredCollection.match(...) stays in FilteredCollection (AND-folds)', () => {
-    const filtered = mongoQuery<TContract>({ contractJson })
+    const filtered = mongoQuery({ contract })
       .from('orders')
       .match(MongoFieldFilter.eq('status', 'active'))
       .match(MongoFieldFilter.gt('amount', 100));
@@ -45,7 +45,7 @@ describe('state machine', () => {
   });
 
   it('pipeline-stage methods drop out of the state-class subclasses', () => {
-    const sorted = mongoQuery<TContract>({ contractJson }).from('orders').sort({ amount: -1 });
+    const sorted = mongoQuery({ contract }).from('orders').sort({ amount: -1 });
     // No longer a CollectionHandle/FilteredCollection — write/find-and-modify
     // surfaces have been left behind.
     expectTypeOf(sorted).not.toExtend<CollectionHandle<TContract, 'Order'>>();
@@ -58,7 +58,7 @@ describe('state machine', () => {
     // find-and-modify terminals inherited from `PipelineChain` are gated off
     // by default, so a leading `.match(...)` is required before reaching them
     // via the `FilteredCollection` overrides (see ADR 201).
-    const handle = mongoQuery<TContract>({ contractJson }).from('orders');
+    const handle = mongoQuery({ contract }).from('orders');
     expectTypeOf<GetU<typeof handle>>().toEqualTypeOf<'update-cleared' & UpdateEnabled>();
     expectTypeOf<GetF<typeof handle>>().toEqualTypeOf<'fam-cleared' & FindAndModifyEnabled>();
   });
@@ -70,7 +70,7 @@ describe('state machine', () => {
     // marker-gated PipelineChain versions), so the initial marker state
     // stays cleared to prevent accidental access to the PipelineChain
     // inheritance path.
-    const filtered = mongoQuery<TContract>({ contractJson })
+    const filtered = mongoQuery({ contract })
       .from('orders')
       .match(MongoFieldFilter.eq('status', 'active'));
     expectTypeOf<GetU<typeof filtered>>().toEqualTypeOf<'update-cleared' & UpdateEnabled>();
@@ -78,23 +78,23 @@ describe('state machine', () => {
   });
 
   it('marker table: limit() leaves both markers cleared', () => {
-    const limited = mongoQuery<TContract>({ contractJson }).from('orders').limit(1);
+    const limited = mongoQuery({ contract }).from('orders').limit(1);
     expectTypeOf<GetU<typeof limited>>().toEqualTypeOf<'update-cleared' & UpdateEnabled>();
     expectTypeOf<GetF<typeof limited>>().toEqualTypeOf<'fam-cleared' & FindAndModifyEnabled>();
   });
 
   it('marker table: sort / addFields / group all leave both markers cleared from .from()', () => {
-    const sorted = mongoQuery<TContract>({ contractJson }).from('orders').sort({ amount: -1 });
+    const sorted = mongoQuery({ contract }).from('orders').sort({ amount: -1 });
     expectTypeOf<GetU<typeof sorted>>().toEqualTypeOf<'update-cleared' & UpdateEnabled>();
     expectTypeOf<GetF<typeof sorted>>().toEqualTypeOf<'fam-cleared' & FindAndModifyEnabled>();
 
-    const added = mongoQuery<TContract>({ contractJson })
+    const added = mongoQuery({ contract })
       .from('orders')
       .addFields((f) => ({ doubled: f.amount }));
     expectTypeOf<GetU<typeof added>>().toEqualTypeOf<'update-cleared' & UpdateEnabled>();
     expectTypeOf<GetF<typeof added>>().toEqualTypeOf<'fam-cleared' & FindAndModifyEnabled>();
 
-    const grouped = mongoQuery<TContract>({ contractJson })
+    const grouped = mongoQuery({ contract })
       .from('orders')
       .group((_f) => ({ _id: null }));
     expectTypeOf<GetU<typeof grouped>>().toEqualTypeOf<'update-cleared' & UpdateEnabled>();
@@ -106,7 +106,7 @@ describe('state machine', () => {
   // parameters here; the runtime / shape behaviour is asserted in
   // builder.test-d.ts.
   it('marker table: lookup() clears both markers', () => {
-    const looked = mongoQuery<TContract>({ contractJson })
+    const looked = mongoQuery({ contract })
       .from('orders')
       .lookup((from) =>
         from('users')

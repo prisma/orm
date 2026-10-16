@@ -11,14 +11,15 @@ import {
   createCacheMiddleware,
   createInMemoryCacheStore,
 } from '@internal/middleware-cache';
+import { contractFromJson } from '@internal/postgres/static';
 import type { Contract } from './contract.d';
 import contractJson from './contract.json' with { type: 'json' };
 
 // How long entries live is an option of the store, not of the middleware.
 const store = createInMemoryCacheStore({ maxEntries: 1000, ttlMs: 60_000 });
 const cache = createCacheMiddleware({ store });
-const db = postgres<Contract>({
-  contractJson,
+const db = postgres({
+  contract: contractFromJson<Contract>(contractJson),
   url: process.env['DATABASE_URL']!,
   middleware: [cache],
 });

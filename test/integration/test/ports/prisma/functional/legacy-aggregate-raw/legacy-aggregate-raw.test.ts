@@ -27,7 +27,7 @@ describe('ports/prisma/functional/0-legacy-ports/aggregate-raw', () => {
     () =>
       withLegacyAggregateRaw(async ({ client, db, contract }) => {
         await db.User.createAll(users as unknown as Parameters<typeof db.User.createAll>[0]);
-        const raw = mongo<Contract>({ contract, mongoClient: client, dbName: 'test' });
+        const raw = mongo({ contract, mongoClient: client, dbName: 'test' });
         const result = await (await raw.runtime())
           .query(
             raw.raw
@@ -52,7 +52,7 @@ describe('ports/prisma/functional/0-legacy-ports/aggregate-raw', () => {
     () =>
       withLegacyAggregateRaw(async ({ client, db, contract }) => {
         await db.User.createAll(users as unknown as Parameters<typeof db.User.createAll>[0]);
-        const raw = mongo<Contract>({ contract, mongoClient: client, dbName: 'test' });
+        const raw = mongo({ contract, mongoClient: client, dbName: 'test' });
         const result = await (await raw.runtime())
           .query(
             raw.raw
