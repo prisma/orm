@@ -22,3 +22,8 @@ export function isRecognisedPnpmResolutionError(stderr: string): boolean {
     /catalog:[^\s]* is not a valid (version|spec)/i.test(stderr)
   );
 }
+
+export function isPnpmIgnoredBuildsError(stderr: string): boolean {
+  if (!stderr) return false;
+  return stderr.includes('ERR_PNPM_IGNORED_BUILDS');
+}

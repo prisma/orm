@@ -3,7 +3,10 @@ import { ifDefined } from '@internal/utils/defined';
 import type { PackageManagerId, PackageOperations } from '@prisma/cli-engine';
 import type { CliStructuredError } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
-import { isRecognisedPnpmResolutionError } from '../commands/init/pnpm-fallback';
+import {
+  isPnpmIgnoredBuildsError,
+  isRecognisedPnpmResolutionError,
+} from '../commands/init/pnpm-fallback';
 import { redactSecrets } from '../commands/init/redact-secrets';
 
 /** What one install pair produced, and which manager finished it. */
@@ -36,6 +39,13 @@ function pnpmLeakedASpecifier(failure: CliStructuredError): boolean {
   );
 }
 
+function pnpmIgnoredBuilds(failure: CliStructuredError): boolean {
+  return (
+    metaString(failure, 'manager') === 'pnpm' &&
+    isPnpmIgnoredBuildsError(metaString(failure, 'stderrTail'))
+  );
+}
+
 /**
  * The engine redacts the stderr it hands back, and this redacts it again
  * before quoting it: what the engine strips is its own business, and registry
@@ -59,6 +69,29 @@ function retriedWarning(failure: CliStructuredError): string {
   const firstLine = redactSecrets(metaString(failure, 'stderrTail')).trim().split('\n')[0] ?? '';
   return [
     'pnpm failed first with a leaked `workspace:*` or `catalog:` specifier, so init retried with npm.',
+    firstLine === '' ? '' : `  pnpm error: ${firstLine}`,
+  ]
+    .filter((line) => line !== '')
+    .join('\n');
+}
+
+function ignoredBuildsFallbackWarning(failure: CliStructuredError): string {
+  const firstLine = redactSecrets(metaString(failure, 'stderrTail')).trim().split('\n')[0] ?? '';
+  return [
+    'pnpm could not install: ignored build scripts (ERR_PNPM_IGNORED_BUILDS).',
+    'Falling back to npm so init can complete.',
+    firstLine === '' ? '' : `  pnpm error: ${firstLine}`,
+    'Both installs ran under npm, which writes a package-lock.json beside the pnpm lockfile — delete whichever of the two you do not want to keep.',
+    'To stay on pnpm, add `allowBuilds` for esbuild, msgpackr-extract, workerd or set `strictDepBuilds: false` in pnpm-workspace.yaml.',
+  ]
+    .filter((line) => line !== '')
+    .join('\n');
+}
+
+function ignoredBuildsRetriedWarning(failure: CliStructuredError): string {
+  const firstLine = redactSecrets(metaString(failure, 'stderrTail')).trim().split('\n')[0] ?? '';
+  return [
+    'pnpm failed first with ignored build scripts (ERR_PNPM_IGNORED_BUILDS), so init retried with npm.',
     firstLine === '' ? '' : `  pnpm error: ${firstLine}`,
   ]
     .filter((line) => line !== '')
@@ -134,18 +167,23 @@ export async function installProjectDependencies(ctx: {
   if (failure === undefined) {
     return { failure: undefined, manager: undefined, warnings: ctx.catalogWarnings };
   }
-  if (!pnpmLeakedASpecifier(failure)) {
+  const isLeaked = pnpmLeakedASpecifier(failure);
+  const isIgnoredBuilds = pnpmIgnoredBuilds(failure);
+  if (!isLeaked && !isIgnoredBuilds) {
     return { failure, manager: undefined, warnings: [] };
   }
 
   const retryFailure = await pair('npm');
   if (retryFailure !== undefined) {
-    // The npm failure is the one raised, but the pnpm failure that triggered
-    // the retry is why npm ran at all — without it the user sees an npm error
-    // with no trace of the first attempt.
-    return { failure: retryFailure, manager: undefined, warnings: [retriedWarning(failure)] };
+    return {
+      failure: retryFailure,
+      manager: undefined,
+      warnings: [isIgnoredBuilds ? ignoredBuildsRetriedWarning(failure) : retriedWarning(failure)],
+    };
   }
-  // npm bypassed pnpm's resolver, so the workspace catalog is not what ended
-  // up installed — saying otherwise alongside the fallback would contradict it.
-  return { failure: undefined, manager: 'npm', warnings: [fallbackWarning(failure)] };
+  return {
+    failure: undefined,
+    manager: 'npm',
+    warnings: [isIgnoredBuilds ? ignoredBuildsFallbackWarning(failure) : fallbackWarning(failure)],
+  };
 }
