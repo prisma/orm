@@ -67,12 +67,15 @@ const vectorCanonicalForm: ToCanonicalForm = (value) => {
 };
 
 export const pgvectorVectorParams = arktype({
-  length: `number.integer >= 1 & number.integer <= ${VECTOR_MAX_DIM}` as const,
+  'length?': `number.integer >= 1 & number.integer <= ${VECTOR_MAX_DIM}` as const,
 });
 
 export const pgvectorVector = sqlDataType('pgvector/vector', {
   params: pgvectorVectorParams,
-  texts: [{ text: 'vector({length})', written: true, catalog: true }],
+  texts: [
+    { text: 'vector', written: true, catalog: true },
+    { text: 'vector({length})', written: true, catalog: true },
+  ],
   listCast: {
     of: [pgInt2.id, pgInt4.id, pgInt8.id, pgNumeric.id],
     cast: (elements) => elements.map(elementNumber),

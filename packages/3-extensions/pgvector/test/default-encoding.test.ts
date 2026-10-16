@@ -57,6 +57,32 @@ describe('literal defaults on a codec contributed through extensions', () => {
     });
   });
 
+  it.each(['namedType', 'column'] as const)(
+    'stores a default without a dimension through %s',
+    (form) => {
+      const contract = defineContract({ extensions: { pgvector } }, ({ field, model, type }) => {
+        const types = { Embedding: type.pgvector.Vector() };
+        const embedding =
+          form === 'namedType' ? field.namedType(types.Embedding) : field.column(vector());
+        return {
+          types,
+          models: {
+            Doc: model('Doc', {
+              fields: { id: field.id.uuidv4String(), embedding: embedding.default([1, 2]) },
+            }),
+          },
+        };
+      });
+      expect(
+        contract.storage.namespaces['public']?.entries.table?.['Doc']?.columns['embedding'],
+      ).toMatchObject({
+        dataType: 'pgvector/vector',
+        codecId: 'pg/vector@1',
+        default: { kind: 'literal', value: [1, 2] },
+      });
+    },
+  );
+
   describe('on a column whose type parameters the data type does not accept', () => {
     it('reports the type parameters, not the default', () => {
       expect(() =>
@@ -65,7 +91,7 @@ describe('literal defaults on a codec contributed through extensions', () => {
             Doc: model('Doc', {
               fields: {
                 id: field.id.uuidv4String(),
-                embedding: field.column({ codecId: 'pg/vector@1' } as const).default([1, 2, 3]),
+                embedding: field.column(vector(0)).default([1, 2, 3]),
               },
             }),
           },
@@ -73,8 +99,7 @@ describe('literal defaults on a codec contributed through extensions', () => {
       ).toThrow(
         expect.objectContaining({
           code: 'CONTRACT.TYPE_PARAMS_INVALID',
-          message:
-            'Field "Doc.embedding" has type parameters that its data type does not accept: pgvector/vector: length must be a number (was missing)',
+          message: expect.stringContaining('length'),
           meta: {
             dataType: 'pgvector/vector',
             parameters: ['length'],
