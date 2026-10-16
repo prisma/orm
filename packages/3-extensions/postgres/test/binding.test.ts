@@ -1,6 +1,12 @@
 import { Client, Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
-import { isPgClient, isPgPool, resolvePostgresBinding } from '../src/runtime/binding';
+import {
+  isPgClient,
+  isPgPool,
+  resolveOptionalPostgresBinding,
+  resolvePostgresBinding,
+  validatePostgresUrl,
+} from '../src/runtime/binding';
 
 function duckPool() {
   return {
@@ -58,6 +64,86 @@ describe('isPgClient', () => {
   });
 });
 
+describe('validatePostgresUrl', () => {
+  it('preserves an empty host so driver defaults apply', () => {
+    expect(validatePostgresUrl('postgresql:///mydb')).toBe('postgresql:///mydb');
+  });
+
+  it('drops empty userinfo so driver defaults apply', () => {
+    expect(validatePostgresUrl('postgresql://localhost/mydb')).toBe('postgresql://localhost/mydb');
+    expect(validatePostgresUrl('postgresql://@localhost/mydb')).toBe('postgresql://localhost/mydb');
+    expect(validatePostgresUrl('postgresql://@/mydb')).toBe('postgresql:///mydb');
+    expect(validatePostgresUrl('postgresql://:@/mydb')).toBe('postgresql:///mydb');
+    expect(validatePostgresUrl('postgres://:@/mydb?host=/var/run/postgresql#connection')).toBe(
+      'postgres:///mydb?host=/var/run/postgresql#connection',
+    );
+  });
+
+  it('keeps provided credentials, host, and port', () => {
+    expect(validatePostgresUrl('postgresql://u:p@db.example.com:5433/mydb')).toBe(
+      'postgresql://u:p@db.example.com:5433/mydb',
+    );
+  });
+
+  it('preserves credentials when the host is omitted', () => {
+    expect(validatePostgresUrl('postgresql://u:p@/mydb')).toBe('postgresql://u:p@/mydb');
+  });
+
+  it('rejects a port without a host', () => {
+    expect(() => validatePostgresUrl('postgresql://u:p@:5432/mydb')).toThrow(
+      'cannot specify a port without a host',
+    );
+  });
+
+  it('keeps a password when the username is empty', () => {
+    expect(validatePostgresUrl('postgresql://:secret@localhost/mydb')).toBe(
+      'postgresql://:secret@localhost/mydb',
+    );
+  });
+
+  it('preserves a hostless socket url that carries credentials', () => {
+    expect(validatePostgresUrl('postgresql://u:p@/mydb?host=/var/run/postgresql')).toBe(
+      'postgresql://u:p@/mydb?host=/var/run/postgresql',
+    );
+  });
+
+  it('leaves a socket-dir host query parameter alone', () => {
+    expect(validatePostgresUrl('postgresql:///mydb?host=/var/run/postgresql')).toBe(
+      'postgresql:///mydb?host=/var/run/postgresql',
+    );
+  });
+
+  it('preserves query params and schema', () => {
+    expect(validatePostgresUrl('postgres://u@h/mydb?schema=app&sslmode=require')).toBe(
+      'postgres://u@h/mydb?schema=app&sslmode=require',
+    );
+  });
+
+  it('rejects a non-postgres scheme', () => {
+    expect(() => validatePostgresUrl('mysql://h/db')).toThrow('postgres:// or postgresql://');
+  });
+
+  it('preserves a username-only credential on a hostless url', () => {
+    expect(validatePostgresUrl('postgresql://u@/mydb')).toBe('postgresql://u@/mydb');
+  });
+
+  it('preserves a password-only credential on a hostless url', () => {
+    expect(validatePostgresUrl('postgresql://:secret@/mydb')).toBe(
+      'postgresql://:secret@/mydb',
+    );
+  });
+
+  it('rejects a port without a host when no credentials are present', () => {
+    expect(() => validatePostgresUrl('postgresql://:5432/mydb')).toThrow(
+      'cannot specify a port without a host',
+    );
+  });
+
+  it('rejects an empty url', () => {
+    expect(() => validatePostgresUrl('   ')).toThrow('non-empty string');
+  });
+});
+
 describe('resolvePostgresBinding', () => {
   it('resolves a real pg Pool to a pgPool binding', () => {
     const pool = new Pool();
@@ -80,9 +166,42 @@ describe('resolvePostgresBinding', () => {
     });
   });
 
+  it('resolves a url input to a url binding with the validated url', () => {
+    expect(resolvePostgresBinding({ url: 'postgresql:///mydb' })).toEqual({
+      kind: 'url',
+      url: 'postgresql:///mydb',
+    });
+  });
+
+  it('throws when no binding input is provided', () => {
+    expect(() => resolvePostgresBinding({})).toThrow('Provide one binding input');
+  });
+
+  it('throws when multiple binding inputs are provided', () => {
+    expect(() =>
+      resolvePostgresBinding({
+        url: 'postgresql:///mydb',
+        pg: duckPool(),
+      } as unknown as Parameters<typeof resolvePostgresBinding>[0]),
+    ).toThrow('Provide one binding input');
+  });
+
   it('throws when pg input is neither Pool nor Client', () => {
     expect(() => resolvePostgresBinding({ pg: { query: () => {} } as unknown as Client })).toThrow(
       'Unable to determine pg binding type from pg input',
     );
+  });
+});
+
+describe('resolveOptionalPostgresBinding', () => {
+  it('returns undefined when no binding input is provided', () => {
+    expect(resolveOptionalPostgresBinding({})).toBeUndefined();
+  });
+
+  it('delegates to resolvePostgresBinding when a url is provided', () => {
+    expect(resolveOptionalPostgresBinding({ url: 'postgresql://u@h/db' })).toEqual({
+      kind: 'url',
+      url: 'postgresql://u@h/db',
+    });
   });
 });

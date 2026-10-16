@@ -45,9 +45,30 @@ export function validatePostgresUrl(url: string): string {
     });
   }
 
+  // Omitted-host libpq DSNs use a temporary host only for WHATWG validation.
+  // Return the original hostless value so the pg driver applies its defaults.
+  let input = trimmed;
+  let preserveEmptyHost = false;
+  const emptyHost = /^postgres(?:ql)?:\/\/([^/?#]*)/i.exec(trimmed);
+  if (emptyHost !== null) {
+    const hostAndPort = emptyHost[1].slice(emptyHost[1].lastIndexOf('@') + 1);
+    if (hostAndPort.startsWith(':')) {
+      throw postgresError(
+        'RUNTIME.BINDING_INVALID',
+        'Postgres URL cannot specify a port without a host',
+        { meta: { extension: 'postgres', reason: 'port without host' } },
+      );
+    }
+    preserveEmptyHost = hostAndPort === '';
+    if (preserveEmptyHost) {
+      const insertAt = emptyHost[0].length - hostAndPort.length;
+      input = `${trimmed.slice(0, insertAt)}localhost${trimmed.slice(insertAt)}`;
+    }
+  }
+
   let parsed: URL;
   try {
-    parsed = new URL(trimmed);
+    parsed = new URL(input);
   } catch {
     throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
       meta: { extension: 'postgres', reason: 'unparseable url' },
@@ -62,7 +83,21 @@ export function validatePostgresUrl(url: string): string {
     );
   }
 
-  return trimmed;
+  if (preserveEmptyHost || parsed.hostname === '') {
+    if (preserveEmptyHost && (emptyHost?.[1] === '@' || emptyHost?.[1] === ':@')) {
+      const authorityEnd = emptyHost[0].length;
+      const authorityStart = emptyHost[0].indexOf('//') + 2;
+      return `${trimmed.slice(0, authorityStart)}${trimmed.slice(authorityEnd)}`;
+    }
+    return trimmed;
+  }
+
+  const userinfo =
+    parsed.username === '' && parsed.password === ''
+      ? ''
+      : `${parsed.username}${parsed.password === '' ? '' : `:${parsed.password}`}@`;
+  const port = parsed.port === '' ? '' : `:${parsed.port}`;
+  return `${parsed.protocol}//${userinfo}${parsed.hostname}${port}${parsed.pathname}${parsed.search}${parsed.hash}`;
 }
 
 export function resolvePostgresBinding(options: PostgresBindingInput): PostgresBinding {
