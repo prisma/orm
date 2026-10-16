@@ -2,7 +2,7 @@ import { CastExpr, ColumnRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { codecDescriptors } from '../src/core/codecs';
 
-const NEEDS_PARAMS = new Set(['pg/enum@1']);
+const NEEDS_PARAMS = new Set(['pg/enum@1', 'sql/raw@1']);
 
 const parameterless = codecDescriptors.filter((d) => !NEEDS_PARAMS.has(d.codecId));
 const source = ColumnRef.of('t', 'c');

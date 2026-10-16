@@ -1,6 +1,16 @@
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 
 export const sqlFamilyAuthoringTypes = {
+  Raw: {
+    kind: 'typeConstructor',
+    documentation:
+      'A column of a type no other column type covers, written exactly as the database catalog prints it, such as Raw("tsvector"). Its values are typed unknown, and its default is a sql expression.',
+    args: [{ kind: 'string', name: 'sql' }],
+    output: {
+      codecId: 'sql/raw@1',
+      typeParams: { sql: { kind: 'arg', index: 0 } },
+    },
+  },
   sql: {
     String: {
       kind: 'typeConstructor',

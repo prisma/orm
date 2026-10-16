@@ -3,7 +3,6 @@ import { SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import { describe, expect, it } from 'vitest';
 import {
   coalesceSubtreeIssues,
-  columnTypeChanged,
   mapNodeIssueToCall,
   planIssues,
 } from '../../src/core/migrations/issue-planner';
@@ -260,7 +259,7 @@ describe('mapNodeIssueToCall — check constraint', () => {
   });
 });
 
-describe('columnTypeChanged', () => {
+describe('typeDiffersFrom on a SQLite column', () => {
   it('compares resolvedNativeType when both sides carry it', () => {
     const expected = expectedColumn({ name: 'a', nativeType: 'INTEGER', nullable: false });
     const actual = actualColumn({
@@ -269,13 +268,13 @@ describe('columnTypeChanged', () => {
       nullable: false,
       resolvedNativeType: 'TEXT',
     });
-    expect(columnTypeChanged(expected, actual)).toBe(true);
+    expect(expected.typeDiffersFrom(actual)).toBe(true);
   });
 
   it('is false when only nullability differs', () => {
     const expected = expectedColumn({ name: 'a', nativeType: 'INTEGER', nullable: false });
     const actual = actualColumn({ name: 'a', nativeType: 'INTEGER', nullable: true });
-    expect(columnTypeChanged(expected, actual)).toBe(false);
+    expect(expected.typeDiffersFrom(actual)).toBe(false);
   });
 });
 

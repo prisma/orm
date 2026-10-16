@@ -52,6 +52,7 @@ import { blindCast } from '@internal/utils/casts';
 import { isPostgresSchema } from '../postgres-schema';
 import { hasAutoincrementDefault } from './autoincrement-widths';
 import {
+  columnTypeIsCatalogText,
   renderColumnAlterType,
   renderColumnDdl,
   resolveColumnTemporaryDefault,
@@ -318,6 +319,7 @@ export const typeChangeCallStrategy: CallMigrationStrategy = (issues, ctx) => {
           kind: 'placeholder',
           slot: `${converted.text}:convert`,
         },
+        ...(columnTypeIsCatalogText(expected, ctx.types) ? { raw: true as const } : {}),
         dataTypes: ctx.dataTypes,
         ownsAutoincrementSequence: hasAutoincrementDefault(actual),
       }),
@@ -345,7 +347,7 @@ export const typeChangeCallStrategy: CallMigrationStrategy = (issues, ctx) => {
  * `typeChangeCallStrategy` always used (`fromColumn.nativeType !==
  * toColumn.nativeType`), which for the widenable numeric/float types
  * `SAFE_WIDENINGS` lists is identical to the resolved comparison
- * `columnTypeChanged` (in `issue-planner.ts`) performs.
+ * `SqlColumnIR.typeDiffersFrom` performs.
  */
 function columnTypeChangedNativeOnly(expected: SqlColumnIR, actual: SqlColumnIR): boolean {
   return expected.nativeType !== actual.nativeType;

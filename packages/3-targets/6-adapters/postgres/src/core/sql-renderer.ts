@@ -3,7 +3,12 @@ import type { JsonValue } from '@internal/contract/types';
 import type { CodecRef, DataTypeLookup } from '@internal/framework-components/codec';
 import type { CapabilityMatrix } from '@internal/framework-components/components';
 import { runtimeError } from '@internal/framework-components/runtime';
-import { dataTypeParams, sqlBaseName, sqlDataTypeOfCodec } from '@internal/sql-contract/data-type';
+import {
+  dataTypeParams,
+  nameIsCatalogText,
+  sqlBaseName,
+  sqlDataTypeOfCodec,
+} from '@internal/sql-contract/data-type';
 import {
   type AggregateExpr,
   type AnyExpression,
@@ -100,8 +105,10 @@ const POSTGRES_INFERRABLE_DATA_TYPES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * A parameter's cast names its data type's base name, never its parameters: an explicit cast to
- * `varchar(n)` truncates and to `numeric(p,s)` rounds.
+ * A parameter's cast names its data type's base name, which leaves out its parameters: an explicit
+ * cast to `varchar(n)` truncates and to `numeric(p,s)` rounds. A data type whose name is its catalog
+ * text has no base name, so its parameter is never cast, in any position, and the column's own input
+ * function reads the value.
  */
 function renderTypedParam(
   index: number,
@@ -131,6 +138,7 @@ function renderTypedParam(
     codecLookup: types.codecDescriptorRegistry,
     dataTypeLookup: types.dataTypeLookup,
   });
+  if (nameIsCatalogText(dataType)) return `$${index}`;
   const arraySuffix = many ? '[]' : '';
   if (forceCast || !POSTGRES_INFERRABLE_DATA_TYPES.has(dataType.id) || many) {
     const params = isPlainRecord(typeParams) ? typeParams : undefined;

@@ -37,6 +37,7 @@ import {
   postgresSqlCharDescriptor,
   postgresSqlFloatDescriptor,
   postgresSqlIntDescriptor,
+  postgresSqlRawDescriptor,
   postgresSqlTextDescriptor,
   postgresSqlVarcharDescriptor,
 } from './codecs';
@@ -94,6 +95,7 @@ export const codecDescriptorMap = {
   json: pgJsonDescriptor,
   jsonb: pgJsonbDescriptor,
   tsquery: pgTsqueryDescriptor,
+  raw: postgresSqlRawDescriptor,
 } as const;
 
 export type Resolve<T> = { readonly [K in keyof T]: { readonly [P in keyof T[K]]: T[K][P] } };

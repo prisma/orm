@@ -24,6 +24,7 @@ import {
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { applicationDomainOf } from '@repo/test-utils';
+import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { TestSqlContractSerializer as SqlContractSerializer } from '../../../../2-sql/9-family/test/test-sql-contract-serializer';
 import { postgresAdapterCapabilities } from '../src/core/capabilities';
@@ -53,9 +54,24 @@ function fixtureDataType(name: string) {
   return sqlDataType(`demo/${name}`, { texts: [{ text: name, written: true }] });
 }
 
+/** A data type unrelated to sql/raw whose name is its catalog text too. */
+const verbatimDataType = sqlDataType<{ name: string }>('demo/verbatim', {
+  params: type({ name: 'string' }),
+  nameIsCatalogText: true,
+  render: ({ name }) => name,
+});
+
 const dataTypes = createDataTypeLookup([
   ...postgresDataTypes,
   ...['foo', 'geography', 'jsonb'].map(fixtureDataType),
+  verbatimDataType,
+]);
+
+const verbatimRegistry = buildPostgresCodecDescriptorRegistry([
+  postgresCodec(genericDescriptor('demo/verbatim@1'), {
+    dataType: verbatimDataType,
+    jsonProjection: (expression: ProjectionExpr) => expression,
+  }),
 ]);
 
 function descriptorFor(codecId: string, name: string): AnyPostgresCodecDescriptor {
@@ -162,6 +178,78 @@ describe('renderLoweredSql cast policy', () => {
     );
 
     expect(lowered.sql).toBe('SELECT "user"."id" AS "id" FROM "user" WHERE "user"."score" = $1');
+  });
+
+  it('emits plain $N for a raw column, so the column type reads the text with its own input function', () => {
+    const ast = selectWithTypeParams(
+      'name',
+      'sql/raw@1',
+      { sql: 'character varying(10)' },
+      'a longer text than ten characters',
+    );
+
+    const lowered = renderLoweredSql(
+      ast,
+      baseContract,
+      postgresCodecDescriptorRegistry,
+      dataTypes,
+      postgresAdapterCapabilities,
+    );
+
+    expect(lowered.sql).toBe('SELECT "user"."id" AS "id" FROM "user" WHERE "user"."name" = $1');
+  });
+
+  it('sends a raw parameter without a cast in every position: a value, a list and a projected parameter', () => {
+    const list = SelectAst.from(TableSource.named('user'))
+      .withProjection([ProjectionItem.of('id', ColumnRef.of('user', 'id'))])
+      .withWhere(
+        BinaryExpr.eq(
+          ColumnRef.of('user', 'name'),
+          ParamRef.of(['abcdef'], {
+            name: 'names',
+            codec: {
+              codecId: 'sql/raw@1',
+              typeParams: { sql: 'character varying(3)' },
+              many: true,
+            },
+          }),
+        ),
+      );
+    const projected = SelectAst.from(TableSource.named('user')).withProjection([
+      ProjectionItem.of(
+        'value',
+        PreparedParamRef.of('value', {
+          codecId: 'sql/raw@1',
+          typeParams: { sql: 'character varying(3)' },
+        }),
+      ),
+    ]);
+    const render = (ast: SelectAst) =>
+      renderLoweredSql(
+        ast,
+        baseContract,
+        postgresCodecDescriptorRegistry,
+        dataTypes,
+        postgresAdapterCapabilities,
+      ).sql;
+
+    expect([render(list), render(projected)]).toEqual([
+      'SELECT "user"."id" AS "id" FROM "user" WHERE "user"."name" = $1',
+      'SELECT $1 AS "value" FROM "user"',
+    ]);
+  });
+
+  it('decides the cast from the data type, so another type whose name is its catalog text is sent without one', () => {
+    const ast = selectWithTypeParams(
+      'tag',
+      'demo/verbatim@1',
+      { name: 'character varying(3)' },
+      'x',
+    );
+    expect(
+      renderLoweredSql(ast, baseContract, verbatimRegistry, dataTypes, postgresAdapterCapabilities)
+        .sql,
+    ).toBe('SELECT "user"."id" AS "id" FROM "user" WHERE "user"."tag" = $1');
   });
 
   it('emits exact native-enum casts from validated descriptor type parameters', () => {

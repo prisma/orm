@@ -158,6 +158,8 @@ export interface PostgresCodecConformanceCase {
    * recorded kind can rot as projections change.
    */
   readonly notYetCanonical?: ExpectedProjectionFailure;
+  /** The codec's data type has no literal values (a raw column), so the projection is compared with `encodeJson` without a canonical form. */
+  readonly literalValuesAbsent?: true;
   readonly valueEquality?: (roundTripped: unknown, value: unknown) => boolean;
 }
 
@@ -353,6 +355,7 @@ function projectedInCanonicalForm(
   descriptor: AnyPostgresCodecDescriptor,
   conformanceCase: PostgresCodecConformanceCase,
 ): JsonValue {
+  if (conformanceCase.literalValuesAbsent === true) return projected;
   const toCanonicalForm = canonicalFormOf(descriptor, {
     get: (id) =>
       postgresDataTypeLookup.get(id) ??

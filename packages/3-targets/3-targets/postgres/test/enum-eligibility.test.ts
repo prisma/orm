@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { codecDescriptors } from '../src/core/codecs';
 
 describe('the Postgres codecs an enum cannot use', () => {
-  it('are the string timestamps, bytea, tsquery and json, each refused with its reason and what to use instead', () => {
+  it('are the string timestamps, bytea, tsquery, json and raw, each refused with its reason and what to use instead', () => {
     const refusals = Object.fromEntries(
       codecDescriptors.flatMap((descriptor) => {
         const refusal = enumRefusalOf(descriptor);
@@ -22,6 +22,8 @@ describe('the Postgres codecs an enum cannot use', () => {
         "PostgreSQL normalises the query text, so a member as written is not the value a query reads back: it prints a & b as 'a' & 'b'. No enum can use a tsquery codec; use a text enum instead.",
       'pg/json@1':
         'The json type has no equality operator, so no CHECK can compare a value with the members. Use pg/jsonb@1, whose type has one.',
+      'sql/raw@1':
+        'A raw column has a type Prisma does not interpret, so no member can be written as one of its values. No enum can use the raw codec; use a text enum instead.',
     });
   });
 });

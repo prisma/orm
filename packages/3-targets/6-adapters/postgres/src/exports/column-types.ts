@@ -31,6 +31,7 @@ import {
   PG_TIMETZ_CODEC_ID,
   PG_VARBIT_CODEC_ID,
   SQL_CHAR_CODEC_ID,
+  SQL_RAW_CODEC_ID,
   SQL_VARCHAR_CODEC_ID,
 } from '@internal/target-postgres/codec-ids';
 
@@ -64,6 +65,13 @@ export function varcharColumn(length: number): ColumnTypeDescriptor<typeof SQL_V
     codecId: SQL_VARCHAR_CODEC_ID,
     typeParams: { length },
   } as const;
+}
+
+/** A column of a type no other column type covers, named exactly as the database catalog prints it, such as `rawColumn('tsvector')` (ADR 273). Its values are typed `unknown`. */
+export function rawColumn<const Sql extends string>(
+  sql: Sql,
+): ColumnTypeDescriptor<typeof SQL_RAW_CODEC_ID> & { readonly typeParams: { readonly sql: Sql } } {
+  return { codecId: SQL_RAW_CODEC_ID, typeParams: { sql } } as const;
 }
 
 export const int4Column = {

@@ -26,7 +26,7 @@ This keeps core/CLI source-agnostic while giving PSL-first SQL users a one-line 
 - Consume target-bound scalar descriptors, shared authoring contributions, and mutation-default registries assembled by composition layers
 - Compose provider flow for SQL PSL-first config (`read -> parse -> interpret`) without local registry assembly
 - Preserve parser diagnostics and add interpreter diagnostics with stable codes
-- Describe unresolved type names for the binder: `describeUnresolvedSqlType` (exported from `./diagnostics`), which the SQL family contributes as its `pslDiagnostics.describeUnresolvedType`, names a field typed `Unsupported("x")` as no Prisma 8 type and says to write the column's type with a type constructor, or, if `x` comes from a database extension that has a Prisma 8 pack, to add the pack to `extensions` in `prisma.config.ts`; any other unknown name keeps the binder's `Cannot find type` message
+- Describe unresolved type names for the binder: `describeUnresolvedSqlType` (exported from `./diagnostics`), which the SQL family contributes as its `pslDiagnostics.describeUnresolvedType`, names a field typed `Unsupported("x")` as no Prisma 8 type and says to write the column's type with a type constructor, or as `Raw("x")` when no type constructor names it, or, if `x` comes from a database extension that has a Prisma 8 pack, to add the pack to `extensions` in `prisma.config.ts`; any other unknown name keeps the binder's `Cannot find type` message
 - Return `notOk` with structured diagnostics for unsupported constructs
 - Keep interpretation deterministic for equivalent AST inputs
 

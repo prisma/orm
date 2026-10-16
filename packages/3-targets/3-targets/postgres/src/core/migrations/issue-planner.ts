@@ -55,6 +55,7 @@ import { PostgresSchemaNodeKind } from '../schema-ir/schema-node-kinds';
 import { hasAutoincrementDefault } from './autoincrement-widths';
 import {
   buildSetDefaultColumn,
+  columnTypeIsCatalogText,
   renderColumnAlterType,
   renderColumnDdl,
 } from './column-ddl-rendering';
@@ -381,16 +382,6 @@ export function emissionSchemaName(ctx: StrategyContext, ddlSchemaName: string):
   return namespaceId === UNBOUND_NAMESPACE_ID ? UNBOUND_NAMESPACE_ID : ddlSchemaName;
 }
 
-/** Whether the expected/actual native type (resolved, or raw+many fallback) differs — mirrors `SqlColumnIR.isEqualTo`'s type comparison. */
-export function columnTypeChanged(expected: SqlColumnIR, actual: SqlColumnIR): boolean {
-  if (expected.resolvedNativeType !== undefined && actual.resolvedNativeType !== undefined) {
-    return expected.resolvedNativeType !== actual.resolvedNativeType;
-  }
-  return (
-    expected.nativeType !== actual.nativeType || Boolean(expected.many) !== Boolean(actual.many)
-  );
-}
-
 // ----------------------------------------------------------------------------
 // Subtree coalescing (the planner's responsibility per the differ's contract)
 // ----------------------------------------------------------------------------
@@ -695,13 +686,14 @@ function mapColumnNodeIssue(
     'a not-equal column issue always carries the actual column node'
   >(issue.actual);
   const calls: PostgresOpFactoryCall[] = [];
-  if (columnTypeChanged(expected, actual)) {
+  if (expected.typeDiffersFrom(actual)) {
     calls.push(
       new AlterColumnTypeCall({
         schemaName,
         tableName,
         columnName: expected.name,
         type: renderColumnAlterType(expected, types),
+        ...(columnTypeIsCatalogText(expected, types) ? { raw: true as const } : {}),
         dataTypes,
         ownsAutoincrementSequence: hasAutoincrementDefault(actual),
         operationClass: liveColumnWidensSafely(expected, actual, types)

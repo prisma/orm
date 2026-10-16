@@ -384,6 +384,14 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
   },
   { codecId: 'pg/inet@1', label: 'ipv4 address', value: '192.168.0.1' },
   { codecId: 'pg/tsquery@1', label: 'tsquery in its canonical form', value: "'zebra' & !'graze'" },
+  {
+    codecId: 'sql/raw@1',
+    typeParams: { sql: 'circle' },
+    columnType: 'circle',
+    literalValuesAbsent: true,
+    label: 'circle as Postgres prints it',
+    value: '<(0,0),1>',
+  },
   { codecId: 'pg/text-array@1', columnType: 'text[]', label: 'string array', value: ['a', 'b'] },
   {
     codecId: 'pg/text-array@1',
@@ -505,6 +513,14 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
   },
   {
     codecId: 'pg/tsquery@1',
+    label: 'null',
+    value: undefined,
+    nullValue: true,
+  },
+  {
+    codecId: 'sql/raw@1',
+    typeParams: { sql: 'circle' },
+    columnType: 'circle',
     label: 'null',
     value: undefined,
     nullValue: true,

@@ -32,6 +32,7 @@ import {
   renderTsLiteral,
 } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { sqlRawDataType } from '@internal/sql-contract/data-type';
 import { canonicalNumeralText } from '@internal/sql-contract/data-type-support';
 import {
   BinaryExpr,
@@ -49,6 +50,7 @@ import {
   sqlCharDescriptor,
   sqlFloatDescriptor,
   sqlIntDescriptor,
+  sqlRawDescriptor,
   sqlTextDescriptor,
   sqlVarcharDescriptor,
 } from '@internal/sql-relational-core/ast';
@@ -366,6 +368,24 @@ export const postgresSqlFloatDescriptor = postgresCodec(sqlFloatDescriptor, {
 export const postgresSqlTextDescriptor = postgresCodec(sqlTextDescriptor, {
   dataType: pgText,
   jsonProjection: identityJsonProjection,
+});
+
+/**
+ * Projects a raw value as the text its type's output function prints, which a flat read returns
+ * too, so an include reads the same value. Postgres' JSON form of `integer` or `boolean` would be a
+ * number or a boolean, and a cast to `text` does not always print the output form: `true::text` is
+ * `true` where the output is `t`. `format('%s', …)` prints through the output function, and turns
+ * NULL into an empty string, so NULL is kept apart.
+ */
+const printedTextJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
+  CaseExpr.of(
+    [{ condition: NullCheckExpr.isNull(expression), value: LiteralExpr.of(null) }],
+    FunctionCallExpr.of('format', [LiteralExpr.of('%s'), expression]),
+  );
+
+export const postgresSqlRawDescriptor = postgresCodec(sqlRawDescriptor, {
+  dataType: sqlRawDataType,
+  jsonProjection: printedTextJsonProjection,
 });
 
 export class PgTextCodec extends CodecImpl<
@@ -1726,6 +1746,7 @@ export const codecDescriptors = definePostgresCodecs([
   postgresSqlIntDescriptor,
   postgresSqlFloatDescriptor,
   postgresSqlTextDescriptor,
+  postgresSqlRawDescriptor,
   pgTextDescriptor,
   pgEnumDescriptor,
   pgCharDescriptor,

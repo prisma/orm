@@ -24,10 +24,12 @@ import {
   encodeJsonFloat,
   SAFE_INTEGER_RANGE,
 } from '@internal/framework-components/codec';
+import { structuredError } from '@internal/utils/structured-error';
 import {
   SQL_CHAR_CODEC_ID,
   SQL_FLOAT_CODEC_ID,
   SQL_INT_CODEC_ID,
+  SQL_RAW_CODEC_ID,
   SQL_TEXT_CODEC_ID,
   SQL_VARCHAR_CODEC_ID,
   sqlCharDecode,
@@ -228,3 +230,66 @@ export const sqlVarcharColumn = (params: LengthParams = {}) =>
 
 sqlVarcharColumn satisfies ColumnHelperFor<SqlVarcharDescriptor>;
 sqlVarcharColumn satisfies ColumnHelperForStrict<SqlVarcharDescriptor>;
+
+type RawParams = { readonly sql: string };
+
+function isJsonValue(value: unknown): value is JsonValue {
+  if (value === null) return true;
+  switch (typeof value) {
+    case 'string':
+    case 'boolean':
+      return true;
+    case 'number':
+      return Number.isFinite(value);
+    case 'object':
+      if (Array.isArray(value)) return value.every(isJsonValue);
+      return (
+        Object.getPrototypeOf(value) === Object.prototype && Object.values(value).every(isJsonValue)
+      );
+    default:
+      return false;
+  }
+}
+
+/**
+ * The codec of a raw column, whose type no other data type claims. Values pass through unchanged and
+ * are typed `unknown`, since nothing is known about them beyond the text the database prints. JSON
+ * passes through unchanged too. A raw column has no literal values, but that is its data type's
+ * rule: the data type's canonical form refuses every literal, wherever one is read. ADR 273.
+ */
+export class SqlRawCodec extends CodecImpl<typeof SQL_RAW_CODEC_ID, readonly [], unknown, unknown> {
+  async encode(value: unknown, _ctx: CodecCallContext): Promise<unknown> {
+    return value;
+  }
+  async decode(wire: unknown, _ctx: CodecCallContext): Promise<unknown> {
+    return wire;
+  }
+  encodeJson(value: unknown): JsonValue {
+    if (isJsonValue(value)) return value;
+    throw structuredError('RUNTIME.ENCODE_FAILED', `${this.id} writes only JSON values as JSON`, {
+      meta: { codecId: this.id },
+    });
+  }
+  decodeJson(json: JsonValue): unknown {
+    return json;
+  }
+}
+
+export class SqlRawDescriptor extends CodecDescriptorTemplateImpl<RawParams> {
+  override readonly codecId = SQL_RAW_CODEC_ID;
+  override readonly traits = [] as const;
+  override readonly enumRefusal =
+    'A raw column has a type Prisma does not interpret, so no member can be written as one of its values. No enum can use the raw codec; use a text enum instead.';
+  override readonly paramsSchema = undefined;
+  override factory(_params: RawParams): (ctx: CodecInstanceContext) => SqlRawCodec {
+    return () => new SqlRawCodec(this);
+  }
+}
+
+export const sqlRawDescriptor = new SqlRawDescriptor();
+
+export const sqlRawColumn = (sql: string) =>
+  column(sqlRawDescriptor.factory({ sql }), sqlRawDescriptor.codecId, { sql });
+
+sqlRawColumn satisfies ColumnHelperFor<SqlRawDescriptor>;
+sqlRawColumn satisfies ColumnHelperForStrict<SqlRawDescriptor>;

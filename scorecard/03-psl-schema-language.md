@@ -51,7 +51,7 @@ Legend:
 | TS ID generator `ksuid` | 🟡 | 🟡 | — | |
 | Literal `@default(...)` values | ✅ | ✅ | 🟡 | `test/e2e/framework/test/dml.test.ts` (`applies literal defaults for every supported type`); `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`default values`) |
 | `@default(cuid())` (cuid v1) | ❌ | ❌ | — | |
-| `Unsupported("...")` | ❌ | ❌ | ❌ | Not a Prisma 8 type: `contract emit` refuses a field typed `Unsupported("x")`, and `contract infer` fails with `CONTRACT.INFER_COLUMN_TYPE_UNCLAIMED` on a column type no data type in the stack claims, instead of printing it. |
+| `Unsupported("...")` | ❌ | ❌ | ❌ | Not a Prisma 8 type: `contract emit` refuses a field typed `Unsupported("x")`, and `contract infer` fails with `CONTRACT.INFER_COLUMN_TYPE_UNCLAIMED` on a column type no data type in the stack claims, instead of printing it. Write such a column as `Raw("x")` (ADR 273). |
 | `@ignore` | ❌ | ❌ | ❌ | |
 | `@@ignore` | ❌ | ❌ | ❌ | |
 | `@shardKey` | ❌ | ❌ | ❌ | |

@@ -29,6 +29,7 @@ import {
   type ToCanonicalForm,
 } from '@internal/framework-components/codec';
 import { canonicalizeJson } from '@internal/framework-components/utils';
+import { sqlRawDataType } from '@internal/sql-contract/data-type';
 import { canonicalDateTime } from '@internal/sql-contract/data-type-support';
 import {
   BinaryExpr,
@@ -41,8 +42,10 @@ import {
   SqlFloatCodec,
   SqlIntCodec,
   SqlIntDescriptor,
+  SqlRawCodec,
   sqlCharDescriptor,
   sqlFloatDescriptor,
+  sqlRawDescriptor,
   sqlVarcharDescriptor,
 } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
@@ -312,6 +315,58 @@ export const sqliteSqlCharDescriptor = sqliteCodec(sqlCharDescriptor, {
 export const sqliteSqlVarcharDescriptor = sqliteCodec(sqlVarcharDescriptor, {
   dataType: sqliteCharacterVarying,
   jsonProjection: identityJsonProjection,
+});
+
+const RAW_BLOB_KEY = 'blob';
+
+/**
+ * Projects a raw value as the driver reads it flat: a BLOB, which SQLite's JSON functions reject, as `{"blob": <uppercase hex>}`, and every other value unchanged. A column value never reaches the JSON constructor as a JSON object, so the object is unambiguous. NULL has type `null`, not `blob`, so it stays distinct from an empty blob.
+ */
+const rawJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
+  CaseExpr.of(
+    [
+      {
+        condition: BinaryExpr.eq(
+          FunctionCallExpr.of('typeof', [expression]),
+          LiteralExpr.of(RAW_BLOB_KEY),
+        ),
+        value: FunctionCallExpr.of('json_object', [
+          LiteralExpr.of(RAW_BLOB_KEY),
+          FunctionCallExpr.of('hex', [expression]),
+        ]),
+      },
+    ],
+    expression,
+  );
+
+function isJsonObject(json: JsonValue): json is { readonly [key: string]: JsonValue } {
+  return typeof json === 'object' && json !== null && !Array.isArray(json);
+}
+
+/** `sql/raw@1` as SQLite reads it: a BLOB is a `Uint8Array`, which its JSON form holds as hex text. */
+export class SqliteSqlRawCodec extends SqlRawCodec {
+  override encodeJson(value: unknown): JsonValue {
+    if (value instanceof Uint8Array) {
+      return { [RAW_BLOB_KEY]: Buffer.from(value).toString('hex').toUpperCase() };
+    }
+    return super.encodeJson(value);
+  }
+  override decodeJson(json: JsonValue): unknown {
+    if (!isJsonObject(json)) return json;
+    const hex = decodeJsonMatching(
+      this.id,
+      json[RAW_BLOB_KEY] ?? null,
+      UPPERCASE_HEX,
+      'uppercase hexadecimal text',
+    );
+    return new Uint8Array(Buffer.from(hex, 'hex'));
+  }
+}
+
+export const sqliteSqlRawDescriptor = sqliteCodec(sqlRawDescriptor, {
+  dataType: sqlRawDataType,
+  jsonProjection: rawJsonProjection,
+  factory: (descriptor) => () => new SqliteSqlRawCodec(descriptor),
 });
 
 /** `sql/int@1` as SQLite stores it: its canonical form is `sqlite/integer`'s digit text. */
@@ -821,6 +876,7 @@ export const codecDescriptors = defineSqliteCodecs([
   sqliteSqlVarcharDescriptor,
   sqliteSqlIntDescriptor,
   sqliteSqlFloatDescriptor,
+  sqliteSqlRawDescriptor,
   sqliteTextDescriptor,
   sqliteIntegerDescriptor,
   sqliteRealDescriptor,

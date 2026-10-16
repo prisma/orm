@@ -190,7 +190,7 @@ describe('postgres defineContract encodes literal defaults through the column co
       id,
       encode: async (value: unknown) => value,
       decode: async (wire: unknown) => wire,
-      encodeJson: () => 'encoded by the caller lookup',
+      encodeJson: () => '2030-06-01T00:00:00Z',
       decodeJson: (json: unknown) => json,
     });
     const contract = defineContract(
@@ -218,6 +218,52 @@ describe('postgres defineContract encodes literal defaults through the column co
     );
     expect(
       contract.storage.namespaces['public']?.entries.table?.['Event']?.columns['at']?.default,
-    ).toEqual({ kind: 'literal', value: 'encoded by the caller lookup' });
+    ).toEqual({ kind: 'literal', value: '2030-06-01T00:00:00Z' });
+  });
+
+  it('refuses JSON a caller-supplied codec writes that the data type does not hold, naming the data type', () => {
+    const builtinCodecs = createPostgresBuiltinCodecLookup();
+    const callerCodec = (id: string) => ({
+      id,
+      encode: async (value: unknown) => value,
+      decode: async (wire: unknown) => wire,
+      encodeJson: () => 'not a date',
+      decodeJson: (json: unknown) => json,
+    });
+    expect(() =>
+      defineContract(
+        {
+          codecLookup: {
+            ...builtinCodecs,
+            descriptorFor: (id) => {
+              const descriptor = builtinCodecs.descriptorFor(id);
+              return descriptor === undefined
+                ? undefined
+                : Object.assign(Object.create(descriptor), {
+                    factory: () => () => callerCodec(id),
+                  });
+            },
+          },
+        },
+        ({ field, model }) => ({
+          models: {
+            Event: model('Event', {
+              fields: {
+                id: field.id.uuidv4String(),
+                at: field.dateTime().default(Temporal.Instant.from('2024-01-01T00:00:00Z')),
+              },
+            }),
+          },
+        }),
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        message: expect.stringMatching(
+          /^Field "Event\.at" has a default that its data type pg\/timestamptz refuses: /,
+        ),
+        meta: expect.objectContaining({ reason: 'data-type-refused-default' }),
+      }),
+    );
   });
 });

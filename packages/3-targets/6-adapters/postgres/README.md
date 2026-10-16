@@ -140,7 +140,7 @@ flowchart TD
 **Column Types Export (`column-types.ts`)**
 
 - Exports column descriptors for built-in types; enums are declared with `enumType` from the contract builder
-- Parameterized helpers: `charColumn(length)`, `varcharColumn(length)`, `numericColumn(precision, scale?)`, `bitColumn(length)`, `varbitColumn(length)`, `timeColumn(precision?)`, `timetzColumn(precision?)`, `intervalColumn(precision?)`
+- Parameterized helpers: `rawColumn(sql)` for a column of a type no other column type covers (ADR 273), `charColumn(length)`, `varcharColumn(length)`, `numericColumn(precision, scale?)`, `bitColumn(length)`, `varbitColumn(length)`, `timeColumn(precision?)`, `timetzColumn(precision?)`, `intervalColumn(precision?)`
 
 - Exports raw JSON helpers:
   - `jsonColumn`, `jsonbColumn` — untyped raw JSON / JSONB column descriptors

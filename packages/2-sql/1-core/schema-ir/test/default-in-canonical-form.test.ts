@@ -17,19 +17,21 @@ describe('defaultInCanonicalForm', () => {
     expect(defaultInCanonicalForm('2026-01-01T00:00:00.000Z', toCanonicalForm, false)).toEqual({
       value: '2026-01-01T00:00:00Z',
       refusal: undefined,
+      noLiteralValues: false,
     });
   });
 
   it('reads a Date as its ISO text first', () => {
     expect(
       defaultInCanonicalForm(new Date('2026-01-01T00:00:00.000Z'), toCanonicalForm, false),
-    ).toEqual({ value: '2026-01-01T00:00:00Z', refusal: undefined });
+    ).toEqual({ value: '2026-01-01T00:00:00Z', refusal: undefined, noLiteralValues: false });
   });
 
   it('gives each element of a list its canonical form', () => {
     expect(defaultInCanonicalForm(['2026-01-01T00:00:00.000Z'], toCanonicalForm, true)).toEqual({
       value: ['2026-01-01T00:00:00Z'],
       refusal: undefined,
+      noLiteralValues: false,
     });
   });
 
@@ -39,9 +41,13 @@ describe('defaultInCanonicalForm', () => {
       container: defaultInCanonicalForm(null, toCanonicalForm, true),
       elements: defaultInCanonicalForm([null, '2026-01-01T00:00:00.000Z'], toCanonicalForm, true),
     }).toEqual({
-      scalar: { value: null, refusal: undefined },
-      container: { value: null, refusal: undefined },
-      elements: { value: [null, '2026-01-01T00:00:00Z'], refusal: undefined },
+      scalar: { value: null, refusal: undefined, noLiteralValues: false },
+      container: { value: null, refusal: undefined, noLiteralValues: false },
+      elements: {
+        value: [null, '2026-01-01T00:00:00Z'],
+        refusal: undefined,
+        noLiteralValues: false,
+      },
     });
   });
 
@@ -50,8 +56,16 @@ describe('defaultInCanonicalForm', () => {
       scalar: defaultInCanonicalForm('2026-01-01 00:00:00', toCanonicalForm, false),
       list: defaultInCanonicalForm(['2026-01-01T00:00:00Z', 'soon'], toCanonicalForm, true),
     }).toEqual({
-      scalar: { value: '2026-01-01 00:00:00', refusal: '"2026-01-01 00:00:00" is not an instant.' },
-      list: { value: ['2026-01-01T00:00:00Z', 'soon'], refusal: '"soon" is not an instant.' },
+      scalar: {
+        value: '2026-01-01 00:00:00',
+        refusal: '"2026-01-01 00:00:00" is not an instant.',
+        noLiteralValues: false,
+      },
+      list: {
+        value: ['2026-01-01T00:00:00Z', 'soon'],
+        refusal: '"soon" is not an instant.',
+        noLiteralValues: false,
+      },
     });
   });
 
@@ -60,6 +74,7 @@ describe('defaultInCanonicalForm', () => {
     expect(defaultInCanonicalForm(date, undefined, false)).toEqual({
       value: date,
       refusal: undefined,
+      noLiteralValues: false,
     });
   });
 

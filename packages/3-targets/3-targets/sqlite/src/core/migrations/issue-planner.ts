@@ -116,16 +116,6 @@ export function issueNode(issue: SchemaDiffIssue): SqlSchemaIRNode | undefined {
   >(node);
 }
 
-/** Whether the expected/actual native type (resolved, or raw+many fallback) differs — mirrors `SqlColumnIR.isEqualTo`'s type comparison. */
-export function columnTypeChanged(expected: SqlColumnIR, actual: SqlColumnIR): boolean {
-  if (expected.resolvedNativeType !== undefined && actual.resolvedNativeType !== undefined) {
-    return expected.resolvedNativeType !== actual.resolvedNativeType;
-  }
-  return (
-    expected.nativeType !== actual.nativeType || Boolean(expected.many) !== Boolean(actual.many)
-  );
-}
-
 /**
  * Builds the flat `SqliteTableSpec` `RecreateTableCall` needs from the
  * expected table node — the node-sourced equivalent of the retired
@@ -302,7 +292,7 @@ function mapColumnIssue(
     SqlColumnIR,
     'a not-equal column issue always carries the actual column node'
   >(issue.actual);
-  const kind = columnTypeChanged(expected, actual) ? 'typeMismatch' : 'nullabilityConflict';
+  const kind = expected.typeDiffersFrom(actual) ? 'typeMismatch' : 'nullabilityConflict';
   return notOk(issueConflict(kind, issue.path.join('/'), issueLocation(tableName, expected.name)));
 }
 

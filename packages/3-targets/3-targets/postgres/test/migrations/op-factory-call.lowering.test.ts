@@ -414,6 +414,15 @@ describe('AlterColumnTypeCall', () => {
     expect(alter().importRequirements()).toEqual([]);
   });
 
+  it('marks a raw type in the call it renders, and checks it as written', () => {
+    const call = alter({ type: 'circle', raw: true });
+    expect({ source: call.renderTypeScript(), checkType: call.checkType }).toEqual({
+      source:
+        'this.alterColumnType({ schema: "public", table: "user", column: "age", type: "circle", raw: true })',
+      checkType: 'circle',
+    });
+  });
+
   it('renders an unfilled USING slot as a placeholder call, and imports placeholder', () => {
     const call = alter({ using: { kind: 'placeholder', slot: 'User.age:convert' } });
     expect(call.renderTypeScript()).toBe(

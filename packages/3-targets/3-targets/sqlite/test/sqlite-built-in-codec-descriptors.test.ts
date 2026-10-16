@@ -48,6 +48,7 @@ const EXPECTED_CODEC_IDS = [
   'sql/varchar@1',
   'sql/int@1',
   'sql/float@1',
+  'sql/raw@1',
   'sqlite/text@1',
   'sqlite/integer@1',
   'sqlite/real@1',

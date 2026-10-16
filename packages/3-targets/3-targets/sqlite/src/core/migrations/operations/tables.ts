@@ -7,6 +7,7 @@ import {
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import type { RowsWithoutValue, SchemaDiffIssue } from '@internal/framework-components/control';
 import { issueOutcome } from '@internal/framework-components/control';
+import { isSqlDataType, nameIsCatalogText } from '@internal/sql-contract/data-type';
 import { REFERENTIAL_ACTION_SQL } from '@internal/sql-contract/referential-action-sql';
 import type { ReferentialAction } from '@internal/sql-contract/types';
 import { RelationalSchemaNodeKind, type SqlColumnIR } from '@internal/sql-schema-ir/types';
@@ -472,16 +473,6 @@ function nodeKindOf(issue: SchemaDiffIssue): string | undefined {
     .nodeKind;
 }
 
-/** Mirrors `SqlColumnIR.isEqualTo`'s type comparison, isolated so a `not-equal` column issue's postcheck can target type drift and nullability drift independently. */
-function columnTypeChanged(expected: SqlColumnIR, actual: SqlColumnIR): boolean {
-  if (expected.resolvedNativeType !== undefined && actual.resolvedNativeType !== undefined) {
-    return expected.resolvedNativeType !== actual.resolvedNativeType;
-  }
-  return (
-    expected.nativeType !== actual.nativeType || Boolean(expected.many) !== Boolean(actual.many)
-  );
-}
-
 /**
  * Returns the columns the contract expects as the table's primary key. Picks
  * up SQLite's inline `INTEGER PRIMARY KEY AUTOINCREMENT` form when no
@@ -533,6 +524,17 @@ function columnNameFromDefaultIssuePath(issue: SchemaDiffIssue): string | undefi
   if (columnId === undefined) return undefined;
   const prefix = 'column:';
   return columnId.startsWith(prefix) ? columnId.slice(prefix.length) : columnId;
+}
+
+/**
+ * Compares the declared type with `typeSql`: exactly for a data type named by its catalog text, as
+ * verify compares it (ADR 273), and without case otherwise.
+ */
+function declaredTypeMatches(expected: SqlColumnIR, typeSql: string): string {
+  const { dataType } = expected;
+  return dataType !== undefined && isSqlDataType(dataType) && nameIsCatalogText(dataType)
+    ? `type = '${escapeLiteral(typeSql)}'`
+    : `LOWER(type) = '${escapeLiteral(typeSql.toLowerCase())}'`;
 }
 
 /**
@@ -605,12 +607,12 @@ export function buildRecreatePostchecks(
               }),
         });
       }
-      if (columnTypeChanged(expected, actual)) {
+      if (expected.typeDiffersFrom(actual)) {
         const colSpec = byName.get(columnName);
         if (colSpec) {
           checks.push({
             description: `verify "${columnName}" type on "${tableName}"`,
-            sql: `SELECT COUNT(*) > 0 FROM pragma_table_info('${t}') WHERE name = '${c}' AND LOWER(type) = '${escapeLiteral(colSpec.typeSql.toLowerCase())}'`,
+            sql: `SELECT COUNT(*) > 0 FROM pragma_table_info('${t}') WHERE name = '${c}' AND ${declaredTypeMatches(expected, colSpec.typeSql)}`,
           });
         }
       }

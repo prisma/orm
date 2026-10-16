@@ -93,7 +93,11 @@ export interface SqlColumnIRInput {
    * Stamped on the contract-derived column; absent on introspected nodes.
    */
   readonly toCanonicalForm?: ToCanonicalForm;
-  /** The element type as the database reports it. Set by introspection; absent on contract-derived nodes. */
+  /**
+   * The element type as the database reports it. Set by introspection, and on a contract-derived
+   * column whose data type's name is its catalog text (ADR 273), with the text it expects. When
+   * both sides carry one, their texts are what the column type compares.
+   */
   readonly reportedType?: ReportedSqlType;
 }
 
@@ -196,24 +200,59 @@ export class SqlColumnIR extends SqlSchemaIRNode implements DiffableNode {
   }
 
   /**
-   * Compares the column's own attributes only — the default lives on the
-   * child node. When both sides carry `resolvedNativeType`, the resolved
-   * value governs (array-ness rides on its `[]` suffix); otherwise raw
-   * fields compare.
+   * Compares the column's own attributes only — the default lives on the child node: its type, as
+   * {@link typeDiffersFrom} compares it, and its nullability.
    */
   isEqualTo(other: DiffableNode): boolean {
-    const node = blindCast<
-      SqlSchemaIRNode,
-      'every diff-tree node the differ pairs is a SqlSchemaIRNode'
-    >(other);
-    assertNode(node, 'SqlColumnIR', SqlColumnIR.is);
-    if (this.resolvedNativeType !== undefined && node.resolvedNativeType !== undefined) {
-      return this.resolvedNativeType === node.resolvedNativeType && this.nullable === node.nullable;
-    }
-    return (
-      this.nativeType === node.nativeType &&
-      this.nullable === node.nullable &&
-      Boolean(this.many) === Boolean(node.many)
-    );
+    const node = columnNodeOf(other);
+    return !this.typeDiffersFrom(node) && this.nullable === node.nullable;
   }
+
+  /**
+   * Whether `other` has a different type from this column. When both carry a reported type, the
+   * reported texts compare exactly, with the list flag; otherwise the resolved types compare when
+   * both sides carry one, and the raw native type and list flag when not. The answer is the same
+   * whichever side is asked.
+   */
+  typeDiffersFrom(other: SqlColumnIR): boolean {
+    const texts = reportedTexts(this, other);
+    if (texts !== undefined) return texts.own !== texts.other;
+    if (this.resolvedNativeType !== undefined && other.resolvedNativeType !== undefined) {
+      return this.resolvedNativeType !== other.resolvedNativeType;
+    }
+    return this.nativeType !== other.nativeType || Boolean(this.many) !== Boolean(other.many);
+  }
+
+  /** When both sides carry a reported type and the texts differ, both texts. */
+  explainMismatch(actual: DiffableNode | undefined): string | undefined {
+    if (actual === undefined) return undefined;
+    const texts = reportedTexts(this, columnNodeOf(actual));
+    if (texts === undefined || texts.own === texts.other) return undefined;
+    return `The column type is "${texts.own}", but the database reports "${texts.other}". A type named by its catalog text is compared with the text the database reports, exactly.`;
+  }
+}
+
+function reportedText(column: SqlColumnIR): string | undefined {
+  if (column.reportedType === undefined) return undefined;
+  return `${column.reportedType.text}${column.many === true ? '[]' : ''}`;
+}
+
+function reportedTexts(
+  own: SqlColumnIR,
+  other: SqlColumnIR,
+): { readonly own: string; readonly other: string } | undefined {
+  const ownText = reportedText(own);
+  const otherText = reportedText(other);
+  return ownText === undefined || otherText === undefined
+    ? undefined
+    : { own: ownText, other: otherText };
+}
+
+function columnNodeOf(other: DiffableNode): SqlColumnIR {
+  const node = blindCast<
+    SqlSchemaIRNode,
+    'every diff-tree node the differ pairs is a SqlSchemaIRNode'
+  >(other);
+  assertNode(node, 'SqlColumnIR', SqlColumnIR.is);
+  return node;
 }

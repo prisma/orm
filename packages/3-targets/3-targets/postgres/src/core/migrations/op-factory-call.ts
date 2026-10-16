@@ -728,6 +728,8 @@ export class AlterColumnTypeCall extends PostgresOpFactoryCallNode {
   readonly columnName: string;
   /** The new type as a migration writes it. */
   readonly type: string;
+  /** The new type is a raw type, named by its catalog text (ADR 273), so its text is checked as written. */
+  readonly raw: true | undefined;
   readonly using: SqlSlot | undefined;
   /** The type `format_type` prints once the alter has run, which the postcheck compares. */
   readonly checkType: string;
@@ -740,6 +742,7 @@ export class AlterColumnTypeCall extends PostgresOpFactoryCallNode {
     readonly tableName: string;
     readonly columnName: string;
     readonly type: string;
+    readonly raw?: true;
     readonly using?: SqlSlot;
     /** The data types of the stack, which read `type` for the postcheck. */
     readonly dataTypes: readonly DataType[];
@@ -753,13 +756,19 @@ export class AlterColumnTypeCall extends PostgresOpFactoryCallNode {
     this.tableName = input.tableName;
     this.columnName = input.columnName;
     this.type = input.type;
+    this.raw = input.raw;
     this.using = input.using;
     this.sequenceWidth = input.ownsAutoincrementSequence
       ? autoincrementWidth(input.type)
       : undefined;
     this.operationClass = input.operationClass ?? this.#defaultClass();
     this.#refuseUnsafeUsing();
-    this.checkType = alterTypeCheckText(input.type, input.dataTypes, this.#callText());
+    this.checkType = alterTypeCheckText(
+      input.type,
+      input.dataTypes,
+      this.#callText(),
+      input.raw === true,
+    );
     this.label = `Alter type of "${input.tableName}"."${input.columnName}" to ${input.type}`;
     this.freeze();
   }
@@ -833,6 +842,7 @@ export class AlterColumnTypeCall extends PostgresOpFactoryCallNode {
     const opts = [
       ...columnCallLocation(this.schemaName, this.tableName, this.columnName),
       `type: ${jsonToTsSource(this.type)}`,
+      ...(this.raw === true ? ['raw: true'] : []),
       ...using,
       ...(this.operationClass === this.#defaultClass()
         ? []

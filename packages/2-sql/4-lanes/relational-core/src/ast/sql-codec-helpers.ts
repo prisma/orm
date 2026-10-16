@@ -11,6 +11,7 @@ export const SQL_VARCHAR_CODEC_ID = 'sql/varchar@1' as const;
 export const SQL_INT_CODEC_ID = 'sql/int@1' as const;
 export const SQL_FLOAT_CODEC_ID = 'sql/float@1' as const;
 export const SQL_TEXT_CODEC_ID = 'sql/text@1' as const;
+export const SQL_RAW_CODEC_ID = 'sql/raw@1' as const;
 
 export const sqlCharEncode = (value: string): string => value;
 /** A `character` value as the database returns it, without the spaces that pad it to its length. Only spaces pad it, so a trailing tab or newline is part of the value. */

@@ -17,6 +17,7 @@ import {
   sqliteSqlCharDescriptor,
   sqliteSqlFloatDescriptor,
   sqliteSqlIntDescriptor,
+  sqliteSqlRawDescriptor,
   sqliteSqlVarcharDescriptor,
   sqliteTextDescriptor,
 } from '../core/codecs';
@@ -34,6 +35,7 @@ const codecDescriptorMap = {
   json: sqliteJsonDescriptor,
   bigint: sqliteBigintDescriptor,
   bigintnumber: sqliteBigintNumberDescriptor,
+  raw: sqliteSqlRawDescriptor,
 } as const;
 
 type Resolve<T> = { readonly [K in keyof T]: { readonly [P in keyof T[K]]: T[K][P] } };

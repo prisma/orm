@@ -41,6 +41,14 @@ describe('alterTypeCheckText', () => {
     ).toEqual(['"Mood"', 'app.status', 'app."Status"', '"Mood"', 'mood']);
   });
 
+  it('checks a raw type, which its text names, as written, list included', () => {
+    expect(
+      ['circle', 'cidr[]', '"LTree"', 'character varying(3)'].map((type) =>
+        alterTypeCheckText(type, postgresDataTypes, where, true),
+      ),
+    ).toEqual(['circle', 'cidr[]', '"LTree"', 'character varying(3)']);
+  });
+
   it('refuses a type no data type of the stack reads, naming the text and where it was written', () => {
     expect(() => alterTypeCheckText('int9', postgresDataTypes, where)).toThrow(
       expect.objectContaining({
@@ -86,3 +94,16 @@ describe('alterTypeCheckText', () => {
 function codecOf(type: SqlDataType): string | undefined {
   return codecDescriptors.find((descriptor) => descriptor.dataType === type.id)?.codecId;
 }
+
+describe('alterTypeCheckText for a raw type', () => {
+  it('refuses a raw text that is not one type name, naming the call', () => {
+    expect(() =>
+      alterTypeCheckText(
+        'text DEFAULT $a$x$a$',
+        postgresDataTypes,
+        'alterColumnType({ table: "User", column: "age" })',
+        true,
+      ),
+    ).toThrow(expect.objectContaining({ code: 'MIGRATION.COLUMN_TYPE_UNREADABLE' }));
+  });
+});

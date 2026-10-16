@@ -10,7 +10,12 @@ export interface DefaultInCanonicalForm {
   readonly value: ColumnDefaultLiteralInputValue;
   /** The canonical form's message for the value, or the first list element, it refuses. */
   readonly refusal: string | undefined;
+  /** The refusal is the data type's: it has no literal values at all, so no form of the value is stored. */
+  readonly noLiteralValues: boolean;
 }
+
+/** The code of a data type's refusal of every literal value, as a raw column's data type refuses them. */
+const LITERAL_VALUES_ABSENT = 'CONTRACT.LITERAL_VALUES_ABSENT';
 
 /**
  * A literal default in the canonical form of the column's values (ADR 254), element by element for
@@ -22,31 +27,39 @@ export function defaultInCanonicalForm(
   toCanonicalForm: ToCanonicalForm | undefined,
   list: boolean,
 ): DefaultInCanonicalForm {
-  if (toCanonicalForm === undefined) return { value, refusal: undefined };
+  if (toCanonicalForm === undefined) return { value, refusal: undefined, noLiteralValues: false };
   if (list && Array.isArray(value)) {
     const elements = value.map((element) => inCanonicalForm(element, toCanonicalForm));
     return {
       value: elements.map((element) => element.value),
       refusal: elements.find((element) => element.refusal !== undefined)?.refusal,
+      noLiteralValues: elements.some((element) => element.noLiteralValues),
     };
   }
   const canonical = inCanonicalForm(
     value instanceof Date ? value.toISOString() : value,
     toCanonicalForm,
   );
-  return canonical.refusal === undefined ? canonical : { value, refusal: canonical.refusal };
+  return canonical.refusal === undefined ? canonical : { ...canonical, value };
 }
 
 function inCanonicalForm(
   value: JsonValue,
   toCanonicalForm: ToCanonicalForm,
-): { readonly value: JsonValue; readonly refusal: string | undefined } {
-  if (value === null) return { value, refusal: undefined };
+): {
+  readonly value: JsonValue;
+  readonly refusal: string | undefined;
+  readonly noLiteralValues: boolean;
+} {
+  if (value === null) return { value, refusal: undefined, noLiteralValues: false };
   try {
-    return { value: toCanonicalForm(value), refusal: undefined };
+    return { value: toCanonicalForm(value), refusal: undefined, noLiteralValues: false };
   } catch (error) {
     if (isStructuredError(error) && error.code === 'CONTRACT.CAST_REFUSED') {
-      return { value, refusal: error.message };
+      return { value, refusal: error.message, noLiteralValues: false };
+    }
+    if (isStructuredError(error) && error.code === LITERAL_VALUES_ABSENT) {
+      return { value, refusal: error.message, noLiteralValues: true };
     }
     throw error;
   }
@@ -54,7 +67,8 @@ function inCanonicalForm(
 
 /**
  * The refusal of a contract's literal default that the canonical form of its column's values does
- * not take, which a contract emitted by an earlier version can carry, with what to do about it.
+ * not take, with what to do about it: re-emit, for a form an earlier version can have written, or
+ * write a SQL expression, for a data type that has no literal values at all.
  */
 export function contractDefaultRefusal(
   columnDefault: ColumnDefault | undefined,
@@ -62,8 +76,12 @@ export function contractDefaultRefusal(
   list: boolean,
 ): string | undefined {
   if (columnDefault?.kind !== 'literal') return undefined;
-  const { refusal } = defaultInCanonicalForm(columnDefault.value, toCanonicalForm, list);
-  return refusal === undefined
-    ? undefined
-    : `The contract holds this default in a form its data type does not store: ${refusal} Re-emit the contract, then try again.`;
+  const { refusal, noLiteralValues } = defaultInCanonicalForm(
+    columnDefault.value,
+    toCanonicalForm,
+    list,
+  );
+  if (refusal === undefined) return undefined;
+  if (noLiteralValues) return `The contract holds a literal default. ${refusal}`;
+  return `The contract holds this default in a form its data type does not store: ${refusal} Re-emit the contract, then try again.`;
 }

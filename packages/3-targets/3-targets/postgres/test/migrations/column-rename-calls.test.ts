@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { postgresContractToSchema } from '../../src/core/migrations/postgres-contract-to-schema';
 import { postgresColumnRenameCall } from '../../src/core/migrations/table-rename-calls';
 import { renameColumnInPostgresSchema } from '../../src/core/migrations/working-schema';
+import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
 import { postgresTypeComponents } from '../postgres-type-lookups';
+import { makeContract, rootOf } from './node-issue-planner-fixtures';
 import {
   ORIGINAL_COLUMNS,
   type ProfileColumns,
@@ -138,6 +140,61 @@ describe('renameColumnInPostgresSchema', () => {
       'id',
       'emailAddress',
       'accountId',
+    ]);
+  });
+});
+
+describe('renameColumnInPostgresSchema on a raw column', () => {
+  it('keeps the type the database reports, so the renamed column plans no type change', () => {
+    const live = rootOf({
+      shape: new PostgresTableSchemaNode({
+        name: 'shape',
+        columns: {
+          size: {
+            name: 'size',
+            nativeType: 'int4',
+            nullable: false,
+            resolvedNativeType: 'int4',
+            reportedType: { text: 'integer', kind: undefined, schema: 'pg_catalog', name: 'int4' },
+          },
+        },
+        foreignKeys: [],
+        uniques: [],
+        indexes: [],
+        policies: [],
+        rlsEnabled: false,
+      }),
+    });
+    const expected = postgresContractToSchema(
+      makeContract({
+        shape: {
+          columns: {
+            count: {
+              dataType: 'sql/raw',
+              codecId: 'sql/raw@1',
+              typeParams: { sql: 'integer' },
+              nullable: false,
+            },
+          },
+          foreignKeys: [],
+          uniques: [],
+          indexes: [],
+        },
+      }),
+      postgresTypeComponents,
+    );
+
+    const renamed = renameColumnInPostgresSchema(live, {
+      schemaName: 'public',
+      table: 'shape',
+      from: 'size',
+      to: 'count',
+    });
+    const after = renamed.namespaces['public']?.tables['shape']?.columns['count'];
+    const wanted = expected.namespaces['public']?.tables['shape']?.columns['count'];
+    expect([after?.reportedType?.text, after && wanted?.typeDiffersFrom(after)]).toEqual([
+      'integer',
+      false,
     ]);
   });
 });

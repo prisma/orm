@@ -3,10 +3,12 @@
  */
 
 import { DatabaseSync } from 'node:sqlite';
+import { sqlRawDataType } from '@internal/sql-contract/data-type';
+import { SqlColumnIR } from '@internal/sql-schema-ir/types';
 import { describe, expect, it } from 'vitest';
 import type { SqliteTableSpec } from '../../src/core/migrations/operations/shared';
 import { buildRecreatePostchecks } from '../../src/core/migrations/operations/tables';
-import { foreignKey, issue, unique } from './node-issue-helpers';
+import { actualColumn, expectedColumn, foreignKey, issue, unique } from './node-issue-helpers';
 
 const codesSpec: SqliteTableSpec = {
   columns: [
@@ -60,6 +62,66 @@ describe('buildRecreatePostchecks on SQLite', () => {
     );
 
     expect(Object.values(results)).toContain(false);
+  });
+});
+
+function typePostcheckHolds(
+  declaredType: string,
+  column: { readonly typeSql: string; readonly expected: SqlColumnIR },
+): boolean {
+  const spec: SqliteTableSpec = {
+    columns: [{ name: 'shape', typeSql: column.typeSql, nullable: true }],
+    uniques: [],
+    foreignKeys: [],
+  };
+  const issues = [
+    issue({
+      path: ['database', 'places', 'column:shape'],
+      expected: column.expected,
+      actual: actualColumn({ name: 'shape', nativeType: 'blob', nullable: true }),
+    }),
+  ];
+  const db = new DatabaseSync(':memory:');
+  try {
+    db.exec(`CREATE TABLE "places" ("shape" ${declaredType})`);
+    const [check] = buildRecreatePostchecks('places', issues, spec);
+    if (check === undefined || !('sql' in check)) {
+      throw new Error('expected one type postcheck carrying SQL');
+    }
+    return Object.values(db.prepare(check.sql).get() ?? {})[0] === 1;
+  } finally {
+    db.close();
+  }
+}
+
+describe('the type postcheck of a recreated table', () => {
+  const rawCircle = {
+    typeSql: 'circle',
+    expected: new SqlColumnIR({
+      name: 'shape',
+      nativeType: 'circle',
+      nullable: true,
+      resolvedNativeType: 'circle',
+      dataType: sqlRawDataType,
+    }),
+  };
+  const integer = {
+    typeSql: 'INTEGER',
+    expected: expectedColumn({ name: 'shape', nativeType: 'integer', nullable: true }),
+  };
+
+  it('compares a type named by its catalog text exactly, case included, as verify does', () => {
+    expect({
+      exact: typePostcheckHolds('circle', rawCircle),
+      otherCase: typePostcheckHolds('CIRCLE', rawCircle),
+    }).toEqual({ exact: true, otherCase: false });
+  });
+
+  it('compares any other type without case', () => {
+    expect({
+      upper: typePostcheckHolds('INTEGER', integer),
+      lower: typePostcheckHolds('integer', integer),
+    }).toEqual({ upper: true, lower: true });
   });
 });
 

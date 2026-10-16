@@ -1,0 +1,7 @@
+# Deferred
+
+- **SQLite compares a raw type's text with case.** A SQLite database that declares a column `CIRCLE` does not match `Raw("circle")`. ADR 273 requires the text exactly as the database reports it, and SQLite reports the declared text as written. Kept as decided. (Slice 1 code review.)
+- **A raw text not in the catalog's form fails only when the migration runs.** `Raw("int4")` plans; Postgres creates an `integer` column, and the check after the migration expects `int4`, so the migration fails at apply. The planner cannot know the catalog's form without a database. Verify reports the column with the text to write. (Slice 1 code review.)
+- **Comparing two contracts without a database compares a raw column with an ordinary one by resolved type name.** `migration plan` from a contract with `Int` to one with `Raw("integer")` plans an `ALTER COLUMN ... TYPE` that changes nothing; from `Int` to `Raw("int4")` it plans nothing, and verify then reports the mismatch. Neither loses data, and planning against a database is right. (Slice 1 verification round 2.)
+- **`alterTypeCheckText` with `raw: true` accepts padded text and spaces inside `[ ]`, which the contract path refuses.** Only a hand-edited `migration.ts` reaches it, and the check after the migration still compares the column's type. (Slice 1 verification round 3.)
+- **`dataTypeRefusal` in `column-defaults.ts` repeats `defaultRefusal` almost line for line.** A cleanup with no change in behavior. (Slice 1 verification round 3.)

@@ -138,6 +138,12 @@ const FIXTURES: readonly AggregateFixture[] = [
     storageClass: 'integer',
     samples: ['1', '2'],
   },
+  {
+    codecId: 'sql/raw@1',
+    storageType: 'geometry',
+    storageClass: 'blob',
+    samples: ["x'01'", "x'02'"],
+  },
 ];
 
 /**
@@ -147,18 +153,27 @@ const FIXTURES: readonly AggregateFixture[] = [
  */
 const COERCED_RATHER_THAN_TYPED = [
   'avg(sql/char@1)',
+  'avg(sql/raw@1)',
   'avg(sql/varchar@1)',
   'avg(sqlite/blob@1)',
   'avg(sqlite/datetime@1)',
   'avg(sqlite/json@1)',
   'avg(sqlite/text@1)',
   'sum(sql/char@1)',
+  'sum(sql/raw@1)',
   'sum(sql/varchar@1)',
   'sum(sqlite/blob@1)',
   'sum(sqlite/datetime@1)',
   'sum(sqlite/json@1)',
   'sum(sqlite/text@1)',
 ];
+
+/**
+ * The pairs SQLite computes and this target declines to offer because the codec declares no
+ * `order` trait: a raw column's values are not interpreted, so the ORM offers no extremum of them
+ * (ADR 273).
+ */
+const UNORDERED = ['max(sql/raw@1)', 'min(sql/raw@1)'];
 
 const TABLE = 'aggregate_conformance';
 const COLUMN = 'value';
@@ -292,7 +307,7 @@ describe('SQLite aggregate conformance', { concurrent: false }, () => {
       });
     }
 
-    expect(unclaimed.sort()).toEqual(COERCED_RATHER_THAN_TYPED);
+    expect(unclaimed.sort()).toEqual([...COERCED_RATHER_THAN_TYPED, ...UNORDERED].sort());
     // SQLite has no aggregate it refuses over a stored value, so nothing is unclaimed for that reason.
     expect(unclaimedAndRefused).toEqual([]);
   });

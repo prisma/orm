@@ -10,6 +10,7 @@
 
 import {
   dataTypeParams,
+  nameIsCatalogText,
   renderSqlTypeName,
   type SqlTypeLookups,
   sqlDataTypeOfCodec,
@@ -27,7 +28,9 @@ import { escapeLiteral, quoteIdentifier } from '../sql-utils';
 
 /**
  * Renders the column's DDL type token (e.g. `"INTEGER"`, `"TEXT"`): the name the data type of its
- * codec is written with, in upper case. Resolves `typeRef` against `storageTypes`.
+ * codec is written with, in upper case, or as given for a data type that names its type exactly as
+ * the catalog reports it, since verify compares that text unchanged. Resolves `typeRef` against
+ * `storageTypes`.
  */
 export function buildColumnTypeSql(
   column: Pick<StorageColumn, 'codecId' | 'typeParams' | 'typeRef'>,
@@ -36,7 +39,8 @@ export function buildColumnTypeSql(
 ): string {
   const resolved = resolveColumnTypeMetadata(column, storageTypes);
   const dataType = sqlDataTypeOfCodec(resolved.codecId, types);
-  return renderSqlTypeName(dataType, dataTypeParams(dataType, resolved.typeParams)).toUpperCase();
+  const written = renderSqlTypeName(dataType, dataTypeParams(dataType, resolved.typeParams));
+  return nameIsCatalogText(dataType) ? written : written.toUpperCase();
 }
 
 const DIGIT_TEXT = /^-?\d+$/;

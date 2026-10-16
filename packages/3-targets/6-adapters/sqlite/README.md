@@ -118,7 +118,7 @@ flowchart TD
 - Used in `contract.d.ts` generation
 
 **Column Types Export (`column-types.ts`)**
-- Exports column descriptors for built-in types: `textColumn`, `integerColumn`, `realColumn`, `blobColumn`, `datetimeColumn`, `jsonColumn`, `bigintColumn`
+- Exports column descriptors for built-in types: `textColumn`, `integerColumn`, `realColumn`, `blobColumn`, `datetimeColumn`, `jsonColumn`, `bigintColumn`, and `rawColumn(sql)` for a column of any other type, written as given (ADR 273)
 - Uses `as const` to preserve literal `codecId` types through the type system
 
 **Types Export (`types.ts`)**
@@ -185,7 +185,7 @@ DELETE FROM "user" WHERE "user"."id" = ? RETURNING "id", "email"
 ## Exports
 
 - `./codec-types`: SQLite codec types (`CodecTypes`, `JsonValue`)
-- `./column-types`: Column type descriptors (`textColumn`, `integerColumn`, `realColumn`, `blobColumn`, `datetimeColumn`, `jsonColumn`, `bigintColumn`)
+- `./column-types`: Column type descriptors (`textColumn`, `integerColumn`, `realColumn`, `blobColumn`, `datetimeColumn`, `jsonColumn`, `bigintColumn`, `rawColumn`)
 - `./types`: SQLite-specific types
 - `./control`: Control-plane entry point (stubbed for future migration support)
 - `./runtime`: Runtime-plane entry point (runtime adapter descriptor)

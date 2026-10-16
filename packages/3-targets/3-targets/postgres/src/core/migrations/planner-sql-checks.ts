@@ -1,6 +1,7 @@
 import { assembleDataTypes, type DataType } from '@internal/framework-components/codec';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import {
+  checkRawTypeText,
   dataTypeParams,
   isSqlDataType,
   type ResolvedSqlType,
@@ -95,7 +96,8 @@ function columnTypeUnreadable(type: string, where: string, reason: string): neve
 
 /**
  * The type `format_type` prints for a column altered to `type`, written as a migration writes it:
- * the catalog text of the one data type of `dataTypes` that reads it, or for an enum, named by its
+ * for a raw type, which the call marks with `raw` (ADR 273), the text as written; otherwise the
+ * catalog text of the one data type of `dataTypes` that reads it, or for an enum, named by its
  * quoted name, that name quoted where Postgres quotes it, without the `public` schema, which
  * `format_type` leaves out as the planner's own enum names do. A list type keeps one `[]`, as
  * `format_type` prints it. The planner and the `alterColumnType` facade both check the alter with
@@ -106,9 +108,22 @@ export function alterTypeCheckText(
   type: string,
   dataTypes: readonly DataType[],
   where: string,
+  raw = false,
 ): string {
+  if (raw) return rawTypeCheckText(type, where);
   const read = readCatalogTypeText(type, dataTypes);
   return read.ok ? read.text : columnTypeUnreadable(type, where, read.reason);
+}
+
+function rawTypeCheckText(type: string, where: string): string {
+  const trimmed = type.trim();
+  const array = ARRAY_SUFFIX.exec(trimmed);
+  const base = array?.[1] ?? trimmed;
+  const suffix = array === null ? '' : '[]';
+  const refused = checkRawTypeText(base);
+  return refused === undefined
+    ? `${base}${suffix}`
+    : columnTypeUnreadable(type, where, `the raw type "${type}" is refused: ${refused}`);
 }
 
 /**

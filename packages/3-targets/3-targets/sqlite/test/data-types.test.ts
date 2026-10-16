@@ -16,6 +16,7 @@ const sourcesOf = (type: { readonly casts: Readonly<Record<string, unknown>> }) 
 describe('the data types this target registers', () => {
   it('registers the types the database stores', () => {
     expect(sqliteDataTypes.map((type) => type.id).sort()).toEqual([
+      'sql/raw',
       'sqlite/blob',
       'sqlite/character',
       'sqlite/character-varying',

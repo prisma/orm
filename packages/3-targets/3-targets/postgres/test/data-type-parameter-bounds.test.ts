@@ -49,6 +49,7 @@ const BOUNDS: ReadonlyArray<
       ] as const,
   ),
   ['pg/enum', [{ typeName: 'mood' }], [{}, { typeName: '' }, { typeName: 3 }]],
+  ['sql/raw', [{ sql: 'tsvector' }, { sql: 'x' }], [{}, { sql: '' }, { sql: 3 }]],
 ];
 
 function accepts(descriptor: AnyCodecDescriptor, params: Readonly<Record<string, unknown>>) {

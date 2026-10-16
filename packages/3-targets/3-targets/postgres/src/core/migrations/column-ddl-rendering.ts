@@ -1,7 +1,11 @@
 import type { ColumnDefault } from '@internal/contract/types';
 import type { CodecControlHooks } from '@internal/family-sql/control';
 import type { ToCanonicalForm } from '@internal/framework-components/codec';
-import type { SqlTypeLookups } from '@internal/sql-contract/data-type';
+import {
+  nameIsCatalogText,
+  type SqlTypeLookups,
+  sqlDataTypeOfCodec,
+} from '@internal/sql-contract/data-type';
 import type { StorageColumn } from '@internal/sql-contract/types';
 import type { DdlColumn } from '@internal/sql-relational-core/ast';
 import * as contractFree from '@internal/sql-relational-core/contract-free';
@@ -118,6 +122,11 @@ export function renderColumnDdl(
  */
 export function renderColumnAlterType(column: SqlColumnIR, types: SqlTypeLookups): string {
   return buildColumnTypeSql(columnLike(column), types, {}, false);
+}
+
+/** Whether the expected column's data type names its type by its catalog text, as a raw column's does (ADR 273). */
+export function columnTypeIsCatalogText(column: SqlColumnIR, types: SqlTypeLookups): boolean {
+  return nameIsCatalogText(sqlDataTypeOfCodec(columnLike(column).codecId, types));
 }
 
 /**

@@ -570,6 +570,8 @@ export abstract class PostgresMigration<
     readonly column: string;
     /** The new type as a migration writes it, such as `int4` or `varchar(20)`. */
     readonly type: string;
+    /** The type is a raw type, named by its catalog text, such as `circle` (ADR 273): it is checked as written. */
+    readonly raw?: true;
     /** The SQL that converts each value to the new type; by default a cast of the column. */
     readonly using?: SqlTextInput;
     /** By default `data` when `using` is given, and `destructive` otherwise. */
@@ -586,6 +588,7 @@ export abstract class PostgresMigration<
       tableName: options.table,
       columnName: options.column,
       type: options.type,
+      ...ifDefined('raw', options.raw),
       ...ifDefined('using', using === undefined ? undefined : { kind: 'sql' as const, sql: using }),
       dataTypes: this.dataTypes(),
       ...ifDefined('operationClass', options.operationClass),

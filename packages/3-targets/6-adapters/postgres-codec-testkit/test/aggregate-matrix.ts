@@ -189,6 +189,7 @@ export const FIXTURES: readonly AggregateFixture[] = [
   { codecId: 'pg/json@1', samples: ['\'{"a":1}\'', '\'{"b":2}\''] },
   { codecId: 'pg/jsonb@1', samples: ['\'{"a":1}\'', '\'{"b":2}\''] },
   { codecId: 'pg/text-array@1', samples: ["ARRAY['a']", "ARRAY['b']"] },
+  { codecId: 'sql/raw@1', typeParams: { sql: 'circle' }, samples: ["'<(0,0),1>'", "'<(1,1),2>'"] },
 ];
 
 export const TABLE = 'aggregate_conformance';

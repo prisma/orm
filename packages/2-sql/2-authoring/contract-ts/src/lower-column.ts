@@ -1,6 +1,7 @@
-import type {
-  CodecLookupWithDescriptors,
-  DataTypeLookup,
+import {
+  type CodecLookupWithDescriptors,
+  canonicalFormOf,
+  type DataTypeLookup,
 } from '@internal/framework-components/codec';
 import {
   dataTypeParams,
@@ -18,7 +19,7 @@ import { composeCheckWirePrefix, computeCheckContentHash } from '@internal/sql-s
 import { invariant } from '@internal/utils/assertions';
 import { ifDefined } from '@internal/utils/defined';
 import { isStructuredError } from '@internal/utils/structured-error';
-import { columnCodec, encodeColumnDefault } from './column-defaults';
+import { columnCodec, type DefaultCanonicalForm, encodeColumnDefault } from './column-defaults';
 import { contractError } from './contract-errors';
 import { type ColumnSite, columnSiteMeta, columnSiteSubject } from './declaration-sites';
 import { checkMemberValues, enumValueSetRefs } from './enum-members';
@@ -77,6 +78,19 @@ function validateColumnTypeParams(
       { cause, meta: { ...cause.meta, ...columnSiteMeta(site) } },
     );
   }
+}
+
+/** The canonical form of the values of the codec `codecId`, from the codec or its data type, with the data type's id. */
+function canonicalFormOfCodec(
+  codecId: string,
+  lookups: TypeLookups,
+): DefaultCanonicalForm | undefined {
+  const descriptor = lookups.codecLookup.descriptorFor(codecId);
+  if (descriptor === undefined) return undefined;
+  const toCanonicalForm = canonicalFormOf(descriptor, lookups.dataTypeLookup);
+  return toCanonicalForm === undefined
+    ? undefined
+    : { dataTypeId: descriptor.dataType, toCanonicalForm };
 }
 
 export interface TypeLookups {
@@ -144,6 +158,7 @@ export function lowerColumn(
           { ...site, codecId },
           many !== false,
           elementNullable,
+          canonicalFormOfCodec(codecId, context.lookups),
         )
       : undefined;
 

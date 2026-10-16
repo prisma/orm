@@ -48,8 +48,15 @@ export interface SqlDataTypeSpec<Params extends SqlTypeParams = SqlTypeParams>
   /** The kind of reported type this data type claims, instead of any text. */
   readonly claimsKind?: string;
   readonly normalize?: (params: Params) => Params;
+  /** The type's name from its parameters, for a type that claims a kind or whose name is its catalog text. */
   readonly render?: (params: Params) => string;
   readonly fromReported?: (reported: ReportedSqlType) => Params;
+  /**
+   * The name `render` writes is the text the database catalog prints, exactly. Such a type has no
+   * texts and claims no kind; it has no base name; verify compares its name with the reported text
+   * unchanged; and a target writes and sends it as given. ADR 273.
+   */
+  readonly nameIsCatalogText?: true;
 }
 
 export interface SqlDataTypeFacts<Params extends SqlTypeParams = SqlTypeParams> {
@@ -58,6 +65,7 @@ export interface SqlDataTypeFacts<Params extends SqlTypeParams = SqlTypeParams> 
   readonly normalize: (params: Params) => Params;
   readonly render: ((params: Params) => string) | undefined;
   readonly fromReported: ((reported: ReportedSqlType) => Params) | undefined;
+  readonly nameIsCatalogText: boolean;
 }
 
 export interface SqlDataType<Params extends SqlTypeParams = SqlTypeParams> extends DataType {
@@ -157,9 +165,23 @@ function checkKindClaim<Params extends SqlTypeParams>(
   id: DataTypeId,
   spec: SqlDataTypeSpec<Params>,
 ): void {
+  if (spec.nameIsCatalogText === true) {
+    if (spec.render === undefined) {
+      refuseDeclaration(id, 'a type whose name is its catalog text declares render.');
+    }
+    if (spec.texts !== undefined || spec.claimsKind !== undefined) {
+      refuseDeclaration(
+        id,
+        'a type whose name is its catalog text declares no texts and claims no kind.',
+      );
+    }
+  }
   if (spec.claimsKind === undefined) {
-    if (spec.render !== undefined) {
-      refuseDeclaration(id, 'render is allowed only together with claimsKind.');
+    if (spec.render !== undefined && spec.nameIsCatalogText !== true) {
+      refuseDeclaration(
+        id,
+        'render is allowed only together with claimsKind or nameIsCatalogText.',
+      );
     }
     if (spec.fromReported !== undefined) {
       refuseDeclaration(id, 'fromReported is allowed only together with claimsKind.');
@@ -225,10 +247,18 @@ export function sqlDataType<Params extends SqlTypeParams = SqlTypeParams>(
       normalize: spec.normalize ?? identity,
       render: spec.render,
       fromReported: spec.fromReported,
+      nameIsCatalogText: spec.nameIsCatalogText === true,
     },
   };
   checkNormalFormsWritten(type);
   return type;
+}
+
+/** Whether the name of `type` is the text the database catalog prints, as declared by {@link SqlDataTypeSpec.nameIsCatalogText}. */
+export function nameIsCatalogText<Params extends SqlTypeParams>(
+  type: SqlDataType<Params>,
+): boolean {
+  return type.sql.nameIsCatalogText;
 }
 
 /** Whether `type` is a data type a SQL column can have. `sql/expression` is the one data type no column has. */
@@ -322,11 +352,20 @@ function substitute<Params extends SqlTypeParams>(
   });
 }
 
-/** The name of `type` with no parameters, for places where parameters must not appear. */
+/**
+ * The name of `type` with no parameters, for places where parameters must not appear, such as a
+ * cast. A type whose name is its catalog text has none: its parameters cannot be separated from its
+ * name, so it is refused.
+ */
 export function sqlBaseName<Params extends SqlTypeParams>(
   type: SqlDataType<Params>,
   params: SqlTypeParams,
 ): string {
+  if (type.sql.nameIsCatalogText) {
+    throw new InternalError(
+      `Data type ${type.id} names its type by its catalog text, so it has no base name.`,
+    );
+  }
   if (type.sql.render !== undefined) return type.sql.render(validateSqlTypeParams(type, params));
   const written = type.sql.texts.filter((text) => text.written === true);
   const fewest = written.reduce<SqlTypeText | undefined>(
@@ -348,14 +387,16 @@ export function sqlBaseName<Params extends SqlTypeParams>(
 }
 
 /**
- * The base name of `type` with `params`, unquoted. It differs from {@link sqlBaseName} only for a
- * type that claims a kind: there it is the `typeName` parameter as written (`app.status`), where
- * `sqlBaseName` gives the quoted name `render` writes into SQL (`"app"."status"`).
+ * The base name of `type` with `params`, unquoted, for display. It differs from {@link sqlBaseName}
+ * for a type that claims a kind, where it is the `typeName` parameter as written (`app.status`)
+ * while `sqlBaseName` gives the quoted name `render` writes into SQL (`"app"."status"`), and for a
+ * type whose name is its catalog text, where it is that whole text.
  */
 export function unquotedSqlBaseName<Params extends SqlTypeParams>(
   type: SqlDataType<Params>,
   params: SqlTypeParams,
 ): string {
+  if (type.sql.nameIsCatalogText) return renderSqlTypeName(type, params);
   if (type.sql.claimsKind === undefined) return sqlBaseName(type, params);
   const { typeName } = validateSqlTypeParams(type, params);
   if (typeof typeName !== 'string') {
@@ -432,6 +473,7 @@ export function renderSqlCatalogText<Params extends SqlTypeParams>(
       `Data type ${type.id} claims the kind "${type.sql.claimsKind}" and has no catalog text.`,
     );
   }
+  if (type.sql.render !== undefined) return type.sql.render(validated);
   const normalized = type.sql.normalize(validated);
   return substitute(type, pickText(type, 'catalog', presentKeys(normalized)), normalized);
 }

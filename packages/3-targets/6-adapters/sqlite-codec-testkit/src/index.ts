@@ -143,6 +143,8 @@ export interface SqliteCodecConformanceCase {
    * recorded kind can rot as projections change.
    */
   readonly notYetCanonical?: ExpectedProjectionFailure;
+  /** The codec's data type has no literal values (a raw column), so the projection is compared with `encodeJson` without a canonical form. */
+  readonly literalValuesAbsent?: true;
 }
 
 export interface CodecProjectionOutcome {
@@ -326,7 +328,10 @@ export async function runSqliteCodecProjection(
 
   let canonical: JsonValue;
   try {
-    const toCanonicalForm = canonicalFormOf(descriptor, dataTypes);
+    const toCanonicalForm =
+      conformanceCase.literalValuesAbsent === true
+        ? undefined
+        : canonicalFormOf(descriptor, dataTypes);
     canonical = toCanonicalForm === undefined ? projected : toCanonicalForm(projected);
   } catch (error) {
     return {

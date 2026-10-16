@@ -1,4 +1,7 @@
+import { createDataTypeLookup } from '@internal/framework-components/codec';
+import { type SqlTypeLookups, sqlDataType } from '@internal/sql-contract/data-type';
 import type { StorageColumn, StorageTable } from '@internal/sql-contract/types';
+import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import {
   buildColumnTypeSql,
@@ -29,7 +32,46 @@ function makeTable(overrides: Partial<StorageTable> = {}): StorageTable {
   };
 }
 
+/** A data type unrelated to sql/raw whose name is its catalog text too. */
+const verbatim = sqlDataType<{ name: string }>('t/verbatim', {
+  params: type({ name: 'string' }),
+  nameIsCatalogText: true,
+  render: ({ name }) => name,
+});
+
+const verbatimTypes: SqlTypeLookups = {
+  codecLookup: {
+    descriptorFor: (id) =>
+      id === 't/verbatim@1'
+        ? {
+            codecId: id,
+            dataType: verbatim.id,
+            traits: [],
+            paramsSchema: undefined,
+            isParameterized: true,
+            factory: () => () => {
+              throw new Error('unused');
+            },
+          }
+        : sqliteTestTypes.codecLookup.descriptorFor(id),
+  },
+  dataTypeLookup: createDataTypeLookup([verbatim]),
+};
+
 describe('buildColumnTypeSql', () => {
+  it('writes a type whose name is its catalog text as given, not in upper case', () => {
+    expect([
+      buildColumnTypeSql(
+        makeColumn({ codecId: 'sql/raw@1', typeParams: { sql: 'circle' } }),
+        sqliteTestTypes,
+      ),
+      buildColumnTypeSql(
+        makeColumn({ codecId: 't/verbatim@1', typeParams: { name: 'MyType(3)' } }),
+        verbatimTypes,
+      ),
+    ]).toEqual(['circle', 'MyType(3)']);
+  });
+
   it('writes the name of the codec data type in upper case', () => {
     expect(buildColumnTypeSql(makeColumn({ codecId: 'sqlite/text@1' }), sqliteTestTypes)).toBe(
       'TEXT',

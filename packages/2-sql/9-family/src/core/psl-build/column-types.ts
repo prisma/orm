@@ -86,7 +86,7 @@ export function inferColumnTypes(input: {
       ].join('\n'),
       {
         why: 'Prisma 8 reads a column type only through a data type that the target or an extension pack declares.',
-        fix: "No configured pack has a type for these columns. If a type comes from a database extension that has a Prisma 8 pack, add the pack to extensions in prisma.config.ts. Otherwise change the column's type or remove the column from the database.",
+        fix: `No configured pack has a type for these columns. If a type comes from a database extension that has a Prisma 8 pack, add the pack to extensions in prisma.config.ts. Otherwise, to keep such a column, write the schema by hand and declare its field as Raw("<type>") with the type as listed, or change the column's type or remove the column from the database.`,
         meta: { columns },
       },
     );

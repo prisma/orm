@@ -64,6 +64,7 @@ describe('the data types this target registers', () => {
       'pg/uuid',
       'pg/varbit',
       'pg/varchar',
+      'sql/raw',
     ]);
   });
 

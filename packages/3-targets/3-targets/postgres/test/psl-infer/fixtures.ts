@@ -1,4 +1,5 @@
 import type { SqlPslBuildContext } from '@internal/family-sql/control';
+import sqlFamilyPack from '@internal/family-sql/pack';
 import {
   type ColumnTypeOf,
   inferColumnTypes,
@@ -219,12 +220,13 @@ export function treeFromFlat(schemaIR: SqlSchemaIR): PostgresDatabaseSchemaNode 
 }
 
 /**
- * The stack `contract emit` reads an inferred schema with: the type constructors the adapter
- * contributes, the target's own, and the target's codecs and data types.
+ * The stack `contract emit` reads an inferred schema with: the type constructors the family and the
+ * adapter contribute, the target's own, and the target's codecs and data types.
  */
 export const inferBuildContext: SqlPslBuildContext = {
   authoringContributions: {
     type: {
+      ...sqlFamilyPack.authoring.type,
       ...postgresAuthoringTypes,
       ...postgresPslTypeConstructors,
     },
