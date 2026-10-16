@@ -21,15 +21,25 @@ export async function decodePostgresListText(
   wireValue: unknown,
   decodeElement: (value: unknown) => Promise<unknown>,
 ): Promise<readonly unknown[]> {
+  let elements: readonly unknown[];
+
+  if (typeof wireValue === 'string') {
+    elements = parsePostgresListText(wireValue);
+  } else if (Array.isArray(wireValue)) {
+    elements = wireValue;
+  } else {
+    throw new TypeError(
+      `expected a Postgres array (string or array) for a many-typed column, got ${typeof wireValue}`,
+    );
+  }
+
   const decoded: unknown[] = [];
-  for (const element of parsePostgresListText(wireValue)) {
+  for (const element of elements) {
     if (element === null) {
       decoded.push(null);
       continue;
     }
-
     decoded.push(await decodeElement(element));
   }
-
   return decoded;
 }
