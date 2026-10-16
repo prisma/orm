@@ -22,7 +22,7 @@ export function startCall<K extends ClientActivityKind = 'test-call'>(
   setup: ClientActivitySetup<K> = {},
 ) {
   return startClientActivity(
-    { kind: setup.kind ?? ('test-call' as K), contentHash: 'call-hash' },
+    { kind: setup.kind ?? ('test-call' as K), contentHash: async () => 'call-hash' },
     {
       middleware,
       context: contextFields(),

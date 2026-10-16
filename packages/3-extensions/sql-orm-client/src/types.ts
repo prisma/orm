@@ -1,5 +1,4 @@
 import type { Contract } from '@internal/contract/types';
-import type { AnnotationValue, OperationKind } from '@internal/framework-components/runtime';
 import type {
   ExtractAggregateTypes,
   ExtractCodecTypes,
@@ -116,16 +115,6 @@ export interface CollectionState {
   readonly offset: LimitOffsetValue | undefined;
   readonly variantValue: string | undefined;
   readonly locking: ReadonlyArray<LockingClause> | undefined;
-  /**
-   * Annotations attached to this query at terminal-call time.
-   * Populated transiently by the read terminals `all` and `first` just before dispatch. Terminals
-   * that compile a plan directly attach annotations to it with `mergeAnnotations` instead; nested
-   * `create()`/`update()` validate annotations and then discard them.
-   * `Collection` itself has no chainable `.annotate()`. Stored as a
-   * `Map<namespace, AnnotationValue>` so
-   * duplicate namespaces last-write-win. Empty on a fresh state.
-   */
-  readonly annotations: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>>;
 }
 
 export function emptyState(tables: CollectionTables): CollectionState {
@@ -142,7 +131,6 @@ export function emptyState(tables: CollectionTables): CollectionState {
     offset: undefined,
     variantValue: undefined,
     locking: undefined,
-    annotations: new Map(),
   };
 }
 
@@ -201,7 +189,7 @@ export interface RuntimeTransaction extends RuntimeScope {
   rollback?(): Promise<void>;
 }
 
-/** What the ORM sends its statements to. It may carry an `activitySource` member, as the SQL runtime's queryables do, through which `startActivityOn` reaches activities; a queryable without one, such as a test stub, has none. */
+/** What the ORM sends its statements to. It must carry an `activitySource` member, as the SQL runtime's queryables, connections, transactions and activity handles do: every terminal method starts an `orm-call` activity through it, and a terminal method on a queryable without one fails with `ORM.ACTIVITY_SOURCE_MISSING`. The member is optional in this type only because the public runtime types do not show it. */
 export interface RuntimeQueryable extends RuntimeScope, Partial<ActivitySourceTarget> {
   connection?(): Promise<RuntimeConnection>;
   transaction?(): Promise<RuntimeTransaction>;

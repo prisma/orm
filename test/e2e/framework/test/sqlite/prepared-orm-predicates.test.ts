@@ -38,7 +38,8 @@ it('prepares ORM predicates and pagination through the public SQLite facade with
   );
   const beforeCompile = vi.fn<NonNullable<SqlMiddleware['beforeCompile']>>(async () => undefined);
   const executions: Array<{ sql: string; params: readonly unknown[] }> = [];
-  const labels: Array<{ label: string } | undefined> = [];
+  const callLabels: Array<{ label: string } | undefined> = [];
+  const planLabels: Array<{ label: string } | undefined> = [];
   const create = sqliteAdapter.create;
   const createSpy = vi.spyOn(sqliteAdapter, 'create').mockImplementation((...args) => {
     const adapter = create(...args);
@@ -59,9 +60,12 @@ it('prepares ORM predicates and pagination through the public SQLite facade with
       {
         name: 'record',
         beforeCompile,
+        async activityStarted(activity) {
+          if (activity.kind === 'orm-call') callLabels.push(annotation.read(activity));
+        },
         beforeEncode(plan) {
           executions.push({ sql: plan.sql, params: plan.params });
-          labels.push(annotation.read(plan));
+          planLabels.push(annotation.read(plan));
         },
       },
     ],
@@ -334,7 +338,10 @@ it('prepares ORM predicates and pagination through the public SQLite facade with
         .prepared.all((meta) => meta.annotate(annotation({ label: 'all' }))),
     );
     expect(await annotated.query(runtime, { id: 1 })).toEqual([{ id: 1 }]);
-    expect(labels.at(-1)).toEqual({ label: 'all' });
+    expect({ call: callLabels.at(-1), plan: planLabels.at(-1) }).toEqual({
+      call: { label: 'all' },
+      plan: undefined,
+    });
     database.exec(
       "create table typed_rows (id integer primary key, active integer, created_at text, metadata text, label text); insert into typed_rows values (1, 1, '2024-03-15T10:30:00.000Z', '{\"count\":42}', 'typed')",
     );

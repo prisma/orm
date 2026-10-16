@@ -50,7 +50,7 @@ describe('startActivity', () => {
       activity: {
         id: expect.any(String),
         kind: 'test-call',
-        contentHash: 'call-hash',
+        contentHash: expect.any(Function),
         annotations: new Map(),
       },
       callScope: 'runtime',
@@ -209,7 +209,7 @@ describe('startActivity', () => {
     const { runtime, events } = createSetup();
 
     await expect(
-      startActivityOn(runtime, { kind: kind as 'test-call', contentHash: 'hash' }),
+      startActivityOn(runtime, { kind: kind as 'test-call', contentHash: async () => 'hash' }),
     ).rejects.toMatchObject({ code: 'RUNTIME.ACTIVITY_KIND_RESERVED' });
     expect(events).toEqual([]);
   });
@@ -263,6 +263,67 @@ describe('startActivity', () => {
       code: 'RUNTIME.ACTIVITY_NOT_ACCEPTING_CHILDREN',
     });
     expect(names(events)).toEqual(before);
+  });
+
+  it('starts no statement for rows returned before the first read, even after the handle ended', async () => {
+    const { runtime, events } = createSetup();
+    const call = await startActivityOn(runtime, testCall);
+    const rows = call.query(rawPlan('select 1'))[Symbol.asyncIterator]();
+
+    await call.end({ outcome: 'succeeded' });
+    const returned = await rows.return?.();
+    const next = await rows.next();
+
+    expect({ returned, next, lifecycle: lifecycle(events) }).toEqual({
+      returned: { done: true, value: undefined },
+      next: { done: true, value: undefined },
+      lifecycle: [
+        'started:test-call',
+        'ended:test-call:succeeded',
+        'finalized:test-call:committed',
+      ],
+    });
+  });
+
+  it('ends the handle and keeps close() from waiting when ending the activity fails', async () => {
+    const { runtime } = createSetup();
+    const call = await startActivityOn(runtime, testCall);
+    const pending = call.query(rawPlan('select 1'))[Symbol.asyncIterator]();
+    await pending.next();
+
+    await expect(call.end({ outcome: 'succeeded' })).rejects.toMatchObject({
+      code: 'RUNTIME.ACTIVITY_CHILDREN_OPEN',
+    });
+    await pending.return?.();
+
+    await expect(runtime.close()).resolves.toBeUndefined();
+  });
+
+  it('keeps every member of a handle in a copy that spreads it', async () => {
+    const { runtime, events } = createSetup();
+    const call = await startActivityOn(runtime, testCall);
+    const copy = { ...call };
+
+    await copy.query(rawPlan('select 1')).toArray();
+    const nested = await copy.startActivity(testCall);
+    await nested.end({ outcome: 'succeeded' });
+    await copy.end({ outcome: 'succeeded' });
+
+    expect({
+      intercepted: copy.intercepted,
+      source: findActivitySource(copy) !== undefined,
+      transaction: typeof copy.transaction,
+      lifecycle: lifecycle(events).filter((name) => name.startsWith('ended:')),
+    }).toEqual({
+      intercepted: undefined,
+      source: true,
+      transaction: 'function',
+      lifecycle: [
+        'ended:statement:succeeded',
+        'ended:test-call:succeeded',
+        'ended:test-call:succeeded',
+      ],
+    });
   });
 
   it('finds the activity source of a queryable, and none on a plain one', async () => {
@@ -329,6 +390,48 @@ describe('startActivity', () => {
 
       expect({ closedWhileOpen, closed }).toEqual({ closedWhileOpen: false, closed: true });
       expect(names(events)).toContain('ended:test-call:succeeded');
+    });
+
+    it("with 'at-once' refusal, still runs the statements and the transaction of an activity started before close()", async () => {
+      const { runtime, events } = createSetup({ closeRefusal: 'at-once' });
+      const call = await startActivityOn(runtime, testCall);
+
+      const closing = runtime.close();
+      const refused = runtime.execute(rawPlan('update t set x = 0'));
+      await call.execute(rawPlan('update t set x = 1'));
+      const rows = await call.query(rawPlan('select 1')).toArray();
+      const transaction = await call.transaction?.();
+      await transaction?.execute(rawPlan('update t set x = 2'));
+      await transaction?.commit();
+      await call.end({ outcome: 'succeeded' });
+      await closing;
+
+      await expect(refused).rejects.toMatchObject({ code: 'DRIVER.NOT_CONNECTED' });
+      expect({
+        rows: rows.length,
+        ended: names(events).includes('ended:test-call:succeeded'),
+      }).toEqual({ rows: 2, ended: true });
+      await expect(startActivityOn(runtime, testCall)).rejects.toMatchObject({
+        code: 'DRIVER.NOT_CONNECTED',
+      });
+    });
+
+    it("with 'at-once' refusal, admits a nested activity started on an activity open before close()", async () => {
+      const { runtime, events } = createSetup({ closeRefusal: 'at-once' });
+      const call = await startActivityOn(runtime, testCall);
+
+      const closing = runtime.close();
+      const nested = await startActivityOn(call, testCall);
+      await nested.execute(rawPlan('update t set x = 1'));
+      await nested.end({ outcome: 'succeeded' });
+      await call.end({ outcome: 'succeeded' });
+      await closing;
+
+      expect(names(events).filter((name) => name.startsWith('ended:'))).toEqual([
+        'ended:statement:succeeded',
+        'ended:test-call:succeeded',
+        'ended:test-call:succeeded',
+      ]);
     });
 
     it('refuses to start an activity on a closed runtime', async () => {

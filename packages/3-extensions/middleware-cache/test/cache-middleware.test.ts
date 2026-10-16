@@ -57,7 +57,7 @@ describe('createCacheMiddleware — opt-in semantics', () => {
 describe('createCacheMiddleware — hit path', () => {
   it('returns cached rows from intercept.onQuery when the store has a non-expired entry', async () => {
     const store = spyStore();
-    store.inner.set('key:select 1', [{ id: 1 }, { id: 2 }]);
+    store.setRows('key:select 1', [{ id: 1 }, { id: 2 }]);
 
     const mw = createCacheMiddleware({ store });
     const exec = makeExec('select 1', {
@@ -74,7 +74,7 @@ describe('createCacheMiddleware — hit path', () => {
 
   it('logs a middleware.cache.hit event via ctx.log.debug on a hit', async () => {
     const store = spyStore();
-    store.inner.set('key:select 1', [{ id: 1 }]);
+    store.setRows('key:select 1', [{ id: 1 }]);
     const mw = createCacheMiddleware({ store });
     const exec = makeExec('select 1', {
       cache: cacheAnnotation({}),
@@ -91,7 +91,7 @@ describe('createCacheMiddleware — hit path', () => {
 
   it('does not call store.set on the hit path', async () => {
     const store = spyStore();
-    store.inner.set('key:select 1', [{ id: 1 }]);
+    store.setRows('key:select 1', [{ id: 1 }]);
     const mw = createCacheMiddleware({ store });
     const exec = makeExec('select 1', {
       cache: cacheAnnotation({}),
@@ -110,7 +110,7 @@ describe('createCacheMiddleware — hit path', () => {
 
   it('survives the absence of ctx.log.debug (it is optional on RuntimeLog)', async () => {
     const store = spyStore();
-    store.inner.set('key:select 1', [{ id: 1 }]);
+    store.setRows('key:select 1', [{ id: 1 }]);
     const mw = createCacheMiddleware({ store });
     const exec = makeExec('select 1', {
       cache: cacheAnnotation({}),
@@ -173,7 +173,7 @@ describe('createCacheMiddleware — miss path', () => {
         version: 0,
         data: { empty: true },
       },
-      [{ id: 1 }, { id: 2 }],
+      { kind: 'statement-rows', rows: [{ id: 1 }, { id: 2 }] },
     );
   });
 
@@ -256,11 +256,11 @@ describe('createCacheMiddleware — miss path', () => {
     await endStatement(mw, execA, ctxA, { rowCount: 2 });
     await endStatement(mw, execB, ctxB, { rowCount: 2 });
 
-    expect(store.inner.get('key:select A')).toEqual([
+    expect(store.rowsAt('key:select A')).toEqual([
       { from: 'A', n: 1 },
       { from: 'A', n: 2 },
     ]);
-    expect(store.inner.get('key:select B')).toEqual([
+    expect(store.rowsAt('key:select B')).toEqual([
       { from: 'B', n: 1 },
       { from: 'B', n: 2 },
     ]);
@@ -270,7 +270,7 @@ describe('createCacheMiddleware — miss path', () => {
 describe('createCacheMiddleware — scope guard', () => {
   it('passes through when ctx.scope = "connection"', async () => {
     const store = spyStore();
-    store.inner.set('key:select 1', [{ id: 1 }]);
+    store.setRows('key:select 1', [{ id: 1 }]);
     const mw = createCacheMiddleware({ store });
     const exec = makeExec('select 1', {
       cache: cacheAnnotation({}),
@@ -283,7 +283,7 @@ describe('createCacheMiddleware — scope guard', () => {
 
   it('passes through when ctx.scope = "transaction"', async () => {
     const store = spyStore();
-    store.inner.set('key:select 1', [{ id: 1 }]);
+    store.setRows('key:select 1', [{ id: 1 }]);
     const mw = createCacheMiddleware({ store });
     const exec = makeExec('select 1', {
       cache: cacheAnnotation({}),
@@ -369,6 +369,9 @@ describe('createCacheMiddleware — middleware shape', () => {
     const stored = await store.get({ key: 'key:custom-not-this', meta: undefined });
     expect(stored.data).toEqual({ empty: true });
     const real = await store.get({ key: 'key:select custom', meta: undefined });
-    expect(real.data).toEqual({ empty: false, value: [{ id: 7 }] });
+    expect(real.data).toEqual({
+      empty: false,
+      value: { kind: 'statement-rows', rows: [{ id: 7 }] },
+    });
   });
 });

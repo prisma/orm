@@ -24,13 +24,18 @@ import postgresAdapter from '@internal/adapter-postgres/control';
 import { createControlClient } from '@internal/cli/control-api';
 import postgresDriver from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
+import {
+  cacheAnnotation,
+  createCacheMiddleware,
+  createInMemoryCacheStore,
+} from '@internal/middleware-cache';
 import { emitContractSpaceArtifacts } from '@internal/migration-tools/spaces';
 import type { SqlMiddleware } from '@internal/sql-runtime';
 import postgres from '@internal/target-postgres/control';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { createDevDatabase, timeouts, withClient } from '@repo/test-utils';
 import { SignJWT } from 'jose';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import supabasePack from '../src/exports/pack';
 import { supabase } from '../src/exports/runtime';
 import type { Contract } from './fixtures/example-app/contract';
@@ -391,6 +396,59 @@ describe('RLS — role-bound Supabase runtime acceptance', () => {
         await new Promise<void>((resolve, reject) =>
           jwksServer.close((err) => (err ? reject(err) : resolve())),
         );
+      }
+    },
+    timeouts.spinUpPpgDev * 4,
+  );
+  it(
+    'an annotated ORM read on a role session is neither served from nor stored in the cache',
+    async () => {
+      const { connectionString } = database;
+      await withClient(connectionString, async (pg) => {
+        await setUpSupabaseMockSchema(pg);
+      });
+      await runDbInit(connectionString, migrationsDir);
+      await applyGrantsFixture(connectionString);
+
+      const userAId = crypto.randomUUID();
+      const userBId = crypto.randomUUID();
+      const now = new Date().toISOString();
+      await withClient(connectionString, async (pg) => {
+        await pg.query(
+          'INSERT INTO auth.users (id, email, created_at, updated_at) VALUES ($1, $2, $3, $3), ($4, $5, $3, $3)',
+          [userAId, 'user-a@example.com', now, userBId, 'user-b@example.com'],
+        );
+        await pg.query(
+          'INSERT INTO public.profile (id, username, "userId") VALUES ($1, $2, $3), ($4, $5, $6)',
+          [crypto.randomUUID(), 'alice', userAId, crypto.randomUUID(), 'bob', userBId],
+        );
+      });
+
+      const inner = createInMemoryCacheStore();
+      const store = {
+        get: vi.fn(inner.get),
+        set: vi.fn(inner.set),
+        unset: vi.fn(inner.unset),
+      };
+      const cache = createCacheMiddleware({ store });
+      const db = await createDb(connectionString, { middleware: [cache] });
+      try {
+        const usernamesOf = async (sub: string) => {
+          const roleDb = await db.asUser(await signJwt({ sub, role: 'authenticated' }));
+          const rows = await roleDb.orm.public.Profile.select('username').all((meta) =>
+            meta.annotate(cacheAnnotation({ key: 'profiles' })),
+          );
+          return rows.map((row) => row.username);
+        };
+
+        expect({
+          userA: await usernamesOf(userAId),
+          userB: await usernamesOf(userBId),
+          storeGets: store.get.mock.calls.length,
+          storeSets: store.set.mock.calls.length,
+        }).toEqual({ userA: ['alice'], userB: ['bob'], storeGets: 0, storeSets: 0 });
+      } finally {
+        await db.close();
       }
     },
     timeouts.spinUpPpgDev * 4,

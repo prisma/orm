@@ -22,7 +22,10 @@ test('the public runtime types do not show startActivity or planContentHash', ()
 
 test('a handle is typed by its kind, and nests through its own members', async () => {
   const runtime = {} as Runtime;
-  const call = await startActivityOn(runtime, { kind: 'test-call', contentHash: 'hash' });
+  const call = await startActivityOn(runtime, {
+    kind: 'test-call',
+    contentHash: async () => 'hash',
+  });
   expectTypeOf(call).toEqualTypeOf<ActivityHandle<'test-call'>>();
   expectTypeOf(call.activity).toEqualTypeOf<ClientActivity<'test-call'>>();
   expectTypeOf(call.intercepted).toEqualTypeOf<
@@ -32,5 +35,5 @@ test('a handle is typed by its kind, and nests through its own members', async (
   expectTypeOf(call.startActivity).toBeFunction();
   expectTypeOf(call.planContentHash).toBeFunction();
   // @ts-expect-error - statement is not a client kind
-  void startActivityOn(runtime, { kind: 'statement', contentHash: 'hash' });
+  void startActivityOn(runtime, { kind: 'statement', contentHash: async () => 'hash' });
 });

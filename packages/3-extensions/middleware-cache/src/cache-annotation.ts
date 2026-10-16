@@ -36,7 +36,7 @@ export type CacheAnnotationHandle = (<TMeta = unknown>(
 
 /**
  * Marks a read for the cache middleware. It applies to reads only: a write terminal refuses it at
- * compile time and at run time. The middleware reads it from `plan.meta.annotations.cache`.
+ * compile time and at run time. The middleware reads it from a statement plan's `meta.annotations.cache`, or from the annotations of a client activity, such as an ORM read, which is then cached as a whole.
  *
  * `TMeta` types `meta` for this call only. Nothing ties it to the store's `TMeta`, so a store
  * package should export a wrapper typed with its own meta, such as

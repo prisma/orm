@@ -1,5 +1,5 @@
 import {
-  type CachedRows,
+  type CachedValue,
   type CacheStore,
   cacheAnnotation,
   createCacheMiddleware,
@@ -35,7 +35,7 @@ interface TagMeta {
   tags: string[];
 }
 
-const tagStore: CacheStore<TagMeta, CachedRows> = {
+const tagStore: CacheStore<TagMeta, CachedValue> = {
   get: async ({ key, meta }) => ({ key, meta, version: 0, data: { empty: true } }),
   set: async () => true,
   unset: async () => {},

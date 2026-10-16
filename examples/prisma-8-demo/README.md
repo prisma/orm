@@ -347,7 +347,7 @@ and the [aggregate descriptor guide](../../docs/reference/aggregate-descriptor-g
 
 ## Cache Middleware Examples
 
-The demo wires `@internal/middleware-cache` into the Postgres client in `src/prisma/db.ts`. The cache middleware is **opt-in per query** — it only acts on plans whose `meta.annotations` carry a `cacheAnnotation`. The default store keeps each entry for 60 seconds. Three CLI commands run a query twice and report the latency of each call so the cache hit is visible:
+The demo wires `@internal/middleware-cache` into the Postgres client in `src/prisma/db.ts`. The cache middleware is **opt-in per query**: it acts only on reads that carry a `cacheAnnotation`. An annotated ORM call is cached as a whole: the annotation is on the call, and the key is the annotation's `key` or the call's content hash. An annotated SQL builder query is cached as the rows of its statement. The default store keeps each entry for 60 seconds. Three CLI commands run a query twice and report the latency of each call so the cache hit is visible:
 
 ```bash
 # ORM client first({ id }) cached for 60s.
@@ -380,7 +380,8 @@ The corresponding source files:
 Relevant points:
 
 - The `cacheAnnotation` handle declares `applicableTo: ['read']`. Passing it to a write terminal is rejected at both the type and runtime levels — a `as any` cast cannot smuggle it past one without failing at the other.
-- The default cache key is `ActivityContext.contentHash(exec)`, a SHA-512 digest of the post-lowering SQL plus parameters. Different parameters land in different cache slots; identical executions hit. Schema migrations rotate `meta.storageHash`, which feeds into `contentHash`, so cached entries do not leak across migrations.
+- On a cache hit for an ORM call no statement runs, so `lints`, `budgets` and the slow-query warning do not run for it.
+- The default cache key of an ORM call is the call's content hash, a digest of the terminal method and the statement it sends first. The default key of a SQL builder query is `ActivityContext.contentHash(exec)`, a SHA-512 digest of the post-lowering SQL plus parameters. Different parameters land in different cache slots; identical executions hit. Schema migrations rotate `meta.storageHash`, which feeds into `contentHash`, so cached entries do not leak across migrations.
 - The default in-memory store is per-process. For shared caching across replicas, supply a custom `CacheStore` (for example a Redis-backed implementation) via `createCacheMiddleware({ store })`.
 - Connection-scoped (`runtime.connection().execute(...)`) and transaction-scoped (`runtime.transaction(...)`) executions bypass the cache regardless of annotation, so transactional read-after-write coherence is preserved.
 

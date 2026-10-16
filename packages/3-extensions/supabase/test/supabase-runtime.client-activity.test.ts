@@ -11,7 +11,7 @@ declare module '@internal/framework-components/runtime' {
 }
 
 const binding = { role: 'authenticated', claims: { sub: 'user-1' } } as const;
-const testCall = { kind: 'test-call', contentHash: 'call-hash' } as const;
+const testCall = { kind: 'test-call', contentHash: async () => 'call-hash' } as const;
 
 function createRecordingSetup() {
   const started: Array<{ readonly kind: string; readonly ctx: SqlMiddlewareContext }> = [];

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { orm } from '@internal/sql-orm-client';
+import { activitySource, delegatingActivitySource } from '@internal/sql-runtime';
 import type { SqliteClient } from '@internal/sqlite/runtime';
 import sqlite from '@internal/sqlite/runtime';
 import { join } from 'pathe';
@@ -67,6 +68,7 @@ describe('integration/integer representation type on sqlite', () => {
         connection() {
           return runtime.connection();
         },
+        [activitySource]: delegatingActivitySource(() => runtime),
       },
     });
   });

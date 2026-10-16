@@ -14,11 +14,11 @@
 import { Collection, orm } from '@internal/sql-orm-client';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { fullTextDocument, websearchToTsquery } from '@internal/target-postgres/full-text';
-import { blindCast } from '@internal/utils/casts';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { Contract } from '../sql-builder/fixtures/generated/contract';
 import { type PlannedIndex, plannedExpressionIndexes } from '../sql-builder/full-text-index-ddl';
 import { setupIntegrationTest, timeouts } from '../sql-builder/setup';
+import { withPlanRecording } from './runtime-helpers';
 
 const QUERY = 'zebra';
 
@@ -69,15 +69,8 @@ describe('ORM search over a weighted full-text index', {
   function ormClient() {
     const captured: SqlQueryPlan<unknown>[] = [];
     const real = runtime();
-    const recording = blindCast<
-      typeof real,
-      'a recording proxy over the suite runtime; the client only queries through it'
-    >({
-      ...real,
-      query: ((plan: SqlQueryPlan<unknown>, options?: Parameters<typeof real.query>[1]) => {
-        captured.push(plan);
-        return real.query(plan, options);
-      }) satisfies (...args: never[]) => unknown,
+    const recording = withPlanRecording(real, (plan) => {
+      if (!('sql' in plan)) captured.push(plan);
     });
     const db = orm({
       runtime: recording,

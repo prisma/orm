@@ -16,7 +16,7 @@ changes:
         - '\.kind\s*===\s*[''"]transaction[''"]'
   - id: start-a-client-activity
     summary: |
-      An extension can start an activity of its own kind with `startActivityOn(queryable, { kind, contentHash, annotations? })`, derive `contentHash` with `planContentHashOn(queryable, plan)`, send statements through the returned handle, and must end every handle with `end({ outcome, result? })`, in a `finally`; an open handle keeps `close()` waiting. A middleware can supply the activity's result through `intercept.onActivity(activity, ctx)`. Registering the kind in `ClientActivityRegistry` types the handle's `intercepted.result` and `end({ result })`; in middleware hooks the result stays `unknown`.
+      An extension can start an activity of its own kind with `startActivityOn(queryable, { kind, contentHash, annotations? })`, where `contentHash` is a function returning a promise of the digest, for example `() => planContentHashOn(queryable, plan)`; middleware read it with `activity.contentHash()`, which computes it once per activity and only when asked. The extension sends statements through the returned handle and must end every handle with `end({ outcome, result? })`, in a `finally`; an open handle keeps `close()` waiting. A middleware can supply the activity's result through `intercept.onActivity(activity, ctx)`. Registering the kind in `ClientActivityRegistry` types the handle's `intercepted.result` and `end({ result })`; in middleware hooks the result stays `unknown`.
   - id: runtime-connections-carry-an-activity-source
     summary: |
       The SQL runtime's queryables start client activities through an `activitySource` member, keyed by a symbol so the public queryable types do not show it, which `startActivityOn` and `planContentHashOn` read. A connection-like object that a `SqlRuntimeBase` subclass builds over a raw connection adds `[activitySource]: this.connectionActivitySource(connection, () => session)`, and `ActivitySourceTarget` to the object's declared type, so activities can start on it. The public `RuntimeConnection` type does not require it.
@@ -104,7 +104,7 @@ export type ReportResult = ClientActivityResult<'report-run'>;
 
 The registry types the handle side only: `call.intercepted.result` and `call.end({ result })`. In middleware hooks the result of a client activity is `unknown`, even after `result.kind === 'report-run'`, because the hook types must accept unregistered kinds; check or cast the value there.
 
-**Start, use and end it.** Derive the content hash from the plan with `planContentHashOn`. It equals the digest `ctx.contentHash(exec)` returns for the statement's execution plan only when `beforeCompile` gives the same result for the plan in both places (for `planContentHashOn` it runs with the scope and parent of the queryable it is called on and with fresh state, so on the runtime itself it has no parent; for the statement it runs beneath the handle, with the state its `activityStarted` hooks wrote), no `beforeEncode` hook changes the parameters, and the codecs encode deterministically; a cache should key on the activity's own content hash and not rely on the two being equal. End every handle, in a `finally`, or `close()` waits for it forever:
+**Start, use and end it.** Pass a function that derives the content hash from the plan with `planContentHashOn`; the runtime calls it only when a middleware calls `activity.contentHash()`, and once per activity. It equals the digest `ctx.contentHash(exec)` returns for the statement's execution plan only when `beforeCompile` gives the same result for the plan in both places (for `planContentHashOn` it runs with the scope and parent of the queryable it is called on and with fresh state, so on the runtime itself it has no parent; for the statement it runs beneath the handle, with the state its `activityStarted` hooks wrote), no `beforeEncode` hook changes the parameters, and the codecs encode deterministically; a cache should key on the activity's own content hash and not rely on the two being equal. End every handle, in a `finally`, or `close()` waits for it forever:
 
 ```ts
 import { planContentHashOn, startActivityOn } from '@prisma/orm-postgres/family-runtime';
@@ -113,8 +113,10 @@ import type { PostgresClient } from '@prisma/orm-postgres/runtime';
 
 async function runReport(db: PostgresClient<Contract>, plan: SqlQueryPlan<{ email: string }>) {
   const runtime = db.runtime();
-  const contentHash = await planContentHashOn(runtime, plan);
-  const call = await startActivityOn(runtime, { kind: 'report-run', contentHash });
+  const call = await startActivityOn(runtime, {
+    kind: 'report-run',
+    contentHash: () => planContentHashOn(runtime, plan),
+  });
   let outcome: 'succeeded' | 'failed' = 'failed';
   let result: { readonly emails: readonly string[] } | undefined;
   try {
@@ -147,14 +149,14 @@ const reportCache: SqlMiddleware = {
   intercept: {
     async onActivity(activity) {
       if (activity.kind !== 'report-run') return undefined;
-      const hit = served.get(activity.contentHash);
+      const hit = served.get(await activity.contentHash());
       return hit === undefined ? undefined : { result: hit };
     },
   },
   async activityEnded(activity, result) {
     if (activity.kind !== 'report-run' || result.kind !== 'report-run') return;
     if (result.outcome === 'succeeded' && result.source === 'client' && result.result !== undefined) {
-      served.set(activity.contentHash, result.result);
+      served.set(await activity.contentHash(), result.result);
     }
   },
 };

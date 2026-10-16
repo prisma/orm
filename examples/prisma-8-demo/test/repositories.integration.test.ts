@@ -523,11 +523,20 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const plans: unknown[] = [];
+        const { runtime } = await getRuntimeWithMiddleware(connectionString, [
+          {
+            name: 'plans',
+            familyId: 'sql',
+            async activityStarted(activity) {
+              if (activity.kind === 'statement') plans.push(activity.plan);
+            },
+          },
+        ]);
 
         try {
           await seedOrmClientData(runtime);
-          const query = vi.spyOn(runtime, 'query');
+          plans.length = 0;
           const ormClient = createOrmClient(runtime);
           const inline = await ormClient.Post.where((post) => post.userId.eq(seededUserIds.admin))
             .select('id', 'userId')
@@ -543,7 +552,7 @@ describe('ORM client integration examples', () => {
             { id: seededPostIds.newer, userId: seededUserIds.admin },
           ]);
           expect(scoped).toEqual(inline);
-          const [inlinePlan, scopedPlan] = query.mock.calls.map(([plan]) => plan);
+          const [inlinePlan, scopedPlan] = plans;
           expect(scopedPlan).toBeDefined();
           expect(scopedPlan).toEqual(inlinePlan);
         } finally {

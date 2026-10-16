@@ -5,7 +5,7 @@
  * mechanism, this time on a multi-row read terminal. The terminal's
  * `configure: (meta) => void` callback hands the caller a
  * `MetaBuilder<'read'>`; calling `meta.annotate(cacheAnnotation({}))`
- * enables caching of the post-lowering execution.
+ * caches the call's result as a whole.
  *
  * The example also shows the per-query `key` override. When set, the
  * supplied string is used verbatim as the cache key; the cache
@@ -14,7 +14,7 @@
  * equivalent (e.g. the same user list rendered through two different
  * `select` shapes), but the trade-off is that you take responsibility
  * for keeping the key bounded and free of sensitive data — the
- * default `contentHash(exec)` digest is a SHA-512 hash with no
+ * default key, the call's content hash, is a SHA-512 digest with no
  * such risks.
  */
 
@@ -24,8 +24,8 @@ import { createOrmClient } from './client';
 
 export interface CachedListOptions {
   /**
-   * Optional override for the cache key. When omitted, the runtime's
-   * `contentHash(exec)` is used (the default and recommended path).
+   * Optional override for the cache key. When omitted, the call's
+   * content hash is used (the default and recommended path).
    */
   readonly key?: string;
 }

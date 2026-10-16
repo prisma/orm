@@ -1,5 +1,4 @@
 import { blindCast } from '@internal/utils/casts';
-import { ifDefined } from '@internal/utils/defined';
 import { brandedAnnotations } from '../annotations';
 import {
   type ActivityChild,
@@ -115,10 +114,19 @@ class ClientActivityRunImpl<K extends ClientActivityKind, TContext extends Activ
   #everythingBeneathCommitted = true;
 
   constructor(activity: StartActivity<K>, options: ClientActivityOptions<TContext>) {
+    const computeContentHash = activity.contentHash;
+    let contentHash: Promise<string> | undefined;
+    let id: string | undefined;
     this.activity = {
-      id: crypto.randomUUID(),
+      get id() {
+        id ??= crypto.randomUUID();
+        return id;
+      },
       kind: activity.kind,
-      contentHash: activity.contentHash,
+      contentHash: () => {
+        contentHash ??= computeContentHash();
+        return contentHash;
+      },
       annotations: activity.annotations ?? brandedAnnotations(undefined),
     };
     this.#record = createActivityRecord<TContext>(
@@ -173,54 +181,61 @@ class ClientActivityRunImpl<K extends ClientActivityKind, TContext extends Activ
     return this.#children.add(child);
   }
 
-  async end(end: ClientActivityEnd<K>): Promise<void> {
+  end(end: ClientActivityEnd<K>): Promise<void> {
     if (this.#ended) {
-      throw runtimeError(
-        'RUNTIME.ACTIVITY_ALREADY_ENDED',
-        `The '${this.activity.kind}' activity has already ended`,
-        { kind: this.activity.kind, id: this.activity.id },
+      return Promise.reject(
+        runtimeError(
+          'RUNTIME.ACTIVITY_ALREADY_ENDED',
+          `The '${this.activity.kind}' activity has already ended`,
+          { kind: this.activity.kind, id: this.activity.id },
+        ),
       );
     }
     const openChildren = this.#children.open;
     if (openChildren > 0) {
-      await this.finish({ outcome: 'failed', source: 'client' });
-      throw runtimeError(
-        'RUNTIME.ACTIVITY_CHILDREN_OPEN',
-        `The '${this.activity.kind}' activity ended while ${openChildren} ${openChildren === 1 ? 'activity' : 'activities'} beneath it had not ended`,
-        { kind: this.activity.kind, id: this.activity.id, openChildren },
-      );
+      return this.finish({ outcome: 'failed', source: 'client' }).then(() => {
+        throw runtimeError(
+          'RUNTIME.ACTIVITY_CHILDREN_OPEN',
+          `The '${this.activity.kind}' activity ended while ${openChildren} ${openChildren === 1 ? 'activity' : 'activities'} beneath it had not ended`,
+          { kind: this.activity.kind, id: this.activity.id, openChildren },
+        );
+      });
     }
     const intercepted = this.#intercepted;
     if (end.result === undefined && intercepted !== undefined) {
-      await this.finish({ outcome: end.outcome, source: 'middleware', result: intercepted.result });
-    } else {
-      await this.finish({ outcome: end.outcome, source: 'client', result: end.result });
+      return this.finish({
+        outcome: end.outcome,
+        source: 'middleware',
+        result: intercepted.result,
+      });
     }
+    return this.finish({ outcome: end.outcome, source: 'client', result: end.result });
   }
 
-  async finish(ended: {
+  finish(ended: {
     readonly outcome: ClientActivityEnd<K>['outcome'];
     readonly source: 'client' | 'middleware';
     readonly result?: ClientActivityResult<K> | undefined;
   }): Promise<void> {
     this.#ended = true;
-    const result: ClientActivityEnded<K> = {
-      kind: this.activity.kind,
-      outcome: ended.outcome,
-      source: ended.source,
-      ...ifDefined('result', ended.result),
-    };
+    const { kind } = this.activity;
+    const result: ClientActivityEnded<K> =
+      ended.result === undefined
+        ? { kind, outcome: ended.outcome, source: ended.source }
+        : { kind, outcome: ended.outcome, source: ended.source, result: ended.result };
     const own: ActivityFinalizedResult = {
       outcome:
         ended.outcome === 'succeeded' && this.#everythingBeneathCommitted ? 'committed' : 'unknown',
     };
-    await endActivity(this.#record, result, own, this.#slot, (finalized) =>
+    return endActivity(this.#record, result, own, this.#slot, (finalized) =>
       this.finalize(finalized),
     );
   }
 
-  async finalize(result: ActivityFinalizedResult): Promise<void> {
-    await this.#children.finalize(result);
-    await this.#record.finalize(result);
+  finalize(result: ActivityFinalizedResult): Promise<void> {
+    const children = this.#children.finalize(result);
+    return children === undefined
+      ? this.#record.finalize(result)
+      : children.then(() => this.#record.finalize(result));
   }
 }

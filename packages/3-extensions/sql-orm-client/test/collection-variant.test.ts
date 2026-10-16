@@ -8,6 +8,7 @@ import {
   ParamRef,
   type SelectAst,
 } from '@internal/sql-relational-core/ast';
+import { activitySource } from '@internal/sql-runtime';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it, vi } from 'vitest';
 import { Collection } from '../src/collection';
@@ -18,6 +19,7 @@ import {
   createMockRuntime,
   getTestContext,
   isSelectAst,
+  stubActivitySource,
 } from './helpers';
 
 function collectColumnRefs(expr: AnyExpression | undefined): ColumnRef[] {
@@ -765,7 +767,7 @@ describe('MTI variant create (two-INSERT orchestration)', () => {
 
     const commit = vi.fn().mockResolvedValue(undefined);
     const rollback = vi.fn().mockResolvedValue(undefined);
-    const txRuntime = {
+    const withTransaction = {
       ...baseRuntime,
       transaction: vi.fn().mockResolvedValue({
         query: baseRuntime.query.bind(baseRuntime),
@@ -774,6 +776,7 @@ describe('MTI variant create (two-INSERT orchestration)', () => {
         rollback,
       }),
     };
+    const txRuntime = { ...withTransaction, [activitySource]: stubActivitySource(withTransaction) };
 
     const collection = new Collection({ runtime: txRuntime, context }, 'Task', {
       namespaceId: 'public',

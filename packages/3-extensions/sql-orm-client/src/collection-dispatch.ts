@@ -21,7 +21,8 @@ import {
 } from '@internal/framework-components/runtime';
 import type { SqlStorage, StorageColumn } from '@internal/sql-contract/types';
 import type { Codec } from '@internal/sql-relational-core/ast';
-import type { Preparable } from '@internal/sql-relational-core/plan';
+import type { Preparable, SqlQueryPlan } from '@internal/sql-relational-core/plan';
+import type { RuntimeScope } from '@internal/sql-relational-core/types';
 import { blindCast } from '@internal/utils/casts';
 import { InternalError, isInternalError } from '@internal/utils/internal-error';
 import { resolveAggregate } from './aggregate-codecs';
@@ -369,24 +370,51 @@ export function describeCollectionFirstOrThrow<Row>(
   };
 }
 
+/** The query a collection read sends. Without includes it is compiled now; with includes, on first use. */
+export interface CollectionQuery<Row> {
+  plan(): SqlQueryPlan<Record<string, unknown>>;
+  rows(scope: RuntimeScope): AsyncIterableResult<Row>;
+}
+
+export function describeCollectionQuery<Row>(
+  options: DescribeCollectionRowsOptions,
+): CollectionQuery<Row> {
+  const { context, state, modelName, namespaceId } = options;
+  if (state.includes.length === 0) {
+    const query = describeExecutionRows<Row>(options);
+    return { plan: () => query.plan, rows: (scope) => runQuery(scope, query) };
+  }
+  resolvePolymorphismInfo(context.contract, namespaceId, modelName);
+  let compiled: Preparable<Record<string, unknown>, AsyncIterableResult<Row>> | undefined;
+  const query = () => {
+    compiled ??= describeExecutionRows<Row>(options);
+    return compiled;
+  };
+  return {
+    plan: () => query().plan,
+    rows: (scope) => {
+      const generator = async function* (): AsyncGenerator<Row, void, unknown> {
+        yield* runQuery(scope, query());
+      };
+      return new AsyncIterableResult(generator());
+    },
+  };
+}
+
+export function runQuery<Result>(
+  scope: RuntimeScope,
+  query: Preparable<Record<string, unknown>, Result>,
+): Result {
+  return query.consume(queryPlanRows(scope, query.plan));
+}
+
 export function dispatchCollectionRows<Row>(
   options: DescribeCollectionRowsOptions & {
     runtime: CollectionContext<Contract<SqlStorage>>['runtime'];
   },
 ): AsyncIterableResult<Row> {
-  const { context, runtime, state, modelName, namespaceId } = options;
-  const descriptionOptions = { context, state, modelName, namespaceId };
-  if (state.includes.length === 0) {
-    const query = describeExecutionRows<Row>(descriptionOptions);
-    return query.consume(queryPlanRows(runtime, query.plan));
-  }
-
-  resolvePolymorphismInfo(context.contract, namespaceId, modelName);
-  const generator = async function* (): AsyncGenerator<Row, void, unknown> {
-    const query = describeExecutionRows<Row>(descriptionOptions);
-    yield* query.consume(queryPlanRows(runtime, query.plan));
-  };
-  return new AsyncIterableResult(generator());
+  const { runtime, ...descriptionOptions } = options;
+  return describeCollectionQuery<Row>(descriptionOptions).rows(runtime);
 }
 
 function consumeIncludeRows<Row>(

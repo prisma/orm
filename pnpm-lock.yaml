@@ -3785,6 +3785,9 @@ importers:
       '@internal/cli':
         specifier: workspace:8.0.0-rc.18
         version: link:../../1-framework/3-tooling/cli
+      '@internal/middleware-cache':
+        specifier: workspace:8.0.0-rc.18
+        version: link:../middleware-cache
       '@internal/operations':
         specifier: workspace:8.0.0-rc.18
         version: link:../../1-framework/1-core/operations

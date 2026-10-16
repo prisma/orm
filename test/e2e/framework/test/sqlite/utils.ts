@@ -42,20 +42,7 @@ export async function withSqliteTestRuntime<TContract extends Contract<SqlStorag
         context,
         rawCodecInferer: client.stack.adapter.rawCodecInferer,
       });
-      const ormClient = orm({
-        context,
-        runtime: {
-          query(plan) {
-            return runtime.query(plan);
-          },
-          execute(plan) {
-            return runtime.execute(plan);
-          },
-          connection() {
-            return runtime.connection();
-          },
-        },
-      });
+      const ormClient = orm({ context, runtime });
 
       await callback({ db, runtime, ormClient, rawDb });
     } finally {

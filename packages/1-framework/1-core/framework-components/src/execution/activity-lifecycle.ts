@@ -10,6 +10,8 @@ import type {
   ActivityObserver,
 } from './runtime-middleware';
 
+const resolved: Promise<void> = Promise.resolve();
+
 /** An open activity that new activities can start beneath. */
 export interface ActivityParent {
   readonly activity: ActivityBase;
@@ -89,13 +91,17 @@ export class ActivityChildren {
     };
   }
 
-  /** Finalizes the children that have ended, in start order, with `result`; a child that ends later is finalized with it then. */
-  async finalize(result: ActivityFinalizedResult): Promise<void> {
-    if (this.#finalized !== undefined) return;
+  /** Finalizes the children that have ended, in start order, with `result`; a child that ends later is finalized with it then. `undefined` when no ended child waited. */
+  finalize(result: ActivityFinalizedResult): Promise<void> | undefined {
+    if (this.#finalized !== undefined) return undefined;
     this.#finalized = result;
-    for (const { child, ended } of this.#held.splice(0)) {
-      if (ended) await child.finalize(result);
-    }
+    const held = this.#held.splice(0);
+    if (held.length === 0) return undefined;
+    return (async () => {
+      for (const { child, ended } of held) {
+        if (ended) await child.finalize(result);
+      }
+    })();
   }
 }
 
@@ -121,7 +127,8 @@ export interface ActivityRecord<TContext extends ActivityContext> extends Activi
   readonly activity: Activity;
   readonly ctx: TContext;
   started(): Promise<void>;
-  ended(result: ActivityEndedResult): Promise<void>;
+  /** Runs the `activityEnded` hooks; `undefined` when no middleware has one. */
+  ended(result: ActivityEndedResult): Promise<void> | undefined;
 }
 
 /** The per-activity state behind `ctx.state(key)`: one object per key, created empty on first use. */
@@ -148,6 +155,22 @@ export function createStateStore(): ActivityStateStore {
   };
 }
 
+interface LifecycleHooks {
+  anyStarted: boolean;
+  anyEnded: boolean;
+  anyFinalized: boolean;
+}
+
+function hooksOf(middleware: ReadonlyArray<ActivityObserver>): LifecycleHooks {
+  const hooks = { anyStarted: false, anyEnded: false, anyFinalized: false };
+  for (const mw of middleware) {
+    hooks.anyStarted ||= mw.activityStarted !== undefined;
+    hooks.anyEnded ||= mw.activityEnded !== undefined;
+    hooks.anyFinalized ||= mw.activityFinalized !== undefined;
+  }
+  return hooks;
+}
+
 export function createActivityRecord<TContext extends ActivityContext>(
   middleware: ReadonlyArray<ActivityObserver>,
   activity: Activity,
@@ -160,49 +183,63 @@ export function createActivityRecord<TContext extends ActivityContext>(
   let started = middleware.length;
   const ctx = contextBeneath<TContext>(fields, parent, store);
 
+  const { anyStarted, anyEnded, anyFinalized } = hooksOf(middleware);
+
   return {
     activity,
     ctx,
-    async started() {
-      for (let index = 0; index < middleware.length; index++) {
-        const mw = middleware[index];
-        if (!mw?.activityStarted) continue;
-        try {
-          await mw.activityStarted(activity, ctx);
-        } catch (error) {
-          started = index + 1;
-          throw error;
+    started() {
+      if (!anyStarted) return resolved;
+      return (async () => {
+        for (let index = 0; index < middleware.length; index++) {
+          const mw = middleware[index];
+          if (!mw?.activityStarted) continue;
+          try {
+            await mw.activityStarted(activity, ctx);
+          } catch (error) {
+            started = index + 1;
+            throw error;
+          }
         }
-      }
+      })();
     },
-    async ended(result) {
+    ended(result) {
+      if (!anyEnded) return undefined;
       // Every middleware that saw the activity start sees it end. When the activity succeeded, the first error a hook throws fails it; after a failure the activity's own error reaches the caller, and hook errors go to the log.
-      let firstError: { readonly error: unknown } | undefined;
-      for (let index = 0; index < started; index++) {
-        const mw = middleware[index];
-        if (!mw?.activityEnded) continue;
-        try {
-          await mw.activityEnded(activity, result, ctx);
-        } catch (error) {
-          if (result.outcome === 'succeeded') firstError ??= { error };
-          else logHookError(ctx, 'middleware.activityEnded.error', mw.name, error);
+      return (async () => {
+        let firstError: { readonly error: unknown } | undefined;
+        for (let index = 0; index < started; index++) {
+          const mw = middleware[index];
+          if (!mw?.activityEnded) continue;
+          try {
+            await mw.activityEnded(activity, result, ctx);
+          } catch (error) {
+            if (result.outcome === 'succeeded') firstError ??= { error };
+            else logHookError(ctx, 'middleware.activityEnded.error', mw.name, error);
+          }
         }
-      }
-      if (firstError !== undefined) throw firstError.error;
+        if (firstError !== undefined) throw firstError.error;
+      })();
     },
-    async finalize(result) {
-      if (finalized) return;
+    finalize(result) {
+      if (finalized) return resolved;
       finalized = true;
-      for (let index = 0; index < started; index++) {
-        const mw = middleware[index];
-        if (!mw?.activityFinalized) continue;
-        try {
-          await mw.activityFinalized(activity, result, ctx);
-        } catch (error) {
-          logHookError(ctx, 'middleware.activityFinalized.error', mw.name, error);
-        }
+      if (!anyFinalized) {
+        store.clear();
+        return resolved;
       }
-      store.clear();
+      return (async () => {
+        for (let index = 0; index < started; index++) {
+          const mw = middleware[index];
+          if (!mw?.activityFinalized) continue;
+          try {
+            await mw.activityFinalized(activity, result, ctx);
+          } catch (error) {
+            logHookError(ctx, 'middleware.activityFinalized.error', mw.name, error);
+          }
+        }
+        store.clear();
+      })();
     },
   };
 }
@@ -251,16 +288,27 @@ function logHookError(
 /**
  * Ends an activity: its `activityEnded` hooks, then its finalization, which its parent holds or performs, or which happens at once with `own` when it has no parent. The finalization runs even when an `activityEnded` hook fails the activity; that error is rethrown afterwards.
  */
-export async function endActivity(
+export function endActivity(
   record: Pick<ActivityRecord<ActivityContext>, 'ended'>,
   result: ActivityEndedResult,
   own: ActivityFinalizedResult,
   slot: ActivityChildSlot | undefined,
   finalize: (result: ActivityFinalizedResult) => Promise<void>,
 ): Promise<void> {
+  const ended = record.ended(result);
+  if (ended === undefined) return slot === undefined ? finalize(own) : slot.ended(own);
+  return finishAfterEndedHooks(ended, own, slot, finalize);
+}
+
+async function finishAfterEndedHooks(
+  ended: Promise<void>,
+  own: ActivityFinalizedResult,
+  slot: ActivityChildSlot | undefined,
+  finalize: (result: ActivityFinalizedResult) => Promise<void>,
+): Promise<void> {
   let endedError: { readonly error: unknown } | undefined;
   try {
-    await record.ended(result);
+    await ended;
   } catch (error) {
     endedError = { error };
   }

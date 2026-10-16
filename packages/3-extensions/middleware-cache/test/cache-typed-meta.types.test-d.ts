@@ -2,7 +2,7 @@ import { expectTypeOf, test } from 'vitest';
 import {
   type CacheAnnotationHandle,
   type CacheAnnotationOptions,
-  type CachedRows,
+  type CachedValue,
   type CacheEntry,
   type CacheMiddleware,
   type CacheStore,
@@ -15,14 +15,14 @@ interface TagMeta {
   tags: string[];
 }
 
-class TagStore implements CacheStore<TagMeta, CachedRows> {
+class TagStore implements CacheStore<TagMeta, CachedValue> {
   async get(target: {
     readonly key: string;
     readonly meta: TagMeta | undefined;
-  }): Promise<CacheEntry<TagMeta, CachedRows>> {
+  }): Promise<CacheEntry<TagMeta, CachedValue>> {
     return { key: target.key, meta: target.meta, version: 0, data: { empty: true } };
   }
-  async set(_entry: CacheEntry<TagMeta, CachedRows>, _value: CachedRows): Promise<boolean> {
+  async set(_entry: CacheEntry<TagMeta, CachedValue>, _value: CachedValue): Promise<boolean> {
     return true;
   }
   async unset(_target: {
@@ -38,7 +38,7 @@ class OneArgumentTagStore implements CacheStore<TagMeta> {
   }): Promise<CacheEntry<TagMeta>> {
     return { key: target.key, meta: target.meta, version: 0, data: { empty: true } };
   }
-  async set(_entry: CacheEntry<TagMeta>, _value: CachedRows): Promise<boolean> {
+  async set(_entry: CacheEntry<TagMeta>, _value: CachedValue): Promise<boolean> {
     return true;
   }
   async unset(_target: {
@@ -47,14 +47,14 @@ class OneArgumentTagStore implements CacheStore<TagMeta> {
   }): Promise<void> {}
 }
 
-test('a store written as CacheStore<TagMeta> holds rows and fits the middleware', () => {
-  expectTypeOf<CacheStore<TagMeta>>().toEqualTypeOf<CacheStore<TagMeta, CachedRows>>();
+test('a store written as CacheStore<TagMeta> holds cached values and fits the middleware', () => {
+  expectTypeOf<CacheStore<TagMeta>>().toEqualTypeOf<CacheStore<TagMeta, CachedValue>>();
   expectTypeOf(createCacheMiddleware({ store: new OneArgumentTagStore() })).toEqualTypeOf<
     CacheMiddleware<TagMeta>
   >();
 });
 
-test('a bare CacheStore holds rows and fits the middleware', () => {
+test('a bare CacheStore holds cached values and fits the middleware', () => {
   const store: CacheStore = createInMemoryCacheStore();
 
   expectTypeOf(createCacheMiddleware({ store })).toEqualTypeOf<CacheMiddleware<unknown>>();
@@ -93,7 +93,7 @@ test('a pre-typed wrapper keeps the annotation and the store in agreement', () =
 });
 
 test('untyped calls default to unknown', () => {
-  expectTypeOf(createInMemoryCacheStore()).toEqualTypeOf<CacheStore<unknown, CachedRows>>();
+  expectTypeOf(createInMemoryCacheStore()).toEqualTypeOf<CacheStore<unknown, CachedValue>>();
   expectTypeOf(createCacheMiddleware()).toEqualTypeOf<CacheMiddleware<unknown>>();
   expectTypeOf(createCacheMiddleware({ store: createInMemoryCacheStore() })).toEqualTypeOf<
     CacheMiddleware<unknown>

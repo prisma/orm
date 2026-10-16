@@ -14,7 +14,14 @@ import type { RuntimeQueryable } from '@internal/sql-orm-client';
 import type { SelectAst, SqlStatementStats } from '@internal/sql-relational-core/ast';
 import type { SqlExecutionPlan, SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
-import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
+import type { RuntimeScope } from '@internal/sql-relational-core/types';
+import {
+  type ActivityHandle,
+  type ActivitySource,
+  activitySource,
+  createExecutionContext,
+  createSqlExecutionStack,
+} from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import type { Contract as ExecutionDefaultedTagsContract } from './fixtures/execution-defaulted-tags/generated/contract';
 import executionDefaultedTagsContractJson from './fixtures/execution-defaulted-tags/generated/contract.json' with {
@@ -315,12 +322,36 @@ export function buildStiPolyContract(): TestContract {
   return deserializeTestContract(raw);
 }
 
+/** An activity source for a test stub: each activity's handle sends its statements through `target` itself, and ends doing nothing. */
+export function stubActivitySource(target: RuntimeScope): ActivitySource {
+  const source: ActivitySource = {
+    async startActivity(start) {
+      const handle = Object.assign(Object.create(target), {
+        activity: {
+          id: 'stub-activity',
+          kind: start.kind,
+          contentHash: start.contentHash,
+          annotations: start.annotations ?? new Map(),
+        },
+        intercepted: undefined,
+        end: async () => {},
+        startActivity: source.startActivity,
+        planContentHash: source.planContentHash,
+        [activitySource]: source,
+      });
+      return handle as ActivityHandle<typeof start.kind>;
+    },
+    planContentHash: async () => 'stub-plan-hash',
+  };
+  return source;
+}
+
 export function createMockRuntime(): MockRuntime {
   const executions: MockExecution[] = [];
   let nextResults: Record<string, unknown>[][] = [];
   let nextStats: SqlStatementStats[] = [];
 
-  const runtime: MockRuntime = {
+  const base = {
     executions,
     setNextResults(results: Record<string, unknown>[][]) {
       nextResults = [...results];
@@ -350,6 +381,7 @@ export function createMockRuntime(): MockRuntime {
       return stats;
     },
   };
+  const runtime: MockRuntime = Object.assign(base, { [activitySource]: stubActivitySource(base) });
 
   return runtime;
 }

@@ -1,4 +1,3 @@
-import { defineAnnotation } from '@internal/framework-components/runtime';
 import { describe, expect, it, vi } from 'vitest';
 import { FilterData } from '../../src/mutation-graph/filter-data';
 import { Graph } from '../../src/mutation-graph/graph';
@@ -19,13 +18,6 @@ import {
   updatePosts,
   updateUsers,
 } from './statements';
-
-const auditAnnotation = defineAnnotation<{ actor: string }>()({
-  namespace: 'audit',
-  applicableTo: ['write'],
-});
-const audit = auditAnnotation({ actor: 'system' });
-const auditAnnotations = new Map([[audit.namespace, audit]]);
 
 function usersWithPosts() {
   const { includes, tables } = createCollectionFor('User').collection.include('posts').state;
@@ -116,7 +108,7 @@ describe('running a graph', () => {
       const update = updateUsers({ name: 'Ada' }, nameIsAda, allUserColumns);
       graph.setResult(graph.add(update, { filter: [] }));
 
-      const rows = await queryGraph(graph, contextOf(runtime), undefined, rowsOfUsers());
+      const rows = await queryGraph(graph, contextOf(runtime), rowsOfUsers());
 
       expect(rows).toEqual([{ id: 1, name: 'Ada', invitedById: 2 }]);
       expect(statements(runtime)).toEqual(['query update']);
@@ -127,12 +119,7 @@ describe('running a graph', () => {
       const graph = new Graph();
       graph.setResult(graph.add(deleteUsers(nameIsAda), { filter: [] }));
 
-      await queryGraph(
-        graph,
-        contextOf(runtime),
-        undefined,
-        rowsOfUsers({ selectedFields: ['id', 'email'] }),
-      );
+      await queryGraph(graph, contextOf(runtime), rowsOfUsers({ selectedFields: ['id', 'email'] }));
 
       expect(statements(runtime)).toEqual(['query delete']);
       expect(returnedColumns(runtime.executions[0]!)).toEqual(['id', 'email']);
@@ -143,7 +130,7 @@ describe('running a graph', () => {
       const graph = new Graph();
       graph.setResult(graph.add(deleteUsers(nameIsAda), { filter: [] }));
 
-      await queryGraph(graph, contextOf(runtime), undefined, rowsOfUsers());
+      await queryGraph(graph, contextOf(runtime), rowsOfUsers());
 
       expect(returnedColumns(runtime.executions[0]!)).toEqual(allUserColumns);
     });
@@ -153,12 +140,7 @@ describe('running a graph', () => {
       const graph = new Graph();
       graph.setResult(graph.add(findUsers([nameIsAda], ['id']), { filter: [] }));
 
-      await queryGraph(
-        graph,
-        contextOf(runtime),
-        undefined,
-        rowsOfUsers({ selectedFields: ['id', 'email'] }),
-      );
+      await queryGraph(graph, contextOf(runtime), rowsOfUsers({ selectedFields: ['id', 'email'] }));
 
       expect(returnedColumns(runtime.executions[0]!)).toEqual(['id', 'email']);
     });
@@ -169,7 +151,7 @@ describe('running a graph', () => {
       const graph = new Graph();
       graph.setResult(graph.add(deleteUsers(nameIsAda), { filter: [] }));
 
-      expect(await executeGraph(graph, contextOf(runtime), undefined)).toEqual({ affectedRows: 3 });
+      expect(await executeGraph(graph, contextOf(runtime))).toEqual({ affectedRows: 3 });
       expect(statements(runtime)).toEqual(['execute delete']);
       expect(returnedColumns(runtime.executions[0]!)).toEqual([]);
     });
@@ -181,12 +163,7 @@ describe('running a graph', () => {
       graph.setResult(graph.add(findUsers(), { filter: [] }));
 
       expect(
-        await firstRowOf(
-          graph,
-          contextOf(runtime),
-          undefined,
-          rowsOfUsers({ selectedFields: ['id'] }),
-        ),
+        await firstRowOf(graph, contextOf(runtime), rowsOfUsers({ selectedFields: ['id'] })),
       ).toEqual({ id: 1 });
     });
 
@@ -195,7 +172,7 @@ describe('running a graph', () => {
       const graph = new Graph();
       graph.setResult(graph.add(deleteUsers(undefined, allUserColumns), { filter: [] }));
 
-      await queryGraph(graph, contextOf(transactional.runtime), undefined, rowsOfUsers());
+      await queryGraph(graph, contextOf(transactional.runtime), rowsOfUsers());
 
       expect(transactional.open).not.toHaveBeenCalled();
     });
@@ -205,13 +182,9 @@ describe('running a graph', () => {
     it('gives no rows, null and zero, and executes nothing when the graph has no node', async () => {
       const runtime = createMockRuntime();
 
-      expect(await queryGraph(new Graph(), contextOf(runtime), undefined, rowsOfUsers())).toEqual(
-        [],
-      );
-      expect(
-        await firstRowOf(new Graph(), contextOf(runtime), undefined, rowsOfUsers()),
-      ).toBeNull();
-      expect(await affectedBy(new Graph(), contextOf(runtime), undefined)).toBe(0);
+      expect(await queryGraph(new Graph(), contextOf(runtime), rowsOfUsers())).toEqual([]);
+      expect(await firstRowOf(new Graph(), contextOf(runtime), rowsOfUsers())).toBeNull();
+      expect(await affectedBy(new Graph(), contextOf(runtime))).toBe(0);
       expect(runtime.executions).toEqual([]);
     });
 
@@ -220,7 +193,7 @@ describe('running a graph', () => {
       const graph = new Graph();
       graph.add(findUsers([nameIsAda]), { filter: [] });
 
-      expect(await firstRowOf(graph, contextOf(runtime), undefined, rowsOfUsers())).toBeNull();
+      expect(await firstRowOf(graph, contextOf(runtime), rowsOfUsers())).toBeNull();
       expect(statements(runtime)).toEqual(['query select']);
     });
   });
@@ -233,7 +206,6 @@ describe('running a graph', () => {
       const rows = await queryGraph(
         findThenDeleteUsers(),
         contextOf(runtime),
-        undefined,
         rowsOfUsers({ selectedFields: ['id', 'name'] }),
       );
 
@@ -247,7 +219,6 @@ describe('running a graph', () => {
       queryGraph(
         findThenDeleteUsers(),
         contextOf(runtime),
-        undefined,
         rowsOfUsers({ selectedFields: ['id', 'name'] }),
       );
       await Promise.resolve();
@@ -261,7 +232,6 @@ describe('running a graph', () => {
       await queryGraph(
         findThenDeleteUsers(),
         contextOf(transactional.runtime),
-        undefined,
         rowsOfUsers({ selectedFields: ['id', 'name'] }),
       );
 
@@ -280,28 +250,11 @@ describe('running a graph', () => {
         queryGraph(
           findThenDeleteUsers(),
           contextOf(transactional.runtime),
-          undefined,
           rowsOfUsers({ selectedFields: ['id', 'name'] }),
         ),
       ).rejects.toThrow('delete failed');
       expect(transactional.rollback).toHaveBeenCalledTimes(1);
       expect(transactional.commit).not.toHaveBeenCalled();
-    });
-
-    it('puts the annotations of the caller on every statement', async () => {
-      const runtime = createMockRuntime();
-
-      await queryGraph(
-        findThenDeleteUsers(),
-        contextOf(runtime),
-        auditAnnotations,
-        rowsOfUsers({ selectedFields: ['id', 'name'] }),
-      );
-
-      expect(runtime.executions.map((execution) => auditAnnotation.read(execution.plan))).toEqual([
-        { actor: 'system' },
-        { actor: 'system' },
-      ]);
     });
   });
 
@@ -310,12 +263,7 @@ describe('running a graph', () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[{ id: 7 }, { id: 8 }], [{ id: 70, title: 'New' }]]);
 
-      const row = await firstRowOf(
-        findThenUpdatePost(),
-        contextOf(runtime),
-        undefined,
-        rowsOfPosts(),
-      );
+      const row = await firstRowOf(findThenUpdatePost(), contextOf(runtime), rowsOfPosts());
 
       expect(row).toEqual({ id: 70, title: 'New' });
       expect(statements(runtime)).toEqual(['query select', 'query update']);
@@ -326,7 +274,7 @@ describe('running a graph', () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[{ id: 7, name: 'Ada' }], []]);
 
-      await firstRowOf(findThenUpdatePost(idAndName), contextOf(runtime), undefined, rowsOfPosts());
+      await firstRowOf(findThenUpdatePost(idAndName), contextOf(runtime), rowsOfPosts());
 
       expect(returnedColumns(runtime.executions[0]!)).toEqual(['id', 'name']);
       expect(whereText(runtime.executions[1]!, 'posts')).toBe("(user_id = 7 and title = 'Ada')");
@@ -336,9 +284,7 @@ describe('running a graph', () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[]]);
 
-      expect(
-        await firstRowOf(findThenUpdatePost(), contextOf(runtime), undefined, rowsOfPosts()),
-      ).toBeNull();
+      expect(await firstRowOf(findThenUpdatePost(), contextOf(runtime), rowsOfPosts())).toBeNull();
       expect(statements(runtime)).toEqual(['query select']);
     });
 
@@ -349,7 +295,7 @@ describe('running a graph', () => {
       const find = graph.add(findUsers([nameIsAda]), { filter: [] });
       graph.setResult(graph.add(deletePosts(), { filter: [new FilterData(find, idToUserId)] }));
 
-      expect(await affectedBy(graph, contextOf(runtime), undefined)).toBe(0);
+      expect(await affectedBy(graph, contextOf(runtime))).toBe(0);
       expect(statements(runtime)).toEqual(['query select']);
     });
 
@@ -364,7 +310,7 @@ describe('running a graph', () => {
       const sameId = columnPairs('posts', 'posts', [['id', 'id']]);
       graph.setResult(graph.add(deletePosts(), { filter: [new FilterData(update, sameId)] }));
 
-      expect(await affectedBy(graph, contextOf(runtime), undefined)).toBe(0);
+      expect(await affectedBy(graph, contextOf(runtime))).toBe(0);
       expect(statements(runtime)).toEqual(['query select']);
     });
 
@@ -377,7 +323,7 @@ describe('running a graph', () => {
         graph.add(deletePosts(undefined, ['id']), { filter: [new FilterData(update, idToUserId)] }),
       );
 
-      await queryGraph(graph, contextOf(runtime), undefined, rowsOfPosts());
+      await queryGraph(graph, contextOf(runtime), rowsOfPosts());
 
       expect(statements(runtime)).toEqual(['query update', 'query delete']);
       expect(returnedColumns(runtime.executions[0]!)).toEqual(['id']);
@@ -398,7 +344,6 @@ describe('running a graph', () => {
       const row = await firstRowOf(
         graph,
         contextOf(runtime),
-        undefined,
         rowsOfUsers({ selectedFields: ['id', 'invited_by_id'] }),
       );
 
@@ -418,7 +363,6 @@ describe('running a graph', () => {
       const rows = await queryGraph(
         graph,
         contextOf(runtime),
-        undefined,
         rowsOfUsers({ selectedFields: ['name'] }),
       );
 
@@ -435,7 +379,7 @@ describe('running a graph', () => {
       graph.add(deletePosts(), { filter: [new FilterData(update, idToUserId)] });
       graph.setResult(update);
 
-      expect(await affectedBy(graph, contextOf(runtime), undefined)).toBe(2);
+      expect(await affectedBy(graph, contextOf(runtime))).toBe(2);
       expect(statements(runtime)).toEqual(['query update', 'execute delete']);
     });
   });
@@ -452,21 +396,12 @@ describe('running a graph', () => {
         graph.add(findUsersWith(state), { filter: [new FilterData(update, sameId)] }),
       );
 
-      const rows = await queryGraph(
-        graph,
-        contextOf(runtime),
-        auditAnnotations,
-        rowsOfUsers(state),
-      );
+      const rows = await queryGraph(graph, contextOf(runtime), rowsOfUsers(state));
 
       expect(rows).toEqual([{ id: 1, name: 'Ada', posts: [] }]);
       expect(statements(runtime)).toEqual(['query update', 'query select']);
       expect(returnedColumns(runtime.executions[0]!)).toEqual(['id']);
       expect(whereText(runtime.executions[1]!, 'users')).toBe('id = 1');
-      expect(runtime.executions.map((execution) => auditAnnotation.read(execution.plan))).toEqual([
-        { actor: 'system' },
-        { actor: 'system' },
-      ]);
     });
 
     it('does not run the Find when the write changed no row', async () => {
@@ -480,9 +415,7 @@ describe('running a graph', () => {
         graph.add(findUsersWith(state), { filter: [new FilterData(update, sameId)] }),
       );
 
-      expect(await queryGraph(graph, contextOf(runtime), undefined, rowsOfUsers(state))).toEqual(
-        [],
-      );
+      expect(await queryGraph(graph, contextOf(runtime), rowsOfUsers(state))).toEqual([]);
       expect(statements(runtime)).toEqual(['query update']);
     });
 
@@ -495,20 +428,11 @@ describe('running a graph', () => {
       graph.add(deleteUsers(nameIsAda), { filter: [] });
       graph.setResult(find);
 
-      const rows = await queryGraph(
-        graph,
-        contextOf(runtime),
-        auditAnnotations,
-        rowsOfUsers(state),
-      );
+      const rows = await queryGraph(graph, contextOf(runtime), rowsOfUsers(state));
 
       expect(rows).toEqual([{ id: 1, name: 'Ada', posts: [] }]);
       expect(statements(runtime)).toEqual(['query select', 'execute delete']);
       expect(returnedColumns(runtime.executions[0]!)).toEqual(['id', 'name', 'posts']);
-      expect(runtime.executions.map((execution) => auditAnnotation.read(execution.plan))).toEqual([
-        { actor: 'system' },
-        { actor: 'system' },
-      ]);
     });
 
     it('leaves a column a Find result returns only for an edge out of the rows', async () => {
@@ -521,7 +445,7 @@ describe('running a graph', () => {
       graph.add(deleteUsers(), { filter: [new FilterData(find, sameId)] });
       graph.setResult(find);
 
-      const row = await firstRowOf(graph, contextOf(runtime), undefined, rowsOfUsers(state));
+      const row = await firstRowOf(graph, contextOf(runtime), rowsOfUsers(state));
 
       expect(row).toEqual({ name: 'Ada', posts: [] });
       expect(returnedColumns(runtime.executions[0]!)).toEqual(['name', 'posts', 'id']);

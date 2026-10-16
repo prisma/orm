@@ -4,6 +4,7 @@ export type { CacheMiddleware, CacheMiddlewareOptions } from '../cache-middlewar
 export { createCacheMiddleware, deriveKeyFromContentHash } from '../cache-middleware';
 export type {
   CachedRows,
+  CachedValue,
   CacheEntry,
   CacheStore,
   InMemoryCacheStoreOptions,

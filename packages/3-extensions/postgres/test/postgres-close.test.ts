@@ -58,6 +58,11 @@ const runtimeClosedError = {
   message: 'Runtime is closed',
 };
 
+const clientClosedError = {
+  code: 'DRIVER.NOT_CONNECTED',
+  message: 'Postgres client is closed',
+};
+
 function poolEndSpy() {
   return (Pool as unknown as { _endSpy: ReturnType<typeof vi.fn> })._endSpy;
 }
@@ -294,12 +299,12 @@ describe('a promise pending when close() is called on a client that owns its poo
     return outcome;
   }
 
-  it('an ORM all() starts when awaited, after the close, and rejects with the runtime closed error', async () => {
+  it('an ORM all() starts its call when awaited, after the close, and is refused with "Postgres client is closed"', async () => {
     const db = await connectedClient();
 
     const outcome = await closeWhilePending(db, db.orm.public.User.all());
 
-    expect(outcome).toEqual({ rejected: expect.objectContaining(runtimeClosedError) });
+    expect(outcome).toEqual({ rejected: expect.objectContaining(clientClosedError) });
   });
 
   it('an ORM first() has started, so the close waits for it and it resolves', async () => {
@@ -340,17 +345,16 @@ describe('a promise pending when close() is called on a client that owns its poo
     expect(calls.indexOf('query')).toBeLessThan(calls.indexOf('end'));
   });
 
-  it('an ORM create() left pending at close() starts its insert after the close, so the runtime refuses it and it must be awaited first', async () => {
+  it('an ORM create() has started its call, so the close waits for its insert and it resolves', async () => {
     const db = await connectedClient();
 
     const outcome = await closeWhilePending(
       db,
       db.orm.public.User.create({ email: 'ada@example.com', name: 'Ada' }),
-      [expect.objectContaining(runtimeClosedError)],
     );
 
-    expect(outcome).toEqual({ rejected: expect.objectContaining(runtimeClosedError) });
-    expect(statements.some((text) => text.startsWith('INSERT'))).toBe(false);
+    expect(outcome).toEqual({ resolved: expect.objectContaining({ email: 'ada@example.com' }) });
+    expect(statements.some((text) => text.startsWith('INSERT'))).toBe(true);
   });
 
   it.each([
@@ -369,20 +373,13 @@ describe('a promise pending when close() is called on a client that owns its poo
         }),
     ],
   ])(
-    'an ORM %s left pending at close() is refused with "Postgres client is closed", so it must be awaited first',
+    'an ORM %s has started its call, so the close waits for its statements and it resolves',
     async (_name, run) => {
       const db = await connectedClient();
 
-      const outcome = await closeWhilePending(db, run(db), [
-        expect.objectContaining({ message: 'Postgres client is closed' }),
-      ]);
+      const outcome = await closeWhilePending(db, run(db));
 
-      expect(outcome).toEqual({
-        rejected: expect.objectContaining({
-          code: 'DRIVER.NOT_CONNECTED',
-          message: 'Postgres client is closed',
-        }),
-      });
+      expect(outcome).toEqual({ resolved: expect.objectContaining({ email: 'ada@example.com' }) });
     },
   );
 
@@ -452,7 +449,7 @@ describe('a promise pending when close() is called on a client that owns its poo
     expect(closed).toBe(true);
   });
 
-  it('close() closes the runtime in the same call, so a lazy read awaited a turn of the event loop later is refused, as on a connection', async () => {
+  it('close() closes the client in the same call, so a lazy read awaited a turn of the event loop later is refused', async () => {
     const db = await connectedClient();
     const runtimeClose = vi.spyOn(db.runtime(), 'close');
     const pending = db.orm.public.User.all();
@@ -466,7 +463,7 @@ describe('a promise pending when close() is called on a client that owns its poo
     );
     await closing;
 
-    expect(outcome).toEqual({ rejected: expect.objectContaining(runtimeClosedError) });
+    expect(outcome).toEqual({ rejected: expect.objectContaining(clientClosedError) });
     expect.soft(unhandledRejections).toEqual([]);
   });
 });

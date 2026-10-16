@@ -121,7 +121,7 @@ A client is code that calls the runtime on the user's behalf, such as the ORM or
 ```ts
 startActivityOn<K extends ClientActivityKind>(queryable: RuntimeScope, activity: {
   readonly kind: K;
-  readonly contentHash: string;
+  readonly contentHash: () => Promise<string>;
   readonly annotations?: Annotations;
 }): Promise<ActivityHandle<K>>;
 
@@ -140,7 +140,11 @@ Ending an activity while one of its children is still open ends it `failed`, fin
 The SQL ORM's terminal methods follow this shape:
 
 ```ts
-const call = await startActivityOn(runtime, { kind: 'orm-call', contentHash, annotations });
+const call = await startActivityOn(runtime, {
+  kind: 'orm-call',
+  contentHash: () => ormCallContentHash(runtime, method, plan),
+  annotations,
+});
 if (call.intercepted) {
   await call.end({ outcome: 'succeeded' });
   return call.intercepted.result;
@@ -150,7 +154,7 @@ await call.end({ outcome: 'succeeded', result: rows });
 return rows;
 ```
 
-The user-facing types (`tx`, the facades) and the public `Runtime`, `RuntimeConnection` and `RuntimeTransaction` types omit `startActivity` and `planContentHash`, as `tx` has no `transaction` method today. The ORM reaches activities the same way everything else does, with `startActivityOn` and `planContentHashOn` on the queryable it holds: the runtime's queryables carry the `activitySource` member, the facades give the ORM runtime objects they build the same member, and a queryable without it, such as a test stub, starts no activity.
+The user-facing types (`tx`, the facades) and the public `Runtime`, `RuntimeConnection` and `RuntimeTransaction` types omit `startActivity` and `planContentHash`, as `tx` has no `transaction` method today. The ORM reaches activities the same way everything else does, with `startActivityOn` and `planContentHashOn` on the queryable it holds: the runtime's queryables carry the `activitySource` member, the facades give the ORM runtime objects they build the same member, and a terminal method on a queryable without it fails with `ORM.ACTIVITY_SOURCE_MISSING`, so a call's annotations are never dropped silently.
 
 ### Annotations
 
@@ -158,7 +162,7 @@ An annotation lives on the activity the user annotated. An annotation on an ORM 
 
 ### Content hash
 
-A statement and a client activity each have a content hash: an opaque digest of what they do, used to derive a cache key when the annotation names none, and to name spans. A transaction has none. For a statement the runtime computes it from the contract's storage hash, the statement text and its parameters, as `ctx.contentHash` does today. For a client activity, the client supplies it. The SQL runtime's `planContentHashOn(queryable, plan)` gives a client the digest of the statement a plan would send, through the `planContentHash` member of the queryable's activity source: it runs `beforeCompile` and lowers and encodes the plan, without `beforeEncode`, whose lints would fire twice and whose parameter changes need not be deterministic. It equals the digest `ctx.contentHash(exec)` returns for the statement's execution plan only when three things hold: `beforeCompile` gives the same result for the plan in both places, no `beforeEncode` hook changes the parameters, and the codecs encode deterministically. `planContentHash` compiles the plan with the scope and parent of the queryable it is called on and with fresh state (a hash taken on the runtime before the activity starts has no parent), while the statement compiles beneath the handle with the state its `activityStarted` hooks wrote; a `beforeCompile` that reads `ctx.parent` or state, or is not deterministic, gives a different digest, as does a middleware that encrypts parameters with a fresh nonce. A cache keys on the client's content hash and must not rely on the two being equal.
+A statement and a client activity each have a content hash: an opaque digest of what they do, used to derive a cache key when the annotation names none, and to name spans. A transaction has none. For a statement the runtime computes it from the contract's storage hash, the statement text and its parameters, as `ctx.contentHash` does today. For a client activity, the client supplies a function that computes it, and middleware read it with `activity.contentHash()`. The runtime calls the function on the first `contentHash()` and returns the same promise to every later caller, so a runtime with no middleware that asks never computes it, as a statement's digest is computed only when a middleware calls `ctx.contentHash(exec)`. The SQL runtime's `planContentHashOn(queryable, plan)` gives a client the digest of the statement a plan would send, through the `planContentHash` member of the queryable's activity source: it runs `beforeCompile` and lowers and encodes the plan, without `beforeEncode`, whose lints would fire twice and whose parameter changes need not be deterministic. It equals the digest `ctx.contentHash(exec)` returns for the statement's execution plan only when three things hold: `beforeCompile` gives the same result for the plan in both places, no `beforeEncode` hook changes the parameters, and the codecs encode deterministically. `planContentHash` compiles the plan with the scope and parent of the queryable it is called on and with fresh state (a hash taken on the runtime before the activity starts has no parent), while the statement compiles beneath the handle with the state its `activityStarted` hooks wrote; a `beforeCompile` that reads `ctx.parent` or state, or is not deterministic, gives a different digest, as does a middleware that encrypts parameters with a fresh nonce. A cache keys on the client's content hash and must not rely on the two being equal.
 
 ### The middleware context
 
@@ -185,7 +189,7 @@ activityFinalized(activity, result, ctx) {
 
 ### Caching
 
-The cache middleware applies one rule to every kind of activity: when the activity carries a cache annotation, serve it from the store through `intercept`, and on a miss store the result it ended with, if it succeeded. The key is the annotation's `key`, or else one derived from the activity's content hash. An annotated ORM call is cached as a whole: on a hit the ORM sends no statements.
+The cache middleware applies one rule to every kind of activity: when the activity carries a cache annotation, serve it from the store through `intercept`, and on a miss store the result it ended with, if it succeeded. The key is the annotation's `key`, or else one derived from the activity's content hash: `ctx.contentHash(exec)` for a statement, `activity.contentHash()` for a client activity. An annotated ORM call is cached as a whole: on a hit the ORM sends no statements. The middleware tags each value it stores with what produced it, `statement-rows` or `call-result`, and the store keeps the tag, so a statement's rows and a call's result under the same key never stand in for each other.
 
 The cache neither serves nor stores an activity for which `ctx.inTransaction()` is true, because a transaction must read its own uncommitted writes and the cache cannot know what the transaction changed until it commits. It also skips an activity whose `ctx.scope` is `'connection'`, because a held connection can carry session state, such as a database role, that changes which rows a statement returns.
 

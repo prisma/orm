@@ -96,3 +96,58 @@ A client, such as an extension, can start its own activity, send statements bene
 | E-4 | A second `transaction()` on a connection handle while the first is open; a query on the handle meanwhile | `RUNTIME.TRANSACTION_ALREADY_OPEN`; `RUNTIME.ACTIVITY_OUTSIDE_TRANSACTION`. |
 | E-5 | A handle opened on a connection whose transaction is already open | No `transaction` property; the activity is the transaction's child. |
 | E-6 | `close()` with an open handle, then `end()` | `close()` waits, logs `runtime.close.waiting-for-activities`, and settles after `end()`. |
+
+# Slice 3: ORM calls are activities, and the cache caches them (TML-3561)
+
+## What this part is testing
+
+Every SQL ORM terminal method now runs as one `orm-call` activity that carries the user's annotations, and its statements carry none. The cache middleware serves and stores whole annotated ORM calls through `intercept.onActivity`: a hit sends no statement, and a call is never served or stored inside a transaction or on a held connection. This part covers both audiences:
+
+- **Application author.** Runs the demo's cache commands, a serializing cache store, and a hand-built runtime, using the cache and ORM READMEs and the app upgrade instructions (`upgrade-instructions/pending/orm-call-activities/app/instructions.md`).
+- **Extension author.** Writes a tracer and an `intercept.onActivity` middleware from the extension upgrade instructions (`upgrade-instructions/pending/orm-call-activities/extension/instructions.md`) and the runtime subsystem doc. Do not read the tests.
+
+## Setup
+
+1. A Postgres database with `vector` available, new for this run, for example `createdb prisma_8_demo_qa3`. If the local Postgres refuses connections, a stateless `@prisma/dev` server started from the demo's `node_modules` works too.
+2. `mise exec -- pnpm build` at the repository root.
+3. In `examples/prisma-8-demo`: `.env` with `DATABASE_URL`, then `contract emit`, `db init` and `pnpm seed`. Note the user ids the seed prints.
+4. A scratch folder `wip/qa3/` whose `node_modules` links the demo's packages plus `@prisma/orm-framework` and `@prisma/orm-family-sql`, as in slice 2. Save every command's output there.
+5. A tracer middleware that logs started, ended and finalized with kind, parent, `inTransaction()`, scope, the user annotations on an `orm-call` activity, the user annotations on each statement's plan, and each ended result's `source` and `result`. Register it first, then an `intercept.onActivity` middleware that answers `orm-call` activities carrying a test annotation, then `createCacheMiddleware()` and `lints()`.
+
+## Checks
+
+| Check | Scenario | Expected |
+|---|---|---|
+| A-1 | `pnpm start -- cache-demo-user <aliceId>` | Second call much faster; same row. |
+| A-2 | `pnpm start -- cache-demo-users 5` | Same, for the listing. |
+| A-3 | The demo's `ormClientFindUserByIdCached` and `ormClientGetUsersCached`, run twice each on a runtime with the tracer | First call: one `orm-call` with one statement child. Second call: one `orm-call` ended `source: 'middleware'` with no statement child. |
+| T-1 | Annotated `first()` | One `orm-call` with the annotation; its statement is a child and its plan carries no user annotation; ended with the row. |
+| T-2 | Annotated `all()` | Same; ended with the rows. |
+| T-3 | Annotated `aggregate()` and `groupBy().aggregate()` | Same; ended with the aggregate object or array. |
+| T-4 | Annotated `create()` | One `orm-call`; the insert is its child. |
+| T-5 | Annotated `update()` with a nested relation write (create or connect) | One `orm-call`; its own transaction is its child; the graph's statements are the transaction's children; the read-back is the call's child after the commit. |
+| T-6 | Annotated `delete()` | One `orm-call`; its statements are its children. |
+| T-7 | ORM read and write inside `db.transaction(fn)` | Each `orm-call` is the transaction's child and opens no transaction of its own; everything is finalized when the transaction ends. |
+| T-8 | Annotated `all()` stopped after one row | The call and its statement end `stopped` and are finalized `unknown`. |
+| T-9 | `intercept.onActivity` answers `first()` and `all()` | The caller gets the supplied value; the call ends `source: 'middleware'`; no statement. |
+| T-10 | `intercept.onActivity` answers `first()` with a number | Rejects `ORM.INTERCEPTED_RESULT_INVALID`. |
+| T-11 | `firstOrThrow()` with no row | The call ends `failed`; the caller gets `RUNTIME.NO_ROWS`. |
+| K-1 | Annotated `first()` twice | Second call is served; no statement. |
+| K-2 | Annotated `first()` that returns `null`, twice | `null` is stored and served. |
+| K-3 | Annotated `firstOrThrow()` with no row, twice | Both reach the database; nothing is stored. |
+| K-4 | Annotated read inside `db.transaction(fn)`: once with a key stored outside, once with a new key, then the new key outside | Inside, never served; the new key is a miss outside, so nothing was stored. |
+| K-5 | `bypass: true` on a cached call | Reaches the database. |
+| K-6 | A user `key` | Served by key, even to a different query (documented). |
+| K-7 | `invalidate({ keys })`, then the same call | Miss. |
+| K-8 | A SQL builder query and an ORM call with the same user key | The other kind is a miss. |
+| K-9 | Annotated ORM read on `db.runtime().connection()`, twice | Scope `connection`; never served. |
+| K-10 | Annotated `all()` read to the end, twice; and stopped early, then read fully | Read to the end: second is served. Stopped early: nothing stored. |
+| K-11 | Mutate the result of a miss, then hit | The hit shows the original values. |
+| P-1 | A prepared ORM `first()` with an email parameter, run for two emails, then both again | Two different content hashes; each execution is cached separately. |
+| S-1 | The README's serializing store, with a serializer for `bigint`, `Date` and `Temporal.Instant`, on `Post` (`impressionCount`, `reachScore`, `createdAt`); then with plain JSON | With the app serializer, the hit returns the same types. With JSON, the problem the README warns about. |
+| E-1 | `orm({ context, runtime: { query, execute } })` | Each terminal fails with `ORM.ACTIVITY_SOURCE_MISSING`; `all()` throws when called; the error's `fix` and the app upgrade instructions say what to do. |
+| N-1 | No-middleware overhead: 2000 `first()` and 200 `all()` of 50 rows, several warm runs, this branch against `origin/main` | Medians and the percentage difference. Use a `git worktree` of `origin/main` under `wip/qa3/main-wt`, and remove it afterwards. |
+
+## Pass criteria
+
+Each check passes when what you see matches the Expected column. Record anything a user would find wrong, confusing or undocumented as a finding.

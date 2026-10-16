@@ -1,23 +1,36 @@
+import { defineAnnotation } from '@internal/framework-components/runtime';
+import { afterEach, describe, expect, it } from 'vitest';
+import type { TestModelName } from './collection-fixtures';
+import type { MockRuntime } from './helpers';
 import {
-  type AnnotationValue,
-  defineAnnotation,
-  type OperationKind,
-} from '@internal/framework-components/runtime';
-import {
-  ColumnRef,
-  ProjectionItem,
-  SelectAst,
-  TableSource,
-} from '@internal/sql-relational-core/ast';
-import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
-import { describe, expect, it } from 'vitest';
-import { mergeAnnotations } from '../src/query-plan-meta';
-import {
-  baseContract,
-  createCollection,
-  createCollectionFor,
-  createReturningCollectionFor,
-} from './collection-fixtures';
+  createActivityCollectionFor,
+  type RecordedCall,
+  statementAnnotationNamespaces,
+} from './orm-call-fixtures';
+
+const runtimes: MockRuntime[] = [];
+
+function track<T extends { runtime: MockRuntime }>(created: T): T {
+  runtimes.push(created.runtime);
+  return created;
+}
+
+const createCollectionFor = <ModelName extends TestModelName>(modelName: ModelName) =>
+  track(createActivityCollectionFor(modelName));
+const createCollection = () => createCollectionFor('User');
+const createReturningCollectionFor = <ModelName extends TestModelName>(modelName: ModelName) =>
+  track(createActivityCollectionFor(modelName, { returning: true }));
+
+function onlyCall(calls: readonly RecordedCall[]) {
+  expect(calls).toHaveLength(1);
+  return calls[0]!.activity;
+}
+
+afterEach(() => {
+  for (const runtime of runtimes.splice(0)) {
+    expect(statementAnnotationNamespaces(runtime)).toEqual([]);
+  }
+});
 
 const cacheAnnotation = defineAnnotation<{ ttl: number; skip?: boolean }>()({
   namespace: 'cache',
@@ -35,14 +48,14 @@ const auditAnnotation = defineAnnotation<{ actor: string }>()({
 });
 
 describe('Collection.all annotations', () => {
-  it('writes the applied annotation under its namespace on the executed plan', async () => {
-    const { collection, runtime } = createCollection();
+  it('writes the applied annotation on the call', async () => {
+    const { collection, runtime, calls } = createCollection();
     runtime.setNextResults([[]]);
 
     await collection.all((meta) => meta.annotate(cacheAnnotation({ ttl: 60 }))).toArray();
 
     expect(runtime.executions).toHaveLength(1);
-    const stored = runtime.executions[0]!.plan.meta.annotations?.['cache'];
+    const stored = onlyCall(calls).annotations.get('cache');
     expect(stored).toMatchObject({
       __annotation: true,
       namespace: 'cache',
@@ -51,17 +64,17 @@ describe('Collection.all annotations', () => {
   });
 
   it('round-trips through the typed handle.read accessor', async () => {
-    const { collection, runtime } = createCollection();
+    const { collection, runtime, calls } = createCollection();
     runtime.setNextResults([[]]);
 
     await collection.all((meta) => meta.annotate(cacheAnnotation({ ttl: 60 }))).toArray();
 
-    const plan = runtime.executions[0]!.plan;
-    expect(cacheAnnotation.read(plan)).toEqual({ ttl: 60 });
+    const call = onlyCall(calls);
+    expect(cacheAnnotation.read(call)).toEqual({ ttl: 60 });
   });
 
   it('multiple annotations under different namespaces coexist', async () => {
-    const { collection, runtime } = createCollection();
+    const { collection, runtime, calls } = createCollection();
     runtime.setNextResults([[]]);
 
     await collection
@@ -70,35 +83,35 @@ describe('Collection.all annotations', () => {
       )
       .toArray();
 
-    const plan = runtime.executions[0]!.plan;
-    expect(cacheAnnotation.read(plan)).toEqual({ ttl: 60 });
-    expect(otelAnnotation.read(plan)).toEqual({ traceId: 't-1' });
+    const call = onlyCall(calls);
+    expect(cacheAnnotation.read(call)).toEqual({ ttl: 60 });
+    expect(otelAnnotation.read(call)).toEqual({ traceId: 't-1' });
   });
 
   it('omitting the configurator is a no-op for user annotations', async () => {
-    const { collection, runtime } = createCollection();
+    const { collection, runtime, calls } = createCollection();
     runtime.setNextResults([[]]);
 
     await collection.all().toArray();
 
-    const plan = runtime.executions[0]!.plan;
-    expect(cacheAnnotation.read(plan)).toBeUndefined();
-    expect(otelAnnotation.read(plan)).toBeUndefined();
+    const call = onlyCall(calls);
+    expect(cacheAnnotation.read(call)).toBeUndefined();
+    expect(otelAnnotation.read(call)).toBeUndefined();
   });
 
   it('a configurator that records nothing is a no-op for user annotations', async () => {
-    const { collection, runtime } = createCollection();
+    const { collection, runtime, calls } = createCollection();
     runtime.setNextResults([[]]);
 
     await collection.all(() => {}).toArray();
 
-    const plan = runtime.executions[0]!.plan;
-    expect(cacheAnnotation.read(plan)).toBeUndefined();
-    expect(otelAnnotation.read(plan)).toBeUndefined();
+    const call = onlyCall(calls);
+    expect(cacheAnnotation.read(call)).toBeUndefined();
+    expect(otelAnnotation.read(call)).toBeUndefined();
   });
 
   it('annotations survive across .where() and .limit() chaining', async () => {
-    const { collection, runtime } = createCollection();
+    const { collection, runtime, calls } = createCollection();
     runtime.setNextResults([[]]);
 
     await collection
@@ -107,8 +120,8 @@ describe('Collection.all annotations', () => {
       .all((meta) => meta.annotate(cacheAnnotation({ ttl: 60 })))
       .toArray();
 
-    const plan = runtime.executions[0]!.plan;
-    expect(cacheAnnotation.read(plan)).toEqual({ ttl: 60 });
+    const call = onlyCall(calls);
+    expect(cacheAnnotation.read(call)).toEqual({ ttl: 60 });
   });
 
   it('runtime gate rejects a write-only annotation forced through a cast', () => {
@@ -131,19 +144,19 @@ describe('Collection.all annotations', () => {
 });
 
 describe('Collection.first annotations', () => {
-  it('writes the applied annotation under its namespace on the executed plan (no filter)', async () => {
-    const { collection, runtime } = createCollection();
+  it('writes the applied annotation on the call (no filter)', async () => {
+    const { collection, runtime, calls } = createCollection();
     runtime.setNextResults([[]]);
 
     await collection.first(undefined, (meta) => meta.annotate(cacheAnnotation({ ttl: 60 })));
 
     expect(runtime.executions).toHaveLength(1);
-    const plan = runtime.executions[0]!.plan;
-    expect(cacheAnnotation.read(plan)).toEqual({ ttl: 60 });
+    const call = onlyCall(calls);
+    expect(cacheAnnotation.read(call)).toEqual({ ttl: 60 });
   });
 
   it('writes the applied annotation when invoked with a function filter', async () => {
-    const { collection, runtime } = createCollection();
+    const { collection, runtime, calls } = createCollection();
     runtime.setNextResults([[]]);
 
     await collection.first(
@@ -151,24 +164,24 @@ describe('Collection.first annotations', () => {
       (meta) => meta.annotate(cacheAnnotation({ ttl: 60 })),
     );
 
-    const plan = runtime.executions[0]!.plan;
-    expect(cacheAnnotation.read(plan)).toEqual({ ttl: 60 });
+    const call = onlyCall(calls);
+    expect(cacheAnnotation.read(call)).toEqual({ ttl: 60 });
   });
 
   it('writes the applied annotation when invoked with a shorthand filter', async () => {
-    const { collection, runtime } = createCollection();
+    const { collection, runtime, calls } = createCollection();
     runtime.setNextResults([[]]);
 
     await collection.first({ name: 'Alice' }, (meta) =>
       meta.annotate(cacheAnnotation({ ttl: 60 })),
     );
 
-    const plan = runtime.executions[0]!.plan;
-    expect(cacheAnnotation.read(plan)).toEqual({ ttl: 60 });
+    const call = onlyCall(calls);
+    expect(cacheAnnotation.read(call)).toEqual({ ttl: 60 });
   });
 
   it('a single function arg is interpreted as a filter (not a configurator)', async () => {
-    const { collection, runtime } = createCollection();
+    const { collection, runtime, calls } = createCollection();
     runtime.setNextResults([[]]);
 
     // Passing a single function is treated as a filter callback, matching the
@@ -177,12 +190,12 @@ describe('Collection.first annotations', () => {
     await collection.first((user) => user.name.eq('Alice'));
 
     expect(runtime.executions).toHaveLength(1);
-    const plan = runtime.executions[0]!.plan;
-    expect(cacheAnnotation.read(plan)).toBeUndefined();
+    const call = onlyCall(calls);
+    expect(cacheAnnotation.read(call)).toBeUndefined();
   });
 
   it('multiple annotations coexist under different namespaces', async () => {
-    const { collection, runtime } = createCollection();
+    const { collection, runtime, calls } = createCollection();
     runtime.setNextResults([[]]);
 
     await collection.first(
@@ -191,9 +204,9 @@ describe('Collection.first annotations', () => {
         meta.annotate(cacheAnnotation({ ttl: 60 })).annotate(otelAnnotation({ traceId: 't-1' })),
     );
 
-    const plan = runtime.executions[0]!.plan;
-    expect(cacheAnnotation.read(plan)).toEqual({ ttl: 60 });
-    expect(otelAnnotation.read(plan)).toEqual({ traceId: 't-1' });
+    const call = onlyCall(calls);
+    expect(cacheAnnotation.read(call)).toEqual({ ttl: 60 });
+    expect(otelAnnotation.read(call)).toEqual({ traceId: 't-1' });
   });
 
   it('runtime gate rejects a write-only annotation forced through a cast', async () => {
@@ -211,8 +224,8 @@ describe('Collection.first annotations', () => {
 });
 
 describe('Collection.firstOrThrow annotations', () => {
-  it('writes the applied annotation on the executed plan with and without a filter', async () => {
-    const { collection, runtime } = createCollection();
+  it('writes the applied annotation on each call with and without a filter', async () => {
+    const { collection, runtime, calls } = createCollection();
     runtime.setNextResults([[{ id: 1 }], [{ id: 1 }]]);
 
     await collection.firstOrThrow(undefined, (meta) => meta.annotate(cacheAnnotation({ ttl: 60 })));
@@ -220,7 +233,7 @@ describe('Collection.firstOrThrow annotations', () => {
       meta.annotate(cacheAnnotation({ ttl: 30 })),
     );
 
-    expect(runtime.executions.map(({ plan }) => cacheAnnotation.read(plan))).toEqual([
+    expect(calls.map(({ activity }) => cacheAnnotation.read(activity))).toEqual([
       { ttl: 60 },
       { ttl: 30 },
     ]);
@@ -250,28 +263,23 @@ describe('Collection.firstOrThrow annotations', () => {
   });
 });
 
-describe('Collection annotations alongside framework-internal codecs metadata', () => {
-  it('user annotations coexist with the framework-internal codecs map under its reserved namespace', async () => {
-    const { collection, runtime } = createCollection();
+describe('Collection annotations and the reserved statement metadata', () => {
+  it('user annotations live on the call; the statement keeps only the reserved keys the ORM sets', async () => {
+    const { collection, runtime, calls } = createCollection();
     runtime.setNextResults([[]]);
 
     await collection.all((meta) => meta.annotate(cacheAnnotation({ ttl: 60 }))).toArray();
 
-    const plan = runtime.executions[0]!.plan;
-    // User annotation lives under its own namespace.
-    expect(cacheAnnotation.read(plan)).toEqual({ ttl: 60 });
-    // Reserved framework namespace, when emitted, lives under 'codecs' and
-    // is not a branded AnnotationValue (so handle.read with namespace
-    // 'codecs' would return undefined; we check the raw shape here).
-    if (plan.meta.annotations?.['codecs'] !== undefined) {
-      expect(plan.meta.annotations['codecs']).toEqual(expect.any(Object));
-    }
+    expect({
+      call: cacheAnnotation.read(onlyCall(calls)),
+      statementKeys: Object.keys(runtime.executions[0]!.plan.meta.annotations ?? {}),
+    }).toEqual({ call: { ttl: 60 }, statementKeys: expect.not.arrayContaining(['cache']) });
   });
 });
 
 describe('Collection.create annotations', () => {
-  it('writes the applied write annotation under its namespace on the executed plan', async () => {
-    const { collection, runtime } = createReturningCollectionFor('User');
+  it('writes the applied write annotation on the call', async () => {
+    const { collection, runtime, calls } = createReturningCollectionFor('User');
     runtime.setNextResults([[{ id: 1, name: 'Alice', email: 'a@b.com' }]]);
 
     await collection.create({ id: 1, name: 'Alice', email: 'a@b.com' }, (meta) =>
@@ -279,31 +287,31 @@ describe('Collection.create annotations', () => {
     );
 
     expect(runtime.executions).toHaveLength(1);
-    const plan = runtime.executions[0]!.plan;
-    expect(auditAnnotation.read(plan)).toEqual({ actor: 'system' });
+    const call = onlyCall(calls);
+    expect(auditAnnotation.read(call)).toEqual({ actor: 'system' });
   });
 
   it('accepts a both-kind annotation', async () => {
-    const { collection, runtime } = createReturningCollectionFor('User');
+    const { collection, runtime, calls } = createReturningCollectionFor('User');
     runtime.setNextResults([[{ id: 1, name: 'Alice', email: 'a@b.com' }]]);
 
     await collection.create({ id: 1, name: 'Alice', email: 'a@b.com' }, (meta) =>
       meta.annotate(otelAnnotation({ traceId: 't-1' })),
     );
 
-    const plan = runtime.executions[0]!.plan;
-    expect(otelAnnotation.read(plan)).toEqual({ traceId: 't-1' });
+    const call = onlyCall(calls);
+    expect(otelAnnotation.read(call)).toEqual({ traceId: 't-1' });
   });
 
-  it('omitting the configurator leaves the plan without user annotations', async () => {
-    const { collection, runtime } = createReturningCollectionFor('User');
+  it('omitting the configurator leaves the call without user annotations', async () => {
+    const { collection, runtime, calls } = createReturningCollectionFor('User');
     runtime.setNextResults([[{ id: 1, name: 'Alice', email: 'a@b.com' }]]);
 
     await collection.create({ id: 1, name: 'Alice', email: 'a@b.com' });
 
-    const plan = runtime.executions[0]!.plan;
-    expect(auditAnnotation.read(plan)).toBeUndefined();
-    expect(otelAnnotation.read(plan)).toBeUndefined();
+    const call = onlyCall(calls);
+    expect(auditAnnotation.read(call)).toBeUndefined();
+    expect(otelAnnotation.read(call)).toBeUndefined();
   });
 
   it('runtime gate rejects a read-only annotation forced through a cast', async () => {
@@ -321,8 +329,8 @@ describe('Collection.create annotations', () => {
 });
 
 describe('Collection.createAll annotations', () => {
-  it('writes the applied annotation onto every plan emitted by the split path', async () => {
-    const { collection, runtime } = createReturningCollectionFor('User');
+  it('writes the applied annotation on the call', async () => {
+    const { collection, runtime, calls } = createReturningCollectionFor('User');
     runtime.setNextResults([
       [{ id: 1, name: 'A', email: 'a@b.com' }],
       [{ id: 2, name: 'B', email: 'b@b.com' }],
@@ -338,32 +346,26 @@ describe('Collection.createAll annotations', () => {
       )
       .toArray();
 
-    expect(runtime.executions.length).toBeGreaterThan(0);
-    for (const execution of runtime.executions) {
-      expect(auditAnnotation.read(execution.plan)).toEqual({ actor: 'system' });
-    }
+    expect(auditAnnotation.read(onlyCall(calls))).toEqual({ actor: 'system' });
   });
 });
 
 describe('Collection.createAndCount annotations', () => {
-  it('writes the applied annotation onto the executed plan', async () => {
-    const { collection, runtime } = createReturningCollectionFor('User');
+  it('writes the applied annotation on the call', async () => {
+    const { collection, runtime, calls } = createReturningCollectionFor('User');
     runtime.setNextResults([[]]);
 
     await collection.createAndCount([{ id: 1, name: 'A', email: 'a@b.com' }], (meta) =>
       meta.annotate(auditAnnotation({ actor: 'system' })),
     );
 
-    expect(runtime.executions.length).toBeGreaterThan(0);
-    for (const execution of runtime.executions) {
-      expect(auditAnnotation.read(execution.plan)).toEqual({ actor: 'system' });
-    }
+    expect(auditAnnotation.read(onlyCall(calls))).toEqual({ actor: 'system' });
   });
 });
 
 describe('Collection.upsert annotations', () => {
-  it('writes the applied annotation under its namespace on the executed plan', async () => {
-    const { collection, runtime } = createReturningCollectionFor('User');
+  it('writes the applied annotation on the call', async () => {
+    const { collection, runtime, calls } = createReturningCollectionFor('User');
     runtime.setNextResults([[{ id: 1, name: 'Alice', email: 'a@b.com' }]]);
 
     await collection.upsert(
@@ -375,8 +377,8 @@ describe('Collection.upsert annotations', () => {
       (meta) => meta.annotate(auditAnnotation({ actor: 'system' })),
     );
 
-    const plan = runtime.executions[0]!.plan;
-    expect(auditAnnotation.read(plan)).toEqual({ actor: 'system' });
+    const call = onlyCall(calls);
+    expect(auditAnnotation.read(call)).toEqual({ actor: 'system' });
   });
 
   it('runtime gate rejects a read-only annotation forced through a cast', async () => {
@@ -400,18 +402,15 @@ describe('Collection.upsert annotations', () => {
 });
 
 describe('Collection.update annotations', () => {
-  it('writes the applied annotation onto the matching read and the update statement', async () => {
-    const { collection, runtime } = createReturningCollectionFor('User');
+  it('writes the applied annotation on the call, not on its read or update statement', async () => {
+    const { collection, runtime, calls } = createReturningCollectionFor('User');
     runtime.setNextResults([[{ id: 1 }], [{ id: 1, name: 'Alice', email: 'a@b.com' }]]);
 
     await collection
       .where({ id: 1 })
       .update({ name: 'Alice' }, (meta) => meta.annotate(auditAnnotation({ actor: 'system' })));
 
-    expect(runtime.executions.map((execution) => auditAnnotation.read(execution.plan))).toEqual([
-      { actor: 'system' },
-      { actor: 'system' },
-    ]);
+    expect(auditAnnotation.read(onlyCall(calls))).toEqual({ actor: 'system' });
   });
 
   it('runtime gate rejects a read-only annotation forced through a cast', async () => {
@@ -429,8 +428,8 @@ describe('Collection.update annotations', () => {
 });
 
 describe('Collection.updateAll annotations', () => {
-  it('writes the applied annotation under its namespace on the executed plan', async () => {
-    const { collection, runtime } = createReturningCollectionFor('User');
+  it('writes the applied annotation on the call', async () => {
+    const { collection, runtime, calls } = createReturningCollectionFor('User');
     runtime.setNextResults([[{ id: 1, name: 'Alice', email: 'a@b.com' }]]);
 
     await collection
@@ -438,14 +437,14 @@ describe('Collection.updateAll annotations', () => {
       .updateAll({ name: 'Alice' }, (meta) => meta.annotate(auditAnnotation({ actor: 'system' })))
       .toArray();
 
-    const plan = runtime.executions[0]!.plan;
-    expect(auditAnnotation.read(plan)).toEqual({ actor: 'system' });
+    const call = onlyCall(calls);
+    expect(auditAnnotation.read(call)).toEqual({ actor: 'system' });
   });
 });
 
 describe('Collection.updateAndCount annotations', () => {
-  it('performs one annotated execute and no query', async () => {
-    const { collection, runtime } = createReturningCollectionFor('User');
+  it('performs one execute and no query, under an annotated call', async () => {
+    const { collection, runtime, calls } = createReturningCollectionFor('User');
     runtime.setNextStats([{ affectedRows: 3 }]);
 
     const count = await collection
@@ -459,25 +458,21 @@ describe('Collection.updateAndCount annotations', () => {
     expect(runtime.executions.filter((execution) => execution.operation === 'query')).toHaveLength(
       0,
     );
-    const execution = runtime.executions[0]!;
-    expect(execution.operation).toBe('execute');
-    expect(auditAnnotation.read(execution.plan)).toEqual({ actor: 'system' });
+    expect(runtime.executions[0]!.operation).toBe('execute');
+    expect(auditAnnotation.read(onlyCall(calls))).toEqual({ actor: 'system' });
   });
 });
 
 describe('Collection.delete annotations', () => {
-  it('writes the applied annotation onto the matching read and the delete statement', async () => {
-    const { collection, runtime } = createReturningCollectionFor('User');
+  it('writes the applied annotation on the call, not on its read or delete statement', async () => {
+    const { collection, runtime, calls } = createReturningCollectionFor('User');
     runtime.setNextResults([[{ id: 1 }], [{ id: 1, name: 'Alice', email: 'a@b.com' }]]);
 
     await collection
       .where({ id: 1 })
       .delete((meta) => meta.annotate(auditAnnotation({ actor: 'system' })));
 
-    expect(runtime.executions.map((execution) => auditAnnotation.read(execution.plan))).toEqual([
-      { actor: 'system' },
-      { actor: 'system' },
-    ]);
+    expect(auditAnnotation.read(onlyCall(calls))).toEqual({ actor: 'system' });
   });
 
   it('runtime gate rejects a read-only annotation forced through a cast', async () => {
@@ -495,8 +490,8 @@ describe('Collection.delete annotations', () => {
 });
 
 describe('Collection.deleteAll annotations', () => {
-  it('writes the applied annotation under its namespace on the executed plan', async () => {
-    const { collection, runtime } = createReturningCollectionFor('User');
+  it('writes the applied annotation on the call', async () => {
+    const { collection, runtime, calls } = createReturningCollectionFor('User');
     runtime.setNextResults([[{ id: 1, name: 'Alice', email: 'a@b.com' }]]);
 
     await collection
@@ -504,14 +499,14 @@ describe('Collection.deleteAll annotations', () => {
       .deleteAll((meta) => meta.annotate(auditAnnotation({ actor: 'system' })))
       .toArray();
 
-    const plan = runtime.executions[0]!.plan;
-    expect(auditAnnotation.read(plan)).toEqual({ actor: 'system' });
+    const call = onlyCall(calls);
+    expect(auditAnnotation.read(call)).toEqual({ actor: 'system' });
   });
 });
 
 describe('Collection.deleteAndCount annotations', () => {
-  it('performs one annotated execute and no query', async () => {
-    const { collection, runtime } = createReturningCollectionFor('User');
+  it('performs one execute and no query, under an annotated call', async () => {
+    const { collection, runtime, calls } = createReturningCollectionFor('User');
     runtime.setNextStats([{ affectedRows: 2 }]);
 
     const count = await collection
@@ -523,15 +518,14 @@ describe('Collection.deleteAndCount annotations', () => {
     expect(runtime.executions.filter((execution) => execution.operation === 'query')).toHaveLength(
       0,
     );
-    const execution = runtime.executions[0]!;
-    expect(execution.operation).toBe('execute');
-    expect(auditAnnotation.read(execution.plan)).toEqual({ actor: 'system' });
+    expect(runtime.executions[0]!.operation).toBe('execute');
+    expect(auditAnnotation.read(onlyCall(calls))).toEqual({ actor: 'system' });
   });
 });
 
 describe('Collection.aggregate annotations', () => {
-  it('writes the applied read annotation under its namespace on the executed plan', async () => {
-    const { collection, runtime } = createCollectionFor('Post');
+  it('writes the applied read annotation on the call', async () => {
+    const { collection, runtime, calls } = createCollectionFor('Post');
     runtime.setNextResults([[{ count: '5' }]]);
 
     await collection.aggregate(
@@ -540,12 +534,12 @@ describe('Collection.aggregate annotations', () => {
     );
 
     expect(runtime.executions).toHaveLength(1);
-    const plan = runtime.executions[0]!.plan;
-    expect(cacheAnnotation.read(plan)).toEqual({ ttl: 60 });
+    const call = onlyCall(calls);
+    expect(cacheAnnotation.read(call)).toEqual({ ttl: 60 });
   });
 
   it('accepts a both-kind annotation', async () => {
-    const { collection, runtime } = createCollectionFor('Post');
+    const { collection, runtime, calls } = createCollectionFor('Post');
     runtime.setNextResults([[{ count: '5' }]]);
 
     await collection.aggregate(
@@ -553,19 +547,19 @@ describe('Collection.aggregate annotations', () => {
       (meta) => meta.annotate(otelAnnotation({ traceId: 't-1' })),
     );
 
-    const plan = runtime.executions[0]!.plan;
-    expect(otelAnnotation.read(plan)).toEqual({ traceId: 't-1' });
+    const call = onlyCall(calls);
+    expect(otelAnnotation.read(call)).toEqual({ traceId: 't-1' });
   });
 
-  it('omitting the configurator leaves the plan without user annotations', async () => {
-    const { collection, runtime } = createCollectionFor('Post');
+  it('omitting the configurator leaves the call without user annotations', async () => {
+    const { collection, runtime, calls } = createCollectionFor('Post');
     runtime.setNextResults([[{ count: '5' }]]);
 
     await collection.aggregate((aggregate) => ({ count: aggregate.count() }));
 
-    const plan = runtime.executions[0]!.plan;
-    expect(cacheAnnotation.read(plan)).toBeUndefined();
-    expect(otelAnnotation.read(plan)).toBeUndefined();
+    const call = onlyCall(calls);
+    expect(cacheAnnotation.read(call)).toBeUndefined();
+    expect(otelAnnotation.read(call)).toBeUndefined();
   });
 
   it('runtime gate rejects a write-only annotation forced through a cast', async () => {
@@ -586,8 +580,8 @@ describe('Collection.aggregate annotations', () => {
 });
 
 describe('GroupedCollection.aggregate annotations', () => {
-  it('writes the applied read annotation under its namespace on the executed plan', async () => {
-    const { collection, runtime } = createCollectionFor('Post');
+  it('writes the applied read annotation on the call', async () => {
+    const { collection, runtime, calls } = createCollectionFor('Post');
     runtime.setNextResults([[{ user_id: 1, count: '2' }]]);
 
     await collection.groupBy('userId').aggregate(
@@ -596,12 +590,12 @@ describe('GroupedCollection.aggregate annotations', () => {
     );
 
     expect(runtime.executions).toHaveLength(1);
-    const plan = runtime.executions[0]!.plan;
-    expect(cacheAnnotation.read(plan)).toEqual({ ttl: 60 });
+    const call = onlyCall(calls);
+    expect(cacheAnnotation.read(call)).toEqual({ ttl: 60 });
   });
 
   it('accepts a both-kind annotation', async () => {
-    const { collection, runtime } = createCollectionFor('Post');
+    const { collection, runtime, calls } = createCollectionFor('Post');
     runtime.setNextResults([[{ user_id: 1, count: '2' }]]);
 
     await collection.groupBy('userId').aggregate(
@@ -609,19 +603,19 @@ describe('GroupedCollection.aggregate annotations', () => {
       (meta) => meta.annotate(otelAnnotation({ traceId: 't-1' })),
     );
 
-    const plan = runtime.executions[0]!.plan;
-    expect(otelAnnotation.read(plan)).toEqual({ traceId: 't-1' });
+    const call = onlyCall(calls);
+    expect(otelAnnotation.read(call)).toEqual({ traceId: 't-1' });
   });
 
-  it('omitting the configurator leaves the plan without user annotations', async () => {
-    const { collection, runtime } = createCollectionFor('Post');
+  it('omitting the configurator leaves the call without user annotations', async () => {
+    const { collection, runtime, calls } = createCollectionFor('Post');
     runtime.setNextResults([[{ user_id: 1, count: '2' }]]);
 
     await collection.groupBy('userId').aggregate((aggregate) => ({ count: aggregate.count() }));
 
-    const plan = runtime.executions[0]!.plan;
-    expect(cacheAnnotation.read(plan)).toBeUndefined();
-    expect(otelAnnotation.read(plan)).toBeUndefined();
+    const call = onlyCall(calls);
+    expect(cacheAnnotation.read(call)).toBeUndefined();
+    expect(otelAnnotation.read(call)).toBeUndefined();
   });
 
   it('runtime gate rejects a write-only annotation forced through a cast', async () => {
@@ -637,83 +631,5 @@ describe('GroupedCollection.aggregate annotations', () => {
     ).rejects.toMatchObject({
       code: 'RUNTIME.ANNOTATION_INAPPLICABLE',
     });
-  });
-});
-
-describe('mergeAnnotations precedence', () => {
-  // Framework-reserved namespace keys (e.g. `codecs`) on the input plan
-  // must win over user-supplied values under the same namespace. Pins
-  // the spread order documented in `mergeAnnotations`: a future
-  // accidental `Object.assign({}, plan.meta.annotations, userEntries)`
-  // flip would inadvertently let users overwrite the codecs map.
-  function makePlan(annotations: Record<string, unknown>): SqlQueryPlan<Record<string, unknown>> {
-    return Object.freeze({
-      ast: SelectAst.from(TableSource.named('users')).withProjection([
-        ProjectionItem.of('id', ColumnRef.of('users', 'id'), { codecId: 'pg/int4@1' }),
-      ]),
-      params: [],
-      meta: Object.freeze({
-        target: baseContract.target,
-        targetFamily: baseContract.targetFamily,
-        storageHash: baseContract.storage.storageHash,
-        lane: 'orm-client',
-        annotations: Object.freeze({ ...annotations }),
-      }),
-    });
-  }
-
-  function entryMap(
-    entries: Record<string, AnnotationValue<unknown, OperationKind>>,
-  ): ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> {
-    return new Map(Object.entries(entries));
-  }
-
-  it('framework-reserved codecs map on the input plan wins over a caller-supplied codecs value under the same namespace', () => {
-    const frameworkCodecs = { id: 'pg/int4@1', email: 'pg/text@1' };
-    const plan = makePlan({ codecs: frameworkCodecs });
-
-    // A caller defines their own `codecs` annotation (bypassing the
-    // reserved-namespace warning) and supplies it through the meta
-    // builder — mergeAnnotations should leave the framework value in
-    // place.
-    const callerCodecsAnnotation = defineAnnotation<{ ttl: number }>()({
-      namespace: 'codecs',
-      applicableTo: ['read'],
-    });
-    const callerValue = callerCodecsAnnotation({ ttl: 60 });
-    const merged = mergeAnnotations(plan, entryMap({ codecs: callerValue }));
-
-    expect(merged.meta.annotations?.['codecs']).toBe(frameworkCodecs);
-    expect(merged.meta.annotations?.['codecs']).not.toBe(callerValue);
-  });
-
-  it('caller-supplied entries under non-colliding namespaces still land on the plan', () => {
-    const plan = makePlan({ codecs: { id: 'pg/int4@1' } });
-    const cacheAnnotation = defineAnnotation<{ ttl: number }>()({
-      namespace: 'cache',
-      applicableTo: ['read'],
-    });
-    const cacheValue = cacheAnnotation({ ttl: 60 });
-
-    const merged = mergeAnnotations(plan, entryMap({ cache: cacheValue }));
-
-    expect(merged.meta.annotations?.['cache']).toBe(cacheValue);
-    expect(merged.meta.annotations?.['codecs']).toEqual({ id: 'pg/int4@1' });
-  });
-
-  it('returns the input plan unchanged when the caller map is empty', () => {
-    const plan = makePlan({ codecs: { id: 'pg/int4@1' } });
-
-    const merged = mergeAnnotations(plan, new Map());
-
-    expect(merged).toBe(plan);
-  });
-
-  it('returns the input plan unchanged when the caller map is undefined', () => {
-    const plan = makePlan({ codecs: { id: 'pg/int4@1' } });
-
-    const merged = mergeAnnotations(plan, undefined);
-
-    expect(merged).toBe(plan);
   });
 });

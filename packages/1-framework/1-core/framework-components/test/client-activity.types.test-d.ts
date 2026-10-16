@@ -42,7 +42,7 @@ test('narrowing on statement, transaction and a client kind', () => {
         expectTypeOf(activity).toEqualTypeOf<TransactionActivity>();
         return;
       }
-      expectTypeOf(activity.contentHash).toEqualTypeOf<string>();
+      expectTypeOf(activity.contentHash).toEqualTypeOf<() => Promise<string>>();
     },
   };
   void middleware;

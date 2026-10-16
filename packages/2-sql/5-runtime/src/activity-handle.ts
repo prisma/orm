@@ -10,6 +10,7 @@ import type {
 import type { SqlExecutionPlan, SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type { RuntimeScope } from '@internal/sql-relational-core/types';
 import { invariant } from '@internal/utils/assertions';
+import type { PreparedExecution, PreparedStatement } from './prepared/types';
 import type { RuntimeQueryable, RuntimeTransaction } from './sql-runtime';
 
 /** What starts client activities and hashes plans. The runtime's queryables and activity handles carry one through `activitySource`. */
@@ -21,8 +22,17 @@ export interface ActivitySource {
     activity: StartActivity<K>,
   ): Promise<ActivityHandle<K>>;
   /** The content hash of the statement `plan` sends: after `beforeCompile`, lowering and encoding, without `beforeEncode`. It equals the digest `ctx.contentHash(exec)` returns for the statement's execution plan only when `beforeCompile` gives the same result here as for the statement (it runs here with the scope and parent of the queryable it is called on, and with fresh state; on the runtime itself there is no parent), no `beforeEncode` hook changes the parameters, and the codecs encode deterministically. It starts nothing, so it also works on a handle that has ended. */
-  planContentHash(plan: SqlQueryPlan | SqlExecutionPlan): Promise<string>;
+  planContentHash(plan: HashablePlan): Promise<string>;
 }
+
+/** A prepared statement and the parameters one execution of it binds; its hash is that of the statement it sends with those parameters. The statement is one the SQL runtime prepared, returning rows or statistics. */
+export interface BoundPreparedStatement {
+  readonly statement: PreparedStatement<unknown, unknown> | PreparedExecution<unknown>;
+  readonly params: unknown;
+}
+
+/** What `planContentHash` hashes: a plan, or one execution of a prepared statement, whose hash is that of the statement it sends with those parameters. */
+export type HashablePlan = SqlQueryPlan | SqlExecutionPlan | BoundPreparedStatement;
 
 /** An open client activity, to send its statements through and to end. Its `startActivity` and `planContentHash` members are those of its `activitySource` member. */
 export interface ActivityHandle<K extends ClientActivityKind>
@@ -83,9 +93,6 @@ export function startActivityOn<K extends ClientActivityKind>(
   return activitySourceOf(target).startActivity(activity);
 }
 
-export function planContentHashOn(
-  target: RuntimeScope,
-  plan: SqlQueryPlan | SqlExecutionPlan,
-): Promise<string> {
+export function planContentHashOn(target: RuntimeScope, plan: HashablePlan): Promise<string> {
   return activitySourceOf(target).planContentHash(plan);
 }

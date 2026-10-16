@@ -1,8 +1,18 @@
-import { ParamRef, RawQueryAst, SelectAst, TableSource } from '@internal/sql-relational-core/ast';
+import {
+  BinaryExpr,
+  ColumnRef,
+  ParamRef,
+  ProjectionItem,
+  RawQueryAst,
+  SelectAst,
+  TableSource,
+} from '@internal/sql-relational-core/ast';
+import type { Expression, ScopeField } from '@internal/sql-relational-core/expression';
 import { planFromAst, type SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { describe, expect, it, vi } from 'vitest';
 import { planContentHashOn, startActivityOn } from '../src/activity-handle';
 import type { SqlMiddleware, SqlMiddlewareContext } from '../src/middleware/sql-middleware';
+import type { PreparedExecution } from '../src/prepared/types';
 import { withTransaction } from '../src/sql-runtime';
 import { testCall } from './client-activity-kinds';
 import {
@@ -146,5 +156,85 @@ describe('planContentHash', () => {
       ['transaction', callCtx, true],
     ]);
     expect(states).toEqual([{ written: true }, {}]);
+  });
+});
+
+function preparedPlan(x: Expression<ScopeField>): SqlQueryPlan {
+  const ast = SelectAst.from(TableSource.named('t'))
+    .withProjection([ProjectionItem.of('id', ColumnRef.of('id', 't'))])
+    .withWhere(BinaryExpr.eq(ColumnRef.of('x', 't'), x.buildAst()));
+  return { ast, params: [], meta };
+}
+
+function queryHashRecorder(hashes: string[]): SqlMiddleware {
+  return {
+    name: 'hashes',
+    familyId: 'sql',
+    intercept: {
+      async onQuery(plan, ctx) {
+        hashes.push(await ctx.contentHash(plan));
+        return undefined;
+      },
+    },
+  };
+}
+
+describe('planContentHash of a prepared statement execution', () => {
+  it('equals the content hash of the statement the execution sends, with its parameters encoded', async () => {
+    const hashes: string[] = [];
+    const { runtime } = createSetup({ middleware: [queryHashRecorder(hashes)] });
+    const statement = await runtime.prepare({ x: doublingCodec.id }, (p) => preparedPlan(p.x));
+
+    const hash = await planContentHashOn(runtime, { statement, params: { x: 21 } });
+    await statement.query(runtime, { x: 21 }).toArray();
+
+    expect(hashes).toEqual([hash]);
+  });
+
+  it('differs between executions with different parameters', async () => {
+    const { runtime } = createSetup();
+    const statement = await runtime.prepare({ x: doublingCodec.id }, (p) => preparedPlan(p.x));
+
+    const first = await planContentHashOn(runtime, { statement, params: { x: 1 } });
+    const second = await planContentHashOn(runtime, { statement, params: { x: 2 } });
+    const again = await planContentHashOn(runtime, { statement, params: { x: 1 } });
+
+    expect({ differs: first !== second, stable: first === again }).toEqual({
+      differs: true,
+      stable: true,
+    });
+  });
+
+  it('rejects an execution that is missing a parameter', async () => {
+    const { runtime } = createSetup();
+    const statement = await runtime.prepare({ x: doublingCodec.id }, (p) => preparedPlan(p.x));
+
+    await expect(planContentHashOn(runtime, { statement, params: {} })).rejects.toMatchObject({
+      code: 'RUNTIME.PREPARE_MISSING_PARAM',
+    });
+  });
+
+  it('is the same on an activity handle as on the runtime', async () => {
+    const { runtime } = createSetup();
+    const statement = await runtime.prepare({ x: doublingCodec.id }, (p) => preparedPlan(p.x));
+    const call = await startActivityOn(runtime, testCall);
+
+    const onCall = await call.planContentHash({ statement, params: { x: 3 } });
+    await call.end({ outcome: 'succeeded' });
+
+    expect(onCall).toBe(await planContentHashOn(runtime, { statement, params: { x: 3 } }));
+  });
+
+  it('hashes a prepared statement that returns statistics, as the statement it sends', async () => {
+    const hashes: string[] = [];
+    const { runtime } = createSetup({ middleware: [hashRecorder(hashes)] });
+    const statement = await runtime.prepare({ x: doublingCodec.id }, (p) =>
+      planFromAst(RawQueryAst.affectedCount(['update t set x = ', p.x.buildAst()]), testContract),
+    );
+
+    const hash = await planContentHashOn(runtime, { statement, params: { x: 21 } });
+    await (statement as unknown as PreparedExecution<{ x: number }>).execute(runtime, { x: 21 });
+
+    expect(hashes).toEqual([hash]);
   });
 });

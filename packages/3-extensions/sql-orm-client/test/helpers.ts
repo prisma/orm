@@ -17,7 +17,11 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import type { Codec, SelectAst, SqlStatementStats } from '@internal/sql-relational-core/ast';
 import type { SqlExecutionPlan, SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
+import type { RuntimeScope } from '@internal/sql-relational-core/types';
 import {
+  type ActivityHandle,
+  type ActivitySource,
+  activitySource,
   createExecutionContext,
   createSqlExecutionStack,
   type RuntimeParameterizedCodecDescriptor,
@@ -895,12 +899,36 @@ export function buildCompositeForeignKeyContract() {
   return defineContract({ models: { Customer, Order } });
 }
 
+/** An activity source for a test stub: each activity's handle sends its statements, and opens its transaction or connection, through `target` itself, and ends doing nothing. */
+export function stubActivitySource(target: RuntimeScope): ActivitySource {
+  const source: ActivitySource = {
+    async startActivity(start) {
+      const handle = Object.assign(Object.create(target), {
+        activity: {
+          id: 'stub-activity',
+          kind: start.kind,
+          contentHash: start.contentHash,
+          annotations: start.annotations ?? new Map(),
+        },
+        intercepted: undefined,
+        end: async () => {},
+        startActivity: source.startActivity,
+        planContentHash: source.planContentHash,
+        [activitySource]: source,
+      });
+      return handle as ActivityHandle<typeof start.kind>;
+    },
+    planContentHash: async () => 'stub-plan-hash',
+  };
+  return source;
+}
+
 export function createMockRuntime(): MockRuntime {
   const executions: MockExecution[] = [];
   let nextResults: Record<string, unknown>[][] = [];
   let nextStats: SqlStatementStats[] = [];
 
-  const runtime: MockRuntime = {
+  const base = {
     executions,
     setNextResults(results: Record<string, unknown>[][]) {
       nextResults = [...results];
@@ -930,6 +958,7 @@ export function createMockRuntime(): MockRuntime {
       return stats;
     },
   };
+  const runtime: MockRuntime = Object.assign(base, { [activitySource]: stubActivitySource(base) });
 
   return runtime;
 }

@@ -4,6 +4,7 @@ import { structuredError } from '@internal/utils/structured-error';
 export type OrmCode = `ORM.${OrmSubcode}`;
 
 type OrmSubcode =
+  | 'ACTIVITY_SOURCE_MISSING'
   | 'TABLE_UNKNOWN'
   | 'COLUMN_UNKNOWN'
   | 'FIELD_UNKNOWN'
@@ -17,6 +18,7 @@ type OrmSubcode =
   | 'RELATION_LINK_DUPLICATE'
   | 'INCLUDE_INVALID'
   | 'INCLUDE_UNSUPPORTED'
+  | 'INTERCEPTED_RESULT_INVALID'
   | 'AGGREGATE_OPERATION_RESERVED'
   | 'AGGREGATE_PROJECTION_ONLY'
   | 'AGGREGATE_SELECTOR_MISSING'

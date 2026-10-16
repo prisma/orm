@@ -62,13 +62,48 @@ describe('client activity', () => {
     expect(call.activity).toEqual({
       id: expect.any(String),
       kind: 'test-call',
-      contentHash: 'call-hash',
+      contentHash: expect.any(Function),
       annotations: new Map(),
     });
+    expect(await call.activity.contentHash()).toBe('call-hash');
     expect({ parent: call.ctx.parent, intercepted: call.intercepted }).toEqual({
       parent: undefined,
       intercepted: undefined,
     });
+  });
+
+  it('computes the content hash once, on the first call, and only when asked', async () => {
+    const computeContentHash = vi.fn(async () => 'lazy-hash');
+    const hashes: string[] = [];
+    const asker: RuntimeMiddleware<MockExec> = {
+      name: 'asker',
+      async activityStarted(activity) {
+        if (activity.kind === 'statement' || activity.kind === 'transaction') return;
+        hashes.push(await activity.contentHash(), await activity.contentHash());
+      },
+    };
+    const options = {
+      context: contextFields(),
+      parent: undefined,
+      holdFinishedChildren: true,
+    } as const;
+
+    const unasked = await startClientActivity(
+      { kind: 'test-call', contentHash: computeContentHash },
+      { ...options, middleware: [] },
+    );
+    const callsWhenUnasked = computeContentHash.mock.calls.length;
+    await startClientActivity(
+      { kind: 'test-call', contentHash: computeContentHash },
+      { ...options, middleware: [asker] },
+    );
+
+    expect({ callsWhenUnasked, calls: computeContentHash.mock.calls.length, hashes }).toEqual({
+      callsWhenUnasked: 0,
+      calls: 1,
+      hashes: ['lazy-hash', 'lazy-hash'],
+    });
+    await unasked.end({ outcome: 'succeeded' });
   });
 
   it.each(['statement', 'transaction', 'report'])(
@@ -173,7 +208,7 @@ describe('client activity', () => {
       const debug = vi.fn();
 
       await startClientActivity(
-        { kind: 'test-call', contentHash: 'call-hash' },
+        { kind: 'test-call', contentHash: async () => 'call-hash' },
         {
           middleware: [interceptor('hit', [], { result: [] })],
           context: contextFields({

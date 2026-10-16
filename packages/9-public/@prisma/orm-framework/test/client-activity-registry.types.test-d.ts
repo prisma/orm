@@ -1,6 +1,8 @@
 import type {
+  ClientActivity,
   ClientActivityResult,
   CrossFamilyMiddleware,
+  StartActivity,
 } from '@prisma/orm-framework/components/runtime';
 import { expectTypeOf, test } from 'vitest';
 
@@ -29,4 +31,9 @@ test('narrowing on the registered kind reaches its registered result type', () =
     },
   };
   void middleware;
+});
+
+test('a client supplies the content hash as a function, and middleware reads it as a method', () => {
+  expectTypeOf<StartActivity['contentHash']>().toEqualTypeOf<() => Promise<string>>();
+  expectTypeOf<ClientActivity['contentHash']>().toEqualTypeOf<() => Promise<string>>();
 });

@@ -151,14 +151,18 @@ A store must also keep a version it has increased for at least as long as a read
 // packages/3-extensions/middleware-cache/src/cache-store.ts
 export type CachedRows = readonly Record<string, unknown>[];
 
-export interface CacheEntry<TMeta = unknown, TValue = CachedRows> {
+export type CachedValue =
+  | { readonly kind: 'statement-rows'; readonly rows: CachedRows }
+  | { readonly kind: 'call-result'; readonly result: unknown };
+
+export interface CacheEntry<TMeta = unknown, TValue = CachedValue> {
   readonly key: string;
   readonly meta: TMeta | undefined;
   readonly version: number;
   readonly data: { readonly empty: true } | { readonly empty: false; readonly value: TValue };
 }
 
-export interface CacheStore<TMeta = unknown, TValue = CachedRows> {
+export interface CacheStore<TMeta = unknown, TValue = CachedValue> {
   get(target: {
     readonly key: string;
     readonly meta: TMeta | undefined;
@@ -184,22 +188,23 @@ A store author takes on these obligations:
 4. An increased version is kept at least as long as a read can take.
 5. A store that cannot act on a `meta` it is given throws rather than ignoring it.
 6. `unset` does not run queries through the runtime that uses the middleware.
+7. `get` gives back a value equivalent to the one `set` was given, `kind` included. A call result holds the values codecs decoded, such as `Date`, `bigint`, Temporal values and extension class instances, so a store that serializes needs a serializer that rebuilds those types; JSON does not. The key does not cover how values are decoded, so a deploy that changes what a codec returns needs a new key prefix for a shared store.
 
-The value type defaults to `CachedRows`, the rows this middleware stores, and `createCacheMiddleware` accepts only a store of rows. The value type is a parameter so the same store type can serve other caches. Every method takes one object, or an entry and a value, so a store written against a different argument shape fails to compile instead of misreading its arguments. `unset` is required, because a store that cannot remove entries brings back the stale reads this design exists to prevent.
+The value type defaults to `CachedValue`, what this middleware stores: the raw rows of a statement, or the result of a client activity, such as an ORM call (ADR 271). The middleware tags each value with what produced it, `statement-rows` or `call-result`, and serves `statement-rows` only to a statement and `call-result` only to a client activity, so under one key a statement's rows and a client activity's result never stand in for each other. `createCacheMiddleware` accepts only a store of `CachedValue`. The value type is a parameter so the same store type can serve other caches. Every method takes one object, or an entry and a value, so a store written against a different argument shape fails to compile instead of misreading its arguments. `unset` is required, because a store that cannot remove entries brings back the stale reads this design exists to prevent.
 
 ## Example: a tagging store
 
 A store that groups entries by `meta.tags`, kept short by never expiring entries or forgetting versions:
 
 ```ts
-import type { CachedRows, CacheStore } from '@internal/middleware-cache';
+import type { CachedValue, CacheStore } from '@internal/middleware-cache';
 
 interface TagMeta {
   readonly tags: readonly string[];
 }
 
 function createTagStore(): CacheStore<TagMeta> {
-  const values = new Map<string, CachedRows>();
+  const values = new Map<string, CachedValue>();
   const versions = new Map<string, number>();
   const keysByTag = new Map<string, Set<string>>();
   const versionOf = (name: string) => versions.get(name) ?? 0;

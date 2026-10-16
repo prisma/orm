@@ -1,5 +1,11 @@
 import { expectTypeOf, test } from 'vitest';
-import type { CachedRows, CacheEntry, CacheMiddleware, CacheStore } from '../src/exports/index';
+import type {
+  CachedRows,
+  CachedValue,
+  CacheEntry,
+  CacheMiddleware,
+  CacheStore,
+} from '../src/exports/index';
 import * as exported from '../src/exports/index';
 
 const cache = exported.createCacheMiddleware();
@@ -39,28 +45,34 @@ type Rows = readonly Record<string, unknown>[];
 const get = async (target: {
   readonly key: string;
   readonly meta: unknown;
-}): Promise<CacheEntry<unknown, Rows>> => ({
+}): Promise<CacheEntry<unknown, CachedValue>> => ({
   key: target.key,
   meta: target.meta,
   version: 0,
   data: { empty: true },
 });
-const set = async (_entry: CacheEntry<unknown, Rows>, _value: Rows) => true;
+const set = async (_entry: CacheEntry<unknown, CachedValue>, _value: CachedValue) => true;
 const unset = async (_target: Parameters<CacheStore['unset']>[0]) => {};
 
-test('createInMemoryCacheStore returns a CacheStore of the given meta and value types', () => {
-  expectTypeOf(exported.createInMemoryCacheStore()).toEqualTypeOf<CacheStore<unknown, Rows>>();
+test('createInMemoryCacheStore returns a CacheStore of cached values with the given meta type', () => {
+  expectTypeOf(exported.createInMemoryCacheStore()).toEqualTypeOf<
+    CacheStore<unknown, CachedValue>
+  >();
   expectTypeOf(
-    exported.createInMemoryCacheStore<{ tags: string[] }, Rows>({
+    exported.createInMemoryCacheStore<{ tags: string[] }>({
       maxEntries: 10,
       ttlMs: Number.POSITIVE_INFINITY,
       clock: Date.now,
     }),
-  ).toEqualTypeOf<CacheStore<{ tags: string[] }, Rows>>();
+  ).toEqualTypeOf<CacheStore<{ tags: string[] }, CachedValue>>();
 });
 
-test('CachedRows is the value type the middleware stores', () => {
+test('CachedValue is the value type the middleware stores: statement rows or a call result', () => {
   expectTypeOf<CachedRows>().toEqualTypeOf<Rows>();
+  expectTypeOf<CachedValue>().toEqualTypeOf<
+    | { readonly kind: 'statement-rows'; readonly rows: Rows }
+    | { readonly kind: 'call-result'; readonly result: unknown }
+  >();
 });
 
 test('CacheEntry carries key, meta, version and data', () => {
@@ -72,8 +84,8 @@ test('CacheEntry carries key, meta, version and data', () => {
   }>();
 });
 
-test('createCacheMiddleware accepts a store of rows, including the default store written inline', () => {
-  const rowsStore: CacheStore<unknown, Rows> = { get, set, unset };
+test('createCacheMiddleware accepts a store of cached values, including the default store written inline', () => {
+  const rowsStore: CacheStore<unknown, CachedValue> = { get, set, unset };
   expectTypeOf(exported.createCacheMiddleware({ store: rowsStore })).toEqualTypeOf<
     CacheMiddleware<unknown>
   >();
@@ -94,12 +106,20 @@ test('createCacheMiddleware accepts the default store created on its own line', 
 });
 
 test('createCacheMiddleware refuses a store of any other value type', () => {
-  const stringStore = exported.createInMemoryCacheStore<unknown, string>();
-  // @ts-expect-error - the middleware stores rows, which a store of strings cannot hold
+  const stringStore: CacheStore<unknown, string> = {
+    get: async ({ key, meta }) => ({ key, meta, version: 0, data: { empty: true } }),
+    set: async () => true,
+    unset,
+  };
+  // @ts-expect-error - the middleware stores cached values, which a store of strings cannot hold
   exported.createCacheMiddleware({ store: stringStore });
 
-  const unknownStore = exported.createInMemoryCacheStore<unknown, unknown>();
-  // @ts-expect-error - a store of unknown values is not a store of rows
+  const unknownStore: CacheStore<unknown, unknown> = {
+    get: async ({ key, meta }) => ({ key, meta, version: 0, data: { empty: true } }),
+    set: async () => true,
+    unset,
+  };
+  // @ts-expect-error - a store of unknown values is not a store of cached values
   exported.createCacheMiddleware({ store: unknownStore });
 });
 
@@ -146,7 +166,7 @@ test('a set returning nothing is a type error', () => {
 
 test('an old get(key: string) is a type error', () => {
   const positionalGet = {
-    get: async (key: string): Promise<CacheEntry<unknown, Rows>> => ({
+    get: async (key: string): Promise<CacheEntry<unknown, CachedValue>> => ({
       key,
       meta: undefined,
       version: 0,

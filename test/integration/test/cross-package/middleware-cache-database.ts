@@ -38,6 +38,8 @@ type TestStackInstance = ExecutionStackInstance<
 export interface MiddlewareCacheDatabase {
   readonly context: ExecutionContext<typeof sqlContract>;
   readonly client: Client;
+  readonly connectionString: string;
+  readonly contract: typeof sqlContract;
   readonly driverQuerySpy: ReturnType<typeof vi.spyOn>;
   buildRuntime(middleware: SqlMiddleware[]): Runtime;
 }
@@ -52,11 +54,13 @@ export function useMiddlewareCacheDatabase(): MiddlewareCacheDatabase {
   let stackInstance: TestStackInstance;
   let driverQuerySpy: ReturnType<typeof vi.spyOn>;
   let client: Client;
+  let connectionString: string;
   const closeFns: Array<() => Promise<void>> = [];
 
   beforeAll(async () => {
     const database = await createDevDatabase();
-    client = new Client({ connectionString: database.connectionString });
+    connectionString = database.connectionString;
+    client = new Client({ connectionString });
     await client.connect();
 
     await setupTestDatabase(client, sqlContract, async (c) => {
@@ -165,6 +169,10 @@ export function useMiddlewareCacheDatabase(): MiddlewareCacheDatabase {
     get client() {
       return client;
     },
+    get connectionString() {
+      return connectionString;
+    },
+    contract: sqlContract,
     get driverQuerySpy() {
       return driverQuerySpy;
     },

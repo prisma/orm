@@ -31,7 +31,7 @@ describe('prepared aggregate', () => {
       Promise<{ total: bigint; sum: bigint | null }>
     >();
     expect(runtime.executions).toEqual([]);
-    expect(annotation.read(description.plan)).toEqual({ label: 'stats' });
+    expect(annotation.read(description.plan)).toBeUndefined();
     expect(
       await description.consume(
         source([

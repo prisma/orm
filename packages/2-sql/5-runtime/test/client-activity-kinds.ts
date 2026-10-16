@@ -4,4 +4,4 @@ declare module '@internal/framework-components/runtime' {
   }
 }
 
-export const testCall = { kind: 'test-call', contentHash: 'call-hash' } as const;
+export const testCall = { kind: 'test-call', contentHash: async () => 'call-hash' } as const;

@@ -1430,7 +1430,7 @@ export function compileSelect(
 ): SqlQueryPlan<Record<string, unknown>> {
   const ast = collectionSelectAst(contract, modelName, state);
   const { params } = deriveParamsFromAst(ast);
-  return buildOrmQueryPlan(contract, ast, params, state.annotations);
+  return buildOrmQueryPlan(contract, ast, params);
 }
 
 export function collectionSelectWithIncludesAst(
@@ -1471,5 +1471,5 @@ export function compileSelectWithIncludes(
 ): SqlQueryPlan<Record<string, unknown>> {
   const ast = collectionSelectWithIncludesAst(contract, aggregates, modelName, state);
   const { params } = deriveParamsFromAst(ast);
-  return buildOrmQueryPlan(contract, ast, params, state.annotations);
+  return buildOrmQueryPlan(contract, ast, params);
 }

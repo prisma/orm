@@ -25,7 +25,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import type { CollectionMethodReceiver } from '@internal/sql-relational-core/collection-methods';
 import { type TraitExpression, toExpr } from '@internal/sql-relational-core/expression';
-import type { Preparable } from '@internal/sql-relational-core/plan';
+import type { Preparable, SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -64,8 +64,10 @@ import {
   consumeFirstRow,
   describeCollectionFirst,
   describeCollectionFirstOrThrow,
+  describeCollectionQuery,
   describeCollectionRows,
   dispatchCollectionRows,
+  runQuery,
 } from './collection-dispatch';
 import type {
   CollectionConstructor,
@@ -152,10 +154,20 @@ import {
 import { Graph } from './mutation-graph/graph';
 import { executeGraph, queryGraph } from './mutation-graph/run-graph';
 import { assertCursorCompatibleOrder, assertDistinctOnCompatibleOrder } from './order-by-guards';
+import {
+  asPreparedOrmCall,
+  modelHashInput,
+  type OrmCall,
+  ormResults,
+  planHashInput,
+  preparedRowsCall,
+  preparedValueCall,
+  runOrmCall,
+  streamOrmCall,
+} from './orm-call';
 import { ormError } from './orm-errors';
 import type { PreparedCollection } from './prepared-collection';
-import { compileAggregate, type InsertConflictSkip, mergeAnnotations } from './query-plan';
-import { queryPlanRows } from './query-plan-rows';
+import { compileAggregate, type InsertConflictSkip } from './query-plan';
 import type { AliasedTable } from './table-scope';
 import {
   type AggregateBuilder,
@@ -186,6 +198,7 @@ import {
   type RelationTargetNamespace,
   type ResolvedCreateInput,
   type ResolvedScalarCreateInput,
+  type RuntimeQueryable,
   type ScalarUpdateInput,
   type ShorthandWhereFilter,
   type UniqueConstraintCriterion,
@@ -198,6 +211,8 @@ import {
 import { paramRefForStorageColumn } from './where-binding';
 import { normalizeWhereArg } from './where-interop';
 import { assertBulkWriteIgnoresNothing, assertRelationUpdateIgnoresNothing } from './write-guards';
+
+type Annotations = ReadonlyMap<string, AnnotationValue<unknown, OperationKind>>;
 
 function applyCreateDefaults(
   ctx: CollectionContext<Contract<SqlStorage>>,
@@ -1596,11 +1611,7 @@ export class CollectionBase<
    * }
    * ```
    *
-   * Accepts an optional `configure` callback that receives a
-   * `MetaBuilder<'read'>` so the caller can attach typed user
-   * annotations to the executed plan. `meta.annotate(...)` enforces
-   * applicability at the type level and at runtime; annotations are
-   * merged into `plan.meta.annotations` at compile time.
+   * Accepts an optional `configure` callback that receives a `MetaBuilder<'read'>` so the caller can attach typed user annotations to the call. `meta.annotate(...)` enforces applicability at the type level and at runtime. Every terminal method runs as one `orm-call` activity that carries the annotations; the statements it sends carry none.
    *
    * ```typescript
    * await db.orm.User.all((meta) => meta.annotate(cacheAnnotation({ key: 'users' })));
@@ -1615,7 +1626,13 @@ export class CollectionBase<
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): AsyncIterableResult<CollectionRowOf<this>>;
   all(configure?: (meta: MetaBuilder<'read'>) => void): AsyncIterableResult<unknown> {
-    return this.#withAnnotationsFromMeta(configure, 'all').#dispatch();
+    const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'all');
+    const query = describeCollectionQuery<Row>(this.#descriptionOptions());
+    return streamOrmCall(
+      this.ctx.runtime,
+      this.#readCall('all', annotations, query.plan, ormResults.rows),
+      query.rows,
+    );
   }
 
   get prepared(): PreparedCollection<
@@ -1628,24 +1645,55 @@ export class CollectionBase<
       PreparedCollection<TContract, ModelName, Row, CollectionTypeStateOf<this>>,
       typeof TypeState
     > = {
-      aggregate: (fn, configure) => this.#describeAggregate(fn, configure),
+      aggregate: (fn, configure) => this.#preparedAggregate(fn, configure),
       all: (configure) => {
-        const selected = this.#withAnnotationsFromMeta(configure, 'all');
-        return describeCollectionRows<Row>(selected.#descriptionOptions());
+        const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'all');
+        const description = describeCollectionRows<Row>(this.#descriptionOptions());
+        return asPreparedOrmCall(
+          description,
+          preparedRowsCall('all', annotations, description.consume),
+        );
       },
       first: (filter, configure) => {
-        const selected = this.#forFirst(filter, configure, 'first');
-        return describeCollectionFirst<Row>(selected.#descriptionOptions());
+        const scoped = this.#forFirst(filter);
+        const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'first');
+        const description = describeCollectionFirst<Row>(scoped.#descriptionOptions());
+        return asPreparedOrmCall(
+          description,
+          preparedValueCall('first', annotations, description.consume, ormResults.rowOrNull<Row>),
+        );
       },
       firstOrThrow: (filter, configure) => {
-        const selected = this.#forFirst(filter, configure, 'firstOrThrow');
-        return describeCollectionFirstOrThrow<Row>(selected.#descriptionOptions());
+        const scoped = this.#forFirst(filter);
+        const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'firstOrThrow');
+        const description = describeCollectionFirstOrThrow<Row>(scoped.#descriptionOptions());
+        return asPreparedOrmCall(
+          description,
+          preparedValueCall('firstOrThrow', annotations, description.consume, ormResults.row<Row>),
+        );
       },
     };
     return blindCast<
       PreparedCollection<TContract, ModelName, CollectionRowOf<this>, CollectionTypeStateOf<this>>,
       'the row this collection reads is the row its type carries'
     >(prepared);
+  }
+
+  #preparedAggregate<Spec extends AggregateSpec>(
+    fn: (aggregate: AggregateBuilder<TContract, ModelName, State['nsId']>) => Spec,
+    configure: ((meta: MetaBuilder<'read'>) => void) | undefined,
+  ): Preparable<Record<string, unknown>, Promise<AggregateResult<Spec>>> {
+    const description = this.#describeAggregate(fn);
+    const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'aggregate');
+    return asPreparedOrmCall(
+      description,
+      preparedValueCall(
+        'aggregate',
+        annotations,
+        description.consume,
+        ormResults.row<AggregateResult<Spec>>,
+      ),
+    );
   }
 
   #descriptionOptions() {
@@ -1659,8 +1707,6 @@ export class CollectionBase<
 
   #forFirst(
     filter: WhereInput<TContract, State['nsId'], ModelName, State['variantValue']> | undefined,
-    configure: ((meta: MetaBuilder<'read'>) => void) | undefined,
-    terminalName: 'first' | 'firstOrThrow',
   ) {
     const scoped =
       filter === undefined
@@ -1668,7 +1714,33 @@ export class CollectionBase<
         : typeof filter === 'function'
           ? this.where(filter)
           : this.where(filter);
-    return scoped.limit(1).#withAnnotationsFromMeta(configure, terminalName);
+    return scoped.limit(1);
+  }
+
+  #readCall<Result>(
+    method: string,
+    annotations: Annotations | undefined,
+    plan: () => SqlQueryPlan,
+    accepts: (value: unknown) => value is Result,
+  ): OrmCall<Result> {
+    return { method, annotations, hashInput: planHashInput(plan), accepts };
+  }
+
+  #writeCall<Result>(
+    method: string,
+    annotations: Annotations | undefined,
+    accepts: (value: unknown) => value is Result,
+  ): OrmCall<Result> {
+    return {
+      method,
+      annotations,
+      hashInput: modelHashInput(this.namespaceId, this.modelName),
+      accepts,
+    };
+  }
+
+  #on(queryable: RuntimeQueryable): CollectionContext<TContract> {
+    return { ...this.ctx, runtime: queryable };
   }
 
   /**
@@ -1708,7 +1780,14 @@ export class CollectionBase<
     filter?: WhereInput<TContract, State['nsId'], ModelName, State['variantValue']>,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Promise<unknown> {
-    return consumeFirstRow(this.#forFirst(filter, configure, 'first').#dispatch());
+    const scoped = this.#forFirst(filter);
+    const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'first');
+    const query = describeCollectionQuery<Row>(scoped.#descriptionOptions());
+    return runOrmCall(
+      this.ctx.runtime,
+      this.#readCall('first', annotations, query.plan, ormResults.rowOrNull<Row>),
+      (queryable) => consumeFirstRow(query.rows(queryable)),
+    );
   }
 
   async firstOrThrow<Self extends this>(
@@ -1724,7 +1803,14 @@ export class CollectionBase<
     filter?: WhereInput<TContract, State['nsId'], ModelName, State['variantValue']>,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Promise<unknown> {
-    return this.#forFirst(filter, configure, 'firstOrThrow').#dispatch().firstOrThrow();
+    const scoped = this.#forFirst(filter);
+    const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'firstOrThrow');
+    const query = describeCollectionQuery<Row>(scoped.#descriptionOptions());
+    return runOrmCall(
+      this.ctx.runtime,
+      this.#readCall('firstOrThrow', annotations, query.plan, ormResults.row<Row>),
+      (queryable) => query.rows(queryable).firstOrThrow(),
+    );
   }
 
   /**
@@ -1745,8 +1831,7 @@ export class CollectionBase<
    * ```
    *
    * Accepts an optional `configure` callback that receives a
-   * `MetaBuilder<'read'>` for attaching typed annotations.
-   * Annotations are merged into the compiled plan's `meta.annotations`.
+   * `MetaBuilder<'read'>` for attaching typed annotations to the call.
    */
   async aggregate<Spec extends AggregateSpec, Self = unknown>(
     this: Self & HasNoUniqueFilter,
@@ -1757,13 +1842,22 @@ export class CollectionBase<
     fn: (aggregate: AggregateBuilder<TContract, ModelName, State['nsId']>) => Spec,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Promise<AggregateResult<Spec>> {
-    const description = this.#describeAggregate(fn, configure);
-    return description.consume(queryPlanRows(this.ctx.runtime, description.plan));
+    const description = this.#describeAggregate(fn);
+    const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'aggregate');
+    return runOrmCall(
+      this.ctx.runtime,
+      this.#readCall(
+        'aggregate',
+        annotations,
+        () => description.plan,
+        ormResults.row<AggregateResult<Spec>>,
+      ),
+      (queryable) => runQuery(queryable, description),
+    );
   }
 
   #describeAggregate<Spec extends AggregateSpec>(
     fn: (aggregate: AggregateBuilder<TContract, ModelName, State['nsId']>) => Spec,
-    configure?: (meta: MetaBuilder<'read'>) => void,
   ): Preparable<Record<string, unknown>, Promise<AggregateResult<Spec>>> {
     assertLockCompatible(this.state, 'aggregate');
     const aggregateSpec = fn(
@@ -1795,17 +1889,12 @@ export class CollectionBase<
       }
     }
 
-    const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'read', 'aggregate');
-
-    const compiled = mergeAnnotations(
-      compileAggregate(
-        this.contract,
-        this.ctx.context.aggregateDescriptors,
-        this.state,
-        aggregateSpec,
-        this.modelName,
-      ),
-      annotationsMap,
+    const compiled = compileAggregate(
+      this.contract,
+      this.ctx.context.aggregateDescriptors,
+      this.state,
+      aggregateSpec,
+      this.modelName,
     );
     const results = entries.map(([alias, selector]) => {
       const resolved = resolveAggregate({
@@ -1877,16 +1966,7 @@ export class CollectionBase<
    * });
    * ```
    *
-   * Accepts an optional `configure` callback that receives a
-   * `MetaBuilder<'write'>` for attaching typed annotations.
-   * Annotations are merged into the compiled mutation plan's
-   * `meta.annotations`.
-   *
-   * Note: when the input contains nested-mutation callbacks, the
-   * operation is executed as a graph of internal queries via
-   * `withMutationScope`. In that path the `configure` callback still runs, so `meta.annotate`
-   * validation applies, but the recorded annotations are discarded: neither the nested
-   * statements nor the read-back query carry them.
+   * Accepts an optional `configure` callback that receives a `MetaBuilder<'write'>` for attaching typed annotations to the call, including when the input contains relation callbacks and the call sends several statements and a read-back.
    */
   async create<Self extends this>(
     this: Self,
@@ -1910,8 +1990,20 @@ export class CollectionBase<
   ): Promise<unknown> {
     assertLockCompatible(this.state, 'mutation');
     assertReturningCapability(this.contract, 'create()');
-    const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'create');
+    const annotations = this.#collectAnnotationsFromMeta(configure, 'write', 'create');
+    return runOrmCall(
+      this.ctx.runtime,
+      this.#writeCall('create', annotations, ormResults.row<Row>),
+      (queryable) => this.#create(queryable, data),
+    );
+  }
 
+  async #create(
+    queryable: RuntimeQueryable,
+    data:
+      | ResolvedCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>
+      | MutationCreateInputWithRelations<TContract, ModelName, State['nsId']>,
+  ): Promise<Row> {
     if (
       hasNestedMutationCallbacks(
         this.contract,
@@ -1925,7 +2017,7 @@ export class CollectionBase<
     ) {
       const createdRow = await executeNestedCreateMutation({
         context: this.ctx.context,
-        runtime: this.ctx.runtime,
+        runtime: queryable,
         namespaceId: this.namespaceId,
         modelName: this.modelName,
         data: blindCast<
@@ -1940,7 +2032,7 @@ export class CollectionBase<
         this.modelName,
         createdRow,
       );
-      const reloaded = await this.#reloadMutationRowByIdentity(identityCriterion);
+      const reloaded = await this.#reloadMutationRowByIdentity(queryable, identityCriterion);
       if (!reloaded) {
         throw ormError(
           'ORM.MUTATION_ROW_MISSING',
@@ -1951,15 +2043,12 @@ export class CollectionBase<
       return reloaded;
     }
 
-    const rows = await this.#createAllWithAnnotations(
-      [
-        blindCast<
-          ResolvedScalarCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>,
-          'absence of nested callbacks selects the scalar create overload input'
-        >(data),
-      ],
-      annotationsMap,
-    );
+    const rows = await this.#createAllRows([
+      blindCast<
+        ResolvedScalarCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>,
+        'absence of nested callbacks selects the scalar create overload input'
+      >(data),
+    ])(queryable);
     const created = rows[0];
     if (created) {
       return created;
@@ -2004,8 +2093,7 @@ export class CollectionBase<
    *
    * Accepts an optional `configure` callback that receives a
    * `MetaBuilder<'write'>` for attaching typed annotations to the
-   * compiled insert plan. It may be passed in second position when
-   * there are no options.
+   * call. It may be passed in second position when there are no options.
    */
   createAll<Self extends this>(
     this: Self,
@@ -2041,26 +2129,26 @@ export class CollectionBase<
     assertLockCompatible(this.state, 'mutation');
     const { options, configureCallback } = splitCreateArguments(optionsOrConfigure, configure);
     const conflictSkip = this.#resolveConflictSkip(options, 'createAll()');
-    return this.#createAllWithAnnotations(
-      data,
-      this.#collectAnnotationsFromMeta(configureCallback, 'write', 'createAll'),
-      conflictSkip,
+    const annotations = this.#collectAnnotationsFromMeta(configureCallback, 'write', 'createAll');
+    return streamOrmCall(
+      this.ctx.runtime,
+      this.#writeCall('createAll', annotations, ormResults.rows<Row>),
+      this.#createAllRows(data, conflictSkip),
     );
   }
 
-  #createAllWithAnnotations(
+  #createAllRows(
     data: readonly ResolvedScalarCreateInput<
       TContract,
       ModelName,
       State['variantValue'],
       State['nsId']
     >[],
-    annotationsMap: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined,
     conflictSkip?: InsertConflictSkip,
-  ): AsyncIterableResult<Row> {
+  ): (queryable: RuntimeQueryable) => AsyncIterableResult<Row> {
     if (data.length === 0) {
       const generator = async function* (): AsyncGenerator<Row, void, unknown> {};
-      return new AsyncIterableResult(generator());
+      return () => new AsyncIterableResult(generator());
     }
 
     assertReturningCapability(this.contract, 'createAll()');
@@ -2078,7 +2166,8 @@ export class CollectionBase<
         mtiContext.variant.modelName,
         this.#variantCreateRows(rows, mtiContext, variantTable),
       );
-      return queryGraph(graph, this.ctx, annotationsMap, this.#descriptionWithoutIncludes());
+      return (queryable) =>
+        queryGraph(graph, this.#on(queryable), this.#descriptionWithoutIncludes());
     }
 
     const graph = createAllGraph(
@@ -2086,7 +2175,7 @@ export class CollectionBase<
       this.#createValues(rows),
       conflictSkip,
     );
-    return queryGraph(graph, this.ctx, annotationsMap, this.#descriptionOptions());
+    return (queryable) => queryGraph(graph, this.#on(queryable), this.#descriptionOptions());
   }
 
   #createValues(rows: readonly Record<string, unknown>[]): Record<string, unknown>[] {
@@ -2330,17 +2419,18 @@ export class CollectionBase<
     assertLockCompatible(this.state, 'mutation');
     const { options, configureCallback } = splitCreateArguments(optionsOrConfigure, configure);
     const conflictSkip = this.#resolveConflictSkip(options, 'createAndCount()');
-
-    if (data.length === 0) {
-      return 0;
-    }
-
-    this.#assertNotMtiVariant('createAndCount()');
-    const annotationsMap = this.#collectAnnotationsFromMeta(
+    const annotations = this.#collectAnnotationsFromMeta(
       configureCallback,
       'write',
       'createAndCount',
     );
+    const call = this.#writeCall('createAndCount', annotations, ormResults.count);
+
+    if (data.length === 0) {
+      return runOrmCall(this.ctx.runtime, call, async () => 0);
+    }
+
+    this.#assertNotMtiVariant('createAndCount()');
 
     const rows = blindCast<
       readonly Record<string, unknown>[],
@@ -2351,8 +2441,14 @@ export class CollectionBase<
       this.#createValues(rows),
       conflictSkip,
     );
-    const stats = await executeGraph(graph, this.ctx, annotationsMap);
-    return stats.affectedRows;
+    return this.#countCall(call, graph);
+  }
+
+  #countCall(call: OrmCall<number>, graph: Graph): Promise<number> {
+    return runOrmCall(this.ctx.runtime, call, async (queryable) => {
+      const stats = await executeGraph(graph, this.#on(queryable));
+      return stats.affectedRows;
+    });
   }
 
   /**
@@ -2416,7 +2512,7 @@ export class CollectionBase<
     assertLockCompatible(this.state, 'mutation');
     assertReturningCapability(this.contract, 'upsert()');
     this.#assertNotMtiVariant('upsert()');
-    const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'upsert');
+    const annotations = this.#collectAnnotationsFromMeta(configure, 'write', 'upsert');
 
     const mappedCreateRows = this.#mapCreateRows([
       blindCast<
@@ -2459,17 +2555,22 @@ export class CollectionBase<
       updateValues,
       conflictColumns,
     );
-    const row = await consumeFirstRow(
-      queryGraph(graph, this.ctx, annotationsMap, this.#descriptionOptions()),
-    );
-    if (row) {
-      return row;
-    }
-
-    throw ormError(
-      'ORM.MUTATION_ROW_MISSING',
-      `upsert() for model "${this.modelName}" did not return a row`,
-      { meta: { operation: 'upsert', model: this.modelName } },
+    return runOrmCall(
+      this.ctx.runtime,
+      this.#writeCall('upsert', annotations, ormResults.row<Row>),
+      async (queryable) => {
+        const row = await consumeFirstRow(
+          queryGraph<Row>(graph, this.#on(queryable), this.#descriptionOptions()),
+        );
+        if (row) {
+          return row;
+        }
+        throw ormError(
+          'ORM.MUTATION_ROW_MISSING',
+          `upsert() for model "${this.modelName}" did not return a row`,
+          { meta: { operation: 'upsert', model: this.modelName } },
+        );
+      },
     );
   }
 
@@ -2505,13 +2606,7 @@ export class CollectionBase<
    * ```
    *
    * Accepts an optional `configure` callback that receives a
-   * `MetaBuilder<'write'>` for attaching typed annotations.
-   *
-   * Note: when the input contains nested-mutation callbacks, the
-   * operation is executed as a graph of internal queries via
-   * `withMutationScope`. In that path the `configure` callback still runs, so `meta.annotate`
-   * validation applies, but the recorded annotations are discarded: neither the nested
-   * statements nor the read-back query carry them.
+   * `MetaBuilder<'write'>` for attaching typed annotations to the call, including when the input contains relation callbacks.
    */
   async update<Self extends HasWhere>(
     this: Self,
@@ -2524,8 +2619,18 @@ export class CollectionBase<
   ): Promise<unknown> {
     assertLockCompatible(this.state, 'mutation');
     assertReturningCapability(this.contract, 'update()');
-    const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'update');
+    const annotations = this.#collectAnnotationsFromMeta(configure, 'write', 'update');
+    return runOrmCall(
+      this.ctx.runtime,
+      this.#writeCall('update', annotations, ormResults.rowOrNull<Row>),
+      (queryable) => this.#update(queryable, data),
+    );
+  }
 
+  async #update(
+    queryable: RuntimeQueryable,
+    data: MutationUpdateInput<TContract, ModelName, State['nsId']>,
+  ): Promise<Row | null> {
     if (
       hasNestedMutationCallbacks(
         this.contract,
@@ -2540,7 +2645,7 @@ export class CollectionBase<
       assertRelationUpdateIgnoresNothing(this.state, this.modelName);
       const updatedRow = await executeNestedUpdateMutation({
         context: this.ctx.context,
-        runtime: this.ctx.runtime,
+        runtime: queryable,
         namespaceId: this.namespaceId,
         modelName: this.modelName,
         tables: this.state.tables,
@@ -2560,7 +2665,7 @@ export class CollectionBase<
         this.modelName,
         updatedRow,
       );
-      return this.#reloadMutationRowByIdentity(identityCriterion);
+      return this.#reloadMutationRowByIdentity(queryable, identityCriterion);
     }
 
     assertModelFieldNames(
@@ -2576,7 +2681,7 @@ export class CollectionBase<
       >(data),
     );
     const graph = updateFirstGraph(this.#descriptionOptions(), values);
-    return consumeFirstRow(queryGraph(graph, this.ctx, annotationsMap, this.#descriptionOptions()));
+    return consumeFirstRow(queryGraph<Row>(graph, this.#on(queryable), this.#descriptionOptions()));
   }
 
   /**
@@ -2615,10 +2720,27 @@ export class CollectionBase<
   ): AsyncIterableResult<unknown> {
     assertBulkWriteIgnoresNothing(this.state, this.modelName, 'updateAll');
     assertLockCompatible(this.state, 'mutation');
-    const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'updateAll');
+    const annotations = this.#collectAnnotationsFromMeta(configure, 'write', 'updateAll');
     assertReturningCapability(this.contract, 'updateAll()');
     const graph = updateAllGraph(this.#descriptionOptions(), this.#updateValues(data));
-    return queryGraph(graph, this.ctx, annotationsMap, this.#descriptionOptions());
+    return this.#rowsCall('updateAll', annotations, graph);
+  }
+
+  #rowsCall(method: string, annotations: Annotations | undefined, graph: Graph) {
+    return streamOrmCall(
+      this.ctx.runtime,
+      this.#writeCall(method, annotations, ormResults.rows<Row>),
+      (queryable) => queryGraph<Row>(graph, this.#on(queryable), this.#descriptionOptions()),
+    );
+  }
+
+  #firstRowCall(method: string, annotations: Annotations | undefined, graph: Graph) {
+    return runOrmCall(
+      this.ctx.runtime,
+      this.#writeCall(method, annotations, ormResults.rowOrNull<Row>),
+      (queryable) =>
+        consumeFirstRow(queryGraph<Row>(graph, this.#on(queryable), this.#descriptionOptions())),
+    );
   }
 
   /**
@@ -2651,9 +2773,8 @@ export class CollectionBase<
       Object.keys(values).length === 0
         ? new Graph()
         : updateAllGraph(this.#descriptionWithoutIncludes(), values);
-    const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'updateAndCount');
-    const stats = await executeGraph(graph, this.ctx, annotationsMap);
-    return stats.affectedRows;
+    const annotations = this.#collectAnnotationsFromMeta(configure, 'write', 'updateAndCount');
+    return this.#countCall(this.#writeCall('updateAndCount', annotations, ormResults.count), graph);
   }
 
   /**
@@ -2677,9 +2798,9 @@ export class CollectionBase<
   async delete(configure?: (meta: MetaBuilder<'write'>) => void): Promise<unknown> {
     assertLockCompatible(this.state, 'mutation');
     assertReturningCapability(this.contract, 'delete()');
-    const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'delete');
+    const annotations = this.#collectAnnotationsFromMeta(configure, 'write', 'delete');
     const graph = deleteFirstGraph(this.#descriptionOptions());
-    return consumeFirstRow(queryGraph(graph, this.ctx, annotationsMap, this.#descriptionOptions()));
+    return this.#firstRowCall('delete', annotations, graph);
   }
 
   /**
@@ -2712,10 +2833,10 @@ export class CollectionBase<
   deleteAll(configure?: (meta: MetaBuilder<'write'>) => void): AsyncIterableResult<unknown> {
     assertBulkWriteIgnoresNothing(this.state, this.modelName, 'deleteAll');
     assertLockCompatible(this.state, 'mutation');
-    const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAll');
+    const annotations = this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAll');
     assertReturningCapability(this.contract, 'deleteAll()');
     const graph = deleteAllGraph(this.#descriptionOptions());
-    return queryGraph(graph, this.ctx, annotationsMap, this.#descriptionOptions());
+    return this.#rowsCall('deleteAll', annotations, graph);
   }
 
   /**
@@ -2737,10 +2858,9 @@ export class CollectionBase<
   async deleteAndCount(configure?: (meta: MetaBuilder<'write'>) => void): Promise<number> {
     assertBulkWriteIgnoresNothing(this.state, this.modelName, 'deleteAndCount');
     assertLockCompatible(this.state, 'mutation');
-    const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAndCount');
+    const annotations = this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAndCount');
     const graph = deleteAllGraph(this.#descriptionWithoutIncludes());
-    const stats = await executeGraph(graph, this.ctx, annotationsMap);
-    return stats.affectedRows;
+    return this.#countCall(this.#writeCall('deleteAndCount', annotations, ormResults.count), graph);
   }
 
   #descriptionWithoutIncludes() {
@@ -2757,11 +2877,15 @@ export class CollectionBase<
     return values;
   }
 
-  async #reloadMutationRowByIdentity(criterion: Record<string, unknown>): Promise<Row | null> {
-    return this.#reloadMutationRowByCriterion(criterion, 'row identity');
+  async #reloadMutationRowByIdentity(
+    queryable: RuntimeQueryable,
+    criterion: Record<string, unknown>,
+  ): Promise<Row | null> {
+    return this.#reloadMutationRowByCriterion(queryable, criterion, 'row identity');
   }
 
   async #reloadMutationRowByCriterion(
+    queryable: RuntimeQueryable,
     criterion: Record<string, unknown>,
     criterionLabel: string,
   ): Promise<Row | null> {
@@ -2791,7 +2915,7 @@ export class CollectionBase<
 
     const rows = await dispatchCollectionRows<Row>({
       context: this.ctx.context,
-      runtime: this.ctx.runtime,
+      runtime: queryable,
       state: resultState,
       modelName: this.modelName,
       namespaceId: this.namespaceId,
@@ -2829,15 +2953,6 @@ export class CollectionBase<
       ...ifDefined('waitPolicy', waitPolicy),
     });
     return this.#cloneSelf({ locking: [...(this.state.locking ?? []), clause] });
-  }
-
-  #clone<NextState extends CollectionTypeState = State>(
-    overrides: Partial<CollectionState>,
-  ): Collection<TContract, ModelName, Row, NextState> {
-    return this.#createSelf<Row, NextState>({
-      ...this.state,
-      ...overrides,
-    });
   }
 
   #cloneSelf<Flags = unknown>(overrides: Partial<CollectionState>): this & Flags {
@@ -2905,67 +3020,11 @@ export class CollectionBase<
     );
   }
 
-  #dispatch(): AsyncIterableResult<Row> {
-    return dispatchCollectionRows<Row>({
-      context: this.ctx.context,
-      runtime: this.ctx.runtime,
-      state: this.state,
-      modelName: this.modelName,
-      namespaceId: this.namespaceId,
-    });
-  }
-
-  /**
-   * Invokes the user-supplied configurator (if any) against a freshly
-   * constructed read meta builder, and returns a clone whose
-   * `state.annotations` carries the recorded map. Used by read
-   * terminals that flow annotations through state (`all`, `first`).
-   *
-   * Returns the receiver unchanged when no configurator was supplied
-   * or when the configurator did not call `meta.annotate(...)`. The
-   * meta builder's `annotate` method enforces applicability at the
-   * type level and at runtime, so terminal code does not need to
-   * re-validate.
-   */
-  #withAnnotationsFromMeta(
-    configure: ((meta: MetaBuilder<'read'>) => void) | undefined,
-    terminalName: string,
-  ): this {
-    if (configure === undefined) {
-      return this;
-    }
-    const meta = createMetaBuilder('read', terminalName);
-    configure(meta);
-    if (meta.annotations.size === 0) {
-      return this;
-    }
-    const next = new Map(this.state.annotations);
-    for (const [namespace, value] of meta.annotations) {
-      next.set(namespace, value);
-    }
-    return blindCast<
-      this,
-      'annotation cloning preserves the concrete collection subclass runtime type'
-    >(this.#clone({ annotations: next }));
-  }
-
-  /**
-   * Invokes the user-supplied configurator (if any) against a freshly
-   * constructed meta builder of the given operation kind, and returns
-   * the recorded annotation map (or `undefined` when empty). Used by
-   * terminals where annotations don't flow through `state` — the
-   * compiled plan is post-wrapped via `mergeAnnotations` instead.
-   * Read terminals `all` and `first` populate `state.annotations`
-   * via `#withAnnotationsFromMeta` instead; `aggregate` uses this
-   * post-wrap path because `compileAggregate` does not forward `state.annotations` into the plan.
-   * The meta builder's `annotate` method enforces applicability at the
-   * type level and at runtime.
-   */
   #collectAnnotationsFromMeta<K extends OperationKind>(
     configure: ((meta: MetaBuilder<K>) => void) | undefined,
     kind: K,
     terminalName: string,
-  ): ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined {
+  ): Annotations | undefined {
     if (configure === undefined) {
       return undefined;
     }

@@ -68,13 +68,13 @@ describe('the ORM objects a sqlite client builds', () => {
 
     const call = await startActivityOn(dbOrmRuntime as never, {
       kind: 'facade-call',
-      contentHash: 'h',
+      contentHash: async () => 'h',
     });
     await call.end({ outcome: 'succeeded' });
     await db.transaction(async () => {
       const txCall = await startActivityOn(ormRuntimes.at(-1) as never, {
         kind: 'facade-call',
-        contentHash: 'h',
+        contentHash: async () => 'h',
       });
       await txCall.end({ outcome: 'succeeded' });
     });

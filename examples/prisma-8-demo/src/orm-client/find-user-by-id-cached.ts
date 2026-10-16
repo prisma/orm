@@ -2,17 +2,17 @@
  * Cached `User.first({ id })` lookup.
  *
  * Demonstrates the read-only `cacheAnnotation` from
- * `@internal/middleware-cache`. The annotation is opt-in: the cache
- * middleware only acts on plans whose `meta.annotations` carry a
- * `cacheAnnotation`. Calling the same lookup with the same `id` while the
- * entry lives (60 seconds in the default store configured in
- * `src/prisma/db.ts`) is served from the cache — the driver is **not**
- * invoked the second time.
+ * `@internal/middleware-cache`. The annotation is opt-in: the ORM call
+ * carries it on its `orm-call` activity, and the cache middleware caches
+ * the call as a whole. Calling the same lookup with the same `id` while
+ * the entry lives (60 seconds in the default store configured in
+ * `src/prisma/db.ts`) is served from the cache — the ORM sends **no**
+ * statement the second time.
  *
- * The cache key is composed by the runtime via
- * `ActivityContext.contentHash(exec)`, which incorporates the
- * post-lowering SQL plus parameters. Two lookups for different `id`
- * values therefore land in different cache slots; the same `id` hits.
+ * The cache key is the call's `activity.contentHash()`, a digest of the
+ * terminal method and the post-lowering SQL plus parameters of the
+ * statement it sends. Two lookups for different `id` values therefore
+ * land in different cache slots; the same `id` hits.
  *
  * Notes worth pinning:
  *
@@ -20,12 +20,11 @@
  *   a write terminal (`create`, `update`, `delete`) is a type error
  *   *and* a runtime error — it cannot be smuggled through with a cast
  *   on one side without failing on the other.
- * - On a cache hit, every registered middleware's `activityEnded` still
- *   fires and reports `source: 'middleware'` — the `slowQueryWarning`
- *   middleware in `db.ts` observes cached reads too — so observability
- *   is preserved even though the driver is skipped.
- * - Schema migrations rotate `meta.storageHash`, which feeds
- *   `contentHash`, so cached entries from a previous schema cannot
+ * - On a cache hit no statement runs, so statement middleware such as
+ *   `slowQueryWarning` in `db.ts` sees nothing; the call's own
+ *   `activityEnded` fires with `source: 'middleware'`.
+ * - Schema migrations rotate `meta.storageHash`, which feeds the
+ *   content hash, so cached entries from a previous schema cannot
  *   accidentally serve queries against the new schema.
  */
 

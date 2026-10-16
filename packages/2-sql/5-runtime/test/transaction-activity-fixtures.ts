@@ -149,6 +149,7 @@ export interface SetupOptions {
   readonly middleware?: readonly SqlMiddleware[];
   /** When false, the recorder implements no `activityFinalized`. */
   readonly recordFinalized?: boolean;
+  readonly closeRefusal?: 'when-idle' | 'at-once';
 }
 
 export function createSetup(options: SetupOptions = {}) {
@@ -184,6 +185,7 @@ export function createSetup(options: SetupOptions = {}) {
     middleware: [middleware, ...(options.middleware ?? [])],
     ...(options.log ? { log: options.log } : {}),
     ...(options.mode ? { mode: options.mode } : {}),
+    ...(options.closeRefusal ? { closeRefusal: options.closeRefusal } : {}),
   });
   return { runtime, events, middleware, driver };
 }
