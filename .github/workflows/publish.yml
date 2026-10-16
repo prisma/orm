@@ -290,19 +290,19 @@ jobs:
       # Tell prisma-cli a family package shipped, so its auto-repin
       # workflow can open the repin PR that deploys a dev CLI carrying
       # this publish (prisma-cli docs/oss/versioning.md, operator ruling
-      # 2026-08-13). Guarded on the PAT and never fails the publish: the
-      # repin has a daily scheduled backstop in prisma-cli, so a missed
-      # dispatch delays it by at most a day.
+      # 2026-08-13). A missing token fails the step so it shows up in the
+      # run, but never fails the publish: the repin has a daily scheduled
+      # backstop in prisma-cli, so a missed dispatch delays it by at most a day.
       - name: Notify prisma-cli
         if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry-run != 'true' }}
         continue-on-error: true
         env:
-          DISPATCH_PAT: ${{ secrets.PRISMA_CLI_DISPATCH_PAT }}
+          DISPATCH_PAT: ${{ secrets.DEPLOY_GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           if [ -z "$DISPATCH_PAT" ]; then
-            echo "PRISMA_CLI_DISPATCH_PAT is not configured; skipping (the daily backstop covers this)."
-            exit 0
+            echo "::error::DEPLOY_GITHUB_TOKEN is not configured; prisma-cli was not notified (the daily backstop covers this)."
+            exit 1
           fi
           curl -sSf --connect-timeout 10 --max-time 30 -X POST \
             -H "Authorization: Bearer $DISPATCH_PAT" \
