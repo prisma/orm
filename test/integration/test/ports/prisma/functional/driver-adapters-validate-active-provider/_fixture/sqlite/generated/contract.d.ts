@@ -6,13 +6,13 @@ import type { CodecTypes as SqliteTypes } from '@internal/adapter-sqlite/codec-t
 import type {
   ColumnTypesFromStorage,
   ContractWithTypeMaps,
-  FieldTypesFromDomain,
   RelationKeys,
   TypeMaps as TypeMapsType,
 } from '@internal/sql-contract/types';
 import type {
   Contract as ContractType,
   ExecutionHashBase,
+  FieldTypesFromDomain,
   NamespaceId,
   ProfileHashBase,
   StorageHashBase,

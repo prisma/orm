@@ -195,14 +195,16 @@ test('R5: nullable enum input accepts the value union or null, or may be left ou
 });
 
 test('R5: many enum input accepts an array of the value union', () => {
-  expectTypeOf<R5CreateInput['tags']>().toEqualTypeOf<('user' | 'admin')[]>();
+  expectTypeOf<R5CreateInput['tags']>().toEqualTypeOf<readonly ('user' | 'admin')[]>();
 });
 
 test('R5: nullable+many enum input resolves to Base[] | null (precedence)', () => {
   expectTypeOf<R5CreateInput['moodTags']>().toEqualTypeOf<
-    ('user' | 'admin')[] | null | undefined
+    readonly ('user' | 'admin')[] | null | undefined
   >();
-  expectTypeOf<R5CreateInput['moodTags']>().not.toEqualTypeOf<('user' | 'admin' | null)[]>();
+  expectTypeOf<R5CreateInput['moodTags']>().not.toEqualTypeOf<
+    readonly ('user' | 'admin' | null)[]
+  >();
 });
 
 test('R5: invalid enum literal is rejected by the create() input field type', () => {

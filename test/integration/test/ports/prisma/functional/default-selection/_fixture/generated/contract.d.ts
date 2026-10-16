@@ -10,13 +10,13 @@ import type { QueryOperationTypes as PgTargetQueryOps } from '@internal/target-p
 import type {
   ColumnTypesFromStorage,
   ContractWithTypeMaps,
-  FieldTypesFromDomain,
   RelationKeys,
   TypeMaps as TypeMapsType,
 } from '@internal/sql-contract/types';
 import type {
   Contract as ContractType,
   ExecutionHashBase,
+  FieldTypesFromDomain,
   NamespaceId,
   ProfileHashBase,
   StorageHashBase,
@@ -239,9 +239,11 @@ type ParameterizedOutputTypeFunctions = PgParameterizedOutputTypes;
 
 type FieldTypeOverrides = {
   readonly public: {
-    readonly Model: {
-      readonly enum: { readonly output: 'A' | 'B'; readonly input: 'A' | 'B' };
-      readonly enumList: { readonly output: 'A' | 'B'; readonly input: 'A' | 'B' };
+    readonly models: {
+      readonly Model: {
+        readonly enum: { readonly output: 'A' | 'B'; readonly input: 'A' | 'B' };
+        readonly enumList: { readonly output: 'A' | 'B'; readonly input: 'A' | 'B' };
+      };
     };
   };
 };

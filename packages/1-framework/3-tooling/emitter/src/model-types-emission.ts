@@ -7,12 +7,7 @@ import type {
 } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { UNBOUND_PSL_NAMESPACE_NAME } from '@internal/framework-components/psl-ast';
-import {
-  type ModelFieldTypeResolvers,
-  resolveModelFieldType,
-  serializeObjectKey,
-  serializeValue,
-} from './domain-type-generation';
+import { serializeObjectKey, serializeValue } from './domain-type-generation';
 import { emitterError } from './emitter-errors';
 
 type ModelRef = {
@@ -160,17 +155,14 @@ function requireVariant(
 
 function collectFieldLines(
   ref: ModelRef,
-  resolvers: ModelFieldTypeResolvers,
   discriminatorType: { readonly field: string; readonly type: string } | undefined,
 ): Map<string, string> {
   const lines = new Map<string, string>();
-  for (const [fieldName, field] of Object.entries(ref.model.fields)) {
+  for (const fieldName of Object.keys(ref.model.fields)) {
     const type =
       discriminatorType !== undefined && fieldName === discriminatorType.field
         ? discriminatorType.type
-        : resolvers.referenceFieldOutputTypes === true
-          ? `FieldOutputTypes[${serializeValue(ref.namespaceId)}][${serializeValue(ref.modelName)}][${serializeValue(fieldName)}]`
-          : resolveModelFieldType(ref.modelName, fieldName, field, ref.model, resolvers).output;
+        : `FieldOutputTypes[${serializeValue(ref.namespaceId)}][${serializeValue(ref.modelName)}][${serializeValue(fieldName)}]`;
     lines.set(fieldName, `${serializeObjectKey(fieldName)}: ${type};`);
   }
   return lines;
@@ -220,11 +212,7 @@ function discriminatorUnion(base: ContractModelBase): string {
   return values.length > 0 ? values.join(' | ') : 'never';
 }
 
-function memberLines(
-  ref: ModelRef,
-  index: ModelIndex,
-  resolvers: ModelFieldTypeResolvers,
-): MemberLines {
+function memberLines(ref: ModelRef, index: ModelIndex): MemberLines {
   const base =
     ref.model.base !== undefined ? requireBase(index.namespaces, ref, ref.model.base) : undefined;
   if (base !== undefined && isPolymorphicBase(base.model)) {
@@ -239,8 +227,8 @@ function memberLines(
     };
     return {
       fieldsByName: new Map([
-        ...collectFieldLines(base, resolvers, discriminatorType),
-        ...collectFieldLines(ref, resolvers, undefined),
+        ...collectFieldLines(base, discriminatorType),
+        ...collectFieldLines(ref, undefined),
       ]),
       relationsByName: new Map([
         ...collectRelationLines(base, index),
@@ -252,7 +240,7 @@ function memberLines(
     ? { field: ref.model.discriminator?.field ?? '', type: discriminatorUnion(ref.model) }
     : undefined;
   return {
-    fieldsByName: collectFieldLines(ref, resolvers, discriminatorType),
+    fieldsByName: collectFieldLines(ref, discriminatorType),
     relationsByName: collectRelationLines(ref, index),
   };
 }
@@ -288,11 +276,7 @@ function namespaceModelsOf(contract: Contract): NamespaceModels[] {
   }));
 }
 
-export function generateModelTypesBlock(
-  contract: Contract,
-  resolvers: ModelFieldTypeResolvers,
-  supportsNamespaces: boolean,
-): string {
+export function generateModelTypesBlock(contract: Contract, supportsNamespaces: boolean): string {
   const memberNameOf: MemberNamer = supportsNamespaces ? namespacedMemberName : bareMemberName;
   const namespaces = namespaceModelsOf(contract);
   const index: ModelIndex = { namespaces, memberNameOf };
@@ -324,7 +308,7 @@ export function generateModelTypesBlock(
     for (const ref of ns.models) {
       const memberName = memberNameOf(ns.namespaceId, ref.modelName);
       members.push(
-        renderMember(memberName, memberLines(ref, index, resolvers), ref.model.owner !== undefined),
+        renderMember(memberName, memberLines(ref, index), ref.model.owner !== undefined),
       );
       keys.push(`${serializeObjectKey(ref.modelName)}: Models.${memberName};`);
     }

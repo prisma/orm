@@ -1,6 +1,6 @@
 import type { ParameterizedOutputTypesFunction } from '@internal/contract/types';
 import { describe, expectTypeOf, test } from 'vitest';
-import type { ColumnTypesFromStorage, FieldTypesFromDomain } from '../src/exports/types';
+import type { ColumnTypesFromStorage } from '../src/exports/types';
 
 type CodecTypes = {
   readonly 'test/text@1': { readonly input: string; readonly output: string };
@@ -19,84 +19,6 @@ type CharOutputTypeMap<TypeParams> = {
 interface CharOutputTypes extends ParameterizedOutputTypesFunction {
   readonly outputTypes: CharOutputTypeMap<this['typeParams']>;
 }
-
-type Domain = {
-  readonly public: {
-    readonly models: {
-      readonly User: {
-        readonly fields: {
-          readonly id: {
-            readonly nullable: false;
-            readonly type: {
-              readonly kind: 'scalar';
-              readonly codecId: 'test/char@1';
-              readonly typeParams: { readonly length: 24 };
-            };
-          };
-          readonly mood: {
-            readonly nullable: true;
-            readonly type: { readonly kind: 'scalar'; readonly codecId: 'test/text@1' };
-          };
-          readonly tags: {
-            readonly nullable: false;
-            readonly type: { readonly kind: 'scalar'; readonly codecId: 'test/text@1' };
-            readonly many: { readonly elementNullable: true };
-          };
-          readonly settings: {
-            readonly nullable: false;
-            readonly type: { readonly kind: 'scalar'; readonly codecId: 'test/json@1' };
-          };
-          readonly unknownCodec: {
-            readonly nullable: false;
-            readonly type: { readonly kind: 'scalar'; readonly codecId: 'test/missing@1' };
-          };
-        };
-      };
-      readonly Empty: { readonly fields: Record<never, never> };
-    };
-  };
-};
-
-type Known = {
-  readonly public: {
-    readonly User: {
-      readonly mood: { readonly output: 'happy' | 'sad'; readonly input: 'happy' | 'sad' };
-      readonly settings: { readonly output: { readonly theme: string } };
-    };
-  };
-};
-
-type Output = FieldTypesFromDomain<Domain, CodecTypes, CharOutputTypes, Known, 'output'>;
-type Input = FieldTypesFromDomain<Domain, CodecTypes, CharOutputTypes, Known, 'input'>;
-
-describe('field types from a contract domain', () => {
-  test('a column with type parameters reads as the type its pack gives it, and writes as the codec input', () => {
-    expectTypeOf<Output['public']['User']['id']>().toEqualTypeOf<Char<24>>();
-    expectTypeOf<Input['public']['User']['id']>().toEqualTypeOf<string>();
-  });
-
-  test('a known type replaces the codec type on the sides it gives, before nullability', () => {
-    expectTypeOf<Output['public']['User']['mood']>().toEqualTypeOf<'happy' | 'sad' | null>();
-    expectTypeOf<Input['public']['User']['mood']>().toEqualTypeOf<'happy' | 'sad' | null>();
-    expectTypeOf<Output['public']['User']['settings']>().toEqualTypeOf<{
-      readonly theme: string;
-    }>();
-    expectTypeOf<Input['public']['User']['settings']>().toEqualTypeOf<unknown>();
-  });
-
-  test('a list wraps the element type, with null for nullable elements', () => {
-    expectTypeOf<Output['public']['User']['tags']>().toEqualTypeOf<ReadonlyArray<string | null>>();
-  });
-
-  test('a codec the codec types lack reads as unknown', () => {
-    expectTypeOf<Output['public']['User']['unknownCodec']>().toEqualTypeOf<unknown>();
-  });
-
-  test('a model without fields has open output types and closed input types', () => {
-    expectTypeOf<Output['public']['Empty']>().toEqualTypeOf<Record<never, never>>();
-    expectTypeOf<Input['public']['Empty']>().toEqualTypeOf<Record<string, never>>();
-  });
-});
 
 type Storage = {
   readonly types: {

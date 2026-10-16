@@ -1073,7 +1073,7 @@ describe('StorageColumnTypes', () => {
     });
 
     it("also types FieldOutputTypes as the literal union, via the storage column's valueSet (no domain field valueSet involved)", () => {
-      // The SQL family's `resolveFieldValueSet` SPI hook (emitter/src/index.ts)
+      // The SQL family's `resolveStorageValueSet` SPI hook (emitter/src/index.ts)
       // resolves a field's value-set from its STORAGE COLUMN's `valueSet` ref —
       // not from a domain-field `valueSet`. `nativeEnumColumnContract()`'s
       // domain field carries no `valueSet` (no domain enum for a native

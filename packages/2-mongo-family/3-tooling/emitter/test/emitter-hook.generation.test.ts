@@ -169,18 +169,6 @@ describe('mongoEmission.generateContractTypes', () => {
       expect(types).toContain(
         'readonly nullableList: { readonly nullable: true; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" }; readonly many: { readonly elementNullable: false } }',
       );
-      expect(types).toContain(
-        'readonly nullableElements: ReadonlyArray<CodecTypes["mongo/string@1"]["output"] | null>',
-      );
-      expect(types).toContain(
-        'readonly nullableList: ReadonlyArray<CodecTypes["mongo/string@1"]["output"]> | null',
-      );
-      expect(types).toContain(
-        'readonly nullableElements: ReadonlyArray<CodecTypes["mongo/string@1"]["input"] | null>',
-      );
-      expect(types).toContain(
-        'readonly nullableList: ReadonlyArray<CodecTypes["mongo/string@1"]["input"]> | null',
-      );
     });
 
     it('generates model relations without strategy', () => {
@@ -636,8 +624,12 @@ describe('mongoEmission.generateContractTypes', () => {
       const types = generateContractDts(contract, mongoEmission, [], testHashes);
       expect(types).toContain('export type NavItemOutput =');
       expect(types).toContain('export type NavItemInput =');
-      expect(types).toContain('readonly children: ReadonlyArray<NavItemOutput>');
-      expect(types).toContain('readonly children: ReadonlyArray<NavItemInput>');
+      expect(types).toContain(
+        'export type NavItemOutput = ValueObjectOutputTypes["__unbound__"]["NavItem"];',
+      );
+      expect(types).toContain(
+        'readonly children: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly name: "NavItem" }; readonly many: { readonly elementNullable: false } }',
+      );
     });
 
     it('omits valueObjects when none exist', () => {
@@ -661,7 +653,12 @@ describe('mongoEmission.generateContractTypes', () => {
         },
       });
       const types = generateContractDts(contract, mongoEmission, [], testHashes);
-      expect(types).toContain('readonly zip: CodecTypes["mongo/string@1"]["output"] | null');
+      expect(types).toContain(
+        'readonly zip: { readonly nullable: true; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" } }',
+      );
+      expect(types).toContain(
+        'export type AddressOutput = ValueObjectOutputTypes["__unbound__"]["Address"];',
+      );
     });
 
     it('emits FieldInputTypes alongside FieldOutputTypes', () => {
@@ -687,10 +684,12 @@ describe('mongoEmission.generateContractTypes', () => {
         storage: namespacedMongoStorageFromCollections({ users: {} }),
       });
       const types = generateContractDts(contract, mongoEmission, [], testHashes);
-      expect(types).toContain('export type FieldOutputTypes =');
-      expect(types).toContain('export type FieldInputTypes =');
-      expect(types).toContain('CodecTypes["mongo/objectId@1"]["input"]');
-      expect(types).toContain('CodecTypes["mongo/string@1"]["input"]');
+      expect(types).toContain(
+        "export type FieldOutputTypes = FieldTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"output\">;",
+      );
+      expect(types).toContain(
+        "export type FieldInputTypes = FieldTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"input\">;",
+      );
     });
   });
 });

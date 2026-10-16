@@ -168,7 +168,7 @@ export const sqlEmission = {
     return `{ ${storageParts.join('; ')} }`;
   },
 
-  resolveFieldValueSet(
+  resolveStorageValueSet(
     _modelName: string,
     fieldName: string,
     model: ContractModelBase,
@@ -221,16 +221,11 @@ export const sqlEmission = {
     ].join('\n');
   },
 
-  fieldTypesExpression(side: 'output' | 'input'): string {
-    return `FieldTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, ${serializeValue(side)}>`;
-  },
-
   getFamilyImports(resolveImportSpecifier: ImportSpecifierResolver): string[] {
     return [
       'import type {',
       '  ColumnTypesFromStorage,',
       '  ContractWithTypeMaps,',
-      '  FieldTypesFromDomain,',
       '  RelationKeys,',
       '  TypeMaps as TypeMapsType,',
       `} from '${resolveImportSpecifier('@internal/sql-contract/types')}';`,
@@ -295,7 +290,10 @@ function generateColumnTypeOverridesMap(
     return Object.entries(tables).flatMap(([tableName, table]) =>
       Object.entries(table.columns).map(
         ([columnName, column]) =>
-          [nsId, tableName, columnName, columnTypeOverride(storage, column, codecLookup)] as const,
+          [
+            [nsId, tableName, columnName],
+            columnTypeOverride(storage, column, codecLookup),
+          ] as const,
       ),
     );
   });

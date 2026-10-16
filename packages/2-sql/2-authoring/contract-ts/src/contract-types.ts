@@ -3,11 +3,12 @@ import type {
   Contract,
   ContractExecutionSection,
   ContractRelation,
+  FieldTypesFromDomain,
   JsonValue,
   NamespaceId,
-  ParameterizedOutputTypesFunction,
   StorageHashBase,
 } from '@internal/contract/types';
+import type { PackParameterizedOutputTypes } from '@internal/contract-authoring';
 import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
 import type { StorageType } from '@internal/framework-components/ir';
 import type { IndexTypeRegistration } from '@internal/sql-contract/index-types';
@@ -17,7 +18,6 @@ import type {
   AuthoredStorageTypeInstance,
   ColumnTypesFromStorage,
   ContractWithTypeMaps,
-  FieldTypesFromDomain,
   ForeignKeyIndex,
   QueryOperationTypesFunction,
   ReferentialAction,
@@ -1543,14 +1543,6 @@ type FieldColumnTypeParams<Definition, FieldState> =
       : undefined
     : DescriptorTypeParams<FieldDescriptorOf<FieldState>>;
 
-type PackParameterizedOutputTypes<Pack> = Pack extends {
-  readonly __parameterizedOutputTypes?: infer TypeFunction;
-}
-  ? Present<TypeFunction> extends infer Defined extends ParameterizedOutputTypesFunction
-    ? Defined
-    : never
-  : never;
-
 type ParameterizedOutputTypesFromDefinition<Definition> = {
   [K in keyof AllPacks<Definition>]: PackParameterizedOutputTypes<AllPacks<Definition>[K]>;
 }[keyof AllPacks<Definition>];
@@ -1590,12 +1582,14 @@ type FieldTypeOverride<
 
 type FieldTypeOverrides<Definition> = {
   readonly [Ns in DomainNamespaceIds<Definition>]: {
-    readonly [ModelName in ModelsInNamespace<Definition, Ns>]: {
-      readonly [FieldName in ModelFieldNames<Definition, ModelName>]: FieldTypeOverride<
-        Definition,
-        ModelName,
-        FieldName
-      >;
+    readonly models: {
+      readonly [ModelName in ModelsInNamespace<Definition, Ns>]: {
+        readonly [FieldName in ModelFieldNames<Definition, ModelName>]: FieldTypeOverride<
+          Definition,
+          ModelName,
+          FieldName
+        >;
+      };
     };
   };
 };

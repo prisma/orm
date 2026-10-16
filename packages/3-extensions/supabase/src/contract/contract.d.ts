@@ -10,13 +10,13 @@ import type { QueryOperationTypes as PgTargetQueryOps } from '@internal/target-p
 import type {
   ColumnTypesFromStorage,
   ContractWithTypeMaps,
-  FieldTypesFromDomain,
   RelationKeys,
   TypeMaps as TypeMapsType,
 } from '@internal/sql-contract/types';
 import type {
   Contract as ContractType,
   ExecutionHashBase,
+  FieldTypesFromDomain,
   NamespaceId,
   ProfileHashBase,
   StorageHashBase,
@@ -239,85 +239,89 @@ type ParameterizedOutputTypeFunctions = PgParameterizedOutputTypes;
 
 type FieldTypeOverrides = {
   readonly auth: {
-    readonly AuthSession: {
-      readonly aal: {
-        readonly output: 'aal1' | 'aal2' | 'aal3';
-        readonly input: 'aal1' | 'aal2' | 'aal3';
+    readonly models: {
+      readonly AuthSession: {
+        readonly aal: {
+          readonly output: 'aal1' | 'aal2' | 'aal3';
+          readonly input: 'aal1' | 'aal2' | 'aal3';
+        };
       };
-    };
-    readonly FlowState: {
-      readonly codeChallengeMethod: {
-        readonly output: 's256' | 'plain';
-        readonly input: 's256' | 'plain';
+      readonly FlowState: {
+        readonly codeChallengeMethod: {
+          readonly output: 's256' | 'plain';
+          readonly input: 's256' | 'plain';
+        };
       };
-    };
-    readonly MfaFactors: {
-      readonly factorType: {
-        readonly output: 'totp' | 'webauthn' | 'phone';
-        readonly input: 'totp' | 'webauthn' | 'phone';
+      readonly MfaFactors: {
+        readonly factorType: {
+          readonly output: 'totp' | 'webauthn' | 'phone';
+          readonly input: 'totp' | 'webauthn' | 'phone';
+        };
+        readonly status: {
+          readonly output: 'unverified' | 'verified';
+          readonly input: 'unverified' | 'verified';
+        };
       };
-      readonly status: {
-        readonly output: 'unverified' | 'verified';
-        readonly input: 'unverified' | 'verified';
+      readonly OauthAuthorizations: {
+        readonly codeChallengeMethod: {
+          readonly output: 's256' | 'plain';
+          readonly input: 's256' | 'plain';
+        };
+        readonly responseType: { readonly output: 'code'; readonly input: 'code' };
+        readonly status: {
+          readonly output: 'pending' | 'approved' | 'denied' | 'expired';
+          readonly input: 'pending' | 'approved' | 'denied' | 'expired';
+        };
       };
-    };
-    readonly OauthAuthorizations: {
-      readonly codeChallengeMethod: {
-        readonly output: 's256' | 'plain';
-        readonly input: 's256' | 'plain';
+      readonly OauthClients: {
+        readonly clientType: {
+          readonly output: 'public' | 'confidential';
+          readonly input: 'public' | 'confidential';
+        };
+        readonly registrationType: {
+          readonly output: 'dynamic' | 'manual';
+          readonly input: 'dynamic' | 'manual';
+        };
       };
-      readonly responseType: { readonly output: 'code'; readonly input: 'code' };
-      readonly status: {
-        readonly output: 'pending' | 'approved' | 'denied' | 'expired';
-        readonly input: 'pending' | 'approved' | 'denied' | 'expired';
-      };
-    };
-    readonly OauthClients: {
-      readonly clientType: {
-        readonly output: 'public' | 'confidential';
-        readonly input: 'public' | 'confidential';
-      };
-      readonly registrationType: {
-        readonly output: 'dynamic' | 'manual';
-        readonly input: 'dynamic' | 'manual';
-      };
-    };
-    readonly OneTimeTokens: {
-      readonly tokenType: {
-        readonly output:
-          | 'confirmation_token'
-          | 'reauthentication_token'
-          | 'recovery_token'
-          | 'email_change_token_new'
-          | 'email_change_token_current'
-          | 'phone_change_token';
-        readonly input:
-          | 'confirmation_token'
-          | 'reauthentication_token'
-          | 'recovery_token'
-          | 'email_change_token_new'
-          | 'email_change_token_current'
-          | 'phone_change_token';
+      readonly OneTimeTokens: {
+        readonly tokenType: {
+          readonly output:
+            | 'confirmation_token'
+            | 'reauthentication_token'
+            | 'recovery_token'
+            | 'email_change_token_new'
+            | 'email_change_token_current'
+            | 'phone_change_token';
+          readonly input:
+            | 'confirmation_token'
+            | 'reauthentication_token'
+            | 'recovery_token'
+            | 'email_change_token_new'
+            | 'email_change_token_current'
+            | 'phone_change_token';
+        };
       };
     };
   };
   readonly storage: {
-    readonly BucketsAnalytics: {
-      readonly _type: {
-        readonly output: 'STANDARD' | 'ANALYTICS' | 'VECTOR';
-        readonly input: 'STANDARD' | 'ANALYTICS' | 'VECTOR';
+    readonly models: {
+      readonly BucketsAnalytics: {
+        readonly _type: {
+          readonly output: 'STANDARD' | 'ANALYTICS' | 'VECTOR';
+          readonly input: 'STANDARD' | 'ANALYTICS' | 'VECTOR';
+        };
       };
-    };
-    readonly BucketsVectors: {
-      readonly _type: {
-        readonly output: 'STANDARD' | 'ANALYTICS' | 'VECTOR';
-        readonly input: 'STANDARD' | 'ANALYTICS' | 'VECTOR';
+      readonly BucketsVectors: {
+        readonly _type: {
+          readonly output: 'STANDARD' | 'ANALYTICS' | 'VECTOR';
+          readonly input: 'STANDARD' | 'ANALYTICS' | 'VECTOR';
+        };
       };
-    };
-    readonly StorageBucket: {
-      readonly _type: {
-        readonly output: 'STANDARD' | 'ANALYTICS' | 'VECTOR';
-        readonly input: 'STANDARD' | 'ANALYTICS' | 'VECTOR';
+      readonly StorageBucket: {
+        readonly _type: {
+          readonly output: 'STANDARD' | 'ANALYTICS' | 'VECTOR';
+          readonly input: 'STANDARD' | 'ANALYTICS' | 'VECTOR';
+        };
       };
     };
   };

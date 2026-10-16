@@ -1,6 +1,6 @@
 import type { TargetPackRef } from '@internal/framework-components/components';
 import { timestampNowControlDescriptor } from '@internal/framework-components/control';
-import type { CodecTypes } from '../exports/codec-types';
+import type { CodecTypes, ParameterizedOutputTypesForTypeParams } from '../exports/codec-types';
 import { mongoAuthoringFieldPresets } from './authoring';
 import { mongoTargetDescriptorMetaRuntime } from './descriptor-meta-runtime';
 
@@ -17,4 +17,5 @@ const mongoTargetDescriptorMetaBase = {
 
 export const mongoTargetDescriptorMeta: typeof mongoTargetDescriptorMetaBase & {
   readonly __codecTypes?: CodecTypes;
+  readonly __parameterizedOutputTypes?: ParameterizedOutputTypesForTypeParams;
 } = mongoTargetDescriptorMetaBase;

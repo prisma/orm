@@ -1,6 +1,6 @@
 import type { TargetPackRef } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import type { CodecTypes } from '../exports/codec-types';
+import type { CodecTypes, ParameterizedOutputTypesForTypeParams } from '../exports/codec-types';
 import { mongoCodecDescriptors } from './codecs';
 import { mongoDataTypes } from './data-types';
 
@@ -29,4 +29,5 @@ const mongoTargetDescriptorMetaRuntimeBase = {
 
 export const mongoTargetDescriptorMetaRuntime: typeof mongoTargetDescriptorMetaRuntimeBase & {
   readonly __codecTypes?: CodecTypes;
+  readonly __parameterizedOutputTypes?: ParameterizedOutputTypesForTypeParams;
 } = mongoTargetDescriptorMetaRuntimeBase;

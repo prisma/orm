@@ -25,7 +25,8 @@ type MongoHelpers = Parameters<
 >[0];
 
 // Input types omit family + target AND explicitly forbid them so that
-// `@ts-expect-error` tests can verify the fields are rejected.
+// `@ts-expect-error` tests can verify the fields are rejected. The result type omits them again:
+// a `family?: never` left in the definition would make the whole definition type `never`.
 type MongoDefinitionInput = Omit<
   ContractDefinition<MongoFamilyPack, MongoTargetPack>,
   'family' | 'target'
@@ -46,7 +47,10 @@ type MongoScaffoldInput = Omit<
 export function defineContract<const Definition extends MongoDefinitionInput>(
   definition: Definition,
 ): MongoContractResult<
-  Definition & { readonly family: MongoFamilyPack; readonly target: MongoTargetPack }
+  Omit<Definition, 'family' | 'target'> & {
+    readonly family: MongoFamilyPack;
+    readonly target: MongoTargetPack;
+  }
 >;
 
 // Overload 2: factory form — models / valueObjects provided by a factory function.
@@ -61,7 +65,8 @@ export function defineContract<
   scaffold: Definition,
   factory: (helpers: MongoHelpers) => Built,
 ): MongoContractResult<
-  Definition & Built & { readonly family: MongoFamilyPack; readonly target: MongoTargetPack }
+  Omit<Definition, 'family' | 'target'> &
+    Built & { readonly family: MongoFamilyPack; readonly target: MongoTargetPack }
 >;
 
 // Implementation — delegates to buildBoundContract which pre-binds family/target

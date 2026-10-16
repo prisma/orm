@@ -10,13 +10,13 @@ import type { QueryOperationTypes as PgTargetQueryOps } from '@internal/target-p
 import type {
   ColumnTypesFromStorage,
   ContractWithTypeMaps,
-  FieldTypesFromDomain,
   RelationKeys,
   TypeMaps as TypeMapsType,
 } from '@internal/sql-contract/types';
 import type {
   Contract as ContractType,
   ExecutionHashBase,
+  FieldTypesFromDomain,
   NamespaceId,
   ProfileHashBase,
   StorageHashBase,
@@ -239,10 +239,12 @@ type ParameterizedOutputTypeFunctions = PgParameterizedOutputTypes;
 
 type FieldTypeOverrides = {
   readonly public: {
-    readonly SuggestionModel: {
-      readonly status: {
-        readonly output: 'pending' | 'accepted' | 'rejected';
-        readonly input: 'pending' | 'accepted' | 'rejected';
+    readonly models: {
+      readonly SuggestionModel: {
+        readonly status: {
+          readonly output: 'pending' | 'accepted' | 'rejected';
+          readonly input: 'pending' | 'accepted' | 'rejected';
+        };
       };
     };
   };

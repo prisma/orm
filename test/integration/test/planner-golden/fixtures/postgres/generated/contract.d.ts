@@ -17,13 +17,13 @@ import type { QueryOperationTypes as PgTargetQueryOps } from '@internal/target-p
 import type {
   ColumnTypesFromStorage,
   ContractWithTypeMaps,
-  FieldTypesFromDomain,
   RelationKeys,
   TypeMaps as TypeMapsType,
 } from '@internal/sql-contract/types';
 import type {
   Contract as ContractType,
   ExecutionHashBase,
+  FieldTypesFromDomain,
   NamespaceId,
   ProfileHashBase,
   StorageHashBase,
@@ -249,11 +249,13 @@ type ParameterizedOutputTypeFunctions =
 
 type FieldTypeOverrides = {
   readonly public: {
-    readonly List: {
-      readonly mood: { readonly output: 'happy' | 'sad'; readonly input: 'happy' | 'sad' };
-    };
-    readonly Scalar: {
-      readonly mood: { readonly output: 'happy' | 'sad'; readonly input: 'happy' | 'sad' };
+    readonly models: {
+      readonly List: {
+        readonly mood: { readonly output: 'happy' | 'sad'; readonly input: 'happy' | 'sad' };
+      };
+      readonly Scalar: {
+        readonly mood: { readonly output: 'happy' | 'sad'; readonly input: 'happy' | 'sad' };
+      };
     };
   };
 };

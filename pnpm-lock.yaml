@@ -2006,6 +2006,9 @@ importers:
       '@repo/tsdown':
         specifier: workspace:8.0.0-rc.18
         version: link:../../../0-config/tsdown
+      arktype:
+        specifier: 'catalog:'
+        version: 2.2.7
       tsdown:
         specifier: 'catalog:'
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
@@ -3117,6 +3120,9 @@ importers:
       '@internal/contract':
         specifier: workspace:8.0.0-rc.18
         version: link:../../1-framework/0-foundation/contract
+      '@internal/contract-authoring':
+        specifier: workspace:8.0.0-rc.18
+        version: link:../../1-framework/2-authoring/contract
       '@internal/driver-mongo':
         specifier: workspace:8.0.0-rc.18
         version: link:../../3-mongo-target/3-mongo-driver
@@ -5450,6 +5456,9 @@ importers:
       '@prisma/orm-extension-postgis':
         specifier: workspace:8.0.0-rc.18
         version: link:../../../packages/9-public/@prisma/orm-extension-postgis
+      '@prisma/orm-mongo':
+        specifier: workspace:8.0.0-rc.18
+        version: link:../../../packages/9-public/@prisma/orm-mongo
       '@prisma/orm-postgres':
         specifier: workspace:8.0.0-rc.18
         version: link:../../../packages/9-public/@prisma/orm-postgres

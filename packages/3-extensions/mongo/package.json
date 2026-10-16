@@ -20,6 +20,7 @@
     "@internal/cli": "workspace:8.0.0-rc.18",
     "@internal/config": "workspace:8.0.0-rc.18",
     "@internal/contract": "workspace:8.0.0-rc.18",
+    "@internal/contract-authoring": "workspace:8.0.0-rc.18",
     "@internal/driver-mongo": "workspace:8.0.0-rc.18",
     "@internal/family-mongo": "workspace:8.0.0-rc.18",
     "@internal/framework-components": "workspace:8.0.0-rc.18",

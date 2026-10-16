@@ -89,8 +89,8 @@ describe('PSL scalar-list Mongo parity', () => {
         },
       );
 
-      // SQL names the field type through the shared FieldTypesFromDomain generic, whose
-      // list rule is type-tested in packages/2-sql/1-core/contract/test/value-type-maps.types.test-d.ts.
+      // Both families name the field type through the shared FieldTypesFromDomain generic, whose
+      // list rule is type-tested in packages/1-framework/0-foundation/contract/test/field-value-types.types.test-d.ts.
       expect(sqlEmitted.contractDts).toContain("tags: FieldOutputTypes['public']['Note']['tags']");
       expect(sqlEmitted.contractDts).toContain(
         'export type FieldOutputTypes = FieldTypesFromDomain<',
@@ -112,8 +112,24 @@ describe('PSL scalar-list Mongo parity', () => {
         },
       });
       expect(mongoEmitted.contractDts).toContain(
-        "readonly tags: ReadonlyArray<CodecTypes['mongo/string@1']['output']>",
+        'export type FieldOutputTypes = FieldTypesFromDomain<',
       );
+      expect(mongoResult.contract.domain).toMatchObject({
+        namespaces: {
+          __unbound__: {
+            models: {
+              Note: {
+                fields: {
+                  tags: {
+                    type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                    many: { elementNullable: false },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
     },
     timeouts.typeScriptCompilation,
   );

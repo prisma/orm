@@ -87,12 +87,13 @@ describe('generateContractDts domain namespace handling', () => {
     expect(dts).not.toContain('export type Models');
     const emailCount = (dts.match(/emailAddress/g) ?? []).length;
     const roleLabelCount = (dts.match(/roleLabel/g) ?? []).length;
-    // emailAddress appears per-namespace only: (1) the auth domain block,
-    // (2) FieldOutputTypes[auth], (3) FieldInputTypes[auth], (4) Models.auth_User.
-    expect(emailCount).toBe(4);
-    // roleLabel appears per-namespace only: (1) the public domain block,
-    // (2) FieldOutputTypes[public], (3) FieldInputTypes[public], (4) Models.public_User.
-    expect(roleLabelCount).toBe(4);
+    // emailAddress appears in its own namespace only: (1) the auth domain block,
+    // (2) the key of Models.auth_User and (3) the FieldOutputTypes path it indexes.
+    expect(emailCount).toBe(3);
+    expect(dts).toContain('emailAddress: FieldOutputTypes["auth"]["User"]["emailAddress"];');
+    // roleLabel likewise appears in the public namespace only.
+    expect(roleLabelCount).toBe(3);
+    expect(dts).toContain('roleLabel: FieldOutputTypes["public"]["User"]["roleLabel"];');
   });
 
   it('throws CONTRACT.NAMESPACE_INVALID when the domain has no namespaces', () => {

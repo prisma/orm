@@ -9,6 +9,16 @@ const roleField = {
   many: false,
   type: { kind: 'scalar', codecId: 'mongo/string@1' },
   valueSet: {
+    plane: 'storage',
+    entityKind: 'valueSet',
+    namespaceId: UNBOUND_NAMESPACE_ID,
+    entityName: 'Role',
+  },
+} as const;
+
+const domainRoleField = {
+  ...roleField,
+  valueSet: {
     plane: 'domain',
     entityKind: 'enum',
     namespaceId: UNBOUND_NAMESPACE_ID,
@@ -20,6 +30,7 @@ const userModel: ContractModelBase = {
   fields: {
     _id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
     role: roleField,
+    domainRole: domainRoleField,
   },
   relations: {},
   storage: { collection: 'users' },
@@ -43,33 +54,42 @@ function contractWithValueSet(values: readonly string[]): Contract {
   return { ...base, storage: storage as Contract['storage'] };
 }
 
-describe('mongoEmission.resolveFieldValueSet', () => {
+describe('mongoEmission.resolveStorageValueSet', () => {
   it('sources encodedValues from the storage value set and codecId from the field', () => {
     const contract = contractWithValueSet(['admin', 'author', 'reader']);
-    const resolved = mongoEmission.resolveFieldValueSet?.('User', 'role', userModel, contract);
+    const resolved = mongoEmission.resolveStorageValueSet?.('User', 'role', userModel, contract);
     expect(resolved).toEqual({
       encodedValues: ['admin', 'author', 'reader'],
       codecId: 'mongo/string@1',
     });
   });
 
-  it('reads the storage value set, not domain.enum (differing values follow the value set)', () => {
-    // The domain enum for Role (from `createMongoContract`'s applicationDomainOf) is absent; the only
-    // source of permitted values is the storage value set. Distinct sentinel values prove the origin.
+  it('reads the storage value set the reference names', () => {
     const contract = contractWithValueSet(['storage-a', 'storage-b']);
-    const resolved = mongoEmission.resolveFieldValueSet?.('User', 'role', userModel, contract);
+    const resolved = mongoEmission.resolveStorageValueSet?.('User', 'role', userModel, contract);
     expect(resolved?.encodedValues).toEqual(['storage-a', 'storage-b']);
+  });
+
+  it('leaves a reference to a domain enum to the framework', () => {
+    const contract = contractWithValueSet(['admin']);
+    const resolved = mongoEmission.resolveStorageValueSet?.(
+      'User',
+      'domainRole',
+      userModel,
+      contract,
+    );
+    expect(resolved).toBeUndefined();
   });
 
   it('returns undefined for a field with no value-set ref', () => {
     const contract = contractWithValueSet(['admin']);
-    const resolved = mongoEmission.resolveFieldValueSet?.('User', '_id', userModel, contract);
+    const resolved = mongoEmission.resolveStorageValueSet?.('User', '_id', userModel, contract);
     expect(resolved).toBeUndefined();
   });
 
   it('returns undefined when the storage value set is absent for the referenced entry', () => {
     const base = createMongoContract({ models: { User: userModel } });
-    const resolved = mongoEmission.resolveFieldValueSet?.('User', 'role', userModel, base);
+    const resolved = mongoEmission.resolveStorageValueSet?.('User', 'role', userModel, base);
     expect(resolved).toBeUndefined();
   });
 });

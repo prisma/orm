@@ -135,13 +135,11 @@ export const mongoAdapterDescriptor: MongoControlAdapterDescriptor<'mongo'> = {
         named: 'CodecTypes',
         alias: 'MongoCodecTypes',
       },
-      typeImports: [
-        {
-          package: '@internal/target-mongo/codec-types',
-          named: 'Vector',
-          alias: 'Vector',
-        },
-      ],
+      parameterizedOutputTypes: {
+        package: '@internal/target-mongo/codec-types',
+        named: 'ParameterizedOutputTypesForTypeParams',
+        alias: 'MongoParameterizedOutputTypes',
+      },
     },
   },
   create(_stack) {

@@ -27,6 +27,7 @@
     "@prisma/orm-extension-paradedb": "workspace:8.0.0-rc.18",
     "@prisma/orm-extension-pgvector": "workspace:8.0.0-rc.18",
     "@prisma/orm-extension-postgis": "workspace:8.0.0-rc.18",
+    "@prisma/orm-mongo": "workspace:8.0.0-rc.18",
     "@prisma/orm-postgres": "workspace:8.0.0-rc.18",
     "@prisma/orm-sqlite": "workspace:8.0.0-rc.18",
     "@repo/test-utils": "workspace:8.0.0-rc.18",

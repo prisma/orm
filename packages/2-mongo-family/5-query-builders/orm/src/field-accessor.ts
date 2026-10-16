@@ -6,10 +6,10 @@ import type {
 import type {
   AnyMongoTypeMaps,
   ExtractMongoCodecTypes,
-  InferModelRow,
   MongoContract,
   MongoContractWithTypeMaps,
   MongoModelsMap,
+  MongoUnboundFieldInputTypes,
 } from '@internal/mongo-contract';
 import type { MongoValue } from '@internal/mongo-value';
 import { MongoParamRef } from '@internal/mongo-value';
@@ -58,51 +58,21 @@ type ValueObjectFieldKeys<
     : never;
 }[keyof MongoModelsMap<TContract>[ModelName]['fields'] & string];
 
-type ResolvedModelRow<
+// The input row of a model: the type each field takes on write, from the contract's field input types.
+type ModelInputRow<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
-  ModelName extends string & keyof MongoModelsMap<TContract>,
-> = InferModelRow<TContract, ModelName>;
+  ModelName extends string,
+> = ModelName extends keyof MongoUnboundFieldInputTypes<TContract>
+  ? MongoUnboundFieldInputTypes<TContract>[ModelName]
+  : Record<never, never>;
 
 type ResolveFieldType<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
   ModelName extends string & keyof MongoModelsMap<TContract>,
-  K extends keyof MongoModelsMap<TContract>[ModelName]['fields'] & string,
-  TCodecTypes extends Record<string, { output: unknown }> = ExtractMongoCodecTypes<TContract>,
-> = MongoModelsMap<TContract>[ModelName]['fields'][K] extends {
-  readonly type: {
-    readonly kind: 'scalar';
-    readonly codecId: infer CId extends string & keyof TCodecTypes;
-  };
-  readonly many: { readonly elementNullable: infer ElementNullable extends boolean };
-  readonly nullable: true;
-}
-  ? readonly (TCodecTypes[CId]['output'] | (ElementNullable extends true ? null : never))[] | null
-  : MongoModelsMap<TContract>[ModelName]['fields'][K] extends {
-        readonly type: {
-          readonly kind: 'scalar';
-          readonly codecId: infer CId extends string & keyof TCodecTypes;
-        };
-        readonly many: { readonly elementNullable: infer ElementNullable extends boolean };
-      }
-    ? readonly (TCodecTypes[CId]['output'] | (ElementNullable extends true ? null : never))[]
-    : MongoModelsMap<TContract>[ModelName]['fields'][K] extends {
-          readonly type: {
-            readonly kind: 'scalar';
-            readonly codecId: infer CId extends string & keyof TCodecTypes;
-          };
-          readonly nullable: true;
-        }
-      ? TCodecTypes[CId]['output'] | null
-      : MongoModelsMap<TContract>[ModelName]['fields'][K] extends {
-            readonly type: {
-              readonly kind: 'scalar';
-              readonly codecId: infer CId extends string & keyof TCodecTypes;
-            };
-          }
-        ? TCodecTypes[CId]['output']
-        : K extends keyof ResolvedModelRow<TContract, ModelName>
-          ? ResolvedModelRow<TContract, ModelName>[K]
-          : unknown;
+  K extends string,
+> = K extends keyof ModelInputRow<TContract, ModelName>
+  ? ModelInputRow<TContract, ModelName>[K]
+  : unknown;
 
 type NumericOps<Operand> = {
   inc(value: Operand): FieldOperation;
@@ -186,42 +156,26 @@ export type DotPath<
     : never;
 }[ValueObjectFieldKeys<TContract, ModelName>];
 
-type ResolveDotPathInFields<
-  TContract extends HasValueObjects,
-  Fields extends Record<string, ContractField>,
-  Path extends string,
-  TCodecTypes extends Record<string, { output: unknown }>,
-> = Path extends `${infer Head}.${infer Rest}`
-  ? Head extends keyof Fields & string
-    ? Fields[Head] extends {
-        readonly type: { readonly kind: 'valueObject'; readonly name: infer N extends string };
-      }
-      ? ResolveDotPathInFields<TContract, VOFields<TContract, N>, Rest, TCodecTypes>
-      : never
-    : never
-  : Path extends keyof Fields & string
-    ? Fields[Path] extends {
-        readonly type: {
-          readonly kind: 'scalar';
-          readonly codecId: infer CId extends string & keyof TCodecTypes;
-        };
-      }
-      ? TCodecTypes[CId]['output']
-      : unknown
-    : never;
+// One step of a dot path: the field `Key` of a value object, or of each element of a list of them.
+type PathStep<Value, Key extends string> =
+  NonNullable<Value> extends readonly (infer Element)[]
+    ? PathStep<Element, Key>
+    : Key extends keyof NonNullable<Value>
+      ? NonNullable<Value>[Key]
+      : never;
 
+type ResolvePath<Value, Path extends string> = Path extends `${infer Head}.${infer Rest}`
+  ? ResolvePath<PathStep<Value, Head>, Rest>
+  : PathStep<Value, Path>;
+
+/** The input type of the field a dot path into a value object names, read from the model's input row. */
 export type ResolveDotPathType<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
   ModelName extends string & keyof MongoModelsMap<TContract>,
   Path extends string,
-  TCodecTypes extends Record<string, { output: unknown }> = ExtractMongoCodecTypes<TContract>,
 > = Path extends `${infer Head}.${infer Rest}`
-  ? Head extends keyof MongoModelsMap<TContract>[ModelName]['fields'] & string
-    ? MongoModelsMap<TContract>[ModelName]['fields'][Head] extends {
-        readonly type: { readonly kind: 'valueObject'; readonly name: infer N extends string };
-      }
-      ? ResolveDotPathInFields<TContract, VOFields<TContract, N>, Rest, TCodecTypes>
-      : never
+  ? Head extends keyof ModelInputRow<TContract, ModelName>
+    ? ResolvePath<ModelInputRow<TContract, ModelName>[Head], Rest>
     : never
   : never;
 
@@ -235,7 +189,7 @@ type ScalarNumericOperand<
   TCodecTypes extends Record<string, { output: unknown }>,
 > = MongoModelsMap<TContract>[ModelName]['fields'][K] extends
   | { readonly nullable: true }
-  | { readonly many: true }
+  | { readonly many: { readonly elementNullable: boolean } }
   ? never
   : MongoModelsMap<TContract>[ModelName]['fields'][K] extends {
         readonly type: {
@@ -258,16 +212,16 @@ export type FieldAccessor<
   TCodecTypes extends Record<string, { output: unknown }> = ExtractMongoCodecTypes<TContract>,
 > = {
   readonly [K in ScalarFieldKeys<TContract, ModelName>]: FieldExpression<
-    ResolveFieldType<TContract, ModelName, K, TCodecTypes>,
+    ResolveFieldType<TContract, ModelName, K>,
     ScalarNumericOperand<TContract, ModelName, K, TCodecTypes>
   >;
 } & {
   readonly [K in ValueObjectFieldKeys<TContract, ModelName>]: FieldExpression<
-    ResolveFieldType<TContract, ModelName, K, TCodecTypes>
+    ResolveFieldType<TContract, ModelName, K>
   >;
 } & (<P extends DotPath<TContract, ModelName>>(
     path: P,
-  ) => FieldExpression<ResolveDotPathType<TContract, ModelName, P, TCodecTypes>>);
+  ) => FieldExpression<ResolveDotPathType<TContract, ModelName, P>>);
 
 // ── Runtime implementation ───────────────────────────────────────────────────
 

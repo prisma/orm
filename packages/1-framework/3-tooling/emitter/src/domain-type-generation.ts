@@ -1,4 +1,5 @@
 import type {
+  Contract,
   ContractField,
   ContractManyToManyRelation,
   ContractModelBase,
@@ -101,13 +102,9 @@ export function generateModelFieldEntry(fieldName: string, field: ContractField)
   return `readonly ${serializeObjectKey(fieldName)}: { readonly nullable: ${nullable}; readonly type: ${serializeValue(type)}${mods} }`;
 }
 
-// An empty field map is `{}` in a descriptor or output (row) type, since `keyof Record<string, never>` is `string`, and `Record<string, never>` in an input type, since TypeScript accepts any object where `{}` is expected.
+// An empty field map is `{}` in a descriptor, since `keyof Record<string, never>` is `string`.
 function objectTypeOpenWhenEmpty(entries: readonly string[]): string {
   return entries.length > 0 ? `{ ${entries.join('; ')} }` : '{}';
-}
-
-function objectTypeClosedWhenEmpty(entries: readonly string[]): string {
-  return entries.length > 0 ? `{ ${entries.join('; ')} }` : 'Record<string, never>';
 }
 
 export function generateModelFieldsType(fields: Record<string, ContractField>): string {
@@ -309,30 +306,15 @@ export function generateHashTypeAliases(hashes: {
   ].join('\n');
 }
 
-export type ResolvedFieldType = { readonly input: string; readonly output: string };
-
-function applyModifiers(base: string, field: ContractField): string {
-  let result = base;
-  if (field.many) {
-    if (field.many.elementNullable) result = `${result} | null`;
-    result = `ReadonlyArray<${result}>`;
-  }
-  if (field.dict === true) result = `Readonly<Record<string, ${result}>>`;
-  if (field.nullable) result = `${result} | null`;
-  return result;
-}
-
 /**
- * A field's permitted values (codec-encoded) plus the codec that types them, as supplied by the
- * family-specific {@link EmissionSpi.resolveFieldValueSet}. The framework renders these into a TS
- * literal union through the codec seam ({@link renderValueSetType}).
+ * A field's permitted values (codec-encoded) plus the codec that types them: read from the domain enum the field names, or supplied for other model fields by the family's {@link EmissionSpi.resolveStorageValueSet}. The framework renders these into a TS literal union through the codec seam ({@link renderValueSetType}).
  */
 export type ResolvedFieldValueSet = {
   readonly encodedValues: readonly JsonValue[];
   readonly codecId: string;
 };
 
-export type FieldValueSetResolver = (
+export type StorageValueSetResolver = (
   modelName: string,
   fieldName: string,
   model: ContractModelBase,
@@ -364,14 +346,8 @@ export function renderValueSetType(
   return literals.join(' | ');
 }
 
-/** The local alias an emitted `contract.d.ts` types a column with type parameters through. */
-export const CODEC_OUTPUT_FOR = 'CodecOutputFor';
-
 /** The local alias for the union of the stack's parameterized output type functions. */
 export const PARAMETERIZED_OUTPUT_TYPE_FUNCTIONS = 'ParameterizedOutputTypeFunctions';
-
-/** The declaration of {@link CODEC_OUTPUT_FOR}: `ParameterizedOutputType` from `@internal/contract/types` applied to {@link PARAMETERIZED_OUTPUT_TYPE_FUNCTIONS}, falling back to the codec's plain output type. */
-export const codecOutputForAlias = `type ${CODEC_OUTPUT_FOR}<CodecId extends keyof CodecTypes, TypeParams extends Record<string, unknown>> = ParameterizedOutputType<${PARAMETERIZED_OUTPUT_TYPE_FUNCTIONS}, CodecId, TypeParams, CodecTypes[CodecId]["output"]>;`;
 
 /** The declaration of {@link PARAMETERIZED_OUTPUT_TYPE_FUNCTIONS} for the type functions the stack's components declare. */
 export function parameterizedOutputTypeFunctionsAlias(
@@ -381,232 +357,9 @@ export function parameterizedOutputTypeFunctionsAlias(
   return `type ${PARAMETERIZED_OUTPUT_TYPE_FUNCTIONS} = ${aliases.length > 0 ? aliases.join(' | ') : 'never'};`;
 }
 
-/**
- * The output type of a value of codec `codecId` in a column with these type parameters. A codec that renders its own type text (`renderOutputType`) gets that text. Otherwise a column with type parameters is typed through {@link CODEC_OUTPUT_FOR}, which applies the stack's type functions as the field type generic does and falls back to the codec's plain output type; a column without them gets the plain output type.
- */
-export function codecOutputType(
-  codecId: string,
-  typeParams: Record<string, unknown> | undefined,
-  codecLookup: CodecLookup | undefined,
-): string {
-  const plain = `CodecTypes[${serializeValue(codecId)}]["output"]`;
-  if (typeParams === undefined) return plain;
-  const rendered = codecLookup?.renderOutputTypeFor(codecId, typeParams);
-  if (rendered && isSafeTypeExpression(rendered)) return rendered;
-  return `${CODEC_OUTPUT_FOR}<${serializeValue(codecId)}, ${serializeValue(typeParams)}>`;
-}
-
-/** The input type of a value of codec `codecId` in a column with these type parameters: the text the codec renders (`renderInputType`), or its plain input type. */
-export function codecInputType(
-  codecId: string,
-  typeParams: Record<string, unknown> | undefined,
-  codecLookup: CodecLookup | undefined,
-): string {
-  if (codecLookup !== undefined && typeParams !== undefined) {
-    const rendered = codecLookup.renderInputTypeFor?.(codecId, typeParams);
-    if (rendered && isSafeTypeExpression(rendered)) return rendered;
-  }
-  return `CodecTypes[${serializeValue(codecId)}]["input"]`;
-}
-
-export function resolveFieldType(
-  field: ContractField,
-  codecLookup?: CodecLookup,
-  resolvedValueSet?: ResolvedFieldValueSet,
-): ResolvedFieldType {
-  const { type } = field;
-
-  switch (type.kind) {
-    case 'scalar': {
-      if (resolvedValueSet) {
-        const output = renderValueSetType(
-          resolvedValueSet.encodedValues,
-          resolvedValueSet.codecId,
-          'output',
-          codecLookup,
-        );
-        const input = renderValueSetType(
-          resolvedValueSet.encodedValues,
-          resolvedValueSet.codecId,
-          'input',
-          codecLookup,
-        );
-        if (output !== undefined && input !== undefined) {
-          return {
-            output: applyModifiers(output, field),
-            input: applyModifiers(input, field),
-          };
-        }
-      }
-      const typeParams =
-        type.typeParams && Object.keys(type.typeParams).length > 0 ? type.typeParams : undefined;
-      return {
-        output: applyModifiers(codecOutputType(type.codecId, typeParams, codecLookup), field),
-        input: applyModifiers(codecInputType(type.codecId, typeParams, codecLookup), field),
-      };
-    }
-    case 'valueObject':
-      return {
-        output: applyModifiers(`${type.name}Output`, field),
-        input: applyModifiers(`${type.name}Input`, field),
-      };
-    case 'union': {
-      const outputMembers = type.members.map((m) =>
-        m.kind === 'scalar'
-          ? `CodecTypes[${serializeValue(m.codecId)}]["output"]`
-          : `${m.name}Output`,
-      );
-      const inputMembers = type.members.map((m) =>
-        m.kind === 'scalar'
-          ? `CodecTypes[${serializeValue(m.codecId)}]["input"]`
-          : `${m.name}Input`,
-      );
-      return {
-        output: applyModifiers(outputMembers.join(' | '), field),
-        input: applyModifiers(inputMembers.join(' | '), field),
-      };
-    }
-    default:
-      return {
-        output: applyModifiers('unknown', field),
-        input: applyModifiers('unknown', field),
-      };
-  }
-}
-
-export function generateFieldResolvedType(
-  field: ContractField,
-  codecLookup?: CodecLookup,
-  side: 'input' | 'output' = 'output',
-): string {
-  return resolveFieldType(field, codecLookup)[side];
-}
-
-export type ModelFieldTypeResolvers = {
-  readonly codecLookup: CodecLookup | undefined;
-  readonly resolveFieldValueSet: FieldValueSetResolver | undefined;
-  /** Types a `Models` member's field by indexing `FieldOutputTypes` rather than writing the type out. */
-  readonly referenceFieldOutputTypes?: boolean;
-};
-
-/**
- * Resolves one model field's input and output types the way `FieldOutputTypes` /
- * `FieldInputTypes` do: the field's type parameters refine its codec's type, and a family-resolved
- * value set renders as a literal union.
- */
-export function resolveModelFieldType(
-  modelName: string,
-  fieldName: string,
-  field: ContractField,
-  model: ContractModelBase,
-  resolvers: ModelFieldTypeResolvers,
-): ResolvedFieldType {
-  const resolvedValueSet = resolvers.resolveFieldValueSet?.(modelName, fieldName, model);
-  return resolveFieldType(field, resolvers.codecLookup, resolvedValueSet);
-}
-
-export function generateBothFieldTypesMaps(
-  models: Record<string, ContractModelBase> | undefined,
-  codecLookup?: CodecLookup,
-  resolveFieldValueSet?: FieldValueSetResolver,
-): ResolvedFieldType {
-  if (!models || Object.keys(models).length === 0) {
-    return { output: 'Record<string, never>', input: 'Record<string, never>' };
-  }
-
-  const resolvers: ModelFieldTypeResolvers = { codecLookup, resolveFieldValueSet };
-  const outputModelEntries: string[] = [];
-  const inputModelEntries: string[] = [];
-  for (const [modelName, model] of Object.entries(models).sort(([a], [b]) => a.localeCompare(b))) {
-    if (!model) continue;
-    const outputFieldEntries: string[] = [];
-    const inputFieldEntries: string[] = [];
-    for (const [fieldName, field] of Object.entries(model.fields)) {
-      const resolved = resolveModelFieldType(modelName, fieldName, field, model, resolvers);
-      const key = `readonly ${serializeObjectKey(fieldName)}`;
-      outputFieldEntries.push(`${key}: ${resolved.output}`);
-      inputFieldEntries.push(`${key}: ${resolved.input}`);
-    }
-    const outputFields = objectTypeOpenWhenEmpty(outputFieldEntries);
-    const inputFields = objectTypeClosedWhenEmpty(inputFieldEntries);
-    const modelKey = `readonly ${serializeObjectKey(modelName)}`;
-    outputModelEntries.push(`${modelKey}: ${outputFields}`);
-    inputModelEntries.push(`${modelKey}: ${inputFields}`);
-  }
-
-  return {
-    output: `{ ${outputModelEntries.join('; ')} }`,
-    input: `{ ${inputModelEntries.join('; ')} }`,
-  };
-}
-
-export function generateFieldTypesMapsByNamespace(
-  namespaceModels: ReadonlyArray<readonly [string, Record<string, ContractModelBase>]>,
-  codecLookup?: CodecLookup,
-  resolveFieldValueSet?: FieldValueSetResolver,
-): ResolvedFieldType {
-  if (namespaceModels.length === 0) {
-    return { output: 'Record<string, never>', input: 'Record<string, never>' };
-  }
-
-  const outputNamespaceEntries: string[] = [];
-  const inputNamespaceEntries: string[] = [];
-  for (const [nsId, models] of namespaceModels) {
-    const inner = generateBothFieldTypesMaps(models, codecLookup, resolveFieldValueSet);
-    const nsKey = `readonly ${serializeObjectKey(nsId)}`;
-    outputNamespaceEntries.push(`${nsKey}: ${inner.output}`);
-    inputNamespaceEntries.push(`${nsKey}: ${inner.input}`);
-  }
-
-  return {
-    output: `{ ${outputNamespaceEntries.join('; ')} }`,
-    input: `{ ${inputNamespaceEntries.join('; ')} }`,
-  };
-}
-
-export function generateFieldOutputTypesMap(
-  models: Record<string, ContractModelBase> | undefined,
-  codecLookup?: CodecLookup,
-): string {
-  return generateBothFieldTypesMaps(models, codecLookup).output;
-}
-
-export function generateFieldInputTypesMap(
-  models: Record<string, ContractModelBase> | undefined,
-  codecLookup?: CodecLookup,
-): string {
-  return generateBothFieldTypesMaps(models, codecLookup).input;
-}
-
-export function generateValueObjectType(
-  _voName: string,
-  vo: ContractValueObject,
-  _valueObjects: Record<string, ContractValueObject>,
-  side: 'input' | 'output' = 'output',
-  codecLookup?: CodecLookup,
-): string {
-  return resolveValueObjectType(_voName, vo, _valueObjects, codecLookup)[side];
-}
-
-export function resolveValueObjectType(
-  _voName: string,
-  vo: ContractValueObject,
-  _valueObjects: Record<string, ContractValueObject>,
-  codecLookup?: CodecLookup,
-): ResolvedFieldType {
-  const outputEntries: string[] = [];
-  const inputEntries: string[] = [];
-  for (const [fieldName, field] of Object.entries(vo.fields)) {
-    const resolved = resolveFieldType(field, codecLookup);
-    const key = `readonly ${serializeObjectKey(fieldName)}`;
-    outputEntries.push(`${key}: ${resolved.output}`);
-    inputEntries.push(`${key}: ${resolved.input}`);
-  }
-  const empty = 'Record<string, never>';
-  return {
-    output: outputEntries.length > 0 ? `{ ${outputEntries.join('; ')} }` : empty,
-    input: inputEntries.length > 0 ? `{ ${inputEntries.join('; ')} }` : empty,
-  };
+/** `FieldOutputTypes` (`side` `'output'`) or `FieldInputTypes` (`'input'`): the shared generic applied to the emitted contract's domain, with `FieldTypeOverrides`. */
+export function fieldTypesMapExpression(side: 'output' | 'input'): string {
+  return `FieldTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ${PARAMETERIZED_OUTPUT_TYPE_FUNCTIONS}, FieldTypeOverrides, ${serializeValue(side)}>`;
 }
 
 export function generateContractFieldDescriptor(fieldName: string, field: ContractField): string {
@@ -646,19 +399,25 @@ export function generateValueObjectsDescriptorType(
   return `{ ${voEntries.join('; ')} }`;
 }
 
+/**
+ * `<Name>Output` and `<Name>Input` for each value object, read from the shared generic's value object types at the namespace that declares it.
+ */
 export function generateValueObjectTypeAliases(
-  valueObjects: Record<string, ContractValueObject> | undefined,
-  codecLookup?: CodecLookup,
+  valueObjectNamespaces: ReadonlyArray<readonly [name: string, namespaceId: string]>,
 ): string {
-  if (!valueObjects || Object.keys(valueObjects).length === 0) {
+  if (valueObjectNamespaces.length === 0) {
     return '';
   }
-
-  const aliases: string[] = [];
-  for (const [voName, vo] of Object.entries(valueObjects)) {
-    const resolved = resolveValueObjectType(voName, vo, valueObjects, codecLookup);
-    aliases.push(`export type ${voName}Output = ${resolved.output};`);
-    aliases.push(`export type ${voName}Input = ${resolved.input};`);
+  const generic = (side: 'output' | 'input') =>
+    `ValueObjectTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ${PARAMETERIZED_OUTPUT_TYPE_FUNCTIONS}, FieldTypeOverrides, ${serializeValue(side)}>`;
+  const aliases = [
+    `type ValueObjectOutputTypes = ${generic('output')};`,
+    `type ValueObjectInputTypes = ${generic('input')};`,
+  ];
+  for (const [name, namespaceId] of valueObjectNamespaces) {
+    const path = `[${serializeValue(namespaceId)}][${serializeValue(name)}]`;
+    aliases.push(`export type ${name}Output = ValueObjectOutputTypes${path};`);
+    aliases.push(`export type ${name}Input = ValueObjectInputTypes${path};`);
   }
   return aliases.join('\n');
 }
@@ -667,7 +426,7 @@ export function generateValueObjectTypeAliases(
 export type TypeOverride = { readonly output?: string; readonly input?: string };
 
 /**
- * The type of a field that its codec does not give, for a family that types its fields with a generic over the contract's shape: the literal union of the value set it holds, the type of a value object or union field, or the text its codec renders for its type parameters. `undefined` when the codec gives both sides.
+ * The type of a scalar field that its codec does not give, which the shared field type generic takes as an override: the literal union of the value set it holds, or the text its codec renders for its type parameters. `undefined` when the codec gives both sides, and for a value object or union field, which the generic types itself.
  */
 export function resolveFieldTypeOverride(
   field: ContractField,
@@ -675,10 +434,7 @@ export function resolveFieldTypeOverride(
   resolvedValueSet: ResolvedFieldValueSet | undefined,
 ): TypeOverride | undefined {
   const { type } = field;
-  if (type.kind !== 'scalar') {
-    const resolved = resolveFieldType({ nullable: false, type }, codecLookup);
-    return { output: resolved.output, input: resolved.input };
-  }
+  if (type.kind !== 'scalar') return undefined;
   if (resolvedValueSet) {
     const override = renderValueSetOverride(
       resolvedValueSet.encodedValues,
@@ -731,63 +487,108 @@ export function renderTypeOverride(override: TypeOverride): string {
   return `{ ${sides.join('; ')} }`;
 }
 
-type OverridePath = readonly [string, string, string];
+type OverrideTree = Map<string, OverrideTree | TypeOverride>;
 
-/** A nested map of type overrides, ordered by name at every level, leaving out every branch with no entry. */
+/** A nested map of type overrides, one level per path segment, ordered by name at every level, leaving out every branch with no entry. */
 export function renderTypeOverridesMap(
-  entries: ReadonlyArray<readonly [string, string, string, TypeOverride | undefined]>,
+  entries: ReadonlyArray<readonly [path: readonly string[], type: TypeOverride | undefined]>,
 ): string {
-  const sorted = entries
-    .flatMap(([first, second, third, type]) => {
-      const path: OverridePath = [first, second, third];
-      return type === undefined ? [] : [{ path, type }];
-    })
-    .sort((a, b) => comparePaths(a.path, b.path));
-  const outer = new Map<string, Map<string, string[]>>();
-  for (const { path, type } of sorted) {
-    const [first, second, third] = path;
-    const middle = outer.get(first) ?? new Map<string, string[]>();
-    outer.set(first, middle);
-    const inner = middle.get(second) ?? [];
-    middle.set(second, inner);
-    inner.push(`readonly ${serializeObjectKey(third)}: ${renderTypeOverride(type)}`);
+  const root: OverrideTree = new Map();
+  for (const [path, type] of entries) {
+    if (type === undefined) continue;
+    let node = root;
+    for (const segment of path.slice(0, -1)) {
+      const child = node.get(segment);
+      const next: OverrideTree = child instanceof Map ? child : new Map();
+      node.set(segment, next);
+      node = next;
+    }
+    const leaf = path.at(-1);
+    if (leaf !== undefined) node.set(leaf, type);
   }
-  const firstParts = [...outer].map(([first, middle]) => {
-    const secondParts = [...middle].map(
-      ([second, inner]) => `readonly ${serializeObjectKey(second)}: { ${inner.join('; ')} }`,
+  return renderOverrideTree(root);
+}
+
+function renderOverrideTree(tree: OverrideTree): string {
+  const parts = [...tree]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(
+      ([key, value]) =>
+        `readonly ${serializeObjectKey(key)}: ${value instanceof Map ? renderOverrideTree(value) : renderTypeOverride(value)}`,
     );
-    return `readonly ${serializeObjectKey(first)}: { ${secondParts.join('; ')} }`;
-  });
-  return `{ ${firstParts.join('; ')} }`;
+  return `{ ${parts.join('; ')} }`;
 }
 
-function comparePaths(a: OverridePath, b: OverridePath): number {
-  return a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]) || a[2].localeCompare(b[2]);
+/**
+ * The values a field's value set holds, with the field's codec. A reference to a domain enum is read from the contract's domain, for model and value object fields alike. Any other model field goes to the family's `resolveStorageValueSet`, which reads its storage. A value object field has no storage of its own.
+ */
+function resolveFieldValueSet(
+  field: ContractField,
+  contract: Pick<Contract, 'domain'>,
+  resolveStorageValueSet: () => ResolvedFieldValueSet | undefined,
+): ResolvedFieldValueSet | undefined {
+  if (field.valueSet?.plane === 'domain') return resolveDomainValueSet(field, contract);
+  return resolveStorageValueSet();
 }
 
-/** `FieldTypeOverrides`: per namespace, model and field, the type of each field its codec does not give. */
+function resolveDomainValueSet(
+  field: ContractField,
+  contract: Pick<Contract, 'domain'>,
+): ResolvedFieldValueSet | undefined {
+  const ref = field.valueSet;
+  if (ref === undefined || field.type.kind !== 'scalar' || ref.entityKind !== 'enum') {
+    return undefined;
+  }
+  const domainEnum = contract.domain.namespaces[ref.namespaceId]?.enum?.[ref.entityName];
+  if (domainEnum === undefined) return undefined;
+  return {
+    encodedValues: domainEnum.members.map((member) => member.value),
+    codecId: field.type.codecId,
+  };
+}
+
+/** `FieldTypeOverrides`: per namespace, `models` or `valueObjects`, owner and field, the type of each field its codec does not give. */
 export function generateFieldTypeOverridesMap(
-  namespaceModels: ReadonlyArray<readonly [string, Record<string, ContractModelBase>]>,
+  contract: Pick<Contract, 'domain'>,
   codecLookup: CodecLookup | undefined,
-  resolveFieldValueSet: FieldValueSetResolver | undefined,
+  resolveStorageValueSet: StorageValueSetResolver | undefined,
 ): string {
   return renderTypeOverridesMap(
-    namespaceModels.flatMap(([nsId, models]) =>
-      Object.entries(models).flatMap(([modelName, model]) =>
+    Object.entries(contract.domain.namespaces).flatMap(([nsId, ns]) => {
+      const modelFields = Object.entries(ns.models).flatMap(([modelName, model]) =>
         Object.entries(model.fields).map(
           ([fieldName, field]) =>
             [
-              nsId,
-              modelName,
-              fieldName,
+              [nsId, 'models', modelName, fieldName],
               resolveFieldTypeOverride(
                 field,
                 codecLookup,
-                resolveFieldValueSet?.(modelName, fieldName, model),
+                resolveFieldValueSet(field, contract, () =>
+                  resolveStorageValueSet?.(modelName, fieldName, model),
+                ),
               ),
             ] as const,
         ),
-      ),
-    ),
+      );
+      const valueObjects = blindCast<
+        Record<string, ContractValueObject>,
+        'ns.valueObjects is a ContractValueObject record in the emitted IR (default to {} when absent)'
+      >(ns.valueObjects ?? {});
+      const valueObjectFields = Object.entries(valueObjects).flatMap(
+        ([valueObjectName, valueObject]) =>
+          Object.entries(valueObject.fields).map(
+            ([fieldName, field]) =>
+              [
+                [nsId, 'valueObjects', valueObjectName, fieldName],
+                resolveFieldTypeOverride(
+                  field,
+                  codecLookup,
+                  resolveFieldValueSet(field, contract, () => undefined),
+                ),
+              ] as const,
+          ),
+      );
+      return [...modelFields, ...valueObjectFields];
+    }),
   );
 }

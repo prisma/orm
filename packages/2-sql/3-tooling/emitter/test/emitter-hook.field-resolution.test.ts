@@ -60,9 +60,9 @@ function contractWith(parts: {
 }
 
 const resolveValueSet = (fieldName: string, fixture: ReturnType<typeof contractWith>) =>
-  sqlEmission.resolveFieldValueSet?.('User', fieldName, fixture.model, fixture.contract);
+  sqlEmission.resolveStorageValueSet?.('User', fieldName, fixture.model, fixture.contract);
 
-describe('resolveFieldValueSet', () => {
+describe('resolveStorageValueSet', () => {
   const fixture = contractWith({
     storageFields: {
       role: { column: 'role' },
@@ -104,7 +104,7 @@ describe('resolveFieldValueSet', () => {
     } as ContractModelBase;
 
     expect(
-      sqlEmission.resolveFieldValueSet?.('User', 'role', model, fixture.contract),
+      sqlEmission.resolveStorageValueSet?.('User', 'role', model, fixture.contract),
     ).toBeUndefined();
   });
 });

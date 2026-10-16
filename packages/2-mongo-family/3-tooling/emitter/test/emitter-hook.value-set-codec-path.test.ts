@@ -44,6 +44,23 @@ const itemModel: ContractModelBase = {
 
 function contractWithEncodedValueSet(): Contract {
   const base = createMongoContract({ models: { Item: itemModel } });
+  const namespace = base.domain.namespaces[UNBOUND_NAMESPACE_ID];
+  const domain = {
+    namespaces: {
+      ...base.domain.namespaces,
+      [UNBOUND_NAMESPACE_ID]: {
+        ...namespace,
+        models: namespace?.models ?? {},
+        // Encoded form: integers. The codec decodes them to string literals.
+        enum: {
+          Level: {
+            codecId: NON_IDENTITY_CODEC_ID,
+            members: LEVEL_BY_INDEX.map((name, value) => ({ name, value })),
+          },
+        },
+      },
+    },
+  };
   const storage = {
     storageHash: coreHash('test'),
     namespaces: {
@@ -58,7 +75,11 @@ function contractWithEncodedValueSet(): Contract {
       },
     },
   };
-  return { ...base, storage: storage as Contract['storage'] };
+  return { ...base, domain, storage: storage as Contract['storage'] };
+}
+
+function overridesOf(dts: string): string | undefined {
+  return dts.match(/^type FieldTypeOverrides = (.*);$/m)?.[1];
 }
 
 describe('mongo emit typing routes through the codec seam (not a raw value print)', () => {
@@ -72,15 +93,11 @@ describe('mongo emit typing routes through the codec seam (not a raw value print
       nonIdentityCodecLookup,
     );
 
-    const outputMap = dts.slice(
-      dts.indexOf('export type FieldOutputTypes'),
-      dts.indexOf('export type FieldInputTypes'),
-    );
-
     // Codec OUTPUT (decoded literals), proving the value flowed through
     // renderValueSetType -> renderValueLiteralFor, not a raw print of the encoded values.
-    expect(outputMap).toContain('readonly level: "low" | "high" | "urgent"');
-    expect(outputMap).not.toContain('0 | 1 | 2');
+    expect(overridesOf(dts)).toBe(
+      '{ readonly __unbound__: { readonly models: { readonly Item: { readonly level: { readonly output: "low" | "high" | "urgent"; readonly input: "low" | "high" | "urgent" } } } } }',
+    );
   });
 
   it('falls back to the codec output type when the lookup renders no literal', () => {
@@ -96,12 +113,7 @@ describe('mongo emit typing routes through the codec seam (not a raw value print
       undefined,
       noLiteralLookup,
     );
-    const outputMap = dts.slice(
-      dts.indexOf('export type FieldOutputTypes'),
-      dts.indexOf('export type FieldInputTypes'),
-    );
-    // Fallback is the codec output channel, never the raw encoded ints.
-    expect(outputMap).toContain(`readonly level: CodecTypes["${NON_IDENTITY_CODEC_ID}"]["output"]`);
-    expect(outputMap).not.toContain('0 | 1 | 2');
+    // No override: the shared generic types the field by its codec, never the raw encoded ints.
+    expect(overridesOf(dts)).toBe('{  }');
   });
 });

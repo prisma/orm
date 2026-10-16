@@ -1,11 +1,10 @@
 /**
  * Type-level proof that a `many` storage column generates `ReadonlyArray<Element>`
- * in the no-emit (`FieldOutputType`) path in SqlContractResult.
+ * in the no-emit path in SqlContractResult.
  *
- * The emit path (`contract.d.ts` FieldOutputTypes) is driven by
- * `domain-type-generation.applyModifiers` in the framework emitter package,
- * which handles nested `many` metadata via the domain ContractField. That
- * behaviour is covered by the emitter's own tests.
+ * Both this path and the emitted `contract.d.ts` type fields with the shared
+ * `FieldTypesFromDomain` generic in `@internal/contract/types`, whose own type
+ * test covers list wrapping.
  *
  * Container nullability: `T[]` → `ReadonlyArray<string>`;
  *                        `T[]?` → `ReadonlyArray<string> | null`.

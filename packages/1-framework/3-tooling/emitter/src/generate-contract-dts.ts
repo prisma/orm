@@ -15,19 +15,16 @@ import {
 import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import {
-  CODEC_OUTPUT_FOR,
-  codecOutputForAlias,
   deduplicateImports,
+  fieldTypesMapExpression,
   generateCodecTypeIntersection,
   generateFieldTypeOverridesMap,
-  generateFieldTypesMapsByNamespace,
   generateHashTypeAliases,
   generateImportLines,
   generateModelsType,
   generateRootsType,
   generateValueObjectsDescriptorType,
   generateValueObjectTypeAliases,
-  PARAMETERIZED_OUTPUT_TYPE_FUNCTIONS,
   parameterizedOutputTypeFunctionsAlias,
   serializeExecutionType,
   serializeObjectKey,
@@ -132,7 +129,8 @@ export function generateContractDts(
 
   // Flatten value objects across all namespaces — first-name-wins on collision.
   const flatValueObjects: Record<string, ContractValueObject> = {};
-  for (const [, ns] of namespaceEntries) {
+  const valueObjectNamespaces: Array<readonly [string, string]> = [];
+  for (const [nsId, ns] of namespaceEntries) {
     for (const [voName, vo] of Object.entries(
       blindCast<
         Record<string, ContractValueObject>,
@@ -141,11 +139,12 @@ export function generateContractDts(
     )) {
       if (!(voName in flatValueObjects)) {
         flatValueObjects[voName] = vo;
+        valueObjectNamespaces.push([voName, nsId]);
       }
     }
   }
   const valueObjects = Object.keys(flatValueObjects).length > 0 ? flatValueObjects : undefined;
-  const valueObjectTypeAliases = generateValueObjectTypeAliases(valueObjects, codecLookup);
+  const valueObjectTypeAliases = generateValueObjectTypeAliases(valueObjectNamespaces);
   const valueObjectsDescriptor = generateValueObjectsDescriptorType(valueObjects);
 
   // Per-namespace models, value objects, and enum types for the domain.namespaces section.
@@ -202,66 +201,36 @@ export function generateContractDts(
       ? `\n  readonly execution: ${serializeExecutionType(contract.execution)};`
       : '';
 
-  const resolveFieldValueSet = emitter.resolveFieldValueSet
+  const resolveStorageValueSet = emitter.resolveStorageValueSet
     ? (modelName: string, fieldName: string, model: ContractModelBase) =>
-        emitter.resolveFieldValueSet?.(modelName, fieldName, model, contract)
+        emitter.resolveStorageValueSet?.(modelName, fieldName, model, contract)
     : undefined;
 
-  const namespaceModelsForFieldTypes = namespaceEntries.map(
-    ([nsId, ns]) => [nsId, ns.models] as const,
+  const fieldTypeOverrides = generateFieldTypeOverridesMap(
+    contract,
+    codecLookup,
+    resolveStorageValueSet,
   );
-
-  const fieldTypesExpression = emitter.fieldTypesExpression?.bind(emitter);
-  const fieldTypesMaps =
-    fieldTypesExpression === undefined
-      ? generateFieldTypesMapsByNamespace(
-          namespaceModelsForFieldTypes,
-          codecLookup,
-          resolveFieldValueSet,
-        )
-      : { output: fieldTypesExpression('output'), input: fieldTypesExpression('input') };
-  const knownFieldTypesDeclaration =
-    fieldTypesExpression === undefined
-      ? ''
-      : `type FieldTypeOverrides = ${generateFieldTypeOverridesMap(namespaceModelsForFieldTypes, codecLookup, resolveFieldValueSet)};\n`;
 
   const extraTypeExports = emitter.getStorageTypeExports?.(contract, codecLookup);
 
   const contractWrapper = emitter.getContractWrapper('ContractBase', 'TypeMaps');
 
-  const modelTypesBlock = generateModelTypesBlock(
-    contract,
-    {
-      codecLookup,
-      resolveFieldValueSet,
-      referenceFieldOutputTypes: fieldTypesExpression !== undefined,
-    },
-    options?.supportsNamespaces ?? true,
-  );
+  const modelTypesBlock = generateModelTypesBlock(contract, options?.supportsNamespaces ?? true);
 
-  const typeTexts = [
-    fieldTypesMaps.output,
-    knownFieldTypesDeclaration,
-    extraTypeExports ?? '',
-    modelTypesBlock,
-    valueObjectTypeAliases,
-  ];
-  const parameterizedOutputDeclaration = typeTexts.some((text) => mentions(text, CODEC_OUTPUT_FOR))
-    ? `${codecOutputForAlias}\n`
-    : '';
-  const parameterizedOutputTypesDeclaration = [...typeTexts, parameterizedOutputDeclaration].some(
-    (text) => mentions(text, PARAMETERIZED_OUTPUT_TYPE_FUNCTIONS),
-  )
-    ? `${parameterizedOutputTypeFunctionsAlias(options?.parameterizedOutputTypeImports ?? [])}\n`
-    : '';
+  const parameterizedOutputTypesDeclaration = parameterizedOutputTypeFunctionsAlias(
+    options?.parameterizedOutputTypeImports ?? [],
+  );
 
   const body = `${hashAliases}
 
 export type CodecTypes = ${codecTypes};
 ${familyTypeAliases}
-${parameterizedOutputTypesDeclaration}${parameterizedOutputDeclaration}${valueObjectTypeAliases}
-${knownFieldTypesDeclaration}export type FieldOutputTypes = ${fieldTypesMaps.output};
-export type FieldInputTypes = ${fieldTypesMaps.input};
+${parameterizedOutputTypesDeclaration}
+${valueObjectTypeAliases}
+type FieldTypeOverrides = ${fieldTypeOverrides};
+export type FieldOutputTypes = ${fieldTypesMapExpression('output')};
+export type FieldInputTypes = ${fieldTypesMapExpression('input')};
 ${extraTypeExports ? `${extraTypeExports}\n` : ''}
 ${modelTypesBlock}
 
@@ -303,9 +272,10 @@ ${familyImportLines.join('\n')}
 import type {
   Contract as ContractType,
   ExecutionHashBase,
-  NamespaceId,${mentions(body, 'ParameterizedOutputType') ? '\n  ParameterizedOutputType,' : ''}
+  FieldTypesFromDomain,
+  NamespaceId,
   ProfileHashBase,
-  StorageHashBase,
+  StorageHashBase,${valueObjects ? '\n  ValueObjectTypesFromDomain,' : ''}
 } from '${resolveImportSpecifier('@internal/contract/types')}';
 
 ${body}`;

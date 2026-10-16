@@ -10,16 +10,17 @@ import type { QueryOperationTypes as PgTargetQueryOps } from '@prisma/orm-postgr
 import type {
   ColumnTypesFromStorage,
   ContractWithTypeMaps,
-  FieldTypesFromDomain,
   RelationKeys,
   TypeMaps as TypeMapsType,
 } from '@prisma/orm-postgres/family-contract/types';
 import type {
   Contract as ContractType,
   ExecutionHashBase,
+  FieldTypesFromDomain,
   NamespaceId,
   ProfileHashBase,
   StorageHashBase,
+  ValueObjectTypesFromDomain,
 } from '@prisma/orm-postgres/contract/types';
 
 export type StorageHash =
@@ -237,23 +238,28 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
     : CodecTypes[CodecId]['json']
   : Encoded;
 type ParameterizedOutputTypeFunctions = PgParameterizedOutputTypes;
-export type AddressOutput = {
-  readonly city: CodecTypes['pg/text@1']['output'];
-  readonly country: CodecTypes['pg/text@1']['output'];
-  readonly street: CodecTypes['pg/text@1']['output'];
-  readonly zip: CodecTypes['pg/text@1']['output'] | null;
-};
-export type AddressInput = {
-  readonly city: CodecTypes['pg/text@1']['input'];
-  readonly country: CodecTypes['pg/text@1']['input'];
-  readonly street: CodecTypes['pg/text@1']['input'];
-  readonly zip: CodecTypes['pg/text@1']['input'] | null;
-};
+type ValueObjectOutputTypes = ValueObjectTypesFromDomain<
+  ContractBase['domain']['namespaces'],
+  CodecTypes,
+  ParameterizedOutputTypeFunctions,
+  FieldTypeOverrides,
+  'output'
+>;
+type ValueObjectInputTypes = ValueObjectTypesFromDomain<
+  ContractBase['domain']['namespaces'],
+  CodecTypes,
+  ParameterizedOutputTypeFunctions,
+  FieldTypeOverrides,
+  'input'
+>;
+export type AddressOutput = ValueObjectOutputTypes['public']['Address'];
+export type AddressInput = ValueObjectInputTypes['public']['Address'];
 type FieldTypeOverrides = {
   readonly public: {
-    readonly User: {
-      readonly address: { readonly output: AddressOutput; readonly input: AddressInput };
-      readonly kind: { readonly output: 'admin' | 'user'; readonly input: 'admin' | 'user' };
+    readonly models: {
+      readonly User: {
+        readonly kind: { readonly output: 'admin' | 'user'; readonly input: 'admin' | 'user' };
+      };
     };
   };
 };

@@ -10,16 +10,17 @@ import type { QueryOperationTypes as PgTargetQueryOps } from '@internal/target-p
 import type {
   ColumnTypesFromStorage,
   ContractWithTypeMaps,
-  FieldTypesFromDomain,
   RelationKeys,
   TypeMaps as TypeMapsType,
 } from '@internal/sql-contract/types';
 import type {
   Contract as ContractType,
   ExecutionHashBase,
+  FieldTypesFromDomain,
   NamespaceId,
   ProfileHashBase,
   StorageHashBase,
+  ValueObjectTypesFromDomain,
 } from '@internal/contract/types';
 
 export type StorageHash =
@@ -236,15 +237,23 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
     : CodecTypes[CodecId]['json']
   : Encoded;
 type ParameterizedOutputTypeFunctions = PgParameterizedOutputTypes;
-export type AddressOutput = { readonly street: CodecTypes['pg/text@1']['output'] };
-export type AddressInput = { readonly street: CodecTypes['pg/text@1']['input'] };
-type FieldTypeOverrides = {
-  readonly public: {
-    readonly Tag: {
-      readonly addresses: { readonly output: AddressOutput; readonly input: AddressInput };
-    };
-  };
-};
+type ValueObjectOutputTypes = ValueObjectTypesFromDomain<
+  ContractBase['domain']['namespaces'],
+  CodecTypes,
+  ParameterizedOutputTypeFunctions,
+  FieldTypeOverrides,
+  'output'
+>;
+type ValueObjectInputTypes = ValueObjectTypesFromDomain<
+  ContractBase['domain']['namespaces'],
+  CodecTypes,
+  ParameterizedOutputTypeFunctions,
+  FieldTypeOverrides,
+  'input'
+>;
+export type AddressOutput = ValueObjectOutputTypes['public']['Address'];
+export type AddressInput = ValueObjectInputTypes['public']['Address'];
+type FieldTypeOverrides = {};
 export type FieldOutputTypes = FieldTypesFromDomain<
   ContractBase['domain']['namespaces'],
   CodecTypes,

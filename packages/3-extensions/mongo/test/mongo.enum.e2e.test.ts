@@ -291,7 +291,7 @@ describe('mongo enum — end-to-end (replica set)', {
   });
 });
 
-describe('emit-then-consume: value-union narrowing through the emitted contract.d.ts', () => {
+describe('the field type overrides the emitter writes for enum fields', () => {
   const mongoCodecImports = [
     {
       package: '@internal/target-mongo/codec-types',
@@ -305,7 +305,7 @@ describe('emit-then-consume: value-union narrowing through the emitted contract.
     profileHash: 'enum-e2e-profile',
   };
 
-  it('emits the enum value union into FieldOutputTypes for a Role field', () => {
+  function fieldTypeOverrides(): string {
     const dts = generateContractDts(
       contract as never,
       mongoEmission,
@@ -314,61 +314,26 @@ describe('emit-then-consume: value-union narrowing through the emitted contract.
       undefined,
       codecLookup,
     );
-
-    const outputMap = dts.slice(
+    expect(dts).toContain('type FieldTypeOverrides');
+    expect(dts).toContain('export type FieldOutputTypes');
+    return dts.slice(
+      dts.indexOf('type FieldTypeOverrides'),
       dts.indexOf('export type FieldOutputTypes'),
-      dts.indexOf('export type FieldInputTypes'),
     );
+  }
 
-    // The enum field narrows to the literal value union (not the codec channel).
-    expect(outputMap).toContain('readonly role: "user" | "admin"');
-    expect(outputMap).not.toContain('readonly role: CodecTypes["mongo/string@1"]["output"]');
-    // Negative: must not widen to a union with string or the full codec channel.
-    expect(outputMap).not.toContain('readonly role: "user" | "admin" | string');
-    expect(outputMap).not.toContain('readonly role: string');
+  // The shared field type generic reads these overrides first, then wraps them for nullability and lists.
+  it.each(['role', 'mood', 'tags'])(
+    'gives the %s enum field the value union as its override on both sides',
+    (fieldName) => {
+      expect(fieldTypeOverrides()).toContain(
+        `readonly ${fieldName}: { readonly output: "user" | "admin"; readonly input: "user" | "admin" }`,
+      );
+    },
+  );
 
-    // The non-enum fields are unchanged.
-    expect(dts).toContain('CodecTypes["mongo/objectId@1"]');
-  });
-
-  it('emits null-inclusive union for a nullable enum field', () => {
-    const dts = generateContractDts(
-      contract as never,
-      mongoEmission,
-      mongoCodecImports,
-      testHashes,
-      undefined,
-      codecLookup,
-    );
-
-    const outputMap = dts.slice(
-      dts.indexOf('export type FieldOutputTypes'),
-      dts.indexOf('export type FieldInputTypes'),
-    );
-
-    expect(outputMap).toContain('readonly mood: "user" | "admin" | null');
-    expect(outputMap).not.toContain('readonly mood: "user" | "admin" | null | string');
-    expect(outputMap).not.toContain('readonly mood: string | null');
-  });
-
-  it('emits ReadonlyArray value union for an array enum field', () => {
-    const dts = generateContractDts(
-      contract as never,
-      mongoEmission,
-      mongoCodecImports,
-      testHashes,
-      undefined,
-      codecLookup,
-    );
-
-    const outputMap = dts.slice(
-      dts.indexOf('export type FieldOutputTypes'),
-      dts.indexOf('export type FieldInputTypes'),
-    );
-
-    expect(outputMap).toContain('readonly tags: ReadonlyArray<"user" | "admin">');
-    expect(outputMap).not.toContain('readonly tags: ReadonlyArray<"user" | "admin" | string>');
-    expect(outputMap).not.toContain('readonly tags: ReadonlyArray<string>');
+  it('gives a field without a value set no override, so its codec types it', () => {
+    expect(fieldTypeOverrides()).not.toContain('_id');
   });
 
   it('non-vacuous: emits the enum domain block in the namespace type (contract.d.ts carries it)', () => {

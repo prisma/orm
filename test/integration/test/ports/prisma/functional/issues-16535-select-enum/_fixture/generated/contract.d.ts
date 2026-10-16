@@ -10,13 +10,13 @@ import type { QueryOperationTypes as PgTargetQueryOps } from '@internal/target-p
 import type {
   ColumnTypesFromStorage,
   ContractWithTypeMaps,
-  FieldTypesFromDomain,
   RelationKeys,
   TypeMaps as TypeMapsType,
 } from '@internal/sql-contract/types';
 import type {
   Contract as ContractType,
   ExecutionHashBase,
+  FieldTypesFromDomain,
   NamespaceId,
   ProfileHashBase,
   StorageHashBase,
@@ -240,8 +240,10 @@ type ParameterizedOutputTypeFunctions = PgParameterizedOutputTypes;
 
 type FieldTypeOverrides = {
   readonly public: {
-    readonly User: {
-      readonly role: { readonly output: 'ADMIN' | 'USER'; readonly input: 'ADMIN' | 'USER' };
+    readonly models: {
+      readonly User: {
+        readonly role: { readonly output: 'ADMIN' | 'USER'; readonly input: 'ADMIN' | 'USER' };
+      };
     };
   };
 };

@@ -4,8 +4,7 @@ import { structuredError } from '@internal/utils/structured-error';
 export type MongoTargetErrorCode =
   | `MIGRATION.${MigrationSubcode}`
   | 'RUNTIME.DECODE_FAILED'
-  | 'RUNTIME.ENCODE_FAILED'
-  | 'RUNTIME.TYPE_PARAMS_INVALID';
+  | 'RUNTIME.ENCODE_FAILED';
 
 type MigrationSubcode =
   | 'FIELD_NAME_UNSUPPORTED'

@@ -16,6 +16,7 @@ import type {
   DataTypeSpec,
 } from '@internal/framework-components/codec';
 import {
+  assertDataTypeParams,
   dataType,
   objectSchemaKeys,
   schemaKeysAllowing,
@@ -257,29 +258,15 @@ function formatKeys(keys: readonly string[]): string {
   return `[${[...keys].sort().join(', ')}]`;
 }
 
-/** The parameters, when `type` accepts them; otherwise `CONTRACT.TYPE_PARAMS_INVALID` naming each parameter at fault. */
+/** The parameters, when `type` accepts them; otherwise `CONTRACT.TYPE_PARAMS_INVALID` naming each parameter it refuses. */
 export function validateSqlTypeParams<Params extends SqlTypeParams>(
   type: SqlDataType<Params>,
   params: SqlTypeParams,
 ): Params {
-  if (type.params === undefined) {
-    return blindCast<
-      Params,
-      'a type without a parameter schema declares no parameters, so its parameter type is the empty object'
-    >(params);
-  }
-  const result = type.params(params);
-  if (result instanceof arktype.errors) {
-    throw contractError('CONTRACT.TYPE_PARAMS_INVALID', `${type.id}: ${result.summary}`, {
-      meta: {
-        dataType: type.id,
-        parameters: [...new Set(result.map((error) => error.path.map(String).join('.')))],
-      },
-    });
-  }
+  assertDataTypeParams(type, params);
   return blindCast<
     Params,
-    'the schema accepted params, and an object schema of parameters has no morphs, so the accepted value is the parameters as declared'
+    'the schema accepted params, or the type declares none; an object schema of parameters has no morphs, so the accepted value is the parameters as declared'
   >(params);
 }
 

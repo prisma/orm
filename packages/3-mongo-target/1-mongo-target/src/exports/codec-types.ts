@@ -1,4 +1,4 @@
-import type { JsonValue } from '@internal/contract/types';
+import type { JsonValue, ParameterizedOutputTypesFunction } from '@internal/contract/types';
 import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
 
 export type { BsonInputValue, BsonScalar, BsonValue } from '@internal/mongo-value';
@@ -74,3 +74,16 @@ export type CodecTypes = {
     readonly traits: never;
   };
 };
+
+type OutputTypeMap<TypeParams> = {
+  readonly 'mongo/vector@1': TypeParams extends { readonly length: infer N extends number }
+    ? Vector<N>
+    : never;
+};
+
+/**
+ * The output type of a vector field with a `length` type parameter, `Vector<N>`: the only declaration of it, which a contract written with `defineContract` and the `contract.d.ts` that `prisma contract emit` writes both apply.
+ */
+export interface ParameterizedOutputTypesForTypeParams extends ParameterizedOutputTypesFunction {
+  readonly outputTypes: OutputTypeMap<this['typeParams']>;
+}

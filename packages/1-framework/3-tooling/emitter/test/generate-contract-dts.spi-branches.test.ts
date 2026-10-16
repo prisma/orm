@@ -87,11 +87,38 @@ describe('generateContractDts SPI hook plumbing', () => {
   });
 });
 
-describe('generateContractDts resolveFieldValueSet wiring', () => {
-  const priorityResolver: EmissionSpi['resolveFieldValueSet'] = (_m, fieldName) =>
+describe('generateContractDts resolveStorageValueSet wiring', () => {
+  // Without an override, the shared field type generic gives the field its codec type.
+  const NO_OVERRIDES = 'type FieldTypeOverrides = {  };';
+
+  const priorityResolver: EmissionSpi['resolveStorageValueSet'] = (_m, fieldName) =>
     fieldName === 'priority' ? { encodedValues: ['low', 'high'], codecId: 'pg/text@1' } : undefined;
 
-  it('narrows an enum field to the literal union supplied by the SPI resolver', () => {
+  const PRIORITY_OVERRIDES =
+    'type FieldTypeOverrides = { readonly public: { readonly models: { readonly Post: { readonly priority: { readonly output: "low" | "high"; readonly input: "low" | "high" } } } } };';
+
+  it('narrows a field whose value set is in storage to the literal union supplied by the SPI resolver', () => {
+    const contract = makeEnumContract({
+      valueSet: {
+        plane: 'storage',
+        namespaceId: 'public',
+        entityKind: 'valueSet',
+        entityName: 'Priority',
+      },
+      includeEnumBlock: false,
+    });
+    const dts = generateContractDts(
+      contract,
+      createMockSpi({ resolveStorageValueSet: priorityResolver }),
+      [],
+      HASHES,
+      undefined,
+      literalCodecLookup(),
+    );
+    expect(dts).toContain(PRIORITY_OVERRIDES);
+  });
+
+  it('narrows a field that names a domain enum to its members without the SPI resolver', () => {
     const contract = makeEnumContract({
       valueSet: {
         plane: 'domain',
@@ -103,24 +130,24 @@ describe('generateContractDts resolveFieldValueSet wiring', () => {
     });
     const dts = generateContractDts(
       contract,
-      createMockSpi({ resolveFieldValueSet: priorityResolver }),
+      createMockSpi({ resolveStorageValueSet: () => undefined }),
       [],
       HASHES,
       undefined,
       literalCodecLookup(),
     );
-    expect(dts).toContain('readonly priority: "low" | "high"');
+    expect(dts).toContain(PRIORITY_OVERRIDES);
   });
 
-  it('does not narrow when the SPI supplies no resolveFieldValueSet hook', () => {
+  it('does not narrow a field whose value set is in storage when the SPI supplies no resolveStorageValueSet hook', () => {
     const contract = makeEnumContract({
       valueSet: {
-        plane: 'domain',
+        plane: 'storage',
         namespaceId: 'public',
-        entityKind: 'enum',
+        entityKind: 'valueSet',
         entityName: 'Priority',
       },
-      includeEnumBlock: true,
+      includeEnumBlock: false,
     });
     const dts = generateContractDts(
       contract,
@@ -130,7 +157,7 @@ describe('generateContractDts resolveFieldValueSet wiring', () => {
       undefined,
       literalCodecLookup(),
     );
-    expect(dts).toContain('readonly priority: CodecTypes["pg/text@1"]["output"]');
+    expect(dts).toContain(NO_OVERRIDES);
   });
 
   it('falls back to the codec channel when the resolver returns undefined for the field', () => {
@@ -145,13 +172,13 @@ describe('generateContractDts resolveFieldValueSet wiring', () => {
     });
     const dts = generateContractDts(
       contract,
-      createMockSpi({ resolveFieldValueSet: () => undefined }),
+      createMockSpi({ resolveStorageValueSet: () => undefined }),
       [],
       HASHES,
       undefined,
       literalCodecLookup(),
     );
-    expect(dts).toContain('readonly priority: CodecTypes["pg/text@1"]["output"]');
+    expect(dts).toContain(NO_OVERRIDES);
   });
 
   it('falls back to the codec channel when no codec lookup is supplied', () => {
@@ -166,10 +193,10 @@ describe('generateContractDts resolveFieldValueSet wiring', () => {
     });
     const dts = generateContractDts(
       contract,
-      createMockSpi({ resolveFieldValueSet: priorityResolver }),
+      createMockSpi({ resolveStorageValueSet: priorityResolver }),
       [],
       HASHES,
     );
-    expect(dts).toContain('readonly priority: CodecTypes["pg/text@1"]["output"]');
+    expect(dts).toContain(NO_OVERRIDES);
   });
 });

@@ -3,6 +3,7 @@ import type {
   AuthoringContributions,
   AuthoringFieldPresetDescriptor,
 } from '@internal/framework-components/authoring';
+import { codecTypeParamsProblem, type MongoTypeLookups } from '@internal/mongo-contract/data-type';
 import {
   diagnosticSource,
   type FieldSymbol,
@@ -18,6 +19,7 @@ export interface FieldPresetContext {
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly sources: PslSources;
   readonly diagnostics: PslDiagnosticCollector;
+  readonly typeLookups: MongoTypeLookups;
   readonly warnPresetWithoutEffect: (preset: PresetWithoutEffect) => void;
 }
 
@@ -114,6 +116,20 @@ export function resolveFieldPreset(input: {
     diagnostics.push({
       code: 'PSL_UNSUPPORTED_FIELD_TYPE',
       message: `${entityLabel} uses field preset "${helperPath}", which contributes ${unsupported.join(' and ')}. Mongo supports presets that set a codec and execution defaults only.`,
+      ...source.at(call.span),
+    });
+    return INVALID;
+  }
+
+  const { codecId, typeParams } = instantiated.descriptor;
+  const problem =
+    typeParams === undefined
+      ? undefined
+      : codecTypeParamsProblem(codecId, typeParams, context.typeLookups);
+  if (problem !== undefined) {
+    diagnostics.push({
+      code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
+      message: `${entityLabel} uses field preset "${helperPath}", whose type parameters are refused: ${problem.message}`,
       ...source.at(call.span),
     });
     return INVALID;

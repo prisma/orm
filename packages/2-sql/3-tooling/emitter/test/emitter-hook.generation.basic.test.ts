@@ -1043,8 +1043,13 @@ describe('sql-target-family-hook', () => {
       expect(types).toContain('export type AddressOutput =');
       expect(types).toContain('export type AddressInput =');
       expect(types).not.toMatch(/export type Address =/);
-      expect(types).toContain('readonly street: CodecTypes["pg/text@1"]["output"]');
-      expect(types).toContain('readonly city: CodecTypes["pg/text@1"]["output"]');
+      // The shared field type generic types each value object from the descriptor it reads.
+      expect(types).toContain(
+        'export type AddressOutput = ValueObjectOutputTypes["__unbound__"]["Address"];',
+      );
+      expect(types).toContain(
+        'export type AddressInput = ValueObjectInputTypes["__unbound__"]["Address"];',
+      );
     });
 
     it('emits valueObjects descriptor on ContractBase', () => {
@@ -1200,7 +1205,9 @@ describe('sql-target-family-hook', () => {
       const types = generateContractDts(ir, sqlEmission, [], testHashes);
       expect(types).toContain('export type NavItemOutput =');
       expect(types).toContain('export type NavItemInput =');
-      expect(types).toContain('readonly children: ReadonlyArray<NavItemOutput>');
+      expect(types).toContain(
+        'readonly children: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly name: "NavItem" }; readonly many: { readonly elementNullable: false } }',
+      );
     });
 
     it('omits valueObjects when none exist', () => {
@@ -1223,7 +1230,12 @@ describe('sql-target-family-hook', () => {
         storage: { tables: {} },
       });
       const types = generateContractDts(ir, sqlEmission, [], testHashes);
-      expect(types).toContain('readonly zip: CodecTypes["pg/text@1"]["output"] | null');
+      expect(types).toContain(
+        'readonly zip: { readonly nullable: true; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/text@1" } }',
+      );
+      expect(types).toContain(
+        'export type AddressOutput = ValueObjectOutputTypes["__unbound__"]["Address"];',
+      );
     });
   });
 });

@@ -6,7 +6,8 @@ import { expect, it } from 'vitest';
 // Compiled as a virtual file beside this test, so its deliberate errors stay out of the package typecheck.
 const virtualSource = fileURLToPath(new URL('./value-type-maps-display.ts', import.meta.url));
 const sourceText = `
-import type { ColumnTypesFromStorage, FieldTypesFromDomain } from '../src/exports/types';
+import type { FieldTypesFromDomain } from '@internal/contract/types';
+import type { ColumnTypesFromStorage } from '../src/exports/types';
 
 type CodecTypes = {
   readonly 'test/int8@1': { readonly input: bigint; readonly output: bigint };

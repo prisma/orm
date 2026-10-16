@@ -18,6 +18,7 @@ import {
   type ExecutionHashBase,
   type ExecutionMutationDefault,
   type ExecutionMutationDefaultPhases,
+  type FieldTypesFromDomain,
   type JsonValue,
   type ProfileHashBase,
   type StorageHashBase,
@@ -31,6 +32,7 @@ import {
   type ExtractAuthoringNamespaceFromPack,
   encodeEnumTypeMembers,
   type MergeExtensionAuthoringNamespaces,
+  type PackParameterizedOutputTypes,
   type ResolveTemplateValue,
   resolveToOneRelationNullable,
   type TupleFromArgumentDescriptors,
@@ -74,6 +76,7 @@ import {
   mongoValueSetsOf,
 } from '@internal/mongo-contract';
 import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
+import { assertMongoFieldTypeParams } from '@internal/mongo-contract/data-type';
 import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
 import { canonicalStringify } from '@internal/utils/canonical-stringify';
 import { blindCast } from '@internal/utils/casts';
@@ -214,9 +217,9 @@ type MergeExtensionCodecTypes<Packs extends Record<string, unknown>> = UnionToIn
 type MergeExtensionCodecTypesSafe<Packs> =
   Packs extends Record<string, unknown>
     ? keyof Packs extends never
-      ? Record<string, never>
+      ? Record<never, never>
       : MergeExtensionCodecTypes<Packs>
-    : Record<string, never>;
+    : Record<never, never>;
 
 export interface FieldBuilder<
   Type extends ContractFieldType = ContractFieldType,
@@ -849,115 +852,73 @@ type BuilderEnumValueUnion<TBuilder> =
       : never
     : never;
 
-// The base codec/enum/value-object type for a builder field on a given channel,
-// before nullable/many modifiers. Enum fields resolve to the value union on both
-// channels; scalar fields resolve to the codec's channel-specific type.
-type BuilderBaseChannelType<
-  TBuilder,
-  TValueObjects extends Record<string, AnyValueObjectBuilder>,
-  TCodecTypes extends Record<string, { output: unknown; input: unknown }>,
-  Channel extends 'output' | 'input',
-> =
-  TBuilder extends FieldBuilder<
-    infer Type extends ContractFieldType,
-    boolean,
-    false | { readonly elementNullable: boolean },
-    EnumTypeHandle | undefined,
-    ExecutionMutationDefaultPhases | undefined
-  >
-    ? [BuilderEnumValueUnion<TBuilder>] extends [never]
-      ? Type extends {
-          readonly kind: 'scalar';
-          readonly codecId: infer CId extends keyof TCodecTypes;
-        }
-        ? TCodecTypes[CId][Channel]
-        : Type extends { readonly kind: 'valueObject'; readonly name: infer VOName extends string }
-          ? VOName extends keyof TValueObjects
-            ? {
-                -readonly [K in keyof ExtractValueObjectFields<
-                  TValueObjects[VOName]
-                >]: BuilderFieldChannelType<
-                  ExtractValueObjectFields<TValueObjects[VOName]>[K],
-                  TValueObjects,
-                  TCodecTypes,
-                  Channel
-                >;
-              }
-            : unknown
-          : unknown
-      : BuilderEnumValueUnion<TBuilder>
-    : never;
+type ExtractModelFields<TBuilder> =
+  TBuilder extends NamedModelBuilder<string, infer Fields> ? Fields : Record<never, never>;
+
+// An enum field reads and writes the members of its enum, which its codec does not give.
+type BuilderFieldTypeOverride<TBuilder> = [BuilderEnumValueUnion<TBuilder>] extends [never]
+  ? never
+  : {
+      readonly output: BuilderEnumValueUnion<TBuilder>;
+      readonly input: BuilderEnumValueUnion<TBuilder>;
+    };
 
 type ExtractValueObjectFields<TBuilder> =
   TBuilder extends NamedValueObjectBuilder<string, infer Fields> ? Fields : Record<never, never>;
 
-// Runs once per `defineContract` call to build the precomputed `FieldOutputTypes`/`FieldInputTypes`
-// maps. Consumers index those maps in O(1) via `InferModelRow` — this is NOT re-evaluated per query.
-// Recursion is bounded to value-object nesting depth (each level resolves its fields exactly once).
-//
-// The JS type for one field builder on a given channel, with nullable/many applied.
-// Compose many first (array wrapping), then add nullability. This avoids the
-// TypeScript operator-precedence trap where `A | B extends infer X` infers X
-// only from B, not from `A | B`.
-type BuilderFieldChannelType<
-  TBuilder,
-  TValueObjects extends Record<string, AnyValueObjectBuilder>,
-  TCodecTypes extends Record<string, { output: unknown; input: unknown }>,
-  Channel extends 'output' | 'input',
-> =
-  TBuilder extends FieldBuilder<
-    ContractFieldType,
-    infer Nullable extends boolean,
-    infer Many extends false | { readonly elementNullable: boolean },
-    EnumTypeHandle | undefined,
-    ExecutionMutationDefaultPhases | undefined
-  >
-    ?
-        | (Many extends { readonly elementNullable: infer ElementNullable extends boolean }
-            ? Array<
-                | BuilderBaseChannelType<TBuilder, TValueObjects, TCodecTypes, Channel>
-                | (ElementNullable extends true ? null : never)
-              >
-            : BuilderBaseChannelType<TBuilder, TValueObjects, TCodecTypes, Channel>)
-        | (Nullable extends true ? null : never)
-    : never;
-
-type ExtractModelFields<TBuilder> =
-  TBuilder extends NamedModelBuilder<string, infer Fields> ? Fields : Record<never, never>;
-
-type FieldChannelTypesFromDefinition<Definition, Channel extends 'output' | 'input'> = {
+type FieldTypeOverridesFromDefinition<Definition> = {
   readonly [K in typeof UNBOUND_NAMESPACE_ID]: {
-    readonly [ModelKey in keyof DefinitionModels<Definition> as ExtractModelName<
-      DefinitionModels<Definition>[ModelKey]
-    >]: {
-      readonly [FieldName in keyof ExtractModelFields<
+    readonly models: {
+      readonly [ModelKey in keyof DefinitionModels<Definition> as ExtractModelName<
         DefinitionModels<Definition>[ModelKey]
-      >]: BuilderFieldChannelType<
-        ExtractModelFields<DefinitionModels<Definition>[ModelKey]>[FieldName],
-        DefinitionValueObjects<Definition>,
-        CodecTypesFromDefinition<Definition>,
-        Channel
-      >;
+      >]: {
+        readonly [FieldName in keyof ExtractModelFields<
+          DefinitionModels<Definition>[ModelKey]
+        >]: BuilderFieldTypeOverride<
+          ExtractModelFields<DefinitionModels<Definition>[ModelKey]>[FieldName]
+        >;
+      };
+    };
+    readonly valueObjects: {
+      readonly [Key in keyof DefinitionValueObjects<Definition> as ExtractValueObjectName<
+        DefinitionValueObjects<Definition>[Key]
+      >]: {
+        readonly [FieldName in keyof ExtractValueObjectFields<
+          DefinitionValueObjects<Definition>[Key]
+        >]: BuilderFieldTypeOverride<
+          ExtractValueObjectFields<DefinitionValueObjects<Definition>[Key]>[FieldName]
+        >;
+      };
     };
   };
 };
 
-type FieldOutputTypesFromDefinition<Definition> = FieldChannelTypesFromDefinition<
-  Definition,
-  'output'
->;
+type DefinitionTarget<Definition> = Definition extends { readonly target: infer Target }
+  ? Target
+  : never;
 
-type FieldInputTypesFromDefinition<Definition> = FieldChannelTypesFromDefinition<
-  Definition,
-  'input'
+type ParameterizedOutputTypesFromDefinition<Definition> =
+  | PackParameterizedOutputTypes<DefinitionTarget<Definition>>
+  | {
+      [K in keyof DefinitionExtensions<Definition>]: PackParameterizedOutputTypes<
+        DefinitionExtensions<Definition>[K]
+      >;
+    }[keyof DefinitionExtensions<Definition>];
+
+type FieldTypesFromDefinition<Definition, Side extends 'output' | 'input'> = FieldTypesFromDomain<
+  MongoContractBaseFromDefinition<Definition>['domain']['namespaces'],
+  CodecTypesFromDefinition<Definition>,
+  ParameterizedOutputTypesFromDefinition<Definition>,
+  FieldTypeOverridesFromDefinition<Definition>,
+  Side
 >;
 
 export type MongoContractResult<Definition> = MongoContractWithTypeMaps<
   MongoContractBaseFromDefinition<Definition>,
   MongoTypeMaps<
     CodecTypesFromDefinition<Definition>,
-    FieldOutputTypesFromDefinition<Definition>,
-    FieldInputTypesFromDefinition<Definition>
+    FieldTypesFromDefinition<Definition, 'output'>,
+    FieldTypesFromDefinition<Definition, 'input'>
   >
 >;
 
@@ -1345,6 +1306,16 @@ function createScalarFieldBuilder<
   });
 }
 
+type VectorFieldType = { readonly kind: 'scalar'; readonly codecId: 'mongo/vector@1' };
+
+function vectorField(): FieldBuilder<VectorFieldType, false, false>;
+function vectorField<const TypeParams extends Record<string, unknown>>(options: {
+  readonly typeParams: TypeParams;
+}): FieldBuilder<VectorFieldType & { readonly typeParams: TypeParams }, false, false>;
+function vectorField(options?: { readonly typeParams: Record<string, unknown> }) {
+  return createScalarFieldBuilder('mongo/vector@1', options);
+}
+
 export const field = {
   scalar: createScalarFieldBuilder,
   objectId() {
@@ -1383,11 +1354,7 @@ export const field = {
   bson() {
     return createScalarFieldBuilder('mongo/bson@1');
   },
-  vector<const TypeParams extends Record<string, unknown> | undefined = undefined>(options?: {
-    readonly typeParams?: TypeParams;
-  }) {
-    return createScalarFieldBuilder('mongo/vector@1', options);
-  },
+  vector: vectorField,
   valueObject<const ValueObject extends ValueObjectNameInput>(valueObjectName: ValueObject) {
     return createFieldBuilder({
       type: blindCast<
@@ -2532,6 +2499,18 @@ function buildContractFromDefinition<
   });
 
   const codecLookup = extractCodecLookup([definition.target]);
+  const components = [
+    definition.family,
+    definition.target,
+    ...Object.values(definition.extensions ?? {}),
+  ];
+  assertMongoFieldTypeParams(
+    { [UNBOUND_NAMESPACE_ID]: { models: builtModels, valueObjects: builtValueObjects } },
+    {
+      codecLookup: extractCodecLookup(components),
+      dataTypeLookup: assembleDataTypes(components).lookup,
+    },
+  );
 
   const builtEnums: Record<string, ContractEnum> = {};
   for (const [enumName, handle] of Object.entries(definition.enums ?? {})) {

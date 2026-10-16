@@ -30,6 +30,7 @@
     "@repo/test-utils": "workspace:8.0.0-rc.18",
     "@repo/tsconfig": "workspace:8.0.0-rc.18",
     "@repo/tsdown": "workspace:8.0.0-rc.18",
+    "arktype": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

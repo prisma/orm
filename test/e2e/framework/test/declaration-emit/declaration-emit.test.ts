@@ -47,6 +47,7 @@ describe('declaration emit of an exported contract, or of rows read through one,
     expect(sources).toEqual([
       'indexes.ts',
       'mixed.ts',
+      'mongo.ts',
       'paradedb.ts',
       'pgvector.ts',
       'plain.ts',

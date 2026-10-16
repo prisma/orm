@@ -1,3 +1,4 @@
+import type { BoundEnumType } from '@internal/contract-authoring';
 import {
   bindEnumType,
   type ExtractCodecTypesFromPack,
@@ -15,4 +16,4 @@ type MongoCodecTypes = ExtractCodecTypesFromPack<typeof mongoTargetPack>;
  * codec's input type so `mongo/string@1` requires string values and a
  * mismatch is a compile error.
  */
-export const enumType = bindEnumType<MongoCodecTypes>();
+export const enumType: BoundEnumType<MongoCodecTypes> = bindEnumType<MongoCodecTypes>();

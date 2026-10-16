@@ -237,52 +237,9 @@ describe('mongoDateCodec', () => {
   });
 });
 
-describe('mongo vector descriptor renderOutputType', () => {
-  // The descriptor list is heterogeneous (`CodecDescriptor` with default `P = void`); the per-codec `P` for vector is `Record<string, unknown>` — narrow back here to invoke the renderer with concrete typeParams.
-  const renderVector = mongoDescriptorById(mongoVectorCodec.id)?.renderOutputType as
-    | ((typeParams: Record<string, unknown>) => string | undefined)
-    | undefined;
-
-  it('renders Vector<length> when length is present', () => {
-    expect(renderVector?.({ length: 1536 })).toBe('Vector<1536>');
-  });
-
-  it('renders Vector<length> with small dimension', () => {
-    expect(renderVector?.({ length: 3 })).toBe('Vector<3>');
-  });
-
-  it('returns undefined when length is absent', () => {
-    expect(renderVector?.({})).toBeUndefined();
-  });
-
-  it('throws on NaN length', () => {
-    expect(() => renderVector?.({ length: Number.NaN })).toThrow(
-      /expected positive integer "length"/,
-    );
-  });
-
-  it('throws on non-integer length', () => {
-    expect(() => renderVector?.({ length: 3.5 })).toThrow(/expected positive integer "length"/);
-  });
-
-  it('throws on zero length', () => {
-    expect(() => renderVector?.({ length: 0 })).toThrow(/expected positive integer "length"/);
-  });
-
-  it('throws on negative length', () => {
-    expect(() => renderVector?.({ length: -1 })).toThrow(/expected positive integer "length"/);
-  });
-
-  it('throws RUNTIME.TYPE_PARAMS_INVALID on invalid length', () => {
-    let caught: unknown;
-    try {
-      renderVector?.({ length: -1 });
-    } catch (err) {
-      caught = err;
-    }
-    expect(isStructuredError(caught)).toBe(true);
-    if (!isStructuredError(caught)) return;
-    expect(caught.code).toBe('RUNTIME.TYPE_PARAMS_INVALID');
+describe('mongo vector descriptor', () => {
+  it('renders no output type text; its pack declares Vector<N> as a type function', () => {
+    expect(mongoDescriptorById(mongoVectorCodec.id)).not.toHaveProperty('renderOutputType');
   });
 });
 
