@@ -1,12 +1,15 @@
 import type { ColumnDefault } from '@internal/contract/types';
 import type { CodecRef, ToCanonicalForm } from '@internal/framework-components/codec';
-import type { DiffableNode } from '@internal/framework-components/control';
+import type { DiffableNode, MismatchExplanation } from '@internal/framework-components/control';
 import { freezeNode } from '@internal/framework-components/ir';
 import { blindCast } from '@internal/utils/casts';
 import { contractDefaultRefusal } from './default-in-canonical-form';
 import { resolvedDefaultsEqual } from './resolved-default-equality';
 import { RelationalSchemaNodeKind } from './schema-node-kinds';
 import { assertNode, defineNonEnumerable, SqlSchemaIRNode } from './sql-schema-ir-node';
+
+/** The `sql` literal that writes a SQL text, or `undefined` when no literal reads back as that text. */
+export type SqlExpressionLiteralFor = (text: string) => string | undefined;
 
 export interface SqlColumnDefaultIRInput {
   /** Structured resolved default (contract-declared or normalizer-parsed). */
@@ -37,6 +40,8 @@ export interface SqlColumnDefaultIRInput {
   readonly codecBaseNativeType?: string;
   /** See {@link import('./sql-column-ir').SqlColumnIRInput.toCanonicalForm}. */
   readonly toCanonicalForm?: ToCanonicalForm;
+  /** See {@link import('./sql-column-ir').SqlColumnIRInput.sqlExpressionLiteralFor}. */
+  readonly sqlExpressionLiteralFor?: SqlExpressionLiteralFor;
 }
 
 /**
@@ -68,6 +73,8 @@ export class SqlColumnDefaultIR extends SqlSchemaIRNode implements DiffableNode 
   declare readonly codecBaseNativeType?: string;
   /** See {@link SqlColumnDefaultIRInput.toCanonicalForm}. Non-enumerable, same reason as {@link many}. */
   declare readonly toCanonicalForm?: ToCanonicalForm;
+  /** See {@link SqlColumnDefaultIRInput.sqlExpressionLiteralFor}. Non-enumerable, same reason as {@link many}. */
+  declare readonly sqlExpressionLiteralFor?: SqlExpressionLiteralFor;
 
   constructor(input: SqlColumnDefaultIRInput) {
     super();
@@ -79,6 +86,7 @@ export class SqlColumnDefaultIR extends SqlSchemaIRNode implements DiffableNode 
     defineNonEnumerable(this, 'codecRef', input.codecRef);
     defineNonEnumerable(this, 'codecBaseNativeType', input.codecBaseNativeType);
     defineNonEnumerable(this, 'toCanonicalForm', input.toCanonicalForm);
+    defineNonEnumerable(this, 'sqlExpressionLiteralFor', input.sqlExpressionLiteralFor);
     freezeNode(this);
   }
 
@@ -124,13 +132,43 @@ export class SqlColumnDefaultIR extends SqlSchemaIRNode implements DiffableNode 
 
   /**
    * The refusal of an expected literal its canonical form does not take, which a contract emitted
-   * by an earlier version can carry, so the mismatch names its cause.
+   * by an earlier version can carry, so the mismatch names its cause. Failing that, for two default
+   * expressions, the text the database reads back, since it may store an expression in a form of
+   * its own.
    */
-  explainMismatch(): string | undefined {
-    return contractDefaultRefusal(
+  explainMismatch(actual: DiffableNode | undefined): MismatchExplanation | undefined {
+    const refusal = contractDefaultRefusal(
       this.resolved,
       this.toCanonicalForm,
       (this.many ?? this.codecRef?.many) === true,
     );
+    return refusal === undefined
+      ? this.storedExpressionForm(actual)
+      : { text: refusal, cause: 'expected-refused' };
+  }
+
+  private storedExpressionForm(actual: DiffableNode | undefined): MismatchExplanation | undefined {
+    if (actual === undefined || this.resolved?.kind !== 'function') return undefined;
+    const node = blindCast<
+      SqlSchemaIRNode,
+      'every diff-tree node the differ pairs is a SqlSchemaIRNode'
+    >(actual);
+    assertNode(node, 'SqlColumnDefaultIR', SqlColumnDefaultIR.is);
+    if (node.resolved?.kind !== 'function') return undefined;
+    const literalFor = this.sqlExpressionLiteralFor;
+    const shown = (text: string) => literalFor?.(text) ?? JSON.stringify(text);
+    const stored = node.raw ?? node.resolved.expression;
+    const written =
+      literalFor === undefined
+        ? stored
+        : [stored, node.resolved.expression].find((text) => literalFor(text) !== undefined);
+    const advice =
+      written === undefined
+        ? "No `sql` literal writes that text unchanged, so change the default's SQL in the contract until the database stores it as written."
+        : `If they do, write the default as ${shown(written)}.`;
+    return {
+      text: `The database reads this default back as ${shown(written ?? stored)}; the contract declares ${shown(this.resolved.expression)}. The database may store a default expression in its own form, so the two can mean the same. ${advice}`,
+      cause: 'possibly-equivalent',
+    };
   }
 }

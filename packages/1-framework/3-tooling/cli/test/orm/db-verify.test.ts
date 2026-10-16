@@ -512,7 +512,7 @@ describe('db verify', () => {
             >({
               path: ['public', 'event', 'at', 'default'],
               expected: { id: 'default', nodeKind: 'sql-column-default' },
-              explanation: REFUSAL,
+              explanation: { text: REFUSAL, cause: 'expected-refused' },
             }),
           ],
         },
@@ -527,7 +527,8 @@ describe('db verify', () => {
         expect(diagnosticsOf(run)[0]?.nextActions).toEqual([
           {
             kind: 'run-command',
-            label: 'Re-emit the contract, which stores the refused default as its type holds it',
+            label:
+              'Re-emit the contract: the emitted contract holds a value its type refuses, and re-emitting stores it as its type holds it',
             command: 'prisma-test contract emit',
           },
         ]);

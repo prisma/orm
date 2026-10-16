@@ -27,6 +27,7 @@ export {
 export {
   SqlColumnDefaultIR,
   type SqlColumnDefaultIRInput,
+  type SqlExpressionLiteralFor,
 } from './ir/sql-column-default-ir';
 export {
   type ReportedSqlType,

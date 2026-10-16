@@ -5,6 +5,7 @@ import { errorPathUnreachable, errorRunnerFailed } from './cli-errors';
 import { failedPrecheckWhy } from './failed-precheck-advice';
 import type { CliInvocation } from './printed-command';
 import { migrateFix } from './runner-failure-advice';
+import { runnerSchemaCheckWhy } from './schema-issues';
 
 /**
  * A `migrate` apply failure as the CLI's structured error; its advice prints paths and commands
@@ -19,6 +20,7 @@ export function mapMigrateFailure(
   }
   return errorRunnerFailed(failure.summary, {
     why:
+      runnerSchemaCheckWhy(failure.meta) ??
       failure.why ??
       (failure.failedPrecheck === undefined
         ? 'Migration runner failed'

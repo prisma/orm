@@ -2,12 +2,13 @@ import { readFile } from 'node:fs/promises';
 import type { PrismaNextConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import type {
-  ExpectationFailureReason,
+  MismatchCause,
   SchemaDiffIssue,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
-import { createControlStack, issueOutcome } from '@internal/framework-components/control';
+import { createControlStack } from '@internal/framework-components/control';
 import { castAs } from '@internal/utils/casts';
+import { assertNever } from '@internal/utils/internal-error';
 import { isStructuredErrorCode } from '@internal/utils/structured-error';
 import type { Block, TreeNode } from '@prisma/cli-engine';
 import type { Diagnostic, NextAction, Result } from '@prisma/cli-engine/protocol';
@@ -21,6 +22,7 @@ import {
   errorFileNotFound,
 } from '../../utils/cli-errors';
 import { chooseAction, runCommandAction } from '../../utils/next-actions';
+import { issueLabel, schemaIssuesWhy } from '../../utils/schema-issues';
 import { contractPathFor, displayPath } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 
@@ -144,18 +146,6 @@ export function verificationThrow(inputs: {
   );
 }
 
-const OUTCOME_LABEL: Record<ExpectationFailureReason, string> = {
-  'not-found': 'missing',
-  'not-expected': 'extra',
-  'not-equal': 'mismatch',
-};
-
-/** What a diff issue says, in the words the commander shell used. */
-export function issueLabel(issue: SchemaDiffIssue): string {
-  const label = `${OUTCOME_LABEL[issueOutcome(issue)]}: ${issue.path.join('/')}`;
-  return issue.explanation === undefined ? label : `${label}. ${issue.explanation}`;
-}
-
 export function issueNodes(
   issues: readonly SchemaDiffIssue[],
   status: 'error' | 'warn',
@@ -217,7 +207,7 @@ export function schemaVerdictDiagnostic(inputs: {
     summary: inputs.result.summary,
     ...(issues.length === 0
       ? {}
-      : { why: sentence(`The live schema differs: ${issues.join('; ')}`) }),
+      : { why: schemaIssuesWhy('The live schema differs', inputs.result.schema.issues) }),
     nextActions: inputs.nextActions,
     meta: {
       ...(inputs.space === undefined ? {} : { space: inputs.space }),
@@ -227,41 +217,69 @@ export function schemaVerdictDiagnostic(inputs: {
   };
 }
 
-function sentence(text: string): string {
-  return text.endsWith('.') ? text : `${text}.`;
-}
-
 /**
- * What to do about schema drift. An issue with an explanation means the emitted contract holds a
- * value its type refuses. Only re-emitting fixes that, and the re-emitted contract has a new hash,
- * so that is the one action offered.
+ * What to do about schema drift, by the causes the issues name. A value the emitted contract holds
+ * that its type refuses is fixed only by re-emitting. A value the database may hold in a form of its
+ * own is fixed in the contract when the two mean the same, and by `db update` when they do not.
+ * `db update` follows when some issue is not a refused contract value; changing the contract to
+ * describe the database follows when some issue has no explanation. Both follow when there is no
+ * issue.
  */
 export function schemaDriftNextActions(inputs: {
   readonly verb: 'sign' | 'verify';
   readonly contractRef: string | undefined;
   readonly issues: readonly SchemaDiffIssue[];
 }): readonly NextAction[] {
-  const { verb, contractRef } = inputs;
+  const { verb, contractRef, issues } = inputs;
   const retryAfterEmit =
     contractRef === undefined
       ? `${verb} again`
       : `${verb} the emitted contract instead of "${contractRef}"`;
-  const drift = [
-    runCommandAction(
-      `Change the database to match the contract, then ${verb} again`,
-      contractRef === undefined ? '{bin} db update' : `{bin} db update --to "${contractRef}"`,
-    ),
-    chooseAction(
-      `Or change the contract source to describe the database as it is, re-run contract emit, then ${retryAfterEmit}`,
-    ),
+  const causes = new Set(issues.flatMap((issue) => issue.explanation?.cause ?? []));
+  const drift =
+    issues.length === 0 || issues.some((issue) => issue.explanation?.cause !== 'expected-refused');
+  const uncaused = issues.length === 0 || issues.some((issue) => issue.explanation === undefined);
+  return [
+    ...[...causes]
+      .sort((a, b) => CAUSE_ORDER[a] - CAUSE_ORDER[b])
+      .map((cause) => causeAction(cause, retryAfterEmit)),
+    ...(drift
+      ? [
+          runCommandAction(
+            `Change the database to match the contract, then ${verb} again`,
+            contractRef === undefined ? '{bin} db update' : `{bin} db update --to "${contractRef}"`,
+          ),
+        ]
+      : []),
+    ...(uncaused
+      ? [
+          chooseAction(
+            causes.has('possibly-equivalent')
+              ? `Or, for the issues with no explanation, change the contract source to describe the database as it is, re-run contract emit, then ${retryAfterEmit}`
+              : `Or change the contract source to describe the database as it is, re-run contract emit, then ${retryAfterEmit}`,
+          ),
+        ]
+      : []),
   ];
-  const contractRefused = inputs.issues.some((issue) => issue.explanation !== undefined);
-  return contractRefused
-    ? [
-        runCommandAction(
-          'Re-emit the contract, which stores the refused default as its type holds it',
-          '{bin} contract emit',
-        ),
-      ]
-    : drift;
+}
+
+const CAUSE_ORDER: Record<MismatchCause, number> = {
+  'expected-refused': 0,
+  'possibly-equivalent': 1,
+};
+
+function causeAction(cause: MismatchCause, retryAfterEmit: string): NextAction {
+  switch (cause) {
+    case 'expected-refused':
+      return runCommandAction(
+        'Re-emit the contract: the emitted contract holds a value its type refuses, and re-emitting stores it as its type holds it',
+        '{bin} contract emit',
+      );
+    case 'possibly-equivalent':
+      return chooseAction(
+        `If the database only stored a value in a form of its own, write it in the contract source as the database stores it, re-run contract emit, then ${retryAfterEmit}`,
+      );
+    default:
+      return assertNever(cause, `Unhandled mismatch cause: ${String(cause)}`);
+  }
 }

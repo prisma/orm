@@ -5,7 +5,7 @@ import { freezeNode } from '@internal/framework-components/ir';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { RelationalSchemaNodeKind } from './schema-node-kinds';
-import { SqlColumnDefaultIR } from './sql-column-default-ir';
+import { SqlColumnDefaultIR, type SqlExpressionLiteralFor } from './sql-column-default-ir';
 import { assertNode, defineNonEnumerable, SqlSchemaIRNode } from './sql-schema-ir-node';
 
 /**
@@ -93,6 +93,12 @@ export interface SqlColumnIRInput {
    * Stamped on the contract-derived column; absent on introspected nodes.
    */
   readonly toCanonicalForm?: ToCanonicalForm;
+  /**
+   * The `sql` literal that writes a SQL text, or `undefined` when no literal reads back as that
+   * text. The SQL family supplies it, so a mismatch can show a default as the user would write it.
+   * Stamped on the contract-derived column; absent on introspected nodes.
+   */
+  readonly sqlExpressionLiteralFor?: SqlExpressionLiteralFor;
   /** The element type as the database reports it. Set by introspection; absent on contract-derived nodes. */
   readonly reportedType?: ReportedSqlType;
 }
@@ -135,6 +141,8 @@ export class SqlColumnIR extends SqlSchemaIRNode implements DiffableNode {
   declare readonly dataType?: DataType;
   /** See {@link SqlColumnIRInput.toCanonicalForm}. Non-enumerable, same reason as {@link codecRef}. */
   declare readonly toCanonicalForm?: ToCanonicalForm;
+  /** See {@link SqlColumnIRInput.sqlExpressionLiteralFor}. Non-enumerable, same reason as {@link codecRef}. */
+  declare readonly sqlExpressionLiteralFor?: SqlExpressionLiteralFor;
   /** See {@link SqlColumnIRInput.reportedType}. Non-enumerable, same reason as {@link codecRef}. */
   declare readonly reportedType?: ReportedSqlType;
 
@@ -153,6 +161,7 @@ export class SqlColumnIR extends SqlSchemaIRNode implements DiffableNode {
     defineNonEnumerable(this, 'codecBaseNativeType', input.codecBaseNativeType);
     defineNonEnumerable(this, 'dataType', input.dataType);
     defineNonEnumerable(this, 'toCanonicalForm', input.toCanonicalForm);
+    defineNonEnumerable(this, 'sqlExpressionLiteralFor', input.sqlExpressionLiteralFor);
     defineNonEnumerable(this, 'reportedType', input.reportedType);
     freezeNode(this);
   }
@@ -187,6 +196,7 @@ export class SqlColumnIR extends SqlSchemaIRNode implements DiffableNode {
         ...ifDefined('codecRef', this.codecRef),
         ...ifDefined('codecBaseNativeType', this.codecBaseNativeType),
         ...ifDefined('toCanonicalForm', this.toCanonicalForm),
+        ...ifDefined('sqlExpressionLiteralFor', this.sqlExpressionLiteralFor),
       }),
     ];
   }

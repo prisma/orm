@@ -1,3 +1,4 @@
+import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { basename, join } from 'pathe';
 import { statementFlag } from '../control-api/statements/statement-flag';
 import type {
@@ -13,6 +14,7 @@ import {
   printedPlanCommand,
   selfEmitCommand,
 } from './printed-command';
+import { runnerSchemaIssues } from './schema-issues';
 
 type FailedMigration = NonNullable<MigrateFailure['failedMigration']>;
 
@@ -114,7 +116,8 @@ export function dbInitRowsWithoutValueFix(
 interface FailedMigrationText {
   readonly directory: string;
   readonly name: string;
-  readonly from: string;
+  /** The contract the migration starts from, or `undefined` for the empty contract, which `migration plan` takes as its default origin and does not accept as `--from`. */
+  readonly from: string | undefined;
   readonly nodeCommand: string;
   readonly invocation: CliInvocation;
 }
@@ -128,7 +131,7 @@ function failedMigrationText(
   return {
     directory,
     name: dirName.slice(dirName.indexOf('_') + 1),
-    from: failed.from,
+    from: failed.from === EMPTY_CONTRACT_HASH ? undefined : failed.from,
     nodeCommand: selfEmitCommand(invocation, join(failed.directory, 'migration.ts')),
     invocation,
   };
@@ -231,6 +234,22 @@ function fieldList(reports: readonly RowsWithoutValueReport[]): string {
     .join(', ');
 }
 
+function migrateSchemaCheckFix(
+  failedMigration: FailedMigrationText | undefined,
+  invocation: CliInvocation,
+): string {
+  const emit = `\`${cliCommand(invocation, 'contract emit')}\``;
+  if (failedMigration === undefined) {
+    return `The failed apply changed nothing. Change the contract source to resolve the issues listed, re-run ${emit}, delete the failed migration's directory (copy any code you wrote in its migration.ts first), plan it again with ${migrationPlanCommand(invocation, [], undefined)}, put any code you copied into the migration.ts it writes, ${RUN_PLANNED_FILE}, and run ${dbMigrateCommand(invocation)}.`;
+  }
+  const plan = migrationPlanCommand(
+    invocation,
+    ['--name', failedMigration.name],
+    failedMigration.from,
+  );
+  return `The failed apply changed nothing. Change the contract source to resolve the issues listed, re-run ${emit}, delete \`${failedMigration.directory}\` (copy any code you wrote in its migration.ts first), plan it again with ${plan}, put any code you copied into the migration.ts it writes, ${RUN_PLANNED_FILE}, and run ${dbMigrateCommand(invocation)}.`;
+}
+
 /**
  * The way out of a failed `db migrate` apply: every path and command it prints works from where the
  * CLI ran, with the `--config` it was given.
@@ -245,6 +264,9 @@ export function migrateFix(failure: MigrateFailure, invocation: CliInvocation): 
   }
   if (failure.rowsWithoutValue !== undefined) {
     return migrateRowsWithoutValueFix(failure.rowsWithoutValue, failedMigration, invocation);
+  }
+  if (runnerSchemaIssues(failure.meta) !== undefined) {
+    return migrateSchemaCheckFix(failedMigration, invocation);
   }
   if (failure.failedPrecheck !== undefined) {
     return migrateFailedPrecheckFix(failure.failedPrecheck, invocation);

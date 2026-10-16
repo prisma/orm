@@ -43,7 +43,7 @@ interface DiffableNode {
   readonly nodeKind: string;                 // per-node discriminant; never folded into id
   readonly dependsOn?: readonly SchemaNodeRef[]; // nodes that must exist before this one
   isEqualTo(other: DiffableNode): boolean;   // compares a matched pair's OWN attributes only
-  explainMismatch?(actual: DiffableNode | undefined): string | undefined; // optional; asked for not-equal and not-found
+  explainMismatch?(actual: DiffableNode | undefined): MismatchExplanation | undefined; // optional; asked for not-equal and not-found
   children(): readonly DiffableNode[];       // the node's children; empty for a leaf
 }
 ```
@@ -60,7 +60,7 @@ interface SchemaDiffIssue<TNode extends DiffableNode = DiffableNode> {
   readonly expected?: TNode;                       // absent when the node is not-expected
   readonly actual?: TNode;                         // absent when the node is not-found
   readonly dependsOn?: readonly (readonly string[])[]; // the paths of the in-diff issues this depends on
-  readonly explanation?: string;                   // text for people from explainMismatch; never an outcome
+  readonly explanation?: MismatchExplanation;      // from explainMismatch: text for people and its cause; never an outcome
 }
 ```
 
@@ -72,7 +72,7 @@ The issue stores no separate kind field: the outcome it represents is discrimina
 
 Caching the outcome as a stored `reason` alongside the very presence that determines it only invited the two to drift, so presence is the single source of truth. `dependsOn` is the issue-to-issue mirror of the node's own `dependsOn`: the differ resolves each node ref to the path of the in-diff issue at that coordinate, dropping any ref whose target produced no issue (that prerequisite is already satisfied by reality). The planner topologically sorts on these edges — a dependency's op before its dependent on the way up, after it on the way down.
 
-An expected node may explain a not-equal or not-found outcome through `explainMismatch`, for example a contract default its data type refuses. The differ copies that text onto the issue as `explanation` and never reads it. It is text for people, not an outcome kind: the outcome still comes only from presence.
+An expected node may explain a not-equal or not-found outcome through `explainMismatch`. The explanation is `{ text, cause }`: `text` is for people, and `cause` says what the difference means, so a command can choose what to advise without reading the text. `expected-refused` means the expected side holds a value its type now refuses, such as a contract default an earlier version stored, so re-emitting the contract fixes it. `possibly-equivalent` means the two sides may be one value written two ways, such as a SQL default the database stores in its own form, so the user may write the expected side as the actual one. The differ copies the explanation onto the issue and never reads it; the outcome still comes only from presence.
 
 ## How pairing works
 

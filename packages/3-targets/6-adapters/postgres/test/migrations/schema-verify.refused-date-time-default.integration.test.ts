@@ -104,7 +104,12 @@ describe('a contract default the canonical form of its data type refuses', {
         path: issue.path.join('/'),
         explanation: issue.explanation,
       })),
-    ).toEqual([{ path: 'database/public/event/column:at/default', explanation: REFUSAL }]);
+    ).toEqual([
+      {
+        path: 'database/public/event/column:at/default',
+        explanation: { text: REFUSAL, cause: 'expected-refused' },
+      },
+    ]);
   });
 
   it('names the refusal when the database has no default', { timeout: testTimeout }, async () => {
@@ -121,7 +126,12 @@ describe('a contract default the canonical form of its data type refuses', {
         path: issue.path.join('/'),
         explanation: issue.explanation,
       })),
-    ).toEqual([{ path: 'database/public/event/column:at/default', explanation: REFUSAL }]);
+    ).toEqual([
+      {
+        path: 'database/public/event/column:at/default',
+        explanation: { text: REFUSAL, cause: 'expected-refused' },
+      },
+    ]);
   });
 
   it('is not written by the planner', { timeout: testTimeout }, async () => {

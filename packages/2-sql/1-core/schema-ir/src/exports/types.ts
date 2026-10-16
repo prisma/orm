@@ -6,6 +6,7 @@ export type {
   SqlCheckConstraintIRInput,
   SqlColumnDefaultIRInput,
   SqlColumnIRInput,
+  SqlExpressionLiteralFor,
   SqlForeignKeyIRInput,
   SqlIndexIRInput,
   SqlReferentialAction,
