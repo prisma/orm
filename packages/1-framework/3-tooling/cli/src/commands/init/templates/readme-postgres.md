@@ -31,4 +31,4 @@ Prisma ORM setup is scaffolded in:
 
 For provider-specific Prisma ORM reference docs, see `prisma-8.md`. Prisma ORM skills live in the upstream `skills/` directory: https://github.com/prisma/prisma/tree/main/skills.
 
-Node-based Prisma ORM projects expect Node.js 24 LTS or newer.
+Node-based Prisma ORM projects expect Node.js 22.18 or newer on the 22 line, 24.11 or newer on the 24 line, or 26 or newer.

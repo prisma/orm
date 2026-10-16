@@ -24,7 +24,7 @@
 
 ## Prerequisites
 
-- Node.js 24 or newer
+- Node.js 22.18 or newer on the 22 line, 24.11 or newer on the 24 line, or 26 or newer, with the npm that ships with your Node.js release (npm 10 on Node.js 22)
 - A package manager (`npm`, `pnpm`, or `yarn`)
 
 ## Getting started

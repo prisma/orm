@@ -8,11 +8,11 @@ See [ADR 222](./architecture%20docs/adrs/ADR%20222%20-%20Version%20support%20pol
 
 | Runtime | Minimum version |
 |---|---|
-| Node.js | 24 |
+| Node.js | 22.18 or newer on the 22 line, 24.11 or newer on the 24 line, or 26 or newer |
 | Bun | 1.2 |
 | Deno | 2.0 |
 
-Node.js is the primary supported runtime. Bun and Deno are supported on a best-effort basis; if you encounter a Bun- or Deno-specific issue, please file an issue and include your runtime version.
+Use the npm that ships with your Node.js release (npm 10 on Node.js 22). Every published package declares this range as `engines.node`: `^22.18.0 || ^24.11.0 || >=26.0.0`. [ADR 269](./architecture%20docs/adrs/ADR%20269%20-%20One%20Node.js%20range%20for%20every%20Prisma%208%20tool.md) records why. Node.js is the primary supported runtime. Bun and Deno are supported on a best-effort basis; if you encounter a Bun- or Deno-specific issue, please file an issue and include your runtime version.
 
 ## Database servers
 

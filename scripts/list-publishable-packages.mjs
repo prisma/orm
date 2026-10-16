@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const SKIP_DIRS = new Set([
   'node_modules',
@@ -11,46 +12,32 @@ const SKIP_DIRS = new Set([
   '.turbo',
 ]);
 
-const roots = [];
-const seen = new Set();
-
 /**
- * Recursively walk a directory and collect paths to non-private packages.
- * A package is considered publishable if it has a package.json without `"private": true`.
+ * Every package under `root`, sorted by directory. A package is publishable
+ * when its package.json does not set `"private": true`.
+ *
+ * @param {string} [root]
+ * @returns {Array<{ dir: string; publishable: boolean }>}
  */
-function walk(dir) {
-  for (const entry of readdirSync(dir)) {
-    if (SKIP_DIRS.has(entry)) {
-      continue;
+export function listWorkspacePackages(root = 'packages') {
+  const found = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir)) {
+      if (SKIP_DIRS.has(entry)) continue;
+      const path = join(dir, entry);
+      if (statSync(path).isDirectory()) {
+        walk(path);
+      } else if (entry === 'package.json') {
+        const pkg = JSON.parse(readFileSync(path, 'utf8'));
+        found.push({ dir, publishable: pkg?.private !== true });
+      }
     }
-
-    const p = join(dir, entry);
-    const st = statSync(p);
-
-    if (st.isDirectory()) {
-      walk(p);
-      continue;
-    }
-
-    if (entry !== 'package.json') {
-      continue;
-    }
-
-    const pkg = JSON.parse(readFileSync(p, 'utf8'));
-
-    if (pkg?.private === true) {
-      continue;
-    }
-
-    if (seen.has(dir)) {
-      continue;
-    }
-
-    seen.add(dir);
-    roots.push(`./${dir}`);
-  }
+  };
+  walk(root);
+  return found.sort((a, b) => a.dir.localeCompare(b.dir));
 }
 
-walk('packages');
-roots.sort((a, b) => a.localeCompare(b));
-console.log(roots.join(' '));
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const publishable = listWorkspacePackages().filter((pkg) => pkg.publishable);
+  console.log(publishable.map((pkg) => `./${pkg.dir}`).join(' '));
+}
