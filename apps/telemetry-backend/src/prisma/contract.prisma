@@ -18,6 +18,6 @@ model TelemetryEvent {
   extensions     Jsonb
   exitCode       Int?
 
-  @@index([ingestedAt])
+  @@index([ingestedAt], map: "telemetry_event_ingestedAt_idx")
   @@map("telemetry_event")
 }
