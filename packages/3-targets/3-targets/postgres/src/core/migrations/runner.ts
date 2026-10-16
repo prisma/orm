@@ -170,7 +170,7 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
 
     const markerAtDestination = this.markerMatchesDestination(existingMarker, options.plan);
     const isSelfEdge = options.plan.origin?.storageHash === options.plan.destination.storageHash;
-    const skipOperations = markerAtDestination && options.plan.origin != null && !isSelfEdge;
+    const skipOperations = markerAtDestination &&  !isSelfEdge;
     let applyValue: ApplyPlanSuccessValue;
 
     if (skipOperations) {
