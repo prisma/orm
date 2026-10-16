@@ -104,8 +104,7 @@ describe('Temporal codecs and generators with a fallback and no global Temporal'
 
   it('the now generators read the clock of the fallback', async () => {
     const { setFallbackTemporal } = await freshModule();
-    const { instantNow } = await import('../src/core/instant-now-generator');
-    const { plainDateTimeNow } = await import('../src/core/plain-date-time-now-generator');
+    const { instantNow, plainDateTimeNow } = await import('../src/core/date-time-now-generators');
     setFallbackTemporal(otherTemporal);
 
     expect({
@@ -183,8 +182,7 @@ describe('Temporal codecs and generators with no global Temporal and no fallback
 
   it('the now generators throw RUNTIME.TEMPORAL_UNAVAILABLE', async () => {
     await freshModule();
-    const { instantNow } = await import('../src/core/instant-now-generator');
-    const { plainDateTimeNow } = await import('../src/core/plain-date-time-now-generator');
+    const { instantNow, plainDateTimeNow } = await import('../src/core/date-time-now-generators');
 
     expect(() => instantNow()).toThrow(
       expect.objectContaining({

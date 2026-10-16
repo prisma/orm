@@ -1,0 +1,316 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Clock": {
+            "storage": {
+              "table": "Clock",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "day": {
+                  "column": "day"
+                },
+                "time": {
+                  "column": "time"
+                },
+                "zoned": {
+                  "column": "zoned"
+                },
+                "optional": {
+                  "column": "optional"
+                },
+                "defaulted": {
+                  "column": "defaulted"
+                },
+                "optionalDefaulted": {
+                  "column": "optionalDefaulted"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "day": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/date-string@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "time": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/time-string@1",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "nullable": false,
+                "many": false
+              },
+              "zoned": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timetz@1",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "nullable": false,
+                "many": false
+              },
+              "optional": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/date-string@1"
+                },
+                "nullable": true,
+                "many": false
+              },
+              "defaulted": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/date-string@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "optionalDefaulted": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/time-string@1",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "nullable": true,
+                "many": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "Clock": {
+      "namespace": "public",
+      "model": "Clock"
+    }
+  },
+  "execution": {
+    "executionHash": "83f4b551a00cf2ae263f55d9867bf1014a7876d4667e3cae6ec350ad80301509",
+    "mutations": {
+      "defaults": [
+        {
+          "ref": {
+            "namespace": "public",
+            "entry": "Clock",
+            "field": "day"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "dateStringNow"
+          },
+          "onUpdate": {
+            "kind": "generator",
+            "id": "dateStringNow"
+          }
+        },
+        {
+          "ref": {
+            "namespace": "public",
+            "entry": "Clock",
+            "field": "defaulted"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "dateStringNow"
+          },
+          "onUpdate": {
+            "kind": "generator",
+            "id": "dateStringNow"
+          }
+        },
+        {
+          "ref": {
+            "namespace": "public",
+            "entry": "Clock",
+            "field": "optional"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "dateStringNow"
+          },
+          "onUpdate": {
+            "kind": "generator",
+            "id": "dateStringNow"
+          }
+        },
+        {
+          "ref": {
+            "namespace": "public",
+            "entry": "Clock",
+            "field": "optionalDefaulted"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "timeStringNow",
+            "params": {
+              "precision": 6
+            }
+          },
+          "onUpdate": {
+            "kind": "generator",
+            "id": "timeStringNow",
+            "params": {
+              "precision": 6
+            }
+          }
+        },
+        {
+          "ref": {
+            "namespace": "public",
+            "entry": "Clock",
+            "field": "time"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "timeStringNow",
+            "params": {
+              "precision": 6
+            }
+          },
+          "onUpdate": {
+            "kind": "generator",
+            "id": "timeStringNow",
+            "params": {
+              "precision": 6
+            }
+          }
+        },
+        {
+          "ref": {
+            "namespace": "public",
+            "entry": "Clock",
+            "field": "zoned"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "timetzNow",
+            "params": {
+              "precision": 6
+            }
+          },
+          "onUpdate": {
+            "kind": "generator",
+            "id": "timetzNow",
+            "params": {
+              "precision": 6
+            }
+          }
+        }
+      ]
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "f8f1312122b9c6ad888fde5204a9ce67f5a69028952df33b7f93f8bd1cc3e675",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "Clock": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "day": {
+                  "dataType": "pg/date",
+                  "codecId": "pg/date-string@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "time": {
+                  "dataType": "pg/time",
+                  "codecId": "pg/time-string@1",
+                  "nullable": false,
+                  "many": false,
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "zoned": {
+                  "dataType": "pg/timetz",
+                  "codecId": "pg/timetz@1",
+                  "nullable": false,
+                  "many": false,
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "optional": {
+                  "dataType": "pg/date",
+                  "codecId": "pg/date-string@1",
+                  "nullable": true,
+                  "many": false
+                },
+                "defaulted": {
+                  "dataType": "pg/date",
+                  "codecId": "pg/date-string@1",
+                  "nullable": false,
+                  "many": false,
+                  "default": {
+                    "kind": "function",
+                    "expression": "now()"
+                  }
+                },
+                "optionalDefaulted": {
+                  "dataType": "pg/time",
+                  "codecId": "pg/time-string@1",
+                  "nullable": true,
+                  "many": false,
+                  "typeParams": {
+                    "precision": 6
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "now()"
+                  }
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

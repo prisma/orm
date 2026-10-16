@@ -35,7 +35,7 @@ import {
   pgTimestampStoredText,
   pgTimestamptzStoredText,
 } from './date-time-stored-text';
-import { utcTimestampText, utcTimestamptzText } from './temporal-codec-helpers';
+import { errorTimestampTextWrongType } from './errors';
 
 export class PgDateStringCodec extends CodecImpl<
   typeof PG_DATE_STRING_CODEC_ID,
@@ -78,17 +78,25 @@ export const pgDateStringColumn = () =>
 pgDateStringColumn satisfies ColumnHelperFor<PgDateStringDescriptor>;
 pgDateStringColumn satisfies ColumnHelperForStrict<PgDateStringDescriptor>;
 
+function requireText(codecId: string, value: unknown): string {
+  if (typeof value === 'string') return value;
+  throw errorTimestampTextWrongType(codecId, describeValue(value));
+}
+
+function describeValue(value: unknown): string {
+  if (value === null) return 'null';
+  if (value instanceof Date) return 'a Date';
+  return `a ${typeof value}`;
+}
+
 export class PgTimestampStringCodec extends CodecImpl<
   typeof PG_TIMESTAMP_STRING_CODEC_ID,
   readonly ['equality', 'order'],
   string,
   string
 > {
-  // `CodecTypes` reads the application type from the last signature, so `string` stays last.
-  encode(value: Date, ctx: CodecCallContext): Promise<string>;
-  encode(value: string, ctx: CodecCallContext): Promise<string>;
-  async encode(value: string | Date, _ctx: CodecCallContext): Promise<string> {
-    return value instanceof Date ? utcTimestampText(value, this.id) : value;
+  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
+    return requireText(this.id, value);
   }
   async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
     return wire;
@@ -145,11 +153,8 @@ export class PgTimestamptzStringCodec extends CodecImpl<
   string,
   string
 > {
-  // `CodecTypes` reads the application type from the last signature, so `string` stays last.
-  encode(value: Date, ctx: CodecCallContext): Promise<string>;
-  encode(value: string, ctx: CodecCallContext): Promise<string>;
-  async encode(value: string | Date, _ctx: CodecCallContext): Promise<string> {
-    return value instanceof Date ? utcTimestamptzText(value, this.id) : value;
+  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
+    return requireText(this.id, value);
   }
   async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
     return wire;

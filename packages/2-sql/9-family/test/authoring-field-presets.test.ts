@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { nonTemporalPresetMirrors } from '../../2-authoring/contract-psl/test/fixtures';
 import {
   nanoidIdPresetMirror,
   nanoidOptionsArgumentMirror,
@@ -95,5 +96,11 @@ describe('contract-ts mirrors of the nanoid presets', () => {
 
   it('mirrors the id.nanoid preset', () => {
     expect(nanoidIdPresetMirror).toEqual(sqlFamilyAuthoringFieldPresets.id.nanoid);
+  });
+});
+
+describe('contract-psl mirror of the uuidString preset', () => {
+  it('mirrors the uuidString preset', () => {
+    expect(nonTemporalPresetMirrors.uuidString).toEqual(sqlFamilyAuthoringFieldPresets.uuidString);
   });
 });

@@ -4,8 +4,10 @@ import {
 } from '@internal/framework-components/authoring';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+import { extensions as slugidExtensions } from '../authoring/parity/default-pack-slugid/packs';
 import {
   composePostgresStack,
+  type PostgresStack,
   printAndReadBack,
   readPsl,
   serializedWithoutCapabilities,
@@ -35,14 +37,17 @@ function temporalPresetCalls(namespace: AuthoringFieldNamespace): readonly strin
   });
 }
 
-async function roundTrip(field: string): Promise<void> {
-  const authored = await readPsl(`// use prisma-8
+async function roundTrip(field: string, withStack: PostgresStack = stack): Promise<void> {
+  const authored = await readPsl(
+    `// use prisma-8
 model Widget {
   id    Int @id
   ${field}
 }
-`);
-  const printed = await printAndReadBack(authored);
+`,
+    { stack: withStack },
+  );
+  const printed = await printAndReadBack(authored, { stack: withStack });
 
   expect(serializedWithoutCapabilities(printed)).toEqual(serializedWithoutCapabilities(authored));
 }
@@ -72,6 +77,17 @@ describe('every generated value the stack reads prints as PSL that reads back', 
     '%s',
     async (call) => {
       await roundTrip(`value ${call}`);
+    },
+    timeouts.pslRoundTrip,
+  );
+
+  it(
+    'a default function an extension registers',
+    async () => {
+      await roundTrip(
+        'value String @default(slugid())',
+        composePostgresStack([...slugidExtensions]),
+      );
     },
     timeouts.pslRoundTrip,
   );

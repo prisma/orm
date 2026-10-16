@@ -1,5 +1,5 @@
 /**
- * The user-facing journey for `prisma contract print`: a project whose `prisma.config.ts` points at `prisma7Schema('./schema.prisma')` runs `contract print`, switches its config to the Prisma 8 PSL the command wrote, and emits the same contract, which `db sign` and `db verify` then accept against the database the Prisma 7 SQL built. It runs over the `relations` and `supported-verify` fixtures, whose database is the SQL Prisma 7.10.0 generated for the full `supported` schema, with their `@ignore` fields and `@@ignore` models removed: Prisma 8 PSL has no syntax yet for storage that no field or model maps (TML-3469), so print refuses those schemas as they are. The command is not tied to Prisma 7: a PSL source prints too. Three things are refused with exit 2 and no file written: a Prisma 7 schema Prisma 8 cannot read, a Prisma 7 schema with ignored storage, and an output path that is the schema being read. A contract with a default control policy prints with a warning, and the config the READMEs show for the printed file emits it with the same policy.
+ * The user-facing journey for `prisma contract print`: a project whose `prisma.config.ts` points at `prisma7Schema('./schema.prisma')` runs `contract print`, switches its config to the Prisma 8 PSL the command wrote, and emits the same contract, which `db sign` and `db verify` then accept against the database the Prisma 7 SQL built. It runs over the `relations` and `supported` fixtures, whose database is the SQL Prisma 7.10.0 generated for the `supported` schema, with their `@ignore` fields and `@@ignore` models removed: Prisma 8 PSL has no syntax yet for storage that no field or model maps (TML-3469), so print refuses those schemas as they are. The command is not tied to Prisma 7: a PSL source prints too. Three things are refused with exit 2 and no file written: a Prisma 7 schema Prisma 8 cannot read, a Prisma 7 schema with ignored storage, and an output path that is the schema being read. A contract with a default control policy prints with a warning, and the config the READMEs show for the printed file emits it with the same policy.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { withClient } from '@repo/test-utils';
@@ -197,7 +197,7 @@ withTempDir(({ createTempDir }) => {
       onReady: (cs) => withClient(cs, (client) => client.query(PRISMA7_DDL)),
     });
 
-    it.each(['relations', 'supported-verify'])(
+    it.each(['relations', 'supported'])(
       'prints the %s fixture and verifies against the database Prisma 7 built',
       async (fixture) => {
         await printAndVerify(

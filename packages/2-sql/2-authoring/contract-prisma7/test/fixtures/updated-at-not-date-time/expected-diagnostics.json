@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA7_UPDATED_AT_FIELD_INVALID",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"Post.title\" has type \"String\", but @updatedAt is only allowed on a DateTime field. Prisma 7 refuses this schema too: \"Fields that are marked with @updatedAt must be of type DateTime.\" Remove @updatedAt, or change the field's type to DateTime."
+  }
+]

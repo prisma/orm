@@ -3,7 +3,7 @@
  * `prisma.config.ts` points `defineConfig` from the Postgres config entry at
  * `prisma7Schema('./schema.prisma')` runs `contract emit`, `db sign`, and
  * `db verify` through the real command family against a database built by the
- * SQL Prisma 7.10.0 generated, with exit 0 and zero findings. Prisma 7 creates no check on a list column, so a `String[]` column reads as a list whose elements may be null, and verifies with no migration. The contract keeps the columns of `@ignore` fields and the tables of `@@ignore` models, so `db verify --strict` reports only the column default left behind by the `@default(now())` removed beside `@updatedAt`. A schema with a `view` fails `contract emit` with one diagnostic and writes nothing.
+ * SQL Prisma 7.10.0 generated, with exit 0 and zero findings. Prisma 7 creates no check on a list column, so a `String[]` column reads as a list whose elements may be null, and verifies with no migration. The contract keeps the columns of `@ignore` fields and the tables of `@@ignore` models, so `db verify --strict` reports no findings either. A schema with a `view` fails `contract emit` with one diagnostic and writes nothing.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { withClient } from '@repo/test-utils';
@@ -81,7 +81,7 @@ withTempDir(({ createTempDir }) => {
       'contract emit, db sign, and db verify succeed against the database Prisma 7 built',
       async () => {
         const ctx = setupPrisma7Project(createTempDir, db.connectionString, {
-          copyFrom: join(PRISMA7_FIXTURES, 'supported-verify/schema.prisma'),
+          copyFrom: join(PRISMA7_FIXTURES, 'supported/schema.prisma'),
         });
 
         const emit = await runContractEmit(ctx, ['--json']);
@@ -201,17 +201,11 @@ withTempDir(({ createTempDir }) => {
         });
 
         const strictVerify = await runDbVerify(ctx, ['--json', '--strict']);
-        expect(strictVerify.exitCode, `db verify --strict\n${output(strictVerify)}`).toBe(4);
-        const strictResult = strictVerify.presented?.data as {
-          readonly schema: { readonly issues: readonly { readonly path: readonly string[] }[] };
-          readonly unclaimed: readonly string[];
-        };
-        expect({
-          issues: strictResult.schema.issues.map((issue) => issue.path).sort(),
-          unclaimed: strictResult.unclaimed,
-        }).toEqual({
-          issues: [['database', 'public', 'Timestamps', 'column:updatedAtNow', 'default']],
-          unclaimed: [],
+        expect(strictVerify.exitCode, `db verify --strict\n${output(strictVerify)}`).toBe(0);
+        expect(strictVerify.presented?.data).toMatchObject({
+          ok: true,
+          mode: 'full',
+          schema: { strict: true, warnings: [] },
         });
       },
       timeouts.spinUpPpgDev,

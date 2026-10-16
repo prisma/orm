@@ -80,8 +80,10 @@ Supported timestamp authoring surface:
 
 Field-preset calls in type position:
 
-- A field may use a registered field-preset call as its type (`createdAt temporal.createdAt()`). A preset is a complete field declaration — it carries its own codec, native type, and any default semantics.
-- Preset-call fields reject the modifiers the preset already decides: `?` optional (`PSL_PRESET_NOT_OPTIONAL`), `@default(...)` (`PSL_PRESET_AND_DEFAULT_CONFLICT`), `@id` unless the preset contributes id semantics (`PSL_PRESET_AND_ID_CONFLICT`), and list use (`PSL_PRESET_NOT_LIST`).
+- A field may use a registered field-preset call as its type (`createdAt temporal.createdAt()`). A preset fixes the field's codec, and whatever else it declares: an id, a database default, or generators.
+- `?` and `@default(...)` combine with any preset unless they contradict what it fixes. `?` is refused only on a preset that fixes the id (`PSL_PRESET_NOT_OPTIONAL`). `@default(...)` is refused when the preset sets its own database default, or when `@default(...)` generates a value and the preset already generates one on create (`PSL_PRESET_AND_DEFAULT_CONFLICT`). `@id` is refused unless the preset contributes id semantics (`PSL_PRESET_AND_ID_CONFLICT`), and list use is refused (`PSL_PRESET_NOT_LIST`).
+- Examples that read: `updatedAt temporal.timestampString(3, onCreate: now, onUpdate: now) @default(now())` has the database default `now()` and the preset's generators; `editedAt temporal.timestampString(3, onCreate: now, onUpdate: now)?` is nullable with the same generators; `token uuidString()?` is a nullable `char(36)`; ``meta json() @default(json`{}`)`` is a `jsonb` column with that default.
+- A generated `@default(...)`, such as `token String? @default(uuid())`, works on an optional field. On create and update, a value left out is generated and an explicit `null` is stored.
 
 Integer representation authoring surface:
 

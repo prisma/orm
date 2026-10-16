@@ -131,6 +131,19 @@ export function errorTemporalWrongType(
   );
 }
 
+/** A string timestamp codec received something other than text, such as a `Date` from a contract emitted before its generator wrote text. */
+export function errorTimestampTextWrongType(codecId: string, received: string): StructuredError {
+  return postgresError(
+    'RUNTIME.ENCODE_FAILED',
+    `Codec '${codecId}' writes PostgreSQL's text for the value, but received ${received}.`,
+    {
+      why: "The codec sends its value to PostgreSQL unchanged. A Date would be sent in the process's local time zone, and a timestamp column without a time zone would store the wrong wall-clock time.",
+      fix: 'Pass the timestamp as text, such as "2024-01-02 03:04:05.678". If the value came from a generated default, emit the contract again: a contract emitted by an earlier version pairs this column with timestampNow, which generates a Date.',
+      meta: { codecId, received },
+    },
+  );
+}
+
 export function errorTemporalNonIsoCalendar(codecId: string, calendarId: string): StructuredError {
   return postgresError(
     'RUNTIME.ENCODE_FAILED',

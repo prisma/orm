@@ -22,16 +22,16 @@ A contract source is a `ContractConfig` whose `source.load` returns a family con
 ## Decisions settled in shaping
 
 - `cuid()` maps to the cuid2 generator. Prisma 7's `cuid()` is cuid v1, which Prisma 8 does not ship; the column type is identical and ids are opaque.
-- `@updatedAt` becomes on-create and on-update generators with column `timestamp(3)`. It is a hard error on an optional field and a hard error together with `@default`; see the decision below.
+- `@updatedAt` becomes on-create and on-update generators with column `timestamp(3)`. It was first a hard error on an optional field and together with `@default`; see the decision below.
 - Implicit many-to-many relations become the junction model Prisma 7 creates, with a `(A, B)` primary key. Databases last migrated on Prisma 5 or earlier have a unique index instead (Prisma 6.0.0 made the change) and must migrate on Prisma 7 first.
 - Constraint names are set only where `db verify` compares them: indexes and check constraints.
 - `defineConfig` accepts a `ContractConfig` for `contract`, and `prisma7Schema(path)` returns one. Detection by file content was rejected as magic.
 
 ## Unspellable shapes are hard errors, not relaxed checks
 
-The contract accepts execution generators on a nullable column and alongside a storage default, and `db verify` is satisfied by either. Prisma 8 PSL cannot spell them: a preset field may not be optional, and a preset may not combine with `@default`. The Prisma 7 source therefore rejects both, with `PSL.PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED` and `PSL.PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED`.
+The contract accepts execution generators on a nullable column and alongside a storage default, and `db verify` is satisfied by either. At first Prisma 8 PSL could not write them: a preset field could not be optional, and a preset could not combine with `@default`. The Prisma 7 source therefore rejected both, with `PSL.PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED` and `PSL.PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED`.
 
-The rule behind that: **Prisma 8 does not compromise its parser or its interpreter for a feature it has not built. A construct the language cannot express is a signal to build the feature.** The feature here is first-class authoring for an optional generated timestamp, and for a storage default combined with an update generator, each designed on its own terms rather than admitted by a loosened check. Until that exists, the hard errors stand. [ADR 252](<../../docs/architecture docs/adrs/ADR 252 - An earlier Prisma version's schema is a contract source.md>) records the rule.
+The rule behind that: **Prisma 8 does not compromise its parser or its interpreter for a feature it has not built. A construct the language cannot express is a signal to build the feature.** Slice 7 built both features in Prisma 8's own authoring: a `temporal.*` preset accepts `?` and a database `@default`, and an ORM generator such as `uuid()` works on an optional field. Only then did the Prisma 7 source accept the two shapes, and both refusals were deleted. The rule stands for the shapes Prisma 8 still cannot express, such as views and column types with no codec. [ADR 252](<../../docs/architecture docs/adrs/ADR 252 - An earlier Prisma version's schema is a contract source.md>) records the rule.
 
 ## The public upgrade guide (read 2026-09-14)
 

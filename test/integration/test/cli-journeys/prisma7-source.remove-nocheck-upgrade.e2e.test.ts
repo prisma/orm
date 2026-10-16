@@ -66,10 +66,7 @@ function setupProject(createTempDir: () => string, connectionString: string): Jo
   const testDir = createTempDir();
   writeProjectManifest(testDir);
   mkdirSync(join(testDir, 'migrations'), { recursive: true });
-  copyFileSync(
-    join(PRISMA7_FIXTURES, 'supported-verify/schema.prisma'),
-    join(testDir, 'schema.prisma'),
-  );
+  copyFileSync(join(PRISMA7_FIXTURES, 'supported/schema.prisma'), join(testDir, 'schema.prisma'));
   const config = readFileSync(join(JOURNEY_FIXTURES, 'prisma.config.prisma7.ts'), 'utf-8').replace(
     /\{\{DB_URL\}\}/g,
     () => connectionString,

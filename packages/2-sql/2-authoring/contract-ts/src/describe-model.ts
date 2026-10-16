@@ -56,7 +56,7 @@ export function describeModel(
   const domainFields: Record<string, ContractField> = {};
   const executionDefaults: ExecutionMutationDefault[] = [];
   for (const field of model.fields) {
-    const executionDefault = executionDefaultOf(model.modelName, field);
+    const executionDefault = executionDefaultOf(field);
     fieldToColumn[field.fieldName] = field.columnName;
     domainFields[field.fieldName] = buildDomainField(
       isValueObjectMember(field)
@@ -168,41 +168,8 @@ function describeFieldColumn(modelName: string, field: ModelField): ColumnDescri
   return describeColumn(field, site);
 }
 
-/** The phases a generated default fills the field on, refused alongside a default or on an optional field. */
-function executionDefaultOf(
-  modelName: string,
-  field: ModelField,
-): ModelField['executionDefaults'] | undefined {
-  const phases =
-    field.executionDefaults?.onCreate || field.executionDefaults?.onUpdate
-      ? field.executionDefaults
-      : undefined;
-  if (phases === undefined) return undefined;
-  if (field.default !== undefined) {
-    throw contractError(
-      'CONTRACT.DEFAULT_INVALID',
-      `Field "${modelName}.${field.fieldName}" cannot define both default and executionDefaults.`,
-      {
-        meta: {
-          modelName,
-          fieldName: field.fieldName,
-          reason: 'default-and-executionDefaults',
-        },
-      },
-    );
-  }
-  if (field.nullable) {
-    throw contractError(
-      'CONTRACT.DEFAULT_INVALID',
-      `Field "${modelName}.${field.fieldName}" is filled on write by a generated default (a preset such as temporal.createdAt() or an id generator), so it cannot be optional; remove .optional().`,
-      {
-        meta: {
-          modelName,
-          fieldName: field.fieldName,
-          reason: 'nullable-with-executionDefaults',
-        },
-      },
-    );
-  }
-  return phases;
+function executionDefaultOf(field: ModelField): ModelField['executionDefaults'] | undefined {
+  return field.executionDefaults?.onCreate || field.executionDefaults?.onUpdate
+    ? field.executionDefaults
+    : undefined;
 }

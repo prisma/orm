@@ -1,10 +1,7 @@
 /**
  * The end-to-end proof for the Prisma 7 contract source on Postgres: the SQL
  * Prisma 7.10.0 generated for the supported schema is applied unchanged, the
- * schema is interpreted, and strict `db verify` reports only the column default left
- * behind by the `@default(now())` removed beside `@updatedAt`. See
- * `fixtures/prisma7-source/supported-verify/README.md` for the three edits that
- * make the schema interpretable and the full schema's error case.
+ * schema is interpreted, and strict `db verify` reports no findings.
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -58,7 +55,7 @@ function load(schemaPath: string) {
 }
 
 async function interpretVerifiableSchema(): Promise<unknown> {
-  const loaded = await load(join(fixturesDir, 'supported-verify/schema.prisma'));
+  const loaded = await load(join(fixturesDir, 'supported/schema.prisma'));
   if (!loaded.ok) throw new Error(JSON.stringify(loaded.failure.diagnostics));
   return new PostgresContractSerializer().serializeContract(loaded.value as Contract<SqlStorage>);
 }
@@ -70,16 +67,15 @@ describe('Prisma 7 supported schema against the database Prisma 7 built', () => 
     await withClient(getConnectionString(), (client) => client.query(migrationSql));
   }, timeouts.spinUpPpgDev);
 
-  it('verifies strictly with only the removed column default as an extra', async () => {
+  it('verifies strictly with no findings', async () => {
     const serialized = await interpretVerifiableSchema();
     const lenient = await runSchemaVerify(getConnectionString(), serialized);
     expect(lenient.schema.issues).toEqual([]);
     expect(lenient.ok).toBe(true);
 
     const strict = await runSchemaVerify(getConnectionString(), serialized, { strict: true });
-    expect(strict.schema.issues.map((issue) => issue.path).sort()).toEqual([
-      ['database', 'public', 'Timestamps', 'column:updatedAtNow', 'default'],
-    ]);
+    expect(strict.schema.issues).toEqual([]);
+    expect(strict.ok).toBe(true);
   });
 
   it('reports a Decimal default that lost digits', async () => {
@@ -116,16 +112,5 @@ describe('Prisma 7 supported schema against the database Prisma 7 built', () => 
     } finally {
       await withClient(getConnectionString(), (client) => client.query('RESET TIME ZONE'));
     }
-  });
-
-  it('rejects an optional generated field and @updatedAt with @default in the full supported schema', async () => {
-    const loaded = await load(join(fixturesDir, 'supported/schema.prisma'));
-    expect(loaded.ok).toBe(false);
-    if (loaded.ok) return;
-    expect(loaded.failure.diagnostics.map((d) => [d.code, d.span?.start.line]).sort()).toEqual([
-      ['PSL.PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED', 115],
-      ['PSL.PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED', 96],
-      ['PSL.PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED', 97],
-    ]);
   });
 });

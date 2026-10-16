@@ -18,6 +18,7 @@ import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
+import { extensions as slugidExtensions } from '../authoring/parity/default-pack-slugid/packs';
 import { trackedContractCandidateFiles } from '../utils/tracked-contract-files';
 import {
   composePostgresStack,
@@ -30,8 +31,10 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../..');
 
 interface ExtensionPack {
   readonly control: ControlExtensionDescriptor<'sql', 'postgres'>;
-  readonly packRef: ExtensionPackRef<'sql', string>;
+  readonly packRef?: ExtensionPackRef<'sql', string>;
 }
+
+const [slugidDefaultsPack] = slugidExtensions;
 
 const extensionPacks: ReadonlyMap<string, ExtensionPack> = new Map<string, ExtensionPack>([
   ['arktype-json', { control: arktypeJsonControl, packRef: arktypeJsonPack }],
@@ -39,6 +42,7 @@ const extensionPacks: ReadonlyMap<string, ExtensionPack> = new Map<string, Exten
   ['pgvector', { control: pgvectorControl, packRef: pgvectorPack }],
   ['postgis', { control: postgisControl, packRef: postgisPack }],
   ['supabase', { control: supabasePack, packRef: supabasePack }],
+  ['slugid-defaults', { control: slugidDefaultsPack }],
 ]);
 
 /**
@@ -47,12 +51,7 @@ const extensionPacks: ReadonlyMap<string, ExtensionPack> = new Map<string, Exten
  * is enough while none of them contributes a type, block or generator the
  * contract uses.
  */
-const packsOutsideThisPackage = new Set([
-  'audit',
-  'demo/engagement-stats',
-  'feature-flags',
-  'slugid-defaults',
-]);
+const packsOutsideThisPackage = new Set(['audit', 'demo/engagement-stats', 'feature-flags']);
 
 /**
  * Every tracked Postgres contract, except migration snapshots: a snapshot is a
@@ -106,7 +105,7 @@ function compositionFor(contract: Contract<SqlStorage>): Composition {
   });
   return {
     stack: composePostgresStack(packs.map((pack) => pack.control)),
-    packRefs: packs.map((pack) => pack.packRef),
+    packRefs: packs.flatMap((pack) => (pack.packRef === undefined ? [] : [pack.packRef])),
   };
 }
 
@@ -281,13 +280,6 @@ const expectedRefusals: ReadonlyMap<string, ExpectedRefusal> = new Map<string, E
   [
     'test/e2e/framework/test/fixtures/generated/contract.json',
     { reason: 'has no foreign key in storage', meta: { model: 'Comment', field: 'post' } },
-  ],
-  [
-    'test/integration/test/authoring/parity/default-pack-slugid/expected.contract.json',
-    {
-      reason: 'the printer knows no PSL default function',
-      meta: { coordinate: '"public"."user"."id"', onCreate: 'slugid', onUpdate: undefined },
-    },
   ],
   [
     'test/integration/test/contract-parity/fixtures/postgres/generated/contract.json',

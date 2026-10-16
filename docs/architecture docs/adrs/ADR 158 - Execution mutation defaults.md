@@ -97,7 +97,7 @@ When authoring a mutation:
 3. Else, allow **database default** to apply by omitting the column when `storage.tables.*.columns.*.default` exists.
 4. Else, if the column is non-nullable, fail mutation authoring with a missing required value error.
 
-If both an execution mutation default and a database default exist for the same column, the execution default shadows the database default. This is allowed, but authoring/validation should emit a diagnostic to reduce accidental ambiguity.
+If both an execution mutation default and a database default exist for the same column, the execution default shadows the database default on writes through the ORM, and a write outside the ORM gets the database default. This is allowed, and authoring emits no diagnostic: the user wrote both on purpose, as in Prisma 7's `@default(now()) @updatedAt` ([`explicit-opt-in-over-diagnostics.mdc`](../../../.agents/rules/explicit-opt-in-over-diagnostics.mdc)).
 
 ## Hashing and marker verification
 

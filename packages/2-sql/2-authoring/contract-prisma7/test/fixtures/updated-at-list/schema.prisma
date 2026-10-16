@@ -1,0 +1,8 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Post {
+  id      Int        @id
+  touched DateTime[] @updatedAt
+}

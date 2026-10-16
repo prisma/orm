@@ -805,6 +805,30 @@ export const temporalCodecPresetMirrors = {
       },
     },
   },
+  pgTimestampString: {
+    kind: 'fieldPreset',
+    args: [
+      TEMPORAL_MIRROR_PRECISION_ARG,
+      TEMPORAL_MIRROR_ON_CREATE_ARG,
+      TEMPORAL_MIRROR_ON_UPDATE_ARG,
+    ],
+    output: {
+      codecId: 'pg/timestamp-string@1',
+      typeParams: { precision: { kind: 'arg', index: 0 } },
+      executionDefaults: {
+        onCreate: {
+          kind: 'select',
+          index: 1,
+          cases: { now: { kind: 'generator', id: 'timestampStringNow' } },
+        },
+        onUpdate: {
+          kind: 'select',
+          index: 2,
+          cases: { now: { kind: 'generator', id: 'timestampStringNow' } },
+        },
+      },
+    },
+  },
   sqliteDatetime: {
     kind: 'fieldPreset',
     args: [TEMPORAL_MIRROR_ON_CREATE_ARG, TEMPORAL_MIRROR_ON_UPDATE_ARG],
@@ -868,3 +892,14 @@ export const temporalConvenienceMirrors = {
     },
   },
 } as const satisfies Record<string, Record<string, AuthoringFieldPresetDescriptor>>;
+
+/**
+ * Mirrors of two presets that are not temporal: the SQL family's `uuidString` and the Postgres target's `json`. This package cannot import either. family-sql's `authoring-field-presets.test.ts` asserts `uuidString` deep-equals the preset that ships; the Postgres target's `authoring-field-presets.test.ts` asserts `json` equals the same literal as `pgJson`, because the target's tests cannot import this file.
+ */
+export const nonTemporalPresetMirrors = {
+  uuidString: {
+    kind: 'fieldPreset',
+    output: { codecId: 'sql/char@1', typeParams: { length: 36 } },
+  },
+  pgJson: { kind: 'fieldPreset', output: { codecId: 'pg/jsonb@1' } },
+} as const;

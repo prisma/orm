@@ -1,123 +1,102 @@
 import type { ExecutionMutationDefault } from '@internal/contract/types';
+import type { SqlPslBuildContext } from '@internal/family-sql/control';
+import {
+  defaultFunctionCallFor,
+  type FieldPresetArgument,
+  fieldPresetCallFor,
+  type PslColumnTypeRef,
+} from '@internal/family-sql/psl-build';
 import type {
   PslAttributeArgument,
   PslFieldAttribute,
 } from '@internal/framework-components/psl-ast';
-import {
-  PG_TIMESTAMP_STRING_CODEC_ID,
-  PG_TIMESTAMP_TEMPORAL_CODEC_ID,
-  PG_TIMESTAMPTZ_DATE_CODEC_ID,
-  PG_TIMESTAMPTZ_STRING_CODEC_ID,
-  PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
-} from '../codec-ids';
-import { postgresNowGeneratorIdFor } from '../now-generators';
 import { buildAttribute, namedArg, positionalArg } from '../psl-build/psl-literals';
 import {
   refuseGeneratorOnUpdate,
+  refuseGeneratorsNoPresetWritesTogether,
   refuseGeneratorWithoutPslFunction,
-  refuseNowGeneratorPairedWithAnother,
+  refusePresetCallReadingBackDifferently,
+  refuseUnwritablePresetCall,
 } from './refusals';
-
-/**
- * The `temporal.*` field preset each codec with a "now" generator is authored through. The target
- * contributes the presets; `test/integration/test/psl-print/generated-values-roundtrip.integration.test.ts` writes and
- * reads back every one the stack contributes, so this table cannot drift from them.
- */
-const TEMPORAL_PRESET_NAMES: ReadonlyMap<string, string> = new Map([
-  [PG_TIMESTAMP_TEMPORAL_CODEC_ID, 'timestamp'],
-  [PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID, 'timestamptz'],
-  [PG_TIMESTAMP_STRING_CODEC_ID, 'timestampString'],
-  [PG_TIMESTAMPTZ_STRING_CODEC_ID, 'timestamptzString'],
-  [PG_TIMESTAMPTZ_DATE_CODEC_ID, 'timestamptzJsDate'],
-]);
-
-/**
- * The `@default(<fn>(…))` call each id generator is authored through. The Postgres adapter registers
- * the functions; `test/integration/test/psl-print/generated-values-roundtrip.integration.test.ts` writes and reads back
- * every call the stack registers, so this table cannot drift from them.
- */
-type GeneratorCall = (params: Record<string, unknown> | undefined) => string;
-
-const GENERATOR_CALLS: ReadonlyMap<string, GeneratorCall> = new Map<string, GeneratorCall>([
-  ['uuidv4', () => 'uuid()'],
-  ['uuidv7', () => 'uuid(7)'],
-  ['cuid2', () => 'cuid(2)'],
-  ['ulid', () => 'ulid()'],
-  [
-    'nanoid',
-    (params) => (typeof params?.['size'] === 'number' ? `nanoid(${params['size']})` : 'nanoid()'),
-  ],
-]);
-
-/** The phases a column's `temporal.*` preset must switch on. */
-export interface TemporalPresetPhases {
-  readonly presetName: string;
-  readonly onCreate: boolean;
-  readonly onUpdate: boolean;
-}
 
 export type BuiltExecutionDefault =
   | { readonly kind: 'attribute'; readonly attribute: PslFieldAttribute }
-  | { readonly kind: 'temporal'; readonly phases: TemporalPresetPhases };
+  | {
+      readonly kind: 'preset';
+      readonly path: readonly string[];
+      readonly args: readonly PslAttributeArgument[];
+    };
+
+function toPslArgument(argument: FieldPresetArgument): PslAttributeArgument {
+  return argument.kind === 'positional'
+    ? positionalArg(argument.value)
+    : namedArg(argument.name, argument.value);
+}
 
 /**
- * How one column's execution generators are written in PSL: an id generator as a `@default(<fn>())`
- * attribute, and a wall-clock-now generator as the `temporal.*` preset the column's codec is
- * authored through.
+ * How one column's execution generators are written in PSL: as the call of the field preset of the stack that writes the column's codec with them, or else a create-only generator as the `@default(<fn>(...))` call of the default function that declares `printArguments` for it. A column neither writes is refused, with the preset's reason when a preset writes its codec and generators.
  */
 export function buildExecutionDefault(input: {
   readonly executionDefault: ExecutionMutationDefault;
   readonly codecId: string;
+  readonly pslType: PslColumnTypeRef;
+  readonly list: boolean;
+  readonly typeParams: Readonly<Record<string, unknown>> | undefined;
   readonly coordinate: string;
+  readonly context: SqlPslBuildContext;
 }): BuiltExecutionDefault {
-  const { executionDefault, codecId, coordinate } = input;
+  const { executionDefault, codecId, pslType, list, typeParams, coordinate, context } = input;
   const onCreateId = executionDefault.onCreate?.id;
   const onUpdateId = executionDefault.onUpdate?.id;
-
-  const nowGeneratorId = postgresNowGeneratorIdFor(codecId);
-  const presetName = TEMPORAL_PRESET_NAMES.get(codecId);
-  if (nowGeneratorId !== undefined && presetName !== undefined) {
-    const onCreate = onCreateId === nowGeneratorId;
-    const onUpdate = onUpdateId === nowGeneratorId;
-    if (onCreate || onUpdate) {
-      if ((onCreateId !== undefined && !onCreate) || (onUpdateId !== undefined && !onUpdate)) {
-        refuseNowGeneratorPairedWithAnother({
-          coordinate,
-          onCreate: onCreateId,
-          onUpdate: onUpdateId,
-          other: onCreate ? onUpdateId : onCreateId,
-        });
-      }
-      return { kind: 'temporal', phases: { presetName, onCreate, onUpdate } };
-    }
-  }
-
   const phases = { coordinate, onCreate: onCreateId, onUpdate: onUpdateId };
-  if (onUpdateId !== undefined) refuseGeneratorOnUpdate(phases);
-  const call = onCreateId === undefined ? undefined : GENERATOR_CALLS.get(onCreateId);
-  if (call === undefined) refuseGeneratorWithoutPslFunction(phases);
-  return {
-    kind: 'attribute',
-    attribute: buildAttribute('field', 'default', [
-      positionalArg(call(executionDefault.onCreate?.params)),
-    ]),
-  };
-}
 
-/** The `temporal.<preset>(precision?, onCreate: now, onUpdate: now)` argument list. */
-export function temporalPresetArguments(input: {
-  readonly phases: TemporalPresetPhases;
-  readonly precision: unknown;
-}): readonly PslAttributeArgument[] {
-  const args: PslAttributeArgument[] = [];
-  if (typeof input.precision === 'number') {
-    args.push(positionalArg(String(input.precision)));
+  const choice = fieldPresetCallFor({
+    fieldPresetsByCodecAndGenerator: context.fieldPresetsByCodecAndGenerator,
+    column: { codecId, pslType, list, typeParams, generators: executionDefault },
+  });
+  if (choice.kind === 'call') {
+    return { kind: 'preset', path: choice.preset.path, args: choice.arguments.map(toPslArgument) };
   }
-  if (input.phases.onCreate) {
-    args.push(namedArg('onCreate', 'now'));
+
+  const call =
+    onCreateId === undefined || onUpdateId !== undefined
+      ? undefined
+      : defaultFunctionCallFor(
+          context.defaultFunctionPrintersByGenerator,
+          onCreateId,
+          executionDefault.onCreate?.params,
+        );
+  if (call !== undefined) {
+    return {
+      kind: 'attribute',
+      attribute: buildAttribute('field', 'default', [positionalArg(call)]),
+    };
   }
-  if (input.phases.onUpdate) {
-    args.push(namedArg('onUpdate', 'now'));
+
+  switch (choice.kind) {
+    case 'cannotWrite':
+      if (choice.reason.kind === 'phasesNotWrittenTogether') {
+        return refuseGeneratorsNoPresetWritesTogether(phases);
+      }
+      return refuseUnwritablePresetCall({
+        coordinate,
+        preset: choice.preset.path.join('.'),
+        reason: choice.reason,
+      });
+    case 'readsBackDifferently':
+      return refusePresetCallReadingBackDifferently({
+        coordinate,
+        preset: choice.preset.path.join('.'),
+        differences: choice.differences,
+      });
+    case 'noPreset':
+      if (onUpdateId !== undefined) return refuseGeneratorOnUpdate(phases);
+      return refuseGeneratorWithoutPslFunction({
+        ...phases,
+        registeredBy:
+          onCreateId !== undefined && context.componentIdsByGenerator.has(onCreateId)
+            ? { componentId: context.componentIdsByGenerator.get(onCreateId) }
+            : undefined,
+      });
   }
-  return args;
 }

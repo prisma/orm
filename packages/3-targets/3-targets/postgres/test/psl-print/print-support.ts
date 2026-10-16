@@ -6,6 +6,7 @@ import type {
   ExecutionMutationDefault,
 } from '@internal/contract/types';
 import { asNamespaceId } from '@internal/contract/types';
+import type { SqlPslBuildContext } from '@internal/family-sql/control';
 import type { PslAttribute, PslField, PslModel } from '@internal/framework-components/psl-ast';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
@@ -103,6 +104,7 @@ export function buildModels(input: {
   readonly execution?: {
     readonly mutations: { readonly defaults: readonly ExecutionMutationDefault[] };
   };
+  readonly context?: SqlPslBuildContext;
 }): readonly PslModel[] {
   const domainNamespace: ApplicationDomainNamespace = {
     models: Object.fromEntries(
@@ -133,7 +135,7 @@ export function buildModels(input: {
   const contract = new PostgresContractSerializer().deserializeContract(json);
   const ast = buildPostgresPslContract(
     blindCast<Contract<SqlStorage>, 'the Postgres serializer yields a SQL contract'>(contract),
-    testBuildContext(),
+    input.context ?? testBuildContext(),
   );
   return ast.namespaces.flatMap((namespace) => namespace.models);
 }

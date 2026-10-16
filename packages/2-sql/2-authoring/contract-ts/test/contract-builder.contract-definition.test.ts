@@ -440,86 +440,63 @@ describe('shared contract definition lowering', () => {
     ]);
   });
 
-  it('rejects generated fields that also declare storage defaults', () => {
-    expect(() =>
-      buildSqlContractFromDefinition(
-        {
-          warnings: undefined,
-          target: postgresTargetPack,
-          createNamespace: createTestSqlNamespace,
-          models: [
-            {
-              modelName: 'User',
-              tableName: 'app_user',
-              fields: [
-                {
-                  fieldName: 'id',
-                  columnName: 'id',
-                  descriptor: {
-                    codecId: 'pg/text@1',
-                  },
-                  nullable: false,
-                  many: false,
-                  default: {
-                    kind: 'function',
-                    expression: 'gen_random_uuid()',
-                  },
-                  executionDefaults: {
-                    onCreate: {
-                      kind: 'generator',
-                      id: 'uuidv4',
-                    },
-                  },
-                },
-              ],
-            },
-          ],
-        },
-        testTypeLookups.codecLookup,
-        testTypeLookups.dataTypeLookup,
-      ),
-    ).toThrow('Field "User.id" cannot define both default and executionDefaults.');
-  });
+  const buildGeneratedTokenField = (field: {
+    readonly nullable: boolean;
+    readonly withDefault: boolean;
+  }) =>
+    buildSqlContractFromDefinition(
+      {
+        warnings: undefined,
+        target: postgresTargetPack,
+        createNamespace: createTestSqlNamespace,
+        models: [
+          {
+            modelName: 'User',
+            tableName: 'app_user',
+            fields: [
+              {
+                fieldName: 'id',
+                columnName: 'id',
+                descriptor: { codecId: 'pg/int4@1' },
+                nullable: false,
+                many: false,
+              },
+              {
+                fieldName: 'token',
+                columnName: 'token',
+                descriptor: { codecId: 'pg/text@1' },
+                nullable: field.nullable,
+                many: false,
+                ...(field.withDefault
+                  ? { default: { kind: 'function', expression: 'gen_random_uuid()' } as const }
+                  : {}),
+                executionDefaults: { onCreate: { kind: 'generator', id: 'uuidv4' } },
+              },
+            ],
+            id: { columns: ['id'] },
+          },
+        ],
+      },
+      testTypeLookups.codecLookup,
+      testTypeLookups.dataTypeLookup,
+    );
 
-  it('default-and-executionDefaults rejection carries CONTRACT.DEFAULT_INVALID', () => {
-    expect(() =>
-      buildSqlContractFromDefinition(
-        {
-          warnings: undefined,
-          target: postgresTargetPack,
-          createNamespace: createTestSqlNamespace,
-          models: [
-            {
-              modelName: 'User',
-              tableName: 'app_user',
-              fields: [
-                {
-                  fieldName: 'id',
-                  columnName: 'id',
-                  descriptor: {
-                    codecId: 'pg/text@1',
-                  },
-                  nullable: false,
-                  many: false,
-                  default: {
-                    kind: 'function',
-                    expression: 'gen_random_uuid()',
-                  },
-                  executionDefaults: {
-                    onCreate: {
-                      kind: 'generator',
-                      id: 'uuidv4',
-                    },
-                  },
-                },
-              ],
-            },
-          ],
-        },
-        testTypeLookups.codecLookup,
-        testTypeLookups.dataTypeLookup,
-      ),
-    ).toThrow(expect.objectContaining({ code: 'CONTRACT.DEFAULT_INVALID' }));
+  it('keeps a storage default together with execution defaults', () => {
+    const contract = buildGeneratedTokenField({ nullable: false, withDefault: true });
+
+    expect(unboundTables(contract.storage)['app_user']?.columns['token']).toEqual({
+      codecId: 'pg/text@1',
+      dataType: 'pg/text',
+      nullable: false,
+      many: false,
+      default: { kind: 'function', expression: 'gen_random_uuid()' },
+    });
+    expect(contract.execution?.mutations.defaults).toEqual([
+      {
+        ref: { namespace: 'public', entry: 'app_user', field: 'token' },
+        onCreate: { kind: 'generator', id: 'uuidv4' },
+      },
+    ]);
   });
 
   it('rejects a foreign key whose referenced table disagrees with the target model mapping', () => {
@@ -593,43 +570,21 @@ describe('shared contract definition lowering', () => {
     expect(build).toThrow(expect.objectContaining({ code: 'CONTRACT.TABLE_MISMATCH' }));
   });
 
-  it('rejects generated fields that are still marked nullable', () => {
-    expect(() =>
-      buildSqlContractFromDefinition(
-        {
-          warnings: undefined,
-          target: postgresTargetPack,
-          createNamespace: createTestSqlNamespace,
-          models: [
-            {
-              modelName: 'User',
-              tableName: 'app_user',
-              fields: [
-                {
-                  fieldName: 'id',
-                  columnName: 'id',
-                  descriptor: {
-                    codecId: 'pg/text@1',
-                  },
-                  nullable: true,
-                  many: false,
-                  executionDefaults: {
-                    onCreate: {
-                      kind: 'generator',
-                      id: 'uuidv4',
-                    },
-                  },
-                },
-              ],
-            },
-          ],
-        },
-        testTypeLookups.codecLookup,
-        testTypeLookups.dataTypeLookup,
-      ),
-    ).toThrow(
-      'Field "User.id" is filled on write by a generated default (a preset such as temporal.createdAt() or an id generator), so it cannot be optional; remove .optional().',
-    );
+  it('keeps execution defaults on a nullable field', () => {
+    const contract = buildGeneratedTokenField({ nullable: true, withDefault: false });
+
+    expect(unboundTables(contract.storage)['app_user']?.columns['token']).toEqual({
+      codecId: 'pg/text@1',
+      dataType: 'pg/text',
+      nullable: true,
+      many: false,
+    });
+    expect(contract.execution?.mutations.defaults).toEqual([
+      {
+        ref: { namespace: 'public', entry: 'app_user', field: 'token' },
+        onCreate: { kind: 'generator', id: 'uuidv4' },
+      },
+    ]);
   });
 
   it('rejects nullable identity fields', () => {

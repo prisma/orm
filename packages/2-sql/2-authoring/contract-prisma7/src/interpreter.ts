@@ -42,7 +42,7 @@ import type {
   SourceFile,
 } from '@internal/psl-parser/syntax';
 import { dottedPathsIn, printSyntax, StringLiteralExprAst } from '@internal/psl-parser/syntax';
-import { sqlDataTypeOfCodec, unquotedSqlBaseNameOfCodec } from '@internal/sql-contract/data-type';
+import { sqlDataTypeOfCodec } from '@internal/sql-contract/data-type';
 import {
   declaredBackingObjectName,
   declaredIndexesServeForeignKey,
@@ -64,6 +64,7 @@ import {
 } from '@internal/sql-contract-ts/contract-builder';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { basename } from 'pathe';
 import {
@@ -71,7 +72,7 @@ import {
   prisma7PrimaryKeyName,
   statedConstraintName,
 } from './constraint-names';
-import { givesColumnDefault, lowerPrisma7Default } from './defaults';
+import { lowerPrisma7Default } from './defaults';
 import { ignoredFieldInPrimaryKey, prisma7Diagnostic } from './diagnostics';
 import { type IndexAttribute, indexNode, parseIndexAttribute } from './indexes';
 import { prisma7NativeTypeMapping, prisma7ScalarMapping } from './native-types';
@@ -154,13 +155,6 @@ interface ModelBuild {
 }
 
 type NamespaceEntities = Map<string, Record<string, Record<string, unknown>>>;
-
-function attributeText(attribute: ResolvedAttribute): string {
-  const args = attribute.args.map((arg) =>
-    arg.kind === 'named' ? `${arg.name}: ${arg.value}` : arg.value,
-  );
-  return args.length === 0 ? `@${attribute.name}` : `@${attribute.name}(${args.join(', ')})`;
-}
 
 function stringArgument(attribute: ResolvedAttribute): string | undefined {
   const argument =
@@ -1061,6 +1055,29 @@ function readField(args: ReadFieldArgs): void {
     return;
   }
 
+  if (updatedAt !== undefined && field.typeName !== 'DateTime') {
+    diagnostics.push(
+      prisma7Diagnostic(
+        'PSL.PRISMA7_UPDATED_AT_FIELD_INVALID',
+        `${label} has type "${field.typeName}", but @updatedAt is only allowed on a DateTime field. Prisma 7 refuses this schema too: "Fields that are marked with @updatedAt must be of type DateTime." Remove @updatedAt, or change the field's type to DateTime.`,
+        sourceId,
+        updatedAt.span,
+      ),
+    );
+    return;
+  }
+  if (updatedAt !== undefined && field.list) {
+    diagnostics.push(
+      prisma7Diagnostic(
+        'PSL.PRISMA7_UPDATED_AT_FIELD_INVALID',
+        `${label} is a list, but @updatedAt is not allowed on a list field. Prisma 7 refuses this schema too: "Fields that are marked with @updatedAt cannot be lists." Remove @updatedAt, or make the field a single DateTime.`,
+        sourceId,
+        updatedAt.span,
+      ),
+    );
+    return;
+  }
+
   const enumDeclaration = args.enums.get(field.typeName);
   let call: ResolvedTypeConstructorCall;
   if (enumDeclaration !== undefined) {
@@ -1150,40 +1167,22 @@ function readField(args: ReadFieldArgs): void {
     return;
   }
   const typeLookups = { codecLookup: input.codecLookup, dataTypeLookup: input.dataTypes.lookup };
-  const columnTypeName = unquotedSqlBaseNameOfCodec(
-    resolved.descriptor.codecId,
-    resolved.descriptor.typeParams,
-    typeLookups,
-  );
-  const updatedAtGeneratorId =
+  const updatedAtGenerator =
     updatedAt === undefined || ignored
       ? undefined
-      : binding.updatedAtGeneratorId(resolved.descriptor.codecId);
-  if (updatedAt !== undefined && !ignored && updatedAtGeneratorId === undefined) {
-    const withoutUpdatedAt =
-      defaultAttribute !== undefined && givesColumnDefault(defaultAttribute)
-        ? `. Its ${attributeText(defaultAttribute)} still sets the value on create, and neither client changes it on update.`
-        : field.optional
-          ? ', but neither client then fills the value, so it stays empty unless a client writes it, and updates leave it unchanged.'
-          : ', but neither client then fills the value, so both require it on create and leave it unchanged on update.';
+      : binding.updatedAtGenerator(resolved.descriptor);
+  if (updatedAt !== undefined && !ignored && updatedAtGenerator === undefined) {
+    if (nativeType === undefined) {
+      throw new InternalError(
+        `The Prisma 7 target binding has no "now" generator for codec "${resolved.descriptor.codecId}", which the DateTime scalar maps to.`,
+      );
+    }
     diagnostics.push(
       prisma7Diagnostic(
-        'PSL.PRISMA7_UPDATED_AT_TYPE_UNSUPPORTED',
-        `${label}: @updatedAt is not supported on this column, because Prisma 8 has no generator for column type "${columnTypeName}" yet. Remove @updatedAt: Prisma 7's next migration is empty${withoutUpdatedAt}`,
+        'PSL.PRISMA7_UPDATED_AT_FIELD_INVALID',
+        `${label} has @updatedAt, but "@db.${nativeType.name}" makes it a column that is not a date or time, so @updatedAt cannot set it. Prisma 7 refuses this schema too: "Native type ${nativeType.name} is not compatible with declared field type DateTime". Remove @updatedAt, or use a date or time native type such as @db.Timestamp.`,
         sourceId,
-        updatedAt.span,
-      ),
-    );
-    return;
-  }
-  if (updatedAt !== undefined && !ignored && defaultAttribute !== undefined) {
-    const written = attributeText(defaultAttribute);
-    diagnostics.push(
-      prisma7Diagnostic(
-        'PSL.PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED',
-        `${label} combines @updatedAt with ${written}, which Prisma 8 cannot express yet. Remove ${written}: @updatedAt still sets the value on create and on update, and Prisma 7's next migration removes the column default.`,
-        sourceId,
-        defaultAttribute.span,
+        nativeType.attribute.span,
       ),
     );
     return;
@@ -1225,29 +1224,11 @@ function readField(args: ReadFieldArgs): void {
     build.ignoredColumns.set(field.name, column);
     return;
   }
-  const updatedAtGenerator =
-    updatedAtGeneratorId === undefined
-      ? undefined
-      : { kind: 'generator' as const, id: updatedAtGeneratorId };
-  const generator = updatedAtGenerator ?? lowered?.onCreate;
-  const generatingAttribute = updatedAt ?? defaultAttribute;
-  if (generator !== undefined && generatingAttribute !== undefined && field.optional) {
-    const written = attributeText(generatingAttribute);
-    diagnostics.push(
-      prisma7Diagnostic(
-        'PSL.PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED',
-        `${label} is optional and its value comes from ${written}, which Prisma 8 cannot express on an optional field yet. Remove ${written} and keep the "?": the database does not change, and both clients then stop filling the value.`,
-        sourceId,
-        generatingAttribute.span,
-      ),
-    );
-    return;
-  }
   const executionDefaults =
     updatedAtGenerator !== undefined
       ? { onCreate: updatedAtGenerator, onUpdate: updatedAtGenerator }
-      : generator !== undefined
-        ? { onCreate: generator }
+      : lowered?.onCreate !== undefined
+        ? { onCreate: lowered.onCreate }
         : undefined;
   build.columns.set(field.name, {
     fieldName: field.name,

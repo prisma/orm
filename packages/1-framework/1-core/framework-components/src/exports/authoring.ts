@@ -26,6 +26,14 @@ export {
   type StoredEnumMember,
 } from '../shared/enum-stored-members';
 export {
+  assembleFieldPresetsByCodecAndGenerator,
+  type FieldPresetPhasePrintForm,
+  type FieldPresetPrintForm,
+  type FieldPresetsByCodecAndGenerator,
+  fieldPresetPrintForm,
+  type PrintableFieldPreset,
+} from '../shared/field-preset-print-form';
+export {
   fieldPresetSpellings,
   getAuthoringFieldPreset,
 } from '../shared/field-preset-resolution';
@@ -80,6 +88,7 @@ export {
   isAuthoringFieldPresetDescriptor,
   isAuthoringModelAttributeDescriptor,
   isAuthoringPslBlockDescriptor,
+  isAuthoringSelectRef,
   isAuthoringTypeConstructorDescriptor,
   isTagEntryKey,
   mergeAuthoringNamespaces,
@@ -113,6 +122,7 @@ export {
   temporalAuthoringPresets,
   temporalCodecPreset,
   temporalPhaseTemplate,
+  temporalPhaseTemplateWithParams,
 } from '../shared/temporal-presets';
 export type {
   CastRefusal,

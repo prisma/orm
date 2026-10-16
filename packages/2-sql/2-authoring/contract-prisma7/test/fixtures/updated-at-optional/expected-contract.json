@@ -1,0 +1,118 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Timestamps": {
+            "storage": {
+              "table": "Timestamps",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "updatedAtOpt": {
+                  "column": "updatedAtOpt"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "updatedAtOpt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamp-string@1",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "nullable": true,
+                "many": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "Timestamps": {
+      "namespace": "public",
+      "model": "Timestamps"
+    }
+  },
+  "execution": {
+    "executionHash": "db900cc51b4881b6d70e26bbca09f945f2de39bb36d6f47c18f72245245a71a8",
+    "mutations": {
+      "defaults": [
+        {
+          "ref": {
+            "namespace": "public",
+            "entry": "Timestamps",
+            "field": "updatedAtOpt"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "timestampStringNow"
+          },
+          "onUpdate": {
+            "kind": "generator",
+            "id": "timestampStringNow"
+          }
+        }
+      ]
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "9971b630bbcace6e16ebbdbf2faae2ec4401c53c511aa014b9b0138c4a276897",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "Timestamps": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "updatedAtOpt": {
+                  "dataType": "pg/timestamp",
+                  "codecId": "pg/timestamp-string@1",
+                  "nullable": true,
+                  "many": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

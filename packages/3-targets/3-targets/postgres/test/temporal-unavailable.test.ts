@@ -6,8 +6,7 @@ import {
   PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
 } from '../src/core/codec-ids';
 import { codecDescriptors } from '../src/core/codecs';
-import { instantNow } from '../src/core/instant-now-generator';
-import { plainDateTimeNow } from '../src/core/plain-date-time-now-generator';
+import { instantNow, plainDateTimeNow } from '../src/core/date-time-now-generators';
 import { postgresCodecDescriptorRegistry } from '../src/core/registry';
 import {
   pgDateTemporalColumn,

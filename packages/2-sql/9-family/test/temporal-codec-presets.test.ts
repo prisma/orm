@@ -144,6 +144,15 @@ describe('downstream mirrors track the factories', () => {
     );
   });
 
+  it('contract-psl mirrors the postgres timestampString preset', () => {
+    expect(temporalCodecPresetMirrors.pgTimestampString).toEqual(
+      temporalCodecPresetWithPrecision({
+        codecId: 'pg/timestamp-string@1',
+        generatorId: 'timestampStringNow',
+      }),
+    );
+  });
+
   it('contract-psl mirrors the sqlite datetime preset', () => {
     expect(temporalCodecPresetMirrors.sqliteDatetime).toEqual(
       temporalCodecPreset({ codecId: 'sqlite/datetime@1' }),

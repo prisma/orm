@@ -1,0 +1,33 @@
+// use prisma-8
+
+model Clock {
+  id                 Int    @id
+  label              String
+  date               temporal.date(onCreate: now, onUpdate: now)
+  dateString         temporal.dateString(onCreate: now, onUpdate: now)
+  time0              temporal.time(0, onCreate: now, onUpdate: now)
+  time3              temporal.time(3, onCreate: now, onUpdate: now)
+  time6              temporal.time(6, onCreate: now, onUpdate: now)
+  timeString0        temporal.timeString(0, onCreate: now, onUpdate: now)
+  timeString3        temporal.timeString(3, onCreate: now, onUpdate: now)
+  timeString6        temporal.timeString(6, onCreate: now, onUpdate: now)
+  timetz0            temporal.timetz(0, onCreate: now, onUpdate: now)
+  timetz3            temporal.timetz(3, onCreate: now, onUpdate: now)
+  timetz6            temporal.timetz(6, onCreate: now, onUpdate: now)
+  timestamp0         temporal.timestamp(0, onCreate: now, onUpdate: now)
+  timestamp3         temporal.timestamp(3, onCreate: now, onUpdate: now)
+  timestamp6         temporal.timestamp(6, onCreate: now, onUpdate: now)
+  timestampString0   temporal.timestampString(0, onCreate: now, onUpdate: now)
+  timestampString3   temporal.timestampString(3, onCreate: now, onUpdate: now)
+  timestampString6   temporal.timestampString(6, onCreate: now, onUpdate: now)
+  timestamptz0       temporal.timestamptz(0, onCreate: now, onUpdate: now)
+  timestamptz3       temporal.timestamptz(3, onCreate: now, onUpdate: now)
+  timestamptz6       temporal.timestamptz(6, onCreate: now, onUpdate: now)
+  timestamptzString0 temporal.timestamptzString(0, onCreate: now, onUpdate: now)
+  timestamptzString3 temporal.timestamptzString(3, onCreate: now, onUpdate: now)
+  timestamptzString6 temporal.timestamptzString(6, onCreate: now, onUpdate: now)
+  timestamptzJsDate0 temporal.timestamptzJsDate(0, onCreate: now, onUpdate: now)
+  timestamptzJsDate3 temporal.timestamptzJsDate(3, onCreate: now, onUpdate: now)
+  timestamptzJsDate6 temporal.timestamptzJsDate(6, onCreate: now, onUpdate: now)
+  @@map("clock")
+}

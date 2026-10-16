@@ -147,7 +147,8 @@ export interface AuthoringExecutionDefaultsTemplate {
 }
 
 export interface AuthoringFieldPresetOutput extends AuthoringStorageTypeTemplate {
-  readonly nullable?: boolean;
+  /** Makes the column nullable without `?`. A preset cannot make a column not nullable: `?` always does. */
+  readonly nullable?: true;
   readonly default?: AuthoringColumnDefaultTemplate;
   readonly executionDefaults?: AuthoringExecutionDefaultsTemplate;
   readonly id?: boolean;
@@ -677,7 +678,7 @@ export function isAuthoringArgRef(value: unknown): value is AuthoringArgRef {
   return true;
 }
 
-function isAuthoringSelectRef(value: unknown): value is AuthoringSelectRef {
+export function isAuthoringSelectRef(value: unknown): value is AuthoringSelectRef {
   if (!isAuthoringTemplateRecord(value) || value['kind'] !== 'select') {
     return false;
   }
@@ -1862,6 +1863,10 @@ function resolveExecutionMutationDefaultPhase(
       'CONTRACT.PACK_CONTRIBUTION_INVALID',
       `Authoring preset executionDefaults.${phase} did not resolve to a valid generator descriptor (kind: 'generator', id: string).`,
     );
+  }
+  if (value.params !== undefined && Object.keys(value.params).length === 0) {
+    const { params: _unfilled, ...generator } = value;
+    return generator;
   }
   return value;
 }

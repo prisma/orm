@@ -10,13 +10,9 @@ import { postgresFullTextMethods } from '../core/full-text-collection-method';
 import { decodePostgresListText } from '../core/list-decoder';
 import { postgresQueryOperations } from '../core/query-operations';
 
+export { postgresNowGenerators } from '../core/date-time-now-generators';
 export type { PostgresFullTextMethods } from '../core/full-text-collection-method';
-export { INSTANT_NOW_GENERATOR_ID, instantNow } from '../core/instant-now-generator';
 export { decodePostgresListText } from '../core/list-decoder';
-export {
-  PLAIN_DATE_TIME_NOW_GENERATOR_ID,
-  plainDateTimeNow,
-} from '../core/plain-date-time-now-generator';
 export { PostgresContractSerializer } from '../core/postgres-contract-serializer';
 export { PostgresContractView } from '../core/postgres-contract-view';
 

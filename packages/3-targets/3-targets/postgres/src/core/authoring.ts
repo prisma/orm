@@ -13,7 +13,10 @@ import type {
   AuthoringTypeNamespace,
   ParsedPslExtensionBlock,
 } from '@internal/framework-components/authoring';
-import { temporalAuthoringPresets } from '@internal/framework-components/authoring';
+import {
+  temporalAuthoringPresets,
+  temporalCodecPreset,
+} from '@internal/framework-components/authoring';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import type {
@@ -60,12 +63,17 @@ import { assertDefined, invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import {
+  PG_DATE_STRING_CODEC_ID,
+  PG_DATE_TEMPORAL_CODEC_ID,
   PG_ENUM_CODEC_ID,
+  PG_TIME_STRING_CODEC_ID,
+  PG_TIME_TEMPORAL_CODEC_ID,
   PG_TIMESTAMP_STRING_CODEC_ID,
   PG_TIMESTAMP_TEMPORAL_CODEC_ID,
   PG_TIMESTAMPTZ_DATE_CODEC_ID,
   PG_TIMESTAMPTZ_STRING_CODEC_ID,
   PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
+  PG_TIMETZ_CODEC_ID,
 } from './codec-ids';
 import { postgresError } from './errors';
 import {
@@ -75,7 +83,7 @@ import {
   fullTextIndexProblems,
 } from './full-text-index-definition';
 import { type FullTextFieldsInput, weightGroupsOf } from './full-text-weight-groups';
-import { postgresNowGeneratorIds } from './now-generators';
+import { postgresNowGeneratorIds, postgresNowGeneratorTakesPrecision } from './now-generators';
 import { postgresCodecTraitsOf } from './postgres-codec-traits';
 import { PostgresNativeEnum } from './postgres-native-enum';
 import { PostgresRlsEnablement, type PostgresRlsEnablementInput } from './postgres-rls-enablement';
@@ -917,6 +925,30 @@ export const postgresAuthoringFieldPresets = {
     timestamptzString: /* @__PURE__ */ temporalCodecPresetWithPrecision({
       codecId: PG_TIMESTAMPTZ_STRING_CODEC_ID,
       generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_STRING_CODEC_ID],
+    }),
+    date: /* @__PURE__ */ temporalCodecPreset({
+      codecId: PG_DATE_TEMPORAL_CODEC_ID,
+      generatorId: postgresNowGeneratorIds[PG_DATE_TEMPORAL_CODEC_ID],
+    }),
+    dateString: /* @__PURE__ */ temporalCodecPreset({
+      codecId: PG_DATE_STRING_CODEC_ID,
+      generatorId: postgresNowGeneratorIds[PG_DATE_STRING_CODEC_ID],
+    }),
+    time: /* @__PURE__ */ temporalCodecPresetWithPrecision({
+      codecId: PG_TIME_TEMPORAL_CODEC_ID,
+      generatorId: postgresNowGeneratorIds[PG_TIME_TEMPORAL_CODEC_ID],
+      nowTakesPrecision: postgresNowGeneratorTakesPrecision[PG_TIME_TEMPORAL_CODEC_ID],
+    }),
+    timeString: /* @__PURE__ */ temporalCodecPresetWithPrecision({
+      codecId: PG_TIME_STRING_CODEC_ID,
+      generatorId: postgresNowGeneratorIds[PG_TIME_STRING_CODEC_ID],
+      nowTakesPrecision: postgresNowGeneratorTakesPrecision[PG_TIME_STRING_CODEC_ID],
+    }),
+    /** Produces a string: no Temporal type holds a time of day with an offset. */
+    timetz: /* @__PURE__ */ temporalCodecPresetWithPrecision({
+      codecId: PG_TIMETZ_CODEC_ID,
+      generatorId: postgresNowGeneratorIds[PG_TIMETZ_CODEC_ID],
+      nowTakesPrecision: postgresNowGeneratorTakesPrecision[PG_TIMETZ_CODEC_ID],
     }),
   },
   uuidNative: {

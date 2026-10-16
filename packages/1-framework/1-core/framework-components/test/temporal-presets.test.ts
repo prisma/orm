@@ -14,6 +14,7 @@ import {
   temporalAuthoringPresets,
   temporalCodecPreset,
   temporalPhaseTemplate,
+  temporalPhaseTemplateWithParams,
   timestampNowControlDescriptor,
 } from '../src/shared/temporal-presets';
 
@@ -105,6 +106,16 @@ describe('temporalCodecPreset', () => {
       onUpdate: TIMESTAMP_NOW,
     });
   });
+
+  it('maps each phase argument to the supplied generator', () => {
+    expect(temporalCodecPreset({ codecId: 'test/date@1', generatorId: 'dateNow' }).output).toEqual({
+      codecId: 'test/date@1',
+      executionDefaults: {
+        onCreate: temporalPhaseTemplate(0, 'dateNow'),
+        onUpdate: temporalPhaseTemplate(1, 'dateNow'),
+      },
+    });
+  });
 });
 
 const temporal = temporalAuthoringPresets({ codecId: 'test/date@1' });
@@ -136,5 +147,35 @@ describe('fieldPresetSpellings', () => {
 
   it('lists nothing for a namespace that holds no preset at any depth', () => {
     expect(fieldPresetSpellings({ field: { ext: { empty: {} } } }, 'ext')).toEqual([]);
+  });
+});
+
+describe('temporalPhaseTemplateWithParams', () => {
+  const preset = {
+    kind: 'fieldPreset',
+    args: [
+      { name: 'precision', kind: 'number', optional: true, integer: true },
+      TEMPORAL_ON_CREATE_ARG,
+    ],
+    output: {
+      codecId: 'test/time@1',
+      executionDefaults: {
+        onCreate: temporalPhaseTemplateWithParams(1, 'timeNow', {
+          precision: { kind: 'arg', index: 0 },
+        }),
+      },
+    },
+  } as const;
+
+  it('gives the generator the params the arguments resolve to', () => {
+    expect(instantiateAuthoringFieldPreset(preset, [0, 'now']).executionDefaults).toEqual({
+      onCreate: { kind: 'generator', id: 'timeNow', params: { precision: 0 } },
+    });
+  });
+
+  it('leaves params out when no argument fills them', () => {
+    expect(instantiateAuthoringFieldPreset(preset, [undefined, 'now']).executionDefaults).toEqual({
+      onCreate: { kind: 'generator', id: 'timeNow' },
+    });
   });
 });

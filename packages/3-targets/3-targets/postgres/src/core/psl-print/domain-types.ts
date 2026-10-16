@@ -73,7 +73,7 @@ function buildMemberType(input: {
   refuseUnwritableFieldShape(field, coordinate);
   const { type } = field;
   if (type.kind === 'valueObject') {
-    return { typeName: type.name };
+    return { kind: 'valueObject', typeName: type.name };
   }
   refuseUnderivedMemberValueSet({
     field,
@@ -82,7 +82,7 @@ function buildMemberType(input: {
     domainEnums: input.domainEnums,
   });
   if (field.valueSet !== undefined) {
-    return { typeName: field.valueSet.entityName };
+    return { kind: 'enum', typeName: field.valueSet.entityName };
   }
   return buildColumnType({
     column: new StorageColumn({

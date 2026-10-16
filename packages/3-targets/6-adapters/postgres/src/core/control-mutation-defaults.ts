@@ -10,10 +10,7 @@ import { timestampNowControlDescriptor } from '@internal/framework-components/co
 import { builtinGeneratorRegistryMetadata } from '@internal/ids';
 import type { FuncCallSig } from '@internal/psl-parser';
 import { int, num, oneOf, optional } from '@internal/psl-parser';
-import {
-  instantNowControlDescriptor,
-  plainDateTimeNowControlDescriptor,
-} from '@internal/target-postgres/control';
+import { postgresNowGeneratorControlDescriptors } from '@internal/target-postgres/control';
 
 function executionGenerator(
   id: ExecutionMutationDefaultValue['id'],
@@ -79,6 +76,11 @@ function lowerNanoid(input: {
     : executionGenerator('nanoid');
 }
 
+function printNanoidArguments(params: Readonly<Record<string, unknown>> | undefined): string {
+  const size = params?.['size'];
+  return typeof size === 'number' ? String(size) : '';
+}
+
 const nowSig: FuncCallSig = {
   documentation: 'Uses the current database timestamp as the default value.',
 };
@@ -113,7 +115,9 @@ const nanoidSig: FuncCallSig = {
     },
   ],
 };
-const postgresDefaultFunctionRegistryEntries = [
+const postgresDefaultFunctionRegistryEntries: ReadonlyArray<
+  readonly [string, ControlMutationDefaultEntry]
+> = [
   [
     'autoincrement',
     {
@@ -125,15 +129,41 @@ const postgresDefaultFunctionRegistryEntries = [
   ['now', { signature: nowSig, lower: lowerNow, usageSignatures: ['now()'] }],
   [
     'uuid',
-    { signature: uuidSig, lower: lowerUuid, usageSignatures: ['uuid()', 'uuid(4)', 'uuid(7)'] },
+    {
+      signature: uuidSig,
+      lower: lowerUuid,
+      usageSignatures: ['uuid()', 'uuid(4)', 'uuid(7)'],
+      printArguments: { uuidv4: () => '', uuidv7: () => '7' },
+    },
   ],
-  ['cuid', { signature: cuidSig, lower: lowerCuid, usageSignatures: ['cuid(2)'] }],
-  ['ulid', { signature: ulidSig, lower: lowerUlid, usageSignatures: ['ulid()'] }],
+  [
+    'cuid',
+    {
+      signature: cuidSig,
+      lower: lowerCuid,
+      usageSignatures: ['cuid(2)'],
+      printArguments: { cuid2: () => '2' },
+    },
+  ],
+  [
+    'ulid',
+    {
+      signature: ulidSig,
+      lower: lowerUlid,
+      usageSignatures: ['ulid()'],
+      printArguments: { ulid: () => '' },
+    },
+  ],
   [
     'nanoid',
-    { signature: nanoidSig, lower: lowerNanoid, usageSignatures: ['nanoid()', 'nanoid(<2-255>)'] },
+    {
+      signature: nanoidSig,
+      lower: lowerNanoid,
+      usageSignatures: ['nanoid()', 'nanoid(<2-255>)'],
+      printArguments: { nanoid: printNanoidArguments },
+    },
   ],
-] satisfies ReadonlyArray<readonly [string, ControlMutationDefaultEntry]>;
+];
 
 export function createPostgresDefaultFunctionRegistry(): ReadonlyMap<
   string,
@@ -151,7 +181,6 @@ export function createPostgresMutationDefaultGeneratorDescriptors(): readonly Mu
       }),
     ),
     timestampNowControlDescriptor(),
-    instantNowControlDescriptor(),
-    plainDateTimeNowControlDescriptor(),
+    ...postgresNowGeneratorControlDescriptors(),
   ];
 }

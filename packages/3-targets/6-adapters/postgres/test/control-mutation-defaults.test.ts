@@ -1,3 +1,4 @@
+import { assembleControlMutationDefaults } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import {
   createPostgresDefaultFunctionRegistry,
@@ -143,6 +144,56 @@ describe('createPostgresDefaultFunctionRegistry', () => {
       ok: true,
       value: { kind: 'execution', generated: { kind: 'generator', id: 'uuidv4' } },
     });
+  });
+
+  it('prints the PSL call arguments of each generator a function produces', () => {
+    const printed = Object.fromEntries(
+      [...registry].map(([name, entry]) => [
+        name,
+        Object.fromEntries(
+          Object.entries(entry.printArguments ?? {}).map(([id, print]) => [id, print(undefined)]),
+        ),
+      ]),
+    );
+    expect(printed).toEqual({
+      autoincrement: {},
+      now: {},
+      uuid: { uuidv4: '', uuidv7: '7' },
+      cuid: { cuid2: '2' },
+      ulid: { ulid: '' },
+      nanoid: { nanoid: '' },
+    });
+  });
+
+  it('prints a nanoid size so that it lowers back to the same params', () => {
+    const entry = registry.get('nanoid')!;
+    expect(entry.printArguments?.['nanoid']?.({ size: 21 })).toBe('21');
+    expect(
+      entry.lower({ call: makeCall('nanoid', { size: 21 }), context: stubContext }),
+    ).toMatchObject({
+      ok: true,
+      value: { kind: 'execution', generated: { id: 'nanoid', params: { size: 21 } } },
+    });
+  });
+
+  it('assembles with a registered generator for every printed call', () => {
+    const assembled = assembleControlMutationDefaults([
+      {
+        id: 'postgres',
+        controlMutationDefaults: {
+          defaultFunctionRegistry: registry,
+          generatorDescriptors: createPostgresMutationDefaultGeneratorDescriptors(),
+        },
+      },
+    ]);
+    expect(
+      Object.fromEntries(
+        [...assembled.defaultFunctionPrintersByGenerator].map(([id, call]) => [
+          id,
+          call.functionName,
+        ]),
+      ),
+    ).toEqual({ uuidv4: 'uuid', uuidv7: 'uuid', cuid2: 'cuid', ulid: 'ulid', nanoid: 'nanoid' });
   });
 });
 

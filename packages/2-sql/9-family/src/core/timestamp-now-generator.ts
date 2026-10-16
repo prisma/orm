@@ -6,6 +6,7 @@ import {
   TIMESTAMP_NOW_GENERATOR_ID,
   temporalAuthoringPresets,
   temporalPhaseTemplate,
+  temporalPhaseTemplateWithParams,
 } from '@internal/framework-components/authoring';
 
 export function temporalStringAuthoringPresets<
@@ -26,6 +27,8 @@ const TEMPORAL_PRECISION_ARG = {
   integer: true,
 } as const;
 
+const PRECISION_PARAMS = { precision: { kind: 'arg', index: 0 } } as const;
+
 /**
  * Builds a `temporal.<codec>` field preset for a codec that takes a precision
  * parameter (`pg/timestamp-temporal@1`, `pg/timestamptz-temporal@1`). Arguments change field
@@ -33,14 +36,24 @@ const TEMPORAL_PRECISION_ARG = {
  *
  * All three arguments are optional: omitting `precision` omits `typeParams`
  * entirely, and omitting a phase omits that phase (both omitted omits
- * `executionDefaults`).
+ * `executionDefaults`). With `nowTakesPrecision`, the generator a `now` selects
+ * also receives the precision as its `precision` param, so it can write a value
+ * the column stores without rounding.
  */
 /* @__NO_SIDE_EFFECTS__ */
 export function temporalCodecPresetWithPrecision<
   const CodecId extends string,
   const GeneratorId extends string = typeof TIMESTAMP_NOW_GENERATOR_ID,
->(input: { readonly codecId: CodecId; readonly generatorId?: GeneratorId }) {
+>(input: {
+  readonly codecId: CodecId;
+  readonly generatorId?: GeneratorId;
+  readonly nowTakesPrecision?: true;
+}) {
   const generatorId = input.generatorId ?? TIMESTAMP_NOW_GENERATOR_ID;
+  const phase = <const Index extends number>(index: Index) =>
+    input.nowTakesPrecision === true
+      ? temporalPhaseTemplateWithParams(index, generatorId, PRECISION_PARAMS)
+      : temporalPhaseTemplate(index, generatorId);
   return {
     kind: 'fieldPreset',
     args: [TEMPORAL_PRECISION_ARG, TEMPORAL_ON_CREATE_ARG, TEMPORAL_ON_UPDATE_ARG],
@@ -48,8 +61,8 @@ export function temporalCodecPresetWithPrecision<
       codecId: input.codecId,
       typeParams: { precision: { kind: 'arg', index: 0 } },
       executionDefaults: {
-        onCreate: temporalPhaseTemplate(1, generatorId),
-        onUpdate: temporalPhaseTemplate(2, generatorId),
+        onCreate: phase(1),
+        onUpdate: phase(2),
       },
     },
   } as const satisfies AuthoringFieldPresetDescriptor;

@@ -4,6 +4,7 @@ import {
   builtinControlMutationDefaults,
   interpretPostgresSchema,
 } from './interpreter-defaults-support';
+import { unboundTables } from './unbound-tables';
 
 describe('interpretPslDocumentToSqlContract default function lowering', () => {
   it('lowers supported default functions into execution and storage contract shapes', () => {
@@ -278,7 +279,7 @@ model UuidNativeBad {
     ]);
   });
 
-  it('returns diagnostics for optional fields with execution defaults', () => {
+  it('keeps an execution default on an optional field', () => {
     const result = interpretPostgresSchema(
       `model OptionalDefaults {
   id Int @id
@@ -289,20 +290,19 @@ model UuidNativeBad {
       },
     );
 
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
 
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'PSL_INVALID_DEFAULT_FUNCTION_ARGUMENT',
-          sourceId: 'schema.prisma',
-          message: expect.stringContaining(
-            'cannot be optional when using execution default "nanoid"',
-          ),
-        }),
-      ]),
-    );
+    expect(
+      unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))['OptionalDefaults']
+        ?.columns['token'],
+    ).toEqual({ many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true });
+    expect(result.value.execution?.mutations.defaults).toEqual([
+      {
+        ref: { namespace: 'public', entry: 'OptionalDefaults', field: 'token' },
+        onCreate: { kind: 'generator', id: 'nanoid' },
+      },
+    ]);
   });
 
   it('preserves raw sql defaults for timestamp columns', () => {

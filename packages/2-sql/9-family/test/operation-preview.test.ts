@@ -116,6 +116,13 @@ describe('SqlControlFamilyInstance OperationPreviewCapable', () => {
       dataTypeLookup: createDataTypeLookup([]),
       declaredDataTypes: [],
       codecDescriptors: [],
+      controlMutationDefaults: {
+        defaultFunctionRegistry: new Map(),
+        generatorDescriptors: [],
+        defaultFunctionPrintersByGenerator: new Map(),
+        componentIdsByGenerator: new Map(),
+      },
+      fieldPresetsByCodecAndGenerator: new Map(),
       // biome-ignore lint/suspicious/noExplicitAny: minimal stub
     } as any;
     return sqlFamilyDescriptor.create(stack);

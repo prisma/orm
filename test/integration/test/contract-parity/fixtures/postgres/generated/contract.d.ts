@@ -26,7 +26,7 @@ import type {
 export type StorageHash =
   StorageHashBase<'7b726ff2c750b13ac5dd2966b8a7c42317a368c40faae5b2231611ac56a0dc59'>;
 export type ExecutionHash =
-  ExecutionHashBase<'8dc724abf2c39e55e3fed5fc39649c060b472d1c8da3ec479a76352456916a5a'>;
+  ExecutionHashBase<'4c8b52aa880ed951466684d8a101a1fc3992151da635fe969fe2926dbd8964eb'>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
 
@@ -2203,8 +2203,8 @@ type ContractBase = Omit<
           };
         },
         {
-          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
-          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly onCreate: { readonly id: 'timestamptzStringNow'; readonly kind: 'generator' };
+          readonly onUpdate: { readonly id: 'timestamptzStringNow'; readonly kind: 'generator' };
           readonly ref: {
             readonly entry: 'users';
             readonly field: 'timestamptzString';

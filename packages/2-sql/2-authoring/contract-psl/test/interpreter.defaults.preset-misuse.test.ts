@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import {
   builtinControlMutationDefaults,
   interpretPostgresSchema,
 } from './interpreter-defaults-support';
+import { unboundTables } from './unbound-tables';
 
-// Field-preset misuse cases. The preset is a complete field declaration —
-// optional (?), list ([]), @default(...), @id, @updatedAt all contradict
-// that and produce hard errors per spec FR7.
 describe('field-preset misuse', () => {
+  const exampleRef = (entry: string) => ({ namespace: 'public', entry, field: 'example' });
   const syntheticPresetContributions = {
     field: {
       temporal: {
@@ -17,6 +17,32 @@ describe('field-preset misuse', () => {
             codecId: 'pg/text@1',
             default: { kind: 'function', expression: "'synthetic-default'" },
           },
+        },
+        generatedField: {
+          kind: 'fieldPreset',
+          output: {
+            codecId: 'pg/text@1',
+            executionDefaults: { onCreate: { kind: 'generator', id: 'uuidv4' } },
+          },
+        },
+        updateOnlyField: {
+          kind: 'fieldPreset',
+          output: {
+            codecId: 'pg/text@1',
+            executionDefaults: { onUpdate: { kind: 'generator', id: 'uuidv4' } },
+          },
+        },
+        idField: {
+          kind: 'fieldPreset',
+          output: {
+            codecId: 'pg/text@1',
+            executionDefaults: { onCreate: { kind: 'generator', id: 'uuidv4' } },
+            id: true,
+          },
+        },
+        nullField: {
+          kind: 'fieldPreset',
+          output: { codecId: 'pg/text@1', nullable: true },
         },
       },
     },
@@ -45,11 +71,11 @@ example temporal.exampleField
     ]);
   });
 
-  it('rejects optional field-preset call with PSL_PRESET_NOT_OPTIONAL', () => {
+  it('rejects ? on a preset that contributes id semantics with PSL_PRESET_NOT_OPTIONAL', () => {
     const result = interpretPostgresSchema(
       `model Bad {
 id Int @id
-example temporal.exampleField()?
+example temporal.idField()?
 }`,
       {
         controlMutationDefaults: builtinControlMutationDefaults,
@@ -59,21 +85,64 @@ example temporal.exampleField()?
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'PSL_PRESET_NOT_OPTIONAL',
-          sourceId: 'schema.prisma',
-        }),
-      ]),
-    );
+    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      {
+        code: 'PSL_PRESET_NOT_OPTIONAL',
+        message: `Field "Bad.example" is a primary key through its field preset, so it cannot be optional; primary key columns must be NOT NULL. Remove "?" or use a preset that does not make the field a primary key.`,
+      },
+    ]);
   });
 
-  it('rejects field-preset call combined with @default(...) with PSL_PRESET_AND_DEFAULT_CONFLICT', () => {
+  it('keeps the column of a nullable preset nullable with ?', () => {
+    const result = interpretPostgresSchema(
+      `model Good {
+id Int @id
+example temporal.nullField()?
+}`,
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+        authoringContributions: syntheticPresetContributions,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(
+      unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))['Good']?.columns[
+        'example'
+      ],
+    ).toEqual({ many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true });
+  });
+
+  it('accepts ? on a preset that does not fix the id', () => {
+    const result = interpretPostgresSchema(
+      `model Good {
+id Int @id
+example temporal.generatedField()?
+}`,
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+        authoringContributions: syntheticPresetContributions,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(
+      unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))['Good']?.columns[
+        'example'
+      ],
+    ).toEqual({ many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: true });
+    expect(result.value.execution?.mutations.defaults).toEqual([
+      { ref: exampleRef('Good'), onCreate: { kind: 'generator', id: 'uuidv4' } },
+    ]);
+  });
+
+  it('rejects @default(...) on a preset that sets its own database default', () => {
     const result = interpretPostgresSchema(
       `model Bad {
 id Int @id
-example temporal.exampleField() @default(now())
+example temporal.exampleField() @default("other")
 }`,
       {
         controlMutationDefaults: builtinControlMutationDefaults,
@@ -83,14 +152,89 @@ example temporal.exampleField() @default(now())
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'PSL_PRESET_AND_DEFAULT_CONFLICT',
-          sourceId: 'schema.prisma',
-        }),
-      ]),
+    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      {
+        code: 'PSL_PRESET_AND_DEFAULT_CONFLICT',
+        message:
+          'Field "Bad.example" uses a field-preset call that already sets a database default, so it cannot also declare @default(...). Remove @default(...) or use a preset without a default.',
+      },
+    ]);
+  });
+
+  it('rejects a generated @default(...) on a preset that generates a value on create', () => {
+    const result = interpretPostgresSchema(
+      `model Bad {
+id Int @id
+example temporal.generatedField() @default(uuid())
+}`,
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+        authoringContributions: syntheticPresetContributions,
+      },
     );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      {
+        code: 'PSL_PRESET_AND_DEFAULT_CONFLICT',
+        message:
+          'Field "Bad.example" uses a field-preset call that already generates a value on create, so @default(...) cannot generate one too. Remove @default(...), write a database default in @default(...), or use a preset without an onCreate generator.',
+      },
+    ]);
+  });
+
+  it('keeps a database @default(...) together with the preset generators', () => {
+    const result = interpretPostgresSchema(
+      `model Good {
+id Int @id
+example temporal.generatedField() @default("fallback")
+}`,
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+        authoringContributions: syntheticPresetContributions,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(
+      unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))['Good']?.columns[
+        'example'
+      ],
+    ).toEqual({
+      many: false,
+      dataType: 'pg/text',
+      codecId: 'pg/text@1',
+      nullable: false,
+      default: { kind: 'literal', value: 'fallback' },
+    });
+    expect(result.value.execution?.mutations.defaults).toEqual([
+      { ref: exampleRef('Good'), onCreate: { kind: 'generator', id: 'uuidv4' } },
+    ]);
+  });
+
+  it('keeps a generated @default(...) together with a preset that only generates on update', () => {
+    const result = interpretPostgresSchema(
+      `model Good {
+id Int @id
+example temporal.updateOnlyField() @default(uuid())
+}`,
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+        authoringContributions: syntheticPresetContributions,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.execution?.mutations.defaults).toEqual([
+      {
+        ref: exampleRef('Good'),
+        onCreate: { kind: 'generator', id: 'uuidv4' },
+        onUpdate: { kind: 'generator', id: 'uuidv4' },
+      },
+    ]);
   });
 
   it('rejects field-preset call combined with @id when preset does not contribute id', () => {

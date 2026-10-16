@@ -1,9 +1,13 @@
 import type { Contract } from '@internal/contract/types';
-import type { DataTypeSupport } from '@internal/framework-components/authoring';
+import type {
+  DataTypeSupport,
+  FieldPresetsByCodecAndGenerator,
+} from '@internal/framework-components/authoring';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type {
   AssembledAuthoringContributions,
   ContractSerializer,
+  DefaultFunctionPrinter,
   DiffSubjectGranularity,
   MigratableTargetDescriptor,
   SchemaVerifier,
@@ -33,12 +37,18 @@ export interface SqlDescribedContractSpace {
 }
 
 /**
- * The parts of the composed stack a target builds a PSL document with. The PSL contract source reads the document with the same parts, so the target writes a column type as a type constructor the stack contributes, and a literal default through the data type of the column's codec, and both read back.
+ * The parts of the composed stack a target builds a PSL document with. The PSL contract source reads the document with the same parts, so the target writes a column type as a type constructor the stack contributes, a literal default through the data type of the column's codec, and a generated value as a default function or field preset the stack contributes, and all of them read back.
  */
 export interface SqlPslBuildContext {
-  readonly authoringContributions: Pick<AssembledAuthoringContributions, 'type'>;
+  readonly authoringContributions: Pick<AssembledAuthoringContributions, 'type' | 'field'>;
   readonly codecLookup: CodecLookupWithDescriptors;
   readonly dataTypes: DataTypeSupport;
+  /** For each generator id, the default function in the stack whose PSL call produces it. */
+  readonly defaultFunctionPrintersByGenerator: ReadonlyMap<string, DefaultFunctionPrinter>;
+  /** For each generator id the stack registers, the id of the component that registers it, when that component has one. */
+  readonly componentIdsByGenerator: ReadonlyMap<string, string | undefined>;
+  /** For each codec, the field preset in the stack that writes a column of it with each generator. */
+  readonly fieldPresetsByCodecAndGenerator: FieldPresetsByCodecAndGenerator;
 }
 
 export interface SqlControlTargetDescriptor<

@@ -1,3 +1,4 @@
+import type { ExecutionMutationDefaultValue } from '@internal/contract/types';
 import type { TargetPackRef } from '@internal/framework-components/components';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import type { Prisma7TypeMap } from './native-types';
@@ -53,8 +54,10 @@ export interface Prisma7TargetBinding {
     tableA: string,
     tableB: string,
   ) => readonly [string, string];
-  /** The "now" generator `@updatedAt` lowers to for a column with this codec; `undefined` when the target has none. */
-  readonly updatedAtGeneratorId: (codecId: string) => string | undefined;
+  /** The "now" generator `@updatedAt` lowers to for a column of this type, with its params; `undefined` when the target has none. */
+  readonly updatedAtGenerator: (
+    column: Pick<Prisma7ColumnType, 'codecId' | 'typeParams'>,
+  ) => ExecutionMutationDefaultValue | undefined;
   /** How a literal `@default` on the column is read; `undefined` when the codec takes the written value. */
   readonly literalDefaultForm: (column: Prisma7ColumnType) => Prisma7LiteralDefaultForm | undefined;
 }
