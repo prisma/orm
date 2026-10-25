@@ -102,6 +102,7 @@ import type {
   HasNoUniqueFilter,
   HasNoVariant,
   HasOrderBy,
+  HasPaging,
   HasRow,
   HasTypeState,
   HasUniqueFilter,
@@ -109,6 +110,7 @@ import type {
   Including,
   ModelFragmentReceiver,
   Ordered,
+  Paged,
   QueryFragment,
   // biome-ignore lint/correctness/noUnusedImports: used in `declare` properties
   RowType,
@@ -1359,14 +1361,14 @@ export class CollectionBase<
   cursor<Self extends HasOrderBy & WithoutUniqueFilter<Self>>(
     this: Self,
     cursorValues: Partial<Record<keyof DefaultModelRow<TContract, ModelName> & string, unknown>>,
-  ): Self;
+  ): Paged<Self>;
   cursor<Self extends HasOrderBy>(
     this: Self & HasNoUniqueFilter,
     cursorValues: Partial<Record<keyof DefaultModelRow<TContract, ModelName> & string, unknown>>,
-  ): Self;
+  ): Paged<Self>;
   cursor(
     cursorValues: Partial<Record<keyof DefaultModelRow<TContract, ModelName> & string, unknown>>,
-  ): this {
+  ): Paged<this> {
     assertCursorCompatibleOrder(this.state.orderBy);
     const mappedCursor = mapCursorValuesToColumns(
       this.contract,
@@ -1376,10 +1378,13 @@ export class CollectionBase<
     );
 
     if (Object.keys(mappedCursor).length === 0) {
-      return this;
+      return blindCast<
+        Paged<this>,
+        'cursor() records its static state even when no cursor value maps to a column'
+      >(this);
     }
 
-    return this.#cloneSelf({
+    return this.#cloneSelf<HasPaging>({
       cursor: mappedCursor,
     });
   }
@@ -1550,15 +1555,15 @@ export class CollectionBase<
   limit<Self extends WithoutUniqueFilter<Self>>(
     this: Self,
     n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
-  ): Self;
+  ): Paged<Self>;
   limit<Self>(
     this: Self & HasNoUniqueFilter,
     n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
-  ): Self;
+  ): Paged<Self>;
   limit(
     n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
-  ): this {
-    return this.#cloneSelf({ limit: typeof n === 'number' ? n : toExpr(n) });
+  ): Paged<this> {
+    return this.#cloneSelf<HasPaging>({ limit: typeof n === 'number' ? n : toExpr(n) });
   }
 
   /**
@@ -1575,15 +1580,15 @@ export class CollectionBase<
   offset<Self extends WithoutUniqueFilter<Self>>(
     this: Self,
     n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
-  ): Self;
+  ): Paged<Self>;
   offset<Self>(
     this: Self & HasNoUniqueFilter,
     n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
-  ): Self;
+  ): Paged<Self>;
   offset(
     n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
-  ): this {
-    return this.#cloneSelf({ offset: typeof n === 'number' ? n : toExpr(n) });
+  ): Paged<this> {
+    return this.#cloneSelf<HasPaging>({ offset: typeof n === 'number' ? n : toExpr(n) });
   }
 
   /**
