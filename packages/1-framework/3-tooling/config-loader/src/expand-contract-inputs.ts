@@ -12,6 +12,18 @@ function resolveLiteral(entry: string): string {
 }
 
 /**
+ * Glob syntax (tinyglobby, pathe's `matchesGlob`) only understands `/` as a
+ * separator and reads a backslash as an escape. Config validation resolves inputs
+ * to native absolute paths, so on Windows an authored `./schema/*.prisma`
+ * arrives as `C:\app\schema\*.prisma`, where the backslash escapes the
+ * wildcard. Convert native separators back to `/` on Windows only, so glob
+ * escapes keep working on POSIX.
+ */
+function toGlobPattern(pattern: string): string {
+  return process.platform === 'win32' ? pattern.replaceAll('\\', '/') : pattern;
+}
+
+/**
  * Expands a finalized contract source input list into its member file set:
  * absolute, deduped by canonical path, sorted. `patterns` must already be
  * absolute (the `orm` config schema resolves each entry against the config
@@ -35,7 +47,12 @@ export async function expandContractInputs(
   const literals: string[] = [];
   const globPatterns: string[] = [];
   for (const pattern of patterns) {
-    (isDynamicPattern(pattern) ? globPatterns : literals).push(pattern);
+    const globPattern = toGlobPattern(pattern);
+    if (isDynamicPattern(globPattern)) {
+      globPatterns.push(globPattern);
+    } else {
+      literals.push(pattern);
+    }
   }
   const globMatches =
     globPatterns.length === 0
@@ -53,5 +70,8 @@ export function globContractInputMatching(
   patterns: readonly string[],
   path: string,
 ): string | undefined {
-  return patterns.find((pattern) => isDynamicPattern(pattern) && matchesGlob(path, pattern));
+  return patterns.find((pattern) => {
+    const globPattern = toGlobPattern(pattern);
+    return isDynamicPattern(globPattern) && matchesGlob(path, globPattern);
+  });
 }
