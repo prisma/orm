@@ -5,6 +5,7 @@ import type {
   CollectionRowOf,
   CollectionTypeStateOf,
   Ordered,
+  Paged,
   UniquelyFiltered,
 } from '../src/collection-types';
 import type { PreparedCollection } from '../src/prepared-collection';
@@ -816,8 +817,8 @@ describe('whereUnique on this inside a class body', () => {
   });
 
   test('many-record calls on this keep their types', () => {
-    expectTypeOf(inClass.top()).toEqualTypeOf<Ordered<ClassBodyPostCollection>>();
-    expectTypeOf(inClass.after(1)).toEqualTypeOf<Ordered<ClassBodyPostCollection>>();
+    expectTypeOf(inClass.top()).toEqualTypeOf<Paged<Ordered<ClassBodyPostCollection>>>();
+    expectTypeOf(inClass.after(1)).toEqualTypeOf<Paged<Ordered<ClassBodyPostCollection>>>();
     expectTypeOf(inClass.everything()).toEqualTypeOf<AsyncIterableResult<Row>>();
     expectTypeOf(inClass.total()).resolves.toEqualTypeOf<{ n: number }>();
     expectTypeOf(inClass.purge()).toEqualTypeOf<AsyncIterableResult<Row>>();

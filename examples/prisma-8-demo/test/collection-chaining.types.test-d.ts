@@ -1,6 +1,7 @@
 import type {
   Filtered,
   Ordered,
+  Paged,
   QueryFragment,
   UniquelyFiltered,
 } from '@prisma/orm-postgres/orm-client';
@@ -36,7 +37,7 @@ test('class methods chain with each other and with the built-in methods', () => 
     Filtered<Ordered<UserCollection>>
   >();
   expectTypeOf(db.Post.forUser('u1').withTitle('t').newestFirst().limit(5)).toEqualTypeOf<
-    Filtered<Ordered<PostCollection>>
+    Paged<Filtered<Ordered<PostCollection>>>
   >();
   expectTypeOf(db.Post.with(titled).newestFirst()).toEqualTypeOf<
     Filtered<Ordered<PostCollection>>
