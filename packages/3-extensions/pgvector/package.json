@@ -29,7 +29,7 @@
     "@internal/target-postgres": "workspace:8.0.0-rc.20",
     "@internal/utils": "workspace:8.0.0-rc.20",
     "@standard-schema/spec": "^1.1.0",
-    "arktype": "^2.2.2"
+    "arktype": "^2.2.8"
   },
   "devDependencies": {
     "@internal/adapter-postgres": "workspace:8.0.0-rc.20",

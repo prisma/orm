@@ -20,7 +20,7 @@
     "@internal/sql-contract": "workspace:8.0.0-rc.20",
     "@internal/sql-errors": "workspace:8.0.0-rc.20",
     "@internal/utils": "workspace:8.0.0-rc.20",
-    "mysql2": "3.15.3"
+    "mysql2": "3.24.6"
   },
   "devDependencies": {
     "@repo/test-utils": "workspace:8.0.0-rc.20",
