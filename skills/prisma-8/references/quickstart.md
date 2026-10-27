@@ -261,7 +261,7 @@ A reference table — not a script to recite at the user. Commands surface in th
 |---|---|---|
 | Apply the current contract to the DB the first time | `prisma db init` | this skill |
 | Re-emit `contract.json` + `contract.d.ts` after editing the contract source | `prisma contract emit` | `references/contract.md` |
-| Quick dev-only schema sync (no migration history kept) | `prisma db update` | `references/migrations.md` |
+| Move a database whose history does not need to be kept to the contract (no migration written) | `prisma db update` | `references/migrations.md` |
 | Plan a migration from a contract diff | `prisma migration plan --name <slug>` | `references/migrations.md` |
 | Apply pending migrations | `prisma db migrate` | `references/migrations.md` |
 | Inspect the live database | `prisma db schema` | `references/debug.md` |
@@ -290,7 +290,7 @@ Switch authoring later by re-running `prisma orm init` in the same directory. Th
 ## What Prisma 8 doesn't do yet
 
 - **Migration from another ORM.** Prisma 8 doesn't migrate your schema *from* Drizzle / Sequelize / TypeORM / Kysely / Knex / a raw driver. A Prisma 6 MongoDB schema and a Prisma 7 Postgres schema are the exception: they can be the contract source as they are (`prisma6Schema` / `prisma7Schema`, see `references/contract.md`). For the others: install the matching `@internal/migrate-from-<orm>-skill` if one exists for your source, or treat the source as a brownfield database and `contract infer` from it. If you need a guided migration flow built-in, file a feature request via the `references/feedback.md` skill.
-- **`prisma db push`-style production sync.** `db update` is the quick development path; for production, use migrations (`migration plan` + `db migrate`). PN deliberately does not offer a "push-to-prod-without-a-migration" surface — see `references/migrations.md`.
+- **`prisma db push`-style production sync.** `db update` is for databases whose migration history does not need to be kept (local, development, staging, preview); for production, use migrations (`migration plan` + `db migrate`). PN deliberately does not offer a "push-to-prod-without-a-migration" surface — see `references/migrations.md`.
 - **Studio / GUI database browser.** Use `prisma db schema` for a CLI tree-style summary of the live DB. If you need an interactive UI, file a feature request via the `references/feedback.md` skill.
 
 ## Reference Files

@@ -7,7 +7,6 @@ import {
   type AggregateContractSpace,
   type ContractSpaceAggregate,
   contractHashAtMarker,
-  requireHeadRef,
   spacesInApplyOrder,
 } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
@@ -15,6 +14,7 @@ import { MigrationToolsError } from '@internal/migration-tools/errors';
 import type { Refs } from '@internal/migration-tools/refs';
 import { readRefs } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
+import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import {
   type CliStructuredError,
@@ -22,12 +22,12 @@ import {
   errorRuntime,
 } from '../../utils/cli-errors';
 import { closeQuietly, resolveMigrationPaths } from '../../utils/command-helpers';
+import type { CliInvocation } from '../../utils/printed-command';
 import { createControlClient } from '../client';
 import type { CreateControlClient } from '../types';
 import { errorFromCaught } from './caught-errors';
 import { buildReadAggregate } from './contract-space-aggregate-loader';
-import { refuseMarkerOutsideGraph } from './graph-queries';
-import { planSpacePath } from './migrate';
+import { planEverySpace, planSpaces, type SpacePathOutcome } from './migrate';
 import {
   liveMarkerUse,
   requireDatabaseForLiveMarkerUse,
@@ -52,6 +52,8 @@ export interface ExecuteMigrateShowPlanOptions {
   readonly db?: string;
   readonly to?: string;
   readonly from?: string;
+  /** The command line printed advice repeats. */
+  readonly invocation: CliInvocation;
   /** Client factory used when the plan needs the live DB marker; defaults to the real client. */
   readonly createClient?: CreateControlClient;
   /**
@@ -168,6 +170,13 @@ export async function executeMigrateShowPlan(
   const markerBySpace = new Map<string, LiveMarker | null>();
   let databaseMarkers: ReadonlyMap<string, LiveMarker> | undefined;
   const allSpaces: ReadonlyArray<AggregateContractSpace> = [aggregate.app, ...aggregate.extensions];
+  const planInputs = () => ({
+    aggregate,
+    markers: markerBySpace,
+    appTarget: { hash: targetHash, invariants: refInvariants, refName: undefined },
+    storageNameOf,
+  });
+  let outcomes: ReadonlyMap<string, SpacePathOutcome> | undefined;
 
   if (options.from !== undefined && !liveOrigin) {
     const fromResult = resolveContractRef(options.from, refContext);
@@ -196,15 +205,6 @@ export async function executeMigrateShowPlan(
       const allMarkers = await client.readAllMarkers();
       databaseMarkers = allMarkers;
       const appMarker = allMarkers.get(aggregate.app.spaceId);
-      if (appMarker !== undefined) {
-        const refusal = refuseMarkerOutsideGraph({
-          markerHash: appMarker.storageHash,
-          graph: appGraph,
-        });
-        if (refusal) {
-          return notOk(refusal);
-        }
-      }
       // Store the full marker record (storageHash + invariants) per space.
       // This is the same data executeMigrate uses via familyInstance.readAllMarkers().
       if (liveOrigin) {
@@ -215,6 +215,21 @@ export async function executeMigrateShowPlan(
       }
       if (liveTarget) {
         targetHash = contractHashAtMarker(appMarker);
+      }
+      // Whichever end of the preview the database supplies, its markers are checked against their
+      // graphs exactly as db migrate checks them.
+      const checked = await planEverySpace({
+        ...planInputs(),
+        markers: allMarkers,
+        migrationsDir,
+        invocation: options.invocation,
+        readLedger: (spaceId) => client.readLedger(spaceId),
+      });
+      if (!checked.ok) {
+        return notOk(checked.failure);
+      }
+      if (liveOrigin) {
+        outcomes = checked.value;
       }
     } catch (error) {
       return notOk(
@@ -231,22 +246,15 @@ export async function executeMigrateShowPlan(
   // planSpacePath feeds resolveRecordedPath identical inputs (targetHash, targetInvariants,
   // currentMarker with full invariants), so the preview path is always the path migrate runs.
   //
+  // An offline --from is not a database marker, so a --from outside the graph is a path that does
+  // not exist rather than MIGRATION.MARKER_MISMATCH.
+  const planned = outcomes ?? planSpaces(planInputs());
   const orderedMigrations: MigrateShowMigration[] = [];
   for (const space of spacesInApplyOrder(aggregate)) {
-    const isAppSpace = space.spaceId === aggregate.app.spaceId;
-    const headRef = requireHeadRef(space);
-    const spaceTargetHash = isAppSpace ? targetHash : headRef.hash;
-    const spaceRefInvariants = isAppSpace ? refInvariants : undefined;
-    const liveMarker = markerBySpace.get(space.spaceId) ?? null;
-
-    const outcome = planSpacePath({
-      space,
-      aggregate,
-      targetHash: spaceTargetHash,
-      refInvariants: spaceRefInvariants,
-      liveMarker,
-      storageNameOf,
-    });
+    const outcome = planned.get(space.spaceId);
+    if (outcome === undefined) {
+      throw new InternalError(`Unreachable: no planned outcome for space "${space.spaceId}"`);
+    }
 
     if (outcome.kind === 'at-head') {
       // Empty-graph space already at target — nothing to run for this space.
@@ -261,8 +269,11 @@ export async function executeMigrateShowPlan(
         }),
       );
     }
-    if (outcome.kind === 'unreachable') {
-      const fromHash = outcome.liveMarker?.storageHash ?? EMPTY_CONTRACT_HASH;
+    if (outcome.kind === 'unreachable' || outcome.kind === 'marker-outside-graph') {
+      const fromHash =
+        outcome.kind === 'marker-outside-graph'
+          ? outcome.markerHash
+          : (outcome.liveMarker?.storageHash ?? EMPTY_CONTRACT_HASH);
       return notOk(
         errorPathUnreachable({
           summary: `No migration path from ${fromHash.slice(0, 14)} to ${outcome.targetHash.slice(0, 14)} in space "${outcome.spaceId}".`,

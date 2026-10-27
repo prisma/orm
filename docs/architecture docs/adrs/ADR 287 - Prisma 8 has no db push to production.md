@@ -1,6 +1,6 @@
 # ADR 287 — Prisma 8 has no `db push` to production
 
-**Status:** Accepted
+**Status:** Accepted; its wording that `db update` is for development only is superseded by [ADR 307 — No recovery resets or drops a database](ADR%20307%20-%20No%20recovery%20resets%20or%20drops%20a%20database.md): `db update` is for any database whose migration history does not need to be kept
 **Date:** 2026-10-22
 
 ---

@@ -20,6 +20,7 @@ Once the contract changes, you choose how the change reaches the database. This 
 - User wants to run pending migrations against a local DB.
 - User hit `MIGRATION.HASH_MISMATCH`, `MIGRATION.UNFILLED_PLACEHOLDER`, or a partially-applied migration.
 - User mentions: *migrate, migration, db push, db update, `prisma migrate dev`, `prisma migrate deploy`, drift, hash mismatch, data backfill*.
+- A deploy or `db migrate` fails with `MIGRATION.MARKER_MISMATCH` (older Composer releases: "no authored path"), or someone proposes resetting a database → *A database whose marker is not in the migration graph* below. For `MIGRATION.PATH_UNREACHABLE`, where the marker is in the graph but no migration reaches the target, plan from the marker to the target instead (`references/debug.md`).
 
 ## When Not to Use
 
@@ -30,7 +31,7 @@ Once the contract changes, you choose how the change reaches the database. This 
 
 ## Key Concepts
 
-- **`db update` (quick path).** Reads the emitted contract, diffs against the live DB, applies the change. Optional `--dry-run` prints the plan without executing. Before an apply it asks what each operation that would lose data means, answered by `--delete <subject>` or `--rename <subject>:<new name>`, and whether each operation that would change who can read or write a model's data may run, answered by `--allow <Model>` (see *Answer the data-loss questions* below). **Writes no migration directory.** Operations needing data transforms are not handled by this path — `db update` excludes the `data` operation class entirely and short-circuits where a data transform would be required. It refuses `--convert` and `--backfill` (`MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE`) and prints the `migration plan` command to run instead. Use only against a database that has no shared history with anyone else (your local dev DB).
+- **`db update` (quick path).** Reads the emitted contract, diffs against the live DB, applies the change. Optional `--dry-run` prints the plan without executing. Before an apply it asks what each operation that would lose data means, answered by `--delete <subject>` or `--rename <subject>:<new name>`, and whether each operation that would change who can read or write a model's data may run, answered by `--allow <Model>` (see *Answer the data-loss questions* below). **Writes no migration directory.** Operations needing data transforms are not handled by this path — `db update` excludes the `data` operation class entirely and short-circuits where a data transform would be required. It refuses `--convert` and `--backfill` (`MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE`) and prints the `migration plan` command to run instead. Use it on a database whose migration history does not need to be kept (a local, development, staging or preview database), shared or not. Never use it on a database that changes only through migrations, such as production: it leaves no migration behind.
 - **`migration plan` (formal path).** Reads the emitted contract, diffs it against a resolved origin — explicit `--from`, else the `db` ref, else the empty database; there is no "head of the graph" to chain from (see `references/migration-model.md`) — and writes a new migration package under `migrations/app/<YYYYMMDDTHHMM>_<snake_slug>/`. A plan that would lose data is written only once `--delete`, `--rename` or, for a type change, `--convert` says what each such operation means. The package's `migration.ts` contains `placeholder(...)` calls only where `--convert` or `--backfill` asked for a slot (see *Type changes and new required fields*).
 - **The `app/` segment in migration paths is the consuming application's contract-space id.** Every migration *you* author lives under `migrations/app/`. Extensions your contract depends on get their own sibling directories (`migrations/<extension-space-id>/`) — those are managed by the extension package and you don't write into them. The `app/` segment lands automatically the first time you run `migration plan` / `db init` against an app-level config.
 - **Migration package files** (inside each `migrations/app/<dir>/`):
@@ -85,9 +86,10 @@ Treat the rendered import lines as framework-managed on both targets:
 
 | Situation | Path | Why |
 |---|---|---|
-| Local dev, schema in flux | `db update` | Fast, interactive, no migration files. |
-| Shared branch with other developers | `migration plan` + `db migrate` | Replayable, reviewable, content-hashed. |
-| Anything reaching production | `migration plan` + `db migrate` | Production must run a reviewed, hashed migration. |
+| Moving a database whose history does not need to be kept (local, development, staging, preview) to the contract | `db update` | Fast, no migration files. Works whether or not the database is shared. |
+| A change other developers or environments will receive | `migration plan` + `db migrate` | Replayable, reviewable, content-hashed. |
+| A database that changes only through migrations, such as production | `migration plan` + `db migrate` | It must run a reviewed, hashed migration. |
+| A deploy says there is no migration path, or `MIGRATION.MARKER_MISMATCH` | See *A database whose marker is not in the migration graph* | Never reset the database. |
 | Adding a column that needs a backfill | `migration plan --backfill Model.field` (writes `placeholder`), edit `migration.ts`, self-emit, then `db migrate` | `db update` does not author data transforms; the formal path does. Without `--backfill`, existing rows get a temporary value. |
 | Changing a field's type so values may not survive | `migration plan --convert Model.field`, fill `using`, self-emit, `db migrate` | Or `--delete Model.field` to let the database cast; the cast may cut or round values (Postgres cuts a longer text to a shorter `VarChar`), and a value it cannot cast fails the apply. |
 | Recovering from drift (DB diverged from contract) | `db sign` after manual fix, *or* `migration plan` if PN can plan the fix | Depends on which side is right. See *Recover from drift* below. |
@@ -139,7 +141,7 @@ If the `db` ref's pointer is itself missing and the hash isn't a graph node eith
 
 **After plain `db migrate`.** `db migrate` does not implicitly advance the `db` ref (production-shaped commands stay explicit). The live marker advances while the ref may lag. Refresh with `db update` (no-op on DB when already current) or `db migrate --advance-ref db` in the same invocation.
 
-**When to switch paths.** Use `db update` while the schema is in flux on a solo dev database. Switch to `migration plan` + `db migrate` when the change needs a reviewable, replayable migration — typically before opening a PR or touching any shared environment. The `db` ref bridges the two: it captures dev iteration state on disk so the first formal plan knows where you left off.
+**When to switch paths.** Use `db update` while the schema is in flux, on a database whose migration history does not need to be kept (a local, development, staging or preview database). Switch to `migration plan` + `db migrate` when the change needs a reviewable, replayable migration — typically before opening a PR, and always for a database that changes only through migrations, such as production. The `db` ref bridges the two: it captures dev iteration state on disk so the first formal plan knows where you left off.
 
 **Graph-node rule (plan time).** Any hash used as a `from` end — explicit `--from`, default `db` ref, or ref name — must already be a node in the on-disk migration graph once the graph is non-empty. The auto-baseline two-bundle emission is the one exception: it applies only on an **empty** graph with a non-null ref-resolved `from` and an available store entry. If the ref's pointer is missing and the hash isn't a graph node either, plan refuses with `MIGRATION.SNAPSHOT_MISSING` instead.
 
@@ -458,11 +460,49 @@ The concept: `db sign` rewrites the marker to the current contract hash and move
 pnpm prisma db sign --db $DATABASE_URL
 ```
 
+## Workflow — A database whose marker is not in the migration graph
+
+**The symptom.** `db migrate` or a deploy fails with `MIGRATION.MARKER_MISMATCH`: the database's marker names a contract that no migration in `migrations/` starts or ends at. (Composer releases older than this skill print it as `MIGRATION_PATH_NOT_FOUND`, "no authored path from the database's current schema".)
+
+**The usual cause.** The database applied a migration that was later planned again or deleted. The common case is a branch deployed to a shared environment, then rebased: each new plan of its migration has a new target hash, and the version the database applied is gone. The error's `why` names the last contract in the graph the database applied (`meta.lastGraphHash`) and the applied migrations that are no longer on disk (`meta.missingMigrations`).
+
+**Never reset or drop the database.** It can always be moved. Pick the recovery by what kind of database it is.
+
+When the error names an extension's contract space (`meta.spaceId` is not `app`), that space's migrations come with the extension package: install a version of the extension whose migrations include the database's contract (`prisma migration list --space <space>` lists them), or ask its maintainers. The recoveries below are for the application space.
+
+### When the database's history does not need to be kept (local, development, staging, preview)
+
+Reconcile it to the target with `db update`:
+
+1. `prisma db update --db $DATABASE_URL --to <target> --dry-run`, and read every operation, above all every drop.
+2. `db update` does not run data transforms or seed steps. When the error has no `meta.lastGraphHash`, the ledger cannot say which migrations it would skip: stop and ask a person. Otherwise read the data transforms of the migrations on disk between `meta.lastGraphHash` and the target (`prisma migration list`, then each one's `migration.ts`). The migrations in `meta.missingMigrations` already ran on this database, so never repeat them; read them, in ledger order (`prisma migration log`) from the git commits that held them, only to learn what the database already holds, since a migration on disk may be a new plan of one of them. If a missing migration's source cannot be recovered, stop and ask a person. For each on-disk transform whose data matters and whose work the database does not already hold:
+   - if it moves data into a new column or table, create that column or table by hand and copy the data with SQL, the way the transform would;
+   - if it inserts rows the application needs, insert them by hand.
+
+   Run the dry run again to confirm the drops that remain lose nothing you need.
+3. `prisma db update --db $DATABASE_URL --to <target>`, answering the data-loss questions with `--delete` or `--rename` (see *Answer the data-loss questions*).
+4. Deploy again. The deploy finds the database at its target.
+
+### When the database changes only through migrations (production)
+
+Author migrations that bring it back onto the graph, and deploy them. The marker's contract is `<marker hash>`; the last graph contract is `meta.lastGraphHash`. When the error has no `lastGraphHash`, the ledger shows no contract the database applied that is still in the graph, or could not be read: check with `prisma migration log`, and if no applied contract is in the graph, stop and ask a person.
+
+`migration plan --to` accepts only contracts already in the graph, so the database's contract goes through the contract source:
+
+1. Commit or copy aside any uncommitted edits to the contract source; step 4 restores it from `HEAD`. Then put the contract the database is at into the contract source. Prefer the contract source as it was when the deleted migration was planned: find the commit with `git log --all --oneline -- migrations/snapshots/<marker hash>` and check out the contract source file from it. If git no longer has it, infer it from the database into a separate file, `prisma contract infer --db $DATABASE_URL --output ./inferred.prisma` (without `--output` it overwrites the contract source), then copy that file over the contract source.
+2. `prisma contract emit`, and check that the emitted storage hash is `<marker hash>`. If it is not, stop and ask a person.
+3. Plan a migration from the last graph contract to the database's contract: `prisma migration plan --from <lastGraphHash> --name rejoin_<database>`. Nothing will run it against this database; it only puts the database's contract in the graph. A fresh database could still run it, so copy the data transforms of every migration in `meta.missingMigrations` into it, in ledger order (`prisma migration log`), from the git commits that held them, and review them.
+4. Restore the contract source (`git checkout HEAD -- <contract source>`; without `HEAD` git restores the version step 1 staged), run `prisma contract emit`, then plan from the database's contract to the target: `prisma migration plan --from <marker hash> --name <slug>`. A plan that loses data needs `--delete` or `--rename` (see *Answer the data-loss questions*). Review it like any migration, and add data transforms for any data the deleted migration's replacement would have moved.
+5. Check how a fresh database reaches the target: `prisma migration status --from @empty --to <target>` lists the migrations it would run. Path finding takes the shortest route, so if these two migrations make a shorter route from the last graph contract to the target than the main line, a new database would take it. When they do, ask a person how to proceed.
+6. Commit both migrations and deploy.
+
+Do not `db sign` the database to a contract you inferred: that rewrites its marker without a migration.
+
 ## Workflow — Recover from drift
 
 The concept: drift means `db verify` reports the live DB schema doesn't match what the marker says it should be. Two valid moves, picked by which side is correct:
 
-- **The contract is right; the DB is wrong** → run a migration. Either `db update` (quick path, dev DB only) or `migration plan` + `db migrate` (everywhere else).
+- **The contract is right; the DB is wrong** → run a migration. Either `db update`, on a database whose migration history does not need to be kept (a local, development, staging or preview database), or `migration plan` + `db migrate`, which every database accepts and a database that changes only through migrations, such as production requires.
 - **The DB is right; the contract or marker is wrong** → edit the contract to match the DB (see `references/contract.md`), emit, then `db sign` to refresh the marker. The sign also moves the `db` ref to the signed hash; when the migration graph is non-empty and that hash is not a graph node, the next default `migration plan` refuses with `MIGRATION.HASH_NOT_IN_GRAPH` (see *The forgot-the-flag pitfall* above for the recovery).
 
 The diagnostic that reveals which side is right:
@@ -528,7 +568,7 @@ In a terminal the command asks each question in turn; type `delete`, `allow`, or
 
 ## Common Pitfalls
 
-1. **Using `db update` against shared or production databases.** Never. The change leaves no migration history. Use `migration plan` + `db migrate`.
+1. **Using `db update` on a database that changes only through migrations, such as production.** The change leaves no migration history. Use `migration plan` + `db migrate`. A shared development or staging database is fine.
 2. **Skipping a data transform.** Leaving `placeholder(...)` in `migration.ts` makes the next `db migrate` throw `MIGRATION.UNFILLED_PLACEHOLDER`. Fill every placeholder slot and self-emit.
 3. **Editing `ops.json` directly.** It's the canonical artifact, not the authoring source. Edit `migration.ts`, then self-emit.
 4. **Forgetting to self-emit after editing `migration.ts`.** The next `db migrate` either uses the stale `ops.json` (if you only added comments) or fails with `MIGRATION.HASH_MISMATCH` (if you changed operations). Always self-emit.
@@ -540,7 +580,7 @@ In a terminal the command asks each question in turn; type `delete`, `allow`, or
 9. **Planning with no `db` ref and no `--from` in a project that already has migrations.** The origin falls through to the empty database, which would make the plan a full-create migration; `migration plan` refuses with `MIGRATION.PLAN_ORIGIN_UNKNOWN` rather than writing it. Pick the exit that matches your intent — the error lists them, and `references/migration-model.md` § *The trap* explains which to choose.
 10. **Hand-authoring `migration.ts` from a blank file, or rewriting the rendered import line.** Migration files are framework-rendered — let `prisma migration plan` (or `migration new`) render the package, then edit only the holes the framework leaves for you. On Postgres leave the rendered `@internal/postgres/migration` (or `@internal/sqlite/migration`) import path alone; on Mongo leave `@prisma/orm-mongo/target/migration` as rendered. Add symbols to the existing import line rather than introducing new import paths.
 12. **Replaying migrations onto a database that is already ahead.** `db migrate` on a database with no marker runs every migration, skipping operations already applied. When the database is already past a migration (it has `x int8` where the migration adds `x int4`), the run stops at that migration's precheck with `MIGRATION.PRECHECK_FAILED`. Adopt such a database with `prisma db sign` (after `contract infer` if needed), not by replaying history.
-13. **Running Prisma 7 `migrate` commands against Prisma 8.** Each one answers `CLI.COMMAND_MOVED` with its Prisma 8 command: `migrate dev` is `contract emit`, `migration plan --name <name>`, then `db migrate --advance-ref db`; `migrate deploy` is `db migrate`; `migrate reset` is also `db migrate`, but Prisma 8 never drops a database or deletes its data, so first drop and recreate the disposable database with its own tools; `migrate status` is `migration status`; `migrate diff` is `db update --dry-run`, or `migration plan` to write a migration package; `migrate resolve` is `db sign <migration>`, which moves the database marker to that migration after checking its schema, but leaves `migration status` without an applied mark. While Prisma 7 still owns the migrations, run every one of them except `migrate diff`, whose replacement only reads, with Prisma 7's CLI instead.
+13. **Running Prisma 7 `migrate` commands against Prisma 8.** Each one answers `CLI.COMMAND_MOVED` with its Prisma 8 command: `migrate dev` is `contract emit`, `migration plan --name <name>`, then `db migrate --advance-ref db`; `migrate deploy` is `db migrate`; `migrate reset` has no equivalent, because Prisma 8 has no reset: `db update` brings the database to the contract instead, asking before it loses data, but it keeps existing rows and runs no seed steps or data transforms (a database that changes only through migrations is moved with `db migrate`); `migrate status` is `migration status`; `migrate diff` is `db update --dry-run`, or `migration plan` to write a migration package; `migrate resolve` is `db sign <migration>`, which moves the database marker to that migration after checking its schema, but leaves `migration status` without an applied mark. While Prisma 7 still owns the migrations, run every one of them except `migrate diff`, whose replacement only reads, with Prisma 7's CLI instead.
 
 ## What Prisma 8 doesn't do yet
 
@@ -569,7 +609,7 @@ The CLI collects anonymous usage data by default. To opt out, set `PRISMA_DISABL
 ## Checklist
 
 - [ ] Contract emitted (`contract.json` + `contract.d.ts` current).
-- [ ] Chose the right path: `db update` (local dev) vs `migration plan` + `db migrate` (anything shared).
+- [ ] Chose the right path: `db update` (a database whose history does not need to be kept) vs `migration plan` + `db migrate` (a change others will receive, or a database that changes only through migrations).
 - [ ] For `migration plan`: confirmed the output's `from:` line names the intended origin — not `(baseline)` over an existing graph (`references/migration-model.md`).
 - [ ] For `migration plan`: ran `migration show <dir>` to review before `db migrate`.
 - [ ] Filled every `placeholder(...)` in `migration.ts` (if any), built against `endContract`.
@@ -577,6 +617,6 @@ The CLI collects anonymous usage data by default. To opt out, set `PRISMA_DISABL
 - [ ] Self-emitted (`node <package dir>/migration.ts`) after editing the TS.
 - [ ] Ran `db migrate` (or `db update`) and saw it complete.
 - [ ] Used `db verify` only when diagnosing drift — not as a routine post-apply step.
-- [ ] Did NOT use `db update` against a shared or production database.
+- [ ] Did NOT use `db update` on a database that changes only through migrations, such as production, and did NOT reset or drop any database to fix a migration problem.
 - [ ] Did NOT edit `ops.json` directly.
 - [ ] Answered each data-loss question deliberately: `--rename` for a rename, `--delete` only for data that may go, `--allow` only for an access change that is meant.

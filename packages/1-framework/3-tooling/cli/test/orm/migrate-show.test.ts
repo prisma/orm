@@ -254,7 +254,7 @@ describe('migrate --show', () => {
           ok: false,
           error: {
             code: 'MIGRATION.MARKER_MISMATCH',
-            meta: { markerHash: C2, reachableHashes: [] },
+            meta: { spaceId: 'app', markerHash: C2, targetHash: C2, missingMigrations: [] },
           },
         },
       });
