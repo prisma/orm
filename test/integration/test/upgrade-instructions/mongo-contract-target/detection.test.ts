@@ -28,7 +28,9 @@ describe.each(['app', 'extension'])('the %s mongo-contract-target detection', (a
       matches(
         "mongoContract(schemaPath, {\n  output: 'out/contract.json',\n  target: mongoTargetPack,\n})",
       ),
-    ]).toEqual([true, true, true, true, true, true, false, false, false]);
+      matches('mongoContract(schemaPath, options)'),
+      matches("mongoContract(join(dir, 'schema.prisma'), config.contract)"),
+    ]).toEqual([true, true, true, true, true, true, false, false, false, true, true]);
   });
 
   it('does not match a call of another function that ends in mongoContract', () => {

@@ -10,6 +10,7 @@ changes:
       matches:
         - '(?<![\w$.])mongoContract\(\s*[^,()]*(?:\([^()]*\)[^,()]*)*,?\s*\)'
         - '(?<![\w$.])mongoContract\(\s*[^,()]*(?:\([^()]*\)[^,()]*)*,\s*\{(?![^{}]*\btarget\b)[^{}]*\}\s*\)'
+        - '(?<![\w$.])mongoContract\(\s*[^,()]*(?:\([^()]*\)[^,()]*)*,\s*[A-Za-z_$][\w$.]*\s*\)'
   - id: mongo-contract-input
     summary: |
       The MongoDB type for the object you pass to `defineContract`, `ContractDefinition`, is renamed `ContractInput`. It is the same type under SQL's name for it. `ContractDefinition` now names the plain-data definition every MongoDB contract source builds from, which takes no type parameters, so the detection flags an import from `@prisma/orm-family-mongo/contract-ts` only where the file writes `ContractDefinition<...>`. Import `ContractInput` from `@prisma/orm-mongo/contract-builder` where you imported `ContractDefinition`.
@@ -149,9 +150,11 @@ changes:
     summary: |
       The PostgreSQL driver ensures `DateStyle=ISO` on every connection it uses, including a `pg.Pool` or `pg.Client` the application passes to Prisma, which it sets with a statement. A statement in the application that sets a `DateStyle` other than `ISO`, or a pooler that drops the startup option, makes every read of a date or timestamp fail with `RUNTIME.DATE_STYLE_NOT_ISO`.
     detection:
-      glob: "**/*.{ts,tsx,mts,cts,js,mjs,cjs}"
+      glob: "**/*.{ts,tsx,mts,cts,js,mjs,cjs,sql,env}"
       matches:
         - 'new\s+(?:pg\.)?(?:Pool|Client)\s*\('
+        - '\b[Ss][Ee][Tt]\s+(?:[Ss][Ee][Ss][Ss][Ii][Oo][Nn]\s+|[Ll][Oo][Cc][Aa][Ll]\s+)?[Dd][Aa][Tt][Ee][Ss][Tt][Yy][Ll][Ee]\b'
+        - '\b(?:[Dd][Aa][Tt][Ee][Ss][Tt][Yy][Ll][Ee]|PGDATESTYLE)\s*='
   - id: psl-field-presets-removed
     summary: |
       PSL field presets are removed. A field typed with a preset call, such as `id.uuidv4String()`, `nanoid({ size: 12 })`, `temporal.createdAt()` or `temporal.time(3, onUpdate: now)`, is refused with `PSL_UNRESOLVED_REFERENCE`, and the message gives the exact replacement. Rewrite each call as the tables in this guide say: a type constructor or a contributed alias, plus `@id`, `@onCreate(...)` and `@onUpdate(...)`. The contract does not change, so there is nothing to re-emit, sign or migrate. The detection matches schema files that type a field with a preset call.
