@@ -1,4 +1,4 @@
-# Databases declare how they may change — spec
+# Database change policies: may db update run, and may a change lose data — spec
 
 The reasoning, scenarios, prior art and rejected alternatives are in [`design.md`](design.md). The slices are in [`plan.md`](plan.md). Linear: [P-TML-1165](https://linear.app/prisma-company/project/databases-declare-how-they-may-change-a870e49c25a5).
 

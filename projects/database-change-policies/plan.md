@@ -1,4 +1,4 @@
-# Databases declare how they may change — plan
+# Database change policies: may db update run, and may a change lose data — plan
 
 **Spec:** [`spec.md`](spec.md). **Rationale:** [`design.md`](design.md). **Linear:** [P-TML-1165](https://linear.app/prisma-company/project/databases-declare-how-they-may-change-a870e49c25a5).
 

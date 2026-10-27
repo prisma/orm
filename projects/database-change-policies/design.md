@@ -1,4 +1,4 @@
-# Databases declare how they may change — design rationale
+# Database change policies: may db update run, and may a change lose data — design rationale
 
 [`spec.md`](spec.md) states the design. This document explains why it has that shape. It records what Will Madden and the orchestrating agent settled between 2026-10-15 and 2026-10-23.
 
