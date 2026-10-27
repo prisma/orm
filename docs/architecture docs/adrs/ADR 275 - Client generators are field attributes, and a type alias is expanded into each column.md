@@ -139,7 +139,7 @@ model Event {
 
 (Amended 2026-10-23.) An alias may not carry `@id`, so an identifier preset becomes an alias for its column, with `@id` and the generator written on the field. [ADR 309 — Each generated identifier has a type alias for its column](ADR%20309%20-%20Each%20generated%20identifier%20has%20a%20type%20alias%20for%20its%20column.md) adds an alias for each identifier column: `id.ulid()` becomes `Ulid @id @onCreate(ulid())`, `id.uuidv4String()` becomes `UuidString @id @onCreate(uuid())`, and `id.uuidv7Native()` becomes `Uuid @id @onCreate(uuid(7))`. The plain scalar presets (`text`, `int`, `boolean`, …) are already PSL type constructors (`String`, `Int`, `Boolean`, …).
 
-(Amended 2026-10-22.) The SQL family contributed its identifier presets to SQLite too, and SQLite had no type constructor for their `sql/char@1` column, since `Char(n)` is a Postgres constructor. So every SQL target gets `sql.Char(n)`, beside `sql.String(n)`, and the replacement of a family preset is written with it: `sql.Char(36) @id @onCreate(uuid())`. On Postgres, `Char(36)` stores the same column and stays the form that `contract print` writes and the docs use. A preset call is refused with `PSL_UNRESOLVED_REFERENCE`, through the family's `describeUnresolvedType`, and the message is the exact rewrite: `id.uuidv4String() was a field preset, and Prisma 8 removed field presets. Write sql.Char(36) @id @onCreate(uuid()).` A component whose `authoring` still has a `field` key is refused with `CONTRACT.PACK_CONTRIBUTION_INVALID`, so an extension built against the old types does not lose its presets silently.
+(Amended 2026-10-22.) The SQL family contributed its identifier presets to SQLite too, and SQLite had no type constructor for their `sql/char@1` column, since `Char(n)` is a Postgres constructor. So every SQL target gets `sql.Char(n)`, beside `sql.String(n)`, and a family preset's column can be written on every SQL target, such as `sql.Char(36)`. (Amended 2026-10-23: the rewrite names the column's alias from ADR 309 instead, such as `sql.UuidString @id @onCreate(uuid())`; `sql.Char(n)` remains for other lengths.) On Postgres, `Char(36)` stores the same column and stays the form that `contract print` writes and the docs use. A preset call is refused with `PSL_UNRESOLVED_REFERENCE`, through the family's `describeUnresolvedType`, and the message is the exact rewrite: `id.uuidv4String() was a field preset, and Prisma 8 removed field presets. Write UuidString @id @onCreate(uuid()).` on Postgres, and `Write sql.UuidString @id @onCreate(uuid()).` on SQLite and MySQL (amended 2026-10-23). A component whose `authoring` still has a `field` key is refused with `CONTRACT.PACK_CONTRIBUTION_INVALID`, so an extension built against the old types does not lose its presets silently.
 
 ### The TypeScript builder
 
@@ -168,9 +168,9 @@ A contributed alias is used through `field.column`, like every other `type.*` he
 
 | Today | After |
 | --- | --- |
-| `field.temporal.timestamp(3, 'now', 'now')` | `field.column(type.Timestamp(3)).onCreate(gen.now()).onUpdate(gen.now())` |
+| `field.temporal.timestamp(3, 'now', 'now')` | `field.column(type.TimestampTemporal(3)).onCreate(gen.now()).onUpdate(gen.now())` |
 | `field.temporal.updatedAt()` | `field.column(type.temporal.UpdatedAt())` (amended 2026-10-21) |
-| `field.id.uuidv4String()` | `field.column(type.Char(36)).id().onCreate(gen.uuid())` on Postgres, `field.column(type.sql.Char(36)).id().onCreate(gen.uuid())` on every SQL target (amended 2026-10-22) |
+| `field.id.uuidv4String()` | `field.column(type.UuidString()).id().onCreate(gen.uuid())` on Postgres, `field.column(type.sql.UuidString()).id().onCreate(gen.uuid())` on every SQL target (amended 2026-10-23) |
 
 ### Mongo
 
