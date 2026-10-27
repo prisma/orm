@@ -39,45 +39,74 @@ export function convertArgs(args: Array<unknown>, argTypes: Array<ArgType>): Arr
       return null
     }
 
-    const scalarType = argType.scalarType
-    switch (scalarType) {
-      case 'int':
-      case 'bigint':
-      case 'float':
-      case 'decimal':
-      case 'string':
-      case 'enum':
-      case 'boolean':
-        return String(arg)
-
-      case 'datetime':
-        // PostgreSQL expects ISO 8601 format
-        if (arg instanceof Date) {
-          return arg.toISOString()
-        }
-        return arg
-
-      case 'json':
-        return typeof arg === 'string' ? arg : JSON.stringify(arg)
-
-      case 'bytes':
-        // Convert Uint8Array/Buffer to hex string for PostgreSQL bytea
-        if (arg instanceof Uint8Array) {
-          return `\\x${Array.from(arg)
-            .map((b) => b.toString(16).padStart(2, '0'))
-            .join('')}`
-        }
-        return arg
-
-      case 'uuid':
-        return String(arg)
-
-      case 'unknown':
-      default:
-        // Default: pass through as-is
-        return arg
+    // The PPG client sends every parameter as text, so a list has to go out as an array literal.
+    if (Array.isArray(arg) && argType.arity === 'list') {
+      return toArrayLiteral(arg.map((element) => convertArg(element, argType)))
     }
+
+    return convertArg(arg, argType)
   })
+}
+
+/**
+ * Converts a single scalar value, or one element of a list, to a PPG client-compatible value.
+ */
+function convertArg(arg: unknown, argType: ArgType): unknown {
+  if (arg === null || arg === undefined) {
+    return null
+  }
+
+  const scalarType = argType.scalarType
+  switch (scalarType) {
+    case 'int':
+    case 'bigint':
+    case 'float':
+    case 'decimal':
+    case 'string':
+    case 'enum':
+    case 'boolean':
+      return String(arg)
+
+    case 'datetime':
+      // PostgreSQL expects ISO 8601 format
+      if (arg instanceof Date) {
+        return arg.toISOString()
+      }
+      return arg
+
+    case 'json':
+      return typeof arg === 'string' ? arg : JSON.stringify(arg)
+
+    case 'bytes':
+      // Convert Uint8Array/Buffer to hex string for PostgreSQL bytea
+      if (arg instanceof Uint8Array) {
+        return `\\x${Array.from(arg)
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join('')}`
+      }
+      return arg
+
+    case 'uuid':
+      return String(arg)
+
+    case 'unknown':
+    default:
+      // Default: pass through as-is
+      return arg
+  }
+}
+
+/**
+ * Serializes converted elements as a PostgreSQL array literal, e.g. `{"a","b c",NULL}`.
+ * Every element is quoted, so commas, braces and spaces inside a value survive.
+ */
+function toArrayLiteral(elements: Array<unknown>): string {
+  const items = elements.map((element) => {
+    if (element === null) return 'NULL'
+    const text = typeof element === 'string' ? element : String(element)
+    return `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+  })
+  return `{${items.join(',')}}`
 }
 
 export const ScalarColumnType = {
@@ -301,10 +330,33 @@ export const builtinParsers = Object.entries({
   [ArrayColumnType.BIT_ARRAY]: normalize_array(normalizeBit),
   [ArrayColumnType.VARBIT_ARRAY]: normalize_array(normalizeBit),
   [ArrayColumnType.XML_ARRAY]: normalize_array(normalize_xml),
+  // The PPG client returns every array it has no parser for as the raw literal (`{a,b}`),
+  // so each array type that `fieldToColumnType` reports needs one here.
+  [ArrayColumnType.BOOL_ARRAY]: normalize_array(normalize_bool),
+  [ArrayColumnType.INT2_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.INT4_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.INT8_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.OID_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.FLOAT4_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.FLOAT8_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.TEXT_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.VARCHAR_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.BPCHAR_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.CHAR_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.UUID_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.INET_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.CIDR_ARRAY]: normalize_array(identity),
 }).map(([k, v]) => ({
   oid: Number(k),
   parse: v,
 }))
+
+/**
+ * Element normalizer for array types whose elements the data mapper already accepts as strings.
+ */
+function identity(x: string): string {
+  return x
+}
 
 function normalize_bool(x: string | null) {
   return x === null ? null : x === 'f' ? 'false' : 'true'
