@@ -82,51 +82,43 @@ function nameList(names: readonly string[]): string {
   return hidden > 0 ? `${shown}, and ${hidden} more` : shown;
 }
 
-const MOVED_BY_DB_UPDATE = '`db update` or `db init` moved it outside the migration graph';
+const MOVED_BY_DB_UPDATE = '`db update` or `db init` moved it outside the migration graph.';
+
+function whichIs(names: readonly string[], singular: string, plural: string): string {
+  return `${nameList(names)}, which ${names.length === 1 ? singular : plural}`;
+}
 
 function historySentence(history: LedgerAfterGraph): string {
   const { lastGraphHash, missingMigrations, replannedMigrations, movedWithoutMigration } = history;
   const migrations = [
     ...(missingMigrations.length === 0
       ? []
-      : [
-          `${nameList(missingMigrations)}, which ${missingMigrations.length === 1 ? 'is' : 'are'} no longer on disk`,
-        ]),
+      : [whichIs(missingMigrations, 'is no longer on disk', 'are no longer on disk')]),
     ...(replannedMigrations.length === 0
       ? []
       : [
-          `${nameList(replannedMigrations)}, which ${replannedMigrations.length === 1 ? 'has' : 'have'} since been planned again with different content`,
+          whichIs(
+            replannedMigrations,
+            'has since been planned again with different content',
+            'have since been planned again with different content',
+          ),
         ]),
   ];
-  const opening = `The database last applied ${lastGraphHash}`;
+  const opening = `After ${lastGraphHash}, the last graph contract it reached,`;
   if (migrations.length === 0) {
     return movedWithoutMigration
-      ? `${opening}, then ${MOVED_BY_DB_UPDATE}.`
-      : `${opening}, then its marker was moved without a migration, for example by \`db sign\`.`;
+      ? `${opening} ${MOVED_BY_DB_UPDATE}`
+      : `${opening} its marker was moved without a migration, for example by \`db sign\`.`;
   }
-  const applied = `${opening}, then ${migrations.join(', and ')}.`;
-  return movedWithoutMigration ? `${applied} After that, ${MOVED_BY_DB_UPDATE}.` : applied;
+  const applied = `${opening} it applied ${migrations.join(', and ')}.`;
+  return movedWithoutMigration ? `${applied} After that, ${MOVED_BY_DB_UPDATE}` : applied;
 }
 
-const PLANNED_AGAIN_OR_DELETED =
-  'This usually means a migration this database applied was later planned again or deleted, for example a branch that was deployed and then rebased.';
 const CAUSE_UNKNOWN =
-  'This usually means a migration this database applied was later planned again or deleted, or `db update` moved the database to a contract no migration ends at.';
-const NOT_RESET = 'The database does not need to be reset or dropped.';
-
-function causeSentence(history: LedgerAfterGraph | undefined): readonly string[] {
-  if (history === undefined) {
-    return [CAUSE_UNKNOWN];
-  }
-  const namesMigrations =
-    history.missingMigrations.length > 0 || history.replannedMigrations.length > 0;
-  return namesMigrations
-    ? [PLANNED_AGAIN_OR_DELETED, historySentence(history)]
-    : [historySentence(history)];
-}
+  'A migration it applied was planned again or deleted, or `db update` moved it to a contract no migration ends at.';
 
 function extensionCause(spaceId: string): string {
-  return `The migrations of extension space "${spaceId}" come with the extension, so this usually means the extension was changed to a version whose migrations do not include that contract.`;
+  return `The migrations of extension space "${spaceId}" come with the extension; it was changed to a version whose migrations do not include that contract.`;
 }
 
 interface Advice {
@@ -134,9 +126,8 @@ interface Advice {
   readonly nextActions: readonly NextAction[];
 }
 
-const KEEP_HISTORY_CHOICE =
-  "If this database's migration history does not need to be kept (a local, development, staging or preview database), reconcile it to the target:";
-const DEPLOY_AGAIN = 'Then deploy again.';
+const MOVE_WITH_DB_UPDATE =
+  'Unless this database changes only through migrations, as production does, move it with db update; its data stays:';
 
 /** The `db update` arguments that name the target, or undefined when no `--to` names it. */
 function reconcileArgs(
@@ -163,27 +154,21 @@ function applicationAdvice(
     const authorOne = `The database is already at the target, but no migration ends there: author a migration from ${from} to ${found.targetHash}, commit it, and deploy again.`;
     return { fix: authorOne, nextActions: [chooseAction(authorOne)] };
   }
-  const migrationsOnly = `If this database changes only through migrations, as production should: author a migration from ${from} to the database's current contract, then one from there to ${found.targetHash}, commit them, and deploy again.`;
   const toTarget = reconcileArgs(found, owner);
   if (toTarget === undefined) {
+    const migrationsOnly = `Plan a migration from ${from} to the database's current contract, then one to ${found.targetHash}, commit them, and deploy again.`;
     return { fix: migrationsOnly, nextActions: [chooseAction(migrationsOnly)] };
   }
   const dryRun = cliCommand(found.invocation, 'db update', [...toTarget, '--dry-run']);
   const reconcile = cliCommand(found.invocation, 'db update', toTarget);
+  const otherwise = `Otherwise plan a migration from ${from} to its current contract, then one to ${found.targetHash}, and deploy again.`;
   return {
-    fix: [
-      KEEP_HISTORY_CHOICE,
-      `  ${dryRun}`,
-      `  ${reconcile}`,
-      `  ${DEPLOY_AGAIN}`,
-      migrationsOnly,
-    ].join('\n'),
+    fix: [MOVE_WITH_DB_UPDATE, `  ${dryRun}`, `  ${reconcile}`, otherwise].join('\n'),
     nextActions: [
-      chooseAction(KEEP_HISTORY_CHOICE),
+      chooseAction(MOVE_WITH_DB_UPDATE),
       runCommandAction('Preview the changes', dryRun),
       runCommandAction('Reconcile the database', reconcile),
-      chooseAction(DEPLOY_AGAIN),
-      chooseAction(migrationsOnly),
+      chooseAction(otherwise),
     ],
   };
 }
@@ -192,11 +177,10 @@ function extensionAdvice(found: MarkerOutsideGraph): Advice {
   const install = `Install a version of the extension whose migrations include the contract the database is at (${found.markerHash}), or ask the extension's maintainers for one.`;
   const list = cliCommand(found.invocation, 'migration list', ['--space', found.spaceId]);
   return {
-    fix: [install, `List the space's migrations with \`${list}\`.`, DEPLOY_AGAIN].join('\n'),
+    fix: [install, `List the space's migrations with \`${list}\`.`].join('\n'),
     nextActions: [
       chooseAction(install),
       runCommandAction(`List the migrations of extension space "${found.spaceId}"`, list),
-      chooseAction(DEPLOY_AGAIN),
     ],
   };
 }
@@ -211,13 +195,13 @@ export function errorMarkerMismatch(found: MarkerOutsideGraph): ActionableCliErr
   const history =
     found.ledger === undefined ? undefined : ledgerAfterGraph(found.ledger, found.graph);
   const directory = printedPath(invocation, join(found.migrationsDir, spaceId));
-  const why = [
-    `The database's marker names contract ${markerHash}, and no migration in ${directory} starts or ends there.`,
-    ...(owner.kind === 'extension'
-      ? [extensionCause(spaceId), ...(history === undefined ? [] : [historySentence(history)])]
-      : causeSentence(history)),
-    NOT_RESET,
-  ].join(' ');
+  const cause =
+    owner.kind === 'extension'
+      ? extensionCause(spaceId)
+      : history === undefined
+        ? CAUSE_UNKNOWN
+        : historySentence(history);
+  const why = `The database's marker names ${markerHash}, which no migration in ${directory} starts or ends at. ${cause}`;
   const advice =
     owner.kind === 'extension' ? extensionAdvice(found) : applicationAdvice(found, owner, history);
   return new ActionableCliError(

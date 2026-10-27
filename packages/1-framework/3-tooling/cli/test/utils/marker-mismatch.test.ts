@@ -39,23 +39,26 @@ function movedByDbUpdate(from: string | null, to: string): LedgerEntryRecord {
 }
 
 const SUMMARY = 'The database is at a contract that is not in the migration graph';
-const OPENING = `The database's marker names contract ${HASH_DELETED}, and no migration in migrations/app starts or ends there.`;
-const PLANNED_AGAIN_OR_DELETED =
-  'This usually means a migration this database applied was later planned again or deleted, for example a branch that was deployed and then rebased.';
+const OPENING = `The database's marker names ${HASH_DELETED}, which no migration in migrations/app starts or ends at.`;
+const AFTER_LAST = `After ${HASH_A}, the last graph contract it reached,`;
+const MOVED_BY_DB_UPDATE = '`db update` or `db init` moved it outside the migration graph.';
 const CAUSE_UNKNOWN =
-  'This usually means a migration this database applied was later planned again or deleted, or `db update` moved the database to a contract no migration ends at.';
-const CLOSING = 'The database does not need to be reset or dropped.';
-const KEEP_HISTORY_CHOICE =
-  "If this database's migration history does not need to be kept (a local, development, staging or preview database), reconcile it to the target:";
+  'A migration it applied was planned again or deleted, or `db update` moved it to a contract no migration ends at.';
+const MOVE_WITH_DB_UPDATE =
+  'Unless this database changes only through migrations, as production does, move it with db update; its data stays:';
 const DRY_RUN = `{bin} db update --to ${HASH_B} --dry-run --db <url>`;
 const RECONCILE = `{bin} db update --to ${HASH_B} --db <url>`;
 
-function migrationsOnly(from: string, to = HASH_B): string {
-  return `If this database changes only through migrations, as production should: author a migration from ${from} to the database's current contract, then one from there to ${to}, commit them, and deploy again.`;
+function otherwise(from: string, to = HASH_B): string {
+  return `Otherwise plan a migration from ${from} to its current contract, then one to ${to}, and deploy again.`;
+}
+
+function migrationsOnly(from: string, to: string): string {
+  return `Plan a migration from ${from} to the database's current contract, then one to ${to}, commit them, and deploy again.`;
 }
 
 function expectedEnvelope(args: {
-  readonly why: readonly string[];
+  readonly why: string;
   readonly from: string;
   readonly meta: Record<string, unknown>;
 }) {
@@ -64,20 +67,13 @@ function expectedEnvelope(args: {
     code: 'MIGRATION.MARKER_MISMATCH',
     severity: 'error',
     summary: SUMMARY,
-    why: [OPENING, ...args.why, CLOSING].join(' '),
-    fix: [
-      KEEP_HISTORY_CHOICE,
-      `  ${DRY_RUN}`,
-      `  ${RECONCILE}`,
-      '  Then deploy again.',
-      migrationsOnly(args.from),
-    ].join('\n'),
+    why: `${OPENING} ${args.why}`,
+    fix: [MOVE_WITH_DB_UPDATE, `  ${DRY_RUN}`, `  ${RECONCILE}`, otherwise(args.from)].join('\n'),
     nextActions: [
-      { kind: 'user-choice', label: KEEP_HISTORY_CHOICE },
+      { kind: 'user-choice', label: MOVE_WITH_DB_UPDATE },
       { kind: 'run-command', label: 'Preview the changes', command: DRY_RUN },
       { kind: 'run-command', label: 'Reconcile the database', command: RECONCILE },
-      { kind: 'user-choice', label: 'Then deploy again.' },
-      { kind: 'user-choice', label: migrationsOnly(args.from) },
+      { kind: 'user-choice', label: otherwise(args.from) },
     ],
     meta: args.meta,
   };
@@ -111,10 +107,7 @@ describe('errorMarkerMismatch', () => {
 
     expect(mismatch(ledger)).toEqual(
       expectedEnvelope({
-        why: [
-          PLANNED_AGAIN_OR_DELETED,
-          `The database last applied ${HASH_A}, then 20261013T0910_request_description, which is no longer on disk.`,
-        ],
+        why: `${AFTER_LAST} it applied 20261013T0910_request_description, which is no longer on disk.`,
         from: HASH_A,
         meta: {
           ...META,
@@ -134,10 +127,7 @@ describe('errorMarkerMismatch', () => {
 
     expect(mismatch(ledger)).toEqual(
       expectedEnvelope({
-        why: [
-          PLANNED_AGAIN_OR_DELETED,
-          `The database last applied ${HASH_A}, then 20261013T0910_first, 20261013T0911_second, which are no longer on disk.`,
-        ],
+        why: `${AFTER_LAST} it applied 20261013T0910_first, 20261013T0911_second, which are no longer on disk.`,
         from: HASH_A,
         meta: {
           ...META,
@@ -157,10 +147,7 @@ describe('errorMarkerMismatch', () => {
 
     expect(mismatch(ledger)).toEqual(
       expectedEnvelope({
-        why: [
-          PLANNED_AGAIN_OR_DELETED,
-          `The database last applied ${HASH_A}, then ${names.slice(0, 5).join(', ')}, and 2 more, which are no longer on disk.`,
-        ],
+        why: `${AFTER_LAST} it applied ${names.slice(0, 5).join(', ')}, and 2 more, which are no longer on disk.`,
         from: HASH_A,
         meta: { ...META, lastGraphHash: HASH_A, missingMigrations: names },
       }),
@@ -175,12 +162,25 @@ describe('errorMarkerMismatch', () => {
 
     expect(mismatch(ledger)).toEqual(
       expectedEnvelope({
-        why: [
-          PLANNED_AGAIN_OR_DELETED,
-          `The database last applied ${HASH_A}, then 20261014T0000_request_description_again, which has since been planned again with different content.`,
-        ],
+        why: `${AFTER_LAST} it applied 20261014T0000_request_description_again, which has since been planned again with different content.`,
         from: HASH_A,
         meta: { ...META, lastGraphHash: HASH_A, missingMigrations: [] },
+      }),
+    );
+  });
+
+  it('names the missing migrations, then the ones planned again', () => {
+    const ledger = [
+      applied('20261001T0000_initial', null, HASH_A),
+      applied('20261013T0910_first', HASH_A, HASH_OTHER),
+      applied('20261014T0000_request_description_again', HASH_OTHER, HASH_DELETED),
+    ];
+
+    expect(mismatch(ledger)).toEqual(
+      expectedEnvelope({
+        why: `${AFTER_LAST} it applied 20261013T0910_first, which is no longer on disk, and 20261014T0000_request_description_again, which has since been planned again with different content.`,
+        from: HASH_A,
+        meta: { ...META, lastGraphHash: HASH_A, missingMigrations: ['20261013T0910_first'] },
       }),
     );
   });
@@ -193,9 +193,7 @@ describe('errorMarkerMismatch', () => {
 
     expect(mismatch(ledger)).toEqual(
       expectedEnvelope({
-        why: [
-          `The database last applied ${HASH_A}, then \`db update\` or \`db init\` moved it outside the migration graph.`,
-        ],
+        why: `${AFTER_LAST} ${MOVED_BY_DB_UPDATE}`,
         from: HASH_A,
         meta: { ...META, lastGraphHash: HASH_A, missingMigrations: [] },
       }),
@@ -211,10 +209,7 @@ describe('errorMarkerMismatch', () => {
 
     expect(mismatch(ledger)).toEqual(
       expectedEnvelope({
-        why: [
-          PLANNED_AGAIN_OR_DELETED,
-          `The database last applied ${HASH_A}, then 20261013T0910_request_description, which is no longer on disk. After that, \`db update\` or \`db init\` moved it outside the migration graph.`,
-        ],
+        why: `${AFTER_LAST} it applied 20261013T0910_request_description, which is no longer on disk. After that, ${MOVED_BY_DB_UPDATE}`,
         from: HASH_A,
         meta: {
           ...META,
@@ -230,9 +225,7 @@ describe('errorMarkerMismatch', () => {
 
     expect(mismatch(ledger)).toEqual(
       expectedEnvelope({
-        why: [
-          `The database last applied ${HASH_A}, then its marker was moved without a migration, for example by \`db sign\`.`,
-        ],
+        why: `${AFTER_LAST} its marker was moved without a migration, for example by \`db sign\`.`,
         from: HASH_A,
         meta: { ...META, lastGraphHash: HASH_A, missingMigrations: [] },
       }),
@@ -253,7 +246,7 @@ describe('errorMarkerMismatch', () => {
     ({ ledger }) => {
       expect(mismatch(ledger)).toEqual(
         expectedEnvelope({
-          why: [CAUSE_UNKNOWN],
+          why: CAUSE_UNKNOWN,
           from: 'the nearest contract in the migration graph',
           meta: { ...META, missingMigrations: [] },
         }),
@@ -264,7 +257,7 @@ describe('errorMarkerMismatch', () => {
   it('leaves the history and missingMigrations out when the ledger could not be read', () => {
     expect(mismatch(undefined)).toEqual(
       expectedEnvelope({
-        why: [CAUSE_UNKNOWN],
+        why: CAUSE_UNKNOWN,
         from: 'the nearest contract in the migration graph',
         meta: META,
       }),
@@ -278,7 +271,7 @@ describe('errorMarkerMismatch', () => {
     });
 
     expect(envelope.nextActions).toEqual([
-      { kind: 'user-choice', label: KEEP_HISTORY_CHOICE },
+      { kind: 'user-choice', label: MOVE_WITH_DB_UPDATE },
       {
         kind: 'run-command',
         label: 'Preview the changes',
@@ -289,10 +282,9 @@ describe('errorMarkerMismatch', () => {
         label: 'Reconcile the database',
         command: '{bin} db update --db <url>',
       },
-      { kind: 'user-choice', label: 'Then deploy again.' },
       {
         kind: 'user-choice',
-        label: migrationsOnly('the nearest contract in the migration graph', HASH_EMITTED),
+        label: otherwise('the nearest contract in the migration graph', HASH_EMITTED),
       },
     ]);
   });
@@ -328,7 +320,7 @@ describe('errorMarkerMismatch', () => {
 
     expect(envelope.nextActions.at(-1)).toEqual({
       kind: 'user-choice',
-      label: migrationsOnly('the empty contract'),
+      label: otherwise('the empty contract'),
     });
   });
 
@@ -345,15 +337,8 @@ describe('errorMarkerMismatch', () => {
       code: 'MIGRATION.MARKER_MISMATCH',
       severity: 'error',
       summary: SUMMARY,
-      why: [
-        `The database's marker names contract ${HASH_DELETED}, and no migration in migrations/pgvector starts or ends there.`,
-        'The migrations of extension space "pgvector" come with the extension, so this usually means the extension was changed to a version whose migrations do not include that contract.',
-        `The database last applied ${HASH_A}, then 20260102T0000_ext_newer, which is no longer on disk.`,
-        CLOSING,
-      ].join(' '),
-      fix: [install, `List the space's migrations with \`${list}\`.`, 'Then deploy again.'].join(
-        '\n',
-      ),
+      why: `The database's marker names ${HASH_DELETED}, which no migration in migrations/pgvector starts or ends at. The migrations of extension space "pgvector" come with the extension; it was changed to a version whose migrations do not include that contract.`,
+      fix: [install, `List the space's migrations with \`${list}\`.`].join('\n'),
       nextActions: [
         { kind: 'user-choice', label: install },
         {
@@ -361,7 +346,6 @@ describe('errorMarkerMismatch', () => {
           label: 'List the migrations of extension space "pgvector"',
           command: list,
         },
-        { kind: 'user-choice', label: 'Then deploy again.' },
       ],
       meta: {
         spaceId: 'pgvector',

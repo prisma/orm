@@ -142,19 +142,18 @@ describe('executeMigrate with no path to the target', () => {
       code: 'MIGRATION.MARKER_MISMATCH',
       severity: 'error',
       summary: 'The database is at a contract that is not in the migration graph',
-      why: `The database's marker names contract ${DELETED}, and no migration in migrations/app starts or ends there. This usually means a migration this database applied was later planned again or deleted, for example a branch that was deployed and then rebased. The database last applied ${APP_HEAD}, then 20261013T0910_request_description, which is no longer on disk. The database does not need to be reset or dropped.`,
+      why: `The database's marker names ${DELETED}, which no migration in migrations/app starts or ends at. After ${APP_HEAD}, the last graph contract it reached, it applied 20261013T0910_request_description, which is no longer on disk.`,
       fix: [
-        "If this database's migration history does not need to be kept (a local, development, staging or preview database), reconcile it to the target:",
+        'Unless this database changes only through migrations, as production does, move it with db update; its data stays:',
         `  {bin} db update --to ${APP_HEAD} --dry-run --db <url>`,
         `  {bin} db update --to ${APP_HEAD} --db <url>`,
-        '  Then deploy again.',
-        `If this database changes only through migrations, as production should: author a migration from ${APP_HEAD} to the database's current contract, then one from there to ${APP_HEAD}, commit them, and deploy again.`,
+        `Otherwise plan a migration from ${APP_HEAD} to its current contract, then one to ${APP_HEAD}, and deploy again.`,
       ].join('\n'),
       nextActions: [
         {
           kind: 'user-choice',
           label:
-            "If this database's migration history does not need to be kept (a local, development, staging or preview database), reconcile it to the target:",
+            'Unless this database changes only through migrations, as production does, move it with db update; its data stays:',
         },
         {
           kind: 'run-command',
@@ -166,10 +165,9 @@ describe('executeMigrate with no path to the target', () => {
           label: 'Reconcile the database',
           command: `{bin} db update --to ${APP_HEAD} --db <url>`,
         },
-        { kind: 'user-choice', label: 'Then deploy again.' },
         {
           kind: 'user-choice',
-          label: `If this database changes only through migrations, as production should: author a migration from ${APP_HEAD} to the database's current contract, then one from there to ${APP_HEAD}, commit them, and deploy again.`,
+          label: `Otherwise plan a migration from ${APP_HEAD} to its current contract, then one to ${APP_HEAD}, and deploy again.`,
         },
       ],
       meta: {
@@ -187,8 +185,8 @@ describe('executeMigrate with no path to the target', () => {
     projectDirs.push(projectDir);
     await mkdir(join(projectDir, 'migrations', 'app'), { recursive: true });
     const choice =
-      "If this database's migration history does not need to be kept (a local, development, staging or preview database), reconcile it to the target:";
-    const migrationsOnly = `If this database changes only through migrations, as production should: author a migration from the empty contract to the database's current contract, then one from there to ${APP_HEAD}, commit them, and deploy again.`;
+      'Unless this database changes only through migrations, as production does, move it with db update; its data stays:';
+    const otherwise = `Otherwise plan a migration from the empty contract to its current contract, then one to ${APP_HEAD}, and deploy again.`;
 
     const result = await migrate({
       projectDir,
@@ -201,13 +199,12 @@ describe('executeMigrate with no path to the target', () => {
       code: 'MIGRATION.MARKER_MISMATCH',
       severity: 'error',
       summary: 'The database is at a contract that is not in the migration graph',
-      why: `The database's marker names contract ${DELETED}, and no migration in migrations/app starts or ends there. This usually means a migration this database applied was later planned again or deleted, or \`db update\` moved the database to a contract no migration ends at. The database does not need to be reset or dropped.`,
+      why: `The database's marker names ${DELETED}, which no migration in migrations/app starts or ends at. A migration it applied was planned again or deleted, or \`db update\` moved it to a contract no migration ends at.`,
       fix: [
         choice,
         '  {bin} db update --dry-run --db <url>',
         '  {bin} db update --db <url>',
-        '  Then deploy again.',
-        migrationsOnly,
+        otherwise,
       ].join('\n'),
       nextActions: [
         { kind: 'user-choice', label: choice },
@@ -221,8 +218,7 @@ describe('executeMigrate with no path to the target', () => {
           label: 'Reconcile the database',
           command: '{bin} db update --db <url>',
         },
-        { kind: 'user-choice', label: 'Then deploy again.' },
-        { kind: 'user-choice', label: migrationsOnly },
+        { kind: 'user-choice', label: otherwise },
       ],
       meta: { spaceId: 'app', markerHash: DELETED, targetHash: APP_HEAD, missingMigrations: [] },
     });

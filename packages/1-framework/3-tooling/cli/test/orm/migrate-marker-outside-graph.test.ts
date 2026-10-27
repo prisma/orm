@@ -108,7 +108,6 @@ describe('a contract space whose marker is outside its migration graph', () => {
             label: 'List the migrations of extension space "pgvector"',
             command: 'prisma-test migration list --space pgvector',
           },
-          { kind: 'user-choice', label: 'Then deploy again.' },
         ],
         meta: {
           spaceId: 'pgvector',

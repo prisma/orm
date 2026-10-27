@@ -157,12 +157,12 @@ withTempDir(({ createTempDir }) => {
               docsUrl:
                 'https://docs.prisma.io/docs/orm/v8/reference/error-reference/MIGRATION.MARKER_MISMATCH',
               summary: 'The database is at a contract that is not in the migration graph',
-              why: `The database's marker names contract ${markerHash}, and no migration in migrations/app starts or ends there. This usually means a migration this database applied was later planned again or deleted, for example a branch that was deployed and then rebased. The database last applied ${initialHash}, then ${deleted}, which is no longer on disk. The database does not need to be reset or dropped.`,
+              why: `The database's marker names ${markerHash}, which no migration in migrations/app starts or ends at. After ${initialHash}, the last graph contract it reached, it applied ${deleted}, which is no longer on disk.`,
               nextActions: [
                 {
                   kind: 'user-choice',
                   label:
-                    "If this database's migration history does not need to be kept (a local, development, staging or preview database), reconcile it to the target:",
+                    'Unless this database changes only through migrations, as production does, move it with db update; its data stays:',
                 },
                 {
                   kind: 'run-command',
@@ -174,10 +174,9 @@ withTempDir(({ createTempDir }) => {
                   label: 'Reconcile the database',
                   command: `prisma-test db update --to ${targetHash}`,
                 },
-                { kind: 'user-choice', label: 'Then deploy again.' },
                 {
                   kind: 'user-choice',
-                  label: `If this database changes only through migrations, as production should: author a migration from ${initialHash} to the database's current contract, then one from there to ${targetHash}, commit them, and deploy again.`,
+                  label: `Otherwise plan a migration from ${initialHash} to its current contract, then one to ${targetHash}, and deploy again.`,
                 },
               ],
               meta: {
