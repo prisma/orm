@@ -2,7 +2,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import { defineContract, field, gen, type } from '../../src/exports/contract-builder';
 
 describe('the type exported by contract-builder', () => {
-  it('declares a fragment field with the column a Timestamptz contract field stores', () => {
+  it('declares a fragment field with the column a TimestamptzTemporal contract field stores', () => {
     const fragmentField = field.column(type.TimestamptzTemporal()).optional().build();
     const contract = defineContract({}, ({ field: callbackField, model, type: callbackType }) => ({
       models: {

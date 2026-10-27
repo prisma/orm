@@ -89,7 +89,7 @@ The key rule: anything that could exist in a non-SQL data model belongs in the m
 
 ### Pack-driven field vocabulary
 
-> Amended 2026-10-22: field presets and `field.generated()` were removed by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md). A field is written `field.column(type.X())`, with `.id()`, `.onCreate(gen.fn())` and `.onUpdate(gen.fn())`; `field.id.uuidv7String()` is `field.column(type.Char(36)).id().onCreate(gen.uuid(7))`. The two paragraphs below are kept as a record of the preset design.
+> Amended 2026-10-22: field presets and `field.generated()` were removed by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md). A field is written `field.column(type.X())`, with `.id()`, `.onCreate(gen.fn())` and `.onUpdate(gen.fn())`; `field.id.uuidv7String()` is `field.column(type.UuidString()).id().onCreate(gen.uuid(7))`. The two paragraphs below are kept as a record of the preset design.
 
 Common column patterns like "UUID primary key with v7 generation" collapse into single-call field presets: `field.id.uuidv7String()` carries the codec, descriptor, generator, nullability, and identity semantics in one expression.
 
