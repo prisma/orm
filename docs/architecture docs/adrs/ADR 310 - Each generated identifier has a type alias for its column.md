@@ -1,4 +1,4 @@
-# ADR 309 — Each generated identifier has a type alias for its column
+# ADR 310 — Each generated identifier has a type alias for its column
 
 **Status:** Implemented
 **Date:** 2026-10-23

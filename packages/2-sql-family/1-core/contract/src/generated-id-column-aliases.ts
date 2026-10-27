@@ -2,7 +2,7 @@ import type { AuthoringTypeAliasDescriptor } from '@internal/framework-component
 
 const CHAR_CODEC_ID = 'sql/char@1';
 
-/** The column of each id format the client generates, named by a type alias that carries no generator, so a foreign key uses it as its key does. The SQL family contributes them in `sql`, and a target may also name them at the top level. ADR 309. */
+/** The column of each id format the client generates, named by a type alias that carries no generator, so a foreign key uses it as its key does. The SQL family contributes them in `sql`, and a target may also name them at the top level. ADR 310. */
 export const generatedIdColumnAliases = {
   UuidString: {
     kind: 'typeAlias',

@@ -251,7 +251,7 @@ Requests answered with a no, with what to use instead. Every Accepted row is on 
 | 304 | Prisma 8 has no automatic batching | Load related rows with `.include(...)`, which the database joins | [ADR 304 - Prisma 8 has no automatic batching.md](adrs/ADR%20304%20-%20Prisma%208%20has%20no%20automatic%20batching.md) |
 | 305 | Prisma 8 has no `P2002`-style error codes | Branch on the dotted `code` of the error envelope (ADR 239) | [ADR 305 - Prisma 8 has no P2002-style error codes.md](adrs/ADR%20305%20-%20Prisma%208%20has%20no%20P2002-style%20error%20codes.md) |
 | 306 | One plain-data definition and one builder per family | Every contract source of a family produces one plain-data definition and calls one builder, which returns refusals as keyed data | [ADR 306 - One plain-data definition and one builder per family.md](adrs/ADR%20306%20-%20One%20plain-data%20definition%20and%20one%20builder%20per%20family.md) |
-| 309 | Each generated identifier has a type alias for its column | `Ulid`, `UuidString`, `Nanoid`, `Cuid2` and `Ksuid` name each identifier's column; the id field writes `@id` and its generator, and a foreign key uses the alias alone | [ADR 309 - Each generated identifier has a type alias for its column.md](adrs/ADR%20309%20-%20Each%20generated%20identifier%20has%20a%20type%20alias%20for%20its%20column.md) |
+| 310 | Each generated identifier has a type alias for its column | `Ulid`, `UuidString`, `Nanoid`, `Cuid2` and `Ksuid` name each identifier's column; the id field writes `@id` and its generator, and a foreign key uses the alias alone | [ADR 310 - Each generated identifier has a type alias for its column.md](adrs/ADR%20310%20-%20Each%20generated%20identifier%20has%20a%20type%20alias%20for%20its%20column.md) |
 
 ## Notes
 
