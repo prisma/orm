@@ -1,6 +1,6 @@
 # ADR 307 — No recovery resets or drops a database
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-23
 
 ## Decision
@@ -14,13 +14,14 @@ The commonest case is a database whose marker names a contract that is not in th
 
 ```text
 ✖ The database is at a contract that is not in the migration graph (MIGRATION.MARKER_MISMATCH)
-  why  The database's marker names contract 267755c4…, and no migration in migrations/app starts or ends there.
-       This usually means a migration this database applied was later planned again or deleted, for example a
-       branch that was deployed and then rebased. The database last applied 9f1e02ab…, then
-       20261013T0910_request_description, which is no longer on disk. The database does not need to be reset or dropped.
+  why  The database's marker names 267755c4…, which no migration in migrations/app starts or ends at. After 9f1e02ab…, the last graph contract it reached, it applied 20261013T0910_request_description, which is no longer on disk.
+  next Unless this database changes only through migrations, as production does, move it with db update; its data stays:
+         prisma db update --to 4b1c…e09a --dry-run --db <url>
+         prisma db update --to 4b1c…e09a --db <url>
+       Otherwise plan a migration from 9f1e02ab… to its current contract, then one to 4b1c…e09a, and deploy again.
 ```
 
-The error gives both recoveries, each labelled with the kind of database it is for.
+The error gives both recoveries; the condition on the first says which kind of database each is for.
 
 ## Why
 

@@ -18,8 +18,8 @@ Five slices, one pull request each, three in `prisma/orm` and two in `prisma/com
 
 **Next actions in this slice:** policies do not exist yet, so the error cannot know which recovery a database permits. It lists both, each labelled with the kind of database it is for:
 
-1. "If this database's migration history does not need to be kept, as for a local, development, staging or preview database": `db update --dry-run`, `db update`, then deploy again.
-2. "If this database changes only through migrations, as production should": author migrations from the last graph hash to the database's contract, then to the target.
+1. "Unless this database changes only through migrations, as production does, move it with db update; its data stays": `db update --dry-run`, then `db update`.
+2. "Otherwise plan a migration" from the last graph hash to the database's contract, then to the target, and deploy again.
 
 Slice 3 replaces this with the one recovery the database's policy permits. Without the labels, every database would look like it permits reconciliation, and the error would send agents to run `db update` on production.
 

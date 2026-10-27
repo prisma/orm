@@ -110,7 +110,7 @@ Each error is a structured envelope built where the failure is detected, in the 
 
 > **summary:** The database is at a contract that is not in the migration graph
 >
-> **why:** The database's marker names contract `<marker hash>`, and no migration in `migrations/app` starts or ends there. This usually means a migration this database applied was later planned again or deleted, for example a branch that was deployed and then rebased. The database last applied `<last graph hash>`, then `<migration names>`, which are no longer on disk. The database does not need to be reset or dropped.
+> **why:** The database's marker names `<marker hash>`, which no migration in `migrations/app` starts or ends at. After `<last graph hash>`, the last graph contract it reached, it applied `<migration names>`, which are no longer on disk.
 
 The last graph hash and the missing migrations come from the database's ledger: walking back from the newest entry, the first entry whose `to` is a graph node gives the last graph hash, and the entries after it name the missing migrations. When the ledger has no such entry, the sentence about the last graph hash is left out.
 

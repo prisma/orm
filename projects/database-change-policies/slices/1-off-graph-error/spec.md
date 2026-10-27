@@ -8,16 +8,11 @@ A Composer deploy or `prisma db migrate` against a database whose marker is not 
 
 ```text
 ✖ The database is at a contract that is not in the migration graph (MIGRATION.MARKER_MISMATCH)
-  why  The database's marker names contract 267755c4…, and no migration in migrations/app starts or ends there.
-       This usually means a migration this database applied was later planned again or deleted, for example a
-       branch that was deployed and then rebased. The database last applied 9f1e02ab…, then
-       20261013T0910_request_description, which is no longer on disk. The database does not need to be reset or dropped.
-  next If this database's migration history does not need to be kept (a local, development, staging or preview database):
-         prisma db update --db <url> --to 4b1c…e09a --dry-run
-         prisma db update --db <url> --to 4b1c…e09a
-         then deploy again
-       If this database changes only through migrations, as production should: author a migration from 9f1e02ab… to
-       the database's current contract, then one from there to 4b1c…e09a, commit them, and deploy again.
+  why  The database's marker names 267755c4…, which no migration in migrations/app starts or ends at. After 9f1e02ab…, the last graph contract it reached, it applied 20261013T0910_request_description, which is no longer on disk.
+  next Unless this database changes only through migrations, as production does, move it with db update; its data stays:
+         prisma db update --to 4b1c…e09a --dry-run --db <url>
+         prisma db update --to 4b1c…e09a --db <url>
+       Otherwise plan a migration from 9f1e02ab… to its current contract, then one to 4b1c…e09a, and deploy again.
 ```
 
 ## Chosen design
@@ -42,13 +37,13 @@ An empty database (no marker) is never case 1.
   - the marker's storage hash;
   - the space's migrations directory, relative to the project, as printed elsewhere in migrate errors;
   - **the last graph hash and the missing migrations, from the database's ledger.** Read the space's ledger (`readLedger`), newest entry first. The first entry whose `to` is a graph node gives the last graph hash; the entries newer than it, oldest first, give the missing migrations by `migrationName`. If no entry's `to` is a graph node, leave out the sentence naming the last graph hash and list nothing. If the ledger cannot be read, leave both out; never fail the error for it.
-  - the closing sentence, always: `The database does not need to be reset or dropped.`
 - **nextActions**, in order:
-  1. `user-choice`: `If this database's migration history does not need to be kept (a local, development, staging or preview database), reconcile it to the target:`
-  2. `run-command`, label `Preview the changes`: `{bin} db update --db <url> --to <target hash> --dry-run`
-  3. `run-command`, label `Reconcile the database`: `{bin} db update --db <url> --to <target hash>`
-  4. `user-choice`: `Then deploy again.`
-  5. `user-choice`: `If this database changes only through migrations, as production should: author a migration from <last graph hash> to the database's current contract, then one from there to <target hash>, commit them, and deploy again.` When there is no last graph hash, say `from the nearest contract in the migration graph` instead.
+  1. `user-choice`: `Unless this database changes only through migrations, as production does, move it with db update; its data stays:`
+  2. `run-command`, label `Preview the changes`: `{bin} db update --to <target hash> --dry-run --db <url>`
+  3. `run-command`, label `Reconcile the database`: `{bin} db update --to <target hash> --db <url>`
+  4. `user-choice`: `Otherwise plan a migration from <last graph hash> to its current contract, then one to <target hash>, and deploy again.` When there is no last graph hash, say `from the nearest contract in the migration graph` instead.
+
+  The `why` is one line per field; the terminal wraps it. Every sentence has to earn its place: no cause the history sentence already shows, and no separate "no reset" sentence, since "its data stays" says it.
 - **meta:** `spaceId`, `markerHash`, `targetHash`, `lastGraphHash` (or absent), `missingMigrations` (array of names, possibly empty; absent when the ledger cannot be read).
 
 Ledger rows written by `db update` or `db init` carry no migration name; the `why` says such a command moved the database outside the graph instead of naming a migration. Each list in the `why` shows at most five names. For an extension space, whose migrations come with the extension, the next actions send the user to a version of the extension whose migrations include the database's contract, since `db update` walks extension graphs and fails the same way. An extension space that ships no migrations is never refused, as before.
@@ -87,7 +82,7 @@ One reviewer can hold this in one sitting: one failure type is replaced by envel
 
 | Case | Expected |
 |---|---|
-| The incident: marker at a hash whose migration was deleted; ledger shows a graph hash, then the deleted migration | `MARKER_MISMATCH` naming both, with all five next actions |
+| The incident: marker at a hash whose migration was deleted; ledger shows a graph hash, then the deleted migration | `MARKER_MISMATCH` naming both, with all four next actions |
 | Marker off the graph, ledger empty or every `to` off the graph | `MARKER_MISMATCH` without the last-graph-hash sentence; the migration next action says "from the nearest contract in the migration graph" |
 | Marker in the graph, target not reachable | `PATH_UNREACHABLE`, unchanged content |
 | No marker (empty database) and no path | Not `MARKER_MISMATCH`; the existing no-path or never-planned error |
