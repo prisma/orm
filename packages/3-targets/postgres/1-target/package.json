@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest run --passWithNoTests",
-    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "typecheck": "tsc --project tsconfig.json --noEmit && tsc --project tsconfig.no-temporal-global.json --noEmit",
     "lint": "biome check . --error-on-warnings",
     "lint:fix": "biome check --write .",
     "lint:fix:unsafe": "biome check --write --unsafe .",
@@ -34,7 +34,8 @@
     "@standard-schema/spec": "^1.1.0",
     "arktype": "^2.2.2",
     "pathe": "^2.0.3",
-    "postgres-array": "2.0.0"
+    "postgres-array": "2.0.0",
+    "temporal-spec": "1.0.1"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.4",

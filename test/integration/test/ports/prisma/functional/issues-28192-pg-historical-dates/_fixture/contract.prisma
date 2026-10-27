@@ -19,7 +19,7 @@
 model TestData {
   id          String     @id @onCreate(cuid(2))
   date        Date
-  timestamp   Timestamp
-  timestamptz Timestamptz
+  timestamp   TimestampTemporal
+  timestamptz TimestamptzTemporal
   @@map("testData")
 }

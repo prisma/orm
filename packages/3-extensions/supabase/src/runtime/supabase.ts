@@ -1,7 +1,10 @@
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import type { NamespacedEnums } from '@internal/contract/enum-accessor';
 import type { Contract } from '@internal/contract/types';
-import postgresDriver, { suppressIdleConnectionErrors } from '@internal/driver-postgres/runtime';
+import postgresDriver, {
+  createPgPool,
+  suppressIdleConnectionErrors,
+} from '@internal/driver-postgres/runtime';
 import type {
   AsyncIterableResult,
   RuntimeExecuteOptions,
@@ -56,7 +59,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
 import { createRemoteJWKSet, decodeProtectedHeader, type JWTVerifyResult, jwtVerify } from 'jose';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import extensionContractJson from '../contract/contract.json' with { type: 'json' };
 import { isSupabaseRole, SUPABASE_JWT_ROLE_CLAIM, SupabaseRole } from '../contract/roles';
 import { supabaseRuntimeDescriptor } from './descriptor';
@@ -288,11 +291,14 @@ function toPoolBinding<TContract extends Contract<SqlStorage>>(
     return {
       kind: 'pgPool',
       pool: suppressIdleConnectionErrors(
-        new Pool({
-          connectionString: options.url,
-          connectionTimeoutMillis: options.poolOptions?.connectionTimeoutMillis ?? 20_000,
-          idleTimeoutMillis: options.poolOptions?.idleTimeoutMillis ?? 30_000,
-        }),
+        createPgPool(
+          {
+            connectionString: options.url,
+            connectionTimeoutMillis: options.poolOptions?.connectionTimeoutMillis ?? 20_000,
+            idleTimeoutMillis: options.poolOptions?.idleTimeoutMillis ?? 30_000,
+          },
+          postgresTarget.sessionSettings ?? {},
+        ),
       ),
       ownedByDriver: true,
     };

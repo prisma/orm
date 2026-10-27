@@ -685,6 +685,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/3-targets/postgres/3-driver/src/session-settings.ts",
+      "domain": "targets",
+      "layer": "drivers",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/postgres/3-driver/src/driver-error.ts",
       "domain": "targets",
       "layer": "drivers",

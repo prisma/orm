@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { postgresRenderCheckExpressions } from '../src/core/check-expressions';
 import { postgresTargetDescriptorMeta } from '../src/core/descriptor-meta';
+import postgresRuntimeTargetDescriptor from '../src/exports/runtime';
 
 describe('postgresTargetDescriptorMeta', () => {
   it('declares namespace support, so emitted model names keep their namespace segment', () => {
@@ -18,5 +19,12 @@ describe('postgresTargetDescriptorMeta', () => {
     expect(postgresTargetDescriptorMeta.authoring.renderCheckExpressions).toBe(
       postgresRenderCheckExpressions,
     );
+  });
+
+  it('declares, on the control and runtime target, that every session prints dates in DateStyle ISO, which its date and time codecs read', () => {
+    expect([
+      postgresTargetDescriptorMeta.sessionSettings,
+      postgresRuntimeTargetDescriptor.sessionSettings,
+    ]).toEqual([{ DateStyle: 'ISO' }, { DateStyle: 'ISO' }]);
   });
 });

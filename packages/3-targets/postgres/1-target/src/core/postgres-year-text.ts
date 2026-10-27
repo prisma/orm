@@ -3,7 +3,7 @@
  */
 
 const POSTGRES_YEAR = /^(\d{4,6})(-.*?)( BC)?$/;
-const ISO_YEAR = /^([+-]\d{6}|\d{4})(-.*)$/;
+const ISO_YEAR = /^([+-]\d{6,}|\d{4})(-.*)$/;
 const BC_SUFFIX = ' BC';
 
 /** ISO 8601 text, with a four-digit or signed six-digit year, from text PostgreSQL prints. Text with no year, ISO text and `0000 BC`, which does not exist, stay as they are. */
@@ -19,7 +19,7 @@ export function isoYearText(text: string): string {
   return digits.length > 4 ? `${isoYear(year)}${rest}` : text;
 }
 
-/** The text PostgreSQL reads for ISO 8601 text with a four-digit or signed six-digit year. Text with no year stays as it is. */
+/** The text PostgreSQL reads for ISO 8601 text with a four-digit year or a signed year of six or more digits. Text with no year stays as it is. */
 export function postgresYearText(text: string): string {
   const match = ISO_YEAR.exec(text);
   if (match === null) return text;

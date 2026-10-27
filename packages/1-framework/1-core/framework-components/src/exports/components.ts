@@ -43,6 +43,7 @@ export type {
   FamilyInstance,
   FamilyPackRef,
   PackRefBase,
+  SessionSettings,
   TargetBoundComponentDescriptor,
   TargetDescriptor,
   TargetInstance,

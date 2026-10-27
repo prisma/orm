@@ -41,9 +41,11 @@ import {
   postgresSqlTextDescriptor,
   postgresSqlVarcharDescriptor,
 } from './codecs';
-import { pgTimestamptzDateDescriptor } from './date-codecs';
+import { pgTimestampDateDescriptor, pgTimestamptzDateDescriptor } from './date-codecs';
+import { pgIntervalStringDescriptor } from './interval-string-codec';
 import {
   pgDateTemporalDescriptor,
+  pgTimestampInstantDescriptor,
   pgTimestampTemporalDescriptor,
   pgTimestamptzTemporalDescriptor,
   pgTimeTemporalDescriptor,
@@ -83,6 +85,8 @@ export const codecDescriptorMap = {
   'timestamp-string': pgTimestampStringDescriptor,
   'timestamptz-string': pgTimestamptzStringDescriptor,
   'timestamptz-date': pgTimestamptzDateDescriptor,
+  'timestamp-date': pgTimestampDateDescriptor,
+  'timestamp-instant': pgTimestampInstantDescriptor,
   'time-string': pgTimeStringDescriptor,
   timetz: pgTimetzDescriptor,
   bool: pgBoolDescriptor,
@@ -92,6 +96,7 @@ export const codecDescriptorMap = {
   uuid: pgUuidDescriptor,
   inet: pgInetDescriptor,
   interval: pgIntervalDescriptor,
+  'interval-string': pgIntervalStringDescriptor,
   json: pgJsonDescriptor,
   jsonb: pgJsonbDescriptor,
   tsquery: pgTsqueryDescriptor,

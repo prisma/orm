@@ -30,7 +30,6 @@ export {
 export type {
   Bit,
   Char,
-  Interval,
   Numeric,
   TimeString,
   TimestampString,

@@ -249,6 +249,41 @@
       "model": "Defaults"
     }
   },
+  "execution": {
+    "executionHash": "34724d7f5b296e0eee40a5a82495ef0ff3eb4bcb7428d1261cf475fb29be215b",
+    "mutations": {
+      "defaults": [
+        {
+          "ref": {
+            "namespace": "public",
+            "entry": "Defaults",
+            "field": "createdAt"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "timestampStringNow",
+            "params": {
+              "precision": 3
+            }
+          }
+        },
+        {
+          "ref": {
+            "namespace": "public",
+            "entry": "Defaults",
+            "field": "createdAtTz"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "timestamptzStringNow",
+            "params": {
+              "precision": 6
+            }
+          }
+        }
+      ]
+    }
+  },
   "extensions": {},
   "capabilities": {},
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",

@@ -24,6 +24,8 @@ model Clock {
   timestamptz3       temporal.timestamptz(3, onCreate: now, onUpdate: now)
   timestamptz6       temporal.timestamptz(6, onCreate: now, onUpdate: now)
   timestamptzString0 temporal.timestamptzString(0, onCreate: now, onUpdate: now)
+  timestamptzString1 temporal.timestamptzString(1, onCreate: now, onUpdate: now)
+  timestamptzString2 temporal.timestamptzString(2, onCreate: now, onUpdate: now)
   timestamptzString3 temporal.timestamptzString(3, onCreate: now, onUpdate: now)
   timestamptzString6 temporal.timestamptzString(6, onCreate: now, onUpdate: now)
   timestamptzJsDate0 temporal.timestamptzJsDate(0, onCreate: now, onUpdate: now)

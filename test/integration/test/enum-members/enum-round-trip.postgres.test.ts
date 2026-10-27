@@ -51,6 +51,7 @@ const storedMembers: Readonly<Record<string, JsonValue>> = {
   'pg/timestamp': '2024-01-02T03:04:05.5',
   'pg/timestamptz': '2024-01-02T03:04:05.5Z',
   'pg/time': '03:04:05.5',
+  'pg/timetz': '03:04:05.5+02:00',
   'pg/bool': true,
   'pg/bit': '1',
   'pg/varbit': '101',

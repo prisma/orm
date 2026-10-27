@@ -131,11 +131,13 @@ describe('postgres temporal per-codec presets', () => {
         sizeType: 'pg/int4',
         codecId: 'pg/timestamp-string@1',
         generatorId: 'timestampStringNow',
+        nowTakesPrecision: true,
       }),
       timestamptzString: temporalCodecPresetWithPrecision({
         sizeType: 'pg/int4',
         codecId: 'pg/timestamptz-string@1',
         generatorId: 'timestamptzStringNow',
+        nowTakesPrecision: true,
       }),
       date: temporalCodecPreset({ codecId: 'pg/date-temporal@1', generatorId: 'plainDateNow' }),
       dateString: temporalCodecPreset({
@@ -166,8 +168,6 @@ describe('postgres temporal per-codec presets', () => {
   it.each([
     ['timestamp', 'plainDateTimeNow'],
     ['timestamptz', 'instantNow'],
-    ['timestampString', 'timestampStringNow'],
-    ['timestamptzString', 'timestamptzStringNow'],
   ] as const)(
     'temporal.%s answers `now` with the %s generator, the representation its codec encodes',
     (helper, generatorId) => {
@@ -190,6 +190,8 @@ describe('postgres temporal per-codec presets', () => {
     ['time', 'plainTimeNow'],
     ['timeString', 'timeStringNow'],
     ['timetz', 'timetzNow'],
+    ['timestampString', 'timestampStringNow'],
+    ['timestamptzString', 'timestamptzStringNow'],
   ] as const)(
     'temporal.%s answers `now` with the %s generator, given the precision so it rounds down',
     (helper, generatorId) => {

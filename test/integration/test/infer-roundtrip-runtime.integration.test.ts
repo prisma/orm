@@ -163,7 +163,7 @@ withTempDir(({ createTempDir }) => {
     );
   });
 
-  describe('Runtime: inferred date and time columns decode as PostgreSQL text in both top-level select and include()', () => {
+  describe('Runtime: inferred date and time columns decode as ISO 8601 in both top-level select and include()', () => {
     let database: Awaited<ReturnType<typeof createDevDatabase>>;
 
     beforeAll(async () => {
@@ -193,14 +193,14 @@ withTempDir(({ createTempDir }) => {
     }, timeouts.spinUpPpgDev);
 
     it(
-      'top-level select and include() both decode the date and time columns',
+      'top-level select and include() both decode the date and time columns, in any session time zone, and refuse another DateStyle',
       async () => {
         const ctx = await inferAndEmit(database.connectionString, createTempDir);
         const contract = readEmittedContract(ctx);
         const stored = {
           notedOn: '2024-01-15',
-          loggedAt: '2024-01-15 10:00:00.5',
-          seenAt: '2024-01-15 10:00:00+00',
+          loggedAt: '2024-01-15T10:00:00.5',
+          seenAt: '2024-01-15T10:00:00Z',
           opensAt: '08:30:00',
         };
 
@@ -231,26 +231,40 @@ withTempDir(({ createTempDir }) => {
             const records = new Collection({ runtime, context }, 'Record', {
               namespaceId: 'public',
             });
-            const rows = await records
-              .select('id', 'notedOn', 'loggedAt', 'seenAt', 'opensAt')
-              .all();
-            expect(rows).toEqual([{ id: 1, ...stored }]);
-
             const owners = new Collection({ runtime, context }, 'Owner', {
               namespaceId: 'public',
             });
-            const includeResult = await owners
-              .select('id')
-              // `contract` is a dynamically-introspected `Contract<SqlStorage>`
-              // with no literal domain shape (it doesn't exist until this test
-              // runs infer + emit), so `include`'s relation-name type inference
-              // has nothing to key off; test files are exempt from the
-              // no-bare-casts rule.
-              .include('records' as never, (record) =>
-                record.select('notedOn', 'loggedAt', 'seenAt', 'opensAt'),
-              )
-              .all();
-            expect(includeResult).toEqual([{ id: 1, records: [stored] }]);
+            const flat = () =>
+              records.select('id', 'notedOn', 'loggedAt', 'seenAt', 'opensAt').all();
+            const included = () =>
+              owners
+                .select('id')
+                // `contract` is a dynamically-introspected `Contract<SqlStorage>`
+                // with no literal domain shape (it doesn't exist until this test
+                // runs infer + emit), so `include`'s relation-name type inference
+                // has nothing to key off; test files are exempt from the
+                // no-bare-casts rule.
+                .include('records' as never, (record) =>
+                  record.select('notedOn', 'loggedAt', 'seenAt', 'opensAt'),
+                )
+                .all();
+            const expected = {
+              flat: [{ id: 1, ...stored }],
+              included: [{ id: 1, records: [stored] }],
+            };
+
+            expect({ flat: await flat(), included: await included() }).toEqual(expected);
+
+            await client.query("SET TimeZone = 'Asia/Tokyo'");
+            expect({ flat: await flat(), included: await included() }).toEqual(expected);
+
+            await client.query("SET DateStyle = 'German, DMY'");
+            const refusal = { code: 'RUNTIME.DATE_STYLE_NOT_ISO' };
+            await expect(flat()).rejects.toMatchObject(refusal);
+            await expect(included()).rejects.toMatchObject({
+              code: 'RUNTIME.DECODE_FAILED',
+              cause: refusal,
+            });
           } finally {
             await runtime.close();
           }

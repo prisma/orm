@@ -89,6 +89,22 @@ describe('values in a Postgres contract decode to the value a query returns', ()
     },
   );
 
+  it.each([
+    [
+      'pg/timestamp-string@1',
+      enumType('Stamp', pgTimestampString, member('A', '2024-01-02T03:04:05')),
+    ],
+    [
+      'pg/timestamptz-string@1',
+      enumType('Stamp', pgTimestamptzString, member('A', '2024-01-02T03:04:05Z')),
+    ],
+  ])(
+    'accepts an enum over %s, whose values a query reads in the ISO 8601 form members are written in',
+    (_codecId, handle) => {
+      expect(() => contractWithEnum(handle)).not.toThrow();
+    },
+  );
+
   it('refuses an inet enum member that is not an address', () => {
     expect(() => contractWithEnum(enumType('Host', pgInet, member('A', 'not an address')))).toThrow(
       expect.objectContaining({
@@ -100,16 +116,6 @@ describe('values in a Postgres contract decode to the value a query returns', ()
   });
 
   it.each([
-    [
-      'pg/timestamp-string@1',
-      enumType('Stamp', pgTimestampString, member('A', '2024-01-02T03:04:05')),
-      'A query reads each value as the text PostgreSQL prints, such as "2024-01-02 03:04:05", while the contract stores it in ISO 8601, such as "2024-01-02T03:04:05", so no value read back equals a member. Use pg/timestamp-temporal@1, whose members are Temporal values.',
-    ],
-    [
-      'pg/timestamptz-string@1',
-      enumType('Stamp', pgTimestamptzString, member('A', '2024-01-02T03:04:05Z')),
-      `A query reads each value as the text PostgreSQL prints in the session's time zone, such as "2024-01-02 03:04:05+00", while the contract stores it in ISO 8601, such as "2024-01-02T03:04:05Z", so no value read back equals a member. Use pg/timestamptz-temporal@1, whose members are Temporal values.`,
-    ],
     [
       'pg/json@1',
       enumType('Stamp', pgJson, member('A', 'low')),

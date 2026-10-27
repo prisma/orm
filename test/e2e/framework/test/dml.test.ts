@@ -89,7 +89,7 @@ describe('DML E2E Tests - UUIDv7 client-generated IDs', { timeout: 30000 }, () =
         id: expect.stringMatching(UUIDV7_REGEX),
         name: 'uuidv7-test-event',
         created_at: expect.any(Temporal.Instant),
-        scheduled_at: '2024-01-15 10:30:00+00',
+        scheduled_at: '2024-01-15T10:30:00Z',
       });
     });
   });

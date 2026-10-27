@@ -19,7 +19,7 @@ const literal = (value: unknown) => ({ kind: 'literal', value });
 /** The tag that writes a value of each Postgres column type these tests use. */
 const TAG_OF: Readonly<Record<string, string>> = {
   DateTime: 'timestamptz',
-  Timestamp: 'timestamp',
+  TimestampTemporal: 'timestamp',
   Date: 'date',
   Time: 'time',
   Timetz: 'timetz',
@@ -49,15 +49,15 @@ describe('a PSL date or time default is stored in its data type canonical form',
       await postgresDefaults(
         `model Event {
   id        Int                @id
-  instant   Timestamptz(3)     @default(timestamptz\`2024-01-01 01:00:00+01\`)
+  instant   TimestamptzTemporal(3)     @default(timestamptz\`2024-01-01 01:00:00+01\`)
   jsDate    TimestamptzJsDate  @default(timestamptz\`2024-01-01 00:00:00.500+00\`)
-  local     Timestamp          @default(timestamp\`2024-01-01 12:34:56.500\`)
+  local     TimestampTemporal          @default(timestamp\`2024-01-01 12:34:56.500\`)
   localText TimestampString    @default(timestamp\`2024-01-01 12:34:56\`)
   day       Date               @default(date\`0044-03-15 BC\`)
   dayText   DateString         @default(date\`12026-01-02\`)
   clock     Time               @default(time\`12:34\`)
   zoned     Timetz             @default(timetz\`12:34:56+02\`)
-  history   Timestamp(3)[]     @default([timestamp\`2024-01-01 00:00:00\`, timestamp\`2024-06-30 12:34:56.789000\`])
+  history   TimestampTemporal(3)[]     @default([timestamp\`2024-01-01 00:00:00\`, timestamp\`2024-06-30 12:34:56.789000\`])
 }`,
         ['instant', 'jsDate', 'local', 'localText', 'day', 'dayText', 'clock', 'zoned', 'history'],
       ),
@@ -87,7 +87,7 @@ describe('a PSL date or time default is stored in its data type canonical form',
 
   it.each([
     [
-      'Timestamp',
+      'TimestampTemporal',
       '2024-01-01T00:00:00Z',
       'pg/timestamp holds no UTC offset, but "2024-01-01T00:00:00Z" has one. Leave it out, as in "2024-01-01T12:34:56".',
     ],
@@ -158,11 +158,11 @@ describe('a PSL date or time default is stored in its data type canonical form',
 describe('a quoted string on a Postgres date, time, interval or bytes column', () => {
   it.each([
     ['DateTime', '2024-01-01T00:00:00Z', 'timestamptz'],
-    ['Timestamp', '2024-01-01 12:34:56', 'timestamp'],
+    ['TimestampTemporal', '2024-01-01 12:34:56', 'timestamp'],
     ['Date', '2024-01-01', 'date'],
     ['Time', '12:34:56', 'time'],
     ['Timetz', '12:34:56+02:00', 'timetz'],
-    ['Interval', 'P1D', 'interval'],
+    ['IntervalParts', 'P1D', 'interval'],
     ['Bytes', '\\x68656c6c6f', 'bytea'],
   ])('on a %s column is refused, showing the tag to write', async (type, written, tag) => {
     const result = await authorSqlContractFromPsl(
@@ -181,7 +181,7 @@ describe('a quoted string on a Postgres date, time, interval or bytes column', (
       await postgresDefaults(
         `model Event {
   id    Int      @id
-  span  Interval @default(interval\`1 day 02:00:00\`)
+  span  IntervalParts @default(interval\`1 day 02:00:00\`)
   bytes Bytes    @default(bytea\`\\x68656c6c6f\`)
 }`,
         ['span', 'bytes'],

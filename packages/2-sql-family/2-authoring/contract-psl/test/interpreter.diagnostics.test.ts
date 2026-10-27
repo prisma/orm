@@ -418,7 +418,7 @@ model User {
       `types {
   BadChar = Char(0)
   BadReal = Real(1)
-  BadTimestamp = Timestamp(-1)
+  BadTimestamp = TimestampTemporal(-1)
 }
 
 model InvalidNativeTypes {
@@ -451,7 +451,7 @@ model InvalidNativeTypes {
         expect.objectContaining({
           code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
           message: expect.stringContaining(
-            'Type alias "BadTimestamp" constructor "Timestamp" Authoring helper argument at Timestamp[0] is invalid: precision must be non-negative (was -1)',
+            'Type alias "BadTimestamp" constructor "TimestampTemporal" Authoring helper argument at TimestampTemporal[0] is invalid: precision must be non-negative (was -1)',
           ),
         }),
       ]),
@@ -463,7 +463,7 @@ model InvalidNativeTypes {
     ['Char(10485761)', 'length must be at most 10485760 (was 10485761)'],
     ['Numeric(1001)', 'precision must be at most 1000 (was 1001)'],
     ['Numeric(10, 1001)', 'scale must be at most 1000 (was 1001)'],
-    ['Timestamptz(7)', 'precision must be at most 6 (was 7)'],
+    ['TimestamptzTemporal(7)', 'precision must be at most 6 (was 7)'],
     ['Time(7)', 'precision must be at most 6 (was 7)'],
     ['Timetz(7)', 'precision must be at most 6 (was 7)'],
   ])('refuses %s, outside its data type’s bounds', (call, message) => {
@@ -479,8 +479,8 @@ model InvalidNativeTypes {
     'Char(10485760)',
     'Numeric(1000, 1000)',
     'Numeric(1, 0)',
-    'Timestamp(0)',
-    'Timestamptz(6)',
+    'TimestampTemporal(0)',
+    'TimestamptzTemporal(6)',
   ])('accepts %s, at the edge of its data type’s bounds', (call) => {
     const result = interpretSqlContract(`model T {\n  id Int @id\n  value ${call}\n}\n`, {
       ...baseInput,
@@ -502,7 +502,7 @@ model InvalidNativeTypes {
 
   it.each([
     ['VarChar(3000000000)', '3000000000', 'Expected a number that pg/int4 can hold; got pg/int8'],
-    ['Timestamp(2.5)', '2.5', 'Expected a number that pg/int4 can hold; got pg/numeric'],
+    ['TimestampTemporal(2.5)', '2.5', 'Expected a number that pg/int4 can hold; got pg/numeric'],
     ['VarChar(255.0)', '255.0', 'Expected a number that pg/int4 can hold; got pg/numeric'],
     ['VarChar("255")', '"255"', 'Expected a number; write 255'],
     ['VarChar(length: true)', 'true', 'Expected a number'],
@@ -549,8 +549,8 @@ model InvalidNativeTypes {
     },
   );
 
-  it('reports Timestamp(7) through the data type’s bounds, at the argument', () => {
-    const schema = 'model T {\n  id Int @id\n  value Timestamp(7)\n}\n';
+  it('reports TimestampTemporal(7) through the data type’s bounds, at the argument', () => {
+    const schema = 'model T {\n  id Int @id\n  value TimestampTemporal(7)\n}\n';
     const result = interpretSqlContract(schema, {
       ...baseInput,
       controlMutationDefaults: builtinControlMutationDefaults,

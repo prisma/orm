@@ -212,6 +212,9 @@ export interface FamilyDescriptor<TFamilyId extends string> extends ComponentDes
  * postgres.targetId // 'postgres'
  * ```
  */
+/** Session settings by name, each with the value a database session must hold. */
+export type SessionSettings = Readonly<Record<string, string>>;
+
 export interface TargetDescriptor<TFamilyId extends string, TTargetId extends string>
   extends ComponentDescriptor<'target'> {
   /** The family this target belongs to */
@@ -222,6 +225,9 @@ export interface TargetDescriptor<TFamilyId extends string, TTargetId extends st
 
   /** Whether the target has a namespace mechanism (Postgres schemas, Mongo namespaces). Absent means true. When false, emitted `Models` member names and the `models` constant drop the namespace segment. */
   readonly supportsNamespaces?: boolean;
+
+  /** Session settings the target's codecs need on every connection. A stack passes them to each driver it creates, and the driver ensures them on every connection it hands out. */
+  readonly sessionSettings?: SessionSettings;
 }
 
 /**

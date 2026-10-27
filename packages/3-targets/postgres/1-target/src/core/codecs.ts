@@ -135,13 +135,16 @@ import {
   pgVarbit,
   pgVarchar,
 } from './data-types';
-import { pgTimestamptzDateDescriptor } from './date-codecs';
+import { pgTimestampDateDescriptor, pgTimestamptzDateDescriptor } from './date-codecs';
+import { type DateTimeWireReading, storedTextFromWire } from './date-time-wire-text';
 import { postgresError } from './errors';
+import { pgIntervalStringDescriptor } from './interval-string-codec';
 import { parsePostgresListText } from './list-decoder';
 import { DEFAULT_NAMESPACE_ID } from './namespace-ids';
 import { PostgresNativeEnum } from './postgres-native-enum';
 import {
   pgDateTemporalDescriptor,
+  pgTimestampInstantDescriptor,
   pgTimestampTemporalDescriptor,
   pgTimestamptzTemporalDescriptor,
   pgTimeTemporalDescriptor,
@@ -932,6 +935,12 @@ export const pgUnboundedIntColumn = () =>
 pgUnboundedIntColumn satisfies ColumnHelperFor<PgUnboundedIntDescriptor>;
 pgUnboundedIntColumn satisfies ColumnHelperForStrict<PgUnboundedIntDescriptor>;
 
+const TIMETZ_READING: DateTimeWireReading = {
+  shape: 'timeWithOffset',
+  holdsInfinity: false,
+  maxOffsetHours: 15,
+};
+
 export class PgTimetzCodec extends CodecImpl<
   typeof PG_TIMETZ_CODEC_ID,
   readonly ['equality', 'order'],
@@ -942,13 +951,13 @@ export class PgTimetzCodec extends CodecImpl<
     return value;
   }
   async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
-    return wire;
+    return storedTextFromWire(this.id, TIMETZ_READING, wire);
   }
   fromDataTypeValue(value: DataTypeValue<string>): string {
     return value.value;
   }
   toDataTypeValue(input: string): DataTypeValue {
-    return this.dataTypeValueOf(input);
+    return this.storedDataTypeValueOf(input);
   }
 }
 
@@ -959,8 +968,9 @@ export class PgTimetzDescriptor extends PostgresCodecDescriptor<PrecisionParams>
   override readonly dataType = pgTimetz.id;
   override readonly codecId = PG_TIMETZ_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
-  override readonly enumRefusal =
-    'A query reads each value as the text PostgreSQL prints, such as "12:34:56+02", while the contract stores it in ISO 8601, such as "12:34:56+02:00", so a value read back need not equal the member written. No enum can use a timetz codec; use a text enum instead.';
+  override renderValueLiteral(value: JsonValue): string | undefined {
+    return renderTsLiteral(value);
+  }
   override readonly paramsSchema = pgPrecisionParams satisfies StandardSchemaV1<PrecisionParams>;
   override factory(params: PrecisionParams): (ctx: CodecInstanceContext) => PgTimetzCodec {
     return () => new PgTimetzCodec(this, pgTimetz, params ?? {});
@@ -1539,6 +1549,8 @@ export const codecDescriptors = definePostgresCodecs([
   pgTimestampStringDescriptor,
   pgTimestamptzStringDescriptor,
   pgTimestamptzDateDescriptor,
+  pgTimestampDateDescriptor,
+  pgTimestampInstantDescriptor,
   pgTimeStringDescriptor,
   pgTimetzDescriptor,
   pgBoolDescriptor,
@@ -1548,6 +1560,7 @@ export const codecDescriptors = definePostgresCodecs([
   pgUuidDescriptor,
   pgInetDescriptor,
   pgIntervalDescriptor,
+  pgIntervalStringDescriptor,
   pgJsonDescriptor,
   pgJsonbDescriptor,
   pgTextArrayDescriptor,

@@ -92,18 +92,32 @@ sequenceDiagram
 - `SqlDriver.connect(binding: TBinding)`:
   - binding is **driver-determined**
   - after connect, driver is executable (and may lazily allocate resources as needed)
+- `RuntimeDriverDescriptor.create(options?, sessionSettings?)`:
+  - `sessionSettings` come from the stack's target; the driver ensures them on every connection it hands out
 - `ExecutionStackInstance.driver`:
   - stack instantiation includes the driver instance so the stack is “complete” and deterministic
 
+### A target's session settings
+
+A target may need every database session to have certain settings. PostgreSQL's date and time codecs read ISO 8601 text, so they need `DateStyle=ISO`. The target states this as data, `sessionSettings` on its descriptor:
+
+```ts
+sessionSettings: { DateStyle: 'ISO' }
+```
+
+The stack hands the settings to the driver. `createExecutionStack` calls `RuntimeDriverDescriptor.create(options, sessionSettings)`, and `createControlStack` passes them in the control driver's connect options. The driver ensures every connection it hands to the runtime has them, whatever its binding. How it does so is the driver's choice. The PostgreSQL driver sends them as startup options on connections it opens. On a pool or client the user supplies, it applies them with a statement before first use, and again after an exclusively held connection is released, because the holder may have reset the session.
+
+A codec never sets a session setting. If a connection does not have the setting, for example because a pooler dropped it, the codec refuses the value it cannot read and names the setting.
+
 ### How to pass driver create options when stack instantiation calls `create()` with no args
 
-Because `instantiateExecutionStack(...)` calls `descriptor.create()` with no arguments, the supported pattern is to **curry options into the descriptor** (i.e. wrap `create()`):
+Because `instantiateExecutionStack(...)` calls `descriptor.create()` with no driver options, the supported pattern is to **curry options into the descriptor** (i.e. wrap `create()`). The wrapper passes on the session settings the stack hands it:
 
 ```ts
 const driverWithCursor = {
   ...postgresDriverDescriptor,
-  create() {
-    return postgresDriverDescriptor.create({ cursor });
+  create(_options, sessionSettings) {
+    return postgresDriverDescriptor.create({ cursor }, sessionSettings);
   },
 };
 ```

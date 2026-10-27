@@ -7,8 +7,8 @@ import {
 const wrongTyped = (value: unknown): never => value as never;
 
 describe.each([
-  { descriptor: pgTimestampStringDescriptor, text: '2024-01-02 03:04:05.678' },
-  { descriptor: pgTimestamptzStringDescriptor, text: '2024-01-02 03:04:05.678+00' },
+  { descriptor: pgTimestampStringDescriptor, text: '2024-01-02T03:04:05.678' },
+  { descriptor: pgTimestamptzStringDescriptor, text: '2024-01-02T03:04:05.678Z' },
 ])('$descriptor.codecId encode', ({ descriptor, text }) => {
   const codec = descriptor.factory({})({ name: '<test>' });
   const codecId = descriptor.codecId;
@@ -24,7 +24,7 @@ describe.each([
   ])('refuses %s', async (received, value) => {
     await expect(codec.toWire(wrongTyped(value), {})).rejects.toMatchObject({
       code: 'RUNTIME.ENCODE_FAILED',
-      message: `Codec '${codecId}' writes PostgreSQL's text for the value, but received ${received}.`,
+      message: `Codec '${codecId}' writes ISO 8601 text, but received ${received}.`,
       meta: { codecId, received },
     });
   });

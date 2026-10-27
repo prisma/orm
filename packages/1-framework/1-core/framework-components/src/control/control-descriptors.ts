@@ -4,6 +4,7 @@ import type {
   DriverDescriptor,
   ExtensionDescriptor,
   FamilyDescriptor,
+  SessionSettings,
   TargetDescriptor,
 } from '../shared/framework-components';
 import type { GeneratorFunctionField } from '../shared/generator-functions';
@@ -100,6 +101,8 @@ export interface ControlDriverConnectOptions {
   readonly existingDatabaseOnly?: boolean;
   /** Give up connecting after this many milliseconds, where the driver connects over a network. */
   readonly connectTimeoutMs?: number;
+  /** Session settings the stack's target declares, which the driver ensures on its connection. */
+  readonly sessionSettings?: SessionSettings;
 }
 
 export interface ControlExtensionDescriptor<

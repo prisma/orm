@@ -185,7 +185,7 @@ model Box {
   token       Uuid           @default("A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11")
   addedTags   String[]       @default(["a", "b"])
   addedEmpty  String[]       @default([])
-  addedAt     Timestamp      @default(timestamp\`0044-03-15 12:00:00 BC\`)
+  addedAt     TimestampTemporal      @default(timestamp\`0044-03-15 12:00:00 BC\`)
   addedNumber Numeric(5, -2) @default(-9999900)
   addedCode   Char(5)        @default("ab")
   addedToken  Uuid           @default("{a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11}")

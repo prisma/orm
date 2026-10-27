@@ -1,3 +1,4 @@
+import type { Temporal as TemporalTypes } from 'temporal-spec';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { type PortContext, timeouts, withPostgresPort } from '../_harness/postgres';
 import type { Contract } from './_fixture-postgres/generated/contract';
@@ -226,8 +227,12 @@ describe('db.enums on a contract emitted from PSL, against Postgres', () => {
     expectTypeOf<Levels['Int4Level']['members']['Low']>().toEqualTypeOf<1>();
     expectTypeOf<Levels['Int8Level']['members']['Low']>().toEqualTypeOf<1n>();
     expectTypeOf<Levels['UuidLevel']['members']['First']>().toEqualTypeOf<typeof uuidA>();
-    expectTypeOf<Levels['StampLevel']['members']['Launch']>().toEqualTypeOf<Temporal.Instant>();
-    expectTypeOf<Levels['DayLevel']['members']['Launch']>().toEqualTypeOf<Temporal.PlainDate>();
+    expectTypeOf<
+      Levels['StampLevel']['members']['Launch']
+    >().toEqualTypeOf<TemporalTypes.Instant>();
+    expectTypeOf<
+      Levels['DayLevel']['members']['Launch']
+    >().toEqualTypeOf<TemporalTypes.PlainDate>();
     expectTypeOf<Levels['Float8Level']['members']['Half']>().toEqualTypeOf<1.5>();
     expectTypeOf<Levels['FloatSpecial']['members']['Nan']>().toEqualTypeOf<number>();
     expectTypeOf<Levels['Int8Level']['values']>().toEqualTypeOf<readonly [1n, 10n]>();

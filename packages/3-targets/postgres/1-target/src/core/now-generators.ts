@@ -6,6 +6,8 @@ import {
   PG_DATE_TEMPORAL_CODEC_ID,
   PG_TIME_STRING_CODEC_ID,
   PG_TIME_TEMPORAL_CODEC_ID,
+  PG_TIMESTAMP_DATE_CODEC_ID,
+  PG_TIMESTAMP_INSTANT_CODEC_ID,
   PG_TIMESTAMP_STRING_CODEC_ID,
   PG_TIMESTAMP_TEMPORAL_CODEC_ID,
   PG_TIMESTAMPTZ_DATE_CODEC_ID,
@@ -37,6 +39,8 @@ export const postgresNowGeneratorIds = {
   [PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID]: INSTANT_NOW_GENERATOR_ID,
   [PG_TIMESTAMPTZ_STRING_CODEC_ID]: TIMESTAMPTZ_STRING_NOW_GENERATOR_ID,
   [PG_TIMESTAMPTZ_DATE_CODEC_ID]: TIMESTAMP_NOW_GENERATOR_ID,
+  [PG_TIMESTAMP_DATE_CODEC_ID]: TIMESTAMP_NOW_GENERATOR_ID,
+  [PG_TIMESTAMP_INSTANT_CODEC_ID]: INSTANT_NOW_GENERATOR_ID,
 } as const;
 
 const nowGeneratorIdByCodecId: ReadonlyMap<string, string> = new Map(
@@ -47,14 +51,16 @@ export function postgresNowGeneratorIdFor(codecId: string): string | undefined {
   return nowGeneratorIdByCodecId.get(codecId);
 }
 
-/** The codecs whose "now" generator takes the column's precision, so that it rounds down where PostgreSQL would round a time up to `24:00:00`. */
+/** The codecs whose "now" generator takes the column's precision and rounds down to it, so PostgreSQL stores the value as generated rather than rounding it up, which for a time can reach `24:00:00`. */
 export const postgresNowGeneratorTakesPrecision = {
   [PG_TIME_TEMPORAL_CODEC_ID]: true,
   [PG_TIME_STRING_CODEC_ID]: true,
   [PG_TIMETZ_CODEC_ID]: true,
+  [PG_TIMESTAMP_STRING_CODEC_ID]: true,
+  [PG_TIMESTAMPTZ_STRING_CODEC_ID]: true,
 } as const;
 
-/** The `now` generator function bound to each Postgres date and time codec, with the column's precision on the three time codecs. */
+/** The `now` generator function bound to each Postgres date and time codec, with the column's precision on the codecs that take it. */
 export const postgresNowGeneratorFunction: GeneratorFunctionContribution = {
   name: 'now',
   bindings: Object.entries(postgresNowGeneratorIds).map(([codecId, generatorId]) =>

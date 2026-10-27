@@ -233,6 +233,26 @@
                   }
                 }
               },
+              "timestamptzString1": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 1
+                  }
+                }
+              },
+              "timestamptzString2": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 2
+                  }
+                }
+              },
               "timestamptzString3": {
                 "nullable": false,
                 "type": {
@@ -355,6 +375,12 @@
                 },
                 "timestamptzString0": {
                   "column": "timestamptzString0"
+                },
+                "timestamptzString1": {
+                  "column": "timestamptzString1"
+                },
+                "timestamptzString2": {
+                  "column": "timestamptzString2"
                 },
                 "timestamptzString3": {
                   "column": "timestamptzString3"
@@ -559,6 +585,22 @@
                     "precision": 0
                   }
                 },
+                "timestamptzString1": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 1
+                  }
+                },
+                "timestamptzString2": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 2
+                  }
+                },
                 "timestamptzString3": {
                   "codecId": "pg/timestamptz-string@1",
                   "dataType": "pg/timestamptz",
@@ -615,10 +657,10 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "cedcd9ab983b876215346a9eca6de6c41fe9fd966787f634bd330256c1e2508c"
+    "storageHash": "e912a0ac1c484ed92ae8cb217638a889ad671c1f4a9bfb3e469ebfb14916c6dd"
   },
   "execution": {
-    "executionHash": "c3a3387d2ba8c172f3b31c9a79cedb29984f1d49e22fd98046b9d41f1fb09e76",
+    "executionHash": "51be7e21b1611b41897bee6131dc8d5bfc6abd6380ca0bd6ba5a86d1c2f479c4",
     "mutations": {
       "defaults": [
         {
@@ -825,11 +867,17 @@
         {
           "onCreate": {
             "id": "timestampStringNow",
-            "kind": "generator"
+            "kind": "generator",
+            "params": {
+              "precision": 0
+            }
           },
           "onUpdate": {
             "id": "timestampStringNow",
-            "kind": "generator"
+            "kind": "generator",
+            "params": {
+              "precision": 0
+            }
           },
           "ref": {
             "entry": "clock",
@@ -840,11 +888,17 @@
         {
           "onCreate": {
             "id": "timestampStringNow",
-            "kind": "generator"
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
           },
           "onUpdate": {
             "id": "timestampStringNow",
-            "kind": "generator"
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
           },
           "ref": {
             "entry": "clock",
@@ -855,11 +909,17 @@
         {
           "onCreate": {
             "id": "timestampStringNow",
-            "kind": "generator"
+            "kind": "generator",
+            "params": {
+              "precision": 6
+            }
           },
           "onUpdate": {
             "id": "timestampStringNow",
-            "kind": "generator"
+            "kind": "generator",
+            "params": {
+              "precision": 6
+            }
           },
           "ref": {
             "entry": "clock",
@@ -960,11 +1020,17 @@
         {
           "onCreate": {
             "id": "timestamptzStringNow",
-            "kind": "generator"
+            "kind": "generator",
+            "params": {
+              "precision": 0
+            }
           },
           "onUpdate": {
             "id": "timestamptzStringNow",
-            "kind": "generator"
+            "kind": "generator",
+            "params": {
+              "precision": 0
+            }
           },
           "ref": {
             "entry": "clock",
@@ -975,11 +1041,59 @@
         {
           "onCreate": {
             "id": "timestamptzStringNow",
-            "kind": "generator"
+            "kind": "generator",
+            "params": {
+              "precision": 1
+            }
           },
           "onUpdate": {
             "id": "timestamptzStringNow",
-            "kind": "generator"
+            "kind": "generator",
+            "params": {
+              "precision": 1
+            }
+          },
+          "ref": {
+            "entry": "clock",
+            "field": "timestamptzString1",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestamptzStringNow",
+            "kind": "generator",
+            "params": {
+              "precision": 2
+            }
+          },
+          "onUpdate": {
+            "id": "timestamptzStringNow",
+            "kind": "generator",
+            "params": {
+              "precision": 2
+            }
+          },
+          "ref": {
+            "entry": "clock",
+            "field": "timestamptzString2",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestamptzStringNow",
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
+          },
+          "onUpdate": {
+            "id": "timestamptzStringNow",
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
           },
           "ref": {
             "entry": "clock",
@@ -990,11 +1104,17 @@
         {
           "onCreate": {
             "id": "timestamptzStringNow",
-            "kind": "generator"
+            "kind": "generator",
+            "params": {
+              "precision": 6
+            }
           },
           "onUpdate": {
             "id": "timestamptzStringNow",
-            "kind": "generator"
+            "kind": "generator",
+            "params": {
+              "precision": 6
+            }
           },
           "ref": {
             "entry": "clock",

@@ -5,7 +5,7 @@ model Event {
   a       DateTime     @default(timestamptz`2024-01-01T00:00:00Z`)
   b       DateTime     @default(timestamptz`2024-01-01T00:00:00.000Z`)
   c       DateTime     @default(timestamptz`2024-01-01T01:00:00+01:00`)
-  localAt Timestamp(3) @default(timestamp`2024-01-01 12:34:56.500`)
+  localAt TimestampTemporal(3) @default(timestamp`2024-01-01 12:34:56.500`)
   day     Date         @default(date`2024-01-01`)
   clock   Time         @default(time`12:34`)
   zoned   Timetz       @default(timetz`12:34:56+02`)

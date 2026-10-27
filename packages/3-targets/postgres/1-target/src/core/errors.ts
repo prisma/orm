@@ -23,6 +23,7 @@ export type PostgresTargetErrorCode =
   | 'MIGRATION.SQL_EXPRESSION_INVALID'
   | 'MIGRATION.TARGET_MISMATCH'
   | 'RUNTIME.ARGUMENT_INVALID'
+  | 'RUNTIME.DATE_STYLE_NOT_ISO'
   | 'RUNTIME.DECODE_FAILED'
   | 'RUNTIME.ENCODE_FAILED'
   | 'RUNTIME.TEMPORAL_UNAVAILABLE'
@@ -76,7 +77,7 @@ export function errorTemporalUnavailable(codecId: string, operation: string): St
     `Codec '${codecId}' cannot ${operation} a value because this runtime has no global Temporal implementation.`,
     {
       why: 'Temporal-backed codecs read and write their values through the global Temporal API, which this runtime does not provide.',
-      fix: "Run on a runtime with Temporal available, install a Temporal polyfill before creating the client, or author the column with its *String type to read and write PostgreSQL's own text instead.",
+      fix: 'Run on a runtime with Temporal available, install a Temporal polyfill before creating the client, or author the column with its *String type to read and write ISO 8601 text instead.',
       meta: { codecId, operation },
     },
   );
@@ -88,7 +89,7 @@ export function errorTemporalUnavailableForDefault(generatorId: string): Structu
     `Mutation default generator '${generatorId}' cannot produce a value because this runtime has no global Temporal implementation.`,
     {
       why: 'The generator answers a Temporal-backed column, so the value it produces is a Temporal.Instant, which this runtime cannot construct.',
-      fix: "Run on a runtime with Temporal available, install a Temporal polyfill before creating the client, or author the column with `temporal.createdAtString()` / `temporal.updatedAtString()` to store PostgreSQL's own text instead.",
+      fix: 'Run on a runtime with Temporal available, install a Temporal polyfill before creating the client, or author the column with `temporal.createdAtString()` / `temporal.updatedAtString()` to store ISO 8601 text instead.',
       meta: { generatorId },
     },
   );
@@ -106,10 +107,10 @@ export function errorTemporalUnrepresentable(options: {
   const direction = operation === 'decode' ? 'PostgreSQL returned' : 'the application supplied';
   return postgresError(
     operation === 'decode' ? 'RUNTIME.DECODE_FAILED' : 'RUNTIME.ENCODE_FAILED',
-    `Codec '${codecId}' cannot represent the value ${direction}: ${JSON.stringify(value)} — ${detail}. Use ${stringType} to carry this column as PostgreSQL's own text.`,
+    `Codec '${codecId}' cannot represent the value ${direction}: ${JSON.stringify(value)} — ${detail}. Use ${stringType} to carry this column as ISO 8601 text.`,
     {
       why: `${detail}. Temporal is the authoritative parser and range check for this codec, so a value it cannot express has no representation on this column.`,
-      fix: `Author the column as ${stringType} to read and write PostgreSQL's own text for it, which preserves every value the database accepts.`,
+      fix: `Author the column as ${stringType} to read and write it as ISO 8601 text, which holds every value the database accepts.`,
       meta: { codecId, operation, value, stringType },
       ...(options.cause === undefined ? {} : { cause: options.cause }),
     },
@@ -127,8 +128,21 @@ export function errorTemporalWrongType(
     `Codec '${codecId}' encodes a ${temporalTag}, but received ${received}.`,
     {
       why: "The codec serializes through the Temporal value's own toString(). A different type reaches PostgreSQL in a spelling it does not accept, and the resulting error names the column rather than the codec.",
-      fix: `Pass a ${temporalTag}, or author the column with its ${stringType} type to write PostgreSQL text directly.`,
+      fix: `Pass a ${temporalTag}, or author the column with its ${stringType} type to write ISO 8601 text.`,
       meta: { codecId, temporalTag, stringType, received },
+    },
+  );
+}
+
+/** A date or time codec read text PostgreSQL printed under a DateStyle other than ISO, which no codec reads. */
+export function errorDateStyleNotIso(codecId: string, received: string): StructuredError {
+  return postgresError(
+    'RUNTIME.DATE_STYLE_NOT_ISO',
+    `Codec '${codecId}' read ${JSON.stringify(received)}, which PostgreSQL prints only when the connection's DateStyle is not ISO: the driver could not ensure the DateStyle=ISO the PostgreSQL target requires. Prisma reads dates and times only in DateStyle ISO.`,
+    {
+      why: 'PostgreSQL prints a date or timestamp in the DateStyle of the connection. The PostgreSQL driver ensures DateStyle=ISO on every connection it uses: it starts each connection it opens with it, and sets it on a connection the application supplies before first use. A statement that sets DateStyle on a connection undoes that, and so does a connection pooler between Prisma and PostgreSQL that drops the startup option or runs each statement on another server connection.',
+      fix: "Do not change DateStyle on a connection Prisma uses. Behind a connection pooler, set DateStyle on the role or database (ALTER ROLE <role> SET DateStyle = 'ISO'), so every server connection holds it.",
+      meta: { codecId, received: received.slice(0, 100) },
     },
   );
 }
@@ -137,10 +151,10 @@ export function errorTemporalWrongType(
 export function errorTimestampTextWrongType(codecId: string, received: string): StructuredError {
   return postgresError(
     'RUNTIME.ENCODE_FAILED',
-    `Codec '${codecId}' writes PostgreSQL's text for the value, but received ${received}.`,
+    `Codec '${codecId}' writes ISO 8601 text, but received ${received}.`,
     {
       why: "The codec sends its value to PostgreSQL unchanged. A Date would be sent in the process's local time zone, and a timestamp column without a time zone would store the wrong wall-clock time.",
-      fix: 'Pass the timestamp as text, such as "2024-01-02 03:04:05.678". If the value came from a generated default, emit the contract again: a contract emitted by an earlier version pairs this column with timestampNow, which generates a Date.',
+      fix: 'Pass the timestamp as ISO 8601 text, such as "2024-01-02T03:04:05.678". If the value came from a generated default, emit the contract again: a contract emitted by an earlier version pairs this column with timestampNow, which generates a Date.',
       meta: { codecId, received },
     },
   );

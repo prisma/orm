@@ -9,62 +9,83 @@ const ZONES = ['UTC', 'Europe/Amsterdam', 'Asia/Kolkata', 'America/St_Johns'] as
 interface DateTimeType {
   readonly codecId: string;
   readonly type: string;
-  /** Values at the edges of what the type holds. */
-  readonly values: readonly string[];
-  /** A value with six digits after the decimal point, read at each precision from 0 to 6. */
-  readonly precise?: string;
+  /** Values at the edges of what the type holds, each with the stored form the codec reads it as in every time zone. */
+  readonly values: readonly (readonly [value: string, stored: string])[];
+  /** A value with six digits after the decimal point, read at each precision from 0 to 6, and its stored form for a fraction. */
+  readonly precise?: {
+    readonly value: string;
+    readonly stored: (fraction: string) => string;
+  };
 }
+
+/** The fraction PostgreSQL keeps of .123456 at each precision from 0 to 6, without trailing zeros. */
+const FRACTIONS = ['', '.1', '.12', '.123', '.1235', '.12346', '.123456'] as const;
 
 const TYPES: readonly DateTimeType[] = [
   {
     codecId: 'pg/date-string@1',
     type: 'date',
     values: [
-      '2024-01-01',
-      '0044-03-15 BC',
-      '4713-11-24 BC',
-      '0001-01-01 BC',
-      '10000-01-01',
-      '5874897-12-31',
-      'infinity',
-      '-infinity',
+      ['2024-01-01', '2024-01-01'],
+      ['0044-03-15 BC', '-000043-03-15'],
+      ['4713-11-24 BC', '-004712-11-24'],
+      ['0001-01-01 BC', '0000-01-01'],
+      ['10000-01-01', '+010000-01-01'],
+      ['5874897-12-31', '+5874897-12-31'],
+      ['infinity', 'infinity'],
+      ['-infinity', '-infinity'],
     ],
   },
   {
     codecId: 'pg/time-string@1',
     type: 'time',
-    values: ['00:00:00', '23:59:59.999999', '24:00:00'],
-    precise: '12:34:56.123456',
+    values: [
+      ['00:00:00', '00:00:00'],
+      ['23:59:59.999999', '23:59:59.999999'],
+      ['24:00:00', '24:00:00'],
+    ],
+    precise: { value: '12:34:56.123456', stored: (fraction) => `12:34:56${fraction}` },
   },
   {
     codecId: 'pg/timetz@1',
     type: 'timetz',
-    values: ['12:00:00+01:30:15', '12:00:00-15:59', '12:00:00+15:59:59', '24:00:00+00'],
-    precise: '12:34:56.123456+02',
+    values: [
+      ['12:00:00+01:30:15', '12:00:00+01:30:15'],
+      ['12:00:00-15:59', '12:00:00-15:59'],
+      ['12:00:00+15:59:59', '12:00:00+15:59:59'],
+      ['24:00:00+00', '24:00:00Z'],
+    ],
+    precise: { value: '12:34:56.123456+02', stored: (fraction) => `12:34:56${fraction}+02:00` },
   },
   {
     codecId: 'pg/timestamp-string@1',
     type: 'timestamp',
     values: [
-      '0044-03-15 12:00:00 BC',
-      '4713-11-24 00:00:00 BC',
-      '294276-12-31 23:59:59',
-      'infinity',
-      '-infinity',
+      ['0044-03-15 12:00:00 BC', '-000043-03-15T12:00:00'],
+      ['4713-11-24 00:00:00 BC', '-004712-11-24T00:00:00'],
+      ['294276-12-31 23:59:59', '+294276-12-31T23:59:59'],
+      ['infinity', 'infinity'],
+      ['-infinity', '-infinity'],
     ],
-    precise: '2024-01-01 12:34:56.123456',
+    precise: {
+      value: '2024-01-01 12:34:56.123456',
+      stored: (fraction) => `2024-01-01T12:34:56${fraction}`,
+    },
   },
   {
     codecId: 'pg/timestamptz-string@1',
     type: 'timestamptz',
     values: [
-      '1800-01-01 00:00:00+00',
-      '0044-03-15 12:00:00+00 BC',
-      '294276-12-31 23:59:59+00',
-      'infinity',
-      '-infinity',
+      ['1800-01-01 00:00:00+00', '1800-01-01T00:00:00Z'],
+      ['0044-03-15 12:00:00+00 BC', '-000043-03-15T12:00:00Z'],
+      ['294276-12-31 23:59:59+00', '+294276-12-31T23:59:59Z'],
+      ['infinity', 'infinity'],
+      ['-infinity', '-infinity'],
     ],
-    precise: '2024-01-01 12:34:56.123456+00',
+    precise: {
+      value: '2024-01-01 12:34:56.123456+00',
+      stored: (fraction) => `2024-01-01T12:34:56${fraction}Z`,
+    },
   },
 ];
 
@@ -84,17 +105,21 @@ function codecFor(codecId: string) {
   });
 }
 
-function typesAtEachPrecision(entry: DateTimeType): readonly (readonly [string, string])[] {
-  const edges = entry.values.map((value) => [entry.type, value] as const);
+function typesAtEachPrecision(
+  entry: DateTimeType,
+): readonly (readonly [type: string, value: string, stored: string])[] {
+  const edges = entry.values.map(([value, stored]) => [entry.type, value, stored] as const);
   if (entry.precise === undefined) return edges;
-  const precise = entry.precise;
+  const { value, stored } = entry.precise;
   return [
     ...edges,
-    ...[0, 1, 2, 3, 4, 5, 6].map((precision) => [`${entry.type}(${precision})`, precise] as const),
+    ...FRACTIONS.map(
+      (fraction, precision) => [`${entry.type}(${precision})`, value, stored(fraction)] as const,
+    ),
   ];
 }
 
-describe('the date and time codecs that carry PostgreSQL text', { concurrent: false }, () => {
+describe('the date and time codecs that carry text', { concurrent: false }, () => {
   let database: Awaited<ReturnType<typeof createDevDatabase>> | undefined;
   let driver: Awaited<ReturnType<typeof postgresControlDriverDescriptor.create>> | undefined;
 
@@ -109,7 +134,7 @@ describe('the date and time codecs that carry PostgreSQL text', { concurrent: fa
   }, timeouts.spinUpPpgDev);
 
   it(
-    'read the text PostgreSQL writes for each value, in each time zone and at each precision, unchanged',
+    'read the text PostgreSQL writes for each value, in each time zone and at each precision, as its ISO 8601 stored form',
     async () => {
       const unread: unknown[] = [];
       let read = 0;
@@ -117,7 +142,7 @@ describe('the date and time codecs that carry PostgreSQL text', { concurrent: fa
         await driver!.query(`SET TimeZone = '${zone}'`);
         for (const entry of TYPES) {
           const codec = codecFor(entry.codecId);
-          for (const [type, value] of typesAtEachPrecision(entry)) {
+          for (const [type, value, stored] of typesAtEachPrecision(entry)) {
             const result = await driver!.query<{ text: string }>(
               `select $1::${type}::text as text`,
               [value],
@@ -125,11 +150,11 @@ describe('the date and time codecs that carry PostgreSQL text', { concurrent: fa
             const text = result.rows[0]!.text;
             try {
               const decoded = await codec.fromWire(text, {});
-              if (decoded === text) {
+              if (decoded === stored) {
                 read += 1;
                 continue;
               }
-              unread.push({ zone, type, value, text, decoded });
+              unread.push({ zone, type, value, text, stored, decoded });
             } catch (error) {
               unread.push({ zone, type, value, text, error: String(error) });
             }
@@ -138,6 +163,62 @@ describe('the date and time codecs that carry PostgreSQL text', { concurrent: fa
       }
       await driver!.query('RESET TimeZone');
       expect({ unread, read }).toEqual({ unread: [], read: 212 });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'write each value they read back in a form PostgreSQL reads as the same value',
+    async () => {
+      const changed: unknown[] = [];
+      for (const entry of TYPES) {
+        const codec = codecFor(entry.codecId);
+        for (const [, stored] of entry.values) {
+          const wire = await codec.toWire(stored, {});
+          const result = await driver!.query<{ text: string }>(
+            `select $1::${entry.type}::text as text`,
+            [wire],
+          );
+          const read = await codec.fromWire(result.rows[0]!.text, {});
+          if (read !== stored) changed.push({ type: entry.type, stored, wire, read });
+        }
+      }
+      expect(changed).toEqual([]);
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'refuse, with every codec, a date or timestamp the session prints under another DateStyle, naming the setting',
+    async () => {
+      const refusals = [];
+      await driver!.query("SET DateStyle = 'German, DMY'");
+      try {
+        for (const [codecId, type] of [
+          ['pg/date-string@1', 'date'],
+          ['pg/date-temporal@1', 'date'],
+          ['pg/timestamp-string@1', 'timestamp'],
+          ['pg/timestamp-temporal@1', 'timestamp'],
+          ['pg/timestamptz-string@1', 'timestamptz'],
+          ['pg/timestamptz-temporal@1', 'timestamptz'],
+          ['pg/timestamptz-date@1', 'timestamptz'],
+        ] as const) {
+          const result = await driver!.query<{ text: string }>(
+            `select '2024-01-02 03:04:05'::${type}::text as text`,
+          );
+          refusals.push(
+            await codecFor(codecId)
+              .fromWire(result.rows[0]!.text, {})
+              .then(
+                () => 'read',
+                (error: { code?: string }) => error.code,
+              ),
+          );
+        }
+      } finally {
+        await driver!.query('RESET DateStyle');
+      }
+      expect(refusals).toEqual(Array(7).fill('RUNTIME.DATE_STYLE_NOT_ISO'));
     },
     timeouts.databaseOperation,
   );

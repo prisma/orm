@@ -160,6 +160,16 @@ export const FIXTURES: readonly AggregateFixture[] = [
     samples: ["'2024-01-01T10:00:00.123456'", "'2024-02-01T10:00:00.654321'"],
   },
   {
+    codecId: 'pg/timestamp-date@1',
+    typeParams: { precision: 3 },
+    samples: ["'2024-01-01T10:00:00.123'", "'2024-02-01T10:00:00.654'"],
+  },
+  {
+    codecId: 'pg/timestamp-instant@1',
+    typeParams: { precision: 6 },
+    samples: ["'2024-01-01T10:00:00.123456'", "'2024-02-01T10:00:00.654321'"],
+  },
+  {
     codecId: 'pg/timestamptz-date@1',
     typeParams: { precision: 3 },
     samples: ["'2024-01-01T10:00:00.123Z'", "'2024-02-01T10:00:00.654Z'"],
@@ -186,6 +196,7 @@ export const FIXTURES: readonly AggregateFixture[] = [
   { codecId: 'pg/inet@1', samples: ["'10.0.0.1'", "'10.0.0.2'"] },
   { codecId: 'pg/tsquery@1', samples: ["'graze'", "'zebra'"] },
   { codecId: 'pg/interval@1', samples: ["'1 day'", "'2 days'"] },
+  { codecId: 'pg/interval-string@1', samples: ["'1 day'", "'2 days 00:00:00.5'"] },
   { codecId: 'pg/json@1', samples: ['\'{"a":1}\'', '\'{"b":2}\''] },
   { codecId: 'pg/jsonb@1', samples: ['\'{"a":1}\'', '\'{"b":2}\''] },
   { codecId: 'pg/text-array@1', samples: ["ARRAY['a']", "ARRAY['b']"] },

@@ -64,8 +64,8 @@ describe('a contributed type alias', () => {
 }`);
     const onTheField = lowered(`model Event {
   id        Int         @id
-  createdAt Timestamptz @onCreate(now())
-  updatedAt Timestamptz @onCreate(now()) @onUpdate(now())
+  createdAt TimestamptzTemporal @onCreate(now())
+  updatedAt TimestamptzTemporal @onCreate(now()) @onUpdate(now())
 }`);
     expect(throughAlias).toEqual(onTheField);
     expect(throughAlias.defaults).toEqual([
@@ -90,7 +90,7 @@ describe('a contributed type alias', () => {
     ).toEqual(
       lowered(`model Event {
   id        Int          @id
-  updatedAt Timestamptz? @onCreate(now()) @onUpdate(now())
+  updatedAt TimestamptzTemporal? @onCreate(now()) @onUpdate(now())
 }`),
     );
   });

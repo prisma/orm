@@ -94,7 +94,7 @@ const generatedToken = expect.stringMatching(
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
 );
 const generatedTimestamp = expect.stringMatching(
-  /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,3})?\+00$/,
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/,
 );
 const row = { id: 1, title: 'a', token: null, editedAt: null };
 

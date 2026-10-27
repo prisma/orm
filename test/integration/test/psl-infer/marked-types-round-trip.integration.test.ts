@@ -80,8 +80,8 @@ const AUTHORED_TYPES = [
   'Bit(8)',
   'VarBit',
   'VarBit(16)',
-  'Interval',
-  'Interval(3)',
+  'IntervalParts',
+  'IntervalParts(3)',
 ] as const;
 
 const AUTHORED_SCHEMA = `model Sample {

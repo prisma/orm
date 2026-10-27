@@ -303,14 +303,14 @@ describe('Temporal codecs round-trip through PostgreSQL', () => {
     });
   });
 
-  it('rejects a non-ISO DateStyle rendering rather than guessing at it', {
+  it('refuses a non-ISO DateStyle rendering, naming the setting, rather than guessing at it', {
     timeout: timeouts.spinUpPpgDev,
   }, async () => {
     await session!.execute({ sql: "SET DateStyle TO 'German, DMY'" });
     try {
       await expect(readRaw(1)).rejects.toMatchObject({
-        code: 'RUNTIME.DECODE_FAILED',
-        meta: { value: '02.01.2026', stringType: 'DateString' },
+        code: 'RUNTIME.DATE_STYLE_NOT_ISO',
+        meta: { codecId: 'pg/date-temporal@1', received: '02.01.2026' },
       });
     } finally {
       await session!.execute({ sql: "SET DateStyle TO 'ISO, MDY'" });

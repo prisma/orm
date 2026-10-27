@@ -264,7 +264,10 @@ describe("each codec's equality-key flag", () => {
       withoutKey: flagged
         .filter((descriptor) => types.get(descriptor.dataType)?.equalityKey === undefined)
         .map((descriptor) => descriptor.codecId),
-    }).toEqual({ flagged: ['pg/numeric@1', 'pg/interval@1'], withoutKey: [] });
+    }).toEqual({
+      flagged: ['pg/numeric@1', 'pg/interval@1', 'pg/interval-string@1'],
+      withoutKey: [],
+    });
   });
 
   it('is declared only by codecs that render no literal, since a read can return a member in another form', async () => {

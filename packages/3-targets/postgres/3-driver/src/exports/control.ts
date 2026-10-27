@@ -9,11 +9,12 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { redactDatabaseUrl } from '@internal/utils/redact-db-url';
 import { suppressIdleConnectionErrors } from '@internal/utils/suppress-idle-connection-errors';
-import { Client } from 'pg';
+import type { Client } from 'pg';
 import { postgresDriverDescriptorMeta } from '../core/descriptor-meta';
 import { normalizePgClientError, normalizePgConnectFailure } from '../normalize-error';
 import { watchClientLoss } from '../pg-client-state';
 import { controlTextTypes } from '../server-text-types';
+import { createPgClient } from '../session-settings';
 
 export class PostgresControlDriver implements SqlControlDriverInstance<'postgres'> {
   readonly familyId = 'sql' as const;
@@ -68,10 +69,13 @@ const postgresDriverDescriptor: ControlDriverDescriptor<'sql', 'postgres', Postg
     ): Promise<PostgresControlDriver> {
       const client = watchClientLoss(
         suppressIdleConnectionErrors(
-          new Client({
-            connectionString: url,
-            ...ifDefined('connectionTimeoutMillis', options?.connectTimeoutMs),
-          }),
+          createPgClient(
+            {
+              connectionString: url,
+              ...ifDefined('connectionTimeoutMillis', options?.connectTimeoutMs),
+            },
+            options?.sessionSettings ?? {},
+          ),
         ),
       );
       try {

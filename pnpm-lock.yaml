@@ -607,6 +607,9 @@ importers:
       temporal-polyfill:
         specifier: ^1.0.4
         version: 1.0.4
+      temporal-spec:
+        specifier: 1.0.1
+        version: 1.0.1
       tsx:
         specifier: 'catalog:'
         version: 4.23.12
@@ -4196,6 +4199,9 @@ importers:
       postgres-array:
         specifier: 2.0.0
         version: 2.0.0
+      temporal-spec:
+        specifier: 1.0.1
+        version: 1.0.1
     devDependencies:
       '@electric-sql/pglite':
         specifier: 0.5.4
@@ -4363,6 +4369,9 @@ importers:
       pg:
         specifier: 'catalog:'
         version: 8.22.0
+      pg-connection-string:
+        specifier: ^2.14.0
+        version: 2.14.0
       pg-cursor:
         specifier: ^2.21.0
         version: 2.21.0(pg@8.22.0)
@@ -4521,6 +4530,9 @@ importers:
       pg:
         specifier: 'catalog:'
         version: 8.22.0
+      temporal-spec:
+        specifier: 1.0.1
+        version: 1.0.1
       tinyglobby:
         specifier: 'catalog:'
         version: 0.2.17
@@ -5441,6 +5453,9 @@ importers:
       temporal-polyfill:
         specifier: ^1.0.4
         version: 1.0.4
+      temporal-spec:
+        specifier: 1.0.1
+        version: 1.0.1
       tinyglobby:
         specifier: 'catalog:'
         version: 0.2.17
@@ -5613,6 +5628,9 @@ importers:
       pg:
         specifier: 'catalog:'
         version: 8.22.0
+      pg-connection-string:
+        specifier: ^2.14.0
+        version: 2.14.0
       pg-cursor:
         specifier: ^2.21.0
         version: 2.21.0(pg@8.22.0)
@@ -5622,6 +5640,9 @@ importers:
       temporal-polyfill:
         specifier: ^1.0.4
         version: 1.0.4
+      temporal-spec:
+        specifier: 1.0.1
+        version: 1.0.1
     devDependencies:
       '@internal/adapter-postgres':
         specifier: workspace:8.0.0-rc.20
@@ -6101,6 +6122,9 @@ importers:
       temporal-polyfill:
         specifier: ^1.0.4
         version: 1.0.4
+      temporal-spec:
+        specifier: 1.0.1
+        version: 1.0.1
       typescript:
         specifier: 'catalog:'
         version: 5.9.3

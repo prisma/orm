@@ -24,7 +24,7 @@ import {
   testTimeout,
 } from './fixtures/runner-fixtures';
 
-/** What `Bit`, `Bit(8)`, `VarBit`, `VarBit(16)`, `Interval` and `Interval(3)` emit. */
+/** What `Bit`, `Bit(8)`, `VarBit`, `VarBit(16)`, `IntervalParts` and `IntervalParts(3)` emit. */
 const COLUMNS = {
   bit: { dataType: 'pg/bit', codecId: 'pg/bit@1' },
   bit8: { dataType: 'pg/bit', codecId: 'pg/bit@1', typeParams: { length: 8 } },
@@ -75,7 +75,7 @@ function buildContract(): Contract<SqlStorage> {
   };
 }
 
-describe('Bit, VarBit and Interval columns', { concurrent: false }, () => {
+describe('Bit, VarBit and IntervalParts columns', { concurrent: false }, () => {
   let database: Awaited<ReturnType<typeof createTestDatabase>>;
   let driver: PostgresControlDriver | undefined;
 

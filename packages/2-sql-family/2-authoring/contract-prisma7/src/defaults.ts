@@ -37,6 +37,7 @@ import type {
   AuthoredColumnDefault,
   AuthoredColumnDefaultLiteralValue,
 } from '@internal/sql-contract-ts/contract-builder';
+import { InternalError } from '@internal/utils/internal-error';
 import { prisma7Diagnostic } from './diagnostics';
 import type { Prisma7LiteralDefaultForm } from './target-binding';
 
@@ -53,6 +54,8 @@ export interface LowerPrisma7DefaultInput {
   readonly onlyDbgenerated: boolean;
   readonly codecId: string;
   readonly typeParams: Readonly<Record<string, unknown>> | undefined;
+  /** The name after `@db.` of the field's native type attribute, if it has one. */
+  readonly nativeTypeName: string | undefined;
   readonly codecLookup: CodecLookupWithDescriptors;
   readonly literalForm: Prisma7LiteralDefaultForm | undefined;
   /** Storage value per member name when the field is typed by a Prisma 7 enum. */
@@ -357,6 +360,18 @@ function lowerFunction(
       span,
     );
   }
+  if (input.field.list) {
+    const written = `@default(${printSyntax(expression.syntax).trim()})`;
+    input.diagnostics.push(
+      prisma7Diagnostic(
+        'PSL.PRISMA7_UNKNOWN_DEFAULT',
+        `${label}: ${written} cannot fill a list field. Write a list literal, such as @default([]), or remove ${written}.`,
+        input.sourceId,
+        span,
+      ),
+    );
+    return undefined;
+  }
   if (entry === undefined) {
     if (generator === undefined) {
       return unknown(`function "${fn}()" cannot fill a column of codec "${input.codecId}".`, span);
@@ -371,29 +386,8 @@ function lowerFunction(
             label,
           );
     if (args === undefined) return undefined;
-    const resolution = input.generatorFunctions.resolve(
-      { name: fn, args },
-      {
-        codecId: input.codecId,
-        typeParams: input.typeParams,
-        length: sqlCodecColumnLength(input.dataTypes, input.codecId, input.typeParams),
-      },
-    );
-    if (resolution.ok) return { storage: undefined, onCreate: resolution.generator };
-    if (resolution.reason === 'refused') {
-      const written =
-        input.attribute.args.find((arg) => arg.kind === 'positional')?.value.trim() ?? `${fn}()`;
-      input.diagnostics.push(
-        prisma7Diagnostic(
-          'PSL.PRISMA7_GENERATOR_REFUSED',
-          `${label}: @default(${written}) cannot fill its column: ${resolution.message}`,
-          input.sourceId,
-          span,
-        ),
-      );
-      return undefined;
-    }
-    return unknown(`function "${fn}()" cannot fill a column of codec "${input.codecId}".`, span);
+    const onCreate = resolveGenerator(fn, args, input, label, unknown);
+    return onCreate === undefined ? undefined : { storage: undefined, onCreate };
   }
   const args = boundArguments(
     defaultFunctionCall(fn, entry, input.dataTypes),
@@ -422,7 +416,69 @@ function lowerFunction(
     );
     return undefined;
   }
-  return { storage: lowered.value.defaultValue, onCreate: undefined };
+  const storage = lowered.value.defaultValue;
+  if (fn !== 'now') return { storage, onCreate: undefined };
+  if (!input.generatorFunctions.functionsFor(input.codecId).some(({ name }) => name === fn)) {
+    input.diagnostics.push(
+      prisma7Diagnostic(
+        'PSL.PRISMA7_UNKNOWN_DEFAULT',
+        `${label}: ${nowOnAColumnThatIsNotADateOrTime(input)}`,
+        input.sourceId,
+        span,
+      ),
+    );
+    return undefined;
+  }
+  const onCreate = resolveGenerator(fn, {}, input, label, unknown);
+  return onCreate === undefined ? undefined : { storage, onCreate };
+}
+
+/** Why Prisma 7 refuses `@default(now())` on a field whose column is not a date or time. */
+function nowOnAColumnThatIsNotADateOrTime(input: LowerPrisma7DefaultInput): string {
+  if (input.field.typeName !== 'DateTime') {
+    return `@default(now()) needs a DateTime field, but the field has type "${input.field.typeName}". Prisma 7 refuses this schema too. Remove @default(now()), or change the field's type to DateTime.`;
+  }
+  const nativeType = input.nativeTypeName;
+  if (nativeType === undefined) {
+    throw new InternalError(
+      `The Prisma 7 target binding has no "now" generator for codec "${input.codecId}", which the DateTime scalar maps to.`,
+    );
+  }
+  return `@default(now()) needs a date or time column, but "@db.${nativeType}" makes it a column that is not a date or time. Prisma 7 refuses this schema too: "Native type ${nativeType} is not compatible with declared field type DateTime". Remove @default(now()), or use a date or time native type such as @db.Timestamp.`;
+}
+
+/** The generator a client function resolves to for the field's column, or `undefined` after reporting why it cannot fill it. */
+function resolveGenerator(
+  fn: string,
+  args: Readonly<Record<string, unknown>>,
+  input: LowerPrisma7DefaultInput,
+  label: string,
+  unknown: (reason: string, span: PslSpan) => undefined,
+): ExecutionMutationDefaultValue | undefined {
+  const span = input.attribute.span;
+  const resolution = input.generatorFunctions.resolve(
+    { name: fn, args },
+    {
+      codecId: input.codecId,
+      typeParams: input.typeParams,
+      length: sqlCodecColumnLength(input.dataTypes, input.codecId, input.typeParams),
+    },
+  );
+  if (resolution.ok) return resolution.generator;
+  if (resolution.reason === 'refused') {
+    const written =
+      input.attribute.args.find((arg) => arg.kind === 'positional')?.value.trim() ?? `${fn}()`;
+    input.diagnostics.push(
+      prisma7Diagnostic(
+        'PSL.PRISMA7_GENERATOR_REFUSED',
+        `${label}: @default(${written}) cannot fill its column: ${resolution.message}`,
+        input.sourceId,
+        span,
+      ),
+    );
+    return undefined;
+  }
+  return unknown(`function "${fn}()" cannot fill a column of codec "${input.codecId}".`, span);
 }
 
 /**

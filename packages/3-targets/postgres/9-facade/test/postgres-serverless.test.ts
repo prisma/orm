@@ -10,7 +10,7 @@ import fixtureContractJson from './fixtures/generated/contract.json' with { type
 
 type QueryMock = ReturnType<typeof vi.fn>;
 interface RecordedClient {
-  readonly connectionString: string | undefined;
+  readonly database: string | undefined;
   readonly connectionTimeoutMillis: number | undefined;
   readonly connect: QueryMock;
   readonly query: QueryMock;
@@ -44,10 +44,10 @@ vi.mock('pg', () => {
     connect = vi.fn(() => recorded.connectImpl());
     query = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 });
     end = vi.fn(() => recorded.endImpl());
-    readonly connectionString: string | undefined;
+    readonly database: string | undefined;
     readonly connectionTimeoutMillis: number | undefined;
-    constructor(config?: { connectionString?: string; connectionTimeoutMillis?: number }) {
-      this.connectionString = config?.connectionString;
+    constructor(config?: { database?: string; connectionTimeoutMillis?: number }) {
+      this.database = config?.database;
       this.connectionTimeoutMillis = config?.connectionTimeoutMillis;
       recorded.clients.push(this);
     }
@@ -203,10 +203,7 @@ describe('postgresServerless connect()', () => {
     const first = await serverless.connect({ url });
     const second = await serverless.connect({ url: 'postgres://localhost:5432/other' });
 
-    expect(recorded.clients.map((client) => client.connectionString)).toEqual([
-      url,
-      'postgres://localhost:5432/other',
-    ]);
+    expect(recorded.clients.map((client) => client.database)).toEqual(['db', 'other']);
     expect(first).not.toBe(second);
     expect(first.runtime()).not.toBe(second.runtime());
 
