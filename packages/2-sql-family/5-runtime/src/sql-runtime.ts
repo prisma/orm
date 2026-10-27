@@ -1859,6 +1859,11 @@ export async function withTransaction<R>(
       throw transactionClosedError();
     }
     for await (const row of trackFirstStep(open())) {
+      // Checked on both sides of the yield: before it, so a row that arrives after the transaction
+      // closed is not handed over; after it, so a closed transaction does not read another row.
+      if (invalidated) {
+        throw transactionClosedError();
+      }
       yield row;
       if (invalidated) {
         throw transactionClosedError();

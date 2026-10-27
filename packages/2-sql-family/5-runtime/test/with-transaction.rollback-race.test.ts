@@ -95,8 +95,8 @@ describe('withTransaction when the callback throws while other statements are pe
   it('keeps TRANSACTION_CLOSED when closing the source stream also fails', async () => {
     const setup = createSetup();
     // A driver stream whose close fails (e.g. a cursor that cannot be closed).
+    let index = 0;
     vi.mocked(setup.driver.query).mockImplementation(() => {
-      let index = 0;
       return {
         [Symbol.asyncIterator]() {
           return {
@@ -123,5 +123,43 @@ describe('withTransaction when the callback throws while other statements are pe
     expect(await run).toBe(failure);
     // Reading on after the transaction closed reports the closed transaction, not the close failure.
     await expect(reader!.next()).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_CLOSED' });
+    // ...without reading another row from the closed transaction first.
+    expect(index).toBe(1);
+  });
+
+  it('does not hand over a row that arrives after the transaction closed, nor read past it', async () => {
+    const setup = createSetup();
+    const secondRow = deferred();
+    let reads = 0;
+    vi.mocked(setup.driver.query).mockImplementation(() => {
+      return {
+        [Symbol.asyncIterator]() {
+          return {
+            next: async () => {
+              reads += 1;
+              if (reads === 2) {
+                await secondRow.promise;
+              }
+              return { done: false, value: { id: reads } };
+            },
+          };
+        },
+      } as never;
+    });
+    const failure = new Error('callback failed');
+    let pending: Promise<unknown> | undefined;
+
+    const run = withTransaction(setup.runtime, async (tx) => {
+      const reader = tx.query(rawPlan('select id from t'))[Symbol.asyncIterator]();
+      await reader.next();
+      // a sibling of Promise.all still waiting for its next row when another sibling fails
+      pending = reader.next().catch((error: unknown) => error);
+      throw failure;
+    }).catch((error: unknown) => error);
+
+    expect(await run).toBe(failure);
+    secondRow.resolve();
+    expect(await pending).toMatchObject({ code: 'RUNTIME.TRANSACTION_CLOSED' });
+    expect(reads).toBe(2);
   });
 });
