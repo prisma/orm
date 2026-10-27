@@ -12,7 +12,7 @@ The skill teaches *the system's mental model* — what a ref is, what a marker i
 - User asks *"what migrations will run when I merge this?"* or *"what's about to run on deploy?"*.
 - User hit a concurrent-migration conflict (`main` advanced while their branch was open).
 - User wants to wire up a `staging` / `production` ref so CI can deploy against it.
-- User wants to run a migration against an environment that isn't the local dev DB.
+- User wants to run a migration against a deployed environment.
 - User asks about CI integration for migrations.
 
 ## When Not to Use
@@ -79,9 +79,9 @@ These codes surface on `migration plan`, `migration ref set`, and `db migrate` �
 
 | Code | When | Meaning | Next move |
 |---|---|---|---|
-| `MIGRATION.HASH_NOT_IN_GRAPH` | `migration plan` (non-empty graph) or `migration ref set` | Resolved hash is not a node in the on-disk migration graph — typical when the default `db` ref points past the graph tip after dev-only `db update` cycles. | `migration plan --from <reachable-ref>` (e.g. `--from production`); or realign the ref with `migration ref set db <graph-node-hash>`. |
+| `MIGRATION.HASH_NOT_IN_GRAPH` | `migration plan` (non-empty graph) or `migration ref set` | Resolved hash is not a node in the on-disk migration graph — typical when the default `db` ref points past the graph tip after `db update` cycles. | `migration plan --from <reachable-ref>` (e.g. `--from production`); or realign the ref with `migration ref set db <graph-node-hash>`. |
 | `MIGRATION.SNAPSHOT_MISSING` | `migration plan` | A named ref has no pointer file (`<name>.json`), and the hash being resolved isn't a node in the migration graph either. | `migration ref set <name> <hash>` to create the ref, `db update --advance-ref <name>` to advance it, or pass a hash that is a graph node. |
-| `MIGRATION.MARKER_MISMATCH` | `db migrate` (pre-DDL, before the runner), `db migrate --show` | Live DB marker hash is not a graph node — drift the offline planner cannot see. | `migration plan --from <graph-tip>` if the marker is canonical; `migration ref set db <marker-hash>` if the on-disk graph is canonical; investigate out-of-band applies. |
+| `MIGRATION.MARKER_MISMATCH` | `db migrate` (pre-DDL, before the runner), `db migrate --show` | Live DB marker hash is not a graph node. Usually a migration the database applied was planned again or deleted. | Follow the error's next actions, and `references/migrations.md` § *A database whose marker is not in the migration graph*. Never reset the database. |
 | `MIGRATION.PATH_UNREACHABLE` | `db migrate` (path resolution) | No migration path from the current marker to the resolved target in the on-disk graph. | Read the improved `fix` payload — it names `fromHash` / `targetHash` and suggests `migration plan --from <from> --to <target>`; run `migration list` to inspect the graph. |
 
 ## Workflow — *"What's about to run on deploy?"*

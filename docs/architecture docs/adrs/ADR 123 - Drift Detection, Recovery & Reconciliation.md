@@ -1,5 +1,7 @@
 # ADR 123 — Drift Detection, Recovery & Reconciliation
 
+**Status:** Accepted; its reset recoveries and its "auto-reset" development policy are superseded by [ADR 307 — No recovery resets or drops a database](ADR%20307%20-%20No%20recovery%20resets%20or%20drops%20a%20database.md).
+
 ## Context
 
 A database can diverge from the state expected by its Prisma Next contract in many ways:

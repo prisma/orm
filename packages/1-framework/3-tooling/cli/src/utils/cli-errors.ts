@@ -534,7 +534,7 @@ export function errorPlanOriginUnknown(
     {
       why: 'Migrations exist on disk, but there is no `db` ref and no --from was given, so the plan origin would silently fall back to an empty database and the resulting migration would recreate everything the existing migrations already create.',
       fix: [
-        `Set the \`db\` ref to the contract your dev database is at (\`${refSetCommand}\`), or advance it via \`{bin} db update\`.`,
+        `Set the \`db\` ref to the contract your database is at (\`${refSetCommand}\`), or, on a database whose migration history does not need to be kept, advance it via \`{bin} db update\`.`,
         `Or pass the origin explicitly: \`{bin} migration plan ${fromSuggestion}\`.`,
         'Or pass --from @empty to deliberately plan from an empty database.',
       ].join('\n'),
@@ -911,48 +911,6 @@ export function errorPlanProducedNoOperations(
   destination: PlanDestination,
 ): CliStructuredError {
   return errorMigrationPlanningFailed({ conflicts: [noOperationsConflict(origin, destination)] });
-}
-
-export function errorMarkerMismatch(
-  markerHash: string,
-  reachableHashes: readonly string[],
-): ActionableCliError {
-  const reachableList =
-    reachableHashes.length > 0 ? reachableHashes.join(', ') : '(none — migration graph is empty)';
-  const planFromFix =
-    'Run `{bin} migration plan --from <contract>`, naming the graph node the database was migrated from, if the live marker is canonical and the on-disk graph needs catching up.';
-  const planCommand = '{bin} migration plan --from <contract>';
-  const signFix =
-    'Run `{bin} db sign` to overwrite the marker if the database already matches the contract.';
-  return new ActionableCliError(
-    'MIGRATION.MARKER_MISMATCH',
-    'Database marker is not reachable in the on-disk migration graph',
-    {
-      why: `DB marker is ${markerHash}, but the on-disk migration graph reaches: ${reachableList}.`,
-      fix: [
-        signFix,
-        planFromFix,
-        `Run \`{bin} migration ref set db ${markerHash}\` if the on-disk graph is canonical and the local \`db\` ref drifted.`,
-        'Investigate whether the database was migrated by an out-of-band process.',
-      ].join('\n'),
-      nextActions: [
-        runCommandAction(
-          'Overwrite the marker if the database already matches the contract',
-          '{bin} db sign',
-        ),
-        runCommandAction('Catch the on-disk graph up to the live marker', planCommand),
-        runCommandAction(
-          'Point the local db ref at the live marker',
-          `{bin} migration ref set db ${markerHash}`,
-        ),
-        chooseAction('Investigate whether the database was migrated by an out-of-band process'),
-      ],
-      meta: {
-        markerHash,
-        reachableHashes: [...reachableHashes],
-      },
-    },
-  );
 }
 
 const ROLLBACK_IS_DESTRUCTIVE =

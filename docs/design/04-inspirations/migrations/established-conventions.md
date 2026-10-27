@@ -215,7 +215,7 @@ Some additional verbs we'll need that are well-established:
 
 ### Verdict
 
-**Adopt `migrate --db URL --to <ref>` as the canonical forward-execution verb.** Everything else aligns with established convention except possibly the dev/deploy split (which is Prisma-specific and worth preserving since our `db update` workflow is genuinely dev-only).
+**Adopt `migrate --db URL --to <ref>` as the canonical forward-execution verb.** Everything else aligns with established convention except possibly the dev/deploy split (which is Prisma-specific).
 
 ---
 
@@ -243,7 +243,7 @@ Atlas's parameterized model is the closer ancestor; we go one step further by gi
 
 ### Verdict
 
-**Reject the dev/deploy verb split.** `migrate --to <ref>` is the canonical and only forward-execution verb. `db update` (off-graph reconciliation, dev-only) and `migrate --to <ref>` (graph walk, environment-agnostic) are two different operations, not two flavors of one.
+**Reject the dev/deploy verb split.** `migrate --to <ref>` is the canonical and only forward-execution verb. `db update` (off-graph reconciliation) and `migrate --to <ref>` (graph walk, environment-agnostic) are two different operations, not two flavors of one.
 
 The shadow-DB concept does not surface in the core model: diffing is fully offline against on-disk contract snapshots, and the CLI never provisions a shadow database (§ 7b). Rehearsal against a fork of a real database is a database-extension preflight hook.
 

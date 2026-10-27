@@ -20,8 +20,8 @@ import {
   loadContractSpaceAggregateForCli,
   refuseContractSpaceIntegrity,
 } from '../control-api/operations/contract-space-aggregate-loader';
-import { refuseMarkerOutsideGraph } from '../control-api/operations/graph-queries';
 import { refuseUnknownInvariants } from '../control-api/operations/invariants';
+import { planEverySpace } from '../control-api/operations/migrate';
 import {
   executeMigrateShowPlan,
   type MigrateShowMigration,
@@ -288,6 +288,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         const planned = await executeMigrateShowPlan({
           config: ctx.config,
           cwd: ctx.cwd,
+          invocation: cliInvocation(ctx, args.flags.db),
           createClient,
           ...ifDefined('db', args.flags.db),
           ...ifDefined('to', args.flags.to),
@@ -406,21 +407,29 @@ export function createMigrateCommand(createClient: CreateControlClient) {
       try {
         await client.connect(dbConnection);
         const appGraph = aggregate.app.graph();
-        const appMarker = (await client.readAllMarkers()).get('app') ?? null;
-
-        if (appMarker !== null) {
-          const markerRefusal = refuseMarkerOutsideGraph({
-            markerHash: appMarker.storageHash,
-            graph: appGraph,
-          });
-          if (markerRefusal) {
-            return notOk(normalizeError(markerRefusal));
-          }
-        }
+        const markers = await client.readAllMarkers();
+        const appMarker = markers.get(aggregate.app.spaceId) ?? null;
 
         const target: RequestedTarget =
           offlineTarget === undefined ? liveMarkerTarget(appMarker) : offlineTarget.value;
+
         const refEntry = target.entry;
+        const planned = await planEverySpace({
+          aggregate,
+          markers,
+          appTarget: {
+            hash: refEntry?.hash ?? appContract.storage.storageHash,
+            invariants: refEntry?.invariants,
+            refName: target.refName,
+          },
+          storageNameOf: (operation) => familyInstance.storageNameOf(operation),
+          migrationsDir,
+          invocation: cliInvocation(ctx, args.flags.db),
+          readLedger: (spaceId) => client.readLedger(spaceId),
+        });
+        if (!planned.ok) {
+          return notOk(normalizeError(planned.failure));
+        }
         if (refEntry !== undefined && refEntry.invariants.length > 0) {
           const invariantRefusal = refuseUnknownInvariants({
             graph: appGraph,

@@ -122,6 +122,7 @@ describe('executeMigrateShowPlan', () => {
     const result = await executeMigrateShowPlan({
       config,
       cwd: tempDir,
+      invocation: { cwd: tempDir, configPath: undefined, dbGiven: false },
       from: HASH_A,
     });
     expect(result.ok).toBe(true);
@@ -146,6 +147,7 @@ describe('executeMigrateShowPlan', () => {
     const result = await executeMigrateShowPlan({
       config,
       cwd: tempDir,
+      invocation: { cwd: tempDir, configPath: undefined, dbGiven: false },
       from: EMPTY_CONTRACT_HASH,
     });
     expect(result.ok).toBe(true);
@@ -163,6 +165,7 @@ describe('executeMigrateShowPlan', () => {
     const result = await executeMigrateShowPlan({
       config,
       cwd: tempDir,
+      invocation: { cwd: tempDir, configPath: undefined, dbGiven: false },
       from: HASH_A,
       onPreflightComplete,
     });
