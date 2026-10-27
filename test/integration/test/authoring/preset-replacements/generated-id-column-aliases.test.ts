@@ -1,4 +1,6 @@
 import type { Contract } from '@internal/contract/types';
+import { defineContract as definePostgresContract } from '@internal/postgres/contract-builder';
+import { defineContract as defineSqliteContract } from '@internal/sqlite/contract-builder';
 import { describe, expect, it } from 'vitest';
 import {
   emitPostgres,
@@ -102,4 +104,54 @@ describe('a generator on a generated id column alias', () => {
       ]);
     },
   );
+});
+
+function postgresKeyAndForeignKey(written: 'alias' | 'char'): Contract {
+  return definePostgresContract({}, ({ field, model, rel, gen, type }) => {
+    const column = () => field.column(written === 'alias' ? type.Ulid() : type.Char(26));
+    const Author = model('Author', { fields: { id: column().id().onCreate(gen.ulid()) } });
+    const Post = model('Post', {
+      fields: { id: field.column(type.Int()).id(), authorId: column() },
+    });
+    return {
+      models: {
+        Author: Author.relations({ posts: rel.hasMany(Post, { by: 'authorId' }) }),
+        Post: Post.relations({ author: rel.belongsTo(Author, { from: 'authorId', to: 'id' }) }),
+      },
+    };
+  });
+}
+
+function sqliteKeyAndForeignKey(written: 'alias' | 'char'): Contract {
+  return defineSqliteContract({}, ({ field, model, rel, gen, type }) => {
+    const column = () => field.column(written === 'alias' ? type.sql.Ulid() : type.sql.Char(26));
+    const Author = model('Author', { fields: { id: column().id().onCreate(gen.ulid()) } });
+    const Post = model('Post', {
+      fields: { id: field.column(type.Int()).id(), authorId: column() },
+    });
+    return {
+      models: {
+        Author: Author.relations({ posts: rel.hasMany(Post, { by: 'authorId' }) }),
+        Post: Post.relations({ author: rel.belongsTo(Author, { from: 'authorId', to: 'id' }) }),
+      },
+    };
+  });
+}
+
+describe('a generated id column alias in TypeScript on a key and the foreign key that copies it', () => {
+  it('on postgres, type.Ulid() emits the contract type.Char(26) emits', async () => {
+    const alias = JSON.parse(await emitPostgres(postgresKeyAndForeignKey('alias')));
+    expect(alias.storage.namespaces.public.entries.table.Post.columns.authorId).toMatchObject({
+      codecId: 'sql/char@1',
+      typeParams: { length: 26 },
+    });
+    expect(Object.keys(alias.domain.namespaces.public.models.Post.relations)).toEqual(['author']);
+    expect(alias).toEqual(JSON.parse(await emitPostgres(postgresKeyAndForeignKey('char'))));
+  });
+
+  it('on sqlite, type.sql.Ulid() emits the contract type.sql.Char(26) emits', async () => {
+    expect(JSON.parse(await emitSqlite(sqliteKeyAndForeignKey('alias')))).toEqual(
+      JSON.parse(await emitSqlite(sqliteKeyAndForeignKey('char'))),
+    );
+  });
 });
