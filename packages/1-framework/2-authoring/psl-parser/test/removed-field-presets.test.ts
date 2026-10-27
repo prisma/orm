@@ -35,9 +35,9 @@ const presets = {
 function describeCall(
   call: ResolvedTypeConstructorCall,
   types: ContributedTypeNamespace,
-  declared: (name: string) => boolean = () => false,
+  isDeclared: (name: string) => boolean = () => false,
 ) {
-  return describeRemovedFieldPreset(presets, call, types, declared);
+  return describeRemovedFieldPreset(presets, call, types, isDeclared);
 }
 
 describe('describeRemovedFieldPreset', () => {

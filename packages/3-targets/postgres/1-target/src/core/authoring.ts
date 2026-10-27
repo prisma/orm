@@ -1,4 +1,4 @@
-import { generatedIdColumnAliases, sqlTargetTypeConstructors } from '@internal/family-sql/pack';
+import { sqlTargetTypeConstructors } from '@internal/family-sql/pack';
 import type {
   AuthoringEntityContext,
   AuthoringEntityTypeFactoryOutput,
@@ -43,6 +43,7 @@ import type {
   ResolvedPslModelRefs,
   SqlPslEntityPlacementOutput,
 } from '@internal/sql-contract/entity-handle-lowering-hook';
+import { generatedIdColumnAliases } from '@internal/sql-contract/generated-id-column-aliases';
 import { exactNameBodyWarning } from '@internal/sql-contract/index-naming';
 import {
   requireSqlExpression,

@@ -69,13 +69,13 @@ export function removedPresetWithPhases(
 }
 
 /**
- * The refusal of a call to a field preset Prisma 8 removed, naming what to write instead, or `undefined` when `presets` has no row for the call that applies to a stack whose types `types` holds. A row is skipped when `declared` says the schema declares the first name of its type, because the rewrite would then name the schema's declaration.
+ * The refusal of a call to a field preset Prisma 8 removed, naming what to write instead, or `undefined` when `presets` has no row for the call that applies to a stack whose types `types` holds. A row is skipped when `isDeclared` says the schema declares the first name of its type, because the rewrite would then name the schema's declaration.
  */
 export function describeRemovedFieldPreset(
   presets: RemovedFieldPresets,
   call: ResolvedTypeConstructorCall,
   types: ContributedTypeNamespace,
-  declared: (name: string) => boolean,
+  isDeclared: (name: string) => boolean,
 ): string | undefined {
   const path = call.path.join('.');
   const rows = Object.hasOwn(presets, path) ? presets[path] : undefined;
@@ -84,7 +84,7 @@ export function describeRemovedFieldPreset(
     const replacement = contributedTypeAt(types, row.type);
     return (
       replacement !== undefined &&
-      (name === undefined || !declared(name)) &&
+      (name === undefined || !isDeclared(name)) &&
       (row.codecId === undefined || contributedTypeCodecId(replacement) === row.codecId)
     );
   });

@@ -5,14 +5,13 @@ import {
   isAuthoringTypeDescriptor,
 } from '@internal/framework-components/authoring';
 import {
-  GENERATED_ID_ALIAS_NAMESPACES,
+  GENERATED_ID_COLUMN_ALIAS_NAMESPACES,
   type GeneratedIdColumnAlias,
+  generatedIdColumnAliases,
 } from '@internal/sql-contract/generated-id-column-aliases';
 import { contractError } from './contract-errors';
 
 const GUIDE = 'The upgrade guide "Field presets are removed" lists every rewrite.';
-
-const CHARACTER_CODEC_ID = 'sql/char@1';
 
 /** A removed field preset: its rewrite, named only where the type the rewrite writes resolves, and to `codecId` when one is given, so a row does not fire on a target the preset never existed on. */
 interface RemovedFieldPreset {
@@ -35,9 +34,9 @@ function idAlias(
   alias: GeneratedIdColumnAlias,
   write: (prefix: string) => string,
 ): readonly RemovedFieldPreset[] {
-  return GENERATED_ID_ALIAS_NAMESPACES.map((namespace) => ({
+  return GENERATED_ID_COLUMN_ALIAS_NAMESPACES.map((namespace) => ({
     type: [...namespace, alias],
-    codecId: CHARACTER_CODEC_ID,
+    codecId: generatedIdColumnAliases[alias].output.type.codecId,
     rewrite: write(prefixOf(namespace)),
   }));
 }

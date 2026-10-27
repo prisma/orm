@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  GENERATED_ID_ALIAS_NAMESPACES,
+  GENERATED_ID_COLUMN_ALIAS_NAMESPACES,
   generatedIdColumnAliases,
 } from '../src/generated-id-column-aliases';
 
@@ -30,6 +30,6 @@ describe('the type aliases for the column of a generated id', () => {
   });
 
   it('are looked up as a top-level name first, then in sql', () => {
-    expect(GENERATED_ID_ALIAS_NAMESPACES).toEqual([[], ['sql']]);
+    expect(GENERATED_ID_COLUMN_ALIAS_NAMESPACES).toEqual([[], ['sql']]);
   });
 });

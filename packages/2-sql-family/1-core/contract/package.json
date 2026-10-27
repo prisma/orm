@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "SQL contract types, validators, and IR factories for Prisma 8",
+  "description": "SQL contract types, validators, IR factories and shared authoring definitions for Prisma 8",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",

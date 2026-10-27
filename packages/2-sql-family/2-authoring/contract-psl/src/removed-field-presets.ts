@@ -6,11 +6,10 @@ import {
   removedPresetWrittenAs,
 } from '@internal/psl-parser/interpret';
 import {
-  GENERATED_ID_ALIAS_NAMESPACES,
+  GENERATED_ID_COLUMN_ALIAS_NAMESPACES,
   type GeneratedIdColumnAlias,
+  generatedIdColumnAliases,
 } from '@internal/sql-contract/generated-id-column-aliases';
-
-const CHARACTER_CODEC_ID = 'sql/char@1';
 
 const NANOID_OPTIONS = /^\{\s*(?:size\s*:\s*(\d+)\s*,?\s*)?\}$/;
 
@@ -32,16 +31,16 @@ function idAlias(
   alias: GeneratedIdColumnAlias,
   attributes?: string,
 ): readonly RemovedFieldPreset[] {
-  return GENERATED_ID_ALIAS_NAMESPACES.flatMap((namespace) =>
+  return GENERATED_ID_COLUMN_ALIAS_NAMESPACES.flatMap((namespace) =>
     removedPresetWrittenAs(
       `${qualified(namespace, alias)}${attributes === undefined ? '' : ` ${attributes}`}`,
-      CHARACTER_CODEC_ID,
+      generatedIdColumnAliases[alias].output.type.codecId,
     ),
   );
 }
 
 function nanoid(id: boolean): readonly RemovedFieldPreset[] {
-  return GENERATED_ID_ALIAS_NAMESPACES.map((namespace) => {
+  return GENERATED_ID_COLUMN_ALIAS_NAMESPACES.map((namespace) => {
     const write = (size: string | undefined) => {
       const column =
         size === undefined ? qualified(namespace, 'Nanoid') : qualified(namespace, `Char(${size})`);
@@ -49,7 +48,7 @@ function nanoid(id: boolean): readonly RemovedFieldPreset[] {
     };
     return {
       type: [...namespace, 'Nanoid'],
-      codecId: CHARACTER_CODEC_ID,
+      codecId: generatedIdColumnAliases.Nanoid.output.type.codecId,
       rewrite: (call) => {
         const options = nanoidSize(call);
         return options === undefined

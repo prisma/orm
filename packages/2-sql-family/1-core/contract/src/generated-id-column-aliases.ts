@@ -35,4 +35,4 @@ export const generatedIdColumnAliases = {
 export type GeneratedIdColumnAlias = keyof typeof generatedIdColumnAliases;
 
 /** Where a stack names a generated id column alias, in the order a rewrite prefers: a target's own top-level name, then the family's `sql.` name. */
-export const GENERATED_ID_ALIAS_NAMESPACES = [[], ['sql']] as const;
+export const GENERATED_ID_COLUMN_ALIAS_NAMESPACES = [[], ['sql']] as const;

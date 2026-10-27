@@ -5,14 +5,13 @@ import {
 } from '@internal/sql-contract/sql-expression';
 import { sqlAttributeSpecs } from '@internal/sql-contract-psl/attribute-specs';
 import { sqlFamilyEntityTypes, sqlFamilyPslBlockDescriptors } from '../core/authoring-entity-types';
-import { sqlFamilyAuthoringTypes } from '../core/authoring-type-constructors';
+import { sqlFamilyAuthoringTypes } from '../core/authoring-types';
 import {
   sqlFamilyGeneratorDescriptors,
   sqlFamilyGeneratorFunctions,
 } from '../core/generator-functions';
 
-export { generatedIdColumnAliases } from '@internal/sql-contract/generated-id-column-aliases';
-export { sqlTargetTypeConstructors } from '../core/authoring-type-constructors';
+export { sqlTargetTypeConstructors } from '../core/authoring-types';
 export {
   idGeneratorFunctionBindings,
   sqlIntegerArgumentGeneratorFunctions,

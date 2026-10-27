@@ -10,7 +10,7 @@ import {
 } from '@internal/sql-contract-psl/attribute-specs';
 import { describeUnresolvedSqlType } from '@internal/sql-contract-psl/diagnostics';
 import { sqlFamilyEntityTypes, sqlFamilyPslBlockDescriptors } from './authoring-entity-types';
-import { sqlFamilyAuthoringTypes } from './authoring-type-constructors';
+import { sqlFamilyAuthoringTypes } from './authoring-types';
 import { createSqlFamilyInstance, type SqlControlFamilyInstance } from './control-instance';
 import { sqlFamilyGeneratorDescriptors, sqlFamilyGeneratorFunctions } from './generator-functions';
 

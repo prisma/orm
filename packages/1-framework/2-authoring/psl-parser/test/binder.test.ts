@@ -1045,7 +1045,9 @@ describe('createBinder — describeUnresolvedType', () => {
     );
 
     expect(
-      seen.map(({ declared }) => ['Toy', 'Cart', 'Int', 'Dog'].filter((name) => declared(name))),
+      seen.map(({ isDeclared }) =>
+        ['Toy', 'Cart', 'Int', 'Dog'].filter((name) => isDeclared(name)),
+      ),
     ).toEqual([['Toy', 'Cart']]);
   });
 

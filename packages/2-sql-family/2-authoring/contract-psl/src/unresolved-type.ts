@@ -36,7 +36,7 @@ function suggestNamespacedTypes(
 export function describeUnresolvedSqlType(
   contributions: AssembledAuthoringContributions,
 ): DescribeUnresolvedType {
-  return ({ field, written, declared }) => {
+  return ({ field, written, isDeclared }) => {
     const call = field.typeConstructor;
     if (call === undefined) {
       return field.typeNamespaceId === undefined
@@ -44,7 +44,12 @@ export function describeUnresolvedSqlType(
         : undefined;
     }
     if (written !== 'Unsupported')
-      return describeRemovedFieldPreset(removedSqlFieldPresets, call, contributions.type, declared);
+      return describeRemovedFieldPreset(
+        removedSqlFieldPresets,
+        call,
+        contributions.type,
+        isDeclared,
+      );
     const [argument, ...rest] = call.args;
     const typeName =
       argument?.kind === 'positional' && rest.length === 0

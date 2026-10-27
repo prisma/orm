@@ -161,7 +161,7 @@ export interface UnresolvedTypeReference {
   readonly owner: FieldOwner;
   readonly written: string;
   /** Whether a declaration of the schema, rather than a contributed type, takes the name `name` where the field is written. */
-  readonly declared: (name: string) => boolean;
+  readonly isDeclared: (name: string) => boolean;
 }
 
 export type DescribeUnresolvedType = (unresolved: UnresolvedTypeReference) => string | undefined;
@@ -451,7 +451,7 @@ function bind(options: BindingInputs): BinderResult {
           field,
           owner: entity,
           written,
-          declared: (declaredName) => declaredInSchema(scope, declaredName),
+          isDeclared: (declaredName) => declaredInSchema(scope, declaredName),
         }),
       );
       if (outcome === undefined) continue;

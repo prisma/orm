@@ -1,4 +1,3 @@
-import { generatedIdColumnAliases } from '@internal/family-sql/pack';
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import {
   collectScalarTypeConstructors,
@@ -9,6 +8,7 @@ import {
 } from '@internal/framework-components/authoring';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { unquotedSqlBaseNameOfCodec } from '@internal/sql-contract/data-type';
+import { generatedIdColumnAliases } from '@internal/sql-contract/generated-id-column-aliases';
 import { describe, expect, it } from 'vitest';
 import { postgresAuthoringTypes } from '../src/core/authoring';
 import { createPostgresBuiltinCodecLookup } from '../src/core/codec-registry';

@@ -1,9 +1,6 @@
 import { generatedIdColumnAliases } from '@internal/sql-contract/generated-id-column-aliases';
 import { describe, expect, it } from 'vitest';
-import sqlFamilyPack, {
-  generatedIdColumnAliases as exportedAliases,
-  sqlTargetTypeConstructors,
-} from '../src/exports/pack';
+import sqlFamilyPack, { sqlTargetTypeConstructors } from '../src/exports/pack';
 
 describe('sql family pack authoring contributions', () => {
   it('contributes Raw, whose argument is a sql expression, and the generated id column aliases in sql', () => {
@@ -17,10 +14,6 @@ describe('sql family pack authoring contributions', () => {
       },
       sql: generatedIdColumnAliases,
     });
-  });
-
-  it('exports the generated id column aliases a target also names at the top level', () => {
-    expect(exportedAliases).toBe(generatedIdColumnAliases);
   });
 
   it('registers sql/expression with its authoring entry, so the TypeScript builder reads sql values', () => {
