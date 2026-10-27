@@ -76,6 +76,27 @@ changes:
       glob: "**/*.{ts,tsx,mts,cts,js,mjs,cjs}"
       matches:
         - '(?<![\w$])verifyContractSpaces\s*\('
+  - id: refuse-marker-outside-graph-removed
+    summary: |
+      `refuseMarkerOutsideGraph` is no longer exported from `@prisma/orm-toolchain/cli/control-api`. The control client's `migrate` and `executeMigrateShowPlan` now check every contract space's marker against its migration graph themselves, and fail with `MIGRATION.MARKER_MISMATCH` when a marker is outside it. Delete the call and its handling; branch on the `MIGRATION.MARKER_MISMATCH` failure those operations return instead.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs}"
+      matches:
+        - '\brefuseMarkerOutsideGraph\b'
+  - id: execute-migrate-show-plan-requires-invocation
+    summary: |
+      `executeMigrateShowPlan` takes a required `invocation` option, `{ cwd, configPath, dbGiven }`, like the control client's `migrate`: where the commands its advice prints are run from, the `--config` they repeat, and whether they repeat `--db`. Pass the same `invocation` you pass to `migrate`.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs}"
+      matches:
+        - '\bexecuteMigrateShowPlan\s*\('
+  - id: marker-mismatch-meta
+    summary: |
+      The `meta` of `MIGRATION.MARKER_MISMATCH` no longer has `reachableHashes`. It has `spaceId`, `markerHash` and `targetHash`; `lastGraphHash`, the last contract in the migration graph the database applied, when its ledger shows one; and `missingMigrations`, the applied migrations after it that are no longer on disk, absent when the ledger could not be read. Code that read `reachableHashes` should read these fields, or show the error's `why` and `nextActions`.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs}"
+      matches:
+        - '\breachableHashes\b'
   - id: psl-temporal-type-renames
     summary: |
       On PostgreSQL, the PSL types `Timestamptz`, `Timestamp` and `Interval` are renamed to `TimestamptzTemporal`, `TimestampTemporal` and `IntervalParts`, and the old names are errors. Rename each use in your `.prisma` files, keeping its arguments: `Timestamptz(3)` becomes `TimestamptzTemporal(3)`. Each new name reads the same value with the same codec, so the contract and its hashes do not change. `@db.Timestamp` and `@db.Timestamptz` in a Prisma 7 schema are not affected.
@@ -159,7 +180,7 @@ Do the steps in this order, and skip a step that does not apply to the project:
 4. Run `prisma contract emit` (this also covers `contract-types-list-new-aggregates`, `prisma7-schema-now-default-writes-on-create` and `contract-artifacts-restamp`).
 5. Run `prisma db sign` against every database when the project reads a Prisma 6 MongoDB schema whose storage hash changed (`mongo-prisma6-merged-indexes`).
 6. On Postgres and SQLite, answer the question about a removed enum value the next time you run `migration plan` or `db update` (`removed-enum-value-questions`).
-7. Change the application code: await client calls inside `try` blocks (`client-members-reject-instead-of-throwing`), stop using a runtime captured before `close()` (`close-ends-the-client-not-your-pool`), catch the connection error for a bad SQLite path (`sqlite-open-failure-is-a-connection-error`), and pass `markerLocation` to `verifyContractSpaces` (`verify-contract-spaces-marker-location`).
+7. Change the application code: await client calls inside `try` blocks (`client-members-reject-instead-of-throwing`), stop using a runtime captured before `close()` (`close-ends-the-client-not-your-pool`), catch the connection error for a bad SQLite path (`sqlite-open-failure-is-a-connection-error`), pass `markerLocation` to `verifyContractSpaces` (`verify-contract-spaces-marker-location`), and, in code that calls the control API, drop `refuseMarkerOutsideGraph`, pass `invocation` to `executeMigrateShowPlan` and read the new `MIGRATION.MARKER_MISMATCH` fields (`refuse-marker-outside-graph-removed`, `execute-migrate-show-plan-requires-invocation`, `marker-mismatch-meta`).
 8. Change the code that uses PostgreSQL date and time values: remove the date and time types no longer exported from imports, including those in migration snapshots (`branded-time-types-removed`, `interval-with-precision-typed-as-parts`), import `Temporal` from `temporal-spec` in type tests (`temporal-types-from-temporal-spec`), read text date and time values as ISO 8601 (`iso-string-date-time-values`), and remove any statement that sets a `DateStyle` other than `ISO` (`date-style-iso-required`).
 
 ## `mongoContract` takes the target pack
@@ -325,6 +346,37 @@ verifyContractSpaces({
 ```
 
 The marker location is `prisma_contract.marker` on Postgres, `_prisma_marker` on SQLite and MySQL, and `_prisma_migrations` on MongoDB.
+
+## The control API checks markers against the migration graph itself
+
+These three changes affect only code that calls `@prisma/orm-toolchain/cli/control-api`. A project that runs the `prisma` CLI has nothing to change.
+
+```ts
+// Before
+const refusal = refuseMarkerOutsideGraph({ markerHash, graph });
+if (refusal) return notOk(refusal);
+const plan = await executeMigrateShowPlan({ ...options });
+
+// After: the operation returns MIGRATION.MARKER_MISMATCH itself
+const plan = await executeMigrateShowPlan({ ...options, invocation });
+if (!plan.ok && plan.failure.code === 'MIGRATION.MARKER_MISMATCH') {
+  // plan.failure.meta: spaceId, markerHash, targetHash, lastGraphHash?, missingMigrations?
+}
+```
+
+### `refuse-marker-outside-graph-removed`
+
+For every file matched by `detection`, delete the call to `refuseMarkerOutsideGraph` and the handling of what it returned. `migrate` and `executeMigrateShowPlan` now make the same check for every contract space and return `MIGRATION.MARKER_MISMATCH` as their failure.
+
+### `execute-migrate-show-plan-requires-invocation`
+
+For every call matched by `detection`, add `invocation: { cwd, configPath, dbGiven }`, the same value the project passes to `migrate`. Set `dbGiven: true` when the project passes a database URL, so the printed commands include `--db <url>`.
+
+### `marker-mismatch-meta`
+
+For every file matched by `detection` that reads the `meta` of `MIGRATION.MARKER_MISMATCH`, read `spaceId`, `markerHash`, `targetHash`, `lastGraphHash` and `missingMigrations` instead of `reachableHashes`, or show the error's `why` and `nextActions`. `MIGRATION.HASH_NOT_IN_GRAPH` still has `reachableHashes`; leave code that reads it there unchanged.
+
+The error's text changes too. `prisma db migrate` now prints `The database's marker names <hash>, which no migration in <directory> starts or ends at.`, followed by what the database applied after the last contract of the graph it reached. Its next actions give two recoveries, `prisma db update` for a database whose migration history does not need to be kept, and new migrations for one that changes only through migrations. None of them resets the database.
 
 ## Explicit date and time types carry the kind of value they read
 
