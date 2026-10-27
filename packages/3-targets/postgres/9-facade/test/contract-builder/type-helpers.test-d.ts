@@ -45,7 +45,7 @@ test('a field typed by temporal.CreatedAt is optional on create', () => {
   defineContract({}, ({ type, field }) => {
     const createdAt = field.column(type.temporal.CreatedAt());
     const updatedAt = field.column(type.temporal.UpdatedAtString()).optional();
-    const plain = field.column(type.Timestamptz());
+    const plain = field.column(type.TimestamptzTemporal());
     expectTypeOf<GeneratesOnCreate<typeof createdAt>>().toEqualTypeOf<true>();
     expectTypeOf<GeneratesOnCreate<typeof updatedAt>>().toEqualTypeOf<true>();
     expectTypeOf<GeneratesOnCreate<typeof plain>>().toEqualTypeOf<false>();

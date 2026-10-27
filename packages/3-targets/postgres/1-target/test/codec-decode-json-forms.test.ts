@@ -441,7 +441,7 @@ describe('the length and scale checks on a long run of padding', () => {
   });
 });
 
-describe('the date and time codecs that carry PostgreSQL text read what they write', () => {
+describe('the date and time codecs that carry text store only the stored form', () => {
   it.each([
     ['pg/date-string@1', pgDateStringDescriptor.factory()(ctx), '0044-03-15 BC', '-000043-03-15'],
     [
@@ -458,8 +458,14 @@ describe('the date and time codecs that carry PostgreSQL text read what they wri
     ],
     ['pg/time-string@1', pgTimeStringDescriptor.factory({})(ctx), '12:34', '12:34:00'],
     ['pg/timetz@1', pgTimetzDescriptor.factory({})(ctx), '12:34:56+02', '12:34:56+02:00'],
-  ])('%s stores %s as %s and reads that text back unchanged', (_id, codec, value, stored) => {
-    const json = toContractJson(codec, value);
+  ])('%s refuses %s and stores %s as written', (_id, codec, other, stored) => {
+    expect(() => toContractJson(codec, other)).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+        message: expect.stringContaining(stored),
+      }),
+    );
+    const json = toContractJson(codec, stored);
     expect({ json, read: fromContractJson(codec, json) }).toEqual({ json: stored, read: stored });
   });
 });

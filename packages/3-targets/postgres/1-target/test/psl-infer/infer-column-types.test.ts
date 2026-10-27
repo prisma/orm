@@ -42,8 +42,8 @@ const COLUMN_TYPES = [
   ['bit(8)', 'Bit(8)'],
   ['bit varying', 'VarBit'],
   ['bit varying(16)', 'VarBit(16)'],
-  ['interval', 'Interval'],
-  ['interval(3)', 'Interval(3)'],
+  ['interval', 'IntervalParts'],
+  ['interval(3)', 'IntervalParts(3)'],
 ] as const;
 
 function tableWith(columns: Record<string, { reportedType: ReportedSqlType; many?: true }>) {

@@ -9,7 +9,7 @@ import {
   float8Column,
   int4Column,
   int8Column,
-  intervalColumn,
+  intervalPartsColumn,
   jsonbColumn,
   jsonColumn,
   numericColumn,
@@ -106,7 +106,7 @@ export const contract = defineContract(
               .column('created_at'),
             startsAt: field.column(timeTemporalColumn(2)).optional().column('starts_at'),
             startsAtTz: field.column(timetzColumn(2)).optional().column('starts_at_tz'),
-            duration: field.column(intervalColumn(6)).optional().column('duration'),
+            duration: field.column(intervalPartsColumn(6)).optional().column('duration'),
           },
         }).sql({ table: 'param_types' }),
 
@@ -116,7 +116,7 @@ export const contract = defineContract(
             name: field.column(textColumn),
             scheduledAt: field
               .column(timestamptzStringColumn)
-              .default({ kind: 'literal', value: '2024-01-15 10:30:00+00' })
+              .default({ kind: 'literal', value: '2024-01-15T10:30:00Z' })
               .column('scheduled_at'),
             createdAt: field.column(timestamptzTemporalColumn).default(now()).column('created_at'),
           },

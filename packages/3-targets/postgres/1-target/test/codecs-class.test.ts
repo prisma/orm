@@ -113,9 +113,9 @@ describe('codecs-class', () => {
 
   describe('pg/timetz@1', () => {
     const codec = pgTimetzDescriptor.factory({})(instanceCtx);
-    it('round-trips strings verbatim', async () => {
-      expect(await codec.toWire('10:30:00+00', callCtx)).toBe('10:30:00+00');
-      expect(await codec.fromWire('10:30:00+00', callCtx)).toBe('10:30:00+00');
+    it('writes its stored form and reads the text PostgreSQL prints as that form', async () => {
+      expect(await codec.toWire('10:30:00Z', callCtx)).toBe('10:30:00Z');
+      expect(await codec.fromWire('10:30:00+00', callCtx)).toBe('10:30:00Z');
     });
   });
 

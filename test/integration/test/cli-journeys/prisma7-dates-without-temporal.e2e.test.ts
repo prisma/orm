@@ -89,12 +89,18 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 20));
   const updated = await events.where({ id: created.id }).update(writes.update);
   const readAfterUpdate = await events.where({ id: created.id }).first();
+  const [session] = await db.query(
+    db.raw.sql\`SELECT EXTRACT(TIMEZONE FROM CURRENT_TIMESTAMP)::int AS "utcOffsetSeconds"\`
+      .returnsRow({ utcOffsetSeconds: 'pg/int4@1' })
+      .build(),
+  );
   process.stdout.write(
     JSON.stringify({
       created,
       readAfterCreate,
       updated,
       readAfterUpdate,
+      sessionUtcOffsetSeconds: session.utcOffsetSeconds,
       temporalPolyfill: [...loaded].filter((url) => url.includes('temporal-polyfill')),
       timezoneOffset: new Date().getTimezoneOffset(),
     }),
@@ -104,6 +110,9 @@ try {
 }
 `;
 
+const TOKYO_UTC_OFFSET_SECONDS = 9 * 60 * 60;
+const TOKYO_UTC_OFFSET_MILLIS = TOKYO_UTC_OFFSET_SECONDS * 1000;
+
 const DATE_COLUMN_CODECS = {
   createdAt: 'pg/timestamp-string@1',
   updatedAt: 'pg/timestamp-string@1',
@@ -112,9 +121,9 @@ const DATE_COLUMN_CODECS = {
   opensAt: 'pg/time-string@1',
 };
 
-/** The written values, each in the text PostgreSQL prints for it, so a read returns it unchanged. */
+/** The written values, each in its ISO 8601 stored form, so a read returns it unchanged. */
 const WRITTEN = {
-  happensAt: '2024-01-15 10:00:00.123456+00',
+  happensAt: '2024-01-15T10:00:00.123456Z',
   day: '2024-01-15',
   opensAt: '08:30:15.25',
 };
@@ -134,6 +143,7 @@ interface AppResult {
   readonly readAfterCreate: EventRow;
   readonly updated: EventRow;
   readonly readAfterUpdate: EventRow;
+  readonly sessionUtcOffsetSeconds: number;
   readonly temporalPolyfill: readonly string[];
   readonly timezoneOffset: number;
 }
@@ -143,7 +153,7 @@ function output(run: EngineCommandResult): string {
 }
 
 function utcMillis(timestampText: string): number {
-  return new Date(`${timestampText.replace(' ', 'T')}Z`).getTime();
+  return new Date(`${timestampText}Z`).getTime();
 }
 
 function expectNow(timestampText: string, before: number, after: number): void {
@@ -152,14 +162,12 @@ function expectNow(timestampText: string, before: number, after: number): void {
   expect(millis, timestampText).toBeLessThanOrEqual(after + 1_000);
 }
 
-async function runApp(ctx: JourneyContext, connectionString: string, writes: unknown) {
-  const sessionUtcOffset = await withClient(connectionString, async (client) => {
-    const { rows } = await client.query<{ seconds: number }>(
-      'SELECT EXTRACT(TIMEZONE FROM CURRENT_TIMESTAMP)::int AS seconds',
-    );
-    return rows[0]?.seconds;
-  });
-  expect(sessionUtcOffset, 'createdAt is CURRENT_TIMESTAMP in the session time zone').toBe(0);
+async function runApp(
+  ctx: JourneyContext,
+  connectionString: string,
+  writes: unknown,
+  expectedSessionUtcOffsetSeconds = 0,
+) {
   const script = join(ctx.testDir, 'app.mjs');
   writeFileSync(script, APP_SCRIPT, 'utf-8');
   const before = Date.now();
@@ -176,6 +184,10 @@ async function runApp(ctx: JourneyContext, connectionString: string, writes: unk
   const result: AppResult = JSON.parse(run.stdout);
   expect(result.temporalPolyfill).toEqual([]);
   expect(result.timezoneOffset, 'the child runs at UTC+3').toBe(-180);
+  expect(
+    result.sessionUtcOffsetSeconds,
+    "the application's database session time zone, which a database now() default uses",
+  ).toBe(expectedSessionUtcOffsetSeconds);
   return { result, before, after };
 }
 
@@ -229,15 +241,15 @@ withTempDir(({ createTempDir }) => {
           expect(sign.exitCode, `db sign\n${output(sign)}`).toBe(0);
 
           const { result, before, after } = await runApp(ctx, db.connectionString, {
-            create: { title: 'a', updatedAt: '2024-01-15 09:00:00.5', ...WRITTEN },
-            update: { title: 'b', updatedAt: '2024-01-15 11:00:00.25' },
+            create: { title: 'a', updatedAt: '2024-01-15T09:00:00.5', ...WRITTEN },
+            update: { title: 'b', updatedAt: '2024-01-15T11:00:00.25' },
           });
 
           expect(result.created).toEqual({
             id: result.created.id,
             title: 'a',
             createdAt: result.created.createdAt,
-            updatedAt: '2024-01-15 09:00:00.5',
+            updatedAt: '2024-01-15T09:00:00.5',
             ...WRITTEN,
           });
           expectNow(result.created.createdAt, before, after);
@@ -245,7 +257,7 @@ withTempDir(({ createTempDir }) => {
           expect(result.updated).toEqual({
             ...result.created,
             title: 'b',
-            updatedAt: '2024-01-15 11:00:00.25',
+            updatedAt: '2024-01-15T11:00:00.25',
           });
           expect(result.readAfterUpdate).toEqual(result.updated);
         },
@@ -293,6 +305,52 @@ withTempDir(({ createTempDir }) => {
             utcMillis(result.created.updatedAt),
           );
           expect(result.readAfterUpdate).toEqual(result.updated);
+        },
+        timeouts.spinUpPpgDev * 2,
+      );
+    });
+
+    describe('through prisma7Schema(...), on a session in Asia/Tokyo', () => {
+      const db = useDevDatabase({
+        onReady: (cs) => withClient(cs, (client) => client.query(PRISMA7_SQL)),
+      });
+
+      it(
+        'stores the current UTC time on a create, and a raw INSERT still gets the database default',
+        async () => {
+          const ctx = setupPrisma7Project(createTempDir, db.connectionString);
+          const emit = await runContractEmit(ctx);
+          expect(emit.exitCode, `contract emit\n${output(emit)}`).toBe(0);
+          const sign = await runDbSign(ctx);
+          expect(sign.exitCode, `db sign\n${output(sign)}`).toBe(0);
+          await withClient(db.connectionString, (client) =>
+            client.query("SET TIME ZONE 'Asia/Tokyo'"),
+          );
+
+          const { result, before, after } = await runApp(
+            ctx,
+            db.connectionString,
+            { create: { title: 'a', ...WRITTEN }, update: { title: 'b' } },
+            TOKYO_UTC_OFFSET_SECONDS,
+          );
+          expectNow(result.created.createdAt, before, after);
+          expect(result.readAfterCreate).toEqual(result.created);
+
+          const rawBefore = Date.now();
+          const raw = await withClient(db.connectionString, (client) =>
+            client.query<{ createdAt: string }>(
+              `INSERT INTO "Event" ("title", "updatedAt", "happensAt", "day", "opensAt")
+               VALUES ('raw', now(), now(), current_date, current_time)
+               RETURNING "createdAt"::text AS "createdAt"`,
+            ),
+          );
+          const rawAfter = Date.now();
+          const rawCreatedAt = raw.rows[0]?.createdAt ?? '';
+          expectNow(
+            rawCreatedAt,
+            rawBefore + TOKYO_UTC_OFFSET_MILLIS,
+            rawAfter + TOKYO_UTC_OFFSET_MILLIS,
+          );
         },
         timeouts.spinUpPpgDev * 2,
       );

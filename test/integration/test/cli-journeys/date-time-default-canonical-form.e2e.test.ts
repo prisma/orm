@@ -180,7 +180,7 @@ model Created {
   id      Int       @id
   instant DateTime  @default(timestamptz\`0044-03-15 00:00:00+00 BC\`)
   day     Date      @default(date\`0044-03-15 BC\`)
-  local   Timestamp @default(timestamp\`-000043-03-15T12:00:00\`)
+  local   TimestampTemporal @default(timestamp\`-000043-03-15T12:00:00\`)
 
   @@map("created")
 }
@@ -189,7 +189,7 @@ model Created {
   id      Int       @id
   instant DateTime  ${defaults ? '@default(timestamptz`-000043-03-15T00:00:00Z`)' : ''}
   day     Date      ${defaults ? '@default(date`-000043-03-15`)' : ''}
-  local   Timestamp ${defaults ? '@default(timestamp`0044-03-15 12:00:00 BC`)' : ''}
+  local   TimestampTemporal ${defaults ? '@default(timestamp`0044-03-15 12:00:00 BC`)' : ''}
 
   @@map("altered")
 }

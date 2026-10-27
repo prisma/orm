@@ -1,9 +1,16 @@
 import { ColumnRef, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { pgTimestamptzDateColumn, pgTimestamptzDateDescriptor } from '../src/core/date-codecs';
+import {
+  pgTimestampDateColumn,
+  pgTimestampDateDescriptor,
+  pgTimestamptzDateColumn,
+  pgTimestamptzDateDescriptor,
+} from '../src/core/date-codecs';
 import {
   pgDateTemporalColumn,
   pgDateTemporalDescriptor,
+  pgTimestampInstantColumn,
+  pgTimestampInstantDescriptor,
   pgTimestampTemporalColumn,
   pgTimestampTemporalDescriptor,
   pgTimestamptzTemporalColumn,
@@ -50,6 +57,7 @@ interface TaxonomyRow {
   readonly temporal: Representation;
   readonly string: Representation;
   readonly date?: Representation;
+  readonly instant?: Representation;
 }
 
 const TAXONOMY: readonly TaxonomyRow[] = [
@@ -81,6 +89,16 @@ const TAXONOMY: readonly TaxonomyRow[] = [
       codecId: 'pg/timestamp-string@1',
       descriptor: pgTimestampStringDescriptor,
       column: pgTimestampStringColumn,
+    },
+    date: {
+      codecId: 'pg/timestamp-date@1',
+      descriptor: pgTimestampDateDescriptor,
+      column: pgTimestampDateColumn,
+    },
+    instant: {
+      codecId: 'pg/timestamp-instant@1',
+      descriptor: pgTimestampInstantDescriptor,
+      column: pgTimestampInstantColumn,
     },
   },
   {
@@ -124,11 +142,12 @@ const representations = TAXONOMY.flatMap((row) => [
   { row, kind: 'temporal' as const, rep: row.temporal },
   { row, kind: 'string' as const, rep: row.string },
   ...(row.date ? [{ row, kind: 'date' as const, rep: row.date }] : []),
+  ...(row.instant ? [{ row, kind: 'instant' as const, rep: row.instant }] : []),
 ]);
 
 const sourceExpression = ColumnRef.of('reading', 'at');
 
-describe('the nine representation-explicit temporal codecs', () => {
+describe('the eleven representation-explicit temporal codecs', () => {
   describe.each(representations)('$rep.codecId', ({ row, rep }) => {
     it('declares the id the taxonomy names', () => {
       expect(rep.descriptor.codecId).toBe(rep.codecId);

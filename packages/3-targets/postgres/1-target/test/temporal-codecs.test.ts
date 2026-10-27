@@ -156,20 +156,6 @@ describe('Temporal-backed temporal codecs', () => {
       ['timestamp infinity', timestampCodec, 'infinity', 'TimestampString(p)'],
       ['timestamptz infinity', timestamptzCodec, 'infinity', 'TimestamptzString(p)'],
       ['timestamptz -infinity', timestamptzCodec, '-infinity', 'TimestamptzString(p)'],
-      ['German DateStyle date', dateCodec, '02.01.2026', 'DateString'],
-      [
-        'German DateStyle timestamptz',
-        timestamptzCodec,
-        '02.01.2026 03:04:05.123456 UTC',
-        'TimestamptzString(p)',
-      ],
-      ['SQL DateStyle date', dateCodec, '02/01/2026', 'DateString'],
-      [
-        'Postgres DateStyle timestamp',
-        timestampCodec,
-        'Fri 02 Jan 03:04:05.123456 2026',
-        'TimestampString(p)',
-      ],
       [
         'hour 24, which PostgreSQL allows and Temporal does not',
         timeCodec,
@@ -189,6 +175,20 @@ describe('Temporal-backed temporal codecs', () => {
         await expect(codec.fromWire(wire, callCtx)).rejects.toThrow(stringType);
       },
     );
+
+    it.each([
+      ['German', '02.01.2026', dateCodec],
+      ['German', '02.01.2026 03:04:05.123456 UTC', timestamptzCodec],
+      ['SQL', '01/02/2026', dateCodec],
+      ['SQL', '01/02/2026 03:04:05.123456', timestampCodec],
+      ['Postgres', 'Fri Jan 02 03:04:05.123456 2026', timestampCodec],
+      ['Postgres', 'Fri Jan 02 03:04:05.123456 2026 UTC', timestamptzCodec],
+    ] as const)('refuses %s DateStyle text %s, naming the setting', async (_style, wire, codec) => {
+      await expect(codec.fromWire(wire, callCtx)).rejects.toMatchObject({
+        code: 'RUNTIME.DATE_STYLE_NOT_ISO',
+        meta: { codecId: codec.id, received: wire },
+      });
+    });
 
     it.each([
       ['date', dateCodec, 'infinity'],

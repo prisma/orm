@@ -3,7 +3,7 @@
 model T {
   id      Int       @id
   instant DateTime  @default(timestamptz`2024-01-01T01:00:00.500+01:00`)
-  local   Timestamp @default(timestamp`2024-01-01 12:34:56.500`)
+  local   TimestampTemporal @default(timestamp`2024-01-01 12:34:56.500`)
   day     Date      @default(date`0044-03-15 BC`)
   clock   Time      @default(time`12:34`)
   zoned   Timetz    @default(timetz`12:34:56+02`)

@@ -48,7 +48,7 @@ const someCodecsHold: Readonly<Record<string, readonly string[]>> = {
   'pg/date': ['-infinity'],
 };
 
-/** The codecs that hold `infinity` and `-infinity`: those whose value is PostgreSQL's own text. */
+/** The codecs that hold `infinity` and `-infinity`: the text codecs. */
 const holdsInfinity: ReadonlySet<string> = new Set([
   'pg/date-string@1',
   'pg/timestamp-string@1',

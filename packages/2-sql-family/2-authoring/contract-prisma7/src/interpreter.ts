@@ -1385,6 +1385,7 @@ function readField(args: ReadFieldArgs): void {
           onlyDbgenerated: unsupported,
           codecId: resolved.descriptor.codecId,
           typeParams: resolved.descriptor.typeParams,
+          nativeTypeName: nativeType?.name,
           codecLookup: input.codecLookup,
           dataTypes: input.dataTypes,
           literalForm: binding.literalDefaultForm({

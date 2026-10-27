@@ -281,7 +281,7 @@ export const postgresScalarAuthoringTypes: AuthoringTypeNamespace = {
       },
     },
   },
-  Timestamp: {
+  TimestampTemporal: {
     kind: 'typeConstructor',
     args: [{ kind: 'value', dataType: 'pg/int4', name: 'precision', optional: true }],
     output: {
@@ -289,7 +289,7 @@ export const postgresScalarAuthoringTypes: AuthoringTypeNamespace = {
       typeParams: { precision: { kind: 'arg', index: 0 } },
     },
   },
-  Timestamptz: {
+  TimestamptzTemporal: {
     kind: 'typeConstructor',
     args: [{ kind: 'value', dataType: 'pg/int4', name: 'precision', optional: true }],
     output: {

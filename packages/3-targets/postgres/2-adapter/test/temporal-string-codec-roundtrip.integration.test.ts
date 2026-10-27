@@ -136,7 +136,7 @@ function buildSelectByIdAst(id: number): SelectAst {
     );
 }
 
-describe('temporal string codecs round-trip PostgreSQL text', () => {
+describe('the string date and time codecs read ISO 8601 from PostgreSQL', () => {
   let database: Awaited<ReturnType<typeof createDevDatabase>> | undefined;
   let runtime: Runtime | undefined;
   let session: ReturnType<typeof postgresRuntimeDriverDescriptor.create> | undefined;
@@ -208,21 +208,21 @@ describe('temporal string codecs round-trip PostgreSQL text', () => {
     expect('Temporal' in globalThis).toBe(false);
   });
 
-  it('preserves microsecond precision that a millisecond-resolution value would truncate', {
+  it('reads back microsecond precision that a millisecond-resolution value would truncate, in ISO 8601', {
     timeout: timeouts.spinUpPpgDev,
   }, async () => {
     await insert({
       id: 1,
       d: '2026-01-02',
-      ts: '2026-01-02 03:04:05.123456',
-      tstz: '2026-01-02 03:04:05.123456+00',
+      ts: '2026-01-02T03:04:05.123456',
+      tstz: '2026-01-02T03:04:05.123456Z',
       t: '03:04:05.123456',
     });
 
     expect(await read(1)).toEqual({
       d: '2026-01-02',
-      ts: '2026-01-02 03:04:05.123456',
-      tstz: '2026-01-02 03:04:05.123456+00',
+      ts: '2026-01-02T03:04:05.123456',
+      tstz: '2026-01-02T03:04:05.123456Z',
       t: '03:04:05.123456',
     });
   });
@@ -242,59 +242,50 @@ describe('temporal string codecs round-trip PostgreSQL text', () => {
     });
   });
 
-  it('round-trips a BC date and an expanded year, which fall outside the representable range', {
+  it('round-trips a year before Christ and an expanded year in their ISO 8601 form', {
     timeout: timeouts.spinUpPpgDev,
   }, async () => {
-    await insert({
+    const beforeChrist = {
       id: 4,
-      d: '0044-03-15 BC',
-      ts: '0044-03-15 12:00:00 BC',
-      tstz: '0044-03-15 12:00:00+00 BC',
+      d: '-000043-03-15',
+      ts: '-000043-03-15T12:00:00',
+      tstz: '-000043-03-15T12:00:00Z',
       t: null,
-    });
-    await insert({
+    };
+    const expanded = {
       id: 5,
-      d: '12026-01-02',
-      ts: '12026-01-02 03:04:05',
-      tstz: '12026-01-02 03:04:05+00',
+      d: '+012026-01-02',
+      ts: '+012026-01-02T03:04:05',
+      tstz: '+012026-01-02T03:04:05Z',
       t: null,
-    });
+    };
+    await insert(beforeChrist);
+    await insert(expanded);
 
-    expect(await read(4)).toEqual({
-      d: '0044-03-15 BC',
-      ts: '0044-03-15 12:00:00 BC',
-      tstz: '0044-03-15 12:00:00+00 BC',
-      t: null,
-    });
-    expect(await read(5)).toEqual({
-      d: '12026-01-02',
-      ts: '12026-01-02 03:04:05',
-      tstz: '12026-01-02 03:04:05+00',
-      t: null,
-    });
+    const { id: _4, ...beforeChristRow } = beforeChrist;
+    const { id: _5, ...expandedRow } = expanded;
+    expect([await read(4), await read(5)]).toEqual([beforeChristRow, expandedRow]);
   });
 
-  it('surfaces the session TimeZone in the rendering instead of pinning the read to UTC', {
+  it('reads a timestamptz as the same UTC instant whatever the session TimeZone', {
     timeout: timeouts.spinUpPpgDev,
   }, async () => {
     await session!.execute({ sql: "SET TimeZone TO 'Asia/Tokyo'" });
     try {
-      expect((await read(1)).tstz).toBe('2026-01-02 12:04:05.123456+09');
+      expect((await read(1)).tstz).toBe('2026-01-02T03:04:05.123456Z');
     } finally {
       await session!.execute({ sql: "SET TimeZone TO 'UTC'" });
     }
   });
 
-  it('surfaces a non-default DateStyle in the rendering instead of normalising it away', {
+  it('refuses to read a date the session prints under another DateStyle, naming the setting', {
     timeout: timeouts.spinUpPpgDev,
   }, async () => {
     await session!.execute({ sql: "SET DateStyle TO 'German, DMY'" });
     try {
-      expect(await read(1)).toEqual({
-        d: '02.01.2026',
-        ts: '02.01.2026 03:04:05.123456',
-        tstz: '02.01.2026 03:04:05.123456 UTC',
-        t: '03:04:05.123456',
+      await expect(read(1)).rejects.toMatchObject({
+        code: 'RUNTIME.DATE_STYLE_NOT_ISO',
+        meta: { codecId: 'pg/date-string@1', received: '02.01.2026' },
       });
     } finally {
       await session!.execute({ sql: "SET DateStyle TO 'ISO, MDY'" });

@@ -1,3 +1,5 @@
+import { blindCast } from '@internal/utils/casts';
+import type { Temporal } from 'temporal-spec';
 import { errorTemporalUnavailable, errorTemporalUnavailableForDefault } from './errors';
 
 export type TemporalImplementation = typeof Temporal;
@@ -22,8 +24,12 @@ export function setFallbackTemporal(implementation: TemporalImplementation): voi
  * `RUNTIME.TEMPORAL_UNAVAILABLE` when there is neither.
  */
 export function requireTemporal(meta: TemporalUnavailableMeta): TemporalImplementation {
-  if (typeof Temporal !== 'undefined') {
-    return Temporal;
+  const runtimeTemporal = blindCast<
+    { readonly Temporal?: TemporalImplementation },
+    'globalThis holds the runtime Temporal when the runtime has one'
+  >(globalThis).Temporal;
+  if (runtimeTemporal !== undefined) {
+    return runtimeTemporal;
   }
   if (fallback !== undefined) {
     return fallback;

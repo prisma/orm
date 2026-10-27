@@ -27,6 +27,7 @@ import type { JsonValue } from '@internal/target-postgres/codec-types';
 import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { type as arktype } from 'arktype';
+import type { Temporal as TemporalTypes } from 'temporal-spec';
 import { expectTypeOf, test } from 'vitest';
 import { TestSqlContractSerializer as SqlContractSerializer } from '../../../packages/2-sql-family/9-family/test/test-sql-contract-serializer';
 import type { Contract } from './fixtures/contract.d';
@@ -598,7 +599,7 @@ test('read: non-enum fields keep their codec output, unchanged from main', () =>
   type Row = ResultType<typeof plan>;
   expectTypeOf<Row['id']>().toEqualTypeOf<number>();
   expectTypeOf<Row['email']>().toEqualTypeOf<string>();
-  expectTypeOf<Row['createdAt']>().toEqualTypeOf<Temporal.Instant>();
+  expectTypeOf<Row['createdAt']>().toEqualTypeOf<TemporalTypes.Instant>();
 });
 
 declare const createdAt: Temporal.Instant;

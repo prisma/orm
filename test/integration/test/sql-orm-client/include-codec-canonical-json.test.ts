@@ -2,7 +2,7 @@ import {
   byteaColumn,
   int4Column,
   int8Column,
-  intervalColumn,
+  intervalPartsColumn,
   numericColumn,
 } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
@@ -43,7 +43,7 @@ const Reading = model('Reading', {
     padded: field.column(numericColumn(10, 2)).optional(),
     counter: field.column(int8Column).optional(),
     payload: field.column(byteaColumn).optional(),
-    elapsed: field.column(intervalColumn()).optional(),
+    elapsed: field.column(intervalPartsColumn()).optional(),
     embedding: field.column(vector(3)).optional(),
   },
 }).sql({ table: 'canonical_readings' });

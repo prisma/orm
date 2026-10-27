@@ -119,12 +119,15 @@ Binding variants:
 
 When a direct driver gives up a supplied client (for example after a failed rollback), it marks the client unusable, sends a `ROLLBACK` for any transaction it opened on it, and never ends it. Binding that client again fails: create a new client.
 
+The driver ensures the session settings the stack's target declares on every connection it uses; the PostgreSQL target declares `DateStyle=ISO`, which every date and time codec that reads a date or timestamp needs. A pool or client made by `createPgPool` or `createPgClient`, as a `url` binding's pool is, starts each session with the settings as startup options, after any `options` the URL or `PGOPTIONS` gives, and reads its connection string, `PGOPTIONS` and certificate files when it opens each connection, as pg does. On any other pool or client, the driver sets the settings with one statement on each connection before first use, and again after a connection from `acquireConnection()` is released.
+
 With `cursor: { disabled: true }` (or buffered cursor fallback), driver-level pool queries return their connection after fetching, before yielding buffered rows for decoding or consumption. Cursor streams retain the connection until completion or iterator cleanup. Queries on caller-owned connections and transactions never release the caller's lease.
 
 ## Exports
 
 - `./runtime`: Runtime entry point for driver implementation
   - Default: `postgresRuntimeDriverDescriptor` — use `create()` for unbound driver, then `connect(binding)`
+  - `createPgPool(config, sessionSettings)` and `createPgClient(config, sessionSettings)`: a pg pool or client whose sessions start with the session settings
   - Types: `PostgresBinding`, `PostgresDriverCreateOptions`, `QueryResult`
 - `./control`: Control plane entry point for driver descriptors
   - Default export: `DriverDescriptor` for use in `prisma.config.ts`

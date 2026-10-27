@@ -66,7 +66,7 @@
     }
   },
   "execution": {
-    "executionHash": "901dc5392c955173f23872f8945af11b6e29a21e54613ee9b821f7fc69f43c82",
+    "executionHash": "6648fa9bcd0cacf082bbb524662c5e16474259ce08470b5ee52cf6826b1b88a8",
     "mutations": {
       "defaults": [
         {
@@ -77,11 +77,17 @@
           },
           "onCreate": {
             "kind": "generator",
-            "id": "timestampStringNow"
+            "id": "timestampStringNow",
+            "params": {
+              "precision": 3
+            }
           },
           "onUpdate": {
             "kind": "generator",
-            "id": "timestampStringNow"
+            "id": "timestampStringNow",
+            "params": {
+              "precision": 3
+            }
           }
         },
         {
@@ -92,11 +98,17 @@
           },
           "onCreate": {
             "kind": "generator",
-            "id": "timestamptzStringNow"
+            "id": "timestamptzStringNow",
+            "params": {
+              "precision": 6
+            }
           },
           "onUpdate": {
             "kind": "generator",
-            "id": "timestamptzStringNow"
+            "id": "timestamptzStringNow",
+            "params": {
+              "precision": 6
+            }
           }
         }
       ]

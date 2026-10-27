@@ -7,6 +7,7 @@ import {
   orderByField,
 } from '@prisma/orm-postgres/orm-client';
 import { websearchToTsquery } from '@prisma/orm-postgres/target/full-text';
+import type { Temporal } from 'temporal-spec';
 import { describe, expectTypeOf, test } from 'vitest';
 import { createdBefore, createdSince, ownedBy, postSummary } from '../src/orm-client/fragments';
 import type { ormClientGetFilteredPosts } from '../src/orm-client/get-filtered-posts';

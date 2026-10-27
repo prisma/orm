@@ -172,7 +172,7 @@ Mongo has no `@default` attribute and no `types {}` block today, its default fun
 
 ### The Prisma 7 reader
 
-The Prisma 7 reader builds the contract directly and writes no aliases. It reads `@updatedAt` as `now` resolved for both phases, and reads Prisma 7's client functions in `@default` (`uuid()`, `cuid()`, `nanoid()`, `ulid()`) as `@onCreate`, both through the generator function registry. `@default(now())` stays a database default. The Postgres binding's own `updatedAtGenerator` goes. The contracts it builds from schemas Prisma 7 accepts do not change; since TML-3389 it refuses a client function whose arguments are out of range, fractional or named, and a column too short for what the generator writes.
+The Prisma 7 reader builds the contract directly and writes no aliases. It reads `@updatedAt` as `now` resolved for both phases, and reads Prisma 7's client functions in `@default` (`uuid()`, `cuid()`, `nanoid()`, `ulid()`) as `@onCreate`, both through the generator function registry. `@default(now())` becomes both the database default `now()` and the `now` generator on create, resolved from the column's codec, because Prisma 7's client filled the value itself on create and the database default covered writes from outside Prisma. A `now()` default on a column no `now` generator fills is refused, as Prisma 7 refuses it. The Postgres binding has no `updatedAtGenerator` of its own. Apart from the `now` generator that `@default(now())` adds, the contracts it builds from schemas Prisma 7 accepts are the ones it built before this decision. It refuses a client function whose arguments are out of range, fractional or named, and a column too short for what the generator writes.
 
 ### `contract print`
 

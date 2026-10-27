@@ -274,18 +274,6 @@ model Task {
         'enum "Priority" member "Low": Expected a number that pg/int4 can hold; got pg/numeric',
       ],
       [
-        'a string timestamp codec, which an enum cannot use',
-        '  @@type("pg/timestamp-string@1")\n  Low = "2024-01-02T03:04:05"',
-        'PSL_EXTENSION_INVALID_VALUE',
-        'enum "Priority" cannot use the codec "pg/timestamp-string@1". A query reads each value as the text PostgreSQL prints, such as "2024-01-02 03:04:05", while the contract stores it in ISO 8601, such as "2024-01-02T03:04:05", so no value read back equals a member. Use pg/timestamp-temporal@1, whose members are Temporal values.',
-      ],
-      [
-        'a timestamptz string codec, which an enum cannot use',
-        '  @@type("pg/timestamptz-string@1")\n  Low = "2024-01-02T03:04:05Z"',
-        'PSL_EXTENSION_INVALID_VALUE',
-        `enum "Priority" cannot use the codec "pg/timestamptz-string@1". A query reads each value as the text PostgreSQL prints in the session's time zone, such as "2024-01-02 03:04:05+00", while the contract stores it in ISO 8601, such as "2024-01-02T03:04:05Z", so no value read back equals a member. Use pg/timestamptz-temporal@1, whose members are Temporal values.`,
-      ],
-      [
         'a bytea codec, which an enum cannot use',
         '  @@type("pg/bytea@1")\n  Low = "AQI="',
         'PSL_EXTENSION_INVALID_VALUE',
@@ -309,15 +297,22 @@ model Task {
         'PSL_EXTENSION_INVALID_VALUE',
         'enum "Priority" cannot use the codec "pg/jsonb@1". A CHECK lists a string member as SQL text, which PostgreSQL reads as the JSON text of a document rather than as a string, and a number member as a number, which PostgreSQL cannot compare with jsonb, so no CHECK can compare a value with the members. No enum can use a jsonb codec; use a text enum instead.',
       ],
-      [
-        'a timetz codec, which an enum cannot use',
-        '  @@type("pg/timetz@1")\n  Low = "12:34:56+02:00"',
-        'PSL_EXTENSION_INVALID_VALUE',
-        'enum "Priority" cannot use the codec "pg/timetz@1". A query reads each value as the text PostgreSQL prints, such as "12:34:56+02", while the contract stores it in ISO 8601, such as "12:34:56+02:00", so a value read back need not equal the member written. No enum can use a timetz codec; use a text enum instead.',
-      ],
     ])('refuses %s', async (_name, members, code, message) => {
       expect(await diagnosticsOf(enumOf(members))).toEqual([{ code, message }]);
     });
+  });
+
+  describe('an enum member of a string date or time codec', () => {
+    it.each([
+      ['pg/timestamp-string@1', 'timestamp`2024-01-02 03:04:05`', '2024-01-02T03:04:05'],
+      ['pg/timestamptz-string@1', 'timestamptz`2024-01-02 04:04:05+01`', '2024-01-02T03:04:05Z'],
+      ['pg/timetz@1', 'timetz`12:34:56+02`', '12:34:56+02:00'],
+    ])(
+      'is accepted by %s and %s is stored in its ISO 8601 form %s',
+      async (codecId, member, stored) => {
+        expect(await storedEnumValues(codecId, [`A = ${member}`])).toEqual({ values: [stored] });
+      },
+    );
   });
 
   describe('an enum member written as a number literal, read from its source text', () => {

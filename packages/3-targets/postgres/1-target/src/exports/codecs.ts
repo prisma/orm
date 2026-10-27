@@ -60,11 +60,21 @@ export {
 } from '../core/codecs';
 export type { PgInterval } from '../core/data-type-values';
 export {
+  PgTimestampDateCodec,
+  PgTimestampDateDescriptor,
   PgTimestamptzDateCodec,
   PgTimestamptzDateDescriptor,
+  pgTimestampDateColumn,
+  pgTimestampDateDescriptor,
   pgTimestamptzDateColumn,
   pgTimestamptzDateDescriptor,
 } from '../core/date-codecs';
+export {
+  PgIntervalStringCodec,
+  PgIntervalStringDescriptor,
+  pgIntervalStringColumn,
+  pgIntervalStringDescriptor,
+} from '../core/interval-string-codec';
 export { parsePostgresListText } from '../core/list-decoder';
 export {
   postgresCodecDescriptorRegistry,

@@ -156,9 +156,9 @@ const parityCases: readonly ParityCase[] = [
     expected: { ...numericOut, typeParams: {} },
   },
   {
-    title: 'Timestamp(3)',
-    bare: 'Timestamp(3)',
-    alias: 'Timestamp(3)',
+    title: 'TimestampTemporal(3)',
+    bare: 'TimestampTemporal(3)',
+    alias: 'TimestampTemporal(3)',
     expected: {
       dataType: 'pg/timestamp',
       codecId: 'pg/timestamp-temporal@1',
@@ -166,15 +166,15 @@ const parityCases: readonly ParityCase[] = [
     },
   },
   {
-    title: 'Timestamp — bare',
-    bare: 'Timestamp',
-    alias: 'Timestamp',
+    title: 'TimestampTemporal — bare',
+    bare: 'TimestampTemporal',
+    alias: 'TimestampTemporal',
     expected: { dataType: 'pg/timestamp', codecId: 'pg/timestamp-temporal@1', typeParams: {} },
   },
   {
-    title: 'Timestamptz(6)',
-    bare: 'Timestamptz(6)',
-    alias: 'Timestamptz(6)',
+    title: 'TimestamptzTemporal(6)',
+    bare: 'TimestamptzTemporal(6)',
+    alias: 'TimestamptzTemporal(6)',
     expected: {
       dataType: 'pg/timestamptz',
       codecId: 'pg/timestamptz-temporal@1',
@@ -182,9 +182,9 @@ const parityCases: readonly ParityCase[] = [
     },
   },
   {
-    title: 'Timestamptz — bare',
-    bare: 'Timestamptz',
-    alias: 'Timestamptz',
+    title: 'TimestamptzTemporal — bare',
+    bare: 'TimestamptzTemporal',
+    alias: 'TimestamptzTemporal',
     expected: { dataType: 'pg/timestamptz', codecId: 'pg/timestamptz-temporal@1', typeParams: {} },
   },
   {
@@ -306,11 +306,11 @@ const bitAndIntervalCases = [
   ['Bit(8)', 'pg/bit', 'pg/bit@1', { length: 8 }],
   ['VarBit', 'pg/varbit', 'pg/varbit@1', {}],
   ['VarBit(16)', 'pg/varbit', 'pg/varbit@1', { length: 16 }],
-  ['Interval', 'pg/interval', 'pg/interval@1', {}],
-  ['Interval(3)', 'pg/interval', 'pg/interval@1', { precision: 3 }],
+  ['IntervalParts', 'pg/interval', 'pg/interval@1', {}],
+  ['IntervalParts(3)', 'pg/interval', 'pg/interval@1', { precision: 3 }],
 ] as const;
 
-describe('Bit, VarBit and Interval', () => {
+describe('Bit, VarBit and IntervalParts', () => {
   it.each(bitAndIntervalCases)(
     '%s gives its codec and parameters as a scalar and as a list',
     (spelling, dataType, codecId, typeParams) => {
@@ -501,7 +501,7 @@ model sample {
   it('rejects a non-integer precision, which pg/int4 cannot hold', () => {
     const result = emit(`model sample {
   id Int @id
-  at Timestamp(1.5)
+  at TimestampTemporal(1.5)
 }
 `);
     expect(result.ok).toBe(false);

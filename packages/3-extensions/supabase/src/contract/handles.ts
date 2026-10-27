@@ -14,8 +14,7 @@ import { extensionModel, field } from '@internal/sql-contract-ts/contract-builde
 
 const pgText = { codecId: 'pg/text@1' } as const;
 // Supabase's `auth` tables are read by application code, so these carry the Temporal
-// representation — the same choice a user authoring the column themselves would get from a bare
-// `Timestamptz`.
+// representation, the codec of the explicit type `TimestamptzTemporal`.
 const pgTimestamptz = {
   codecId: 'pg/timestamptz-temporal@1',
 } as const;

@@ -33,7 +33,7 @@ describe('@internal/driver-postgres control', () => {
     vi.doUnmock('pg');
   });
 
-  it('passes a connect timeout to the client only when asked for one', async () => {
+  it('passes a connect timeout to the client only when asked for one, and the session settings as startup options', async () => {
     const configs: unknown[] = [];
     const mockClient = { connect: vi.fn(async () => {}), end: vi.fn(async () => {}), on: vi.fn() };
     vi.doMock('pg', () => ({
@@ -45,12 +45,16 @@ describe('@internal/driver-postgres control', () => {
     vi.resetModules();
     const { default: descriptor } = await import('../src/exports/control');
 
-    await descriptor.create('postgres://localhost/test', { connectTimeoutMs: 3000 });
+    await descriptor.create('postgres://localhost/test', {
+      connectTimeoutMs: 3000,
+      sessionSettings: { DateStyle: 'ISO' },
+    });
     await descriptor.create('postgres://localhost/test');
 
+    const connection = { host: 'localhost', database: 'test', user: '', password: '', port: '' };
     expect(configs).toEqual([
-      { connectionString: 'postgres://localhost/test', connectionTimeoutMillis: 3000 },
-      { connectionString: 'postgres://localhost/test' },
+      { ...connection, connectionTimeoutMillis: 3000, options: '-c DateStyle=ISO' },
+      connection,
     ]);
     vi.doUnmock('pg');
   });

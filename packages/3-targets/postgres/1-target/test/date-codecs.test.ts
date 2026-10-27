@@ -7,6 +7,20 @@ const codec = pgTimestamptzDateDescriptor.factory({})({ name: 'test' });
 
 describe('pg/timestamptz-date@1', () => {
   it.each([
+    '02.01.2026 03:04:05.123456 UTC',
+    '01/02/2026 03:04:05.123456 UTC',
+    'Fri Jan 02 03:04:05.123456 2026 UTC',
+  ])(
+    'refuses %s, which PostgreSQL prints only under another DateStyle, naming the setting',
+    async (wire) => {
+      await expect(codec.fromWire(wire, {})).rejects.toMatchObject({
+        code: 'RUNTIME.DATE_STYLE_NOT_ISO',
+        meta: { codecId: 'pg/timestamptz-date@1', received: wire },
+      });
+    },
+  );
+
+  it.each([
     ['2026-01-02 03:04:05.123456+00', '2026-01-02T03:04:05.123Z'],
     ['2026-01-02T03:04:05.123Z', '2026-01-02T03:04:05.123Z'],
     ['2026-01-02 03:04:05+05:30', '2026-01-01T21:34:05.000Z'],

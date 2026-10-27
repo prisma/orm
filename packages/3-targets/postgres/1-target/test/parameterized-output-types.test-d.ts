@@ -4,9 +4,9 @@ import type {
   Bit,
   Char,
   CodecTypes,
-  Interval,
   Numeric,
   ParameterizedOutputTypesForTypeParams,
+  PgInterval,
   TimeString,
   TimestampString,
   TimestamptzString,
@@ -54,9 +54,12 @@ describe('the output type of a Postgres column with type parameters', () => {
     >();
   });
 
+  test('keeps the interval parts an interval with a precision reads', () => {
+    expectTypeOf<Output<'pg/interval@1', { readonly precision: 6 }>>().toEqualTypeOf<PgInterval>();
+  });
+
   test('carries a time precision, or none', () => {
     expectTypeOf<Output<'pg/timetz@1', { readonly precision: 3 }>>().toEqualTypeOf<Timetz<3>>();
-    expectTypeOf<Output<'pg/interval@1', { readonly precision: 6 }>>().toEqualTypeOf<Interval<6>>();
     expectTypeOf<Output<'pg/timestamp-string@1', { readonly precision: 6 }>>().toEqualTypeOf<
       TimestampString<6>
     >();

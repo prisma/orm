@@ -25,6 +25,7 @@
     "arktype": "catalog:",
     "pathe": "^2.0.3",
     "pg": "catalog:",
+    "temporal-spec": "1.0.1",
     "tinyglobby": "catalog:"
   },
   "devDependencies": {

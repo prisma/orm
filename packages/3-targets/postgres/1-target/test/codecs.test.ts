@@ -178,8 +178,8 @@ describe('adapter-postgres codecs', () => {
       expect(await timetzCodec.toWire('12:34:56+02', {})).toBe('12:34:56+02');
     });
 
-    it('decodes string as-is', async () => {
-      expect(await timetzCodec.fromWire('23:59:59-05', {})).toBe('23:59:59-05');
+    it('decodes the text PostgreSQL prints to its stored form', async () => {
+      expect(await timetzCodec.fromWire('23:59:59-05', {})).toBe('23:59:59-05:00');
     });
   });
 

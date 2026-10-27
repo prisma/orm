@@ -6,10 +6,16 @@ const SCHEMA = `// use prisma-8
 model Event {
   id        Int                   @id
   instant   DateTime
-  zoned     Timestamptz
-  zoned3    Timestamptz(3)
-  local     Timestamp
-  local3    Timestamp(3)
+  zoned     TimestamptzTemporal
+  zoned3    TimestamptzTemporal(3)
+  local     TimestampTemporal
+  local3    TimestampTemporal(3)
+  utcDate   TimestampJsDate(3)
+  utcAt     TimestampInstant(6)
+  dayT      DateTemporal
+  clockT    TimeTemporal(0)
+  period    IntervalParts
+  span      IntervalString(3)
   day       Date
   clock     Time
   clock3    Time(3)
@@ -33,19 +39,25 @@ function fieldTypes(printed: string): Record<string, string> {
 }
 
 describe('contract print spells each date and time column', () => {
-  it('as the type contract infer writes, or the first constructor that reads the column back', async () => {
+  it('as the type contract infer writes, or else as the explicit type that reads the column back', async () => {
     const contract = await readPsl(SCHEMA);
 
     expect(fieldTypes(printContract(contract).text)).toEqual({
       id: 'Int',
-      instant: 'DateTime',
-      zoned: 'DateTime',
-      zoned3: 'Timestamptz(3)',
-      local: 'Timestamp',
-      local3: 'Timestamp(3)',
-      day: 'Date',
-      clock: 'Time',
-      clock3: 'Time(3)',
+      instant: 'TimestamptzTemporal',
+      zoned: 'TimestamptzTemporal',
+      zoned3: 'TimestamptzTemporal(3)',
+      local: 'TimestampTemporal',
+      local3: 'TimestampTemporal(3)',
+      utcDate: 'TimestampJsDate(3)',
+      utcAt: 'TimestampInstant(6)',
+      dayT: 'DateTemporal',
+      clockT: 'TimeTemporal(0)',
+      period: 'IntervalParts',
+      span: 'IntervalString(3)',
+      day: 'DateTemporal',
+      clock: 'TimeTemporal',
+      clock3: 'TimeTemporal(3)',
       zonedText: 'TimestamptzString(3)',
       localText: 'TimestampString(3)',
       dayText: 'DateString',

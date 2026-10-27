@@ -1,6 +1,7 @@
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import type { Contract } from '@internal/contract/types';
 import postgresDriver, {
+  createPgPool,
   type PostgresBinding as DriverPostgresBinding,
   suppressIdleConnectionErrors,
 } from '@internal/driver-postgres/runtime';
@@ -10,7 +11,7 @@ import type { Runtime } from '@internal/sql-runtime';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { InternalError } from '@internal/utils/internal-error';
-import { type Client, Pool } from 'pg';
+import type { Client, Pool } from 'pg';
 import { postgresError } from '../errors';
 import { validatePostgresContract } from '../static/contract-from-json';
 import { buildPostgresStaticContext } from '../static/postgres-static';
@@ -83,12 +84,15 @@ function toRuntimeBinding<
     kind: 'pgPool',
     ownedByDriver: true,
     pool: suppressIdleConnectionErrors(
-      new Pool({
-        connectionString: binding.url,
-        connectionTimeoutMillis:
-          options.poolOptions?.connectionTimeoutMillis ?? DEFAULT_CONNECT_TIMEOUT_MILLIS,
-        idleTimeoutMillis: options.poolOptions?.idleTimeoutMillis ?? 30_000,
-      }),
+      createPgPool(
+        {
+          connectionString: binding.url,
+          connectionTimeoutMillis:
+            options.poolOptions?.connectionTimeoutMillis ?? DEFAULT_CONNECT_TIMEOUT_MILLIS,
+          idleTimeoutMillis: options.poolOptions?.idleTimeoutMillis ?? 30_000,
+        },
+        postgresTarget.sessionSettings ?? {},
+      ),
     ),
   } as const;
 }

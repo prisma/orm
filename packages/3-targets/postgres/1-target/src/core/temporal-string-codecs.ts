@@ -20,8 +20,14 @@ import {
   PG_TIMESTAMPTZ_STRING_CODEC_ID,
 } from './codec-ids';
 import { pgDate, pgPrecisionParams, pgTime, pgTimestamp, pgTimestamptz } from './data-types';
+import { type DateTimeWireReading, storedTextFromWire } from './date-time-wire-text';
 import { errorTimestampTextWrongType } from './errors';
 import { postgresYearText } from './postgres-year-text';
+
+const DATE_READING: DateTimeWireReading = { shape: 'date', holdsInfinity: true };
+const TIMESTAMP_READING: DateTimeWireReading = { shape: 'dateTime', holdsInfinity: true };
+const TIMESTAMPTZ_READING: DateTimeWireReading = { shape: 'instant', holdsInfinity: true };
+const TIME_READING: DateTimeWireReading = { shape: 'time', holdsInfinity: false };
 
 export class PgDateStringCodec extends CodecImpl<
   typeof PG_DATE_STRING_CODEC_ID,
@@ -33,13 +39,13 @@ export class PgDateStringCodec extends CodecImpl<
     return postgresYearText(value);
   }
   async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
-    return wire;
+    return storedTextFromWire(this.id, DATE_READING, wire);
   }
   fromDataTypeValue(value: DataTypeValue<string>): string {
     return value.value;
   }
   toDataTypeValue(input: string): DataTypeValue {
-    return this.dataTypeValueOf(input);
+    return this.storedDataTypeValueOf(input);
   }
 }
 
@@ -88,24 +94,15 @@ export class PgTimestampStringCodec extends CodecImpl<
     return postgresYearText(requireText(this.id, value));
   }
   async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
-    return wire;
+    return storedTextFromWire(this.id, TIMESTAMP_READING, wire);
   }
   fromDataTypeValue(value: DataTypeValue<string>): string {
     return value.value;
   }
   toDataTypeValue(input: string): DataTypeValue {
-    return this.dataTypeValueOf(input);
+    return this.storedDataTypeValueOf(input);
   }
 }
-
-/** Why an enum cannot use a string timestamp codec, given how PostgreSQL prints a value and how the contract stores it. */
-const stringTimestampEnumRefusal = (
-  printed: string,
-  stored: string,
-  printing: string,
-  instead: string,
-): string =>
-  `A query reads each value as the text PostgreSQL prints${printing}, such as "${printed}", while the contract stores it in ISO 8601, such as "${stored}", so no value read back equals a member. Use ${instead}, whose members are Temporal values.`;
 
 export class PgTimestampStringDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
@@ -114,12 +111,9 @@ export class PgTimestampStringDescriptor extends PostgresCodecDescriptor<Precisi
   override readonly dataType = pgTimestamp.id;
   override readonly codecId = PG_TIMESTAMP_STRING_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
-  override readonly enumRefusal = stringTimestampEnumRefusal(
-    '2024-01-02 03:04:05',
-    '2024-01-02T03:04:05',
-    '',
-    'pg/timestamp-temporal@1',
-  );
+  override renderValueLiteral(value: JsonValue): string | undefined {
+    return renderTsLiteral(value);
+  }
   override readonly paramsSchema = pgPrecisionParams satisfies StandardSchemaV1<PrecisionParams>;
   override factory(params: PrecisionParams): (ctx: CodecInstanceContext) => PgTimestampStringCodec {
     return () => new PgTimestampStringCodec(this, pgTimestamp, params ?? {});
@@ -144,13 +138,13 @@ export class PgTimestamptzStringCodec extends CodecImpl<
     return postgresYearText(requireText(this.id, value));
   }
   async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
-    return wire;
+    return storedTextFromWire(this.id, TIMESTAMPTZ_READING, wire);
   }
   fromDataTypeValue(value: DataTypeValue<string>): string {
     return value.value;
   }
   toDataTypeValue(input: string): DataTypeValue {
-    return this.dataTypeValueOf(input);
+    return this.storedDataTypeValueOf(input);
   }
 }
 
@@ -161,12 +155,9 @@ export class PgTimestamptzStringDescriptor extends PostgresCodecDescriptor<Preci
   override readonly dataType = pgTimestamptz.id;
   override readonly codecId = PG_TIMESTAMPTZ_STRING_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
-  override readonly enumRefusal = stringTimestampEnumRefusal(
-    '2024-01-02 03:04:05+00',
-    '2024-01-02T03:04:05Z',
-    " in the session's time zone",
-    'pg/timestamptz-temporal@1',
-  );
+  override renderValueLiteral(value: JsonValue): string | undefined {
+    return renderTsLiteral(value);
+  }
   override readonly paramsSchema = pgPrecisionParams satisfies StandardSchemaV1<PrecisionParams>;
   override factory(
     params: PrecisionParams,
@@ -197,13 +188,13 @@ export class PgTimeStringCodec extends CodecImpl<
     return value;
   }
   async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
-    return wire;
+    return storedTextFromWire(this.id, TIME_READING, wire);
   }
   fromDataTypeValue(value: DataTypeValue<string>): string {
     return value.value;
   }
   toDataTypeValue(input: string): DataTypeValue {
-    return this.dataTypeValueOf(input);
+    return this.storedDataTypeValueOf(input);
   }
 }
 
