@@ -1,6 +1,6 @@
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { CodecTypes } from '../exports/codec-types';
-import { sqliteAuthoringFieldPresets, sqliteAuthoringTypes } from './authoring';
+import { sqliteAuthoringTypes } from './authoring';
 import { sqliteDataTypeEntries } from './data-type-entries';
 import { sqliteTextDataTypes } from './data-types';
 import { sqliteTargetDescriptorMetaRuntime } from './descriptor-meta-runtime';
@@ -14,7 +14,6 @@ const sqliteTargetDescriptorMetaBase = {
   displayName: 'SQLite',
   authoring: {
     type: { ...sqliteScalarTypeConstructors, ...sqliteAuthoringTypes },
-    field: sqliteAuthoringFieldPresets,
     dataTypes: sqliteDataTypeEntries(),
     textDataTypes: sqliteTextDataTypes,
   },

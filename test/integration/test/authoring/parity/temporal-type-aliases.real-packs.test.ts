@@ -73,7 +73,7 @@ function succeeded<T>(
 }
 
 describe('the temporal type aliases with real packs', () => {
-  it('store on Postgres exactly what the matching presets store', () => {
+  it('store on Postgres exactly what the matching generator attributes store', () => {
     const throughAliases = succeeded(
       interpretPostgres(`model Event {
   id              Int                       @id
@@ -86,23 +86,23 @@ describe('the temporal type aliases with real packs', () => {
 }
 `),
     );
-    const throughPresets = succeeded(
+    const throughAttributes = succeeded(
       interpretPostgres(`model Event {
-  id              Int                          @id
-  createdAt       temporal.createdAt()
-  updatedAt       temporal.updatedAt()
-  createdAtString temporal.createdAtString()
-  updatedAtString temporal.updatedAtString()
-  createdAtJsDate temporal.createdAtJsDate()
-  updatedAtJsDate temporal.updatedAtJsDate()
+  id              Int               @id
+  createdAt       TimestamptzTemporal       @onCreate(now())
+  updatedAt       TimestamptzTemporal       @onCreate(now()) @onUpdate(now())
+  createdAtString TimestamptzString @onCreate(now())
+  updatedAtString TimestamptzString @onCreate(now()) @onUpdate(now())
+  createdAtJsDate TimestamptzJsDate @onCreate(now())
+  updatedAtJsDate TimestamptzJsDate @onCreate(now()) @onUpdate(now())
 }
 `),
     );
-    expect(throughAliases).toEqual(throughPresets);
+    expect(throughAliases).toEqual(throughAttributes);
     expect(throughAliases.execution?.mutations.defaults).toHaveLength(6);
   });
 
-  it('store on SQLite exactly what the matching presets store', () => {
+  it('store on SQLite exactly what the matching generator attributes store', () => {
     const throughAliases = succeeded(
       interpretSqlite(`model Event {
   id        Int                @id
@@ -111,19 +111,19 @@ describe('the temporal type aliases with real packs', () => {
 }
 `),
     );
-    const throughPresets = succeeded(
+    const throughAttributes = succeeded(
       interpretSqlite(`model Event {
-  id        Int                  @id
-  createdAt temporal.createdAt()
-  updatedAt temporal.updatedAt()
+  id        Int      @id
+  createdAt DateTime @onCreate(now())
+  updatedAt DateTime @onCreate(now()) @onUpdate(now())
 }
 `),
     );
-    expect(throughAliases).toEqual(throughPresets);
+    expect(throughAliases).toEqual(throughAttributes);
     expect(throughAliases.execution?.mutations.defaults).toHaveLength(2);
   });
 
-  it('give the TypeScript builder on Postgres what the presets give it', () => {
+  it('give the TypeScript builder on Postgres what they give PSL', () => {
     const throughAliases = defineContract({}, ({ type, field, model }) => ({
       models: {
         Event: model('Event', {
@@ -139,22 +139,6 @@ describe('the temporal type aliases with real packs', () => {
         }).sql({ table: 'Event' }),
       },
     }));
-    const throughPresets = defineContract({}, ({ type, field, model }) => ({
-      models: {
-        Event: model('Event', {
-          fields: {
-            id: field.column(type.Int()).id(),
-            createdAt: field.temporal.createdAt(),
-            updatedAt: field.temporal.updatedAt(),
-            createdAtString: field.temporal.createdAtString(),
-            updatedAtString: field.temporal.updatedAtString(),
-            createdAtJsDate: field.temporal.createdAtJsDate(),
-            updatedAtJsDate: field.temporal.updatedAtJsDate(),
-          },
-        }).sql({ table: 'Event' }),
-      },
-    }));
-    expect(throughAliases).toEqual(throughPresets);
     expect(throughAliases).toEqual(
       succeeded(
         interpretPostgres(`model Event {
@@ -171,7 +155,7 @@ describe('the temporal type aliases with real packs', () => {
     );
   });
 
-  it('give the TypeScript builder on SQLite what the presets give it', () => {
+  it('give the TypeScript builder on SQLite what they give PSL', () => {
     const throughAliases = defineSqliteContract({}, ({ type, field, model }) => ({
       models: {
         Event: model('Event', {
@@ -183,17 +167,15 @@ describe('the temporal type aliases with real packs', () => {
         }).sql({ table: 'Event' }),
       },
     }));
-    const throughPresets = defineSqliteContract({}, ({ type, field, model }) => ({
-      models: {
-        Event: model('Event', {
-          fields: {
-            id: field.column(type.Int()).id(),
-            createdAt: field.temporal.createdAt(),
-            updatedAt: field.temporal.updatedAt(),
-          },
-        }).sql({ table: 'Event' }),
-      },
-    }));
-    expect(throughAliases).toEqual(throughPresets);
+    expect(throughAliases).toEqual(
+      succeeded(
+        interpretSqlite(`model Event {
+  id        Int                @id
+  createdAt temporal.CreatedAt
+  updatedAt temporal.UpdatedAt
+}
+`),
+      ),
+    );
   });
 });

@@ -38,11 +38,11 @@ export function typeConstructorSnippet(
     } else if (arg !== undefined && arg.optional !== true) {
       const key = arg.name ?? `arg${index + 1}`;
       const tabStop = values.length + 1;
-      const [tag] = arg.kind === 'value' ? admittedTags(dataTypes, dataTypeId(arg.dataType)) : [];
+      const [tag] = admittedTags(dataTypes, dataTypeId(arg.dataType));
       values.push(
         tag !== undefined
           ? taggedPlaceholder(tag, tabStop, key)
-          : argSnippetPlaceholder(arg.kind === 'object' ? 'record' : 'identifier', tabStop, key),
+          : argSnippetPlaceholder('identifier', tabStop, key),
       );
     }
   }

@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import type {
-  AuthoringFieldNamespace,
-  AuthoringFieldPresetDescriptor,
   AuthoringTypeConstructorDescriptor,
   AuthoringTypeNamespace,
 } from '../src/shared/framework-authoring';
@@ -9,10 +7,8 @@ import {
   assertNoCrossRegistryCollisions,
   classifyEnumMemberType,
   collectScalarTypeConstructors,
-  instantiateAuthoringFieldPreset,
   instantiateAuthoringTypeConstructor,
   isAuthoringArgRef,
-  isAuthoringFieldPresetDescriptor,
   isAuthoringTypeConstructorDescriptor,
   resolveAuthoringTemplateValue,
   validateAuthoringHelperArguments,
@@ -23,128 +19,43 @@ describe('authoring template resolution', () => {
     kind: 'typeConstructor',
     output: { codecId: 'test/text@1' },
   } satisfies AuthoringTypeConstructorDescriptor;
-  const fieldPreset = {
-    kind: 'fieldPreset',
-    output: { codecId: 'test/text@1' },
-  } satisfies AuthoringFieldPresetDescriptor;
 
   it('narrows a descriptor by kind', () => {
     expect(isAuthoringTypeConstructorDescriptor(typeConstructor)).toBe(true);
-    expect(isAuthoringFieldPresetDescriptor(fieldPreset)).toBe(true);
   });
 
   it('classifies a sub-namespace as not a descriptor', () => {
     const typeNamespace = { nested: typeConstructor } satisfies AuthoringTypeNamespace;
-    const fieldNamespace = { nested: fieldPreset } satisfies AuthoringFieldNamespace;
     expect(isAuthoringTypeConstructorDescriptor(typeNamespace)).toBe(false);
-    expect(isAuthoringFieldPresetDescriptor(fieldNamespace)).toBe(false);
   });
 
-  it('rejects arg refs with invalid index or path', () => {
+  it('rejects arg refs with an invalid index', () => {
     expect(isAuthoringArgRef({ kind: 'arg', index: 0 })).toBe(true);
-    expect(isAuthoringArgRef({ kind: 'arg', index: 0, path: ['a', 'b'] })).toBe(true);
 
     expect(isAuthoringArgRef({ kind: 'arg', index: -1 })).toBe(false);
     expect(isAuthoringArgRef({ kind: 'arg', index: 1.5 })).toBe(false);
     expect(isAuthoringArgRef({ kind: 'arg', index: Number.NaN })).toBe(false);
-    expect(isAuthoringArgRef({ kind: 'arg', index: 0, path: [1] })).toBe(false);
-    expect(isAuthoringArgRef({ kind: 'arg', index: 0, path: 'not-array' })).toBe(false);
   });
 
-  it('resolves array template values', () => {
+  it('resolves array template values, an absent argument to undefined', () => {
     expect(
       resolveAuthoringTemplateValue(
         [
-          {
-            kind: 'arg',
-            index: 0,
-          },
-          {
-            kind: 'arg',
-            index: 1,
-            default: 'fallback',
-          },
+          { kind: 'arg', index: 0 },
+          { kind: 'arg', index: 1 },
         ],
         ['value'],
       ),
-    ).toEqual(['value', 'fallback']);
+    ).toEqual(['value', undefined]);
   });
 
-  it('validates supported helper argument kinds', () => {
-    expect(() =>
-      validateAuthoringHelperArguments(
-        'field.test',
-        [
-          { kind: 'value', dataType: 'demo/text' },
-          {
-            kind: 'object',
-            properties: {
-              label: { kind: 'option', values: ['embedding'] },
-              length: { kind: 'number', integer: true, minimum: 1, maximum: 3 },
-            },
-          },
-          { kind: 'number', optional: true, minimum: 0 },
-        ],
-        ['vector', { label: 'embedding', length: 2 }, 0],
+  it('omits an object template key whose argument is absent', () => {
+    expect(
+      resolveAuthoringTemplateValue(
+        { length: { kind: 'arg', index: 0 }, scale: { kind: 'arg', index: 1 } },
+        [8],
       ),
-    ).not.toThrow();
-  });
-
-  it('allows omitted optional helper arguments', () => {
-    expect(() =>
-      validateAuthoringHelperArguments(
-        'field.test',
-        [
-          { kind: 'value', dataType: 'demo/text' },
-          { kind: 'number', optional: true },
-        ],
-        ['name'],
-      ),
-    ).not.toThrow();
-  });
-
-  it('rejects missing required helper arguments', () => {
-    expect(() =>
-      validateAuthoringHelperArguments(
-        'field.test',
-        [{ kind: 'object', properties: { label: { kind: 'number' } } }],
-        [{}],
-      ),
-    ).toThrow('Authoring helper argument at field.test[0].label is missing');
-  });
-
-  it('rejects malformed helper argument values', () => {
-    expect(() =>
-      validateAuthoringHelperArguments(
-        'field.test',
-        [{ kind: 'object', properties: { label: { kind: 'number' } } }],
-        ['not-an-object'],
-      ),
-    ).toThrow(/must be an object/);
-
-    expect(() =>
-      validateAuthoringHelperArguments(
-        'field.test',
-        [{ kind: 'object', properties: { label: { kind: 'number' } } }],
-        [{ label: 1, extra: true }],
-      ),
-    ).toThrow(/contains unknown property "extra"/);
-
-    expect(() =>
-      validateAuthoringHelperArguments('field.test', [{ kind: 'number' }], ['x']),
-    ).toThrow(/must be a number/);
-
-    expect(() =>
-      validateAuthoringHelperArguments('field.test', [{ kind: 'number', integer: true }], [1.5]),
-    ).toThrow(/must be an integer/);
-
-    expect(() =>
-      validateAuthoringHelperArguments('field.test', [{ kind: 'number', minimum: 2 }], [1]),
-    ).toThrow(/must be >= 2, received 1/);
-
-    expect(() =>
-      validateAuthoringHelperArguments('field.test', [{ kind: 'number', maximum: 2 }], [3]),
-    ).toThrow(/must be <= 2, received 3/);
+    ).toEqual({ length: 8 });
   });
 
   it('checks only that a value argument is present: its value is already a value of its data type', () => {
@@ -157,13 +68,26 @@ describe('authoring template resolution', () => {
     );
   });
 
+  it('allows omitted optional helper arguments', () => {
+    expect(() =>
+      validateAuthoringHelperArguments(
+        'type.test',
+        [
+          { kind: 'value', dataType: 'demo/text' },
+          { kind: 'value', dataType: 'demo/int4', optional: true },
+        ],
+        ['name'],
+      ),
+    ).not.toThrow();
+  });
+
   it('rejects invalid helper argument counts', () => {
     expect(() =>
       validateAuthoringHelperArguments(
-        'field.test',
+        'type.test',
         [
           { kind: 'value', dataType: 'demo/text' },
-          { kind: 'number', optional: true },
+          { kind: 'value', dataType: 'demo/int4', optional: true },
         ],
         [],
       ),
@@ -171,7 +95,7 @@ describe('authoring template resolution', () => {
 
     expect(() =>
       validateAuthoringHelperArguments(
-        'field.test',
+        'type.test',
         [{ kind: 'value', dataType: 'demo/text' }],
         ['a', 'b'],
       ),
@@ -179,62 +103,19 @@ describe('authoring template resolution', () => {
   });
 
   it('computes minimum arity from last required slot, not count of required slots', () => {
+    const descriptors = [
+      { kind: 'value', dataType: 'demo/int4', optional: true },
+      { kind: 'value', dataType: 'demo/text' },
+    ] as const;
+    expect(() => validateAuthoringHelperArguments('type.test', descriptors, [])).toThrow(
+      /expects 2 argument\(s\), received 0/,
+    );
+    expect(() => validateAuthoringHelperArguments('type.test', descriptors, [42])).toThrow(
+      /expects 2 argument\(s\), received 1/,
+    );
     expect(() =>
-      validateAuthoringHelperArguments(
-        'field.test',
-        [
-          { kind: 'number', optional: true },
-          { kind: 'value', dataType: 'demo/text' },
-        ],
-        [],
-      ),
-    ).toThrow(/expects 2 argument\(s\), received 0/);
-
-    expect(() =>
-      validateAuthoringHelperArguments(
-        'field.test',
-        [
-          { kind: 'number', optional: true },
-          { kind: 'value', dataType: 'demo/text' },
-        ],
-        [42],
-      ),
-    ).toThrow(/expects 2 argument\(s\), received 1/);
-
-    expect(() =>
-      validateAuthoringHelperArguments(
-        'field.test',
-        [
-          { kind: 'number', optional: true },
-          { kind: 'value', dataType: 'demo/text' },
-        ],
-        [42, 'hello'],
-      ),
+      validateAuthoringHelperArguments('type.test', descriptors, [42, 'hello']),
     ).not.toThrow();
-  });
-
-  it('ignores prototype-chain values when resolving arg paths', () => {
-    const descriptor = {
-      kind: 'typeConstructor',
-      output: {
-        codecId: 'test/text@1',
-        typeParams: {
-          label: {
-            kind: 'arg',
-            index: 0,
-            path: ['label'],
-            default: 'fallback',
-          },
-        },
-      },
-    } as const;
-
-    const args = [Object.create({ label: 'prototype-label' })];
-
-    expect(instantiateAuthoringTypeConstructor(descriptor, args)).toEqual({
-      codecId: 'test/text@1',
-      typeParams: { label: 'fallback' },
-    });
   });
 
   it('instantiates an output template to its codec and parameters, naming no database type', () => {
@@ -262,477 +143,6 @@ describe('authoring template resolution', () => {
     expect(() => instantiateAuthoringTypeConstructor(descriptor, ['not-an-object'])).toThrow(
       /Resolved authoring typeParams must be an object/,
     );
-  });
-
-  it('rejects object-valued function default expressions', () => {
-    const descriptor = {
-      kind: 'fieldPreset',
-      output: {
-        codecId: 'test/text@1',
-        default: {
-          kind: 'function',
-          expression: {
-            kind: 'arg',
-            index: 0,
-          },
-        },
-      },
-    } as const;
-
-    expect(() =>
-      instantiateAuthoringFieldPreset(descriptor, [{ sql: 'CURRENT_TIMESTAMP' }]),
-    ).toThrow(/Resolved authoring function default expression must resolve to a primitive/);
-  });
-
-  it('rejects literal defaults that resolve to undefined', () => {
-    const descriptor = {
-      kind: 'fieldPreset',
-      output: {
-        codecId: 'test/text@1',
-        default: {
-          kind: 'literal',
-          value: {
-            kind: 'arg',
-            index: 0,
-            path: ['missing'],
-          },
-        },
-      },
-    } as const;
-
-    expect(() => instantiateAuthoringFieldPreset(descriptor, [{}])).toThrow(
-      /Resolved authoring literal default must not be undefined/,
-    );
-  });
-
-  it('resolves literal defaults and execution defaults from field presets', () => {
-    const descriptor = {
-      kind: 'fieldPreset',
-      output: {
-        codecId: 'test/vector@1',
-        typeParams: {
-          length: {
-            kind: 'arg',
-            index: 0,
-          },
-        },
-        default: {
-          kind: 'literal',
-          value: {
-            length: {
-              kind: 'arg',
-              index: 0,
-            },
-          },
-        },
-        executionDefaults: {
-          onCreate: {
-            kind: 'arg',
-            index: 1,
-          },
-        },
-        nullable: true,
-        id: true,
-        unique: true,
-      },
-    } as const;
-
-    expect(
-      instantiateAuthoringFieldPreset(descriptor, [
-        1536,
-        { kind: 'generator', id: 'vectorGenerated' },
-      ]),
-    ).toEqual({
-      descriptor: {
-        codecId: 'test/vector@1',
-        typeParams: { length: 1536 },
-      },
-      nullable: true,
-      default: {
-        kind: 'literal',
-        value: {
-          length: 1536,
-        },
-      },
-      executionDefaults: {
-        onCreate: { kind: 'generator', id: 'vectorGenerated' },
-      },
-      id: true,
-      unique: true,
-    });
-  });
-
-  it('resolves phase-specific execution defaults from field presets', () => {
-    const descriptor = {
-      kind: 'fieldPreset',
-      output: {
-        codecId: 'test/timestamp@1',
-        executionDefaults: {
-          onCreate: {
-            kind: 'arg',
-            index: 0,
-            path: ['create'],
-          },
-          onUpdate: {
-            kind: 'arg',
-            index: 0,
-            path: ['update'],
-          },
-        },
-      },
-    } as const;
-
-    expect(
-      instantiateAuthoringFieldPreset(descriptor, [
-        {
-          create: { kind: 'generator', id: 'timestampNow' },
-          update: { kind: 'generator', id: 'timestampNow' },
-        },
-      ]),
-    ).toEqual({
-      descriptor: {
-        codecId: 'test/timestamp@1',
-      },
-      nullable: false,
-      executionDefaults: {
-        onCreate: { kind: 'generator', id: 'timestampNow' },
-        onUpdate: { kind: 'generator', id: 'timestampNow' },
-      },
-      id: false,
-      unique: false,
-    });
-  });
-
-  it('rejects executionDefaults phases that resolve to non-generator values', () => {
-    const descriptor = {
-      kind: 'fieldPreset',
-      output: {
-        codecId: 'test/timestamp@1',
-        executionDefaults: {
-          onCreate: {
-            kind: 'arg',
-            index: 0,
-          },
-        },
-      },
-    } as const;
-
-    expect(() => instantiateAuthoringFieldPreset(descriptor, ['not-a-generator'])).toThrow(
-      /Authoring preset executionDefaults\.onCreate did not resolve to a valid generator descriptor/,
-    );
-  });
-
-  it('rejects executionDefaults phases whose generator id is not a string', () => {
-    const descriptor = {
-      kind: 'fieldPreset',
-      output: {
-        codecId: 'test/timestamp@1',
-        executionDefaults: {
-          onUpdate: {
-            kind: 'arg',
-            index: 0,
-          },
-        },
-      },
-    } as const;
-
-    expect(() =>
-      instantiateAuthoringFieldPreset(descriptor, [{ kind: 'generator', id: 42 }]),
-    ).toThrow(
-      /Authoring preset executionDefaults\.onUpdate did not resolve to a valid generator descriptor/,
-    );
-  });
-
-  it('validates option-kind arguments', () => {
-    expect(() =>
-      validateAuthoringHelperArguments(
-        'field.test',
-        [{ kind: 'option', values: ['now'] }],
-        ['now'],
-      ),
-    ).not.toThrow();
-  });
-
-  it('rejects an option-kind argument value not in the descriptor values', () => {
-    expect(() =>
-      validateAuthoringHelperArguments(
-        'field.test',
-        [{ kind: 'option', values: ['now'] }],
-        ['later'],
-      ),
-    ).toThrow('Authoring helper argument at field.test[0] must be "now"; received "later"');
-  });
-
-  it('rejects a non-string value for an option-kind argument', () => {
-    expect(() =>
-      validateAuthoringHelperArguments('field.test', [{ kind: 'option', values: ['now'] }], [42]),
-    ).toThrow('Authoring helper argument at field.test[0] must be "now"; received 42');
-  });
-
-  it('says an option that lists no values takes none', () => {
-    expect(() =>
-      validateAuthoringHelperArguments('field.test', [{ kind: 'option', values: [] }], ['now']),
-    ).toThrow('Authoring helper argument at field.test[0] takes no value; received "now"');
-  });
-
-  it('names a named argument and lists every value an option takes', () => {
-    expect(() =>
-      validateAuthoringHelperArguments(
-        'temporal.timestamp',
-        [{ name: 'onCreate', kind: 'option', values: ['now', 'never'], optional: true }],
-        ['later'],
-      ),
-    ).toThrow(
-      'Argument "onCreate" of temporal.timestamp must be one of "now", "never"; received "later"',
-    );
-  });
-
-  it('rejects a missing required option-kind argument', () => {
-    expect(() =>
-      validateAuthoringHelperArguments(
-        'field.test',
-        [{ kind: 'option', values: ['now'] }],
-        [undefined],
-      ),
-    ).toThrow('Authoring helper argument at field.test[0] is missing');
-  });
-
-  it('allows an omitted optional option-kind argument', () => {
-    expect(() =>
-      validateAuthoringHelperArguments(
-        'field.test',
-        [{ kind: 'option', values: ['now'], optional: true }],
-        [undefined],
-      ),
-    ).not.toThrow();
-  });
-
-  describe('resolveAuthoringTemplateValue with a select node', () => {
-    it('resolves the case the argument value selects, recursively', () => {
-      expect(
-        resolveAuthoringTemplateValue(
-          {
-            kind: 'select',
-            index: 0,
-            cases: { now: { kind: 'generator', id: { kind: 'arg', index: 1 } } },
-          },
-          ['now', 'timestampNow'],
-        ),
-      ).toEqual({ kind: 'generator', id: 'timestampNow' });
-    });
-
-    it('throws when the resolved value has no case', () => {
-      expect(() =>
-        resolveAuthoringTemplateValue({ kind: 'select', index: 0, cases: { now: 'resolved' } }, [
-          'later',
-        ]),
-      ).toThrow(/Authoring template select has no case for value "later"/);
-    });
-
-    it('resolves undefined for an absent argument', () => {
-      expect(
-        resolveAuthoringTemplateValue({ kind: 'select', index: 0, cases: { now: 'resolved' } }, [
-          undefined,
-        ]),
-      ).toBeUndefined();
-    });
-
-    it('walks path into an object argument before selecting', () => {
-      expect(
-        resolveAuthoringTemplateValue(
-          { kind: 'select', index: 0, path: ['mode'], cases: { now: 'resolved' } },
-          [{ mode: 'now' }],
-        ),
-      ).toBe('resolved');
-    });
-
-    it('omits an executionDefaults phase whose select argument is absent', () => {
-      const descriptor = {
-        kind: 'fieldPreset',
-        args: [{ name: 'onCreate', kind: 'option', values: ['now'], optional: true }],
-        output: {
-          codecId: 'test/timestamp@1',
-          executionDefaults: {
-            onCreate: { kind: 'select', index: 0, cases: { now: { kind: 'generator', id: 'g' } } },
-          },
-        },
-      } as const;
-
-      expect(instantiateAuthoringFieldPreset(descriptor, [undefined])).not.toHaveProperty(
-        'executionDefaults',
-      );
-      expect(instantiateAuthoringFieldPreset(descriptor, ['now']).executionDefaults).toEqual({
-        onCreate: { kind: 'generator', id: 'g' },
-      });
-    });
-  });
-
-  describe('select templates validated against option arguments at registration', () => {
-    const presetWith = (args: readonly unknown[], onCreate: unknown): Record<string, unknown> => ({
-      stamped: {
-        kind: 'fieldPreset',
-        args,
-        output: {
-          codecId: 'test/timestamp@1',
-          executionDefaults: { onCreate },
-        },
-      },
-    });
-    const check = (fieldNamespace: Record<string, unknown>) => () =>
-      assertNoCrossRegistryCollisions({}, fieldNamespace as never);
-
-    it('accepts a select whose cases exactly cover the option values', () => {
-      expect(
-        check(
-          presetWith([{ name: 'onCreate', kind: 'option', values: ['now'], optional: true }], {
-            kind: 'select',
-            index: 0,
-            cases: { now: { kind: 'generator', id: 'g' } },
-          }),
-        ),
-      ).not.toThrow();
-    });
-
-    it('rejects a select missing a case for a declared option value', () => {
-      expect(
-        check(
-          presetWith(
-            [{ name: 'onCreate', kind: 'option', values: ['now', 'later'], optional: true }],
-            { kind: 'select', index: 0, cases: { now: { kind: 'generator', id: 'g' } } },
-          ),
-        ),
-      ).toThrow(
-        /Authoring field helper "stamped" option argument "onCreate" allows \[now, later\] but the select template has no case for: later/,
-      );
-    });
-
-    it('rejects a select carrying a case no option value can reach', () => {
-      expect(
-        check(
-          presetWith([{ name: 'onCreate', kind: 'option', values: ['now'], optional: true }], {
-            kind: 'select',
-            index: 0,
-            cases: {
-              now: { kind: 'generator', id: 'g' },
-              later: { kind: 'generator', id: 'g' },
-            },
-          }),
-        ),
-      ).toThrow(
-        /Authoring field helper "stamped" select template has case\(s\) not allowed by option argument "onCreate": later/,
-      );
-    });
-
-    it('rejects a select whose argument is not an option', () => {
-      expect(
-        check(
-          presetWith([{ name: 'onCreate', kind: 'number', optional: true }], {
-            kind: 'select',
-            index: 0,
-            cases: { now: { kind: 'generator', id: 'g' } },
-          }),
-        ),
-      ).toThrow(
-        /Authoring field helper "stamped" select template references argument #1, which is kind "number"; select requires an option argument/,
-      );
-    });
-
-    it('rejects a select referencing an undeclared argument position', () => {
-      expect(
-        check(
-          presetWith([], {
-            kind: 'select',
-            index: 0,
-            cases: { now: { kind: 'generator', id: 'g' } },
-          }),
-        ),
-      ).toThrow(
-        /Authoring field helper "stamped" select template references argument #1, but the helper declares no argument at that position/,
-      );
-    });
-
-    it('validates a select that paths into an object-argument option property', () => {
-      const objectArg = {
-        kind: 'object',
-        optional: true,
-        properties: { mode: { kind: 'option', values: ['now'] } },
-      };
-      expect(
-        check(
-          presetWith([objectArg], {
-            kind: 'select',
-            index: 0,
-            path: ['mode'],
-            cases: { now: { kind: 'generator', id: 'g' } },
-          }),
-        ),
-      ).not.toThrow();
-      expect(
-        check(
-          presetWith([objectArg], {
-            kind: 'select',
-            index: 0,
-            path: ['mode'],
-            cases: { sometime: { kind: 'generator', id: 'g' } },
-          }),
-        ),
-      ).toThrow(/has no case for: now/);
-    });
-  });
-
-  describe('execution-defaults phase omission', () => {
-    it('omits a phase whose template resolves to undefined', () => {
-      const descriptor = {
-        kind: 'fieldPreset',
-        output: {
-          codecId: 'test/timestamp@1',
-          executionDefaults: {
-            onCreate: { kind: 'arg', index: 0 },
-            onUpdate: { kind: 'generator', id: 'timestampNow' },
-          },
-        },
-      } as const;
-
-      expect(instantiateAuthoringFieldPreset(descriptor, [undefined]).executionDefaults).toEqual({
-        onUpdate: { kind: 'generator', id: 'timestampNow' },
-      });
-    });
-
-    it('omits executionDefaults entirely when every phase resolves to undefined', () => {
-      const descriptor = {
-        kind: 'fieldPreset',
-        output: {
-          codecId: 'test/timestamp@1',
-          executionDefaults: {
-            onCreate: { kind: 'arg', index: 0 },
-            onUpdate: { kind: 'arg', index: 1 },
-          },
-        },
-      } as const;
-
-      const result = instantiateAuthoringFieldPreset(descriptor, [undefined, undefined]);
-      expect(result).not.toHaveProperty('executionDefaults');
-    });
-
-    it('carries only the defined phase when one of two resolves to undefined', () => {
-      const descriptor = {
-        kind: 'fieldPreset',
-        output: {
-          codecId: 'test/timestamp@1',
-          executionDefaults: {
-            onCreate: { kind: 'arg', index: 0 },
-            onUpdate: { kind: 'arg', index: 1 },
-          },
-        },
-      } as const;
-
-      expect(
-        instantiateAuthoringFieldPreset(descriptor, [
-          { kind: 'generator', id: 'timestampNow' },
-          undefined,
-        ]).executionDefaults,
-      ).toEqual({ onCreate: { kind: 'generator', id: 'timestampNow' } });
-    });
   });
 
   describe('empty resolved typeParams omission', () => {
@@ -765,50 +175,22 @@ describe('authoring template resolution', () => {
       });
     });
   });
+});
 
-  it('regression: a static executionDefaults template (e.g. temporalAuthoringPresets shape) resolves unchanged', () => {
-    const descriptor = {
-      kind: 'fieldPreset',
-      output: {
-        codecId: 'test/timestamp@1',
-        executionDefaults: {
-          onCreate: { kind: 'generator', id: 'timestampNow' },
-          onUpdate: { kind: 'generator', id: 'timestampNow' },
-        },
-      },
-    } as const;
-
-    expect(instantiateAuthoringFieldPreset(descriptor, [])).toEqual({
-      descriptor: { codecId: 'test/timestamp@1' },
-      nullable: false,
-      executionDefaults: {
-        onCreate: { kind: 'generator', id: 'timestampNow' },
-        onUpdate: { kind: 'generator', id: 'timestampNow' },
-      },
-      id: false,
-      unique: false,
-    });
-  });
-
-  it('stringifies primitive function default expressions', () => {
-    const descriptor = {
-      kind: 'fieldPreset',
-      output: {
-        codecId: 'test/text@1',
-        default: {
-          kind: 'function',
-          expression: {
-            kind: 'arg',
-            index: 0,
+describe('assertNoCrossRegistryCollisions', () => {
+  it('rejects a path registered both as an entity and as a type constructor', () => {
+    expect(() =>
+      assertNoCrossRegistryCollisions(
+        { custom: { Thing: { kind: 'typeConstructor', output: { codecId: 'a@1' } } } },
+        {
+          custom: {
+            Thing: { kind: 'entity', discriminator: 'thing', output: { factory: () => ({}) } },
           },
         },
-      },
-    } as const;
-
-    expect(instantiateAuthoringFieldPreset(descriptor, [123]).default).toEqual({
-      kind: 'function',
-      expression: '123',
-    });
+      ),
+    ).toThrow(
+      'Ambiguous authoring registry path "custom.Thing". The same path is registered as an entity contribution AND as a type constructor or type alias; PSL resolution would be ambiguous.',
+    );
   });
 });
 
@@ -831,7 +213,7 @@ describe('collectScalarTypeConstructors', () => {
       sql: {
         String: {
           kind: 'typeConstructor',
-          args: [{ kind: 'number', name: 'length' }],
+          args: [{ kind: 'value', dataType: 'demo/int4', name: 'length' }],
           output: { codecId: 'sql/varchar@1' },
         },
       },
@@ -844,7 +226,7 @@ describe('collectScalarTypeConstructors', () => {
     const namespace = {
       Vector: {
         kind: 'typeConstructor',
-        args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
+        args: [{ kind: 'value', dataType: 'demo/int4', name: 'length' }],
         output: { codecId: 'pg/vector@1' },
       },
     } satisfies AuthoringTypeNamespace;
@@ -855,7 +237,7 @@ describe('collectScalarTypeConstructors', () => {
   it('includes an all-optional-args constructor with exactly its zero-arg instantiation output', () => {
     const VarCharish = {
       kind: 'typeConstructor',
-      args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, optional: true }],
+      args: [{ kind: 'value', dataType: 'demo/int4', name: 'length', optional: true }],
       output: {
         codecId: 'sql/varchar@1',
         typeParams: { length: { kind: 'arg', index: 0 } },
@@ -870,32 +252,13 @@ describe('collectScalarTypeConstructors', () => {
     });
   });
 
-  it('applies a template default in bare form, same as the zero-arg call', () => {
-    const Defaulted = {
-      kind: 'typeConstructor',
-      args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, optional: true }],
-      output: {
-        codecId: 'sql/varchar@1',
-        typeParams: { length: { kind: 'arg', index: 0, default: 191 } },
-      },
-    } satisfies AuthoringTypeConstructorDescriptor;
-    const namespace = { Defaulted } satisfies AuthoringTypeNamespace;
-
-    const bare = collectScalarTypeConstructors(namespace).get('Defaulted');
-    expect(bare).toEqual(instantiateAuthoringTypeConstructor(Defaulted, []));
-    expect(bare).toEqual({
-      codecId: 'sql/varchar@1',
-      typeParams: { length: 191 },
-    });
-  });
-
   it('excludes constructors mixing an optional arg with a required one', () => {
     const namespace = {
       Mixed: {
         kind: 'typeConstructor',
         args: [
-          { kind: 'number', name: 'precision', integer: true },
-          { kind: 'number', name: 'scale', integer: true, optional: true },
+          { kind: 'value', dataType: 'demo/int4', name: 'precision' },
+          { kind: 'value', dataType: 'demo/int4', name: 'scale', optional: true },
         ],
         output: { codecId: 'pg/numeric@1' },
       },

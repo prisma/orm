@@ -90,10 +90,7 @@ export function scopeCompletionItems(
           item.detail = descriptor.documentation || 'Type alias';
           break;
         }
-        const callable =
-          descriptor.kind === 'fieldPreset' ||
-          descriptor.args !== undefined ||
-          descriptor.entityRefArg !== undefined;
+        const callable = descriptor.args !== undefined || descriptor.entityRefArg !== undefined;
         item.kind = callable ? CompletionItemKind.Function : CompletionItemKind.Class;
         if (callable) {
           item.textEdit = {
@@ -103,10 +100,6 @@ export function scopeCompletionItems(
               : `${name}()`,
           };
           if (capabilities.clientSupportsSnippets) item.insertTextFormat = InsertTextFormat.Snippet;
-        }
-        if (descriptor.kind === 'fieldPreset') {
-          item.detail = 'Field preset';
-          break;
         }
         item.detail =
           descriptor.deprecated === undefined

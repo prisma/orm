@@ -1274,9 +1274,6 @@ importers:
       '@internal/contract':
         specifier: workspace:8.0.0-rc.21
         version: link:../../0-foundation/contract
-      '@internal/framework-components':
-        specifier: workspace:8.0.0-rc.21
-        version: link:../../1-core/framework-components
       '@internal/utils':
         specifier: workspace:8.0.0-rc.21
         version: link:../../0-foundation/utils
@@ -6092,6 +6089,9 @@ importers:
       '@repo/tsdown':
         specifier: workspace:8.0.0-rc.21
         version: link:../../packages/0-config/tsdown
+      '@types/lodash':
+        specifier: 4.17.25
+        version: 4.17.25
       '@types/pg':
         specifier: 'catalog:'
         version: 8.20.4
@@ -6104,6 +6104,9 @@ importers:
       gray-matter:
         specifier: 'catalog:'
         version: 4.0.3
+      lodash:
+        specifier: 4.17.23
+        version: 4.17.23
       mongodb:
         specifier: 'catalog:'
         version: 7.5.0(socks@2.8.9)

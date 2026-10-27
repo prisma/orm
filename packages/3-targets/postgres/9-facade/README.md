@@ -259,9 +259,9 @@ import { defineContract, field, model } from '@internal/postgres/contract-builde
 
 export const contract = defineContract(
   { extensions: {} },
-  ({ field: f, model: m }) => ({
+  ({ field: f, model: m, gen, type }) => ({
     models: {
-      User: m('User', { fields: { id: f.id.uuidv4String() } }),
+      User: m('User', { fields: { id: f.column(type.Uuid()).id().onCreate(gen.uuid()) } }),
     },
   }),
 );

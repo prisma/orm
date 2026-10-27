@@ -2,8 +2,6 @@ export type {
   ArgTypeFromDescriptor,
   CanonicalArguments,
   DataTypeArgumentTypes,
-  ObjectArgumentType,
-  OptionalObjectArgumentKeys,
   ResolveTemplateValue,
   TupleFromArgumentDescriptors,
 } from './authoring-argument-types';
@@ -35,11 +33,11 @@ export {
   isEnumTypeHandle,
   member,
 } from './enum-type';
+export { answerMissingPropertyReads } from './missing-property-reads';
 export {
   assertSafeAuthoringHelperKey,
   composePackAuthoringNamespace,
-  createFieldHelpersFromNamespace,
-} from './field-preset-helpers';
+} from './pack-authoring-namespaces';
 export type {
   ExtractDataTypeArgumentTypesFromPack,
   ExtractParameterizedOutputTypesFromPack,

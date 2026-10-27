@@ -1,8 +1,7 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import { uuidv4 } from '@internal/ids';
 import { expectTypeOf, test } from 'vitest';
 import type { MutationCreateInput, MutationUpdateInput } from '../src/types';
-import { defineContract, field, model, rel } from './contract-builder';
+import { defineContract, field, gen, model, rel, type } from './contract-builder';
 import type { Contract } from './fixtures/generated/contract';
 import type { Contract as JunctionNsContract } from './fixtures/junction-namespaces/generated/contract';
 
@@ -34,7 +33,7 @@ const ExecUserRole = model('UserRole', {
     roleId: field.column(textColumn).column('role_id'),
     // NOT NULL payload column whose only default is the execution-time onCreate
     // generator — the arm that keeps create/connect enabled.
-    token: field.generated(uuidv4()),
+    token: field.column(type.Char(36)).onCreate(gen.uuid()),
   },
 })
   .attributes(({ fields, constraints }) => ({

@@ -41,7 +41,7 @@ const profileSchema = type({
 
 export const contract = defineContract(
   { codecLookup: postgresCodecLookup, dataTypeLookup: postgresDataTypeLookup },
-  ({ field, model, rel }) => {
+  ({ field, model, rel, gen, type }) => {
     const UserBase = model('User', {
       fields: {
         id: field.column(int4Column).default(autoincrement()).id(),
@@ -112,7 +112,7 @@ export const contract = defineContract(
 
         Event: model('Event', {
           fields: {
-            id: field.id.uuidv7String(),
+            id: field.column(type.Char(36)).id().onCreate(gen.uuid(7)),
             name: field.column(textColumn),
             scheduledAt: field
               .column(timestamptzStringColumn)

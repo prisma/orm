@@ -21,14 +21,6 @@ const sqlFamilyPack = {
   id: 'sql',
   familyId: 'sql',
   version: '0.0.1',
-  authoring: {
-    field: {
-      text: {
-        kind: 'fieldPreset',
-        output: { codecId: 'pg/text@1' },
-      },
-    },
-  },
 } as const satisfies FamilyPackRef<'sql'>;
 
 const postgresTargetPack = {
@@ -38,7 +30,7 @@ const postgresTargetPack = {
   targetId: 'postgres',
   version: '0.0.1',
   defaultNamespaceId: 'public',
-  authoring: { field: {}, renderCheckExpressions },
+  authoring: { type: {}, renderCheckExpressions },
 } as const;
 
 const pgText = { codecId: 'pg/text@1' as const } as const;
@@ -57,7 +49,11 @@ function buildUser(options?: { readonly control?: ControlPolicy }): Contract<Sql
       ({
         models: {
           User: m('User', {
-            fields: { id: f.text().id(), role: f.namedType(Role), tags: f.text().many() },
+            fields: {
+              id: f.column(pgText).id(),
+              role: f.namedType(Role),
+              tags: f.column(pgText).many(),
+            },
           }).sql(options?.control === undefined ? {} : { control: options.control }),
         },
       }) as const,
@@ -77,10 +73,18 @@ function buildMixedControl(): Contract<SqlStorage> {
       ({
         models: {
           User: m('User', {
-            fields: { id: f.text().id(), role: f.namedType(Role), tags: f.text().many() },
+            fields: {
+              id: f.column(pgText).id(),
+              role: f.namedType(Role),
+              tags: f.column(pgText).many(),
+            },
           }).sql({ control: 'managed' }),
           Item: m('Item', {
-            fields: { id: f.text().id(), role: f.namedType(Role), tags: f.text().many() },
+            fields: {
+              id: f.column(pgText).id(),
+              role: f.namedType(Role),
+              tags: f.column(pgText).many(),
+            },
           }),
         },
       }) as const,
@@ -100,7 +104,6 @@ const stubContext: ContractSourceContext = {
   composedExtensionContracts: new Map(),
   authoringContributions: {
     dataTypes: {},
-    field: {},
     type: {},
     entityTypes: {},
     pslBlockDescriptors: {},

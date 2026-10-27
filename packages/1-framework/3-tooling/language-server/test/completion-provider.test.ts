@@ -1,6 +1,7 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type {
+  AuthoringContributions,
   AuthoringEntityTypeNamespace,
   AuthoringPslBlockDescriptorNamespace,
   AuthoringTypeNamespace,
@@ -1740,33 +1741,34 @@ namespace app {
     expect(completionItemByLabel(items, 'Int').detail).toBe('Configured scalar type');
   });
 
-  it('completes a field preset as a call', () => {
-    const { items } = completeWithSource({
-      markedSource: 'model Post { value | }',
-      pslBlockDescriptors: {},
-      clientSupportsSnippets: false,
-      authoringContributions: assembleAuthoringContributions([
-        {
-          id: 'presets',
-          authoring: {
-            field: {
-              stamp: {
-                kind: 'fieldPreset',
-                output: { codecId: 'fixture/timestamp@1' },
-              },
-            },
-          },
-        },
-      ]),
-      controlMutationDefaults,
-    });
-    const item = completionItemByLabel(items, 'stamp');
-    expect({
-      kind: item.kind,
-      detail: item.detail,
-      newText: item.textEdit === undefined ? undefined : item.textEdit.newText,
-    }).toEqual({ kind: CompletionItemKind.Function, detail: 'Field preset', newText: 'stamp()' });
-  });
+  it(
+    'offers no field preset of the real Postgres pack in type position',
+    async () => {
+      const { postgresTargetDescriptorMeta } = await importFromPackageRoot<{
+        readonly postgresTargetDescriptorMeta: { readonly authoring: AuthoringContributions };
+      }>('../../../3-targets/postgres/1-target/src/core/descriptor-meta.ts');
+      const authoringContributions = assembleAuthoringContributions([
+        { id: 'postgres', authoring: postgresTargetDescriptorMeta.authoring },
+      ]);
+      const labels = (markedSource: string) =>
+        completeWithSource({
+          markedSource,
+          pslBlockDescriptors: {},
+          clientSupportsSnippets: false,
+          authoringContributions,
+          controlMutationDefaults,
+        }).items.map((item) => item.label);
+
+      const topLevel = labels('model Post { value | }');
+      const temporal = labels('model Post { value temporal.| }');
+      expect({
+        topLevel: ['text', 'json', 'uuidNative', 'id'].filter((name) => topLevel.includes(name)),
+        temporal: ['createdAt', 'updatedAt', 'timestamp'].filter((name) => temporal.includes(name)),
+        aliases: ['CreatedAt', 'UpdatedAt'].filter((name) => temporal.includes(name)),
+      }).toEqual({ topLevel: [], temporal: [], aliases: ['CreatedAt', 'UpdatedAt'] });
+    },
+    timeouts.typeScriptCompilation,
+  );
 
   it(
     'lists deprecated Mongo scalar names tagged deprecated, naming the replacement',

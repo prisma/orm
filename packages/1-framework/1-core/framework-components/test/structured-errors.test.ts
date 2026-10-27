@@ -45,14 +45,18 @@ const adapter: RuntimeAdapterDescriptor<'sql', 'postgres'> = {
 };
 
 describe('structured error codes', () => {
-  it('malformed helper argument raises CONTRACT.ARGUMENT_INVALID', () => {
+  it('a missing helper argument raises CONTRACT.ARGUMENT_INVALID', () => {
     const error = capture(() =>
-      validateAuthoringHelperArguments('field.test', [{ kind: 'number' }], ['123']),
+      validateAuthoringHelperArguments(
+        'type.test',
+        [{ kind: 'value', dataType: 'demo/int4' }],
+        [undefined],
+      ),
     );
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({
       code: 'CONTRACT.ARGUMENT_INVALID',
-      message: 'Authoring helper argument at field.test[0] must be a number',
+      message: 'Authoring helper argument at type.test[0] is missing',
     });
   });
 

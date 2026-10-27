@@ -61,7 +61,7 @@ model Profile {
 model Post {
   id              String    @id @onCreate(cuid(2))
   createdAt       DateTime  @default(now())
-  updatedAt       temporal.updatedAt()
+  updatedAt       temporal.UpdatedAt
   published       Boolean
   title           String
   content         String?

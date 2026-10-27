@@ -181,7 +181,7 @@ export type {
   ContributedTypeScope,
   ContributedTypeSymbol,
 } from '../contributed-type-scope';
-export { contributedTypeCodecId } from '../contributed-type-scope';
+export { contributedTypeAt, contributedTypeCodecId } from '../contributed-type-scope';
 export type { DiagnosticSource, PslDiagnostic, PslDiagnosticCollector } from '../diagnostic';
 export {
   createPslDiagnosticCollector,

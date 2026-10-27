@@ -22,7 +22,7 @@ SQLite declares no `UnboundedInt` because it has no lossless unbounded integer s
 
 ## Authoring
 
-These are ordinary target-scoped types rather than field presets, so ordinary scalar modifiers apply subject to the target's capabilities. PSL uses the bare type names:
+These are ordinary target-scoped types, so ordinary scalar modifiers apply subject to the target's capabilities. PSL uses the bare type names:
 
 ```prisma
 model Meter {

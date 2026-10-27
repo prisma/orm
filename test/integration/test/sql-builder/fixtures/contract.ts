@@ -1,14 +1,15 @@
 import { int4Column, textColumn, varcharColumn } from '@internal/adapter-postgres/column-types';
 import { vector } from '@internal/extension-pgvector/column-types';
 import pgvector from '@internal/extension-pgvector/pack';
-import { uuidv4 } from '@internal/ids';
 import {
   defineContract,
   field,
   fullTextIndex,
+  gen,
   model,
   rel,
   sql,
+  type,
 } from '@internal/postgres/contract-builder';
 
 const UserBase = model('User', {
@@ -83,7 +84,7 @@ const Profile = model('Profile', {
 
 const Article = model('Article', {
   fields: {
-    id: field.generated(uuidv4()).id(),
+    id: field.column(type.Char(36)).onCreate(gen.uuid()).id(),
     title: field.column(textColumn),
   },
 }).sql({ table: 'articles' });

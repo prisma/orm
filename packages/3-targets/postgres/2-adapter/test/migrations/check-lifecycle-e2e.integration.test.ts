@@ -39,6 +39,9 @@ import {
   testTimeout,
 } from './fixtures/runner-fixtures';
 
+const pgText = { codecId: 'pg/text@1' } as const;
+const pgVarchar = { codecId: 'pg/varchar@1' } as const;
+
 const FULL_POLICY: MigrationOperationPolicy = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'],
 };
@@ -64,18 +67,6 @@ const authoringFamilyPack = {
   id: 'sql',
   familyId: 'sql',
   version: '0.0.1',
-  authoring: {
-    field: {
-      text: {
-        kind: 'fieldPreset',
-        output: { codecId: 'pg/text@1' },
-      },
-      varchar: {
-        kind: 'fieldPreset',
-        output: { codecId: 'pg/varchar@1' },
-      },
-    },
-  },
 } as const;
 
 const authoringTargetPack = {
@@ -85,7 +76,7 @@ const authoringTargetPack = {
   targetId: 'postgres',
   version: '0.0.1',
   defaultNamespaceId: 'public',
-  authoring: { field: {}, renderCheckExpressions: postgresRenderCheckExpressions },
+  authoring: { type: {}, renderCheckExpressions: postgresRenderCheckExpressions },
 } as const;
 
 type ColumnSpec = {
@@ -236,7 +227,7 @@ function itemContractWithCheck(input: {
     ({ field: f, model: m }) =>
       ({
         models: {
-          Item: m('Item', { fields: { id: f.text().id(), total: f.text() } }).sql({
+          Item: m('Item', { fields: { id: f.column(pgText).id(), total: f.column(pgText) } }).sql({
             checks: [check(input)],
           }),
         },
@@ -265,7 +256,9 @@ function itemContractWithVarcharCheck(input: {
     ({ field: f, model: m }) =>
       ({
         models: {
-          Item: m('Item', { fields: { id: f.text().id(), status: f.varchar() } }).sql({
+          Item: m('Item', {
+            fields: { id: f.column(pgText).id(), status: f.column(pgVarchar) },
+          }).sql({
             checks: [check(input)],
           }),
         },
@@ -286,12 +279,12 @@ function authoredScalarListContract(elementNullable: boolean): Contract<SqlStora
         models: {
           Item: m('Item', {
             fields: {
-              id: f.text().id(),
-              strictTags: f.text().many(),
-              nullableTags: f.text().many({ elementsNullable: true }),
+              id: f.column(pgText).id(),
+              strictTags: f.column(pgText).many(),
+              nullableTags: f.column(pgText).many({ elementsNullable: true }),
               transitioningTags: elementNullable
-                ? f.text().many({ elementsNullable: true })
-                : f.text().many({ elementsNullable: false }),
+                ? f.column(pgText).many({ elementsNullable: true })
+                : f.column(pgText).many({ elementsNullable: false }),
             },
           }),
         },
@@ -951,7 +944,10 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
         ({
           models: {
             Item: m('Item', {
-              fields: { id: f.text().id(), tags: f.text().many({ elementsNullable: true }) },
+              fields: {
+                id: f.column(pgText).id(),
+                tags: f.column(pgText).many({ elementsNullable: true }),
+              },
             }),
           },
         }) as const,

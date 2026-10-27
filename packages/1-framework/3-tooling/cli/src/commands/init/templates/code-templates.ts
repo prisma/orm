@@ -138,14 +138,14 @@ import { defineContract } from '${builder}';
 
 export const contract = defineContract(
   {},
-  ({ field, model }) => ({
+  ({ field, model, gen, type }) => ({
     models: {
       User: model('User', {
         fields: {
-          id: field.id.uuidv7String(),
-          email: field.text().unique(),
-          username: field.text().optional(),
-          name: field.text().optional(),
+          id: field.column(type.Uuid()).id().onCreate(gen.uuid(7)),
+          email: field.column(type.String()).unique(),
+          username: field.column(type.String()).optional(),
+          name: field.column(type.String()).optional(),
         },
       }),
     },
@@ -187,7 +187,7 @@ model User {
   name      String?
   posts     Post[]
   createdAt TimestamptzString @default(now())
-  updatedAt temporal.updatedAtString()
+  updatedAt temporal.UpdatedAtString
 }
 
 model Post {
@@ -197,7 +197,7 @@ model Post {
   author    User     @relation(fields: [authorId], references: [id])
   authorId  Int
   createdAt TimestamptzString @default(now())
-  updatedAt temporal.updatedAtString()
+  updatedAt temporal.UpdatedAtString
 }
 `;
 }
@@ -228,26 +228,26 @@ model Post {
 function starterSchemaTsPostgres(builder: string): string {
   return `import { defineContract } from '${builder}';
 
-export const contract = defineContract({}, ({ field, model, rel }) => {
+export const contract = defineContract({}, ({ field, model, rel, gen, type }) => {
   const User = model('User', {
     fields: {
-      id: field.id.uuidv7String(),
-      email: field.text().unique(),
-      username: field.text().optional(),
-      name: field.text().optional(),
-      createdAt: field.temporal.createdAtString(),
-      updatedAt: field.temporal.updatedAtString(),
+      id: field.column(type.Uuid()).id().onCreate(gen.uuid(7)),
+      email: field.column(type.String()).unique(),
+      username: field.column(type.String()).optional(),
+      name: field.column(type.String()).optional(),
+      createdAt: field.column(type.temporal.CreatedAtString()),
+      updatedAt: field.column(type.temporal.UpdatedAtString()),
     },
   });
 
   const Post = model('Post', {
     fields: {
-      id: field.id.uuidv7String(),
-      title: field.text(),
-      content: field.text().optional(),
-      authorId: field.uuidString(),
-      createdAt: field.temporal.createdAtString(),
-      updatedAt: field.temporal.updatedAtString(),
+      id: field.column(type.Uuid()).id().onCreate(gen.uuid(7)),
+      title: field.column(type.String()),
+      content: field.column(type.String()).optional(),
+      authorId: field.column(type.Uuid()),
+      createdAt: field.column(type.temporal.CreatedAtString()),
+      updatedAt: field.column(type.temporal.UpdatedAtString()),
     },
   });
 

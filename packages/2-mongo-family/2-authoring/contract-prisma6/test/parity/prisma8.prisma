@@ -22,8 +22,8 @@ model Post {
   meta      Json
   authorId  ObjectId
   author    User                   @relation(fields: [authorId], references: [id])
-  createdAt temporal.createdAt()
-  updatedAt temporal.updatedAt()
+  createdAt temporal.CreatedAt
+  updatedAt temporal.UpdatedAt
 
   @@index([authorId])
 }

@@ -38,7 +38,7 @@ import {
   getAttribute,
   storageName,
 } from './psl-attribute-parsing';
-import type { ColumnDescriptor, FieldPresetContributions } from './psl-column-resolution';
+import type { ColumnDescriptor } from './psl-column-resolution';
 import {
   fieldAttributeOwner,
   lowerDefaultForField,
@@ -106,6 +106,8 @@ export interface CollectResolvedFieldsInput {
   readonly generatorFunctions: GeneratorFunctionRegistry;
   readonly dataTypes: DataTypeSupport;
   readonly diagnostics: PslDiagnosticCollector;
+  /** Collects each field left out because its type did not resolve, so the contract is not built without it. */
+  readonly droppedFields: Set<FieldSymbol>;
   readonly sources: PslSources;
   readonly binder: Binder;
   readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
@@ -123,16 +125,7 @@ export interface CollectResolvedFieldsInput {
 }
 
 /**
- * Per-attribute migration rule for attributes that have been removed
- * from PSL in favor of the field-preset surface. The `hint` text is
- * appended to the `PSL_UNSUPPORTED_FIELD_ATTRIBUTE` message so users
- * porting Prisma 6 schemas see "use this preset instead" inline; the
- * `suppressWhen` predicate skips the hint when the user has already
- * migrated (so they don't get told to do what they just did).
- *
- * Pairing the suppression predicate with the hint makes each entry
- * self-contained: a future entry for, say, `@id` ↔ `id.uuidv7String()` cannot
- * silently inherit the wrong predicate when added.
+ * A Prisma 6 field attribute that Prisma 8 PSL removed. The `hint`, what to write instead, is appended to the `PSL_UNSUPPORTED_FIELD_ATTRIBUTE` message, unless `suppressWhen` says the field already writes it.
  */
 interface RemovedAttributeRule {
   readonly hint: string;
@@ -263,6 +256,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     generatorFunctions,
     dataTypes,
     diagnostics,
+    droppedFields,
     sources,
     scalarColumnDescriptors,
     enumHandles,
@@ -313,7 +307,6 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     });
 
     let descriptor: ColumnDescriptor | undefined;
-    let presetContributions: FieldPresetContributions | undefined;
     const resolveInput = {
       field,
       resolution: fieldTypeResolution,
@@ -355,37 +348,20 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       }
       const resolved = resolveFieldTypeDescriptor(resolveInput);
       if (!resolved.ok) {
-        continue;
-      }
-      // A preset fixes its codec, which `[]` would change to a list. Reject early.
-      if (resolved.presetContributions) {
-        diagnostics.push({
-          code: 'PSL_PRESET_NOT_LIST',
-          message: `Field "${model.name}.${field.name}" uses a field-preset call as a list element type. Presets cannot be list elements; remove "[]" or use a scalar type.`,
-          ...source.at(field.span),
-        });
+        droppedFields.add(field);
         continue;
       }
       descriptor = resolved.descriptor;
     } else {
       const resolved = resolveFieldTypeDescriptor(resolveInput);
       if (!resolved.ok) {
+        droppedFields.add(field);
         continue;
       }
       descriptor = resolved.descriptor;
-      presetContributions = resolved.presetContributions;
     }
 
     if (!descriptor) {
-      continue;
-    }
-
-    if (presetContributions?.id && field.optional) {
-      diagnostics.push({
-        code: 'PSL_PRESET_NOT_OPTIONAL',
-        message: `Field "${model.name}.${field.name}" is a primary key through its field preset, so it cannot be optional; primary key columns must be NOT NULL. Remove "?" or use a preset that does not make the field a primary key.`,
-        ...source.at(field.span),
-      });
       continue;
     }
 
@@ -401,14 +377,6 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     }
 
     const defaultAttribute = getAttribute(field.attributes, 'default');
-    if (presetContributions?.default && defaultAttribute) {
-      diagnostics.push({
-        code: 'PSL_PRESET_AND_DEFAULT_CONFLICT',
-        message: `Field "${model.name}.${field.name}" uses a field-preset call that already sets a database default, so it cannot also declare @default(...). Remove @default(...) or use a preset without a default.`,
-        ...source.at(defaultAttribute.span),
-      });
-      continue;
-    }
     const enumHandle =
       fieldTypeResolution?.kind === 'block'
         ? enumHandles.get(fieldTypeResolution.symbol)
@@ -494,20 +462,6 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       });
       continue;
     }
-    const presetPhaseConflict = GENERATOR_ATTRIBUTE_NAMES.find(
-      (phase) =>
-        presetContributions?.executionDefaults?.[phase] !== undefined &&
-        generatedValues?.[phase] !== undefined,
-    );
-    if (presetPhaseConflict !== undefined) {
-      const phaseText = presetPhaseConflict === 'onCreate' ? 'on create' : 'on update';
-      diagnostics.push({
-        code: 'PSL_PRESET_AND_DEFAULT_CONFLICT',
-        message: `Field "${model.name}.${field.name}" uses a field-preset call that already generates a value ${phaseText}, so @${presetPhaseConflict}(...) cannot set one too. Remove @${presetPhaseConflict}(...) or use a preset without an ${presetPhaseConflict} generator.`,
-        ...source.at(getAttribute(field.attributes, presetPhaseConflict)?.span ?? field.span),
-      });
-      continue;
-    }
     const mappedColumnName = storageName(field, input.physicalNames);
     const specContext = fieldSpecContext({
       symbols: symbolTable,
@@ -545,29 +499,15 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       isIdField = false;
     }
 
-    if (presetContributions && idAttribute && !presetContributions.id) {
-      diagnostics.push({
-        code: 'PSL_PRESET_AND_ID_CONFLICT',
-        message: `Field "${model.name}.${field.name}" uses a field-preset call and cannot also declare @id. Use a preset that contributes id semantics, or drop @id.`,
-        ...source.at(idAttribute.span),
-      });
-      continue;
-    }
-
-    const fieldExecutionDefaults = mergeExecutionDefaults(
-      generatedValues,
-      presetContributions?.executionDefaults,
-    );
-    const fieldDefaultValue = presetContributions?.default ?? loweredDefault.defaultValue;
     resolvedFields.push({
       field,
       columnName: mappedColumnName,
       descriptor,
-      nullable: field.optional || Boolean(presetContributions?.nullable),
-      ...ifDefined('defaultValue', fieldDefaultValue),
-      ...ifDefined('executionDefaults', fieldExecutionDefaults),
-      isId: isIdField || Boolean(presetContributions?.id),
-      isUnique: Boolean(uniqueAttribute) || Boolean(presetContributions?.unique),
+      nullable: field.optional,
+      ...ifDefined('defaultValue', loweredDefault.defaultValue),
+      ...ifDefined('executionDefaults', generatedValues),
+      isId: isIdField,
+      isUnique: Boolean(uniqueAttribute),
       ...ifDefined('idName', idName),
       ...ifDefined('uniqueName', uniqueName),
       ...ifDefined('many', isListField ? (true as const) : undefined),
@@ -582,10 +522,10 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
 
 function mergeExecutionDefaults(
   fromAttributes: ExecutionMutationDefaultPhases | undefined,
-  fromPreset: ExecutionMutationDefaultPhases | undefined,
+  fromTypeAlias: ExecutionMutationDefaultPhases | undefined,
 ): ExecutionMutationDefaultPhases | undefined {
-  if (fromAttributes === undefined || fromPreset === undefined) {
-    return fromPreset ?? fromAttributes;
+  if (fromAttributes === undefined || fromTypeAlias === undefined) {
+    return fromTypeAlias ?? fromAttributes;
   }
-  return { ...fromAttributes, ...fromPreset };
+  return { ...fromAttributes, ...fromTypeAlias };
 }

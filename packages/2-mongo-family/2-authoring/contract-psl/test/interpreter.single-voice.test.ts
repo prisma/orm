@@ -2,7 +2,7 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
 import { interpretMongoContract } from './interpreter-test-helpers';
 
-const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
+const scalarTypes: ReadonlyMap<string, string> = new Map([
   ['String', 'mongo/string@1'],
   ['Int32', 'mongo/int32@1'],
   ['ObjectId', 'mongo/objectId@1'],
@@ -12,7 +12,7 @@ function interpret(schema: string) {
   return interpretMongoContract(
     schema,
     {
-      scalarTypeCodecIds,
+      scalarTypes,
       defaultFunctionRegistry: new Map(),
     },
     'test.prisma',
@@ -41,6 +41,37 @@ describe('one voice per resolution failure', () => {
         message: `Cannot find type "${type.replace('()', '')}"`,
         sourceId: 'test.prisma',
       },
+    ]);
+  });
+
+  it('reports a call in a namespace nothing registers as an unresolved constructor call', () => {
+    expect(
+      diagnosticsOf(`model Item {\n  id ObjectId @id @map("_id")\n  ts weather.updatedAt()\n}`).map(
+        ({ code, message, data }) => ({ code, message, data }),
+      ),
+    ).toEqual([
+      {
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message: 'Cannot find type "weather.updatedAt"',
+        data: { reference: 'type', name: 'weather.updatedAt', constructorCall: true },
+      },
+    ]);
+  });
+
+  it.each([
+    ['type', 'composite type'],
+    ['model', 'model'],
+  ])('reports a call qualified by a %s only through the binder', (keyword, kind) => {
+    expect(
+      diagnosticsOf(`${keyword} audit {
+  ${keyword === 'model' ? 'id ObjectId @id @map("_id")' : 'value String'}
+}
+model Item {
+  id ObjectId @id @map("_id")
+  createdAt audit.stamp()?
+}`).map(({ code, message }) => ({ code, message })),
+    ).toEqual([
+      { code: 'PSL_UNRESOLVED_REFERENCE', message: `"audit" is a ${kind}, not a namespace` },
     ]);
   });
 

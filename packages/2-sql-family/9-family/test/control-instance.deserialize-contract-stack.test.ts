@@ -103,7 +103,6 @@ function familyInstance(valueObjectStorageType: string | undefined) {
       defaultFunctionPrintersByGenerator: new Map(),
       componentIdsByGenerator: new Map(),
     },
-    fieldPresetsByCodecAndGenerator: new Map(),
     authoringContributions: {
       type: {
         Jsonb: { kind: 'typeConstructor', output: { codecId: 't/jsonb@1' } },

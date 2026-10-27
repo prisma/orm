@@ -14,10 +14,13 @@ describe('uuid-backed enum authoring against the real Postgres pack', () => {
       member('A', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'),
       member('B', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'),
     );
-    const built = defineContract({ enums: { Key } }, ({ field, model }) => ({
+    const built = defineContract({ enums: { Key } }, ({ field, model, gen, type }) => ({
       models: {
         Item: model('Item', {
-          fields: { id: field.id.uuidv4String(), key: field.namedType(Key) },
+          fields: {
+            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+            key: field.namedType(Key),
+          },
         }),
       },
     }));
@@ -53,10 +56,13 @@ describe('uuid-backed enum authoring against the real Postgres pack', () => {
   ])('refuses a member written in %s, saying the text Postgres stores', (_spelling, written) => {
     const Key = enumType('Key', pgUuid, member('A', written));
     expect(() =>
-      defineContract({ enums: { Key } }, ({ field, model }) => ({
+      defineContract({ enums: { Key } }, ({ field, model, gen, type }) => ({
         models: {
           Item: model('Item', {
-            fields: { id: field.id.uuidv4String(), key: field.namedType(Key) },
+            fields: {
+              id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+              key: field.namedType(Key),
+            },
           }),
         },
       })),
@@ -71,10 +77,13 @@ describe('uuid-backed enum authoring against the real Postgres pack', () => {
   it('refuses a number member on pg/numeric from the untyped builder as an enum error', () => {
     const Ratio = untypedEnumType('Ratio', { codecId: 'pg/numeric@1' }, member('Half', 1.5));
     expect(() =>
-      defineContract({ enums: { Ratio } }, ({ field, model }) => ({
+      defineContract({ enums: { Ratio } }, ({ field, model, gen, type }) => ({
         models: {
           Item: model('Item', {
-            fields: { id: field.id.uuidv4String(), ratio: field.namedType(Ratio) },
+            fields: {
+              id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+              ratio: field.namedType(Ratio),
+            },
           }),
         },
       })),

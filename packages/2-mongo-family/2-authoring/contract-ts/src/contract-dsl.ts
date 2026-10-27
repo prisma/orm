@@ -12,7 +12,6 @@ import type {
   MongoCollectionOptionsAuthoringInput,
   MongoIndexAuthoringInput,
 } from '@internal/mongo-contract';
-import type { PresetContributionNode } from './contract-definition';
 import type { EnumTypeHandle } from './enum-type';
 
 export type VariantSpec = {
@@ -42,8 +41,6 @@ export interface FieldBuilder<
   readonly __storedName: StoredName;
   /** The generator function calls `.onCreate(...)` and `.onUpdate(...)` give, resolved by the field's codec when the contract is built. */
   readonly __generatorCalls?: FieldGeneratorCalls;
-  /** What the field preset that made the field contributed. */
-  readonly __presetContribution?: PresetContributionNode;
   /** Generates the field's value in the client when a document is created without one, with a call from `gen`, such as `gen.now()`. */
   onCreate(
     call: GeneratorFunctionCall,
@@ -118,7 +115,7 @@ export type WithGeneratedPhase<
 };
 
 /**
- * Whether a preset such as `temporal.createdAt()` fills the field on write. Distributes over a union, so the widest `FieldBuilder` constraint keeps both signatures and every field builder satisfies it.
+ * Whether a generator call such as `.onCreate(gen.now())` fills the field on write. Distributes over a union, so the widest `FieldBuilder` constraint keeps both signatures and every field builder satisfies it.
  */
 type FilledOnWrite<ExecutionDefaults> = ExecutionDefaults extends undefined
   ? false

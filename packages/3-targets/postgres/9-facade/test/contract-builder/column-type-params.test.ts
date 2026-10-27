@@ -4,10 +4,13 @@ import { describe, expect, it } from 'vitest';
 import { defineContract } from '../../src/exports/contract-builder';
 
 function buildWithColumn(descriptor: ColumnTypeDescriptor) {
-  return defineContract({}, ({ field, model }) => ({
+  return defineContract({}, ({ field, model, gen, type }) => ({
     models: {
       Item: model('Item', {
-        fields: { id: field.id.uuidv4String(), value: field.column(descriptor) },
+        fields: {
+          id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+          value: field.column(descriptor),
+        },
       }),
     },
   }));

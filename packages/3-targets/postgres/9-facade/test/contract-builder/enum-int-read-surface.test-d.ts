@@ -31,11 +31,11 @@ const pgInt = { codecId: 'pg/int4@1' } as const;
 
 const Level = enumType('Level', pgInt, member('Low', 1), member('High', 10));
 
-const contract = defineContract({ enums: { Level } }, ({ field, model }) => ({
+const contract = defineContract({ enums: { Level } }, ({ field, model, gen, type }) => ({
   models: {
     Event: model('Event', {
       fields: {
-        id: field.id.uuidv4String(),
+        id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
         level: field.namedType(Level),
       },
     }),

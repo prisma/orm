@@ -1,9 +1,17 @@
 import { defineContract, rel } from '@prisma/orm-postgres/contract-builder';
 
-export const plain = defineContract({}, ({ field, model }) => {
-  const User = model('User', { fields: { id: field.id.uuidv4String(), email: field.text() } });
+export const plain = defineContract({}, ({ field, model, gen, type }) => {
+  const User = model('User', {
+    fields: {
+      id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+      email: field.column(type.String()),
+    },
+  });
   const Post = model('Post', {
-    fields: { id: field.id.uuidv4String(), userId: field.uuidString() },
+    fields: {
+      id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+      userId: field.column(type.Char(36)),
+    },
   });
   return {
     models: {

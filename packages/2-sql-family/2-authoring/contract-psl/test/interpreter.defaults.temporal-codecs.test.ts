@@ -1,43 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
-import {
-  interpretSqlContract,
-  postgresScalarTypeDescriptors,
-  sqliteScalarColumnDescriptors,
-  sqliteTarget,
-} from './fixtures';
+import { postgresScalarAuthoringTypes, postgresScalarTypeDescriptors } from './fixtures';
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import {
   builtinControlMutationDefaults,
   interpretPostgresSchema,
-  postgresTemporalContributions,
-  sqliteTemporalContributions,
 } from './interpreter-defaults-support';
 import { unboundTables } from './unbound-tables';
 
-// Whole column shapes and whole execution-defaults lists are asserted here,
-// not spot fields: which keys are absent is as much a part of the lowering
-// contract as which are present. `temporal.timestamp()` must omit
-// `typeParams` entirely, and a preset with no phase token must omit
-// `executionDefaults` entirely rather than emit an empty object.
-describe('temporal per-codec preset lowering', () => {
-  const interpretTemporal = (schema: string) => {
-    return interpretPostgresSchema(schema, {
+// Whole column shapes and whole execution-defaults lists are asserted here: which keys are absent is as much a part of the lowering as which are present.
+describe('a temporal type constructor with generator attributes', () => {
+  const interpretTemporal = (schema: string) =>
+    interpretPostgresSchema(schema, {
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
       controlMutationDefaults: builtinControlMutationDefaults,
-      authoringContributions: postgresTemporalContributions,
+      authoringContributions: { type: postgresScalarAuthoringTypes },
     });
-  };
 
   const columnAndDefaults = (schema: string) => {
     const result = interpretTemporal(schema);
-    expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error('interpretation failed');
+    if (!result.ok) throw new Error(JSON.stringify(result.failure.diagnostics));
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     return {
       column: unboundTables(storage)['T']?.columns['stamped'],
-      defaults: result.value.execution?.mutations.defaults ?? [],
+      defaults: result.value.execution?.mutations.defaults,
     };
   };
 
@@ -46,178 +31,54 @@ id Int @id
 stamped ${field}
 }`;
 
-  const pgTimestampPrecision3 = {
+  const timestamp = {
     many: false,
     dataType: 'pg/timestamp',
     codecId: 'pg/timestamp-temporal@1',
     nullable: false,
-    typeParams: { precision: 3 },
+  };
+  const timestamptz = {
+    many: false,
+    dataType: 'pg/timestamptz',
+    codecId: 'pg/timestamptz-temporal@1',
+    nullable: false,
   };
   const stampedRef = { namespace: 'public', entry: 'T', field: 'stamped' };
-  const nowPhase = { kind: 'generator', id: 'timestampNow' };
+  const plainDateTimeNow = { kind: 'generator', id: 'plainDateTimeNow' };
+  const instantNow = { kind: 'generator', id: 'instantNow' };
 
-  it('timestamp(3, onCreate: now, onUpdate: now) yields precision 3 and both phases', () => {
-    const { column, defaults } = columnAndDefaults(
-      model('temporal.timestamp(3, onCreate: now, onUpdate: now)'),
-    );
-    expect(column).toEqual(pgTimestampPrecision3);
-    expect(defaults).toEqual([{ ref: stampedRef, onCreate: nowPhase, onUpdate: nowPhase }]);
-  });
-
-  it('timestamp(3) yields precision 3 and no execution defaults at all', () => {
-    const { column, defaults } = columnAndDefaults(model('temporal.timestamp(3)'));
-    expect(column).toEqual(pgTimestampPrecision3);
-    expect(defaults).toEqual([]);
-  });
-
-  it('timestamp() omits the typeParams key entirely and has no execution defaults', () => {
-    const { column, defaults } = columnAndDefaults(model('temporal.timestamp()'));
-    expect(column).toEqual({
-      many: false,
-      dataType: 'pg/timestamp',
-      codecId: 'pg/timestamp-temporal@1',
-      nullable: false,
-    });
-    expect(column).not.toHaveProperty('typeParams');
-    expect(defaults).toEqual([]);
-  });
-
-  it('timestamptz(onCreate: now, onUpdate: now) yields both phases and no typeParams', () => {
-    const { column, defaults } = columnAndDefaults(
-      model('temporal.timestamptz(onCreate: now, onUpdate: now)'),
-    );
-    expect(column).toEqual({
-      dataType: 'pg/timestamptz',
-      codecId: 'pg/timestamptz-temporal@1',
-      nullable: false,
-      many: false,
-    });
-    expect(defaults).toEqual([{ ref: stampedRef, onCreate: nowPhase, onUpdate: nowPhase }]);
-  });
-
-  it('timestamptz(onUpdate: now) yields the onUpdate phase only', () => {
-    const { column, defaults } = columnAndDefaults(model('temporal.timestamptz(onUpdate: now)'));
-    expect(column).toEqual({
-      dataType: 'pg/timestamptz',
-      codecId: 'pg/timestamptz-temporal@1',
-      nullable: false,
-      many: false,
-    });
-    expect(defaults).toEqual([{ ref: stampedRef, onUpdate: nowPhase }]);
-  });
-
-  it('updatedAt() is byte-identical to timestamptz(onCreate: now, onUpdate: now)', () => {
-    const convenience = columnAndDefaults(model('temporal.updatedAt()'));
-    const full = columnAndDefaults(model('temporal.timestamptz(onCreate: now, onUpdate: now)'));
-    expect(convenience).toEqual(full);
-  });
-
-  it('accepts a precision at each edge of the data type’s bounds', () => {
-    expect(interpretTemporal(model('temporal.timestamp(0)')).ok).toBe(true);
-    expect(interpretTemporal(model('temporal.timestamp(6)')).ok).toBe(true);
-  });
-
-  it('reports a precision outside the bounds at the argument, not the call', () => {
-    const schema = model('temporal.timestamp(7)');
-    const result = interpretTemporal(schema);
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    const diagnostic = result.failure.diagnostics.find((entry) =>
-      entry.message.includes('precision must be at most 6'),
-    );
-    expect(diagnostic?.span?.start.offset).toBe(schema.indexOf('7)'));
-  });
-
-  it('accepts precision named as well as positional, lowering identically', () => {
-    expect(columnAndDefaults(model('temporal.timestamp(precision: 3)'))).toEqual(
-      columnAndDefaults(model('temporal.timestamp(3)')),
-    );
+  it('TimestampTemporal(3) with both phases stores precision 3 and both generators', () => {
     expect(
-      columnAndDefaults(model('temporal.timestamp(precision: 3, onCreate: now, onUpdate: now)')),
-    ).toEqual(columnAndDefaults(model('temporal.timestamp(3, onCreate: now, onUpdate: now)')));
+      columnAndDefaults(model('TimestampTemporal(3) @onCreate(now()) @onUpdate(now())')),
+    ).toEqual({
+      column: { ...timestamp, typeParams: { precision: 3 } },
+      defaults: [{ ref: stampedRef, onCreate: plainDateTimeNow, onUpdate: plainDateTimeNow }],
+    });
   });
 
-  it('lowers sqlite temporal.datetime(onCreate: now, onUpdate: now) to the sqlite codec', () => {
-    const result = interpretSqlContract(model('temporal.datetime(onCreate: now, onUpdate: now)'), {
-      target: sqliteTarget,
-      scalarColumnDescriptors: sqliteScalarColumnDescriptors,
-      composedExtensionContracts: new Map(),
-      controlMutationDefaults: builtinControlMutationDefaults,
-      authoringContributions: sqliteTemporalContributions,
-      createNamespace: createTestSqlNamespace,
-      ...fixtureInterpreterTypes,
-      capabilities: { sql: { scalarList: true } },
+  it('TimestampTemporal(3) with no generator attribute stores no execution entry', () => {
+    expect(columnAndDefaults(model('TimestampTemporal(3)'))).toEqual({
+      column: { ...timestamp, typeParams: { precision: 3 } },
+      defaults: undefined,
     });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    expect(unboundTables(storage)['T']?.columns['stamped']).toEqual({
-      dataType: 'sqlite/text',
-      codecId: 'sqlite/datetime@1',
-      nullable: false,
-      many: false,
-    });
-    expect(result.value.execution?.mutations.defaults).toEqual([
-      {
-        ref: { namespace: '__unbound__', entry: 'T', field: 'stamped' },
-        onCreate: nowPhase,
-        onUpdate: nowPhase,
-      },
-    ]);
   });
 
-  // Every bad-argument spelling reports through the existing
-  // PSL_INVALID_ATTRIBUTE_ARGUMENT plumbing; the option kind introduces no
-  // diagnostic code of its own.
-  it.each([
-    {
-      name: 'an option value outside the descriptor values',
-      field: 'temporal.timestamp(onCreate: later)',
-      message: /: Argument "onCreate" of temporal\.timestamp must be "now"; received "later"$/,
-    },
-    {
-      name: 'a quoted option value (one spelling only)',
-      field: 'temporal.timestamp(onCreate: "now")',
-      message: /cannot parse named argument "onCreate" for descriptor kind "option"/,
-    },
-    {
-      name: 'a duplicate named argument',
-      field: 'temporal.timestamp(precision: 3, precision: 4)',
-      message: /received duplicate value for argument "precision"/,
-    },
-    {
-      name: 'a positional argument the same named argument also supplies',
-      field: 'temporal.timestamp(3, precision: 4)',
-      message: /received duplicate value for argument "precision"/,
-    },
-    {
-      name: 'an unknown named argument',
-      field: 'temporal.timestamp(frequency: now)',
-      message: /received unknown named argument "frequency"/,
-    },
-    {
-      name: 'a precision below the data type’s bounds, reported at the argument',
-      field: 'temporal.timestamp(-1)',
-      message:
-        /preset "temporal\.timestamp" Authoring helper argument at temporal\.timestamp\[0\] is invalid: precision must be non-negative \(was -1\)/,
-    },
-    {
-      name: 'a precision above the data type’s bounds',
-      field: 'temporal.timestamp(precision: 7)',
-      message: /precision must be at most 6 \(was 7\)/,
-    },
-  ])('rejects $name', ({ field, message }) => {
-    const result = interpretTemporal(model(field));
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-          message: expect.stringMatching(message),
-        }),
-      ]),
+  it('TimestampTemporal with no arguments stores no typeParams', () => {
+    const { column } = columnAndDefaults(model('TimestampTemporal'));
+    expect(column).toEqual(timestamp);
+    expect(column).not.toHaveProperty('typeParams');
+  });
+
+  it('TimestamptzTemporal with only @onUpdate stores the onUpdate generator only', () => {
+    expect(columnAndDefaults(model('TimestamptzTemporal @onUpdate(now())'))).toEqual({
+      column: timestamptz,
+      defaults: [{ ref: stampedRef, onUpdate: instantNow }],
+    });
+  });
+
+  it('reads the precision named as well as positional', () => {
+    expect(columnAndDefaults(model('TimestampTemporal(precision: 3) @onCreate(now())'))).toEqual(
+      columnAndDefaults(model('TimestampTemporal(3) @onCreate(now())')),
     );
   });
 });

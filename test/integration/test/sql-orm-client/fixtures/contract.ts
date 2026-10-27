@@ -6,14 +6,15 @@ import {
 } from '@internal/adapter-postgres/column-types';
 import { vector } from '@internal/extension-pgvector/column-types';
 import pgvector from '@internal/extension-pgvector/pack';
-import { uuidv4 } from '@internal/ids';
 import {
   defineContract,
   field,
   fullTextIndex,
+  gen,
   model,
   now,
   rel,
+  type,
 } from '@internal/postgres/contract-builder';
 
 const UserBase = model('User', {
@@ -71,7 +72,7 @@ const Article = model('Article', {
 
 const Tag = model('Tag', {
   fields: {
-    id: field.generated(uuidv4()).id(),
+    id: field.column(type.Char(36)).onCreate(gen.uuid()).id(),
     name: field.column(textColumn).unique(),
   },
 }).sql({ table: 'tags' });
@@ -91,7 +92,7 @@ const UserTag = model('UserTag', {
 
 const Role = model('Role', {
   fields: {
-    id: field.generated(uuidv4()).id(),
+    id: field.column(type.Char(36)).onCreate(gen.uuid()).id(),
     name: field.column(textColumn).unique(),
   },
 }).sql({ table: 'roles' });

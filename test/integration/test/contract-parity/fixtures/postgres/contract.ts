@@ -1,22 +1,23 @@
 /**
- * The field presets, id generators, parameterized codecs and relation shapes the planner golden fixture leaves out, so the parity test compares them with their emitted types.
+ * The type constructors, id generators, parameterized codecs and relation shapes the planner golden fixture leaves out, so the parity test compares them with their emitted types.
  */
 
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import { arktypeJson } from '@internal/extension-arktype-json/column-types';
 import arktypeJsonPack from '@internal/extension-arktype-json/pack';
-import { cuid2, ksuid, nanoid, ulid, uuidv4, uuidv7 } from '@internal/ids';
 import {
   defineContract,
   enumType,
   field,
   fullTextIndex,
+  gen,
   member,
   model,
   rel,
   sql,
+  type,
 } from '@internal/postgres/contract-builder';
-import { type } from 'arktype';
+import { type as arktype } from 'arktype';
 
 const TimestampString3 = field.column({
   codecId: 'pg/timestamp-string@1',
@@ -45,23 +46,26 @@ const pgVarchar20 = { codecId: 'pg/varchar@1', typeParams: { length: 20 } } as c
 
 const User = model('User', {
   fields: {
-    id: field.id.uuidv7String(),
+    id: field.column(type.Char(36)).id().onCreate(gen.uuid(7)),
     email: field.column(textColumn),
-    externalId: field.uuidString(),
-    ulid: field.ulid(),
-    nanoid: field.nanoid(),
-    shortNanoid: field.nanoid({ size: 10 }),
-    cuid2: field.cuid2(),
-    ksuid: field.ksuid(),
-    createdAt: field.temporal.createdAt(),
-    updatedAt: field.temporal.updatedAt(),
-    timestamp: field.temporal.timestamp(3),
-    timestamptz: field.temporal.timestamptz(6, 'now'),
-    timestampString: field.temporal.timestampString(3),
-    timestamptzString: field.temporal.timestamptzString(3, 'now', 'now'),
+    externalId: field.column(type.Char(36)),
+    ulid: field.column(type.Char(26)),
+    nanoid: field.column(type.Char(21)),
+    shortNanoid: field.column(type.Char(10)),
+    cuid2: field.column(type.Char(24)),
+    ksuid: field.column(type.Char(27)),
+    createdAt: field.column(type.temporal.CreatedAt()),
+    updatedAt: field.column(type.temporal.UpdatedAt()),
+    timestamp: field.column(type.TimestampTemporal(3)),
+    timestamptz: field.column(type.TimestamptzTemporal(6)).onCreate(gen.now()),
+    timestampString: field.column(type.TimestampString(3)),
+    timestamptzString: field
+      .column(type.TimestamptzString(3))
+      .onCreate(gen.now())
+      .onUpdate(gen.now()),
     timestampStringAlias: TimestampString3,
     timestamptzStringAlias: TimestamptzString3.optional(),
-    seenAt: field.temporal.timestamptzJsDate(3),
+    seenAt: field.column(type.TimestamptzJsDate(3)),
     handle: field.column(pgVarchar20),
     plan: field.namedType(Plan),
     ratio: field.namedType(Ratio),
@@ -70,34 +74,40 @@ const User = model('User', {
 
 const Post = model('Post', {
   fields: {
-    id: field.id.uuidv4String(),
-    authorId: field.uuidString(),
+    id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+    authorId: field.column(type.Char(36)),
     title: field.column(textColumn),
   },
 });
 
 const Tag = model('Tag', {
-  fields: { id: field.id.ulid(), label: field.column(textColumn) },
+  fields: {
+    id: field.column(type.Char(26)).id().onCreate(gen.ulid()),
+    label: field.column(textColumn),
+  },
 });
 
 const PostTag = model('PostTag', {
-  fields: { postId: field.uuidString(), tagId: field.ulid() },
+  fields: { postId: field.column(type.Char(36)), tagId: field.column(type.Char(26)) },
 });
 
 const Generated = model('Generated', {
   fields: {
-    id: field.generated(uuidv4()).id(),
-    uuidv7: field.generated(uuidv7()),
-    ulid: field.generated(ulid()),
-    nanoid: field.generated(nanoid()),
-    shortNanoid: field.generated(nanoid({ size: 12 })),
-    cuid2: field.generated(cuid2()),
-    ksuid: field.generated(ksuid()),
+    id: field.column(type.Char(36)).onCreate(gen.uuid()).id(),
+    uuidv7: field.column(type.Char(36)).onCreate(gen.uuid(7)),
+    ulid: field.column(type.Char(26)).onCreate(gen.ulid()),
+    nanoid: field.column(type.Char(21)).onCreate(gen.nanoid()),
+    shortNanoid: field.column(type.Char(12)).onCreate(gen.nanoid(12)),
+    cuid2: field.column(type.Char(24)).onCreate(gen.cuid(2)),
+    ksuid: field.column(type.Char(27)).onCreate(gen.ksuid()),
   },
 });
 
 const Employee = model('Employee', {
-  fields: { id: field.id.nanoid(), managerId: field.nanoid().optional() },
+  fields: {
+    id: field.column(type.Char(21)).id().onCreate(gen.nanoid()),
+    managerId: field.column(type.Char(21)).optional(),
+  },
 });
 
 const Badge = model('Badge', {
@@ -105,14 +115,14 @@ const Badge = model('Badge', {
 });
 
 const UserBadge = model('UserBadge', {
-  fields: { userId: field.uuidString(), badgeCode: field.column(textColumn) },
+  fields: { userId: field.column(type.Char(36)), badgeCode: field.column(textColumn) },
 });
 
 // Foreign keys whose backing indexes the build names, cuts or leaves out.
 const LongNamed = model('LongNamed', {
   fields: {
-    id: field.id.uuidv4String(),
-    organizationReference: field.uuidString().column('organization_reference_identifier'),
+    id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+    organizationReference: field.column(type.Char(36)).column('organization_reference_identifier'),
   },
 }).sql(({ cols, constraints }) => ({
   table: 'organization_membership_invitations',
@@ -120,7 +130,10 @@ const LongNamed = model('LongNamed', {
 }));
 
 const PartialIndexed = model('PartialIndexed', {
-  fields: { id: field.id.uuidv4String(), writerId: field.uuidString().column('writer_id') },
+  fields: {
+    id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+    writerId: field.column(type.Char(36)).column('writer_id'),
+  },
 }).sql(({ cols, constraints }) => ({
   table: 'partial_writers',
   indexes: [
@@ -130,7 +143,10 @@ const PartialIndexed = model('PartialIndexed', {
 }));
 
 const PlainIndexed = model('PlainIndexed', {
-  fields: { id: field.id.uuidv4String(), writerId: field.uuidString().column('writer_id') },
+  fields: {
+    id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+    writerId: field.column(type.Char(36)).column('writer_id'),
+  },
 }).sql(({ cols, constraints }) => ({
   table: 'plain_writers',
   indexes: [constraints.index([cols.writerId], { name: 'by_writer' })],
@@ -139,8 +155,8 @@ const PlainIndexed = model('PlainIndexed', {
 
 const KeyCovered = model('KeyCovered', {
   fields: {
-    id: field.id.uuidv4String(),
-    writerId: field.uuidString().column('writer_id').unique(),
+    id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+    writerId: field.column(type.Char(36)).column('writer_id').unique(),
   },
 }).sql(({ cols, constraints }) => ({
   table: 'key_writers',
@@ -148,7 +164,10 @@ const KeyCovered = model('KeyCovered', {
 }));
 
 const Unindexed = model('Unindexed', {
-  fields: { id: field.id.uuidv4String(), writerId: field.uuidString().column('writer_id') },
+  fields: {
+    id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+    writerId: field.column(type.Char(36)).column('writer_id'),
+  },
 }).sql(({ cols, constraints }) => ({
   table: 'unindexed_writers',
   foreignKeys: [constraints.foreignKey(cols.writerId, User.refs.id, { index: false })],
@@ -156,15 +175,19 @@ const Unindexed = model('Unindexed', {
 
 const Account = model('Account', {
   namespace: 'auth',
-  fields: { id: field.id.cuid2(), userId: field.uuidString(), provider: field.column(textColumn) },
+  fields: {
+    id: field.column(type.Char(24)).id().onCreate(gen.cuid(2)),
+    userId: field.column(type.Char(36)),
+    provider: field.column(textColumn),
+  },
 });
 
 const Profile = model('Profile', {
   fields: {
-    id: field.id.ksuid(),
-    userId: field.uuidString(),
+    id: field.column(type.Char(27)).id().onCreate(gen.ksuid()),
+    userId: field.column(type.Char(36)),
     rank: field.column(int4Column),
-    settings: field.column(arktypeJson(type({ theme: 'string', fontSize: 'number' }))),
+    settings: field.column(arktypeJson(arktype({ theme: 'string', fontSize: 'number' }))),
   },
 });
 

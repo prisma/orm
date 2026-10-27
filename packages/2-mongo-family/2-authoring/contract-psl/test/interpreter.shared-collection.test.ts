@@ -20,7 +20,7 @@ model Admin {
 describe('a PSL MongoDB collection that stores two models', () => {
   it('gets a validator that accepts a document of either model', () => {
     const result = interpretMongoContract(schema, {
-      scalarTypeCodecIds: new Map([
+      scalarTypes: new Map([
         ['String', 'mongo/string@1'],
         ['Int', 'mongo/int32@1'],
         ['ObjectId', 'mongo/objectId@1'],

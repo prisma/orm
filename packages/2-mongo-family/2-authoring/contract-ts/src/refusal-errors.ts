@@ -405,7 +405,7 @@ export function refusalError(refusal: BuildRefusal): StructuredError {
     case 'generatorPhaseSetTwice':
       return contractError(
         'CONTRACT.DEFAULT_INVALID',
-        `.${refusal.phase}() is called on a field that already generates a value ${refusal.phase === 'onCreate' ? 'on create' : 'on update'}. Set each phase once, and do not combine .${refusal.phase}() with a field preset, type alias or alias constant that sets it.`,
+        `.${refusal.phase}() is called on a field that already generates a value ${refusal.phase === 'onCreate' ? 'on create' : 'on update'}. Set each phase once, and do not combine .${refusal.phase}() with a type alias or alias constant that sets it.`,
         {
           meta: {
             modelName: refusal.key.owner.name,
@@ -585,14 +585,7 @@ export function refusalError(refusal: BuildRefusal): StructuredError {
 
 /** A builder warning as `defineContract` reports it. */
 export function authoringWarningOf(warning: BuildWarning): AuthoringWarning {
-  if (warning.kind === 'source') return warning.warning;
-  const item = `field "${warning.key.owner.name}.${warning.key.field}"`;
-  return {
-    code: 'PN_PRESET_WITHOUT_EFFECT',
-    message: `Field "${warning.key.owner.name}.${warning.key.field}" uses ${warning.preset}(), which generates no value, so the field is stored like any field of codec "${warning.codecId}".`,
-    item,
-    summary: 'fields use a preset that generates no value',
-  };
+  return warning.warning;
 }
 
 function differenceWording(difference: RestatedFieldDifference): string {

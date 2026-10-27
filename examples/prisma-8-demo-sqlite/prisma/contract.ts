@@ -1,7 +1,7 @@
 import { bigintColumn, datetimeColumn, textColumn } from '@prisma/orm-sqlite/adapter/column-types';
 import { defineContract, now, rel } from '@prisma/orm-sqlite/contract-builder';
 
-export const contract = defineContract({}, ({ field, model, type }) => {
+export const contract = defineContract({}, ({ field, model, type, gen }) => {
   // SQLite contributes `BigIntNumber` — INTEGER storage read as a JS `number`,
   // throwing rather than rounding outside ±(2^53 − 1). It contributes no
   // `UnboundedInt`: that type needs lossless unbounded integer storage, which
@@ -11,7 +11,7 @@ export const contract = defineContract({}, ({ field, model, type }) => {
 
   const User = model('User', {
     fields: {
-      id: field.id.uuidv4String(),
+      id: field.column(type.sql.Char(36)).id().onCreate(gen.uuid()),
       email: field.column(textColumn),
       displayName: field.column(textColumn),
       createdAt: field.column(datetimeColumn).default(now()),
@@ -20,9 +20,9 @@ export const contract = defineContract({}, ({ field, model, type }) => {
 
   const Post = model('Post', {
     fields: {
-      id: field.id.uuidv4String(),
+      id: field.column(type.sql.Char(36)).id().onCreate(gen.uuid()),
       title: field.column(textColumn),
-      userId: field.uuidString(),
+      userId: field.column(type.sql.Char(36)),
       createdAt: field.column(datetimeColumn).default(now()),
       // Two engagement counters, both INTEGER in the database and each read
       // back as a different JavaScript type. They are optional because the
@@ -34,15 +34,15 @@ export const contract = defineContract({}, ({ field, model, type }) => {
 
   const Tag = model('Tag', {
     fields: {
-      id: field.id.uuidv4String(),
+      id: field.column(type.sql.Char(36)).id().onCreate(gen.uuid()),
       label: field.column(textColumn),
     },
   });
 
   const PostTag = model('PostTag', {
     fields: {
-      postId: field.uuidString(),
-      tagId: field.uuidString(),
+      postId: field.column(type.sql.Char(36)),
+      tagId: field.column(type.sql.Char(36)),
     },
   }).attributes(({ fields, constraints }) => ({
     id: constraints.id([fields.postId, fields.tagId], { name: 'post_tag_pkey' }),

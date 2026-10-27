@@ -16,7 +16,6 @@ import { unboundTables } from './unbound-tables';
 
 const authoringContributions = {
   entityTypes: testEnumEntityContributions,
-  field: {},
   pslBlockDescriptors: { enum: testEnumPslBlockDescriptor },
   modelAttributes: {},
   valueObjectStorageType: 'Jsonb',

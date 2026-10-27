@@ -1,7 +1,6 @@
 import { timestampNowRuntimeGenerator } from '@internal/family-sql/runtime';
 import { TIMESTAMP_NOW_GENERATOR_ID } from '@internal/framework-components/authoring';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { postgresAuthoringFieldPresets } from '../src/core/authoring';
 import {
   dateStringNow,
   instantNow,
@@ -26,14 +25,6 @@ const generate: Readonly<Record<string, () => unknown>> = {
   [TIMESTAMP_NOW_GENERATOR_ID]: () => timestampNowRuntimeGenerator().generate(),
   ...Object.fromEntries(postgresNowGenerators.map(({ id, generate }) => [id, () => generate()])),
 };
-
-function presetGeneratorIds(output: object): string[] {
-  if (!('executionDefaults' in output)) return [];
-  return Object.values(output.executionDefaults as object).map((phase: unknown) => {
-    const { id, cases } = phase as { id?: string; cases?: { now: { id: string } } };
-    return id ?? cases?.now.id ?? '';
-  });
-}
 
 const DATE_AND_TIME_CODEC_IDS = [
   'pg/date-temporal@1',
@@ -108,23 +99,6 @@ describe('the "now" generator for each codec', () => {
       'pg/timestamp-date@1': 'timestampNow',
       'pg/timestamp-instant@1': 'instantNow',
     });
-  });
-
-  it('gives every temporal preset the generator the lookup gives its codec', () => {
-    const presets = Object.entries(postgresAuthoringFieldPresets.temporal).flatMap(
-      ([name, preset]) =>
-        presetGeneratorIds(preset.output).map((generatorId) => ({
-          name,
-          codecId: preset.output.codecId,
-          generatorId,
-        })),
-    );
-    expect(presets.map(({ name }) => name)).toContain('updatedAtJsDate');
-    expect(
-      presets.filter(
-        ({ codecId, generatorId }) => postgresNowGeneratorIdFor(codecId) !== generatorId,
-      ),
-    ).toEqual([]);
   });
 });
 

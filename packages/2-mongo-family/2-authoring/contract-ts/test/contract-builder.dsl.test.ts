@@ -728,6 +728,33 @@ describe('mongo contract builder', () => {
     expect(run).toThrow(expect.objectContaining({ code: 'CONTRACT.PACK_CONTRIBUTION_INVALID' }));
   });
 
+  it('rejects a pack that registers one path as both an entity and a type alias', () => {
+    const familyPackWithAmbiguousPath = {
+      ...mongoFamilyPack,
+      authoring: {
+        type: {
+          custom: { Thing: { kind: 'typeAlias', output: { type: { codecId: 'mongo/string@1' } } } },
+        },
+        entityTypes: {
+          custom: {
+            Thing: { kind: 'entity', discriminator: 'thing', output: { factory: () => ({}) } },
+          },
+        },
+      },
+    } as unknown as typeof mongoFamilyPack;
+
+    expect(() =>
+      defineContract({ family: familyPackWithAmbiguousPath, target: mongoTargetPack }, () => ({
+        models: {},
+      })),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.PACK_CONTRIBUTION_INVALID',
+        message: expect.stringContaining('Ambiguous authoring registry path "custom.Thing"'),
+      }),
+    );
+  });
+
   it('throws once and names the missing field when a multi-key index mixes valid and invalid fields', () => {
     const User = model('User', {
       collection: 'users',

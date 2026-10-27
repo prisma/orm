@@ -1,8 +1,4 @@
 import {
-  type AuthoringContributions,
-  temporalAuthoringPresets,
-} from '@internal/framework-components/authoring';
-import {
   assembleGeneratorFunctions,
   singleGeneratorBinding,
 } from '@internal/framework-components/components';
@@ -27,13 +23,9 @@ const generatorFunctions = assembleGeneratorFunctions([
   },
 ]);
 
-const authoringContributions: AuthoringContributions = {
-  field: { temporal: temporalAuthoringPresets({ codecId: 'mongo/date@1' }) },
-};
-
 function interpret(schema: string) {
   return interpretMongoContract(schema, {
-    scalarTypeCodecIds: new Map([
+    scalarTypes: new Map([
       ['ObjectId', 'mongo/objectId@1'],
       ['String', 'mongo/string@1'],
       ['DateTime', 'mongo/date@1'],
@@ -42,7 +34,6 @@ function interpret(schema: string) {
     generatorFunctions,
     codecLookup: mongoCodecLookup,
     dataTypes: mongoDataTypeSupport,
-    authoringContributions,
   });
 }
 
@@ -118,24 +109,9 @@ model Click {
 }`),
     ).toEqual([
       {
-        code: 'PSL_PRESET_ON_VARIANT_FIELD',
+        code: 'PSL_GENERATOR_ON_VARIANT_FIELD',
         message:
           'Generated value on variant "Click" field "seenAt": execution defaults apply to every document in collection "Event", so declare them on the base model.',
-      },
-    ]);
-  });
-
-  it('refuse an attribute for a phase the preset already sets', () => {
-    expect(
-      diagnostics(`model Post {
-  id        ObjectId             @id @map("_id")
-  updatedAt temporal.updatedAt() @onUpdate(now())
-}`),
-    ).toEqual([
-      {
-        code: 'PSL_PRESET_AND_DEFAULT_CONFLICT',
-        message:
-          'Field "Post.updatedAt" uses a field-preset call that already generates a value on update, so @onUpdate(...) cannot set one too. Remove @onUpdate(...) or use a preset without an onUpdate generator.',
       },
     ]);
   });
@@ -166,6 +142,76 @@ model Click {
         code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
         message:
           'Field "Post.createdAt" uses unsupported attribute "@default". Use @onCreate(now()) instead; MongoDB has no database defaults.',
+      },
+    ]);
+  });
+});
+
+describe('Mongo PSL generated values keyed by collection', () => {
+  it('emit one ref for a generator on the base model, shared by its variants', () => {
+    const result = interpret(`model Event {
+  id        ObjectId @id @map("_id")
+  kind      String
+  createdAt DateTime @onCreate(now())
+  @@discriminator(kind)
+  @@map("events")
+}
+
+model Click {
+  url String
+  @@base(Event, "click")
+}
+
+model View {
+  path String
+  @@base(Event, "view")
+}`);
+    expect(result.ok && result.value.execution?.mutations.defaults).toEqual([
+      {
+        ref: { namespace: '__unbound__', entry: 'events', field: 'createdAt' },
+        onCreate: timestampNow,
+      },
+    ]);
+  });
+
+  it('merge identical generators two models declare for the same collection field', () => {
+    const result = interpret(`model Post {
+  id        ObjectId @id @map("_id")
+  createdAt DateTime @onCreate(now())
+  @@map("entries")
+}
+
+model Page {
+  id        ObjectId @id @map("_id")
+  createdAt DateTime @onCreate(now())
+  @@map("entries")
+}`);
+    expect(result.ok && result.value.execution?.mutations.defaults).toEqual([
+      {
+        ref: { namespace: '__unbound__', entry: 'entries', field: 'createdAt' },
+        onCreate: timestampNow,
+      },
+    ]);
+  });
+
+  it('refuse different generators two models declare for the same collection field', () => {
+    expect(
+      diagnostics(`model Post {
+  id    ObjectId @id @map("_id")
+  stamp DateTime @onCreate(now())
+  @@map("entries")
+}
+
+model Page {
+  id    ObjectId @id @map("_id")
+  stamp DateTime @onCreate(now()) @onUpdate(now())
+  @@map("entries")
+}`),
+    ).toEqual([
+      {
+        code: 'PSL_GENERATOR_CONFLICT',
+        message:
+          'Generated value on "Page.stamp" sets different execution defaults than "Post.stamp" for field "stamp" of collection "entries". Generate the same values on both models.',
       },
     ]);
   });

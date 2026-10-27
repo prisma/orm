@@ -160,19 +160,6 @@ describe('.onCreate and .onUpdate', () => {
     );
   });
 
-  it('refuse a phase a generated field already sets', () => {
-    expect(() =>
-      field
-        .generated({ type: textColumn, generated: { kind: 'generator', id: 'uuidv4' } })
-        .onCreate(gen.uuid()),
-    ).toThrow(
-      expect.objectContaining({
-        code: 'CONTRACT.DEFAULT_INVALID',
-        meta: { reason: 'generator-phase-set-twice', phase: 'onCreate' },
-      }),
-    );
-  });
-
   it('keep a database default beside a generator', () => {
     const definition = buildContractDefinition({
       family: familyPack,

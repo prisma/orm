@@ -25,7 +25,7 @@
 //   }
 //
 // Subject: creating a post then a user with `posts: { connect }` does not throw.
-// Note: @updatedAt becomes `temporal.updatedAt()` field preset in Prisma 8 PSL.
+// Note: @updatedAt becomes the `temporal.UpdatedAt` type alias in Prisma 8 PSL.
 model User {
   id    String  @id @onCreate(cuid(2))
   email String  @unique
@@ -37,7 +37,7 @@ model User {
 model Post {
   id        String   @id @onCreate(cuid(2))
   createdAt DateTime @default(now())
-  updatedAt temporal.updatedAt()
+  updatedAt temporal.UpdatedAt
   title     String
   content   String?
   published Boolean  @default(false)

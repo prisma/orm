@@ -31,7 +31,7 @@ export const EMPTY_DATA_TYPES: DataTypeSupport = {
 export interface FieldAttributeSpecContext extends AttributeSpecContext {
   readonly field: FieldSymbol;
   readonly typeResolution: Resolution | undefined;
-  /** The type constructor or field preset the field's type resolves to, through a named type when it is declared with one. */
+  /** The type constructor the field's type resolves to, through a named type when it is declared with one. */
   readonly typeConstructor: ContributedTypeSymbol | undefined;
 }
 
@@ -54,7 +54,7 @@ export interface TypeAttributeSpecContext extends Omit<AttributeSpecContext, 'mo
   /** The type as written, such as an enum's name. */
   readonly typeName: string;
   readonly typeResolution: Resolution | undefined;
-  /** The type constructor or field preset the type resolves to, through a named type when it is declared with one. */
+  /** The type constructor the type resolves to, through a named type when it is declared with one. */
   readonly typeConstructor: ContributedTypeSymbol | undefined;
 }
 

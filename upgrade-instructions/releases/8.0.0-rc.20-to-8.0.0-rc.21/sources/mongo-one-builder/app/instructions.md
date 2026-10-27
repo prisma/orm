@@ -20,7 +20,7 @@ changes:
       `defineContract` now refuses a value object field typed by an enum the contract does not declare (`CONTRACT.ENUM_UNKNOWN`), as it already did for a model field. Add the enum to `defineContract({ enums })`.
   - id: mongo-newly-accepted
     summary: |
-      No action is needed. An optional field that a preset, a type alias, `@onCreate(...)`/`@onUpdate(...)` or `.onCreate(...)`/`.onUpdate(...)` fills is now accepted, as on SQL; a list that generates a value is still refused. A TypeScript variant may leave its `collection` out and is stored in its base's. The PSL preset-without-effect warning is no longer reported next to `@onCreate(...)` or `@onUpdate(...)`, which do fill the field, and is now reported even when the schema is refused. `defineContract` now reports the same case as the warning `PN_PRESET_WITHOUT_EFFECT`.
+      No action is needed. An optional field that a type alias, `@onCreate(...)`/`@onUpdate(...)` or `.onCreate(...)`/`.onUpdate(...)` fills is now accepted, as on SQL; a list that generates a value is still refused. A TypeScript variant may leave its `collection` out and is stored in its base's.
   - id: mongo-prisma6-merged-indexes
     summary: |
       A Prisma 6 schema read by `prisma6Schema()` in which one collection holds two identical indexes, such as `@unique` and `@@unique` on one field, or the same `@@index` on two models stored in one collection, now gives one index, as the database holds one. That contract's storage hash changes. Run `prisma contract emit`, then `prisma db sign` to record the new hash; the database itself needs no change.

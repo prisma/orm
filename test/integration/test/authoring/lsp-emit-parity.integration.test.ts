@@ -29,7 +29,7 @@ model User {
   name      String?
   posts     Post[]
   createdAt TimestamptzString @default(now())
-  updatedAt temporal.updatedAtString()
+  updatedAt temporal.UpdatedAtString
 }
 
 model Post {
@@ -39,7 +39,7 @@ model Post {
   author    User @relation(fields: [authorId], references: [id])
   authorId  Int
   createdAt TimestamptzString @default(now())
-  updatedAt temporal.updatedAtString()
+  updatedAt temporal.UpdatedAtString
 }
 `;
 

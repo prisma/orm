@@ -1,4 +1,5 @@
 import sqlFamilyPack from '@internal/family-sql/pack';
+import { assembleDataTypeSupport } from '@internal/framework-components/authoring';
 import {
   assembleDataTypes,
   type CodecLookupWithDescriptors,
@@ -13,6 +14,7 @@ import {
   buildBoundContract,
   type ComposedAuthoringHelpers,
   type ContractInput,
+  createComposedAuthoringHelpers,
   type EnumTypeHandle,
   field,
   type MergeEnums,
@@ -34,6 +36,26 @@ import { postgresCreateNamespace } from '@internal/target-postgres/types';
 
 export type { ScalarFieldBuilder };
 export { field, model, rel };
+
+const composedHelpers = createComposedAuthoringHelpers({
+  family: sqlFamilyPack,
+  target: postgresPack,
+  codecLookup: assemblePostgresCodecRegistryWithBuiltins(
+    [],
+    assembleDataTypeSupport([sqlFamilyPack, postgresPack], () => undefined).support.lookup,
+  ),
+});
+
+export const type: ComposedAuthoringHelpers<
+  typeof sqlFamilyPack,
+  typeof postgresPack,
+  undefined
+>['type'] = composedHelpers.type;
+export const gen: ComposedAuthoringHelpers<
+  typeof sqlFamilyPack,
+  typeof postgresPack,
+  undefined
+>['gen'] = composedHelpers.gen;
 
 type SqlFamily = typeof sqlFamilyPack;
 type PostgresPack = typeof postgresPack;

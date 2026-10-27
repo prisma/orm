@@ -99,6 +99,7 @@
     "./family-contract/entity-kinds": "./dist/family-contract__entity-kinds.mjs",
     "./family-contract/factories": "./dist/family-contract__factories.mjs",
     "./family-contract/foreign-key-materialization": "./dist/family-contract__foreign-key-materialization.mjs",
+    "./family-contract/generated-id-column-aliases": "./dist/family-contract__generated-id-column-aliases.mjs",
     "./family-contract/index-naming": "./dist/family-contract__index-naming.mjs",
     "./family-contract/index-type-validation": "./dist/family-contract__index-type-validation.mjs",
     "./family-contract/index-types": "./dist/family-contract__index-types.mjs",

@@ -68,7 +68,16 @@ describe('templates', () => {
 
       expect(schema).toContain('defineContract');
       expect(schema).toContain("from '@internal/postgres/contract-builder'");
-      expect(schema).toContain('username: field.text().optional()');
+      expect(schema).toContain('username: field.column(type.String()).optional()');
+      expect(schema).toContain('id: field.column(type.Uuid()).id().onCreate(gen.uuid(7))');
+      expect(schema).toContain('authorId: field.column(type.Uuid())');
+      expect(schema).not.toContain('type.Char(');
+      expect(schema).toContain('updatedAt: field.column(type.temporal.UpdatedAtString())');
+      expect(schema).not.toMatch(/field\.(id|temporal)\.|field\.(text|uuidString)\(/);
+    });
+
+    it('writes no field preset into the postgres PSL starter schema', () => {
+      expect(starterSchema('postgres', 'psl')).toContain('updatedAt temporal.UpdatedAtString\n');
     });
 
     it('uses defineContract for mongo TypeScript imported from facade', () => {
@@ -114,7 +123,7 @@ describe('templates', () => {
         // body. The shared signature is the callback destructure itself.
         for (const schema of [pg, mongo]) {
           expect(schema).toMatch(
-            /defineContract\(\s*\{\s*\},\s*\(\{ field, model, rel \}\) => [({]/,
+            /defineContract\(\s*\{\s*\},\s*\(\{ field, model, rel(, gen, type)? \}\) => [({]/,
           );
           expect(schema).not.toMatch(/\{ family:/);
           expect(schema).toContain('models: {');

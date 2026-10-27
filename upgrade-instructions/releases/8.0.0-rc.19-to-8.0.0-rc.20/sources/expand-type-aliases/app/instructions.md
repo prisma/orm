@@ -91,7 +91,7 @@ model Post {
 ```
 
 - An alias may carry `@default`, `@onCreate` and `@onUpdate`. Each field typed by it gets them. A field may add an attribute its alias does not set, but writing one the alias already sets is the error `PSL_DUPLICATE_ATTRIBUTE`. `@id` and `@unique` belong on the field, not the alias.
-- Postgres, SQLite and MongoDB contribute `temporal.CreatedAt` and `temporal.UpdatedAt`, written bare as a field type. Each stores exactly what `temporal.createdAt()` and `temporal.updatedAt()` store. Postgres also has `temporal.CreatedAtString`, `temporal.UpdatedAtString`, `temporal.CreatedAtJsDate` and `temporal.UpdatedAtJsDate`.
+- Postgres, SQLite and MongoDB contribute `temporal.CreatedAt` and `temporal.UpdatedAt`, written bare as a field type. Each stores exactly what the field presets `temporal.createdAt()` and `temporal.updatedAt()` stored, which this release removes; the `remove-field-presets` guide gives the replacement of every preset. Postgres also has `temporal.CreatedAtString`, `temporal.UpdatedAtString`, `temporal.CreatedAtJsDate` and `temporal.UpdatedAtJsDate`.
 
 ## `ts-types-key-removed`
 
