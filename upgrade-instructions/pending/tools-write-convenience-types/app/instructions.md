@@ -66,22 +66,28 @@ For each project whose `prisma.config.ts` uses `prisma7Schema(...)`:
 
 A `Date` holds milliseconds. A `@db.Timestamptz(6)` or `@db.Timestamp(6)` column with values that use the extra digits reads with them dropped. To keep them, write the Prisma 8 schema yourself with `DateTime(as: string)` or `DateTime(as: temporal)` for that field.
 
+A `Date` cannot hold `infinity` or `-infinity` either. A row that stores one now fails to read with `RUNTIME.DECODE_FAILED`, where it read as the string `infinity` before. For a column that can hold them, write the Prisma 8 schema yourself with `DateTime(as: string, storage: timestamp, precision: 3)` for that field; `DateTime(as: temporal)` cannot hold them either.
+
 ## `temporal-type-aliases-on-datetime`
 
 `temporal.CreatedAt` is now `DateTime @onCreate(now())` and `temporal.UpdatedAt` is `DateTime @onCreate(now()) @onUpdate(now())`, a `timestamptz(3)` column read as a JavaScript `Date`. To keep each field exactly as it is, and its contract, write the type and the generators the alias stood for:
 
 | Before | After, in PSL |
 | --- | --- |
-| `temporal.CreatedAt` | `TimestamptzTemporal @onCreate(now())` |
-| `temporal.UpdatedAt` | `TimestamptzTemporal @onCreate(now()) @onUpdate(now())` |
-| `temporal.CreatedAtString` | `TimestamptzString @onCreate(now())` |
-| `temporal.UpdatedAtString` | `TimestamptzString @onCreate(now()) @onUpdate(now())` |
+| `temporal.CreatedAt` | `DateTime(as: temporal) @onCreate(now())` |
+| `temporal.UpdatedAt` | `DateTime(as: temporal) @onCreate(now()) @onUpdate(now())` |
+| `temporal.CreatedAtString` | `DateTime(as: string) @onCreate(now())` |
+| `temporal.UpdatedAtString` | `DateTime(as: string) @onCreate(now()) @onUpdate(now())` |
 | `temporal.CreatedAtJsDate` | `TimestamptzJsDate @onCreate(now())` |
 | `temporal.UpdatedAtJsDate` | `TimestamptzJsDate @onCreate(now()) @onUpdate(now())` |
 
-In a TypeScript contract, `field.column(type.temporal.CreatedAtString())` becomes `field.column(type.TimestamptzString()).onCreate(gen.now())`, adding `.onUpdate(gen.now())` for an `UpdatedAt` alias, with `gen` taken from the `defineContract` callback beside `field` and `type`. Do the same for each alias in the table. Re-emit with `prisma contract emit`: the contract is the same as before.
+`DateTime(as: temporal)` is exactly `TimestamptzTemporal`, and `DateTime(as: string)` exactly `TimestamptzString`; either form gives the same contract. `TimestamptzJsDate` keeps its explicit name, because `DateTime` gives `TimestamptzJsDate(3)`, which stores a precision the alias did not.
+
+In a TypeScript contract, `field.column(type.temporal.CreatedAtString())` becomes `field.column(type.DateTime({ as: 'string' })).onCreate(gen.now())`, adding `.onUpdate(gen.now())` for an `UpdatedAt` alias, with `gen` taken from the `defineContract` callback beside `field` and `type`. Do the same for each alias in the table. Re-emit with `prisma contract emit`: the contract is the same as before.
 
 To move a `temporal.CreatedAt` or `temporal.UpdatedAt` field to the new default instead, keep the alias and update the code that reads it to a `Date`. Its column becomes `timestamptz(3)`, which rounds stored values to milliseconds, so plan it with `prisma migration plan --delete <Model>.<field>` and apply it with `prisma db migrate`, or run `prisma db update --delete <Model>.<field>`.
+
+If you followed the 8.0.0-rc.21 guide's `remove-field-presets` change, a field it rewrote from `temporal.createdAt()` or `temporal.updatedAt()` to `temporal.CreatedAt` or `temporal.UpdatedAt` is such a field: write it from the table above to keep its contract.
 
 The detection also matches `temporal.CreatedAt` and `temporal.UpdatedAt` in SQLite and MongoDB projects. There they keep their meaning and need no change.
 
