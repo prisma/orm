@@ -88,6 +88,7 @@ describe('mysqlConnectionOptions', () => {
       prepareCacheLength: 0,
       foundRows: true,
       logParam: false,
+      permitRedirect: false,
       multipleStatements: false,
       namedPlaceholders: false,
       permitSetMultiParamEntries: false,
@@ -134,53 +135,33 @@ describe('mysqlConnectionOptions', () => {
     }
   });
 
-  it('refuses a URL parameter the driver does not understand', () => {
+  it('ignores a URL parameter it does not read, as pg ignores one, so the URL cannot turn on a package option', () => {
+    const plain = mysqlPoolOptions('mysql://root@localhost/app?sslmode=require');
     for (const parameter of [
-      'namedPlaceholders=true',
       'multipleStatements=true',
+      'namedPlaceholders=true',
       'permitSetMultiParamEntries=true',
+      'permitLocalInfile=true',
+      'permitRedirect=true',
       'typeCast=false',
-      'flags=MULTI_STATEMENTS',
       'prepareCacheLength=10',
-      'statementCacheSize=10',
-      'connectionLimit=2',
+      'connection_limit=2',
+      'sslaccept=accept_invalid_certs',
     ]) {
-      expect(() => mysqlConnectionOptions(`mysql://root@localhost/app?${parameter}`)).toThrow(
-        expect.objectContaining({ code: 'RUNTIME.BINDING_INVALID' }),
+      expect(mysqlPoolOptions(`mysql://root@localhost/app?sslmode=require&${parameter}`)).toEqual(
+        plain,
       );
     }
   });
 
-  it('names the parameters it accepts when it refuses one, and the replacement for each Prisma 7 engine parameter', () => {
-    const accepted =
-      'it accepts ssl, sslmode, sslcert, sslkey, sslrootcert and allowPublicKeyRetrieval';
-    const replacements = {
-      connection_limit: "set poolOptions.max in mysql()'s options",
-      pool_timeout: "set poolOptions.connectionTimeoutMillis in mysql()'s options",
-      connect_timeout: "set poolOptions.connectionTimeoutMillis in mysql()'s options",
-      sslidentity: 'use sslcert and sslkey, each the path of a PEM file',
-      sslpassword: 'no replacement; use an unencrypted sslkey file',
-      sslaccept: 'use sslmode=no-verify to accept an invalid certificate',
-      socket_timeout: 'no replacement',
-      statement_cache_size: 'no replacement; each statement is prepared, run and closed',
-    };
-    for (const [parameter, replacement] of Object.entries(replacements)) {
-      expect(() => mysqlConnectionOptions(`mysql://root@localhost/app?${parameter}=1`)).toThrow(
-        expect.objectContaining({
-          code: 'RUNTIME.BINDING_INVALID',
-          message: expect.stringContaining(`${parameter} (${replacement}); ${accepted}`),
-          meta: { received: parameter, reason: expect.any(String) },
-        }),
-      );
-    }
-    expect(() =>
-      mysqlConnectionOptions('mysql://root@localhost/app?flags=X&connection_limit=2'),
-    ).toThrow(
+  it("refuses sslcert without sslkey, because a Prisma 7 MySQL URL's sslcert named the server's CA, which is now sslrootcert", () => {
+    expect(() => mysqlConnectionOptions('mysql://root@localhost/app?sslcert=/etc/ca.pem')).toThrow(
       expect.objectContaining({
+        code: 'RUNTIME.BINDING_INVALID',
         message: expect.stringContaining(
-          `flags, connection_limit (set poolOptions.max in mysql()'s options); ${accepted}`,
+          "sslcert names the client's certificate and needs sslkey; to check the server's certificate against a CA file, as sslcert did in Prisma 7, use sslrootcert",
         ),
-        meta: { received: 'flags, connection_limit', reason: expect.any(String) },
+        meta: { received: 'sslcert', reason: expect.any(String) },
       }),
     );
   });
@@ -203,7 +184,7 @@ describe('mysqlConnectionOptions', () => {
     const secret = 'hunter2-secret';
     for (const url of [
       `mysql://app:${secret}@db.example/app?sslmode=${secret}`,
-      `mysql://app:${secret}@db.example/app?connection_limit=${secret}`,
+      `mysql://app:${secret}@db.example/app?sslcert=/${secret}.pem`,
       `mysql://app:${secret}@db.example/app?sslkey=/${secret}.pem`,
       `mysql://app:${secret}@db.example/app?charset=${secret}`,
       `mysql://app:${secret}@[db.example/app`,

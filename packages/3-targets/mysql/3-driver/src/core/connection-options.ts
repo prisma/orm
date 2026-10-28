@@ -47,20 +47,6 @@ const PARAMETER_FORMS: Readonly<Record<ParameterName, string>> = {
   allowPublicKeyRetrieval: 'true or false',
 };
 
-const PARAMETER_NAMES = Object.keys(PARAMETER_FORMS);
-
-/** What replaces each parameter of a Prisma 7 engine URL. */
-const ENGINE_PARAMETER_REPLACEMENTS: ReadonlyMap<string, string> = new Map([
-  ['connection_limit', "set poolOptions.max in mysql()'s options"],
-  ['pool_timeout', "set poolOptions.connectionTimeoutMillis in mysql()'s options"],
-  ['connect_timeout', "set poolOptions.connectionTimeoutMillis in mysql()'s options"],
-  ['sslidentity', 'use sslcert and sslkey, each the path of a PEM file'],
-  ['sslpassword', 'no replacement; use an unencrypted sslkey file'],
-  ['sslaccept', 'use sslmode=no-verify to accept an invalid certificate'],
-  ['socket_timeout', 'no replacement'],
-  ['statement_cache_size', 'no replacement; each statement is prepared, run and closed'],
-]);
-
 function isParameterName(name: string): name is ParameterName {
   return Object.hasOwn(PARAMETER_FORMS, name);
 }
@@ -68,15 +54,16 @@ function isParameterName(name: string): name is ParameterName {
 type UrlParameters = typeof urlParameters.infer;
 
 /**
- * Options the URL cannot change. Values travel only as prepared-statement parameters, so every option that would rewrite SQL on the client stays off, and `logParam` keeps values out of error messages. Each statement is prepared, run and closed (`prepareCacheLength: 0`). `typeCast` reads every column as text or bytes, so no column reaches a codec as a value the package parsed. `foundRows` makes an UPDATE count the rows it matched, as Postgres's row count does. The connection is utf8mb4: the driver reads each statement as utf8mb4 to find its placeholders, and MySQL must read it the same way.
+ * Options the URL cannot change. Values travel only as prepared-statement parameters, so every option that would rewrite SQL on the client stays off, and `logParam` keeps values out of error messages. `permitRedirect` stays off, so a server cannot send the client, with its credentials, to another host, which `pg` never does. Each statement is prepared, run and closed (`prepareCacheLength: 0`). `typeCast` reads every column as text or bytes, so no column reaches a codec as a value the package parsed. `foundRows` makes an UPDATE count the rows it matched, as Postgres's row count does. The connection is utf8mb4: the driver reads each statement as utf8mb4 to find its placeholders, and MySQL must read it the same way.
  */
-const FIXED_OPTIONS: ConnectionConfig = {
+const FIXED_OPTIONS: ConnectionConfig & { readonly permitRedirect: false } = {
   collation: 'UTF8MB4_UNICODE_CI',
   multipleStatements: false,
   namedPlaceholders: false,
   permitSetMultiParamEntries: false,
   permitLocalInfile: false,
   logParam: false,
+  permitRedirect: false,
   prepareCacheLength: 0,
   foundRows: true,
   typeCast: readTextOrBytes,
@@ -87,15 +74,6 @@ function invalidBinding(reason: string, parameters: readonly string[]): Error {
   return structuredError('RUNTIME.BINDING_INVALID', `MySQL connection URL: ${reason}`, {
     meta: { received: parameters.join(', '), reason },
   });
-}
-
-function describeUnknown(name: string): string {
-  const replacement = ENGINE_PARAMETER_REPLACEMENTS.get(name);
-  return replacement === undefined ? name : `${name} (${replacement})`;
-}
-
-function acceptedList(): string {
-  return `${PARAMETER_NAMES.slice(0, -1).join(', ')} and ${PARAMETER_NAMES.at(-1)}`;
 }
 
 /** Parses `url` as the Postgres facade does, refusing it without the parser's error, which carries the whole URL. */
@@ -115,22 +93,21 @@ function readUrl(url: string): { readonly parsed: URL; readonly parameters: UrlP
       ['charset'],
     );
   }
-  const names = [...new Set(parsed.searchParams.keys())];
-  const unknown = names.filter((name) => !isParameterName(name));
-  if (unknown.length > 0) {
-    throw invalidBinding(
-      `the driver does not accept ${unknown.map(describeUnknown).join(', ')}; it accepts ${acceptedList()}`,
-      unknown,
-    );
-  }
-  const parameters = urlParameters(Object.fromEntries(parsed.searchParams));
+  const names = [...new Set(parsed.searchParams.keys())].filter(isParameterName);
+  const parameters = urlParameters(
+    Object.fromEntries([...parsed.searchParams].filter(([name]) => isParameterName(name))),
+  );
   if (parameters instanceof type.errors) {
-    const invalid = names
-      .filter(isParameterName)
-      .filter((name) => parameters.some((error) => error.path[0] === name));
+    const invalid = names.filter((name) => parameters.some((error) => error.path[0] === name));
     throw invalidBinding(
       invalid.map((name) => `${name} must be ${PARAMETER_FORMS[name]}`).join('; '),
       invalid,
+    );
+  }
+  if (parameters.sslcert !== undefined && parameters.sslkey === undefined) {
+    throw invalidBinding(
+      "sslcert names the client's certificate and needs sslkey; to check the server's certificate against a CA file, as sslcert did in Prisma 7, use sslrootcert",
+      ['sslcert'],
     );
   }
   return { parsed, parameters };
@@ -192,7 +169,7 @@ function connectionOptions(
   };
 }
 
-/** The `mariadb` options for one connection to the server a `mysql://` URL names, whose session starts with `sessionSettings`. Refuses a URL parameter the driver does not read, and a charset. */
+/** The `mariadb` options for one connection to the server a `mysql://` URL names. Ignores a URL parameter the driver does not read, as `pg` does, and refuses a charset. */
 export function mysqlConnectionOptions(
   url: string,
   settings?: Partial<ConnectionSettings>,
