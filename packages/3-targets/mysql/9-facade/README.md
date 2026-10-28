@@ -24,4 +24,4 @@ Wires the MySQL target, adapter and driver together for a project's `prisma.conf
 
 ## Testing
 
-`test/fixtures/` holds the project's example contract in PSL with its emitted `generated/` files, which `pnpm fixtures:check` keeps stable. The live tests need `MYSQL_URL` and are skipped without it. `docker compose up mysql` starts MySQL 8.4 for them: `MYSQL_URL=mysql://root:root@127.0.0.1:3307/mysql pnpm test`.
+`test/fixtures/` holds the project's example contract in PSL with its emitted `generated/` files, which `pnpm fixtures:check` keeps stable. The live tests need `MYSQL_URL` and are skipped without it. `docker compose up mysql` starts MySQL 8.4 for them: `MYSQL_URL='mysql://root:root@127.0.0.1:3307/mysql?allowPublicKeyRetrieval=true' pnpm test`. The server has no TLS, so the URL lets the driver fetch its public key to sign in with `caching_sha2_password`.
