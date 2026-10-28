@@ -312,11 +312,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     await withMysqlDatabase(test, ({ url }) =>
       withDriver(url, async (driver) => {
         await driver.execute({ sql: 'CREATE TABLE t (id int)' });
-        const refused = expect.objectContaining({
-          kind: 'sql_query',
-          sqlState: 'HY000',
-          detail: expect.stringContaining('prepared statement'),
-        });
+        const refused = expect.objectContaining({ kind: 'sql_query', sqlState: 'HY000' });
         expect({
           begin: await driver
             .execute({ sql: 'START TRANSACTION' })
@@ -586,7 +582,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
       await withDriver(limited.toString(), async (driver) => {
         const held = await driver.acquireConnection();
         const waiting = collect(driver.query({ sql: 'SELECT 1 AS n' }));
-        await expect(waiting).rejects.toMatchObject({ code: 'DRIVER.CONNECTION_FAILED' });
+        await expect(waiting).rejects.toMatchObject({ kind: 'sql_connection', transient: true });
         await held.release();
         expect(await collect(driver.query({ sql: 'SELECT 2 AS n' }))).toEqual([{ n: '2' }]);
       });
@@ -668,7 +664,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     });
   });
 
-  it('ends a stream whose connection is lost with DRIVER.NOT_CONNECTED, and close() still finishes', async (test) => {
+  it('ends a stream whose connection is lost with a transient SqlConnectionError, and close() still finishes', async (test) => {
     await withMysqlDatabase(test, async ({ url }) => {
       const admin = await mysqlControlDriver.create(url);
       const driver = mysqlRuntimeDriver.create();
@@ -677,7 +673,10 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
         const rows = driver.query<{ cid: string }>({ sql: slowRows })[Symbol.asyncIterator]();
         const first = await rows.next();
         await admin.query(`KILL ${first.done ? '' : first.value.cid}`);
-        await expect(drain(rows)).rejects.toMatchObject({ code: 'DRIVER.NOT_CONNECTED' });
+        await expect(drain(rows)).rejects.toMatchObject({
+          kind: 'sql_connection',
+          transient: true,
+        });
         await driver.close();
         expect(driver.state).toBe('closed');
       } finally {

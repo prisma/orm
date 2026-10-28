@@ -19,8 +19,9 @@ describe('MysqlControlDriver', () => {
 
     expect(() => connection.emit('error', new Error('Connection lost'))).not.toThrow();
     await expect(driver.query('SELECT 1')).rejects.toMatchObject({
-      code: 'DRIVER.NOT_CONNECTED',
-      why: 'Connection lost',
+      kind: 'sql_connection',
+      transient: true,
+      message: 'Connection lost',
     });
     expect(connection.queries).toBe(0);
   });

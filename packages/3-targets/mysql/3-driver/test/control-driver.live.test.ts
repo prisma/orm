@@ -255,7 +255,7 @@ describe('MysqlControlDriver against a MySQL server', {
     });
   });
 
-  it('reports a connection the server closed as DRIVER.NOT_CONNECTED instead of crashing', async (test) => {
+  it('reports a connection the server closed as a SqlConnectionError instead of crashing', async (test) => {
     await withMysqlDatabase(test, async ({ url }) => {
       const driver = await mysqlDriver.create(url);
       const admin = await mysqlDriver.create(url);
@@ -264,7 +264,8 @@ describe('MysqlControlDriver against a MySQL server', {
         await admin.query(`KILL ${Number(rows[0]?.id)}`);
         await new Promise((resolve) => setTimeout(resolve, 200));
         await expect(driver.query('SELECT 1')).rejects.toMatchObject({
-          code: 'DRIVER.NOT_CONNECTED',
+          kind: 'sql_connection',
+          transient: true,
         });
       } finally {
         await admin.close();
@@ -343,8 +344,9 @@ describe('MysqlControlDriver against a MySQL server', {
           }).toEqual({
             refused: expect.objectContaining({ code: 'DRIVER.CONNECTION_FAILED', fix: waysOut }),
             pooledRefused: expect.objectContaining({
-              code: 'DRIVER.CONNECTION_FAILED',
-              fix: waysOut,
+              kind: 'sql_connection',
+              transient: false,
+              message: waysOut,
             }),
             user: [{ u: `${user}@%` }],
           });

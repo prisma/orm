@@ -304,7 +304,7 @@ describe('MySQL runtime driver and its pool', () => {
         call === 'query'
           ? collect(driver.query({ sql: 'SELECT n FROM t' }))
           : driver.execute({ sql: 'DELETE FROM t' });
-      await expect(run).rejects.toMatchObject({ code: 'DRIVER.NOT_CONNECTED' });
+      await expect(run).rejects.toMatchObject({ kind: 'sql_connection', transient: true });
       outcomes.push({
         call,
         released: connection.release.mock.calls.length,
@@ -336,7 +336,7 @@ describe('MySQL runtime driver and its pool', () => {
     }).toEqual({ destroyed: 0, released: 1, drained: 1, closed: 1 });
   });
 
-  it('destroys the connection of a stream that loses it, and reports DRIVER.NOT_CONNECTED', async () => {
+  it('destroys the connection of a stream that loses it, and reports a SqlConnectionError', async () => {
     connection.behaviour = {
       kind: 'fails',
       error: Object.assign(new Error('socket has unexpectedly been closed'), {
@@ -348,7 +348,7 @@ describe('MySQL runtime driver and its pool', () => {
     };
     const driver = await connected();
     await expect(collect(driver.query({ sql: 'SELECT 1' }))).rejects.toMatchObject({
-      code: 'DRIVER.NOT_CONNECTED',
+      kind: 'sql_connection',
     });
     expect({
       destroyed: connection.destroy.mock.calls.length,
