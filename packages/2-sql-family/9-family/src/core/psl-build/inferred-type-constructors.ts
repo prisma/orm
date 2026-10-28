@@ -96,7 +96,7 @@ export function writtenTypeArguments(
   const written: string[] = [];
   for (const [index, value] of args.entries()) {
     const argument = descriptor.args?.[index];
-    if (argument?.kind !== 'value') return undefined;
+    if (argument === undefined) return undefined;
     const text = writeDataTypeValue(
       blindCast<
         JsonValue,

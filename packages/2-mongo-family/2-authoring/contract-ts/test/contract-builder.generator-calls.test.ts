@@ -100,7 +100,7 @@ describe('Mongo .onCreate and .onUpdate', () => {
       expect.objectContaining({
         code: 'CONTRACT.DEFAULT_INVALID',
         message:
-          '.onUpdate() is called on a field that already generates a value on update. Set each phase once, and do not combine .onUpdate() with a field preset, type alias or alias constant that sets it.',
+          '.onUpdate() is called on a field that already generates a value on update. Set each phase once, and do not combine .onUpdate() with a type alias or alias constant that sets it.',
         meta: { reason: 'generator-phase-set-twice', phase: 'onUpdate' },
       }),
     );

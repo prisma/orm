@@ -26,31 +26,9 @@ const codecLookup: CodecLookupWithDescriptors = {
 
 const dataTypeLookup = createDataTypeLookup([vector]);
 
-function vectorPreset(length: number): AuthoringContributions {
-  return {
-    field: {
-      embedding: {
-        kind: 'fieldPreset',
-        output: { codecId: 'test/vector@1', typeParams: { length } },
-      },
-    },
-  };
-}
-
-function interpret(length: number) {
-  return interpretSchema(
-    `model Doc {
-  id     ObjectId    @id @map("_id")
-  values embedding()
-}
-`,
-    vectorPreset(length),
-  );
-}
-
 function interpretSchema(schema: string, authoringContributions: AuthoringContributions) {
   return interpretMongoContract(schema, {
-    scalarTypeCodecIds: new Map([['ObjectId', 'mongo/objectId@1']]),
+    scalarTypes: new Map([['ObjectId', 'mongo/objectId@1']]),
     defaultFunctionRegistry: new Map(),
     codecLookup,
     dataTypes: {
@@ -66,30 +44,6 @@ function interpretSchema(schema: string, authoringContributions: AuthoringContri
 }
 
 describe('Mongo PSL field type parameters', () => {
-  it('keeps type parameters the data type accepts', () => {
-    const result = interpret(3);
-    if (!result.ok) throw new Error(JSON.stringify(result.failure));
-    expect(result.value.domain.namespaces['__unbound__']?.models['Doc']?.fields['values']).toEqual({
-      nullable: false,
-      many: false,
-      type: { kind: 'scalar', codecId: 'test/vector@1', typeParams: { length: 3 } },
-    });
-  });
-
-  it.each([0, -1, 2.5])('reports a length of %s as a diagnostic at the field', (length) => {
-    const result = interpret(length);
-    if (result.ok) throw new Error('Expected interpretation to fail');
-    expect(result.failure.diagnostics).toEqual([
-      expect.objectContaining({
-        code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-        message: expect.stringMatching(
-          /^Field "Doc\.values" uses field preset "embedding", whose type parameters are refused: test\/vector: length /,
-        ),
-        span: expect.objectContaining({ start: expect.any(Object) }),
-      }),
-    ]);
-  });
-
   it('keeps the type parameters of a bare type constructor, on a field and through a types {} alias', () => {
     const result = interpretSchema(
       `types {
@@ -122,5 +76,33 @@ model Doc {
       values: vector3,
       aliased: vector3,
     });
+  });
+
+  it('refuses a type constructor with a required argument written without a call', () => {
+    const result = interpretSchema(
+      `model Doc {
+  id     ObjectId @id @map("_id")
+  values Sized
+}
+`,
+      {
+        type: {
+          Sized: {
+            kind: 'typeConstructor',
+            args: [{ kind: 'value', dataType: 'mongo/int32', name: 'length' }],
+            output: { codecId: 'test/vector@1', typeParams: { length: { kind: 'arg', index: 0 } } },
+          },
+        },
+      },
+    );
+    expect(
+      result.ok ? [] : result.failure.diagnostics.map(({ code, message }) => ({ code, message })),
+    ).toEqual([
+      {
+        code: 'PSL_TYPE_CONSTRUCTOR_NOT_CALLED',
+        message:
+          'Field "Doc.values" uses type constructor "Sized" without arguments. Write Sized(length).',
+      },
+    ]);
   });
 });

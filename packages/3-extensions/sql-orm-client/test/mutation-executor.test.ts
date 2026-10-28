@@ -1043,7 +1043,7 @@ describe('mutation-executor', () => {
   it('executeNestedCreateMutation() M:N connect applies the execution default to the junction row', async () => {
     // `level` is a NOT NULL junction payload column whose only default is an
     // execution-time onCreate generator (no storage default), authored through
-    // the DSL via `field.generated`. The connect path must populate it before
+    // the DSL via `.onCreate(gen.testLevel())`. The connect path must populate it before
     // the INSERT, mirroring insertJunctionLink.
     const contract = buildExecutionDefaultJunctionContract();
     // The defaults applier closes over the contract the context was created

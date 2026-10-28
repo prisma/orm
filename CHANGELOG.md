@@ -6,6 +6,166 @@ Changelog tracking starts at **v0.12.0**, the first release cut after this conve
 
 <!-- New release entries go here, newest first, each mirroring docs/releases/v<version>.md under a `## v<version>` header. -->
 
+## v8.0.0-rc.21
+
+`migration plan` and `db update` can rename or delete an enum value on Postgres and SQLite, and update the rows that hold it. MongoDB contracts written in TypeScript, PSL or Prisma 6 now build through one builder and follow the same rules. A closed client's members report the failure through the promise or result they return. MySQL gets its first public packages, which can plan and apply migrations. PostgreSQL's date and time types now name the kind of value they read, and the text date and time types read ISO 8601 on every server. Field presets are removed: each is written with a type constructor or type alias that stores the same contract. When a database is at a contract outside the migration graph, `db migrate` explains why and gives recoveries that work, none of which resets the database. The upgrade guides for rc.18 and rc.19 now work on real projects.
+
+The upgrade recipes for this hop: the [app recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.21/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/) and the [extension recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.21/skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/). Each breaking change below names the change ids to look for in them. After upgrading, run `prisma contract emit` once, so a contract that an extension such as Supabase stamps with its version matches the installed package (`contract-artifacts-restamp` in the app recipe).
+
+## Breaking changes
+
+- **A client member that returns a promise or a result rejects instead of throwing at the call.** On `postgres()`, `sqlite()`, a `supabase()` role-bound client and a transaction, `query`, `execute`, `prepare`, `transaction`, ORM calls and a prepared statement's `query` and `execute` now report a closed client, a failed connection or an ended transaction through what they return. The promise rejects, or the result rejects when it is awaited or read. Error codes and messages do not change. So `.catch(handle)` and `Promise.allSettled` now see the error, but a `try`/`catch` around a call without `await` no longer catches it: add `await`. `db.runtime()` still throws at the call, and so does a mistake in the call itself. Extension authors: `lazyActivitySource` and `delegatingActivitySource` now reject from `startActivity` and `planContentHash` when their source throws. See `client-members-reject-instead-of-throwing` in the [app recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.21/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/), and `client-members-reject-instead-of-throwing` and `lazy-activity-source-rejects` in the [extension recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.21/skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/). ([#30840](https://github.com/prisma/orm/pull/30840))
+
+  Before:
+
+  ```ts
+  try {
+    db.transaction(work); // threw at the call after close(), so the catch ran
+  } catch (error) {
+    handle(error);
+  }
+  ```
+
+  After:
+
+  ```ts
+  try {
+    await db.transaction(work); // the returned promise rejects; await it to catch the error
+  } catch (error) {
+    handle(error);
+  }
+  ```
+
+- **Removing an enum value is now asked about, like removing a model or a field.** On Postgres and SQLite, when the contract removes an enum member or changes the value it stores, `migration plan` and `db update` ask what the change means and rewrite the rows that hold the old value. A script that runs without a terminal fails with `CLI.CONSENT_REQUIRED` until you answer with `--rename Status.ARCHIVED:Status.RETIRED` or `--delete Status.ARCHIVED`. Before, Postgres failed at apply when a row held the old value, and SQLite planned nothing. Native Postgres enums (`pg.enum(...)`) are unchanged. Extension authors: renames and migration subjects gain an `enumValue` kind, and three optional fields let a target say how to keep the data a removed value would lose. See `removed-enum-value-questions` in the [app recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.21/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/), and `enum-value-rename-statement` and `rows-holding-value-and-keep-data-edit` in the [extension recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.21/skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/). ([#30849](https://github.com/prisma/orm/pull/30849))
+
+- **MongoDB contract type names and `mongoContract` options change.** `mongoContract(schemaPath, options)` now requires `options.target`, the MongoDB target pack; a config written with `defineConfig` from `@prisma/orm-mongo/config` needs no change. The type of the object you pass to `defineContract` is renamed from `ContractDefinition` to `ContractInput`, as in SQL. `MongoModelDefinition` is removed: write `ContractModel<MongoModelStorage>`. Extension authors: `loadContractSource` no longer takes `onWarning` and returns `{ contract, warnings }`, and a failed emit carries `sourceWarnings`. See `mongo-contract-target-option`, `mongo-contract-input` and `mongo-model-definition-removed` in the [app recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.21/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/), and the same ids plus `contract-source-warnings` in the [extension recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.21/skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/). ([#30846](https://github.com/prisma/orm/pull/30846))
+
+  Before:
+
+  ```ts
+  import type { ContractDefinition } from '@prisma/orm-mongo/contract-builder';
+
+  const contract = mongoContract('./prisma/schema.prisma');
+  ```
+
+  After:
+
+  ```ts
+  import type { ContractInput } from '@prisma/orm-mongo/contract-builder';
+  import mongoTargetPack from '@prisma/orm-mongo/target/pack';
+
+  const contract = mongoContract('./prisma/schema.prisma', { target: mongoTargetPack });
+  ```
+
+- **Every MongoDB contract source applies the same rules, so some contracts are now refused.** `defineContract` now refuses what PSL refused: a discriminator that is optional, a list or not text; a variant value the discriminator cannot hold; a listed variant no model declares; and a variant stored in another collection than its base. Every source refuses an index MongoDB would refuse, a value object field typed by an undeclared enum, and a variant field that overwrites or restates a base field differently. PSL also refuses a duplicate index in one collection. Some contracts are newly accepted, such as an optional field that a type alias or generator fills. A Prisma 6 schema with two identical indexes in one collection now gives one index, so its storage hash changes: run `prisma contract emit`, then `prisma db sign`. See `mongo-ts-polymorphism-rules`, `mongo-index-shape-rules`, `mongo-value-object-enum-check`, `mongo-newly-accepted` and `mongo-prisma6-merged-indexes` in the [app recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.21/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/) and the [extension recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.21/skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/). ([#30846](https://github.com/prisma/orm/pull/30846))
+
+- **`close()` closes the client's runtime even when you passed in the pool, and a SQLite file that cannot be opened is a connection error.** When you pass your own `pg.Pool` or `pg.Client` to `postgres()` or `supabase()`, `close()` now also closes the client's runtime, so a runtime captured with `db.runtime()` before `close()` refuses new work. Your pool or client stays open; end it yourself. A SQLite database file that cannot be opened, such as a missing directory or a file that is not a database, is now a `SqlConnectionError` instead of a `SqlQueryError`. See `close-ends-the-client-not-your-pool` and `sqlite-open-failure-is-a-connection-error` in the [app recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.21/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/). ([#30833](https://github.com/prisma/orm/pull/30833))
+
+- **Each target names where its contract markers live.** `verifyContractSpaces` takes a required `markerLocation`. Extension authors: `SqlControlAdapter`, `MongoControlAdapter` and `ControlFamilyInstance` gain a required `markerLocation`, `SqlControlAdapter` gains an optional `holdMarkerLock`, and `SqlPlanTargetDetails.schema` is optional, with SQLite operations no longer carrying `schema: 'main'`. See `verify-contract-spaces-marker-location` in the [app recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.21/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/), and `verify-contract-spaces-marker-location`, `control-adapter-marker-location`, `control-adapter-hold-marker-lock` and `plan-target-details-schema-optional` in the [extension recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.21/skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/). ([#30841](https://github.com/prisma/orm/pull/30841))
+
+- **PostgreSQL date and time types that read more than one kind of value are renamed.** In PSL, `Timestamptz` becomes `TimestamptzTemporal`, `Timestamp` becomes `TimestampTemporal` and `Interval` becomes `IntervalParts`; the old names are errors. In TypeScript, `type.Timestamptz(...)`, `type.Timestamp(...)` and `type.Interval(...)` are renamed the same way, and `intervalColumn(...)` becomes `intervalPartsColumn(...)`. Each new name reads the same value with the same codec, so the contract and its hashes do not change. `@db.Timestamp` and `@db.Timestamptz` in a Prisma 7 schema are not affected. An `IntervalParts(p)` column is now typed as `PgInterval`, the `{ months, days, micros }` object it reads, instead of a string. The string types `Timestamp`, `Timestamptz`, `Time` and `Interval` are no longer exported from `@prisma/orm-postgres/target/codec-types`, so remove them from imports, including those in migration snapshots' `contract.d.ts`. `Temporal` fields are now typed with the `temporal-spec` package instead of a global declaration; a type test that compares a field with the global `Temporal.Instant` imports `Temporal` from `temporal-spec`. See `psl-temporal-type-renames`, `ts-temporal-type-helpers-renamed`, `interval-with-precision-typed-as-parts`, `branded-time-types-removed`, `temporal-types-from-temporal-spec` and `contract-types-list-new-aggregates` in the [app recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.21/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/) and the [extension recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.21/skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/). ([#30834](https://github.com/prisma/orm/pull/30834))
+
+  Before:
+
+  ```prisma
+  model Event {
+    id   Int            @id
+    at   Timestamptz(3)
+    span Interval
+  }
+  ```
+
+  After:
+
+  ```prisma
+  model Event {
+    id   Int                    @id
+    at   TimestamptzTemporal(3)
+    span IntervalParts
+  }
+  ```
+
+- **PostgreSQL text date and time values are ISO 8601, and every connection must use `DateStyle=ISO`.** `TimestamptzString`, `TimestampString`, `DateString`, `TimeString` and `Timetz` read and write ISO 8601, the form the contract stores, instead of the text PostgreSQL prints in the session's time zone and date style. A `TimestamptzString` that read `2024-01-01 01:00:00+01` on a server in `Europe/Berlin` now reads `2024-01-01T00:00:00Z` on every server. A literal default or enum member on these types must be written in that form, or `contract emit` refuses it with `CONTRACT.DEFAULT_INVALID`. Their `now()` values round down to the column's precision, so the execution hash changes where such a column has a `now()` generator. The PostgreSQL driver ensures `DateStyle=ISO` on every connection, including a `pg.Pool` or `pg.Client` you pass in; a connection that prints another style makes every date and time read fail with `RUNTIME.DATE_STYLE_NOT_ISO`. Extension authors: a target can declare `sessionSettings`, and a driver receives them as the second argument of `create` or in its connect options and must ensure them on every connection. See `iso-string-date-time-values` and `date-style-iso-required` in the [app recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.21/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/), and `driver-ensures-target-session-settings` in the [extension recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.21/skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/). ([#30834](https://github.com/prisma/orm/pull/30834))
+
+  Before:
+
+  ```ts
+  scheduledAt: field.column(timestamptzStringColumn).default('2024-01-15 10:30:00+00'),
+  ```
+
+  After:
+
+  ```ts
+  scheduledAt: field.column(timestamptzStringColumn).default('2024-01-15T10:30:00Z'),
+  ```
+
+- **A Prisma 7 schema's `@default(now())` is filled by the client on create.** A contract from `prisma7Schema(...)` now reads `@default(now())` as `@default(now()) @onCreate(now())`, so a create through Prisma 8 writes the current time in UTC, as Prisma 7's client did, instead of leaving the column to the database's clock in the session's time zone. Re-emit the contract and commit it: only the execution hash changes, so no migration and no `db sign` is needed. The reader also refuses two schemas Prisma 7 refuses: `now()` on a field that is not a date or time, and a function default other than `dbgenerated` on a list field. See `prisma7-schema-now-default-writes-on-create` in the [app recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.21/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/). ([#30834](https://github.com/prisma/orm/pull/30834))
+
+- **The control API checks a database's marker against the migration graph itself.** `refuseMarkerOutsideGraph` is no longer exported from `@prisma/orm-toolchain/cli/control-api`: the control client's `migrate` and `executeMigrateShowPlan` now check the marker of every contract space and fail with `MIGRATION.MARKER_MISMATCH` when it is outside the space's migration graph. `executeMigrateShowPlan` takes a required `invocation`, `{ cwd, configPath, dbGiven }`, as `migrate` does. The error's `meta` no longer has `reachableHashes`; it has `spaceId`, `markerHash`, `targetHash`, and `lastGraphHash` and `missingMigrations` when the database's ledger shows them. Projects that only run the `prisma` CLI are not affected. See `refuse-marker-outside-graph-removed`, `execute-migrate-show-plan-requires-invocation` and `marker-mismatch-meta` in the [app recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.21/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/). ([#30866](https://github.com/prisma/orm/pull/30866))
+
+  Before:
+
+  ```ts
+  const refusal = refuseMarkerOutsideGraph({ markerHash, graph });
+  if (refusal) return notOk(refusal);
+  const plan = await executeMigrateShowPlan({ ...options });
+  ```
+
+  After:
+
+  ```ts
+  const plan = await executeMigrateShowPlan({ ...options, invocation });
+  if (!plan.ok && plan.failure.code === 'MIGRATION.MARKER_MISMATCH') {
+    // plan.failure.meta: spaceId, markerHash, targetHash, lastGraphHash?, missingMigrations?
+  }
+  ```
+
+- **Field presets are removed; each is written with a type constructor or type alias that stores the same contract.** A field preset set a field's column, identity and generated values in one call, such as `id.uuidv4String()` and `temporal.createdAt()` in PSL, or `field.id.uuidv4String()`, `field.text()` and `field.temporal.createdAt()` in TypeScript. Every preset, and `field.generated(...)` with the `uuidv4()`, `ulid()` and other helpers of `@prisma/orm-framework/ids`, is removed. PSL refuses a preset with `PSL_UNRESOLVED_REFERENCE` and a message that gives the exact rewrite; TypeScript reports a missing property, and an emit of a contract that was not type-checked fails with `CONTRACT.FIELD_HELPER_UNKNOWN`. The replacement stores the same contract with the same hashes, so nothing is re-emitted, signed or migrated. MongoDB's `field.date()`, `field.string()` and other codec helpers are not presets and stay. Extension authors: the `authoring.field` namespace, the `fieldPreset` kind, the `option`, `number` and `object` argument kinds and the helpers that built presets are removed, a pack that still contributes `authoring.field` is refused with `CONTRACT.PACK_CONTRIBUTION_INVALID`, and `PSL_PRESET_ON_VARIANT_FIELD` and `PSL_PRESET_CONFLICT` are renamed `PSL_GENERATOR_ON_VARIANT_FIELD` and `PSL_GENERATOR_CONFLICT`. See `psl-field-presets-removed`, `ts-field-presets-removed` and `ts-field-generated-removed` in the [app recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.21/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/), and `authoring-field-namespace-removed`, `argument-kinds-removed`, `preset-builders-removed`, `preset-diagnostics-removed` and `field-presets-in-extension-code` in the [extension recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.21/skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/). ([#30845](https://github.com/prisma/orm/pull/30845))
+
+  Before:
+
+  ```prisma
+  model Post {
+    id        id.ulid()
+    authorId  ulid()
+    createdAt temporal.createdAt()
+  }
+  ```
+
+  After:
+
+  ```prisma
+  model Post {
+    id        Ulid @id @onCreate(ulid())
+    authorId  Ulid
+    createdAt temporal.CreatedAt
+  }
+  ```
+
+## Features
+
+- `migration plan` and `db update` can rename or delete an enum value on Postgres and SQLite. `--rename Status.ARCHIVED:Status.RETIRED` changes the stored value in every column and list that holds it, and `--delete Status.ARCHIVED` sets it to NULL in optional columns and takes it out of lists. On a required column that still holds the value, the apply stops before changing anything and says how to keep the data. `migration.ts` gains `this.replaceStoredValue` and `this.removeStoredValue`. ([#30849](https://github.com/prisma/orm/pull/30849))
+- MySQL has its first public packages, `@prisma/orm-mysql` and `@prisma/orm-target-mysql`, as an early preview. They can emit a contract, and `migration plan`, `db migrate`, `db verify` and `db sign` work against MySQL 8.4 for creating and dropping tables, columns, indexes, unique constraints and foreign keys. Other schema changes are refused with a message that they are not supported on MySQL yet, and queries are not available yet. The new `prisma-8-demo-mysql` example shows the workflow. ([#30841](https://github.com/prisma/orm/pull/30841), [#30856](https://github.com/prisma/orm/pull/30856))
+- A failed migration on a target whose schema changes cannot be rolled back, such as MySQL or MongoDB, says which contract space failed and what stayed applied. Running `db migrate` again skips what was applied and finishes the rest. ([#30841](https://github.com/prisma/orm/pull/30841))
+- A contract source's warnings now reach `contract emit`, `contract print` and the control client even when the source then fails. Before, they were dropped. ([#30846](https://github.com/prisma/orm/pull/30846))
+- PostgreSQL has three new explicit date and time types: `TimestampJsDate(p?)` reads a `timestamp` column as a JavaScript `Date`, `TimestampInstant(p?)` reads it as a `Temporal.Instant`, both as UTC, and `IntervalString(p?)` reads an `interval` as an ISO 8601 duration such as `P1Y2M`. `DateTemporal` and `TimeTemporal` are added as the explicit names of what `Date` and `Time` read today. An enum on `TimestampString`, `TimestamptzString` or `Timetz` is now allowed. ([#30834](https://github.com/prisma/orm/pull/30834))
+- Every SQL target has a type alias for each generated identifier's column: `sql.UuidString`, `sql.Ulid`, `sql.Nanoid`, `sql.Cuid2` and `sql.Ksuid`, which Postgres also names at the top level, such as `Ulid`. In TypeScript they are `type.sql.Ulid()` and, on Postgres, `type.Ulid()`. Every SQL target also has `sql.Char(n)`, which SQLite had no way to write before. `@prisma/orm-postgres/contract-builder` exports `type` beside `field` and `gen`, so a query fragment declares a field as `field.column(type.TimestamptzTemporal())`. See `identifier-type-aliases`, `sqlite-sql-char` and `postgres-contract-builder-exports-type` in the [app recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.21/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/). ([#30845](https://github.com/prisma/orm/pull/30845))
+
+## Fixes
+
+- When a database's marker names a contract that no migration starts or ends at, for example after a migration it applied was deleted or planned again, `db migrate` fails with `MIGRATION.MARKER_MISMATCH` and now says why: the last contract of the migration graph the database reached, and the migrations it applied after that which are no longer on disk or were planned again. Its next actions give two recoveries that work: `db update`, for a database whose migration history does not need to be kept, and new migrations, for one that changes only through migrations, such as production. Before, it suggested `migration plan --from` and `migration ref set`, which the CLI refuses. `db migrate`, `db migrate --show` and the control API now make this check for every contract space and return the same error, and no error, document or skill recommends resetting a database. ([#30866](https://github.com/prisma/orm/pull/30866))
+- The upgrade guides and scripts for rc.18 → rc.19 and rc.19 → rc.20 now work on real projects, so users who upgrade from rc.18 or rc.19 get working guides through `prisma skills sync`. The main fixes: ([#30855](https://github.com/prisma/orm/pull/30855))
+  - Every script skips hidden directories, such as `.next/` and other worktrees.
+  - `contract-from-json` moves a client call whose result is destructured.
+  - `remove-nocheck` rewrites stored PostgreSQL defaults into the rc.19 form, and takes `--default` for a default it cannot convert.
+  - Both guides say how to recover a database that is behind on migrations: `prisma db sign --contract <last applied migration>`, then `prisma db migrate`.
+  - Detection patterns no longer stall on large generated files.
+- On SQLite, a SQL builder or ORM query with parameters in a join or derived table and also in `WHERE`, or in `GROUP BY` and also in `HAVING` or `ORDER BY`, bound its values to the wrong placeholders and returned wrong rows. Each value now binds to its own numbered placeholder. ([#30853](https://github.com/prisma/orm/pull/30853))
+- The Postgres driver recognizes a lost connection from the error's code and the driver's own state, not from its message. Errors such as SQLSTATE class `08`, `57P01`–`57P05`, `EPIPE` and `EAI_AGAIN` are now connection errors. For a `pg.Client` you pass in, two queries arriving at once share one connection attempt, and a failed connection attempt is reported on every later use instead of hanging. ([#30833](https://github.com/prisma/orm/pull/30833))
+- Postgres messages about contract markers named the table `_prisma_marker`; they now name `prisma_contract.marker`, where the markers are. SQLite messages that name an object say `user` where they said `main.user`. ([#30841](https://github.com/prisma/orm/pull/30841))
+- `Temporal` fields were typed `any` in a project without a `Temporal` polyfill's global declarations. They are now typed through the `temporal-spec` package. ([#30834](https://github.com/prisma/orm/pull/30834))
+- In a PSL schema with relations, a field whose type does not resolve was dropped, and the contract build then failed with an unrelated relation error such as `CONTRACT.RELATION_INVALID`. The build now stops first and reports the field's own diagnostic. On SQLite, an unknown bare type name such as `Ulid` suggests the name in a namespace: `Did you mean sql.Ulid?`. ([#30845](https://github.com/prisma/orm/pull/30845))
+
 ## v8.0.0-rc.20
 
 ORM commands run on `@prisma/cli-engine` 0.9.0, so a piped command prints tab-separated data lines and JSON needs `--json`. A type alias in PSL can set `@default`, `@onCreate` and `@onUpdate`, and the contract stores each column's real type instead of the alias name. Postgres migrations can rename, move and remove namespaces, and can change a relation's actions or a primary key. A failed migration check now names the object it expected.

@@ -2,16 +2,16 @@ import type { CreateInput } from '@internal/mongo-orm';
 import { expectTypeOf, test } from 'vitest';
 import { defineContract } from '../src/exports/contract-builder';
 
-const contract = defineContract({}, ({ field, model }) => ({
+const contract = defineContract({}, ({ field, model, gen }) => ({
   models: {
     Post: model('Post', {
       collection: 'posts',
       fields: {
         _id: field.objectId(),
         title: field.string(),
-        createdAt: field.temporal.createdAt(),
-        updatedAt: field.temporal.updatedAt(),
-        touchedAt: field.temporal.timestamp(undefined, 'now'),
+        createdAt: field.date().onCreate(gen.now()),
+        updatedAt: field.date().onCreate(gen.now()).onUpdate(gen.now()),
+        touchedAt: field.date().onUpdate(gen.now()),
         publishedAt: field.date(),
       },
     }),

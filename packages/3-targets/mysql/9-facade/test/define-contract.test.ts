@@ -27,4 +27,23 @@ describe('defineContract for MySQL', () => {
       role: (table?.columns['role'] as { readonly typeParams?: unknown } | undefined)?.typeParams,
     }).toEqual({ target: 'mysql', kind: 'mysql-namespace', role: { values: ['USER', 'ADMIN'] } });
   });
+
+  it('stores a type.sql.Ulid() column as the type.sql.Char(26) column', () => {
+    const columnOf = (written: 'alias' | 'char') =>
+      defineContract({}, ({ field: f, model: m, type, gen }) => ({
+        models: {
+          User: m('User', {
+            fields: {
+              id: f
+                .column(written === 'alias' ? type.sql.Ulid() : type.sql.Char(26))
+                .id()
+                .onCreate(gen.ulid()),
+            },
+          }),
+        },
+      })).storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries.table?.['User']?.columns['id'];
+    const alias = columnOf('alias');
+    expect(alias).toMatchObject({ codecId: 'sql/char@1' });
+    expect(alias).toEqual(columnOf('char'));
+  });
 });

@@ -15,21 +15,27 @@ const pgTimestamptzString = {
 type EnumHandle = ReturnType<typeof enumType>;
 
 function contractWithEnum(handle: EnumHandle) {
-  return defineContract({ enums: { [handle.enumName]: handle } }, ({ field, model }) => ({
-    models: {
-      Item: model('Item', {
-        fields: { id: field.id.uuidv4String(), value: field.namedType(handle) },
-      }),
-    },
-  }));
+  return defineContract(
+    { enums: { [handle.enumName]: handle } },
+    ({ field, model, gen, type }) => ({
+      models: {
+        Item: model('Item', {
+          fields: {
+            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+            value: field.namedType(handle),
+          },
+        }),
+      },
+    }),
+  );
 }
 
 function storedDefaults(): Record<string, unknown> {
-  const contract = defineContract({}, ({ field, model }) => ({
+  const contract = defineContract({}, ({ field, model, gen, type }) => ({
     models: {
       Item: model('Item', {
         fields: {
-          id: field.id.uuidv4String(),
+          id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
           ratio: field.column(pgNumeric).default('01.5'),
           zero: field.column(pgNumeric).default('-0'),
           host: field.column(pgInet).default('10.0.0.1/32'),

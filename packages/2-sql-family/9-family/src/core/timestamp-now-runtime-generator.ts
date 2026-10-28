@@ -12,8 +12,7 @@ import type { RuntimeMutationDefaultGenerator } from '@internal/framework-compon
  * semantics: one `new Date()` per lowered mutation, not per row.
  *
  * Lives in its own module, exported only through `exports/runtime.ts`,
- * so the control-plane `timestamp-now-generator.ts` (descriptor +
- * authoring presets) stays free of runtime-plane imports.
+ * so the control plane stays free of runtime-plane imports.
  */
 export function timestampNowRuntimeGenerator(): RuntimeMutationDefaultGenerator {
   return {

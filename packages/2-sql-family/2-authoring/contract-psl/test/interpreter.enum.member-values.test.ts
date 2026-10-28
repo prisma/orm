@@ -21,7 +21,6 @@ function interpret(schema: string) {
     controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
     authoringContributions: {
       entityTypes: testEnumEntityContributions,
-      field: {},
       type: {},
       pslBlockDescriptors: { enum: testEnumPslBlockDescriptor },
       dataTypes: fixtureDataTypeSupport.entries,

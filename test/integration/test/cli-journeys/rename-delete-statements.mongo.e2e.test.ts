@@ -15,7 +15,7 @@ import { timeouts } from '@repo/test-utils';
 import { type Db, MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { fixtureAppDir } from '../utils/cli-test-helpers';
+import { fixtureAppDir, writeProjectManifest } from '../utils/cli-test-helpers';
 import {
   type EngineCommandResult,
   engineError,
@@ -28,6 +28,7 @@ import {
   runMigrate,
   runMigrationPlan,
 } from '../utils/journey-test-helpers';
+import { writeMongoPslConfig } from '../utils/journey-workspace-helpers';
 
 const BEFORE = `// use prisma-8
 
@@ -121,32 +122,8 @@ function setupProject(connectionString: string): JourneyContext {
   const outputDir = join(testDir, 'output');
   mkdirSync(outputDir, { recursive: true });
   mkdirSync(join(testDir, 'migrations'), { recursive: true });
-  writeFileSync(
-    join(testDir, 'package.json'),
-    JSON.stringify({
-      name: 'mongo-renames-journey',
-      private: true,
-      type: 'module',
-      dependencies: { '@prisma/orm-mongo': 'workspace:0.16.0' },
-    }),
-  );
-  const configPath = join(testDir, 'prisma.config.ts');
-  writeFileSync(
-    configPath,
-    [
-      "import { defineConfig as ormConfig } from '@prisma/orm-mongo/config';",
-      "import { definePrismaConfig } from '@prisma/cli-engine';",
-      '',
-      'export default definePrismaConfig({',
-      '  orm: ormConfig({',
-      "    contract: './contract.prisma',",
-      "    output: 'output',",
-      `    db: { connection: ${JSON.stringify(connectionString)} },`,
-      '  }),',
-      '});',
-      '',
-    ].join('\n'),
-  );
+  writeProjectManifest(testDir);
+  const configPath = writeMongoPslConfig(testDir, connectionString);
   return { testDir, configPath, outputDir };
 }
 

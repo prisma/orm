@@ -5,10 +5,39 @@ application installs. It has a PSL contract with two models, a relation and an
 enum, and a committed migration written by `prisma migration plan`.
 
 MySQL support is early, and this example grows with it. Today it shows the
-control plane: the contract emits, the committed migration applies to an empty
-MySQL database, `db verify` and `db sign` pass, and planning again from the
-unchanged contract writes nothing. Reads, writes and MariaDB will be added here
-as each lands, and each is done only when this example runs it in CI.
+control plane and reads: the contract emits, the committed migration applies to
+an empty MySQL database, `db verify` and `db sign` pass, planning again from the
+unchanged contract writes nothing, and the ORM and the SQL builder read the
+seeded rows, includes among them. Writes and MariaDB will be added here as each
+lands, and each is done only when this example runs it in CI.
+
+## Reading
+
+`src/prisma/db.ts` builds the client from `@prisma/orm-mysql/runtime` and the
+emitted contract, read with `contractFromJson` from `@prisma/orm-mysql/static`:
+
+```ts
+import mysql from '@prisma/orm-mysql/runtime';
+import { contractFromJson } from '@prisma/orm-mysql/static';
+
+const db = mysql({ contract: contractFromJson<Contract>(contractJson), url });
+```
+
+`src/orm-client/` holds the ORM reads and `src/queries/` the SQL builder read, one file each. Each read is one SQL statement:
+
+```ts
+// Admins ordered by email
+await db.orm.User.where({ role: 'ADMIN' }).orderBy((u) => u.email.asc()).limit(2).all();
+// A user with their posts, in the order the include asks for
+await db.orm.User.include('posts', (posts) => posts.orderBy((p) => p.title.desc())).first({ id: 1 });
+// Every post with its author
+await db.orm.Post.include('author').all();
+// The SQL builder
+await db.query(db.sql.User.select('id', 'email').where((f, fns) => fns.eq(f.role, 'ADMIN')).build());
+```
+
+The ORM cannot write to MySQL yet, so `src/seed.ts` inserts the demo rows
+through the raw SQL lane, `db.raw.sql`.
 
 ## Setup
 
@@ -42,12 +71,13 @@ which contract the database is at.
 | `db:migrate` | `prisma db migrate` | Applies the migrations the database does not have yet |
 | `db:verify` | `prisma db verify` | Checks the database's marker and schema against the contract |
 | `db:sign` | `prisma db sign` | Signs a database whose schema satisfies the contract |
-| `test` | `vitest run` | The whole flow against a fresh database at `MYSQL_URL` |
+| `test` | `vitest run` | The whole flow against fresh databases at `MYSQL_URL` |
 
-`pnpm test` uses only the server part of `MYSQL_URL`: it creates a uniquely
-named database on that server, runs `db migrate`, `db verify`, `db sign` and `migration plan` against it
-through the `prisma` CLI, and drops the database. Without `MYSQL_URL` the tests
-are skipped.
+`pnpm test` uses only the server part of `MYSQL_URL`. For each test file it
+creates a uniquely named database on that server and drops it afterwards.
+`test/migrations.test.ts` runs `db migrate`, `db verify`, `db sign` and
+`migration plan` through the `prisma` CLI. `test/reads.test.ts` migrates with
+`db migrate`, seeds the rows and checks the whole result of each read. Without `MYSQL_URL` the tests are skipped.
 
 ## What the migration creates
 
@@ -77,5 +107,11 @@ index on a `text` column without a key length.
 - `prisma/contract.prisma` — the contract (User, Post, Role)
 - `prisma.config.ts` — CLI config; reads the connection from `MYSQL_URL`
 - `migrations/` — the committed migration and its contract snapshot
-- `test/migrations.test.ts` — the end-to-end flow
-- `test/database.ts` — creates and drops a database for each test run
+- `src/prisma/db.ts` — the client
+- `src/orm-client/` — the ORM reads, one file each
+- `src/queries/` — the SQL builder read
+- `src/seed.ts` — the demo rows
+- `test/migrations.test.ts` — the migration flow
+- `test/reads.test.ts` — the reads against a migrated, seeded database
+- `test/cli.ts` — runs the `prisma` CLI on a copy of the example
+- `test/database.ts` — creates and drops a database for each test file

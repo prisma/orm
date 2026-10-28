@@ -1,5 +1,7 @@
 # ADR 246 — Option arguments and select templates for authoring helpers
 
+**Status:** Superseded 2026-10-22 by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md), except its two omission rules. Field presets, the `option` argument kind and the `select` template node were removed. The two omission rules, no empty `typeParams` and no empty `executionDefaults`, stand as canonicalization rules in [Data Contract](../subsystems/1.%20Data%20Contract.md#deterministic-emission). The content below is preserved as a historical record.
+
 ## At a glance
 
 Field presets take enumerated arguments, spelled as bare tokens in PSL and string literals in TypeScript, declared with an `option` argument kind and dispatched to fragments of the preset's output by `select` template nodes. Two omission rules complete the design: an argument the author does not supply leaves no trace in the contract.

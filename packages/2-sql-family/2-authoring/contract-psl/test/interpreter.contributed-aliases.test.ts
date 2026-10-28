@@ -13,7 +13,6 @@ const now = { name: 'now', args: {} } as const;
 
 const authoringContributions = {
   entityTypes: {},
-  field: {},
   pslBlockDescriptors: {},
   modelAttributes: {},
   type: {

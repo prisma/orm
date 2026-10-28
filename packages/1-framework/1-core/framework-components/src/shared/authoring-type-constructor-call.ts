@@ -62,7 +62,7 @@ export function authoringTypeConstructorArguments(
   const args: unknown[] = [];
   for (const [key, template] of Object.entries(descriptor.output.typeParams ?? {})) {
     const value = output.typeParams?.[key];
-    if (value !== undefined && isAuthoringArgRef(template) && template.path === undefined) {
+    if (value !== undefined && isAuthoringArgRef(template)) {
       args[template.index] = value;
     }
   }

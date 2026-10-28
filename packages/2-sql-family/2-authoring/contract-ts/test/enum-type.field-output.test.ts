@@ -15,14 +15,6 @@ const sqlFamilyPack = {
   id: 'sql',
   familyId: 'sql',
   version: '0.0.1',
-  authoring: {
-    field: {
-      text: {
-        kind: 'fieldPreset',
-        output: { codecId: 'pg/text@1' },
-      },
-    },
-  },
 } as const satisfies FamilyPackRef<'sql'>;
 
 const postgresTargetPack = {

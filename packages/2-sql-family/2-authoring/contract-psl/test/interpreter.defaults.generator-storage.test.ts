@@ -19,7 +19,7 @@ describe('generator defaults never mutate storage — the type position is the o
     Uuid: { kind: 'typeConstructor', output: { codecId: 'pg/uuid@1' } },
     Char: {
       kind: 'typeConstructor',
-      args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, optional: true }],
+      args: [{ kind: 'value', dataType: 'pg/int4', name: 'length', optional: true }],
       output: {
         codecId: 'sql/char@1',
         typeParams: { length: { kind: 'arg', index: 0 } },
@@ -28,7 +28,6 @@ describe('generator defaults never mutate storage — the type position is the o
   } satisfies AuthoringTypeNamespace;
   const authoringContributions = {
     entityTypes: {},
-    field: {},
     pslBlockDescriptors: {},
     modelAttributes: {},
     type: authoringTypes,

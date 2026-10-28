@@ -1,5 +1,4 @@
 import type {
-  AuthoringFieldPresetDescriptor,
   AuthoringTypeAliasDescriptor,
   AuthoringTypeConstructorDescriptor,
 } from '@internal/framework-components/authoring';
@@ -26,7 +25,7 @@ const text: AuthoringTypeConstructorDescriptor = {
 
 const varchar: AuthoringTypeConstructorDescriptor = {
   kind: 'typeConstructor',
-  args: [{ kind: 'number', name: 'length' }],
+  args: [{ kind: 'value', dataType: 'fixture/int', name: 'length' }],
   output: { codecId: 'fixture/varchar@1' },
 };
 
@@ -49,11 +48,6 @@ const dated: AuthoringTypeAliasDescriptor = {
   output: { type: { codecId: 'fixture/date@1' }, onCreate: { name: 'now', args: {} } },
 };
 
-const createdAt: AuthoringFieldPresetDescriptor = {
-  kind: 'fieldPreset',
-  output: { codecId: 'fixture/timestamp@1' },
-};
-
 function context(): BinderContext {
   return {
     authoringContributions: {
@@ -63,7 +57,6 @@ function context(): BinderContext {
         Timestamp: timestamp,
         temporal: { UpdatedAt: updatedAt, Dated: dated },
       },
-      field: { temporal: { createdAt } },
       entityTypes: {},
       attributeSpecs: { model: {}, field: {} },
       modelAttributes: {},
@@ -136,11 +129,10 @@ types {
     });
   });
 
-  it('refuses a base that is another alias, a preset, a constructor that needs arguments, or missing', () => {
+  it('refuses a base that is another alias, a constructor that needs arguments, or missing', () => {
     const { aliases, reported } = resolve(`types {
   A = String @default("a")
   B = A
-  C = temporal.createdAt()
   D = VarChar
   E = Missing()
 }`);
@@ -154,19 +146,14 @@ types {
           line: 3,
         },
         {
-          code: 'PSL_UNSUPPORTED_NAMED_TYPE_CONSTRUCTOR',
-          message: 'Type alias "C" references unsupported constructor "temporal.createdAt"',
-          line: 4,
-        },
-        {
           code: 'PSL_UNSUPPORTED_NAMED_TYPE_BASE',
           message: 'Type alias "D" references unsupported base type "VarChar"',
-          line: 5,
+          line: 4,
         },
         {
           code: 'PSL_UNSUPPORTED_NAMED_TYPE_CONSTRUCTOR',
           message: 'Type alias "E" references unsupported constructor "Missing"',
-          line: 6,
+          line: 5,
         },
       ],
     });

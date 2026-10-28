@@ -5,8 +5,7 @@
 // package cannot resolve degrades to `any` under `skipLibCheck`, which makes
 // every codec-resolved type assertion vacuous.
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import { uuidv4 } from '@internal/ids';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import { defineContract, field, gen, model, rel, type } from '@internal/postgres/contract-builder';
 
 const UserBase = model('User', {
   fields: {
@@ -48,7 +47,7 @@ const Profile = model('Profile', {
 
 const Article = model('Article', {
   fields: {
-    id: field.generated(uuidv4()).id(),
+    id: field.column(type.Char(36)).onCreate(gen.uuid()).id(),
     title: field.column(textColumn),
   },
 }).sql({ table: 'articles' });

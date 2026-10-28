@@ -80,10 +80,29 @@ describe('MysqlControlDriver against a MySQL server', {
     });
   });
 
-  it('refuses two statements in one query even when the URL asks for multiple statements', async (test) => {
+  it('refuses a charset in the URL', async (test) => {
+    await withMysqlDatabase(test, async ({ url }) => {
+      const latin1 = new URL(url);
+      latin1.searchParams.set('charset', 'latin1');
+      await expect(mysqlDriver.create(latin1.toString())).rejects.toMatchObject({
+        code: 'RUNTIME.BINDING_INVALID',
+      });
+    });
+  });
+
+  it('refuses a URL that asks for multiple statements', async (test) => {
     await withMysqlDatabase(test, async ({ url }) => {
       const withMultipleStatements = new URL(url);
       withMultipleStatements.searchParams.set('multipleStatements', 'true');
+      await expect(mysqlDriver.create(withMultipleStatements.toString())).rejects.toMatchObject({
+        code: 'RUNTIME.BINDING_INVALID',
+      });
+    });
+  });
+
+  it('refuses two statements in one query even when the URL flags multiple statements', async (test) => {
+    await withMysqlDatabase(test, async ({ url }) => {
+      const withMultipleStatements = new URL(url);
       withMultipleStatements.searchParams.set('flags', 'MULTI_STATEMENTS');
       const driver = await mysqlDriver.create(withMultipleStatements.toString());
       try {
@@ -97,12 +116,29 @@ describe('MysqlControlDriver against a MySQL server', {
     });
   });
 
-  it('sends an object parameter as a string, not as SQL', async (test) => {
+  it('refuses an object parameter rather than writing it as SQL', async (test) => {
     await withMysqlDatabase(test, async ({ url }) => {
       const driver = await mysqlDriver.create(url);
       try {
-        expect(await driver.query('SELECT ? AS v', [{ id: 1 }])).toEqual({
-          rows: [{ v: '[object Object]' }],
+        await expect(driver.query('SELECT ? AS v', [{ id: 1 }])).rejects.toMatchObject({
+          code: 'RUNTIME.AST_INVALID',
+        });
+      } finally {
+        await driver.close();
+      }
+    });
+  });
+
+  it('fills only the placeholders outside quoted text, so a value cannot leave its literal', async (test) => {
+    await withMysqlDatabase(test, async ({ url }) => {
+      const driver = await mysqlDriver.create(url);
+      try {
+        const value = "' OR 1=1 OR '";
+        expect(await driver.query("SELECT 'why?' AS q, ? AS v /* ? */ -- ?\n", [value])).toEqual({
+          rows: [{ q: 'why?', v: value }],
+        });
+        await expect(driver.query("SELECT '?' AS q", [value])).rejects.toMatchObject({
+          code: 'RUNTIME.PARAM_PLACEHOLDER_MISMATCH',
         });
       } finally {
         await driver.close();
@@ -126,6 +162,55 @@ describe('MysqlControlDriver against a MySQL server', {
           v: value,
           flagged: false,
         });
+      } finally {
+        await driver.close();
+      }
+    });
+  });
+
+  it('clears ANSI_QUOTES, so a double-quoted string is read as the driver scans it', async (test) => {
+    await withMysqlDatabase(test, async ({ url }) => {
+      const driver = await connectWhileServerDefaultIncludes(url, 'ANSI_QUOTES');
+      try {
+        const rows = await driver
+          .query<Record<string, string>>(
+            "SELECT 'leaked' AS \"r\\\", 'x\"' AS s FROM DUAL WHERE FALSE OR ' = ?1 OR ' -- '\n",
+            [' OR TRUE OR '],
+          )
+          .then(
+            (result) => result.rows,
+            () => [],
+          );
+        const { rows: mode } = await driver.query<{ ansi: string }>(
+          "SELECT FIND_IN_SET('ANSI_QUOTES', @@SESSION.sql_mode) AS ansi",
+        );
+        expect({ rows, mode }).toEqual({ rows: [], mode: [{ ansi: '0' }] });
+      } finally {
+        await driver.close();
+      }
+    });
+  });
+
+  it('runs a statement with values as a prepared statement, and SQL with none as text', async (test) => {
+    await withMysqlDatabase(test, async ({ url }) => {
+      const driver = await mysqlDriver.create(url);
+      try {
+        const executed = async () => {
+          const { rows } = await driver.query<{ Value: string }>(
+            "SHOW SESSION STATUS LIKE 'Com_stmt_execute'",
+          );
+          return Number(rows[0]?.Value);
+        };
+        const start = await executed();
+        const withValue = await driver.query('SELECT ? AS v', ["it's"]);
+        const afterValue = await executed();
+        await driver.query('SELECT 1 AS v');
+        const afterConstant = await executed();
+        expect({
+          withValue: withValue.rows,
+          prepared: afterValue - start,
+          constant: afterConstant - afterValue,
+        }).toEqual({ withValue: [{ v: "it's" }], prepared: 1, constant: 0 });
       } finally {
         await driver.close();
       }

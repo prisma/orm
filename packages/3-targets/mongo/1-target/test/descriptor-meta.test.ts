@@ -33,30 +33,7 @@ describe('mongoTargetDescriptorMeta', () => {
   });
 });
 
-describe('mongo temporal field presets', () => {
-  const temporal = mongoTargetDescriptorMeta.authoring.field.temporal;
-  const storage = { codecId: 'mongo/date@1' };
-  const timestampNow = { kind: 'generator', id: 'timestampNow' };
-
-  it('createdAt fills a date on create', () => {
-    expect(temporal.createdAt).toEqual({
-      kind: 'fieldPreset',
-      output: { ...storage, executionDefaults: { onCreate: timestampNow } },
-    });
-  });
-
-  it('updatedAt fills a date on create and on update', () => {
-    expect(temporal.updatedAt).toEqual({
-      kind: 'fieldPreset',
-      output: { ...storage, executionDefaults: { onCreate: timestampNow, onUpdate: timestampNow } },
-    });
-  });
-
-  it('timestamp takes optional onCreate and onUpdate options and no precision', () => {
-    expect(temporal.timestamp.args.map((arg) => arg.name)).toEqual(['onCreate', 'onUpdate']);
-    expect(temporal.timestamp.output).toMatchObject(storage);
-  });
-
+describe('mongo control-plane generators', () => {
   it('registers the timestampNow generator for control-plane checks', () => {
     expect(
       mongoTargetDescriptorMeta.controlMutationDefaults.generatorDescriptors.map((d) => d.id),
@@ -70,7 +47,7 @@ describe('mongo temporal field presets', () => {
 });
 
 describe('mongo temporal type aliases', () => {
-  it('generate on create, and on update, what the matching presets generate', () => {
+  it('generate timestampNow on create, and on update', () => {
     const { CreatedAt, UpdatedAt } = mongoTargetDescriptorMeta.authoring.type.temporal;
     const field = { codecId: 'mongo/date@1', typeParams: undefined, length: undefined };
     const generatorFunctions = assembleGeneratorFunctions([mongoTargetDescriptorMeta]);

@@ -1,7 +1,5 @@
 import { readFile } from 'node:fs/promises';
 import type { ContractConfig, ContractSourceDiagnostic } from '@internal/config/config-types';
-import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
-import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
 import {
   buildSymbolTable,
@@ -26,12 +24,6 @@ export interface MongoContractOptions {
   readonly output?: string;
   /** The target's default codec ids for an `enum` block that omits `@@type`. */
   readonly enumInferenceCodecs?: { readonly text: string; readonly int: string };
-}
-
-function collectScalarTypeCodecIds(namespace: AuthoringTypeNamespace): ReadonlyMap<string, string> {
-  return new Map(
-    [...collectScalarTypeConstructors(namespace)].map(([name, output]) => [name, output.codecId]),
-  );
 }
 
 function hasTarget(options: MongoContractOptions | undefined): boolean {
@@ -61,7 +53,6 @@ export function mongoContract(schemaPath: string, options: MongoContractOptions)
         target: options.target,
         ...ifDefined('extensionPacks', options.extensionPacks),
         seedDiagnostics: [],
-        scalarTypeCodecIds: collectScalarTypeCodecIds(context.authoringContributions.type),
         defaultFunctionRegistry: context.controlMutationDefaults.defaultFunctionRegistry,
         generatorFunctions: context.generatorFunctions,
         dataTypes: context.dataTypes,

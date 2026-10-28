@@ -106,7 +106,6 @@ function interpretMongoPsl(schema: string) {
       defaultNamespaceId: '__unbound__',
       composedExtensionContracts: new Map(),
       authoringContributions: {
-        field: {},
         type: scalarTypeConstructors,
         entityTypes: {},
         pslBlockDescriptors: {},
@@ -159,7 +158,6 @@ function interpretSqlPsl(schema: string) {
       composedExtensionContracts: new Map(),
       // Mirrors the real postgres adapter declaration.
       authoringContributions: {
-        field: {},
         type: postgresScalarAuthoringTypes,
         entityTypes: {},
         pslBlockDescriptors: {},

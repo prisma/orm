@@ -109,7 +109,7 @@ describe('integration/polymorphism with a fixed-length character discriminator',
     try {
       const { contract, namespaceId } = await authorSqliteContract(
         directory,
-        shapesSchema('uuidString()'),
+        shapesSchema('sql.Char(36)'),
       );
       const path = join(directory, 'test.db');
       const database = new DatabaseSync(path);

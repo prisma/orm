@@ -11,13 +11,13 @@ import {
   type CodecTrait,
   type DataType,
   type DataTypeId,
+  validateCodecTypeParams,
 } from '@internal/framework-components/codec';
 import type { ProjectionExpr } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
-import { mysqlQueryNotYetSupported } from './errors';
 
 const MYSQL_CODEC_DESCRIPTOR_KIND = 'mysql-codec' as const;
 
@@ -27,7 +27,7 @@ export interface AnyMysqlCodecDescriptor extends AnyCodecDescriptor {
 }
 
 /**
- * A codec descriptor the MySQL target registers. Reading related rows as JSON, which `include` needs, is not built yet, so every descriptor refuses to project a column into JSON.
+ * A codec descriptor the MySQL target registers. `jsonProjection` writes a column into the JSON an include reads, in the form the codec's `fromWire` reads from a row.
  */
 export abstract class MysqlCodecDescriptor<P = void>
   extends CodecDescriptorImpl<P>
@@ -35,8 +35,26 @@ export abstract class MysqlCodecDescriptor<P = void>
 {
   readonly descriptorKind = MYSQL_CODEC_DESCRIPTOR_KIND;
 
-  projectJson(_expression: ProjectionExpr, _ref: CodecRef): ProjectionExpr {
-    throw mysqlQueryNotYetSupported('Reading related rows as JSON');
+  protected abstract jsonProjection(expression: ProjectionExpr, params: P): ProjectionExpr;
+
+  projectJson(expression: ProjectionExpr, ref: CodecRef): ProjectionExpr {
+    if (ref.many === true) {
+      throw structuredError(
+        'RUNTIME.CODEC_DESCRIPTOR_ARRAY_UNSUPPORTED',
+        `Codec '${ref.codecId}' uses CodecRef.many, but MySQL has no stored scalar arrays.`,
+        {
+          why: 'MySQL codec descriptors project scalar values only.',
+          fix: 'Use a scalar CodecRef.',
+          meta: { codecId: ref.codecId },
+        },
+      );
+    }
+    return this.jsonProjection(
+      expression,
+      blindCast<P, 'validateCodecTypeParams validates the params against this descriptor schema'>(
+        validateCodecTypeParams(this, ref),
+      ),
+    );
   }
 }
 
@@ -58,6 +76,8 @@ export interface MysqlCodecOptions<
   readonly dataType: DataType;
   /** Renders the literal of the value the codec reads from a stored value of `dataType`. */
   readonly renderValueLiteral?: (value: JsonValue, side: 'output' | 'input') => string | undefined;
+  /** Writes a column of this codec into the JSON an include reads. */
+  readonly jsonProjection: (expression: ProjectionExpr, params: P) => ProjectionExpr;
   /** Builds the codec of the family template, constructed with `dataType` and the column's parameters. */
   readonly factory: (
     descriptor: MysqlCodecDescriptor<P>,
@@ -111,6 +131,13 @@ class MysqlCodecDescriptorAdapter<
     params: DescriptorParams<D>,
   ): ((ctx: CodecInstanceContext) => Codec<string, readonly CodecTrait[], unknown, unknown>) =>
     this.options.factory(this, this.options.dataType, params);
+
+  protected override jsonProjection(
+    expression: ProjectionExpr,
+    params: DescriptorParams<D>,
+  ): ProjectionExpr {
+    return this.options.jsonProjection(expression, params);
+  }
 }
 
 /** Adapts a family codec template to MySQL, naming the MySQL data type it represents. */

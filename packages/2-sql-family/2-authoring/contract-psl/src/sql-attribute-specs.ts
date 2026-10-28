@@ -296,7 +296,7 @@ export function defaultFunctionCall(
   });
 }
 
-/** The data type of the column a field declares, when its type, or the named type it is declared with, is a constructor or preset the stack knows. */
+/** The data type of the column a field declares, when its type, or the named type it is declared with, is a constructor the stack knows. */
 function receivingDataType(ctx: TypeAttributeSpecContext): string | undefined {
   const typeConstructor = ctx.typeConstructor;
   return typeConstructor === undefined

@@ -13,11 +13,11 @@ function domainModels(namespaces: Record<string, { readonly models: object }>) {
 
 describe('the namespaces of a TypeScript contract', () => {
   it('holds every model in its declared namespace and no default namespace', () => {
-    const contract = defineContract({ namespaces: ['auth'] }, ({ field, model }) => ({
+    const contract = defineContract({ namespaces: ['auth'] }, ({ field, model, gen, type }) => ({
       models: {
         Session: model('Session', {
           namespace: 'auth',
-          fields: { id: field.id.uuidv4String() },
+          fields: { id: field.column(type.Char(36)).id().onCreate(gen.uuid()) },
         }).sql({ table: 'sessions' }),
       },
     }));
@@ -43,9 +43,11 @@ describe('the namespaces of a TypeScript contract', () => {
   });
 
   it('has no domain namespace for a declared namespace without models', () => {
-    const contract = defineContract({ namespaces: ['audit'] }, ({ field, model }) => ({
+    const contract = defineContract({ namespaces: ['audit'] }, ({ field, model, gen, type }) => ({
       models: {
-        User: model('User', { fields: { id: field.id.uuidv4String() } }).sql({ table: 'users' }),
+        User: model('User', {
+          fields: { id: field.column(type.Char(36)).id().onCreate(gen.uuid()) },
+        }).sql({ table: 'users' }),
       },
     }));
 
@@ -62,12 +64,14 @@ describe('the namespaces of a TypeScript contract', () => {
   });
 
   it('places each model in its own namespace', () => {
-    const contract = defineContract({ namespaces: ['auth'] }, ({ field, model }) => ({
+    const contract = defineContract({ namespaces: ['auth'] }, ({ field, model, gen, type }) => ({
       models: {
-        User: model('User', { fields: { id: field.id.uuidv4String() } }).sql({ table: 'users' }),
+        User: model('User', {
+          fields: { id: field.column(type.Char(36)).id().onCreate(gen.uuid()) },
+        }).sql({ table: 'users' }),
         Session: model('Session', {
           namespace: 'auth',
-          fields: { id: field.id.uuidv4String() },
+          fields: { id: field.column(type.Char(36)).id().onCreate(gen.uuid()) },
         }).sql({ table: 'sessions' }),
       },
     }));
@@ -91,14 +95,14 @@ describe('the namespaces of a TypeScript contract', () => {
   });
 
   it('types the rows of a model in a declared namespace with the codec output types', async () => {
-    const contract = defineContract({ namespaces: ['auth'] }, ({ field, model, type }) => ({
+    const contract = defineContract({ namespaces: ['auth'] }, ({ field, model, type, gen }) => ({
       models: {
         Session: model('Session', {
           namespace: 'auth',
           fields: {
-            id: field.id.uuidv4String(),
+            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
             label: field.column(type.sql.String(50)),
-            expiresAt: field.temporal.timestamptzJsDate().optional(),
+            expiresAt: field.column(type.TimestamptzJsDate()).optional(),
           },
         }).sql({ table: 'sessions' }),
       },
@@ -116,19 +120,24 @@ describe('the namespaces of a TypeScript contract', () => {
 
   it('lists every model in every namespace when a model namespace is not a literal', () => {
     const sessionNamespace: string = 'auth';
-    const contract = defineContract({ namespaces: ['auth', 'billing'] }, ({ field, model }) => ({
-      models: {
-        User: model('User', { fields: { id: field.id.uuidv4String() } }).sql({ table: 'users' }),
-        Invoice: model('Invoice', {
-          namespace: 'billing',
-          fields: { id: field.id.uuidv4String() },
-        }).sql({ table: 'invoices' }),
-        Session: model('Session', {
-          namespace: sessionNamespace,
-          fields: { id: field.id.uuidv4String() },
-        }).sql({ table: 'sessions' }),
-      },
-    }));
+    const contract = defineContract(
+      { namespaces: ['auth', 'billing'] },
+      ({ field, model, gen, type }) => ({
+        models: {
+          User: model('User', {
+            fields: { id: field.column(type.Char(36)).id().onCreate(gen.uuid()) },
+          }).sql({ table: 'users' }),
+          Invoice: model('Invoice', {
+            namespace: 'billing',
+            fields: { id: field.column(type.Char(36)).id().onCreate(gen.uuid()) },
+          }).sql({ table: 'invoices' }),
+          Session: model('Session', {
+            namespace: sessionNamespace,
+            fields: { id: field.column(type.Char(36)).id().onCreate(gen.uuid()) },
+          }).sql({ table: 'sessions' }),
+        },
+      }),
+    );
     const client = postgres({ contract, url });
     type Models = keyof NonNullable<(typeof contract.domain.namespaces)[string]>['models'];
     type OrmModels = keyof NonNullable<(typeof client.orm)[string]>;

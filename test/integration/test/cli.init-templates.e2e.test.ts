@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -101,12 +101,71 @@ async function typecheck(testDir: string): Promise<void> {
 
 const TYPECHECK_TIMEOUT = timeouts.typeScriptCompilation;
 
-const CELLS: ReadonlyArray<{ readonly target: TargetId; readonly authoring: AuthoringId }> = [
-  { target: 'postgres', authoring: 'psl' },
-  { target: 'postgres', authoring: 'typescript' },
-  { target: 'mongo', authoring: 'psl' },
-  { target: 'mongo', authoring: 'typescript' },
+interface ContractHashes {
+  readonly storageHash: string;
+  readonly executionHash?: string;
+  readonly profileHash: string;
+}
+
+const POSTGRES_PROFILE_HASH = '3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2';
+const MONGO_PROFILE_HASH = '251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3';
+
+/** The hashes of each starter's contract. A template change that changes a starter's contract changes them. */
+const CELLS: ReadonlyArray<{
+  readonly target: TargetId;
+  readonly authoring: AuthoringId;
+  readonly hashes: ContractHashes;
+}> = [
+  {
+    target: 'postgres',
+    authoring: 'psl',
+    hashes: {
+      storageHash: 'a51b4833fdaffe730572670ccc27dd89af7e0726ab3de7f428d21702d687cc15',
+      executionHash: '3730158042e7c88d23f35529e89ad90532db0cd5c528c13e701f93cb45aa8a9c',
+      profileHash: POSTGRES_PROFILE_HASH,
+    },
+  },
+  {
+    target: 'postgres',
+    authoring: 'typescript',
+    hashes: {
+      storageHash: 'cc9d4ebfe093981ab7ea8fdc2332c00214f9c7d0267e723ca3983ffb5e68cbe6',
+      executionHash: '91162cb5749f09907ced481b9863bd25166b8a213775335fede5c23e58eb135c',
+      profileHash: POSTGRES_PROFILE_HASH,
+    },
+  },
+  {
+    target: 'mongo',
+    authoring: 'psl',
+    hashes: {
+      storageHash: '1b32cdae5987d45006e4c8a26db4f87732e4c164ea47402253364582b1818b73',
+      profileHash: MONGO_PROFILE_HASH,
+    },
+  },
+  {
+    target: 'mongo',
+    authoring: 'typescript',
+    hashes: {
+      storageHash: '530517580da72a6b8c5800c90776cbbe73272007bcfac6c8418c202a6f6ea5b4',
+      profileHash: MONGO_PROFILE_HASH,
+    },
+  },
 ];
+
+function emittedHashes(testDir: string): ContractHashes {
+  const contract = JSON.parse(readFileSync(join(testDir, 'prisma', 'contract.json'), 'utf-8')) as {
+    readonly profileHash: string;
+    readonly storage: { readonly storageHash: string };
+    readonly execution?: { readonly executionHash: string };
+  };
+  return {
+    storageHash: contract.storage.storageHash,
+    ...(contract.execution === undefined
+      ? {}
+      : { executionHash: contract.execution.executionHash }),
+    profileHash: contract.profileHash,
+  };
+}
 
 describe('init generates a typecheckable project', () => {
   let testDir: string;
@@ -136,9 +195,9 @@ describe('init generates a typecheckable project', () => {
   // `import 'dotenv/config'` and `process.env['DATABASE_URL']!` shape that
   // requires `@types/node`) + `prisma/db.ts` (which imports `./contract.d`
   // and `./contract.json`) + emitted contract artefacts.
-  for (const { target, authoring } of CELLS) {
+  for (const { target, authoring, hashes } of CELLS) {
     it(
-      `${target} + ${authoring}: full project typechecks after emit`,
+      `${target} + ${authoring}: emits the starter contract's hashes and typechecks`,
       async () => {
         const { configPath } = writeInitFiles(testDir, target, authoring);
         await emitContract(testDir, configPath);
@@ -147,6 +206,7 @@ describe('init generates a typecheckable project', () => {
           contractJson: existsSync(join(testDir, 'prisma', 'contract.json')),
           contractDts: existsSync(join(testDir, 'prisma', 'contract.d.ts')),
         }).toMatchObject({ contractJson: true, contractDts: true });
+        expect(emittedHashes(testDir)).toEqual(hashes);
 
         await typecheck(testDir);
       },

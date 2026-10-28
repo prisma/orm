@@ -25,6 +25,19 @@ describe('loadContractFromTs', () => {
   );
 
   it(
+    'imports the framework the contract uses from where it is installed instead of bundling a copy',
+    async () => {
+      await loadContractFromTs(join(fixturesDir, 'valid-contract.ts'));
+
+      const recorded: unknown = Reflect.get(globalThis, Symbol.for('prisma.orm.frameworkCopies'));
+      expect([...(recorded instanceof Set ? recorded : [])]).not.toContainEqual(
+        expect.stringContaining('prisma-8-contract-'),
+      );
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it(
     'loads a valid contract with default export',
     async () => {
       const contractPath = join(fixturesDir, 'valid-contract-default.ts');

@@ -27,14 +27,6 @@ const authoringTypes = {
 
 const authoringContributions = {
   entityTypes: {},
-  field: {
-    db: {
-      uuid: {
-        kind: 'fieldPreset',
-        output: { codecId: 'pg/uuid@1', id: true },
-      },
-    },
-  },
   pslBlockDescriptors: {},
   modelAttributes: {},
   type: authoringTypes,
@@ -77,23 +69,6 @@ describe('SQL field types from the binder resolution', () => {
         'body'
       ],
     ).toMatchObject({ codecId: 'pg/text@1', dataType: 'pg/text' });
-  });
-
-  it('resolves a preset and a type constructor that share a namespace', () => {
-    const result = interpretSqlContract(
-      `model Doc {
-  id   db.uuid()
-  body db.Text
-}
-`,
-      baseInput,
-    );
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    const table = unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))['Doc'];
-    expect(table?.columns['id']).toMatchObject({ codecId: 'pg/uuid@1', dataType: 'pg/uuid' });
-    expect(table?.primaryKey).toEqual({ columns: ['id'] });
   });
 
   it('refuses a call to a type alias', () => {
@@ -189,6 +164,22 @@ model Doc {
         message:
           'Unsupported("hstore") is not a Prisma 8 type. Write the column\'s type with a type constructor, or as Raw(sql`hstore`) when no type constructor names it. If "hstore" comes from a database extension that has a Prisma 8 pack, add the pack to extensions in prisma.config.ts.',
         start: typeStart,
+      },
+    ]);
+  });
+
+  it('refuses a namespaced call in @default as attribute syntax', () => {
+    expect(
+      diagnosticsOf(`model Doc {
+  id Int @id
+  stamp DateTime @default(db.now())
+}
+`),
+    ).toEqual([
+      {
+        code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+        message:
+          'Expected one of: string | number | boolean | null | autoincrement() | now() | sql`...` | json`...` | list of (string | number | boolean | null | json`...`)',
       },
     ]);
   });

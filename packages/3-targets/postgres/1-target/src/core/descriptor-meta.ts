@@ -2,7 +2,6 @@ import type { CodecTypes, ParameterizedOutputTypesForTypeParams } from '../expor
 import type { QueryOperationTypesForCodecs } from '../types/operation-types';
 import {
   postgresAuthoringEntityTypes,
-  postgresAuthoringFieldPresets,
   postgresAuthoringModelAttributes,
   postgresAuthoringPslBlockDescriptors,
   postgresAuthoringTypes,
@@ -27,7 +26,6 @@ const postgresTargetDescriptorMetaBase = {
   indexTypes: postgresIndexTypes,
   authoring: {
     type: { ...postgresScalarAndNativeTypeConstructors, ...postgresAuthoringTypes },
-    field: postgresAuthoringFieldPresets,
     dataTypes: postgresDataTypeEntries(),
     textDataTypes: postgresTextDataTypes,
     entityTypes: postgresAuthoringEntityTypes,

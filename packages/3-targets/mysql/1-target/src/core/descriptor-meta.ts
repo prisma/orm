@@ -14,7 +14,6 @@ const mysqlTargetDescriptorMetaBase = {
   displayName: 'MySQL',
   authoring: {
     type: { ...mysqlScalarTypeConstructors, ...mysqlAuthoringTypes },
-    field: {},
     dataTypes: mysqlDataTypeEntries(),
     textDataTypes: mysqlTextDataTypes,
   },

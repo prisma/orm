@@ -18,9 +18,9 @@ describe('postgres defineContract wrap', () => {
   });
 
   it('pre-binds family and target (factory form)', () => {
-    const result = defineContract({}, ({ field: f, model: m }) => ({
+    const result = defineContract({}, ({ field: f, model: m, gen, type }) => ({
       models: {
-        Foo: m('Foo', { fields: { id: f.id.uuidv4String() } }),
+        Foo: m('Foo', { fields: { id: f.column(type.Char(36)).id().onCreate(gen.uuid()) } }),
       },
     }));
     expect(result.target).toBe('postgres');
@@ -28,16 +28,16 @@ describe('postgres defineContract wrap', () => {
     expect(domainModelsAtDefaultNamespace(result.domain)['Foo']).toBeDefined();
   });
 
-  it('exposes Date presets through the composed public field facade', () => {
-    const result = defineContract({}, ({ field: f, model: m }) => ({
+  it('declares Date columns through the composed type helpers', () => {
+    const result = defineContract({}, ({ field: f, model: m, type, gen }) => ({
       models: {
         Event: m('Event', {
           fields: {
-            id: f.id.uuidv4String(),
-            at: f.temporal.timestamptzJsDate(),
-            precise: f.temporal.timestamptzJsDate(3, 'now', 'now'),
-            created: f.temporal.createdAtJsDate(),
-            updated: f.temporal.updatedAtJsDate(),
+            id: f.column(type.Char(36)).id().onCreate(gen.uuid()),
+            at: f.column(type.TimestamptzJsDate()),
+            precise: f.column(type.TimestamptzJsDate(3)).onCreate(gen.now()).onUpdate(gen.now()),
+            created: f.column(type.temporal.CreatedAtJsDate()),
+            updated: f.column(type.temporal.UpdatedAtJsDate()),
           },
         }),
       },
@@ -73,13 +73,13 @@ describe('postgres defineContract wrap', () => {
   });
 
   it('types Date columns through the codec map, with no type of their own', () => {
-    const contract = defineContract({}, ({ field: f, model: m }) => ({
+    const contract = defineContract({}, ({ field: f, model: m, type }) => ({
       models: {
         Event: m('Event', {
           fields: {
             id: f.column({ codecId: 'pg/int4@1' }).id(),
-            at: f.temporal.timestamptzJsDate(),
-            maybe: f.temporal.timestamptzJsDate(6).optional(),
+            at: f.column(type.TimestamptzJsDate()),
+            maybe: f.column(type.TimestamptzJsDate(6)).optional(),
           },
         }),
       },

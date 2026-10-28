@@ -33,7 +33,7 @@ const authoringTypes = {
   Inet: { kind: 'typeConstructor', output: { codecId: 'pg/inet@1' } },
   TimestampString: {
     kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'precision', integer: true, optional: true }],
+    args: [{ kind: 'value', dataType: 'pg/int4', name: 'precision', optional: true }],
     output: {
       codecId: 'pg/timestamp-string@1',
       typeParams: { precision: { kind: 'arg', index: 0 } },
@@ -41,7 +41,7 @@ const authoringTypes = {
   },
   TimestamptzString: {
     kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'precision', integer: true, optional: true }],
+    args: [{ kind: 'value', dataType: 'pg/int4', name: 'precision', optional: true }],
     output: {
       codecId: 'pg/timestamptz-string@1',
       typeParams: { precision: { kind: 'arg', index: 0 } },
@@ -53,7 +53,7 @@ const authoringTypes = {
   },
   TimeString: {
     kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'precision', integer: true, optional: true }],
+    args: [{ kind: 'value', dataType: 'pg/int4', name: 'precision', optional: true }],
     output: {
       codecId: 'pg/time-string@1',
       typeParams: { precision: { kind: 'arg', index: 0 } },
@@ -61,7 +61,7 @@ const authoringTypes = {
   },
   VarChar: {
     kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'length', integer: true, optional: true }],
+    args: [{ kind: 'value', dataType: 'pg/int4', name: 'length', optional: true }],
     output: {
       codecId: 'sql/varchar@1',
       typeParams: { length: { kind: 'arg', index: 0 } },
@@ -70,8 +70,8 @@ const authoringTypes = {
   Numeric: {
     kind: 'typeConstructor',
     args: [
-      { kind: 'number', name: 'precision', integer: true, optional: true },
-      { kind: 'number', name: 'scale', integer: true, optional: true },
+      { kind: 'value', dataType: 'pg/int4', name: 'precision', optional: true },
+      { kind: 'value', dataType: 'pg/int4', name: 'scale', optional: true },
     ],
     output: {
       codecId: 'pg/numeric@1',

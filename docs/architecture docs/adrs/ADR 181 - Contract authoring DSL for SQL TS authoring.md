@@ -15,21 +15,21 @@ export const contract = defineContract(
     target: postgresPack,
     naming: { tables: 'snake_case', columns: 'snake_case' },
   },
-  ({ field, model, rel }) => {
+  ({ field, model, rel, gen, type }) => {
     const User = model('User', {
       fields: {
-        id: field.id.uuidv7String(),            // ← pack-provided preset: UUID v7 primary key (char(36))
-        email: field.text().unique(),          // ← inline unique constraint
-        createdAt: field.createdAt(),          // ← pack-provided preset: timestamp with default
+        id: field.column(type.Char(36)).id().onCreate(gen.uuid(7)), // ← UUID v7 primary key (char(36))
+        email: field.column(type.String()).unique(),                 // ← inline unique constraint
+        createdAt: field.column(type.temporal.CreatedAt()), // ← pack-provided alias: timestamp set on create
       },
     });
 
     const Post = model('Post', {
       fields: {
-        id: field.id.uuidv7String(),
-        authorId: field.uuidString(),
-        title: field.text(),
-        body: field.text().optional(),
+        id: field.column(type.Char(36)).id().onCreate(gen.uuid(7)),
+        authorId: field.column(type.Char(36)),
+        title: field.column(type.String()),
+        body: field.column(type.String()).optional(),
       },
     });
 
@@ -57,14 +57,14 @@ export const contract = defineContract(
 
 Three things to notice:
 
-1. **No table or column layer.** Inside the callback helper namespace, the author writes `field.text()`, not `t.column('email', textColumn)`. Column names come from the field keys via a naming strategy. The author only touches storage names when overriding.
-2. **Semantic intent, then SQL.** Identity (`field.id.uuidv7String()`), uniqueness (`.unique()`), and relations (`rel.belongsTo(User, ...)`) are expressed in the model definition. The `.sql()` block is reserved for table mapping, indexes, and constraint names.
+1. **No table or column layer.** Inside the callback helper namespace, the author writes `field.column(type.String())`, not `t.column('email', textColumn)`. Column names come from the field keys via a naming strategy. The author only touches storage names when overriding.
+2. **Semantic intent, then SQL.** Identity (`.id()`), uniqueness (`.unique()`), and relations (`rel.belongsTo(User, ...)`) are expressed in the model definition. The `.sql()` block is reserved for table mapping, indexes, and constraint names.
 3. **Typed references.** `User` is a model token, not a string. `User.ref('id')` is a typed field reference. The lowering pipeline validates these at build time.
 
 ## Design principles
 
 1. **Semantic model first, storage second.** Authors describe their application's domain graph — models, fields, relations, identity — before they describe how it maps to SQL. Most contracts need no `.sql()` block at all. This is a concrete application of the framework's [domain-first surfaces](../../Architecture%20Overview.md#domain-first-surfaces) principle.
-2. **Pack-driven vocabulary.** Helpers like `field.text()`, `field.id.uuidv7String()`, and `field.createdAt()` are not hardcoded DSL keywords. They come from composition units — families, targets, and extension packs — that contribute field vocabulary through preset descriptors ([ADR 170](ADR%20170%20-%20Pack-provided%20type%20constructors%20and%20field%20presets.md)). The vocabulary changes as framework composition changes.
+2. **Pack-driven vocabulary.** Helpers like `type.String()`, `type.Char(36)` and `type.temporal.CreatedAt()` are not hardcoded DSL keywords. They come from composition units — families, targets, and extension packs — that contribute type constructors and type aliases ([ADR 170](ADR%20170%20-%20Pack-provided%20type%20constructors%20and%20field%20presets.md), [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md)). The vocabulary changes as framework composition changes.
 3. **Typed local references.** Inside `.sql()`, `cols` provides typed refs to the model's scalar fields only. Relation fields cannot appear in constraint authoring. Cross-model refs use model tokens.
 4. **Same canonical output.** The contract DSL lowers to the same `contract.json` and `contract.d.ts` consumed by `schema()`, `sql()`, `orm()`, the runtime, and migration tooling. Downstream inference is unchanged.
 5. **Contract purity.** The contract object remains pure data — no functions, closures, or side effects. Deterministic canonicalization ensures that equivalent authoring intent produces identical artifacts ([ADR 096](ADR%20096%20-%20TS-authored%20contract%20parity%20&%20purity%20rules.md)).
@@ -75,7 +75,7 @@ The contract DSL keeps domain meaning close to the model definition. For a simpl
 
 Most SQL contract verbosity comes from restating information the system already has: field names imply column names, relation declarations imply FK structure, and common column shapes (UUID IDs, timestamps, text) have well-known codecs and defaults. The contract DSL removes that duplication while keeping explicit escape hatches for SQL-specific detail.
 
-Pack-provided type constructors and field presets — introduced in [ADR 170](ADR%20170%20-%20Pack-provided%20type%20constructors%20and%20field%20presets.md), which defines how families, targets, and extension packs contribute named column shapes through a composition registry — are what make this collapse possible. When `field.text()` carries a codec ID (the framework's portable type identifier, e.g. `sql/text@1`), a native type descriptor, and nullability semantics from the pack registry, the author doesn't need to spell them out.
+Pack-provided type constructors — introduced in [ADR 170](ADR%20170%20-%20Pack-provided%20type%20constructors%20and%20field%20presets.md), which defines how families, targets, and extension packs contribute named column shapes through a composition registry — are what make this collapse possible. When `type.String()` carries a codec ID (the framework's portable type identifier, e.g. `sql/text@1`), a native type descriptor, and nullability semantics from the pack registry, the author doesn't need to spell them out.
 
 ## How the DSL is structured
 
@@ -88,6 +88,8 @@ The model definition captures everything that is independent of any particular S
 The key rule: anything that could exist in a non-SQL data model belongs in the model definition. Anything that only makes sense in SQL belongs in `.sql()`. This reflects the [domain-storage separation](ADR%20172%20-%20Contract%20domain-storage%20separation.md) that structures the contract itself — the authoring surface mirrors the contract's architecture.
 
 ### Pack-driven field vocabulary
+
+> Amended 2026-10-22: field presets and `field.generated()` were removed by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md). A field is written `field.column(type.X())`, with `.id()`, `.onCreate(gen.fn())` and `.onUpdate(gen.fn())`; `field.id.uuidv7String()` is `field.column(type.UuidString()).id().onCreate(gen.uuid(7))`. The two paragraphs below are kept as a record of the preset design.
 
 Common column patterns like "UUID primary key with v7 generation" collapse into single-call field presets: `field.id.uuidv7String()` carries the codec, descriptor, generator, nullability, and identity semantics in one expression.
 
@@ -119,7 +121,7 @@ defineContract({
 With `snake_case`, a model named `User` maps to table `user`, a field `createdAt` maps to column `created_at`. The `applyNaming()` function handles camelCase boundaries, all-uppercase sequences, and digit boundaries.
 
 Overrides take precedence at any level:
-- Per-field: `field.text().column('email_address')`
+- Per-field: `field.column(type.String()).column('email_address')`
 - Per-model: `.sql({ table: 'app_user' })`
 
 ### Constraint placement
@@ -127,8 +129,8 @@ Overrides take precedence at any level:
 Single-field constraints are most readable where the field is defined — the reader doesn't need to look anywhere else to understand the field's role:
 
 ```ts
-id: field.id.uuidv7String(),   // primary key
-email: field.text().unique(),  // unique constraint
+id: field.column(type.Char(36)).id().onCreate(gen.uuid(7)),   // primary key
+email: field.column(type.String()).unique(),  // unique constraint
 ```
 
 Compound constraints reference multiple fields, which means they can't be expressed inline on any single field. They belong in `.sql()`, where `cols` provides typed references to all scalar fields:
@@ -186,7 +188,7 @@ Lowering validates the contract graph and produces actionable error messages for
 
 ### Benefits
 
-- **Reduced boilerplate.** Pack presets carry codec, native type, nullability, and default in a single call. A naming strategy eliminates explicit column names for the common case.
+- **Reduced boilerplate.** Pack type constructors and aliases carry codec, native type and generated values in a single call. A naming strategy eliminates explicit column names for the common case.
 - **Visible intent.** The contract reads as a model graph first, SQL details second. A developer scanning the contract sees application concepts, not storage choreography.
 - **Type-safe references.** Model tokens and typed `cols` provide autocompletion and compile-time validation for constraint authoring and cross-model FK targets.
 - **Portability.** Switching a contract from Postgres to SQLite means changing the target import and any target-specific `.sql()` details. The model layer stays unchanged — measured at <10% source change for average portable contracts.

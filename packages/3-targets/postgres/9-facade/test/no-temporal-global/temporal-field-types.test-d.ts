@@ -4,11 +4,11 @@ import type { Temporal } from 'temporal-spec';
 import { expectTypeOf, test } from 'vitest';
 import { defineContract } from '../../src/exports/contract-builder';
 
-const contract = defineContract({}, ({ type, field, model }) => ({
+const contract = defineContract({}, ({ type, field, model, gen }) => ({
   models: {
     Event: model('Event', {
       fields: {
-        id: field.id.uuidv4String(),
+        id: field.column(type.Uuid()).id().onCreate(gen.uuid()),
         at: field.column(type.TimestamptzTemporal(3)),
         local: field.column(type.TimestampTemporal()),
         day: field.column(type.DateTemporal()),

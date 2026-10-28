@@ -1,12 +1,21 @@
+import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempDisposableSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempDisposableSync,
+  realpathSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
-import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 
-const guardPath = join(dirname(fileURLToPath(import.meta.url)), 'guard-review-artifacts-ignored.mjs');
+const guardPath = join(
+  dirname(fileURLToPath(import.meta.url)),
+  'guard-review-artifacts-ignored.mjs',
+);
 
 const FAKE_JJ_SCRIPT = `#!/bin/sh
 case "$*" in

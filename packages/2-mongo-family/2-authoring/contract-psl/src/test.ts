@@ -1,11 +1,9 @@
 import type { ContractSourceContext } from '@internal/config/config-types';
-import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import type { InterpretPslDocumentToMongoContractInput } from './interpreter';
 
 export type MongoContextInput = Pick<
   InterpretPslDocumentToMongoContractInput,
   | 'target'
-  | 'scalarTypeCodecIds'
   | 'defaultFunctionRegistry'
   | 'generatorFunctions'
   | 'dataTypes'
@@ -32,11 +30,6 @@ export function mongoContextInput(
 ): MongoContextInput {
   return {
     ...stack,
-    scalarTypeCodecIds: new Map(
-      [...collectScalarTypeConstructors(context.authoringContributions.type)].map(
-        ([name, output]) => [name, output.codecId],
-      ),
-    ),
     defaultFunctionRegistry: context.controlMutationDefaults.defaultFunctionRegistry,
     generatorFunctions: context.generatorFunctions,
     dataTypes: context.dataTypes,

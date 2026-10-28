@@ -47,7 +47,7 @@ describe('the SQLite control stack codec lookup', () => {
     expect(stack.codecLookup.descriptorFor?.(codecId)?.dataType).toBe(dataType);
   });
 
-  it('marks no type constructor or field preset inferred, because SQLite has no contract infer', () => {
+  it('marks no type constructor inferred, because SQLite has no contract infer', () => {
     const inferredPaths = (namespace: unknown, path: string): readonly string[] => {
       if (typeof namespace !== 'object' || namespace === null) return [];
       if ('kind' in namespace) return 'inferred' in namespace ? [path] : [];
@@ -55,9 +55,6 @@ describe('the SQLite control stack codec lookup', () => {
         inferredPaths(value, path === '' ? key : `${path}.${key}`),
       );
     };
-    expect([
-      ...inferredPaths(stack.authoringContributions.type, ''),
-      ...inferredPaths(stack.authoringContributions.field, ''),
-    ]).toEqual([]);
+    expect(inferredPaths(stack.authoringContributions.type, '')).toEqual([]);
   });
 });

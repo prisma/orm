@@ -1,10 +1,13 @@
 {
   "name": "@prisma/orm-extension-arktype-json",
-  "version": "8.0.0-rc.20",
+  "version": "8.0.0-rc.21",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
   "description": "Arktype-validated JSON columns for Prisma 8",
+  "keywords": [
+    "prisma-orm-extension"
+  ],
   "files": [
     "dist"
   ],
@@ -14,21 +17,21 @@
     "clean": "rm -rf dist src-gen"
   },
   "dependencies": {
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.20",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.20",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.21",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.21",
     "@standard-schema/spec": "^1.1.0",
     "arktype": "~2.2.2"
   },
   "devDependencies": {
-    "@internal/extension-arktype-json": "workspace:8.0.0-rc.20",
-    "@repo/tsconfig": "workspace:8.0.0-rc.20",
-    "@repo/tsdown": "workspace:8.0.0-rc.20",
-    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.20",
+    "@internal/extension-arktype-json": "workspace:8.0.0-rc.21",
+    "@repo/tsconfig": "workspace:8.0.0-rc.21",
+    "@repo/tsdown": "workspace:8.0.0-rc.21",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.21",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
   "peerDependencies": {
-    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.20",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.21",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {

@@ -60,11 +60,11 @@ function makeRoleContract(members: { name: string; value: string }[]): Contract<
     sqlFamilyPack,
     postgresPack,
     { ...postgresTypeLookups, enums: { Role }, createNamespace: postgresCreateNamespace },
-    ({ field: f, model: m }) => ({
+    ({ field: f, model: m, type }) => ({
       models: {
         User: m('User', {
           fields: {
-            id: f.text().id(),
+            id: f.column(type.String()).id(),
             role: f.namedType(Role),
           },
         }),

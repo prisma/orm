@@ -9,16 +9,19 @@ import {
   type ScalarFieldBuilder,
 } from '../../src/exports/contract-builder';
 
-type PostgresField = Parameters<NonNullable<Parameters<typeof defineContract>[1]>>[0]['field'];
+type PostgresHelpers = Parameters<NonNullable<Parameters<typeof defineContract>[1]>>[0];
 
-function storedDefault(build: (field: PostgresField) => ScalarFieldBuilder): unknown {
-  const contract = defineContract({}, ({ field, model }) => ({
-    models: {
-      Event: model('Event', {
-        fields: { id: field.id.uuidv4String(), at: build(field) },
-      }),
-    },
-  }));
+function storedDefault(build: (helpers: PostgresHelpers) => ScalarFieldBuilder): unknown {
+  const contract = defineContract({}, (helpers) => {
+    const { field, model, gen, type } = helpers;
+    return {
+      models: {
+        Event: model('Event', {
+          fields: { id: field.column(type.Char(36)).id().onCreate(gen.uuid()), at: build(helpers) },
+        }),
+      },
+    };
+  });
   return contract.storage.namespaces['public']?.entries.table?.['Event']?.columns['at']?.default;
 }
 
@@ -27,10 +30,12 @@ function fromUntypedCaller(value: unknown): never {
 }
 
 describe('postgres defineContract encodes literal defaults through the column codec', () => {
-  describe('field.dateTime()', () => {
+  describe('field.column(type.DateTime())', () => {
     it('refuses a string, naming the model and field and carrying the codec message', () => {
       expect(() =>
-        storedDefault((field) => field.dateTime().default(fromUntypedCaller('2024-01-01'))),
+        storedDefault(({ field, type }) =>
+          field.column(type.DateTime()).default(fromUntypedCaller('2024-01-01')),
+        ),
       ).toThrow(
         expect.objectContaining({
           code: 'CONTRACT.DEFAULT_INVALID',
@@ -49,23 +54,27 @@ describe('postgres defineContract encodes literal defaults through the column co
 
     it('stores the text the codec produces for a Temporal.Instant', () => {
       expect(
-        storedDefault((field) =>
-          field.dateTime().default(Temporal.Instant.from('2024-01-01T00:00:00Z')),
+        storedDefault(({ field, type }) =>
+          field.column(type.DateTime()).default(Temporal.Instant.from('2024-01-01T00:00:00Z')),
         ),
       ).toEqual({ kind: 'literal', value: '2024-01-01T00:00:00Z' });
     });
   });
 
-  it('stores the canonical form of a Date given to field.temporal.timestamptzJsDate()', () => {
+  it('stores the canonical form of a Date given to field.column(type.TimestamptzJsDate())', () => {
     expect(
-      storedDefault((field) =>
-        field.temporal.timestamptzJsDate().default(new Date('2024-01-01T00:00:00Z')),
+      storedDefault(({ field, type }) =>
+        field.column(type.TimestamptzJsDate()).default(new Date('2024-01-01T00:00:00Z')),
       ),
     ).toEqual({ kind: 'literal', value: '2024-01-01T00:00:00Z' });
   });
 
   it('refuses a fractional number on a bigint column', () => {
-    expect(() => storedDefault((field) => field.bigint().default(fromUntypedCaller(1.5)))).toThrow(
+    expect(() =>
+      storedDefault(({ field, type }) =>
+        field.column(type.BigInt()).default(fromUntypedCaller(1.5)),
+      ),
+    ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.DEFAULT_INVALID',
         meta: {
@@ -80,9 +89,9 @@ describe('postgres defineContract encodes literal defaults through the column co
 
   it('says which element of a list default the codec refused', () => {
     expect(() =>
-      storedDefault((field) =>
+      storedDefault(({ field, type }) =>
         field
-          .bigint()
+          .column(type.BigInt())
           .many()
           .default(fromUntypedCaller([1, 1.5])),
       ),
@@ -104,8 +113,8 @@ describe('postgres defineContract encodes literal defaults through the column co
 
   it('stores a uuid default in the form PostgreSQL writes', () => {
     expect(
-      storedDefault((field) =>
-        field.uuidNative().default('{A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11}'),
+      storedDefault(({ field, type }) =>
+        field.column(type.Uuid()).default('{A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11}'),
       ),
     ).toEqual({ kind: 'literal', value: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' });
   });
@@ -118,10 +127,13 @@ describe('postgres defineContract encodes literal defaults through the column co
       member('Long', 'abc'),
     );
     expect(() =>
-      defineContract({ enums: { Code } }, ({ field, model }) => ({
+      defineContract({ enums: { Code } }, ({ field, model, gen, type }) => ({
         models: {
           Event: model('Event', {
-            fields: { id: field.id.uuidv4String(), code: field.namedType(Code) },
+            fields: {
+              id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+              code: field.namedType(Code),
+            },
           }),
         },
       })),
@@ -148,11 +160,11 @@ describe('postgres defineContract encodes literal defaults through the column co
       member('Low', 1n),
       member('High', 10n),
     );
-    const contract = defineContract({ enums: { Level } }, ({ field, model }) => ({
+    const contract = defineContract({ enums: { Level } }, ({ field, model, gen, type }) => ({
       models: {
         Event: model('Event', {
           fields: {
-            id: field.id.uuidv4String(),
+            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
             level: field.namedType(Level).default(Level.members.Low),
           },
         }),
@@ -170,11 +182,11 @@ describe('postgres defineContract encodes literal defaults through the column co
       member('Low', 1n),
       member('High', 10n),
     );
-    const contract = defineContract({ enums: { Level } }, ({ field, model }) => ({
+    const contract = defineContract({ enums: { Level } }, ({ field, model, gen, type }) => ({
       models: {
         Event: model('Event', {
           fields: {
-            id: field.id.uuidv4String(),
+            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
             levels: field.namedType(Level).many().default([Level.members.Low, Level.members.High]),
           },
         }),
@@ -208,12 +220,14 @@ describe('postgres defineContract encodes literal defaults through the column co
           },
         },
       },
-      ({ field, model }) => ({
+      ({ field, model, gen, type }) => ({
         models: {
           Event: model('Event', {
             fields: {
-              id: field.id.uuidv4String(),
-              at: field.dateTime().default(Temporal.Instant.from('2024-01-01T00:00:00Z')),
+              id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+              at: field
+                .column(type.DateTime())
+                .default(Temporal.Instant.from('2024-01-01T00:00:00Z')),
             },
           }),
         },

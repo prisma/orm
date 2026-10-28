@@ -36,7 +36,7 @@ A definition is plain data with every name resolved. MongoDB's `ContractDefiniti
 
 - the target pack and the extension packs, which the contract records, and the default control policy;
 - models, each with its collection, owner, storage relations, control policy, collection options and indexes, in the order the source wrote them;
-- fields, each with its stored name, type, nullability, list shape, enum by name, the generated values its type gives, the generated values the source already resolved, the generator calls it writes, and what a field preset contributed;
+- fields, each with its stored name, type, nullability, list shape, enum by name, the generated values its type gives, the generated values the source already resolved, and the generator calls it writes;
 - relations, with cardinality and join fields;
 - polymorphism: the base's discriminator field and listed variants, and each variant's base and its value as the source wrote it;
 - value objects, enums, optional explicit roots, whether collections get validators, and the warnings the source collected.
@@ -66,7 +66,7 @@ The builder checks the assembled contract last. Those refusals (kind `validator`
 
 ## Alternatives considered
 
-- **Each source keeps its assembly, and a shared function checks the built contract.** The contract has lost what the source wrote: the position of an index, the value a variant wrote, which preset made a field. Refusals could not be placed, and some rules could not be checked at all.
+- **Each source keeps its assembly, and a shared function checks the built contract.** The contract has lost what the source wrote: the position of an index, the value a variant wrote, which type alias typed a field. Refusals could not be placed, and some rules could not be checked at all.
 - **The builder throws its first refusal.** PSL would then report one problem per run, and could not place it without catching and parsing the error.
 
 ## Related ADRs

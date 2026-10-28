@@ -232,7 +232,7 @@
       "id": "supabase",
       "kind": "extension",
       "targetId": "postgres",
-      "version": "8.0.0-rc.20"
+      "version": "8.0.0-rc.21"
     }
   },
   "meta": {},

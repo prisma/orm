@@ -39,25 +39,13 @@ const { model } = createComposedAuthoringHelpers({
 
 const int4Column = columnDescriptor('pg/int4@1');
 const textColumn = columnDescriptor('pg/text@1');
-const charColumn = columnDescriptor('sql/char@1');
 
 describe('contract DSL runtime helpers', () => {
-  it('normalizes defaults, generated descriptors, relation helpers, and input detection', () => {
+  it('normalizes defaults, relation helpers, and input detection', () => {
     const literalDefault = field.column(textColumn).default('draft').build();
     const functionDefault = field
       .column(textColumn)
       .default({ kind: 'function', expression: 'now()' })
-      .build();
-    const generated = field
-      .generated({
-        type: charColumn,
-        typeParams: { length: 12 },
-        generated: {
-          kind: 'generator',
-          id: 'nanoid',
-          params: { size: 12 },
-        },
-      })
       .build();
 
     const User = model('User', {
@@ -70,10 +58,6 @@ describe('contract DSL runtime helpers', () => {
 
     expect(literalDefault.default).toEqual({ kind: 'literal', value: 'draft' });
     expect(functionDefault.default).toEqual({ kind: 'function', expression: 'now()' });
-    expect(generated.descriptor).toEqual({
-      codecId: 'sql/char@1',
-      typeParams: { length: 12 },
-    });
     expect(normalizeRelationFieldNames('id')).toEqual(['id']);
     expect(normalizeRelationFieldNames(['orgId', 'userId'])).toEqual(['orgId', 'userId']);
     expect(resolveRelationModelName(lazyBelongsTo.toModel)).toBe('User');

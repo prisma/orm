@@ -36,3 +36,15 @@ From the system-design review of slice 2b (2026-10-22).
 From slice 2c (2026-10-23).
 
 Including `migrations/**` in the MySQL example's `tsconfig.json` fails with TS2742 on `get operations()`: the inferred type names a bundled chunk inside `@prisma/orm-target-mysql`, which an application that depends only on `@prisma/orm-mysql` cannot name. The Postgres and SQLite demos also leave `migrations/` out of type checking, so it may affect every target; not yet checked there. Fix: give the operations an explicit type the facade exports, and type-check `migrations/` in every example.
+
+## A family-level client builder and a shared SQL renderer core
+
+From the system-design review of slice 3 (2026-10-23).
+
+The MySQL facade's client (about 440 lines) and the MySQL SQL renderer are copied from SQLite's. The renderer copy is justified for now, because the dialect differences are throughout it. The client copy has already drifted once: `main` gained `delegatingRuntime` while the MySQL copy kept its own, and slice 3 had to adopt it. The family-level builder should come first. Two follow-ups: a family-level builder for a target's `mysql(...)`/`sqlite(...)`/`postgres(...)` client, so each facade supplies only its driver and options; and a shared renderer core that targets extend for their dialect, so a fix like collecting parameters in written order lands once.
+
+## A codec's integer representation is not checked against its input type
+
+From the post-fix system-design review of slice 3 (2026-10-23).
+
+A codec descriptor declares `integerRepresentation: 'number' | 'bigint'`, and the ORM's `having` reads it for both the comparand's type and the runtime check. Nothing at compile time ties it to the codec's TypeScript input type, so a third-party codec can declare `'bigint'` while taking a `number`. Each target's tests check its own codecs. A compile-time check needs a change to the generics of the framework's codec descriptor base class, which is outside this project.

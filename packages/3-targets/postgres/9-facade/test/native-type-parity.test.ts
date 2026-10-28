@@ -359,14 +359,14 @@ describe('native types as bare scalar types — parity with the live bare-type p
     }).toEqual({ types: undefined, viaAlias: expected, viaNamed: expected, direct: expected });
   });
 
-  it('lowers the Date updatedAt shorthand identically to explicit Date clock phases', () => {
+  it('lowers the Date UpdatedAt alias identically to explicit Date clock phases', () => {
     const shorthand = emit(`model sample {
       id Int @id
-      at temporal.updatedAtJsDate()
+      at temporal.UpdatedAtJsDate
     }`);
     const explicit = emit(`model sample {
       id Int @id
-      at temporal.timestamptzJsDate(onCreate: now, onUpdate: now)
+      at TimestamptzJsDate @onCreate(now()) @onUpdate(now())
     }`);
     expect(shorthand.ok).toBe(true);
     expect(explicit.ok).toBe(true);
@@ -379,14 +379,14 @@ describe('native types as bare scalar types — parity with the live bare-type p
     });
   });
 
-  it('lowers the Date createdAt shorthand identically to an explicit create clock phase', () => {
+  it('lowers the Date CreatedAt alias identically to an explicit create clock phase', () => {
     const result = emit(`model sample {
       id Int @id
-      at temporal.createdAtJsDate()
+      at temporal.CreatedAtJsDate
     }`);
     const explicit = emit(`model sample {
       id Int @id
-      at temporal.timestamptzJsDate(onCreate: now)
+      at TimestamptzJsDate @onCreate(now())
     }`);
     expect(result.ok).toBe(true);
     expect(explicit.ok).toBe(true);
@@ -399,6 +399,23 @@ describe('native types as bare scalar types — parity with the live bare-type p
       codecId: 'pg/timestamptz-date@1',
     });
     expect(column).not.toHaveProperty('default');
+  });
+
+  it('names the rewrite of a removed field preset through the SQL family', () => {
+    const result = emit(`model sample {
+  id Int @id
+  at temporal.timestamptzJsDate(3, onCreate: now)
+}
+`);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      {
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message:
+          'temporal.timestamptzJsDate(3, onCreate: now) was a field preset, and Prisma 8 removed field presets. Write TimestamptzJsDate(3) @onCreate(now()).',
+      },
+    ]);
   });
 
   it('names Unsupported("x") as no Prisma 8 type through the SQL family', () => {

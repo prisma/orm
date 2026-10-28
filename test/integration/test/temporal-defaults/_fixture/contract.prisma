@@ -3,9 +3,9 @@
 model Reading {
   id             Int    @id
   label          String
-  createdAt      temporal.createdAt()
-  updatedAt      temporal.updatedAt()
-  createdAtText  temporal.createdAtString()
-  updatedAtText  temporal.updatedAtString()
+  createdAt      temporal.CreatedAt
+  updatedAt      temporal.UpdatedAt
+  createdAtText  temporal.CreatedAtString
+  updatedAtText  temporal.UpdatedAtString
   @@map("reading")
 }

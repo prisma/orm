@@ -19,7 +19,7 @@ model Menu {
 
 function interpretMenu() {
   const result = interpretMongoContract(SCHEMA, {
-    scalarTypeCodecIds: new Map([
+    scalarTypes: new Map([
       ['String', 'mongo/string@1'],
       ['ObjectId', 'mongo/objectId@1'],
     ]),

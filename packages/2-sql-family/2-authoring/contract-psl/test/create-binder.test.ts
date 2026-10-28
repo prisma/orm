@@ -1,5 +1,4 @@
 import type { ContractSourceContext } from '@internal/config/config-types';
-import type { AuthoringFieldNamespace } from '@internal/framework-components/authoring';
 import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import { createBinder } from '@internal/psl-parser';
 import { SyntaxNode } from '@internal/psl-parser/syntax';
@@ -17,7 +16,7 @@ import {
 const SCHEMA = `
 model User {
   id        Int      @id
-  createdAt temporal.createdAt()
+  createdAt temporal.CreatedAt
   price     Money
   weird     String   @unrecognized
   ghost     Unknown
@@ -39,18 +38,12 @@ model Session {
 }
 `;
 
-const fieldPresets: AuthoringFieldNamespace = {
-  temporal: {
-    createdAt: {
-      kind: 'fieldPreset',
-      output: { codecId: 'pg/timestamptz@1' },
-    },
-  },
-};
-
 const authoringType = {
   ...postgresScalarAuthoringTypes,
   Money: { kind: 'typeConstructor', output: { codecId: 'pg/numeric@1' } },
+  temporal: {
+    CreatedAt: { kind: 'typeAlias', output: { type: { codecId: 'pg/timestamptz@1' } } },
+  },
 } as const;
 
 function normalize(resolution: unknown): unknown {
@@ -120,7 +113,6 @@ describe('createBinder', () => {
       composedExtensionContracts: new Map(),
       authoringContributions: {
         dataTypes: fixtureDataTypeSupport.entries,
-        field: fieldPresets,
         type: authoringType,
         entityTypes: {},
         pslBlockDescriptors: {},
@@ -167,7 +159,7 @@ describe('createBinder', () => {
       { kind: 'contributedType', name: 'Int', path: ['Int'] },
       { kind: 'attribute', name: 'id', level: 'field' },
       { kind: 'field', name: 'createdAt' },
-      { kind: 'contributedType', name: 'createdAt', path: ['temporal', 'createdAt'] },
+      { kind: 'contributedType', name: 'CreatedAt', path: ['temporal', 'CreatedAt'] },
       { kind: 'contributedNamespace', name: 'temporal' },
       { kind: 'field', name: 'price' },
       { kind: 'contributedType', name: 'Money', path: ['Money'] },
@@ -231,7 +223,6 @@ describe('createBinder', () => {
       composedExtensionContracts: new Map(),
       authoringContributions: {
         dataTypes: fixtureDataTypeSupport.entries,
-        field: fieldPresets,
         type: authoringType,
         entityTypes: {},
         pslBlockDescriptors: {},

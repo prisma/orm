@@ -187,7 +187,7 @@ export interface MongoCollection<
   /**
    * On insert: `update` fields are applied via `$set`, remaining `create` fields via `$setOnInsert`.
    * This means `update` values take precedence over `create` for overlapping fields on insert.
-   * A field that `create` sets and that has an update default (such as `temporal.updatedAt()`) keeps the `create` value on insert and advances on update; that case is sent as one upsert with an update pipeline that tells an insert from an update.
+   * A field that `create` sets and that has an update default (such as `temporal.UpdatedAt`) keeps the `create` value on insert and advances on update; that case is sent as one upsert with an update pipeline that tells an insert from an update.
    * Requires `.where()`.
    */
   upsert(input: {

@@ -1,24 +1,15 @@
-import {
-  sqlTargetTypeConstructors,
-  temporalCodecPresetWithPrecision,
-  temporalStringAuthoringPresets,
-} from '@internal/family-sql/pack';
+import { sqlTargetTypeConstructors } from '@internal/family-sql/pack';
 import type {
   AuthoringEntityContext,
   AuthoringEntityTypeFactoryOutput,
   AuthoringEntityTypeNamespace,
-  AuthoringFieldNamespace,
   AuthoringModelAttributeContext,
   AuthoringModelAttributeDescriptorNamespace,
   AuthoringPslBlockDescriptorNamespace,
   AuthoringTypeNamespace,
   ParsedPslExtensionBlock,
 } from '@internal/framework-components/authoring';
-import {
-  temporalAuthoringPresets,
-  temporalCodecPreset,
-  temporalTypeAliases,
-} from '@internal/framework-components/authoring';
+import { temporalTypeAliases } from '@internal/framework-components/authoring';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import type {
@@ -52,6 +43,7 @@ import type {
   ResolvedPslModelRefs,
   SqlPslEntityPlacementOutput,
 } from '@internal/sql-contract/entity-handle-lowering-hook';
+import { generatedIdColumnAliases } from '@internal/sql-contract/generated-id-column-aliases';
 import { exactNameBodyWarning } from '@internal/sql-contract/index-naming';
 import {
   requireSqlExpression,
@@ -65,17 +57,10 @@ import { assertDefined, invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import {
-  PG_DATE_STRING_CODEC_ID,
-  PG_DATE_TEMPORAL_CODEC_ID,
   PG_ENUM_CODEC_ID,
-  PG_TIME_STRING_CODEC_ID,
-  PG_TIME_TEMPORAL_CODEC_ID,
-  PG_TIMESTAMP_STRING_CODEC_ID,
-  PG_TIMESTAMP_TEMPORAL_CODEC_ID,
   PG_TIMESTAMPTZ_DATE_CODEC_ID,
   PG_TIMESTAMPTZ_STRING_CODEC_ID,
   PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
-  PG_TIMETZ_CODEC_ID,
 } from './codec-ids';
 import { postgresError } from './errors';
 import {
@@ -85,7 +70,6 @@ import {
   fullTextIndexProblems,
 } from './full-text-index-definition';
 import { type FullTextFieldsInput, weightGroupsOf } from './full-text-weight-groups';
-import { postgresNowGeneratorIds, postgresNowGeneratorTakesPrecision } from './now-generators';
 import { postgresCodecTraitsOf } from './postgres-codec-traits';
 import { PostgresNativeEnum } from './postgres-native-enum';
 import { PostgresRlsEnablement, type PostgresRlsEnablementInput } from './postgres-rls-enablement';
@@ -141,6 +125,7 @@ const PSL_ROLE_BLOCK_OUTSIDE_UNBOUND_NAMESPACE: ContributedPslDiagnosticCode =
  */
 export const postgresAuthoringTypes = {
   .../* @__PURE__ */ sqlTargetTypeConstructors({ sizeType: PG_SIZE_TYPE }),
+  ...generatedIdColumnAliases,
   BigIntNumber: {
     kind: 'typeConstructor',
     documentation:
@@ -541,19 +526,6 @@ export const postgresAuthoringEntityTypes = {
   },
 } as const satisfies AuthoringEntityTypeNamespace;
 
-/**
- * Field presets contributed by the Postgres target pack.
- *
- * These mirror the PSL scalar-to-codec mapping used by the Postgres adapter
- * (see `createPostgresPslScalarTypeDescriptors`), so that authoring a field
- * via the TS callback surface (e.g. `field.int()`) and via the PSL scalar
- * surface (e.g. `Int`) lowers to byte-identical contracts.
- *
- * The `uuidNative` / `id.uuidv4Native` / `id.uuidv7Native` presets use the
- * native Postgres `uuid` type (codecId `pg/uuid@1`). For cross-target
- * portability use `uuidString` / `id.uuidv4String` / `id.uuidv7String` from
- * the family pack instead.
- */
 // A policy may only target an RLS-controlled model: the model named by
 // `target` must declare `@@rls`, or the load fails with a diagnostic naming
 // the model and the policy prefix.
@@ -861,169 +833,6 @@ export const postgresAuthoringModelAttributes = {
     },
   },
 } as const satisfies AuthoringModelAttributeDescriptorNamespace;
-
-export const postgresAuthoringFieldPresets = {
-  text: {
-    kind: 'fieldPreset',
-    output: {
-      codecId: 'pg/text@1',
-    },
-  },
-  int: {
-    kind: 'fieldPreset',
-    output: {
-      codecId: 'pg/int4@1',
-    },
-  },
-  bigint: {
-    kind: 'fieldPreset',
-    output: {
-      codecId: 'pg/int8@1',
-    },
-  },
-  float: {
-    kind: 'fieldPreset',
-    output: {
-      codecId: 'pg/float8@1',
-    },
-  },
-  decimal: {
-    kind: 'fieldPreset',
-    output: {
-      codecId: 'pg/numeric@1',
-    },
-  },
-  boolean: {
-    kind: 'fieldPreset',
-    output: {
-      codecId: 'pg/bool@1',
-    },
-  },
-  json: {
-    kind: 'fieldPreset',
-    output: {
-      codecId: 'pg/jsonb@1',
-    },
-  },
-  bytes: {
-    kind: 'fieldPreset',
-    output: {
-      codecId: 'pg/bytea@1',
-    },
-  },
-  dateTime: {
-    kind: 'fieldPreset',
-    output: {
-      codecId: 'pg/timestamptz-temporal@1',
-    },
-  },
-  temporal: {
-    createdAtJsDate: /* @__PURE__ */ temporalAuthoringPresets({
-      codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
-      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_DATE_CODEC_ID],
-    }).createdAt,
-    updatedAtJsDate: /* @__PURE__ */ temporalAuthoringPresets({
-      codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
-      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_DATE_CODEC_ID],
-    }).updatedAt,
-    timestamptzJsDate: /* @__PURE__ */ temporalCodecPresetWithPrecision({
-      sizeType: PG_SIZE_TYPE,
-      codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
-      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_DATE_CODEC_ID],
-    }),
-    .../* @__PURE__ */ temporalAuthoringPresets({
-      codecId: PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
-      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID],
-    }),
-    .../* @__PURE__ */ temporalStringAuthoringPresets({
-      codecId: PG_TIMESTAMPTZ_STRING_CODEC_ID,
-      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_STRING_CODEC_ID],
-    }),
-    timestamp: /* @__PURE__ */ temporalCodecPresetWithPrecision({
-      sizeType: PG_SIZE_TYPE,
-      codecId: PG_TIMESTAMP_TEMPORAL_CODEC_ID,
-      generatorId: postgresNowGeneratorIds[PG_TIMESTAMP_TEMPORAL_CODEC_ID],
-    }),
-    timestamptz: /* @__PURE__ */ temporalCodecPresetWithPrecision({
-      sizeType: PG_SIZE_TYPE,
-      codecId: PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
-      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID],
-    }),
-    timestampString: /* @__PURE__ */ temporalCodecPresetWithPrecision({
-      sizeType: PG_SIZE_TYPE,
-      codecId: PG_TIMESTAMP_STRING_CODEC_ID,
-      generatorId: postgresNowGeneratorIds[PG_TIMESTAMP_STRING_CODEC_ID],
-      nowTakesPrecision: postgresNowGeneratorTakesPrecision[PG_TIMESTAMP_STRING_CODEC_ID],
-    }),
-    timestamptzString: /* @__PURE__ */ temporalCodecPresetWithPrecision({
-      sizeType: PG_SIZE_TYPE,
-      codecId: PG_TIMESTAMPTZ_STRING_CODEC_ID,
-      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_STRING_CODEC_ID],
-      nowTakesPrecision: postgresNowGeneratorTakesPrecision[PG_TIMESTAMPTZ_STRING_CODEC_ID],
-    }),
-    date: /* @__PURE__ */ temporalCodecPreset({
-      codecId: PG_DATE_TEMPORAL_CODEC_ID,
-      generatorId: postgresNowGeneratorIds[PG_DATE_TEMPORAL_CODEC_ID],
-    }),
-    dateString: /* @__PURE__ */ temporalCodecPreset({
-      codecId: PG_DATE_STRING_CODEC_ID,
-      generatorId: postgresNowGeneratorIds[PG_DATE_STRING_CODEC_ID],
-    }),
-    time: /* @__PURE__ */ temporalCodecPresetWithPrecision({
-      sizeType: PG_SIZE_TYPE,
-      codecId: PG_TIME_TEMPORAL_CODEC_ID,
-      generatorId: postgresNowGeneratorIds[PG_TIME_TEMPORAL_CODEC_ID],
-      nowTakesPrecision: postgresNowGeneratorTakesPrecision[PG_TIME_TEMPORAL_CODEC_ID],
-    }),
-    timeString: /* @__PURE__ */ temporalCodecPresetWithPrecision({
-      sizeType: PG_SIZE_TYPE,
-      codecId: PG_TIME_STRING_CODEC_ID,
-      generatorId: postgresNowGeneratorIds[PG_TIME_STRING_CODEC_ID],
-      nowTakesPrecision: postgresNowGeneratorTakesPrecision[PG_TIME_STRING_CODEC_ID],
-    }),
-    /** Produces a string: no Temporal type holds a time of day with an offset. */
-    timetz: /* @__PURE__ */ temporalCodecPresetWithPrecision({
-      sizeType: PG_SIZE_TYPE,
-      codecId: PG_TIMETZ_CODEC_ID,
-      generatorId: postgresNowGeneratorIds[PG_TIMETZ_CODEC_ID],
-      nowTakesPrecision: postgresNowGeneratorTakesPrecision[PG_TIMETZ_CODEC_ID],
-    }),
-  },
-  uuidNative: {
-    kind: 'fieldPreset',
-    output: {
-      codecId: 'pg/uuid@1',
-    },
-  },
-  id: {
-    uuidv4Native: {
-      kind: 'fieldPreset',
-      output: {
-        codecId: 'pg/uuid@1',
-        executionDefaults: {
-          onCreate: {
-            kind: 'generator',
-            id: 'uuidv4',
-          },
-        },
-        id: true,
-      },
-    },
-    uuidv7Native: {
-      kind: 'fieldPreset',
-      output: {
-        codecId: 'pg/uuid@1',
-        executionDefaults: {
-          onCreate: {
-            kind: 'generator',
-            id: 'uuidv7',
-          },
-        },
-        id: true,
-      },
-    },
-  },
-} as const satisfies AuthoringFieldNamespace;
 
 interface RlsRoleHandleShape {
   readonly entityKind: 'role';

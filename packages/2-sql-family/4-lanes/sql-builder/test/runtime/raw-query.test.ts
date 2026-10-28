@@ -15,6 +15,8 @@ import { TableProxyImpl } from '../../src/runtime/table-proxy-impl';
 import { contract as contractJson } from '../fixtures/contract';
 import type { Contract } from '../fixtures/generated/contract';
 
+const pgText = { codecId: 'pg/text@1' } as const;
+
 const sqlContract = validateSqlContractFully<Contract>(contractJson);
 
 const stubBase = {
@@ -138,11 +140,6 @@ describe('a storage namespace named raw', () => {
         id: 'sql',
         familyId: 'sql',
         version: '0.0.1',
-        authoring: {
-          field: {
-            text: { kind: 'fieldPreset', output: { codecId: 'pg/text@1' } },
-          },
-        },
       } as const satisfies FamilyPackRef<'sql'>,
       target: {
         kind: 'target',
@@ -157,7 +154,7 @@ describe('a storage namespace named raw', () => {
     ({ field: f, model: m }) =>
       ({
         models: {
-          Note: m('Note', { fields: { id: f.text().id() } }),
+          Note: m('Note', { fields: { id: f.column(pgText).id() } }),
         },
       }) as const,
   ) as FrameworkContract<SqlStorage>;

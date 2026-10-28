@@ -34,10 +34,22 @@ const execFileAsync = promisify(execFile);
 /**
  * Path to the workspace-built CLI binary. The integration package's
  * `pretest` hook runs `pnpm -w build`, so `dist/bin.mjs` exists when these
- * tests run.
+ * tests run. Only `orm init` runs it: the project has nothing installed yet,
+ * so the CLI is the only framework copy loaded.
  */
 const WORKSPACE_ROOT = resolve(import.meta.dirname, '../../../../..');
-const CLI_BIN = join(WORKSPACE_ROOT, 'packages/1-framework/3-tooling/cli/dist/bin.mjs');
+const WORKSPACE_CLI_BIN = join(WORKSPACE_ROOT, 'packages/1-framework/3-tooling/cli/dist/bin.mjs');
+
+/**
+ * The project's own `prisma` command, written after install. It runs the CLI
+ * from the project's installed `@prisma/orm-toolchain`, so the CLI and the
+ * project's `@prisma/orm-*` packages load one framework copy, as a user's do.
+ */
+const PROJECT_CLI_FILE = 'prisma-cli.mjs';
+const PROJECT_CLI_SOURCE = `import { runOrmBin } from '@prisma/orm-toolchain/cli';
+
+await runOrmBin();
+`;
 
 /**
  * Shared cache root for the journey runs. Lives outside the repo (under
@@ -148,7 +160,7 @@ export async function createJourneyProject(
     const target = cell.target === 'mongo' ? 'mongodb' : 'postgres';
     const initResult = await runNode(
       [
-        CLI_BIN,
+        WORKSPACE_CLI_BIN,
         'orm',
         'init',
         '--target',
@@ -167,6 +179,7 @@ export async function createJourneyProject(
       rewritePackageJsonForTarballs(dir, cell, tarballs);
       writeIsolatedNpmrc(dir);
       installResult = await runPnpm(['install', '--no-frozen-lockfile'], dir);
+      writeFileSync(join(dir, PROJECT_CLI_FILE), PROJECT_CLI_SOURCE, 'utf-8');
     }
 
     return {
@@ -481,15 +494,15 @@ function rewritePackageJsonForTarballs(dir: string, cell: CellId, tarballs: Pack
     ...migrationDepEntries,
     dotenv: '^16.4.5',
   };
-  // No standalone-CLI devDependency: journey steps invoke the
-  // workspace-built engine bin.
-  // `@prisma/cli-engine` is the scaffolded prisma.config.ts's
-  // definePrismaConfig import, installed from the registry exactly as
+  // `@prisma/orm-toolchain` is what the project's `prisma` command
+  // (`PROJECT_CLI_FILE`) runs the CLI from. `@prisma/cli-engine` is the
+  // scaffolded prisma.config.ts's definePrismaConfig import, installed from the registry exactly as
   // `init`'s own install would. Must be an engine that has that export
   // (0.2.0+), and should track what the workspace pins.
   pkg.devDependencies = {
     ...(pkg.devDependencies ?? {}),
     '@prisma/cli-engine': '0.9.0',
+    '@prisma/orm-toolchain': `file:${requireTarball(tarballs, '@prisma/orm-toolchain')}`,
     '@types/node': '^24.10.4',
     typescript: '^5.9.3',
   };
@@ -567,12 +580,11 @@ export function attachDatabase(project: JourneyProject, connectionString: string
 
 /**
  * Emits the contract. The user-facing bin is the unified `prisma` CLI
- * (published from the prisma-cli repo), so journey steps invoke the
- * workspace-built engine bin in the project directory instead of
- * `pnpm exec prisma`.
+ * (published from the prisma-cli repo), so journey steps run the project's
+ * `PROJECT_CLI_FILE`, which loads the CLI from the installed toolchain.
  */
 export async function emitContract(project: JourneyProject): Promise<StepResult> {
-  return runStep(project, ['node', CLI_BIN, 'contract', 'emit']);
+  return runStep(project, ['node', PROJECT_CLI_FILE, 'contract', 'emit']);
 }
 
 /**
@@ -581,7 +593,7 @@ export async function emitContract(project: JourneyProject): Promise<StepResult>
  * the schema in via `migrationPlan` + `migrationApply`.
  */
 export async function dbInit(project: JourneyProject): Promise<StepResult> {
-  return runStep(project, ['node', CLI_BIN, 'db', 'init']);
+  return runStep(project, ['node', PROJECT_CLI_FILE, 'db', 'init']);
 }
 
 /**
@@ -592,7 +604,7 @@ export async function dbInit(project: JourneyProject): Promise<StepResult> {
  * `selfEmitLatestMigration`) and then running `migrationApply`.
  */
 export async function migrationPlan(project: JourneyProject, name: string): Promise<StepResult> {
-  return runStep(project, ['node', CLI_BIN, 'migration', 'plan', '--name', name]);
+  return runStep(project, ['node', PROJECT_CLI_FILE, 'migration', 'plan', '--name', name]);
 }
 
 /**
@@ -635,7 +647,7 @@ export async function selfEmitLatestMigration(project: JourneyProject): Promise<
  * seam (TML-2486) surfaces here when the bug is present.
  */
 export async function migrationApply(project: JourneyProject): Promise<StepResult> {
-  return runStep(project, ['node', CLI_BIN, 'migrate']);
+  return runStep(project, ['node', PROJECT_CLI_FILE, 'migrate']);
 }
 
 /**

@@ -6,24 +6,19 @@ import {
 } from './data-type';
 import {
   type AuthoringContributions,
-  type AuthoringFieldPresetDescriptor,
   type AuthoringTypeConstructorDescriptor,
   type DataTypeAuthoringEntry,
-  isAuthoringFieldPresetDescriptor,
   isAuthoringTypeConstructorDescriptor,
   isAuthoringTypeDescriptor,
 } from './framework-authoring';
 import { runtimeError } from './runtime-error';
 import type { DataTypeSupport } from './written-value';
 
-/** A component as data type assembly reads it: the data types it registers, their authoring entries, the codecs that name them, and the type constructors and field presets whose value arguments name them. */
+/** A component as data type assembly reads it: the data types it registers, their authoring entries, the codecs that name them, and the type constructors whose value arguments name them. */
 export interface DataTypeComponent {
   readonly id?: string;
   readonly dataTypes?: ReadonlyArray<DataType>;
-  readonly authoring?: Pick<
-    AuthoringContributions,
-    'dataTypes' | 'type' | 'field' | 'textDataTypes'
-  >;
+  readonly authoring?: Pick<AuthoringContributions, 'dataTypes' | 'type' | 'textDataTypes'>;
   readonly types?: {
     readonly [slot: string]: unknown;
     readonly codecTypes?: {
@@ -58,10 +53,10 @@ export interface DataTypeAssemblyInput {
   }>;
 }
 
-/** A type constructor or field preset, the helpers that take arguments, with the path it is registered under and who registered it. */
+/** A type constructor, the helper that takes arguments, with the path it is registered under and who registered it. */
 export interface ContributedHelper {
   readonly path: string;
-  readonly descriptor: AuthoringTypeConstructorDescriptor | AuthoringFieldPresetDescriptor;
+  readonly descriptor: AuthoringTypeConstructorDescriptor;
   readonly contributedBy: string;
 }
 
@@ -114,17 +109,16 @@ function descriptorsIn<D>(
   });
 }
 
-/** Every type constructor and field preset a component contributes. */
+/** Every type constructor a component contributes. */
 export function contributedHelpers(
   component: Pick<DataTypeComponent, 'id' | 'authoring'>,
 ): readonly ContributedHelper[] {
-  return [
-    ...descriptorsIn(component.authoring?.type, isAuthoringTypeDescriptor).flatMap(
-      ({ path, descriptor }) =>
-        isAuthoringTypeConstructorDescriptor(descriptor) ? [{ path, descriptor }] : [],
-    ),
-    ...descriptorsIn(component.authoring?.field, isAuthoringFieldPresetDescriptor),
-  ].map((entry) => ({ ...entry, contributedBy: component.id ?? UNKNOWN_CONTRIBUTOR }));
+  return descriptorsIn(component.authoring?.type, isAuthoringTypeDescriptor).flatMap(
+    ({ path, descriptor }) =>
+      isAuthoringTypeConstructorDescriptor(descriptor)
+        ? [{ path, descriptor, contributedBy: component.id ?? UNKNOWN_CONTRIBUTOR }]
+        : [],
+  );
 }
 
 /** The data types a contract source can write: each entry's own, and every type a plain-number entry classifies a number as. */
@@ -148,13 +142,13 @@ function enforceValueArguments(
   writable: ReadonlySet<string>,
 ): void {
   const { path, descriptor, contributedBy } = contributed;
-  const kind = descriptor.kind === 'typeConstructor' ? 'type constructor' : 'field preset';
   for (const [index, argument] of (descriptor.args ?? []).entries()) {
-    const label = `Argument ${argument.name === undefined ? `#${index + 1}` : `"${argument.name}"`} of ${kind} "${path}"`;
-    if (argument.kind !== 'value' && descriptor.kind === 'typeConstructor') {
+    const label = `Argument ${argument.name === undefined ? `#${index + 1}` : `"${argument.name}"`} of type constructor "${path}"`;
+    const argumentKind: string = argument.kind;
+    if (argumentKind !== 'value') {
       throw runtimeError(
         'CONTRACT.PACK_CONTRIBUTION_INVALID',
-        `${label} contributed by "${contributedBy}" is an argument of kind "${argument.kind}", but a type constructor's argument is a value of a data type. Declare it as { kind: 'value', dataType: ... }, naming the data type its value belongs to.`,
+        `${label} contributed by "${contributedBy}" is an argument of kind "${argumentKind}", but a type constructor's argument is a value of a data type. Declare it as { kind: 'value', dataType: ... }, naming the data type its value belongs to.`,
         {
           packId: contributedBy,
           contribution: path,
@@ -162,7 +156,6 @@ function enforceValueArguments(
         },
       );
     }
-    if (argument.kind !== 'value') continue;
     const type = support.lookup.get(argument.dataType);
     if (type === undefined) {
       throw runtimeError(
@@ -276,7 +269,7 @@ export function enforceDataTypeAssemblyInvariants(input: DataTypeAssemblyInput):
 }
 
 /**
- * The data types the components register, with their authoring entries, as every contract source reads values with. Refuses two registrations of one data type or one entry key, every case {@link enforceDataTypeAssemblyInvariants} lists, a value argument of a type constructor or field preset whose data type is unregistered or that no contract source can write, and a type-constructor argument that is not a value. ADR 254.
+ * The data types the components register, with their authoring entries, as every contract source reads values with. Refuses two registrations of one data type or one entry key, every case {@link enforceDataTypeAssemblyInvariants} lists, a value argument of a type constructor whose data type is unregistered or that no contract source can write, and a type-constructor argument that is not a value. ADR 254.
  */
 export function assembleDataTypeSupport(
   components: ReadonlyArray<DataTypeComponent>,

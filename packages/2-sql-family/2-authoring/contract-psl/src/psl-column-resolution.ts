@@ -1,5 +1,4 @@
 import type {
-  ColumnDefault,
   ColumnDefaultLiteralInputValue,
   ExecutionMutationDefaultPhases,
   ExecutionMutationDefaultValue,
@@ -10,7 +9,6 @@ import type {
   AuthoringContributions,
   AuthoringEntityTypeDescriptor,
   AuthoringEntityTypeNamespace,
-  AuthoringFieldPresetDescriptor,
   AuthoringStorageTypeTemplate,
   AuthoringTypeConstructorDescriptor,
   ScalarTypeConstructorOutput,
@@ -61,10 +59,8 @@ import {
   typeGeneratorAttributeSpec,
 } from '@internal/psl-parser';
 import {
-  instantiatePslFieldPreset,
   isBareTypeConstructor,
   mapPslHelperArgs,
-  reportPresetNotCalled,
   reportTypeConstructorNotCalled,
 } from '@internal/psl-parser/interpret';
 import type { FieldAttributeAst, PslSources } from '@internal/psl-parser/syntax';
@@ -126,7 +122,7 @@ function argumentSpan(
 }
 
 /**
- * Checks the type parameters a constructor or preset produced against its codec's parameter schema,
+ * Checks the type parameters a constructor produced against its codec's parameter schema,
  * reporting a failure at the argument the failing parameter came from. Returns whether they passed.
  */
 export function checkPslTypeParams(input: {
@@ -389,23 +385,8 @@ function resolveEntityRefTypeConstructorCall(input: {
   };
 }
 
-/**
- * Contract contributions a field preset adds beyond the bare storage-type triple. Set when a field is resolved through the field-preset dispatch path; absent when resolved through the type-constructor path or as a scalar/enum/named-type lookup.
- */
-export type FieldPresetContributions = {
-  readonly nullable: boolean;
-  readonly id: boolean;
-  readonly unique: boolean;
-  readonly default?: ColumnDefault;
-  readonly executionDefaults?: ExecutionMutationDefaultPhases;
-};
-
 export type ResolveFieldTypeResult =
-  | {
-      readonly ok: true;
-      readonly descriptor: ColumnDescriptor;
-      readonly presetContributions?: FieldPresetContributions;
-    }
+  | { readonly ok: true; readonly descriptor: ColumnDescriptor }
   | { readonly ok: false };
 
 const NOT_RESOLVED: ResolveFieldTypeResult = { ok: false };
@@ -475,45 +456,6 @@ export function instantiateFieldTypeConstructor(
   return instantiated === undefined ? NOT_RESOLVED : { ok: true, descriptor: instantiated };
 }
 
-function instantiateFieldPreset(input: {
-  readonly call: ResolvedTypeConstructorCall;
-  readonly descriptor: AuthoringFieldPresetDescriptor;
-  readonly codecLookup: CodecLookupWithDescriptors;
-  readonly diagnostics: PslDiagnosticCollector;
-  readonly source: DiagnosticSource;
-  readonly entityLabel: string;
-  readonly dataTypes: DataTypeSupport;
-}): ResolveFieldTypeResult {
-  const instantiated = instantiatePslFieldPreset(input);
-  if (!instantiated) {
-    return NOT_RESOLVED;
-  }
-  if (
-    !checkPslTypeParams({
-      call: input.call,
-      subject: `${input.entityLabel} preset "${input.call.path.join('.')}"`,
-      args: input.descriptor.args,
-      template: input.descriptor.output,
-      typeParams: instantiated.descriptor.typeParams,
-      codecLookup: input.codecLookup,
-      diagnostics: input.diagnostics,
-      source: input.source,
-    })
-  ) {
-    return NOT_RESOLVED;
-  }
-  const presetContributions: FieldPresetContributions = {
-    nullable: instantiated.nullable,
-    id: instantiated.id,
-    unique: instantiated.unique,
-    ...(instantiated.default !== undefined ? { default: instantiated.default } : {}),
-    ...(instantiated.executionDefaults !== undefined
-      ? { executionDefaults: instantiated.executionDefaults }
-      : {}),
-  };
-  return { ok: true, descriptor: instantiated.descriptor, presetContributions };
-}
-
 function resolvedKindLabel(resolution: Resolution): string {
   switch (resolution.kind) {
     case 'compositeType':
@@ -570,27 +512,6 @@ export function resolveFieldTypeDescriptor(
           return NOT_RESOLVED;
         }
         return { ok: true, descriptor: instantiateAuthoringTypeAlias(descriptor).type };
-      }
-      if (descriptor.kind === 'fieldPreset') {
-        if (call === undefined) {
-          reportPresetNotCalled({
-            entityLabel,
-            presetPath: written,
-            source,
-            span: field.span,
-            diagnostics,
-          });
-          return NOT_RESOLVED;
-        }
-        return instantiateFieldPreset({
-          call,
-          descriptor,
-          codecLookup: input.codecLookup,
-          diagnostics,
-          source,
-          entityLabel,
-          dataTypes: input.dataTypes,
-        });
       }
       if (call !== undefined) {
         return instantiateFieldTypeConstructor({ ...input, call, descriptor, source });

@@ -208,6 +208,8 @@ jobs:
         run: pnpm build
       - name: Link bins
         run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/mongod-binary
+        timeout-minutes: 10
       - name: Run package tests with coverage
         id: package-tests
         continue-on-error: true
@@ -278,13 +280,20 @@ jobs:
       - name: Link bins
         run: pnpm install --frozen-lockfile
       - name: Start cloudflare-worker Postgres (5433, pg_stat_statements)
-        run: pnpm --filter prisma-8-cloudflare-worker db:up
+        run: >-
+          node scripts/retry-command.mjs
+          --before-retry 'docker compose --project-directory examples/prisma-8-cloudflare-worker down --volumes'
+          -- pnpm --filter prisma-8-cloudflare-worker db:up
       # Fetch Prisma 7's schema engine, which the install does not download,
-      # so a slow or unreachable binary host fails this step within 5 minutes
+      # so a slow or unreachable binary host fails this step within 10 minutes
       # instead of timing out inside the example test.
       - name: Fetch the Prisma 7 schema engine (prisma7-adoption)
-        timeout-minutes: 5
-        run: pnpm --filter prisma7-adoption exec prisma7 --version --config prisma7.config.ts
+        timeout-minutes: 10
+        run: >-
+          node scripts/retry-command.mjs
+          -- pnpm --filter prisma7-adoption exec prisma7 --version --config prisma7.config.ts
+      - uses: ./.github/actions/mongod-binary
+        timeout-minutes: 10
       - name: Test examples
         run: pnpm test:examples
       - name: Check working tree is clean
@@ -448,7 +457,7 @@ jobs:
       - name: Start local Supabase stack
         if: needs.changes.outputs.inert != 'true'
         working-directory: examples/supabase
-        run: supabase start
+        run: node ../../scripts/retry-command.mjs --before-retry 'supabase stop --no-backup' -- supabase start
       - name: Export stack credentials for the acceptance harness
         if: needs.changes.outputs.inert != 'true'
         working-directory: examples/supabase

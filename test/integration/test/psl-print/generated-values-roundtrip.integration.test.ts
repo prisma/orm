@@ -1,6 +1,7 @@
 import {
-  type AuthoringFieldNamespace,
-  isAuthoringFieldPresetDescriptor,
+  type AuthoringTypeNamespace,
+  isAuthoringTypeAliasDescriptor,
+  isAuthoringTypeConstructorDescriptor,
 } from '@internal/framework-components/authoring';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
@@ -35,18 +36,27 @@ const textGeneratorCalls = [
   'ksuid()',
 ];
 
-/** Every `temporal.*` field preset the stack contributes, called with the now generator in each phase it takes. */
-function temporalPresetCalls(namespace: AuthoringFieldNamespace): readonly string[] {
-  const temporal = namespace['temporal'];
-  if (temporal === undefined || isAuthoringFieldPresetDescriptor(temporal)) return [];
-  return Object.entries(temporal).flatMap(([name, preset]) => {
-    if (!isAuthoringFieldPresetDescriptor(preset)) return [];
-    const phases = (preset.args ?? [])
-      .map((arg) => arg.name)
-      .filter((argName) => argName === 'onCreate' || argName === 'onUpdate')
-      .map((argName) => `${argName}: now`);
-    return [`temporal.${name}(${phases.join(', ')})`];
-  });
+/** Every `temporal.*` type alias the stack contributes. */
+function temporalTypeAliases(types: AuthoringTypeNamespace): readonly string[] {
+  const temporal = types['temporal'];
+  if (temporal === undefined || isAuthoringTypeConstructorDescriptor(temporal)) return [];
+  return Object.entries(temporal).flatMap(([name, alias]) =>
+    isAuthoringTypeAliasDescriptor(alias) ? [`temporal.${name}`] : [],
+  );
+}
+
+/** Every type the stack's `now()` generates a value for, written with no arguments and both generator attributes. */
+function nowGeneratedTypes(withStack: PostgresStack): readonly string[] {
+  return Object.entries(withStack.authoringContributions.type).flatMap(([name, descriptor]) =>
+    isAuthoringTypeConstructorDescriptor(descriptor) &&
+    descriptor.entityRefArg === undefined &&
+    (descriptor.args ?? []).every((arg) => arg.optional === true) &&
+    withStack.generatorFunctions
+      .functionsFor(descriptor.output.codecId)
+      .some((fn) => fn.name === 'now')
+      ? [`${name} @onCreate(now()) @onUpdate(now())`]
+      : [],
+  );
 }
 
 async function roundTrip(field: string, withStack: PostgresStack = stack): Promise<void> {
@@ -65,14 +75,18 @@ model Widget {
 }
 
 describe('every generated value the stack reads prints as PSL that reads back', () => {
-  it('finds the default functions, generator functions and temporal presets', () => {
+  it('finds the default functions, generator functions, temporal aliases and now() types', () => {
     expect(defaultFunctionCalls).toContain('now()');
     expect(stack.generatorFunctions.functionsFor('pg/text@1').map(({ name }) => name)).toEqual(
       [...new Set(textGeneratorCalls.map((call) => call.slice(0, call.indexOf('('))))].sort(),
     );
-    expect(temporalPresetCalls(stack.authoringContributions.field)).toContain(
-      'temporal.timestamptz(onCreate: now, onUpdate: now)',
-    );
+    expect({
+      aliases: temporalTypeAliases(stack.authoringContributions.type),
+      now: nowGeneratedTypes(stack),
+    }).toMatchObject({
+      aliases: expect.arrayContaining(['temporal.CreatedAt', 'temporal.UpdatedAtJsDate']),
+      now: expect.arrayContaining(['TimestamptzTemporal @onCreate(now()) @onUpdate(now())']),
+    });
   });
 
   it.each(defaultFunctionCalls)(
@@ -104,7 +118,7 @@ describe('every generated value the stack reads prints as PSL that reads back', 
     timeouts.pslRoundTrip,
   );
 
-  it.each(temporalPresetCalls(stack.authoringContributions.field))(
+  it.each([...temporalTypeAliases(stack.authoringContributions.type), ...nowGeneratedTypes(stack)])(
     '%s',
     async (call) => {
       await roundTrip(`value ${call}`);

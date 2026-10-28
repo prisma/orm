@@ -5,13 +5,13 @@ types {
 }
 
 model Post {
-  id        ObjectId             @id @map("_id")
-  title     String               @map("t")
-  createdAt temporal.createdAt()
-  updatedAt temporal.UpdatedAt   @map("updated_at")
-  seenAt    Date                 @onCreate(now())
+  id        ObjectId           @id @map("_id")
+  title     String             @map("t")
+  createdAt temporal.CreatedAt
+  updatedAt temporal.UpdatedAt @map("updated_at")
+  seenAt    Date               @onCreate(now())
   touchedAt TouchedAt
-  stamp     temporal.timestamp()
+  stamp     Date
 
   @@map("posts")
 }

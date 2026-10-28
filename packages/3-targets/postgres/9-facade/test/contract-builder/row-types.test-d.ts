@@ -6,11 +6,11 @@ import postgres from '../../src/exports/runtime';
 
 const Level = enumType('Level', { codecId: 'pg/int8@1' }, member('Low', 1n), member('High', 10n));
 
-const contract = defineContract({ enums: { Level } }, ({ field, model, type }) => ({
+const contract = defineContract({ enums: { Level } }, ({ field, model, type, gen }) => ({
   models: {
     Reading: model('Reading', {
       fields: {
-        id: field.id.uuidv4String(),
+        id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
         label: field.column(type.sql.String(50)),
         note: field.column(type.sql.String(50)).optional(),
         level: field.namedType(Level),

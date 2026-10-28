@@ -1,67 +1,72 @@
 /**
- * The field presets, id generators and relation shapes the planner golden fixture leaves out, so the parity test compares them with their emitted types.
+ * The type constructors, id generators and relation shapes the planner golden fixture leaves out, so the parity test compares them with their emitted types.
  */
 
 import { integerColumn, textColumn } from '@internal/adapter-sqlite/column-types';
-import { cuid2, ksuid, nanoid, ulid, uuidv4, uuidv7 } from '@internal/ids';
 import { defineContract } from '@internal/sqlite/contract-builder';
 
 // The foreign key defaults turn backing indexes off, so only a foreign key that asks for one gets it.
 export const contract = defineContract(
   { foreignKeyDefaults: { constraint: true, index: false } },
-  ({ field, model, rel }) => {
+  ({ field, model, rel, gen, type }) => {
     const User = model('User', {
       fields: {
-        id: field.id.uuidv7String(),
+        id: field.column(type.sql.Char(36)).id().onCreate(gen.uuid(7)),
         email: field.column(textColumn),
-        externalId: field.uuidString(),
-        ulid: field.ulid(),
-        nanoid: field.nanoid(),
-        shortNanoid: field.nanoid({ size: 10 }),
-        cuid2: field.cuid2(),
-        ksuid: field.ksuid(),
-        createdAt: field.temporal.createdAt(),
-        updatedAt: field.temporal.updatedAt(),
-        seenAt: field.temporal.datetime(),
+        externalId: field.column(type.sql.Char(36)),
+        ulid: field.column(type.sql.Char(26)),
+        nanoid: field.column(type.sql.Char(21)),
+        shortNanoid: field.column(type.sql.Char(10)),
+        cuid2: field.column(type.sql.Char(24)),
+        ksuid: field.column(type.sql.Char(27)),
+        createdAt: field.column(type.temporal.CreatedAt()),
+        updatedAt: field.column(type.temporal.UpdatedAt()),
+        seenAt: field.column(type.DateTime()),
       },
     });
 
     const Post = model('Post', {
       fields: {
-        id: field.id.uuidv4String(),
-        authorId: field.uuidString(),
+        id: field.column(type.sql.Char(36)).id().onCreate(gen.uuid()),
+        authorId: field.column(type.sql.Char(36)),
         title: field.column(textColumn),
       },
     });
 
     const Tag = model('Tag', {
-      fields: { id: field.id.ulid(), label: field.column(textColumn) },
+      fields: {
+        id: field.column(type.sql.Char(26)).id().onCreate(gen.ulid()),
+        label: field.column(textColumn),
+      },
     });
 
     const PostTag = model('PostTag', {
-      fields: { postId: field.uuidString(), tagId: field.ulid() },
+      fields: { postId: field.column(type.sql.Char(36)), tagId: field.column(type.sql.Char(26)) },
     });
 
     const Generated = model('Generated', {
       fields: {
-        id: field.generated(uuidv4()).id(),
-        uuidv7: field.generated(uuidv7()),
-        ulid: field.generated(ulid()),
-        nanoid: field.generated(nanoid()),
-        shortNanoid: field.generated(nanoid({ size: 12 })),
-        cuid2: field.generated(cuid2()),
-        ksuid: field.generated(ksuid()),
+        id: field.column(type.sql.Char(36)).onCreate(gen.uuid()).id(),
+        uuidv7: field.column(type.sql.Char(36)).onCreate(gen.uuid(7)),
+        ulid: field.column(type.sql.Char(26)).onCreate(gen.ulid()),
+        nanoid: field.column(type.sql.Char(21)).onCreate(gen.nanoid()),
+        shortNanoid: field.column(type.sql.Char(12)).onCreate(gen.nanoid(12)),
+        cuid2: field.column(type.sql.Char(24)).onCreate(gen.cuid(2)),
+        ksuid: field.column(type.sql.Char(27)).onCreate(gen.ksuid()),
       },
     });
 
     const Employee = model('Employee', {
-      fields: { id: field.id.nanoid(), managerId: field.nanoid().optional() },
+      fields: {
+        id: field.column(type.sql.Char(21)).id().onCreate(gen.nanoid()),
+        managerId: field.column(type.sql.Char(21)).optional(),
+      },
     });
 
     const Profile = model('Profile', {
       fields: {
-        id: field.id.ksuid(),
-        userId: field.uuidString(),
+        id: field.column(type.sql.Char(27)).id().onCreate(gen.ksuid()),
+        userId: field.column(type.sql.Char(36)),
         rank: field.column(integerColumn),
       },
     });

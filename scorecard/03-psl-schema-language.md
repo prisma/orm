@@ -43,7 +43,7 @@ Legend:
 | `@onCreate(ulid())` | 🟡 | 🟡 | — | |
 | `@onCreate(nanoid())` | 🟡 | 🟡 | — | |
 | `@onCreate(ksuid())` | 🟡 | 🟡 | — | |
-| `@onCreate(now())` / `@onUpdate(now())` | ✅ | 🟡 | 🟡 | `test/integration/test/temporal-defaults/generator-attributes-parity.test.ts`; `test/integration/test/mongo/temporal-presets/generator-attributes-parity.test.ts` |
+| `@onCreate(now())` / `@onUpdate(now())` | ✅ | 🟡 | 🟡 | `test/integration/test/temporal-defaults/generator-attributes-parity.test.ts`; `test/integration/test/mongo/temporal-generators/generator-attributes-parity.test.ts` |
 | `@default(uuid())` and other client functions in `@default` | ❌ | ❌ | — | Refused with `PSL_GENERATOR_IN_DEFAULT`, naming `@onCreate(...)` (`packages/2-sql-family/2-authoring/contract-psl/test/interpreter.defaults.functions.test.ts`). |
 | `@default(dbgenerated("..."))` | ❌ | ❌ | — | Removed; a raw SQL default is `` @default(sql`...`) `` (`packages/2-sql-family/2-authoring/contract-psl/test/interpreter.defaults.tagged-literal.test.ts`). A `dbgenerated(...)` call is `PSL_UNKNOWN_DEFAULT_FUNCTION` naming the replacement (`test/integration/test/authoring/diagnostics/removed-dbgenerated/`). |
 | TS ID generator `ulid` | 🟡 | 🟡 | — | |

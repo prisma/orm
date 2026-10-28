@@ -11,7 +11,6 @@ import { unboundTables } from './unbound-tables';
 
 const authoringContributions = {
   entityTypes: {},
-  field: {},
   pslBlockDescriptors: {},
   modelAttributes: {},
   type: postgresScalarAuthoringTypes,

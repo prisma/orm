@@ -222,14 +222,7 @@ export type BuildRefusal =
     };
 
 /** Something the builder accepts but the author probably did not mean, or a warning the source collected. */
-export type BuildWarning =
-  | {
-      readonly kind: 'presetWithoutEffect';
-      readonly key: FieldKey;
-      readonly preset: string;
-      readonly codecId: string;
-    }
-  | { readonly kind: 'source'; readonly warning: AuthoringWarning };
+export type BuildWarning = { readonly kind: 'source'; readonly warning: AuthoringWarning };
 
 export function modelFieldKey(model: string, field: string): FieldKey {
   return { kind: 'field', owner: { kind: 'model', name: model }, field };

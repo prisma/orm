@@ -26,7 +26,7 @@ const BigLevel = enumType('BigLevel', { codecId: 'pg/int8@1' as const }, member(
 const handWritten = { codecId: 'app/custom@1' } as const;
 
 test('.default() takes the input type of the field codec', () => {
-  defineContract({ enums: { Level, BigLevel } }, ({ field, model }) => {
+  defineContract({ enums: { Level, BigLevel } }, ({ field, model, gen, type }) => {
     const Counter = field.column({
       kind: 'codec-instance',
       codecId: 'pg/int8@1',
@@ -36,19 +36,24 @@ test('.default() takes the input type of the field codec', () => {
       models: {
         Accepted: model('Accepted', {
           fields: {
-            id: field.id.uuidv4String(),
-            instant: field.dateTime().default(Temporal.Instant.from('2024-01-01T00:00:00Z')),
-            big: field.bigint().default(1n),
-            bytes: field.bytes().default(new Uint8Array([120])),
-            text: field.text().default('x'),
-            jsDate: field.temporal.timestamptzJsDate().default(new Date()),
-            isoString: field.temporal.timestamptzString().default('2024-01-01T00:00:00Z'),
-            generatedNow: field.dateTime().default(now()),
-            rawSql: field.text().default(sql`'x'`),
-            optionalThenDefault: field.bigint().optional().default(1n),
-            list: field.bigint().many().default([1n, 2n]),
-            nullableElements: field.bigint().many({ elementsNullable: true }).default([1n, null]),
-            nullableList: field.bigint().many().optional().default(null),
+            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+            instant: field
+              .column(type.DateTime())
+              .default(Temporal.Instant.from('2024-01-01T00:00:00Z')),
+            big: field.column(type.BigInt()).default(1n),
+            bytes: field.column(type.Bytes()).default(new Uint8Array([120])),
+            text: field.column(type.String()).default('x'),
+            jsDate: field.column(type.TimestamptzJsDate()).default(new Date()),
+            isoString: field.column(type.TimestamptzString()).default('2024-01-01T00:00:00Z'),
+            generatedNow: field.column(type.DateTime()).default(now()),
+            rawSql: field.column(type.String()).default(sql`'x'`),
+            optionalThenDefault: field.column(type.BigInt()).optional().default(1n),
+            list: field.column(type.BigInt()).many().default([1n, 2n]),
+            nullableElements: field
+              .column(type.BigInt())
+              .many({ elementsNullable: true })
+              .default([1n, null]),
+            nullableList: field.column(type.BigInt()).many().optional().default(null),
             nullableEnumElements: field
               .namedType(Level)
               .many({ elementsNullable: true })
@@ -65,21 +70,21 @@ test('.default() takes the input type of the field codec', () => {
         }),
         Refused: model('Refused', {
           fields: {
-            id: field.id.uuidv4String(),
+            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
             // @ts-expect-error pg/timestamptz-temporal@1 takes a Temporal.Instant, not a string
-            instant: field.dateTime().default('2024-01-01'),
+            instant: field.column(type.DateTime()).default('2024-01-01'),
             // @ts-expect-error pg/text@1 takes a string, not a number
-            text: field.text().default(1),
+            text: field.column(type.String()).default(1),
             // @ts-expect-error pg/int8@1 takes a bigint, not a number
-            big: field.bigint().default(1),
+            big: field.column(type.BigInt()).default(1),
             // @ts-expect-error pg/bytea@1 takes a Uint8Array, not a string
-            bytes: field.bytes().default('x'),
+            bytes: field.column(type.Bytes()).default('x'),
             // @ts-expect-error pg/timestamptz-date@1 takes a Date, not a string
-            jsDate: field.temporal.timestamptzJsDate().default('2024-01-01T00:00:00Z'),
+            jsDate: field.column(type.TimestamptzJsDate()).default('2024-01-01T00:00:00Z'),
             // @ts-expect-error pg/timestamptz-string@1 takes a string, not a Date
-            isoString: field.temporal.timestamptzString().default(new Date()),
+            isoString: field.column(type.TimestamptzString()).default(new Date()),
             // @ts-expect-error a list field takes an array
-            list: field.bigint().many().default(1n),
+            list: field.column(type.BigInt()).many().default(1n),
             // @ts-expect-error an enum field takes one of its member values
             level: field.namedType(Level).default(2),
             // @ts-expect-error an enum list field takes an array of member values
