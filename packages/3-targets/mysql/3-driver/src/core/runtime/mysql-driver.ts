@@ -140,7 +140,13 @@ async function* streamRows<Row>(
       throw settle(error, outcome);
     },
   );
-  const rows = statement.executeStream(values);
+  let rows: Readable;
+  try {
+    rows = statement.executeStream(values);
+  } catch (error) {
+    statement.close();
+    throw settle(error, outcome);
+  }
   rows.on('error', ignoreAfterStop);
   let settled = false;
   try {

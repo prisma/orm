@@ -221,6 +221,20 @@ describe('MySQL runtime driver and its pool', () => {
     }).toEqual({ destroyed: 0, released: 1, drained: 1, closed: 1 });
   });
 
+  it('closes the prepared statement and reports the error when executeStream throws, and returns the connection to the pool', async () => {
+    connection.behaviour = { kind: 'throws', error: mariadbError(false) };
+    const driver = await connected();
+    await expect(collect(driver.query({ sql: 'SELECT n FROM t' }))).rejects.toMatchObject({
+      kind: 'sql_query',
+      sqlState: '42S02',
+    });
+    expect({
+      closed: firstStatement().close.mock.calls.length,
+      released: connection.release.mock.calls.length,
+      destroyed: connection.destroy.mock.calls.length,
+    }).toEqual({ closed: 1, released: 1, destroyed: 0 });
+  });
+
   it('returns the connection to the pool after a statement error, from a stream, from execute and from prepare', async () => {
     const outcomes = [];
     for (const fail of ['stream', 'execute', 'prepare'] as const) {
