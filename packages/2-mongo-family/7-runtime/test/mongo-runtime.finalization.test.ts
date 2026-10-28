@@ -5,6 +5,7 @@ import type {
   ActivityFinalizedResult,
 } from '@internal/framework-components/runtime';
 import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
+import type { MongoContract } from '@internal/mongo-contract';
 import type { MongoAdapter, MongoDriver, MongoLoweredDraft } from '@internal/mongo-lowering';
 import type { MongoExecutionContext, MongoQueryPlan } from '@internal/mongo-query-ast/execution';
 import {
@@ -13,9 +14,9 @@ import {
   DeleteOneWireCommand,
 } from '@internal/mongo-wire';
 import { describe, expect, it, vi } from 'vitest';
-import type { MongoExecutionStack } from '../src/mongo-execution-stack';
 import type { MongoMiddleware, MongoMiddlewareContext } from '../src/mongo-middleware';
 import { createMongoRuntime } from '../src/mongo-runtime';
+import { testContract } from './mongo-middleware-fixtures';
 
 const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
 
@@ -66,7 +67,7 @@ function codecsWithFailingDecode() {
 function makeExecution(
   wireCommand: AnyMongoDmlWireCommand,
   onResolveParams: () => void = () => {},
-): { readonly context: MongoExecutionContext; readonly stack: MongoExecutionStack } {
+): { readonly context: MongoExecutionContext<MongoContract>; readonly adapter: MongoAdapter } {
   const adapter = {
     familyId: 'mongo',
     targetId: 'mongo',
@@ -84,29 +85,12 @@ function makeExecution(
     }),
   } as unknown as MongoAdapter;
   return {
-    context: { contract: {}, codecs: codecsWithFailingDecode(), applyMutationDefaults: () => [] },
-    stack: {
-      target: {
-        kind: 'target',
-        id: 'mongo',
-        familyId: 'mongo',
-        targetId: 'mongo',
-        version: '0.0.1',
-        codecs: () => newMongoCodecRegistry(),
-        create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
-      },
-      adapter: {
-        kind: 'adapter',
-        id: 'mongo',
-        familyId: 'mongo',
-        targetId: 'mongo',
-        version: '0.0.1',
-        codecs: () => newMongoCodecRegistry(),
-        create: () => adapter,
-      },
-      driver: undefined,
-      extensions: [],
-    } as unknown as MongoExecutionStack,
+    context: {
+      contract: testContract,
+      codecs: codecsWithFailingDecode(),
+      applyMutationDefaults: () => [],
+    },
+    adapter,
   };
 }
 

@@ -58,7 +58,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
     ]);
 
     const orm = mongoOrm({
-      contract,
+      context: ctx.context,
       executor: ctx.runtime,
       enums: buildMongoEnums(contract, ctx.codecs),
     });
@@ -77,7 +77,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
     ]);
 
     const orm = mongoOrm({
-      contract,
+      context: ctx.context,
       executor: ctx.runtime,
       enums: buildMongoEnums(contract, ctx.codecs),
     });
@@ -105,7 +105,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
     });
 
     const orm = mongoOrm({
-      contract,
+      context: ctx.context,
       executor: ctx.runtime,
       enums: buildMongoEnums(contract, ctx.codecs),
     });
@@ -130,7 +130,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
     });
 
     const orm = mongoOrm({
-      contract,
+      context: ctx.context,
       executor: ctx.runtime,
       enums: buildMongoEnums(contract, ctx.codecs),
     });
@@ -155,7 +155,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
     });
 
     const orm = mongoOrm({
-      contract,
+      context: ctx.context,
       executor: ctx.runtime,
       enums: buildMongoEnums(contract, ctx.codecs),
     });
@@ -188,7 +188,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
     ]);
 
     const orm = mongoOrm({
-      contract,
+      context: ctx.context,
       executor: ctx.runtime,
       enums: buildMongoEnums(contract, ctx.codecs),
     });
@@ -216,7 +216,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
     });
 
     const orm = mongoOrm({
-      contract,
+      context: ctx.context,
       executor: ctx.runtime,
       enums: buildMongoEnums(contract, ctx.codecs),
     });
@@ -242,7 +242,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
     ]);
 
     const orm = mongoOrm({
-      contract,
+      context: ctx.context,
       executor: ctx.runtime,
       enums: buildMongoEnums(contract, ctx.codecs),
     });
@@ -262,7 +262,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
     ]);
 
     const orm = mongoOrm({
-      contract,
+      context: ctx.context,
       executor: ctx.runtime,
       enums: buildMongoEnums(contract, ctx.codecs),
     });
@@ -283,7 +283,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
     ]);
 
     const orm = mongoOrm({
-      contract,
+      context: ctx.context,
       executor: ctx.runtime,
       enums: buildMongoEnums(contract, ctx.codecs),
     });
@@ -301,7 +301,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
     ]);
 
     const orm = mongoOrm({
-      contract,
+      context: ctx.context,
       executor: ctx.runtime,
       enums: buildMongoEnums(contract, ctx.codecs),
     });
@@ -336,7 +336,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
     });
 
     const orm = mongoOrm({
-      contract,
+      context: ctx.context,
       executor: ctx.runtime,
       enums: buildMongoEnums(contract, ctx.codecs),
     });

@@ -30,14 +30,14 @@ const STANDARD_CODEC_IDS = [
 ];
 
 describe('createMongoExecutionStack', () => {
-  it('builds a stack from target + adapter (no extensions, no driver)', () => {
+  it('builds a stack from target + adapter (no extensions)', () => {
     const stack = createMongoExecutionStack({
       target: mongoRuntimeTarget,
       adapter: mongoRuntimeAdapter,
     });
     expect(stack.target).toBe(mongoRuntimeTarget);
     expect(stack.adapter).toBe(mongoRuntimeAdapter);
-    expect(stack.driver).toBeUndefined();
+    expect(stack).not.toHaveProperty('driver');
     expect(stack.extensions).toEqual([]);
   });
 

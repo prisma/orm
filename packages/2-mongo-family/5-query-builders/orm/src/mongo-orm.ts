@@ -1,10 +1,10 @@
-import type { MutationDefaults } from '@internal/framework-components/runtime';
 import type {
   AnyMongoTypeMaps,
   MongoContract,
   MongoContractWithTypeMaps,
   RootModelName,
 } from '@internal/mongo-contract';
+import type { MongoExecutionContext } from '@internal/mongo-query-ast/execution';
 import { blindCast } from '@internal/utils/casts';
 import type { MongoCollection, MongoOrmEnums } from './collection';
 import { createMongoCollection } from './collection';
@@ -12,10 +12,9 @@ import type { MongoQueryExecutor } from './executor';
 import { ormError } from './orm-errors';
 
 export interface MongoOrmOptions<TContract extends MongoContract> {
-  readonly contract: TContract;
+  /** The validated contract, its codecs, and the execution defaults filled on writes. */
+  readonly context: MongoExecutionContext<TContract>;
   readonly executor: MongoQueryExecutor;
-  /** Fills the contract's execution defaults on writes. Without it, no generated values are applied. */
-  readonly mutationDefaults?: MutationDefaults;
   /** The contract's enum accessors, which a written enum value is checked against: `buildMongoEnums(contract, context.codecs)`, the accessors `db.enums` holds. */
   readonly enums: MongoOrmEnums;
 }
@@ -46,15 +45,8 @@ function assertEnumsComplete(contract: MongoContract, enums: MongoOrmEnums): voi
 export function mongoOrm<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
 >(options: MongoOrmOptions<TContract>): MongoOrmClient<TContract> {
-  const { contract, executor, mutationDefaults, enums } = options;
-  const executionDefaults = contract.execution?.mutations.defaults ?? [];
-  if (executionDefaults.length > 0 && mutationDefaults === undefined) {
-    throw ormError(
-      'ORM.MUTATION_DEFAULTS_MISSING',
-      'The contract has execution defaults (fields such as temporal.CreatedAt that the ORM fills on write), but mongoOrm() was built without mutationDefaults, so those fields would never be written. Pass the execution context: mongoOrm({ contract, executor, mutationDefaults: context }), or create the client with mongo().',
-      { meta: { fields: executionDefaults.map((d) => `${d.ref.entry}.${d.ref.field}`) } },
-    );
-  }
+  const { context, executor, enums } = options;
+  const { contract } = context;
   assertEnumsComplete(contract, enums);
   const client: Record<string, unknown> = {};
 
@@ -67,7 +59,7 @@ export function mongoOrm<
       >(rootRef.model),
       executor,
       enums,
-      mutationDefaults,
+      context,
     );
   }
 

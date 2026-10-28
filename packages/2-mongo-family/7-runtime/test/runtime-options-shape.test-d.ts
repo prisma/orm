@@ -1,4 +1,6 @@
 import type { MongoCodecRegistry } from '@internal/mongo-codec';
+import type { MongoContract } from '@internal/mongo-contract';
+import type { MongoAdapter } from '@internal/mongo-lowering';
 import { expectTypeOf, test } from 'vitest';
 import type {
   MongoExecutionContext,
@@ -7,24 +9,22 @@ import type {
 } from '../src/exports/index';
 import { createMongoRuntime } from '../src/mongo-runtime';
 
-declare const ctx: MongoExecutionContext;
+declare const ctx: MongoExecutionContext<MongoContract>;
+declare const adapter: MongoAdapter;
 declare const stack: MongoExecutionStack;
 
-test('the execution context carries no stack; the runtime takes it as its own option', () => {
+test('the runtime takes the adapter beside the context, as the SQL runtime does', () => {
   expectTypeOf<MongoExecutionContext>().not.toHaveProperty('stack');
-  expectTypeOf<MongoRuntimeOptions['stack']>().toEqualTypeOf<MongoExecutionStack>();
+  expectTypeOf<MongoRuntimeOptions['adapter']>().toEqualTypeOf<MongoAdapter>();
+  expectTypeOf<MongoExecutionStack>().not.toHaveProperty('driver');
 });
 
-test('runtime options accept only context, driver, middleware, and mode', () => {
-  createMongoRuntime({
-    context: ctx,
-    stack,
-    driver: {} as never,
-  });
+test('runtime options accept only context, adapter, driver, middleware, and mode', () => {
+  createMongoRuntime({ context: ctx, adapter, driver: {} as never });
 
   const validOptions = {
     context: ctx,
-    stack,
+    adapter,
     driver: {} as never,
     middleware: [
       {
@@ -40,7 +40,7 @@ test('runtime options accept only context, driver, middleware, and mode', () => 
 
   createMongoRuntime({
     context: ctx,
-    stack,
+    adapter,
     driver: {} as never,
     // @ts-expect-error `codecs` is not a property of MongoRuntimeOptions —
     // codecs are aggregated via `createMongoExecutionContext` and reached
@@ -50,30 +50,28 @@ test('runtime options accept only context, driver, middleware, and mode', () => 
 
   createMongoRuntime({
     context: ctx,
-    stack,
+    adapter,
     driver: {} as never,
-    // @ts-expect-error `adapter` is not a property of MongoRuntimeOptions —
-    // the adapter is reached via `stack.adapter`.
-    adapter: {} as never,
+    // @ts-expect-error `stack` is not a property of MongoRuntimeOptions —
+    // the client creates the adapter from its stack and passes the adapter.
+    stack,
   });
 
   createMongoRuntime({
     context: ctx,
-    stack,
+    adapter,
     driver: {} as never,
     // @ts-expect-error `targetId` is not a property of MongoRuntimeOptions —
-    // the target is reached via `stack.target.targetId`.
+    // the target is read from `context.contract.target`.
     targetId: 'mongo',
   });
 
   createMongoRuntime({
     context: ctx,
-    stack,
+    adapter,
     driver: {} as never,
     // @ts-expect-error `contract` is not a property of MongoRuntimeOptions —
     // the contract is reached via `context.contract`.
     contract: {},
   });
 });
-
-declare const _options: MongoRuntimeOptions;

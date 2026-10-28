@@ -32,7 +32,7 @@ const user = await db.User.byEmail('alice@example.com').first();
 **Mongo ORM (target — not yet implemented):**
 
 ```typescript
-const db = mongoOrm({ contract, runtime });
+const db = mongoOrm({ context, executor: runtime, enums });
 
 // Same custom collection pattern
 class UserCollection extends Collection<Contract, 'User'> {

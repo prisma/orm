@@ -14,11 +14,11 @@ import {
   createMongoExecutionStack,
   createMongoRuntime,
   type MongoExecutionContext,
-  type MongoExecutionStack,
   type MongoRuntimeAdapterDescriptor,
 } from '@internal/mongo-runtime';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { describe, expect, it, vi } from 'vitest';
+import { fixtureContract } from '../mongo/setup';
 
 /**
  * Minimal cross-family observer for tests. Records `beforeEncode` and
@@ -164,14 +164,17 @@ function mockAdapterDescriptor(adapter: MongoAdapter): MongoRuntimeAdapterDescri
 }
 
 function makeMongoExecution(adapter: MongoAdapter): {
-  readonly context: MongoExecutionContext;
-  readonly stack: MongoExecutionStack;
+  readonly context: MongoExecutionContext<typeof fixtureContract>;
+  readonly adapter: MongoAdapter;
 } {
   const stack = createMongoExecutionStack({
     target: mongoRuntimeTarget,
     adapter: mockAdapterDescriptor(adapter),
   });
-  return { context: createMongoExecutionContext({ contract: {}, stack }), stack };
+  return {
+    context: createMongoExecutionContext({ contract: fixtureContract, stack }),
+    adapter: stack.adapter.create(stack),
+  };
 }
 
 function createMockMongoDriver(rows: Record<string, unknown>[] = []): MongoDriver {

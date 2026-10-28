@@ -32,7 +32,7 @@ import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/code
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
-import { describeWithMongoDB } from '../mongo/setup';
+import { describeWithMongoDB, executionContextFor } from '../mongo/setup';
 
 const mongoPsl = `
 model User {
@@ -213,10 +213,11 @@ describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
 
     const validated = { contract: new MongoContractSerializer().deserializeContract(contract) };
 
+    const context = executionContextFor(validated.contract);
     const orm = mongoOrm({
-      contract: validated.contract,
+      context,
       executor: ctx.runtime,
-      enums: buildMongoEnums(validated.contract, ctx.codecs),
+      enums: buildMongoEnums(validated.contract, context.codecs),
     });
     const userCollection = orm['User']!;
 
@@ -248,10 +249,11 @@ describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
     if (!result.ok) throw new Error(`Interpretation failed: ${result.failure.summary}`);
 
     const validated = { contract: new MongoContractSerializer().deserializeContract(result.value) };
+    const context = executionContextFor(validated.contract);
     const orm = mongoOrm({
-      contract: validated.contract,
+      context,
       executor: ctx.runtime,
-      enums: buildMongoEnums(validated.contract, ctx.codecs),
+      enums: buildMongoEnums(validated.contract, context.codecs),
     });
     const userCollection = orm['User']!;
 
@@ -291,10 +293,11 @@ type Address {
     if (!result.ok) throw new Error(`Interpretation failed: ${result.failure.summary}`);
 
     const validated = { contract: new MongoContractSerializer().deserializeContract(result.value) };
+    const context = executionContextFor(validated.contract);
     const orm = mongoOrm({
-      contract: validated.contract,
+      context,
       executor: ctx.runtime,
-      enums: buildMongoEnums(validated.contract, ctx.codecs),
+      enums: buildMongoEnums(validated.contract, context.codecs),
     });
     const userCollection = orm['User']!;
 

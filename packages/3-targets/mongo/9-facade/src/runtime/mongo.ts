@@ -106,7 +106,7 @@ export default function mongo<
     }
     return createMongoRuntime({
       context,
-      stack,
+      adapter: stack.adapter.create(stack),
       driver,
       ...ifDefined('mode', options.mode),
       ...ifDefined('middleware', options.middleware),
@@ -151,9 +151,8 @@ export default function mongo<
   }
 
   const orm = mongoOrm<TContract>({
-    contract,
+    context,
     executor: { query: queryRows, execute: executeStats },
-    mutationDefaults: context,
     enums: enumsByNamespace,
   });
 

@@ -182,7 +182,10 @@ describe('facade lifecycle structured codes', () => {
       fn.mockReset();
     }
     mocks.deserializeContract.mockReturnValue(fakeContract);
-    mocks.createMongoExecutionStack.mockReturnValue({ id: 'stack' });
+    mocks.createMongoExecutionStack.mockReturnValue({
+      id: 'stack',
+      adapter: { create: () => ({ id: 'adapter' }) },
+    });
     mocks.createMongoExecutionContext.mockReturnValue({ id: 'context' });
     mocks.driverFromConnection.mockResolvedValue({
       id: 'driver',

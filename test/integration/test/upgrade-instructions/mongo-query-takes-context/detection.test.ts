@@ -48,13 +48,45 @@ describe.each(['app', 'extension'] as const)('the %s mongoQuery detection', (aud
   });
 });
 
-describe.each(['app', 'extension'] as const)('the %s runtime stack detection', (audience) => {
-  const change = 'mongo-runtime-takes-stack';
+describe.each(['app', 'extension'] as const)('the %s ORM and raw detection', (audience) => {
+  const change = 'mongo-orm-takes-context';
+
+  it.each([
+    ['an ORM built from a contract', 'mongoOrm({ contract, executor, enums })'],
+    ['an ORM with a type argument', 'mongoOrm<Contract>({\n  contract,\n  executor,\n})'],
+    ['a raw client built from a contract', 'const raw = mongoRaw({ contract });'],
+    ['the mutationDefaults option', 'mongoOrm({ context, executor, mutationDefaults: context })'],
+    ['the removed error code', "if (error.code === 'ORM.MUTATION_DEFAULTS_MISSING') {}"],
+  ])('finds %s', (_name, content) => {
+    expect(detects(audience, content, change)).toBe(true);
+  });
+
+  it.each([
+    ['an ORM built from a context', 'mongoOrm({ context, executor, enums })'],
+    ['a raw client built from a context', 'mongoRaw({ context })'],
+    ['the static raw client', 'const { raw } = mongoStatic({ contract });'],
+    ['a method of the same name', 'db.mongoOrm({ contract })'],
+  ])('skips %s', (_name, content) => {
+    expect(detects(audience, content, change)).toBe(false);
+  });
+});
+
+describe.each(['app', 'extension'] as const)('the %s runtime adapter detection', (audience) => {
+  const change = 'mongo-runtime-takes-adapter';
 
   it.each([
     ['a runtime built from a context', 'const runtime = createMongoRuntime({ context, driver });'],
     ['the stack read from a context', 'const adapter = context.stack.adapter;'],
     ['the stack read from a named context', 'mongoContext.stack.target.targetId'],
+    ['a context type with a target id', "type Ctx = MongoExecutionContext<Contract, 'mongo'>;"],
+    [
+      'a context type with a generic contract and a target id',
+      'MongoExecutionContext<MongoContract<Storage>, TTargetId>',
+    ],
+    [
+      'a stack built with a driver',
+      'createMongoExecutionStack({\n  target,\n  adapter,\n  driver: mongoDriver,\n})',
+    ],
   ])('finds %s', (_name, content) => {
     expect(detects(audience, content, change)).toBe(true);
   });
@@ -63,6 +95,9 @@ describe.each(['app', 'extension'] as const)('the %s runtime stack detection', (
     ['a stack read from a stack', 'stack.adapter.create(stack)'],
     ['a method of the same name', 'factory.createMongoRuntime({ context })'],
     ['a stack on another object', 'options.stack.adapter'],
+    ['a context type over one contract', 'MongoExecutionContext<Contract>'],
+    ['a context type over a generic contract', 'MongoExecutionContext<MongoContract<Storage>>'],
+    ['a stack built without a driver', 'createMongoExecutionStack({ target, adapter })'],
   ])('skips %s', (_name, content) => {
     expect(detects(audience, content, change)).toBe(false);
   });

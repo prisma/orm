@@ -3,8 +3,6 @@ import {
   createExecutionStack,
   type RuntimeAdapterDescriptor,
   type RuntimeAdapterInstance,
-  type RuntimeDriverDescriptor,
-  type RuntimeDriverInstance,
   type RuntimeExtensionDescriptor,
   type RuntimeExtensionInstance,
   type RuntimeTargetDescriptor,
@@ -66,45 +64,25 @@ export interface MongoRuntimeExtensionDescriptor<TTargetId extends string = 'mon
 }
 
 /**
- * The Mongo execution stack: target + adapter + optional driver + extension packs. Mirrors `SqlExecutionStack`. Constructed via `createMongoExecutionStack`.
+ * The Mongo execution stack: target + adapter + extension packs. Mirrors `SqlExecutionStack`. Constructed via `createMongoExecutionStack`.
  */
 export interface MongoExecutionStack<TTargetId extends string = 'mongo'> {
   readonly target: MongoRuntimeTargetDescriptor<TTargetId>;
   readonly adapter: MongoRuntimeAdapterDescriptor<TTargetId>;
-  readonly driver:
-    | RuntimeDriverDescriptor<
-        'mongo',
-        TTargetId,
-        unknown,
-        RuntimeDriverInstance<'mongo', TTargetId>
-      >
-    | undefined;
   readonly extensions: readonly MongoRuntimeExtensionDescriptor<TTargetId>[];
 }
 
 export function createMongoExecutionStack<TTargetId extends string = 'mongo'>(options: {
   readonly target: MongoRuntimeTargetDescriptor<TTargetId>;
   readonly adapter: MongoRuntimeAdapterDescriptor<TTargetId>;
-  readonly driver?:
-    | RuntimeDriverDescriptor<
-        'mongo',
-        TTargetId,
-        unknown,
-        RuntimeDriverInstance<'mongo', TTargetId>
-      >
-    | undefined;
   readonly extensions?: readonly MongoRuntimeExtensionDescriptor<TTargetId>[] | undefined;
 }): MongoExecutionStack<TTargetId> {
-  const stack = createExecutionStack({
+  const { target, adapter, extensions } = createExecutionStack({
     target: options.target,
     adapter: options.adapter,
-    driver: options.driver,
     extensions: options.extensions,
   });
-  return blindCast<
-    MongoExecutionStack<TTargetId>,
-    'createExecutionStack keeps the Mongo descriptors it was given'
-  >(stack);
+  return { target, adapter, extensions };
 }
 
 export function createMongoExecutionContext<

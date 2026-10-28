@@ -159,13 +159,12 @@ export async function withMongoPort<
     });
     const context = createMongoExecutionContext({ contract, stack });
     const driver = await createMongoDriver(connectionUri, dbName);
-    const runtime = createMongoRuntime({ context, stack, driver });
+    const runtime = createMongoRuntime({ context, adapter: stack.adapter.create(stack), driver });
 
     try {
       const db = mongoOrm<TContract>({
-        contract,
+        context,
         executor: runtime,
-        mutationDefaults: context,
         enums: buildMongoEnums(contract, context.codecs),
       });
       const mongoDb = client.db(dbName);

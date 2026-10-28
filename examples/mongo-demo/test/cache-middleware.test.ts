@@ -75,9 +75,14 @@ describe('mongo-demo cache middleware integration', {
     const driver = await createMongoDriver(replSet.getUri(), dbName);
     const driverExecuteSpy = vi.spyOn(driver, 'execute');
     const cache = createCacheMiddleware();
-    const runtime = createMongoRuntime({ context, stack, driver, middleware: [cache] });
+    const runtime = createMongoRuntime({
+      context,
+      adapter: stack.adapter.create(stack),
+      driver,
+      middleware: [cache],
+    });
     const orm = mongoOrm({
-      contract,
+      context,
       executor: runtime,
       enums: buildMongoEnums(contract, context.codecs),
     });

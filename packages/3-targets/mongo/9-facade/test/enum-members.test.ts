@@ -104,7 +104,7 @@ describe('db.enums member types', () => {
 describe('the Mongo ORM checks a written enum value against the accessors db.enums holds', () => {
   it('passes a member to the database and refuses a value outside the enum', async () => {
     const orm = mongoOrm({
-      contract,
+      context,
       executor: unreachableDatabase,
       enums: buildMongoEnums(contract, context.codecs),
     });
@@ -126,12 +126,12 @@ describe('the Mongo ORM checks a written enum value against the accessors db.enu
         message: `mongoOrm() has no accessor for enum ${enumName} in namespace __unbound__, so it cannot check a value written to a field of that enum. Pass the contract's enum accessors: enums: buildMongoEnums(contract, context.codecs).`,
         meta: { argument: 'enums', namespace: '__unbound__', enum: enumName },
       });
-    expect(() => mongoOrm({ contract, executor: unreachableDatabase, enums: {} })).toThrow(
+    expect(() => mongoOrm({ context, executor: unreachableDatabase, enums: {} })).toThrow(
       refusalFor('TextLevel'),
     );
     expect(() =>
       mongoOrm({
-        contract,
+        context,
         executor: unreachableDatabase,
         enums: { __unbound__: Object.defineProperties({}, withoutDouble) },
       }),
@@ -154,7 +154,7 @@ describe('the Mongo ORM checks a written enum value against the accessors db.enu
       ),
     );
     expect(() =>
-      mongoOrm({ contract, executor: unreachableDatabase, enums: { __unbound__: unread } }),
+      mongoOrm({ context, executor: unreachableDatabase, enums: { __unbound__: unread } }),
     ).not.toThrow();
   });
 

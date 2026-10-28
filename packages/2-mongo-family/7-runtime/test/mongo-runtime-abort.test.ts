@@ -1,17 +1,13 @@
 import type { PlanMeta } from '@internal/contract/types';
 import type { CodecCallContext } from '@internal/framework-components/codec';
 import { type MongoCodecRegistry, newMongoCodecRegistry } from '@internal/mongo-codec';
+import type { MongoContract } from '@internal/mongo-contract';
 import type { MongoAdapter, MongoDriver, MongoLoweredDraft } from '@internal/mongo-lowering';
 import type { MongoExecutionContext, MongoQueryPlan } from '@internal/mongo-query-ast/execution';
 import type { AnyMongoWireCommand } from '@internal/mongo-wire';
 import { describe, expect, it, vi } from 'vitest';
-import type {
-  MongoExecutionStack,
-  MongoRuntimeAdapterDescriptor,
-  MongoRuntimeAdapterInstance,
-  MongoRuntimeTargetDescriptor,
-} from '../src/mongo-execution-stack';
 import { createMongoRuntime } from '../src/mongo-runtime';
+import { testContract } from './mongo-middleware-fixtures';
 
 const baseMeta: PlanMeta = {
   target: 'mongo',
@@ -57,44 +53,13 @@ function recordingAdapter(): RecordingAdapter {
 }
 
 function makeExecution(adapter: MongoAdapter): {
-  readonly context: MongoExecutionContext;
-  readonly stack: MongoExecutionStack;
+  readonly context: MongoExecutionContext<MongoContract>;
+  readonly adapter: MongoAdapter;
 } {
   const codecs: MongoCodecRegistry = newMongoCodecRegistry();
-  const adapterInstance: MongoRuntimeAdapterInstance<'mongo'> = {
-    familyId: 'mongo',
-    targetId: 'mongo',
-    lower: adapter.lower.bind(adapter),
-    structuralLower: adapter.structuralLower.bind(adapter),
-    resolveParams: adapter.resolveParams.bind(adapter),
-  };
-  const target: MongoRuntimeTargetDescriptor<'mongo'> = {
-    kind: 'target',
-    id: 'mongo',
-    familyId: 'mongo',
-    targetId: 'mongo',
-    version: '0.0.1',
-    codecs: () => newMongoCodecRegistry(),
-    create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
-  };
-  const adapterDescriptor: MongoRuntimeAdapterDescriptor<'mongo'> = {
-    kind: 'adapter',
-    id: 'mongo',
-    familyId: 'mongo',
-    targetId: 'mongo',
-    version: '0.0.1',
-    codecs: () => newMongoCodecRegistry(),
-    create: () => adapterInstance,
-  };
-  const stack: MongoExecutionStack<'mongo'> = {
-    target,
-    adapter: adapterDescriptor,
-    driver: undefined,
-    extensions: [],
-  };
   return {
-    context: Object.freeze({ contract: {}, codecs, applyMutationDefaults: () => [] }),
-    stack,
+    context: Object.freeze({ contract: testContract, codecs, applyMutationDefaults: () => [] }),
+    adapter,
   };
 }
 

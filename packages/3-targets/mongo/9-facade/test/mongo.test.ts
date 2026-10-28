@@ -76,6 +76,8 @@ const fakeDriverFromDbClose = vi.fn().mockResolvedValue(undefined);
 const fakeOrm = { id: 'orm-instance' };
 const fakeQuery = { id: 'query-instance' };
 const fakeRaw = { id: 'raw-instance', collection: vi.fn() };
+const fakeAdapter = { id: 'adapter-instance' };
+const fakeStack = { id: 'stack-instance', adapter: { create: () => fakeAdapter } };
 
 describe('mongo() facade', () => {
   beforeEach(() => {
@@ -84,7 +86,7 @@ describe('mongo() facade', () => {
     }
 
     mocks.deserializeContract.mockReturnValue(fakeContract);
-    mocks.createMongoExecutionStack.mockReturnValue({ id: 'stack-instance' });
+    mocks.createMongoExecutionStack.mockReturnValue(fakeStack);
     mocks.createMongoExecutionContext.mockReturnValue({ id: 'context-instance' });
     mocks.driverFromConnection.mockResolvedValue({
       id: 'driver-from-url',
@@ -137,18 +139,19 @@ describe('mongo() facade', () => {
     expect(mocks.createMongoExecutionContext).toHaveBeenCalledTimes(1);
     expect(mocks.createMongoExecutionContext).toHaveBeenCalledWith({
       contract: fakeContract,
-      stack: { id: 'stack-instance' },
+      stack: fakeStack,
     });
     expect(mocks.createMongoRuntime).toHaveBeenCalledTimes(1);
     expect(mocks.createMongoRuntime).toHaveBeenCalledWith(
       expect.objectContaining({
         context: { id: 'context-instance' },
+        adapter: fakeAdapter,
       }),
     );
     // The user-facing options bag never sees `codecs`.
     const runtimeArgs = mocks.createMongoRuntime.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(runtimeArgs).not.toHaveProperty('codecs');
-    expect(runtimeArgs).not.toHaveProperty('adapter');
+    expect(runtimeArgs).not.toHaveProperty('stack');
     expect(runtimeArgs).not.toHaveProperty('targetId');
   });
 
@@ -507,12 +510,21 @@ describe('mongo() facade', () => {
       expect(db.context).toEqual({ id: 'context-instance' });
     });
 
+    it('builds query, raw and orm from the one execution context', () => {
+      mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb' });
+      const context = { id: 'context-instance' };
+      expect(mocks.mongoQuery).toHaveBeenCalledWith({ context });
+      expect(mocks.mongoRaw).toHaveBeenCalledWith({ context });
+      expect(mocks.mongoOrm).toHaveBeenCalledWith(expect.objectContaining({ context }));
+      expect(mocks.mongoOrm.mock.calls[0]?.[0]).not.toHaveProperty('contract');
+    });
+
     it('createMongoExecutionContext is called upfront (before runtime()) with the resolved contract', () => {
       mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb' });
       expect(mocks.createMongoExecutionContext).toHaveBeenCalledTimes(1);
       expect(mocks.createMongoExecutionContext).toHaveBeenCalledWith({
         contract: fakeContract,
-        stack: { id: 'stack-instance' },
+        stack: fakeStack,
       });
     });
 

@@ -76,17 +76,34 @@ describe('MongoRuntime middleware lifecycle', () => {
     expect(results).toHaveLength(1);
   });
 
+  it('checks middleware against the target named by the context contract', () => {
+    const execution = makeExecution(createMockAdapter());
+    const driver = createMockDriver();
+    const middlewareFor = (targetId: string): MongoMiddleware => ({
+      name: `for-${targetId}`,
+      familyId: 'mongo',
+      targetId,
+    });
+
+    expect(() =>
+      createMongoRuntime({ ...execution, driver, middleware: [middlewareFor('mongo')] }),
+    ).not.toThrow();
+    expect(() =>
+      createMongoRuntime({ ...execution, driver, middleware: [middlewareFor('other')] }),
+    ).toThrow(expect.objectContaining({ code: 'RUNTIME.MIDDLEWARE_TARGET_MISMATCH' }));
+  });
+
   it('intercepts execute statistics through intercept.onExecute only', async () => {
     const calls: string[] = [];
     const contexts: MongoMiddlewareContext[] = [];
     const driver = createMockDriver([{ deletedCount: 99 }]);
-    const { context, stack } = makeExecution(
+    const { context, adapter } = makeExecution(
       createMockAdapter(),
       new DeleteOneWireCommand('users', { id: 1 }),
     );
     const runtime = createMongoRuntime({
       context,
-      stack,
+      adapter,
       driver,
       middleware: [
         {

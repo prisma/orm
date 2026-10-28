@@ -59,7 +59,7 @@ export function buildMongoStaticContext<
     'built from this contract domain; the mapped-type shape cannot be proven statically'
   >(unbound);
   const query = mongoQuery({ context });
-  const raw = mongoRaw<TContract>({ contract });
+  const raw = mongoRaw({ context });
   return { context, contract, enums, enumsByNamespace, query, raw, stack };
 }
 

@@ -3,7 +3,7 @@ import { buildMongoEnums } from '@internal/mongo-runtime';
 import { ObjectId } from 'mongodb';
 import { expect, expectTypeOf, it } from 'vitest';
 import { contract } from './fixtures/contract';
-import { describeWithMongoDB } from './setup';
+import { describeWithMongoDB, executionContextFor } from './setup';
 
 describeWithMongoDB('Mongo no-emit integration', (ctx) => {
   it('mongoOrm executes with a builder-authored contract directly', async () => {
@@ -27,10 +27,11 @@ describeWithMongoDB('Mongo no-emit integration', (ctx) => {
       comments: [{ _id: commentId, text: 'Investigating', createdAt: new Date('2025-01-01') }],
     });
 
+    const context = executionContextFor(contract);
     const orm = mongoOrm({
-      contract,
+      context,
       executor: ctx.runtime,
-      enums: buildMongoEnums(contract, ctx.codecs),
+      enums: buildMongoEnums(contract, context.codecs),
     });
     const tasks = await orm.tasks.include('assignee').all();
 

@@ -1,7 +1,7 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
 import type { PlanMeta } from '@internal/contract/types';
 import type { CodecCallContext } from '@internal/framework-components/codec';
-import type { MongoDriver, MongoLoweredDraft } from '@internal/mongo-lowering';
+import type { MongoAdapter, MongoDriver, MongoLoweredDraft } from '@internal/mongo-lowering';
 import { InsertOneCommand } from '@internal/mongo-query-ast/execution';
 import type { MongoMiddleware } from '@internal/mongo-runtime';
 import {
@@ -9,13 +9,13 @@ import {
   createMongoExecutionStack,
   createMongoRuntime,
   type MongoExecutionContext,
-  type MongoExecutionStack,
 } from '@internal/mongo-runtime';
 import { MongoParamRef } from '@internal/mongo-value';
 import type { AnyMongoWireCommand } from '@internal/mongo-wire';
 import { InsertOneWireCommand } from '@internal/mongo-wire';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { describe, expect, it, vi } from 'vitest';
+import { fixtureContract } from '../setup';
 
 const BULK_CODEC_ID = 'test/bulk-transform';
 
@@ -27,14 +27,17 @@ const baseMeta: PlanMeta = {
 };
 
 function buildExecution(): {
-  readonly context: MongoExecutionContext;
-  readonly stack: MongoExecutionStack;
+  readonly context: MongoExecutionContext<typeof fixtureContract>;
+  readonly adapter: MongoAdapter;
 } {
   const stack = createMongoExecutionStack({
     target: mongoRuntimeTarget,
     adapter: mongoRuntimeAdapter,
   });
-  return { context: createMongoExecutionContext({ contract: {}, stack }), stack };
+  return {
+    context: createMongoExecutionContext({ contract: fixtureContract, stack }),
+    adapter: stack.adapter.create(stack),
+  };
 }
 
 function recordingDriver(): {
@@ -140,8 +143,9 @@ describe('MongoRuntime execute param-mutator wiring', () => {
     let structuralDraft: MongoLoweredDraft | undefined;
     const resolveDraftRefs: MongoLoweredDraft[] = [];
 
-    const { stack } = buildExecution();
-    const adapterInstance = stack.adapter.create(stack);
+    const adapterInstance = mongoRuntimeAdapter.create(
+      createMongoExecutionStack({ target: mongoRuntimeTarget, adapter: mongoRuntimeAdapter }),
+    );
     const structuralLowerSpy = vi.fn((plan) => {
       structuralDraft = adapterInstance.structuralLower(plan);
       return structuralDraft;
@@ -162,10 +166,17 @@ describe('MongoRuntime execute param-mutator wiring', () => {
         }),
       },
     });
-    const patchedContext = createMongoExecutionContext({ contract: {}, stack: patchedStack });
+    const patchedContext = createMongoExecutionContext({
+      contract: fixtureContract,
+      stack: patchedStack,
+    });
 
     const { driver } = recordingDriver();
-    const runtime = createMongoRuntime({ context: patchedContext, stack: patchedStack, driver });
+    const runtime = createMongoRuntime({
+      context: patchedContext,
+      adapter: patchedStack.adapter.create(patchedStack),
+      driver,
+    });
 
     await runtime
       .query({
