@@ -75,7 +75,6 @@
   "devDependencies": {
     "@biomejs/biome": "2.5.8",
     "@cursor/sdk": "^1.0.26",
-    "@internal/cli": "workspace:8.0.0-rc.21",
     "@internal/framework-components": "workspace:8.0.0-rc.21",
     "@internal/migration-tools": "workspace:8.0.0-rc.21",
     "@repo/tsconfig": "workspace:8.0.0-rc.21",

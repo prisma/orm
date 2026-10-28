@@ -1,4 +1,5 @@
 import { fstatSync } from 'node:fs';
+import process from 'node:process';
 import { ifDefined } from '@internal/utils/defined';
 import type { Cli, HostProcess, MountedTree, Runtime } from '@prisma/cli-engine';
 import { createCli, telemetryCommandGroup } from '@prisma/cli-engine';
@@ -229,4 +230,15 @@ export async function runOrmCli(proc: HostProcess): Promise<number> {
   } catch (error) {
     return reportStartupFailure(proc, error);
   }
+}
+
+/**
+ * Runs the CLI as this process's `prisma` command: the exit code becomes `process.exitCode`, and
+ * stdin is released so the process exits once the run settles. A command that read stdin leaves it
+ * referenced — `lsp` reads it for its whole run — and with fd 0 closed Node substitutes a stream
+ * that has no `unref`.
+ */
+export async function runOrmBin(): Promise<void> {
+  process.exitCode = await runOrmCli(process);
+  process.stdin.unref?.();
 }

@@ -1325,6 +1325,14 @@ A Mongo update or delete command did not return exactly one result object with t
 
 Statistics execution was requested for a Mongo command that does not expose affected-row statistics. Only update and delete command kinds provide the native counts used by this operation. Payload: `commandKind`.
 
+### RUNTIME.MULTIPLE_ORM_COPIES
+
+Prisma ORM is loaded from more than one folder. Each folder holding `@prisma/orm-framework` is a separate copy, even at the same version, and values and registries made by one copy are not recognised by another. Commands and clients refuse to start, before they read the contract or connect. The message names each copy's version, and the details list each copy's folder.
+
+Two copies usually mean versions that differ: an `@prisma/orm-*` package, or an extension, at a different version from the application's database package, or a `prisma` CLI that runs a different ORM version. Install the same version of every `@prisma/orm-*` package and a `prisma` CLI that runs it. `npm ls @prisma/orm-framework`, `pnpm why @prisma/orm-framework` or `bun why @prisma/orm-framework` shows which package brought each copy. npm refuses a mismatched peer dependency, but pnpm and bun only warn, so a mismatch can install without an error. When every copy has the same version, reinstall so the package manager keeps one copy. With pnpm, copies of one version can also differ by their peer dependencies: `pnpm why @prisma/orm-framework` shows the difference, and giving every dependent the same peer leaves one copy.
+
+Copies bundled into a single file can't be told apart, so this check doesn't detect them. Payload: `copies`, a list of `{ folder, version }`; `version` is absent where it cannot be read.
+
 ### RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING
 
 The contract declares column or field defaults produced by a mutation default generator (e.g. a nanoid/uuid generator, or `timestampNow` behind `temporal.CreatedAt`) that no runtime component provides, detected up front when the SQL context or the Mongo execution context validates generator coverage, or at mutation time when a generator-kind default spec is resolved. The message names each missing generator with the `<collection or table>.<field>` entries that need it, and says where generators come from: the built-in ones, `timestampNow` among them, from the database adapter's runtime descriptor, others from the extension pack that defines them. Payload: `ids` and `fields` (validation pass) or `id` (resolution).

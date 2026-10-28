@@ -3,8 +3,10 @@
 > **For the CLI command, install [`@prisma/cli`](https://www.npmjs.com/package/@prisma/cli) (`@next` dist-tag).**
 > The unified `prisma` binary mounts this package's `orm` command family;
 > the standalone npm package is no longer published. Inside this
-> workspace a local `prisma` bin still exists for examples and development — it
-> is the same engine entry (`dist/bin.mjs`), just workspace-local.
+> workspace, examples and apps run `prisma` from `@repo/prisma-bin`
+> (`test/prisma-bin`), which loads this package from the built
+> `@prisma/orm-toolchain` so the CLI and the project share one framework copy.
+> This package's own `dist/bin.mjs` runs the CLI from source, for its tests.
 >
 > This package (`@internal/cli`) is both the CLI's implementation and the
 > documented programmatic-API import target. Authors of build integrations,
@@ -40,7 +42,7 @@ Provide a command-line interface that:
 - **File I/O**: Read TS contracts, write emitted artifacts (`contract.json`, `contract.d.ts`)
 - **Extension Pack Descriptor Assembly**: Collect adapter and extension descriptors for emission
 - **Config Management**: Load and validate `prisma.config.ts` files using Arktype validation
-- **Workspace-local bin**: Build emits `dist/bin.mjs`, the engine entry the workspace's local `prisma` bin points at (the published toolchain ships no bin; the unified `prisma` CLI mounts the family instead)
+- **Workspace-local bin**: Build emits `dist/bin.mjs`, the engine entry this package's tests spawn. Examples and apps run `@repo/prisma-bin` instead, which calls `runOrmBin` from `@prisma/orm-toolchain/cli` (the published toolchain ships no bin; the unified `prisma` CLI mounts the family instead)
 
 ### Wiring validation
 
@@ -1447,6 +1449,7 @@ E2E tests use a shared fixture app pattern to ensure proper module resolution:
 - **No package.json in test directories**: Test directories inherit workspace dependencies from the parent `package.json` at the root
 - **Helper function**: `setupTestDirectoryFromFixtures()` handles directory setup and returns a cleanup function
 - **Cleanup responsibility**: Each test must clean up its own directory (use `afterEach` hooks or `finally` blocks)
+- **Internal database packages**: `test/fixture-app/package.json` aliases `@prisma/orm-postgres` and `@prisma/orm-mongo` to `@internal/postgres` and `@internal/mongo`, so a fixture config and the CLI under test load one framework copy
 
 **Example:**
 ```typescript
@@ -1582,7 +1585,7 @@ Operations return structured result types:
 
 The CLI package exports several subpaths for different use cases:
 
-- **`@internal/cli`** (main export): Exports `loadContractFromTs` and `createContractEmitCommand`
+- **`@internal/cli`** (main export): Exports `loadContractFromTs`, and `runOrmBin`, which runs the CLI as the process's `prisma` command; `src/bin.ts` and the workspace bin in `test/prisma-bin` call it
 - **`@internal/cli/config-types`**: Exports `defineConfig` and config types
 - **`@internal/cli/control-api`**: Exports `createControlClient` and control API types
 - **`@internal/cli/commands/db-init`**: Exports `createDbInitCommand`

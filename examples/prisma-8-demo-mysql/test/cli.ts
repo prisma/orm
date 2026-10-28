@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 const exampleDir = fileURLToPath(new URL('..', import.meta.url));
-const prismaBin = join(exampleDir, '..', '..', 'node_modules', '.bin', 'prisma');
+const prismaBin = join(exampleDir, 'node_modules', '.bin', 'prisma');
 
 export interface CliRun {
   readonly exitCode: number;
