@@ -17,7 +17,6 @@ import {
 import {
   fewestArgumentsCall,
   inferredTypeConstructors,
-  writtenTypeArguments,
   writtenTypeChoiceCall,
 } from '../../src/core/psl-build/inferred-type-constructors';
 
@@ -265,24 +264,6 @@ describe('writtenTypeChoiceCall', () => {
 
   it('writes nothing for a call no type choice reproduces exactly, or one no type choice names', () => {
     expect([write(['StampDate'], []), write(['Numeric'], [10])]).toEqual([undefined, undefined]);
-  });
-});
-
-describe('writtenTypeArguments', () => {
-  const numericConstructor = authoringTypes.Numeric;
-
-  it('writes each value argument as a literal of its data type', () => {
-    expect([
-      writtenTypeArguments(numericConstructor, [10, 2], dataTypes),
-      writtenTypeArguments(authoringTypes.ext.Labelled, ['say "hi"'], dataTypes),
-    ]).toEqual([['10', '2'], ['"say \\"hi\\""']]);
-  });
-
-  it('writes nothing for a value no literal of its data type reads back as', () => {
-    expect([
-      writtenTypeArguments(numericConstructor, [-1], dataTypes),
-      writtenTypeArguments(numericConstructor, [{ precision: 1 }], dataTypes),
-    ]).toEqual([undefined, undefined]);
   });
 });
 

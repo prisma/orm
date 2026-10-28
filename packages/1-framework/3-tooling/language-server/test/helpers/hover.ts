@@ -175,6 +175,25 @@ const authoringContributions = assembleAuthoringContributions([
               { when: { as: 'date', storage: 'narrow' }, type: 'Flag' },
             ],
           },
+          Shape: {
+            kind: 'typeChoice',
+            documentation: '',
+            args: [
+              {
+                kind: 'option',
+                name: 'as',
+                values: ['raw', 'huge'],
+                default: 'raw',
+                optional: true,
+              },
+              { kind: 'value', name: 'sql', dataType: 'fixture/expression', optional: true },
+              { kind: 'value', name: 'precision', dataType: 'fixture/int', optional: true },
+            ],
+            choices: [
+              { when: { as: 'raw' }, type: 'Raw', defaults: { sql: 'text' } },
+              { when: { as: 'huge' }, type: 'Stamp', defaults: { precision: { digits: 10 } } },
+            ],
+          },
           Stamp: {
             kind: 'typeConstructor',
             args: [{ name: 'precision', kind: 'value', dataType: 'fixture/int', optional: true }],

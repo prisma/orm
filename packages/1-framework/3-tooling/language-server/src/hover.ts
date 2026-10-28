@@ -1,12 +1,12 @@
 import {
   type AuthoringArgumentDescriptor,
   type AuthoringPslBlockDescriptorNamespace,
-  type AuthoringTypeChoiceDescriptor,
   type AuthoringTypeChoiceOption,
   type AuthoringTypeChoiceRow,
   type DataTypeSupport,
   describeAdmittedForms,
   isAuthoringTypeChoiceOption,
+  writtenTypeConstructorCall,
 } from '@internal/framework-components/authoring';
 import { dataTypeId } from '@internal/framework-components/codec';
 import {
@@ -168,10 +168,24 @@ function renderContributedTypeContent(
   }
   const chosen = renderChosenType(symbol, result.annotation, input);
   const head = chosen === undefined ? fence : `${fence}\n\n${chosen}`;
-  return `${withDocumentation(head, symbol.descriptor.documentation)}\n\n${renderTypeChoices(symbol.descriptor)}`;
+  return `${withDocumentation(head, symbol.descriptor.documentation)}\n\n${renderTypeChoices(symbol, input.dataTypes)}`;
 }
 
-/** The explicit type the call at `annotation` becomes, or `undefined` when its arguments choose none. */
+/** The explicit type `type`, at the level of the type choice `symbol`, called with `args` as the tools write it; `undefined` when the type choice names no such type or an argument has no literal. */
+function writtenChosenType(
+  symbol: ContributedTypeChoiceSymbol,
+  type: string,
+  args: readonly unknown[],
+  dataTypes: DataTypeSupport,
+): string | undefined {
+  const descriptor = symbol.choiceTypes.get(type);
+  return (
+    descriptor &&
+    writtenTypeConstructorCall([...symbol.path.slice(0, -1), type], descriptor, args, dataTypes)
+  );
+}
+
+/** The explicit type the call at `annotation` becomes, or `undefined` when its arguments choose none or it cannot be written. */
 function renderChosenType(
   symbol: ContributedTypeChoiceSymbol,
   annotation: TypeAnnotationAst | undefined,
@@ -179,27 +193,31 @@ function renderChosenType(
 ): string | undefined {
   const call = readResolvedConstructorCall(annotation, input.sources);
   const chosen = chosenTypeConstructor(symbol, call, input.dataTypes);
-  if (!chosen.ok) return undefined;
-  const { type, descriptor, args } = chosen.value;
-  const written = (descriptor.args ?? []).flatMap((arg, index) =>
-    args[index] === undefined
-      ? []
-      : [`${arg.name ?? `arg${index + 1}`}: ${JSON.stringify(args[index])}`],
-  );
+  const written =
+    chosen.ok && writtenChosenType(symbol, chosen.value.type, chosen.value.args, input.dataTypes);
+  if (written === false || written === undefined) return undefined;
   const callText = call === undefined ? symbol.path.join('.') : printTypeConstructorCall(call);
-  return `\`${callText}\` is exactly \`${type}${written.length === 0 ? '' : `(${written.join(', ')})`}\`.`;
+  return `\`${callText}\` is exactly \`${written}\`.`;
 }
 
 /** Each combination of a type choice's options, as written, and the explicit type it becomes. */
-function renderTypeChoices(descriptor: AuthoringTypeChoiceDescriptor): string {
+function renderTypeChoices(
+  symbol: ContributedTypeChoiceSymbol,
+  dataTypes: DataTypeSupport,
+): string {
+  const { descriptor } = symbol;
   const options = descriptor.args.filter(isAuthoringTypeChoiceOption);
   const cell = (value: string | undefined, option: AuthoringTypeChoiceOption) =>
     value === option.default ? `${value} (default)` : (value ?? '');
   const becomes = (row: AuthoringTypeChoiceRow) => {
-    const defaults = Object.entries(row.defaults ?? {}).map(
-      ([name, value]) => `${name}: ${JSON.stringify(value)}`,
+    const defaults = row.defaults ?? {};
+    const args = (symbol.choiceTypes.get(row.type)?.args ?? []).map((argument) =>
+      argument.name !== undefined && Object.hasOwn(defaults, argument.name)
+        ? defaults[argument.name]
+        : undefined,
     );
-    return `\`${row.type}${defaults.length === 0 ? '' : `(${defaults.join(', ')})`}\``;
+    const written = writtenChosenType(symbol, row.type, args, dataTypes);
+    return `\`${written ?? `${[...symbol.path.slice(0, -1), row.type].join('.')}(...)`}\``;
   };
   return [
     `| ${[...options.map((option) => option.name), 'Becomes'].join(' | ')} |`,

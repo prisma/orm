@@ -1,7 +1,6 @@
 import {
   type InferredTypeConstructors,
   type PslTypeArgument,
-  writtenTypeArguments,
   writtenTypeChoiceCall,
 } from '@internal/family-sql/psl-build';
 import {
@@ -11,6 +10,7 @@ import {
   type DataTypeSupport,
   findAuthoringTypeConstructorCall,
   getAuthoringTypeConstructor,
+  writtenTypeArguments,
 } from '@internal/framework-components/authoring';
 import type { DataTypeLookup } from '@internal/framework-components/codec';
 import { dataTypeParams } from '@internal/framework-components/codec';

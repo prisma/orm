@@ -4,6 +4,7 @@ import {
   type DataTypeSupport,
   getAuthoringTypeChoice,
   getAuthoringTypeConstructor,
+  writtenTypeArguments,
 } from '@internal/framework-components/authoring';
 import type { DataType } from '@internal/framework-components/codec';
 import { resolveReportedSqlType } from '@internal/sql-contract/data-type';
@@ -16,7 +17,6 @@ import {
   type InferredTypeConstructors,
   type PslTypeArgument,
   sameInNormalForm,
-  writtenTypeArguments,
   writtenTypeChoiceCall,
 } from './inferred-type-constructors';
 

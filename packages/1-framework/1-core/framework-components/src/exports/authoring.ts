@@ -32,6 +32,13 @@ export {
   authoringTypeConstructors,
   findAuthoringTypeConstructorCall,
 } from '../shared/authoring-type-constructor-call';
+export {
+  type TypedLiteralOptions,
+  writeDataTypeValue,
+  writeTypedLiteral,
+  writtenTypeArguments,
+  writtenTypeConstructorCall,
+} from '../shared/data-type-literal';
 export type {
   AssembledDataTypeSupport,
   DataTypeComponent,

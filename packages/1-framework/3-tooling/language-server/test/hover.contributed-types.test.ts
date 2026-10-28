@@ -60,15 +60,15 @@ describe('providePslHover', () => {
         'pg.Moment(as?: date | text, storage?: wide | narrow, precision?: a number)',
         '```',
         '',
-        '`pg.Moment(as: text)` is exactly `Text`.',
+        '`pg.Moment(as: text)` is exactly `pg.Text`.',
         '',
         'A moment in time.',
         '',
         '| as | storage | Becomes |',
         '| --- | --- | --- |',
-        '| date (default) | wide (default) | `Stamp(precision: 3)` |',
-        '| text | wide (default) | `Text` |',
-        '| date (default) | narrow | `Flag` |',
+        '| date (default) | wide (default) | `pg.Stamp(precision: 3)` |',
+        '| text | wide (default) | `pg.Text` |',
+        '| date (default) | narrow | `pg.Flag` |',
       ].join('\n'),
     });
   });
@@ -76,19 +76,34 @@ describe('providePslHover', () => {
   it('shows the explicit type a bare type choice is, with the arguments its row defaults', () => {
     const value = hover('model Product {\n  at pg.Mo|ment\n}')?.contents;
     expect(value).toMatchObject({
-      value: expect.stringContaining('`pg.Moment` is exactly `Stamp(precision: 3)`.'),
+      value: expect.stringContaining('`pg.Moment` is exactly `pg.Stamp(precision: 3)`.'),
     });
   });
 
   it('shows the explicit type with the arguments a call hands on', () => {
     const value = hover('model Product {\n  at pg.Mo|ment(precision: 6)\n}')?.contents;
     expect(value).toMatchObject({
-      value: expect.stringContaining('`pg.Moment(precision: 6)` is exactly `Stamp(precision: 6)`.'),
+      value: expect.stringContaining(
+        '`pg.Moment(precision: 6)` is exactly `pg.Stamp(precision: 6)`.',
+      ),
     });
   });
 
   it('names no explicit type for a call whose combination has no row', () => {
     const value = hover('model Product {\n  at pg.Mo|ment(as: text, storage: narrow)\n}')?.contents;
     expect(value).toMatchObject({ value: expect.not.stringContaining('is exactly') });
+  });
+
+  it('writes each argument of the explicit type as a literal of its data type', () => {
+    const value = hover('model Product {\n  shape pg.Sha|pe\n}')?.contents;
+    expect(value).toMatchObject({
+      value: expect.stringContaining('`pg.Shape` is exactly `pg.Raw(sql: sql`text`)`.'),
+    });
+  });
+
+  it('names no explicit type, and still hovers, when an argument has no literal', () => {
+    const value = hover('model Product {\n  shape pg.Sha|pe(as: huge)\n}')?.contents;
+    expect(value).toMatchObject({ value: expect.not.stringContaining('is exactly') });
+    expect(value).toMatchObject({ value: expect.stringContaining('| huge | `pg.Stamp(...)` |') });
   });
 });

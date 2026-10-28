@@ -15,11 +15,7 @@ export type {
   DefaultMappingOptions,
   DefaultMappingResult,
 } from '../core/psl-build/default-mapping';
-export {
-  mapDefault,
-  writeDataTypeValue,
-  writeDefaultLiteral,
-} from '../core/psl-build/default-mapping';
+export { mapDefault } from '../core/psl-build/default-mapping';
 export type {
   GeneratorCallRefusal,
   GeneratorCallsResult,
@@ -35,7 +31,6 @@ export {
   sameInNormalForm,
   type WrittenPslTypeCall,
   type WrittenTypeChoiceCall,
-  writtenTypeArguments,
   writtenTypeChoiceCall,
 } from '../core/psl-build/inferred-type-constructors';
 export { toEnumMemberName } from '../core/psl-build/psl-names';

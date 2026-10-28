@@ -11,6 +11,7 @@ import {
   getAuthoringTypeChoice,
   instantiateAuthoringTypeConstructor,
   isAuthoringTypeChoiceOption,
+  writeDataTypeValue,
 } from '@internal/framework-components/authoring';
 import type {
   CodecLookupWithDescriptors,
@@ -26,7 +27,6 @@ import {
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { isInternalError } from '@internal/utils/internal-error';
-import { writeDataTypeValue } from './default-mapping';
 
 /** The type constructor `contract infer` writes for a data type, with the data type it produces. */
 export interface InferredTypeConstructor {
@@ -88,32 +88,6 @@ export function fewestArgumentsCall(
   const args = [...all];
   while (args.length > 0 && normalParams(marked, args.slice(0, -1)) === wanted) args.pop();
   return { path: marked.path, args };
-}
-
-/**
- * Each argument of a call to `descriptor` as PSL writes it: a value argument as a literal of its data type that reads back as the same value. `undefined` when an argument is not a value argument or no literal reads back as it.
- */
-export function writtenTypeArguments(
-  descriptor: AuthoringTypeConstructorDescriptor,
-  args: readonly unknown[],
-  dataTypes: DataTypeSupport,
-): readonly string[] | undefined {
-  const written: string[] = [];
-  for (const [index, value] of args.entries()) {
-    const argument = descriptor.args?.[index];
-    if (argument === undefined) return undefined;
-    const text = writeDataTypeValue(
-      blindCast<
-        JsonValue,
-        'a type constructor argument is a type parameter, which contract.json stores as JSON'
-      >(value),
-      dataTypeId(argument.dataType),
-      dataTypes,
-    );
-    if (text === undefined) return undefined;
-    written.push(text);
-  }
-  return written;
 }
 
 /** An argument of a type call as PSL writes it: by name, or by position when `name` is undefined. */
