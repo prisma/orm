@@ -1,5 +1,7 @@
 import mysqlDriver, { type MysqlControlDriver } from '@internal/driver-mysql/control';
 import { acquireMarkerLock, releaseMarkerLock } from '@internal/target-mysql/marker-lock';
+import mysqlTarget from '@internal/target-mysql/runtime';
+import { ifDefined } from '@internal/utils/defined';
 import { timeouts } from '@repo/test-utils';
 import { withMysqlDatabase } from '@repo/test-utils/mysql-database';
 import { describe, expect, it } from 'vitest';
@@ -64,10 +66,12 @@ describe('MysqlControlAdapter against a MySQL server', {
     });
   });
 
-  it('stamps control-table rows with the current time in UTC', async (test) => {
+  it('stamps control-table rows with the current time in UTC, in a session with the settings the target declares', async (test) => {
     await withMysqlDatabase(test, async ({ url }) => {
       const adapter = createAdapter();
-      const driver = await mysqlDriver.create(url);
+      const driver = await mysqlDriver.create(url, {
+        ...ifDefined('sessionSettings', mysqlTarget.sessionSettings),
+      });
       try {
         for (const node of adapter.bootstrapControlTableQueries()) {
           await driver.query((await adapter.lowerToExecuteRequest(node)).sql);
