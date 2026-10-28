@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { type ConnectionConfig, createConnection } from 'mariadb';
+import mysqlControlDriver from '@prisma/orm-mysql/driver/control';
 
 export interface TestDatabase {
   readonly url: string;
@@ -23,23 +23,12 @@ export async function createTestDatabase(serverUrl: string): Promise<TestDatabas
   };
 }
 
+/** Runs one statement through the MySQL control driver, which reads `serverUrl` as the CLI does, TLS settings included. */
 async function runOnServer(serverUrl: string, statement: string): Promise<void> {
-  const connection = await createConnection(serverOptions(serverUrl));
+  const driver = await mysqlControlDriver.create(serverUrl);
   try {
-    await connection.query(statement);
+    await driver.query(statement);
   } finally {
-    await connection.end();
+    await driver.close();
   }
-}
-
-/** Connection options for the server a `mysql://` URL names; the `mariadb` package reads only `mariadb://` URLs. */
-function serverOptions(serverUrl: string): ConnectionConfig {
-  const url = new URL(serverUrl);
-  return {
-    host: url.hostname.replace(/^\[(.*)\]$/, '$1'),
-    ...(url.port === '' ? {} : { port: Number(url.port) }),
-    user: decodeURIComponent(url.username),
-    password: decodeURIComponent(url.password),
-    allowPublicKeyRetrieval: url.searchParams.get('allowPublicKeyRetrieval') === 'true',
-  };
 }

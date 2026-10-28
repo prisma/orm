@@ -665,9 +665,6 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 26.1.2
-      mariadb:
-        specifier: 3.5.4
-        version: 3.5.4
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
