@@ -55,7 +55,7 @@ A type alias written with one of the names, such as `types { Stamp = DateTime @o
 To move a field to the new defaults instead, keep the name, update the application code that reads the field, and run `prisma contract emit`. What the database needs then depends on the type:
 
 - **`Date` and `Time`** keep their `date` and `time(p)` columns, when a precision is written by name (`Time(precision: 0)` for `Time(0)`), and change only the codec, so the database does not change, but the contract hash does.
-  - With migrations: `prisma migration plan` refuses, because it finds nothing to change, and names the command to run instead. Run `prisma migration new --from <hash>` with the hash it gives, which writes a migration with no operations, then `prisma db migrate`.
+  - With migrations: `prisma migration plan` writes a migration with no operations, then `prisma db migrate` applies it and moves the marker.
   - With `prisma db update`: run it. It applies no operations and records the new contract on the database.
 - **`DateTime`** makes the column `timestamptz(3)`, and a schema that wrote `DateTime` before had a `timestamptz` column, which holds microseconds. Lowering the precision rounds stored values to milliseconds, so both commands ask before they change it. Run `prisma migration plan --delete <Model>.<field>` and then `prisma db migrate`, or `prisma db update --delete <Model>.<field>`, which accepts the rounding. A JavaScript `Date` holds milliseconds only, so to keep microseconds, keep the `Temporal.Instant` field: write `DateTime(as: temporal)`, which is exactly `TimestamptzTemporal`.
 

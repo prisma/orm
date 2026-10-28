@@ -1,5 +1,5 @@
 /**
- * Journey: a schema that wrote the Temporal types under their explicit names moves its fields to the convenience types' defaults, as the upgrade instruction describes. `Date` and `Time` keep the `date` and `time(0)` columns and change only the codec: `migration plan` refuses to plan nothing and names `migration new --from <hash>`, which writes a migration with no operations, and `db update` applies no operations and moves the marker. `DateTime` makes the `timestamptz` column `timestamptz(3)`, which can round stored values, so both `migration plan` and `db update` ask for `--delete Event.at` before they alter it.
+ * Journey: a schema that wrote the Temporal types under their explicit names moves its fields to the convenience types' defaults, as the upgrade instruction describes. `Date` and `Time` keep the `date` and `time(0)` columns and change only the codec: `migration plan` writes a migration with no operations, and `db update` applies no operations and moves the marker. `DateTime` makes the `timestamptz` column `timestamptz(3)`, which can round stored values, so both `migration plan` and `db update` ask for `--delete Event.at` before they alter it.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'pathe';
@@ -13,7 +13,6 @@ import {
   runDbUpdate,
   runDbVerify,
   runMigrate,
-  runMigrationNew,
   runMigrationPlan,
   setupJourney,
   timeouts,
@@ -75,13 +74,7 @@ withTempDir(({ createTempDir }) => {
           expect(applied.exitCode, output(applied)).toBe(0);
 
           const codecOnly = await emit(ctx, CODEC_ONLY);
-          const refused = await runMigrationPlan(ctx, ['--from', explicit, '--name', 'codecs']);
-          expect(refused.exitCode).toBe(2);
-          expect(output(refused)).toContain(
-            'The contract changed, but migration plan found nothing to change in the database.',
-          );
-          expect(output(refused)).toContain(`prisma migration new --from ${explicit}`);
-          const empty = await runMigrationNew(ctx, ['--from', explicit, '--name', 'codecs']);
+          const empty = await runMigrationPlan(ctx, ['--from', explicit, '--name', 'codecs']);
           expect(empty.exitCode, output(empty)).toBe(0);
           const appliedEmpty = await runMigrate(ctx);
           expect(appliedEmpty.exitCode, output(appliedEmpty)).toBe(0);
