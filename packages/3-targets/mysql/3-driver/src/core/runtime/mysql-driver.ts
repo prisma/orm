@@ -198,7 +198,7 @@ abstract class MysqlQueryable implements SqlQueryable {
  */
 class HeldSession {
   readonly connection: PoolConnection;
-  #openStreams = 0;
+  #streamOpen = false;
 
   constructor(connection: PoolConnection) {
     this.connection = connection;
@@ -206,7 +206,7 @@ class HeldSession {
 
   /** Refuses to start anything while a stream on the connection is open. */
   assertIdle(): void {
-    if (this.#openStreams === 0) return;
+    if (!this.#streamOpen) return;
     throw errorRuntime(
       'DRIVER.CONNECTION_BUSY',
       'A stream on this MySQL connection is still open',
@@ -221,14 +221,12 @@ class HeldSession {
   lend(stream: boolean): Lent {
     this.assertIdle();
     if (!stream) return { connection: this.connection, held: true, done: async () => {} };
-    this.#openStreams += 1;
-    let open = true;
+    this.#streamOpen = true;
     return {
       connection: this.connection,
       held: true,
       done: async () => {
-        if (open) this.#openStreams -= 1;
-        open = false;
+        this.#streamOpen = false;
       },
     };
   }
