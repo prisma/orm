@@ -3,6 +3,7 @@ import {
   type AuthoringTypeChoiceDescriptor,
   type AuthoringTypeConstructorDescriptor,
   type DataTypeSupport,
+  type ResolvedAuthoringTypeChoice,
   resolveAuthoringTypeChoice,
   typeConstructorLookup,
 } from '@internal/framework-components/authoring';
@@ -74,12 +75,12 @@ export function isContributedTypeDescriptor(
   );
 }
 
-/** The type constructor a call of the type choice `symbol` chooses, reading the call as the column does, or why it chooses none. */
+/** The explicit type a call of the type choice `symbol` chooses and the arguments it is built with, reading the call as the column does, or why it chooses none. */
 export function chosenTypeConstructor(
   symbol: ContributedTypeChoiceSymbol,
   call: ResolvedTypeConstructorCall | undefined,
   dataTypes: DataTypeSupport,
-): Result<AuthoringTypeConstructorDescriptor, string> {
+): Result<ResolvedAuthoringTypeChoice, string> {
   const helperPath = symbol.path.join('.');
   const args = readPslHelperArgs({
     args: call?.args ?? [],
@@ -94,7 +95,7 @@ export function chosenTypeConstructor(
         descriptor: symbol.descriptor,
         args,
         constructorNamed: (name) => symbol.choiceTypes.get(name),
-      }).descriptor,
+      }),
     );
   } catch (error) {
     if (isInternalError(error) || !(error instanceof Error)) throw error;
@@ -110,7 +111,7 @@ export function contributedTypeCodecId(
   const { symbol } = use;
   if (isContributedTypeChoice(symbol)) {
     const chosen = chosenTypeConstructor(symbol, use.call, dataTypes);
-    return chosen.ok ? chosen.value.output.codecId : undefined;
+    return chosen.ok ? chosen.value.descriptor.output.codecId : undefined;
   }
   const { descriptor } = symbol;
   return descriptor.kind === 'typeAlias'

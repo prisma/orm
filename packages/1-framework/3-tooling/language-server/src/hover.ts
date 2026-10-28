@@ -9,27 +9,34 @@ import {
   isAuthoringTypeChoiceOption,
 } from '@internal/framework-components/authoring';
 import { dataTypeId } from '@internal/framework-components/codec';
-import type {
-  AttributeSymbol,
-  Binder,
-  BlockSymbol,
-  CompositeTypeSymbol,
-  ConstantSymbol,
-  ContributedTypeSymbol,
-  FieldSymbol,
-  FunctionSymbol,
-  MixinSymbol,
-  ModelSymbol,
-  NamedTypeSymbol,
-  NamespaceSymbol,
-  ParameterSymbol,
+import {
+  type AttributeSymbol,
+  type Binder,
+  type BlockSymbol,
+  type CompositeTypeSymbol,
+  type ConstantSymbol,
+  type ContributedTypeChoiceSymbol,
+  type ContributedTypeSymbol,
+  chosenTypeConstructor,
+  type FieldSymbol,
+  type FunctionSymbol,
+  findBlockDescriptor,
+  isContributedTypeChoice,
+  type MixinSymbol,
+  type ModelSymbol,
+  type NamedTypeSymbol,
+  type NamespaceSymbol,
+  type ParameterSymbol,
+  printTypeConstructorCall,
+  readResolvedConstructorCall,
 } from '@internal/psl-parser';
-import { findBlockDescriptor } from '@internal/psl-parser';
 import {
   GenericBlockDeclarationAst,
   MixinDeclarationAst,
+  type PslSources,
   type SyntaxNode,
   type SyntaxToken,
+  TypeAnnotationAst,
 } from '@internal/psl-parser/syntax';
 import { type Hover, MarkupKind } from 'vscode-languageserver';
 import type { PslCursorInput } from './attribute-syntax-context';
@@ -45,6 +52,7 @@ export interface ProvidePslHoverInput extends PslCursorInput {
   readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
   /** The stack's data types, which say how a type constructor's value arguments are written. */
   readonly dataTypes: DataTypeSupport;
+  readonly sources: PslSources;
 }
 
 type HoverEntitySymbol =
@@ -59,7 +67,11 @@ type HoverResult =
   | { readonly kind: 'entity'; readonly symbol: HoverEntitySymbol }
   | { readonly kind: 'namespace'; readonly symbol: NamespaceSymbol }
   | { readonly kind: 'attribute'; readonly symbol: AttributeSymbol }
-  | { readonly kind: 'contributedType'; readonly symbol: ContributedTypeSymbol }
+  | {
+      readonly kind: 'contributedType';
+      readonly symbol: ContributedTypeSymbol;
+      readonly annotation: TypeAnnotationAst | undefined;
+    }
   | { readonly kind: 'parameter'; readonly symbol: ParameterSymbol }
   | { readonly kind: 'function'; readonly symbol: FunctionSymbol }
   | { readonly kind: 'constant'; readonly symbol: ConstantSymbol };
@@ -81,7 +93,7 @@ export function providePslHover(input: ProvidePslHoverInput): Hover | null {
 
 function hoverValueAt(input: ProvidePslHoverInput, token: SyntaxToken): string | undefined {
   const result = resolveHoverResult(input.binder, token);
-  if (result !== undefined) return renderHoverResult(result, input.dataTypes);
+  if (result !== undefined) return renderHoverResult(result, input);
   return blockKeywordDocumentationAt(token, input.pslBlockDescriptors);
 }
 
@@ -100,7 +112,11 @@ function resolveHoverResult(binder: Binder, token: SyntaxToken): HoverResult | u
     case 'attribute':
       return { kind: 'attribute', symbol: resolution.symbol };
     case 'contributedType':
-      return { kind: 'contributedType', symbol: resolution.symbol };
+      return {
+        kind: 'contributedType',
+        symbol: resolution.symbol,
+        annotation: token.parent.findAncestor(TypeAnnotationAst.cast),
+      };
     case 'parameter':
       return { kind: 'parameter', symbol: resolution.symbol };
     case 'function':
@@ -112,13 +128,11 @@ function resolveHoverResult(binder: Binder, token: SyntaxToken): HoverResult | u
   }
 }
 
-function renderHoverResult(result: HoverResult, dataTypes: DataTypeSupport): string {
+function renderHoverResult(result: HoverResult, input: ProvidePslHoverInput): string {
   if (result.kind === 'entity') return renderEntityContent(result.symbol);
   if (result.kind === 'namespace') return renderNamespaceContent(result.symbol);
   if (result.kind === 'attribute') return renderAttributeContent(result.symbol);
-  if (result.kind === 'contributedType') {
-    return renderContributedTypeContent(result.symbol, dataTypes);
-  }
+  if (result.kind === 'contributedType') return renderContributedTypeContent(result, input);
   if (result.kind === 'parameter') return renderParameterContent(result.symbol);
   if (result.kind === 'function') return renderFunctionContent(result.symbol);
   return renderConstantContent(result.symbol);
@@ -142,14 +156,38 @@ function renderAttributeContent(symbol: AttributeSymbol): string {
 }
 
 function renderContributedTypeContent(
-  symbol: ContributedTypeSymbol,
-  dataTypes: DataTypeSupport,
+  result: Extract<HoverResult, { readonly kind: 'contributedType' }>,
+  input: ProvidePslHoverInput,
 ): string {
-  const fence = ['```prisma', renderContributedTypeLabel(symbol, dataTypes), '```'].join('\n');
-  const content = withDocumentation(fence, symbol.descriptor.documentation);
-  return symbol.descriptor.kind === 'typeChoice'
-    ? `${content}\n\n${renderTypeChoices(symbol.descriptor)}`
-    : content;
+  const { symbol } = result;
+  const fence = ['```prisma', renderContributedTypeLabel(symbol, input.dataTypes), '```'].join(
+    '\n',
+  );
+  if (!isContributedTypeChoice(symbol)) {
+    return withDocumentation(fence, symbol.descriptor.documentation);
+  }
+  const chosen = renderChosenType(symbol, result.annotation, input);
+  const head = chosen === undefined ? fence : `${fence}\n\n${chosen}`;
+  return `${withDocumentation(head, symbol.descriptor.documentation)}\n\n${renderTypeChoices(symbol.descriptor)}`;
+}
+
+/** The explicit type the call at `annotation` becomes, or `undefined` when its arguments choose none. */
+function renderChosenType(
+  symbol: ContributedTypeChoiceSymbol,
+  annotation: TypeAnnotationAst | undefined,
+  input: ProvidePslHoverInput,
+): string | undefined {
+  const call = readResolvedConstructorCall(annotation, input.sources);
+  const chosen = chosenTypeConstructor(symbol, call, input.dataTypes);
+  if (!chosen.ok) return undefined;
+  const { type, descriptor, args } = chosen.value;
+  const written = (descriptor.args ?? []).flatMap((arg, index) =>
+    args[index] === undefined
+      ? []
+      : [`${arg.name ?? `arg${index + 1}`}: ${JSON.stringify(args[index])}`],
+  );
+  const callText = call === undefined ? symbol.path.join('.') : printTypeConstructorCall(call);
+  return `\`${callText}\` is exactly \`${type}${written.length === 0 ? '' : `(${written.join(', ')})`}\`.`;
 }
 
 /** Each combination of a type choice's options, as written, and the explicit type it becomes. */

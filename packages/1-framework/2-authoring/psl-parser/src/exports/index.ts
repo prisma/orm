@@ -173,6 +173,7 @@ export type {
   MapBlockSpec,
   StructBlockSpec,
 } from '../block-spec/types';
+export { printTypeConstructorCall } from '../call-arguments';
 export type {
   ContributedMember,
   ContributedNamespaceSymbol,

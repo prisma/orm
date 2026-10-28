@@ -199,6 +199,7 @@ export class Project {
         binder: data.artifacts.binder(),
         pslBlockDescriptors: data.controlStack.pslBlockDescriptors,
         dataTypes: data.controlStack.dataTypes ?? EMPTY_DATA_TYPES,
+        sources: data.artifacts.sources,
       });
     } catch {
       return null;

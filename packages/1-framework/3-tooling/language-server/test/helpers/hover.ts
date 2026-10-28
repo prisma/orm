@@ -259,5 +259,6 @@ export function hover(markedSource: string, siblings: readonly string[] = []) {
     binder: testBinder({ sources, symbolTable, authoringContributions, pslBlockDescriptors }),
     pslBlockDescriptors,
     dataTypes,
+    sources,
   });
 }

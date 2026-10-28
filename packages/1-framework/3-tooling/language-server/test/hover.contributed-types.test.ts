@@ -60,6 +60,8 @@ describe('providePslHover', () => {
         'pg.Moment(as?: date | text, storage?: wide | narrow, precision?: a number)',
         '```',
         '',
+        '`pg.Moment(as: text)` is exactly `Text`.',
+        '',
         'A moment in time.',
         '',
         '| as | storage | Becomes |',
@@ -69,5 +71,24 @@ describe('providePslHover', () => {
         '| date (default) | narrow | `Flag` |',
       ].join('\n'),
     });
+  });
+
+  it('shows the explicit type a bare type choice is, with the arguments its row defaults', () => {
+    const value = hover('model Product {\n  at pg.Mo|ment\n}')?.contents;
+    expect(value).toMatchObject({
+      value: expect.stringContaining('`pg.Moment` is exactly `Stamp(precision: 3)`.'),
+    });
+  });
+
+  it('shows the explicit type with the arguments a call hands on', () => {
+    const value = hover('model Product {\n  at pg.Mo|ment(precision: 6)\n}')?.contents;
+    expect(value).toMatchObject({
+      value: expect.stringContaining('`pg.Moment(precision: 6)` is exactly `Stamp(precision: 6)`.'),
+    });
+  });
+
+  it('names no explicit type for a call whose combination has no row', () => {
+    const value = hover('model Product {\n  at pg.Mo|ment(as: text, storage: narrow)\n}')?.contents;
+    expect(value).toMatchObject({ value: expect.not.stringContaining('is exactly') });
   });
 });

@@ -186,7 +186,7 @@ The PostgreSQL target ships two type aliases (ADR 275), in the namespace `tempor
 - A type constructor still names exactly one codec (ADR 254). A type choice is a second kind of type declaration, which resolves to a type constructor.
 - Every explicit type of a database type with several codecs carries a suffix for its value (ADR 257); bare concept names belong to convenience types.
 - The `temporal.*` aliases (ADR 275) are built on `DateTime` and need no variants for other values.
-- The editor's hover lists a convenience type's options and the explicit type each combination gives.
+- The editor's hover on a convenience call names the explicit type that call is, such as `DateTime(as: temporal)` is exactly `TimestamptzTemporal`, and lists the explicit type each combination gives.
 
 ## Not decided here
 
