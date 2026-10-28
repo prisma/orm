@@ -295,7 +295,11 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
           ),
         }).toEqual({
           rows: [
-            { b: '-9223372036854775808', v: Buffer.from([0, 1, 255]), d: '10000000000000000000' },
+            {
+              b: '-9223372036854775808',
+              v: new Uint8Array([0, 1, 255]),
+              d: '10000000000000000000',
+            },
             { b: '9223372036854775807', v: null, d: '100000000000000000000' },
           ],
           below: [{ n: '1' }],
@@ -353,16 +357,16 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
           y: '2026',
           dt: '2026-10-23 01:02:03.456',
           dd: '2026-10-23',
-          tm: '01:02:03.450000',
+          tm: '01:02:03.450',
           j: '{"a": 1}',
           vc: "ħ\\'",
           c: 'ab',
           tx: 'tx',
           e: 'B',
           st: 'a,b',
-          vb: Buffer.from([0, 255]),
-          bl: Buffer.from([1]),
-          bt: Buffer.from([1]),
+          vb: new Uint8Array([0, 255]),
+          bl: new Uint8Array([1]),
+          bt: new Uint8Array([1]),
           n: null,
         };
         const connection = await driver.acquireConnection();

@@ -1,10 +1,13 @@
-import type { TypeCastFunction } from 'mariadb';
+import type { FieldInfo, TypeCastFunction } from 'mariadb';
 
 /** MySQL's `binary` collation, which marks a string or blob column that holds bytes. */
 const BINARY_COLLATION = 63;
 
+/** The column flag MySQL sets on a `ZEROFILL` number and on `YEAR`, whose text it pads with zeros to the column's width. */
+const ZEROFILL = 1 << 6;
+
 /** The column types whose value is text, or bytes when the column's collation is binary. */
-const CHARACTER_OR_BLOB_TYPES = new Set([
+const CHARACTER_OR_BLOB_TYPES: ReadonlySet<string> = new Set([
   'VARCHAR',
   'VAR_STRING',
   'STRING',
@@ -14,13 +17,69 @@ const CHARACTER_OR_BLOB_TYPES = new Set([
   'BLOB',
 ]);
 
+/** The column types whose value MySQL sends as text. A type outside this list, such as BIT, GEOMETRY or one the package has no name for, is read as bytes. */
+const TEXT_TYPES: ReadonlySet<string> = new Set([
+  ...CHARACTER_OR_BLOB_TYPES,
+  'DECIMAL',
+  'NEWDECIMAL',
+  'TINY',
+  'SHORT',
+  'INT',
+  'INT24',
+  'BIGINT',
+  'FLOAT',
+  'DOUBLE',
+  'YEAR',
+  'DATE',
+  'NEWDATE',
+  'TIME',
+  'TIME2',
+  'DATETIME',
+  'DATETIME2',
+  'TIMESTAMP',
+  'TIMESTAMP2',
+  'JSON',
+  'ENUM',
+  'SET',
+  'NULL',
+]);
+
+/** The most fraction digits a MySQL time can have; a computed column of unknown precision reports more. */
+const MAX_FRACTION_DIGITS = 6;
+
+function withFractionDigits(time: string, digits: number): string {
+  if (digits > MAX_FRACTION_DIGITS) return time;
+  const [whole = '', fraction = ''] = time.split('.');
+  return digits === 0 ? whole : `${whole}.${fraction.padEnd(digits, '0').slice(0, digits)}`;
+}
+
 /**
- * Reads each column as the row value ADR 155 sets at the driver boundary: a binary string or blob, BIT and GEOMETRY column as its bytes, every other column as text, and NULL as `null`. Over the text protocol the text is what MySQL sends. Under a prepared statement MySQL sends numbers, dates and times in binary, and the package writes them as text: an integer as its decimal digits, a FLOAT as the decimal text of the double it widens to, a DOUBLE as JavaScript prints it, a DATETIME with the column's fraction digits, and a TIME with six fraction digits when it has any.
+ * The column's text in one form whichever protocol carried it. Over the text protocol MySQL writes it; under a prepared statement MySQL sends numbers, dates and times in binary and the package writes them. They differ for five kinds of column, so each gets one form: YEAR and a ZEROFILL integer padded to the column's width and a TIME with the column's fraction digits, as MySQL writes them; a FLOAT as the decimal text of the double it widens to and a DOUBLE as JavaScript prints it, because MySQL's own printing of a binary float cannot be reproduced exactly.
+ */
+function sameTextEitherProtocol(field: FieldInfo, text: string): string {
+  switch (field.type) {
+    case 'FLOAT':
+      return String(Math.fround(Number(text)));
+    case 'DOUBLE':
+      return String(Number(text));
+    case 'TIME':
+      return withFractionDigits(text, field.scale);
+    default:
+      return (field.flags & ZEROFILL) === 0 ? text : text.padStart(field.columnLength, '0');
+  }
+}
+
+/**
+ * Reads each column as the row value ADR 155 sets at the driver boundary: a binary string or blob, BIT, GEOMETRY and a column of a type the package does not know as its bytes, every other column as text, and NULL as `null`. Bytes are a plain `Uint8Array`, not the package's `Buffer`.
  */
 export const readTextOrBytes: TypeCastFunction = (field) => {
-  if (field.type === 'BIT' || field.type === 'GEOMETRY') return field.buffer();
-  if (CHARACTER_OR_BLOB_TYPES.has(field.type) && field.collation.index === BINARY_COLLATION) {
-    return field.buffer();
+  if (
+    !TEXT_TYPES.has(field.type) ||
+    (CHARACTER_OR_BLOB_TYPES.has(field.type) && field.collation.index === BINARY_COLLATION)
+  ) {
+    const bytes = field.buffer();
+    return bytes === null ? null : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   }
-  return field.string();
+  const text = field.string();
+  return text === null ? null : sameTextEitherProtocol(field, text);
 };

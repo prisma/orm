@@ -32,37 +32,63 @@ async function connectWhileServerDefaultIncludes(
 describe('MysqlControlDriver against a MySQL server', {
   timeout: timeouts.databaseOperation,
 }, () => {
-  it('hands every column over as the text MySQL sends, with values or without', async (test) => {
+  it('hands every column over as text, a binary column as bytes, in one form with values or without', async (test) => {
     await withMysqlDatabase(test, async ({ url, name }) => {
       const driver = await mysqlDriver.create(url);
       try {
         await driver.query(
-          "CREATE TABLE t (i INT, b BIGINT, d DECIMAL(10,2), dt DATETIME(3), j JSON, bin VARBINARY(4), txt TEXT, e ENUM('A','B'))",
+          "CREATE TABLE t (i INT, b BIGINT, d DECIMAL(10,2), dt DATETIME(3), j JSON, bin VARBINARY(4), txt TEXT, e ENUM('A','B'), y YEAR, z TINYINT(3) ZEROFILL, tm TIME(2), tm0 TIME(3), db DOUBLE, f FLOAT)",
         );
-        await driver.query('INSERT INTO t VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [
-          42,
-          '9007199254740993',
-          '1.50',
-          '2024-01-02 03:04:05.678',
-          '{"a": [1, 2]}',
-          Buffer.from([0, 1, 2, 255]),
-          'héllo',
-          'B',
-        ]);
+        await driver.query(
+          'INSERT INTO t VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 5, ?, ?, 1e21, 3.4e38)',
+          [
+            42,
+            '9007199254740993',
+            '1.50',
+            '2024-01-02 03:04:05.678',
+            '{"a": [1, 2]}',
+            new Uint8Array([0, 1, 2, 255]),
+            'héllo',
+            'B',
+            '25:00:00.5',
+            '-01:02:03',
+          ],
+        );
         const row = {
           i: '42',
           b: '9007199254740993',
           d: '1.50',
           dt: '2024-01-02 03:04:05.678',
           j: '{"a": [1, 2]}',
-          bin: Buffer.from([0, 1, 2, 255]),
+          bin: new Uint8Array([0, 1, 2, 255]),
           txt: 'héllo',
           e: 'B',
+          y: '0000',
+          z: '005',
+          tm: '25:00:00.50',
+          tm0: '-01:02:03.000',
+          db: '1e+21',
+          f: '3.3999999521443642e+38',
         };
-        expect({
-          text: (await driver.query('SELECT * FROM t')).rows,
-          prepared: (await driver.query('SELECT * FROM t WHERE i = ?', [42])).rows,
-        }).toEqual({ text: [row], prepared: [row] });
+        const runtime = mysqlRuntimeDriver.create();
+        await runtime.connect({ kind: 'url', url });
+        try {
+          const read = async (rows: AsyncIterable<unknown>) => {
+            const out: unknown[] = [];
+            for await (const r of rows) out.push(r);
+            return out;
+          };
+          expect({
+            text: (await driver.query('SELECT * FROM t')).rows,
+            prepared: (await driver.query('SELECT * FROM t WHERE i = ?', [42])).rows,
+            runtimeText: await read(runtime.query({ sql: 'SELECT * FROM t' })),
+            runtimePrepared: await read(
+              runtime.query({ sql: 'SELECT * FROM t WHERE i = ?1', params: [42] }),
+            ),
+          }).toEqual({ text: [row], prepared: [row], runtimeText: [row], runtimePrepared: [row] });
+        } finally {
+          await runtime.close();
+        }
         expect(await driver.databaseName()).toBe(name);
       } finally {
         await driver.close();
