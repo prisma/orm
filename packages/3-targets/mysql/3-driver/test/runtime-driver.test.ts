@@ -256,40 +256,6 @@ describe('MySQL runtime driver and its pool', () => {
     ]);
   });
 
-  it('refuses a statement on a held connection while a stream on it is open, instead of waiting for it forever', async () => {
-    const driver = await connected();
-    const held = await driver.acquireConnection();
-    const transaction = await held.beginTransaction();
-    const refusals = [];
-    for await (const _row of held.query({ sql: 'SELECT n FROM t' })) {
-      for (const run of [
-        () => held.execute({ sql: 'SELECT 1' }),
-        () => collect(held.query({ sql: 'SELECT 1' })),
-        () => transaction.execute({ sql: 'SELECT 1' }),
-        () => transaction.commit(),
-      ]) {
-        refusals.push(
-          await run().then(
-            () => 'ran',
-            (error: unknown) => Object(error).code,
-          ),
-        );
-      }
-      break;
-    }
-    await transaction.commit();
-    await held.release();
-    expect({
-      refusals,
-      prepared: connection.prepared.length,
-      committed: connection.commit.mock.calls.length,
-    }).toEqual({
-      refusals: Array(4).fill('DRIVER.CONNECTION_BUSY'),
-      prepared: 1,
-      committed: 1,
-    });
-  });
-
   it('drops the rest of a stream on a held connection the caller stops early, and keeps the connection', async () => {
     const driver = await connected();
     const held = await driver.acquireConnection();

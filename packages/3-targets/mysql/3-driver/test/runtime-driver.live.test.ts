@@ -36,9 +36,6 @@ const numbers =
 const twoHundredNumbers =
   'WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE n < 200) SELECT n FROM s';
 
-const largeRows =
-  "WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE n < 900) SELECT n, REPEAT('x', 1000) AS pad FROM s";
-
 /**
  * Runs `fn` with a URL for a new user of its own on the test database, and a function that counts the connections that user has opened on the server. A user of its own keeps the count apart from other tests sharing the server.
  */
@@ -524,39 +521,34 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     );
   });
 
-  it('refuses a statement on a held connection while a stream on it is open, instead of waiting forever, and close() still finishes', async (test) => {
-    await withMysqlDatabase(test, async ({ url }) => {
-      const driver = mysqlRuntimeDriver.create();
-      await driver.connect({ kind: 'url', url });
-      const connection = await driver.acquireConnection();
-      const transaction = await connection.beginTransaction();
-      const refusals: unknown[] = [];
-      for await (const _row of transaction.query({ sql: largeRows })) {
-        for (const run of [
-          () => connection.execute({ sql: 'SELECT 1' }),
-          () => transaction.execute({ sql: 'SELECT 1' }),
-          () => collect(transaction.query({ sql: 'SELECT 1' })),
-          () => transaction.commit(),
-        ]) {
-          refusals.push(
-            await run().then(
-              () => 'ran',
-              (error: unknown) => Object(error).code,
-            ),
-          );
+  it('runs a statement sent on a transaction while a stream on it is open after the stream ends, in the order sent, as the Postgres driver does', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(url, async (driver) => {
+        await driver.execute({ sql: 'CREATE TABLE t (n INT)' });
+        const connection = await driver.acquireConnection();
+        const transaction = await connection.beginTransaction();
+        const streamed: unknown[] = [];
+        let inserted: Promise<unknown> | undefined;
+        let committed: Promise<void> | undefined;
+        for await (const row of transaction.query<{ n: string }>({ sql: numbers })) {
+          streamed.push(row.n);
+          inserted ??= transaction.execute({ sql: 'INSERT INTO t VALUES (1)' });
+          committed ??= transaction.commit();
         }
-        break;
-      }
-      await transaction.rollback();
-      const after = await collect(connection.query({ sql: 'SELECT 7 AS n' }));
-      await connection.release();
-      await driver.close();
-      expect({ refusals, after, state: driver.state }).toEqual({
-        refusals: Array(4).fill('DRIVER.CONNECTION_BUSY'),
-        after: [{ n: '7' }],
-        state: 'closed',
-      });
-    });
+        const stats = await inserted;
+        await committed;
+        await connection.release();
+        expect({
+          streamed,
+          stats,
+          after: await collect(driver.query({ sql: 'SELECT n FROM t' })),
+        }).toEqual({
+          streamed: ['1', '2', '3'],
+          stats: { affectedRows: 1 },
+          after: [{ n: '1' }],
+        });
+      }),
+    );
   });
 
   it('gives up waiting for a pooled connection after the pool timeout', async (test) => {

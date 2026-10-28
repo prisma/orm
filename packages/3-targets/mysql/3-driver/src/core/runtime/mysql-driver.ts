@@ -162,11 +162,11 @@ async function* streamRows<Row>(
 }
 
 abstract class MysqlQueryable implements SqlQueryable {
-  /** Lends a connection for one statement; `stream` says whether the statement streams its rows. */
-  protected abstract lend(stream: boolean): Promise<Lent>;
+  /** Lends a connection for one statement. */
+  protected abstract lend(): Promise<Lent>;
 
   async *query<Row = Record<string, unknown>>(request: SqlExecuteRequest): AsyncIterable<Row> {
-    const lent = await this.lend(true);
+    const lent = await this.lend();
     const outcome: Outcome = { destroy: false };
     try {
       yield* streamRows<Row>(lent, request, outcome);
@@ -176,7 +176,7 @@ abstract class MysqlQueryable implements SqlQueryable {
   }
 
   async execute(request: SqlExecuteRequest): Promise<SqlStatementStats> {
-    const lent = await this.lend(false);
+    const lent = await this.lend();
     const outcome: Outcome = { destroy: false };
     try {
       const { statement, values } = await prepareChecked(lent.connection, request);
@@ -194,42 +194,10 @@ abstract class MysqlQueryable implements SqlQueryable {
 }
 
 /**
- * A connection the caller holds, shared by the connection and the transactions begun on it. The package pauses the socket while a stream's caller is busy, and runs a connection's statements one after another, so a statement sent while a stream on the same connection is open waits for that stream, whose caller may be waiting for the statement. The session refuses such a statement instead.
+ * Lends a connection the caller holds. The package runs a connection's statements one at a time in the order they are sent, as `pg` did for the Postgres driver, so a statement sent while a stream on the connection is open waits for that stream to end. One awaited inside the stream's own loop therefore never finishes, as on Postgres with a cursor.
  */
-class HeldSession {
-  readonly connection: PoolConnection;
-  #streamOpen = false;
-
-  constructor(connection: PoolConnection) {
-    this.connection = connection;
-  }
-
-  /** Refuses to start anything while a stream on the connection is open. */
-  assertIdle(): void {
-    if (!this.#streamOpen) return;
-    throw errorRuntime(
-      'DRIVER.CONNECTION_BUSY',
-      'A stream on this MySQL connection is still open',
-      {
-        why: 'MySQL runs one statement at a time on a connection, and the driver reads the open stream only as fast as its caller asks for rows. A statement sent now would wait for the stream to end, while the stream waits for the caller, so neither would finish.',
-        fix: 'Finish or stop reading the stream before running another statement on the same connection or transaction, or collect its rows first with toArray().',
-        meta: { target: 'mysql' },
-      },
-    );
-  }
-
-  lend(stream: boolean): Lent {
-    this.assertIdle();
-    if (!stream) return { connection: this.connection, held: true, done: async () => {} };
-    this.#streamOpen = true;
-    return {
-      connection: this.connection,
-      held: true,
-      done: async () => {
-        this.#streamOpen = false;
-      },
-    };
-  }
+function lendHeld(connection: PoolConnection): Lent {
+  return { connection, held: true, done: async () => {} };
 }
 
 async function transactionCall(call: () => Promise<void>): Promise<void> {
@@ -242,59 +210,56 @@ async function transactionCall(call: () => Promise<void>): Promise<void> {
 
 /** A connection held by one caller, whose statements all run on the same session. */
 class MysqlConnectionImpl extends MysqlQueryable implements SqlConnection {
-  readonly #session: HeldSession;
+  readonly #connection: PoolConnection;
   readonly #giveBack: () => void;
 
   constructor(connection: PoolConnection, giveBack: () => void) {
     super();
-    this.#session = new HeldSession(connection);
+    this.#connection = connection;
     this.#giveBack = giveBack;
   }
 
-  protected async lend(stream: boolean): Promise<Lent> {
-    return this.#session.lend(stream);
+  protected async lend(): Promise<Lent> {
+    return lendHeld(this.#connection);
   }
 
   async beginTransaction(): Promise<SqlTransaction> {
-    this.#session.assertIdle();
-    await transactionCall(() => this.#session.connection.beginTransaction());
-    return new MysqlTransactionImpl(this.#session);
+    await transactionCall(() => this.#connection.beginTransaction());
+    return new MysqlTransactionImpl(this.#connection);
   }
 
   async release(): Promise<void> {
     try {
-      await this.#session.connection.release();
+      await this.#connection.release();
     } finally {
       this.#giveBack();
     }
   }
 
   async destroy(_reason?: unknown): Promise<void> {
-    this.#session.connection.destroy();
+    this.#connection.destroy();
     this.#giveBack();
   }
 }
 
 class MysqlTransactionImpl extends MysqlQueryable implements SqlTransaction {
-  readonly #session: HeldSession;
+  readonly #connection: PoolConnection;
 
-  constructor(session: HeldSession) {
+  constructor(connection: PoolConnection) {
     super();
-    this.#session = session;
+    this.#connection = connection;
   }
 
-  protected async lend(stream: boolean): Promise<Lent> {
-    return this.#session.lend(stream);
+  protected async lend(): Promise<Lent> {
+    return lendHeld(this.#connection);
   }
 
   async commit(): Promise<void> {
-    this.#session.assertIdle();
-    await transactionCall(() => this.#session.connection.commit());
+    await transactionCall(() => this.#connection.commit());
   }
 
   async rollback(): Promise<void> {
-    this.#session.assertIdle();
-    await transactionCall(() => this.#session.connection.rollback());
+    await transactionCall(() => this.#connection.rollback());
   }
 }
 
@@ -341,7 +306,7 @@ export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
     }
   }
 
-  protected async lend(_stream: boolean): Promise<Lent> {
+  protected async lend(): Promise<Lent> {
     const giveBack = this.#leases.take();
     try {
       const connection = await this.#acquire();
