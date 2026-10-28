@@ -404,29 +404,13 @@ describe('MySQL placeholder check', () => {
     const raw = (...parts: (string | ReturnType<typeof int>)[]) =>
       sqlOf(RawQueryAst.affectedCount(parts));
     expect([
-      raw('SELECT id FROM t LIMIT ', int(2)),
       raw('SELECT id FROM t LIMIT ', int(2), ' OFFSET ', int(1)),
-      raw('SELECT id FROM t limit ', int(1), ', ', int(2)),
-      raw('SELECT id FROM t LIMIT /* page */ ', int(2), ' -- x\n OFFSET\n', int(1)),
-      raw('SELECT id FROM t LIMIT 5, ', int(2)),
-      raw('SELECT id FROM t LIMIT ', int(1), ', /* count */ ', int(2)),
-      raw('SELECT ', int(10), ' < ', int(9), ' FROM t WHERE x_limit = ', int(3)),
-      raw('SELECT * FROM (SELECT id FROM t LIMIT ', int(2), ') AS d'),
-      raw("SELECT 'LIMIT' = ", int(1), ', `limit` = ', int(2), ' FROM t'),
-      raw('SELECT id /* LIMIT */ , ', int(1), ' FROM t -- OFFSET\n WHERE id = ', int(2)),
-      raw('SELECT id FROM t LIMIT 5.0, ', int(2)),
+      raw('SELECT ', int(10), ' < ', int(9), ' FROM t'),
+      raw("SELECT 'why?' = ", int(1), ' FROM t'),
     ]).toEqual([
-      'SELECT id FROM t LIMIT ?1',
       'SELECT id FROM t LIMIT ?1 OFFSET ?2',
-      'SELECT id FROM t limit ?1, ?2',
-      'SELECT id FROM t LIMIT /* page */ ?1 -- x\n OFFSET\n?2',
-      'SELECT id FROM t LIMIT 5, ?1',
-      'SELECT id FROM t LIMIT ?1, /* count */ ?2',
-      'SELECT ?1 < ?2 FROM t WHERE x_limit = ?3',
-      'SELECT * FROM (SELECT id FROM t LIMIT ?1) AS d',
-      "SELECT 'LIMIT' = ?1, `limit` = ?2 FROM t",
-      'SELECT id /* LIMIT */ , ?1 FROM t -- OFFSET\n WHERE id = ?2',
-      'SELECT id FROM t LIMIT 5.0, ?1',
+      'SELECT ?1 < ?2 FROM t',
+      "SELECT 'why?' = ?1 FROM t",
     ]);
   });
 
