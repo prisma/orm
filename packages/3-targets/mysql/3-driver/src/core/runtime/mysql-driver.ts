@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import type { Readable } from 'node:stream';
 import { finished } from 'node:stream/promises';
 import { errorRuntime } from '@internal/errors/execution';
+import type { SessionSettings } from '@internal/framework-components/components';
 import type { RuntimeDriverInstance } from '@internal/framework-components/execution';
 import type {
   SqlConnection,
@@ -13,8 +14,8 @@ import type {
   SqlTransaction,
 } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
-import { createPool, type Pool, type PoolConnection, type Prepare } from 'mariadb';
-import { mysqlPoolOptions } from '../connection-options';
+import { createPool, type Pool, type PoolConnection } from 'mariadb';
+import { type MysqlPoolOptions, mysqlPoolOptions } from '../connection-options';
 import { isFatal, normalizeMysqlError } from '../normalize-error';
 import { assertPlaceholderCount } from '../placeholder-count';
 import { positionalParams } from '../positional-params';
@@ -24,26 +25,63 @@ export type MysqlBinding = { readonly kind: 'url'; readonly url: string };
 
 export type MysqlRuntimeDriver = RuntimeDriverInstance<'sql', 'mysql'> & SqlDriver<MysqlBinding>;
 
+export interface MysqlDriverCreateOptions {
+  /** Stream each query's rows as they arrive, instead of reading the whole result before the first row, which is the default, as on Postgres without a cursor. */
+  readonly stream?: boolean | undefined;
+  readonly poolOptions?: MysqlPoolOptions | undefined;
+  /** The session settings the stack's target declares, which every connection starts with. */
+  readonly sessionSettings?: SessionSettings | undefined;
+}
+
 function notConnected(message: string) {
   return errorRuntime('DRIVER.NOT_CONNECTED', message, {
     fix: 'Call connect(binding) before running queries, and do not use the driver after close().',
   });
 }
 
-/** Prepares `request` on the server, its `?N` placeholders written as `?`, and checks MySQL's placeholder count against the values. Throws the package's error as it is. */
-async function prepareChecked(
-  connection: PoolConnection,
+/** Called once a statement's last command is in the package's queue, so the next statement on the connection may queue its own. */
+type Sent = () => void;
+
+/**
+ * Runs `request` on `client` and returns its result. A statement with values runs as a server-side prepared statement, its `?N` placeholders written as `?`, after checking MySQL's placeholder count against the values. A statement without values runs over the text protocol, as `pg` runs one: nothing is written into it, so a raw `START TRANSACTION` or `LOCK TABLES`, which MySQL does not prepare, runs too. Throws the package's error as it is.
+ */
+async function run(
+  client: PoolConnection,
   request: SqlExecuteRequest,
-): Promise<{ readonly statement: Prepare; readonly values: unknown[] }> {
+  sent: Sent,
+): Promise<unknown> {
   const { sql, values } = positionalParams(request.sql, request.params ?? []);
-  const statement = await connection.prepare(sql);
+  if (values.length === 0) {
+    const result = client.query(sql);
+    sent();
+    return result;
+  }
+  const statement = await client.prepare(sql);
   try {
     assertPlaceholderCount(statement, values.length);
-  } catch (mismatch) {
+    const result = statement.execute(values);
+    sent();
+    return await result;
+  } finally {
     statement.close();
-    throw mismatch;
   }
-  return { statement, values };
+}
+
+/** Starts streaming the rows of `request` on `client`, prepared when it has values and over the text protocol when it has none, as {@link run} runs it. `close` closes the prepared statement, if any. Throws the package's error as it is. */
+async function startStream(
+  client: PoolConnection,
+  request: SqlExecuteRequest,
+): Promise<{ readonly rows: Readable; readonly close: () => void }> {
+  const { sql, values } = positionalParams(request.sql, request.params ?? []);
+  if (values.length === 0) return { rows: client.queryStream(sql), close: () => {} };
+  const statement = await client.prepare(sql);
+  try {
+    assertPlaceholderCount(statement, values.length);
+    return { rows: statement.executeStream(values), close: () => statement.close() };
+  } catch (error) {
+    statement.close();
+    throw error;
+  }
 }
 
 function affectedRows(result: unknown): number {
@@ -55,43 +93,12 @@ function affectedRows(result: unknown): number {
     : 0;
 }
 
-/** Counts what the driver has handed out, a connection or a stream, so `close()` can wait until every one is back. */
-class Leases {
-  #count = 0;
-  #idle: (() => void)[] = [];
-
-  take(): () => void {
-    this.#count += 1;
-    let returned = false;
-    return () => {
-      if (returned) return;
-      returned = true;
-      this.#count -= 1;
-      if (this.#count === 0) for (const resolve of this.#idle.splice(0)) resolve();
-    };
-  }
-
-  idle(): Promise<void> {
-    return this.#count === 0
-      ? Promise.resolve()
-      : new Promise((resolve) => this.#idle.push(resolve));
-  }
-}
-
-/** A connection lent to one statement. `done` gives a pooled connection back to the pool, or destroys it when it may be broken. */
-interface Lent {
-  readonly connection: PoolConnection;
-  /** Whether the caller holds the connection, so its session must survive the statement. */
-  readonly held: boolean;
-  done(destroy: boolean): Promise<void>;
-}
-
-/** What a statement reports back to whoever lent its connection. */
+/** What a statement reports back to whoever released its client: whether the client may be broken and must be destroyed. */
 interface Outcome {
   destroy: boolean;
 }
 
-/** The error to report for `error`, after noting in `outcome` whether it left the connection unusable. */
+/** The error to report for `error`, after noting in `outcome` whether it left the client unusable. */
 function settle(error: unknown, outcome: Outcome): unknown {
   if (isFatal(error)) outcome.destroy = true;
   return normalizeMysqlError(error);
@@ -111,180 +118,225 @@ async function dropRest(rows: Readable & { close?: () => void }): Promise<void> 
   await finished(rows);
 }
 
-/**
- * Ends a stream the caller stopped reading early. Once the whole result has arrived, or on a held connection whose session must survive, the rest is read and dropped and the connection stays usable. A pooled connection whose result is still arriving is destroyed instead, so a large result is not downloaded only to be thrown away; MySQL does not say how many rows remain. Destroying it mid-result makes the package open one short-lived extra connection to send `KILL`, because MySQL cannot cancel a statement on its own connection.
- */
-async function stopEarly(lent: Lent, rows: Readable, outcome: Outcome): Promise<void> {
-  if (!lent.held && !resultReceived(rows)) {
-    outcome.destroy = true;
-    return;
-  }
-  await dropRest(rows).catch((error: unknown) => {
-    if (isFatal(error)) outcome.destroy = true;
-  });
-}
-
 /** The package can report an error on a stream after the caller stopped reading it, such as the one for a connection destroyed mid-result; the generator has already settled by then. */
 function ignoreAfterStop(): void {}
 
-/**
- * Streams the rows of `request` on `connection`, run as a prepared statement; the package pauses the socket while the caller is busy. A caller that stops reading early is handled by {@link stopEarly}. A fatal error, such as a lost connection, sets `outcome.destroy`, whether it comes from `prepare` or from the stream.
- */
-async function* streamRows<Row>(
-  lent: Lent,
-  request: SqlExecuteRequest,
-  outcome: Outcome,
-): AsyncGenerator<Row> {
-  const { statement, values } = await prepareChecked(lent.connection, request).catch(
-    (error: unknown) => {
-      throw settle(error, outcome);
-    },
-  );
-  let rows: Readable;
-  try {
-    rows = statement.executeStream(values);
-  } catch (error) {
-    statement.close();
-    throw settle(error, outcome);
-  }
-  rows.on('error', ignoreAfterStop);
-  let settled = false;
-  try {
-    for await (const row of rows.iterator({ destroyOnReturn: false })) {
-      yield blindCast<
-        Row,
-        'the package streams the rows the statement produces, shaped by the query'
-      >(row);
-    }
-    settled = true;
-  } catch (error) {
-    settled = true;
-    throw settle(error, outcome);
-  } finally {
-    if (!settled) await stopEarly(lent, rows, outcome);
-    if (outcome.destroy) rows.destroy();
-    else statement.close();
-  }
-}
-
 abstract class MysqlQueryable implements SqlQueryable {
-  /** Lends a connection for one statement. */
-  protected abstract lend(): Promise<Lent>;
+  protected abstract acquireClient(): Promise<PoolConnection>;
+  protected abstract releaseClient(client: PoolConnection, outcome: Outcome): Promise<void>;
+  /** Whether the caller holds the client, so its session must survive a stream the caller stops early. */
+  protected abstract readonly holdsClient: boolean;
+
+  constructor(protected readonly streams: boolean) {}
+
+  /** Takes the next turn on this client when called, and settles once every statement sent before has queued its commands. A pooled client runs one statement, so it waits for nothing. */
+  protected async nextTurn(): Promise<Sent> {
+    return () => {};
+  }
 
   async *query<Row = Record<string, unknown>>(request: SqlExecuteRequest): AsyncIterable<Row> {
-    const lent = await this.lend();
-    const outcome: Outcome = { destroy: false };
-    try {
-      yield* streamRows<Row>(lent, request, outcome);
-    } finally {
-      await lent.done(outcome.destroy);
+    if (this.streams) {
+      yield* this.#streamRows<Row>(request);
+      return;
+    }
+    const result = await this.#runReleasing(request);
+    for (const row of Array.isArray(result) ? result : []) {
+      yield blindCast<
+        Row,
+        'the package returns the rows the statement produces, shaped by the query'
+      >(row);
     }
   }
 
   async execute(request: SqlExecuteRequest): Promise<SqlStatementStats> {
-    const lent = await this.lend();
+    return { affectedRows: affectedRows(await this.#runReleasing(request)) };
+  }
+
+  async #runReleasing(request: SqlExecuteRequest): Promise<unknown> {
+    const turn = this.nextTurn();
+    const client = await this.acquireClient();
     const outcome: Outcome = { destroy: false };
+    const sent = await turn;
     try {
-      const { statement, values } = await prepareChecked(lent.connection, request);
-      try {
-        return { affectedRows: affectedRows(await statement.execute(values)) };
-      } finally {
-        statement.close();
-      }
+      return await run(client, request, sent);
     } catch (error) {
       throw settle(error, outcome);
     } finally {
-      await lent.done(outcome.destroy);
+      sent();
+      await this.releaseClient(client, outcome);
+    }
+  }
+
+  /**
+   * Streams the rows of `request` as they arrive; the package pauses the socket while the caller is busy. A caller that stops reading early is handled by {@link MysqlQueryable.#stopEarly}. A fatal error, such as a lost connection, destroys the client.
+   */
+  async *#streamRows<Row>(request: SqlExecuteRequest): AsyncGenerator<Row> {
+    const turn = this.nextTurn();
+    const client = await this.acquireClient();
+    const outcome: Outcome = { destroy: false };
+    const sent = await turn;
+    try {
+      const stream = await startStream(client, request)
+        .catch((error: unknown) => {
+          throw settle(error, outcome);
+        })
+        .finally(sent);
+      stream.rows.on('error', ignoreAfterStop);
+      let settled = false;
+      try {
+        for await (const row of stream.rows.iterator({ destroyOnReturn: false })) {
+          yield blindCast<
+            Row,
+            'the package streams the rows the statement produces, shaped by the query'
+          >(row);
+        }
+        settled = true;
+      } catch (error) {
+        settled = true;
+        throw settle(error, outcome);
+      } finally {
+        if (!settled) await this.#stopEarly(stream.rows, outcome);
+        if (outcome.destroy) stream.rows.destroy();
+        else stream.close();
+      }
+    } finally {
+      await this.releaseClient(client, outcome);
+    }
+  }
+
+  /**
+   * Ends a stream the caller stopped reading early. Once the whole result has arrived, or on a held client whose session must survive, the rest is read and dropped and the client stays usable. A pooled client whose result is still arriving is destroyed instead, so a large result is not downloaded only to be thrown away; MySQL does not say how many rows remain. Destroying it mid-result makes the package open one short-lived extra connection to send `KILL`, because MySQL cannot cancel a statement on its own connection.
+   */
+  async #stopEarly(rows: Readable, outcome: Outcome): Promise<void> {
+    if (!this.holdsClient && !resultReceived(rows)) {
+      outcome.destroy = true;
+      return;
+    }
+    await dropRest(rows).catch((error: unknown) => {
+      if (isFatal(error)) outcome.destroy = true;
+    });
+  }
+}
+
+/** The state of a held connection, shared by the connection and its transactions as the Postgres driver shares its transaction state. */
+interface HeldState {
+  /** How many statements are running; a stream the caller dropped without finishing it stays running. */
+  running: number;
+  /** Settles once the last statement sent has queued all its commands. */
+  queued: Promise<void>;
+}
+
+/**
+ * A queryable on a connection the caller holds, whose statements all run on the same session, in the order they are sent, as the Postgres driver's per-client lock runs them. The package runs a connection's commands in the order they are queued, so the driver only makes a statement wait until the one before it has queued its last command: a prepared statement queues its execution only after MySQL answers the prepare, and a commit sent meanwhile would otherwise run first. A statement sent while a stream on the connection is open waits for that stream to end; one awaited inside the stream's own loop never finishes, as on Postgres with a cursor.
+ */
+abstract class MysqlHeldQueryable extends MysqlQueryable {
+  protected readonly holdsClient = true;
+
+  constructor(
+    protected readonly client: PoolConnection,
+    protected readonly held: HeldState,
+    streams: boolean,
+  ) {
+    super(streams);
+  }
+
+  protected async acquireClient(): Promise<PoolConnection> {
+    this.held.running += 1;
+    return this.client;
+  }
+
+  protected async releaseClient(): Promise<void> {
+    this.held.running -= 1;
+  }
+
+  protected override async nextTurn(): Promise<Sent> {
+    const previous = this.held.queued;
+    let sent: Sent = () => {};
+    this.held.queued = new Promise((resolve) => {
+      sent = resolve;
+    });
+    await previous;
+    return sent;
+  }
+
+  /** Runs one of the package's transaction calls in its turn. */
+  protected async inTurn(call: () => Promise<void>): Promise<void> {
+    const sent = await this.nextTurn();
+    const done = call();
+    sent();
+    try {
+      await done;
+    } catch (error) {
+      throw normalizeMysqlError(error);
     }
   }
 }
 
-/** How many statements are running on a held connection, shared by the connection and its transactions as the Postgres driver shares its transaction state. A stream the caller dropped without finishing it stays running. */
-interface RunningStatements {
-  count: number;
-}
+class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
+  #onRelease: (() => void) | undefined;
 
-/**
- * Lends a connection the caller holds. The package runs a connection's statements one at a time in the order they are sent, as `pg` did for the Postgres driver, so a statement sent while a stream on the connection is open waits for that stream to end. One awaited inside the stream's own loop therefore never finishes, as on Postgres with a cursor.
- */
-function lendHeld(connection: PoolConnection, running: RunningStatements): Lent {
-  running.count += 1;
-  return {
-    connection,
-    held: true,
-    done: async () => {
-      running.count -= 1;
-    },
-  };
-}
-
-async function transactionCall(call: () => Promise<void>): Promise<void> {
-  try {
-    await call();
-  } catch (error) {
-    throw normalizeMysqlError(error);
-  }
-}
-
-/** A connection held by one caller, whose statements all run on the same session. */
-class MysqlConnectionImpl extends MysqlQueryable implements SqlConnection {
-  readonly #connection: PoolConnection;
-  readonly #giveBack: () => void;
-  readonly #running: RunningStatements = { count: 0 };
-
-  constructor(connection: PoolConnection, giveBack: () => void) {
-    super();
-    this.#connection = connection;
-    this.#giveBack = giveBack;
+  constructor(client: PoolConnection, streams: boolean, onRelease: () => void) {
+    super(client, { running: 0, queued: Promise.resolve() }, streams);
+    this.#onRelease = onRelease;
   }
 
-  protected async lend(): Promise<Lent> {
-    return lendHeld(this.#connection, this.#running);
+  #released(): void {
+    const onRelease = this.#onRelease;
+    this.#onRelease = undefined;
+    onRelease?.();
   }
 
   async beginTransaction(): Promise<SqlTransaction> {
-    await transactionCall(() => this.#connection.beginTransaction());
-    return new MysqlTransactionImpl(this.#connection, this.#running);
+    await this.inTurn(() => this.client.beginTransaction());
+    return new MysqlTransactionImpl(this.client, this.held, this.streams);
   }
 
   /**
    * Returns the connection to the pool, as the Postgres driver's `release()` does. A connection with a statement still running, such as a stream the caller dropped, is destroyed instead: the package's release sends `ROLLBACK` behind that statement and waits for it, which would never finish, where `pg`'s release does not wait on the server.
    */
   async release(): Promise<void> {
-    if (this.#running.count > 0) return this.destroy();
+    if (this.held.running > 0) return this.destroy();
     try {
-      await this.#connection.release();
+      await this.client.release();
     } finally {
-      this.#giveBack();
+      this.#released();
     }
   }
 
   async destroy(_reason?: unknown): Promise<void> {
-    this.#connection.destroy();
-    this.#giveBack();
+    this.client.destroy();
+    this.#released();
   }
 }
 
-class MysqlTransactionImpl extends MysqlQueryable implements SqlTransaction {
-  readonly #connection: PoolConnection;
-  readonly #running: RunningStatements;
-
-  constructor(connection: PoolConnection, running: RunningStatements) {
-    super();
-    this.#connection = connection;
-    this.#running = running;
-  }
-
-  protected async lend(): Promise<Lent> {
-    return lendHeld(this.#connection, this.#running);
-  }
-
+class MysqlTransactionImpl extends MysqlHeldQueryable implements SqlTransaction {
   async commit(): Promise<void> {
-    await transactionCall(() => this.#connection.commit());
+    await this.inTurn(() => this.client.commit());
   }
 
   async rollback(): Promise<void> {
-    await transactionCall(() => this.#connection.rollback());
+    await this.inTurn(() => this.client.rollback());
+  }
+}
+
+/** How many clients the driver has handed out and not had back, a held connection or one lent to a single statement, so `close()` can wait until every one is back. */
+class ClientsInUse {
+  #count = 0;
+  #idle: (() => void)[] = [];
+
+  acquired(): void {
+    this.#count += 1;
+  }
+
+  released(): void {
+    this.#count -= 1;
+    if (this.#count === 0) for (const resolve of this.#idle.splice(0)) resolve();
+  }
+
+  none(): Promise<void> {
+    return this.#count === 0
+      ? Promise.resolve()
+      : new Promise((resolve) => this.#idle.push(resolve));
   }
 }
 
@@ -297,14 +349,21 @@ type DriverState =
   | { readonly kind: 'closed' };
 
 /**
- * The MySQL runtime driver: a `mariadb` pool that runs every statement as a server-side prepared statement, so a value never travels inside the SQL. The pool runs the session setup once on each physical connection, and a connection goes back to the pool after each statement as it is; a broken connection is destroyed. `close()` waits for every connection and stream it has handed out before it ends the pool.
+ * The MySQL runtime driver: a `mariadb` pool. A statement with values runs as a server-side prepared statement, so a value never travels inside the SQL. A query reads its whole result before the first row unless `stream` is set. The pool runs the session setup once on each physical connection, and a connection goes back to the pool after each statement as it is; a broken connection is destroyed. `close()` waits for every connection and stream it has handed out before it ends the pool.
  */
 export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
   readonly familyId = 'sql' as const;
   readonly targetId = 'mysql' as const;
+  protected readonly holdsClient = false;
 
   #state: DriverState = { kind: 'unbound' };
-  readonly #leases = new Leases();
+  readonly #inUse = new ClientsInUse();
+  readonly #options: MysqlDriverCreateOptions;
+
+  constructor(options: MysqlDriverCreateOptions = {}) {
+    super(options.stream ?? false);
+    this.#options = options;
+  }
 
   get state(): SqlDriverState {
     return this.#state.kind;
@@ -316,61 +375,50 @@ export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
         fix: 'Call close() before connecting again.',
       });
     }
-    const pool = createPool(mysqlPoolOptions(binding.url));
+    const pool = createPool(
+      mysqlPoolOptions(binding.url, {
+        poolOptions: this.#options.poolOptions,
+        sessionSettings: this.#options.sessionSettings,
+      }),
+    );
     if (pool instanceof EventEmitter) pool.on('error', ignoreConnectionFailure);
     this.#state = { kind: 'connected', pool };
   }
 
   async acquireConnection(): Promise<SqlConnection> {
-    const giveBack = this.#leases.take();
-    try {
-      return new MysqlConnectionImpl(await this.#acquire(), giveBack);
-    } catch (error) {
-      giveBack();
-      throw error;
-    }
-  }
-
-  protected async lend(): Promise<Lent> {
-    const giveBack = this.#leases.take();
-    try {
-      const connection = await this.#acquire();
-      return {
-        connection,
-        held: false,
-        done: async (destroy) => {
-          try {
-            if (destroy) connection.destroy();
-            else await connection.release();
-          } finally {
-            giveBack();
-          }
-        },
-      };
-    } catch (error) {
-      giveBack();
-      throw error;
-    }
+    const client = await this.acquireClient();
+    return new MysqlConnectionImpl(client, this.streams, () => this.#inUse.released());
   }
 
   async close(): Promise<void> {
     if (this.#state.kind !== 'connected') return;
     const { pool } = this.#state;
     this.#state = { kind: 'closed' };
-    await this.#leases.idle();
+    await this.#inUse.none();
     await pool.end();
   }
 
-  async #acquire(): Promise<PoolConnection> {
+  protected async acquireClient(): Promise<PoolConnection> {
     if (this.#state.kind !== 'connected') {
       throw notConnected(
         this.#state.kind === 'closed' ? 'MySQL driver is closed' : 'MySQL driver not connected',
       );
     }
+    this.#inUse.acquired();
     try {
       return await this.#state.pool.getConnection();
     } catch (error) {
+      this.#inUse.released();
       throw normalizeMysqlError(error);
+    }
+  }
+
+  protected async releaseClient(client: PoolConnection, { destroy }: Outcome): Promise<void> {
+    try {
+      if (destroy) client.destroy();
+      else await client.release();
+    } finally {
+      this.#inUse.released();
     }
   }
 }

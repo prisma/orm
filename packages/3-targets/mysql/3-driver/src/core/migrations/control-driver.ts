@@ -14,7 +14,7 @@ import { assertPlaceholderCount } from '../placeholder-count';
 import { positionalParams } from '../positional-params';
 
 /**
- * A MySQL connection for the control plane. A statement with values runs as a server-side prepared statement, so a value never travels inside the SQL. Any statement without values, a user's `rawSql` migration step included, runs through the text protocol, `query()`, because MySQL does not prepare some statements, such as `START TRANSACTION` and `LOCK TABLES`; with no values there is nothing written into the SQL to inject, and `multipleStatements` stays off. Either way every column reads as the text MySQL sends.
+ * A MySQL connection for the control plane. It runs statements as the runtime driver does: one with values as a server-side prepared statement, so a value never travels inside the SQL, and one without values, a user's `rawSql` migration step included, over the text protocol, so `START TRANSACTION` and `LOCK TABLES`, which MySQL does not prepare, run too. Either way every column reads in one form, text or bytes.
  */
 export class MysqlControlDriver implements SqlControlDriverInstance<'mysql'> {
   readonly familyId = 'sql' as const;
@@ -28,7 +28,7 @@ export class MysqlControlDriver implements SqlControlDriverInstance<'mysql'> {
     });
   }
 
-  /** Runs `sql` and returns its rows, every column as the text MySQL sends and a binary column as bytes. */
+  /** Runs `sql` and returns its rows, every column as text and a binary column as bytes. */
   async query<Row = Record<string, unknown>>(
     sql: string,
     params?: readonly unknown[],
@@ -80,7 +80,10 @@ export class MysqlControlDriver implements SqlControlDriverInstance<'mysql'> {
 const mysqlDriverDescriptor: ControlDriverDescriptor<'sql', 'mysql', MysqlControlDriver> = {
   ...mysqlDriverDescriptorMeta,
   async create(url: string, options?: ControlDriverConnectOptions): Promise<MysqlControlDriver> {
-    const connectionOptions = mysqlConnectionOptions(url, options?.connectTimeoutMs);
+    const connectionOptions = mysqlConnectionOptions(url, {
+      connectTimeoutMs: options?.connectTimeoutMs,
+      sessionSettings: options?.sessionSettings,
+    });
     try {
       return new MysqlControlDriver(await createConnection(connectionOptions));
     } catch (error) {

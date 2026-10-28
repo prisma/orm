@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import type { SessionSettings } from '@internal/framework-components/components';
+import { quoteIdentifier, quoteLiteral } from '@internal/target-mysql/sql-utils';
 import { ifDefined } from '@internal/utils/defined';
 import { structuredError } from '@internal/utils/structured-error';
 import { type } from 'arktype';
@@ -5,32 +8,29 @@ import type { ConnectionConfig, PoolConfig } from 'mariadb';
 import { SESSION_SETUP } from './session-setup';
 import { readTextOrBytes } from './text-or-bytes';
 
-const positiveInteger = type('string.integer.parse').to('number.integer > 0');
+/** The pool settings `mysql()` takes, named and defaulted as the Postgres facade's `poolOptions` and `pg.Pool`. */
+export interface MysqlPoolOptions {
+  /** How long to wait for a new connection to open, and for a pooled one to come free, in milliseconds. 20 seconds by default. */
+  readonly connectionTimeoutMillis?: number;
+  /** How long a pooled connection may stay idle before the pool closes it, in milliseconds. 30 seconds by default; 0 keeps idle connections open. */
+  readonly idleTimeoutMillis?: number;
+  /** The most connections the pool opens. 10 by default. */
+  readonly max?: number;
+}
 
-const tlsSettings = type({
-  'ca?': 'string',
-  'cert?': 'string',
-  'key?': 'string',
-  'passphrase?': 'string',
-  'servername?': 'string',
-  'rejectUnauthorized?': 'boolean',
-}).onUndeclaredKey('reject');
-
-/** The largest statement cache a URL may ask for: at the pool's default of 10 connections, 1,000 each keeps one process at 10,000 open statements, under MySQL's server-wide default of 16,382. */
-const MAX_STATEMENT_CACHE_SIZE = 1000;
+const DEFAULT_CONNECT_TIMEOUT_MILLIS = 20_000;
+const DEFAULT_IDLE_TIMEOUT_MILLIS = 30_000;
 
 /**
- * The URL parameters the driver reads. `ssl` is `true` or a JSON object of TLS settings; `statementCacheSize` is the number of prepared statements each connection keeps open, 0 (off) by default.
+ * The URL parameters the driver reads. The TLS parameters are those `pg-connection-string` reads for the Postgres driver: `ssl` turns TLS on or off; `sslmode`, `sslcert`, `sslkey` and `sslrootcert` turn it on, the last three naming PEM files.
  */
 const URL_PARAMETERS = {
-  'ssl?': type('string.json.parse').to(type('boolean').or(tlsSettings)),
-  'connectTimeout?': positiveInteger,
+  'ssl?': type("'true' | '1' | 'false' | '0'").pipe((text) => text === 'true' || text === '1'),
+  'sslmode?': "'disable' | 'prefer' | 'require' | 'verify-ca' | 'verify-full' | 'no-verify'",
+  'sslcert?': 'string > 0',
+  'sslkey?': 'string > 0',
+  'sslrootcert?': 'string > 0',
   'allowPublicKeyRetrieval?': type("'true' | 'false'").pipe((text) => text === 'true'),
-  'connectionLimit?': positiveInteger,
-  'poolTimeout?': positiveInteger,
-  'statementCacheSize?': type('string.integer.parse').to(
-    type('number.integer >= 0').atMost(MAX_STATEMENT_CACHE_SIZE),
-  ),
 } as const;
 
 const urlParameters = type(URL_PARAMETERS);
@@ -39,27 +39,26 @@ type ParameterName = keyof typeof URL_PARAMETERS extends `${infer Name}?` ? Name
 
 /** The form each URL parameter's value must take, for the refusal of a value. */
 const PARAMETER_FORMS: Readonly<Record<ParameterName, string>> = {
-  ssl: 'true, false, or a JSON object of ca, cert, key, passphrase, servername and rejectUnauthorized',
-  connectTimeout: 'a positive integer of milliseconds',
+  ssl: 'true, 1, false or 0',
+  sslmode: 'disable, prefer, require, verify-ca, verify-full or no-verify',
+  sslcert: 'the path of a PEM file',
+  sslkey: 'the path of a PEM file',
+  sslrootcert: 'the path of a PEM file',
   allowPublicKeyRetrieval: 'true or false',
-  connectionLimit: 'a positive integer',
-  poolTimeout: 'a positive integer of milliseconds',
-  statementCacheSize: `an integer from 0 to ${MAX_STATEMENT_CACHE_SIZE}, so a process's connections stay under MySQL's server-wide limit on open prepared statements`,
 };
 
 const PARAMETER_NAMES = Object.keys(PARAMETER_FORMS);
 
 /** What replaces each parameter of a Prisma 7 engine URL. */
 const ENGINE_PARAMETER_REPLACEMENTS: ReadonlyMap<string, string> = new Map([
-  ['connection_limit', 'use connectionLimit'],
-  ['pool_timeout', 'use poolTimeout, in milliseconds'],
-  ['connect_timeout', 'use connectTimeout, in milliseconds'],
-  ['sslcert', "use ssl, with the CA certificate's PEM text as ca"],
-  ['sslidentity', "use ssl, with the client certificate's and key's PEM text as cert and key"],
-  ['sslpassword', "use ssl's passphrase"],
-  ['sslaccept', "use ssl's rejectUnauthorized"],
+  ['connection_limit', "set poolOptions.max in mysql()'s options"],
+  ['pool_timeout', "set poolOptions.connectionTimeoutMillis in mysql()'s options"],
+  ['connect_timeout', "set poolOptions.connectionTimeoutMillis in mysql()'s options"],
+  ['sslidentity', 'use sslcert and sslkey, each the path of a PEM file'],
+  ['sslpassword', 'no replacement; use an unencrypted sslkey file'],
+  ['sslaccept', 'use sslmode=no-verify to accept an invalid certificate'],
   ['socket_timeout', 'no replacement'],
-  ['statement_cache_size', 'use statementCacheSize'],
+  ['statement_cache_size', 'no replacement; each statement is prepared, run and closed'],
 ]);
 
 function isParameterName(name: string): name is ParameterName {
@@ -68,24 +67,22 @@ function isParameterName(name: string): name is ParameterName {
 
 type UrlParameters = typeof urlParameters.infer;
 
-const DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
-const DEFAULT_POOL_TIMEOUT_MS = 10_000;
-
 /**
- * Options the URL cannot change. Values travel only as prepared-statement parameters, so every option that would rewrite SQL on the client stays off, and `logParam` keeps values out of error messages. `typeCast` reads every column as text or bytes, so no column reaches a codec as a value the package parsed. The connection is utf8mb4: the driver reads each statement as utf8mb4 to find its placeholders, and MySQL must read it the same way.
+ * Options the URL cannot change. Values travel only as prepared-statement parameters, so every option that would rewrite SQL on the client stays off, and `logParam` keeps values out of error messages. Each statement is prepared, run and closed (`prepareCacheLength: 0`). `typeCast` reads every column as text or bytes, so no column reaches a codec as a value the package parsed. `foundRows` makes an UPDATE count the rows it matched, as Postgres's row count does. The connection is utf8mb4: the driver reads each statement as utf8mb4 to find its placeholders, and MySQL must read it the same way.
  */
 const FIXED_OPTIONS: ConnectionConfig = {
   collation: 'UTF8MB4_UNICODE_CI',
-  initSql: [...SESSION_SETUP],
   multipleStatements: false,
   namedPlaceholders: false,
   permitSetMultiParamEntries: false,
   permitLocalInfile: false,
   logParam: false,
+  prepareCacheLength: 0,
+  foundRows: true,
   typeCast: readTextOrBytes,
 };
 
-/** Refuses the URL. `parameters` names the parameters at fault; no value from the URL goes into the error, because a URL carries the password and TLS keys. */
+/** Refuses the URL. `parameters` names the parameters at fault; no value from the URL goes into the error, because a URL carries the password. */
 function invalidBinding(reason: string, parameters: readonly string[]): Error {
   return structuredError('RUNTIME.BINDING_INVALID', `MySQL connection URL: ${reason}`, {
     meta: { received: parameters.join(', '), reason },
@@ -139,10 +136,47 @@ function readUrl(url: string): { readonly parsed: URL; readonly parameters: UrlP
   return { parsed, parameters };
 }
 
+function readPem(parameter: 'sslcert' | 'sslkey' | 'sslrootcert', path: string): string {
+  try {
+    return readFileSync(path, 'utf8');
+  } catch {
+    throw invalidBinding(`the file ${parameter} names cannot be read`, [parameter]);
+  }
+}
+
+/**
+ * The TLS settings the URL gives, read as `pg-connection-string` reads them for the Postgres driver: `ssl=true` turns TLS on and `ssl=false` off; `sslcert`, `sslkey`, `sslrootcert` or `sslmode` turn it on, with the certificate, key and CA read from the files they name. `sslmode=disable` turns it off; `no-verify` accepts any server certificate; every other mode verifies the certificate and the host name, as `verify-full` does.
+ */
+function tlsOptions(parameters: UrlParameters): ConnectionConfig['ssl'] {
+  const { sslcert, sslkey, sslrootcert, sslmode } = parameters;
+  if ([sslcert, sslkey, sslrootcert, sslmode].every((value) => value === undefined)) {
+    return parameters.ssl;
+  }
+  if (sslmode === 'disable') return false;
+  return {
+    ...ifDefined('cert', sslcert === undefined ? undefined : readPem('sslcert', sslcert)),
+    ...ifDefined('key', sslkey === undefined ? undefined : readPem('sslkey', sslkey)),
+    ...ifDefined('ca', sslrootcert === undefined ? undefined : readPem('sslrootcert', sslrootcert)),
+    ...(sslmode === 'no-verify' ? { rejectUnauthorized: false } : {}),
+  };
+}
+
+/** The statements that set the session settings the target declares, in the order given. The names and values come from the target's descriptor, never from a caller, and the package runs `initSql` only as text, so they are written as a quoted identifier and a quoted literal, as the Postgres driver writes its own into a connection's startup options. */
+function sessionSettingStatements(sessionSettings: SessionSettings): string[] {
+  return Object.entries(sessionSettings).map(
+    ([name, value]) => `SET SESSION ${quoteIdentifier(name)} = ${quoteLiteral(value)}`,
+  );
+}
+
+interface ConnectionSettings {
+  readonly connectTimeoutMs: number | undefined;
+  readonly sessionSettings: SessionSettings | undefined;
+}
+
 function connectionOptions(
   parsed: URL,
   parameters: UrlParameters,
-  connectTimeoutMs: number | undefined,
+  { connectTimeoutMs, sessionSettings }: ConnectionSettings,
 ): ConnectionConfig {
   return {
     host: decodeURIComponent(parsed.hostname).replace(/^\[(.*)\]$/, '$1'),
@@ -150,26 +184,47 @@ function connectionOptions(
     user: decodeURIComponent(parsed.username),
     password: decodeURIComponent(parsed.password),
     database: decodeURIComponent(parsed.pathname.slice(1)),
-    ...ifDefined('ssl', parameters.ssl),
+    ...ifDefined('ssl', tlsOptions(parameters)),
     allowPublicKeyRetrieval: parameters.allowPublicKeyRetrieval ?? false,
-    connectTimeout: connectTimeoutMs ?? parameters.connectTimeout ?? DEFAULT_CONNECT_TIMEOUT_MS,
-    prepareCacheLength: parameters.statementCacheSize ?? 0,
+    connectTimeout: connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MILLIS,
+    initSql: [...SESSION_SETUP, ...sessionSettingStatements(sessionSettings ?? {})],
     ...FIXED_OPTIONS,
   };
 }
 
-/** The `mariadb` options for one connection to the server a `mysql://` URL names. Refuses a URL parameter the driver does not read, and a charset. */
-export function mysqlConnectionOptions(url: string, connectTimeoutMs?: number): ConnectionConfig {
+/** The `mariadb` options for one connection to the server a `mysql://` URL names, whose session starts with `sessionSettings`. Refuses a URL parameter the driver does not read, and a charset. */
+export function mysqlConnectionOptions(
+  url: string,
+  settings?: Partial<ConnectionSettings>,
+): ConnectionConfig {
   const { parsed, parameters } = readUrl(url);
-  return connectionOptions(parsed, parameters, connectTimeoutMs);
+  return connectionOptions(parsed, parameters, {
+    connectTimeoutMs: settings?.connectTimeoutMs,
+    sessionSettings: settings?.sessionSettings,
+  });
 }
 
-/** The `mariadb` pool options for a `mysql://` URL: the connection options, `connectionLimit`, and `poolTimeout` in milliseconds, ten seconds unless the URL says otherwise, as the pool's `acquireTimeout`. */
-export function mysqlPoolOptions(url: string): PoolConfig {
+/**
+ * The `mariadb` pool options for a `mysql://` URL, sized and timed as the Postgres driver's `pg.Pool`: it opens a connection only when one is needed (`minimumIdle: 0`), closes one idle for `idleTimeoutMillis`, and waits `connectionTimeoutMillis` both to open a connection and for a pooled one to come free.
+ */
+export function mysqlPoolOptions(
+  url: string,
+  settings?: {
+    readonly poolOptions?: MysqlPoolOptions | undefined;
+    readonly sessionSettings?: SessionSettings | undefined;
+  },
+): PoolConfig {
   const { parsed, parameters } = readUrl(url);
+  const poolOptions = settings?.poolOptions;
+  const timeoutMs = poolOptions?.connectionTimeoutMillis ?? DEFAULT_CONNECT_TIMEOUT_MILLIS;
   return {
-    ...connectionOptions(parsed, parameters, undefined),
-    ...ifDefined('connectionLimit', parameters.connectionLimit),
-    acquireTimeout: parameters.poolTimeout ?? DEFAULT_POOL_TIMEOUT_MS,
+    ...connectionOptions(parsed, parameters, {
+      connectTimeoutMs: timeoutMs,
+      sessionSettings: settings?.sessionSettings,
+    }),
+    acquireTimeout: timeoutMs,
+    minimumIdle: 0,
+    idleTimeout: Math.ceil((poolOptions?.idleTimeoutMillis ?? DEFAULT_IDLE_TIMEOUT_MILLIS) / 1000),
+    ...ifDefined('connectionLimit', poolOptions?.max),
   };
 }

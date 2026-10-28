@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { inspect } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import { mysqlConnectionOptions, mysqlPoolOptions } from '../src/core/connection-options';
@@ -5,22 +8,57 @@ import { SESSION_SETUP } from '../src/core/session-setup';
 import { readTextOrBytes } from '../src/core/text-or-bytes';
 
 describe('mysqlConnectionOptions', () => {
-  it('reads the server, credentials, database and TLS settings from the URL', () => {
-    expect(
-      mysqlConnectionOptions(
-        'mysql://app:p%40ss@db.example:3307/shop?ssl={"rejectUnauthorized":false,"ca":"PEM"}',
-      ),
-    ).toMatchObject({
+  it('reads the server, credentials and database from the URL', () => {
+    expect(mysqlConnectionOptions('mysql://app:p%40ss@db.example:3307/shop')).toMatchObject({
       host: 'db.example',
       port: 3307,
       user: 'app',
       password: 'p@ss',
       database: 'shop',
-      ssl: { rejectUnauthorized: false, ca: 'PEM' },
     });
-    expect(mysqlConnectionOptions('mysql://root@localhost/app?ssl=true')).toMatchObject({
-      ssl: true,
-    });
+  });
+
+  it('reads TLS settings as pg-connection-string does for Postgres: ssl, sslmode, and sslcert, sslkey and sslrootcert as PEM files', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mysql-tls-'));
+    const file = (name: string) => {
+      const path = join(dir, name);
+      writeFileSync(path, `${name} PEM`);
+      return encodeURIComponent(path);
+    };
+    const ssl = (query: string) =>
+      mysqlConnectionOptions(`mysql://root@localhost/app?${query}`).ssl;
+    try {
+      expect({
+        none: ssl('allowPublicKeyRetrieval=false'),
+        on: ssl('ssl=true'),
+        one: ssl('ssl=1'),
+        off: ssl('ssl=0'),
+        verifyFull: ssl('sslmode=verify-full'),
+        require: ssl('sslmode=require'),
+        noVerify: ssl('sslmode=no-verify'),
+        disable: ssl(`sslmode=disable&sslrootcert=${file('ca')}`),
+        files: ssl(`sslcert=${file('cert')}&sslkey=${file('key')}&sslrootcert=${file('ca')}`),
+      }).toEqual({
+        none: undefined,
+        on: true,
+        one: true,
+        off: false,
+        verifyFull: {},
+        require: {},
+        noVerify: { rejectUnauthorized: false },
+        disable: false,
+        files: { cert: 'cert PEM', key: 'key PEM', ca: 'ca PEM' },
+      });
+      expect(() => ssl('sslkey=/no/such/file.pem')).toThrow(
+        expect.objectContaining({
+          code: 'RUNTIME.BINDING_INVALID',
+          message: expect.stringContaining('the file sslkey names cannot be read'),
+          meta: { received: 'sslkey', reason: expect.any(String) },
+        }),
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
   });
 
   it('reads an IPv6 host without its brackets', () => {
@@ -31,10 +69,24 @@ describe('mysqlConnectionOptions', () => {
     expect(mysqlConnectionOptions('mysql://root@localhost/app')).not.toHaveProperty('port');
   });
 
-  it('sets up each connection with the session statements, in utf8mb4, and never logs values', () => {
+  it('sets up each connection with the session statements and then the session settings the target declares, in utf8mb4, never logs values, never caches statements and counts matched rows', () => {
+    expect({
+      none: mysqlConnectionOptions('mysql://root@localhost/app').initSql,
+      settings: mysqlConnectionOptions('mysql://root@localhost/app', {
+        sessionSettings: { time_zone: '+00:00', 'odd`name': "it's" },
+      }).initSql,
+    }).toEqual({
+      none: [...SESSION_SETUP],
+      settings: [
+        ...SESSION_SETUP,
+        "SET SESSION `time_zone` = '+00:00'",
+        "SET SESSION `odd``name` = 'it''s'",
+      ],
+    });
     expect(mysqlConnectionOptions('mysql://root@localhost/app')).toMatchObject({
       collation: 'UTF8MB4_UNICODE_CI',
-      initSql: [...SESSION_SETUP],
+      prepareCacheLength: 0,
+      foundRows: true,
       logParam: false,
       multipleStatements: false,
       namedPlaceholders: false,
@@ -48,31 +100,6 @@ describe('mysqlConnectionOptions', () => {
       connection: mysqlConnectionOptions('mysql://root@localhost/app').typeCast,
       pool: mysqlPoolOptions('mysql://root@localhost/app').typeCast,
     }).toEqual({ connection: readTextOrBytes, pool: readTextOrBytes });
-  });
-
-  it('keeps the prepared-statement cache off unless statementCacheSize turns it on', () => {
-    expect({
-      off: mysqlConnectionOptions('mysql://root@localhost/app').prepareCacheLength,
-      zero: mysqlConnectionOptions('mysql://root@localhost/app?statementCacheSize=0')
-        .prepareCacheLength,
-      on: mysqlConnectionOptions('mysql://root@localhost/app?statementCacheSize=20')
-        .prepareCacheLength,
-      largest: mysqlConnectionOptions('mysql://root@localhost/app?statementCacheSize=1000')
-        .prepareCacheLength,
-    }).toEqual({ off: 0, zero: 0, on: 20, largest: 1000 });
-  });
-
-  it('refuses a statementCacheSize that is not an integer from 0 to 1,000', () => {
-    for (const size of ['-1', '1.5', 'many', '', '1001']) {
-      expect(() =>
-        mysqlConnectionOptions(`mysql://root@localhost/app?statementCacheSize=${size}`),
-      ).toThrow(
-        expect.objectContaining({
-          code: 'RUNTIME.BINDING_INVALID',
-          message: expect.stringContaining('statementCacheSize must be an integer from 0 to 1000'),
-        }),
-      );
-    }
   });
 
   it('fetches the server public key only when allowPublicKeyRetrieval=true', () => {
@@ -89,8 +116,8 @@ describe('mysqlConnectionOptions', () => {
   });
 
   it('refuses TLS settings it does not know', () => {
-    for (const ssl of ['{"secureProtocol":"TLSv1_method"}', 'maybe', '1']) {
-      expect(() => mysqlConnectionOptions(`mysql://root@localhost/app?ssl=${ssl}`)).toThrow(
+    for (const query of ['ssl={}', 'ssl=maybe', 'sslmode=allow', 'sslcert=']) {
+      expect(() => mysqlConnectionOptions(`mysql://root@localhost/app?${query}`)).toThrow(
         expect.objectContaining({ code: 'RUNTIME.BINDING_INVALID' }),
       );
     }
@@ -115,6 +142,8 @@ describe('mysqlConnectionOptions', () => {
       'typeCast=false',
       'flags=MULTI_STATEMENTS',
       'prepareCacheLength=10',
+      'statementCacheSize=10',
+      'connectionLimit=2',
     ]) {
       expect(() => mysqlConnectionOptions(`mysql://root@localhost/app?${parameter}`)).toThrow(
         expect.objectContaining({ code: 'RUNTIME.BINDING_INVALID' }),
@@ -124,17 +153,16 @@ describe('mysqlConnectionOptions', () => {
 
   it('names the parameters it accepts when it refuses one, and the replacement for each Prisma 7 engine parameter', () => {
     const accepted =
-      'it accepts ssl, connectTimeout, allowPublicKeyRetrieval, connectionLimit, poolTimeout and statementCacheSize';
+      'it accepts ssl, sslmode, sslcert, sslkey, sslrootcert and allowPublicKeyRetrieval';
     const replacements = {
-      connection_limit: 'use connectionLimit',
-      pool_timeout: 'use poolTimeout, in milliseconds',
-      connect_timeout: 'use connectTimeout, in milliseconds',
-      sslcert: "use ssl, with the CA certificate's PEM text as ca",
-      sslidentity: "use ssl, with the client certificate's and key's PEM text as cert and key",
-      sslpassword: "use ssl's passphrase",
-      sslaccept: "use ssl's rejectUnauthorized",
+      connection_limit: "set poolOptions.max in mysql()'s options",
+      pool_timeout: "set poolOptions.connectionTimeoutMillis in mysql()'s options",
+      connect_timeout: "set poolOptions.connectionTimeoutMillis in mysql()'s options",
+      sslidentity: 'use sslcert and sslkey, each the path of a PEM file',
+      sslpassword: 'no replacement; use an unencrypted sslkey file',
+      sslaccept: 'use sslmode=no-verify to accept an invalid certificate',
       socket_timeout: 'no replacement',
-      statement_cache_size: 'use statementCacheSize',
+      statement_cache_size: 'no replacement; each statement is prepared, run and closed',
     };
     for (const [parameter, replacement] of Object.entries(replacements)) {
       expect(() => mysqlConnectionOptions(`mysql://root@localhost/app?${parameter}=1`)).toThrow(
@@ -150,7 +178,7 @@ describe('mysqlConnectionOptions', () => {
     ).toThrow(
       expect.objectContaining({
         message: expect.stringContaining(
-          `flags, connection_limit (use connectionLimit); ${accepted}`,
+          `flags, connection_limit (set poolOptions.max in mysql()'s options); ${accepted}`,
         ),
         meta: { received: 'flags, connection_limit', reason: expect.any(String) },
       }),
@@ -159,30 +187,26 @@ describe('mysqlConnectionOptions', () => {
 
   it('names a parameter whose value it refuses, and the form the value must take', () => {
     expect(() =>
-      mysqlPoolOptions('mysql://root@localhost/app?poolTimeout=soon&connectionLimit=2'),
+      mysqlPoolOptions('mysql://root@localhost/app?sslmode=soon&allowPublicKeyRetrieval=true'),
     ).toThrow(
       expect.objectContaining({
         code: 'RUNTIME.BINDING_INVALID',
-        message: expect.stringContaining('poolTimeout must be a positive integer of milliseconds'),
-        meta: { received: 'poolTimeout', reason: expect.any(String) },
+        message: expect.stringContaining(
+          'sslmode must be disable, prefer, require, verify-ca, verify-full or no-verify',
+        ),
+        meta: { received: 'sslmode', reason: expect.any(String) },
       }),
     );
   });
 
-  it('copies no value from the URL into the error, neither the password nor a TLS key, even from a URL it cannot parse', () => {
-    const secrets = ['hunter2-secret', 'PRIVATE-KEY-PEM', 'pp-secret'];
-    const ssl = encodeURIComponent(
-      JSON.stringify({ key: 'PRIVATE-KEY-PEM', passphrase: 'pp-secret', bogus: 1 }),
-    );
-    const validSsl = encodeURIComponent(
-      JSON.stringify({ key: 'PRIVATE-KEY-PEM', passphrase: 'pp-secret' }),
-    );
+  it('copies no value from the URL into the error, not the password, even from a URL it cannot parse', () => {
+    const secret = 'hunter2-secret';
     for (const url of [
-      `mysql://app:hunter2-secret@db.example/app?ssl=${ssl}`,
-      `mysql://app:hunter2-secret@db.example/app?ssl=${validSsl}&connection_limit=hunter2-secret`,
-      `mysql://app:hunter2-secret@db.example/app?ssl=${validSsl}&poolTimeout=hunter2-secret`,
-      `mysql://app:hunter2-secret@db.example/app?ssl=${validSsl}&charset=hunter2-secret`,
-      'mysql://app:hunter2-secret@[db.example/app',
+      `mysql://app:${secret}@db.example/app?sslmode=${secret}`,
+      `mysql://app:${secret}@db.example/app?connection_limit=${secret}`,
+      `mysql://app:${secret}@db.example/app?sslkey=/${secret}.pem`,
+      `mysql://app:${secret}@db.example/app?charset=${secret}`,
+      `mysql://app:${secret}@[db.example/app`,
     ]) {
       const error = (() => {
         try {
@@ -192,47 +216,49 @@ describe('mysqlConnectionOptions', () => {
         }
         throw new Error(`accepted ${url}`);
       })();
-      const written = inspect(error, { depth: 10 });
       expect({
         code: Object(error).code,
-        leaked: secrets.filter((secret) => written.includes(secret)),
-      }).toEqual({ code: 'RUNTIME.BINDING_INVALID', leaked: [] });
+        leaked: inspect(error, { depth: 10 }).includes(secret),
+      }).toEqual({ code: 'RUNTIME.BINDING_INVALID', leaked: false });
     }
   });
 
-  it('waits ten seconds to connect unless the URL or the caller says otherwise, and leaves out the pool settings', () => {
-    const given = mysqlConnectionOptions(
-      'mysql://root@localhost/app?connectionLimit=2&poolTimeout=100&connectTimeout=300',
-      500,
-    );
+  it('waits 20 seconds to connect, as the Postgres facade does, unless the caller says otherwise, and leaves out the pool settings', () => {
+    const given = mysqlConnectionOptions('mysql://root@localhost/app', { connectTimeoutMs: 500 });
     expect({
       default: mysqlConnectionOptions('mysql://root@localhost/app').connectTimeout,
-      url: mysqlConnectionOptions('mysql://root@localhost/app?connectTimeout=300').connectTimeout,
       caller: given.connectTimeout,
       poolSettings: 'connectionLimit' in given || 'acquireTimeout' in given,
-    }).toEqual({ default: 10_000, url: 300, caller: 500, poolSettings: false });
+    }).toEqual({ default: 20_000, caller: 500, poolSettings: false });
   });
 });
 
 describe('mysqlPoolOptions', () => {
-  it('reads the pool size and how long to wait for a connection, waiting ten seconds by default', () => {
+  it("sizes and times the pool as the Postgres driver's pg.Pool: no connection opened before one is needed, idle ones closed after 30 seconds, 20 seconds to wait for one", () => {
     expect({
-      given: mysqlPoolOptions(
-        'mysql://root@localhost/app?connectionLimit=5&poolTimeout=2000&statementCacheSize=20',
-      ),
       defaults: mysqlPoolOptions('mysql://root@localhost/app?ssl=true'),
+      given: mysqlPoolOptions('mysql://root@localhost/app', {
+        poolOptions: { connectionTimeoutMillis: 2000, idleTimeoutMillis: 1500, max: 5 },
+        sessionSettings: { time_zone: '+00:00' },
+      }),
     }).toMatchObject({
-      given: { connectionLimit: 5, acquireTimeout: 2000, prepareCacheLength: 20 },
-      defaults: { acquireTimeout: 10_000, prepareCacheLength: 0, ssl: true },
+      defaults: {
+        minimumIdle: 0,
+        idleTimeout: 30,
+        acquireTimeout: 20_000,
+        connectTimeout: 20_000,
+        prepareCacheLength: 0,
+        ssl: true,
+      },
+      given: {
+        minimumIdle: 0,
+        idleTimeout: 2,
+        acquireTimeout: 2000,
+        connectTimeout: 2000,
+        connectionLimit: 5,
+        initSql: [...SESSION_SETUP, "SET SESSION `time_zone` = '+00:00'"],
+      },
     });
     expect(mysqlPoolOptions('mysql://root@localhost/app')).not.toHaveProperty('connectionLimit');
-  });
-
-  it('refuses a pool setting that is not a positive integer', () => {
-    for (const parameter of ['connectionLimit=0', 'poolTimeout=soon', 'connectionLimit=2.5']) {
-      expect(() => mysqlPoolOptions(`mysql://root@localhost/app?${parameter}`)).toThrow(
-        expect.objectContaining({ code: 'RUNTIME.BINDING_INVALID' }),
-      );
-    }
   });
 });

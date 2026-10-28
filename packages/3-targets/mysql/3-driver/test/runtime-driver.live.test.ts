@@ -11,11 +11,14 @@ async function collect<Row>(rows: AsyncIterable<Row>): Promise<Row[]> {
   return out;
 }
 
+type DriverOptions = Parameters<typeof mysqlRuntimeDriver.create>[0];
+
 async function withDriver<T>(
   url: string,
   fn: (driver: ReturnType<typeof mysqlRuntimeDriver.create>) => Promise<T>,
+  options?: DriverOptions,
 ): Promise<T> {
-  const driver = mysqlRuntimeDriver.create();
+  const driver = mysqlRuntimeDriver.create(options);
   await driver.connect({ kind: 'url', url });
   try {
     return await fn(driver);
@@ -31,8 +34,14 @@ async function drain(rows: AsyncIterator<unknown>): Promise<void> {
   while (!(await rows.next()).done) {}
 }
 
+const tenSlowRows =
+  'WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE n < 10) SELECT n, SLEEP(0.05) AS z FROM s';
+
 const numbers =
   'SELECT n FROM (SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3) AS t ORDER BY n';
+
+const streaming = { stream: true } as const;
+const single = { stream: true, poolOptions: { max: 1 } } as const;
 
 const twoHundredNumbers =
   'WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE n < 200) SELECT n FROM s';
@@ -218,32 +227,17 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     }
   }
 
-  it('closes every prepared statement after it runs unless statementCacheSize turns the cache on', async (test) => {
+  it('closes every prepared statement after it runs, so a process never holds statements open against the server-wide limit', async (test) => {
     await withMysqlDatabase(test, async ({ url, name }) => {
-      const limited = new URL(url);
-      limited.searchParams.set('connectionLimit', '2');
-      const openWhileConnected = async (target: URL) =>
-        withDriver(target.toString(), async (driver) => {
+      const open = await withDriver(
+        url,
+        async (driver) => {
           await runManyStatements(driver);
           return openStatements(url, name);
-        });
-      const off = await openWhileConnected(limited);
-      limited.searchParams.set('statementCacheSize', '5');
-      const cached = await openWhileConnected(limited);
-      expect({ off, cachedWithinBound: cached > 0 && cached <= 10 }).toEqual({
-        off: 0,
-        cachedWithinBound: true,
-      });
-    });
-  });
-
-  it('refuses a statementCacheSize that is not a non-negative integer', async (test) => {
-    await withMysqlDatabase(test, async ({ url }) => {
-      const invalid = new URL(url);
-      invalid.searchParams.set('statementCacheSize', '-1');
-      await expect(
-        mysqlRuntimeDriver.create().connect({ kind: 'url', url: invalid.toString() }),
-      ).rejects.toMatchObject({ code: 'RUNTIME.BINDING_INVALID' });
+        },
+        { poolOptions: { max: 2 } },
+      );
+      expect(open).toBe(0);
     });
   });
 
@@ -308,19 +302,21 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     );
   });
 
-  it('reports a statement MySQL cannot prepare as a SqlQueryError, so raw START TRANSACTION and LOCK TABLES fail with its SQLSTATE', async (test) => {
+  it('runs a raw statement without values over the text protocol, as pg does, so START TRANSACTION and LOCK TABLES, which MySQL does not prepare, run', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
       withDriver(url, async (driver) => {
         await driver.execute({ sql: 'CREATE TABLE t (id int)' });
-        const refused = expect.objectContaining({ kind: 'sql_query', sqlState: 'HY000' });
-        expect({
-          begin: await driver
-            .execute({ sql: 'START TRANSACTION' })
-            .catch((error: unknown) => error),
-          lock: await driver
-            .execute({ sql: 'LOCK TABLES t READ' })
-            .catch((error: unknown) => error),
-        }).toEqual({ begin: refused, lock: refused });
+        const connection = await driver.acquireConnection();
+        try {
+          await connection.execute({ sql: 'LOCK TABLES t WRITE' });
+          await connection.execute({ sql: 'START TRANSACTION' });
+          await connection.execute({ sql: 'INSERT INTO t VALUES (?1)', params: [1] });
+          await connection.execute({ sql: 'COMMIT' });
+          await connection.execute({ sql: 'UNLOCK TABLES' });
+        } finally {
+          await connection.release();
+        }
+        expect(await collect(driver.query({ sql: 'SELECT id FROM t' }))).toEqual([{ id: '1' }]);
       }),
     );
   });
@@ -386,15 +382,14 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
           await connection.execute({
             sql: "SET SESSION sql_mode = 'NO_BACKSLASH_ESCAPES'",
           });
-          await expect(
-            collect(connection.query({ sql: "SELECT 'x\\' AS a, ? AS b" })),
-          ).rejects.toMatchObject({
+          const request = { sql: "SELECT ?1 AS v, 'x\\' AS a, ? AS b", params: [1] };
+          await expect(collect(connection.query(request))).rejects.toMatchObject({
             code: 'RUNTIME.PARAM_PLACEHOLDER_MISMATCH',
-            meta: expect.objectContaining({ prepared: 1, params: 0 }),
+            meta: expect.objectContaining({ prepared: 2, params: 1 }),
           });
-          await expect(
-            connection.execute({ sql: "SELECT 'x\\' AS a, ? AS b" }),
-          ).rejects.toMatchObject({ code: 'RUNTIME.PARAM_PLACEHOLDER_MISMATCH' });
+          await expect(connection.execute(request)).rejects.toMatchObject({
+            code: 'RUNTIME.PARAM_PLACEHOLDER_MISMATCH',
+          });
         } finally {
           await connection.destroy();
         }
@@ -404,20 +399,22 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
 
   it('keeps a SET on its connection after the connection goes back to the pool, as Postgres does', async (test) => {
     await withMysqlDatabase(test, async ({ url }) => {
-      const single = new URL(url);
-      single.searchParams.set('connectionLimit', '1');
-      await withDriver(single.toString(), async (driver) => {
-        const zone = () =>
-          collect(
-            driver.query<Record<string, string>>({ sql: 'SELECT @@SESSION.time_zone AS tz' }),
-          );
-        const before = await zone();
-        await driver.execute({ sql: "SET time_zone = '+05:00'" });
-        expect({ before, after: await zone() }).toEqual({
-          before: [{ tz: '+00:00' }],
-          after: [{ tz: '+05:00' }],
-        });
-      });
+      await withDriver(
+        url,
+        async (driver) => {
+          const zone = () =>
+            collect(
+              driver.query<Record<string, string>>({ sql: 'SELECT @@SESSION.time_zone AS tz' }),
+            );
+          const before = await zone();
+          await driver.execute({ sql: "SET time_zone = '+05:00'" });
+          expect({ before, after: await zone() }).toEqual({
+            before: [{ tz: '+00:00' }],
+            after: [{ tz: '+05:00' }],
+          });
+        },
+        { poolOptions: { max: 1 }, sessionSettings: { time_zone: '+00:00' } },
+      );
     });
   });
 
@@ -436,70 +433,85 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     );
   });
 
-  it('sets up every connection: no backslash escapes mode and UTC', async (test) => {
+  it('sets up every connection: no backslash escapes mode, and the session settings it is created with', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
-      withDriver(url, async (driver) => {
-        const [row] = await collect(
-          driver.query<Record<string, string>>({
-            sql: "SELECT @@SESSION.time_zone AS tz, FIND_IN_SET('NO_BACKSLASH_ESCAPES', @@SESSION.sql_mode) AS nbe",
-          }),
-        );
-        expect(row).toEqual({ tz: '+00:00', nbe: '0' });
-      }),
+      withDriver(
+        url,
+        async (driver) => {
+          const [row] = await collect(
+            driver.query<Record<string, string>>({
+              sql: "SELECT @@SESSION.time_zone AS tz, FIND_IN_SET('NO_BACKSLASH_ESCAPES', @@SESSION.sql_mode) AS nbe",
+            }),
+          );
+          expect(row).toEqual({ tz: '+03:00', nbe: '0' });
+        },
+        { sessionSettings: { time_zone: '+03:00' } },
+      ),
     );
   });
 
   it('leaves a connection usable after its caller stops reading a stream early', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
-      withDriver(url, async (driver) => {
-        const connection = await driver.acquireConnection();
-        try {
-          for await (const row of connection.query({ sql: numbers })) {
-            expect(row).toEqual({ n: '1' });
-            break;
+      withDriver(
+        url,
+        async (driver) => {
+          const connection = await driver.acquireConnection();
+          try {
+            for await (const row of connection.query({ sql: numbers })) {
+              expect(row).toEqual({ n: '1' });
+              break;
+            }
+            expect(await collect(connection.query({ sql: 'SELECT 7 AS n' }))).toEqual([{ n: '7' }]);
+          } finally {
+            await connection.release();
           }
-          expect(await collect(connection.query({ sql: 'SELECT 7 AS n' }))).toEqual([{ n: '7' }]);
-        } finally {
-          await connection.release();
-        }
-      }),
+        },
+        streaming,
+      ),
     );
   });
 
   it('stops a pooled stream the caller breaks out of without reading the rest of the result', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
-      withDriver(url, async (driver) => {
-        const started = Date.now();
-        for await (const _row of driver.query({ sql: slowRows })) break;
-        const elapsedMs = Date.now() - started;
-        expect({
-          quick: elapsedMs < 3000,
-          next: await collect(driver.query({ sql: 'SELECT 1 AS n' })),
-        }).toEqual({ quick: true, next: [{ n: '1' }] });
-      }),
+      withDriver(
+        url,
+        async (driver) => {
+          const started = Date.now();
+          for await (const _row of driver.query({ sql: slowRows })) break;
+          const elapsedMs = Date.now() - started;
+          expect({
+            quick: elapsedMs < 3000,
+            next: await collect(driver.query({ sql: 'SELECT 1 AS n' })),
+          }).toEqual({ quick: true, next: [{ n: '1' }] });
+        },
+        streaming,
+      ),
     );
   });
 
   it('returns a pooled connection whose stream the caller stops early to the pool when the whole result has arrived, opening no connection', async (test) => {
     await withMysqlDatabase(test, ({ url, name }) =>
       withCountedUser(url, name, async (userUrl, opened) => {
-        userUrl.searchParams.set('connectionLimit', '1');
-        await withDriver(userUrl.toString(), async (driver) => {
-          const first = await connectionId(driver);
-          const before = await opened();
-          for (let round = 0; round < 10; round += 1) {
-            for (const sql of [numbers, twoHundredNumbers]) {
-              for await (const _row of driver.query({ sql })) break;
+        await withDriver(
+          userUrl.toString(),
+          async (driver) => {
+            const first = await connectionId(driver);
+            const before = await opened();
+            for (let round = 0; round < 10; round += 1) {
+              for (const sql of [numbers, twoHundredNumbers]) {
+                for await (const _row of driver.query({ sql })) break;
+              }
             }
-          }
-          expect({
-            opened: (await opened()) - before,
-            same: (await connectionId(driver)) === first,
-          }).toEqual({
-            opened: 0,
-            same: true,
-          });
-        });
+            expect({
+              opened: (await opened()) - before,
+              same: (await connectionId(driver)) === first,
+            }).toEqual({
+              opened: 0,
+              same: true,
+            });
+          },
+          single,
+        );
       }),
     );
   });
@@ -507,57 +519,112 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
   it('destroys a pooled connection whose stream the caller stops early while a large rest of the result is still to come', async (test) => {
     await withMysqlDatabase(test, ({ url, name }) =>
       withCountedUser(url, name, async (userUrl, opened) => {
-        userUrl.searchParams.set('connectionLimit', '1');
-        await withDriver(userUrl.toString(), async (driver) => {
-          const first = await connectionId(driver);
-          const before = await opened();
-          for await (const _row of driver.query({ sql: slowRows })) break;
-          const next = await connectionId(driver);
-          expect({ opened: (await opened()) - before > 0, replaced: next !== first }).toEqual({
-            opened: true,
-            replaced: true,
-          });
-        });
+        await withDriver(
+          userUrl.toString(),
+          async (driver) => {
+            const first = await connectionId(driver);
+            const before = await opened();
+            for await (const _row of driver.query({ sql: slowRows })) break;
+            const next = await connectionId(driver);
+            expect({ opened: (await opened()) - before > 0, replaced: next !== first }).toEqual({
+              opened: true,
+              replaced: true,
+            });
+          },
+          single,
+        );
       }),
     );
   });
 
-  it('runs a statement sent on a transaction while a stream on it is open after the stream ends, in the order sent, as the Postgres driver does', async (test) => {
+  it('runs a statement awaited inside the loop over a query on the same transaction, because a query reads its whole result first, as Postgres does without a cursor', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
       withDriver(url, async (driver) => {
         await driver.execute({ sql: 'CREATE TABLE t (n INT)' });
         const connection = await driver.acquireConnection();
         const transaction = await connection.beginTransaction();
-        const streamed: unknown[] = [];
-        let inserted: Promise<unknown> | undefined;
-        let committed: Promise<void> | undefined;
+        const inserted: unknown[] = [];
         for await (const row of transaction.query<{ n: string }>({ sql: numbers })) {
-          streamed.push(row.n);
-          inserted ??= transaction.execute({ sql: 'INSERT INTO t VALUES (1)' });
-          committed ??= transaction.commit();
+          inserted.push(
+            await transaction.execute({ sql: 'INSERT INTO t VALUES (?1)', params: [row.n] }),
+          );
         }
-        const stats = await inserted;
-        await committed;
+        await transaction.commit();
         await connection.release();
         expect({
-          streamed,
-          stats,
-          after: await collect(driver.query({ sql: 'SELECT n FROM t' })),
+          inserted,
+          after: await collect(driver.query({ sql: 'SELECT n FROM t ORDER BY n' })),
         }).toEqual({
-          streamed: ['1', '2', '3'],
-          stats: { affectedRows: 1 },
-          after: [{ n: '1' }],
+          inserted: [{ affectedRows: 1 }, { affectedRows: 1 }, { affectedRows: 1 }],
+          after: [{ n: '1' }, { n: '2' }, { n: '3' }],
         });
+      }),
+    );
+  });
+
+  it('runs a statement sent on a transaction while a stream on it is still arriving after the stream ends, and a commit sent after it after it, as the Postgres driver does with a cursor', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(
+        url,
+        async (driver) => {
+          await driver.execute({ sql: 'CREATE TABLE t (n INT)' });
+          const connection = await driver.acquireConnection();
+          const transaction = await connection.beginTransaction();
+          let lastRowAt = 0;
+          let insertedAt = 0;
+          let inserted: Promise<unknown> | undefined;
+          let committed: Promise<void> | undefined;
+          for await (const _row of transaction.query({ sql: tenSlowRows })) {
+            lastRowAt = performance.now();
+            inserted ??= transaction
+              .execute({ sql: 'INSERT INTO t VALUES (?1)', params: [1] })
+              .then((stats) => {
+                insertedAt = performance.now();
+                return stats;
+              });
+            committed ??= transaction.commit();
+          }
+          const stats = await inserted;
+          await committed;
+          await connection.release();
+          expect({
+            insertedAfterLastRow: insertedAt >= lastRowAt,
+            stats,
+            after: await collect(driver.query({ sql: 'SELECT n FROM t' })),
+          }).toEqual({
+            insertedAfterLastRow: true,
+            stats: { affectedRows: 1 },
+            after: [{ n: '1' }],
+          });
+        },
+        streaming,
+      ),
+    );
+  });
+
+  it('runs statements on a transaction in the order they are sent, so a prepared statement sent before a rollback is rolled back', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(url, async (driver) => {
+        await driver.execute({ sql: 'CREATE TABLE t (n INT)' });
+        const connection = await driver.acquireConnection();
+        try {
+          const transaction = await connection.beginTransaction();
+          await Promise.all([
+            transaction.execute({ sql: 'INSERT INTO t VALUES (?1)', params: [1] }),
+            transaction.rollback(),
+          ]);
+        } finally {
+          await connection.release();
+        }
+        expect(await collect(driver.query({ sql: 'SELECT n FROM t' }))).toEqual([]);
       }),
     );
   });
 
   it('destroys a held connection released while a stream on it is still open, so the pool and close() go on', async (test) => {
     await withMysqlDatabase(test, async ({ url }) => {
-      const limited = new URL(url);
-      limited.searchParams.set('connectionLimit', '1');
-      const driver = mysqlRuntimeDriver.create();
-      await driver.connect({ kind: 'url', url: limited.toString() });
+      const driver = mysqlRuntimeDriver.create(single);
+      await driver.connect({ kind: 'url', url });
       const connection = await driver.acquireConnection();
       const transaction = await connection.beginTransaction();
       const rows = transaction.query<{ cid: string }>({ sql: slowRows })[Symbol.asyncIterator]();
@@ -574,19 +641,37 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     });
   });
 
-  it('gives up waiting for a pooled connection after the pool timeout', async (test) => {
-    await withMysqlDatabase(test, async ({ url }) => {
-      const limited = new URL(url);
-      limited.searchParams.set('connectionLimit', '1');
-      limited.searchParams.set('poolTimeout', '200');
-      await withDriver(limited.toString(), async (driver) => {
-        const held = await driver.acquireConnection();
-        const waiting = collect(driver.query({ sql: 'SELECT 1 AS n' }));
-        await expect(waiting).rejects.toMatchObject({ kind: 'sql_connection', transient: true });
-        await held.release();
-        expect(await collect(driver.query({ sql: 'SELECT 2 AS n' }))).toEqual([{ n: '2' }]);
-      });
-    });
+  it('gives up waiting for a pooled connection after connectionTimeoutMillis', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(
+        url,
+        async (driver) => {
+          const held = await driver.acquireConnection();
+          const waiting = collect(driver.query({ sql: 'SELECT 1 AS n' }));
+          await expect(waiting).rejects.toMatchObject({ kind: 'sql_connection', transient: true });
+          await held.release();
+          expect(await collect(driver.query({ sql: 'SELECT 2 AS n' }))).toEqual([{ n: '2' }]);
+        },
+        { poolOptions: { max: 1, connectionTimeoutMillis: 200 } },
+      ),
+    );
+  });
+
+  it('opens no connection before the first statement needs one, as pg.Pool does', async (test) => {
+    await withMysqlDatabase(test, ({ url, name }) =>
+      withCountedUser(url, name, async (userUrl, opened) => {
+        const before = await opened();
+        await withDriver(userUrl.toString(), async (driver) => {
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          const atConnect = (await opened()) - before;
+          await collect(driver.query({ sql: 'SELECT 1 AS n' }));
+          expect({ atConnect, afterOne: (await opened()) - before }).toEqual({
+            atConnect: 0,
+            afterOne: 1,
+          });
+        });
+      }),
+    );
   });
 
   it('commits and rolls back a transaction on one connection, and reports affected rows', async (test) => {
@@ -620,7 +705,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
 
   it('waits in close() for a stream in flight to finish', async (test) => {
     await withMysqlDatabase(test, async ({ url }) => {
-      const driver = mysqlRuntimeDriver.create();
+      const driver = mysqlRuntimeDriver.create(streaming);
       await driver.connect({ kind: 'url', url });
       const iterator = driver.query({ sql: numbers })[Symbol.asyncIterator]();
       const first = await iterator.next();
@@ -667,7 +752,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
   it('ends a stream whose connection is lost with a transient SqlConnectionError, and close() still finishes', async (test) => {
     await withMysqlDatabase(test, async ({ url }) => {
       const admin = await mysqlControlDriver.create(url);
-      const driver = mysqlRuntimeDriver.create();
+      const driver = mysqlRuntimeDriver.create(streaming);
       await driver.connect({ kind: 'url', url });
       try {
         const rows = driver.query<{ cid: string }>({ sql: slowRows })[Symbol.asyncIterator]();
@@ -688,7 +773,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
   it('stops reading a held connection that is lost after the caller broke out of its stream', async (test) => {
     await withMysqlDatabase(test, async ({ url }) => {
       const admin = await mysqlControlDriver.create(url);
-      const driver = mysqlRuntimeDriver.create();
+      const driver = mysqlRuntimeDriver.create(streaming);
       await driver.connect({ kind: 'url', url });
       try {
         const connection = await driver.acquireConnection();
@@ -707,26 +792,28 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     });
   });
 
-  it('leaves the values of a statement MySQL refuses out of its error, from a stream and from execute', async (test) => {
-    await withMysqlDatabase(test, ({ url }) =>
-      withDriver(url, async (driver) => {
-        const value = 'distinctive-value-5d1c9e';
-        const request = { sql: 'SELECT * FROM missing WHERE name = ?1', params: [value] };
-        const errors = [
-          await collect(driver.query(request)).catch((error: unknown) => error),
-          await driver.execute(request).catch((error: unknown) => error),
-        ];
-        expect(
-          errors.map((error) => ({
-            sqlState: Object(error).sqlState,
-            leaked: inspect(error, { depth: 10 }).includes(value),
-          })),
-        ).toEqual([
-          { sqlState: '42S02', leaked: false },
-          { sqlState: '42S02', leaked: false },
-        ]);
-      }),
-    );
+  it('leaves the values of a statement MySQL refuses when it runs out of its error, from a stream, from a whole result and from execute', async (test) => {
+    await withMysqlDatabase(test, async ({ url }) => {
+      const value = 'distinctive-value-5d1c9e';
+      const request = { sql: 'INSERT INTO t VALUES (?1)', params: [value] };
+      const errors = async (driver: ReturnType<typeof mysqlRuntimeDriver.create>) => [
+        await collect(driver.query(request)).catch((error: unknown) => error),
+        await driver.execute(request).catch((error: unknown) => error),
+      ];
+      await withDriver(url, (driver) =>
+        driver.execute({ sql: "CREATE TABLE t (s VARCHAR(40), CHECK (s = 'allowed'))" }),
+      );
+      const all = [
+        ...(await withDriver(url, errors, streaming)),
+        ...(await withDriver(url, errors)),
+      ];
+      expect(
+        all.map((error) => ({
+          sqlState: Object(error).sqlState,
+          leaked: inspect(error, { depth: 10 }).includes(value),
+        })),
+      ).toEqual(Array.from({ length: 4 }, () => ({ sqlState: '23514', leaked: false })));
+    });
   });
 
   it('reports a query error with its SQLSTATE', async (test) => {

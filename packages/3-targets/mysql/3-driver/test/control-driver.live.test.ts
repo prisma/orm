@@ -242,9 +242,9 @@ describe('MysqlControlDriver against a MySQL server', {
     });
   });
 
-  it('runs its session in UTC', async (test) => {
+  it('starts its session with the session settings the stack passes, the target UTC time zone among them', async (test) => {
     await withMysqlDatabase(test, async ({ url }) => {
-      const driver = await mysqlDriver.create(url);
+      const driver = await mysqlDriver.create(url, { sessionSettings: { time_zone: '+00:00' } });
       try {
         expect(await driver.query('SELECT @@SESSION.time_zone AS tz')).toEqual({
           rows: [{ tz: '+00:00' }],
@@ -324,15 +324,15 @@ describe('MysqlControlDriver against a MySQL server', {
           },
           (error: unknown) => error,
         );
-        const pooled = mysqlRuntimeDriver.create();
-        asUser.searchParams.set('poolTimeout', '1000');
+        const pooled = mysqlRuntimeDriver.create({
+          poolOptions: { connectionTimeoutMillis: 1000 },
+        });
         await pooled.connect({ kind: 'url', url: asUser.toString() });
         const pooledRefused = await pooled.execute({ sql: 'SELECT 1' }).then(
           () => undefined,
           (error: unknown) => error,
         );
         await pooled.close();
-        asUser.searchParams.delete('poolTimeout');
         asUser.searchParams.set('allowPublicKeyRetrieval', 'true');
         const allowed = await mysqlDriver.create(asUser.toString());
         try {
@@ -363,7 +363,7 @@ describe('MysqlControlDriver against a MySQL server', {
   it('connects over TLS with the settings in the URL', async (test) => {
     await withMysqlDatabase(test, async ({ url }) => {
       const tls = new URL(url);
-      tls.searchParams.set('ssl', JSON.stringify({ rejectUnauthorized: false }));
+      tls.searchParams.set('sslmode', 'no-verify');
       const driver = await mysqlDriver.create(tls.toString());
       try {
         const { rows } = await driver.query<{ Value: string }>(
