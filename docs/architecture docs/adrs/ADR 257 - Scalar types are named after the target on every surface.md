@@ -2,7 +2,7 @@
 
 Status: **Accepted**
 
-**Amended by [ADR 279](ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md) (2026-10-22):** where a stored type has several codecs, every one of them carries a suffix naming its kind of value, not only the second (`TimestamptzTemporal`, `TimestamptzJsDate`, `TimestamptzString`). The unsuffixed name of the concept, such as `DateTime`, `Date`, `Time` and `Duration` on PostgreSQL, belongs to a convenience type, a type choice that becomes one of the suffixed types. Those renames were made before the release candidate, so the old names were removed at once, with no deprecated alias for a release line; the upgrade instructions give each rewrite.
+**Amended by [ADR 279](ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md) (2026-10-22):** where a stored type has several codecs, every one of them carries a suffix naming its kind of value, not only the second (`TimestamptzTemporal`, `TimestamptzJsDate`, `TimestamptzString`). The unsuffixed name of the concept, such as `DateTime`, `Date`, `Time` and `Duration` on PostgreSQL, belongs to a convenience type, a type choice that becomes one of the suffixed types. Those renames were made before the release candidate, so the old names were removed at once, with no deprecated alias for a release line; the upgrade instructions give each rewrite. A type named before this amendment with no suffix beside a suffixed one, such as MongoDB's `Int64` beside `Int64Number` below, keeps its name until it is renamed under the alias rule.
 
 ## Decision
 
