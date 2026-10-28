@@ -15,7 +15,7 @@ import { assertPreparedCount } from '../prepared-count';
 import { serverText } from '../server-text';
 
 /**
- * A MySQL connection for the control plane. A statement with values runs as a server-side prepared statement, so a value never travels inside the SQL; SQL with no values, which the control plane writes itself, runs through the text protocol, `query()`, because MySQL does not prepare some of it, such as `START TRANSACTION`. Either way every column reads as the text MySQL sends. `multipleStatements` stays off.
+ * A MySQL connection for the control plane. A statement with values runs as a server-side prepared statement, so a value never travels inside the SQL. Any statement without values, a user's `rawSql` migration step included, runs through the text protocol, `query()`, because MySQL does not prepare some statements, such as `START TRANSACTION` and `LOCK TABLES`; with no values there is nothing written into the SQL to inject, and `multipleStatements` stays off. Either way every column reads as the text MySQL sends.
  */
 export class MysqlControlDriver implements SqlControlDriverInstance<'mysql'> {
   readonly familyId = 'sql' as const;
