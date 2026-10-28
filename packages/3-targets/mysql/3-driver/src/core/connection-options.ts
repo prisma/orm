@@ -96,8 +96,17 @@ function acceptedList(): string {
   return `${PARAMETER_NAMES.slice(0, -1).join(', ')} and ${PARAMETER_NAMES.at(-1)}`;
 }
 
+/** Parses `url` as the Postgres facade does, refusing it without the parser's error, which carries the whole URL. */
+function parseUrl(url: string): URL {
+  try {
+    return new URL(url);
+  } catch {
+    throw invalidBinding('the URL cannot be parsed', []);
+  }
+}
+
 function readUrl(url: string): { readonly parsed: URL; readonly parameters: UrlParameters } {
-  const parsed = new URL(url);
+  const parsed = parseUrl(url);
   if (parsed.searchParams.has('charset')) {
     throw invalidBinding(
       'the driver always uses utf8mb4, because it reads each statement as utf8mb4 to find its placeholders; remove the charset parameter',

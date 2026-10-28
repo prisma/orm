@@ -1,3 +1,4 @@
+import { inspect } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import { mysqlConnectionOptions, mysqlPoolOptions } from '../src/core/connection-options';
 import { SESSION_SETUP } from '../src/core/session-setup';
@@ -166,7 +167,7 @@ describe('mysqlConnectionOptions', () => {
     );
   });
 
-  it('copies no value from the URL into the error, neither the password nor a TLS key', () => {
+  it('copies no value from the URL into the error, neither the password nor a TLS key, even from a URL it cannot parse', () => {
     const secrets = ['hunter2-secret', 'PRIVATE-KEY-PEM', 'pp-secret'];
     const ssl = encodeURIComponent(
       JSON.stringify({ key: 'PRIVATE-KEY-PEM', passphrase: 'pp-secret', bogus: 1 }),
@@ -179,6 +180,7 @@ describe('mysqlConnectionOptions', () => {
       `mysql://app:hunter2-secret@db.example/app?ssl=${validSsl}&connection_limit=hunter2-secret`,
       `mysql://app:hunter2-secret@db.example/app?ssl=${validSsl}&poolTimeout=hunter2-secret`,
       `mysql://app:hunter2-secret@db.example/app?ssl=${validSsl}&charset=hunter2-secret`,
+      'mysql://app:hunter2-secret@[db.example/app',
     ]) {
       const error = (() => {
         try {
@@ -188,7 +190,7 @@ describe('mysqlConnectionOptions', () => {
         }
         throw new Error(`accepted ${url}`);
       })();
-      const written = error instanceof Error ? `${error.stack}\n${JSON.stringify(error)}` : '';
+      const written = inspect(error, { depth: 10 });
       expect({
         code: Object(error).code,
         leaked: secrets.filter((secret) => written.includes(secret)),
