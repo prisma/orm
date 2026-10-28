@@ -43,19 +43,19 @@ function idAlias(
 
 function nanoid(id: boolean): readonly RemovedFieldPreset[] {
   return GENERATED_ID_COLUMN_ALIAS_NAMESPACES.map((namespace) => {
-    const write = (size: string | undefined) => {
+    const write = (size: string | undefined, modifier: string) => {
       const column =
         size === undefined ? qualified(namespace, 'Nanoid') : qualified(namespace, `Char(${size})`);
-      return id ? `${column} @id @onCreate(nanoid(${size ?? ''}))` : column;
+      return `${column}${modifier}${id ? ` @id @onCreate(nanoid(${size ?? ''}))` : ''}`;
     };
     return {
       type: presetType(qualified(namespace, 'Nanoid')),
       codecId: generatedIdColumnAliases.Nanoid.output.type.codecId,
-      rewrite: (call) => {
+      rewrite: (call, modifier) => {
         const options = nanoidSize(call);
         return options === undefined
-          ? `Write ${write(undefined)}, or ${write('n')} for a size of n.`
-          : `Write ${write(options.size)}.`;
+          ? `Write ${write(undefined, modifier)}, or ${write('n', modifier)} for a size of n.`
+          : `Write ${write(options.size, modifier)}.`;
       },
     };
   });

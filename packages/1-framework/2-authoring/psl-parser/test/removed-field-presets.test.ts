@@ -7,20 +7,19 @@ import {
   removedPresetWithPhases,
   removedPresetWrittenAs,
 } from '../src/removed-field-presets';
-import type { ResolvedTypeConstructorCall } from '../src/resolve';
 import { PslSources } from '../src/source-file';
-import { buildSymbolTable } from '../src/symbol-table';
+import { buildSymbolTable, type FieldSymbol } from '../src/symbol-table';
 
-function callOf(type: string): ResolvedTypeConstructorCall {
+function callOf(type: string): FieldSymbol {
   const { document, sources } = parse(`model M {\n  f ${type}\n}\n`, 'schema.prisma');
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources: new PslSources([[document.syntax, sources.sourceFileFor(document.syntax)]]),
     defaultNamespaceId: 'public',
   });
-  const call = symbolTable.defaultNamespace.models['M']?.fields['f']?.typeConstructor;
-  if (call === undefined) throw new Error(`${type} is not a call`);
-  return call;
+  const field = symbolTable.defaultNamespace.models['M']?.fields['f'];
+  if (field?.typeConstructor === undefined) throw new Error(`${type} is not a call`);
+  return field;
 }
 
 const stamp = { kind: 'typeConstructor', output: { codecId: 'test/stamp@1' } } as const;
@@ -46,11 +45,11 @@ const presets = {
 };
 
 function describeCall(
-  call: ResolvedTypeConstructorCall,
+  field: FieldSymbol,
   types: ContributedTypeNamespace,
   isDeclared: (name: string) => boolean = () => false,
 ) {
-  return describeRemovedFieldPreset(presets, call, types, isDeclared);
+  return describeRemovedFieldPreset(presets, field, types, isDeclared);
 }
 
 describe('describeRemovedFieldPreset', () => {
@@ -80,6 +79,26 @@ describe('describeRemovedFieldPreset', () => {
       choices: [{ when: { as: 'stamp' }, type: 'Text' }],
     } as const;
     expect(describeCall(callOf('chosen()'), { Moment: textOnly, Text: text })).toBeUndefined();
+  });
+
+  it.each([
+    ['plain()?', 'Write Stamp? @id.'],
+    ['plain()[]', 'Write Stamp[] @id.'],
+    ['ns.stamp(3, onCreate: now)?', 'Write Stamp(precision: 3)? @onCreate(now()).'],
+    [
+      'ns.stamp(onCreate: later)[]',
+      'Write Stamp(...)[] with @onCreate(now()) and @onUpdate(now()) for the phases the preset set.',
+    ],
+  ])('writes the modifier of %s right after the type, before the attributes', (type, rewrite) => {
+    const call = type.replace(/(\?|\[\])$/, '');
+    expect(describeCall(callOf(type), { Stamp: stamp })).toBe(
+      `${call} was a field preset, and Prisma 8 removed field presets. ${rewrite}`,
+    );
+  });
+
+  it('names nothing for a field not typed by a call', () => {
+    const { typeConstructor: _, ...field } = callOf('plain()');
+    expect(describeCall(field, { Stamp: stamp })).toBeUndefined();
   });
 
   it('names the rewrite of the first row that applies to the stack', () => {

@@ -446,7 +446,7 @@ export const postgresRows: readonly SqlRow<PostgresHelpers>[] = [
   },
   {
     model: 'OptionalCreatedAt',
-    psl: { replacement: 'TimestamptzTemporal? @onCreate(now())' },
+    psl: { preset: 'temporal.createdAt()?', replacement: 'TimestamptzTemporal? @onCreate(now())' },
     ts: ({ field, type, gen }) =>
       field.column(type.TimestamptzTemporal()).onCreate(gen.now()).optional(),
   },

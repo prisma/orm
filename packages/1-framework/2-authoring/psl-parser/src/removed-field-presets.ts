@@ -4,6 +4,7 @@ import {
   writtenContributedTypeCodecId,
 } from './contributed-type-scope';
 import type { ResolvedTypeConstructorCall } from './resolve';
+import type { FieldSymbol } from './symbol-table';
 
 /** A type as a removed preset's rewrite writes it: its path, and the options it is called with, each written as a bare name, such as `as: temporal`. */
 export interface RemovedPresetType {
@@ -35,7 +36,8 @@ export function writtenPresetType(type: RemovedPresetType, extra?: string): stri
 export interface RemovedFieldPreset {
   readonly type: RemovedPresetType;
   readonly codecId?: string;
-  readonly rewrite: (call: ResolvedTypeConstructorCall) => string;
+  /** The rewrite of `call`, with `modifier`, the field's `?` or `[]`, written right after the type. */
+  readonly rewrite: (call: ResolvedTypeConstructorCall, modifier: string) => string;
 }
 
 /** A family's removed field presets, keyed by the path a schema called: the rows of each, of which the first that applies names the rewrite, such as a target's own type before the family's. */
@@ -59,7 +61,7 @@ export function removedPresetWrittenAs(
     {
       type: written,
       ...(codecId === undefined ? {} : { codecId }),
-      rewrite: () => `Write ${writtenPresetType(written)}${suffix}.`,
+      rewrite: (_, modifier) => `Write ${writtenPresetType(written)}${modifier}${suffix}.`,
     },
   ];
 }
@@ -78,7 +80,7 @@ export function removedPresetWithPhases(
     {
       type: written,
       codecId,
-      rewrite: (call) => {
+      rewrite: (call, modifier) => {
         const args = argumentsByParameter(call.args, parameters);
         const precision = args?.get('precision');
         if (
@@ -86,27 +88,35 @@ export function removedPresetWithPhases(
           (precision !== undefined && !/^\d+$/.test(precision)) ||
           PHASES.some((phase) => args.has(phase) && args.get(phase) !== 'now')
         ) {
-          return `Write ${writtenPresetType(written, takesPrecision ? '...' : undefined)} with @onCreate(now()) and @onUpdate(now()) for the phases the preset set.`;
+          return `Write ${writtenPresetType(written, takesPrecision ? '...' : undefined)}${modifier} with @onCreate(now()) and @onUpdate(now()) for the phases the preset set.`;
         }
         const attributes = PHASES.filter((phase) => args.has(phase)).map(
           (phase) => ` @${phase}(now())`,
         );
         const extra = precision === undefined ? undefined : `precision: ${precision}`;
-        return `Write ${writtenPresetType(written, extra)}${attributes.join('')}.`;
+        return `Write ${writtenPresetType(written, extra)}${modifier}${attributes.join('')}.`;
       },
     },
   ];
 }
 
+/** The `?` or `[]` a field writes right after its type. */
+function typeModifier(field: FieldSymbol): string {
+  if (field.list) return field.elementOptional ? '?[]' : '[]';
+  return field.optional ? '?' : '';
+}
+
 /**
- * The refusal of a call to a field preset Prisma 8 removed, naming what to write instead, or `undefined` when `presets` has no row for the call that applies to a stack whose types `types` holds. A row applies where its type, called as the rewrite writes it, resolves as a column would, to the row's codec. A row is skipped when `isDeclared` says the schema declares the first name of its type, because the rewrite would then name the schema's declaration.
+ * The refusal of a field typed by a call to a field preset Prisma 8 removed, naming what to write instead, with the field's `?` or `[]` right after the type and before any attribute. `undefined` when the field is not typed by a call, or `presets` has no row for the call that applies to a stack whose types `types` holds. A row applies where its type, called as the rewrite writes it, resolves as a column would, to the row's codec. A row is skipped when `isDeclared` says the schema declares the first name of its type, because the rewrite would then name the schema's declaration.
  */
 export function describeRemovedFieldPreset(
   presets: RemovedFieldPresets,
-  call: ResolvedTypeConstructorCall,
+  field: FieldSymbol,
   types: ContributedTypeNamespace,
   isDeclared: (name: string) => boolean,
 ): string | undefined {
+  const call = field.typeConstructor;
+  if (call === undefined) return undefined;
   const path = call.path.join('.');
   const rows = Object.hasOwn(presets, path) ? presets[path] : undefined;
   const preset = rows?.find((row) => {
@@ -128,5 +138,5 @@ export function describeRemovedFieldPreset(
     );
   });
   if (preset === undefined) return undefined;
-  return `${printTypeConstructorCall(call)} was a field preset, and Prisma 8 removed field presets. ${preset.rewrite(call)}`;
+  return `${printTypeConstructorCall(call)} was a field preset, and Prisma 8 removed field presets. ${preset.rewrite(call, typeModifier(field))}`;
 }

@@ -46,7 +46,7 @@ export function describeUnresolvedSqlType(
     if (written !== 'Unsupported')
       return describeRemovedFieldPreset(
         removedSqlFieldPresets,
-        call,
+        field,
         contributions.type,
         isDeclared,
       );

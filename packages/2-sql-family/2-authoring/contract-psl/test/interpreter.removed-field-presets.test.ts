@@ -308,11 +308,32 @@ describe('a removed field preset in a SQL schema', () => {
       ]);
     });
 
-    it('refuses each preset field once, keeping the field modifiers out of the call', () => {
-      expect(diagnosticsOf('temporal.createdAt()?', postgresInput)).toEqual(
-        removed('temporal.createdAt()', 'Write DateTime(as: temporal) @onCreate(now()).'),
-      );
-    });
+    it.each([
+      ['temporal.createdAt()?', 'Write DateTime(as: temporal)? @onCreate(now()).'],
+      ['temporal.timestamptz(onCreate: now)?', 'Write DateTime(as: temporal)? @onCreate(now()).'],
+      [
+        'temporal.time(3, onUpdate: now)[]',
+        'Write Time(as: temporal, precision: 3)[] @onUpdate(now()).',
+      ],
+      ['id.ulid()?', 'Write Ulid? @id @onCreate(ulid()).'],
+      ['nanoid()[]', 'Write Nanoid[].'],
+      [
+        'id.nanoid({ length: 16 })?',
+        'Write Nanoid? @id @onCreate(nanoid()), or Char(n)? @id @onCreate(nanoid(n)) for a size of n.',
+      ],
+      [
+        'temporal.timestamp(onCreate: later)?',
+        'Write TimestampTemporal(...)? with @onCreate(now()) and @onUpdate(now()) for the phases the preset set.',
+      ],
+    ])(
+      'refuses %s once, writing the modifier right after the type and before the attributes',
+      (field, rewrite) => {
+        const refusals = diagnosticsOf(field, postgresInput).filter(
+          ({ code }) => code === 'PSL_UNRESOLVED_REFERENCE',
+        );
+        expect(refusals).toEqual(removed(field.replace(/(\?|\[\])$/, ''), rewrite));
+      },
+    );
 
     it('keeps the binder message for a SQLite preset', () => {
       expect(diagnosticsOf('temporal.datetime(onCreate: now)', postgresInput)).toEqual([
