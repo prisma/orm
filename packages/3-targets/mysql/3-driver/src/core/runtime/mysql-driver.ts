@@ -40,29 +40,47 @@ function notConnected(message: string) {
   });
 }
 
-/** Called once a statement's last command is in the package's queue, so the next statement on the connection may queue its own. */
-type Sent = () => void;
+class AsyncMutex {
+  #queue = Promise.resolve();
+
+  async lock(): Promise<() => void> {
+    const previous = this.#queue;
+    let releaseLock: (() => void) | undefined;
+    this.#queue = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+    await previous;
+    return () => {
+      releaseLock?.();
+      releaseLock = undefined;
+    };
+  }
+}
+
+/**
+ * One statement at a time on each client, in the order sent, as the Postgres driver's per-client lock runs them. The lock is held until the statement settles, or for a stream's whole life. The package queues a prepared statement's execution only after MySQL answers the prepare, so without the lock a commit sent meanwhile would run first.
+ */
+const clientQueryLocks = new WeakMap<object, AsyncMutex>();
+
+function acquireClientQueryLock(client: object): Promise<() => void> {
+  let mutex = clientQueryLocks.get(client);
+  if (mutex === undefined) {
+    mutex = new AsyncMutex();
+    clientQueryLocks.set(client, mutex);
+  }
+  return mutex.lock();
+}
 
 /**
  * Runs `request` on `client` and returns its result. A statement with values runs as a server-side prepared statement, its `?N` placeholders written as `?`, after checking MySQL's placeholder count against the values. A statement without values runs over the text protocol, as `pg` runs one: nothing is written into it, so a raw `START TRANSACTION` or `LOCK TABLES`, which MySQL does not prepare, runs too. Throws the package's error as it is.
  */
-async function run(
-  client: PoolConnection,
-  request: SqlExecuteRequest,
-  sent: Sent,
-): Promise<unknown> {
+async function run(client: PoolConnection, request: SqlExecuteRequest): Promise<unknown> {
   const { sql, values } = positionalParams(request.sql, request.params ?? []);
-  if (values.length === 0) {
-    const result = client.query(sql);
-    sent();
-    return result;
-  }
+  if (values.length === 0) return client.query(sql);
   const statement = await client.prepare(sql);
   try {
     assertPlaceholderCount(statement, values.length);
-    const result = statement.execute(values);
-    sent();
-    return await result;
+    return await statement.execute(values);
   } finally {
     statement.close();
   }
@@ -130,11 +148,6 @@ abstract class MysqlQueryable implements SqlQueryable {
 
   constructor(protected readonly streams: boolean) {}
 
-  /** Takes the next turn on this client when called, and settles once every statement sent before has queued its commands. A pooled client runs one statement, so it waits for nothing. */
-  protected async nextTurn(): Promise<Sent> {
-    return () => {};
-  }
-
   async *query<Row = Record<string, unknown>>(request: SqlExecuteRequest): AsyncIterable<Row> {
     if (this.streams) {
       yield* this.#streamRows<Row>(request);
@@ -154,16 +167,18 @@ abstract class MysqlQueryable implements SqlQueryable {
   }
 
   async #runReleasing(request: SqlExecuteRequest): Promise<unknown> {
-    const turn = this.nextTurn();
     const client = await this.acquireClient();
     const outcome: Outcome = { destroy: false };
-    const sent = await turn;
     try {
-      return await run(client, request, sent);
+      const releaseLock = await acquireClientQueryLock(client);
+      try {
+        return await run(client, request);
+      } finally {
+        releaseLock();
+      }
     } catch (error) {
       throw settle(error, outcome);
     } finally {
-      sent();
       await this.releaseClient(client, outcome);
     }
   }
@@ -172,16 +187,13 @@ abstract class MysqlQueryable implements SqlQueryable {
    * Streams the rows of `request` as they arrive; the package pauses the socket while the caller is busy. A caller that stops reading early is handled by {@link MysqlQueryable.#stopEarly}. A fatal error, such as a lost connection, destroys the client.
    */
   async *#streamRows<Row>(request: SqlExecuteRequest): AsyncGenerator<Row> {
-    const turn = this.nextTurn();
     const client = await this.acquireClient();
     const outcome: Outcome = { destroy: false };
-    const sent = await turn;
+    const releaseLock = await acquireClientQueryLock(client);
     try {
-      const stream = await startStream(client, request)
-        .catch((error: unknown) => {
-          throw settle(error, outcome);
-        })
-        .finally(sent);
+      const stream = await startStream(client, request).catch((error: unknown) => {
+        throw settle(error, outcome);
+      });
       stream.rows.on('error', ignoreAfterStop);
       let settled = false;
       try {
@@ -201,6 +213,7 @@ abstract class MysqlQueryable implements SqlQueryable {
         else stream.close();
       }
     } finally {
+      releaseLock();
       await this.releaseClient(client, outcome);
     }
   }
@@ -221,14 +234,12 @@ abstract class MysqlQueryable implements SqlQueryable {
 
 /** The state of a held connection, shared by the connection and its transactions as the Postgres driver shares its transaction state. */
 interface HeldState {
-  /** How many statements are running; a stream the caller dropped without finishing it stays running. */
+  /** How many statements are running or waiting for the client's lock; a stream the caller dropped without finishing it stays running. */
   running: number;
-  /** Settles once the last statement sent has queued all its commands. */
-  queued: Promise<void>;
 }
 
 /**
- * A queryable on a connection the caller holds, whose statements all run on the same session, in the order they are sent, as the Postgres driver's per-client lock runs them. The package runs a connection's commands in the order they are queued, so the driver only makes a statement wait until the one before it has queued its last command: a prepared statement queues its execution only after MySQL answers the prepare, and a commit sent meanwhile would otherwise run first. A statement sent while a stream on the connection is open waits for that stream to end; one awaited inside the stream's own loop never finishes, as on Postgres with a cursor.
+ * A queryable on a connection the caller holds, whose statements all run on the same session, in the order they are sent, under the client's lock. A statement sent while a stream on the connection is open waits for that stream to end; one awaited inside the stream's own loop never finishes, as on Postgres with a cursor.
  */
 abstract class MysqlHeldQueryable extends MysqlQueryable {
   protected readonly holdsClient = true;
@@ -250,25 +261,20 @@ abstract class MysqlHeldQueryable extends MysqlQueryable {
     this.held.running -= 1;
   }
 
-  protected override async nextTurn(): Promise<Sent> {
-    const previous = this.held.queued;
-    let sent: Sent = () => {};
-    this.held.queued = new Promise((resolve) => {
-      sent = resolve;
-    });
-    await previous;
-    return sent;
-  }
-
-  /** Runs one of the package's transaction calls in its turn. */
-  protected async inTurn(call: () => Promise<void>): Promise<void> {
-    const sent = await this.nextTurn();
-    const done = call();
-    sent();
+  /** Runs one of the package's transaction calls under the client's lock, taken as a statement takes it, so it keeps its place among the statements sent. */
+  protected async underLock(call: () => Promise<void>): Promise<void> {
+    const client = await this.acquireClient();
     try {
-      await done;
+      const releaseLock = await acquireClientQueryLock(client);
+      try {
+        await call();
+      } finally {
+        releaseLock();
+      }
     } catch (error) {
       throw normalizeMysqlError(error);
+    } finally {
+      await this.releaseClient();
     }
   }
 }
@@ -277,7 +283,7 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
   #onRelease: (() => void) | undefined;
 
   constructor(client: PoolConnection, streams: boolean, onRelease: () => void) {
-    super(client, { running: 0, queued: Promise.resolve() }, streams);
+    super(client, { running: 0 }, streams);
     this.#onRelease = onRelease;
   }
 
@@ -288,7 +294,7 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
   }
 
   async beginTransaction(): Promise<SqlTransaction> {
-    await this.inTurn(() => this.client.beginTransaction());
+    await this.underLock(() => this.client.beginTransaction());
     return new MysqlTransactionImpl(this.client, this.held, this.streams);
   }
 
@@ -312,11 +318,11 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
 
 class MysqlTransactionImpl extends MysqlHeldQueryable implements SqlTransaction {
   async commit(): Promise<void> {
-    await this.inTurn(() => this.client.commit());
+    await this.underLock(() => this.client.commit());
   }
 
   async rollback(): Promise<void> {
-    await this.inTurn(() => this.client.rollback());
+    await this.underLock(() => this.client.rollback());
   }
 }
 
