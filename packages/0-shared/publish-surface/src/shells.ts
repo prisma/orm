@@ -233,7 +233,6 @@ interface FacadeContractReexportOptions {
 /**
  * The part of a facade's republished surface that contracts, migrations and
  * the control plane need, without the family runtime or the query surfaces.
- * A facade whose target cannot run queries yet publishes only this.
  */
 function facadeContractReexports(options: FacadeContractReexportOptions): ShellReexportMapping[] {
   return [
@@ -252,7 +251,7 @@ function facadeContractReexports(options: FacadeContractReexportOptions): ShellR
 }
 
 /**
- * The SQL family's query surfaces, republished by both SQL facades.
+ * The SQL family's query surfaces, republished by every SQL facade.
  *
  * `schema-ir` carries one subpath. Code that authors a migration by hand, or
  * drives the planner itself, names `SqlSchemaIR` — it is the schema shape the
@@ -753,12 +752,14 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
       dir: 'packages/9-public/@prisma/orm-mysql',
       kind: 'facade',
       packages: [{ dir: 'packages/3-targets/mysql/9-facade', name: '@internal/mysql', entry: '' }],
-      reexports: facadeContractReexports({
+      reexports: facadeReexports({
         family: '@internal/sql-contract',
         familyPack: '@internal/family-sql',
+        runtime: '@internal/sql-runtime',
         target: '@internal/target-mysql',
         adapter: '@internal/adapter-mysql',
         driver: '@internal/driver-mysql',
+        queryBuilders: SQL_QUERY_REEXPORTS,
       }),
     },
   ],

@@ -91,6 +91,8 @@ Move on to the next step. Repeat.
 
 Prisma 8 extensions pin every `@prisma/orm-*` SPI dependency (everything except `@prisma/orm-extension-*`) to a single **exact** version (no `^`, no `~`, no range, no wildcard, no `workspace:` specifier in the published `package.json`). All of those entries share the same version. The pin advances after each successful upgrade step, release-candidate steps included.
 
+The version is the one the application's database package (`@prisma/orm-postgres`, `@prisma/orm-mongo`, …) uses. An application must load exactly one copy of Prisma ORM: values and registries made by one copy are not recognised by another. When an extension pins a different version, the package manager installs a second copy beside the application's. The target package (such as `@prisma/orm-target-postgres`) is therefore a **peer dependency**, so npm refuses a mismatched install instead of adding a copy. The framework and family packages are ordinary dependencies at the same exact version. pnpm and bun only warn about a mismatched peer, so a second copy can still be installed; every command and every client then stops with [`RUNTIME.MULTIPLE_ORM_COPIES`](https://docs.prisma.io/docs/orm/v8/reference/error-reference#RUNTIME.MULTIPLE_ORM_COPIES), which lists each copy's version and folder.
+
 The one-line check in step 3 of the per-step flow enforces the rule; the `prisma-8-check-pins` guard the monorepo uses for its own extensions is not published. Wire the check into the extension's CI alongside the build/test step so an accidental range pin fails the PR before it lands.
 
 ## When the chain is done

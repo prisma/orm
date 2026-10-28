@@ -19,8 +19,11 @@ import { structuredError } from '@internal/utils/structured-error';
 import { type as arktype, type Type } from 'arktype';
 import { canonicalizeJson } from '../utils/canonicalize-json';
 import { DATA_TYPE_ID_PATTERN } from './data-type-id-pattern';
+import { assertOneFrameworkCopy, registerFrameworkCopy } from './framework-copies';
 import { refuseJsonValue } from './json-readers';
 import { runtimeError } from './runtime-error';
+
+registerFrameworkCopy();
 
 /**
  * The identity of a data type: `owner/name`, with no version. A type's identity does not change;
@@ -229,6 +232,7 @@ export function requireValueOf(
   holder: string,
 ): DataTypeValue {
   if (!DataTypeValueRecord.isConstructed(value)) {
+    assertOneFrameworkCopy();
     throw new InternalError(
       `${holder} takes only values of ${type}, and was handed an object no data type constructed.`,
     );

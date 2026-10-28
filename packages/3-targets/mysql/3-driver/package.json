@@ -19,6 +19,8 @@
     "@internal/framework-components": "workspace:8.0.0-rc.21",
     "@internal/sql-contract": "workspace:8.0.0-rc.21",
     "@internal/sql-errors": "workspace:8.0.0-rc.21",
+    "@internal/sql-relational-core": "workspace:8.0.0-rc.21",
+    "@internal/target-mysql": "workspace:8.0.0-rc.21",
     "@internal/utils": "workspace:8.0.0-rc.21",
     "mysql2": "3.15.3"
   },
@@ -44,6 +46,7 @@
   ],
   "exports": {
     "./control": "./dist/control.mjs",
+    "./runtime": "./dist/runtime.mjs",
     "./package.json": "./package.json"
   },
   "engines": {

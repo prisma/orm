@@ -35,7 +35,7 @@
     "@repo/tsconfig": "workspace:8.0.0-rc.21",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
-    "prisma": "workspace:@internal/cli@8.0.0-rc.21",
+    "prisma": "workspace:@repo/prisma-bin@8.0.0-rc.21",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

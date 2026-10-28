@@ -30,6 +30,7 @@
     "@prisma/cli-engine": "0.9.0",
     "@prisma/compute-sdk": "^0.43.0",
     "@prisma/management-api-sdk": "^1.76.0",
+    "@repo/prisma-bin": "workspace:8.0.0-rc.21",
     "@repo/test-utils": "workspace:8.0.0-rc.21",
     "@repo/tsconfig": "workspace:8.0.0-rc.21",
     "@types/bun": "^1.2.18",

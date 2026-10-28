@@ -155,7 +155,7 @@ The same command with `--from 20260707T1005_init` (a migration directory name) s
 
 **Cause.** `@prisma/client@7.10.0` declares `prisma` as a peer dependency (`"prisma": "*"`). pnpm installs missing peers automatically, and the only `prisma` it can find is Prisma 7's, a dependency of `@prisma/prisma7`, so `node_modules/.bin/prisma` becomes Prisma 7.
 
-**Workaround.** Keep an explicit Prisma 8 `prisma` dev dependency (the guide's `prisma@latest`; inside this repository the workspace alias `"prisma": "workspace:@internal/cli@..."`). A direct dependency's bin wins and the peer is satisfied by it.
+**Workaround.** Keep an explicit Prisma 8 `prisma` dev dependency (the guide's `prisma@latest`; inside this repository the workspace alias `"prisma": "workspace:@repo/prisma-bin@..."`). A direct dependency's bin wins and the peer is satisfied by it.
 
 **Reproduction.**
 1. In a project with `@prisma/prisma7` and `@prisma/client` at 7.10.0 and no `prisma` dev dependency, `pnpm install`.

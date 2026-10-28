@@ -20,18 +20,22 @@
     "@internal/adapter-mysql": "workspace:8.0.0-rc.21",
     "@internal/cli": "workspace:8.0.0-rc.21",
     "@internal/config": "workspace:8.0.0-rc.21",
+    "@internal/contract": "workspace:8.0.0-rc.21",
     "@internal/driver-mysql": "workspace:8.0.0-rc.21",
     "@internal/family-sql": "workspace:8.0.0-rc.21",
     "@internal/framework-components": "workspace:8.0.0-rc.21",
+    "@internal/sql-builder": "workspace:8.0.0-rc.21",
     "@internal/sql-contract": "workspace:8.0.0-rc.21",
     "@internal/sql-contract-psl": "workspace:8.0.0-rc.21",
     "@internal/sql-contract-ts": "workspace:8.0.0-rc.21",
+    "@internal/sql-orm-client": "workspace:8.0.0-rc.21",
+    "@internal/sql-relational-core": "workspace:8.0.0-rc.21",
+    "@internal/sql-runtime": "workspace:8.0.0-rc.21",
     "@internal/target-mysql": "workspace:8.0.0-rc.21",
     "@internal/utils": "workspace:8.0.0-rc.21",
     "pathe": "^2.0.3"
   },
   "devDependencies": {
-    "@internal/contract": "workspace:8.0.0-rc.21",
     "@internal/migration-tools": "workspace:8.0.0-rc.21",
     "@internal/sql-schema-ir": "workspace:8.0.0-rc.21",
     "@prisma/cli-engine": "0.9.0",
@@ -59,6 +63,8 @@
     "./contract-builder": "./dist/contract-builder.mjs",
     "./control": "./dist/control.mjs",
     "./migration": "./dist/migration.mjs",
+    "./runtime": "./dist/runtime.mjs",
+    "./static": "./dist/static.mjs",
     "./package.json": "./package.json"
   },
   "engines": {

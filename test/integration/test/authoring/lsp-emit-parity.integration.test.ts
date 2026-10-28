@@ -45,11 +45,11 @@ model Post {
 
 const configPath = join(
   import.meta.dirname,
-  '../fixtures/cli/cli-test-app/fixtures/lsp-emit-parity/prisma.config.ts',
+  '../fixtures/cli/cli-test-app/fixtures/lsp-workspace-packages/prisma.config.ts',
 );
 const multiFileConfigPath = join(
   import.meta.dirname,
-  '../fixtures/cli/cli-test-app/fixtures/lsp-emit-parity-multi-file/prisma.config.ts',
+  '../fixtures/cli/cli-test-app/fixtures/lsp-workspace-packages-multi-file/prisma.config.ts',
 );
 
 function pullClient() {
@@ -108,7 +108,7 @@ function pullClient() {
 }
 
 withTempDir(({ createTempDir }) => {
-  describe('language-server diagnostics with a project-installed interpreter', () => {
+  describe("language-server diagnostics through the project config's interpreter agree with emit", () => {
     it.each(['name String @map("")', '@@map("")'])(
       'diagnoses an empty mapping in %s and clears it after an edit',
       async (declaration) => {
@@ -229,7 +229,7 @@ namespace auth {
         diagnosticCodes: ['PSL_RESERVED_NAMESPACE_NAME'],
       },
     ])(
-      'agrees with emit for $name across the internal/public parser boundary',
+      'agrees with emit for $name',
       async ({ text, exitCode, diagnosticCodes }) => {
         const ctx = setupJourney({ createTempDir, contractMode: 'psl' });
         const schemaPath = join(ctx.testDir, 'contract.prisma');

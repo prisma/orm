@@ -9,6 +9,8 @@ import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/compon
 import {
   assembleAuthoringContributions,
   assembleControlMutationDefaults,
+  type CreateControlStackInput,
+  createControlStack,
 } from '@internal/framework-components/control';
 import {
   type AttributeSpecNamespace,
@@ -4261,7 +4263,7 @@ describe('language server config failure surfacing', {
     ]);
   });
 
-  it('publishes the structured error why text instead of the generic envelope title', async () => {
+  it('publishes the structured error why text and fix instead of the generic envelope title', async () => {
     harness = startHarness(async () => {
       throw errorUnexpected('boom', { why: 'Failed to load config: boom' });
     });
@@ -4269,7 +4271,34 @@ describe('language server config failure surfacing', {
     openDocument(harness, schemaUri, cleanSchema);
 
     const published = await harness.waitForDiagnostics(configUri);
-    expect(published).toEqual([expectedConfigFailure('Failed to load config: boom')]);
+    expect(published).toEqual([
+      expectedConfigFailure('Failed to load config: boom\nCheck the error message and try again'),
+    ]);
+  });
+
+  it('publishes the cause and the fix of a refusal to load a second framework copy', async () => {
+    const recorded: unknown = Reflect.get(globalThis, Symbol.for('prisma.orm.frameworkCopies'));
+    if (!(recorded instanceof Set)) throw new Error('The framework copies record is missing');
+    const secondCopy =
+      'file:///elsewhere/node_modules/@prisma/orm-framework/dist/framework-copies.mjs';
+    harness = startHarness(async () => {
+      recorded.add(secondCopy);
+      try {
+        createControlStack({} as CreateControlStackInput<'sql', 'postgres'>);
+      } finally {
+        recorded.delete(secondCopy);
+      }
+      throw new Error('createControlStack accepted a second framework copy');
+    });
+    await harness.initialize();
+    openDocument(harness, schemaUri, cleanSchema);
+
+    const [published] = await harness.waitForDiagnostics(configUri);
+    expect(published).toMatchObject({ code: CONFIG_LOAD_FAILED_CODE });
+    expect(published?.message).toContain(
+      '/elsewhere/node_modules/@prisma/orm-framework/dist/framework-copies.mjs',
+    );
+    expect(published?.message).toContain('`npm ls @prisma/orm-framework`');
   });
 
   it('publishes the config diagnostic exactly once when two documents await the same load', async () => {

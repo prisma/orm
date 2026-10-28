@@ -24,18 +24,17 @@ import type { MysqlCreateTable, MysqlDdlNode, MysqlDdlVisitor } from '@internal/
 import { mysqlQueryNotYetSupported } from '@internal/target-mysql/errors';
 import { withMarkerLock } from '@internal/target-mysql/marker-lock';
 import { structuredError } from '@internal/utils/structured-error';
+import { decodeMysqlMarkerRow, readMarkerResult, readMarkerRows } from '../marker-read';
 import { renderMysqlColumnDefault, renderMysqlCreateTable } from './ddl-renderer';
 import { declaredIndexes } from './declared-indexes';
 import { buildMysqlSchemaIR } from './introspection';
 import { readMysqlCatalog } from './introspection-queries';
 import {
   compareAndSwapMarkerRow,
-  decodeMysqlMarkerRow,
   insertLedgerRow,
   insertMarkerRow,
   type MarkerDestination,
   readLedgerEntries,
-  readMarkerRows,
   upsertMarkerRow,
 } from './marker-ledger';
 
@@ -112,14 +111,8 @@ export class MysqlControlAdapter implements SqlControlAdapter<'mysql'> {
   }
 
   async readMarker(driver: Driver, space: string): Promise<ContractMarkerRecord | null> {
-    return withMarkerReadErrorHandling(
-      async () => {
-        const rows = await readMarkerRows(driver, space);
-        const [row] = rows ?? [];
-        return row === undefined ? null : decodeMysqlMarkerRow(row);
-      },
-      { space, markerLocation: MARKER_TABLE_NAME },
-    );
+    const result = await readMarkerResult(driver, space);
+    return result.kind === 'present' ? result.record : null;
   }
 
   async readAllMarkers(driver: Driver): Promise<ReadonlyMap<string, ContractMarkerRecord>> {

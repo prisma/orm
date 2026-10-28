@@ -22,6 +22,7 @@
     "@internal/migration-tools": "workspace:8.0.0-rc.21",
     "@internal/sql-contract": "workspace:8.0.0-rc.21",
     "@internal/sql-relational-core": "workspace:8.0.0-rc.21",
+    "@internal/sql-runtime": "workspace:8.0.0-rc.21",
     "@internal/sql-schema-ir": "workspace:8.0.0-rc.21",
     "@internal/target-mysql": "workspace:8.0.0-rc.21",
     "@internal/utils": "workspace:8.0.0-rc.21"
@@ -51,6 +52,7 @@
     "./adapter": "./dist/adapter.mjs",
     "./codec-types": "./dist/codec-types.mjs",
     "./control": "./dist/control.mjs",
+    "./runtime": "./dist/runtime.mjs",
     "./package.json": "./package.json"
   },
   "engines": {

@@ -43,8 +43,10 @@
     "./adapter/adapter": "./dist/adapter__adapter.mjs",
     "./adapter/codec-types": "./dist/adapter__codec-types.mjs",
     "./adapter/control": "./dist/adapter__control.mjs",
+    "./adapter/runtime": "./dist/adapter__runtime.mjs",
     "./driver": "./dist/driver.mjs",
     "./driver/control": "./dist/driver__control.mjs",
+    "./driver/runtime": "./dist/driver__runtime.mjs",
     "./target": "./dist/target.mjs",
     "./target/codec-descriptor": "./dist/target__codec-descriptor.mjs",
     "./target/codec-ids": "./dist/target__codec-ids.mjs",
@@ -60,6 +62,7 @@
     "./target/marker-lock": "./dist/target__marker-lock.mjs",
     "./target/migration": "./dist/target__migration.mjs",
     "./target/pack": "./dist/target__pack.mjs",
+    "./target/runtime": "./dist/target__runtime.mjs",
     "./target/sql-utils": "./dist/target__sql-utils.mjs",
     "./package.json": "./package.json"
   },
