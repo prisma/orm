@@ -13,7 +13,7 @@ export default defineConfig({
     timeouts: 'src/timeouts.ts',
     'typed-expectations': 'src/typed-expectations.ts',
   },
-  external: ['@internal/contract', '@prisma/dev', 'mysql2', 'pg', 'vitest', /^node:/],
+  external: ['@internal/contract', '@prisma/dev', 'mariadb', 'pg', 'vitest', /^node:/],
   outDir: 'dist/exports',
   // Keep manual exports to preserve root "." mapping with this custom outDir layout.
   exports: { enabled: false },

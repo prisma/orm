@@ -34,7 +34,7 @@ const numbers =
   'SELECT n FROM (SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3) AS t ORDER BY n';
 
 describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => {
-  it('streams a bigint, a datetime and JSON as text, and a value bound apart from the SQL', async (test) => {
+  it('streams a bigint as a bigint, a datetime and JSON as text, and a value bound apart from the SQL', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
       withDriver(url, async (driver) => {
         expect(
@@ -44,7 +44,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
               params: ["it's"],
             }),
           ),
-        ).toEqual([{ i: '42', d: '2024-01-02 03:04:05.678', j: '[1, "a"]', p: "it's" }]);
+        ).toEqual([{ i: 42n, d: '2024-01-02 03:04:05.678', j: '[1, "a"]', p: "it's" }]);
       }),
     );
   });
@@ -146,38 +146,122 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     );
   });
 
-  it('keeps no more prepared statements open than the cache size on each connection', async (test) => {
-    await withMysqlDatabase(test, async ({ url, name }) => {
-      const cached = new URL(url);
-      cached.searchParams.set('statementCacheSize', '5');
-      cached.searchParams.set('connectionLimit', '2');
-      const admin = await mysqlControlDriver.create(url);
-      try {
-        await withDriver(cached.toString(), async (driver) => {
-          const sizes = Array.from({ length: 300 }, (_, i) => i + 1);
-          for (let start = 0; start < sizes.length; start += 10) {
-            await Promise.all(
-              sizes.slice(start, start + 10).map((size) => {
-                const list = Array.from({ length: size }, (_, i) => `?${i + 1}`).join(', ');
-                return collect(
-                  driver.query({
-                    sql: `SELECT 1 AS n FROM DUAL WHERE 1 IN (${list})`,
-                    params: Array.from({ length: size }, (_, i) => i + 1),
-                  }),
-                );
-              }),
-            );
-          }
-          const { rows } = await admin.query<{ open: string }>(
-            'SELECT COUNT(*) AS open FROM performance_schema.prepared_statements_instances p JOIN performance_schema.threads t ON p.OWNER_THREAD_ID = t.THREAD_ID WHERE t.PROCESSLIST_DB = ? AND t.PROCESSLIST_ID <> CONNECTION_ID()',
-            [name],
+  async function openStatements(url: string, name: string): Promise<number> {
+    const admin = await mysqlControlDriver.create(url);
+    try {
+      const { rows } = await admin.query<{ open: string }>(
+        'SELECT COUNT(*) AS open FROM performance_schema.prepared_statements_instances p JOIN performance_schema.threads t ON p.OWNER_THREAD_ID = t.THREAD_ID WHERE t.PROCESSLIST_DB = ? AND t.PROCESSLIST_ID <> CONNECTION_ID()',
+        [name],
+      );
+      return Number(rows[0]?.open);
+    } finally {
+      await admin.close();
+    }
+  }
+
+  async function runManyStatements(driver: ReturnType<typeof mysqlRuntimeDriver.create>) {
+    const sizes = Array.from({ length: 60 }, (_, i) => i + 1);
+    for (let start = 0; start < sizes.length; start += 10) {
+      await Promise.all(
+        sizes.slice(start, start + 10).map((size) => {
+          const list = Array.from({ length: size }, (_, i) => `?${i + 1}`).join(', ');
+          return collect(
+            driver.query({
+              sql: `SELECT 1 AS n FROM DUAL WHERE 1 IN (${list})`,
+              params: Array.from({ length: size }, (_, i) => i + 1),
+            }),
           );
-          expect(Number(rows[0]?.open)).toBeLessThanOrEqual(10);
+        }),
+      );
+    }
+  }
+
+  it('closes every prepared statement after it runs unless statementCacheSize turns the cache on', async (test) => {
+    await withMysqlDatabase(test, async ({ url, name }) => {
+      const limited = new URL(url);
+      limited.searchParams.set('connectionLimit', '2');
+      const openWhileConnected = async (target: URL) =>
+        withDriver(target.toString(), async (driver) => {
+          await runManyStatements(driver);
+          return openStatements(url, name);
         });
-      } finally {
-        await admin.close();
-      }
+      const off = await openWhileConnected(limited);
+      limited.searchParams.set('statementCacheSize', '5');
+      const cached = await openWhileConnected(limited);
+      expect({ off, cachedWithinBound: cached > 0 && cached <= 10 }).toEqual({
+        off: 0,
+        cachedWithinBound: true,
+      });
     });
+  });
+
+  it('refuses a statementCacheSize that is not a non-negative integer', async (test) => {
+    await withMysqlDatabase(test, async ({ url }) => {
+      const invalid = new URL(url);
+      invalid.searchParams.set('statementCacheSize', '-1');
+      await expect(
+        mysqlRuntimeDriver.create().connect({ kind: 'url', url: invalid.toString() }),
+      ).rejects.toMatchObject({ code: 'RUNTIME.BINDING_INVALID' });
+    });
+  });
+
+  it('sends integers as BIGINT, so a comparison with no column compares numbers and LIMIT takes the largest INT', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(url, async (driver) => {
+        expect({
+          compared: await collect(
+            driver.query({
+              sql: 'SELECT ?1 < ?2 AS lt, ?3 < ?4 AS text_lt',
+              params: [10, 9, '10', '9'],
+            }),
+          ),
+          limited: await collect(
+            driver.query({ sql: 'SELECT 1 AS n FROM DUAL LIMIT ?1', params: [2147483647] }),
+          ),
+          offset: await collect(
+            driver.query({
+              sql: 'SELECT 1 AS n FROM DUAL LIMIT ?1 OFFSET ?2',
+              params: [2 ** 53, 0],
+            }),
+          ),
+        }).toEqual({
+          compared: [{ lt: 0n, text_lt: 1n }],
+          limited: [{ n: 1n }],
+          offset: [{ n: 1n }],
+        });
+      }),
+    );
+  });
+
+  it('round-trips the ends of the signed 64-bit range and bytes, and refuses an integer past it or a Date without crashing', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(url, async (driver) => {
+        await driver.execute({ sql: 'CREATE TABLE t (b BIGINT, v VARBINARY(4))' });
+        await driver.execute({
+          sql: 'INSERT INTO t VALUES (?1, ?2), (?3, NULL)',
+          params: [-(2n ** 63n), new Uint8Array([0, 1, 255]), 2n ** 63n - 1n],
+        });
+        for (const value of [-(2n ** 63n) - 1n, 2n ** 64n, new Date(0)]) {
+          await expect(
+            driver.execute({ sql: 'INSERT INTO t (b) VALUES (?1)', params: [value] }),
+          ).rejects.toMatchObject({ code: 'RUNTIME.AST_INVALID' });
+        }
+        expect(await collect(driver.query({ sql: 'SELECT b, v FROM t ORDER BY b' }))).toEqual([
+          { b: -(2n ** 63n), v: Buffer.from([0, 1, 255]) },
+          { b: 2n ** 63n - 1n, v: null },
+        ]);
+      }),
+    );
+  });
+
+  it('runs raw SQL prepared even with no values, so START TRANSACTION fails with DRIVER.PREPARE_FAILED', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(url, async (driver) => {
+        await expect(driver.execute({ sql: 'START TRANSACTION' })).rejects.toMatchObject({
+          code: 'DRIVER.PREPARE_FAILED',
+        });
+      }),
+    );
   });
 
   it('refuses a statement MySQL cannot prepare with DRIVER.PREPARE_FAILED', async (test) => {
@@ -211,12 +295,12 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
         expect(await collect(driver.query({ sql: 'SELECT * FROM t' }))).toEqual([
           {
             i: -7,
-            b: '9223372036854775807',
-            ub: '18446744073709551615',
+            b: 9223372036854775807n,
+            ub: 18446744073709551615n,
             d: '1.000000000000000000000000000001',
             dt: '2026-10-23 01:02:03.456',
             dd: '2026-10-23',
-            tm: '01:02:03.45',
+            tm: '01:02:03.450000',
             j: '{"a": 1}',
             vc: "ħ\\'",
             c: 'ab',
@@ -297,7 +381,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
             sql: "SELECT @@SESSION.time_zone AS tz, FIND_IN_SET('NO_BACKSLASH_ESCAPES', @@SESSION.sql_mode) AS nbe",
           }),
         );
-        expect(row).toEqual({ tz: '+00:00', nbe: '0' });
+        expect(row).toEqual({ tz: '+00:00', nbe: 0n });
       }),
     );
   });
@@ -308,10 +392,10 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
         const connection = await driver.acquireConnection();
         try {
           for await (const row of connection.query({ sql: numbers })) {
-            expect(row).toEqual({ n: '1' });
+            expect(row).toEqual({ n: 1n });
             break;
           }
-          expect(await collect(connection.query({ sql: 'SELECT 7 AS n' }))).toEqual([{ n: '7' }]);
+          expect(await collect(connection.query({ sql: 'SELECT 7 AS n' }))).toEqual([{ n: 7n }]);
         } finally {
           await connection.release();
         }
@@ -328,7 +412,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
         expect({
           quick: elapsedMs < 3000,
           next: await collect(driver.query({ sql: 'SELECT 1 AS n' })),
-        }).toEqual({ quick: true, next: [{ n: '1' }] });
+        }).toEqual({ quick: true, next: [{ n: 1n }] });
       }),
     );
   });
@@ -343,7 +427,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
         const waiting = collect(driver.query({ sql: 'SELECT 1 AS n' }));
         await expect(waiting).rejects.toMatchObject({ code: 'DRIVER.CONNECTION_FAILED' });
         await held.release();
-        expect(await collect(driver.query({ sql: 'SELECT 2 AS n' }))).toEqual([{ n: '2' }]);
+        expect(await collect(driver.query({ sql: 'SELECT 2 AS n' }))).toEqual([{ n: 2n }]);
       });
     });
   });
@@ -390,10 +474,10 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
       const rest = [await iterator.next(), await iterator.next(), await iterator.next()];
       await closing;
       expect({ first, rest, closed, state: driver.state }).toEqual({
-        first: { done: false, value: { n: '1' } },
+        first: { done: false, value: { n: 1n } },
         rest: [
-          { done: false, value: { n: '2' } },
-          { done: false, value: { n: '3' } },
+          { done: false, value: { n: 2n } },
+          { done: false, value: { n: 3n } },
           { done: true, value: undefined },
         ],
         closed: true,
@@ -416,7 +500,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
       await connection.release();
       await closing;
       expect({ rows, closedBeforeRelease, closed }).toEqual({
-        rows: [{ n: '1' }],
+        rows: [{ n: 1n }],
         closedBeforeRelease: false,
         closed: true,
       });
@@ -469,7 +553,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
         await expect(collect(driver.query({ sql: 'SELECT * FROM missing' }))).rejects.toMatchObject(
           { sqlState: '42S02' },
         );
-        expect(await collect(driver.query({ sql: 'SELECT 1 AS n' }))).toEqual([{ n: '1' }]);
+        expect(await collect(driver.query({ sql: 'SELECT 1 AS n' }))).toEqual([{ n: 1n }]);
       }),
     );
   });

@@ -1,24 +1,26 @@
-import type { TypeCast } from 'mysql2';
+import type { TypeCastFunction } from 'mariadb';
 
-/** The column types whose value may be bytes: a binary column of one of them reads as a Buffer, any other as text in the column's character set. */
-const BYTES_OR_TEXT = new Set([
+/** MySQL's `binary` collation, which marks a string or blob column that holds bytes. */
+const BINARY_COLLATION = 63;
+
+/** The column types whose value is text, or bytes when the column's collation is binary. */
+const TEXT_OR_BYTES = new Set([
+  'VARCHAR',
+  'VAR_STRING',
+  'STRING',
   'TINY_BLOB',
   'MEDIUM_BLOB',
   'LONG_BLOB',
   'BLOB',
-  'STRING',
-  'VAR_STRING',
 ]);
 
-/** The column types MySQL sends as bytes whatever their character set. */
-const BYTES = new Set(['BIT', 'GEOMETRY']);
-
 /**
- * Hands codecs the text MySQL sends for each column (ADR 155). A JSON column is read as UTF-8, because MySQL reports its character set as binary; a binary string or blob column as its bytes; every other column, numbers and dates included, as text, never as a JavaScript number or `Date`.
+ * Hands the control plane the text MySQL sends for each column, over either protocol: a binary string or blob, BIT and GEOMETRY column as its bytes, and every other column, numbers, dates and JSON included, as text.
  */
-export const serverText: TypeCast = (field, next) => {
-  if (field.type === 'JSON') return field.string('utf8');
-  if (BYTES.has(field.type)) return field.buffer();
-  if (BYTES_OR_TEXT.has(field.type)) return next();
-  return field.string('utf8');
+export const serverText: TypeCastFunction = (field) => {
+  if (field.type === 'BIT' || field.type === 'GEOMETRY') return field.buffer();
+  if (TEXT_OR_BYTES.has(field.type) && field.collation.index === BINARY_COLLATION) {
+    return field.buffer();
+  }
+  return field.string();
 };

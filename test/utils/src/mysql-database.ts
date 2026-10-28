@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { createConnection } from 'mysql2/promise';
+import { type ConnectionConfig, createConnection } from 'mariadb';
 
 /** A MySQL database created for one test. */
 export interface MysqlTestDatabase {
@@ -18,6 +18,18 @@ interface SkippableTest {
 export function mysqlServerUrl(): string | undefined {
   const url = process.env['MYSQL_URL'];
   return url === undefined || url.length === 0 ? undefined : url;
+}
+
+/** Connection options for the server a `mysql://` URL names; the `mariadb` package reads only `mariadb://` URLs. */
+function serverOptions(serverUrl: string): ConnectionConfig {
+  const url = new URL(serverUrl);
+  return {
+    host: url.hostname.replace(/^\[(.*)\]$/, '$1'),
+    ...(url.port === '' ? {} : { port: Number(url.port) }),
+    user: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+    allowPublicKeyRetrieval: url.searchParams.get('allowPublicKeyRetrieval') === 'true',
+  };
 }
 
 function uniqueDatabaseName(): string {
@@ -39,7 +51,7 @@ export async function withMysqlDatabase<T>(
   const name = uniqueDatabaseName();
   const url = new URL(serverUrl);
   url.pathname = `/${name}`;
-  const admin = await createConnection({ uri: serverUrl });
+  const admin = await createConnection(serverOptions(serverUrl));
   try {
     await admin.query(`CREATE DATABASE \`${name}\``);
     let testFailed = false;

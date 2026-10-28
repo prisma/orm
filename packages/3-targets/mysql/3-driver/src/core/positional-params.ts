@@ -34,27 +34,42 @@ function unsupportedValue(message: string, meta: Record<string, unknown>): Error
   return structuredError('RUNTIME.AST_INVALID', message, { meta: { target: 'mysql', ...meta } });
 }
 
-/** The value mysql2 sends for a parameter: a safe integer as a BigInt, which MySQL reads as an integer where it needs one, as in `LIMIT`, where mysql2 would send a number as a double; bytes as a Buffer. */
+const BIGINT_MIN = -(2n ** 63n);
+const BIGINT_MAX = 2n ** 63n - 1n;
+
+function int64(value: bigint, index: number): bigint {
+  if (value < BIGINT_MIN || value > BIGINT_MAX) {
+    throw unsupportedValue(
+      `MySQL has no parameter value for the integer ${value}; a parameter integer must fit in a signed 64-bit BIGINT`,
+      { index },
+    );
+  }
+  return value;
+}
+
+/**
+ * The value the `mariadb` package sends for a parameter. Every integer goes as a 64-bit BIGINT: the package sends a number as INT only below 2^31 - 1 and otherwise as DOUBLE, which MySQL refuses in `LIMIT`. A bigint outside the signed 64-bit range is refused here, because the package crashes the process on one. A `Uint8Array` goes as a Buffer over the same bytes, because the package sends any other `Uint8Array` as JSON text. A `Date` is refused: the package encodes it in the process's local time zone, and the MySQL codecs send dates as text.
+ */
 function bindValue(value: unknown, index: number): unknown {
   if (value === null || value === undefined) return null;
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) {
       throw unsupportedValue(`MySQL has no parameter value for ${value}`, { index });
     }
-    return Number.isSafeInteger(value) ? BigInt(value) : value;
+    return Number.isInteger(value) ? int64(BigInt(value), index) : value;
   }
-  if (value instanceof Uint8Array) return Buffer.from(value);
-  if (
-    typeof value === 'string' ||
-    typeof value === 'bigint' ||
-    typeof value === 'boolean' ||
-    value instanceof Date
-  ) {
-    return value;
+  if (typeof value === 'bigint') return int64(value, index);
+  if (Buffer.isBuffer(value)) return value;
+  if (value instanceof Uint8Array) {
+    return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
   }
+  if (typeof value === 'string' || typeof value === 'boolean') return value;
   throw unsupportedValue(
-    'A MySQL parameter must be text, a number, a bigint, a boolean, a Date, bytes or null',
-    { index, valueType: Array.isArray(value) ? 'array' : typeof value },
+    'A MySQL parameter must be text, a number, a bigint, a boolean, bytes or null; a Date is sent as text by its codec',
+    {
+      index,
+      valueType: value instanceof Date ? 'Date' : Array.isArray(value) ? 'array' : typeof value,
+    },
   );
 }
 

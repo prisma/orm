@@ -1,14 +1,14 @@
 import { EventEmitter } from 'node:events';
-import type { Connection } from 'mysql2/promise';
+import type { Connection } from 'mariadb';
 import { describe, expect, it } from 'vitest';
 import { MysqlControlDriver } from '../src/core/migrations/control-driver';
 
 class FakeConnection extends EventEmitter {
   queries = 0;
 
-  async query(): Promise<[unknown[]]> {
+  async query(): Promise<unknown[]> {
     this.queries += 1;
-    return [[]];
+    return [];
   }
 }
 

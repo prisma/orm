@@ -1,6 +1,5 @@
 import { timeouts } from '@repo/test-utils';
 import { withMysqlDatabase } from '@repo/test-utils/mysql-database';
-import { createConnection } from 'mysql2/promise';
 import { describe, expect, it } from 'vitest';
 import type { MysqlControlDriver } from '../src/core/migrations/control-driver';
 import mysqlDriver from '../src/core/migrations/control-driver';
@@ -9,10 +8,10 @@ async function connectWhileServerDefaultIncludes(
   url: string,
   sqlMode: string,
 ): Promise<MysqlControlDriver> {
-  const admin = await createConnection(url);
+  const admin = await mysqlDriver.create(url);
   try {
-    const [rows] = await admin.query('SELECT @@GLOBAL.sql_mode AS mode');
-    const [{ mode }] = rows as [{ mode: string }];
+    const { rows } = await admin.query<{ mode: string }>('SELECT @@GLOBAL.sql_mode AS mode');
+    const mode = rows[0]?.mode ?? '';
     await admin.query(`SET GLOBAL sql_mode = '${[mode, sqlMode].filter(Boolean).join(',')}'`);
     let driver: MysqlControlDriver | undefined;
     try {
@@ -25,14 +24,14 @@ async function connectWhileServerDefaultIncludes(
       });
     }
   } finally {
-    await admin.end();
+    await admin.close();
   }
 }
 
 describe('MysqlControlDriver against a MySQL server', {
   timeout: timeouts.databaseOperation,
 }, () => {
-  it('hands every column over as the text MySQL sends', async (test) => {
+  it('hands every column over as the text MySQL sends, with values or without', async (test) => {
     await withMysqlDatabase(test, async ({ url, name }) => {
       const driver = await mysqlDriver.create(url);
       try {
@@ -49,19 +48,20 @@ describe('MysqlControlDriver against a MySQL server', {
           'héllo',
           'B',
         ]);
-        const { rows } = await driver.query('SELECT * FROM t');
-        expect(rows).toEqual([
-          {
-            i: '42',
-            b: '9007199254740993',
-            d: '1.50',
-            dt: '2024-01-02 03:04:05.678',
-            j: '{"a": [1, 2]}',
-            bin: Buffer.from([0, 1, 2, 255]),
-            txt: 'héllo',
-            e: 'B',
-          },
-        ]);
+        const row = {
+          i: '42',
+          b: '9007199254740993',
+          d: '1.50',
+          dt: '2024-01-02 03:04:05.678',
+          j: '{"a": [1, 2]}',
+          bin: Buffer.from([0, 1, 2, 255]),
+          txt: 'héllo',
+          e: 'B',
+        };
+        expect({
+          text: (await driver.query('SELECT * FROM t')).rows,
+          prepared: (await driver.query('SELECT * FROM t WHERE i = ?', [42])).rows,
+        }).toEqual({ text: [row], prepared: [row] });
         expect(await driver.databaseName()).toBe(name);
       } finally {
         await driver.close();
@@ -100,11 +100,9 @@ describe('MysqlControlDriver against a MySQL server', {
     });
   });
 
-  it('refuses two statements in one query even when the URL flags multiple statements', async (test) => {
+  it('refuses two statements in one query', async (test) => {
     await withMysqlDatabase(test, async ({ url }) => {
-      const withMultipleStatements = new URL(url);
-      withMultipleStatements.searchParams.set('flags', 'MULTI_STATEMENTS');
-      const driver = await mysqlDriver.create(withMultipleStatements.toString());
+      const driver = await mysqlDriver.create(url);
       try {
         await expect(driver.query('SELECT 1; SELECT 2')).rejects.toMatchObject({
           kind: 'sql_query',
@@ -233,7 +231,7 @@ describe('MysqlControlDriver against a MySQL server', {
   it('reports a connection the server closed as DRIVER.NOT_CONNECTED instead of crashing', async (test) => {
     await withMysqlDatabase(test, async ({ url }) => {
       const driver = await mysqlDriver.create(url);
-      const admin = await createConnection(url);
+      const admin = await mysqlDriver.create(url);
       try {
         const { rows } = await driver.query<{ id: string }>('SELECT CONNECTION_ID() AS id');
         await admin.query(`KILL ${Number(rows[0]?.id)}`);
@@ -242,7 +240,7 @@ describe('MysqlControlDriver against a MySQL server', {
           code: 'DRIVER.NOT_CONNECTED',
         });
       } finally {
-        await admin.end();
+        await admin.close();
         await driver.close();
       }
     });
@@ -275,6 +273,61 @@ describe('MysqlControlDriver against a MySQL server', {
       const { message, why, meta } = error as { message: string; why: string; meta: unknown };
       expect(JSON.stringify({ message, why, meta })).not.toContain('secret');
       expect(JSON.stringify(meta)).toContain('no_such_database_for_prisma');
+    });
+  });
+
+  it('signs in with a password over plain TCP only when the URL allows fetching the server key', async (test) => {
+    await withMysqlDatabase(test, async ({ url, name }) => {
+      const admin = await mysqlDriver.create(url);
+      const user = `${name.slice(-12)}_u`;
+      try {
+        await admin.query(
+          `CREATE USER '${user}'@'%' IDENTIFIED WITH caching_sha2_password BY 'pw-1'`,
+        );
+        await admin.query(`GRANT ALL ON \`${name}\`.* TO '${user}'@'%'`);
+        const asUser = new URL(url);
+        asUser.username = user;
+        asUser.password = 'pw-1';
+        const refused = await mysqlDriver.create(asUser.toString()).then(
+          async (driver) => {
+            await driver.close();
+            return undefined;
+          },
+          (error: unknown) => error,
+        );
+        asUser.searchParams.set('allowPublicKeyRetrieval', 'true');
+        const allowed = await mysqlDriver.create(asUser.toString());
+        try {
+          expect({
+            refused,
+            user: (await allowed.query('SELECT CURRENT_USER() AS u')).rows,
+          }).toEqual({
+            refused: expect.objectContaining({ code: 'DRIVER.CONNECTION_FAILED' }),
+            user: [{ u: `${user}@%` }],
+          });
+        } finally {
+          await allowed.close();
+        }
+      } finally {
+        await admin.query(`DROP USER IF EXISTS '${user}'@'%'`).catch(() => undefined);
+        await admin.close();
+      }
+    });
+  });
+
+  it('connects over TLS with the settings in the URL', async (test) => {
+    await withMysqlDatabase(test, async ({ url }) => {
+      const tls = new URL(url);
+      tls.searchParams.set('ssl', JSON.stringify({ rejectUnauthorized: false }));
+      const driver = await mysqlDriver.create(tls.toString());
+      try {
+        const { rows } = await driver.query<{ Value: string }>(
+          "SHOW SESSION STATUS LIKE 'Ssl_version'",
+        );
+        expect(rows[0]?.Value).toMatch(/^TLS/);
+      } finally {
+        await driver.close();
+      }
     });
   });
 });

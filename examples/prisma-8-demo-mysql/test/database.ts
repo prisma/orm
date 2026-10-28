@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { createConnection } from 'mysql2/promise';
+import { type ConnectionConfig, createConnection } from 'mariadb';
 
 export interface TestDatabase {
   readonly url: string;
@@ -24,10 +24,22 @@ export async function createTestDatabase(serverUrl: string): Promise<TestDatabas
 }
 
 async function runOnServer(serverUrl: string, statement: string): Promise<void> {
-  const connection = await createConnection(serverUrl);
+  const connection = await createConnection(serverOptions(serverUrl));
   try {
     await connection.query(statement);
   } finally {
     await connection.end();
   }
+}
+
+/** Connection options for the server a `mysql://` URL names; the `mariadb` package reads only `mariadb://` URLs. */
+function serverOptions(serverUrl: string): ConnectionConfig {
+  const url = new URL(serverUrl);
+  return {
+    host: url.hostname.replace(/^\[(.*)\]$/, '$1'),
+    ...(url.port === '' ? {} : { port: Number(url.port) }),
+    user: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+    allowPublicKeyRetrieval: url.searchParams.get('allowPublicKeyRetrieval') === 'true',
+  };
 }

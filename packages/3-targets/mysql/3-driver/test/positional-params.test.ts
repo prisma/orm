@@ -16,14 +16,43 @@ describe('positionalParams', () => {
     });
   });
 
-  it('sends an integer number as a BigInt, which MySQL reads as an integer where LIMIT needs one', () => {
-    expect(positionalParams('SELECT ?1, ?2, ?3', [2, 1.5, 2n]).values).toEqual([2n, 1.5, 2n]);
+  it('sends every integer number as a bigint, so MySQL reads it as BIGINT, and a fraction as a number', () => {
+    expect(
+      positionalParams('SELECT ?1, ?2, ?3, ?4, ?5', [2, 2147483647, 2 ** 60, 1.5, 2n]).values,
+    ).toEqual([2n, 2147483647n, 2n ** 60n, 1.5, 2n]);
   });
 
-  it('sends bytes as a Buffer', () => {
-    expect(positionalParams('SELECT ?1', [new Uint8Array([1, 255])]).values).toEqual([
-      Buffer.from([1, 255]),
+  it('refuses an integer outside the signed 64-bit range before it reaches the package', () => {
+    for (const value of [-(2n ** 63n) - 1n, 2n ** 63n, 2 ** 64]) {
+      expect(() => positionalParams('SELECT ?1', [value])).toThrow(
+        expect.objectContaining({ code: 'RUNTIME.AST_INVALID' }),
+      );
+    }
+    expect(positionalParams('SELECT ?1, ?2', [-(2n ** 63n), 2n ** 63n - 1n]).values).toEqual([
+      -(2n ** 63n),
+      2n ** 63n - 1n,
     ]);
+  });
+
+  it('sends bytes as a Buffer over the same memory, and a Buffer as it is', () => {
+    const bytes = new Uint8Array([0, 1, 255, 7]).subarray(1, 3);
+    const buffer = Buffer.from([9]);
+    const [sent, kept] = positionalParams('SELECT ?1, ?2', [bytes, buffer]).values;
+    expect({
+      sent,
+      isBuffer: Buffer.isBuffer(sent),
+      sameMemory: Buffer.isBuffer(sent) && sent.buffer === bytes.buffer,
+      kept: kept === buffer,
+    }).toEqual({ sent: Buffer.from([1, 255]), isBuffer: true, sameMemory: true, kept: true });
+  });
+
+  it('refuses a Date, which the package would encode in the local time zone', () => {
+    expect(() => positionalParams('SELECT ?1', [new Date(0)])).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.AST_INVALID',
+        message: expect.stringContaining('Date'),
+      }),
+    );
   });
 
   it('reads the statement as MySQL does: -- before a control character opens a comment, and /*! is refused', () => {
@@ -50,7 +79,7 @@ describe('positionalParams', () => {
   });
 
   it('refuses a value MySQL has no parameter type for', () => {
-    for (const value of [{ a: 1 }, [1, 2], Number.NaN]) {
+    for (const value of [{ a: 1 }, [1, 2], Number.NaN, Number.POSITIVE_INFINITY]) {
       expect(() => positionalParams('SELECT ?1', [value])).toThrow(
         expect.objectContaining({ code: 'RUNTIME.AST_INVALID' }),
       );
