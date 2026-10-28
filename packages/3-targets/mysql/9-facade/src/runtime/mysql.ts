@@ -1,6 +1,6 @@
 import mysqlAdapter from '@internal/adapter-mysql/runtime';
 import type { Contract } from '@internal/contract/types';
-import type { MysqlBinding } from '@internal/driver-mysql/runtime';
+import type { MysqlBinding, MysqlPoolOptions } from '@internal/driver-mysql/runtime';
 import mysqlDriver from '@internal/driver-mysql/runtime';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { createRawLane, sql as sqlBuilder } from '@internal/sql-builder/runtime';
@@ -188,6 +188,11 @@ export interface MysqlOptionsBase {
   readonly verifyMarker?: VerifyMarkerOption;
   readonly log?: Log;
   readonly mode?: RuntimeMode;
+  /**
+   * Stream each query's rows as they arrive. Unset reads the whole result before the first row, as the Postgres facade does without `cursor`. While a stream on a connection is open, a statement sent on the same connection waits for it, so one awaited inside the loop over a stream in a transaction never finishes.
+   */
+  readonly stream?: boolean;
+  readonly poolOptions?: MysqlPoolOptions;
 }
 
 export type MysqlOptions<
@@ -289,7 +294,10 @@ export default function mysql<
       throw new InternalError('Driver descriptor missing from execution stack');
     }
 
-    const driver = driverDescriptor.create();
+    const driver = driverDescriptor.create({
+      stream: options.stream ?? false,
+      ...ifDefined('poolOptions', options.poolOptions),
+    });
     ownedDispose = () => driver.close();
     runtimeDriver = driver;
     if (binding !== undefined) {

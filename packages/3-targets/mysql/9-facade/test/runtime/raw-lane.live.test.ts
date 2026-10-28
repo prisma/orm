@@ -70,4 +70,26 @@ describe('MySQL raw SQL with integer values', { timeout: timeouts.databaseOperat
       });
     });
   });
+
+  it('runs a query awaited inside the loop over a large result in a transaction, because a query reads its whole result first, as on Postgres', async (test) => {
+    await withSeededDatabase(test, exampleDatabase, async (url) => {
+      await using db = mysql({ contract, url, verifyMarker: false });
+      const seen = await db.transaction(async (tx) => {
+        let total = 0;
+        for await (const row of tx.query(
+          tx.raw
+            .sql`WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE n < ${500}) SELECT n, REPEAT('x', 4000) AS pad FROM s`
+            .returnsRow({ n: 'mysql/int@1', pad: 'mysql/text@1' })
+            .build(),
+        )) {
+          const [echo] = await tx.query(
+            tx.raw.sql`SELECT ${row.n} AS m`.returnsRow({ m: 'mysql/int@1' }).build(),
+          );
+          total += echo?.m ?? 0;
+        }
+        return total;
+      });
+      expect(seen).toBe((500 * 501) / 2);
+    });
+  });
 });
