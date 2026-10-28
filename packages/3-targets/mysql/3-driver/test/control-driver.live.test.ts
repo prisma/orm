@@ -288,6 +288,7 @@ describe('MysqlControlDriver against a MySQL server', {
         const asUser = new URL(url);
         asUser.username = user;
         asUser.password = 'pw-1';
+        asUser.searchParams.delete('allowPublicKeyRetrieval');
         const refused = await mysqlDriver.create(asUser.toString()).then(
           async (driver) => {
             await driver.close();
