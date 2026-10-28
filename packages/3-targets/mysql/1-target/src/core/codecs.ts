@@ -173,14 +173,14 @@ export class MysqlIntDescriptor extends MysqlCodecDescriptor<void> {
 
 export const mysqlIntDescriptor = new MysqlIntDescriptor();
 
-/** A MySQL `bigint` as a JavaScript bigint. A row and an include's JSON carry it as decimal text. A parameter goes as a bigint, which the driver sends as a 64-bit integer, so MySQL computes and compares it exactly even with no column beside it. */
+/** A MySQL `bigint` as a JavaScript bigint. A row, an include's JSON and a parameter carry it as decimal text, as the Postgres `int8` codec does; MySQL reads a text parameter beside a `bigint` column exactly. */
 export class MysqlBigintCodec extends CodecImpl<
   typeof MYSQL_BIGINT_CODEC_ID,
   readonly ['equality', 'order', 'numeric'],
-  string | bigint,
+  string,
   bigint
 > {
-  async toWire(value: bigint, _ctx: CodecCallContext): Promise<bigint> {
+  async toWire(value: bigint, _ctx: CodecCallContext): Promise<string> {
     if (typeof value !== 'bigint' || value < BIGINT_MIN || value > BIGINT_MAX) {
       return encodeFailed(
         MYSQL_BIGINT_CODEC_ID,
@@ -188,7 +188,7 @@ export class MysqlBigintCodec extends CodecImpl<
         value,
       );
     }
-    return value;
+    return value.toString();
   }
   async fromWire(wire: string, _ctx: CodecCallContext): Promise<bigint> {
     if (!DECIMAL_INTEGER.test(wire)) {

@@ -9,12 +9,12 @@ import { exampleDatabase, withSeededDatabase } from './live-database';
 const contract = contractFromJson<Contract>(contractJson);
 
 describe('MySQL raw SQL with integer values', { timeout: timeouts.databaseOperation }, () => {
-  it('compares, combines and builds JSON from integer values as integers, not text', async (test) => {
+  it('compares and builds JSON from int values as integers, and adds bigint values, sent as decimal text, as integers once one is cast, as on Postgres', async (test) => {
     await withSeededDatabase(test, exampleDatabase, async (url) => {
       await using db = mysql({ contract, url, verifyMarker: false });
       const [row] = await db.query(
         db.raw
-          .sql`SELECT ${10} < ${9} AS lt, GREATEST(${10}, ${9}) AS greatest, CAST(JSON_ARRAY(${5}) AS CHAR) AS arr, ${9007199254740993n} + ${1n} AS sum`
+          .sql`SELECT ${10} < ${9} AS lt, GREATEST(${10}, ${9}) AS greatest, CAST(JSON_ARRAY(${5}) AS CHAR) AS arr, CAST(${9007199254740993n} AS SIGNED) + ${1n} AS sum`
           .returnsRow({
             lt: 'mysql/int@1',
             greatest: 'mysql/int@1',
