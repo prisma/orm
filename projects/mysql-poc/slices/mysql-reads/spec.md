@@ -62,16 +62,10 @@ The At a glance calls return the expected rows against MySQL 8.4 in live tests, 
 
 ## Changed during the slice
 
-The reviews changed four parts of the chosen design above. Design notes sections 7 and 8 give the reasons.
+The reviews changed three parts of the chosen design above. Design notes sections 7 and 8 give the reasons.
 
-- **Placeholders are numbered.** The renderer writes `?N`, N being the parameter's place in the runtime's list, not `?`.
+- **Placeholders are numbered.** The renderer writes `?N`, N being the parameter's place in the runtime's list, as the Postgres and SQLite renderers do. The driver rewrites each `?N` to `?` and sends the values in placeholder order.
 - **The length limit is in the statement.** A statement that uses `GROUP_CONCAT` carries a `SET_VAR(group_concat_max_len = …)` optimizer hint; the driver no longer sets it for the session.
-- **Values travel apart from the SQL.** The runtime driver runs every statement as a server-side prepared statement, with a bounded cache, not the text protocol. Integer parameters are written `CAST(?N AS SIGNED)`, except as `LIMIT` or `OFFSET` operands.
-- **Raw SQL never leaves a setting on a shared connection.** A pooled connection that ran raw SQL is closed, not returned to the pool.
+- **The drivers use the `mariadb` package, and values travel apart from the SQL.** Both drivers run on `mariadb`, as Prisma 7 does. Every statement with values, and all raw SQL at runtime, runs as a server-side prepared statement. The statement cache is off by default. Integers are sent as BIGINT, so the renderer needs no casts.
 
-The slice also made four shared changes, each with an upgrade note in `upgrade-instructions/pending/mysql-orm-reads/`:
-
-1. Every SQL driver request carries `containsRawSql`, computed by the runtime from the query's AST.
-2. An ORM `having` comparand is a bound parameter on every target, so a fractional or out-of-range comparand against an integer aggregate now fails.
-3. Codec descriptors can declare `integerRepresentation`, which the `having` comparand's type and runtime check both read.
-4. `fns.and` and `fns.or` accept only `true` and `false` as raw operands.
+The slice makes no change outside the MySQL packages. Changes to shared packages tried during review (a raw-SQL flag on driver requests, a codec field for integer handling, `having` comparands as parameters, and stricter `fns.and`/`fns.or` operands) were reverted.
