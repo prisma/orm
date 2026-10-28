@@ -22,10 +22,10 @@ interface RewriteType {
   readonly options: Readonly<Record<string, string>> | undefined;
 }
 
-/** A removed field preset: its rewrite, named only where `type` resolves, and to `codecId` when one is given, so a row does not fire on a target the preset never existed on. */
+/** A removed field preset: its rewrite, named only where `type` resolves to `codecId`, the codec the preset stored, so a row does not fire on a target the preset never existed on. */
 interface RemovedFieldPreset {
   readonly type: RewriteType;
-  readonly codecId: string | undefined;
+  readonly codecId: string;
   readonly rewrite: string;
 }
 
@@ -50,11 +50,7 @@ function typeCall({ path, options }: RewriteType, precision?: string): string {
 }
 
 /** The row of a preset whose rewrite is the column of `type`, then `chain`. */
-function writtenAs(
-  type: RewriteType,
-  codecId: string | undefined,
-  chain = '',
-): readonly RemovedFieldPreset[] {
+function writtenAs(type: RewriteType, codecId: string, chain = ''): readonly RemovedFieldPreset[] {
   return [{ type, codecId, rewrite: `field.column(${typeCall(type)})${chain}` }];
 }
 
@@ -88,6 +84,7 @@ const withPhases = (type: RewriteType, codecId: string, precision: boolean) => [
   },
 ];
 
+const SQLITE_DATETIME = 'sqlite/datetime@1';
 const CREATED = '.onCreate(gen.now())';
 const UPDATED = '.onCreate(gen.now()).onUpdate(gen.now())';
 const TEMPORAL_DATE_TIME = choice('DateTime', { as: 'temporal' });
@@ -133,11 +130,11 @@ export const PRESETS: Readonly<Record<string, readonly RemovedFieldPreset[]>> = 
   'id.uuidv7Native': writtenAs(explicit('Uuid'), 'pg/uuid@1', '.id().onCreate(gen.uuid(7))'),
   'temporal.createdAt': [
     ...writtenAs(TEMPORAL_DATE_TIME, 'pg/timestamptz-temporal@1', CREATED),
-    ...writtenAs(explicit('temporal.CreatedAt'), undefined),
+    ...writtenAs(explicit('temporal.CreatedAt'), SQLITE_DATETIME),
   ],
   'temporal.updatedAt': [
     ...writtenAs(TEMPORAL_DATE_TIME, 'pg/timestamptz-temporal@1', UPDATED),
-    ...writtenAs(explicit('temporal.UpdatedAt'), undefined),
+    ...writtenAs(explicit('temporal.UpdatedAt'), SQLITE_DATETIME),
   ],
   'temporal.createdAtString': writtenAs(STRING_DATE_TIME, 'pg/timestamptz-string@1', CREATED),
   'temporal.updatedAtString': writtenAs(STRING_DATE_TIME, 'pg/timestamptz-string@1', UPDATED),
@@ -169,7 +166,7 @@ export const PRESETS: Readonly<Record<string, readonly RemovedFieldPreset[]>> = 
   'temporal.time': withPhases(choice('Time', { as: 'temporal' }), 'pg/time-temporal@1', true),
   'temporal.timeString': withPhases(choice('Time'), 'pg/time-string@1', true),
   'temporal.timetz': withPhases(choice('Time', { storage: 'timetz' }), 'pg/timetz@1', true),
-  'temporal.datetime': withPhases(explicit('DateTime'), 'sqlite/datetime@1', false),
+  'temporal.datetime': withPhases(explicit('DateTime'), SQLITE_DATETIME, false),
 };
 
 /** The codec a column of `type` is stored with in `types`, a type choice resolved with its options as a column resolves it; `undefined` when `types` has no such type or the options choose none. */
@@ -201,8 +198,7 @@ function codecIdAt(
 }
 
 function appliesTo(preset: RemovedFieldPreset, types: AuthoringTypeNamespace): boolean {
-  const codecId = codecIdAt(types, preset.type.path, preset.type.options);
-  return codecId !== undefined && (preset.codecId === undefined || codecId === preset.codecId);
+  return codecIdAt(types, preset.type.path, preset.type.options) === preset.codecId;
 }
 
 function refuse(path: string, types: AuthoringTypeNamespace): never {

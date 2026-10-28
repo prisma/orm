@@ -302,6 +302,18 @@ describe('a removed field preset in a SQL schema', () => {
       ).toEqual(removed('id.ulid()', 'Write sql.Ulid @id @onCreate(ulid()).'));
     });
 
+    it('names no temporal alias where the schema declares DateTime, since the alias stores another codec than the preset', () => {
+      const result = interpretSqlContract(
+        'model DateTime {\n  id Int @id\n}\n\nmodel Event {\n  id    Int @id\n  value temporal.createdAt()\n}\n',
+        postgresInput,
+      );
+      expect(
+        result.ok ? [] : result.failure.diagnostics.map(({ code, message }) => ({ code, message })),
+      ).toEqual([
+        { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find type "temporal.createdAt"' },
+      ]);
+    });
+
     it('keeps the binder message for a preset written without a call', () => {
       expect(diagnosticsOf('temporal.createdAt', postgresInput)).toEqual([
         { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find type "temporal.createdAt"' },

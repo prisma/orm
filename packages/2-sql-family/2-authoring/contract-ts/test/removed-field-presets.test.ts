@@ -163,14 +163,13 @@ describe('a read of a removed field preset from the SQL field helpers', () => {
     expect(refusalOf(sqliteField, path)).toMatchObject(unknown(path));
   });
 
-  it('names the forms that replace presets where the type choice call stores another codec', () => {
+  it('names the forms that replace presets where the type choice call stores another codec, and temporal.UpdatedAt stores another codec than the preset', () => {
     const jsDateOnly = {
       ...postgresLike,
       DateTime: {
         ...postgresLike.DateTime,
         choices: [{ when: { as: 'date' }, type: 'TimestamptzJsDate' }],
       },
-      temporal: {},
     } as const;
     expect(
       refusalOf(refusingRemovedFieldPresets(field, jsDateOnly), 'temporal.updatedAt'),

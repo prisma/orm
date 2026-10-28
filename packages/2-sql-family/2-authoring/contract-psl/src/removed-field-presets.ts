@@ -63,10 +63,11 @@ function nanoid(id: boolean): readonly RemovedFieldPreset[] {
 
 const TEMPORAL_DATE_TIME = presetType('DateTime', { as: 'temporal' });
 const STRING_DATE_TIME = presetType('DateTime', { as: 'string' });
+const SQLITE_DATETIME = 'sqlite/datetime@1';
 const CREATED = '@onCreate(now())';
 const UPDATED = '@onCreate(now()) @onUpdate(now())';
 
-/** The SQL family's removed field presets: each row applies only where its rewrite's type stores the preset's codec, and a row with no codec id writes a type alias only the targets with the preset contribute. A generated id preset is written with the target's top-level alias where it has one, and with the `sql.` alias elsewhere. A date and time preset is written with the convenience call that gives the explicit type it stored, where one does (ADR 279). */
+/** The SQL family's removed field presets: each row applies only where its rewrite's type stores the preset's codec. A generated id preset is written with the target's top-level alias where it has one, and with the `sql.` alias elsewhere. A date and time preset is written with the convenience call that gives the explicit type it stored, where one does (ADR 279). */
 export const removedSqlFieldPresets: RemovedFieldPresets = {
   uuidString: idAlias('UuidString'),
   ulid: idAlias('Ulid'),
@@ -93,11 +94,11 @@ export const removedSqlFieldPresets: RemovedFieldPresets = {
   'id.uuidv7Native': removedPresetWrittenAs('Uuid', 'pg/uuid@1', '@id @onCreate(uuid(7))'),
   'temporal.createdAt': [
     ...removedPresetWrittenAs(TEMPORAL_DATE_TIME, 'pg/timestamptz-temporal@1', CREATED),
-    ...removedPresetWrittenAs('temporal.CreatedAt', undefined),
+    ...removedPresetWrittenAs('temporal.CreatedAt', SQLITE_DATETIME),
   ],
   'temporal.updatedAt': [
     ...removedPresetWrittenAs(TEMPORAL_DATE_TIME, 'pg/timestamptz-temporal@1', UPDATED),
-    ...removedPresetWrittenAs('temporal.UpdatedAt', undefined),
+    ...removedPresetWrittenAs('temporal.UpdatedAt', SQLITE_DATETIME),
   ],
   'temporal.createdAtString': removedPresetWrittenAs(
     STRING_DATE_TIME,
@@ -161,5 +162,5 @@ export const removedSqlFieldPresets: RemovedFieldPresets = {
     'pg/timetz@1',
     true,
   ),
-  'temporal.datetime': removedPresetWithPhases('DateTime', 'sqlite/datetime@1', false),
+  'temporal.datetime': removedPresetWithPhases('DateTime', SQLITE_DATETIME, false),
 };

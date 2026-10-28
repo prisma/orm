@@ -31,11 +31,11 @@ export function writtenPresetType(type: RemovedPresetType, extra?: string): stri
 }
 
 /**
- * A field preset Prisma 8 removed, and how to write what it stored. The preset is named only where `type` resolves, and to `codecId` when one is given, so a row does not fire on a target the preset never existed on.
+ * A field preset Prisma 8 removed, and how to write what it stored. The preset is named only where `type` resolves to `codecId`, the codec the preset stored, so a row does not fire on a target the preset never existed on, or name a type that stores something else.
  */
 export interface RemovedFieldPreset {
   readonly type: RemovedPresetType;
-  readonly codecId?: string;
+  readonly codecId: string;
   /** The rewrite of `call`, with `modifier`, the field's `?` or `[]`, written right after the type. */
   readonly rewrite: (call: ResolvedTypeConstructorCall, modifier: string) => string;
 }
@@ -52,7 +52,7 @@ function asType(type: RemovedPresetType | string): RemovedPresetType {
 /** The row of a preset whose rewrite always writes `type`, then `attributes` when given, such as `Ulid @id @onCreate(ulid())`. */
 export function removedPresetWrittenAs(
   type: RemovedPresetType | string,
-  codecId: string | undefined,
+  codecId: string,
   attributes?: string,
 ): readonly RemovedFieldPreset[] {
   const written = asType(type);
@@ -60,7 +60,7 @@ export function removedPresetWrittenAs(
   return [
     {
       type: written,
-      ...(codecId === undefined ? {} : { codecId }),
+      codecId,
       rewrite: (_, modifier) => `Write ${writtenPresetType(written)}${modifier}${suffix}.`,
     },
   ];
@@ -131,11 +131,7 @@ export function describeRemovedFieldPreset(
       })),
       span: call.span,
     });
-    return (
-      codecId !== undefined &&
-      (name === undefined || !isDeclared(name)) &&
-      (row.codecId === undefined || codecId === row.codecId)
-    );
+    return codecId === row.codecId && (name === undefined || !isDeclared(name));
   });
   if (preset === undefined) return undefined;
   return `${printTypeConstructorCall(call)} was a field preset, and Prisma 8 removed field presets. ${preset.rewrite(call, typeModifier(field))}`;
