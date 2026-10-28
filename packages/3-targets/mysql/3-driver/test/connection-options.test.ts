@@ -122,6 +122,83 @@ describe('mysqlConnectionOptions', () => {
     }
   });
 
+  it('names the parameters it accepts when it refuses one, and the replacement for each Prisma 7 engine parameter', () => {
+    const accepted =
+      'it accepts ssl, connectTimeout, allowPublicKeyRetrieval, connectionLimit, poolTimeout and statementCacheSize';
+    const replacements = {
+      connection_limit: 'use connectionLimit',
+      pool_timeout: 'use poolTimeout, in milliseconds',
+      connect_timeout: 'use connectTimeout, in milliseconds',
+      sslcert: "use ssl, with the CA certificate's PEM text as ca",
+      sslidentity: "use ssl, with the client certificate's and key's PEM text as cert and key",
+      sslpassword: "use ssl's passphrase",
+      sslaccept: "use ssl's rejectUnauthorized",
+      socket_timeout: 'no replacement',
+      statement_cache_size: 'use statementCacheSize',
+    };
+    for (const [parameter, replacement] of Object.entries(replacements)) {
+      expect(() => mysqlConnectionOptions(`mysql://root@localhost/app?${parameter}=1`)).toThrow(
+        expect.objectContaining({
+          code: 'RUNTIME.BINDING_INVALID',
+          message: expect.stringContaining(`${parameter} (${replacement}); ${accepted}`),
+          meta: { received: parameter, reason: expect.any(String) },
+        }),
+      );
+    }
+    expect(() =>
+      mysqlConnectionOptions('mysql://root@localhost/app?flags=X&connection_limit=2'),
+    ).toThrow(
+      expect.objectContaining({
+        message: expect.stringContaining(
+          `flags, connection_limit (use connectionLimit); ${accepted}`,
+        ),
+        meta: { received: 'flags, connection_limit', reason: expect.any(String) },
+      }),
+    );
+  });
+
+  it('names a parameter whose value it refuses, and the form the value must take', () => {
+    expect(() =>
+      mysqlPoolOptions('mysql://root@localhost/app?poolTimeout=soon&connectionLimit=2'),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.BINDING_INVALID',
+        message: expect.stringContaining('poolTimeout must be a positive integer of milliseconds'),
+        meta: { received: 'poolTimeout', reason: expect.any(String) },
+      }),
+    );
+  });
+
+  it('copies no value from the URL into the error, neither the password nor a TLS key', () => {
+    const secrets = ['hunter2-secret', 'PRIVATE-KEY-PEM', 'pp-secret'];
+    const ssl = encodeURIComponent(
+      JSON.stringify({ key: 'PRIVATE-KEY-PEM', passphrase: 'pp-secret', bogus: 1 }),
+    );
+    const validSsl = encodeURIComponent(
+      JSON.stringify({ key: 'PRIVATE-KEY-PEM', passphrase: 'pp-secret' }),
+    );
+    for (const url of [
+      `mysql://app:hunter2-secret@db.example/app?ssl=${ssl}`,
+      `mysql://app:hunter2-secret@db.example/app?ssl=${validSsl}&connection_limit=hunter2-secret`,
+      `mysql://app:hunter2-secret@db.example/app?ssl=${validSsl}&poolTimeout=hunter2-secret`,
+      `mysql://app:hunter2-secret@db.example/app?ssl=${validSsl}&charset=hunter2-secret`,
+    ]) {
+      const error = (() => {
+        try {
+          mysqlPoolOptions(url);
+        } catch (thrown) {
+          return thrown;
+        }
+        throw new Error(`accepted ${url}`);
+      })();
+      const written = error instanceof Error ? `${error.stack}\n${JSON.stringify(error)}` : '';
+      expect({
+        code: Object(error).code,
+        leaked: secrets.filter((secret) => written.includes(secret)),
+      }).toEqual({ code: 'RUNTIME.BINDING_INVALID', leaked: [] });
+    }
+  });
+
   it('waits ten seconds to connect unless the URL or the caller says otherwise, and leaves out the pool settings', () => {
     const given = mysqlConnectionOptions(
       'mysql://root@localhost/app?connectionLimit=2&poolTimeout=100&connectTimeout=300',

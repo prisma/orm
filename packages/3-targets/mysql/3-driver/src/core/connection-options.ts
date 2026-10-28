@@ -27,9 +27,38 @@ const URL_PARAMETERS = {
   'statementCacheSize?': type('string.integer.parse').to('number.integer >= 0'),
 } as const;
 
-const urlParameters = type(URL_PARAMETERS).onUndeclaredKey('reject');
+const urlParameters = type(URL_PARAMETERS);
 
-const PARAMETER_NAMES = Object.keys(URL_PARAMETERS).map((key) => key.slice(0, -1));
+type ParameterName = keyof typeof URL_PARAMETERS extends `${infer Name}?` ? Name : never;
+
+/** The form each URL parameter's value must take, for the refusal of a value. */
+const PARAMETER_FORMS: Readonly<Record<ParameterName, string>> = {
+  ssl: 'true, false, or a JSON object of ca, cert, key, passphrase, servername and rejectUnauthorized',
+  connectTimeout: 'a positive integer of milliseconds',
+  allowPublicKeyRetrieval: 'true or false',
+  connectionLimit: 'a positive integer',
+  poolTimeout: 'a positive integer of milliseconds',
+  statementCacheSize: 'a non-negative integer',
+};
+
+const PARAMETER_NAMES = Object.keys(PARAMETER_FORMS);
+
+/** What replaces each parameter of a Prisma 7 engine URL. */
+const ENGINE_PARAMETER_REPLACEMENTS: ReadonlyMap<string, string> = new Map([
+  ['connection_limit', 'use connectionLimit'],
+  ['pool_timeout', 'use poolTimeout, in milliseconds'],
+  ['connect_timeout', 'use connectTimeout, in milliseconds'],
+  ['sslcert', "use ssl, with the CA certificate's PEM text as ca"],
+  ['sslidentity', "use ssl, with the client certificate's and key's PEM text as cert and key"],
+  ['sslpassword', "use ssl's passphrase"],
+  ['sslaccept', "use ssl's rejectUnauthorized"],
+  ['socket_timeout', 'no replacement'],
+  ['statement_cache_size', 'use statementCacheSize'],
+]);
+
+function isParameterName(name: string): name is ParameterName {
+  return Object.hasOwn(PARAMETER_FORMS, name);
+}
 
 type UrlParameters = typeof urlParameters.infer;
 
@@ -58,10 +87,20 @@ const FIXED_OPTIONS: ConnectionConfig & {
   bitOneIsBoolean: false,
 };
 
-function invalidBinding(reason: string, received: string): Error {
+/** Refuses the URL. `parameters` names the parameters at fault; no value from the URL goes into the error, because a URL carries the password and TLS keys. */
+function invalidBinding(reason: string, parameters: readonly string[]): Error {
   return structuredError('RUNTIME.BINDING_INVALID', `MySQL connection URL: ${reason}`, {
-    meta: { received, reason },
+    meta: { received: parameters.join(', '), reason },
   });
+}
+
+function describeUnknown(name: string): string {
+  const replacement = ENGINE_PARAMETER_REPLACEMENTS.get(name);
+  return replacement === undefined ? name : `${name} (${replacement})`;
+}
+
+function acceptedList(): string {
+  return `${PARAMETER_NAMES.slice(0, -1).join(', ')} and ${PARAMETER_NAMES.at(-1)}`;
 }
 
 function readUrl(url: string): { readonly parsed: URL; readonly parameters: UrlParameters } {
@@ -69,14 +108,25 @@ function readUrl(url: string): { readonly parsed: URL; readonly parameters: UrlP
   if (parsed.searchParams.has('charset')) {
     throw invalidBinding(
       'the driver always uses utf8mb4, because it reads each statement as utf8mb4 to find its placeholders; remove the charset parameter',
-      'charset',
+      ['charset'],
+    );
+  }
+  const names = [...new Set(parsed.searchParams.keys())];
+  const unknown = names.filter((name) => !isParameterName(name));
+  if (unknown.length > 0) {
+    throw invalidBinding(
+      `the driver does not accept ${unknown.map(describeUnknown).join(', ')}; it accepts ${acceptedList()}`,
+      unknown,
     );
   }
   const parameters = urlParameters(Object.fromEntries(parsed.searchParams));
   if (parameters instanceof type.errors) {
+    const invalid = names
+      .filter(isParameterName)
+      .filter((name) => parameters.some((error) => error.path[0] === name));
     throw invalidBinding(
-      `${parameters.summary}; the driver reads ${PARAMETER_NAMES.join(', ')}`,
-      parsed.search,
+      invalid.map((name) => `${name} must be ${PARAMETER_FORMS[name]}`).join('; '),
+      invalid,
     );
   }
   return { parsed, parameters };
