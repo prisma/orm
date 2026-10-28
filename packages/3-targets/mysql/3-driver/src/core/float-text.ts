@@ -114,7 +114,7 @@ function digitsToDecimals(
 }
 
 /**
- * A FLOAT or DOUBLE column declared with `decimals`, such as `DOUBLE(10,2)`, as MySQL writes it over the text protocol, a FLOAT's value read as a double: the fewest significant digits that read back as the same double, padded with zeros to `decimals` digits after the point when they fit, and otherwise the exact value rounded to `decimals` digits after the point, ties to even, in fixed notation. MySQL stores no negative zero in such a column.
+ * A FLOAT or DOUBLE column declared with `decimals`, such as `DOUBLE(10,2)`, as MySQL writes it over the text protocol, a FLOAT's value read as a double: the fewest significant digits that read back as the same double, padded with zeros to `decimals` digits after the point when they fit, and otherwise the exact value rounded to `decimals` digits after the point, ties to even, in fixed notation. Negative zero, which a computed column such as `-price` can hold, keeps its sign.
  */
 export function mysqlFixedDecimalsText(value: number, decimals: number): string {
   const { digits, pointAt } = digitsToDecimals(Math.abs(value), decimals);
@@ -122,5 +122,5 @@ export function mysqlFixedDecimalsText(value: number, decimals: number): string 
   const fraction = `${'0'.repeat(Math.max(-pointAt, 0))}${digits.slice(Math.max(pointAt, 0))}`
     .padEnd(decimals, '0')
     .slice(0, decimals);
-  return `${value < 0 ? '-' : ''}${whole}${decimals === 0 ? '' : `.${fraction}`}`;
+  return `${value < 0 || Object.is(value, -0) ? '-' : ''}${whole}${decimals === 0 ? '' : `.${fraction}`}`;
 }

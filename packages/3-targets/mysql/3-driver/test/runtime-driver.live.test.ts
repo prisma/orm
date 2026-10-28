@@ -444,6 +444,23 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     );
   });
 
+  it('reads negative zero in a computed column declared with decimals with its sign, as MySQL writes it, whether the row came over the text protocol or prepared', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(url, async (driver) => {
+        await driver.execute({
+          sql: 'CREATE TABLE t (f FLOAT(10,2), d DOUBLE(10,2), w DOUBLE(255,0))',
+        });
+        await driver.execute({ sql: 'INSERT INTO t VALUES (-1.5e0, 0e0, 0e0)' });
+        const rows = [{ negated: '-0.00', times: '-0.00', whole: '-0' }];
+        const select = 'SELECT -d AS negated, f * 0 AS times, -w AS whole FROM t';
+        expect({
+          text: await collect(driver.query({ sql: select })),
+          prepared: await collect(driver.query({ sql: `${select} WHERE ?1 = ?1`, params: [1] })),
+        }).toEqual({ text: rows, prepared: rows });
+      }),
+    );
+  });
+
   it('refuses a statement whose placeholder count MySQL reads differently from the values, before running it, under NO_BACKSLASH_ESCAPES set on a held connection', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
       withDriver(url, async (driver) => {
