@@ -186,7 +186,8 @@ describe('facade lifecycle structured codes', () => {
     });
     mocks.createMongoExecutionContext.mockReturnValue({
       id: 'context',
-      enums: { __unbound__: {} },
+      contract: { domain: { namespaces: { __unbound__: {} } } },
+      codecs: { get: () => undefined },
     });
     mocks.driverFromConnection.mockResolvedValue({
       id: 'driver',

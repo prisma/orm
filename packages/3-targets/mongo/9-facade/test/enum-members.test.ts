@@ -35,6 +35,10 @@ const contract = defineContract({
         double: field.namedType(DoubleLevel),
       },
     }),
+    Note: model('Note', {
+      collection: 'notes',
+      fields: { _id: field.objectId(), level: field.namedType(TextLevel) },
+    }),
   },
 });
 
@@ -118,31 +122,40 @@ describe('the Mongo ORM checks a written enum value against the enums of its con
     });
   });
 
-  it('reads the accessors db.enums holds, the ones its context built once', async () => {
-    const int32Level = context.enums['__unbound__']?.['Int32Level'];
-    expect(enums.Int32Level).toBe(int32Level);
+  it('builds db.enums once, so every read returns the same accessor', () => {
+    const db = mongoStatic({ contract });
+    expect(db.enums.Int32Level).toBe(db.enums.Int32Level);
+    expect(db.enums.Int32Level).not.toBe(enums.Int32Level);
+  });
 
-    const refuseEverything = vi.fn(() => false);
-    const sharedAccessors = {
-      __unbound__: {
-        TextLevel: { ...enums.TextLevel, has: refuseEverything },
-        Int32Level: enums.Int32Level,
-        DoubleLevel: enums.DoubleLevel,
-      },
-    };
-    const sharedContext = { ...context, enums: sharedAccessors as unknown as typeof context.enums };
-    const orm = mongoOrm({ context: sharedContext, runtime: unreachableDatabase });
-    const readings = createMongoCollection(
-      { context: sharedContext, runtime: unreachableDatabase },
-      'Reading',
+  it('builds its own accessors once per ORM client, which hold the values db.enums holds', async () => {
+    const codecLookups = vi.fn((codecId: string) => context.codecs.get(codecId));
+    const countingContext = { ...context, codecs: { ...context.codecs, get: codecLookups } };
+
+    const orm = mongoOrm({ context: countingContext, runtime: unreachableDatabase });
+
+    expect(codecLookups).toHaveBeenCalledTimes(Object.keys(enums).length);
+    await expect(orm.readings.create(reading)).rejects.toThrow('no database');
+    await expect(orm.notes.create({ level: enums.TextLevel.members.Low })).rejects.toThrow(
+      'no database',
     );
+    await expect(orm.notes.create({ level: 'medium' as never })).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
+    });
+  });
 
-    await expect(orm.readings.create(reading)).rejects.toMatchObject({
-      code: 'RUNTIME.ENCODE_FAILED',
-    });
-    await expect(readings.create(reading)).rejects.toMatchObject({
-      code: 'RUNTIME.ENCODE_FAILED',
-    });
-    expect(refuseEverything).toHaveBeenCalledTimes(2);
+  it('refuses to build an ORM client whose context has no codec for an enum', () => {
+    expect(() =>
+      mongoOrm({
+        context: { ...context, codecs: { get: () => undefined, has: () => false } },
+        runtime: unreachableDatabase,
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.CODEC_DESCRIPTOR_MISSING',
+        message:
+          "No codec is registered for codecId 'mongo/string@1', which a domain enum in the contract uses.",
+      }),
+    );
   });
 });

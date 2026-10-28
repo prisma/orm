@@ -32,7 +32,6 @@ export function makeExecution(
     context: Object.freeze({
       contract: testContract,
       codecs,
-      enums: {},
       applyMutationDefaults: () => [],
     }),
     adapter,

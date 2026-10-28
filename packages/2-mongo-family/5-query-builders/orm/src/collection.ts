@@ -1,4 +1,4 @@
-import type { EnumAccessor } from '@internal/contract/enum-accessor';
+import { buildNamespacedEnums, type EnumAccessor } from '@internal/contract/enum-accessor';
 import {
   type ContractField,
   type ContractModel,
@@ -241,6 +241,26 @@ function topLevelUpdateFields(
   return fields;
 }
 
+/** The contract's enum accessors by namespace and enum name, which a written enum value is checked against. */
+export type MongoEnumAccessors = Readonly<
+  Record<string, Readonly<Record<string, EnumAccessor>> | undefined>
+>;
+
+/** The context contract's enum accessors, each reading its members through its codec in the context. */
+export function buildEnumAccessors(context: MongoExecutionContext): MongoEnumAccessors {
+  return buildNamespacedEnums(context.contract.domain, (codecId) => {
+    const codec = context.codecs.get(codecId);
+    if (codec === undefined) {
+      throw runtimeError(
+        'RUNTIME.CODEC_DESCRIPTOR_MISSING',
+        `No codec is registered for codecId '${codecId}', which a domain enum in the contract uses.`,
+        { codecId },
+      );
+    }
+    return codec;
+  });
+}
+
 /** What a collection runs against: the execution context, whose contract, codecs and mutation defaults it uses, and the runtime that executes its plans. Mirrors the SQL ORM's `CollectionContext`. */
 export interface MongoCollectionContext<TContract extends MongoContract> {
   readonly context: MongoExecutionContext<TContract>;
@@ -262,7 +282,7 @@ function isUnknownRecord(value: unknown): value is Record<string, unknown> {
 
 const LIST_INDEX = /^\d+$/;
 
-class MongoCollectionImpl<
+export class MongoCollectionImpl<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
   ModelName extends string & keyof MongoModelsMap<TContract>,
   TIncludes extends MongoIncludeSpec<TContract, ModelName> = NoIncludes,
@@ -272,14 +292,20 @@ class MongoCollectionImpl<
   readonly #contract: TContract;
   readonly #modelName: ModelName;
   readonly #ctx: MongoCollectionContext<TContract>;
+  readonly #enums: MongoEnumAccessors;
   readonly #executor: MongoQueryExecutor;
   readonly #mutationDefaults: MutationDefaults;
   #collectionName: string;
   #state: MongoCollectionState;
   #variantValue: string | undefined;
 
-  constructor(ctx: MongoCollectionContext<TContract>, modelName: ModelName) {
+  constructor(
+    ctx: MongoCollectionContext<TContract>,
+    modelName: ModelName,
+    enums: MongoEnumAccessors,
+  ) {
     this.#ctx = ctx;
+    this.#enums = enums;
     this.#contract = ctx.context.contract;
     this.#modelName = modelName;
     this.#executor = ctx.runtime;
@@ -1134,11 +1160,7 @@ class MongoCollectionImpl<
     if (valueSet === undefined || valueSet.entityKind !== 'enum' || value === null) return;
     const contractEnum =
       this.#contract.domain.namespaces[valueSet.namespaceId]?.enum?.[valueSet.entityName];
-    const enums = blindCast<
-      Readonly<Record<string, Readonly<Record<string, EnumAccessor>> | undefined>>,
-      'the accessors are keyed by the contract namespace ids and enum names a field value set names'
-    >(this.#ctx.context.enums);
-    const accessor = enums[valueSet.namespaceId]?.[valueSet.entityName];
+    const accessor = this.#enums[valueSet.namespaceId]?.[valueSet.entityName];
     if (contractEnum === undefined || accessor === undefined) return;
     const values: readonly unknown[] = field.many && Array.isArray(value) ? value : [value];
     const outside = values.findIndex((entry) => entry !== null && !accessor.has(entry));
@@ -1438,6 +1460,7 @@ class MongoCollectionImpl<
     const instance = new MongoCollectionImpl<TContract, ModelName, TIncludes, TVariantValue>(
       this.#ctx,
       this.#modelName,
+      this.#enums,
     );
     instance.#state = { ...this.#state, ...overrides };
     instance.#collectionName = this.#collectionName;
@@ -1452,6 +1475,7 @@ class MongoCollectionImpl<
     const instance = new MongoCollectionImpl<TContract, ModelName, TIncludes, VNew>(
       this.#ctx,
       this.#modelName,
+      this.#enums,
     );
     instance.#state = { ...this.#state, ...overrides };
     instance.#collectionName = this.#collectionName;
@@ -1468,5 +1492,5 @@ export function createMongoCollection<
   ctx: MongoCollectionContext<TContract>,
   modelName: ModelName,
 ): MongoCollection<TContract, ModelName> {
-  return new MongoCollectionImpl(ctx, modelName);
+  return new MongoCollectionImpl(ctx, modelName, buildEnumAccessors(ctx.context));
 }

@@ -61,7 +61,6 @@ function makeExecution(adapter: MongoAdapter): {
     context: Object.freeze({
       contract: testContract,
       codecs,
-      enums: {},
       applyMutationDefaults: () => [],
     }),
     adapter,

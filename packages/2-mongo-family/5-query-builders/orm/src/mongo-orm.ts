@@ -7,7 +7,7 @@ import type {
 import type { MongoExecutionContext } from '@internal/mongo-query-ast/execution';
 import { blindCast } from '@internal/utils/casts';
 import type { MongoCollection } from './collection';
-import { createMongoCollection } from './collection';
+import { buildEnumAccessors, MongoCollectionImpl } from './collection';
 import type { MongoQueryExecutor } from './executor';
 
 export interface MongoOrmOptions<TContract extends MongoContract> {
@@ -29,15 +29,17 @@ export function mongoOrm<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
 >(options: MongoOrmOptions<TContract>): MongoOrmClient<TContract> {
   const { context, runtime } = options;
+  const enums = buildEnumAccessors(context);
   const client: Record<string, unknown> = {};
 
   for (const [rootName, rootRef] of Object.entries(context.contract.roots)) {
-    client[rootName] = createMongoCollection(
+    client[rootName] = new MongoCollectionImpl(
       { context, runtime },
       blindCast<
         RootModelName<TContract, typeof rootName & keyof TContract['roots'] & string>,
         'roots entries are CrossReferences; rootRef.model is a valid RootModelName for this contract'
       >(rootRef.model),
+      enums,
     );
   }
 

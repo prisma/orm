@@ -113,7 +113,7 @@ describe.each(['app', 'extension'] as const)('the %s runtime adapter detection',
     ['a stack on another object', 'options.stack.adapter'],
     ['a context type over one contract', 'MongoExecutionContext<Contract>'],
     ['a context type over a contract typeof', 'MongoExecutionContext<typeof contract>'],
-    ['the enum accessors of a context', 'const enums = context.enums;'],
+    ['the enum accessors of a client', 'const { enums } = mongoStatic({ contract });'],
     ['a context type over a generic contract', 'MongoExecutionContext<MongoContract<Storage>>'],
     ['a stack built without a driver', 'createMongoExecutionStack({ target, adapter })'],
   ])('skips %s', (_name, content) => {

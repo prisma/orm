@@ -75,7 +75,11 @@ const fakeOrm = { id: 'orm-instance' };
 const fakeQuery = { id: 'query-instance' };
 const fakeRaw = { id: 'raw-instance', collection: vi.fn() };
 const fakeAdapter = { id: 'adapter-instance' };
-const fakeContext = { id: 'context-instance', enums: { __unbound__: {} } };
+const fakeContext = {
+  id: 'context-instance',
+  contract: fakeContract,
+  codecs: { get: () => undefined },
+};
 const fakeStack = { id: 'stack-instance', adapter: { create: () => fakeAdapter } };
 
 describe('mongo() facade', () => {
@@ -433,27 +437,67 @@ describe('mongo() facade', () => {
   });
 
   describe('db.enums (facade)', () => {
-    const roleAccessor = { values: ['user', 'admin'] };
-    const contextWithEnums = {
-      id: 'context-instance',
-      enums: { __unbound__: { Role: roleAccessor } },
+    const roleEnum = {
+      codecId: 'mongo/string@1',
+      members: [
+        { name: 'User', value: 'user' },
+        { name: 'Admin', value: 'admin' },
+      ],
+    } as const;
+
+    const contractWithEnum = {
+      domain: {
+        namespaces: {
+          __unbound__: { models: {}, enum: { Role: roleEnum } },
+        },
+      },
+    } as unknown as AnyMongoContract;
+
+    const stringCodec = {
+      dataType: { fromContract: (json: unknown) => json, toContract: (value: unknown) => value },
+      fromDataTypeValue: (value: unknown) => value,
+      toDataTypeValue: (value: unknown) => value,
     };
 
     beforeEach(() => {
-      mocks.createMongoExecutionContext.mockReturnValue(contextWithEnums);
+      mocks.deserializeContract.mockReturnValue(contractWithEnum);
+      mocks.createMongoExecutionContext.mockReturnValue({
+        id: 'context-instance',
+        contract: contractWithEnum,
+        codecs: { get: (id: string) => (id === 'mongo/string@1' ? stringCodec : undefined) },
+      });
     });
 
-    it('holds the accessors of the execution context, the ones the ORM checks writes against', () => {
-      const db = mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb' });
+    function roleAccessor() {
+      const db = mongo({ contract: contractWithEnum, url: 'mongodb://localhost:27017/mydb' });
+      return db.enums['Role']!;
+    }
 
-      expect(db.enums).toBe(contextWithEnums.enums.__unbound__);
-      expect(db.enums['Role']).toBe(roleAccessor);
+    it('refuses to build a client whose runtime has no codec for an enum', () => {
+      mocks.createMongoExecutionContext.mockReturnValue({
+        id: 'context-instance',
+        contract: contractWithEnum,
+        codecs: { get: () => undefined },
+      });
+      expect(() =>
+        mongo({ contract: contractWithEnum, url: 'mongodb://localhost:27017/mydb' }),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'RUNTIME.CODEC_DESCRIPTOR_MISSING',
+          message:
+            "No codec is registered for codecId 'mongo/string@1', which a domain enum in the contract uses.",
+        }),
+      );
+    });
+
+    it('exposes the enum accessor at db.enums.Role', () => {
+      expect(roleAccessor().values).toEqual(['user', 'admin']);
     });
 
     it('builds the enums surface eagerly, without connecting the driver', () => {
-      const db = mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb' });
+      const db = mongo({ contract: contractWithEnum, url: 'mongodb://localhost:27017/mydb' });
 
-      expect(db.enums['Role']).toBe(roleAccessor);
+      expect(db.enums['Role']!.values).toEqual(['user', 'admin']);
       expect(mocks.driverFromConnection).not.toHaveBeenCalled();
       expect(mocks.createMongoRuntime).not.toHaveBeenCalled();
     });

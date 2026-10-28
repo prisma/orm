@@ -1,6 +1,7 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
-import type { NamespacedEnums } from '@internal/contract/enum-accessor';
+import { buildNamespacedEnums, type NamespacedEnums } from '@internal/contract/enum-accessor';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { runtimeError } from '@internal/framework-components/runtime';
 import type {
   AnyMongoTypeMaps,
   MongoContract,
@@ -47,7 +48,19 @@ export function buildMongoStaticContext<
     adapter: mongoRuntimeAdapter,
   });
   const context = createMongoExecutionContext<TContract>({ contract, stack });
-  const enums = context.enums[UNBOUND_NAMESPACE_ID];
+  const enums = Object.freeze(
+    buildNamespacedEnums<TContract>(context.contract.domain, (codecId) => {
+      const codec = context.codecs.get(codecId);
+      if (codec === undefined) {
+        throw runtimeError(
+          'RUNTIME.CODEC_DESCRIPTOR_MISSING',
+          `No codec is registered for codecId '${codecId}', which a domain enum in the contract uses.`,
+          { codecId },
+        );
+      }
+      return codec;
+    }),
+  )[UNBOUND_NAMESPACE_ID];
   assertDefined(enums, 'the unbound namespace always exists on a mongo builder output');
   const query = mongoQuery({ context });
   const raw = mongoRaw({ context });
