@@ -31,6 +31,24 @@ export function connectionLost(cause: Error): SqlConnectionError {
   });
 }
 
+/** Node's socket and DNS error codes, and whether a retry can succeed after each, as the Postgres driver classifies them. */
+const NODE_CONNECTION_CODES: ReadonlyMap<string, boolean> = new Map([
+  ['ECONNRESET', true],
+  ['ETIMEDOUT', true],
+  ['EPIPE', true],
+  ['EAI_AGAIN', true],
+  ['ECONNREFUSED', false],
+  ['ENOTFOUND', false],
+  ['EHOSTUNREACH', false],
+]);
+
+/** Whether a retry can succeed after `error`, for a Node socket or DNS error; undefined for any other. */
+function nodeConnectionTransience(error: unknown): boolean | undefined {
+  return error instanceof Error && 'code' in error && typeof error.code === 'string'
+    ? NODE_CONNECTION_CODES.get(error.code)
+    : undefined;
+}
+
 const ER_GET_CONNECTION_TIMEOUT = 45028;
 const ER_INITIAL_SQL_ERROR = 45030;
 const ER_CANNOT_RETRIEVE_RSA_KEY = 45044;
@@ -38,8 +56,9 @@ const ER_CANNOT_RETRIEVE_RSA_KEY = 45044;
 /** The errors MySQL refuses a sign-in with: access denied, access denied for a socket-authenticated account, and an authentication plugin the server has not loaded. Another attempt with the same URL fails the same way. */
 const SIGN_IN_REFUSED: ReadonlySet<number> = new Set([1045, 1698, 1524]);
 
-/** Whether `error` is one another attempt to connect with the same settings cannot get past: a refused sign-in, a sign-in that needs the server's public key, or session setup MySQL refuses. */
+/** Whether `error` is one another attempt to connect with the same settings cannot get past: a refused connection, an unknown or unreachable host, a refused sign-in, a sign-in that needs the server's public key, or session setup MySQL refuses. */
 export function connectingCannotSucceed(error: unknown): boolean {
+  if (nodeConnectionTransience(error) === false) return true;
   return (
     isMariadbError(error) &&
     (SIGN_IN_REFUSED.has(error.errno) ||
@@ -94,9 +113,13 @@ function poolTimedOut(error: MariadbError): unknown {
 }
 
 /**
- * An error from the `mariadb` package as the driver reports it, in the family's types as the Postgres driver reports its own: a lost connection and a pool that gave no connection in time as a transient `SqlConnectionError`; a sign-in that needs the server's public key, and session setup that fails, as a `SqlConnectionError` that is not transient; a sign-in MySQL refuses, as Postgres's 28P01, and an error MySQL reported about a statement as `SqlQueryError` with its SQLSTATE, a constraint violation with the SQLSTATE Postgres sends; and any other error unchanged. A pool that timed out because it could not sign in reports the sign-in's error.
+ * An error from the `mariadb` package as the driver reports it, in the family's types as the Postgres driver reports its own: a Node socket or DNS error as a `SqlConnectionError`, transient as the Postgres driver's table says; a lost connection and a pool that gave no connection in time as a transient `SqlConnectionError`; a sign-in that needs the server's public key, and session setup that fails, as a `SqlConnectionError` that is not transient; a sign-in MySQL refuses, as Postgres's 28P01, and an error MySQL reported about a statement as `SqlQueryError` with its SQLSTATE, a constraint violation with the SQLSTATE Postgres sends; and any other error unchanged. A pool that timed out because it could not connect in a way no retry can get past reports that error.
  */
 export function normalizeMysqlError(error: unknown): unknown {
+  const transient = nodeConnectionTransience(error);
+  if (transient !== undefined && error instanceof Error) {
+    return new SqlConnectionError(error.message, { cause: error, transient });
+  }
   if (!isMariadbError(error)) return error;
   if (error.errno === ER_CANNOT_RETRIEVE_RSA_KEY) return publicKeyNeeded(error);
   if (error.errno === ER_INITIAL_SQL_ERROR) {

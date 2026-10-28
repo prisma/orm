@@ -60,7 +60,7 @@ describe('normalizeMysqlError', () => {
       errno: 45012,
       sqlState: '08S01',
       fatal: true,
-      sqlMessage: 'connect ECONNREFUSED 127.0.0.1:1',
+      sqlMessage: 'Connection timeout: failed to create socket after 1001ms',
     });
     const error = Object.assign(
       sqlError({
@@ -75,8 +75,72 @@ describe('normalizeMysqlError', () => {
       expect.objectContaining({
         kind: 'sql_connection',
         transient: true,
-        message: expect.stringContaining('ECONNREFUSED'),
+        message: expect.stringContaining('failed to create socket'),
         cause: error,
+      }),
+    );
+  });
+
+  it('reports a socket error by its Node code with the Postgres driver table, a refused connection and an unknown or unreachable host as not transient, directly and as the reason a pool gave no connection', () => {
+    const socketError = (code: string, errno: number | undefined) =>
+      Object.assign(errno === undefined ? new AggregateError([]) : new Error(`connect ${code}`), {
+        code,
+        errno,
+        fatal: true,
+        sqlState: 'HY000',
+      });
+    const timedOut = (cause: Error) =>
+      Object.assign(
+        sqlError({
+          errno: 45028,
+          sqlState: 'HY000',
+          fatal: false,
+          sqlMessage: 'pool failed to retrieve a connection from pool',
+        }),
+        { cause },
+      );
+    const cases = [
+      socketError('ECONNREFUSED', -61),
+      socketError('ECONNREFUSED', undefined),
+      socketError('ENOTFOUND', -3008),
+      socketError('EHOSTUNREACH', -65),
+      socketError('ECONNRESET', -54),
+      socketError('ETIMEDOUT', -60),
+      socketError('EPIPE', -32),
+      socketError('EAI_AGAIN', -3001),
+    ];
+    expect(
+      cases.map((error) => {
+        const direct = Object(normalizeMysqlError(error));
+        const pooled = Object(normalizeMysqlError(timedOut(error)));
+        return {
+          direct: {
+            kind: direct.kind,
+            transient: direct.transient,
+            sqlState: direct.sqlState,
+            message: direct.message,
+            isCause: direct.cause === error,
+          },
+          pooled: {
+            kind: pooled.kind,
+            transient: pooled.transient,
+            isCause: pooled.cause === error,
+          },
+        };
+      }),
+    ).toEqual(
+      cases.map((error) => {
+        const transient = !['ECONNREFUSED', 'ENOTFOUND', 'EHOSTUNREACH'].includes(error.code);
+        return {
+          direct: {
+            kind: 'sql_connection',
+            transient,
+            sqlState: undefined,
+            message: error.message,
+            isCause: true,
+          },
+          pooled: { kind: 'sql_connection', transient, isCause: !transient },
+        };
       }),
     );
   });
