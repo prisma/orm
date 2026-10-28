@@ -5,6 +5,7 @@ import { readTextOrBytes } from '../src/core/text-or-bytes';
 const BINARY = 63;
 const UTF8MB4 = 224;
 const ZEROFILL = 1 << 6;
+const NOT_FIXED = 31;
 
 interface FieldShape {
   readonly type: string | undefined;
@@ -141,7 +142,7 @@ describe('readTextOrBytes', () => {
       [0, '0'],
       [-0, '-0'],
     ];
-    expect(floats.map(([number]) => read({ type: 'FLOAT', number }))).toEqual(
+    expect(floats.map(([number]) => read({ type: 'FLOAT', scale: NOT_FIXED, number }))).toEqual(
       floats.map(([, text]) => text),
     );
   });
@@ -169,8 +170,33 @@ describe('readTextOrBytes', () => {
       [0, '0'],
       [-0, '-0'],
     ];
-    expect(doubles.map(([number]) => read({ type: 'DOUBLE', number }))).toEqual(
+    expect(doubles.map(([number]) => read({ type: 'DOUBLE', scale: NOT_FIXED, number }))).toEqual(
       doubles.map(([, text]) => text),
+    );
+  });
+
+  it('reads a FLOAT or DOUBLE declared with decimals as MySQL writes it over the text protocol: the shortest digits, rounded to the declared decimals ties to even or padded with zeros, in fixed notation', () => {
+    const declared: readonly (readonly [string, number, number, string])[] = [
+      ['FLOAT', 6, 1234.5677490234375, '1234.567749'],
+      ['FLOAT', 6, 1234.567749, '1234.567749'],
+      ['FLOAT', 6, 98765.4296875, '98765.429688'],
+      ['FLOAT', 6, 0.10000000149011612, '0.100000'],
+      ['FLOAT', 20, 0.10000000149011612, '0.10000000149011612000'],
+      ['FLOAT', 1, 2097152.25, '2097152.2'],
+      ['FLOAT', 1, 2097152.75, '2097152.8'],
+      ['FLOAT', 1, -7, '-7.0'],
+      ['DOUBLE', 2, 1.5, '1.50'],
+      ['DOUBLE', 2, 100, '100.00'],
+      ['DOUBLE', 2, -12345678.9, '-12345678.90'],
+      ['DOUBLE', 2, 1e20, '100000000000000000000.00'],
+      ['DOUBLE', 2, 0, '0.00'],
+      ['DOUBLE', 30, 1e-25, '0.000000000000000000000000100000'],
+      ['DOUBLE', 30, 0.3333333333333333, '0.333333333333333300000000000000'],
+      ['DOUBLE', 30, 123456789.12345679, '123456789.123456790000000000000000000000'],
+      ['DOUBLE', 0, 5, '5'],
+    ];
+    expect(declared.map(([type, scale, number]) => read({ type, scale, number }))).toEqual(
+      declared.map(([, , , text]) => text),
     );
   });
 });

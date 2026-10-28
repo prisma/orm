@@ -401,6 +401,39 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     );
   });
 
+  it('reads a FLOAT and a DOUBLE declared with decimals with exactly those decimals, as MySQL writes them over the text protocol, whether the row came over the text protocol or prepared', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(url, async (driver) => {
+        await driver.execute({
+          sql: 'CREATE TABLE t (id INT, f FLOAT(12,6), d DOUBLE(10,2), w DOUBLE(40,30), z FLOAT(10,1))',
+        });
+        await driver.execute({
+          sql: 'INSERT INTO t VALUES (1, 1234.5677e0, 1.5e0, 0.1e0, 5e0), (2, 0.1e0, 100e0, 1e-25, -7e0), (3, -0.5e0, -12345678.9e0, 1e0/3e0, 0e0), (4, 98765.4321e0, 0e0, 123456789.123456789e0, 2097152.3e0)',
+        });
+        const rows = [
+          { f: '1234.567749', d: '1.50', w: '0.100000000000000000000000000000', z: '5.0' },
+          { f: '0.100000', d: '100.00', w: '0.000000000000000000000000100000', z: '-7.0' },
+          { f: '-0.500000', d: '-12345678.90', w: '0.333333333333333300000000000000', z: '0.0' },
+          {
+            f: '98765.429688',
+            d: '0.00',
+            w: '123456789.123456790000000000000000000000',
+            z: '2097152.2',
+          },
+        ];
+        expect({
+          text: await collect(driver.query({ sql: 'SELECT f, d, w, z FROM t ORDER BY id' })),
+          prepared: await collect(
+            driver.query({
+              sql: 'SELECT f, d, w, z FROM t WHERE ?1 = ?1 ORDER BY id',
+              params: [1],
+            }),
+          ),
+        }).toEqual({ text: rows, prepared: rows });
+      }),
+    );
+  });
+
   it('refuses a statement whose placeholder count MySQL reads differently from the values, before running it, under NO_BACKSLASH_ESCAPES set on a held connection', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
       withDriver(url, async (driver) => {

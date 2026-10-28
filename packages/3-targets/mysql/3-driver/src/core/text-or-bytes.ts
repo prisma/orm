@@ -1,8 +1,11 @@
 import type { FieldInfo, TypeCastFunction } from 'mariadb';
-import { mysqlDoubleText, mysqlFloatText } from './float-text';
+import { mysqlDoubleText, mysqlFixedDecimalsText, mysqlFloatText } from './float-text';
 
 /** MySQL's `binary` collation, which marks a string or blob column that holds bytes. */
 const BINARY_COLLATION = 63;
+
+/** The decimals MySQL reports for a FLOAT or DOUBLE column declared without them. */
+const NOT_FIXED_DECIMALS = 31;
 
 /** The column flag MySQL sets on a `ZEROFILL` number and on `YEAR`, whose text it pads with zeros to the column's width. */
 const ZEROFILL = 1 << 6;
@@ -65,11 +68,12 @@ function sameTextEitherProtocol(field: FieldInfo, text: string): string {
 }
 
 /**
- * A FLOAT or DOUBLE as MySQL writes it over the text protocol. The package reads the number the server sent, whichever the protocol; the text it writes for a prepared statement's binary number differs from MySQL's in digits, notation and the sign of zero.
+ * A FLOAT or DOUBLE as MySQL writes it over the text protocol, with the column's declared decimals if it has them. The package reads the number the server sent, whichever the protocol; the text it writes for a prepared statement's binary number differs from MySQL's in digits, notation and the sign of zero.
  */
 function floatingText(field: FieldInfo): string | null {
   const value = field.float();
   if (value === null) return null;
+  if (field.scale < NOT_FIXED_DECIMALS) return mysqlFixedDecimalsText(value, field.scale);
   return field.type === 'FLOAT' ? mysqlFloatText(value) : mysqlDoubleText(value);
 }
 
