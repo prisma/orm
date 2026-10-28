@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mysqlConnectionOptions, mysqlPoolOptions } from '../src/core/connection-options';
 import { SESSION_SETUP } from '../src/core/session-setup';
+import { readTextOrBytes } from '../src/core/text-or-bytes';
 
 describe('mysqlConnectionOptions', () => {
   it('reads the server, credentials, database and TLS settings from the URL', () => {
@@ -41,15 +42,11 @@ describe('mysqlConnectionOptions', () => {
     });
   });
 
-  it('reads BIGINT, DECIMAL, dates and JSON exactly, and BIT(1) as bytes', () => {
-    expect(mysqlConnectionOptions('mysql://root@localhost/app')).toMatchObject({
-      bigIntAsNumber: false,
-      decimalAsNumber: false,
-      dateStrings: true,
-      jsonStrings: true,
-      autoJsonMap: false,
-      bitOneIsBoolean: false,
-    });
+  it('reads every column as text or bytes, on the pool and on a single connection', () => {
+    expect({
+      connection: mysqlConnectionOptions('mysql://root@localhost/app').typeCast,
+      pool: mysqlPoolOptions('mysql://root@localhost/app').typeCast,
+    }).toEqual({ connection: readTextOrBytes, pool: readTextOrBytes });
   });
 
   it('keeps the prepared-statement cache off unless statementCacheSize turns it on', () => {

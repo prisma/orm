@@ -1,6 +1,6 @@
 import type { FieldInfo } from 'mariadb';
 import { describe, expect, it } from 'vitest';
-import { serverText } from '../src/core/server-text';
+import { readTextOrBytes } from '../src/core/text-or-bytes';
 
 const BINARY = 63;
 const UTF8MB4 = 224;
@@ -22,9 +22,15 @@ function field(type: string, collation: number) {
   return { value, calls };
 }
 
-describe('serverText', () => {
+describe('readTextOrBytes', () => {
   it.each([
     ['INT', BINARY, 'string'],
+    ['TINY', BINARY, 'string'],
+    ['YEAR', BINARY, 'string'],
+    ['FLOAT', BINARY, 'string'],
+    ['DOUBLE', BINARY, 'string'],
+    ['DATE', BINARY, 'string'],
+    ['TIME', BINARY, 'string'],
     ['BIGINT', BINARY, 'string'],
     ['NEWDECIMAL', BINARY, 'string'],
     ['DATETIME', BINARY, 'string'],
@@ -39,7 +45,7 @@ describe('serverText', () => {
     ['GEOMETRY', BINARY, 'buffer'],
   ])('reads a %s column in collation %i with %s()', (type, collation, call) => {
     const { value, calls } = field(type, collation);
-    serverText(value, () => 'next');
+    readTextOrBytes(value, () => 'next');
     expect(calls).toEqual([call]);
   });
 });

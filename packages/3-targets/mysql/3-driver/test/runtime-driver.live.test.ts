@@ -78,7 +78,7 @@ async function connectionId(driver: ReturnType<typeof mysqlRuntimeDriver.create>
 }
 
 describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => {
-  it('streams a bigint as a bigint, a datetime and JSON as text, and a value bound apart from the SQL', async (test) => {
+  it('streams an integer, a datetime and JSON as text, and a value bound apart from the SQL', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
       withDriver(url, async (driver) => {
         expect(
@@ -88,7 +88,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
               params: ["it's"],
             }),
           ),
-        ).toEqual([{ i: 42n, d: '2024-01-02 03:04:05.678', j: '[1, "a"]', p: "it's" }]);
+        ).toEqual([{ i: '42', d: '2024-01-02 03:04:05.678', j: '[1, "a"]', p: "it's" }]);
       }),
     );
   });
@@ -269,9 +269,9 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
             }),
           ),
         }).toEqual({
-          compared: [{ lt: 0n, text_lt: 1n }],
-          limited: [{ n: 1n }],
-          offset: [{ n: 1n }],
+          compared: [{ lt: '0', text_lt: '1' }],
+          limited: [{ n: '1' }],
+          offset: [{ n: '1' }],
         });
       }),
     );
@@ -297,10 +297,10 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
           ),
         }).toEqual({
           rows: [
-            { b: -(2n ** 63n), v: Buffer.from([0, 1, 255]), d: 1e19 },
-            { b: 2n ** 63n - 1n, v: null, d: 1e20 },
+            { b: '-9223372036854775808', v: Buffer.from([0, 1, 255]), d: '10000000000000000000' },
+            { b: '9223372036854775807', v: null, d: '100000000000000000000' },
           ],
-          below: [{ n: 1n }],
+          below: [{ n: '1' }],
         });
       }),
     );
@@ -327,42 +327,55 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     );
   });
 
-  it('reads each column type from the binary protocol in the form its codec takes', async (test) => {
+  it('returns every column type as text, binary columns as bytes and NULL as null, on a pooled and a held connection', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
       withDriver(url, async (driver) => {
         await driver.execute({
-          sql: "CREATE TABLE t (i INT, b BIGINT, ub BIGINT UNSIGNED, d DECIMAL(65,30), dt DATETIME(3), dd DATE, tm TIME(3), j JSON, vc VARCHAR(10), c CHAR(3), tx TEXT, e ENUM('A','B'), vb VARBINARY(4), f FLOAT, y YEAR)",
+          sql: "CREATE TABLE t (i INT, ti TINYINT(1), b BIGINT, ub BIGINT UNSIGNED, d DECIMAL(65,30), f FLOAT, db DOUBLE, y YEAR, dt DATETIME(3), dd DATE, tm TIME(3), j JSON, vc VARCHAR(10), c CHAR(3), tx TEXT, e ENUM('A','B'), st SET('a','b'), vb VARBINARY(4), bl BLOB, bt BIT(1), n INT)",
         });
         await driver.execute({
-          sql: "INSERT INTO t VALUES (?1, ?2, ?3, ?4, ?5, '2026-10-23', '01:02:03.450', '{\"a\": 1}', ?6, 'ab', 'tx', 'B', X'00ff', 0.1, 2026)",
+          sql: "INSERT INTO t VALUES (?1, 1, ?2, ?3, ?4, 0.1, 0.1, 2026, ?5, '2026-10-23', '01:02:03.450', '{\"a\": 1}', ?6, 'ab', 'tx', 'B', 'a,b', X'00ff', X'01', b'1', NULL)",
           params: [
-            -7,
-            9223372036854775807n,
+            '-7',
+            '9223372036854775807',
             '18446744073709551615',
             '1.000000000000000000000000000001',
             '2026-10-23 01:02:03.456',
             "ħ\\'",
           ],
         });
-        expect(await collect(driver.query({ sql: 'SELECT * FROM t' }))).toEqual([
-          {
-            i: -7,
-            b: 9223372036854775807n,
-            ub: 18446744073709551615n,
-            d: '1.000000000000000000000000000001',
-            dt: '2026-10-23 01:02:03.456',
-            dd: '2026-10-23',
-            tm: '01:02:03.450000',
-            j: '{"a": 1}',
-            vc: "ħ\\'",
-            c: 'ab',
-            tx: 'tx',
-            e: 'B',
-            vb: Buffer.from([0, 255]),
-            f: 0.10000000149011612,
-            y: 2026,
-          },
-        ]);
+        const row = {
+          i: '-7',
+          ti: '1',
+          b: '9223372036854775807',
+          ub: '18446744073709551615',
+          d: '1.000000000000000000000000000001',
+          f: '0.10000000149011612',
+          db: '0.1',
+          y: '2026',
+          dt: '2026-10-23 01:02:03.456',
+          dd: '2026-10-23',
+          tm: '01:02:03.450000',
+          j: '{"a": 1}',
+          vc: "ħ\\'",
+          c: 'ab',
+          tx: 'tx',
+          e: 'B',
+          st: 'a,b',
+          vb: Buffer.from([0, 255]),
+          bl: Buffer.from([1]),
+          bt: Buffer.from([1]),
+          n: null,
+        };
+        const connection = await driver.acquireConnection();
+        try {
+          expect({
+            pooled: await collect(driver.query({ sql: 'SELECT * FROM t' })),
+            held: await collect(connection.query({ sql: 'SELECT * FROM t' })),
+          }).toEqual({ pooled: [row], held: [row] });
+        } finally {
+          await connection.release();
+        }
       }),
     );
   });
@@ -433,7 +446,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
             sql: "SELECT @@SESSION.time_zone AS tz, FIND_IN_SET('NO_BACKSLASH_ESCAPES', @@SESSION.sql_mode) AS nbe",
           }),
         );
-        expect(row).toEqual({ tz: '+00:00', nbe: 0n });
+        expect(row).toEqual({ tz: '+00:00', nbe: '0' });
       }),
     );
   });
@@ -444,10 +457,10 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
         const connection = await driver.acquireConnection();
         try {
           for await (const row of connection.query({ sql: numbers })) {
-            expect(row).toEqual({ n: 1n });
+            expect(row).toEqual({ n: '1' });
             break;
           }
-          expect(await collect(connection.query({ sql: 'SELECT 7 AS n' }))).toEqual([{ n: 7n }]);
+          expect(await collect(connection.query({ sql: 'SELECT 7 AS n' }))).toEqual([{ n: '7' }]);
         } finally {
           await connection.release();
         }
@@ -464,7 +477,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
         expect({
           quick: elapsedMs < 3000,
           next: await collect(driver.query({ sql: 'SELECT 1 AS n' })),
-        }).toEqual({ quick: true, next: [{ n: 1n }] });
+        }).toEqual({ quick: true, next: [{ n: '1' }] });
       }),
     );
   });
@@ -540,7 +553,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
       await driver.close();
       expect({ refusals, after, state: driver.state }).toEqual({
         refusals: Array(4).fill('DRIVER.CONNECTION_BUSY'),
-        after: [{ n: 7n }],
+        after: [{ n: '7' }],
         state: 'closed',
       });
     });
@@ -556,7 +569,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
         const waiting = collect(driver.query({ sql: 'SELECT 1 AS n' }));
         await expect(waiting).rejects.toMatchObject({ code: 'DRIVER.CONNECTION_FAILED' });
         await held.release();
-        expect(await collect(driver.query({ sql: 'SELECT 2 AS n' }))).toEqual([{ n: 2n }]);
+        expect(await collect(driver.query({ sql: 'SELECT 2 AS n' }))).toEqual([{ n: '2' }]);
       });
     });
   });
@@ -582,7 +595,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
           expect({
             stats,
             rows: await collect(driver.query({ sql: 'SELECT id FROM t ORDER BY id' })),
-          }).toEqual({ stats: { affectedRows: 2 }, rows: [{ id: 3 }, { id: 4 }] });
+          }).toEqual({ stats: { affectedRows: 2 }, rows: [{ id: '3' }, { id: '4' }] });
         } finally {
           await connection.release();
         }
@@ -603,10 +616,10 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
       const rest = [await iterator.next(), await iterator.next(), await iterator.next()];
       await closing;
       expect({ first, rest, closed, state: driver.state }).toEqual({
-        first: { done: false, value: { n: 1n } },
+        first: { done: false, value: { n: '1' } },
         rest: [
-          { done: false, value: { n: 2n } },
-          { done: false, value: { n: 3n } },
+          { done: false, value: { n: '2' } },
+          { done: false, value: { n: '3' } },
           { done: true, value: undefined },
         ],
         closed: true,
@@ -629,7 +642,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
       await connection.release();
       await closing;
       expect({ rows, closedBeforeRelease, closed }).toEqual({
-        rows: [{ n: 1n }],
+        rows: [{ n: '1' }],
         closedBeforeRelease: false,
         closed: true,
       });
@@ -682,7 +695,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
         await expect(collect(driver.query({ sql: 'SELECT * FROM missing' }))).rejects.toMatchObject(
           { sqlState: '42S02' },
         );
-        expect(await collect(driver.query({ sql: 'SELECT 1 AS n' }))).toEqual([{ n: 1n }]);
+        expect(await collect(driver.query({ sql: 'SELECT 1 AS n' }))).toEqual([{ n: '1' }]);
       }),
     );
   });

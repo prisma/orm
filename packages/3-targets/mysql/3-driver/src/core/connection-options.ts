@@ -3,6 +3,7 @@ import { structuredError } from '@internal/utils/structured-error';
 import { type } from 'arktype';
 import type { ConnectionConfig, PoolConfig } from 'mariadb';
 import { SESSION_SETUP } from './session-setup';
+import { readTextOrBytes } from './text-or-bytes';
 
 const positiveInteger = type('string.integer.parse').to('number.integer > 0');
 
@@ -66,12 +67,9 @@ const DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
 const DEFAULT_POOL_TIMEOUT_MS = 10_000;
 
 /**
- * Options the URL cannot change. The package reads `jsonStrings` and `bitOneIsBoolean`, which its typings leave out. Values travel only as prepared-statement parameters, so every option that would rewrite SQL on the client stays off, and `logParam` keeps values out of error messages. Rows read BIGINT as a `bigint`, DECIMAL as its digits, dates and JSON as the text MySQL sends, and BIT(1) as bytes. The connection is utf8mb4: the driver reads each statement as utf8mb4 to find its placeholders, and MySQL must read it the same way.
+ * Options the URL cannot change. Values travel only as prepared-statement parameters, so every option that would rewrite SQL on the client stays off, and `logParam` keeps values out of error messages. `typeCast` reads every column as text or bytes, so no column reaches a codec as a value the package parsed. The connection is utf8mb4: the driver reads each statement as utf8mb4 to find its placeholders, and MySQL must read it the same way.
  */
-const FIXED_OPTIONS: ConnectionConfig & {
-  readonly jsonStrings: boolean;
-  readonly bitOneIsBoolean: boolean;
-} = {
+const FIXED_OPTIONS: ConnectionConfig = {
   collation: 'UTF8MB4_UNICODE_CI',
   initSql: [...SESSION_SETUP],
   multipleStatements: false,
@@ -79,12 +77,7 @@ const FIXED_OPTIONS: ConnectionConfig & {
   permitSetMultiParamEntries: false,
   permitLocalInfile: false,
   logParam: false,
-  bigIntAsNumber: false,
-  decimalAsNumber: false,
-  dateStrings: true,
-  jsonStrings: true,
-  autoJsonMap: false,
-  bitOneIsBoolean: false,
+  typeCast: readTextOrBytes,
 };
 
 /** Refuses the URL. `parameters` names the parameters at fault; no value from the URL goes into the error, because a URL carries the password and TLS keys. */
