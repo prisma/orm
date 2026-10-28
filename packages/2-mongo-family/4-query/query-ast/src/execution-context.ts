@@ -1,4 +1,5 @@
-import type { MutationDefaults } from '@internal/framework-components/runtime';
+import type { EnumMemberCodecFor } from '@internal/contract/enum-accessor';
+import { type MutationDefaults, runtimeError } from '@internal/framework-components/runtime';
 import type { MongoCodec } from '@internal/mongo-codec';
 import type { MongoContract } from '@internal/mongo-contract';
 
@@ -10,6 +11,21 @@ import type { MongoContract } from '@internal/mongo-contract';
 export interface MongoCodecLookup {
   get(id: string): MongoCodec<string> | undefined;
   has(id: string): boolean;
+}
+
+/** The codec lookup `buildNamespacedEnums` reads enum members through: each enum's codec in `codecs`, refusing an enum whose codec `codecs` lacks with `RUNTIME.CODEC_DESCRIPTOR_MISSING`. */
+export function enumMemberCodecFor(codecs: MongoCodecLookup): EnumMemberCodecFor {
+  return (codecId) => {
+    const codec = codecs.get(codecId);
+    if (codec === undefined) {
+      throw runtimeError(
+        'RUNTIME.CODEC_DESCRIPTOR_MISSING',
+        `No codec is registered for codecId '${codecId}', which a domain enum in the contract uses.`,
+        { codecId },
+      );
+    }
+    return codec;
+  };
 }
 
 /**

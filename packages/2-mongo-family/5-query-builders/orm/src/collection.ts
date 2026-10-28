@@ -38,6 +38,7 @@ import type {
 } from '@internal/mongo-query-ast/execution';
 import {
   DeleteManyCommand,
+  enumMemberCodecFor,
   FindOneAndDeleteCommand,
   FindOneAndUpdateCommand,
   freezeMongoResultShape,
@@ -248,17 +249,7 @@ export type MongoEnumAccessors = Readonly<
 
 /** The context contract's enum accessors, each reading its members through its codec in the context. */
 export function buildEnumAccessors(context: MongoExecutionContext): MongoEnumAccessors {
-  return buildNamespacedEnums(context.contract.domain, (codecId) => {
-    const codec = context.codecs.get(codecId);
-    if (codec === undefined) {
-      throw runtimeError(
-        'RUNTIME.CODEC_DESCRIPTOR_MISSING',
-        `No codec is registered for codecId '${codecId}', which a domain enum in the contract uses.`,
-        { codecId },
-      );
-    }
-    return codec;
-  });
+  return buildNamespacedEnums(context.contract.domain, enumMemberCodecFor(context.codecs));
 }
 
 /** What a collection runs against: the execution context, whose contract, codecs and mutation defaults it uses, and the runtime that executes its plans. Mirrors the SQL ORM's `CollectionContext`. */
