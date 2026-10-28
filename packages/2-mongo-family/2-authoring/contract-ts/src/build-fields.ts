@@ -9,20 +9,6 @@ import {
 } from './build-refusals';
 import type { FieldNode, ModelNode, ValueObjectNode } from './contract-definition';
 
-function generatesNothing(field: FieldNode): boolean {
-  const contributed = field.presetContribution?.executionDefaults;
-  const calls = field.generatorCalls;
-  const values = field.generatedValues;
-  return (
-    values?.onCreate === undefined &&
-    values?.onUpdate === undefined &&
-    contributed?.onCreate === undefined &&
-    contributed?.onUpdate === undefined &&
-    calls?.onCreate === undefined &&
-    calls?.onUpdate === undefined
-  );
-}
-
 function checkField(
   field: FieldNode,
   key: FieldKey,
@@ -41,18 +27,10 @@ function checkField(
     const problem = codecTypeParamsProblem(type.codecId, type.typeParams, input.lookups);
     if (problem !== undefined) input.refusals.push({ kind: 'typeParamsInvalid', key, problem });
   }
-  if (field.presetContribution !== undefined && type.kind === 'scalar' && generatesNothing(field)) {
-    input.warnings.push({
-      kind: 'presetWithoutEffect',
-      key,
-      preset: field.presetContribution.preset,
-      codecId: type.codecId,
-    });
-  }
 }
 
 /**
- * Checks each field of the models and value objects on its own: its enum is declared, its data type accepts its type parameters, and a preset that made it generates a value.
+ * Checks each field of the models and value objects on its own: its enum is declared, and its data type accepts its type parameters.
  */
 export function checkFields(input: {
   readonly models: readonly ModelNode[];

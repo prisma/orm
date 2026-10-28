@@ -56,11 +56,11 @@ function makeTaskContract(): PostgresContract {
     sqlFamilyPack,
     postgresPack,
     { ...postgresTypeLookups, enums: { Priority }, createNamespace: postgresCreateNamespace },
-    ({ field: f, model: m }) => ({
+    ({ field: f, model: m, type }) => ({
       models: {
         Task: m('Task', {
           fields: {
-            id: f.text().id(),
+            id: f.column(type.String()).id(),
             priority: f.namedType(Priority).optional(),
           },
         }),

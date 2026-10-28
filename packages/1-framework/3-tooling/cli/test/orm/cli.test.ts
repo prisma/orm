@@ -104,7 +104,7 @@ describe('the orm command family', () => {
       { from: 'migrate deploy', flag: undefined, replacement: '{bin} db migrate' },
       { from: 'migrate status', flag: undefined, replacement: '{bin} migration status' },
       { from: 'migrate diff', flag: undefined, replacement: '{bin} db update --dry-run' },
-      { from: 'migrate reset', flag: undefined, replacement: '{bin} db migrate' },
+      { from: 'migrate reset', flag: undefined, replacement: '{bin} db update' },
       { from: 'migrate resolve', flag: undefined, replacement: '{bin} db sign <migration>' },
     ]);
   });
@@ -194,8 +194,8 @@ describe('a retired invocation', () => {
     },
     {
       verb: 'reset',
-      why: "Prisma 8 never drops a database: drop and recreate it with your database's own tools, then `db migrate` applies every migration; while Prisma 7 still owns this project's migrations, run `migrate reset` with Prisma 7's CLI instead.",
-      command: 'prisma-test db migrate',
+      why: "Prisma 8 has no reset: `db update` moves the database to the contract without a reset and asks before losing data, on a database whose migration history does not need to be kept; a database that changes only through migrations is moved with `db migrate`; while Prisma 7 still owns this project's migrations, run `migrate reset` with Prisma 7's CLI instead.",
+      command: 'prisma-test db update',
     },
     {
       verb: 'resolve',

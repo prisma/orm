@@ -1,0 +1,3783 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "sql",
+  "target": "postgres",
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "roots": {
+    "Bool": {
+      "model": "Bool",
+      "namespace": "public"
+    },
+    "Bytea": {
+      "model": "Bytea",
+      "namespace": "public"
+    },
+    "CreatedAt": {
+      "model": "CreatedAt",
+      "namespace": "public"
+    },
+    "CreatedAtJsDate": {
+      "model": "CreatedAtJsDate",
+      "namespace": "public"
+    },
+    "CreatedAtString": {
+      "model": "CreatedAtString",
+      "namespace": "public"
+    },
+    "Cuid2Column": {
+      "model": "Cuid2Column",
+      "namespace": "public"
+    },
+    "DateColumn": {
+      "model": "DateColumn",
+      "namespace": "public"
+    },
+    "DateStringBothPhases": {
+      "model": "DateStringBothPhases",
+      "namespace": "public"
+    },
+    "DateTimeColumn": {
+      "model": "DateTimeColumn",
+      "namespace": "public"
+    },
+    "Float8": {
+      "model": "Float8",
+      "namespace": "public"
+    },
+    "GeneratedCuid2": {
+      "model": "GeneratedCuid2",
+      "namespace": "public"
+    },
+    "GeneratedKsuid": {
+      "model": "GeneratedKsuid",
+      "namespace": "public"
+    },
+    "GeneratedNanoid": {
+      "model": "GeneratedNanoid",
+      "namespace": "public"
+    },
+    "GeneratedNanoidSized": {
+      "model": "GeneratedNanoidSized",
+      "namespace": "public"
+    },
+    "GeneratedUlid": {
+      "model": "GeneratedUlid",
+      "namespace": "public"
+    },
+    "GeneratedUuidv4": {
+      "model": "GeneratedUuidv4",
+      "namespace": "public"
+    },
+    "GeneratedUuidv4Id": {
+      "model": "GeneratedUuidv4Id",
+      "namespace": "public"
+    },
+    "GeneratedUuidv7": {
+      "model": "GeneratedUuidv7",
+      "namespace": "public"
+    },
+    "IdCuid2": {
+      "model": "IdCuid2",
+      "namespace": "public"
+    },
+    "IdKsuid": {
+      "model": "IdKsuid",
+      "namespace": "public"
+    },
+    "IdNanoid": {
+      "model": "IdNanoid",
+      "namespace": "public"
+    },
+    "IdNanoidSized": {
+      "model": "IdNanoidSized",
+      "namespace": "public"
+    },
+    "IdUlid": {
+      "model": "IdUlid",
+      "namespace": "public"
+    },
+    "IdUuidv4Native": {
+      "model": "IdUuidv4Native",
+      "namespace": "public"
+    },
+    "IdUuidv4String": {
+      "model": "IdUuidv4String",
+      "namespace": "public"
+    },
+    "IdUuidv4StringNamed": {
+      "model": "IdUuidv4StringNamed",
+      "namespace": "public"
+    },
+    "IdUuidv7Native": {
+      "model": "IdUuidv7Native",
+      "namespace": "public"
+    },
+    "IdUuidv7String": {
+      "model": "IdUuidv7String",
+      "namespace": "public"
+    },
+    "Int4": {
+      "model": "Int4",
+      "namespace": "public"
+    },
+    "Int8": {
+      "model": "Int8",
+      "namespace": "public"
+    },
+    "JsonbColumn": {
+      "model": "JsonbColumn",
+      "namespace": "public"
+    },
+    "KsuidColumn": {
+      "model": "KsuidColumn",
+      "namespace": "public"
+    },
+    "MappedUpdatedAt": {
+      "model": "MappedUpdatedAt",
+      "namespace": "public"
+    },
+    "NanoidColumn": {
+      "model": "NanoidColumn",
+      "namespace": "public"
+    },
+    "NanoidSized": {
+      "model": "NanoidSized",
+      "namespace": "public"
+    },
+    "NumericColumn": {
+      "model": "NumericColumn",
+      "namespace": "public"
+    },
+    "OptionalCreatedAt": {
+      "model": "OptionalCreatedAt",
+      "namespace": "public"
+    },
+    "Text": {
+      "model": "Text",
+      "namespace": "public"
+    },
+    "TimeOnUpdate": {
+      "model": "TimeOnUpdate",
+      "namespace": "public"
+    },
+    "TimeStringOnCreate": {
+      "model": "TimeStringOnCreate",
+      "namespace": "public"
+    },
+    "TimeWithoutPrecision": {
+      "model": "TimeWithoutPrecision",
+      "namespace": "public"
+    },
+    "TimestampBare": {
+      "model": "TimestampBare",
+      "namespace": "public"
+    },
+    "TimestampBothPhases": {
+      "model": "TimestampBothPhases",
+      "namespace": "public"
+    },
+    "TimestampNamedPrecision": {
+      "model": "TimestampNamedPrecision",
+      "namespace": "public"
+    },
+    "TimestampStringOnUpdate": {
+      "model": "TimestampStringOnUpdate",
+      "namespace": "public"
+    },
+    "TimestamptzBare": {
+      "model": "TimestamptzBare",
+      "namespace": "public"
+    },
+    "TimestamptzJsDateOnCreate": {
+      "model": "TimestamptzJsDateOnCreate",
+      "namespace": "public"
+    },
+    "TimestamptzOnCreate": {
+      "model": "TimestamptzOnCreate",
+      "namespace": "public"
+    },
+    "TimestamptzStringBothPhases": {
+      "model": "TimestamptzStringBothPhases",
+      "namespace": "public"
+    },
+    "TimetzBothPhases": {
+      "model": "TimetzBothPhases",
+      "namespace": "public"
+    },
+    "UlidColumn": {
+      "model": "UlidColumn",
+      "namespace": "public"
+    },
+    "UpdateOnlyWithDefault": {
+      "model": "UpdateOnlyWithDefault",
+      "namespace": "public"
+    },
+    "UpdateOnlyWithOnCreate": {
+      "model": "UpdateOnlyWithOnCreate",
+      "namespace": "public"
+    },
+    "UpdatedAt": {
+      "model": "UpdatedAt",
+      "namespace": "public"
+    },
+    "UpdatedAtJsDate": {
+      "model": "UpdatedAtJsDate",
+      "namespace": "public"
+    },
+    "UpdatedAtString": {
+      "model": "UpdatedAtString",
+      "namespace": "public"
+    },
+    "UuidNative": {
+      "model": "UuidNative",
+      "namespace": "public"
+    },
+    "UuidStringColumn": {
+      "model": "UuidStringColumn",
+      "namespace": "public"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Bool": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/bool@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "Bool"
+            }
+          },
+          "Bytea": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/bytea@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "Bytea"
+            }
+          },
+          "CreatedAt": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "CreatedAt"
+            }
+          },
+          "CreatedAtJsDate": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "CreatedAtJsDate"
+            }
+          },
+          "CreatedAtString": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "CreatedAtString"
+            }
+          },
+          "Cuid2Column": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 24
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "Cuid2Column"
+            }
+          },
+          "DateColumn": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/date-temporal@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "DateColumn"
+            }
+          },
+          "DateStringBothPhases": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/date-string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "DateStringBothPhases"
+            }
+          },
+          "DateTimeColumn": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "DateTimeColumn"
+            }
+          },
+          "Float8": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/float8@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "Float8"
+            }
+          },
+          "GeneratedCuid2": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 24
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "GeneratedCuid2"
+            }
+          },
+          "GeneratedKsuid": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 27
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "GeneratedKsuid"
+            }
+          },
+          "GeneratedNanoid": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 21
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "GeneratedNanoid"
+            }
+          },
+          "GeneratedNanoidSized": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 16
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "GeneratedNanoidSized"
+            }
+          },
+          "GeneratedUlid": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 26
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "GeneratedUlid"
+            }
+          },
+          "GeneratedUuidv4": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "GeneratedUuidv4"
+            }
+          },
+          "GeneratedUuidv4Id": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "public",
+              "table": "GeneratedUuidv4Id"
+            }
+          },
+          "GeneratedUuidv7": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "GeneratedUuidv7"
+            }
+          },
+          "IdCuid2": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 24
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "public",
+              "table": "IdCuid2"
+            }
+          },
+          "IdKsuid": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 27
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "public",
+              "table": "IdKsuid"
+            }
+          },
+          "IdNanoid": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 21
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "public",
+              "table": "IdNanoid"
+            }
+          },
+          "IdNanoidSized": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 16
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "public",
+              "table": "IdNanoidSized"
+            }
+          },
+          "IdUlid": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 26
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "public",
+              "table": "IdUlid"
+            }
+          },
+          "IdUuidv4Native": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/uuid@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "public",
+              "table": "IdUuidv4Native"
+            }
+          },
+          "IdUuidv4String": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "public",
+              "table": "IdUuidv4String"
+            }
+          },
+          "IdUuidv4StringNamed": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "public",
+              "table": "IdUuidv4StringNamed"
+            }
+          },
+          "IdUuidv7Native": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/uuid@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "public",
+              "table": "IdUuidv7Native"
+            }
+          },
+          "IdUuidv7String": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "public",
+              "table": "IdUuidv7String"
+            }
+          },
+          "Int4": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "Int4"
+            }
+          },
+          "Int8": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int8@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "Int8"
+            }
+          },
+          "JsonbColumn": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/jsonb@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "JsonbColumn"
+            }
+          },
+          "KsuidColumn": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 27
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "KsuidColumn"
+            }
+          },
+          "MappedUpdatedAt": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "updated_at"
+                }
+              },
+              "namespaceId": "public",
+              "table": "MappedUpdatedAt"
+            }
+          },
+          "NanoidColumn": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 21
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "NanoidColumn"
+            }
+          },
+          "NanoidSized": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 12
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "NanoidSized"
+            }
+          },
+          "NumericColumn": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "NumericColumn"
+            }
+          },
+          "OptionalCreatedAt": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "OptionalCreatedAt"
+            }
+          },
+          "Text": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "Text"
+            }
+          },
+          "TimeOnUpdate": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/time-temporal@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "TimeOnUpdate"
+            }
+          },
+          "TimeStringOnCreate": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/time-string@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "TimeStringOnCreate"
+            }
+          },
+          "TimeWithoutPrecision": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/time-temporal@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "TimeWithoutPrecision"
+            }
+          },
+          "TimestampBare": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamp-temporal@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "TimestampBare"
+            }
+          },
+          "TimestampBothPhases": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamp-temporal@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "TimestampBothPhases"
+            }
+          },
+          "TimestampNamedPrecision": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamp-temporal@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "TimestampNamedPrecision"
+            }
+          },
+          "TimestampStringOnUpdate": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamp-string@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "TimestampStringOnUpdate"
+            }
+          },
+          "TimestamptzBare": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "TimestamptzBare"
+            }
+          },
+          "TimestamptzJsDateOnCreate": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "TimestamptzJsDateOnCreate"
+            }
+          },
+          "TimestamptzOnCreate": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "TimestamptzOnCreate"
+            }
+          },
+          "TimestamptzStringBothPhases": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "TimestamptzStringBothPhases"
+            }
+          },
+          "TimetzBothPhases": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timetz@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "TimetzBothPhases"
+            }
+          },
+          "UlidColumn": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 26
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "UlidColumn"
+            }
+          },
+          "UpdateOnlyWithDefault": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "UpdateOnlyWithDefault"
+            }
+          },
+          "UpdateOnlyWithOnCreate": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "UpdateOnlyWithOnCreate"
+            }
+          },
+          "UpdatedAt": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "UpdatedAt"
+            }
+          },
+          "UpdatedAtJsDate": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "UpdatedAtJsDate"
+            }
+          },
+          "UpdatedAtString": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "UpdatedAtString"
+            }
+          },
+          "UuidNative": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/uuid@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "UuidNative"
+            }
+          },
+          "UuidStringColumn": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                }
+              },
+              "namespaceId": "public",
+              "table": "UuidStringColumn"
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "public": {
+        "entries": {
+          "table": {
+            "Bool": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/bool@1",
+                  "dataType": "pg/bool",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "Bytea": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/bytea@1",
+                  "dataType": "pg/bytea",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "CreatedAt": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "CreatedAtJsDate": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/timestamptz-date@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "CreatedAtString": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "Cuid2Column": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 24
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "DateColumn": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/date-temporal@1",
+                  "dataType": "pg/date",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "DateStringBothPhases": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/date-string@1",
+                  "dataType": "pg/date",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "DateTimeColumn": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "Float8": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "GeneratedCuid2": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 24
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "GeneratedKsuid": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 27
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "GeneratedNanoid": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 21
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "GeneratedNanoidSized": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 16
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "GeneratedUlid": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 26
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "GeneratedUuidv4": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "GeneratedUuidv4Id": {
+              "columns": {
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "GeneratedUuidv7": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "IdCuid2": {
+              "columns": {
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 24
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "IdKsuid": {
+              "columns": {
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 27
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "IdNanoid": {
+              "columns": {
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 21
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "IdNanoidSized": {
+              "columns": {
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 16
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "IdUlid": {
+              "columns": {
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 26
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "IdUuidv4Native": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/uuid@1",
+                  "dataType": "pg/uuid",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "IdUuidv4String": {
+              "columns": {
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "IdUuidv4StringNamed": {
+              "columns": {
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"],
+                "name": "IdUuidv4StringNamed_pk"
+              },
+              "uniques": []
+            },
+            "IdUuidv7Native": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/uuid@1",
+                  "dataType": "pg/uuid",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "IdUuidv7String": {
+              "columns": {
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "Int4": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "Int8": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/int8@1",
+                  "dataType": "pg/int8",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "JsonbColumn": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/jsonb@1",
+                  "dataType": "pg/jsonb",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "KsuidColumn": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 27
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "MappedUpdatedAt": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "updated_at": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "NanoidColumn": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 21
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "NanoidSized": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 12
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "NumericColumn": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "OptionalCreatedAt": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": true
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "Text": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "TimeOnUpdate": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/time-temporal@1",
+                  "dataType": "pg/time",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "TimeStringOnCreate": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/time-string@1",
+                  "dataType": "pg/time",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "TimeWithoutPrecision": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/time-temporal@1",
+                  "dataType": "pg/time",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "TimestampBare": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/timestamp-temporal@1",
+                  "dataType": "pg/timestamp",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "TimestampBothPhases": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/timestamp-temporal@1",
+                  "dataType": "pg/timestamp",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "TimestampNamedPrecision": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/timestamp-temporal@1",
+                  "dataType": "pg/timestamp",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "TimestampStringOnUpdate": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/timestamp-string@1",
+                  "dataType": "pg/timestamp",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "TimestamptzBare": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "TimestamptzJsDateOnCreate": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/timestamptz-date@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "TimestamptzOnCreate": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "TimestamptzStringBothPhases": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "TimetzBothPhases": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/timetz@1",
+                  "dataType": "pg/timetz",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "UlidColumn": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 26
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "UpdateOnlyWithDefault": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "UpdateOnlyWithOnCreate": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "UpdatedAt": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "UpdatedAtJsDate": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/timestamptz-date@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "UpdatedAtString": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "UuidNative": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "pg/uuid@1",
+                  "dataType": "pg/uuid",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            },
+            "UuidStringColumn": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "value": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            }
+          }
+        },
+        "id": "public",
+        "kind": "postgres-schema"
+      }
+    },
+    "storageHash": "d44d725316bd8067730874483a24dfcaeef20dc26199e383a7b408b314483b10"
+  },
+  "execution": {
+    "executionHash": "ceb90e72bf9e61b35dd8432c4b5d055abb98d2f8718136762e9a3e1c488a8e79",
+    "mutations": {
+      "defaults": [
+        {
+          "onCreate": {
+            "id": "instantNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "CreatedAt",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "CreatedAtJsDate",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestamptzStringNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "CreatedAtString",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "plainDateNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "DateColumn",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "dateStringNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "dateStringNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "DateStringBothPhases",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "GeneratedCuid2",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "ksuid",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "GeneratedKsuid",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "nanoid",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "GeneratedNanoid",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "nanoid",
+            "kind": "generator",
+            "params": {
+              "size": 16
+            }
+          },
+          "ref": {
+            "entry": "GeneratedNanoidSized",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "ulid",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "GeneratedUlid",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv4",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "GeneratedUuidv4",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv4",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "GeneratedUuidv4Id",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv7",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "GeneratedUuidv7",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "IdCuid2",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "ksuid",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "IdKsuid",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "nanoid",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "IdNanoid",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "nanoid",
+            "kind": "generator",
+            "params": {
+              "size": 16
+            }
+          },
+          "ref": {
+            "entry": "IdNanoidSized",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "ulid",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "IdUlid",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv4",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "IdUuidv4Native",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv4",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "IdUuidv4String",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv4",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "IdUuidv4StringNamed",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv7",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "IdUuidv7Native",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv7",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "IdUuidv7String",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "instantNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "instantNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "MappedUpdatedAt",
+            "field": "updated_at",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "instantNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "OptionalCreatedAt",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onUpdate": {
+            "id": "plainTimeNow",
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
+          },
+          "ref": {
+            "entry": "TimeOnUpdate",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timeStringNow",
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
+          },
+          "ref": {
+            "entry": "TimeStringOnCreate",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "plainTimeNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "TimeWithoutPrecision",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "plainDateTimeNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "plainDateTimeNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "TimestampBothPhases",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "plainDateTimeNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "TimestampNamedPrecision",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onUpdate": {
+            "id": "timestampStringNow",
+            "kind": "generator",
+            "params": {
+              "precision": 6
+            }
+          },
+          "ref": {
+            "entry": "TimestampStringOnUpdate",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "TimestamptzJsDateOnCreate",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "instantNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "TimestamptzOnCreate",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestamptzStringNow",
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
+          },
+          "onUpdate": {
+            "id": "timestamptzStringNow",
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
+          },
+          "ref": {
+            "entry": "TimestamptzStringBothPhases",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timetzNow",
+            "kind": "generator",
+            "params": {
+              "precision": 6
+            }
+          },
+          "onUpdate": {
+            "id": "timetzNow",
+            "kind": "generator",
+            "params": {
+              "precision": 6
+            }
+          },
+          "ref": {
+            "entry": "TimetzBothPhases",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onUpdate": {
+            "id": "instantNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "UpdateOnlyWithDefault",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "instantNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "instantNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "UpdateOnlyWithOnCreate",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "instantNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "instantNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "UpdatedAt",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "UpdatedAtJsDate",
+            "field": "value",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestamptzStringNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "timestamptzStringNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "UpdatedAtString",
+            "field": "value",
+            "namespace": "public"
+          }
+        }
+      ]
+    }
+  },
+  "capabilities": {
+    "postgres": {
+      "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
+      "jsonAgg": true,
+      "lateral": true,
+      "limit": true,
+      "orderBy": true,
+      "returning": true
+    },
+    "sql": {
+      "checkConstraint": true,
+      "defaultInInsert": true,
+      "enums": true,
+      "forShare": true,
+      "forUpdate": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictWithoutTarget": true,
+      "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
+      "returning": true,
+      "scalarList": true
+    }
+  },
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}

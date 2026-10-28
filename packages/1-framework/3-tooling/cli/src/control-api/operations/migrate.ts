@@ -2,7 +2,7 @@
  * Backs the `migrate` command. Resolves the recorded path for every space, replay-only (no introspect/diff/planner).
  */
 
-import type { Contract } from '@internal/contract/types';
+import type { Contract, LedgerEntryRecord } from '@internal/contract/types';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type {
   ControlDriverInstance,
@@ -26,11 +26,13 @@ import {
 } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
+import { isGraphNode } from '@internal/migration-tools/migration-graph';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
-import { notOk, ok } from '@internal/utils/result';
+import { notOk, ok, type Result } from '@internal/utils/result';
 import { join } from 'pathe';
 import { type CliStructuredError, errorPathUnreachable } from '../../utils/cli-errors';
+import { errorMarkerMismatch, readLedgerQuietly } from '../../utils/marker-mismatch';
 import { migrateRunnerFailureError } from '../../utils/migrate-failure';
 import type { CliInvocation } from '../../utils/printed-command';
 import type {
@@ -166,6 +168,22 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
   // Plan every space via graph-walk. App space targets `refHash`
   // when provided, otherwise its own head; extensions always walk
   // to their own head ref.
+  const planned = await planEverySpace({
+    aggregate,
+    markers: markerRows,
+    appTarget: {
+      hash: refHash ?? requireHeadRef(aggregate.app).hash,
+      invariants: refHash === undefined ? undefined : refInvariants,
+      refName,
+    },
+    storageNameOf: (operation) => familyInstance.storageNameOf(operation),
+    migrationsDir,
+    invocation: options.invocation,
+    readLedger: (spaceId) => familyInstance.readLedger({ driver, space: spaceId }),
+  });
+  if (!planned.ok) {
+    return notOk(planned.failure);
+  }
   const allSpaces: ReadonlyArray<AggregateContractSpace> = [aggregate.app, ...aggregate.extensions];
   const perSpacePlans = new Map<string, PerSpacePlan>();
   // An empty-graph space already at its target, or a space with no marker
@@ -173,23 +191,10 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
   // they stay out of its schedule; the success envelope still lists them.
   const plansKeptFromRunner = new Map<string, PerSpacePlan>();
   for (const space of allSpaces) {
-    const isAppSpace = space.spaceId === aggregate.app.spaceId;
-    // The aggregate passed the integrity gate, so every space's head ref
-    // is resolved (the app's is synthesised from the live contract).
-    const headRef = requireHeadRef(space);
-    const spaceTargetHash = isAppSpace && refHash !== undefined ? refHash : headRef.hash;
-    const spaceRefInvariants = isAppSpace && refHash !== undefined ? refInvariants : undefined;
-    const liveMarker = markerRows.get(space.spaceId) ?? null;
-
-    const outcome = planSpacePath({
-      space,
-      aggregate,
-      targetHash: spaceTargetHash,
-      refInvariants: spaceRefInvariants,
-      liveMarker,
-      ...(isAppSpace ? { refName } : {}),
-      storageNameOf: (operation) => familyInstance.storageNameOf(operation),
-    });
+    const outcome = planned.value.get(space.spaceId);
+    if (outcome === undefined) {
+      throw new InternalError(`Unreachable: no planned outcome for space "${space.spaceId}"`);
+    }
 
     if (outcome.kind === 'at-head') {
       plansKeptFromRunner.set(space.spaceId, outcome.plan);
@@ -217,7 +222,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
       throw noInvariantPathError({
         graph: outcome.targetSpace.graph(),
         fromHash: outcome.liveHash,
-        targetHash: spaceTargetHash,
+        targetHash: outcome.targetHash,
         required: outcome.targetInvariants,
         missing: outcome.missing,
         ...(outcome.refName !== undefined ? { refName: outcome.refName } : {}),
@@ -349,6 +354,7 @@ export type SpacePathOutcome =
   | { readonly kind: 'ok'; readonly plan: PerSpacePlan }
   | { readonly kind: 'at-head'; readonly plan: PerSpacePlan }
   | { readonly kind: 'never-planned'; readonly spaceId: string; readonly targetHash: string }
+  | MarkerOutsideGraphOutcome
   | {
       readonly kind: 'unreachable';
       readonly spaceId: string;
@@ -359,6 +365,7 @@ export type SpacePathOutcome =
       readonly kind: 'unsatisfiable';
       readonly spaceId: string;
       readonly isAppSpace: boolean;
+      readonly targetHash: string;
       readonly missing: readonly string[];
       readonly targetInvariants: readonly string[];
       readonly targetSpace: AggregateContractSpace;
@@ -400,8 +407,23 @@ export function planSpacePath({
 }): SpacePathOutcome {
   const isAppSpace = space.spaceId === aggregate.app.spaceId;
   const headRef = requireHeadRef(space);
+  const graph = space.graph();
+  const extensionShipsNoMigrations = !isAppSpace && graph.nodes.size === 0;
 
-  if (space.graph().nodes.size === 0) {
+  if (
+    liveMarker !== null &&
+    !extensionShipsNoMigrations &&
+    !isGraphNode(liveMarker.storageHash, graph)
+  ) {
+    return {
+      kind: 'marker-outside-graph',
+      spaceId: space.spaceId,
+      markerHash: liveMarker.storageHash,
+      targetHash,
+    };
+  }
+
+  if (graph.nodes.size === 0) {
     const liveHash = liveMarker?.storageHash;
     if (targetHash === liveHash || (liveHash === undefined && targetHash === EMPTY_CONTRACT_HASH)) {
       return {
@@ -430,6 +452,7 @@ export function planSpacePath({
           kind: 'unsatisfiable',
           spaceId: space.spaceId,
           isAppSpace,
+          targetHash,
           missing: [...headRef.invariants].sort(),
           targetInvariants: headRef.invariants,
           targetSpace: space,
@@ -474,6 +497,7 @@ export function planSpacePath({
       kind: 'unsatisfiable',
       spaceId: space.spaceId,
       isAppSpace,
+      targetHash,
       missing: walked.missing,
       targetInvariants,
       targetSpace,
@@ -482,6 +506,97 @@ export function planSpacePath({
     };
   }
   return { kind: 'ok', plan: walked.result };
+}
+
+/**
+ * A space whose marker names a contract that is not a node of its migration graph, even when that
+ * contract is the target: no migration records how the database got there. An extension space
+ * that ships no migrations is never one: its marker advances to the extension's head without DDL.
+ */
+export interface MarkerOutsideGraphOutcome {
+  readonly kind: 'marker-outside-graph';
+  readonly spaceId: string;
+  readonly markerHash: string;
+  readonly targetHash: string;
+}
+
+/** Every outcome a run can continue past; a marker outside its graph refuses the run. */
+export type PlannedSpaceOutcome = Exclude<SpacePathOutcome, MarkerOutsideGraphOutcome>;
+
+interface PlanSpacesInputs {
+  readonly aggregate: Pick<ContractSpaceAggregate, 'targetId' | 'app' | 'extensions'>;
+  readonly markers: ReadonlyMap<string, ContractMarkerRecordLike | null>;
+  readonly appTarget: {
+    readonly hash: string;
+    readonly invariants: readonly string[] | undefined;
+    readonly refName: string | undefined;
+  };
+  readonly storageNameOf: (operation: MigrationPlanOperation) => string;
+}
+
+/** Every contract space's outcome, keyed by space, the application space first. */
+export function planSpaces(args: PlanSpacesInputs): ReadonlyMap<string, SpacePathOutcome> {
+  const { aggregate, appTarget } = args;
+  return new Map(
+    [aggregate.app, ...aggregate.extensions].map((space) => {
+      const isAppSpace = space.spaceId === aggregate.app.spaceId;
+      const outcome = planSpacePath({
+        space,
+        aggregate,
+        targetHash: isAppSpace ? appTarget.hash : requireHeadRef(space).hash,
+        refInvariants: isAppSpace ? appTarget.invariants : undefined,
+        liveMarker: args.markers.get(space.spaceId) ?? null,
+        ...(isAppSpace ? ifDefined('refName', appTarget.refName) : {}),
+        storageNameOf: args.storageNameOf,
+      });
+      return [space.spaceId, outcome] as const;
+    }),
+  );
+}
+
+/**
+ * Plans every contract space from the database's markers and refuses with
+ * `MIGRATION.MARKER_MISMATCH` for the first space, the application space first, whose marker is
+ * outside its graph, before any other failure a space reports. `db migrate`, `db migrate --show`
+ * and the control API's `migrate` all decide it here, so they refuse the same database with the
+ * same envelope.
+ */
+export async function planEverySpace(
+  args: PlanSpacesInputs & {
+    readonly migrationsDir: string;
+    readonly invocation: CliInvocation;
+    readonly readLedger: (spaceId: string) => Promise<readonly LedgerEntryRecord[]>;
+  },
+): Promise<Result<ReadonlyMap<string, PlannedSpaceOutcome>, CliStructuredError>> {
+  const { aggregate } = args;
+  const planned = planSpaces(args);
+  const continuing = new Map<string, PlannedSpaceOutcome>();
+  for (const space of [aggregate.app, ...aggregate.extensions]) {
+    const outcome = planned.get(space.spaceId);
+    if (outcome === undefined) {
+      throw new InternalError(`Unreachable: no planned outcome for space "${space.spaceId}"`);
+    }
+    if (outcome.kind !== 'marker-outside-graph') {
+      continuing.set(space.spaceId, outcome);
+      continue;
+    }
+    return notOk(
+      errorMarkerMismatch({
+        spaceId: space.spaceId,
+        owner:
+          space.spaceId === aggregate.app.spaceId
+            ? { kind: 'application', emittedContractHash: requireHeadRef(space).hash }
+            : { kind: 'extension' },
+        markerHash: outcome.markerHash,
+        targetHash: outcome.targetHash,
+        graph: space.graph(),
+        migrationsDir: args.migrationsDir,
+        ledger: await readLedgerQuietly(() => args.readLedger(space.spaceId)),
+        invocation: args.invocation,
+      }),
+    );
+  }
+  return ok(continuing);
 }
 
 /**

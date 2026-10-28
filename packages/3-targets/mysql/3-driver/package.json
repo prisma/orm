@@ -1,7 +1,7 @@
 {
   "name": "@internal/driver-mysql",
   "private": true,
-  "version": "8.0.0-rc.20",
+  "version": "8.0.0-rc.21",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -15,17 +15,19 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/errors": "workspace:8.0.0-rc.20",
-    "@internal/framework-components": "workspace:8.0.0-rc.20",
-    "@internal/sql-contract": "workspace:8.0.0-rc.20",
-    "@internal/sql-errors": "workspace:8.0.0-rc.20",
-    "@internal/utils": "workspace:8.0.0-rc.20",
+    "@internal/errors": "workspace:8.0.0-rc.21",
+    "@internal/framework-components": "workspace:8.0.0-rc.21",
+    "@internal/sql-contract": "workspace:8.0.0-rc.21",
+    "@internal/sql-errors": "workspace:8.0.0-rc.21",
+    "@internal/sql-relational-core": "workspace:8.0.0-rc.21",
+    "@internal/target-mysql": "workspace:8.0.0-rc.21",
+    "@internal/utils": "workspace:8.0.0-rc.21",
     "mysql2": "3.15.3"
   },
   "devDependencies": {
-    "@repo/test-utils": "workspace:8.0.0-rc.20",
-    "@repo/tsconfig": "workspace:8.0.0-rc.20",
-    "@repo/tsdown": "workspace:8.0.0-rc.20",
+    "@repo/test-utils": "workspace:8.0.0-rc.21",
+    "@repo/tsconfig": "workspace:8.0.0-rc.21",
+    "@repo/tsdown": "workspace:8.0.0-rc.21",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -44,6 +46,7 @@
   ],
   "exports": {
     "./control": "./dist/control.mjs",
+    "./runtime": "./dist/runtime.mjs",
     "./package.json": "./package.json"
   },
   "engines": {

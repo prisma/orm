@@ -27,7 +27,7 @@ import {
   TIMETZ_NOW_GENERATOR_ID,
 } from './date-time-now-generators';
 
-/** The "now" generator for each codec that has one. The `temporal` field presets read it. */
+/** The "now" generator for each codec that has one. The `now` generator function binds it. */
 export const postgresNowGeneratorIds = {
   [PG_DATE_TEMPORAL_CODEC_ID]: PLAIN_DATE_NOW_GENERATOR_ID,
   [PG_DATE_STRING_CODEC_ID]: DATE_STRING_NOW_GENERATOR_ID,

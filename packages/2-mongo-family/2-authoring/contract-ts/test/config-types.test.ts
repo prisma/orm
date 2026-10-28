@@ -16,7 +16,6 @@ const emptyContext: ContractSourceContext = {
 
   authoringContributions: {
     dataTypes: {},
-    field: {},
     type: {},
     entityTypes: {},
     pslBlockDescriptors: {},

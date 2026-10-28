@@ -32,7 +32,6 @@ export type {
   FieldNode,
   IndexNode,
   ModelNode,
-  PresetContributionNode,
   ReferenceRelationNode,
   RelationNode,
   ValueObjectNode,

@@ -1,4 +1,4 @@
-import { field } from '@prisma/orm-postgres/contract-builder';
+import { field, type } from '@prisma/orm-postgres/contract-builder';
 import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import {
   type CodecField,
@@ -33,19 +33,19 @@ export const titleSummary = client.public.Post.fragment((posts) =>
   posts.select('id', 'title').include('user'),
 );
 
-export const firstPage = client.fragment({ title: field.text() }, (rows) =>
+export const firstPage = client.fragment({ title: field.column(type.String()) }, (rows) =>
   rows.limit(10).offset(0),
 );
 
 export const unexpiredPosts = (now: Temporal.Instant) => client.public.Post.with(unexpired(now));
 
 export const labelled = (labels: readonly string[]) =>
-  client.fragment({ labels: field.text().many() }, (rows) =>
+  client.fragment({ labels: field.column(type.String()).many() }, (rows) =>
     rows.where((row) => row.labels.eq(labels)),
   );
 
 export const unexpired = (now: Temporal.Instant) =>
-  client.fragment({ expiresAt: field.temporal.timestamptz() }, (rows) =>
+  client.fragment({ expiresAt: field.column(type.TimestamptzTemporal()) }, (rows) =>
     rows.where((row) => row.expiresAt.gt(now)).orderBy((row) => row.expiresAt.asc()),
   );
 

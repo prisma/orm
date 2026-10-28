@@ -25,7 +25,7 @@ function interpret(schema: string) {
   return interpretSqlContract(schema, {
     target: postgresTarget,
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
-    authoringContributions: { entityTypes: testEnumEntityContributions, type: {}, field: {} },
+    authoringContributions: { entityTypes: testEnumEntityContributions, type: {} },
     composedExtensionContracts: new Map(),
     controlMutationDefaults: builtinControlMutationDefaults,
     createNamespace: createTestSqlNamespace,

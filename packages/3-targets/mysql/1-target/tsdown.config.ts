@@ -16,6 +16,7 @@ export default defineConfig({
     'src/exports/marker-lock.ts',
     'src/exports/migration.ts',
     'src/exports/pack.ts',
+    'src/exports/runtime.ts',
     'src/exports/sql-utils.ts',
   ],
 });

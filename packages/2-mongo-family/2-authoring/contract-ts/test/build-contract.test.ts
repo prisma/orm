@@ -133,7 +133,7 @@ describe('buildMongoContractFromDefinition', () => {
     }).toEqual({ with: true, without: false });
   });
 
-  it('returns the warnings the definition carries with its own', () => {
+  it('returns the warnings the definition carries', () => {
     const sourceWarning = {
       code: 'TEST_WARNING',
       message: 'a warning from the source',
@@ -142,22 +142,10 @@ describe('buildMongoContractFromDefinition', () => {
     };
     const built = build({
       warnings: [sourceWarning],
-      models: [
-        user([
-          scalar('note', { presetContribution: { preset: 'plain', executionDefaults: undefined } }),
-        ]),
-      ],
+      models: [user([])],
     });
 
-    expect(built.ok && built.value.warnings).toEqual([
-      { kind: 'source', warning: sourceWarning },
-      {
-        kind: 'presetWithoutEffect',
-        key: modelField('User', 'note'),
-        preset: 'plain',
-        codecId: 'mongo/string@1',
-      },
-    ]);
+    expect(built.ok && built.value.warnings).toEqual([{ kind: 'source', warning: sourceWarning }]);
   });
 
   it('builds an optional field that generates a value', () => {

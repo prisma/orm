@@ -1,7 +1,4 @@
-import type {
-  AuthoringFieldNamespace,
-  AuthoringTypeNamespace,
-} from '@internal/framework-components/authoring';
+import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import type {
   ExtensionPackRef,
@@ -21,23 +18,13 @@ import {
   testTypeLookups,
 } from '../../../1-core/contract/test/test-type-lookups';
 import { fixtureDataTypeSupport } from '../../contract-psl/test/fixture-data-types';
-import {
-  createFieldPresetHelper,
-  createTypeHelpersFromNamespace,
-  isNamedConstraintOptionsLike,
-} from '../src/authoring-helper-runtime';
+import { createTypeHelpersFromNamespace } from '../src/authoring-helper-runtime';
 import { createComposedAuthoringHelpers } from '../src/composed-authoring-helpers';
-import { nanoidIdPresetMirror } from './nanoid-preset-mirror';
 
 const helperLookups = {
   codecLookup: testTypeLookups.codecLookup,
   dataTypes: fixtureDataTypeSupport,
 };
-
-const textPreset = {
-  kind: 'fieldPreset',
-  output: { codecId: 'sql/text@1' },
-} as const;
 
 const bareFamilyPack = {
   kind: 'family',
@@ -70,16 +57,6 @@ const nestedTypeNamespace = {
   },
 } as const satisfies AuthoringTypeNamespace;
 
-const uniqueTextFieldNamespace = {
-  slug: {
-    ...textPreset,
-    output: {
-      ...textPreset.output,
-      unique: true,
-    },
-  },
-} as const satisfies AuthoringFieldNamespace;
-
 function withBlockedKey<T extends object>(value: T): T {
   const unsafe = Object.create(null) as Record<string, unknown>;
   for (const [key, entry] of Object.entries(value)) {
@@ -93,18 +70,6 @@ function withBlockedKey<T extends object>(value: T): T {
 }
 
 describe('authoring helper runtime', () => {
-  it('recognizes valid named constraint option objects', () => {
-    expect(isNamedConstraintOptionsLike({})).toBe(true);
-    expect(isNamedConstraintOptionsLike({ name: 'user_pkey' })).toBe(true);
-  });
-
-  it('rejects invalid named constraint option shapes', () => {
-    expect(isNamedConstraintOptionsLike(null)).toBe(false);
-    expect(isNamedConstraintOptionsLike([])).toBe(false);
-    expect(isNamedConstraintOptionsLike({ name: 123 })).toBe(false);
-    expect(isNamedConstraintOptionsLike({ name: 'user_pkey', extra: true })).toBe(false);
-  });
-
   it('creates nested type helpers and instantiates storage types', () => {
     const helpers = createTypeHelpersFromNamespace(nestedTypeNamespace, helperLookups) as {
       readonly pgvector: {
@@ -136,91 +101,9 @@ describe('authoring helper runtime', () => {
       expect.objectContaining({ code: 'CONTRACT.PACK_CONTRIBUTION_INVALID' }),
     );
   });
-
-  it('passes optional named constraint options through field preset helpers', () => {
-    const helper = createFieldPresetHelper({
-      helperPath: 'field.id.nanoid',
-      descriptor: nanoidIdPresetMirror,
-      codecLookup: testTypeLookups.codecLookup,
-      dataTypes: fixtureDataTypeSupport,
-      build: ({ args, namedConstraintOptions }) => ({
-        args,
-        namedConstraintOptions,
-      }),
-    });
-
-    expect(helper({ size: 16 }, { name: 'short_link_pkey' })).toEqual({
-      args: [{ size: 16 }],
-      namedConstraintOptions: { name: 'short_link_pkey' },
-    });
-  });
-
-  it('rejects extra arguments for helpers that accept named constraint options', () => {
-    const helper = createFieldPresetHelper({
-      helperPath: 'field.id.nanoid',
-      descriptor: nanoidIdPresetMirror,
-      codecLookup: testTypeLookups.codecLookup,
-      dataTypes: fixtureDataTypeSupport,
-      build: ({ args, namedConstraintOptions }) => ({
-        args,
-        namedConstraintOptions,
-      }),
-    });
-
-    expect(() => helper({ size: 16 }, { name: 'short_link_pkey' }, { name: 'ignored' })).toThrow(
-      'field.id.nanoid expects at most 2 argument(s), received 3',
-    );
-    expect(() => helper({ size: 16 }, { name: 'short_link_pkey' }, { name: 'ignored' })).toThrow(
-      expect.objectContaining({ code: 'CONTRACT.ARGUMENT_INVALID' }),
-    );
-  });
-
-  it('rejects malformed named constraint option objects', () => {
-    const helper = createFieldPresetHelper({
-      helperPath: 'field.id.nanoid',
-      descriptor: nanoidIdPresetMirror,
-      codecLookup: testTypeLookups.codecLookup,
-      dataTypes: fixtureDataTypeSupport,
-      build: ({ args, namedConstraintOptions }) => ({
-        args,
-        namedConstraintOptions,
-      }),
-    });
-
-    expect(() => helper({ size: 16 }, { invalid: true } as never)).toThrow(
-      'field.id.nanoid accepts an optional trailing { name?: string } constraint options object',
-    );
-  });
 });
 
 describe('createComposedAuthoringHelpers', () => {
-  it('builds custom unique field helpers and keeps core helpers available', () => {
-    const slugPack = {
-      kind: 'extension',
-      id: 'slug-pack',
-      familyId: 'sql',
-      targetId: 'postgres',
-      version: '0.0.1',
-      authoring: {
-        field: uniqueTextFieldNamespace,
-      },
-    } as const satisfies ExtensionPackRef<'sql', 'postgres'>;
-
-    const helpers = createComposedAuthoringHelpers({
-      ...testTypeLookups,
-      family: bareFamilyPack,
-      target: bareTargetPack,
-      extensions: {
-        slugPack,
-      },
-    });
-
-    const slugState = helpers.field.slug({ name: 'post_slug_key' }).build();
-    expect(slugState.unique).toEqual({ name: 'post_slug_key' });
-    expect(helpers.field.column).toBeDefined();
-    expect(helpers.type).toEqual({});
-  });
-
   it('rejects duplicate nested type helper paths across composed packs', () => {
     const targetPack = {
       ...bareTargetPack,
@@ -309,79 +192,6 @@ describe('createComposedAuthoringHelpers', () => {
         target: targetPack,
       }),
     ).toThrow(expect.objectContaining({ code: 'CONTRACT.DATA_TYPE_WRITTEN_FORM_DUPLICATE' }));
-  });
-
-  it('rejects extension helpers that collide with reserved core field helper names', () => {
-    const reservedFieldPack = {
-      kind: 'extension',
-      id: 'reserved-field-pack',
-      familyId: 'sql',
-      targetId: 'postgres',
-      version: '0.0.1',
-      authoring: {
-        field: {
-          column: textPreset,
-        },
-      },
-    } as const satisfies ExtensionPackRef<'sql', 'postgres'>;
-
-    expect(() =>
-      createComposedAuthoringHelpers({
-        ...testTypeLookups,
-        family: bareFamilyPack,
-        target: bareTargetPack,
-        extensions: {
-          reservedFieldPack,
-        },
-      }),
-    ).toThrow('Duplicate authoring field helper "column". Core field helpers reserve that name.');
-  });
-
-  it('rejects ambiguous paths registered as both a field preset and a type constructor', () => {
-    // Same path (`shared.thing`) is registered as a field preset on the
-    // target and as a type constructor on an extension pack — this would
-    // make PSL resolution ambiguous (field-preset wins per RD9, but the
-    // double-registration is still a registry-coherence bug). The
-    // composition layer rejects it with a clear error.
-    const targetWithFieldPreset = {
-      ...bareTargetPack,
-      authoring: {
-        field: {
-          shared: {
-            thing: textPreset,
-          },
-        },
-      },
-    } as const satisfies TargetPackRef<'sql', 'postgres'>;
-
-    const extensionWithTypeConstructor = {
-      kind: 'extension',
-      id: 'colliding-pack',
-      familyId: 'sql',
-      targetId: 'postgres',
-      version: '0.0.1',
-      authoring: {
-        type: {
-          shared: {
-            thing: {
-              kind: 'typeConstructor',
-              output: { codecId: 'sql/text@1' },
-            },
-          },
-        },
-      },
-    } as const satisfies ExtensionPackRef<'sql', 'postgres'>;
-
-    expect(() =>
-      createComposedAuthoringHelpers({
-        ...testTypeLookups,
-        family: bareFamilyPack,
-        target: targetWithFieldPreset,
-        extensions: {
-          extensionWithTypeConstructor,
-        },
-      }),
-    ).toThrow('Ambiguous authoring registry path "shared.thing"');
   });
 
   describe('type helpers read the codec’s data type', () => {

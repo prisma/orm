@@ -16,14 +16,6 @@ const sqlFamilyPack = {
   id: 'sql',
   familyId: 'sql',
   version: '0.0.1',
-  authoring: {
-    field: {
-      text: {
-        kind: 'fieldPreset',
-        output: { codecId: 'pg/text@1' },
-      },
-    },
-  },
 } as const satisfies FamilyPackRef<'sql'>;
 
 const postgresTargetPack = {
@@ -36,7 +28,7 @@ const postgresTargetPack = {
 } as const satisfies TargetPackRef<'sql', 'postgres'>;
 
 // A minimal codec descriptor that carries the codecId the
-// `enumType` API requires — same shape as a FieldPreset output / ColumnTypeDescriptor.
+// `enumType` API requires — same shape as a ColumnTypeDescriptor.
 const pgText = { codecId: 'pg/text@1' as const } as const;
 
 // ---------------------------------------------------------------------------
@@ -376,7 +368,7 @@ describe('enumType() — full integration via defineContract factory', () => {
           models: {
             Post: m('Post', {
               fields: {
-                id: f.text().id(),
+                id: f.column(pgText).id(),
                 status: f.namedType(Status),
               },
             }),

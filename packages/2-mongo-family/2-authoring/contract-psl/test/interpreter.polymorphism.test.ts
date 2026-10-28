@@ -36,7 +36,7 @@ function interpret(schema: string) {
   return interpretMongoContract(
     schema,
     {
-      scalarTypeCodecIds: mongoScalarTypeDescriptors,
+      scalarTypes: mongoScalarTypeDescriptors,
       defaultFunctionRegistry: new Map(),
       codecLookup: mongoCodecLookup,
       dataTypes: mongoDataTypeSupport,

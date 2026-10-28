@@ -113,7 +113,7 @@ describe('Temporal-backed codecs in a runtime without Temporal', () => {
         return {
           threw: true,
           code: structured.code,
-          namesTheStringPreset: (structured.fix ?? '').includes('updatedAtString'),
+          namesTheStringAlias: (structured.fix ?? '').includes('temporal.UpdatedAtString'),
           meta: structured.meta,
         };
       }
@@ -122,7 +122,7 @@ describe('Temporal-backed codecs in a runtime without Temporal', () => {
     expect(outcome).toEqual({
       threw: true,
       code: 'RUNTIME.TEMPORAL_UNAVAILABLE',
-      namesTheStringPreset: true,
+      namesTheStringAlias: true,
       meta: { generatorId: 'instantNow' },
     });
   });

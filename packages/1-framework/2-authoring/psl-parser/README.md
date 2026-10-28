@@ -70,7 +70,7 @@ An unqualified name is looked up in this order:
 
 1. the namespace the referring declaration is in;
 2. the document level: the members of the default namespace, the named types and the namespaces;
-3. the types the configured target and its extensions contribute (scalars, type constructors, field presets).
+3. the types the configured target and its extensions contribute (scalars, type constructors, type aliases).
 
 Other namespaces are never searched, apart from the default one, whose members are the document level. A nearer declaration hides an outer one of the same name. For `ns.Name`, `ns` must resolve to a namespace, and `Name` is looked up only inside it; the default namespace's name works as a qualifier even when no block is written for it. A resolved model, composite type or generic block always carries its namespace. The base of a named type is looked up without the named types in scope, so `Uuid = Uuid` in a `types` block refines the contributed `Uuid`.
 
@@ -78,7 +78,7 @@ The binder also resolves what attribute and block specifications describe: attri
 
 A binder belongs to one snapshot of a schema. After an edit, the caller builds a new tree, symbol table and binder.
 
-The binder only resolves names. Whether a resolved name is used correctly is checked by interpretation: a field preset or a type constructor written without a call, or a type the family cannot store. The binder's diagnostics are reported as they are, by whoever built the binder; an interpreter neither repeats nor filters them. Each family supplies the wording for an unsupported attribute and for an unresolved type.
+The binder only resolves names. Whether a resolved name is used correctly is checked by interpretation: a type constructor written without a call that needs arguments, or a type the family cannot store. The binder's diagnostics are reported as they are, by whoever built the binder; an interpreter neither repeats nor filters them. Each family supplies the wording for an unsupported attribute and for an unresolved type.
 
 ### Attribute and block specifications
 

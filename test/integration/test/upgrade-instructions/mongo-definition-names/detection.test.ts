@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { detectionPatterns } from '../guide-detections';
 
+const APP_GUIDE =
+  'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/instructions.md';
+
+const EXTENSION_GUIDE =
+  'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/instructions.md';
+
 function patternsOf(audience: string, id: string): readonly RegExp[] {
-  return detectionPatterns(
-    `upgrade-instructions/pending/mongo-definition-names/${audience}/instructions.md`,
-    id,
-  );
+  return detectionPatterns(audience === 'app' ? APP_GUIDE : EXTENSION_GUIDE, id);
 }
 
 describe.each(['app', 'extension'])('the %s mongo-definition-names detection', (audience) => {

@@ -165,7 +165,7 @@ describe('alias constants', () => {
       expect.objectContaining({
         code: 'CONTRACT.DEFAULT_INVALID',
         message:
-          '.default() is called on a field that already has a default. Set the default once, and do not combine .default() with a field preset or alias constant that sets one.',
+          '.default() is called on a field that already has a default. Set the default once, and do not combine .default() with an alias constant that sets one.',
         meta: { reason: 'default-set-twice' },
       }),
     );
@@ -236,7 +236,7 @@ describe('contributed type aliases', () => {
         expect.objectContaining({
           code: 'CONTRACT.DEFAULT_INVALID',
           message:
-            '.onUpdate() is called on a field that already generates a value on update. Set each phase once, and do not combine .onUpdate() with a field preset, type alias or alias constant that sets it.',
+            '.onUpdate() is called on a field that already generates a value on update. Set each phase once, and do not combine .onUpdate() with a type alias or alias constant that sets it.',
           meta: { reason: 'generator-phase-set-twice', phase: 'onUpdate' },
         }),
       );

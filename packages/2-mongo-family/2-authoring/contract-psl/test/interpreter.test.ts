@@ -106,12 +106,15 @@ function interpret(
       InterpretPslDocumentToMongoContractInput,
       'documents' | 'symbolTable' | 'sources' | 'codecLookup'
     >
-  > & { readonly codecLookup?: CodecLookupWithDescriptors },
+  > & {
+    readonly codecLookup?: CodecLookupWithDescriptors;
+    readonly scalarTypes?: ReadonlyMap<string, string>;
+  },
 ) {
   return interpretMongoContract(
     schema,
     {
-      scalarTypeCodecIds: mongoScalarTypeDescriptors,
+      scalarTypes: mongoScalarTypeDescriptors,
       defaultFunctionRegistry: new Map(),
       codecLookup: mongoCodecLookup,
       dataTypes: mongoDataTypeSupport,
@@ -128,7 +131,10 @@ function interpretOk(
       InterpretPslDocumentToMongoContractInput,
       'documents' | 'symbolTable' | 'sources' | 'codecLookup'
     >
-  > & { readonly codecLookup?: CodecLookupWithDescriptors },
+  > & {
+    readonly codecLookup?: CodecLookupWithDescriptors;
+    readonly scalarTypes?: ReadonlyMap<string, string>;
+  },
 ) {
   const result = interpret(schema, overrides);
   expect(result.ok).toBe(true);
@@ -235,7 +241,6 @@ model Item {
       composedExtensionContracts: new Map(),
       authoringContributions: {
         type: {},
-        field: {},
         entityTypes: {},
         pslBlockDescriptors: authoringContributions.pslBlockDescriptors,
         modelAttributes: {},
@@ -267,7 +272,6 @@ model Item {
         symbolTable,
         binder,
         ...mongoTestStack,
-        scalarTypeCodecIds: new Map(),
         defaultFunctionRegistry: context.controlMutationDefaults.defaultFunctionRegistry,
         dataTypes: context.dataTypes,
         codecLookup: context.codecLookup,
@@ -364,7 +368,7 @@ model Item {
         }
       `,
         {
-          scalarTypeCodecIds: new Map([
+          scalarTypes: new Map([
             ['ObjectId', 'custom/oid@2'],
             ['String', 'custom/text@2'],
           ]),
@@ -1113,7 +1117,7 @@ model Item {
         }
       `,
           {
-            scalarTypeCodecIds: new Map([
+            scalarTypes: new Map([
               ...mongoScalarTypeDescriptors,
               ['Json', 'mongo/json@1'],
               ['Vector', 'mongo/vector@1'],
@@ -1384,7 +1388,7 @@ model Item {
         }
       `,
         {
-          scalarTypeCodecIds: mongoScalarTypeDescriptors,
+          scalarTypes: mongoScalarTypeDescriptors,
         },
       );
 
@@ -2535,7 +2539,6 @@ model Item {
         `,
         {
           authoringContributions: {
-            field: {},
             type: {},
             entityTypes: {
               enum: {
@@ -2822,7 +2825,7 @@ model Post {
 }
 `,
         {
-          scalarTypeCodecIds: mongoScalarTypeDescriptors,
+          scalarTypes: mongoScalarTypeDescriptors,
           defaultFunctionRegistry: new Map(),
         },
       );

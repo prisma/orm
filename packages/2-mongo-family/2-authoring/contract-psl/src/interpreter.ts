@@ -14,9 +14,7 @@ import { type EnumTypeHandle, resolveToOneRelationNullable } from '@internal/con
 import type {
   AuthoringContributions,
   AuthoringEntityContext,
-  AuthoringFieldPresetDescriptor,
   AuthoringTypeConstructorDescriptor,
-  AuthoringTypeNamespace,
   DataTypeSupport,
   ParsedPslExtensionBlock,
   WrittenValue,
@@ -24,7 +22,6 @@ import type {
 import {
   instantiateAuthoringEntityType,
   isAuthoringEntityTypeDescriptor,
-  isAuthoringTypeConstructorDescriptor,
 } from '@internal/framework-components/authoring';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type {
@@ -82,7 +79,6 @@ import {
   fkRelationPairKey,
   type InvalidFkPairing,
   isBareTypeConstructor,
-  reportPresetNotCalled,
   reportTypeConstructorNotCalled,
   unsupportedBlockDiagnostic,
 } from '@internal/psl-parser/interpret';
@@ -100,7 +96,6 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
-import { type FieldPresetContext, resolveFieldPreset } from './field-presets';
 import {
   interpretFieldAttribute,
   interpretModelAttribute,
@@ -120,7 +115,6 @@ import {
   refusalDiagnostic,
   type SchemaSites,
   type Site,
-  warningDiagnostic,
 } from './refusal-diagnostics';
 import {
   lowerGeneratorAttribute,
@@ -138,7 +132,6 @@ export interface InterpretPslDocumentToMongoContractInput {
   /** The target and extension packs of the stack, which the contract records. */
   readonly target: TargetPackRef<'mongo', string>;
   readonly extensionPacks?: Readonly<Record<string, ExtensionPackRef<string, string>>>;
-  readonly scalarTypeCodecIds: ReadonlyMap<string, string>;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   /** The stack's generator functions, which `@onCreate(fn())` and `@onUpdate(fn())` resolve through. */
   readonly generatorFunctions: GeneratorFunctionRegistry;
@@ -148,7 +141,7 @@ export interface InterpretPslDocumentToMongoContractInput {
   readonly authoringContributions?: AuthoringContributions;
   /** The target's default codec ids for an `enum` block that omits `@@type`. */
   readonly enumInferenceCodecs?: { readonly text: string; readonly int: string };
-  /** Receives a warning for each field typed with a deprecated scalar name, and for each preset that fills nothing. */
+  /** Receives a warning for each field typed with a deprecated scalar name. */
   readonly reportWarning?: (diagnostic: ContractSourceDiagnostic) => void;
 }
 
@@ -187,20 +180,10 @@ interface ScalarNames {
   ) => void;
 }
 
-/** The scalar type name a codec stands for, leaving out deprecated names, for the warning about a preset that fills nothing. */
-function scalarTypeOfCodecIn(
-  types: AuthoringTypeNamespace | undefined,
-  scalarTypeCodecIds: ReadonlyMap<string, string>,
-): (codecId: string) => string | undefined {
-  return (codecId) =>
-    [...scalarTypeCodecIds].find(([name, id]) => {
-      const type = types?.[name];
-      const deprecated =
-        type !== undefined &&
-        isAuthoringTypeConstructorDescriptor(type) &&
-        type.deprecated !== undefined;
-      return id === codecId && !deprecated;
-    })?.[0];
+/** What resolving a field's type reports to. */
+interface FieldResolutionContext {
+  readonly sources: PslSources;
+  readonly diagnostics: PslDiagnosticCollector;
 }
 
 /**
@@ -755,13 +738,6 @@ function lowerGeneratorAttributes(input: {
 
 interface ResolvedNonRelationField {
   readonly field: ContractField;
-  /** What the field's preset generates. */
-  readonly executionDefaults?: ExecutionMutationDefaultPhases;
-  /** The preset that made the field. */
-  readonly preset?: {
-    readonly helperPath: string;
-    readonly descriptor: AuthoringFieldPresetDescriptor;
-  };
   /** The type alias the field is typed by. */
   readonly typeAlias?: ResolvedTypeAlias;
 }
@@ -805,7 +781,7 @@ function resolveNonRelationField(
   owner: { readonly name: string; readonly kind: 'model' | 'compositeType' },
   resolution: Resolution | undefined,
   codecIdByEnumName: ReadonlyMap<string, string>,
-  presetContext: FieldPresetContext,
+  context: FieldResolutionContext,
   scalarNames: ScalarNames,
   typeAliases: ResolvedTypeAliases,
 ): ResolvedNonRelationField | undefined {
@@ -841,10 +817,10 @@ function resolveNonRelationField(
 
   if (resolution?.kind === 'namedType') {
     if (field.typeConstructor !== undefined) {
-      presetContext.diagnostics.push({
+      context.diagnostics.push({
         code: 'PSL_UNSUPPORTED_FIELD_TYPE',
         message: `Field "${ownerName}.${field.name}" calls "${field.typeConstructor.path.join('.')}", which is a type alias, not a type constructor. Remove the arguments.`,
-        ...diagnosticSource(presetContext.sources, field.node.syntax).at(field.span),
+        ...diagnosticSource(context.sources, field.node.syntax).at(field.span),
       });
       return undefined;
     }
@@ -857,10 +833,10 @@ function resolveNonRelationField(
     resolution?.kind === 'block' ||
     resolution?.kind === 'crossSpace'
   ) {
-    presetContext.diagnostics.push({
+    context.diagnostics.push({
       code: 'PSL_UNSUPPORTED_FIELD_TYPE',
       message: `Field "${ownerName}.${field.name}" type "${field.typeName}" is not supported in Mongo PSL interpreter`,
-      ...diagnosticSource(presetContext.sources, field.node.syntax).at(field.span),
+      ...diagnosticSource(context.sources, field.node.syntax).at(field.span),
     });
     return undefined;
   }
@@ -870,10 +846,10 @@ function resolveNonRelationField(
   const { descriptor, path } = resolution.symbol;
   const call = field.typeConstructor;
   const entityLabel = `Field "${ownerName}.${field.name}"`;
-  const source = diagnosticSource(presetContext.sources, field.node.syntax);
+  const source = diagnosticSource(context.sources, field.node.syntax);
   if (descriptor.kind === 'typeAlias') {
     if (call !== undefined) {
-      presetContext.diagnostics.push({
+      context.diagnostics.push({
         code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
         message: `${path.join('.')} is a type alias and takes no arguments.`,
         ...source.at(call.span),
@@ -884,31 +860,6 @@ function resolveNonRelationField(
     invariant(typeAlias !== undefined, 'A contributed type alias always resolves');
     return fieldOfTypeAlias(field, typeAlias);
   }
-  if (descriptor.kind === 'fieldPreset') {
-    if (call === undefined) {
-      reportPresetNotCalled({
-        entityLabel,
-        presetPath: path.join('.'),
-        source,
-        span: field.span,
-        diagnostics: presetContext.diagnostics,
-      });
-      return undefined;
-    }
-    const preset = resolveFieldPreset({
-      field,
-      call,
-      descriptor,
-      ownerName,
-      context: presetContext,
-    });
-    if (preset.kind === 'invalid') return undefined;
-    return {
-      field: preset.field,
-      ...ifDefined('executionDefaults', preset.executionDefaults),
-      preset: { helperPath: preset.helperPath, descriptor },
-    };
-  }
   if (call === undefined && !isBareTypeConstructor(descriptor)) {
     reportTypeConstructorNotCalled({
       entityLabel,
@@ -916,7 +867,7 @@ function resolveNonRelationField(
       descriptor,
       source,
       span: field.span,
-      diagnostics: presetContext.diagnostics,
+      diagnostics: context.diagnostics,
     });
     return undefined;
   }
@@ -1026,7 +977,7 @@ function fieldNodeOf(
   generatedValues: ExecutionMutationDefaultPhases | undefined,
 ): FieldNode {
   const { field } = resolved;
-  const executionDefaults = resolved.executionDefaults ?? resolved.typeAlias?.executionDefaults;
+  const executionDefaults = resolved.typeAlias?.executionDefaults;
   return {
     fieldName,
     ...(storedName === fieldName ? {} : { storedName }),
@@ -1036,14 +987,6 @@ function fieldNodeOf(
     ...ifDefined('enumName', enumNameOf(field)),
     ...ifDefined('executionDefaults', executionDefaults),
     ...ifDefined('generatedValues', generatedValues),
-    ...(resolved.preset === undefined
-      ? {}
-      : {
-          presetContribution: {
-            preset: resolved.preset.helperPath,
-            executionDefaults: resolved.executionDefaults,
-          },
-        }),
   };
 }
 
@@ -1063,14 +1006,9 @@ function relationNodeOf(fieldName: string, relation: ContractReferenceRelation):
 export function interpretPslDocumentToMongoContract(
   input: InterpretPslDocumentToMongoContractInput,
 ): Result<Contract, ContractSourceDiagnostics> {
-  const { symbolTable, sources, scalarTypeCodecIds, codecLookup } = input;
+  const { symbolTable, sources, codecLookup } = input;
   const diagnostics = createPslDiagnosticCollector(sources);
-  const presetContext: FieldPresetContext = {
-    authoringContributions: input.authoringContributions,
-    sources,
-    diagnostics,
-    dataTypes: input.dataTypes,
-  };
+  const fieldResolution: FieldResolutionContext = { sources, diagnostics };
   const scalarNames: ScalarNames = {
     warnDeprecated: deprecatedScalarWarner({ sources, reportWarning: input.reportWarning }),
   };
@@ -1271,7 +1209,7 @@ export function interpretPslDocumentToMongoContract(
         { name: pslModel.name, kind: 'model' },
         resolution,
         codecIdByEnumName,
-        presetContext,
+        fieldResolution,
         scalarNames,
         typeAliases,
       );
@@ -1309,7 +1247,6 @@ export function interpretPslDocumentToMongoContract(
       fieldSites.set(siteKey, {
         symbol: field,
         source,
-        ...ifDefined('preset', resolved.preset),
         ...ifDefined('typeAlias', resolved.typeAlias),
         generatorAttributes: generated.sites,
         storedName,
@@ -1391,7 +1328,7 @@ export function interpretPslDocumentToMongoContract(
         { name: compositeType.name, kind: 'compositeType' },
         fieldTypeResolution(field, binder),
         codecIdByEnumName,
-        presetContext,
+        fieldResolution,
         scalarNames,
         typeAliases,
       );
@@ -1407,7 +1344,6 @@ export function interpretPslDocumentToMongoContract(
       fieldSites.set(siteKey, {
         symbol: field,
         source: diagnosticSource(sources, field.node.syntax),
-        ...ifDefined('preset', resolved.preset),
         ...ifDefined('typeAlias', resolved.typeAlias),
         generatorAttributes: {},
         ...(fieldMap === undefined
@@ -1456,14 +1392,8 @@ export function interpretPslDocumentToMongoContract(
     models: modelSites,
     fields: fieldSites,
     enums: enumSites,
-    scalarTypeOfCodec: scalarTypeOfCodecIn(input.authoringContributions?.type, scalarTypeCodecIds),
   };
   const built = buildMongoContractFromDefinition(definition, codecLookup, input.dataTypes);
-  for (const warning of built.ok ? built.value.warnings : built.failure.warnings) {
-    const diagnostic = warningDiagnostic(warning, sites);
-    const [external] = diagnostic === undefined ? [] : mapPslDiagnostics([diagnostic], sources);
-    if (external !== undefined) input.reportWarning?.({ ...external, severity: 'warning' });
-  }
   for (const refusal of built.ok ? [] : built.failure.refusals) {
     if (alreadyReported(refusal, droppedFields, polymorphism.reported)) continue;
     const diagnostic = refusalDiagnostic(refusal, sites);

@@ -16,7 +16,6 @@ export type {
 } from '@internal/sql-contract-ts/contract-builder';
 export {
   autoincrement,
-  field,
   member,
   model,
   now,
@@ -25,4 +24,5 @@ export {
 } from '@internal/sql-contract-ts/contract-builder';
 export { defineContract } from '../contract/define-contract';
 export { enumType } from '../contract/enum-type';
+export { field, type } from '../contract/field';
 export { gen } from '../contract/gen';

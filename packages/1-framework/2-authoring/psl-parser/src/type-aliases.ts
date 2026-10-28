@@ -204,7 +204,7 @@ function fieldOnlyAttributeMessage(
 }
 
 /**
- * Reads each `types {}` declaration as a type alias. A base must be a type constructor or a block; another alias, a field preset or anything else is refused, as is an alias with no base. Of the attributes, those the family accepts are kept and every other one is refused and dropped, keeping the alias, so its fields are not refused for it too.
+ * Reads each `types {}` declaration as a type alias. A base must be a type constructor or a block; another alias or anything else is refused, as is an alias with no base. Of the attributes, those the family accepts are kept and every other one is refused and dropped, keeping the alias, so its fields are not refused for it too.
  */
 export function resolveTypeAliases(input: {
   readonly declarations: readonly NamedTypeSymbol[];

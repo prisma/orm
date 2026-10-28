@@ -18,7 +18,7 @@ describe('index naming at PSL lowering', () => {
     return interpretSqlContract(schema, {
       target: postgresTarget,
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
-      authoringContributions: { entityTypes: testEnumEntityContributions, type: {}, field: {} },
+      authoringContributions: { entityTypes: testEnumEntityContributions, type: {} },
       composedExtensionContracts: new Map(),
       controlMutationDefaults: builtinControlMutationDefaults,
       createNamespace: createTestSqlNamespace,
@@ -74,7 +74,7 @@ describe('@@index matrix threading at PSL lowering', () => {
     return interpretSqlContract(schema, {
       target: postgresTarget,
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
-      authoringContributions: { entityTypes: testEnumEntityContributions, type: {}, field: {} },
+      authoringContributions: { entityTypes: testEnumEntityContributions, type: {} },
       composedExtensionContracts: new Map(),
       controlMutationDefaults: builtinControlMutationDefaults,
       createNamespace: createTestSqlNamespace,

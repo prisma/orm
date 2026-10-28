@@ -64,6 +64,7 @@ describe('requireTemporal', () => {
         code: 'RUNTIME.TEMPORAL_UNAVAILABLE',
         message:
           "Mutation default generator 'instantNow' cannot produce a value because this runtime has no global Temporal implementation.",
+        fix: 'Run on a runtime with Temporal available, install a Temporal polyfill before creating the client, or author the column with `temporal.CreatedAtString` / `temporal.UpdatedAtString` to store ISO 8601 text instead.',
         meta: { generatorId: 'instantNow' },
       }),
     );

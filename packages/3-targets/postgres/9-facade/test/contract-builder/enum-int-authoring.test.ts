@@ -7,11 +7,11 @@ const pgText = { codecId: 'pg/text@1' as const };
 describe('int-backed enum authoring against the real Postgres pack', () => {
   it('emits numeric membership checks for scalar and array enum columns', () => {
     const Level = enumType('Level', pgInt, member('Low', 1), member('High', 10));
-    const contract = defineContract({ enums: { Level } }, ({ field, model }) => ({
+    const contract = defineContract({ enums: { Level } }, ({ field, model, gen, type }) => ({
       models: {
         Event: model('Event', {
           fields: {
-            id: field.id.uuidv4String(),
+            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
             level: field.namedType(Level),
             levels: field.namedType(Level).many(),
           },
@@ -32,10 +32,13 @@ describe('int-backed enum authoring against the real Postgres pack', () => {
   it('accepts a text-backed enum on the same shape', () => {
     const Role = enumType('Role', pgText, member('User', 'user'), member('Admin', 'admin'));
     expect(() =>
-      defineContract({ enums: { Role } }, ({ field, model }) => ({
+      defineContract({ enums: { Role } }, ({ field, model, gen, type }) => ({
         models: {
           Event: model('Event', {
-            fields: { id: field.id.uuidv4String(), role: field.namedType(Role) },
+            fields: {
+              id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+              role: field.namedType(Role),
+            },
           }),
         },
       })),

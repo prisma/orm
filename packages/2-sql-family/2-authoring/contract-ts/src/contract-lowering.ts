@@ -99,7 +99,7 @@ type RuntimeCollection = {
   readonly modelSpecs: ReadonlyMap<string, RuntimeModelSpec>;
 };
 
-/** A column stores no `typeParams` when it has none, as PSL writes it (ADR 246). */
+/** A column stores no `typeParams` when it has none, as PSL writes it (see "Deterministic emission" in `docs/architecture docs/subsystems/1. Data Contract.md`). */
 function withoutEmptyTypeParams(descriptor: ColumnTypeDescriptor): ColumnTypeDescriptor {
   const { typeParams, ...rest } = descriptor;
   return typeParams === undefined || Object.keys(typeParams).length > 0 ? descriptor : rest;
@@ -880,7 +880,7 @@ function coveredFieldNames(index: IndexConstraint): readonly string[] {
 }
 
 /**
- * The generators a field's `.onCreate(...)` and `.onUpdate(...)` calls resolve to for its column, merged over the phases a field preset or `field.generated(...)` sets.
+ * The generators a field's `.onCreate(...)` and `.onUpdate(...)` calls resolve to for its column.
  */
 function resolveGeneratorCalls(input: {
   readonly modelName: string;
@@ -892,7 +892,7 @@ function resolveGeneratorCalls(input: {
 }): ExecutionMutationDefaultPhases | undefined {
   const { modelName, fieldName, fieldState, descriptor, generatorFunctions } = input;
   const calls = fieldState.generatorCalls;
-  if (calls === undefined) return fieldState.executionDefaults;
+  if (calls === undefined) return undefined;
   const typeParams = descriptor.typeParams;
   const column = {
     codecId: descriptor.codecId,
@@ -902,9 +902,7 @@ function resolveGeneratorCalls(input: {
   const phases: {
     onCreate?: ExecutionMutationDefaultValue;
     onUpdate?: ExecutionMutationDefaultValue;
-  } = {
-    ...fieldState.executionDefaults,
-  };
+  } = {};
   for (const phase of ['onCreate', 'onUpdate'] as const) {
     const call = calls[phase];
     if (call === undefined) continue;

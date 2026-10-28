@@ -34,10 +34,10 @@ export interface SqlDescribedContractSpace {
 }
 
 /**
- * The parts of the composed stack a target builds a PSL document with. The PSL contract source reads the document with the same parts, so the target writes a column type as a type constructor the stack contributes, a literal default through the data type of the column's codec, and a generated value as a default function or field preset the stack contributes, and all of them read back.
+ * The parts of the composed stack a target builds a PSL document with. The PSL contract source reads the document with the same parts, so the target writes a column type as a type constructor the stack contributes, a literal default through the data type of the column's codec, and a generated value as a default function or generator function the stack contributes, and all of them read back.
  */
 export interface SqlPslBuildContext {
-  readonly authoringContributions: Pick<AssembledAuthoringContributions, 'type' | 'field'>;
+  readonly authoringContributions: Pick<AssembledAuthoringContributions, 'type'>;
   readonly codecLookup: CodecLookupWithDescriptors;
   readonly dataTypes: DataTypeSupport;
   /** The generator functions of the stack, which write each generator as `@onCreate(fn(...))` or `@onUpdate(fn(...))`. */

@@ -19,7 +19,6 @@ const baseInput = {
   authoringContributions: {
     entityTypes: testEnumEntityContributions,
     type: postgresScalarAuthoringTypes,
-    field: {},
   },
   composedExtensionContracts: new Map(),
   createNamespace: createTestSqlNamespace,

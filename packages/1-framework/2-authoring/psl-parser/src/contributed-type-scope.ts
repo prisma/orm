@@ -1,13 +1,11 @@
 import type {
-  AuthoringFieldPresetDescriptor,
   AuthoringTypeAliasDescriptor,
   AuthoringTypeConstructorDescriptor,
 } from '@internal/framework-components/authoring';
 
 export type ContributedTypeDescriptor =
   | AuthoringTypeConstructorDescriptor
-  | AuthoringTypeAliasDescriptor
-  | AuthoringFieldPresetDescriptor;
+  | AuthoringTypeAliasDescriptor;
 
 export type ContributedTypeNamespace = {
   readonly [name: string]: ContributedTypeDescriptor | ContributedTypeNamespace;
@@ -37,10 +35,7 @@ export interface ContributedTypeScope {
 export function isContributedTypeDescriptor(
   value: ContributedTypeDescriptor | ContributedTypeNamespace,
 ): value is ContributedTypeDescriptor {
-  return (
-    'kind' in value &&
-    (value.kind === 'typeConstructor' || value.kind === 'typeAlias' || value.kind === 'fieldPreset')
-  );
+  return 'kind' in value && (value.kind === 'typeConstructor' || value.kind === 'typeAlias');
 }
 
 /** The codec a column typed by `descriptor` is stored with. */
@@ -50,22 +45,17 @@ export function contributedTypeCodecId(descriptor: ContributedTypeDescriptor): s
     : descriptor.output.codecId;
 }
 
-export function mergeContributedTypes(
-  ...namespaces: readonly ContributedTypeNamespace[]
-): ContributedTypeNamespace {
-  const merged: Record<string, ContributedTypeDescriptor | ContributedTypeNamespace> = {};
-  for (const namespace of namespaces) {
-    for (const [name, value] of Object.entries(namespace)) {
-      const existing = Object.hasOwn(merged, name) ? merged[name] : undefined;
-      merged[name] =
-        existing !== undefined &&
-        !isContributedTypeDescriptor(existing) &&
-        !isContributedTypeDescriptor(value)
-          ? mergeContributedTypes(existing, value)
-          : value;
-    }
-  }
-  return merged;
+/** The descriptor at `path` in `namespace`, or `undefined` when none is contributed there. */
+export function contributedTypeAt(
+  namespace: ContributedTypeNamespace,
+  path: readonly string[],
+): ContributedTypeDescriptor | undefined {
+  const [name, ...rest] = path;
+  if (name === undefined || !Object.hasOwn(namespace, name)) return undefined;
+  const value = namespace[name];
+  if (value === undefined) return undefined;
+  if (isContributedTypeDescriptor(value)) return rest.length === 0 ? value : undefined;
+  return contributedTypeAt(value, rest);
 }
 
 export function contributedTypeScope(

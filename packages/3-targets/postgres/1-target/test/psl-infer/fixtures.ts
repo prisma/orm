@@ -18,7 +18,6 @@ import {
   type SqlTableIR,
 } from '@internal/sql-schema-ir/types';
 import {
-  postgresAuthoringFieldPresets,
   postgresAuthoringPslBlockDescriptors,
   postgresAuthoringTypes,
 } from '../../src/core/authoring';
@@ -225,7 +224,6 @@ export const inferBuildContext: SqlPslBuildContext = {
       ...postgresAuthoringTypes,
       ...postgresScalarAndNativeTypeConstructors,
     },
-    field: postgresAuthoringFieldPresets,
   },
   generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
   componentIdsByGenerator: new Map(),

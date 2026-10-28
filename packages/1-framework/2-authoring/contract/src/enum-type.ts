@@ -138,7 +138,7 @@ function describeValue(value: unknown): string {
  *
  * - The codec is an explicit required argument — the `codecId` is taken
  *   from the passed `ColumnTypeDescriptor` (e.g. `{ codecId: 'pg/text@1' }`
- *   from a field preset output or a direct inline object).
+ *   from a column type constant or a direct inline object).
  * - `const` generics on the members spread preserve the ordered literal
  *   value tuple so `Role.values` is `readonly ['user','admin']`, not
  *   `string[]`.

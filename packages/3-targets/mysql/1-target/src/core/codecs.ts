@@ -13,6 +13,8 @@ import {
 } from '@internal/framework-components/codec';
 import { sqlRawDataType } from '@internal/sql-contract/data-type';
 import {
+  CastExpr,
+  type ProjectionExpr,
   SqlCharCodec,
   SqlRawCodec,
   SqlVarcharCodec,
@@ -39,9 +41,18 @@ import {
   mysqlText,
   mysqlVarchar,
 } from './data-types';
-import { mysqlError } from './errors';
+import { mysqlError, mysqlQueryNotYetSupported } from './errors';
 
 const DECIMAL_INTEGER = /^-?\d+$/;
+const BIGINT_MIN = -(2n ** 63n);
+const BIGINT_MAX = 2n ** 63n - 1n;
+
+/** Projects a column whose JSON form, a number or a string, is what its `fromWire` reads. */
+const identityJsonProjection = (expression: ProjectionExpr): ProjectionExpr => expression;
+
+/** Projects a bigint as its decimal text: a JSON number past 2^53 would lose digits when JavaScript parses the include. */
+const textJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
+  CastExpr.as(expression, 'CHAR');
 
 function decodeFailed(codecId: string, expected: string, received: unknown): never {
   throw mysqlError('RUNTIME.DECODE_FAILED', `${codecId} wire value must be ${expected}`, {
@@ -58,18 +69,23 @@ function encodeFailed(codecId: string, expected: string, received: unknown): nev
 export const mysqlSqlCharDescriptor = mysqlCodec(sqlCharDescriptor, {
   dataType: mysqlChar,
   renderValueLiteral: renderTsLiteral,
+  jsonProjection: identityJsonProjection,
   factory: (descriptor, dataType, params) => () => new SqlCharCodec(descriptor, dataType, params),
 });
 
 export const mysqlSqlVarcharDescriptor = mysqlCodec(sqlVarcharDescriptor, {
   dataType: mysqlVarchar,
   renderValueLiteral: renderTsLiteral,
+  jsonProjection: identityJsonProjection,
   factory: (descriptor, dataType, params) => () =>
     new SqlVarcharCodec(descriptor, dataType, params),
 });
 
 export const mysqlSqlRawDescriptor = mysqlCodec(sqlRawDescriptor, {
   dataType: sqlRawDataType,
+  jsonProjection: () => {
+    throw mysqlQueryNotYetSupported('Reading a raw column inside an include');
+  },
   factory: (descriptor, dataType, params) => () => new SqlRawCodec(descriptor, dataType, params),
 });
 
@@ -100,6 +116,9 @@ export class MysqlTextDescriptor extends MysqlCodecDescriptor<void> {
   override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
     return renderTsLiteral(value);
+  }
+  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
+    return identityJsonProjection(expression);
   }
   override factory(): (ctx: CodecInstanceContext) => MysqlTextCodec {
     return () => new MysqlTextCodec(this, mysqlText);
@@ -144,6 +163,9 @@ export class MysqlIntDescriptor extends MysqlCodecDescriptor<void> {
   override renderValueLiteral(value: JsonValue): string | undefined {
     return renderTsLiteral(value);
   }
+  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
+    return identityJsonProjection(expression);
+  }
   override factory(): (ctx: CodecInstanceContext) => MysqlIntCodec {
     return () => new MysqlIntCodec(this, mysqlInt);
   }
@@ -151,18 +173,25 @@ export class MysqlIntDescriptor extends MysqlCodecDescriptor<void> {
 
 export const mysqlIntDescriptor = new MysqlIntDescriptor();
 
-/** A MySQL `bigint` as a JavaScript bigint. MySQL sends it as decimal text. */
+/** A MySQL `bigint` as a JavaScript bigint. The driver reads it as its decimal text and sends a bigint as a 64-bit integer, which MySQL compares exactly. */
 export class MysqlBigintCodec extends CodecImpl<
   typeof MYSQL_BIGINT_CODEC_ID,
   readonly ['equality', 'order', 'numeric'],
-  string,
+  string | bigint,
   bigint
 > {
-  async toWire(value: bigint, _ctx: CodecCallContext): Promise<string> {
-    if (typeof value !== 'bigint') return encodeFailed(MYSQL_BIGINT_CODEC_ID, 'a bigint', value);
-    return value.toString();
+  async toWire(value: bigint, _ctx: CodecCallContext): Promise<bigint> {
+    if (typeof value !== 'bigint' || value < BIGINT_MIN || value > BIGINT_MAX) {
+      return encodeFailed(
+        MYSQL_BIGINT_CODEC_ID,
+        `a bigint from ${BIGINT_MIN} to ${BIGINT_MAX}`,
+        value,
+      );
+    }
+    return value;
   }
-  async fromWire(wire: string, _ctx: CodecCallContext): Promise<bigint> {
+  async fromWire(wire: string | bigint, _ctx: CodecCallContext): Promise<bigint> {
+    if (typeof wire === 'bigint') return wire;
     if (!DECIMAL_INTEGER.test(wire)) {
       return decodeFailed(MYSQL_BIGINT_CODEC_ID, 'the decimal text of an integer', wire);
     }
@@ -183,6 +212,9 @@ export class MysqlBigintDescriptor extends MysqlCodecDescriptor<void> {
   override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
     return decimalTextBigintLiteral(value);
+  }
+  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
+    return textJsonProjection(expression);
   }
   override factory(): (ctx: CodecInstanceContext) => MysqlBigintCodec {
     return () => new MysqlBigintCodec(this, mysqlBigint);
@@ -241,6 +273,9 @@ export class MysqlDatetimeDescriptor extends MysqlCodecDescriptor<DatetimeParams
   override readonly codecId = MYSQL_DATETIME_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
   override readonly paramsSchema = mysqlDatetimeParams;
+  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
+    return identityJsonProjection(expression);
+  }
   override factory(params: DatetimeParams): (ctx: CodecInstanceContext) => MysqlDatetimeCodec {
     return () => new MysqlDatetimeCodec(this, mysqlDatetime, params);
   }
@@ -278,6 +313,9 @@ export class MysqlEnumDescriptor extends MysqlCodecDescriptor<EnumParams> {
   override readonly paramsSchema = mysqlEnumParams;
   override renderValueLiteral(value: JsonValue): string | undefined {
     return renderTsLiteral(value);
+  }
+  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
+    return identityJsonProjection(expression);
   }
   override factory(params: EnumParams): (ctx: CodecInstanceContext) => MysqlEnumCodec {
     return () => new MysqlEnumCodec(this, mysqlEnum, params);

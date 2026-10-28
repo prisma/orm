@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { detectionPatterns } from '../guide-detections';
 
 const GUIDE_PATHS = {
-  app: 'upgrade-instructions/pending/closed-client-members-reject/app/instructions.md',
-  extension: 'upgrade-instructions/pending/closed-client-members-reject/extension/instructions.md',
+  app: 'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/instructions.md',
+  extension:
+    'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/instructions.md',
 } as const;
 
 const id = 'client-members-reject-instead-of-throwing';

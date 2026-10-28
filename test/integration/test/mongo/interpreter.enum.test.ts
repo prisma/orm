@@ -54,7 +54,6 @@ function identityCodec(id: string): Codec | undefined {
 
 const authoringContributions = {
   entityTypes: mongoFamilyEntityTypes,
-  field: {},
   type: {},
   pslBlockDescriptors: mongoFamilyPslBlockDescriptors,
 };
@@ -94,7 +93,6 @@ function interpret(
       defaultNamespaceId: '__unbound__',
       composedExtensionContracts: new Map(),
       authoringContributions: {
-        field: authoringContributions.field ?? {},
         type: { ...scalarTypeConstructors, ...authoringContributions.type },
         entityTypes: authoringContributions.entityTypes ?? {},
         pslBlockDescriptors: authoringContributions.pslBlockDescriptors ?? {},

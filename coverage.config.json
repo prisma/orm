@@ -14,11 +14,11 @@
     {
       "package": "3-targets/sqlite/1-target",
       "reason": "runner.ts, statement-builders.ts, codecs.ts, default-normalizer.ts, and other foundational files moved into target-sqlite to break a workspace cycle. They are exhaustively exercised by full target\u2194adapter\u2194driver tests in adapter-sqlite/test/migrations and the e2e framework's sqlite migrations suite, but those run in a separate vitest config so the per-package coverage report doesn't see them. Mirrors the equivalent Postgres situation.",
-      "addedDate": "2026-07-27",
+      "addedDate": "2026-10-27",
       "expiryDays": 90,
       "assignee": null,
-      "linear": null,
-      "notes": "See packages/3-targets/sqlite/2-adapter/test/migrations/* (runner.basic, runner.errors, runner.idempotency, planner-introspection.integration, render-typescript.roundtrip) and test/e2e/framework/test/sqlite/migrations/* for the integration coverage. Recovery requires either reorganizing coverage scopes or adding unit-level tests inside target-sqlite. Renewed 2026-07-27 (lapsed mid-flight on TML-3099): the cross-config coverage situation is unchanged; recovery options above still apply."
+      "linear": "TML-3756",
+      "notes": "See packages/3-targets/sqlite/2-adapter/test/migrations/* (runner.basic, runner.errors, runner.idempotency, planner-introspection.integration, render-typescript.roundtrip) and test/e2e/framework/test/sqlite/migrations/* for the integration coverage. Recovery requires either reorganizing coverage scopes or adding unit-level tests inside target-sqlite. Renewed 2026-07-27 (lapsed mid-flight on TML-3099): the cross-config coverage situation is unchanged; recovery options above still apply. Renewed 2026-10-27: expired 2026-10-25 and turned the Coverage check red on every open PR; the coverage is unchanged (85.49% functions against an 88% threshold) and the recovery above still applies (tracked on TML-3756)."
     },
     {
       "package": "3-extensions/sql-orm-client",

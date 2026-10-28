@@ -30,7 +30,6 @@ const stubContext: ContractSourceContext = {
   composedExtensionContracts: new Map(),
   authoringContributions: {
     dataTypes: {},
-    field: {},
     type: {},
     entityTypes: {},
     pslBlockDescriptors: {},

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { defineContract, field, index, model, valueObject } from '../src/contract-builder';
 import type { AnyFieldBuilder, AnyModelBuilder, AnyValueObjectBuilder } from '../src/contract-dsl';
 import { enumType, member } from '../src/enum-type';
@@ -207,68 +207,5 @@ describe('defineContract — namespaces', () => {
     });
 
     expect(Object.keys(contract.domain.namespaces)).toEqual(['main']);
-  });
-});
-
-describe('defineContract — presets', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('reports the warnings of a build it refuses', () => {
-    const emitWarning = vi.spyOn(process, 'emitWarning').mockImplementation(() => undefined);
-    const targetWithPreset = {
-      ...mongoTargetPack,
-      authoring: {
-        ...mongoTargetPack.authoring,
-        field: { plainText: { kind: 'fieldPreset', output: { codecId: 'mongo/string@1' } } },
-      },
-    } as const;
-
-    const build = () =>
-      defineContract({ family: mongoFamilyPack, target: targetWithPreset }, (helpers) => ({
-        models: {
-          Doc: model('Doc', {
-            collection: 'docs',
-            fields: {
-              _id: field.objectId(),
-              note: helpers.field.plainText(),
-              a: field.string(),
-              b: field.string().mongo({ field: 'a' }),
-            },
-          }),
-        },
-      }));
-
-    expect(refusalOf(build).code).toBe('CONTRACT.NAME_DUPLICATE');
-    expect(emitWarning.mock.calls.map(([, options]) => options)).toEqual([
-      { code: 'PN_PRESET_WITHOUT_EFFECT' },
-    ]);
-  });
-
-  it('warns about a preset that generates no value', () => {
-    const emitWarning = vi.spyOn(process, 'emitWarning').mockImplementation(() => undefined);
-    const targetWithPreset = {
-      ...mongoTargetPack,
-      authoring: {
-        ...mongoTargetPack.authoring,
-        field: {
-          plainText: { kind: 'fieldPreset', output: { codecId: 'mongo/string@1' } },
-        },
-      },
-    } as const;
-
-    defineContract({ family: mongoFamilyPack, target: targetWithPreset }, (helpers) => ({
-      models: {
-        Doc: model('Doc', {
-          collection: 'docs',
-          fields: { _id: field.objectId(), note: helpers.field.plainText() },
-        }),
-      },
-    }));
-
-    expect(emitWarning.mock.calls.map(([, options]) => options)).toEqual([
-      { code: 'PN_PRESET_WITHOUT_EFFECT' },
-    ]);
   });
 });

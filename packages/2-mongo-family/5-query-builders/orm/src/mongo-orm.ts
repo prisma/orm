@@ -51,7 +51,7 @@ export function mongoOrm<
   if (executionDefaults.length > 0 && mutationDefaults === undefined) {
     throw ormError(
       'ORM.MUTATION_DEFAULTS_MISSING',
-      'The contract has execution defaults (fields such as temporal.createdAt() that the ORM fills on write), but mongoOrm() was built without mutationDefaults, so those fields would never be written. Pass the execution context: mongoOrm({ contract, executor, mutationDefaults: context }), or create the client with mongo().',
+      'The contract has execution defaults (fields such as temporal.CreatedAt that the ORM fills on write), but mongoOrm() was built without mutationDefaults, so those fields would never be written. Pass the execution context: mongoOrm({ contract, executor, mutationDefaults: context }), or create the client with mongo().',
       { meta: { fields: executionDefaults.map((d) => `${d.ref.entry}.${d.ref.field}`) } },
     );
   }

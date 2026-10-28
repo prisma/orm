@@ -38,7 +38,7 @@ const types: AuthoringTypeNamespace = {
   String: { kind: 'typeConstructor', output: { codecId: 'pg/text@1' } },
   Time: {
     kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'precision', integer: true, optional: true }],
+    args: [{ kind: 'value', dataType: 'fixture/int', name: 'precision', optional: true }],
     output: { codecId: 'pg/time-temporal@1', typeParams: { precision: { kind: 'arg', index: 0 } } },
   },
 };

@@ -29,7 +29,7 @@ model Post {
 - An alias's base is a type constructor or an enum. It may not name another alias or a contributed alias (`PSL_UNSUPPORTED_NAMED_TYPE_BASE`).
 - An alias may carry `@onCreate` and `@onUpdate`. `@default` is refused at the alias, because MongoDB has no database defaults, and so are `@id` and `@unique` (`PSL_UNSUPPORTED_NAMED_TYPE_ATTRIBUTE`). A refused attribute is dropped and the alias is kept.
 - A field that writes an attribute its alias already sets is `PSL_DUPLICATE_ATTRIBUTE`. A list field typed by an alias that generates a value is refused, as `@onCreate` on a list is; an optional one is accepted, as an optional field with `@onCreate` is. Generated values are keyed by the field's stored name, so a `@map`-ped field works.
-- The Mongo target contributes `temporal.CreatedAt` (`now()` on create) and `temporal.UpdatedAt` (`now()` on create and on update), on `Date` (`mongo/date@1`). They take no arguments and store what `temporal.createdAt()` and `temporal.updatedAt()` store.
+- The Mongo target contributes `temporal.CreatedAt` (`now()` on create) and `temporal.UpdatedAt` (`now()` on create and on update), on `Date` (`mongo/date@1`). They take no arguments. A call to a removed field preset, `temporal.createdAt()`, `temporal.updatedAt()` or `temporal.timestamp(...)`, is refused with `PSL_UNRESOLVED_REFERENCE` and the message names its replacement, such as `Write temporal.CreatedAt.`
 - The `@updatedAt` attribute is refused with the hint `Use @onCreate(now()) @onUpdate(now()), or type the field temporal.UpdatedAt.`
 
 ## Index sort directions

@@ -82,7 +82,7 @@ const mongoCodecLookup: CodecLookupWithDescriptors = {
 };
 
 function pslToContract(schema: string): MongoContract {
-  const scalarTypeCodecIds = new Map([
+  const scalarCodecIds = new Map([
     ['String', 'mongo/string@1'],
     ['Int32', 'mongo/int32@1'],
     ['Bool', 'mongo/bool@1'],
@@ -92,7 +92,7 @@ function pslToContract(schema: string): MongoContract {
   ]);
   const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
     Object.fromEntries(
-      [...scalarTypeCodecIds].map(([name, codecId]) => [
+      [...scalarCodecIds].map(([name, codecId]) => [
         name,
         { kind: 'typeConstructor' as const, output: { codecId } },
       ]),
@@ -104,7 +104,6 @@ function pslToContract(schema: string): MongoContract {
       defaultNamespaceId: '__unbound__',
       composedExtensionContracts: new Map(),
       authoringContributions: {
-        field: {},
         type: scalarTypeConstructors,
         entityTypes: {},
         pslBlockDescriptors: {},

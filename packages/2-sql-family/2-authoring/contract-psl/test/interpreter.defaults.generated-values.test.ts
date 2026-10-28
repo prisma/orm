@@ -1,11 +1,6 @@
-import { temporalCodecPreset } from '@internal/framework-components/authoring';
+import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
-import {
-  modelsOf,
-  nonTemporalPresetMirrors,
-  postgresScalarTypeDescriptors,
-  temporalCodecPresetMirrors,
-} from './fixtures';
+import { modelsOf, postgresScalarAuthoringTypes, postgresScalarTypeDescriptors } from './fixtures';
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import {
   builtinControlMutationDefaults,
@@ -13,34 +8,41 @@ import {
 } from './interpreter-defaults-support';
 import { unboundTables } from './unbound-tables';
 
-describe('generated values with a database default or on an optional field', () => {
-  const contributions = {
-    field: {
-      temporal: {
-        timestamptz: temporalCodecPresetMirrors.pgTimestamptz,
-        timestampString: temporalCodecPresetMirrors.pgTimestampString,
-        dateString: temporalCodecPreset({
-          codecId: 'pg/date-string@1',
-          generatorId: 'dateStringNow',
-        }),
-      },
+const types: AuthoringTypeNamespace = {
+  ...postgresScalarAuthoringTypes,
+  TimestampString: {
+    kind: 'typeConstructor',
+    args: [{ kind: 'value', dataType: 'pg/int4', name: 'precision', optional: true }],
+    output: {
+      codecId: 'pg/timestamp-string@1',
+      typeParams: { precision: { kind: 'arg', index: 0 } },
     },
-  } as const;
+  },
+  DateString: { kind: 'typeConstructor', output: { codecId: 'pg/date-string@1' } },
+  sql: {
+    Char: {
+      kind: 'typeConstructor',
+      args: [{ kind: 'value', dataType: 'pg/int4', name: 'length' }],
+      output: { codecId: 'sql/char@1', typeParams: { length: { kind: 'arg', index: 0 } } },
+    },
+  },
+};
 
-  it('keeps the preset generators, the database default and the nullability', () => {
+describe('generated values with a database default or on an optional field', () => {
+  it('keeps the generators, the database default and the nullability', () => {
     const result = interpretPostgresSchema(
       `model Post {
   id        Int @id
-  updatedAt temporal.timestampString(3, onCreate: now, onUpdate: now) @default(now())
-  touchedAt temporal.timestamptz(onUpdate: now) @default(now())
+  updatedAt TimestampString(3) @default(now()) @onCreate(now()) @onUpdate(now())
+  touchedAt TimestamptzTemporal @default(now()) @onUpdate(now())
   token     String? @onCreate(uuid())
-  editedAt  temporal.timestampString(3, onCreate: now, onUpdate: now)?
-  day       temporal.dateString(onCreate: now, onUpdate: now)?
+  editedAt  TimestampString(3)? @onCreate(now()) @onUpdate(now())
+  day       DateString? @onCreate(now()) @onUpdate(now())
 }`,
       {
         scalarColumnDescriptors: postgresScalarTypeDescriptors,
         controlMutationDefaults: builtinControlMutationDefaults,
-        authoringContributions: contributions,
+        authoringContributions: { type: types },
       },
     );
 
@@ -105,7 +107,11 @@ describe('generated values with a database default or on an optional field', () 
     });
 
     const ref = (field: string) => ({ namespace: 'public', entry: 'Post', field });
-    const timestampStringNow = { kind: 'generator', id: 'timestampStringNow' };
+    const timestampStringNow = {
+      kind: 'generator',
+      id: 'timestampStringNow',
+      params: { precision: 3 },
+    };
     expect(result.value.execution?.mutations.defaults).toEqual([
       {
         ref: ref('day'),
@@ -114,30 +120,25 @@ describe('generated values with a database default or on an optional field', () 
       },
       { ref: ref('editedAt'), onCreate: timestampStringNow, onUpdate: timestampStringNow },
       { ref: ref('token'), onCreate: { kind: 'generator', id: 'uuidv4' } },
-      { ref: ref('touchedAt'), onUpdate: { kind: 'generator', id: 'timestampNow' } },
+      { ref: ref('touchedAt'), onUpdate: { kind: 'generator', id: 'instantNow' } },
       { ref: ref('updatedAt'), onCreate: timestampStringNow, onUpdate: timestampStringNow },
     ]);
   });
 });
 
-describe('a preset that is not temporal, on an optional field or beside a database default', () => {
-  it('keeps the nullability and the database default', () => {
+describe('a column with no generator, on an optional field or beside a database default', () => {
+  it('keeps the nullability and the database default, and has no execution entry', () => {
     const result = interpretPostgresSchema(
       `model Doc {
   id      Int @id
-  token   uuidString()?
-  meta    json()?
-  options json() @default(json\`{ "plan": "free" }\`)
+  token   sql.Char(36)?
+  meta    Jsonb?
+  options Jsonb @default(json\`{ "plan": "free" }\`)
 }`,
       {
         scalarColumnDescriptors: postgresScalarTypeDescriptors,
         controlMutationDefaults: builtinControlMutationDefaults,
-        authoringContributions: {
-          field: {
-            uuidString: nonTemporalPresetMirrors.uuidString,
-            json: nonTemporalPresetMirrors.pgJson,
-          },
-        },
+        authoringContributions: { type: types },
       },
     );
 

@@ -58,7 +58,7 @@ describe('interpretPslDocumentToSqlContract', () => {
     interpretSqlContract(schema, {
       target: postgresTarget,
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
-      authoringContributions: { entityTypes: testEnumEntityContributions, type: {}, field: {} },
+      authoringContributions: { entityTypes: testEnumEntityContributions, type: {} },
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
       capabilities: { sql: { scalarList: true } },
@@ -150,7 +150,7 @@ describe('interpretPslDocumentToSqlContract', () => {
       {
         target: targetWithCapabilities,
         scalarColumnDescriptors: postgresScalarTypeDescriptors,
-        authoringContributions: { entityTypes: testEnumEntityContributions, type: {}, field: {} },
+        authoringContributions: { entityTypes: testEnumEntityContributions, type: {} },
         composedExtensionContracts: new Map(),
         createNamespace: createTestSqlNamespace,
         ...fixtureInterpreterTypes,

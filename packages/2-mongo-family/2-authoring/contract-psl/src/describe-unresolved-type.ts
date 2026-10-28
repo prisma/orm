@@ -5,6 +5,8 @@ import {
 } from '@internal/framework-components/authoring';
 import type { AssembledAuthoringContributions } from '@internal/framework-components/control';
 import type { DescribeUnresolvedType } from '@internal/psl-parser';
+import { describeRemovedFieldPreset } from '@internal/psl-parser/interpret';
+import { removedMongoFieldPresets } from './removed-field-presets';
 
 const EARLIER_MONGO_SCALAR_NAMES: Readonly<Record<string, string>> = {
   BigInt: 'Int64',
@@ -35,8 +37,16 @@ export function describeUnresolvedMongoType(
 ): DescribeUnresolvedType {
   const types = contributions.type;
   const scalars = collectScalarTypeConstructors(types);
-  return ({ field, owner, written }) => {
-    if (field.typeNamespaceId !== undefined || field.typeConstructor !== undefined) {
+  return ({ field, owner, written, isDeclared }) => {
+    if (field.typeConstructor !== undefined) {
+      return describeRemovedFieldPreset(
+        removedMongoFieldPresets,
+        field.typeConstructor,
+        types,
+        isDeclared,
+      );
+    }
+    if (field.typeNamespaceId !== undefined) {
       return undefined;
     }
     const replacement = EARLIER_MONGO_SCALAR_NAMES[written];

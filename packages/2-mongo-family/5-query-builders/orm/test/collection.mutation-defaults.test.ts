@@ -319,7 +319,8 @@ describe('mongoOrm', () => {
     expect(() => mongoOrm({ contract: withDefaults, executor, enums: noEnums })).toThrow(
       expect.objectContaining({
         code: 'ORM.MUTATION_DEFAULTS_MISSING',
-        message: expect.stringContaining('mutationDefaults: context'),
+        message:
+          'The contract has execution defaults (fields such as temporal.CreatedAt that the ORM fills on write), but mongoOrm() was built without mutationDefaults, so those fields would never be written. Pass the execution context: mongoOrm({ contract, executor, mutationDefaults: context }), or create the client with mongo().',
       }),
     );
   });

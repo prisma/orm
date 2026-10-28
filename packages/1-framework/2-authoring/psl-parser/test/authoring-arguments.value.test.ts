@@ -198,3 +198,85 @@ describe('mapPslHelperArgs on a value argument with no expression', () => {
     );
   });
 });
+
+describe('mapPslHelperArgs positional and named dispatch', () => {
+  const descriptors = [
+    { kind: 'value', dataType: 'pg/int4', name: 'x' },
+    { kind: 'value', dataType: 'pg/text', name: 'y', optional: true },
+  ] as const;
+
+  it('maps positional arguments in order', () => {
+    expect(callWith('1, "two"', descriptors)).toEqual({ result: [1, 'two'], diagnostics: [] });
+  });
+
+  it('maps named arguments by descriptor name, in any order', () => {
+    expect(callWith('y: "two", x: 1', descriptors)).toEqual({
+      result: [1, 'two'],
+      diagnostics: [],
+    });
+  });
+
+  it('maps a positional argument written after a named one to the first parameter', () => {
+    expect(callWith('y: "two", 1', descriptors)).toEqual({ result: [1, 'two'], diagnostics: [] });
+  });
+
+  it('rejects a named argument for a parameter a later positional argument fills', () => {
+    const { result, diagnostics } = callWith('x: 2, 1', descriptors);
+    expect(result).toBeUndefined();
+    expect(diagnostics.map((d) => d.message)).toEqual([
+      'Field "Model.field" constructor "Sized" received duplicate value for argument "x".',
+    ]);
+  });
+
+  it('leaves an optional trailing descriptor unset when no argument supplies it', () => {
+    expect(callWith('1', descriptors)).toEqual({ result: [1, undefined], diagnostics: [] });
+  });
+
+  it('rejects more positional arguments than the helper declares', () => {
+    const { result, diagnostics } = callWith('1, "two", 3', descriptors);
+    expect(result).toBeUndefined();
+    expect(diagnostics.map((d) => d.message)).toEqual([
+      'Field "Model.field" constructor "Sized" accepts at most 2 argument(s), received 3.',
+    ]);
+  });
+
+  it('rejects a named argument that does not match any descriptor', () => {
+    const { result, diagnostics } = callWith('z: 1', descriptors);
+    expect(result).toBeUndefined();
+    expect(diagnostics.map((d) => d.message)).toEqual([
+      'Field "Model.field" constructor "Sized" received unknown named argument "z".',
+    ]);
+  });
+
+  it('rejects a named argument that duplicates an already-supplied positional value', () => {
+    const { result, diagnostics } = callWith('1, x: 2', descriptors);
+    expect(result).toBeUndefined();
+    expect(diagnostics.map((d) => d.message)).toEqual([
+      'Field "Model.field" constructor "Sized" received duplicate value for argument "x".',
+    ]);
+  });
+
+  it('reports a bad value before a bad name in the same call', () => {
+    expect(callWith('"bad", z: 1', descriptors).diagnostics.map((d) => d.message)).toEqual([
+      'Expected a number',
+    ]);
+  });
+
+  it('reports a bad named value before a later bad name', () => {
+    expect(callWith('y: 2, z: 1', descriptors).diagnostics.map((d) => d.message)).toEqual([
+      'Expected a quoted string',
+    ]);
+  });
+
+  it('rejects a positional argument at an index the descriptor array does not define', () => {
+    const sparseDescriptors = [
+      undefined,
+      descriptors[1],
+    ] as unknown as readonly AuthoringArgumentDescriptor[];
+    const { result, diagnostics } = callWith('1, "two"', sparseDescriptors);
+    expect(result).toBeUndefined();
+    expect(diagnostics.map((d) => d.message)).toEqual([
+      'Field "Model.field" constructor "Sized" does not define positional argument #1.',
+    ]);
+  });
+});

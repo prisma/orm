@@ -1,62 +1,61 @@
 import { computeExecutionHash } from '@internal/contract/hashing';
 import { domainModelsAtDefaultNamespace } from '@internal/contract/types';
-import {
-  temporalAuthoringPresets,
-  temporalCodecPreset,
-} from '@internal/framework-components/authoring';
 import type { TargetPackRef } from '@internal/framework-components/components';
+import { singleGeneratorBinding } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
 import { defineContract } from '../src/contract-builder';
 import type { FieldBuilder } from '../src/contract-dsl';
 import { mongoFamilyPack, mongoTargetPack as mongoTestTargetPack } from './mongo-test-packs';
 
-/** What a JavaScript caller, whom the types do not stop, can write on a preset field. */
+/** What a JavaScript caller, whom the types do not stop, can write on a generated field. */
 function untyped(builder: unknown): { many(): FieldBuilder } {
   return builder as { many(): FieldBuilder };
 }
 
-const mongoDate = { codecId: 'mongo/date@1' } as const;
-
 const mongoTargetPack = {
   ...mongoTestTargetPack,
-  authoring: {
-    ...mongoTestTargetPack.authoring,
-    field: {
-      temporal: {
-        ...temporalAuthoringPresets(mongoDate),
-        timestamp: temporalCodecPreset(mongoDate),
-      },
+  generatorFunctions: [
+    {
+      name: 'now',
+      signature: { documentation: 'now' },
+      bindings: [
+        singleGeneratorBinding({ codecIds: ['mongo/date@1'], generatorId: 'timestampNow' }),
+      ],
     },
+  ],
+  controlMutationDefaults: {
+    defaultFunctionRegistry: new Map(),
+    generatorDescriptors: [{ id: 'timestampNow' }],
   },
 } as const satisfies TargetPackRef<'mongo', 'mongo'>;
 
 const scaffold = { family: mongoFamilyPack, target: mongoTargetPack } as const;
 const timestampNow = { kind: 'generator', id: 'timestampNow' } as const;
 
-describe('Mongo TS temporal presets', () => {
-  const contract = defineContract(scaffold, ({ field, model }) => ({
+describe('Mongo TS generated fields', () => {
+  const contract = defineContract(scaffold, ({ field, model, gen }) => ({
     models: {
       Post: model('Post', {
         collection: 'posts',
         fields: {
           _id: field.objectId(),
-          updatedAt: field.temporal.updatedAt(),
-          createdAt: field.temporal.createdAt(),
-          touchedAt: field.temporal.timestamp(undefined, 'now'),
+          updatedAt: field.date().onCreate(gen.now()).onUpdate(gen.now()),
+          createdAt: field.date().onCreate(gen.now()),
+          touchedAt: field.date().onUpdate(gen.now()),
         },
       }),
     },
   }));
 
   it('keys the execution default of a field by its stored name', () => {
-    const mapped = defineContract(scaffold, ({ field, model }) => ({
+    const mapped = defineContract(scaffold, ({ field, model, gen }) => ({
       models: {
         Post: model('Post', {
           collection: 'posts',
           fields: {
             id: field.objectId().mongo({ field: '_id' }),
-            createdAt: field.temporal.createdAt().mongo({ field: 'created_at' }),
+            createdAt: field.date().onCreate(gen.now()).mongo({ field: 'created_at' }),
           },
         }),
       },
@@ -69,7 +68,7 @@ describe('Mongo TS temporal presets', () => {
     ]);
   });
 
-  it('types each preset field as a mongo/date@1 scalar', () => {
+  it('types each generated field as a mongo/date@1 scalar', () => {
     const date = { nullable: false, type: { kind: 'scalar', codecId: 'mongo/date@1' } };
     expect(domainModelsAtDefaultNamespace(contract.domain)['Post']?.fields).toMatchObject({
       updatedAt: date,
@@ -114,11 +113,11 @@ describe('Mongo TS temporal presets', () => {
     } as const satisfies TargetPackRef<'mongo', 'mongo-other'>;
     const bound = defineContract(
       { family: mongoFamilyPack, target: otherTarget },
-      ({ field, model }) => ({
+      ({ field, model, gen }) => ({
         models: {
           Post: model('Post', {
             collection: 'posts',
-            fields: { _id: field.objectId(), createdAt: field.temporal.createdAt() },
+            fields: { _id: field.objectId(), createdAt: field.date().onCreate(gen.now()) },
           }),
         },
       }),
@@ -143,13 +142,13 @@ describe('Mongo TS temporal presets', () => {
   });
 });
 
-describe('Mongo TS temporal preset misuse', () => {
+describe('Mongo TS generated field misuse', () => {
   it('builds an optional field that generates a value', () => {
-    const contract = defineContract(scaffold, ({ field, model }) => ({
+    const contract = defineContract(scaffold, ({ field, model, gen }) => ({
       models: {
         Post: model('Post', {
           collection: 'posts',
-          fields: { _id: field.objectId(), createdAt: field.temporal.createdAt().optional() },
+          fields: { _id: field.objectId(), createdAt: field.date().onCreate(gen.now()).optional() },
         }),
       },
     }));
@@ -170,13 +169,13 @@ describe('Mongo TS temporal preset misuse', () => {
 
   it('refuses a list field with execution defaults', () => {
     expect(() =>
-      defineContract(scaffold, ({ field, model }) => ({
+      defineContract(scaffold, ({ field, model, gen }) => ({
         models: {
           Post: model('Post', {
             collection: 'posts',
             fields: {
               _id: field.objectId(),
-              createdAt: untyped(field.temporal.createdAt()).many(),
+              createdAt: untyped(field.date().onCreate(gen.now())).many(),
             },
           }),
         },
@@ -193,14 +192,14 @@ describe('Mongo TS temporal preset misuse', () => {
 
   it('refuses execution defaults on a model without a collection', () => {
     expect(() =>
-      defineContract(scaffold, ({ field, model }) => {
+      defineContract(scaffold, ({ field, model, gen }) => {
         const Owner = model('Owner', { collection: 'owners', fields: { _id: field.objectId() } });
         return {
           models: {
             Owner,
             Address: model('Address', {
               owner: Owner,
-              fields: { createdAt: field.temporal.createdAt() },
+              fields: { createdAt: field.date().onCreate(gen.now()) },
             }),
           },
         };
@@ -215,9 +214,9 @@ describe('Mongo TS temporal preset misuse', () => {
 
   it('refuses execution defaults on a value-object field', () => {
     expect(() =>
-      defineContract(scaffold, ({ field, model, valueObject }) => ({
+      defineContract(scaffold, ({ field, model, valueObject, gen }) => ({
         valueObjects: {
-          Audit: valueObject('Audit', { fields: { createdAt: field.temporal.createdAt() } }),
+          Audit: valueObject('Audit', { fields: { createdAt: field.date().onCreate(gen.now()) } }),
         },
         models: {
           Post: model('Post', { collection: 'posts', fields: { _id: field.objectId() } }),
@@ -234,75 +233,17 @@ describe('Mongo TS temporal preset misuse', () => {
       }),
     );
   });
-
-  it('refuses a preset argument outside its option values', () => {
-    expect(() =>
-      defineContract(scaffold, ({ field, model }) => ({
-        models: {
-          Post: model('Post', {
-            collection: 'posts',
-            fields: {
-              _id: field.objectId(),
-              touchedAt: field.temporal.timestamp('later' as 'now'),
-            },
-          }),
-        },
-      })),
-    ).toThrow(/temporal\.timestamp/);
-  });
-
-  it('refuses a pack preset that collides with a core field helper', () => {
-    const collidingTarget = {
-      ...mongoTargetPack,
-      authoring: { field: { string: temporalCodecPreset(mongoDate) } },
-    } as const satisfies TargetPackRef<'mongo', 'mongo'>;
-    expect(() =>
-      defineContract({ family: mongoFamilyPack, target: collidingTarget }, () => ({ models: {} })),
-    ).toThrow(expect.objectContaining({ code: 'CONTRACT.PACK_CONTRIBUTION_INVALID' }));
-  });
-
-  it.each([
-    ['default', { default: { kind: 'function', expression: 'now()' } }],
-    ['id', { id: true }],
-    ['unique', { unique: true }],
-  ] as const)('refuses a pack preset that contributes %s', (contribution, output) => {
-    const target = {
-      ...mongoTargetPack,
-      authoring: {
-        field: { custom: { stamp: { kind: 'fieldPreset', output: { ...mongoDate, ...output } } } },
-      },
-    } as const satisfies TargetPackRef<'mongo', 'mongo'>;
-    expect(() =>
-      defineContract({ family: mongoFamilyPack, target }, ({ field, model }) => ({
-        models: {
-          Post: model('Post', {
-            collection: 'posts',
-            fields: { _id: field.objectId(), stamp: field.custom.stamp() },
-          }),
-        },
-      })),
-    ).toThrow(
-      expect.objectContaining({
-        code: 'CONTRACT.PACK_CONTRIBUTION_INVALID',
-        meta: expect.objectContaining({
-          helperPath: 'custom.stamp',
-          reason: 'preset-contribution-unsupported',
-          contribution: [contribution],
-        }),
-      }),
-    );
-  });
 });
 
-describe('Mongo TS temporal presets on polymorphic models', () => {
-  function eventContract(clickFields: 'plain' | 'withPreset') {
-    return defineContract(scaffold, ({ field, model }) => {
+describe('Mongo TS generated fields on polymorphic models', () => {
+  function eventContract(clickFields: 'plain' | 'withGenerated') {
+    return defineContract(scaffold, ({ field, model, gen }) => {
       const Event = model('Event', {
         collection: 'events',
         fields: {
           _id: field.objectId(),
           kind: field.string(),
-          createdAt: field.temporal.createdAt(),
+          createdAt: field.date().onCreate(gen.now()),
         },
         discriminator: { field: 'kind', variants: { Click: { value: 'click' } } },
       });
@@ -310,15 +251,15 @@ describe('Mongo TS temporal presets on polymorphic models', () => {
         collection: 'events',
         base: Event,
         fields:
-          clickFields === 'withPreset'
-            ? { url: field.string(), clickedAt: field.temporal.createdAt() }
+          clickFields === 'withGenerated'
+            ? { url: field.string(), clickedAt: field.date().onCreate(gen.now()) }
             : { url: field.string() },
       });
       return { models: { Event, Click } };
     });
   }
 
-  it('emits one ref for a preset on the base model, shared by its variants', () => {
+  it('emits one ref for a generated field on the base model, shared by its variants', () => {
     expect(eventContract('plain').execution?.mutations.defaults).toEqual([
       {
         ref: { namespace: UNBOUND_NAMESPACE_ID, entry: 'events', field: 'createdAt' },
@@ -328,7 +269,7 @@ describe('Mongo TS temporal presets on polymorphic models', () => {
   });
 
   it('refuses execution defaults on a variant field', () => {
-    expect(() => eventContract('withPreset')).toThrow(
+    expect(() => eventContract('withGenerated')).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.DEFAULT_INVALID',
         meta: {
@@ -341,17 +282,23 @@ describe('Mongo TS temporal presets on polymorphic models', () => {
   });
 });
 
-describe('Mongo TS temporal presets on models sharing a collection', () => {
+describe('Mongo TS generated fields on models sharing a collection', () => {
   function sharedCollectionContract(pageStamp: 'createdAt' | 'updatedAt') {
-    return defineContract(scaffold, ({ field, model }) => ({
+    return defineContract(scaffold, ({ field, model, gen }) => ({
       models: {
         Post: model('Post', {
           collection: 'entries',
-          fields: { _id: field.objectId(), stamp: field.temporal.createdAt() },
+          fields: { _id: field.objectId(), stamp: field.date().onCreate(gen.now()) },
         }),
         Page: model('Page', {
           collection: 'entries',
-          fields: { _id: field.objectId(), stamp: field.temporal[pageStamp]() },
+          fields: {
+            _id: field.objectId(),
+            stamp:
+              pageStamp === 'createdAt'
+                ? field.date().onCreate(gen.now())
+                : field.date().onCreate(gen.now()).onUpdate(gen.now()),
+          },
         }),
       },
     }));
@@ -377,20 +324,24 @@ describe('Mongo TS temporal presets on models sharing a collection', () => {
 
   it("names each model's own field when differing defaults share a stored name", () => {
     expect(() =>
-      defineContract(scaffold, ({ field, model }) => ({
+      defineContract(scaffold, ({ field, model, gen }) => ({
         models: {
           Post: model('Post', {
             collection: 'entries',
             fields: {
               _id: field.objectId(),
-              createdAt: field.temporal.createdAt().mongo({ field: 'created_at' }),
+              createdAt: field.date().onCreate(gen.now()).mongo({ field: 'created_at' }),
             },
           }),
           Page: model('Page', {
             collection: 'entries',
             fields: {
               _id: field.objectId(),
-              created: field.temporal.updatedAt().mongo({ field: 'created_at' }),
+              created: field
+                .date()
+                .onCreate(gen.now())
+                .onUpdate(gen.now())
+                .mongo({ field: 'created_at' }),
             },
           }),
         },

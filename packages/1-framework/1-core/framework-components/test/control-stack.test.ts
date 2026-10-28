@@ -170,7 +170,6 @@ describe('assembleAuthoringContributions', () => {
     const result = assembleAuthoringContributions([createDescriptor()]);
     expect(result).toEqual({
       dataTypes: {},
-      field: {},
       type: {},
       entityTypes: {},
       pslBlockDescriptors: {},
@@ -179,47 +178,31 @@ describe('assembleAuthoringContributions', () => {
     });
   });
 
-  it('merges field namespaces from multiple descriptors', () => {
-    const result = assembleAuthoringContributions([
-      createDescriptor({
-        authoring: {
-          field: {
-            ns1: { kind: 'fieldPreset', output: { codecId: 'a@1' } },
-          },
-        },
-      }),
-      createDescriptor({
-        id: 'other',
-        authoring: {
-          field: {
-            ns2: { kind: 'fieldPreset', output: { codecId: 'b@1' } },
-          },
-        },
-      }),
-    ]);
-    expect(Object.keys(result.field)).toEqual(['ns1', 'ns2']);
-  });
-
-  it('throws on duplicate field preset paths', () => {
+  it('refuses a component that contributes authoring.field, naming typeAlias as the replacement', () => {
     expect(() =>
       assembleAuthoringContributions([
         createDescriptor({
+          id: 'legacy-pack',
           authoring: {
-            field: {
-              dup: { kind: 'fieldPreset', output: { codecId: 'a@1' } },
-            },
-          },
-        }),
-        createDescriptor({
-          id: 'other',
-          authoring: {
-            field: {
-              dup: { kind: 'fieldPreset', output: { codecId: 'b@1' } },
-            },
-          },
+            field: { createdAt: { kind: 'fieldPreset', output: { codecId: 'a@1' } } },
+          } as unknown as never,
         }),
       ]),
-    ).toThrow(/Duplicate authoring field helper "dup"/);
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.PACK_CONTRIBUTION_INVALID',
+        message:
+          'Component "legacy-pack" contributes authoring.field, which Prisma 8 removed with field presets. Contribute a type alias (kind: \'typeAlias\') or a type constructor in authoring.type.',
+      }),
+    );
+  });
+
+  it('refuses an empty authoring.field', () => {
+    expect(() =>
+      assembleAuthoringContributions([
+        createDescriptor({ id: 'legacy-pack', authoring: { field: {} } as unknown as never }),
+      ]),
+    ).toThrow(/Component "legacy-pack" contributes authoring\.field/);
   });
 
   it('lands top-level type constructors from a descriptor in the merged namespace', () => {
@@ -271,7 +254,7 @@ describe('assembleAuthoringContributions', () => {
             type: {
               Sized: {
                 kind: 'typeConstructor',
-                args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
+                args: [{ kind: 'value', dataType: 'test/int', name: 'length' }],
                 output: {
                   codecId: 'a/sized@1',
                   typeParams: { length: { kind: 'arg', index: 2 } },
@@ -315,34 +298,6 @@ describe('assembleAuthoringContributions', () => {
     );
   });
 
-  it('rejects a dangling arg-ref inside an arg-ref default', () => {
-    expect(() =>
-      assembleAuthoringContributions([
-        createDescriptor({
-          id: 'adapter-a',
-          authoring: {
-            type: {
-              Sized: {
-                kind: 'typeConstructor',
-                args: [{ kind: 'number', name: 'length', integer: true, optional: true }],
-                output: {
-                  codecId: 'a/sized@1',
-                  typeParams: {
-                    length: { kind: 'arg', index: 0, default: { kind: 'arg', index: 5 } },
-                  },
-                },
-              },
-            },
-          },
-        }),
-      ]),
-    ).toThrow(
-      'Invalid authoring type constructor "Sized" contributed by descriptor "adapter-a". ' +
-        'output.typeParams.length references argument 5, but the constructor declares 1 argument(s). ' +
-        'Declare the argument or correct the reference index.',
-    );
-  });
-
   it('accepts a plain type constructor whose output names only its codec', () => {
     expect(() =>
       assembleAuthoringContributions([
@@ -366,7 +321,7 @@ describe('assembleAuthoringContributions', () => {
           type: {
             VarCharish: {
               kind: 'typeConstructor',
-              args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, optional: true }],
+              args: [{ kind: 'value', dataType: 'test/int', name: 'length', optional: true }],
               output: {
                 codecId: 'a/varcharish@1',
                 typeParams: { length: { kind: 'arg', index: 0 } },
@@ -500,7 +455,7 @@ describe('assembleAuthoringContributions', () => {
             type: {
               Sized: {
                 kind: 'typeConstructor',
-                args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
+                args: [{ kind: 'value', dataType: 'test/int', name: 'length' }],
                 output: { codecId: 'a/sized@1' },
               },
             },
@@ -548,79 +503,26 @@ describe('assembleAuthoringContributions', () => {
   });
 
   it('rejects malformed descriptor values during merge instead of recursing into primitives', () => {
-    // A descriptor missing `output` fails the canonical leaf guard but is a plain object, so the walker would historically recurse INTO it and, on the second registration of the same path, try to walk through the inner `'fieldPreset'` string of the `kind` property — either silently mangling state or infinite-looping. The walker now rejects the malformed value with a clear path-aware error.
     expect(() =>
       assembleAuthoringContributions([
         createDescriptor({
           authoring: {
-            field: {
-              malformed: { kind: 'fieldPreset' } as unknown as never,
+            entityTypes: {
+              malformed: { kind: 'entity' } as unknown as never,
             },
           },
         }),
         createDescriptor({
           id: 'other',
           authoring: {
-            field: {
-              malformed: { kind: 'fieldPreset' } as unknown as never,
+            entityTypes: {
+              malformed: { kind: 'entity' } as unknown as never,
             },
           },
         }),
       ]),
-    ).toThrow(/Invalid authoring field helper "malformed\.kind"/);
+    ).toThrow(/Invalid authoring entity helper "malformed\.kind"/);
   });
-
-  it('rejects field preset and type constructor path collisions', () => {
-    expect(() =>
-      assembleAuthoringContributions([
-        createDescriptor({
-          authoring: {
-            field: {
-              custom: {
-                Json: { kind: 'fieldPreset', output: { codecId: 'a@1' } },
-              },
-            },
-          },
-        }),
-        createDescriptor({
-          id: 'other',
-          authoring: {
-            type: {
-              custom: {
-                Json: {
-                  kind: 'typeConstructor',
-                  output: { codecId: 'b@1' },
-                },
-              },
-            },
-          },
-        }),
-      ]),
-    ).toThrow(/Ambiguous authoring registry path "custom.Json"/);
-  });
-
-  it('rejects field preset and type alias path collisions, naming the type alias', () => {
-    expect(() =>
-      assembleAuthoringContributions([
-        createDescriptor({
-          authoring: {
-            field: { custom: { Stamp: { kind: 'fieldPreset', output: { codecId: 'a@1' } } } },
-          },
-        }),
-        createDescriptor({
-          id: 'other',
-          authoring: {
-            type: {
-              custom: { Stamp: { kind: 'typeAlias', output: { type: { codecId: 'b@1' } } } },
-            },
-          },
-        }),
-      ]),
-    ).toThrow(
-      'Ambiguous authoring registry path "custom.Stamp". The same path is registered as both a type constructor or type alias and a field preset;',
-    );
-  });
-
   it('merges entityTypes namespaces from multiple descriptors', () => {
     const result = assembleAuthoringContributions([
       createDescriptor({
@@ -1030,16 +932,16 @@ describe('assembleAuthoringContributions', () => {
     // Pack B adds a second leaf under the same sub-namespace.
     // After merging, pack A's original object must not contain pack B's key.
     const packAAuthoring = {
-      field: {
+      type: {
         id: {
-          alpha: { kind: 'fieldPreset' as const, output: { codecId: 'a@1' } },
+          alpha: { kind: 'typeConstructor' as const, output: { codecId: 'a@1' } },
         },
       },
     };
     const packBAuthoring = {
-      field: {
+      type: {
         id: {
-          beta: { kind: 'fieldPreset' as const, output: { codecId: 'b@1' } },
+          beta: { kind: 'typeConstructor' as const, output: { codecId: 'b@1' } },
         },
       },
     };
@@ -1049,22 +951,22 @@ describe('assembleAuthoringContributions', () => {
       createDescriptor({ id: 'pack-b', authoring: packBAuthoring }),
     ]);
 
-    expect(Object.keys(result.field['id'] as object)).toEqual(['alpha', 'beta']);
+    expect(Object.keys(result.type['id'] as object)).toEqual(['alpha', 'beta']);
     // Pack A's original sub-namespace object must be untouched.
-    expect(packAAuthoring.field.id).not.toHaveProperty('beta');
+    expect(packAAuthoring.type.id).not.toHaveProperty('beta');
   });
 
   it('composing the same pack objects twice does not throw', () => {
     // Simulates two calls to assembleAuthoringContributions (or createControlStack) within the
     // same process using the same singleton pack descriptors. Without the shallow-copy fix,
     // the first call mutates the family pack's id sub-namespace, so the second call finds both
-    // leaves already present in the source object and throws "Duplicate authoring field helper".
+    // leaves already present in the source object and throws "Duplicate authoring type helper".
     const packADescriptor = createDescriptor({
       authoring: {
-        field: {
+        type: {
           id: {
             alpha: {
-              kind: 'fieldPreset' as const,
+              kind: 'typeConstructor' as const,
               output: { codecId: 'a@1' },
             },
           },
@@ -1074,10 +976,10 @@ describe('assembleAuthoringContributions', () => {
     const packBDescriptor = createDescriptor({
       id: 'pack-b',
       authoring: {
-        field: {
+        type: {
           id: {
             beta: {
-              kind: 'fieldPreset' as const,
+              kind: 'typeConstructor' as const,
               output: { codecId: 'b@1' },
             },
           },
@@ -1086,7 +988,7 @@ describe('assembleAuthoringContributions', () => {
     });
 
     const first = assembleAuthoringContributions([packADescriptor, packBDescriptor]);
-    expect(Object.keys(first.field['id'] as object)).toEqual(['alpha', 'beta']);
+    expect(Object.keys(first.type['id'] as object)).toEqual(['alpha', 'beta']);
 
     // Second composition with the same singletons must not throw.
     expect(() => assembleAuthoringContributions([packADescriptor, packBDescriptor])).not.toThrow();
@@ -1097,10 +999,10 @@ describe('assembleAuthoringContributions', () => {
       assembleAuthoringContributions([
         createDescriptor({
           authoring: {
-            field: {
+            type: {
               id: {
                 shared: {
-                  kind: 'fieldPreset' as const,
+                  kind: 'typeConstructor' as const,
                   output: { codecId: 'a@1' },
                 },
               },
@@ -1110,10 +1012,10 @@ describe('assembleAuthoringContributions', () => {
         createDescriptor({
           id: 'pack-b',
           authoring: {
-            field: {
+            type: {
               id: {
                 shared: {
-                  kind: 'fieldPreset' as const,
+                  kind: 'typeConstructor' as const,
                   output: { codecId: 'b@1' },
                 },
               },
@@ -1121,7 +1023,7 @@ describe('assembleAuthoringContributions', () => {
           },
         }),
       ]),
-    ).toThrow(/Duplicate authoring field helper "id\.shared"/);
+    ).toThrow(/Duplicate authoring type helper "id\.shared"/);
   });
 
   it('preserves prototype-carrying objects in sub-namespaces through composition', () => {
@@ -1164,18 +1066,18 @@ describe('assembleAuthoringContributions', () => {
   });
 
   it('deep-copies nested plain-object sub-namespaces so composing the same pack twice does not throw or mutate', () => {
-    // depth-3: pack A owns field.a.b.alpha; pack B adds field.a.b.beta.
+    // depth-3: pack A owns type.a.b.alpha; pack B adds type.a.b.beta.
     // Before the deep-copy fix, shallow-copying `a` on first assignment left
     // `a.b` shared with pack A's original. On the second composition, pack B
     // recursing into `a.b` would find `beta` already present (mutated in by the
-    // first run) and throw "Duplicate authoring field helper".
+    // first run) and throw "Duplicate authoring type helper".
     const packADescriptor = createDescriptor({
       authoring: {
-        field: {
+        type: {
           a: {
             b: {
               alpha: {
-                kind: 'fieldPreset' as const,
+                kind: 'typeConstructor' as const,
                 output: { codecId: 'a@1' },
               },
             },
@@ -1186,11 +1088,11 @@ describe('assembleAuthoringContributions', () => {
     const packBDescriptor = createDescriptor({
       id: 'pack-b',
       authoring: {
-        field: {
+        type: {
           a: {
             b: {
               beta: {
-                kind: 'fieldPreset' as const,
+                kind: 'typeConstructor' as const,
                 output: { codecId: 'b@1' },
               },
             },
@@ -1200,7 +1102,7 @@ describe('assembleAuthoringContributions', () => {
     });
 
     const first = assembleAuthoringContributions([packADescriptor, packBDescriptor]);
-    expect(Object.keys((first.field['a'] as Record<string, unknown>)['b'] as object)).toEqual([
+    expect(Object.keys((first.type['a'] as Record<string, unknown>)['b'] as object)).toEqual([
       'alpha',
       'beta',
     ]);
@@ -1208,7 +1110,7 @@ describe('assembleAuthoringContributions', () => {
     // Second composition with the same singletons must not throw.
     expect(() => assembleAuthoringContributions([packADescriptor, packBDescriptor])).not.toThrow();
     // Pack A's original nested object must be untouched.
-    expect(packADescriptor.authoring?.field?.['a']).not.toHaveProperty(['b', 'beta']);
+    expect(packADescriptor.authoring?.type?.['a']).not.toHaveProperty(['b', 'beta']);
   });
 });
 
@@ -1512,7 +1414,6 @@ describe('createControlStack', () => {
     expect(state.extensionIds).toEqual(['fam', 'tgt']);
     expect(state.authoringContributions).toEqual({
       dataTypes: {},
-      field: {},
       type: {},
       entityTypes: {},
       pslBlockDescriptors: {},

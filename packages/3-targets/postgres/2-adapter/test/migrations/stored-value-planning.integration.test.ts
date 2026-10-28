@@ -61,11 +61,11 @@ function roleContract(
     sqlFamilyPack,
     postgresPack,
     { ...postgresTypeLookups, enums: { Role }, createNamespace: postgresCreateNamespace },
-    ({ field: f, model: m }) => ({
+    ({ field: f, model: m, type }) => ({
       models: {
         User: m('User', {
           fields: {
-            id: f.text().id(),
+            id: f.column(type.String()).id(),
             role: options.required === true ? f.namedType(Role) : f.namedType(Role).optional(),
           },
         }),
@@ -90,18 +90,18 @@ function teamContract(
     sqlFamilyPack,
     postgresPack,
     { ...postgresTypeLookups, enums: { Role }, createNamespace: postgresCreateNamespace },
-    ({ field: f, model: m }) => ({
+    ({ field: f, model: m, type }) => ({
       models: {
         User: m('User', {
-          fields: { id: f.text().id(), role: f.namedType(Role).optional() },
+          fields: { id: f.column(type.String()).id(), role: f.namedType(Role).optional() },
         }),
         Team: m('Team', {
-          fields: { id: f.text().id(), roles: f.namedType(Role).many() },
+          fields: { id: f.column(type.String()).id(), roles: f.namedType(Role).many() },
         }),
         ...(options.legacy
           ? {
               Legacy: m('Legacy', {
-                fields: { id: f.text().id(), role: f.namedType(Role).optional() },
+                fields: { id: f.column(type.String()).id(), role: f.namedType(Role).optional() },
               }),
             }
           : {}),
@@ -123,10 +123,10 @@ function rankContract(members: Readonly<Record<string, number>>): Contract<SqlSt
     sqlFamilyPack,
     postgresPack,
     { ...postgresTypeLookups, enums: { Rank }, createNamespace: postgresCreateNamespace },
-    ({ field: f, model: m }) => ({
+    ({ field: f, model: m, type }) => ({
       models: {
         User: m('User', {
-          fields: { id: f.text().id(), rank: f.namedType(Rank).optional() },
+          fields: { id: f.column(type.String()).id(), rank: f.namedType(Rank).optional() },
         }),
       },
     }),

@@ -26,7 +26,7 @@ const fixtureRoots = [
   'test/contract-parity/fixtures',
   'test/mongo/bson-scalars',
   'test/mongo/list-filters',
-  'test/mongo/temporal-presets',
+  'test/mongo/temporal-generators',
   'test/mongo/prisma6-source',
 ];
 

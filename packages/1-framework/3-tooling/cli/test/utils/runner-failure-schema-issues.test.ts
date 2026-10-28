@@ -189,8 +189,12 @@ describe('a failed schema check after apply', () => {
       });
     });
 
-    it('keeps the runner why for a failure that carries no issues', () => {
-      expect(dbInitError(withoutIssues).why).toBe(RUNNER_WHY);
+    it('keeps the runner why for a failure that carries no issues, and says to bring the database to the contract with db update', () => {
+      const error = dbInitError(withoutIssues);
+      expect({ why: error.why, fix: error.fix }).toEqual({
+        why: RUNNER_WHY,
+        fix: 'Fix the schema mismatch (db init is additive-only), or bring the database to the contract with `{bin} db update`, which moves the database without a reset and asks before losing data.',
+      });
     });
   });
 

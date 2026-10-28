@@ -1,15 +1,11 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
-import {
-  temporalAuthoringPresets,
-  temporalCodecPreset,
-} from '@internal/framework-components/authoring';
 import { mongoCodecLookup } from '@internal/mongo-contract/test';
 import { describe, expect, it } from 'vitest';
 import { interpretMongoContract } from './interpreter-test-helpers';
 import { mongoDataTypeSupport } from './mongo-type-lookups';
 
 const lookups = {
-  scalarTypeCodecIds: new Map([
+  scalarTypes: new Map([
     ['String', 'mongo/string@1'],
     ['Int', 'mongo/int32@1'],
     ['ObjectId', 'mongo/objectId@1'],
@@ -103,24 +99,23 @@ model Admin {
   });
 
   it('reports the warnings of a schema it refuses', () => {
-    const mongoDate = { codecId: 'mongo/date@1' } as const;
     const warnings: ContractSourceDiagnostic[] = [];
     const result = interpretMongoContract(
       `model Post {
-  id    ObjectId             @id @map("_id")
-  at    temporal.timestamp()
+  id    ObjectId @id @map("_id")
+  at    DateTime
   a     String
-  b     String               @map("a")
+  b     String   @map("a")
 }
 `,
       {
         ...lookups,
-        scalarTypeCodecIds: new Map([...lookups.scalarTypeCodecIds, ['Date', 'mongo/date@1']]),
         authoringContributions: {
-          field: {
-            temporal: {
-              ...temporalAuthoringPresets(mongoDate),
-              timestamp: temporalCodecPreset(mongoDate),
+          type: {
+            DateTime: {
+              kind: 'typeConstructor',
+              output: { codecId: 'mongo/date@1' },
+              deprecated: { replacement: 'Date' },
             },
           },
         },
@@ -134,7 +129,7 @@ model Admin {
       warnings: warnings.map(({ code }) => code),
     }).toEqual({
       errors: ['PSL_DUPLICATE_STORED_NAME'],
-      warnings: ['PSL_PRESET_WITHOUT_EFFECT'],
+      warnings: ['PSL_DEPRECATED_SCALAR_NAME'],
     });
   });
 

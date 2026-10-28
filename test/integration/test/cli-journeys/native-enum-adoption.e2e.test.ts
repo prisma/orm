@@ -18,18 +18,9 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import postgresAdapterDescriptor from '@prisma/orm-postgres/adapter/control';
-import { createControlStack } from '@prisma/orm-postgres/components/control';
-import { type Contract, coreHash, profileHash } from '@prisma/orm-postgres/contract/types';
-import postgresDriverDescriptor from '@prisma/orm-postgres/driver/control';
-import sqlFamilyDescriptor from '@prisma/orm-postgres/family/control';
-import { SqlStorage } from '@prisma/orm-postgres/family-contract/types';
-import postgresTargetDescriptor from '@prisma/orm-postgres/target/control';
-import { postgresCreateNamespace } from '@prisma/orm-postgres/target/types';
-import { applicationDomainOf, withClient } from '@repo/test-utils';
+import { withClient } from '@repo/test-utils';
 import stripAnsi from 'strip-ansi';
 import { describe, expect, it } from 'vitest';
-import { printPsl } from '../utils/cli-commands';
 import { withTempDir } from '../utils/cli-test-helpers';
 import {
   type JourneyContext,
@@ -40,6 +31,7 @@ import {
   timeouts,
   useDevDatabase,
 } from '../utils/journey-test-helpers';
+import { inferPostgresNamespacePsl } from '../utils/journey-workspace-helpers';
 
 const SEED_SQL = `
   CREATE TYPE ticket_status AS ENUM ('draft', 'review', 'done');
@@ -66,53 +58,6 @@ function readEmittedContractJson(ctx: JourneyContext): {
   };
 } {
   return JSON.parse(readFileSync(join(ctx.testDir, 'contract.json'), 'utf-8'));
-}
-
-/**
- * Minimal contract declaring only the `auth` namespace, so contract-guided
- * introspection walks the `auth` schema (the CLI's no-contract introspection
- * defaults to `public` and cannot reach it).
- */
-const authIntrospectionContract: Contract<SqlStorage> = {
-  target: 'postgres',
-  targetFamily: 'sql',
-  profileHash: profileHash('test'),
-  storage: new SqlStorage({
-    storageHash: coreHash('auth-introspection'),
-    namespaces: {
-      auth: postgresCreateNamespace({ id: 'auth', entries: { table: {} } }),
-    },
-  }),
-  roots: {},
-  domain: applicationDomainOf({ models: {} }),
-  capabilities: {},
-  extensions: {},
-  meta: {},
-};
-
-const controlStack = createControlStack({
-  family: sqlFamilyDescriptor,
-  target: postgresTargetDescriptor,
-  adapter: postgresAdapterDescriptor,
-  driver: postgresDriverDescriptor,
-  extensions: [],
-});
-const familyInstance = sqlFamilyDescriptor.create(controlStack);
-
-async function inferAuthPsl(connectionString: string): Promise<string> {
-  const driver = await postgresDriverDescriptor.create(connectionString);
-  try {
-    const schemaIR = await familyInstance.introspect({
-      driver,
-      contract: authIntrospectionContract,
-    });
-    const ast = await familyInstance.inferPslContract(schemaIR);
-    return printPsl(ast, {
-      pslBlockDescriptors: controlStack.authoringContributions.pslBlockDescriptors,
-    });
-  } finally {
-    await driver.close();
-  }
 }
 
 withTempDir(({ createTempDir }) => {
@@ -182,7 +127,7 @@ withTempDir(({ createTempDir }) => {
           contractMode: 'psl',
         });
 
-        const psl = await inferAuthPsl(db.connectionString);
+        const psl = await inferPostgresNamespacePsl(db.connectionString, 'auth');
         expect(psl, 'NA.01: auth output is namespace-wrapped').toContain('namespace auth {');
         expect(psl, 'NA.01: native_enum block emitted').toContain('native_enum AalLevel {');
         expect(psl, 'NA.01: @@map carries the bare type name').toContain('@@map("aal_level")');

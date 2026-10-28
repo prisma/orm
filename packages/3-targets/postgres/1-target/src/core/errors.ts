@@ -89,7 +89,7 @@ export function errorTemporalUnavailableForDefault(generatorId: string): Structu
     `Mutation default generator '${generatorId}' cannot produce a value because this runtime has no global Temporal implementation.`,
     {
       why: 'The generator answers a Temporal-backed column, so the value it produces is a Temporal.Instant, which this runtime cannot construct.',
-      fix: 'Run on a runtime with Temporal available, install a Temporal polyfill before creating the client, or author the column with `temporal.createdAtString()` / `temporal.updatedAtString()` to store ISO 8601 text instead.',
+      fix: 'Run on a runtime with Temporal available, install a Temporal polyfill before creating the client, or author the column with `temporal.CreatedAtString` / `temporal.UpdatedAtString` to store ISO 8601 text instead.',
       meta: { generatorId },
     },
   );

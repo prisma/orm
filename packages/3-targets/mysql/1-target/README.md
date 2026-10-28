@@ -6,7 +6,7 @@ MySQL target pack for Prisma 8.
 
 - **Domain**: targets
 - **Layer**: targets
-- **Plane**: multi-plane (shared, migration)
+- **Plane**: multi-plane (shared, migration, runtime)
 
 ## Purpose
 
@@ -17,7 +17,7 @@ Declares what MySQL is to the SQL family: its data types, codecs and PSL scalars
 - **Descriptor metadata**: `targetId: 'mysql'`, `supportsNamespaces: false` and the unbound default namespace ([ADR 223](../../../../docs/architecture%20docs/adrs/ADR%20223%20-%20Target-owned%20default%20namespace.md)). Namespace blocks are refused through that flag, with the display name and reason the descriptor supplies.
 - **Data types** (`src/core/data-types.ts`, [ADR 254](../../../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md)): `mysql/int`, `mysql/bigint`, `mysql/varchar`, `mysql/char`, `mysql/text`, `mysql/datetime` and `mysql/enum`. PSL `String` is `varchar(191)`, so a `@unique` column can be indexed. `mysql/enum` is a native `enum('A','B')` column type whose name is the text MySQL's catalog prints, so `db verify` compares the members and their order.
 - **Enum columns** (`src/core/mysql-database.ts`): the namespace factory writes each enum column's members, from the value set the column names, into its type parameters in declared order. No CHECK constraint is derived.
-- **Codecs**: one per data type, plus MySQL adaptations of the family's `sql/char@1`, `sql/varchar@1` and `sql/raw@1`. Each `fromWire` reads the text MySQL sends ([ADR 155](../../../../docs/architecture%20docs/adrs/ADR%20155%20-%20Driver%20Codec%20Boundary%20and%20Lowering%20Responsibilities.md)). `projectJson` refuses until reads with includes are built.
+- **Codecs**: one per data type, plus MySQL adaptations of the family's `sql/char@1`, `sql/varchar@1` and `sql/raw@1`. Each `fromWire` reads what the driver hands over: the text MySQL sends for text, bigint, decimal, date and JSON columns, and a number for an `int`. `projectJson` writes a column into the JSON an include reads, in the form its `fromWire` reads from a row: `int`, the text types, `enum` and `datetime` pass through; `bigint` renders as `CAST(x AS CHAR)`, because JavaScript's `JSON.parse` would round a number past 2^53. A raw column is refused. The bigint codec sends a JavaScript bigint, which mysql2 sends as its decimal text; the adapter writes an `int` or `bigint` param as `CAST(?N AS SIGNED)`, so MySQL reads it as an integer. The codec refuses a value outside the signed 64-bit range.
 - **Control tables**: `_prisma_marker` and `_prisma_ledger` live beside the application's tables, because MySQL has no schema inside a database. `src/contract-free/control-bootstrap.ts` declares their DDL.
 - **Control target descriptor**: contract serializer, `contractToSchema`, `diffSchema`, the planner and the runner.
 - **Planner** (`src/core/migrations/planner.ts`, `issue-planner.ts`): creates and drops tables, columns, indexes, unique constraints and foreign keys, with backtick-quoted DDL. Foreign keys are added after every table exists and dropped first. Dropping a foreign key also drops the index InnoDB made for it, when no other index served the key and the destination keeps no index of that name; dropping an index a foreign key of the destination uses, with no other index to take over, is refused, because MySQL refuses it. A change to a column's type, nullability or default, a primary key, a CHECK constraint, a required column with no default, a name longer than 64 characters, an autoincrement column that does not lead the primary key or a unique constraint, and every statement such as a rename are refused with a conflict that says they are not yet supported on MySQL. `migration.ts` is written as calls on `MysqlMigration` (`src/core/migrations/mysql-migration.ts`).
@@ -26,6 +26,7 @@ Declares what MySQL is to the SQL family: its data types, codecs and PSL scalars
 ## Exports
 
 - `./pack`: the pack ref for `defineContract` and the PSL interpreter
+- `./runtime`: the runtime target descriptor and `MysqlContractSerializer`
 - `./control`: the control target descriptor and `mysqlCreateNamespace`
 - `./migration`: `MysqlMigration` as `Migration`, the migration calls, the planner and the runner
 - `./codecs`, `./codec-ids`, `./codec-types`, `./codec-descriptor`: codecs and their registry

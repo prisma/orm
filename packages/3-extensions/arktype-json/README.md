@@ -25,11 +25,11 @@ import { defineContract, field, model } from '@internal/sql-contract-ts/contract
 
 const ProductSchema = type({ name: 'string', price: 'number', 'description?': 'string' });
 
-const contract = defineContract({ /* ... */ }, ({ field, model }) => ({
+const contract = defineContract({ /* ... */ }, ({ field, model, gen, type }) => ({
   models: {
     Product: model('Product', {
       fields: {
-        id: field.id.uuidv4String(),
+        id: field.column(type.Uuid()).id().onCreate(gen.uuid()),
         spec: field.column(arktypeJson(ProductSchema)),
       },
     }).sql({ table: 'product' }),

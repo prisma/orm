@@ -6,10 +6,6 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Contract } from '@prisma/orm-postgres/contract/types';
-import type { SqlStorage } from '@prisma/orm-postgres/family-contract/types';
-import postgres from '@prisma/orm-postgres/runtime';
-import { contractFromJson } from '@prisma/orm-postgres/static';
 import { withClient } from '@repo/test-utils';
 import stripAnsi from 'strip-ansi';
 import { describe, expect, it } from 'vitest';
@@ -24,6 +20,7 @@ import {
   timeouts,
   useDevDatabase,
 } from '../utils/journey-test-helpers';
+import { selectRows } from '../utils/journey-workspace-helpers';
 
 const SCHEMA = `// use prisma-8
 
@@ -78,12 +75,6 @@ function emittedTable(contractJson: unknown): {
     throw new Error(`expected one table, got ${Object.keys(tables)}`);
   }
   return { key: entry[0], table: entry[1] };
-}
-
-async function rows(result: AsyncIterable<unknown>): Promise<unknown[]> {
-  const out: unknown[] = [];
-  for await (const row of result) out.push(row);
-  return out;
 }
 
 withTempDir(({ createTempDir }) => {
@@ -145,24 +136,12 @@ withTempDir(({ createTempDir }) => {
           client.query(`insert into "${key}" default values`),
         );
 
-        const client = postgres({
-          contract: contractFromJson<Contract<SqlStorage>>(contractJson),
-          url: db.connectionString,
-        });
-        const runtime = await client.connect();
-        try {
-          const sqlNamespace = (
-            client.sql as unknown as {
-              readonly public: Record<string, { select(...columns: string[]): { build(): never } }>;
-            }
-          ).public;
-          const sqlTable = sqlNamespace[key];
-          expect(
-            sqlTable,
-            `the client exposes ${key}; it has ${Object.keys(sqlNamespace)}`,
-          ).toBeDefined();
-          const plan = sqlTable
-            ?.select(
+        expect(
+          await selectRows({
+            contractJson,
+            connectionString: db.connectionString,
+            table: key,
+            columns: [
               'id',
               'name',
               'small',
@@ -174,26 +153,23 @@ withTempDir(({ createTempDir }) => {
               'meta',
               'scores',
               'docs',
-            )
-            .build();
-          expect(await rows(runtime.query(plan as never))).toEqual([
-            {
-              id: 1,
-              name: 'anonymous',
-              small: 100,
-              count: 100000,
-              balance: 100000000000000099n,
-              price: '1.50',
-              ratio: Number.NaN,
-              active: true,
-              meta: { plan: 'free', seats: 1 },
-              scores: [1, 2],
-              docs: [{}, []],
-            },
-          ]);
-        } finally {
-          await runtime.close();
-        }
+            ],
+          }),
+        ).toEqual([
+          {
+            id: 1,
+            name: 'anonymous',
+            small: 100,
+            count: 100000,
+            balance: 100000000000000099n,
+            price: '1.50',
+            ratio: Number.NaN,
+            active: true,
+            meta: { plan: 'free', seats: 1 },
+            scores: [1, 2],
+            docs: [{}, []],
+          },
+        ]);
       },
       timeouts.spinUpPpgDev,
     );

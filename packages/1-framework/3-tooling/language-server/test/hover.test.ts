@@ -140,12 +140,6 @@ const authoringContributions = assembleAuthoringContributions([
             args: [{ name: 'sql', kind: 'value', dataType: 'fixture/expression' }],
             output: { codecId: 'fixture/raw' },
           },
-          Mode: {
-            kind: 'typeConstructor',
-            documentation: 'A deletion mode.',
-            args: [{ name: 'mode', kind: 'option', values: ['cascade', 'restrict'] }],
-            output: { codecId: 'fixture/mode' },
-          },
           Flag: {
             kind: 'typeConstructor',
             documentation: '',
@@ -155,15 +149,6 @@ const authoringContributions = assembleAuthoringContributions([
             kind: 'typeAlias',
             documentation: 'Set to now when a row is created.',
             output: { type: { codecId: 'fixture/text' }, onCreate: { name: 'now', args: {} } },
-          },
-        },
-      },
-      field: {
-        pg: {
-          Serial: {
-            kind: 'fieldPreset',
-            args: [{ name: 'start', kind: 'number' }],
-            output: { codecId: 'fixture/serial' },
           },
         },
       },
@@ -536,14 +521,6 @@ describe('providePslHover', () => {
     });
   });
 
-  it('shows a field-preset contributed type as the fence only, with its arg labels', () => {
-    const result = hover('model Counter {\n  value pg.Ser|ial(1)\n}');
-    expect(result).toEqual({
-      contents: { kind: 'markdown', value: '```prisma\npg.Serial(start: number)\n```' },
-      range: { start: { line: 1, character: 11 }, end: { line: 1, character: 17 } },
-    });
-  });
-
   it('shows a value argument by the forms its data type is written in', () => {
     const result = hover('model Product {\n  labels pg.Ra|w(sql`text`)\n}');
     expect(result).toEqual({
@@ -552,17 +529,6 @@ describe('providePslHover', () => {
         value: '```prisma\npg.Raw(sql: sql`...`)\n```\n\nA type written as SQL.',
       },
       range: { start: { line: 1, character: 12 }, end: { line: 1, character: 15 } },
-    });
-  });
-
-  it('shows an option contributed-type arg as its joined allowed values', () => {
-    const result = hover('model Product {\n  onDelete pg.Mo|de(cascade)\n}');
-    expect(result).toEqual({
-      contents: {
-        kind: 'markdown',
-        value: "```prisma\npg.Mode(mode: 'cascade' | 'restrict')\n```\n\nA deletion mode.",
-      },
-      range: { start: { line: 1, character: 14 }, end: { line: 1, character: 18 } },
     });
   });
 

@@ -5,7 +5,7 @@
   },
   "psl": [
     {
-      "code": "PSL_PRESET_CONFLICT",
+      "code": "PSL_GENERATOR_CONFLICT",
       "message": "Generated value on \"Admin.seenAt\" sets different execution defaults than \"User.seenAt\" for field \"seenAt\" of collection \"people\". Generate the same values on both models.",
       "spanText": "seenAt Date     @onUpdate(now())"
     }

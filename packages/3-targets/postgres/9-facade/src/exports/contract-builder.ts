@@ -40,7 +40,7 @@ export type {
 } from '@internal/target-postgres/codec-types';
 export { defineContract } from '../contract/define-contract';
 export { enumType } from '../contract/enum-type';
-export { field, gen } from '../contract/field';
+export { field, gen, type } from '../contract/field';
 export { fullTextIndex } from '../contract/full-text-index';
 export { type NativeEnumHandle, nativeEnum, pg } from '../contract/native-enum';
 export {

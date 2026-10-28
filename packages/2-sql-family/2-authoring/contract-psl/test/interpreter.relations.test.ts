@@ -285,6 +285,99 @@ model Profile {
     );
   });
 
+  it('reports an unresolved key type, not the relation that joins on the key', () => {
+    const result = interpretSqlContract(
+      `model User {
+  id    Foo @id
+  posts Post[]
+}
+
+model Post {
+  id       Int  @id
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id])
+}
+`,
+      { ...baseInput },
+    );
+
+    expect(
+      result.ok ? [] : result.failure.diagnostics.map(({ code, message }) => ({ code, message })),
+    ).toEqual([{ code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find type "Foo"' }]);
+  });
+
+  it('still reports the relation error the build finds when every field type resolves', () => {
+    const result = interpretSqlContract(
+      `model User {
+  id    Int @id
+  posts Post[]
+}
+
+model Post {
+  id       Int  @id
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id], index: "post_author_gone")
+}
+`,
+      { ...baseInput },
+    );
+
+    expect(result.ok ? [] : result.failure.diagnostics.map(({ code }) => code)).toEqual([
+      'PSL_INVALID_RELATION_ATTRIBUTE',
+    ]);
+  });
+
+  it('reports an unknown composite type member type, not the error the build would find', () => {
+    const result = interpretSqlContract(
+      `type Address {
+  street Foo
+}
+
+model User {
+  id    Int @id
+  posts Post[]
+}
+
+model Post {
+  id       Int  @id
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id], index: "post_author_gone")
+}
+`,
+      { ...baseInput },
+    );
+
+    expect(
+      result.ok ? [] : result.failure.diagnostics.map(({ code, message }) => ({ code, message })),
+    ).toEqual([{ code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find type "Foo"' }]);
+  });
+
+  it.each([
+    [
+      'an over-qualified type',
+      'a.b.Int',
+      ['PSL_INVALID_QUALIFIED_NAME', 'PSL_INVALID_QUALIFIED_TYPE'],
+    ],
+    ['no type', '', ['PSL_INVALID_MODEL_MEMBER']],
+  ])('reports a key with %s, not the relation that joins on the key', (_, type, codes) => {
+    const result = interpretSqlContract(
+      `model User {
+  id    ${type} @id
+  posts Post[]
+}
+
+model Post {
+  id       Int  @id
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id])
+}
+`,
+      { ...baseInput },
+    );
+
+    expect(result.ok ? [] : result.failure.diagnostics.map(({ code }) => code)).toEqual(codes);
+  });
+
   it('still rejects a field whose type is neither a model, enum, composite, nor scalar', () => {
     const result = interpretSqlContract(
       `model User {

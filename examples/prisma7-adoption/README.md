@@ -48,7 +48,7 @@ export default definePrismaConfig({
 });
 ```
 
-In your own project the first import is `import { definePrismaConfig } from 'prisma/config'` and the Prisma 8 CLI is the published `prisma@latest` dev dependency, exactly as the guide shows. Inside this repository the published `prisma` package is built elsewhere, so this example aliases the workspace CLI as its `prisma` dev dependency (`"prisma": "workspace:@internal/cli@..."`) and imports `definePrismaConfig` from `@prisma/cli-engine`, which the published package re-exports as `prisma/config`. Everything else is what you would write.
+In your own project the first import is `import { definePrismaConfig } from 'prisma/config'` and the Prisma 8 CLI is the published `prisma@latest` dev dependency, exactly as the guide shows. Inside this repository the published `prisma` package is built elsewhere, so this example aliases the workspace CLI as its `prisma` dev dependency (`"prisma": "workspace:@repo/prisma-bin@..."`) and imports `definePrismaConfig` from `@prisma/cli-engine`, which the published package re-exports as `prisma/config`. Everything else is what you would write.
 
 `prisma7Schema` replaces the guide's `prisma contract infer` step and the hand edit after it (adding `@@map` to every model): the source reads the Prisma 7 schema itself, so model names stay as written. Neither `prisma contract infer` nor the source puts Prisma 7's `_prisma_migrations` table in the contract. `pnpm emit` writes `generated/prisma8/contract.json` and `contract.d.ts`; `pnpm sign` verifies the live schema against that contract and writes Prisma 8's marker; `pnpm verify` reports nothing when they match.
 

@@ -152,7 +152,6 @@ function makeContractFromPsl(): MongoContract {
       defaultNamespaceId: '__unbound__',
       composedExtensionContracts: new Map(),
       authoringContributions: {
-        field: {},
         type: scalarTypeConstructors,
         entityTypes: {},
         pslBlockDescriptors: {},

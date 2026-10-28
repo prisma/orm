@@ -68,7 +68,7 @@ A name is the one piece of a type a user reads every time they write a schema, s
 
 The target owns its codecs, so it owns their names. A codec id already names the stored type (`mongo/int32@1`, `pg/int8@1`, `sqlite/blob@1`), which makes it the natural source of the token: the PSL name and the TypeScript helper follow the codec id, never the reverse. A codec id is recorded in every emitted `contract.json`, feeds the storage and execution hashes, and appears in signed database markers and migration snapshots, so renaming one would re-hash every contract that uses it. Surface names can change freely; codec ids do not.
 
-Symmetry across targets is symmetry of rule and grammar, not of spelling. Bare PascalCase scalar names, namespaced presets (`temporal.createdAt()`), the shared attribute set and `field.<token>()` are the same everywhere; the tokens are each target's own. A reader moving between targets uses one table that maps concepts across targets, not a shared spelling that hides the differences.
+Symmetry across targets is symmetry of rule and grammar, not of spelling. Bare PascalCase scalar names, namespaced type aliases (`temporal.CreatedAt`; amended 2026-10-22, field presets such as `temporal.createdAt()` were removed by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md)), the shared attribute set and `field.<token>()` are the same everywhere; the tokens are each target's own. A reader moving between targets uses one table that maps concepts across targets, not a shared spelling that hides the differences.
 
 ## `Json` and `Bson`
 

@@ -193,6 +193,14 @@ describe('parse() syntactic diagnostics', () => {
     expect(greenText(result.document.syntax.green)).toBe(source);
   });
 
+  it('refuses a second type constructor call on one field', () => {
+    const result = parse('model M {\n  f Timestamp(3) Timestamptz(3)\n}', 'test.psl');
+    expect(result.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      { code: 'PSL_INVALID_MODEL_MEMBER', message: 'Expected a type after field "Timestamptz"' },
+      { code: 'PSL_INVALID_MODEL_MEMBER', message: 'Invalid model member declaration "("' },
+    ]);
+  });
+
   it('reports a composite-type field missing its type, anchored on the field name', () => {
     const source = 'type Foo {\n  field\n}';
     const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_MODEL_MEMBER');

@@ -30,9 +30,9 @@ const withModel = defineContract({
 expectTypeOf(withModel.target).toEqualTypeOf<'sqlite'>();
 expectTypeOf<SoleNamespaceModels<typeof withModel>['User']>().not.toBeNever();
 
-const withFactory = defineContract({}, ({ model: m, field: f }) => ({
+const withFactory = defineContract({}, ({ model: m, field: f, gen, type }) => ({
   models: {
-    Post: m('Post', { fields: { id: f.id.uuidv4String() } }),
+    Post: m('Post', { fields: { id: f.column(type.sql.Char(36)).id().onCreate(gen.uuid()) } }),
   },
 }));
 expectTypeOf(withFactory.target).toEqualTypeOf<'sqlite'>();
