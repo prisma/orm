@@ -1,5 +1,6 @@
 export {
   assertWireNamePrefixLength,
+  CHECK_KINDS,
   type CheckKind,
   composeCheckWirePrefix,
   computeCheckContentHash,

@@ -55,6 +55,7 @@ import {
 import { MARKER_LOCK_KEY, MARKER_LOCK_SQL } from './marker-lock';
 import { qualifyTableName } from './planner-sql-checks';
 import type { PostgresPlanTargetDetails } from './planner-target-details';
+import { CHECK_VIOLATION, rowsFailingCheckOf } from './rows-failing-check';
 import {
   SCHEMA_OBJECTS_SQL,
   schemaBlockingObjects,
@@ -540,7 +541,7 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
   private async runExecuteSteps(
     driver: SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>['driver'],
     operation: SqlMigrationPlanOperation<PostgresPlanTargetDetails>,
-    plan: { readonly contract: Contract<SqlStorage>; readonly operationIndex: number },
+    plan: PlanPosition,
   ): Promise<Result<void, SqlMigrationRunnerFailure>> {
     for (const step of operation.execute) {
       try {
@@ -564,6 +565,29 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
           );
         }
         if (SqlQueryError.is(error)) {
+          const failingCheck =
+            error.sqlState === CHECK_VIOLATION
+              ? rowsFailingCheckOf({
+                  operation,
+                  constraint: error.constraint,
+                  storage: plan.contract.storage,
+                  operations: plan.operations,
+                  operationIndex: plan.operationIndex,
+                })
+              : undefined;
+          if (failingCheck !== undefined) {
+            return runnerFailure('MIGRATION.EXECUTION_FAILED', failingCheck.summary, {
+              why: failingCheck.why,
+              meta: {
+                rowsFailingCheck: failingCheck.fact,
+                operationId: operation.id,
+                stepDescription: step.description,
+                sqlState: error.sqlState,
+                constraint: error.constraint,
+                table: error.table,
+              },
+            });
+          }
           const dependents =
             error.sqlState === DEPENDENT_OBJECTS_STILL_EXIST ? dependentsOf(error.detail) : [];
           const details = operation.target.details;

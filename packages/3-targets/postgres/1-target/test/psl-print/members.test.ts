@@ -45,9 +45,21 @@ describe('value-object members are written as the type their domain type reads b
       deserialize(
         widgetContract({
           columns: { price: { dataType: 'pg/jsonb', codecId: 'pg/jsonb@1', nullable: false } },
-          fields: { price: { nullable: false, type: { kind: 'valueObject', name: 'Price' } } },
-          domain: {
-            valueObjects: {
+          table: { control: 'external' },
+          fields: {
+            price: {
+              nullable: false,
+              type: {
+                kind: 'valueObject',
+                plane: 'storage',
+                namespaceId: 'public',
+                entityKind: 'valueObject',
+                entityName: 'Price',
+              },
+            },
+          },
+          entries: {
+            valueObject: {
               Price: {
                 fields: {
                   amount: { nullable: false, type: numeric },

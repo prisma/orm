@@ -180,8 +180,11 @@
               "address": {
                 "nullable": true,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Address",
                   "kind": "valueObject",
-                  "name": "Address"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               },
               "bio": {
@@ -247,40 +250,6 @@
                 },
                 "name": {
                   "field": "name"
-                }
-              }
-            }
-          }
-        },
-        "valueObjects": {
-          "Address": {
-            "fields": {
-              "city": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "country": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "street": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "zip": {
-                "nullable": true,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
                 }
               }
             }
@@ -490,13 +459,47 @@
                 "validationLevel": "strict"
               }
             }
+          },
+          "valueObject": {
+            "Address": {
+              "fields": {
+                "city": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "country": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "street": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "zip": {
+                  "nullable": true,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            }
           }
         },
         "id": "__unbound__",
         "kind": "mongo-database"
       }
     },
-    "storageHash": "bd6f4b342df331f80b6e10550b5ee6d9a8b9dc3b279f3eec78b779d6871993d8"
+    "storageHash": "4211584674f0ef61d518d3b24b3380e1760d7e46d6dd7098b1b0b1dc19ff3e30"
   },
   "capabilities": {},
   "extensions": {},

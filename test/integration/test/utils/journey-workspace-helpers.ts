@@ -155,6 +155,34 @@ export async function selectRows(options: {
   }
 }
 
+/** Creates a row of `model` in the `public` namespace through a Postgres client built from the emitted contract. */
+export async function createRowThroughOrm(options: {
+  readonly contractJson: unknown;
+  readonly connectionString: string;
+  readonly model: string;
+  readonly row: Record<string, unknown>;
+}): Promise<unknown> {
+  const client = postgres({
+    contract: contractFromJson<Contract<SqlStorage>>(options.contractJson),
+    url: options.connectionString,
+  });
+  const runtime = await client.connect();
+  try {
+    const models = (
+      client.orm as unknown as {
+        readonly public: Record<string, { create(row: Record<string, unknown>): Promise<unknown> }>;
+      }
+    ).public;
+    const collection = models[options.model];
+    if (collection === undefined) {
+      throw new Error(`the ORM exposes no ${options.model}; it has ${Object.keys(models)}`);
+    }
+    return await collection.create(options.row);
+  } finally {
+    await runtime.close();
+  }
+}
+
 /**
  * The PSL `contract infer` would write for the Postgres schema `namespace`.
  *

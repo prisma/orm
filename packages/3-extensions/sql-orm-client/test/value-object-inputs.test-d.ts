@@ -1,6 +1,6 @@
 import { expectTypeOf, test } from 'vitest';
 import type { CreateInput, DefaultModelRow, MutationUpdateInput } from '../src/types';
-import type { Contract } from './fixtures/generated/contract';
+import type { Contract } from './fixtures/value-objects/generated/contract';
 
 type AddressShape = { readonly street: string; readonly city: string; readonly zip: string | null };
 

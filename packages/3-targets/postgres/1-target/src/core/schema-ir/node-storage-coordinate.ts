@@ -1,4 +1,4 @@
-import type { EntityCoordinate } from '@internal/framework-components/ir';
+import type { EntityCoordinate } from '@internal/contract/types';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 import { PostgresNativeEnumSchemaNode } from './postgres-native-enum-schema-node';
 import { PostgresTableSchemaNode } from './postgres-table-schema-node';

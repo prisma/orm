@@ -26,6 +26,7 @@ import type {
   MigrationPlanOperation,
   MigrationPlanSubjects,
   OperationPreview,
+  RowsFailingCheck,
   VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
@@ -34,6 +35,7 @@ import type { AggregateMigrationEdgeRef } from '@internal/migration-tools/aggreg
 import type { Result } from '@internal/utils/result';
 import type { CliStructuredError } from '../utils/cli-errors';
 import type { CliInvocation } from '../utils/printed-command';
+import type { ChangedStorageEntity } from './operations/changed-storage-entities';
 import type { ExecuteDbSignResult } from './operations/db-sign';
 import type { ExecuteDbVerifyResult } from './operations/db-verify';
 import type { RenderContractDtsOptions, RenderContractDtsResult } from './render-contract-dts';
@@ -497,6 +499,8 @@ export interface DbUpdateSuccess
    * graph ends at it: the origin a `migration plan` for this database starts from.
    */
   readonly databaseStorageHash?: string;
+  /** The storage entities that changed, when the run signed the database with a changed contract and ran no operation. */
+  readonly changedStorageEntities?: readonly ChangedStorageEntity[];
   readonly summary: string;
 }
 
@@ -529,9 +533,14 @@ export interface RunnerFailureFacts {
   readonly failedPrecheck?: FailedPrecheckReport;
   /** The data that still holds a stored enum value whose removal its storage cannot take. */
   readonly rowsHoldingValue?: RowsHoldingValueReport;
+  /** The existing rows that a check the failed operation adds refuses. */
+  readonly rowsFailingCheck?: RowsFailingCheckReport;
   /** The written migration of the failed operation, when the runner named the operation, or the last one applied when the schema check after apply failed. */
   readonly failedMigration?: { readonly spaceId: string; readonly edge: AggregateMigrationEdgeRef };
 }
+
+/** The existing rows that a check the failed operation adds refuses, as the advice names them. */
+export type RowsFailingCheckReport = Omit<RowsFailingCheck, 'operationIndex'>;
 
 /** The data that still holds the stored value of an enum value the plan removes from storage that cannot do without it. */
 export interface RowsHoldingValueReport {

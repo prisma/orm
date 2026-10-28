@@ -19,6 +19,28 @@
           "collection": {
             "tasks": {},
             "users": {}
+          },
+          "valueObject": {
+            "HomeAddress": {
+              "fields": {
+                "city": {
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "mongo/string@1"
+                  },
+                  "nullable": false,
+                  "many": false
+                },
+                "country": {
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "mongo/string@1"
+                  },
+                  "nullable": false,
+                  "many": false
+                }
+              }
+            }
           }
         }
       }
@@ -257,7 +279,10 @@
               "homeAddress": {
                 "type": {
                   "kind": "valueObject",
-                  "name": "HomeAddress"
+                  "plane": "storage",
+                  "namespaceId": "__unbound__",
+                  "entityKind": "valueObject",
+                  "entityName": "HomeAddress"
                 },
                 "nullable": true,
                 "many": false
@@ -369,28 +394,6 @@
             },
             "relations": {},
             "owner": "Task"
-          }
-        },
-        "valueObjects": {
-          "HomeAddress": {
-            "fields": {
-              "city": {
-                "type": {
-                  "kind": "scalar",
-                  "codecId": "mongo/string@1"
-                },
-                "nullable": false,
-                "many": false
-              },
-              "country": {
-                "type": {
-                  "kind": "scalar",
-                  "codecId": "mongo/string@1"
-                },
-                "nullable": false,
-                "many": false
-              }
-            }
           }
         }
       }

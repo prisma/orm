@@ -2,6 +2,7 @@ import type { Contract, ContractModelBase, CrossReference } from '@internal/cont
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { UNBOUND_PSL_NAMESPACE_NAME } from '@internal/framework-components/psl-ast';
 import { canonicalizeJson } from '@internal/framework-components/utils';
+import { discriminatorValueSet } from '@internal/sql-contract/check-expressions';
 import type {
   ForeignKey,
   SqlModelStorage,
@@ -141,4 +142,20 @@ export function isVariantLinkForeignKey(fk: ForeignKey, variant: VariantInfo | u
     fk.onDelete === 'cascade' &&
     fk.onUpdate === undefined
   );
+}
+
+/**
+ * The value set the PSL source writes for a discriminator, keyed `<Base>.<field>` and holding the variants' values, sorted. A discriminator an enum types keeps the enum's value set, so it writes none.
+ */
+export function discriminatorValueSetOf(
+  entry: ModelWithTable,
+): { readonly name: string; readonly values: readonly string[] } | undefined {
+  const { discriminator, variants } = entry.model;
+  if (discriminator === undefined || variants === undefined) return undefined;
+  const derived = discriminatorValueSet(entry.name, discriminator.field, Object.keys(variants));
+  const columnName = entry.storage.fields[discriminator.field]?.column;
+  const valueSet = columnName === undefined ? undefined : entry.table.columns[columnName]?.valueSet;
+  return valueSet?.entityName === derived.name && valueSet.namespaceId === entry.namespaceId
+    ? derived
+    : undefined;
 }

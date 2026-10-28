@@ -30,6 +30,7 @@ class MarkingTextCodec extends CodecImpl<'test/marking-text@1', readonly [], str
 }
 
 class MarkingTextDescriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'any' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -59,6 +60,7 @@ class TextCodec extends CodecImpl<'test/upper-casing-text@1', readonly [], strin
 
 /** A text codec whose projection changes the text, so the projected value reads to another value than the row. */
 class UpperCasingTextDescriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'any' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return FunctionCallExpr.of('upper', [expression]);
   }

@@ -1,11 +1,13 @@
+import type { CheckExpressionInput } from '@internal/sql-contract/check-expressions';
 import { describe, expect, it } from 'vitest';
 import { postgresRenderCheckExpressions } from '../src/core/check-expressions';
 
-const base = {
+const base: CheckExpressionInput = {
   tableName: 'User',
   columnName: 'role',
   many: false,
   memberValues: undefined,
+  valueObject: undefined,
 };
 
 describe('postgresRenderCheckExpressions', () => {
@@ -153,6 +155,7 @@ describe('postgresRenderCheckExpressions', () => {
         columnName: 'sta"tus',
         many: false,
         memberValues: ["o'brien"],
+        valueObject: undefined,
       }),
     ).toEqual([
       { kind: 'membership', columnName: 'sta"tus', expression: `"sta""tus" IN ('o''brien')` },

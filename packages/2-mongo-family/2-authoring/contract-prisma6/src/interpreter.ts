@@ -803,7 +803,13 @@ function resolveFieldType(
   if (ctx.compositeTypeNames.has(field.typeName)) {
     if (nativeType !== undefined) return nativeTypeUnsupported(nativeType);
     return {
-      type: { kind: 'valueObject', name: field.typeName },
+      type: {
+        kind: 'valueObject',
+        plane: 'storage',
+        namespaceId: ctx.namespaceId,
+        entityKind: 'valueObject',
+        entityName: field.typeName,
+      },
       nullable: field.optional,
       ...many,
     };
@@ -871,7 +877,7 @@ function readCompositeFields(
         ctx.diagnostics.push(
           prisma6Diagnostic(
             'PSL.PRISMA6_MONGO_COMPOSITE_MAP_UNSUPPORTED',
-            `${label}: @map on a field of a composite type is not supported yet. The stored field keeps the name "${stringArgument(attribute) ?? field.name}", so removing @map renames it in storage; keep the schema as it is until Prisma 8 supports it.`,
+            `${label}: @map on a field of a composite type is not supported: Prisma 8 stores each field of a value object under its own name. Rename the field to "${stringArgument(attribute) ?? field.name}", the name it is stored under, and remove @map.`,
             sourceId,
             attribute.span,
           ),

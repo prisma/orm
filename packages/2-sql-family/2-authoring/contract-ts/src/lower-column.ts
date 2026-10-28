@@ -1,5 +1,11 @@
+import type { StorageBase } from '@internal/contract/types';
 import type { CodecLookupWithDescriptors, TypeLookups } from '@internal/framework-components/codec';
 import { dataTypeParams } from '@internal/framework-components/codec';
+import {
+  type CheckExpressionCandidate,
+  type CheckExpressionRenderer,
+  resolveColumnValueObject,
+} from '@internal/sql-contract/check-expressions';
 import {
   type SqlDataType,
   sqlDataTypeOfCodec,
@@ -20,11 +26,7 @@ import { type ColumnSite, columnSiteMeta, columnSiteSubject } from './declaratio
 import { checkMemberValues, enumValueSetRefs } from './enum-members';
 import { type CollectedColumnEntities, collectEntityFromColumn } from './pack-entities';
 import type { ColumnDescription } from './storage-description';
-import {
-  type CheckExpressionRenderer,
-  type ColumnTypeQualifier,
-  resolveColumnDescriptor,
-} from './target-authoring-hooks';
+import { type ColumnTypeQualifier, resolveColumnDescriptor } from './target-authoring-hooks';
 
 /**
  * Names the target's rendered checks and lowers them into contract entities.
@@ -37,13 +39,9 @@ import {
  * rather than having to assume something about SQL text it declares itself
  * unable to read.
  */
-function lowerRenderedChecks(
+export function lowerRenderedChecks(
   tableName: string,
-  candidates: ReadonlyArray<{
-    readonly kind: 'membership' | 'elementNotNull';
-    readonly columnName: string;
-    readonly expression: string;
-  }>,
+  candidates: ReadonlyArray<CheckExpressionCandidate>,
 ): CheckConstraint[] {
   return candidates.map(
     (candidate) =>
@@ -80,6 +78,8 @@ export interface ColumnLoweringContext {
   readonly defaultNamespaceId: string;
   readonly qualifyColumnType: ColumnTypeQualifier | undefined;
   readonly renderCheckExpressions: CheckExpressionRenderer | undefined;
+  /** The value objects and value sets storage will hold, which a value object column's check is derived from. */
+  readonly storage: Pick<StorageBase, 'namespaces'>;
   /** Receives the pack entity a column's type constructor refers to. */
   readonly collectedColumnEntities: CollectedColumnEntities;
 }
@@ -162,10 +162,21 @@ export function lowerColumn(
   const candidates = render({
     tableName: placement.tableName,
     columnName: description.columnName,
-    many: many !== false,
-    elementNullable,
+    many,
     memberValues:
       enumTypeHandle !== undefined ? checkMemberValues(enumTypeHandle, codecLookup) : undefined,
+    valueObject:
+      description.valueObject !== undefined
+        ? resolveColumnValueObject(
+            context.storage,
+            {
+              reference: description.valueObject.reference,
+              nullable: description.nullable,
+              many: description.valueObject.many,
+            },
+            codecLookup,
+          )
+        : undefined,
   });
   return { column, derivedChecks: lowerRenderedChecks(placement.tableName, candidates) };
 }

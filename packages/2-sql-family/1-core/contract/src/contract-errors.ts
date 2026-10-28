@@ -6,6 +6,7 @@ type ContractCode = `CONTRACT.${ContractSubcode}`;
 type ContractSubcode =
   | 'ARGUMENT_INVALID'
   | 'CODEC_DESCRIPTOR_MISSING'
+  | 'CODEC_JSON_TYPE_MISSING'
   | 'DATA_TYPE_UNREGISTERED'
   | 'INDEX_INVALID'
   | 'PACK_CONTRIBUTION_INVALID'

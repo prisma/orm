@@ -1,5 +1,9 @@
 import type { Contract, ContractModelBase, JsonValue } from '@internal/contract/types';
-import { serializeObjectKey, serializeValue } from '@internal/emitter/domain-type-generation';
+import {
+  generateValueObjectsDescriptorType,
+  serializeObjectKey,
+  serializeValue,
+} from '@internal/emitter/domain-type-generation';
 import type { ImportSpecifierResolver } from '@internal/framework-components/emission';
 import type { Namespace } from '@internal/framework-components/ir';
 import type { MongoCollection, MongoModelStorage, MongoStorage } from '@internal/mongo-contract';
@@ -47,9 +51,17 @@ function generateMongoNamespacesType(namespaces: MongoStorage['namespaces']): st
   }
   const parts: string[] = [];
   for (const [name, ns] of sorted) {
-    const collectionsType = generateMongoNamespaceCollectionsType(ns.entries.collection ?? {});
+    const entriesParts = [
+      `readonly collection: ${generateMongoNamespaceCollectionsType(ns.entries.collection ?? {})}`,
+    ];
+    const valueObjects = ns.entries.valueObject;
+    if (valueObjects !== undefined && Object.keys(valueObjects).length > 0) {
+      entriesParts.push(
+        `readonly valueObject: ${generateValueObjectsDescriptorType(valueObjects)}`,
+      );
+    }
     parts.push(
-      `readonly ${serializeObjectKey(name)}: { readonly id: ${serializeValue(ns.id)}; ${mongoNamespaceSerializedKind(ns)}; readonly entries: { readonly collection: ${collectionsType} } }`,
+      `readonly ${serializeObjectKey(name)}: { readonly id: ${serializeValue(ns.id)}; ${mongoNamespaceSerializedKind(ns)}; readonly entries: { ${entriesParts.join('; ')} } }`,
     );
   }
   return `{ ${parts.join('; ')} }`;

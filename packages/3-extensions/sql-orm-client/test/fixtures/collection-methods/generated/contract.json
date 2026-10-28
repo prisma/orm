@@ -211,6 +211,13 @@
         "entries": {
           "table": {
             "notes": {
+              "checks": [
+                {
+                  "expression": "\"kind\" IN ('memo')",
+                  "name": "notes_kind_check_97646eca",
+                  "prefix": "notes_kind_check"
+                }
+              ],
               "columns": {
                 "body": {
                   "codecId": "pg/text@1",
@@ -225,7 +232,13 @@
                 "kind": {
                   "codecId": "pg/text@1",
                   "dataType": "pg/text",
-                  "nullable": false
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Note.kind",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
                 },
                 "pinned": {
                   "codecId": "pg/bool@1",
@@ -339,13 +352,21 @@
               },
               "uniques": []
             }
+          },
+          "valueSet": {
+            "Note.kind": {
+              "kind": "valueSet",
+              "values": [
+                "memo"
+              ]
+            }
           }
         },
         "id": "public",
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "8973aa4e3654dc5083f7ff15a7c187e3e590f977b4171bb816cd6566fa4db93b"
+    "storageHash": "87d224586379cdc42fda508d70ac88410eb9795e164b6031ef5a9dd9a5a1b759"
   },
   "capabilities": {
     "postgres": {

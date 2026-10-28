@@ -19,11 +19,11 @@ import type {
   NamespaceId,
   ProfileHashBase,
   StorageHashBase,
-  ValueObjectTypesFromDomain,
+  ValueObjectTypesFromStorage,
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'5eedd9b568f168145ab3967dfddcafb7efb16c59c1d5babaed9d71cae6a75923'>;
+  StorageHashBase<'3959359f149bf7501cc3d923e3f0975b8c1820f99af796db88df3fc9d138ecd7'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3'>;
@@ -31,15 +31,15 @@ export type ProfileHash =
 export type CodecTypes = MongoCodecTypes;
 
 type ParameterizedOutputTypeFunctions = MongoParameterizedOutputTypes;
-type ValueObjectOutputTypes = ValueObjectTypesFromDomain<
-  ContractBase['domain']['namespaces'],
+type ValueObjectOutputTypes = ValueObjectTypesFromStorage<
+  ContractBase['storage']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
   'output'
 >;
-type ValueObjectInputTypes = ValueObjectTypesFromDomain<
-  ContractBase['domain']['namespaces'],
+type ValueObjectInputTypes = ValueObjectTypesFromStorage<
+  ContractBase['storage']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
@@ -53,14 +53,16 @@ export type FieldOutputTypes = FieldTypesFromDomain<
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'output'
+  'output',
+  ContractBase['storage']['namespaces']
 >;
 export type FieldInputTypes = FieldTypesFromDomain<
   ContractBase['domain']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'input'
+  'input',
+  ContractBase['storage']['namespaces']
 >;
 
 export namespace Models {
@@ -154,6 +156,16 @@ type ContractBase = Omit<
               };
             };
           };
+          readonly valueObject: {
+            readonly Entry: {
+              readonly fields: {
+                readonly value: {
+                  readonly nullable: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                };
+              };
+            };
+          };
         };
       };
     };
@@ -191,12 +203,24 @@ type ContractBase = Omit<
               };
               readonly optionalEntries: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'valueObject'; readonly name: 'Entry' };
+                readonly type: {
+                  readonly kind: 'valueObject';
+                  readonly plane: 'storage';
+                  readonly namespaceId: '__unbound__';
+                  readonly entityKind: 'valueObject';
+                  readonly entityName: 'Entry';
+                };
                 readonly many: { readonly elementNullable: false };
               };
               readonly optionalNullableEntries: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'valueObject'; readonly name: 'Entry' };
+                readonly type: {
+                  readonly kind: 'valueObject';
+                  readonly plane: 'storage';
+                  readonly namespaceId: '__unbound__';
+                  readonly entityKind: 'valueObject';
+                  readonly entityName: 'Entry';
+                };
                 readonly many: { readonly elementNullable: true };
               };
               readonly optionalNullableStrings: {
@@ -232,32 +256,12 @@ type ContractBase = Omit<
             };
           };
         };
-        readonly valueObjects: {
-          readonly Entry: {
-            readonly fields: {
-              readonly value: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-              };
-            };
-          };
-        };
       };
     };
   };
   readonly capabilities: {};
   readonly extensions: {};
   readonly meta: {};
-  readonly valueObjects: {
-    readonly Entry: {
-      readonly fields: {
-        readonly value: {
-          readonly nullable: false;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-        };
-      };
-    };
-  };
   readonly profileHash: ProfileHash;
 };
 

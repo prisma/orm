@@ -4,7 +4,7 @@
  * Every codec id represents the data type the real stack gives it (`CODEC_DATA_TYPES`), else the
  * codec id without its version. A data type is written as the name in `names` (by codec id),
  * `CODEC_TYPE_NAMES` or `DATA_TYPE_NAMES`, else its name part. Each codec stores its values as
- * authored and takes any parameters.
+ * authored and takes any parameters, and declares the JSON type in `CODEC_JSON_TYPES`, else `any`.
  */
 
 import type { JsonValue } from '@internal/contract/types';
@@ -75,6 +75,14 @@ const DATA_TYPE_NAMES: Readonly<Record<string, string>> = {
   'postgis/geometry': 'geometry',
   'sqlite/character': 'character',
   'sqlite/character-varying': 'character varying',
+};
+
+const CODEC_JSON_TYPES: Readonly<Record<string, string>> = {
+  'pg/text@1': 'string',
+  'pg/int4@1': 'number',
+  'pg/bool@1': 'boolean',
+  'sql/text@1': 'string',
+  'sql/int@1': 'number',
 };
 
 const ENUM_CODEC_IDS: ReadonlySet<string> = new Set(['pg/enum@1']);
@@ -202,10 +210,11 @@ export function testSqlTypeLookups(
       if (own.dataType !== undefined) return own;
       return { ...own, dataType: dataTypeOfCodec(codecId).id };
     }
-    return {
+    const descriptor = {
       codecId,
+      jsonType: CODEC_JSON_TYPES[codecId] ?? 'any',
       dataType: dataTypeOfCodec(codecId).id,
-      traits: ['equality'],
+      traits: ['equality'] as const,
       paramsSchema: acceptAnything,
       isParameterized: true,
       factory: () => () =>
@@ -214,6 +223,7 @@ export function testSqlTypeLookups(
           'a test codec lookup may have no codec for this id, as a real one may not'
         >(codecOf(codecId)),
     };
+    return descriptor;
   };
 
   return {

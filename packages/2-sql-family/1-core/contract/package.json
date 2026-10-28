@@ -45,6 +45,8 @@
   "exports": {
     "./authored-check-naming": "./dist/authored-check-naming.mjs",
     "./canonicalization-hooks": "./dist/canonicalization-hooks.mjs",
+    "./check-expressions": "./dist/check-expressions.mjs",
+    "./codec-json-type": "./dist/codec-json-type.mjs",
     "./contract-view": "./dist/contract-view.mjs",
     "./data-type": "./dist/data-type.mjs",
     "./data-type-support": "./dist/data-type-support.mjs",

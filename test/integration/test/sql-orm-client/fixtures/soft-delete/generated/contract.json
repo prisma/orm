@@ -204,8 +204,11 @@
                 },
                 "nullable": false,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Address",
                   "kind": "valueObject",
-                  "name": "Address"
+                  "namespaceId": "public",
+                  "plane": "storage"
                 }
               },
               "id": {
@@ -311,19 +314,6 @@
               },
               "namespaceId": "public",
               "table": "users"
-            }
-          }
-        },
-        "valueObjects": {
-          "Address": {
-            "fields": {
-              "street": {
-                "nullable": false,
-                "type": {
-                  "codecId": "pg/text@1",
-                  "kind": "scalar"
-                }
-              }
             }
           }
         }
@@ -482,6 +472,11 @@
             "tags": {
               "checks": [
                 {
+                  "expression": "jsonb_path_match(\"addresses\", 'strict $.type() == \"array\" && !exists($[*] ? (!((@.type() == \"object\" && exists(@.keyvalue() ? (@.key == \"street\" && (@.value.type() == \"string\"))) && !exists(@.keyvalue() ? (@.key != \"street\"))))))') IS TRUE",
+                  "name": "tags_addresses_shape_c752a33a",
+                  "prefix": "tags_addresses_shape"
+                },
+                {
                   "expression": "array_position(\"labels\", NULL) IS NULL",
                   "name": "tags_labels_elem_not_null_0c04ab5c",
                   "prefix": "tags_labels_elem_not_null"
@@ -559,13 +554,26 @@
               },
               "uniques": []
             }
+          },
+          "valueObject": {
+            "Address": {
+              "fields": {
+                "street": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "pg/text@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            }
           }
         },
         "id": "public",
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "dfd3186b551a7868c3339bf4a5f80ca2a3ad4aa43a610cc64189db7c62a1e475"
+    "storageHash": "388580bf7258d1c37e6113016201f45f9054b3a56527588f9d8f6646473ea9ef"
   },
   "capabilities": {
     "postgres": {

@@ -1,6 +1,6 @@
 {
-  "targetFamily": "mongo",
   "target": "mongo",
+  "targetFamily": "mongo",
   "roots": {
     "Post": {
       "namespace": "__unbound__",
@@ -24,7 +24,10 @@
               "address": {
                 "type": {
                   "kind": "valueObject",
-                  "name": "Address"
+                  "plane": "storage",
+                  "namespaceId": "__unbound__",
+                  "entityKind": "valueObject",
+                  "entityName": "Address"
                 },
                 "nullable": false,
                 "many": false
@@ -32,7 +35,10 @@
               "history": {
                 "type": {
                   "kind": "valueObject",
-                  "name": "Address"
+                  "plane": "storage",
+                  "namespaceId": "__unbound__",
+                  "entityKind": "valueObject",
+                  "entityName": "Address"
                 },
                 "nullable": false,
                 "many": {
@@ -42,7 +48,10 @@
               "backup": {
                 "type": {
                   "kind": "valueObject",
-                  "name": "Address"
+                  "plane": "storage",
+                  "namespaceId": "__unbound__",
+                  "entityKind": "valueObject",
+                  "entityName": "Address"
                 },
                 "nullable": true,
                 "many": false
@@ -67,74 +76,16 @@
               }
             }
           }
-        },
-        "valueObjects": {
-          "Address": {
-            "fields": {
-              "street": {
-                "type": {
-                  "kind": "scalar",
-                  "codecId": "mongo/string@1"
-                },
-                "nullable": false,
-                "many": false
-              },
-              "zip": {
-                "type": {
-                  "kind": "scalar",
-                  "codecId": "mongo/string@1"
-                },
-                "nullable": true,
-                "many": false
-              },
-              "ownerId": {
-                "type": {
-                  "kind": "scalar",
-                  "codecId": "mongo/objectId@1"
-                },
-                "nullable": false,
-                "many": false
-              },
-              "geo": {
-                "type": {
-                  "kind": "valueObject",
-                  "name": "Geo"
-                },
-                "nullable": false,
-                "many": false
-              }
-            }
-          },
-          "Geo": {
-            "fields": {
-              "lat": {
-                "type": {
-                  "kind": "scalar",
-                  "codecId": "mongo/double@1"
-                },
-                "nullable": false,
-                "many": false
-              },
-              "lng": {
-                "type": {
-                  "kind": "scalar",
-                  "codecId": "mongo/double@1"
-                },
-                "nullable": false,
-                "many": false
-              }
-            }
-          }
         }
       }
     }
   },
-  "extensions": {},
   "capabilities": {},
+  "extensions": {},
   "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
   "meta": {},
   "storage": {
-    "storageHash": "dd22a5221b155cd435b52d49dd4a066c207d083079a291c2340674f70d8e067a",
+    "storageHash": "ae4ed29eb19b7d02a12b90b87853eb23103557cd076483c0110cd1b4d95e11da",
     "namespaces": {
       "__unbound__": {
         "id": "__unbound__",
@@ -143,6 +94,67 @@
           "collection": {
             "Post": {
               "kind": "mongo-collection"
+            }
+          },
+          "valueObject": {
+            "Address": {
+              "fields": {
+                "street": {
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "mongo/string@1"
+                  },
+                  "nullable": false,
+                  "many": false
+                },
+                "zip": {
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "mongo/string@1"
+                  },
+                  "nullable": true,
+                  "many": false
+                },
+                "ownerId": {
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "mongo/objectId@1"
+                  },
+                  "nullable": false,
+                  "many": false
+                },
+                "geo": {
+                  "type": {
+                    "kind": "valueObject",
+                    "plane": "storage",
+                    "namespaceId": "__unbound__",
+                    "entityKind": "valueObject",
+                    "entityName": "Geo"
+                  },
+                  "nullable": false,
+                  "many": false
+                }
+              }
+            },
+            "Geo": {
+              "fields": {
+                "lat": {
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "mongo/double@1"
+                  },
+                  "nullable": false,
+                  "many": false
+                },
+                "lng": {
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "mongo/double@1"
+                  },
+                  "nullable": false,
+                  "many": false
+                }
+              }
             }
           }
         }

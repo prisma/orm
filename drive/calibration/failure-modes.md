@@ -889,3 +889,21 @@ Per-repo stop conditions beyond the canonical ones:
 - The orchestrator applies the same test to each review finding before accepting it.
 
 **Reference incident.** Cross-namespace inheritance, table-scope slice (prisma/orm#30646, 2026-10): four additions were written and then removed at the operator's direction: a check that `merge()` rejects a scope the package did not create; a planner helper that checked derived-table aliases against every `combine` branch scope; a rename pass for hand-built `where()` expressions in an aliased child; and a rejection of an include refinement that returns a collection it was not handed. The third slice (prisma/orm#30696) put the rule in the plan's standing rules and in the reviewer prompt, and the pattern did not recur.
+
+### F50. Rules are moved into one place, and an invariant that a derived artefact relies on was never a rule
+
+**Symptom.** A refactor gathers every existing check into one builder and proves each source applies them the same way. Review then finds inputs that build without error and produce a broken artefact, because the artefact assumes something no check ever enforced. The defect is usually on `main` too.
+
+**Root cause.** The spec inventoried the rules that existed. It did not list the artefacts the builder derives (a collection validator, an index set, a storage hash) and the input shapes each one assumes. So the parity suite proved the sources agree, not that what they agree on is valid.
+
+**Detection signal.**
+
+- An artefact is derived from part of the input, such as a MongoDB collection validator written from the base model while variants share the collection.
+- A review finding says "this builds, but the database refuses it at run time".
+
+**Mitigation.**
+
+- When a spec moves rules into one place, it also lists each derived artefact and the assumptions it makes about the input, and names the rule or test that enforces each assumption.
+- The parity suite gets a case per assumption, accepted and refused, not only a case per existing rule.
+
+**Reference incident.** One MongoDB definition and builder (prisma/orm#30846, 2026-10): the principal-engineer review found, in two rounds, that a variant field could be stored under a name its base used, and that a variant could restate a base field with another type or stored name. Both built, and MongoDB then refused the variant's documents, because the validator is written from the base. Both were on `main` before the refactor.

@@ -179,6 +179,7 @@ const arktypeJsonParamsSchema = type({
 }) satisfies StandardSchemaV1<ArktypeJsonTypeParams>;
 
 export class ArktypeJsonDescriptor extends PostgresCodecDescriptor<ArktypeJsonTypeParams> {
+  override readonly jsonType = 'any' as const;
   /** The document's JSON text, which `fromWire` parses as it parses a row; a document that is a string would otherwise reach it unquoted. */
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');

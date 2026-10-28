@@ -119,6 +119,26 @@ describe('resolveStatements, convert statements', () => {
     );
   });
 
+  it('refuses a value-object field whose type does not change, naming the value object', () => {
+    const withAddress = contractOf({
+      app: {
+        models: {
+          User: { fields: ['id', 'home'], fieldTypes: { home: { valueObject: 'Address' } } },
+        },
+        valueObjects: { Address: ['city'] },
+      },
+    });
+    expectFailure(
+      resolveStatements({
+        statements: [convert('User.home')],
+        origin: { kind: 'contract', contract: withAddress },
+        destination: withAddress,
+      }),
+      UNRESOLVED,
+      'has the same type, Address, in the origin and destination contracts',
+    );
+  });
+
   it('refuses a field the origin does not have and no rename gives it', () => {
     expectFailure(
       resolve([convert('User.handle')]),

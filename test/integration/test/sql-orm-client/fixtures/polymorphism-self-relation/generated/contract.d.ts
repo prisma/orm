@@ -23,7 +23,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'8938bb7c885ba3bade87681ec83e5856d1a2107f4db096afde6a52bd48bea45d'>;
+  StorageHashBase<'819d42189875a8fbc83dedd6c2b2616a82ec5c3628dea2b618935d3597c29f95'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -269,22 +269,38 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
   : Encoded;
 type ParameterizedOutputTypeFunctions = PgParameterizedOutputTypes;
 
-type FieldTypeOverrides = {};
+type FieldTypeOverrides = {
+  readonly public: {
+    readonly models: {
+      readonly Task: {
+        readonly type: { readonly output: 'bug' | 'feature'; readonly input: 'bug' | 'feature' };
+      };
+    };
+  };
+};
 export type FieldOutputTypes = FieldTypesFromDomain<
   ContractBase['domain']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'output'
+  'output',
+  ContractBase['storage']['namespaces']
 >;
 export type FieldInputTypes = FieldTypesFromDomain<
   ContractBase['domain']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'input'
+  'input',
+  ContractBase['storage']['namespaces']
 >;
-type ColumnTypeOverrides = {};
+type ColumnTypeOverrides = {
+  readonly public: {
+    readonly tasks: {
+      readonly type: { readonly output: 'bug' | 'feature'; readonly input: 'bug' | 'feature' };
+    };
+  };
+};
 export type StorageColumnTypes = ColumnTypesFromStorage<
   ContractBase['storage'],
   CodecTypes,
@@ -479,6 +495,12 @@ type ContractBase = Omit<
               ];
             };
           };
+          readonly valueSet: {
+            readonly 'Task.type': {
+              readonly kind: 'valueSet';
+              readonly values: readonly ['bug', 'feature'];
+            };
+          };
         };
       };
     };
@@ -632,7 +654,6 @@ type ContractBase = Omit<
   };
   readonly extensions: {};
   readonly meta: {};
-
   readonly profileHash: ProfileHash;
 };
 

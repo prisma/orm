@@ -30,6 +30,7 @@ function contractWith(models: Readonly<Record<string, readonly string[]>>): Cont
         ]),
       ),
     },
+    storage: { namespaces: {} },
   };
 }
 

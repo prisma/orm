@@ -37,8 +37,11 @@
               "composite": {
                 "nullable": false,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Composite",
                   "kind": "valueObject",
-                  "name": "Composite"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               },
               "enum": {
@@ -184,19 +187,6 @@
               }
             }
           }
-        },
-        "valueObjects": {
-          "Composite": {
-            "fields": {
-              "value": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              }
-            }
-          }
         }
       }
     }
@@ -306,6 +296,19 @@
               }
             }
           },
+          "valueObject": {
+            "Composite": {
+              "fields": {
+                "value": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            }
+          },
           "valueSet": {
             "Enum": {
               "kind": "valueSet",
@@ -320,7 +323,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "7fe8a5ef11abf3a2db023b5af601b57e7c00e94563ef45301135e34b64182696"
+    "storageHash": "b3aa4824e50739d258a1bae8ba11729a450c18c6276f6008bdf5276d6f5ed8f5"
   },
   "capabilities": {},
   "extensions": {},

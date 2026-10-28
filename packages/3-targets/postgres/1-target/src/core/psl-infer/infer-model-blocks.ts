@@ -209,8 +209,9 @@ function computeDerivedCheckNames(table: SqlTableIR): ReadonlySet<string> {
     for (const candidate of postgresRenderCheckExpressions({
       tableName: table.name,
       columnName: column.name,
-      many: column.many === true,
+      many: column.many === true ? { elementNullable: false } : false,
       memberValues: undefined,
+      valueObject: undefined,
     })) {
       const derivedName = formatWireName(
         composeCheckWirePrefix(table.name, column.name, candidate.kind),
@@ -329,8 +330,9 @@ function enforcesElementNotNull(
   return postgresRenderCheckExpressions({
     tableName: table.name,
     columnName: column.name,
-    many: true,
+    many: { elementNullable: false },
     memberValues: undefined,
+    valueObject: undefined,
   }).some(
     (candidate) =>
       candidate.kind === 'elementNotNull' &&

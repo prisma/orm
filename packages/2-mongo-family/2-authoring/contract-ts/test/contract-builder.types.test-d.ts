@@ -428,6 +428,17 @@ const VOContract = defineContract({
 type VORow = InferModelRow<typeof VOContract, 'VOModel'>;
 type VOInput = MongoUnboundFieldInputTypes<typeof VOContract>['VOModel'];
 
+test('value objects are typed in the storage namespace, not the domain', () => {
+  type Namespace = (typeof VOContract)['storage']['namespaces']['__unbound__'];
+  expectTypeOf<keyof Namespace['entries']['valueObject']>().toEqualTypeOf<'Inner' | 'Outer'>();
+  expectTypeOf<
+    Namespace['entries']['valueObject']['Outer']['fields']['inner']['type']['entityName']
+  >().toEqualTypeOf<'Inner'>();
+  expectTypeOf<
+    keyof (typeof VOContract)['domain']['namespaces']['__unbound__']
+  >().toEqualTypeOf<'models'>();
+});
+
 test('VO output: plain value object resolves to the full nested shape', () => {
   expectTypeOf<VORow['nested']>().toEqualTypeOf<{
     readonly inner: { readonly x: string; readonly y: number };

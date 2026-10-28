@@ -19,11 +19,11 @@ import type {
   NamespaceId,
   ProfileHashBase,
   StorageHashBase,
-  ValueObjectTypesFromDomain,
+  ValueObjectTypesFromStorage,
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'95ba06155628a6148dd6c81cf187f68d1e0d09c7289de3530bbd4b58ac311fcd'>;
+  StorageHashBase<'20ad63fd1abaddd34b269a096dfe71a87c028cddcd13c1af679cbfbfb63a3b34'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3'>;
@@ -31,15 +31,15 @@ export type ProfileHash =
 export type CodecTypes = MongoCodecTypes;
 
 type ParameterizedOutputTypeFunctions = MongoParameterizedOutputTypes;
-type ValueObjectOutputTypes = ValueObjectTypesFromDomain<
-  ContractBase['domain']['namespaces'],
+type ValueObjectOutputTypes = ValueObjectTypesFromStorage<
+  ContractBase['storage']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
   'output'
 >;
-type ValueObjectInputTypes = ValueObjectTypesFromDomain<
-  ContractBase['domain']['namespaces'],
+type ValueObjectInputTypes = ValueObjectTypesFromStorage<
+  ContractBase['storage']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
@@ -57,14 +57,16 @@ export type FieldOutputTypes = FieldTypesFromDomain<
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'output'
+  'output',
+  ContractBase['storage']['namespaces']
 >;
 export type FieldInputTypes = FieldTypesFromDomain<
   ContractBase['domain']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'input'
+  'input',
+  ContractBase['storage']['namespaces']
 >;
 
 export namespace Models {
@@ -179,6 +181,39 @@ type ContractBase = Omit<
               };
             };
           };
+          readonly valueObject: {
+            readonly CommentContent: {
+              readonly fields: {
+                readonly text: {
+                  readonly nullable: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                };
+                readonly upvotes: {
+                  readonly nullable: false;
+                  readonly type: {
+                    readonly kind: 'valueObject';
+                    readonly plane: 'storage';
+                    readonly namespaceId: '__unbound__';
+                    readonly entityKind: 'valueObject';
+                    readonly entityName: 'CommentContentUpvotes';
+                  };
+                  readonly many: { readonly elementNullable: false };
+                };
+              };
+            };
+            readonly CommentContentUpvotes: {
+              readonly fields: {
+                readonly userId: {
+                  readonly nullable: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                };
+                readonly vote: {
+                  readonly nullable: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/bool@1' };
+                };
+              };
+            };
+          };
         };
       };
     };
@@ -206,7 +241,13 @@ type ContractBase = Omit<
             readonly fields: {
               readonly content: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'valueObject'; readonly name: 'CommentContent' };
+                readonly type: {
+                  readonly kind: 'valueObject';
+                  readonly plane: 'storage';
+                  readonly namespaceId: '__unbound__';
+                  readonly entityKind: 'valueObject';
+                  readonly entityName: 'CommentContent';
+                };
               };
               readonly country: {
                 readonly nullable: true;
@@ -231,7 +272,13 @@ type ContractBase = Omit<
             readonly fields: {
               readonly content: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'valueObject'; readonly name: 'CommentContent' };
+                readonly type: {
+                  readonly kind: 'valueObject';
+                  readonly plane: 'storage';
+                  readonly namespaceId: '__unbound__';
+                  readonly entityKind: 'valueObject';
+                  readonly entityName: 'CommentContent';
+                };
               };
               readonly country: {
                 readonly nullable: true;
@@ -253,69 +300,12 @@ type ContractBase = Omit<
             };
           };
         };
-        readonly valueObjects: {
-          readonly CommentContent: {
-            readonly fields: {
-              readonly text: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-              };
-              readonly upvotes: {
-                readonly nullable: false;
-                readonly type: {
-                  readonly kind: 'valueObject';
-                  readonly name: 'CommentContentUpvotes';
-                };
-                readonly many: { readonly elementNullable: false };
-              };
-            };
-          };
-          readonly CommentContentUpvotes: {
-            readonly fields: {
-              readonly userId: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-              };
-              readonly vote: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/bool@1' };
-              };
-            };
-          };
-        };
       };
     };
   };
   readonly capabilities: {};
   readonly extensions: {};
   readonly meta: {};
-  readonly valueObjects: {
-    readonly CommentContent: {
-      readonly fields: {
-        readonly text: {
-          readonly nullable: false;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-        };
-        readonly upvotes: {
-          readonly nullable: false;
-          readonly type: { readonly kind: 'valueObject'; readonly name: 'CommentContentUpvotes' };
-          readonly many: { readonly elementNullable: false };
-        };
-      };
-    };
-    readonly CommentContentUpvotes: {
-      readonly fields: {
-        readonly userId: {
-          readonly nullable: false;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-        };
-        readonly vote: {
-          readonly nullable: false;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/bool@1' };
-        };
-      };
-    };
-  };
   readonly profileHash: ProfileHash;
 };
 

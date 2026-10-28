@@ -3,8 +3,8 @@ import {
   type ContractField,
   type ContractValueObject,
   domainModelsAtDefaultNamespace,
-  domainValueObjectsAtDefaultNamespace,
   UNBOUND_DOMAIN_NAMESPACE_ID,
+  valueObjectsWithCoordinates,
 } from '@internal/contract/types';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
@@ -193,7 +193,22 @@ function modelsAtDefaultNamespace(contract: Contract) {
 }
 
 function valueObjectsAtDefaultNamespace(contract: Contract) {
-  return domainValueObjectsAtDefaultNamespace(contract.domain);
+  return Object.fromEntries(
+    valueObjectsWithCoordinates(contract.storage).map(({ coordinate, valueObject }) => [
+      coordinate.entityName,
+      valueObject,
+    ]),
+  );
+}
+
+function valueObjectRef(namespaceId: string, entityName: string) {
+  return {
+    kind: 'valueObject',
+    plane: 'storage',
+    namespaceId,
+    entityKind: 'valueObject',
+    entityName,
+  };
 }
 
 describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
@@ -204,13 +219,14 @@ describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
 
     const contract = result.value;
     const unboundDomain = contract.domain.namespaces[UNBOUND_DOMAIN_NAMESPACE_ID]!;
-    expect(unboundDomain.valueObjects).toBeDefined();
-    expect(unboundDomain.valueObjects!['Address']).toBeDefined();
+    expect(valueObjectsAtDefaultNamespace(contract)['Address']).toBeDefined();
 
     const userFields = unboundDomain.models['User']!.fields as Record<string, ContractField>;
     expect(userFields['homeAddress']!.type.kind).toBe('valueObject');
 
-    const validated = { contract: new MongoContractSerializer().deserializeContract(contract) };
+    const validated = {
+      contract: new MongoContractSerializer().deserializeContract(contract),
+    };
 
     const context = executionContextFor(validated.contract);
     const orm = mongoOrm({ context, runtime: ctx.runtime });
@@ -305,10 +321,8 @@ describe('value objects: end-to-end SQL pipeline', () => {
 
     const contract = result.value;
     const publicDomain = contract.domain.namespaces['public']!;
-    expect(publicDomain.valueObjects).toBeDefined();
-    expect(publicDomain.valueObjects!['Address']).toBeDefined();
-
-    const addressVo = publicDomain.valueObjects!['Address'] as ContractValueObject;
+    const addressVo = valueObjectsAtDefaultNamespace(contract)['Address'] as ContractValueObject;
+    expect(addressVo).toBeDefined();
     const voFields = addressVo.fields;
     expect(voFields['street']).toBeDefined();
     expect(voFields['city']).toBeDefined();
@@ -316,7 +330,7 @@ describe('value objects: end-to-end SQL pipeline', () => {
 
     const userFields = publicDomain.models['User']!.fields as Record<string, ContractField>;
     const homeAddressField = userFields['homeAddress']!;
-    expect(homeAddressField.type).toEqual({ kind: 'valueObject', name: 'Address' });
+    expect(homeAddressField.type).toEqual(valueObjectRef('public', 'Address'));
     expect(homeAddressField.nullable).toBe(false);
 
     const storage = contract.storage as unknown as {
@@ -386,8 +400,8 @@ type Metadata {
       ContractField
     >;
 
-    expect(mongoItemFields['meta']!.type).toEqual({ kind: 'valueObject', name: 'Metadata' });
-    expect(sqlItemFields['meta']!.type).toEqual({ kind: 'valueObject', name: 'Metadata' });
+    expect(mongoItemFields['meta']!.type).toEqual(valueObjectRef('__unbound__', 'Metadata'));
+    expect(sqlItemFields['meta']!.type).toEqual(valueObjectRef('public', 'Metadata'));
   });
 
   it('nested value objects produce consistent definitions across families', () => {
@@ -437,7 +451,7 @@ type Address {
     const sqlShipping = valueObjectsAtDefaultNamespace(sqlResult.value)!['ShippingInfo']!
       .fields as Record<string, ContractField>;
 
-    expect(mongoShipping['address']!.type).toEqual({ kind: 'valueObject', name: 'Address' });
-    expect(sqlShipping['address']!.type).toEqual({ kind: 'valueObject', name: 'Address' });
+    expect(mongoShipping['address']!.type).toEqual(valueObjectRef('__unbound__', 'Address'));
+    expect(sqlShipping['address']!.type).toEqual(valueObjectRef('public', 'Address'));
   });
 });

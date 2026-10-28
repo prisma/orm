@@ -118,8 +118,11 @@
                 },
                 "nullable": false,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "CartItem",
                   "kind": "valueObject",
-                  "name": "CartItem"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               },
               "userId": {
@@ -262,8 +265,11 @@
                 },
                 "nullable": false,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "InvoiceLineItem",
                   "kind": "valueObject",
-                  "name": "InvoiceLineItem"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               },
               "orderId": {
@@ -425,8 +431,11 @@
                 },
                 "nullable": false,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "OrderLineItem",
                   "kind": "valueObject",
-                  "name": "OrderLineItem"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               },
               "shippingAddress": {
@@ -442,8 +451,11 @@
                 },
                 "nullable": false,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "StatusEntry",
                   "kind": "valueObject",
-                  "name": "StatusEntry"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               },
               "type": {
@@ -574,8 +586,11 @@
               "image": {
                 "nullable": false,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Image",
                   "kind": "valueObject",
-                  "name": "Image"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               },
               "name": {
@@ -588,8 +603,11 @@
               "price": {
                 "nullable": false,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Price",
                   "kind": "valueObject",
-                  "name": "Price"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               },
               "primaryCategory": {
@@ -692,8 +710,11 @@
               "address": {
                 "nullable": true,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Address",
                   "kind": "valueObject",
-                  "name": "Address"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               },
               "email": {
@@ -818,211 +839,6 @@
                 },
                 "subCategory": {
                   "field": "subCategory"
-                }
-              }
-            }
-          }
-        },
-        "valueObjects": {
-          "Address": {
-            "fields": {
-              "city": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "country": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "postalCode": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "streetAndNumber": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              }
-            }
-          },
-          "CartItem": {
-            "fields": {
-              "amount": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/int32@1",
-                  "kind": "scalar"
-                }
-              },
-              "brand": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "image": {
-                "nullable": false,
-                "type": {
-                  "kind": "valueObject",
-                  "name": "Image"
-                }
-              },
-              "name": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "price": {
-                "nullable": false,
-                "type": {
-                  "kind": "valueObject",
-                  "name": "Price"
-                }
-              },
-              "productId": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              }
-            }
-          },
-          "Image": {
-            "fields": {
-              "url": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              }
-            }
-          },
-          "InvoiceLineItem": {
-            "fields": {
-              "amount": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/int32@1",
-                  "kind": "scalar"
-                }
-              },
-              "lineTotal": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/double@1",
-                  "kind": "scalar"
-                }
-              },
-              "name": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "unitPrice": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/double@1",
-                  "kind": "scalar"
-                }
-              }
-            }
-          },
-          "OrderLineItem": {
-            "fields": {
-              "amount": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/int32@1",
-                  "kind": "scalar"
-                }
-              },
-              "brand": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "image": {
-                "nullable": false,
-                "type": {
-                  "kind": "valueObject",
-                  "name": "Image"
-                }
-              },
-              "name": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "price": {
-                "nullable": false,
-                "type": {
-                  "kind": "valueObject",
-                  "name": "Price"
-                }
-              },
-              "productId": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              }
-            }
-          },
-          "Price": {
-            "fields": {
-              "amount": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/double@1",
-                  "kind": "scalar"
-                }
-              },
-              "currency": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              }
-            }
-          },
-          "StatusEntry": {
-            "fields": {
-              "status": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "timestamp": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/date@1",
-                  "kind": "scalar"
                 }
               }
             }
@@ -1792,6 +1608,223 @@
               }
             }
           },
+          "valueObject": {
+            "Address": {
+              "fields": {
+                "city": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "country": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "postalCode": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "streetAndNumber": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            },
+            "CartItem": {
+              "fields": {
+                "amount": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/int32@1",
+                    "kind": "scalar"
+                  }
+                },
+                "brand": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "image": {
+                  "nullable": false,
+                  "type": {
+                    "entityKind": "valueObject",
+                    "entityName": "Image",
+                    "kind": "valueObject",
+                    "namespaceId": "__unbound__",
+                    "plane": "storage"
+                  }
+                },
+                "name": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "price": {
+                  "nullable": false,
+                  "type": {
+                    "entityKind": "valueObject",
+                    "entityName": "Price",
+                    "kind": "valueObject",
+                    "namespaceId": "__unbound__",
+                    "plane": "storage"
+                  }
+                },
+                "productId": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            },
+            "Image": {
+              "fields": {
+                "url": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            },
+            "InvoiceLineItem": {
+              "fields": {
+                "amount": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/int32@1",
+                    "kind": "scalar"
+                  }
+                },
+                "lineTotal": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/double@1",
+                    "kind": "scalar"
+                  }
+                },
+                "name": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "unitPrice": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/double@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            },
+            "OrderLineItem": {
+              "fields": {
+                "amount": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/int32@1",
+                    "kind": "scalar"
+                  }
+                },
+                "brand": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "image": {
+                  "nullable": false,
+                  "type": {
+                    "entityKind": "valueObject",
+                    "entityName": "Image",
+                    "kind": "valueObject",
+                    "namespaceId": "__unbound__",
+                    "plane": "storage"
+                  }
+                },
+                "name": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "price": {
+                  "nullable": false,
+                  "type": {
+                    "entityKind": "valueObject",
+                    "entityName": "Price",
+                    "kind": "valueObject",
+                    "namespaceId": "__unbound__",
+                    "plane": "storage"
+                  }
+                },
+                "productId": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            },
+            "Price": {
+              "fields": {
+                "amount": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/double@1",
+                    "kind": "scalar"
+                  }
+                },
+                "currency": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            },
+            "StatusEntry": {
+              "fields": {
+                "status": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "timestamp": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/date@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            }
+          },
           "valueSet": {
             "OrderType": {
               "kind": "valueSet",
@@ -1814,7 +1847,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "41bd5540ea833c009b5eacf6db7d489e88bdd5062554398ba8aa2657fa19d27e"
+    "storageHash": "2f0e67cbc2a193e280f07c26972a484af4b62d3472c018c73bfd095749d4d0f5"
   },
   "capabilities": {},
   "extensions": {},

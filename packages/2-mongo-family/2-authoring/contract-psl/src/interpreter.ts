@@ -789,7 +789,13 @@ function resolveNonRelationField(
   if (resolution?.kind === 'compositeType') {
     return {
       field: {
-        type: { kind: 'valueObject', name: resolution.symbol.name },
+        type: {
+          kind: 'valueObject',
+          plane: 'storage',
+          namespaceId: resolution.namespace.id,
+          entityKind: 'valueObject',
+          entityName: resolution.symbol.name,
+        },
         nullable: field.optional,
         many: field.list ? { elementNullable: field.elementOptional } : false,
       },

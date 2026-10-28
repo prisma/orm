@@ -5,6 +5,7 @@ import type {
 } from '@internal/config/config-types';
 import type {
   Contract,
+  ContractDiscriminator,
   ContractModel,
   ControlPolicy,
   CrossReference,
@@ -1776,31 +1777,35 @@ function modelLabel(namespaceId: string, modelName: string, qualified: boolean):
   return qualified ? `${namespaceId}.${modelName}` : modelName;
 }
 
-function resolvePolymorphism(
-  models: Record<string, ContractModel>,
-  physicalNames: ReadonlyMap<ModelSymbol | FieldSymbol, string>,
+/** What `@@discriminator` and `@@base` declare, by model key, as the build writes it into the domain models and the storage. */
+type ResolvedPolymorphism = {
+  readonly discriminators: ReadonlyMap<
+    string,
+    {
+      readonly discriminator: ContractDiscriminator;
+      readonly variants: Record<string, CrossReference>;
+    }
+  >;
+  readonly bases: ReadonlyMap<string, CrossReference>;
+};
+
+/**
+ * Pairs each `@@discriminator` with the variants that declare `@@base` on it, before the build, so the build writes the discriminator's value set before it computes the storage hash (ADR 309). Reports a model with both attributes, a discriminator no variant names, a duplicate value, and a base with no discriminator.
+ */
+function resolveVariants(
+  modelKeys: ReadonlySet<string>,
   discriminatorDeclarations: Map<string, DiscriminatorDeclaration>,
   baseDeclarations: Map<string, BaseDeclaration>,
   reported: ReportedPolymorphism,
-  syntheticPkFieldsByVariant: ReadonlyMap<string, readonly string[]>,
-  stiBaseFieldsByBase: ReadonlyMap<string, readonly string[]>,
   diagnostics: PslDiagnosticCollector,
-): Record<string, ContractModel> {
-  let patched = models;
-
-  // STI variant columns were materialised onto the base storage table so the
-  // variants' `storage.fields` resolve. They are storage-only on the base — the
-  // domain field belongs to the variant — so strip them from the base model's
-  // domain + storage field maps (the table column, built upstream, stays).
-  for (const [baseKey, fieldNames] of stiBaseFieldsByBase) {
-    const baseModel = patched[baseKey];
-    if (!baseModel || fieldNames.length === 0) continue;
-    patched = {
-      ...patched,
-      [baseKey]: stripStorageOnlyDomainFields(baseModel, fieldNames),
-    };
-  }
-
+): ResolvedPolymorphism {
+  const discriminators = new Map<
+    string,
+    {
+      readonly discriminator: ContractDiscriminator;
+      readonly variants: Record<string, CrossReference>;
+    }
+  >();
   for (const [modelKey, decl] of discriminatorDeclarations) {
     const modelName = decl.model.name;
     if (baseDeclarations.has(modelKey)) {
@@ -1811,16 +1816,12 @@ function resolvePolymorphism(
       });
       continue;
     }
-
-    const model = patched[modelKey];
-    if (!model) continue;
+    if (!modelKeys.has(modelKey)) continue;
 
     const variants: Record<string, CrossReference> = {};
-
     for (const baseDecl of baseDeclarations.values()) {
       if (baseDecl.base.key !== modelKey || baseDecl.value === undefined) continue;
       const variantName = baseDecl.model.name;
-
       const existingVariant = variants[baseDecl.value];
       if (existingVariant) {
         const qualified =
@@ -1848,20 +1849,16 @@ function resolvePolymorphism(
       });
       continue;
     }
-
-    patched = {
-      ...patched,
-      [modelKey]: { ...model, discriminator: { field: decl.fieldName }, variants },
-    };
+    discriminators.set(modelKey, { discriminator: { field: decl.fieldName }, variants });
   }
 
+  const bases = new Map<string, CrossReference>();
   for (const [variantKey, baseDecl] of baseDeclarations) {
-    const baseName = baseDecl.base.model.name;
     if (!discriminatorDeclarations.has(baseDecl.base.key)) {
       if (reported.discriminators.has(baseDecl.base.key)) continue;
       const qualified = baseDecl.namespaceId !== baseDecl.base.namespaceId;
       const variantLabel = modelLabel(baseDecl.namespaceId, baseDecl.model.name, qualified);
-      const baseLabel = modelLabel(baseDecl.base.namespaceId, baseName, qualified);
+      const baseLabel = modelLabel(baseDecl.base.namespaceId, baseDecl.base.model.name, qualified);
       diagnostics.push({
         code: 'PSL_ORPHANED_BASE',
         message: `Model "${variantLabel}" declares @@base(${baseLabel}, ...) but "${baseLabel}" has no @@discriminator`,
@@ -1869,13 +1866,56 @@ function resolvePolymorphism(
       });
       continue;
     }
+    if (discriminatorDeclarations.has(variantKey) || !modelKeys.has(variantKey)) continue;
+    bases.set(variantKey, crossRef(baseDecl.base.model.name, baseDecl.base.namespaceId));
+  }
+  return { discriminators, bases };
+}
 
-    if (discriminatorDeclarations.has(variantKey)) {
-      continue;
-    }
+/** The model nodes with the discriminator, variants and base the build writes. */
+function withPolymorphism(
+  modelNodes: readonly ModelNode[],
+  polymorphism: ResolvedPolymorphism,
+  defaultNamespaceId: string,
+): ModelNode[] {
+  return modelNodes.map((node) => {
+    const key = modelCoordinateKey(node.namespaceId ?? defaultNamespaceId, node.modelName);
+    const discriminator = polymorphism.discriminators.get(key);
+    const base = polymorphism.bases.get(key);
+    return {
+      ...node,
+      ...(discriminator ?? {}),
+      ...ifDefined('base', base),
+    };
+  });
+}
 
+/**
+ * Points each variant without `@@map` at its base table, and strips from the domain the columns a variant's or a base's model only stores: STI columns on the base, and the link column of an MTI variant. The discriminator, the variants and the base are written by the build.
+ */
+function resolveVariantStorage(
+  models: Record<string, ContractModel>,
+  physicalNames: ReadonlyMap<ModelSymbol | FieldSymbol, string>,
+  baseDeclarations: Map<string, BaseDeclaration>,
+  polymorphism: ResolvedPolymorphism,
+  syntheticPkFieldsByVariant: ReadonlyMap<string, readonly string[]>,
+  stiBaseFieldsByBase: ReadonlyMap<string, readonly string[]>,
+): Record<string, ContractModel> {
+  let patched = models;
+
+  for (const [baseKey, fieldNames] of stiBaseFieldsByBase) {
+    const baseModel = patched[baseKey];
+    if (!baseModel || fieldNames.length === 0) continue;
+    patched = {
+      ...patched,
+      [baseKey]: stripStorageOnlyDomainFields(baseModel, fieldNames),
+    };
+  }
+
+  for (const variantKey of polymorphism.bases.keys()) {
+    const baseDecl = baseDeclarations.get(variantKey);
     const variantModel = patched[variantKey];
-    if (!variantModel) continue;
+    if (!baseDecl || !variantModel) continue;
 
     const hasExplicitMap = getAttribute(baseDecl.model.attributes, 'map') !== undefined;
     const resolvedTable = storageName(
@@ -1885,7 +1925,6 @@ function resolvePolymorphism(
 
     const patchedVariant: ContractModel = {
       ...variantModel,
-      base: crossRef(baseName, baseDecl.base.namespaceId),
       ...(resolvedTable ? { storage: { ...variantModel.storage, table: resolvedTable } } : {}),
     };
 
@@ -2194,13 +2233,26 @@ export function interpretPslDocumentToSqlContract(
   const models: ModelSymbol[] = [];
   const modelEntries: ModelNamespaceEntry[] = [];
   const compositeTypes: CompositeTypeSymbol[] = [];
+  const compositeTypeNamespaces = new Map<string, string>();
 
   for (const namespace of namespaceSymbols) {
     for (const model of Object.values(namespace.models)) {
       models.push(model);
       modelEntries.push({ model, namespaceId: namespace.id });
     }
-    compositeTypes.push(...Object.values(namespace.compositeTypes));
+    for (const compositeType of Object.values(namespace.compositeTypes)) {
+      const firstNamespaceId = compositeTypeNamespaces.get(compositeType.name);
+      if (firstNamespaceId !== undefined) {
+        diagnostics.push({
+          code: 'PSL_DUPLICATE_DECLARATION',
+          message: `Composite type "${compositeType.name}" is declared in namespace "${firstNamespaceId}" and in namespace "${namespace.id}". Every composite type is stored in the default storage namespace, so composite type names must differ across namespaces. Rename one of them.`,
+          ...diagnosticSource(input.sources, compositeType.node.syntax).at(),
+        });
+        continue;
+      }
+      compositeTypeNamespaces.set(compositeType.name, namespace.id);
+      compositeTypes.push(compositeType);
+    }
   }
   const physicalNames = new Map<ModelSymbol | FieldSymbol, string>();
   for (const model of models) {
@@ -2705,6 +2757,25 @@ export function interpretPslDocumentToSqlContract(
     });
   }
 
+  const polyDiagnostics = createPslDiagnosticCollector(input.sources);
+  const polymorphism = resolveVariants(
+    new Set(
+      stiColumnModelNodes.map((node) =>
+        modelCoordinateKey(node.namespaceId ?? defaultNamespaceId, node.modelName),
+      ),
+    ),
+    discriminatorDeclarations,
+    baseDeclarations,
+    reported,
+    polyDiagnostics,
+  );
+  if (polyDiagnostics.length > 0) {
+    return notOk({
+      summary: 'PSL to SQL contract interpretation failed',
+      diagnostics: polyDiagnostics.toExternal(),
+    });
+  }
+
   // Merge lowered extension-block entities into each namespace's entries.
   // `valueSet` is unioned rather than overwritten: a namespace may derive
   // value-sets from both a PSL `enum` block and an extension entity, and both
@@ -2771,7 +2842,7 @@ export function interpretPslDocumentToSqlContract(
           : {}),
         createNamespace: createNamespaceWithExtensions,
         ...ifDefined('valueObjects', valueObjects.length > 0 ? valueObjects : undefined),
-        models: stiColumnModelNodes,
+        models: withPolymorphism(stiColumnModelNodes, polymorphism, defaultNamespaceId),
       },
       input.codecLookup,
       input.dataTypes.lookup,
@@ -2804,24 +2875,14 @@ export function interpretPslDocumentToSqlContract(
     }
   }
 
-  const polyDiagnostics = createPslDiagnosticCollector(input.sources);
-  const polymorphicModels = resolvePolymorphism(
+  const polymorphicModels = resolveVariantStorage(
     modelsByCoordinate,
     physicalNames,
-    discriminatorDeclarations,
     baseDeclarations,
-    reported,
+    polymorphism,
     syntheticPkFieldsByVariant,
     stiBaseFieldsByBase,
-    polyDiagnostics,
   );
-
-  if (polyDiagnostics.length > 0) {
-    return notOk({
-      summary: 'PSL to SQL contract interpretation failed',
-      diagnostics: polyDiagnostics.toExternal(),
-    });
-  }
 
   const filteredRoots = Object.fromEntries(
     Object.entries(contract.roots).filter(
@@ -2845,7 +2906,6 @@ export function interpretPslDocumentToSqlContract(
               ]),
             ),
             ...ifDefined('enum', namespaceSlice.enum),
-            ...ifDefined('valueObjects', namespaceSlice.valueObjects),
           },
         ]),
       ),

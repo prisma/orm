@@ -10,6 +10,7 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
 import { sqlEmission } from '../src/index';
 import { createEmitterTestContract as createContract } from './create-emitter-test-contract';
+import { identityCodecLookup } from './value-set-codec-lookups';
 
 type TestDescriptor =
   | ControlTargetDescriptor<'sql', string>
@@ -1052,7 +1053,7 @@ describe('sql-target-family-hook', () => {
       );
     });
 
-    it('emits valueObjects descriptor on ContractBase', () => {
+    it('emits value objects in the storage namespace entries, and nowhere else', () => {
       const ir = createContract({
         valueObjects: {
           Address: {
@@ -1068,8 +1069,10 @@ describe('sql-target-family-hook', () => {
         storage: { tables: {} },
       });
       const types = generateContractDts(ir, sqlEmission, [], testHashes);
-      expect(types).toContain('readonly valueObjects:');
-      expect(types).toContain('readonly Address: { readonly fields:');
+      expect(types).toContain(
+        'readonly entries: { readonly table: {}; readonly valueObject: { readonly Address: { readonly fields: { readonly street: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/text@1" } } } } } }',
+      );
+      expect(types).not.toContain('readonly valueObjects:');
     });
 
     it('emits model fields referencing value objects with valueObject kind', () => {
@@ -1089,7 +1092,13 @@ describe('sql-target-family-hook', () => {
               homeAddress: {
                 nullable: true,
                 many: false,
-                type: { kind: 'valueObject', name: 'Address' },
+                type: {
+                  kind: 'valueObject',
+                  plane: 'storage',
+                  namespaceId: '__unbound__',
+                  entityKind: 'valueObject',
+                  entityName: 'Address',
+                },
               },
             },
             relations: {},
@@ -1123,7 +1132,7 @@ describe('sql-target-family-hook', () => {
       });
       const types = generateContractDts(ir, sqlEmission, [], testHashes);
       expect(types).toContain(
-        'readonly homeAddress: { readonly nullable: true; readonly type: { readonly kind: "valueObject"; readonly name: "Address" } }',
+        'readonly homeAddress: { readonly nullable: true; readonly type: { readonly kind: "valueObject"; readonly plane: "storage"; readonly namespaceId: "__unbound__"; readonly entityKind: "valueObject"; readonly entityName: "Address" } }',
       );
     });
 
@@ -1143,7 +1152,13 @@ describe('sql-target-family-hook', () => {
               id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
               addresses: {
                 nullable: false,
-                type: { kind: 'valueObject', name: 'Address' },
+                type: {
+                  kind: 'valueObject',
+                  plane: 'storage',
+                  namespaceId: '__unbound__',
+                  entityKind: 'valueObject',
+                  entityName: 'Address',
+                },
                 many: { elementNullable: false },
               },
             },
@@ -1178,7 +1193,7 @@ describe('sql-target-family-hook', () => {
       });
       const types = generateContractDts(ir, sqlEmission, [], testHashes);
       expect(types).toContain(
-        'readonly addresses: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly name: "Address" }; readonly many: { readonly elementNullable: false } }',
+        'readonly addresses: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly plane: "storage"; readonly namespaceId: "__unbound__"; readonly entityKind: "valueObject"; readonly entityName: "Address" }; readonly many: { readonly elementNullable: false } }',
       );
     });
 
@@ -1194,7 +1209,13 @@ describe('sql-target-family-hook', () => {
               },
               children: {
                 nullable: false,
-                type: { kind: 'valueObject', name: 'NavItem' },
+                type: {
+                  kind: 'valueObject',
+                  plane: 'storage',
+                  namespaceId: '__unbound__',
+                  entityKind: 'valueObject',
+                  entityName: 'NavItem',
+                },
                 many: { elementNullable: false },
               },
             },
@@ -1206,16 +1227,60 @@ describe('sql-target-family-hook', () => {
       expect(types).toContain('export type NavItemOutput =');
       expect(types).toContain('export type NavItemInput =');
       expect(types).toContain(
-        'readonly children: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly name: "NavItem" }; readonly many: { readonly elementNullable: false } }',
+        'readonly children: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly plane: "storage"; readonly namespaceId: "__unbound__"; readonly entityKind: "valueObject"; readonly entityName: "NavItem" }; readonly many: { readonly elementNullable: false } }',
       );
     });
 
-    it('omits valueObjects when none exist', () => {
+    it('omits value objects when none exist', () => {
       const ir = createContract({
         storage: { tables: {} },
       });
       const types = generateContractDts(ir, sqlEmission, [], testHashes);
-      expect(types).not.toContain('valueObjects');
+      expect(types).not.toMatch(/valueObject/i);
+    });
+
+    it('types an enum member of a value object by the storage value set it names', () => {
+      const ir = createContract({
+        valueObjects: {
+          Address: {
+            fields: {
+              kind: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+                valueSet: {
+                  plane: 'storage',
+                  entityKind: 'valueSet',
+                  namespaceId: '__unbound__',
+                  entityName: 'Kind',
+                },
+              },
+            },
+          },
+        },
+        storage: {
+          namespaces: {
+            __unbound__: {
+              id: '__unbound__',
+              entries: {
+                table: {},
+                valueSet: { Kind: { kind: 'valueSet', values: ['home', 'work'] } },
+              },
+            },
+          },
+        },
+      });
+      const types = generateContractDts(
+        ir,
+        sqlEmission,
+        [],
+        testHashes,
+        undefined,
+        identityCodecLookup,
+      );
+      expect(types).toContain(
+        'type FieldTypeOverrides = { readonly __unbound__: { readonly valueObjects: { readonly Address: { readonly kind: { readonly output: "home" | "work"; readonly input: "home" | "work" } } } } };',
+      );
     });
 
     it('emits nullable value object type alias field', () => {

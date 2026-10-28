@@ -43,7 +43,7 @@ export interface Contract<TStorage extends StorageBase = StorageBase> {
   readonly targetFamily: string;
   readonly roots: Record<string, CrossReference>;
   /**
-   * Application plane (ADR 221): `domain.namespaces.<nsId>.{ models, valueObjects }`.
+   * Application plane (ADR 221): `domain.namespaces.<nsId>.{ models, enum }`.
    */
   readonly domain: ApplicationDomain;
   readonly storage: TStorage;
@@ -63,17 +63,33 @@ type ExactlyOneNamespace<T extends Record<string, unknown>> = keyof T extends in
   : never;
 
 type NamespaceValueObjectsOf<TNamespace> = TNamespace extends {
-  readonly valueObjects?: infer VO;
+  readonly entries: { readonly valueObject?: infer VO };
 }
   ? VO extends Record<string, ContractValueObject>
     ? VO
     : Record<never, never>
   : Record<never, never>;
 
-/** Value-object map when the contract declares exactly one domain namespace. */
+/** The value object of `TStorage` that `TReference` names, at `namespaces[namespaceId].entries.valueObject[entityName]`, or `never` when storage does not have it. */
+export type ContractValueObjectAt<
+  TStorage,
+  TReference extends { readonly namespaceId: string; readonly entityName: string },
+> = TStorage extends { readonly namespaces: infer Namespaces }
+  ? TReference['namespaceId'] extends keyof Namespaces
+    ? Namespaces[TReference['namespaceId']] extends {
+        readonly entries: { readonly valueObject: infer VOs };
+      }
+      ? TReference['entityName'] extends keyof VOs
+        ? VOs[TReference['entityName']]
+        : never
+      : never
+    : never
+  : never;
+
+/** Value-object map of the storage plane when the contract declares exactly one storage namespace. */
 export type ContractValueObjectDefinitions<TContract extends Contract> =
   NamespaceValueObjectsOf<
-    TContract['domain']['namespaces'][ExactlyOneNamespace<TContract['domain']['namespaces']>]
+    TContract['storage']['namespaces'][ExactlyOneNamespace<TContract['storage']['namespaces']>]
   > extends infer Projected
     ? Projected extends Record<string, ContractValueObject>
       ? Projected

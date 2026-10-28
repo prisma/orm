@@ -120,6 +120,7 @@ class PgTextCodec extends CodecImpl<'pg/text@1', readonly ['equality'], string, 
 
 class PgTextDescriptor extends PostgresCodecDescriptor<void> {
   override readonly dataType = pgText.id;
+  override readonly jsonType = 'string' as const;
   override readonly codecId = 'pg/text@1';
   override readonly traits = ['equality'] as const;
   override readonly paramsSchema = undefined;

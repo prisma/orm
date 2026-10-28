@@ -11,6 +11,24 @@ import type {
 } from '@internal/mongo-contract';
 import { blindCast } from '@internal/utils/casts';
 
+type ValueObjectRef<Name extends string> = {
+  readonly kind: 'valueObject';
+  readonly plane: 'storage';
+  readonly namespaceId: '__unbound__';
+  readonly entityKind: 'valueObject';
+  readonly entityName: Name;
+};
+
+function valueObjectRef<Name extends string>(entityName: Name): ValueObjectRef<Name> {
+  return {
+    kind: 'valueObject',
+    plane: 'storage',
+    namespaceId: '__unbound__',
+    entityKind: 'valueObject',
+    entityName,
+  };
+}
+
 type TestModels = {
   readonly Order: {
     readonly fields: {
@@ -111,17 +129,17 @@ type TestModels = {
         readonly many: false;
       };
       readonly address: {
-        readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
+        readonly type: ValueObjectRef<'Address'>;
         readonly nullable: false;
         readonly many: false;
       };
       readonly workAddress: {
-        readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
+        readonly type: ValueObjectRef<'Address'>;
         readonly nullable: true;
         readonly many: false;
       };
       readonly stats: {
-        readonly type: { readonly kind: 'valueObject'; readonly name: 'Stats' };
+        readonly type: ValueObjectRef<'Stats'>;
         readonly nullable: false;
         readonly many: false;
       };
@@ -151,7 +169,7 @@ type TestModels = {
         readonly many: false;
       };
       readonly home: {
-        readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
+        readonly type: ValueObjectRef<'Address'>;
         readonly nullable: true;
         readonly many: false;
       };
@@ -187,7 +205,7 @@ type TestValueObjects = {
         readonly many: false;
       };
       readonly geo: {
-        readonly type: { readonly kind: 'valueObject'; readonly name: 'GeoPoint' };
+        readonly type: ValueObjectRef<'GeoPoint'>;
         readonly nullable: false;
         readonly many: false;
       };
@@ -236,6 +254,7 @@ type TestStorage = {
           readonly customers: { readonly kind: 'mongo-collection' };
           readonly accounts: { readonly kind: 'mongo-collection' };
         };
+        readonly valueObject: TestValueObjects;
       };
     };
   };
@@ -254,7 +273,6 @@ export type TestContract = Omit<MongoContract<TestStorage>, 'domain'> & {
     readonly namespaces: {
       readonly __unbound__: {
         readonly models: TestModels;
-        readonly valueObjects: TestValueObjects;
       };
     };
   };
@@ -431,16 +449,16 @@ export const testContractJson = {
                 many: false,
               },
               address: {
-                type: { kind: 'valueObject', name: 'Address' },
+                type: valueObjectRef('Address'),
                 nullable: false,
                 many: false,
               },
               workAddress: {
-                type: { kind: 'valueObject', name: 'Address' },
+                type: valueObjectRef('Address'),
                 nullable: true,
                 many: false,
               },
-              stats: { type: { kind: 'valueObject', name: 'Stats' }, nullable: false, many: false },
+              stats: { type: valueObjectRef('Stats'), nullable: false, many: false },
             },
             relations: {},
             storage: {
@@ -466,7 +484,7 @@ export const testContractJson = {
                 nullable: false,
                 many: false,
               },
-              home: { type: { kind: 'valueObject', name: 'Address' }, nullable: true, many: false },
+              home: { type: valueObjectRef('Address'), nullable: true, many: false },
             },
             relations: {},
             storage: {
@@ -475,60 +493,6 @@ export const testContractJson = {
                 id: { field: '_id' },
                 displayName: { field: 'display_name' },
                 home: { field: 'home_address' },
-              },
-            },
-          },
-        },
-        valueObjects: {
-          Address: {
-            fields: {
-              street: {
-                type: { kind: 'scalar', codecId: 'mongo/string@1' },
-                nullable: false,
-                many: false,
-              },
-              city: {
-                type: { kind: 'scalar', codecId: 'mongo/string@1' },
-                nullable: false,
-                many: false,
-              },
-              zip: {
-                type: { kind: 'scalar', codecId: 'mongo/string@1' },
-                nullable: true,
-                many: false,
-              },
-              geo: {
-                type: { kind: 'valueObject', name: 'GeoPoint' },
-                nullable: false,
-                many: false,
-              },
-            },
-          },
-          GeoPoint: {
-            fields: {
-              lat: {
-                type: { kind: 'scalar', codecId: 'mongo/double@1' },
-                nullable: false,
-                many: false,
-              },
-              lng: {
-                type: { kind: 'scalar', codecId: 'mongo/double@1' },
-                nullable: false,
-                many: false,
-              },
-            },
-          },
-          Stats: {
-            fields: {
-              visits: {
-                type: { kind: 'scalar', codecId: 'mongo/double@1' },
-                nullable: false,
-                many: false,
-              },
-              lastSeen: {
-                type: { kind: 'scalar', codecId: 'mongo/date@1' },
-                nullable: true,
-                many: false,
               },
             },
           },
@@ -547,6 +511,62 @@ export const testContractJson = {
           users: { kind: 'mongo-collection' },
           customers: { kind: 'mongo-collection' },
           accounts: { kind: 'mongo-collection' },
+        },
+        entries: {
+          valueObject: {
+            Address: {
+              fields: {
+                street: {
+                  type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                  nullable: false,
+                  many: false,
+                },
+                city: {
+                  type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                  nullable: false,
+                  many: false,
+                },
+                zip: {
+                  type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                  nullable: true,
+                  many: false,
+                },
+                geo: {
+                  type: valueObjectRef('GeoPoint'),
+                  nullable: false,
+                  many: false,
+                },
+              },
+            },
+            GeoPoint: {
+              fields: {
+                lat: {
+                  type: { kind: 'scalar', codecId: 'mongo/double@1' },
+                  nullable: false,
+                  many: false,
+                },
+                lng: {
+                  type: { kind: 'scalar', codecId: 'mongo/double@1' },
+                  nullable: false,
+                  many: false,
+                },
+              },
+            },
+            Stats: {
+              fields: {
+                visits: {
+                  type: { kind: 'scalar', codecId: 'mongo/double@1' },
+                  nullable: false,
+                  many: false,
+                },
+                lastSeen: {
+                  type: { kind: 'scalar', codecId: 'mongo/date@1' },
+                  nullable: true,
+                  many: false,
+                },
+              },
+            },
+          },
         },
       },
     },

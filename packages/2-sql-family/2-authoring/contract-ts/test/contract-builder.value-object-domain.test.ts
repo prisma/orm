@@ -6,6 +6,16 @@ import { buildSqlContractFromDefinition } from '../src/contract-builder';
 import { enumType, member } from '../src/enum-type';
 import { valueObjectsOf } from './contract-test-helpers';
 
+function valueObjectRef(entityName: string) {
+  return {
+    kind: 'valueObject',
+    plane: 'storage',
+    namespaceId: 'public',
+    entityKind: 'valueObject',
+    entityName,
+  } as const;
+}
+
 const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   kind: 'target',
   id: 'postgres',
@@ -23,8 +33,8 @@ const numeric = {
 } as const;
 const idField = { fieldName: 'id', columnName: 'id', descriptor: int4, nullable: false } as const;
 
-describe('value-object members and value-object fields in the domain', () => {
-  it('types a model field by its value object, optional and list', () => {
+describe('value objects in the storage plane, and the fields that refer to them', () => {
+  it('types a model field by the storage coordinate of its value object, optional and list', () => {
     const jsonb = { codecId: 'pg/jsonb@1' } as const;
     const contract = buildSqlContractFromDefinition(
       {
@@ -67,16 +77,16 @@ describe('value-object members and value-object fields in the domain', () => {
     const { id: _id, ...fields } =
       contract.domain.namespaces['public']?.models['User']?.fields ?? {};
     expect(fields).toEqual({
-      home: { type: { kind: 'valueObject', name: 'Address' }, nullable: true, many: false },
+      home: { type: valueObjectRef('Address'), nullable: true, many: false },
       addresses: {
-        type: { kind: 'valueObject', name: 'Address' },
+        type: valueObjectRef('Address'),
         nullable: false,
         many: { elementNullable: false },
       },
     });
   });
 
-  it('builds value-object members like model fields, keeping many, type parameters and the domain valueSet of an enum', () => {
+  it('builds value-object members like model fields, keeping many and type parameters, with the storage value set of an enum', () => {
     const Country = enumType('Country', text, member('DE', 'DE'), member('FR', 'FR'));
     const scalarFields = [
       { fieldName: 'amount', descriptor: numeric, nullable: false },
@@ -149,17 +159,11 @@ describe('value-object members and value-object fields in the domain', () => {
       testTypeLookups.dataTypeLookup,
     );
 
-    const namespace = contract.domain.namespaces['public'];
-    const {
-      id: _id,
-      shipping: _shipping,
-      ...modelFields
-    } = namespace?.models['Order']?.fields ?? {};
-    const { stops, ...memberFields } = namespace?.valueObjects?.['Shipping']?.fields ?? {};
-    expect({ memberFields, stops }).toEqual({
-      memberFields: modelFields,
+    const { stops, ...memberFields } = valueObjectsOf(contract)?.['Shipping']?.fields ?? {};
+    expect({ stops, domainKeys: Object.keys(contract.domain.namespaces['public'] ?? {}) }).toEqual({
+      domainKeys: ['models', 'enum'],
       stops: {
-        type: { kind: 'valueObject', name: 'Stop' },
+        type: valueObjectRef('Stop'),
         nullable: false,
         many: { elementNullable: true },
       },
@@ -180,8 +184,8 @@ describe('value-object members and value-object fields in the domain', () => {
         nullable: false,
         many: false,
         valueSet: {
-          plane: 'domain',
-          entityKind: 'enum',
+          plane: 'storage',
+          entityKind: 'valueSet',
           namespaceId: 'public',
           entityName: 'Country',
         },
@@ -191,8 +195,8 @@ describe('value-object members and value-object fields in the domain', () => {
         nullable: true,
         many: { elementNullable: false },
         valueSet: {
-          plane: 'domain',
-          entityKind: 'enum',
+          plane: 'storage',
+          entityKind: 'valueSet',
           namespaceId: 'public',
           entityName: 'Country',
         },
@@ -242,7 +246,7 @@ describe('value-object members and value-object fields in the domain', () => {
         fields: {
           street: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false, many: false },
           location: {
-            type: { kind: 'valueObject', name: 'GeoLocation' },
+            type: valueObjectRef('GeoLocation'),
             nullable: true,
             many: false,
           },
@@ -251,7 +255,7 @@ describe('value-object members and value-object fields in the domain', () => {
     });
   });
 
-  it('omits valueObjects from the contract when none are defined', () => {
+  it('writes no valueObject slot when none are defined', () => {
     const contract = buildSqlContractFromDefinition(
       {
         warnings: undefined,

@@ -10,6 +10,7 @@ function column(modelName: string, columnName: string, nullable = true): ColumnD
     many: false,
     default: undefined,
     enumTypeHandle: undefined,
+    valueObject: undefined,
     site: { kind: 'field', modelName, fieldName: columnName },
   };
 }

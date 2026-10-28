@@ -5,6 +5,7 @@ import type {
   JsonValue,
 } from '@internal/contract/types';
 import {
+  generateValueObjectsDescriptorType,
   renderCodecTypeOverride,
   renderTypeOverridesMap,
   renderValueSetOverride,
@@ -523,6 +524,12 @@ function generateStorageNamespacesType(namespaces: SqlStorage['namespaces']): st
     const valueSetEntries = ns.entries.valueSet;
     if (valueSetEntries !== undefined && Object.keys(valueSetEntries).length > 0) {
       entriesParts.push(`readonly valueSet: ${generateValueSetBlockType(valueSetEntries)}`);
+    }
+    const valueObjectEntries = ns.entries.valueObject;
+    if (valueObjectEntries !== undefined && Object.keys(valueObjectEntries).length > 0) {
+      entriesParts.push(
+        `readonly valueObject: ${generateValueObjectsDescriptorType(valueObjectEntries)}`,
+      );
     }
     const entriesType = `{ ${entriesParts.join('; ')} }`;
     parts.push(

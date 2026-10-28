@@ -84,41 +84,38 @@ describe('SQL contract validators', () => {
   });
 
   it.each([
-    { metadata: {}, valid: true, many: false },
-    { metadata: { many: false }, valid: true, many: false },
-    {
-      metadata: { many: { elementNullable: false } },
-      valid: true,
-      many: { elementNullable: false },
-    },
-    { metadata: { many: { elementNullable: true } }, valid: true, many: { elementNullable: true } },
-    { metadata: { many: true }, valid: false, many: undefined },
-    { metadata: { many: null }, valid: false, many: undefined },
-    { metadata: { many: {} }, valid: false, many: undefined },
-    { metadata: { many: { elementNullable: 'false' } }, valid: false, many: undefined },
-  ])('validates and normalizes value-object cardinality $metadata', ({ metadata, valid, many }) => {
+    { metadata: {}, valid: true },
+    { metadata: { many: false }, valid: true },
+    { metadata: { many: { elementNullable: false } }, valid: true },
+    { metadata: { many: { elementNullable: true } }, valid: true },
+    { metadata: { many: true }, valid: false },
+    { metadata: { many: null }, valid: false },
+    { metadata: { many: {} }, valid: false },
+    { metadata: { many: { elementNullable: 'false' } }, valid: false },
+  ])('validates storage value-object cardinality $metadata', ({ metadata, valid }) => {
     const field = { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false, ...metadata };
     const schema = createSqlContractSchema(composeSqlEntityKinds());
     const result = schema({
       target: 'postgres',
       targetFamily: 'sql',
       profileHash: 'test',
-      domain: {
+      domain: { namespaces: { [UNBOUND_NAMESPACE_ID]: { models: {} } } },
+      storage: {
+        storageHash: 'test',
         namespaces: {
           [UNBOUND_NAMESPACE_ID]: {
-            models: {},
-            valueObjects: { Address: { fields: { city: field } } },
+            id: UNBOUND_NAMESPACE_ID,
+            entries: { valueObject: { Address: { fields: { city: field } } } },
           },
         },
       },
-      storage: { storageHash: 'test', namespaces: {} },
     });
     if (valid) {
       expect(result).toMatchObject({
-        domain: {
+        storage: {
           namespaces: {
             [UNBOUND_NAMESPACE_ID]: {
-              valueObjects: { Address: { fields: { city: { ...field, many } } } },
+              entries: { valueObject: { Address: { fields: { city: field } } } },
             },
           },
         },
@@ -1021,22 +1018,46 @@ describe('SQL contract validators', () => {
 
     it('leaves the storage type of a value-object column to the stack', () => {
       const c = createContract<SqlStorage>({
-        storage: unboundTables({
-          user: table({ id: col('pg/int4', 'pg/int4@1'), address: col('pg/text', 'pg/text@1') }),
+        storage: blindCast<SqlStorage, 'test storage literal with a valueObject slot'>({
+          namespaces: {
+            [UNBOUND_NAMESPACE_ID]: {
+              id: UNBOUND_NAMESPACE_ID,
+              kind: 'test-sql-namespace',
+              entries: {
+                table: {
+                  user: table({
+                    id: col('pg/int4', 'pg/int4@1'),
+                    address: col('pg/text', 'pg/text@1'),
+                  }),
+                },
+                valueObject: {
+                  Address: {
+                    fields: {
+                      street: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+                    },
+                  },
+                },
+              },
+            },
+          },
         }),
         models: {
           User: blindCast<ContractModel, 'test model literal with a value-object field'>({
             ...contractModel('user', { id: { column: 'id' }, address: { column: 'address' } }),
             fields: {
               id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-              address: { nullable: false, type: { kind: 'valueObject', name: 'Address' } },
+              address: {
+                nullable: false,
+                type: {
+                  kind: 'valueObject',
+                  plane: 'storage',
+                  namespaceId: UNBOUND_NAMESPACE_ID,
+                  entityKind: 'valueObject',
+                  entityName: 'Address',
+                },
+              },
             },
           }),
-        },
-        valueObjects: {
-          Address: {
-            fields: { street: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } } },
-          },
         },
       });
       expect(() => validateSqlContractFully(c)).not.toThrow();

@@ -2,10 +2,15 @@ import { ContractValidationError } from '@internal/contract/contract-validation-
 import {
   type Contract,
   ContractExecutionSectionSchema,
+  ContractFieldTypeSchema,
   type ContractModel,
   CrossReferenceSchema,
 } from '@internal/contract/types';
-import { validateContractDomain } from '@internal/contract/validate-domain';
+import {
+  removedDomainKeyProblems,
+  validateContractDomain,
+} from '@internal/contract/validate-domain';
+import { validateStorageValueObjects } from '@internal/contract/validate-storage';
 import {
   createDataTypeLookup,
   DATA_TYPE_ID_PATTERN,
@@ -285,6 +290,36 @@ function removedKeyProblems(storage: unknown): readonly string[] {
   return [];
 }
 
+/**
+ * A SQL value object member that is a union or a dictionary, named by its value object and member. The storage schema refuses it too, but at the path of its namespace, so this names it first.
+ */
+function unenforceableValueObjectMemberProblems(storage: unknown): readonly string[] {
+  return entriesOf(fieldOf(storage, 'namespaces')).flatMap(([namespaceId, namespace]) =>
+    entriesOf(fieldOf(fieldOf(namespace, 'entries'), 'valueObject')).flatMap(
+      ([valueObjectName, valueObject]) =>
+        entriesOf(fieldOf(valueObject, 'fields')).flatMap(([memberName, member]) => {
+          const kind =
+            fieldOf(fieldOf(member, 'type'), 'kind') === 'union'
+              ? 'union'
+              : fieldOf(member, 'dict') === true
+                ? 'dictionary'
+                : undefined;
+          return kind === undefined
+            ? []
+            : [
+                `value object "${namespaceId}:${valueObjectName}" member "${memberName}" is a ${kind}; SQL value objects hold no unions or dictionaries, since their check cannot enforce them`,
+              ];
+        }),
+    ),
+  );
+}
+
+/** The problems a stored contract has before its structure is validated: removed keys first, then value object members SQL cannot enforce. */
+function preStructuralStorageProblems(storage: unknown): readonly string[] {
+  const removedKeys = removedKeyProblems(storage);
+  return removedKeys.length > 0 ? removedKeys : unenforceableValueObjectMemberProblems(storage);
+}
+
 type NamespacedStorageWalk = {
   readonly namespaces: Readonly<
     Record<
@@ -419,30 +454,6 @@ function rejectDuplicateWireNamedCheckContent(
   }
 }
 
-function isContractFieldType(value: unknown): boolean {
-  if (!isPlainRecord(value)) return false;
-  const kind = value['kind'];
-  if (kind === 'scalar') {
-    if (typeof value['codecId'] !== 'string') return false;
-    const typeParams = value['typeParams'];
-    if (typeParams !== undefined && !isPlainRecord(typeParams)) return false;
-    return true;
-  }
-  if (kind === 'valueObject') {
-    return typeof value['name'] === 'string';
-  }
-  if (kind === 'union') {
-    const members = value['members'];
-    if (!Array.isArray(members)) return false;
-    return members.every((m) => isContractFieldType(m));
-  }
-  return false;
-}
-
-const ContractFieldTypeSchema = type('unknown').narrow((value, ctx) =>
-  isContractFieldType(value) ? true : ctx.mustBe('scalar, valueObject, or union field type'),
-);
-
 const ModelFieldSchema = type({
   '+': 'reject',
   nullable: 'boolean',
@@ -552,9 +563,6 @@ export function createSqlContractSchema(
       namespaces: type({
         '[string]': type({
           models: type({ '[string]': ModelSchema }),
-          'valueObjects?': type({
-            '[string]': type({ fields: type({ '[string]': ModelFieldSchema }) }),
-          }),
           'enum?': type({ '[string]': ContractEnumSchema }),
         }),
       }),
@@ -576,11 +584,11 @@ const SqlContractSchema = createSqlContractSchema(DEFAULT_SQL_KINDS);
  * @throws Error if the storage structure is invalid
  */
 export function validateStorage(value: unknown): void {
-  const removedKeys = removedKeyProblems(value);
+  const preStructuralProblems = preStructuralStorageProblems(value);
   const result = StorageSchema(value);
   const errors =
-    removedKeys.length > 0
-      ? [...removedKeys]
+    preStructuralProblems.length > 0
+      ? [...preStructuralProblems]
       : result instanceof type.errors
         ? result.map((p: { message: string }) => p.message)
         : [];
@@ -632,10 +640,13 @@ function validateSqlContractStructure<T extends Contract<SqlStorage>>(
     throw new ContractValidationError(`Unsupported target family: ${targetFamily}`, 'structural');
   }
 
-  const removedKeys = removedKeyProblems(fieldOf(value, 'storage'));
-  if (removedKeys.length > 0) {
+  const preStructuralProblems = [
+    ...removedDomainKeyProblems(value),
+    ...preStructuralStorageProblems(fieldOf(value, 'storage')),
+  ];
+  if (preStructuralProblems.length > 0) {
     throw new ContractValidationError(
-      `Contract structural validation failed: ${removedKeys.join('; ')}`,
+      `Contract structural validation failed: ${preStructuralProblems.join('; ')}`,
       'structural',
     );
   }
@@ -1002,6 +1013,7 @@ export function validateExecutionDefaultsTargetMappedColumns(contract: Contract<
  * counts match their referenced columns. Throws on the first mismatch.
  */
 export function validateSqlStorageConsistency(contract: Contract<SqlStorage>): void {
+  validateStorageValueObjects(contract.storage);
   for (const { namespaceId, tableName, table: rawTable } of eachStorageTable(contract.storage)) {
     const table = blindCast<StorageTable, 'table entry in structurally validated SQL storage'>(
       rawTable,
@@ -1146,6 +1158,7 @@ export function validateSqlContractFully<T extends Contract<SqlStorage>>(
   validateContractDomain({
     roots: validated.roots,
     domain: validated.domain,
+    storage: validated.storage,
   });
   validateSqlStorageConsistency(validated);
   const semanticErrors = validateStorageSemantics(validated.storage);

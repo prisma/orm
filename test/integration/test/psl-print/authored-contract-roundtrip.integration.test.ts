@@ -51,6 +51,43 @@ function loadContract(relativePath: string): Contract<SqlStorage> {
  */
 const pslCases: ReadonlyArray<{ readonly name: string; readonly schema: string }> = [
   {
+    name: 'value objects with nested, list, enum and self-referring members, and a discriminator, each with its derived check',
+    schema: readFileSync(
+      join(
+        repoRoot,
+        'test/integration/test/sql-orm-client/fixtures/value-object-checks/contract.prisma',
+      ),
+      'utf-8',
+    ).replace('// use prisma-8\n', ''),
+  },
+  {
+    name: 'a value object field of a variant that shares the base table, whose column is nullable',
+    schema: `type Geo {
+  lat Float
+  lng Float
+}
+
+model Shape {
+  id   Int    @id
+  kind String
+
+  @@discriminator(kind)
+}
+
+model Circle {
+  center Geo
+
+  @@base(Shape, "circle")
+}
+
+model Square {
+  side Int
+
+  @@base(Shape, "square")
+}
+`,
+  },
+  {
     name: 'a model control policy',
     schema: `model Ledger {
   id Int @id
@@ -208,6 +245,33 @@ policy_select p_read {
 
   @@check(expression: sql\`length(email) > 0\`, name: "widget_email_not_blank")
   @@check(expression: sql\`id > 0\`, map: "widget_id_positive")
+}
+`,
+  },
+  {
+    name: 'a value object nested in another, a list of nested value objects, and an enum member',
+    schema: `enum Country {
+  @@type("pg/text@1")
+  DE = "DE"
+  FR = "FR"
+}
+
+type Geo {
+  lat Float
+  lng Float
+}
+
+type Address {
+  street  String
+  country Country
+  geo     Geo
+  stops   Geo[]
+}
+
+model Person {
+  id    Int       @id
+  home  Address
+  homes Address[]
 }
 `,
   },

@@ -134,6 +134,7 @@ export class PgTimestamptzDateCodec extends CodecImpl<
 }
 
 export class PgTimestamptzDateDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
+  override readonly jsonType = 'string' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
@@ -178,6 +179,7 @@ export class PgTimestampDateCodec extends CodecImpl<
 }
 
 export class PgTimestampDateDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
+  override readonly jsonType = 'string' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }

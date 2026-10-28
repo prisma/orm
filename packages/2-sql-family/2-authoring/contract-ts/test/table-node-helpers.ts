@@ -1,4 +1,5 @@
 import type { Contract } from '@internal/contract/types';
+import type { CheckExpressionInput } from '@internal/sql-contract/check-expressions';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { invariant } from '@internal/utils/assertions';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
@@ -14,13 +15,7 @@ import {
   type ValueObjectFieldNode,
 } from '../src/contract-definition';
 
-interface RenderInput {
-  readonly tableName: string;
-  readonly columnName: string;
-  readonly many: boolean;
-  readonly elementNullable: boolean;
-  readonly memberValues: readonly (string | number)[] | undefined;
-}
+type RenderInput = CheckExpressionInput;
 
 function renderCheckExpressions(input: RenderInput): ReadonlyArray<{
   readonly kind: 'membership' | 'elementNotNull';
@@ -38,7 +33,7 @@ function renderCheckExpressions(input: RenderInput): ReadonlyArray<{
           },
         ]
       : []),
-    ...(input.many && !input.elementNullable
+    ...(input.many !== false && !input.many.elementNullable
       ? [
           {
             kind: 'elementNotNull' as const,

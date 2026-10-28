@@ -28,7 +28,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'8973aa4e3654dc5083f7ff15a7c187e3e590f977b4171bb816cd6566fa4db93b'>;
+  StorageHashBase<'87d224586379cdc42fda508d70ac88410eb9795e164b6031ef5a9dd9a5a1b759'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -276,22 +276,34 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 type ParameterizedOutputTypeFunctions =
   PgParameterizedOutputTypes | PgVectorParameterizedOutputTypes;
 
-type FieldTypeOverrides = {};
+type FieldTypeOverrides = {
+  readonly public: {
+    readonly models: {
+      readonly Note: { readonly kind: { readonly output: 'memo'; readonly input: 'memo' } };
+    };
+  };
+};
 export type FieldOutputTypes = FieldTypesFromDomain<
   ContractBase['domain']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'output'
+  'output',
+  ContractBase['storage']['namespaces']
 >;
 export type FieldInputTypes = FieldTypesFromDomain<
   ContractBase['domain']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'input'
+  'input',
+  ContractBase['storage']['namespaces']
 >;
-type ColumnTypeOverrides = {};
+type ColumnTypeOverrides = {
+  readonly public: {
+    readonly notes: { readonly kind: { readonly output: 'memo'; readonly input: 'memo' } };
+  };
+};
 export type StorageColumnTypes = ColumnTypesFromStorage<
   ContractBase['storage'],
   CodecTypes,
@@ -482,6 +494,9 @@ type ContractBase = Omit<
               indexes: readonly [];
               foreignKeys: readonly [];
             };
+          };
+          readonly valueSet: {
+            readonly 'Note.kind': { readonly kind: 'valueSet'; readonly values: readonly ['memo'] };
           };
         };
       };
@@ -687,7 +702,6 @@ type ContractBase = Omit<
     };
   };
   readonly meta: {};
-
   readonly profileHash: ProfileHash;
 };
 

@@ -20,11 +20,11 @@ import type {
   NamespaceId,
   ProfileHashBase,
   StorageHashBase,
-  ValueObjectTypesFromDomain,
+  ValueObjectTypesFromStorage,
 } from '@prisma/orm-postgres/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'b596b070c94c65a7c369422bd7b328fa8a3c7b5c33440ff96d6951eab14f40a0'>;
+  StorageHashBase<'aec35593db935d2bb2a8ce976972281fea82f22acbad88e81f6ec60b1bba210f'>;
 export type ExecutionHash =
   ExecutionHashBase<'0a7f0d7c621b64f307b872110f0effe4cd04d5410d04e913f6550ef107d46788'>;
 export type ProfileHash =
@@ -270,15 +270,15 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
     : CodecTypes[CodecId]['json']
   : Encoded;
 type ParameterizedOutputTypeFunctions = PgParameterizedOutputTypes;
-type ValueObjectOutputTypes = ValueObjectTypesFromDomain<
-  ContractBase['domain']['namespaces'],
+type ValueObjectOutputTypes = ValueObjectTypesFromStorage<
+  ContractBase['storage']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
   'output'
 >;
-type ValueObjectInputTypes = ValueObjectTypesFromDomain<
-  ContractBase['domain']['namespaces'],
+type ValueObjectInputTypes = ValueObjectTypesFromStorage<
+  ContractBase['storage']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
@@ -289,6 +289,9 @@ export type AddressInput = ValueObjectInputTypes['public']['Address'];
 type FieldTypeOverrides = {
   readonly public: {
     readonly models: {
+      readonly Task: {
+        readonly type: { readonly output: 'bug' | 'feature'; readonly input: 'bug' | 'feature' };
+      };
       readonly User: {
         readonly kind: { readonly output: 'admin' | 'user'; readonly input: 'admin' | 'user' };
       };
@@ -300,17 +303,22 @@ export type FieldOutputTypes = FieldTypesFromDomain<
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'output'
+  'output',
+  ContractBase['storage']['namespaces']
 >;
 export type FieldInputTypes = FieldTypesFromDomain<
   ContractBase['domain']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'input'
+  'input',
+  ContractBase['storage']['namespaces']
 >;
 type ColumnTypeOverrides = {
   readonly public: {
+    readonly task: {
+      readonly type: { readonly output: 'bug' | 'feature'; readonly input: 'bug' | 'feature' };
+    };
     readonly user: {
       readonly kind: { readonly output: 'admin' | 'user'; readonly input: 'admin' | 'user' };
     };
@@ -673,9 +681,35 @@ type ContractBase = Omit<
             };
           };
           readonly valueSet: {
+            readonly 'Task.type': {
+              readonly kind: 'valueSet';
+              readonly values: readonly ['bug', 'feature'];
+            };
             readonly user_type: {
               readonly kind: 'valueSet';
               readonly values: readonly ['admin', 'user'];
+            };
+          };
+          readonly valueObject: {
+            readonly Address: {
+              readonly fields: {
+                readonly city: {
+                  readonly nullable: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                };
+                readonly country: {
+                  readonly nullable: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                };
+                readonly street: {
+                  readonly nullable: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                };
+                readonly zip: {
+                  readonly nullable: true;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                };
+              };
             };
           };
         };
@@ -855,7 +889,13 @@ type ContractBase = Omit<
             readonly fields: {
               readonly address: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
+                readonly type: {
+                  readonly kind: 'valueObject';
+                  readonly plane: 'storage';
+                  readonly namespaceId: 'public';
+                  readonly entityKind: 'valueObject';
+                  readonly entityName: 'Address';
+                };
               };
               readonly createdAt: {
                 readonly nullable: false;
@@ -909,28 +949,6 @@ type ContractBase = Omit<
                 readonly email: { readonly column: 'email' };
                 readonly id: { readonly column: 'id' };
                 readonly kind: { readonly column: 'kind' };
-              };
-            };
-          };
-        };
-        readonly valueObjects: {
-          readonly Address: {
-            readonly fields: {
-              readonly city: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
-              readonly country: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
-              readonly street: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
-              readonly zip: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
             };
           };
@@ -1013,28 +1031,6 @@ type ContractBase = Omit<
     };
   };
   readonly meta: {};
-  readonly valueObjects: {
-    readonly Address: {
-      readonly fields: {
-        readonly city: {
-          readonly nullable: false;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-        };
-        readonly country: {
-          readonly nullable: false;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-        };
-        readonly street: {
-          readonly nullable: false;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-        };
-        readonly zip: {
-          readonly nullable: true;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-        };
-      };
-    };
-  };
   readonly profileHash: ProfileHash;
 };
 

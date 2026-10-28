@@ -56,8 +56,11 @@
               "badge": {
                 "nullable": false,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Badge",
                   "kind": "valueObject",
-                  "name": "Badge"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               },
               "badges": {
@@ -66,8 +69,11 @@
                 },
                 "nullable": false,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Badge",
                   "kind": "valueObject",
-                  "name": "Badge"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               },
               "id": {
@@ -164,32 +170,6 @@
               }
             }
           }
-        },
-        "valueObjects": {
-          "Badge": {
-            "fields": {
-              "label": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "level": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/int32@1",
-                  "kind": "scalar"
-                },
-                "valueSet": {
-                  "entityKind": "enum",
-                  "entityName": "Level",
-                  "namespaceId": "__unbound__",
-                  "plane": "domain"
-                }
-              }
-            }
-          }
         }
       }
     }
@@ -279,6 +259,32 @@
               }
             }
           },
+          "valueObject": {
+            "Badge": {
+              "fields": {
+                "label": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "level": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/int32@1",
+                    "kind": "scalar"
+                  },
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Level",
+                    "namespaceId": "__unbound__",
+                    "plane": "storage"
+                  }
+                }
+              }
+            }
+          },
           "valueSet": {
             "Level": {
               "kind": "valueSet",
@@ -294,7 +300,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "0b97ad584118f2bce663b3289d44b665cfe365baf2d164b1fc70f4d694993963"
+    "storageHash": "f15cc7ed8744412382801fa2f9e249273fedc015ddfa58c6ca1c0416baa0fb9c"
   },
   "capabilities": {},
   "extensions": {},

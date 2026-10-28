@@ -190,7 +190,7 @@
     "execute": [
       {
         "description": "create table \"user\"",
-        "sql": "CREATE TABLE \"public\".\"user\" (\n  \"address\" jsonb,\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"displayName\" text NOT NULL,\n  \"email\" text NOT NULL,\n  \"id\" uuid NOT NULL,\n  \"kind\" text NOT NULL,\n  PRIMARY KEY (\"id\"),\n  CONSTRAINT \"user_kind_check_836d43ef\" CHECK (\"kind\" IN ('admin', 'user'))\n)",
+        "sql": "CREATE TABLE \"public\".\"user\" (\n  \"address\" jsonb,\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"displayName\" text NOT NULL,\n  \"email\" text NOT NULL,\n  \"id\" uuid NOT NULL,\n  \"kind\" text NOT NULL,\n  PRIMARY KEY (\"id\"),\n  CONSTRAINT \"user_address_shape_69432dc1\" CHECK (\"address\" IS NULL OR jsonb_path_match(\"address\", 'strict $.type() == \"null\" || ($.type() == \"object\" && exists($.keyvalue() ? (@.key == \"city\" && (@.value.type() == \"string\"))) && exists($.keyvalue() ? (@.key == \"country\" && (@.value.type() == \"string\"))) && exists($.keyvalue() ? (@.key == \"street\" && (@.value.type() == \"string\"))) && !exists($.keyvalue() ? (@.key == \"zip\" && !(@.value.type() == \"null\" || (@.value.type() == \"string\")))) && !exists($.keyvalue() ? (@.key != \"city\" && @.key != \"country\" && @.key != \"street\" && @.key != \"zip\")))') IS TRUE),\n  CONSTRAINT \"user_kind_check_836d43ef\" CHECK (\"kind\" IN ('admin', 'user'))\n)",
         "params": []
       }
     ],
@@ -276,7 +276,7 @@
     "execute": [
       {
         "description": "create table \"task\"",
-        "sql": "CREATE TABLE \"public\".\"task\" (\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"description\" text,\n  \"id\" uuid NOT NULL,\n  \"status\" text DEFAULT 'open' NOT NULL,\n  \"title\" text NOT NULL,\n  \"type\" text NOT NULL,\n  \"userId\" uuid NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "sql": "CREATE TABLE \"public\".\"task\" (\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"description\" text,\n  \"id\" uuid NOT NULL,\n  \"status\" text DEFAULT 'open' NOT NULL,\n  \"title\" text NOT NULL,\n  \"type\" text NOT NULL,\n  \"userId\" uuid NOT NULL,\n  PRIMARY KEY (\"id\"),\n  CONSTRAINT \"task_type_check_cda3f5e7\" CHECK (\"type\" IN ('bug', 'feature'))\n)",
         "params": []
       }
     ],

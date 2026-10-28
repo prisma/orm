@@ -1,4 +1,4 @@
-import type { ValueSetRef } from '@internal/contract/types';
+import type { EntityCoordinate } from '@internal/contract/types';
 import { type EnumTypeHandle, encodeEnumTypeMembers } from '@internal/contract-authoring';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { contractError } from './contract-errors';
@@ -29,8 +29,8 @@ export function checkMemberValues(
 }
 
 export interface EnumValueSetRefs {
-  readonly domain: ValueSetRef;
-  readonly storage: ValueSetRef;
+  readonly domain: EntityCoordinate<'domain', 'enum'>;
+  readonly storage: EntityCoordinate<'storage', 'valueSet'>;
 }
 
 /**

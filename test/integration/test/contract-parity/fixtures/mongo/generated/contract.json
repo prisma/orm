@@ -217,8 +217,11 @@
               "home": {
                 "nullable": true,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Address",
                   "kind": "valueObject",
-                  "name": "Address"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               },
               "joinedAt": {
@@ -251,8 +254,11 @@
                 },
                 "nullable": false,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Address",
                   "kind": "valueObject",
-                  "name": "Address"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               },
               "pastRoles": {
@@ -393,74 +399,6 @@
                 },
                 "visits": {
                   "field": "visits"
-                }
-              }
-            }
-          }
-        },
-        "valueObjects": {
-          "Address": {
-            "fields": {
-              "kind": {
-                "nullable": true,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                },
-                "valueSet": {
-                  "entityKind": "enum",
-                  "entityName": "Role",
-                  "namespaceId": "__unbound__",
-                  "plane": "domain"
-                }
-              },
-              "location": {
-                "nullable": true,
-                "type": {
-                  "kind": "valueObject",
-                  "name": "Point"
-                }
-              },
-              "street": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "tags": {
-                "many": {
-                  "elementNullable": false
-                },
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "zip": {
-                "nullable": true,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              }
-            }
-          },
-          "Point": {
-            "fields": {
-              "lat": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/double@1",
-                  "kind": "scalar"
-                }
-              },
-              "lng": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/double@1",
-                  "kind": "scalar"
                 }
               }
             }
@@ -822,6 +760,77 @@
               }
             }
           },
+          "valueObject": {
+            "Address": {
+              "fields": {
+                "kind": {
+                  "nullable": true,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  },
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Role",
+                    "namespaceId": "__unbound__",
+                    "plane": "storage"
+                  }
+                },
+                "location": {
+                  "nullable": true,
+                  "type": {
+                    "entityKind": "valueObject",
+                    "entityName": "Point",
+                    "kind": "valueObject",
+                    "namespaceId": "__unbound__",
+                    "plane": "storage"
+                  }
+                },
+                "street": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "tags": {
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "zip": {
+                  "nullable": true,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            },
+            "Point": {
+              "fields": {
+                "lat": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/double@1",
+                    "kind": "scalar"
+                  }
+                },
+                "lng": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/double@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            }
+          },
           "valueSet": {
             "Role": {
               "kind": "valueSet",
@@ -836,7 +845,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "f40b9a31525edcf6ac7faa3ae99f554ca15e128136e74743654436c4b79fb2f6"
+    "storageHash": "c4a473ccd6718dc606dfcda2d01643cfdcc79efc8d3ab1e1647001ea6086e133"
   },
   "capabilities": {},
   "extensions": {},

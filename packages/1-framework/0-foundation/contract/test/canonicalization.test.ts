@@ -6,8 +6,6 @@ function crossRef(model: string, namespace = 'default') {
   return { namespace: asNamespaceId(namespace), model };
 }
 
-import { blindCast } from '@internal/utils/casts';
-import { ifDefined } from '@internal/utils/defined';
 import {
   type CanonicalizeContractOptions,
   canonicalizeContract as canonicalizeContractRaw,
@@ -17,7 +15,7 @@ import {
 import { createPreserveEmptyPredicate, type PathPattern } from '../src/canonicalization-path-match';
 import { createStorageSort, type NamedArraySortTarget } from '../src/canonicalization-storage-sort';
 import type { Contract } from '../src/contract-types';
-import type { ContractModelBase, ContractValueObject } from '../src/domain-types';
+import type { ContractModelBase } from '../src/domain-types';
 import { coreHash, profileHash } from '../src/types';
 import { applicationDomainOf } from './support/application-domain-of';
 
@@ -69,6 +67,10 @@ function minimal(overrides?: Record<string, unknown>): Contract {
     domain: _domain,
     ...rest
   } = overrides ?? {};
+  const storageNamespaces =
+    valueObjects === undefined
+      ? {}
+      : { [UNBOUND]: { id: UNBOUND, entries: { valueObject: valueObjects } } };
   return {
     targetFamily: 'sql',
     target: 'postgres',
@@ -76,18 +78,8 @@ function minimal(overrides?: Record<string, unknown>): Contract {
     domain:
       domainOverride !== undefined
         ? (domainOverride as Contract['domain'])
-        : applicationDomainOf({
-            models: models as Record<string, ContractModelBase>,
-            ...ifDefined(
-              'valueObjects',
-              valueObjects !== undefined
-                ? blindCast<Record<string, ContractValueObject>, 'canonicalization test fixtures'>(
-                    valueObjects,
-                  )
-                : undefined,
-            ),
-          }),
-    storage: { storageHash: coreHash('stub'), namespaces: {} },
+        : applicationDomainOf({ models: models as Record<string, ContractModelBase> }),
+    storage: { storageHash: coreHash('stub'), namespaces: storageNamespaces },
     extensions: {},
     capabilities: {},
     meta: {},
@@ -374,10 +366,11 @@ describe('default omission', () => {
     expect(nameField).not.toHaveProperty('many');
     const cityField = drill(
       result,
-      'domain',
+      'storage',
       'namespaces',
       UNBOUND,
-      'valueObjects',
+      'entries',
+      'valueObject',
       'Address',
       'fields',
       'city',
@@ -828,8 +821,8 @@ describe('orderTopLevel', () => {
   });
 });
 
-describe('canonicalize with valueObjects', () => {
-  it('includes valueObjects under domain.namespaces when present', () => {
+describe('canonicalize with value objects', () => {
+  it('includes value objects under storage.namespaces.*.entries.valueObject when present', () => {
     const contract = minimal({
       valueObjects: {
         Address: {
@@ -841,7 +834,7 @@ describe('canonicalize with valueObjects', () => {
       },
     });
     const result = canonicalizeContractToObject(contract);
-    const vo = drill(result, 'domain', 'namespaces', UNBOUND, 'valueObjects');
+    const vo = drill(result, 'storage', 'namespaces', UNBOUND, 'entries', 'valueObject');
     expect(vo).toHaveProperty('Address');
   });
 
