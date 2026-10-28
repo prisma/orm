@@ -7,7 +7,10 @@ import type { MongoExecutionContext, MongoQueryPlan } from '@internal/mongo-quer
 import { AggregateWireCommand, type AnyMongoDmlWireCommand } from '@internal/mongo-wire';
 import { vi } from 'vitest';
 
-export const testContract = { target: 'mongo' } as unknown as MongoContract;
+export const testContract = {
+  target: 'mongo',
+  domain: { namespaces: {} },
+} as unknown as MongoContract;
 
 export function makeExecution(
   _adapter: MongoAdapter,
@@ -26,7 +29,12 @@ export function makeExecution(
     resolveParams: vi.fn(async (_draft: MongoLoweredDraft, _ctx: CodecCallContext) => wireCommand),
   };
   return {
-    context: Object.freeze({ contract: testContract, codecs, applyMutationDefaults: () => [] }),
+    context: Object.freeze({
+      contract: testContract,
+      codecs,
+      enums: {},
+      applyMutationDefaults: () => [],
+    }),
     adapter,
   };
 }

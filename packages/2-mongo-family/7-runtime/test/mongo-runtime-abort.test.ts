@@ -58,7 +58,12 @@ function makeExecution(adapter: MongoAdapter): {
 } {
   const codecs: MongoCodecRegistry = newMongoCodecRegistry();
   return {
-    context: Object.freeze({ contract: testContract, codecs, applyMutationDefaults: () => [] }),
+    context: Object.freeze({
+      contract: testContract,
+      codecs,
+      enums: {},
+      applyMutationDefaults: () => [],
+    }),
     adapter,
   };
 }

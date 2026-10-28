@@ -1,3 +1,4 @@
+import type { NamespacedEnums } from '@internal/contract/enum-accessor';
 import type { MongoContract } from '@internal/mongo-contract';
 import type { MongoExecutionContext, RawMongoCommand } from '@internal/mongo-query-ast/execution';
 import { blindCast } from '@internal/utils/casts';
@@ -12,6 +13,7 @@ function contextOf<TContract extends MongoContract>(
   return {
     contract,
     codecs: { get: () => undefined, has: () => false },
+    enums: {} as NamespacedEnums<TContract>,
     applyMutationDefaults: () => [],
   };
 }

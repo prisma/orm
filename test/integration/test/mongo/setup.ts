@@ -6,7 +6,6 @@ import {
   createMongoExecutionContext,
   createMongoExecutionStack,
   createMongoRuntime,
-  type MongoCodecLookup,
   type MongoExecutionContext,
   type MongoRuntime,
 } from '@internal/mongo-runtime';
@@ -63,7 +62,6 @@ export async function withMongod<T>(fn: (ctx: MongodContext) => Promise<T>): Pro
       client,
       runtime,
       context,
-      codecs: context.codecs,
     };
     return await fn(ctx);
   } finally {
@@ -80,8 +78,6 @@ export interface MongodContext {
   readonly runtime: MongoRuntime;
   /** The execution context over the fixture contract, which `mongoOrm()` and `mongoRaw()` take. */
   readonly context: MongoExecutionContext<Contract>;
-  /** The execution context's codecs, which `buildMongoEnums()` reads enum members through. */
-  readonly codecs: MongoCodecLookup;
 }
 
 export function describeWithMongoDB(name: string, fn: (ctx: MongodContext) => void): void {
@@ -105,9 +101,6 @@ export function describeWithMongoDB(name: string, fn: (ctx: MongodContext) => vo
       },
       get context() {
         return context;
-      },
-      get codecs() {
-        return context.codecs;
       },
     };
 

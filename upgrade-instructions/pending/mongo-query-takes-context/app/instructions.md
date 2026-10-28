@@ -23,7 +23,7 @@ changes:
         - 'MUTATION_DEFAULTS_MISSING'
   - id: mongo-runtime-takes-adapter
     summary: |
-      `createMongoRuntime()` takes `{ context, adapter, driver }`, as the SQL runtime does: create the adapter with `stack.adapter.create(stack)` and pass it beside the context. The runtime reads the target from `context.contract.target`, so build the context over the validated contract. `MongoExecutionContext` no longer has a `stack` member or a second type parameter, and its contract must be a MongoDB contract, as SQL's `ExecutionContext` requires a SQL contract: write `MongoExecutionContext<Contract>`, and build it with `createMongoExecutionContext({ contract, stack })` over a validated contract. `MongoExecutionStack` no longer has a `driver` member, and `createMongoExecutionStack()` no longer takes a `driver` option. The detection matches files that call `createMongoRuntime(`, read `.stack` from a context, give `MongoExecutionContext` two type arguments or a non-contract type argument, or pass a driver to `createMongoExecutionStack`.
+      `createMongoRuntime()` takes `{ context, adapter, driver }`, as the SQL runtime does: create the adapter with `stack.adapter.create(stack)` and pass it beside the context. The runtime reads the target from `context.contract.target`, so build the context over the validated contract. `MongoExecutionContext` no longer has a `stack` member or a second type parameter, and its contract must be a MongoDB contract, as SQL's `ExecutionContext` requires a SQL contract: write `MongoExecutionContext<Contract>`, and build it with `createMongoExecutionContext({ contract, stack })` over a validated contract. `MongoExecutionStack` no longer has a `driver` member, and `createMongoExecutionStack()` no longer takes a `driver` option. `buildMongoEnums()` is removed: read the contract's enum accessors from `db.enums`, or from `context.enums` on a context built with `createMongoExecutionContext()`. The detection matches files that call `createMongoRuntime(`, read `.stack` from a context, give `MongoExecutionContext` two type arguments or a non-contract type argument, pass a driver to `createMongoExecutionStack`, or name `buildMongoEnums` or `MongoEnumAccessors`.
     detection:
       glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs,jsx}"
       matches:
@@ -31,6 +31,7 @@ changes:
         - '(?<![\w$])[\w$]*[cC]ontext\s*\.\s*stack(?![\w$])'
         - '(?<![\w$])MongoExecutionContext\s*<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*,'
         - '(?<![\w$])MongoExecutionContext\s*<\s*(?:unknown|\{)'
+        - '(?<![\w$.])(?:buildMongoEnums|MongoEnumAccessors)(?![\w$])'
         - '(?<![\w$.])createMongoExecutionStack\s*(?:<[^>()]*>)?\s*\(\s*\{(?:[^{}]|\{[^{}]*\})*\bdriver\b'
 ---
 

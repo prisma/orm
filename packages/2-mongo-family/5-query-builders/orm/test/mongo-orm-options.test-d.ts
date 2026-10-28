@@ -1,7 +1,4 @@
-import type {
-  MongoEnumAccessors,
-  MongoExecutionContext,
-} from '@internal/mongo-query-ast/execution';
+import type { MongoExecutionContext } from '@internal/mongo-query-ast/execution';
 import { expectTypeOf, test } from 'vitest';
 import type { Contract } from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract';
 import { createMongoCollection } from '../src/collection';
@@ -12,7 +9,7 @@ import { mongoRaw } from '../src/mongo-raw';
 declare const contract: Contract;
 declare const context: MongoExecutionContext<Contract>;
 declare const runtime: MongoQueryExecutor;
-declare const enums: MongoEnumAccessors;
+declare const enums: MongoExecutionContext['enums'];
 
 test('mongoOrm() takes a context and a runtime, as the SQL orm() does', () => {
   mongoOrm({ context, runtime });

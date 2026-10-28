@@ -4,7 +4,6 @@ import type {
   MongoContract,
   MongoContractWithTypeMaps,
 } from '@internal/mongo-contract';
-import type * as MongoRuntime from '@internal/mongo-runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type AnyMongoContract = MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>;
@@ -32,8 +31,7 @@ vi.mock('@internal/target-mongo/runtime', () => ({
   default: mocks.mongoRuntimeTarget,
 }));
 
-vi.mock('@internal/mongo-runtime', async (importOriginal) => ({
-  buildMongoEnums: (await importOriginal<typeof MongoRuntime>()).buildMongoEnums,
+vi.mock('@internal/mongo-runtime', () => ({
   createMongoExecutionStack: mocks.createMongoExecutionStack,
   createMongoExecutionContext: mocks.createMongoExecutionContext,
   createMongoRuntime: mocks.createMongoRuntime,
@@ -77,6 +75,7 @@ const fakeOrm = { id: 'orm-instance' };
 const fakeQuery = { id: 'query-instance' };
 const fakeRaw = { id: 'raw-instance', collection: vi.fn() };
 const fakeAdapter = { id: 'adapter-instance' };
+const fakeContext = { id: 'context-instance', enums: { __unbound__: {} } };
 const fakeStack = { id: 'stack-instance', adapter: { create: () => fakeAdapter } };
 
 describe('mongo() facade', () => {
@@ -87,7 +86,7 @@ describe('mongo() facade', () => {
 
     mocks.deserializeContract.mockReturnValue(fakeContract);
     mocks.createMongoExecutionStack.mockReturnValue(fakeStack);
-    mocks.createMongoExecutionContext.mockReturnValue({ id: 'context-instance' });
+    mocks.createMongoExecutionContext.mockReturnValue(fakeContext);
     mocks.driverFromConnection.mockResolvedValue({
       id: 'driver-from-url',
       close: fakeDriverClose,
@@ -144,7 +143,7 @@ describe('mongo() facade', () => {
     expect(mocks.createMongoRuntime).toHaveBeenCalledTimes(1);
     expect(mocks.createMongoRuntime).toHaveBeenCalledWith(
       expect.objectContaining({
-        context: { id: 'context-instance' },
+        context: fakeContext,
         adapter: fakeAdapter,
       }),
     );
@@ -434,65 +433,27 @@ describe('mongo() facade', () => {
   });
 
   describe('db.enums (facade)', () => {
-    const roleEnum = {
-      codecId: 'mongo/string@1',
-      members: [
-        { name: 'User', value: 'user' },
-        { name: 'Admin', value: 'admin' },
-      ],
-    } as const;
-
-    const contractWithEnum = {
-      domain: {
-        namespaces: {
-          __unbound__: { models: {}, enum: { Role: roleEnum } },
-        },
-      },
-    } as unknown as AnyMongoContract;
-
-    const stringCodec = {
-      dataType: { fromContract: (json: unknown) => json, toContract: (value: unknown) => value },
-      fromDataTypeValue: (value: unknown) => value,
-      toDataTypeValue: (value: unknown) => value,
+    const roleAccessor = { values: ['user', 'admin'] };
+    const contextWithEnums = {
+      id: 'context-instance',
+      enums: { __unbound__: { Role: roleAccessor } },
     };
 
     beforeEach(() => {
-      mocks.deserializeContract.mockReturnValue(contractWithEnum);
-      mocks.createMongoExecutionContext.mockReturnValue({
-        id: 'context-instance',
-        codecs: { get: (id: string) => (id === 'mongo/string@1' ? stringCodec : undefined) },
-      });
+      mocks.createMongoExecutionContext.mockReturnValue(contextWithEnums);
     });
 
-    function roleAccessor() {
-      const db = mongo({ contract: contractWithEnum, url: 'mongodb://localhost:27017/mydb' });
-      return db.enums['Role']!;
-    }
+    it('holds the accessors of the execution context, the ones the ORM checks writes against', () => {
+      const db = mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb' });
 
-    it('refuses to build a client whose runtime has no codec for an enum', () => {
-      mocks.createMongoExecutionContext.mockReturnValue({
-        id: 'context-instance',
-        codecs: { get: () => undefined },
-      });
-      expect(() =>
-        mongo({ contract: contractWithEnum, url: 'mongodb://localhost:27017/mydb' }),
-      ).toThrow(
-        expect.objectContaining({
-          code: 'RUNTIME.CODEC_DESCRIPTOR_MISSING',
-          message:
-            "No codec is registered for codecId 'mongo/string@1', which a domain enum in the contract uses.",
-        }),
-      );
-    });
-
-    it('exposes the enum accessor at db.enums.Role', () => {
-      expect(roleAccessor().values).toEqual(['user', 'admin']);
+      expect(db.enums).toBe(contextWithEnums.enums.__unbound__);
+      expect(db.enums['Role']).toBe(roleAccessor);
     });
 
     it('builds the enums surface eagerly, without connecting the driver', () => {
-      const db = mongo({ contract: contractWithEnum, url: 'mongodb://localhost:27017/mydb' });
+      const db = mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb' });
 
-      expect(db.enums['Role']!.values).toEqual(['user', 'admin']);
+      expect(db.enums['Role']).toBe(roleAccessor);
       expect(mocks.driverFromConnection).not.toHaveBeenCalled();
       expect(mocks.createMongoRuntime).not.toHaveBeenCalled();
     });
@@ -507,12 +468,12 @@ describe('mongo() facade', () => {
 
     it('context matches what createMongoExecutionContext returns', () => {
       const db = mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb' });
-      expect(db.context).toEqual({ id: 'context-instance' });
+      expect(db.context).toEqual(fakeContext);
     });
 
     it('builds query, raw and orm from the one execution context', () => {
       mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb' });
-      const context = { id: 'context-instance' };
+      const context = fakeContext;
       expect(mocks.mongoQuery).toHaveBeenCalledWith({ context });
       expect(mocks.mongoRaw).toHaveBeenCalledWith({ context });
       expect(mocks.mongoOrm).toHaveBeenCalledWith(expect.objectContaining({ context }));
@@ -538,7 +499,7 @@ describe('mongo() facade', () => {
       const db = mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb' });
       await db.runtime();
       expect(mocks.createMongoRuntime).toHaveBeenCalledWith(
-        expect.objectContaining({ context: { id: 'context-instance' } }),
+        expect.objectContaining({ context: fakeContext }),
       );
     });
   });

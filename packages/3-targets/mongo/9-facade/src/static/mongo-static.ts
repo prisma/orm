@@ -10,7 +10,6 @@ import type { MongoRawClient } from '@internal/mongo-orm';
 import { mongoRaw } from '@internal/mongo-orm';
 import { mongoQuery } from '@internal/mongo-query-builder';
 import {
-  buildMongoEnums,
   createMongoExecutionContext,
   createMongoExecutionStack,
   type MongoExecutionContext,
@@ -18,7 +17,6 @@ import {
 } from '@internal/mongo-runtime';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { assertDefined } from '@internal/utils/assertions';
-import { blindCast } from '@internal/utils/casts';
 import { validateMongoContract } from './contract-from-json';
 
 type UnboundEnums<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>> =
@@ -49,12 +47,8 @@ export function buildMongoStaticContext<
     adapter: mongoRuntimeAdapter,
   });
   const context = createMongoExecutionContext<TContract>({ contract, stack });
-  const unbound = buildMongoEnums(contract, context.codecs)[UNBOUND_NAMESPACE_ID];
-  assertDefined(unbound, 'the unbound namespace always exists on a mongo builder output');
-  const enums = blindCast<
-    UnboundEnums<TContract>,
-    'built from this contract domain; the mapped-type shape cannot be proven statically'
-  >(unbound);
+  const enums = context.enums[UNBOUND_NAMESPACE_ID];
+  assertDefined(enums, 'the unbound namespace always exists on a mongo builder output');
   const query = mongoQuery({ context });
   const raw = mongoRaw({ context });
   return { context, contract, enums, query, raw, stack };

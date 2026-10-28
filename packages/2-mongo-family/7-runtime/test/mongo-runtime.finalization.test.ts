@@ -88,6 +88,7 @@ function makeExecution(
     context: {
       contract: testContract,
       codecs: codecsWithFailingDecode(),
+      enums: {},
       applyMutationDefaults: () => [],
     },
     adapter,

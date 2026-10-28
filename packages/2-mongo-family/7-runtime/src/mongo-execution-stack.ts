@@ -1,3 +1,4 @@
+import { buildNamespacedEnums } from '@internal/contract/enum-accessor';
 import {
   createExecutionStack,
   type RuntimeAdapterDescriptor,
@@ -120,9 +121,24 @@ export function createMongoExecutionContext<
     }
   }
 
+  const enums = Object.freeze(
+    buildNamespacedEnums<TContract>(options.contract.domain, (codecId) => {
+      const codec = registry.get(codecId);
+      if (codec === undefined) {
+        throw runtimeError(
+          'RUNTIME.CODEC_DESCRIPTOR_MISSING',
+          `No codec is registered for codecId '${codecId}', which a domain enum in the contract uses.`,
+          { codecId },
+        );
+      }
+      return codec;
+    }),
+  );
+
   return Object.freeze({
     contract: options.contract,
     codecs: registry,
+    enums,
     applyMutationDefaults: (mutation: MutationDefaultsOptions) =>
       applyMutationDefaults(execution, generators, mutation),
   });

@@ -1,3 +1,4 @@
+import type { EnumAccessor } from '@internal/contract/enum-accessor';
 import {
   type ContractField,
   type ContractModel,
@@ -29,7 +30,6 @@ import type {
   AnyMongoCommand,
   InsertManyResult,
   InsertOneResult,
-  MongoEnumAccessors,
   MongoExecutionContext,
   MongoFieldShape,
   MongoFilterExpr,
@@ -37,7 +37,6 @@ import type {
   MongoResultShape,
 } from '@internal/mongo-query-ast/execution';
 import {
-  buildMongoEnums,
   DeleteManyCommand,
   FindOneAndDeleteCommand,
   FindOneAndUpdateCommand,
@@ -275,22 +274,16 @@ class MongoCollectionImpl<
   readonly #ctx: MongoCollectionContext<TContract>;
   readonly #executor: MongoQueryExecutor;
   readonly #mutationDefaults: MutationDefaults;
-  readonly #enums: MongoEnumAccessors;
   #collectionName: string;
   #state: MongoCollectionState;
   #variantValue: string | undefined;
 
-  constructor(
-    ctx: MongoCollectionContext<TContract>,
-    modelName: ModelName,
-    enums: MongoEnumAccessors,
-  ) {
+  constructor(ctx: MongoCollectionContext<TContract>, modelName: ModelName) {
     this.#ctx = ctx;
     this.#contract = ctx.context.contract;
     this.#modelName = modelName;
     this.#executor = ctx.runtime;
     this.#mutationDefaults = ctx.context;
-    this.#enums = enums;
     this.#collectionName = resolveCollectionName(modelOf(this.#contract, modelName), modelName);
     this.#state = emptyCollectionState();
   }
@@ -1141,7 +1134,11 @@ class MongoCollectionImpl<
     if (valueSet === undefined || valueSet.entityKind !== 'enum' || value === null) return;
     const contractEnum =
       this.#contract.domain.namespaces[valueSet.namespaceId]?.enum?.[valueSet.entityName];
-    const accessor = this.#enums[valueSet.namespaceId]?.[valueSet.entityName];
+    const enums = blindCast<
+      Readonly<Record<string, Readonly<Record<string, EnumAccessor>> | undefined>>,
+      'the accessors are keyed by the contract namespace ids and enum names a field value set names'
+    >(this.#ctx.context.enums);
+    const accessor = enums[valueSet.namespaceId]?.[valueSet.entityName];
     if (contractEnum === undefined || accessor === undefined) return;
     const values: readonly unknown[] = field.many && Array.isArray(value) ? value : [value];
     const outside = values.findIndex((entry) => entry !== null && !accessor.has(entry));
@@ -1441,7 +1438,6 @@ class MongoCollectionImpl<
     const instance = new MongoCollectionImpl<TContract, ModelName, TIncludes, TVariantValue>(
       this.#ctx,
       this.#modelName,
-      this.#enums,
     );
     instance.#state = { ...this.#state, ...overrides };
     instance.#collectionName = this.#collectionName;
@@ -1456,7 +1452,6 @@ class MongoCollectionImpl<
     const instance = new MongoCollectionImpl<TContract, ModelName, TIncludes, VNew>(
       this.#ctx,
       this.#modelName,
-      this.#enums,
     );
     instance.#state = { ...this.#state, ...overrides };
     instance.#collectionName = this.#collectionName;
@@ -1465,7 +1460,7 @@ class MongoCollectionImpl<
   }
 }
 
-/** A collection of `modelName` over the context's contract, which fills generated fields from the context's mutation defaults and checks written enum values against the contract's enums. */
+/** A collection of `modelName` over the context's contract, which fills generated fields from the context's mutation defaults and checks written enum values against the context's enum accessors. */
 export function createMongoCollection<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
   ModelName extends string & keyof MongoModelsMap<TContract>,
@@ -1473,9 +1468,5 @@ export function createMongoCollection<
   ctx: MongoCollectionContext<TContract>,
   modelName: ModelName,
 ): MongoCollection<TContract, ModelName> {
-  return new MongoCollectionImpl(
-    ctx,
-    modelName,
-    buildMongoEnums(ctx.context.contract, ctx.context.codecs),
-  );
+  return new MongoCollectionImpl(ctx, modelName);
 }

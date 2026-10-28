@@ -1,7 +1,6 @@
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import { createMongoCollection, type MongoQueryExecutor, mongoOrm } from '@internal/mongo-orm';
-import { buildMongoEnums } from '@internal/mongo-runtime';
-import { describe, expect, expectTypeOf, it } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { defineContract, enumType, field, member, model } from '../src/exports/contract-builder';
 import mongoStatic from '../src/static/mongo-static';
 
@@ -119,13 +118,31 @@ describe('the Mongo ORM checks a written enum value against the enums of its con
     });
   });
 
-  it('refuses a contract whose enum codec the runtime lacks when the accessors are built', () => {
-    expect(() => buildMongoEnums(contract, { get: () => undefined, has: () => false })).toThrow(
-      expect.objectContaining({
-        code: 'RUNTIME.CODEC_DESCRIPTOR_MISSING',
-        message:
-          "No codec is registered for codecId 'mongo/string@1', which a domain enum in the contract uses.",
-      }),
+  it('reads the accessors db.enums holds, the ones its context built once', async () => {
+    const int32Level = context.enums['__unbound__']?.['Int32Level'];
+    expect(enums.Int32Level).toBe(int32Level);
+
+    const refuseEverything = vi.fn(() => false);
+    const sharedAccessors = {
+      __unbound__: {
+        TextLevel: { ...enums.TextLevel, has: refuseEverything },
+        Int32Level: enums.Int32Level,
+        DoubleLevel: enums.DoubleLevel,
+      },
+    };
+    const sharedContext = { ...context, enums: sharedAccessors as unknown as typeof context.enums };
+    const orm = mongoOrm({ context: sharedContext, runtime: unreachableDatabase });
+    const readings = createMongoCollection(
+      { context: sharedContext, runtime: unreachableDatabase },
+      'Reading',
     );
+
+    await expect(orm.readings.create(reading)).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
+    });
+    await expect(readings.create(reading)).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
+    });
+    expect(refuseEverything).toHaveBeenCalledTimes(2);
   });
 });

@@ -123,6 +123,61 @@ function fields(
 }
 
 describe('createMongoExecutionContext composition', () => {
+  it("builds the contract's enum accessors once, reading members through the stack's codecs", () => {
+    const stack = createMongoExecutionStack({
+      target: target(),
+      adapter: adapter(),
+      extensions: [extension('levels', { codecIds: ['test/level@1'] })],
+    });
+    const contract = {
+      ...testContract,
+      domain: {
+        namespaces: {
+          [NS]: {
+            enum: {
+              Level: {
+                codecId: 'test/level@1',
+                members: [
+                  { name: 'Low', value: 'low' },
+                  { name: 'High', value: 'high' },
+                ],
+              },
+            },
+          },
+        },
+      },
+    } as unknown as MongoContract;
+
+    const context = createMongoExecutionContext({ contract, stack });
+    const firstRead = context.enums[NS]?.['Level'];
+
+    expect({
+      namespaces: Object.keys(context.enums),
+      members: firstRead?.members,
+    }).toEqual({ namespaces: [NS], members: { Low: 'low', High: 'high' } });
+    expect(context.enums[NS]?.['Level']).toBe(firstRead);
+  });
+
+  it('refuses a contract whose enum codec no stack component contributes', () => {
+    const stack = createMongoExecutionStack({ target: target(), adapter: adapter() });
+    const contract = {
+      ...testContract,
+      domain: {
+        namespaces: {
+          [NS]: { enum: { Level: { codecId: 'test/level@1', members: [] } } },
+        },
+      },
+    } as unknown as MongoContract;
+
+    expect(() => createMongoExecutionContext({ contract, stack })).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.CODEC_DESCRIPTOR_MISSING',
+        message:
+          "No codec is registered for codecId 'test/level@1', which a domain enum in the contract uses.",
+      }),
+    );
+  });
+
   it('folds the codecs of target, adapter and extensions into one lookup', () => {
     const stack = createMongoExecutionStack({
       target: target(),

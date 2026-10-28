@@ -23,7 +23,7 @@ changes:
         - 'MUTATION_DEFAULTS_MISSING'
   - id: mongo-runtime-takes-adapter
     summary: |
-      `MongoRuntimeOptions` is `{ context, adapter, driver, middleware?, mode? }`, as the SQL runtime's options are: the caller creates the adapter with `stack.adapter.create(stack)`, and the runtime checks middleware against `context.contract.target`, so `context` is a `MongoExecutionContext<MongoContract>`. `MongoExecutionContext` is declared in `@prisma/orm-family-mongo/query-ast/execution` (`@internal/mongo-query-ast/execution`), still exported from the runtime entry; it has no `stack` member and no second type parameter (`TTargetId`), and its type parameter is constrained as SQL's `ExecutionContext` is: `MongoExecutionContext<TContract extends MongoContract = MongoContract>`, and `createMongoExecutionContext` takes the same constraint. `buildMongoEnums` and `MongoEnumAccessors` are declared beside it in `@internal/mongo-query-ast/execution` and still exported from the runtime entry. `MongoExecutionStack` has no `driver` member, and `createMongoExecutionStack()` takes no `driver` option. The detection matches files that call `createMongoRuntime(`, read `.stack` from a context, give `MongoExecutionContext` two type arguments or a non-contract type argument, or pass a driver to `createMongoExecutionStack`.
+      `MongoRuntimeOptions` is `{ context, adapter, driver, middleware?, mode? }`, as the SQL runtime's options are: the caller creates the adapter with `stack.adapter.create(stack)`, and the runtime checks middleware against `context.contract.target`, so `context` is a `MongoExecutionContext<MongoContract>`. `MongoExecutionContext` is declared in `@prisma/orm-family-mongo/query-ast/execution` (`@internal/mongo-query-ast/execution`), still exported from the runtime entry; it has no `stack` member and no second type parameter (`TTargetId`), and its type parameter is constrained as SQL's `ExecutionContext` is: `MongoExecutionContext<TContract extends MongoContract = MongoContract>`, and `createMongoExecutionContext` takes the same constraint. `MongoExecutionStack` has no `driver` member, and `createMongoExecutionStack()` takes no `driver` option. The detection matches files that call `createMongoRuntime(`, read `.stack` from a context, give `MongoExecutionContext` two type arguments or a non-co`buildMongoEnums()` and `MongoEnumAccessors` are removed: `createMongoExecutionContext()` builds the contract's enum accessors once, with the framework's `buildNamespacedEnums`, and holds them as `context.enums`; read them there or from `db.enums`. A hand-built `MongoExecutionContext` needs an `enums` member. ntract type argument, pass a driver to `createMongoExecutionStack`, or name `buildMongoEnums` or `MongoEnumAccessors`.
     detection:
       glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs,jsx}"
       matches:
@@ -31,6 +31,7 @@ changes:
         - '(?<![\w$])[\w$]*[cC]ontext\s*\.\s*stack(?![\w$])'
         - '(?<![\w$])MongoExecutionContext\s*<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*,'
         - '(?<![\w$])MongoExecutionContext\s*<\s*(?:unknown|\{)'
+        - '(?<![\w$.])(?:buildMongoEnums|MongoEnumAccessors)(?![\w$])'
         - '(?<![\w$.])createMongoExecutionStack\s*(?:<[^>()]*>)?\s*\(\s*\{(?:[^{}]|\{[^{}]*\})*\bdriver\b'
 ---
 

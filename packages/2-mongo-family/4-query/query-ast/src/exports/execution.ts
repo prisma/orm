@@ -37,8 +37,6 @@ export {
   MongoNotExpr,
   MongoOrExpr,
 } from '../filter-expressions';
-export type { MongoEnumAccessors } from '../mongo-enums';
-export { buildMongoEnums } from '../mongo-enums';
 export type { MongoQueryPlan } from '../query-plan';
 export type { RawMongoCommand } from '../raw-commands';
 export {

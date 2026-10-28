@@ -1208,7 +1208,7 @@ A codec descriptor handed to a target codec-descriptor registry (Postgres, SQLit
 
 ### RUNTIME.CODEC_DESCRIPTOR_MISSING
 
-A column, a domain enum, or an AST-carried CodecRef references a `codecId` for which no runtime component registered a codec descriptor: usually the extension pack that owns the codec is missing from the runtime stack. Surfaces at SQL context construction during the contract codec walk, when a SQL or Mongo client builds `db.enums` (for Mongo, in `buildMongoEnums`, which also builds the accessors `mongoOrm()` takes), or lazily when the AST codec resolver materializes a codec at query time. Payload: `codecId`; on the column path also `table`, `column`.
+A column, a domain enum, or an AST-carried CodecRef references a `codecId` for which no runtime component registered a codec descriptor: usually the extension pack that owns the codec is missing from the runtime stack. Surfaces at SQL context construction during the contract codec walk, when a SQL or Mongo client builds `db.enums` (for Mongo, in `createMongoExecutionContext`, which builds the accessors `db.enums` and the ORM share), or lazily when the AST codec resolver materializes a codec at query time. Payload: `codecId`; on the column path also `table`, `column`.
 
 ### RUNTIME.CODEC_MISSING
 
