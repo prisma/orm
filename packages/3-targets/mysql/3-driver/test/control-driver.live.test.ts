@@ -3,6 +3,7 @@ import { withMysqlDatabase } from '@repo/test-utils/mysql-database';
 import { describe, expect, it } from 'vitest';
 import type { MysqlControlDriver } from '../src/core/migrations/control-driver';
 import mysqlDriver from '../src/core/migrations/control-driver';
+import mysqlRuntimeDriver from '../src/core/runtime/runtime-driver';
 
 async function connectWhileServerDefaultIncludes(
   url: string,
@@ -119,7 +120,7 @@ describe('MysqlControlDriver against a MySQL server', {
       const driver = await mysqlDriver.create(url);
       try {
         await expect(driver.query('SELECT ? AS v', [{ id: 1 }])).rejects.toMatchObject({
-          code: 'RUNTIME.AST_INVALID',
+          code: 'RUNTIME.ENCODE_FAILED',
         });
       } finally {
         await driver.close();
@@ -276,7 +277,7 @@ describe('MysqlControlDriver against a MySQL server', {
     });
   });
 
-  it('signs in with a password over plain TCP only when the URL allows fetching the server key', async (test) => {
+  it('signs in with a password over plain TCP only when the URL allows fetching the server key, and otherwise names the two ways to allow it', async (test) => {
     await withMysqlDatabase(test, async ({ url, name }) => {
       const admin = await mysqlDriver.create(url);
       const user = `${name.slice(-12)}_u`;
@@ -296,14 +297,29 @@ describe('MysqlControlDriver against a MySQL server', {
           },
           (error: unknown) => error,
         );
+        const pooled = mysqlRuntimeDriver.create();
+        asUser.searchParams.set('poolTimeout', '1000');
+        await pooled.connect({ kind: 'url', url: asUser.toString() });
+        const pooledRefused = await pooled.execute({ sql: 'SELECT 1' }).then(
+          () => undefined,
+          (error: unknown) => error,
+        );
+        await pooled.close();
+        asUser.searchParams.delete('poolTimeout');
         asUser.searchParams.set('allowPublicKeyRetrieval', 'true');
         const allowed = await mysqlDriver.create(asUser.toString());
         try {
+          const waysOut = expect.stringMatching(/allowPublicKeyRetrieval=true.*TLS/);
           expect({
             refused,
+            pooledRefused,
             user: (await allowed.query('SELECT CURRENT_USER() AS u')).rows,
           }).toEqual({
-            refused: expect.objectContaining({ code: 'DRIVER.CONNECTION_FAILED' }),
+            refused: expect.objectContaining({ code: 'DRIVER.CONNECTION_FAILED', fix: waysOut }),
+            pooledRefused: expect.objectContaining({
+              code: 'DRIVER.CONNECTION_FAILED',
+              fix: waysOut,
+            }),
             user: [{ u: `${user}@%` }],
           });
         } finally {

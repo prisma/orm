@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeMysqlError, statementError } from '../src/core/normalize-error';
+import { normalizeMysqlError } from '../src/core/normalize-error';
 
 function sqlError(fields: {
   errno: number;
@@ -79,17 +79,64 @@ describe('normalizeMysqlError', () => {
   });
 });
 
-describe('statementError', () => {
-  it('names statementCacheSize and connectionLimit when MySQL refuses to prepare another statement', () => {
+describe('normalizeMysqlError for errors MySQL reports about a statement', () => {
+  it('reports every server error as a SqlQueryError, a statement MySQL cannot prepare and the open-statement limit included', () => {
+    const cases = [
+      {
+        errno: 1295,
+        sqlState: 'HY000',
+        sqlMessage: 'This command is not supported in the prepared statement protocol yet',
+        detail: expect.stringContaining('LOCK TABLES'),
+      },
+      {
+        errno: 1461,
+        sqlState: '42000',
+        sqlMessage: "Can't create more than max_prepared_stmt_count statements",
+        detail: expect.stringContaining('statementCacheSize'),
+      },
+      {
+        errno: 1210,
+        sqlState: 'HY000',
+        sqlMessage: 'Incorrect arguments to LIMIT',
+        detail: undefined,
+      },
+    ];
+    for (const { detail, ...fields } of cases) {
+      const error = sqlError({ ...fields, fatal: false });
+      expect(normalizeMysqlError(error)).toEqual(
+        expect.objectContaining({
+          kind: 'sql_query',
+          sqlState: fields.sqlState,
+          message: fields.sqlMessage,
+          detail,
+          cause: error,
+        }),
+      );
+    }
+  });
+
+  it('reports a sign-in that needs the server public key as DRIVER.CONNECTION_FAILED, naming allowPublicKeyRetrieval and TLS', () => {
     const error = sqlError({
-      errno: 1461,
-      sqlState: '42000',
-      fatal: false,
-      sqlMessage: "Can't create more than max_prepared_stmt_count statements",
+      errno: 45044,
+      sqlState: '08S01',
+      fatal: true,
+      sqlMessage: 'RSA public key is not available client side.',
     });
-    expect(statementError(error, 'SELECT 1')).toMatchObject({
-      code: 'DRIVER.PREPARE_FAILED',
-      fix: expect.stringContaining('statementCacheSize'),
+    const fix = expect.stringMatching(
+      /allowPublicKeyRetrieval=true.*TLS|TLS.*allowPublicKeyRetrieval=true/,
+    );
+    const timedOut = Object.assign(
+      sqlError({
+        errno: 45028,
+        sqlState: 'HY000',
+        fatal: false,
+        sqlMessage: 'pool timeout: failed to retrieve a connection from pool after 200ms',
+      }),
+      { cause: error },
+    );
+    expect({ direct: normalizeMysqlError(error), pooled: normalizeMysqlError(timedOut) }).toEqual({
+      direct: expect.objectContaining({ code: 'DRIVER.CONNECTION_FAILED', fix, cause: error }),
+      pooled: expect.objectContaining({ code: 'DRIVER.CONNECTION_FAILED', fix, cause: error }),
     });
   });
 
@@ -100,6 +147,6 @@ describe('statementError', () => {
       fatal: true,
       sqlMessage: 'socket has unexpectedly been closed',
     });
-    expect(statementError(error, 'SELECT 1')).toMatchObject({ code: 'DRIVER.NOT_CONNECTED' });
+    expect(normalizeMysqlError(error)).toMatchObject({ code: 'DRIVER.NOT_CONNECTED' });
   });
 });

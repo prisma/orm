@@ -16,17 +16,31 @@ describe('positionalParams', () => {
     });
   });
 
-  it('sends every integer number as a bigint, so MySQL reads it as BIGINT, and a fraction as a number', () => {
+  it('sends an integer number within the signed 64-bit range as a bigint, so MySQL reads it as BIGINT, and any other number as a double', () => {
     expect(
-      positionalParams('SELECT ?1, ?2, ?3, ?4, ?5', [2, 2147483647, 2 ** 60, 1.5, 2n]).values,
-    ).toEqual([2n, 2147483647n, 2n ** 60n, 1.5, 2n]);
+      positionalParams('SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9', [
+        2,
+        2147483647,
+        2 ** 60,
+        -(2 ** 63),
+        1.5,
+        2n,
+        1e20,
+        -1e20,
+        2 ** 63,
+      ]).values,
+    ).toEqual([2n, 2147483647n, 2n ** 60n, -(2n ** 63n), 1.5, 2n, 1e20, -1e20, 2 ** 63]);
   });
 
-  it('refuses an integer outside the signed 64-bit range before it reaches the package', () => {
-    for (const value of [-(2n ** 63n) - 1n, 2n ** 63n, 2 ** 64]) {
+  it('refuses a bigint outside the signed 64-bit range before it reaches the package', () => {
+    for (const [index, value] of [-(2n ** 63n) - 1n, 2n ** 63n].entries()) {
       expect(() => positionalParams('SELECT ?1', [value])).toThrow(
-        expect.objectContaining({ code: 'RUNTIME.AST_INVALID' }),
+        expect.objectContaining({
+          code: 'RUNTIME.ENCODE_FAILED',
+          meta: { target: 'mysql', paramIndex: 0, received: 'bigint' },
+        }),
       );
+      expect(index).toBeLessThan(2);
     }
     expect(positionalParams('SELECT ?1, ?2', [-(2n ** 63n), 2n ** 63n - 1n]).values).toEqual([
       -(2n ** 63n),
@@ -47,10 +61,11 @@ describe('positionalParams', () => {
   });
 
   it('refuses a Date, which the package would encode in the local time zone', () => {
-    expect(() => positionalParams('SELECT ?1', [new Date(0)])).toThrow(
+    expect(() => positionalParams('SELECT ?1, ?2', ['a', new Date(0)])).toThrow(
       expect.objectContaining({
-        code: 'RUNTIME.AST_INVALID',
+        code: 'RUNTIME.ENCODE_FAILED',
         message: expect.stringContaining('Date'),
+        meta: { target: 'mysql', paramIndex: 1, received: 'Date' },
       }),
     );
   });
@@ -79,9 +94,17 @@ describe('positionalParams', () => {
   });
 
   it('refuses a value MySQL has no parameter type for', () => {
-    for (const value of [{ a: 1 }, [1, 2], Number.NaN, Number.POSITIVE_INFINITY]) {
+    for (const [value, received] of [
+      [{ a: 1 }, 'object'],
+      [[1, 2], 'array'],
+      [Number.NaN, 'NaN'],
+      [Number.POSITIVE_INFINITY, 'Infinity'],
+    ] as const) {
       expect(() => positionalParams('SELECT ?1', [value])).toThrow(
-        expect.objectContaining({ code: 'RUNTIME.AST_INVALID' }),
+        expect.objectContaining({
+          code: 'RUNTIME.ENCODE_FAILED',
+          meta: { target: 'mysql', paramIndex: 0, received },
+        }),
       );
     }
   });

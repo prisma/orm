@@ -9,7 +9,7 @@ import { redactDatabaseUrl } from '@internal/utils/redact-db-url';
 import { type Connection, createConnection } from 'mariadb';
 import { mysqlConnectionOptions } from '../connection-options';
 import { mysqlDriverDescriptorMeta } from '../descriptor-meta';
-import { connectionLost, isFatal, normalizeMysqlError, statementError } from '../normalize-error';
+import { connectionFix, connectionLost, isFatal, normalizeMysqlError } from '../normalize-error';
 import { positionalParams } from '../positional-params';
 import { assertPreparedCount } from '../prepared-count';
 import { serverText } from '../server-text';
@@ -53,7 +53,7 @@ export class MysqlControlDriver implements SqlControlDriverInstance<'mysql'> {
         this.#lost = error;
         throw connectionLost(error);
       }
-      throw statementError(error, sql);
+      throw normalizeMysqlError(error);
     }
   }
 
@@ -91,7 +91,9 @@ const mysqlDriverDescriptor: ControlDriverDescriptor<'sql', 'mysql', MysqlContro
       const normalized = normalizeMysqlError(error);
       throw errorRuntime('DRIVER.CONNECTION_FAILED', 'Database connection failed', {
         why: normalized instanceof Error ? normalized.message : String(normalized),
-        fix: 'Verify the database URL, ensure the database is reachable, and confirm credentials/permissions',
+        fix:
+          connectionFix(error) ??
+          'Verify the database URL, ensure the database is reachable, and confirm credentials/permissions',
         meta: { ...redactDatabaseUrl(url) },
         cause: error,
       });
