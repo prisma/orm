@@ -3,7 +3,7 @@ import type {
   DataTypeSupport,
 } from '@internal/framework-components/authoring';
 import type { AnyCodecDescriptor } from '@internal/framework-components/codec';
-import { createDataTypeLookup } from '@internal/framework-components/codec';
+import { createDataTypeLookup, dataTypeId } from '@internal/framework-components/codec';
 import { sqlDataType } from '@internal/sql-contract/data-type';
 import type { ReportedSqlType, SqlColumnIRInput } from '@internal/sql-schema-ir/types';
 import { SqlColumnIR } from '@internal/sql-schema-ir/types';
@@ -177,7 +177,10 @@ const dataTypes: DataTypeSupport = {
     },
   },
   lookup: createDataTypeLookup([int, numeric, text, labelled, stamp, clock]),
-  dataTypeOfCodec: () => undefined,
+  dataTypeOfCodec: (codecId) => {
+    const id = dataTypeOfCodec[codecId];
+    return id === undefined ? undefined : dataTypeId(id);
+  },
 };
 
 describe('inferredTypeConstructors', () => {

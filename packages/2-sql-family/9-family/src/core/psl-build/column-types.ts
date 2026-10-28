@@ -3,6 +3,7 @@ import {
   authoringTypeConstructorArguments,
   type DataTypeSupport,
   getAuthoringTypeChoice,
+  getAuthoringTypeConstructor,
 } from '@internal/framework-components/authoring';
 import type { DataType } from '@internal/framework-components/codec';
 import { resolveReportedSqlType } from '@internal/sql-contract/data-type';
@@ -12,7 +13,6 @@ import { sqlFamilyError } from '../errors';
 import {
   fewestArgumentsCall,
   type InferredTypeConstructor,
-  type InferredTypeConstructorPath,
   type InferredTypeConstructors,
   type PslTypeArgument,
   sameInNormalForm,
@@ -56,7 +56,7 @@ function reportedTypeOf(column: SqlColumnIR, tableName: string): ReportedSqlType
 
 /** The call to the type choice that becomes `marked` with every parameter in `params`, compared in the normal form, as `db verify` compares the column, with the explicit call it becomes. */
 function convenienceCall(
-  marked: InferredTypeConstructorPath & Pick<InferredTypeConstructor, 'dataType'>,
+  marked: InferredTypeConstructor,
   params: Readonly<Record<string, unknown>>,
   authoringTypes: AuthoringTypeNamespace,
   support: DataTypeSupport,
@@ -95,16 +95,13 @@ async function rowReadingDefault(
 ): Promise<PslTypeCall | undefined> {
   const choice = getAuthoringTypeChoice({ type: authoringTypes }, written.path);
   for (const row of choice?.descriptor.choices ?? []) {
-    const path = [...written.path.slice(0, -1), row.type].join('.');
-    const alternative = marked.alternatives.find((candidate) => candidate.path.join('.') === path);
+    const path = [...written.path.slice(0, -1), row.type];
+    const descriptor = getAuthoringTypeConstructor({ type: authoringTypes }, path);
     const call =
-      alternative &&
-      convenienceCall(
-        { ...alternative, dataType: marked.dataType },
-        params,
-        authoringTypes,
-        support,
-      );
+      descriptor !== undefined &&
+      support.dataTypeOfCodec(descriptor.output.codecId) === marked.dataType.id
+        ? convenienceCall({ ...marked, path, descriptor }, params, authoringTypes, support)
+        : undefined;
     if (call !== undefined && (await readsDefault(call))) return call;
   }
   return undefined;
