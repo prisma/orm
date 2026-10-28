@@ -892,6 +892,54 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     });
   });
 
+  it('returns each connection the pool hands to a statement that already failed straight to the pool, so the pool serves every such request and then runs the next statement on its one connection', async (test) => {
+    await withMysqlDatabase(test, ({ url, name }) =>
+      withCountedUser(url, name, async (userUrl, opened) => {
+        const port = await freePort();
+        const refusing = new URL(userUrl);
+        refusing.hostname = '127.0.0.1';
+        refusing.port = String(port);
+        const proxy = createServer((client) => {
+          const upstream = connect(Number(userUrl.port), userUrl.hostname);
+          client.pipe(upstream).pipe(client);
+          client.on('error', () => upstream.destroy());
+          upstream.on('error', () => client.destroy());
+        });
+        try {
+          const before = await opened();
+          const outcomes = await withDriver(
+            refusing.toString(),
+            async (driver) => {
+              const refused = await Promise.all(
+                Array.from({ length: 5 }, (_, n) =>
+                  driver.execute({ sql: `SELECT ${n}` }).catch((error: unknown) => error),
+                ),
+              );
+              await new Promise<void>((resolve) => proxy.listen(port, '127.0.0.1', resolve));
+              const started = Date.now();
+              const afterReturn = await collect(driver.query({ sql: 'SELECT 2 AS n' }));
+              const waited = Date.now() - started;
+              const next = await collect(driver.query({ sql: 'SELECT 3 AS n' }));
+              return { refused, afterReturn, next, beforeTimeout: waited < 2000 };
+            },
+            { poolOptions: { max: 1, connectionTimeoutMillis: 2500 } },
+          );
+          expect({ ...outcomes, opened: (await opened()) - before }).toEqual({
+            refused: Array.from({ length: 5 }, () =>
+              expect.objectContaining({ kind: 'sql_connection', transient: false }),
+            ),
+            afterReturn: [{ n: '2' }],
+            next: [{ n: '3' }],
+            beforeTimeout: true,
+            opened: 1,
+          });
+        } finally {
+          await new Promise((resolve) => proxy.close(resolve));
+        }
+      }),
+    );
+  });
+
   it('gives up waiting for a pooled connection after connectionTimeoutMillis', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
       withDriver(
