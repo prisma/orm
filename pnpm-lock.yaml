@@ -4171,6 +4171,9 @@ importers:
       '@internal/utils':
         specifier: workspace:8.0.0-rc.21
         version: link:../../../1-framework/0-foundation/utils
+      arktype:
+        specifier: 'catalog:'
+        version: 2.2.7
       pathe:
         specifier: ^2.0.3
         version: 2.0.3

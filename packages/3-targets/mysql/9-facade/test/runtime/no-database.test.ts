@@ -1,4 +1,5 @@
 import mysqlDriver from '@internal/driver-mysql/runtime';
+import { blindCast } from '@internal/utils/casts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import mysql from '../../src/exports/runtime';
 import mysqlStatic, { contractFromJson } from '../../src/exports/static';
@@ -76,6 +77,25 @@ describe('a MySQL client with no database', () => {
         poolOptions: { max: 3, connectionTimeoutMillis: 1000, idleTimeoutMillis: 2000 },
       },
     ]);
+  });
+
+  it('checks the stream option when the factory is called, as the Postgres facade checks cursor', () => {
+    for (const received of ['yes', 1, { batchSize: 10 }]) {
+      expect(() =>
+        mysql({
+          contract,
+          stream: blindCast<boolean, 'a value a caller passes past the types'>(received),
+        }),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'RUNTIME.ARGUMENT_INVALID',
+          message: 'Invalid stream option',
+          fix: expect.stringContaining('leave stream unset'),
+          meta: { extension: 'mysql', helper: 'mysql', argument: 'stream', received },
+        }),
+      );
+    }
+    expect(() => mysql({ contract, stream: false })).not.toThrow();
   });
 
   it('refuses to connect without a URL', async () => {
