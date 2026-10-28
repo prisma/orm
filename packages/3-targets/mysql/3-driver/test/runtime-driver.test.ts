@@ -4,11 +4,31 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import mysqlRuntimeDriver from '../src/core/runtime/runtime-driver';
 import { SESSION_SETUP } from '../src/core/session-setup';
 
-type StreamBehaviour = { kind: 'rows'; rows: unknown[] } | { kind: 'fails'; error: Error };
+/** How a fake result arrives: row by row as the caller reads (`rows`), all at once with its end before the caller reads (`received`), or as an error. */
+type StreamBehaviour =
+  | { kind: 'rows'; rows: unknown[] }
+  | { kind: 'received'; rows: unknown[] }
+  | { kind: 'fails'; error: Error };
+
+function mariadbError(fatal: boolean): Error {
+  return Object.assign(
+    new Error(fatal ? 'socket has unexpectedly been closed' : "Table 't' doesn't exist"),
+    {
+      errno: fatal ? 45009 : 1146,
+      sqlState: fatal ? '08S01' : '42S02',
+      sqlMessage: fatal ? 'socket has unexpectedly been closed' : "Table 't' doesn't exist",
+      fatal,
+    },
+  );
+}
 
 class FakeStatement {
   parameterCount = 0;
-  readonly execute = vi.fn(async (_values?: unknown[]) => ({ affectedRows: 3 }));
+  executeError: Error | undefined;
+  readonly execute = vi.fn(async (_values?: unknown[]) => {
+    if (this.executeError !== undefined) throw this.executeError;
+    return { affectedRows: 3 };
+  });
   readonly close = vi.fn();
   readonly streamClosed = vi.fn();
   constructor(private readonly behaviour: StreamBehaviour) {}
@@ -23,9 +43,13 @@ class FakeStatement {
           queueMicrotask(() => this.emit('error', behaviour.error));
           return;
         }
-        this.push(pending.length > 0 ? pending.shift() : null);
+        if (behaviour.kind === 'rows') this.push(pending.length > 0 ? pending.shift() : null);
       },
     });
+    if (behaviour.kind === 'received') {
+      for (const row of behaviour.rows) stream.push(row);
+      stream.push(null);
+    }
     return Object.assign(stream, {
       close: () => {
         this.streamClosed();
@@ -45,10 +69,14 @@ class FakeConnection extends EventEmitter {
   readonly prepared: { sql: string; statement: FakeStatement }[] = [];
   behaviour: StreamBehaviour = { kind: 'rows', rows: [{ n: 1 }, { n: 2 }, { n: 3 }] };
   parameterCount = 0;
+  prepareError: Error | undefined;
+  executeError: Error | undefined;
 
   async prepare(sql: string): Promise<FakeStatement> {
+    if (this.prepareError !== undefined) throw this.prepareError;
     const statement = new FakeStatement(this.behaviour);
     statement.parameterCount = this.parameterCount;
+    statement.executeError = this.executeError;
     this.prepared.push({ sql, statement });
     return statement;
   }
@@ -154,7 +182,7 @@ describe('MySQL runtime driver and its pool', () => {
     }).toEqual({ executed: 0, closed: 1, released: 1 });
   });
 
-  it('destroys a pooled connection whose stream the caller stops early, instead of reading the rest', async () => {
+  it('destroys a pooled connection whose stream the caller stops early while the rest of the result is still arriving', async () => {
     const driver = await connected();
     for await (const _row of driver.query({ sql: 'SELECT n FROM t' })) break;
     const statement = firstStatement();
@@ -163,6 +191,103 @@ describe('MySQL runtime driver and its pool', () => {
       released: connection.release.mock.calls.length,
       drained: statement.streamClosed.mock.calls.length,
     }).toEqual({ destroyed: 1, released: 0, drained: 0 });
+  });
+
+  it('drops the rest of a pooled stream the caller stops early once the whole result has arrived, and returns the connection to the pool', async () => {
+    connection.behaviour = { kind: 'received', rows: [{ n: 1 }, { n: 2 }, { n: 3 }] };
+    const driver = await connected();
+    for await (const _row of driver.query({ sql: 'SELECT n FROM t' })) break;
+    const statement = firstStatement();
+    expect({
+      destroyed: connection.destroy.mock.calls.length,
+      released: connection.release.mock.calls.length,
+      drained: statement.streamClosed.mock.calls.length,
+      closed: statement.close.mock.calls.length,
+    }).toEqual({ destroyed: 0, released: 1, drained: 1, closed: 1 });
+  });
+
+  it('returns the connection to the pool after a statement error, from a stream, from execute and from prepare', async () => {
+    const outcomes = [];
+    for (const fail of ['stream', 'execute', 'prepare'] as const) {
+      connection = new FakeConnection();
+      if (fail === 'stream') connection.behaviour = { kind: 'fails', error: mariadbError(false) };
+      if (fail === 'execute') connection.executeError = mariadbError(false);
+      if (fail === 'prepare') connection.prepareError = mariadbError(false);
+      const driver = await connected();
+      const run =
+        fail === 'stream'
+          ? collect(driver.query({ sql: 'SELECT n FROM t' }))
+          : driver.execute({ sql: 'DELETE FROM t' });
+      await expect(run).rejects.toMatchObject({ kind: 'sql_query', sqlState: '42S02' });
+      outcomes.push({
+        fail,
+        released: connection.release.mock.calls.length,
+        destroyed: connection.destroy.mock.calls.length,
+        closed: connection.prepared.map(({ statement }) => statement.close.mock.calls.length),
+      });
+    }
+    expect(outcomes).toEqual([
+      { fail: 'stream', released: 1, destroyed: 0, closed: [1] },
+      { fail: 'execute', released: 1, destroyed: 0, closed: [1] },
+      { fail: 'prepare', released: 1, destroyed: 0, closed: [] },
+    ]);
+  });
+
+  it('destroys the connection when it is lost during prepare, from query as from execute', async () => {
+    const outcomes = [];
+    for (const call of ['query', 'execute'] as const) {
+      connection = new FakeConnection();
+      connection.prepareError = mariadbError(true);
+      const driver = await connected();
+      const run =
+        call === 'query'
+          ? collect(driver.query({ sql: 'SELECT n FROM t' }))
+          : driver.execute({ sql: 'DELETE FROM t' });
+      await expect(run).rejects.toMatchObject({ code: 'DRIVER.NOT_CONNECTED' });
+      outcomes.push({
+        call,
+        released: connection.release.mock.calls.length,
+        destroyed: connection.destroy.mock.calls.length,
+      });
+    }
+    expect(outcomes).toEqual([
+      { call: 'query', released: 0, destroyed: 1 },
+      { call: 'execute', released: 0, destroyed: 1 },
+    ]);
+  });
+
+  it('refuses a statement on a held connection while a stream on it is open, instead of waiting for it forever', async () => {
+    const driver = await connected();
+    const held = await driver.acquireConnection();
+    const transaction = await held.beginTransaction();
+    const refusals = [];
+    for await (const _row of held.query({ sql: 'SELECT n FROM t' })) {
+      for (const run of [
+        () => held.execute({ sql: 'SELECT 1' }),
+        () => collect(held.query({ sql: 'SELECT 1' })),
+        () => transaction.execute({ sql: 'SELECT 1' }),
+        () => transaction.commit(),
+      ]) {
+        refusals.push(
+          await run().then(
+            () => 'ran',
+            (error: unknown) => Object(error).code,
+          ),
+        );
+      }
+      break;
+    }
+    await transaction.commit();
+    await held.release();
+    expect({
+      refusals,
+      prepared: connection.prepared.length,
+      committed: connection.commit.mock.calls.length,
+    }).toEqual({
+      refusals: Array(4).fill('DRIVER.CONNECTION_BUSY'),
+      prepared: 1,
+      committed: 1,
+    });
   });
 
   it('drops the rest of a stream on a held connection the caller stops early, and keeps the connection', async () => {
