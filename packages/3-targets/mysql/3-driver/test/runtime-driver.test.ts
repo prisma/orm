@@ -4,11 +4,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import mysqlRuntimeDriver from '../src/core/runtime/runtime-driver';
 import { SESSION_SETUP } from '../src/core/session-setup';
 
-/** How a fake result arrives: row by row as the caller reads (`rows`), all at once with its end before the caller reads (`received`), or as an error. */
-type StreamBehaviour =
+/** How a fake result arrives: row by row as the caller reads (`rows`), all at once with its end before the caller reads (`received`), or as an error on the stream (`fails`) or thrown by `executeStream` itself (`throws`). `hidesState` hides Node's internal `_readableState` from the driver. */
+type StreamBehaviour = (
   | { kind: 'rows'; rows: unknown[] }
   | { kind: 'received'; rows: unknown[] }
-  | { kind: 'fails'; error: Error };
+  | { kind: 'fails'; error: Error }
+  | { kind: 'throws'; error: Error }
+) & { hidesState?: boolean };
+
+/** `stream` as the driver sees it when Node keeps no `_readableState`; the stream's own methods still run on the real stream. */
+function withoutReadableState(stream: Readable): Readable {
+  return new Proxy(stream, {
+    get(target, property) {
+      if (property === '_readableState') return undefined;
+      const value: unknown = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
 
 function mariadbError(fatal: boolean): Error {
   return Object.assign(
@@ -35,6 +48,7 @@ class FakeStatement {
 
   executeStream(_values?: unknown[]): Readable {
     const behaviour = this.behaviour;
+    if (behaviour.kind === 'throws') throw behaviour.error;
     const pending = behaviour.kind === 'rows' ? [...behaviour.rows] : [];
     const stream = new Readable({
       objectMode: true,
@@ -50,12 +64,13 @@ class FakeStatement {
       for (const row of behaviour.rows) stream.push(row);
       stream.push(null);
     }
-    return Object.assign(stream, {
+    const closable = Object.assign(stream, {
       close: () => {
         this.streamClosed();
         pending.length = 0;
       },
     });
+    return behaviour.hidesState ? withoutReadableState(closable) : closable;
   }
 }
 
@@ -319,6 +334,21 @@ describe('MySQL runtime driver and its pool', () => {
       released: 1,
       destroyed: 0,
     });
+  });
+
+  it('destroys a held connection released while a stream on it is still open, instead of waiting for the stream, so close() finishes', async () => {
+    const driver = await connected();
+    const held = await driver.acquireConnection();
+    const transaction = await held.beginTransaction();
+    const rows = transaction.query({ sql: 'SELECT n FROM t' })[Symbol.asyncIterator]();
+    await rows.next();
+    await held.release();
+    await driver.close();
+    expect({
+      destroyed: connection.destroy.mock.calls.length,
+      released: connection.release.mock.calls.length,
+      ended: lastPool().end.mock.calls.length,
+    }).toEqual({ destroyed: 1, released: 0, ended: 1 });
   });
 
   it('ends the pool on close, after the connections it lent come back', async () => {

@@ -551,6 +551,28 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     );
   });
 
+  it('destroys a held connection released while a stream on it is still open, so the pool and close() go on', async (test) => {
+    await withMysqlDatabase(test, async ({ url }) => {
+      const limited = new URL(url);
+      limited.searchParams.set('connectionLimit', '1');
+      const driver = mysqlRuntimeDriver.create();
+      await driver.connect({ kind: 'url', url: limited.toString() });
+      const connection = await driver.acquireConnection();
+      const transaction = await connection.beginTransaction();
+      const rows = transaction.query<{ cid: string }>({ sql: slowRows })[Symbol.asyncIterator]();
+      const first = await rows.next();
+      await connection.release();
+      const [after] = await collect(
+        driver.query<{ cid: string }>({ sql: 'SELECT CONNECTION_ID() AS cid' }),
+      );
+      await driver.close();
+      expect({
+        newConnection: after?.cid !== (first.done ? undefined : first.value.cid),
+        state: driver.state,
+      }).toEqual({ newConnection: true, state: 'closed' });
+    });
+  });
+
   it('gives up waiting for a pooled connection after the pool timeout', async (test) => {
     await withMysqlDatabase(test, async ({ url }) => {
       const limited = new URL(url);

@@ -193,11 +193,23 @@ abstract class MysqlQueryable implements SqlQueryable {
   }
 }
 
+/** How many statements are running on a held connection, shared by the connection and its transactions as the Postgres driver shares its transaction state. A stream the caller dropped without finishing it stays running. */
+interface RunningStatements {
+  count: number;
+}
+
 /**
  * Lends a connection the caller holds. The package runs a connection's statements one at a time in the order they are sent, as `pg` did for the Postgres driver, so a statement sent while a stream on the connection is open waits for that stream to end. One awaited inside the stream's own loop therefore never finishes, as on Postgres with a cursor.
  */
-function lendHeld(connection: PoolConnection): Lent {
-  return { connection, held: true, done: async () => {} };
+function lendHeld(connection: PoolConnection, running: RunningStatements): Lent {
+  running.count += 1;
+  return {
+    connection,
+    held: true,
+    done: async () => {
+      running.count -= 1;
+    },
+  };
 }
 
 async function transactionCall(call: () => Promise<void>): Promise<void> {
@@ -212,6 +224,7 @@ async function transactionCall(call: () => Promise<void>): Promise<void> {
 class MysqlConnectionImpl extends MysqlQueryable implements SqlConnection {
   readonly #connection: PoolConnection;
   readonly #giveBack: () => void;
+  readonly #running: RunningStatements = { count: 0 };
 
   constructor(connection: PoolConnection, giveBack: () => void) {
     super();
@@ -220,15 +233,19 @@ class MysqlConnectionImpl extends MysqlQueryable implements SqlConnection {
   }
 
   protected async lend(): Promise<Lent> {
-    return lendHeld(this.#connection);
+    return lendHeld(this.#connection, this.#running);
   }
 
   async beginTransaction(): Promise<SqlTransaction> {
     await transactionCall(() => this.#connection.beginTransaction());
-    return new MysqlTransactionImpl(this.#connection);
+    return new MysqlTransactionImpl(this.#connection, this.#running);
   }
 
+  /**
+   * Returns the connection to the pool, as the Postgres driver's `release()` does. A connection with a statement still running, such as a stream the caller dropped, is destroyed instead: the package's release sends `ROLLBACK` behind that statement and waits for it, which would never finish, where `pg`'s release does not wait on the server.
+   */
   async release(): Promise<void> {
+    if (this.#running.count > 0) return this.destroy();
     try {
       await this.#connection.release();
     } finally {
@@ -244,14 +261,16 @@ class MysqlConnectionImpl extends MysqlQueryable implements SqlConnection {
 
 class MysqlTransactionImpl extends MysqlQueryable implements SqlTransaction {
   readonly #connection: PoolConnection;
+  readonly #running: RunningStatements;
 
-  constructor(connection: PoolConnection) {
+  constructor(connection: PoolConnection, running: RunningStatements) {
     super();
     this.#connection = connection;
+    this.#running = running;
   }
 
   protected async lend(): Promise<Lent> {
-    return lendHeld(this.#connection);
+    return lendHeld(this.#connection, this.#running);
   }
 
   async commit(): Promise<void> {
