@@ -197,7 +197,7 @@ function renderChosenType(
     chosen.ok && writtenChosenType(symbol, chosen.value.type, chosen.value.args, input.dataTypes);
   if (written === false || written === undefined) return undefined;
   const callText = call === undefined ? symbol.path.join('.') : printTypeConstructorCall(call);
-  return `\`${callText}\` is exactly \`${written}\`.`;
+  return `${inlineCode(callText)} is exactly ${inlineCode(written)}.`;
 }
 
 /** Each combination of a type choice's options, as written, and the explicit type it becomes. */
@@ -217,7 +217,7 @@ function renderTypeChoices(
         : undefined,
     );
     const written = writtenChosenType(symbol, row.type, args, dataTypes);
-    return `\`${written ?? `${[...symbol.path.slice(0, -1), row.type].join('.')}(...)`}\``;
+    return inlineCode(written ?? `${[...symbol.path.slice(0, -1), row.type].join('.')}(...)`);
   };
   return [
     `| ${[...options.map((option) => option.name), 'Becomes'].join(' | ')} |`,
@@ -227,6 +227,14 @@ function renderTypeChoices(
         `| ${[...options.map((option) => cell(row.when[option.name], option)), becomes(row)].join(' | ')} |`,
     ),
   ].join('\n');
+}
+
+/** `text` as a Markdown code span, fenced by more backticks than any run inside it. */
+function inlineCode(text: string): string {
+  const longestRun = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
+  const fence = '`'.repeat(longestRun + 1);
+  const padding = text.startsWith('`') || text.endsWith('`') || longestRun > 0 ? ' ' : '';
+  return `${fence}${padding}${text}${padding}${fence}`;
 }
 
 function renderParameterContent(symbol: ParameterSymbol): string {

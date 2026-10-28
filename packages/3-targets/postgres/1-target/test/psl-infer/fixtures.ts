@@ -215,12 +215,12 @@ export function treeFromFlat(schemaIR: SqlSchemaIR): PostgresDatabaseSchemaNode 
   });
 }
 
+const inferCodecLookup = createPostgresBuiltinCodecLookup();
+
 /**
  * The stack `contract emit` reads an inferred schema with: the type constructors the family and the
  * adapter contribute, the target's own, and the target's codecs and data types.
  */
-const inferCodecLookup = createPostgresBuiltinCodecLookup();
-
 export const inferBuildContext: SqlPslBuildContext = {
   authoringContributions: {
     type: {

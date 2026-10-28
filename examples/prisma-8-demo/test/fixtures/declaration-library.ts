@@ -45,7 +45,7 @@ export const labelled = (labels: readonly string[]) =>
   );
 
 export const unexpired = (now: Temporal.Instant) =>
-  client.fragment({ expiresAt: field.column(type.TimestamptzTemporal()) }, (rows) =>
+  client.fragment({ expiresAt: field.column(type.DateTime({ as: 'temporal' })) }, (rows) =>
     rows.where((row) => row.expiresAt.gt(now)).orderBy((row) => row.expiresAt.asc()),
   );
 

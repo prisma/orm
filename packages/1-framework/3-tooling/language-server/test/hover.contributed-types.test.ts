@@ -97,7 +97,7 @@ describe('providePslHover', () => {
   it('writes each argument of the explicit type as a literal of its data type', () => {
     const value = hover('model Product {\n  shape pg.Sha|pe\n}')?.contents;
     expect(value).toMatchObject({
-      value: expect.stringContaining('`pg.Shape` is exactly `pg.Raw(sql: sql`text`)`.'),
+      value: expect.stringContaining('`pg.Shape` is exactly `` pg.Raw(sql: sql`text`) ``.'),
     });
   });
 
