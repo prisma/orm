@@ -1,3 +1,4 @@
+import { inspect } from 'node:util';
 import { timeouts } from '@repo/test-utils';
 import { withMysqlDatabase } from '@repo/test-utils/mysql-database';
 import { describe, expect, it } from 'vitest';
@@ -701,6 +702,28 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
         await admin.close();
       }
     });
+  });
+
+  it('leaves the values of a statement MySQL refuses out of its error, from a stream and from execute', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(url, async (driver) => {
+        const value = 'distinctive-value-5d1c9e';
+        const request = { sql: 'SELECT * FROM missing WHERE name = ?1', params: [value] };
+        const errors = [
+          await collect(driver.query(request)).catch((error: unknown) => error),
+          await driver.execute(request).catch((error: unknown) => error),
+        ];
+        expect(
+          errors.map((error) => ({
+            sqlState: Object(error).sqlState,
+            leaked: inspect(error, { depth: 10 }).includes(value),
+          })),
+        ).toEqual([
+          { sqlState: '42S02', leaked: false },
+          { sqlState: '42S02', leaked: false },
+        ]);
+      }),
+    );
   });
 
   it('reports a query error with its SQLSTATE', async (test) => {

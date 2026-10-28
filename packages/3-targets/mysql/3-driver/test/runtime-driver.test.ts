@@ -221,6 +221,38 @@ describe('MySQL runtime driver and its pool', () => {
     }).toEqual({ destroyed: 0, released: 1, drained: 1, closed: 1 });
   });
 
+  it('destroys a pooled connection whose stream the caller stops early when Node keeps no record of whether the result has arrived', async () => {
+    connection.behaviour = {
+      kind: 'received',
+      rows: [{ n: 1 }, { n: 2 }, { n: 3 }],
+      hidesState: true,
+    };
+    const driver = await connected();
+    for await (const _row of driver.query({ sql: 'SELECT n FROM t' })) break;
+    expect({
+      destroyed: connection.destroy.mock.calls.length,
+      released: connection.release.mock.calls.length,
+      drained: firstStatement().streamClosed.mock.calls.length,
+    }).toEqual({ destroyed: 1, released: 0, drained: 0 });
+  });
+
+  it('drops the rest of a stream on a held connection the caller stops early when Node keeps no record of whether the result has arrived, and keeps the connection', async () => {
+    connection.behaviour = {
+      kind: 'received',
+      rows: [{ n: 1 }, { n: 2 }, { n: 3 }],
+      hidesState: true,
+    };
+    const driver = await connected();
+    const held = await driver.acquireConnection();
+    for await (const _row of held.query({ sql: 'SELECT n FROM t' })) break;
+    await held.release();
+    expect({
+      destroyed: connection.destroy.mock.calls.length,
+      released: connection.release.mock.calls.length,
+      drained: firstStatement().streamClosed.mock.calls.length,
+    }).toEqual({ destroyed: 0, released: 1, drained: 1 });
+  });
+
   it('closes the prepared statement and reports the error when executeStream throws, and returns the connection to the pool', async () => {
     connection.behaviour = { kind: 'throws', error: mariadbError(false) };
     const driver = await connected();
