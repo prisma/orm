@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { ifDefined } from '@internal/utils/defined';
 import { type ConnectionConfig, createConnection } from 'mariadb';
 
 /** A MySQL database created for one test. */
@@ -20,7 +21,33 @@ export function mysqlServerUrl(): string | undefined {
   return url === undefined || url.length === 0 ? undefined : url;
 }
 
-/** Connection options for the server a `mysql://` URL names; the `mariadb` package reads only `mariadb://` URLs. */
+function textField(value: object, key: string): string | undefined {
+  const field: unknown = Reflect.get(value, key);
+  return typeof field === 'string' ? field : undefined;
+}
+
+/** The TLS settings of the URL's `ssl` parameter: `true`, `false` or a JSON object, read as the MySQL driver reads them. */
+function tlsOptions(text: string | null): ConnectionConfig['ssl'] {
+  if (text === null) return undefined;
+  const value: unknown = JSON.parse(text);
+  if (typeof value === 'boolean') return value;
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('The ssl parameter of MYSQL_URL must be true, false or a JSON object');
+  }
+  const rejectUnauthorized: unknown = Reflect.get(value, 'rejectUnauthorized');
+  return {
+    ...ifDefined('ca', textField(value, 'ca')),
+    ...ifDefined('cert', textField(value, 'cert')),
+    ...ifDefined('key', textField(value, 'key')),
+    ...ifDefined('passphrase', textField(value, 'passphrase')),
+    ...ifDefined('servername', textField(value, 'servername')),
+    ...(typeof rejectUnauthorized === 'boolean' ? { rejectUnauthorized } : {}),
+  };
+}
+
+/**
+ * Connection options for the server a `mysql://` URL names, with its `ssl` and `allowPublicKeyRetrieval` parameters; the `mariadb` package reads only `mariadb://` URLs. The MySQL control driver reads the URL the same way, but this package cannot depend on it: the driver's tests depend on this package.
+ */
 function serverOptions(serverUrl: string): ConnectionConfig {
   const url = new URL(serverUrl);
   return {
@@ -28,6 +55,7 @@ function serverOptions(serverUrl: string): ConnectionConfig {
     ...(url.port === '' ? {} : { port: Number(url.port) }),
     user: decodeURIComponent(url.username),
     password: decodeURIComponent(url.password),
+    ...ifDefined('ssl', tlsOptions(url.searchParams.get('ssl'))),
     allowPublicKeyRetrieval: url.searchParams.get('allowPublicKeyRetrieval') === 'true',
   };
 }
