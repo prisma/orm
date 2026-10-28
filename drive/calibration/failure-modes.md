@@ -941,7 +941,7 @@ Per-repo stop conditions beyond the canonical ones:
 
 **Root cause.** The rewrite was driven by the emitted fixtures `fixtures:check` knows about. Sources that a test emits at run time are not in that list, and PR CI skips the integration tests that read them.
 
-**Detection signal.** `git grep -n "<Name>" -- 'test/**/*.psl' 'test/**/*.prisma' 'test/**/fixtures/**'` lists files the branch did not change.
+**Detection signal.** `git grep -n "<Name>" -- 'test/**/*.psl' 'test/**/*.prisma' 'test/**/*.ts' 'examples/**/*.prisma' 'examples/**/*.ts'` lists files the branch did not change.
 
 **Mitigation.** When a name changes meaning, grep every PSL and TypeScript source under `test/` and `examples/` for the name, rewrite each one that relied on the old meaning, and run the integration file that emits it before enabling auto-merge.
 
