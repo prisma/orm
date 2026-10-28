@@ -5467,6 +5467,9 @@ importers:
       '@prisma/orm-toolchain':
         specifier: workspace:8.0.0-rc.21
         version: link:../orm-toolchain
+      arktype:
+        specifier: 'catalog:'
+        version: 2.2.7
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
