@@ -18,7 +18,7 @@ Wires the MySQL target, adapter and driver together for a project's `prisma.conf
 - **`defineContract`** (`./contract-builder`): the TypeScript contract builder bound to the MySQL packs.
 - **`createMysqlControlClient`** (`./control`): a control client for `migration plan`, `db migrate`, `db verify`, `db sign` and introspection.
 - **`./migration`**: what a MySQL `migration.ts` imports: `Migration`, `MigrationCLI` and the column and constraint helpers.
-- **`mysql({ contract, url })`** (`./runtime`): a lazy MySQL client with `orm`, `sql`, `raw`, `query`, `execute`, `transaction` and `close`, as `sqlite(...)` and `postgres(...)` have. It connects on its first query.
+- **`mysql({ contract, url })`** (`./runtime`): a lazy MySQL client with `orm`, `sql`, `raw`, `query`, `execute`, `transaction` and `close`, as `sqlite(...)` and `postgres(...)` have. It connects on its first query. As in `postgres(...)`, the URL must use `mysql://` (`RUNTIME.BINDING_INVALID` otherwise), a query reads its whole result before the first row unless `stream: true` is set, and `poolOptions` takes `connectionTimeoutMillis` (20 seconds by default) and `idleTimeoutMillis` (30 seconds), plus `max` (10), the pool size, because MySQL has no binding for a pool the caller builds. With `stream: true`, a statement awaited inside the loop over a stream on the same transaction never finishes, as on Postgres with `cursor`.
 - **`contractFromJson`** (`./static`): validates an emitted `contract.json` once; `mysqlStatic` gives the query surfaces without a driver.
 - Published as `@prisma/orm-mysql`.
 

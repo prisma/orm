@@ -51,8 +51,8 @@ The URL sets `allowPublicKeyRetrieval=true` because the local server has no
 TLS: MySQL 8.4 signs `root` in with `caching_sha2_password`, which then needs
 the server's public key to send the password. Without it, connecting fails
 once the server no longer has the account cached, such as after a restart.
-Against a server reached over a network, use TLS (the `ssl` parameter)
-instead, since fetching the key without TLS lets a machine in between read the
+Against a server reached over a network, use TLS (`sslmode=verify-full`, or
+`ssl=true`) instead, since fetching the key without TLS lets a machine in between read the
 password.
 
 ```bash

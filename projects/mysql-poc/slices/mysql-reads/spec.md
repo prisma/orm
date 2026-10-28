@@ -58,7 +58,7 @@ One reviewer reads this as "MySQL can read": a runtime plane and a renderer, wit
 
 The At a glance calls return the expected rows against MySQL 8.4 in live tests, including a nested include and an ordered to-many include; golden tests cover every rendered node kind; and build, typecheck, lint, `lint:deps` and the changed packages' tests pass.
 
-**Added 2026-10-23, after the reviews:** the runtime driver runs statements as server-side prepared statements, with the prepared-statement cache off by default; `statementCacheSize` turns it on (design notes section 8), replacing client-side escaping.
+**Added 2026-10-23, after the reviews:** the runtime driver runs statements as server-side prepared statements, with the prepared-statement cache off (design notes section 8), replacing client-side escaping.
 
 ## Changed during the slice
 
@@ -66,6 +66,7 @@ The reviews changed three parts of the chosen design above. Design notes section
 
 - **Placeholders are numbered.** The renderer writes `?N`, N being the parameter's place in the runtime's list, as the Postgres and SQLite renderers do. The driver rewrites each `?N` to `?` and sends the values in placeholder order.
 - **The length limit is in the statement.** A statement that uses `GROUP_CONCAT` carries a `SET_VAR(group_concat_max_len = …)` optimizer hint; the driver no longer sets it for the session.
-- **The drivers use the `mariadb` package, and values travel apart from the SQL.** Both drivers run on `mariadb`, as Prisma 7 does. Every statement with values, and all raw SQL at runtime, runs as a server-side prepared statement. The statement cache is off by default. Integers are sent as BIGINT, so the renderer needs no casts.
+- **The drivers use the `mariadb` package, and values travel apart from the SQL.** Both drivers run on `mariadb`, as Prisma 7 does. Every statement with values runs as a server-side prepared statement; one without values runs over the text protocol, as `pg` runs it. No statement is reused. The renderer writes no parameter casts, as the Postgres renderer writes none for integers; the bigint codec sends decimal text, as Postgres's does.
+- **The driver copies the Postgres driver (second review, 2026-10-28).** A query reads its whole result unless `stream: true` is set; the target declares the UTC time zone as a session setting; connection failures are `SqlConnectionError` and constraint violations take Postgres's SQLSTATEs; pool and TLS settings are named as on Postgres.
 
 The slice makes no change outside the MySQL packages. Changes to shared packages tried during review (a raw-SQL flag on driver requests, a codec field for integer handling, `having` comparands as parameters, and stricter `fns.and`/`fns.or` operands) were reverted.
