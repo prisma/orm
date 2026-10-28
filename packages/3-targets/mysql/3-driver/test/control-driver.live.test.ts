@@ -67,7 +67,7 @@ describe('MysqlControlDriver against a MySQL server', {
           z: '005',
           tm: '25:00:00.50',
           tm0: '-01:02:03.000',
-          db: '1e+21',
+          db: '1e21',
           f: '3.4e38',
         };
         const runtime = mysqlRuntimeDriver.create();

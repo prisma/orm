@@ -1,5 +1,5 @@
 import type { FieldInfo, TypeCastFunction } from 'mariadb';
-import { mysqlFloatText } from './float-text';
+import { mysqlDoubleText, mysqlFloatText } from './float-text';
 
 /** MySQL's `binary` collation, which marks a string or blob column that holds bytes. */
 const BINARY_COLLATION = 63;
@@ -18,7 +18,7 @@ const CHARACTER_OR_BLOB_TYPES: ReadonlySet<string> = new Set([
   'BLOB',
 ]);
 
-/** The column types whose value MySQL sends as text. A type outside this list, such as BIT, GEOMETRY or one the package has no name for, is read as bytes. */
+/** The column types besides FLOAT and DOUBLE whose value MySQL sends as text. A type outside this list, such as BIT, GEOMETRY or one the package has no name for, is read as bytes. */
 const TEXT_TYPES: ReadonlySet<string> = new Set([
   ...CHARACTER_OR_BLOB_TYPES,
   'DECIMAL',
@@ -28,8 +28,6 @@ const TEXT_TYPES: ReadonlySet<string> = new Set([
   'INT',
   'INT24',
   'BIGINT',
-  'FLOAT',
-  'DOUBLE',
   'YEAR',
   'DATE',
   'NEWDATE',
@@ -55,14 +53,10 @@ function withFractionDigits(time: string, digits: number): string {
 }
 
 /**
- * The column's text in one form whichever protocol carried it. Over the text protocol MySQL writes it; under a prepared statement MySQL sends numbers, dates and times in binary and the package writes them. They differ for five kinds of column, so each gets one form: YEAR and a ZEROFILL integer padded to the column's width and a TIME with the column's fraction digits, as MySQL writes them; a FLOAT as MySQL writes it over the text protocol; and a DOUBLE as JavaScript prints it.
+ * The column's text in one form whichever protocol carried it. Over the text protocol MySQL writes it; under a prepared statement MySQL sends numbers, dates and times in binary and the package writes them. They differ for three kinds of column besides FLOAT and DOUBLE, so each gets MySQL's form: YEAR and a ZEROFILL integer padded to the column's width, and a TIME with the column's fraction digits.
  */
 function sameTextEitherProtocol(field: FieldInfo, text: string): string {
   switch (field.type) {
-    case 'FLOAT':
-      return mysqlFloatText(Number(text));
-    case 'DOUBLE':
-      return String(Number(text));
     case 'TIME':
       return withFractionDigits(text, field.scale);
     default:
@@ -71,9 +65,19 @@ function sameTextEitherProtocol(field: FieldInfo, text: string): string {
 }
 
 /**
+ * A FLOAT or DOUBLE as MySQL writes it over the text protocol. The package reads the number the server sent, whichever the protocol; the text it writes for a prepared statement's binary number differs from MySQL's in digits, notation and the sign of zero.
+ */
+function floatingText(field: FieldInfo): string | null {
+  const value = field.float();
+  if (value === null) return null;
+  return field.type === 'FLOAT' ? mysqlFloatText(value) : mysqlDoubleText(value);
+}
+
+/**
  * Reads each column as the row value ADR 155 sets at the driver boundary: a binary string or blob, BIT, GEOMETRY and a column of a type the package does not know as its bytes, every other column as text, and NULL as `null`. Bytes are a plain `Uint8Array`, not the package's `Buffer`.
  */
 export const readTextOrBytes: TypeCastFunction = (field) => {
+  if (field.type === 'FLOAT' || field.type === 'DOUBLE') return floatingText(field);
   if (
     !TEXT_TYPES.has(field.type) ||
     (CHARACTER_OR_BLOB_TYPES.has(field.type) && field.collation.index === BINARY_COLLATION)

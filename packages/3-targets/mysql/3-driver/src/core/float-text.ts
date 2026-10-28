@@ -1,6 +1,5 @@
 const SIGNIFICANT_DIGITS = 6;
-const LOWEST_FIXED_EXPONENT = -15;
-const HIGHEST_FIXED_EXPONENT = 14;
+const MAX_FIXED_DIGITS = 15;
 
 /** The exact decimal digits of a finite 32-bit float's magnitude, and where the decimal point falls in them. */
 function exactDigits(bits: number): { readonly digits: string; readonly pointAt: number } {
@@ -41,21 +40,32 @@ function scientific(digits: string, pointAt: number): string {
   return `${digits[0]}${fraction === '' ? '' : `.${fraction}`}e${pointAt - 1}`;
 }
 
+/** Significant `digits` with the decimal point at `pointAt` in MySQL's notation: fixed unless that needs more than 14 zeros after the point, or more than 15 digits before it with none after it. */
+function mysqlNotation(negative: boolean, digits: string, pointAt: number): string {
+  const isFixed =
+    pointAt > -MAX_FIXED_DIGITS && (pointAt <= MAX_FIXED_DIGITS || digits.length > pointAt);
+  return `${negative ? '-' : ''}${isFixed ? fixed(digits, pointAt) : scientific(digits, pointAt)}`;
+}
+
 /**
- * A FLOAT's text as MySQL writes it over the text protocol: six significant digits, rounded half to even, without trailing zeros, in fixed notation for an exponent from -15 to 14 and as `1.5e20` otherwise. Under a prepared statement MySQL sends the 32-bit float in binary, and this gives it the same text.
+ * A FLOAT's text as MySQL writes it over the text protocol: six significant digits, rounded half to even, without trailing zeros, in MySQL's notation. Under a prepared statement MySQL sends the 32-bit float in binary, and this gives it the same text.
  */
 export function mysqlFloatText(value: number): string {
   const view = new DataView(new ArrayBuffer(4));
   view.setFloat32(0, value);
   const bits = view.getUint32(0);
-  const sign = bits >>> 31 === 1 ? '-' : '';
-  if ((bits & 0x7fffffff) === 0) return `${sign}0`;
+  const negative = bits >>> 31 === 1;
+  if ((bits & 0x7fffffff) === 0) return mysqlNotation(negative, '0', 1);
   const exact = exactDigits(bits);
   const { digits, pointAt } = roundedDigits(exact.digits, exact.pointAt);
-  const exponent = pointAt - 1;
-  return `${sign}${
-    exponent >= LOWEST_FIXED_EXPONENT && exponent <= HIGHEST_FIXED_EXPONENT
-      ? fixed(digits, pointAt)
-      : scientific(digits, pointAt)
-  }`;
+  return mysqlNotation(negative, digits, pointAt);
+}
+
+/**
+ * A DOUBLE's text as MySQL writes it over the text protocol: the fewest significant digits that read back as the same double, which JavaScript also prints, in MySQL's notation. Under a prepared statement MySQL sends the double in binary, and this gives it the same text.
+ */
+export function mysqlDoubleText(value: number): string {
+  const negative = value < 0 || Object.is(value, -0);
+  const [mantissa = '', exponent = ''] = Math.abs(value).toExponential().split('e');
+  return mysqlNotation(negative, mantissa.replace('.', ''), Number(exponent) + 1);
 }

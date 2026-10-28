@@ -292,9 +292,9 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
             {
               b: '-9223372036854775808',
               v: new Uint8Array([0, 1, 255]),
-              d: '10000000000000000000',
+              d: '1e19',
             },
-            { b: '9223372036854775807', v: null, d: '100000000000000000000' },
+            { b: '9223372036854775807', v: null, d: '1e20' },
           ],
           below: [{ n: '1' }],
         });
@@ -373,6 +373,30 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
         } finally {
           await connection.release();
         }
+      }),
+    );
+  });
+
+  it('reads a FLOAT and a DOUBLE as MySQL writes them over the text protocol, negative zero included, whether the row came over the text protocol or prepared', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(url, async (driver) => {
+        await driver.execute({ sql: 'CREATE TABLE t (id INT, f FLOAT, d DOUBLE)' });
+        await driver.execute({
+          sql: 'INSERT INTO t VALUES (1, -0e0, -0e0), (2, 0.1, 1e20), (3, 3.4e38, 1e-7), (4, 1e-16, 1e15), (5, 2.5, 4233813289058719.5)',
+        });
+        const rows = [
+          { f: '-0', d: '-0' },
+          { f: '0.1', d: '1e20' },
+          { f: '3.4e38', d: '0.0000001' },
+          { f: '1e-16', d: '1e15' },
+          { f: '2.5', d: '4233813289058719.5' },
+        ];
+        expect({
+          text: await collect(driver.query({ sql: 'SELECT f, d FROM t ORDER BY id' })),
+          prepared: await collect(
+            driver.query({ sql: 'SELECT f, d FROM t WHERE ?1 = ?1 ORDER BY id', params: [1] }),
+          ),
+        }).toEqual({ text: rows, prepared: rows });
       }),
     );
   });
