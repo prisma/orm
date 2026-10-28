@@ -92,9 +92,9 @@ These were decided by the orchestrator from the slice 2 research, under Will's i
 
 - **A to-many include keeps its order with `GROUP_CONCAT(… ORDER BY …)`.** The MySQL manual says the element order of `JSON_ARRAYAGG` is undefined, and that the optimizer ignores a derived table's `ORDER BY` when the outer query aggregates, so neither keeps related rows in order. `GROUP_CONCAT` honours its own `ORDER BY`. The adapter builds the JSON array text with it and casts the result to JSON. A statement that uses `GROUP_CONCAT` carries a `SET_VAR(group_concat_max_len = …)` optimizer hint, so the SQL does not depend on a session setting. An empty array is written only when the include matched no rows; if the array text is NULL for any other reason (for example a result larger than `max_allowed_packet`, where MySQL returns NULL with only a warning), the cast fails the statement instead of returning an empty list. It needs no shared change. Rejected for now: carrying a sort key in each JSON object and sorting in the runtime's decoder, which needs a shared change and a new capability; it is the fallback if live tests show the chosen form breaks.
 - **Coupling rows 10, 11 and 26 wait.** Capability checks already refuse `distinctOn` and the Postgres-only lock strengths on MySQL, so neither blocks reads. Row 26 does not block reads. (The integer parameter casts this bullet once described are removed by section 8: the driver sends integers as BIGINT.)
-- **Parameters are numbered.** The MySQL renderer writes `?N`, where N is the parameter's place in the runtime's parameter list. SQLite had the same parameter-order bug and got the same fix on `main`. Section 8 has the open question on how the driver maps them.
+- **Parameters are numbered.** The MySQL renderer writes `?N`, where N is the parameter's place in the runtime's parameter list. SQLite had the same parameter-order bug and got the same fix on `main`. The driver rewrites them to `?` and orders the values to match (section 8).
 
-## 8. The MySQL driver (2026-10-27, proposed; replaces the mysql2 design of 2026-10-23)
+## 8. The MySQL driver (2026-10-27, approved 2026-10-28; replaces the mysql2 design of 2026-10-23)
 
 This section describes how the MySQL runtime driver and control driver talk to the server. It replaces an earlier design built on the `mysql2` package. Facts come from the `mariadb` package's source (3.4.5 and 3.5.4), its issue trackers, Prisma 7's adapter, and probes against a MySQL 9.6 server; the research notes are `wip/research-mysql-protocol.md` and `wip/research-mariadb-driver.md` in the slice's worktree.
 
@@ -108,14 +108,11 @@ Every statement that carries values runs as a server-side prepared statement (`e
 
 A statement with no values that Prisma itself writes may run over the text protocol (`query`), because there is nothing in it to inject. That is needed for the statements MySQL refuses to prepare (error 1295, confirmed by probe): `START TRANSACTION`, `BEGIN`, `SAVEPOINT`, `ROLLBACK TO SAVEPOINT`, `RELEASE SAVEPOINT`, `LOCK TABLES` and `UNLOCK TABLES`. Transactions use the package's `beginTransaction()`, `commit()` and `rollback()`. Raw SQL a user writes always runs prepared, even with no values; a raw `START TRANSACTION` therefore fails with MySQL's own error.
 
-### Placeholders: open question for Will
+### Placeholders: numbered by the renderer, rewritten by the driver (Will, 2026-10-28)
 
-The shared runtime encodes a statement's values after the adapter renders it, and always in its own order: each parameter once, in the order it first appears in the query's tree (`collectOrderedParamRefs`). Postgres writes `$1`, SQLite writes `?1`, so a placeholder names its value by number and the order does not matter. MySQL has only `?`, which takes values in the order the placeholders appear in the SQL text, with a parameter used twice needing its value twice. That order can differ from the runtime's (across joins and derived tables; the bug fixed for SQLite on `main` in prisma/orm#30853). So something must map placeholders to values after encoding. Two ways:
+The renderer handles parameters exactly as the Postgres and SQLite renderers do. It numbers each parameter node once, in the order the runtime encodes values (`collectOrderedParamRefs`), and writes that number wherever the node appears. Postgres writes `$N` and SQLite writes `?N`, which the server reads directly. MySQL's `?` cannot carry a number and takes values by position, so the MySQL renderer writes `?N` and the driver turns each `?N` into `?`, listing the values in placeholder order (a parameter written twice is sent twice). The driver reads the SQL with a MySQL lexer that skips strings, comments and quoted identifiers, so a `?1` inside a string in raw SQL is left alone. Values still travel separately from the SQL text. Nothing changes in the SQL family.
 
-- **(a) Today's way, MySQL only.** The renderer writes `?1`, `?2`; the driver reads the SQL with a MySQL lexer, rewrites each `?N` to `?` and orders the values to match. No shared change. The lexer must skip strings, comments and quoted identifiers, and how MySQL reads those depends on `sql_mode` (`ANSI_QUOTES`, `NO_BACKSLASH_ESCAPES`). Prisma's own SQL contains no strings, so only raw SQL that a user writes under a changed `sql_mode` can be misread. The worst case is a wrong value bound or a count mismatch, never a value read as SQL, because values still travel separately.
-- **(b) A SQL family change.** The lowered statement says which runtime parameter each placeholder takes, in written order, and the runtime or driver orders the values from that. Nothing reads SQL text. It changes the adapter-to-driver contract in the SQL family, which needs Will's decision.
-
-Recommended: (a) for this project, because it is contained in MySQL's packages and its failure is bounded; (b) recorded as a coupling row for the family to consider when it next changes the driver contract.
+Rejected: a SQL family change in which the lowered statement lists, in written order, which parameter each placeholder takes. It adds a field to the shared adapter-to-driver contract for one target.
 
 ### The prepared-statement cache: off by default
 
@@ -152,7 +149,7 @@ MySQL 8.4's default `caching_sha2_password` fails over plain TCP unless TLS is u
 
 ### What this removes from the slice
 
-`mysql2` and its typings; the `CAST(? AS SIGNED)` integer casts and the raw-SQL `LIMIT`/`OFFSET` detection; the driver's statement cache code and its bound checks (the package's option replaces them). If (a) is chosen for placeholders, the lexer stays in the driver only.
+`mysql2` and its typings; the `CAST(? AS SIGNED)` integer casts and the raw-SQL `LIMIT`/`OFFSET` detection; the driver's statement cache code and its bound checks (the package's option replaces them). The placeholder lexer stays, in the driver only.
 
 ### Rejected
 
