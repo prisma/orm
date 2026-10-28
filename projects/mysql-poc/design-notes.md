@@ -88,6 +88,79 @@ These were decided by the orchestrator from the slice 2 research, under Will's i
 - **No namespaces on MySQL in this project.** The target reports `supportsNamespaces: false` and the unbound default namespace, as SQLite does. Mapping namespaces to MySQL databases is later work.
 - **Slice 2 splits in two.** The research sized it at 10–13k lines. 2a: target, codecs, driver, facade, emit, introspection, CI. 2b: planner, runner, verify, sign, atomicity.
 
+## 7. Decided while shaping slice 3 (2026-10-23)
+
+- **A to-many include keeps its order with `GROUP_CONCAT(… ORDER BY …)`.** The MySQL manual says the element order of `JSON_ARRAYAGG` is undefined, and that the optimizer ignores a derived table's `ORDER BY` when the outer query aggregates, so neither keeps related rows in order. `GROUP_CONCAT` honours its own `ORDER BY`. The adapter builds the JSON array text with it and casts the result to JSON. A statement that uses `GROUP_CONCAT` carries a `SET_VAR(group_concat_max_len = …)` optimizer hint, so the SQL does not depend on a session setting. An empty array is written only when the include matched no rows; if the array text is NULL for any other reason (for example a result larger than `max_allowed_packet`, where MySQL returns NULL with only a warning), the cast fails the statement instead of returning an empty list. It needs no shared change. Rejected for now: carrying a sort key in each JSON object and sorting in the runtime's decoder, which needs a shared change and a new capability; it is the fallback if live tests show the chosen form breaks.
+- **Coupling rows 10, 11 and 26 wait.** Capability checks already refuse `distinctOn` and the Postgres-only lock strengths on MySQL, so neither blocks reads. Row 26 does not block reads. (The integer parameter casts this bullet once described are removed by section 8: the driver sends integers as BIGINT.)
+- **Parameters are numbered.** The MySQL renderer writes `?N`, where N is the parameter's place in the runtime's parameter list. SQLite had the same parameter-order bug and got the same fix on `main`. Section 8 has the open question on how the driver maps them.
+
+## 8. The MySQL driver (2026-10-27, proposed; replaces the mysql2 design of 2026-10-23)
+
+This section describes how the MySQL runtime driver and control driver talk to the server. It replaces an earlier design built on the `mysql2` package. Facts come from the `mariadb` package's source (3.4.5 and 3.5.4), its issue trackers, Prisma 7's adapter, and probes against a MySQL 9.6 server; the research notes are `wip/research-mysql-protocol.md` and `wip/research-mariadb-driver.md` in the slice's worktree.
+
+### The package: `mariadb`, for MySQL and MariaDB
+
+Both drivers use the `mariadb` npm package, version 3.5.4 or later, for MySQL and for MariaDB. Prisma 7's `@prisma/adapter-mariadb` uses it for both. Prisma chose it in June 2025 after a `mysql2` adapter was built and abandoned: `mysql2` held about 40 MB more for every test and never released it (Linear TML-761, closed 2025-06-20; TML-1129: "it's just too unreliable … we're pivoting to the `mariadb` driver for both MySQL and MariaDB"). 3.5.4 is the floor because earlier versions corrupt rows when a type conversion asks for a column's text under prepared statements (CONJS-363), and hang without pipelining (CONJS-361).
+
+### Values never travel inside SQL text
+
+Every statement that carries values runs as a server-side prepared statement (`execute`): the SQL goes to the server with `?` placeholders, the server parses it, and the values follow separately. The driver never writes a value into SQL, and never uses the package's client-side escaping. This is the decision Will made on 2026-10-23 after three reviews found injections in client-side escaping; changing the package does not change it.
+
+A statement with no values that Prisma itself writes may run over the text protocol (`query`), because there is nothing in it to inject. That is needed for the statements MySQL refuses to prepare (error 1295, confirmed by probe): `START TRANSACTION`, `BEGIN`, `SAVEPOINT`, `ROLLBACK TO SAVEPOINT`, `RELEASE SAVEPOINT`, `LOCK TABLES` and `UNLOCK TABLES`. Transactions use the package's `beginTransaction()`, `commit()` and `rollback()`. Raw SQL a user writes always runs prepared, even with no values; a raw `START TRANSACTION` therefore fails with MySQL's own error.
+
+### Placeholders: open question for Will
+
+The shared runtime encodes a statement's values after the adapter renders it, and always in its own order: each parameter once, in the order it first appears in the query's tree (`collectOrderedParamRefs`). Postgres writes `$1`, SQLite writes `?1`, so a placeholder names its value by number and the order does not matter. MySQL has only `?`, which takes values in the order the placeholders appear in the SQL text, with a parameter used twice needing its value twice. That order can differ from the runtime's (across joins and derived tables; the bug fixed for SQLite on `main` in prisma/orm#30853). So something must map placeholders to values after encoding. Two ways:
+
+- **(a) Today's way, MySQL only.** The renderer writes `?1`, `?2`; the driver reads the SQL with a MySQL lexer, rewrites each `?N` to `?` and orders the values to match. No shared change. The lexer must skip strings, comments and quoted identifiers, and how MySQL reads those depends on `sql_mode` (`ANSI_QUOTES`, `NO_BACKSLASH_ESCAPES`). Prisma's own SQL contains no strings, so only raw SQL that a user writes under a changed `sql_mode` can be misread. The worst case is a wrong value bound or a count mismatch, never a value read as SQL, because values still travel separately.
+- **(b) A SQL family change.** The lowered statement says which runtime parameter each placeholder takes, in written order, and the runtime or driver orders the values from that. Nothing reads SQL text. It changes the adapter-to-driver contract in the SQL family, which needs Will's decision.
+
+Recommended: (a) for this project, because it is contained in MySQL's packages and its failure is bounded; (b) recorded as a coupling row for the family to consider when it next changes the driver contract.
+
+### The prepared-statement cache: off by default
+
+The package keeps a cache of prepared statements per connection (`prepareCacheLength`, default 256) and closes a statement on the server when the cache evicts it. MySQL limits open prepared statements across all connections to 16,382 by default (`max_prepared_stmt_count`). Prisma 7 left the cache on in 7.5.0 and users hit the limit within two weeks (prisma/orm#29361, #29364); 7.x then set it to 0 (#29392). A second problem only appears with the cache on: since MySQL 8.0.22 a cached statement keeps the parameter types of its first run, so a value sent later as a different type is converted, and the probe stored `'9007199254740993'` as `9007199254740992` after a first run with a fraction. With the cache off, each statement is prepared, run and closed, and the probe stored the exact value.
+
+So the cache is off by default (`prepareCacheLength: 0`), and a `statementCacheSize` URL parameter turns it on, documented with both risks. The cost of off is one extra round trip per statement on MySQL (prepare, then execute, then close); MariaDB sends prepare and execute together. The Prisma engines used a cache of 100 per connection; that is the alternative if the cost proves too high.
+
+### Sending values
+
+The package's encoding has traps the driver must guard against (all from its source, confirmed by probe):
+
+- A JavaScript number is sent as INT only between −2^31 and 2^31 − 2, and otherwise as DOUBLE, so `LIMIT ?` with 2147483647 fails. The driver sends every integer number as a `bigint` (BIGINT), which also keeps one parameter's wire type the same on every run. With integers sent as BIGINT, a comparison with no column (`? < ?`) compares integers, so the renderer no longer needs `CAST(? AS SIGNED)`, and the raw-SQL `LIMIT` detection goes with it.
+- A `bigint` below −2^63 makes the package throw inside its socket callback, which crashes the process. The driver refuses a `bigint` outside the signed 64-bit range before sending.
+- A `Date` is encoded in the process's local time zone whatever the `timezone` option says. The MySQL codecs send dates and times as text, never as `Date`.
+- A `Uint8Array` that is not a Node `Buffer` is sent as JSON text. The driver wraps it as a `Buffer`.
+
+### Reading values
+
+Options: `bigIntAsNumber: false` and `decimalAsNumber: false` (the defaults: BIGINT as an exact `bigint`, DECIMAL as exact digit text), `dateStrings: true` (DATE and DATETIME as the server's text, padded to the column's precision), `jsonStrings: true` with `autoJsonMap: false` (JSON as the server's text, so large numbers survive), `bitOneIsBoolean: false`. TIME is always text, YEAR a number, SET an array, binary columns a `Buffer`. FLOAT reads as the widened double (`0.1` as `0.10000000149011612`); the codec handles it, as before. These match what Prisma 7 sets, except where the codecs need otherwise.
+
+### Connections and the session
+
+The pool runs the session setup once per physical connection through `initSql`: `sql_mode` without `NO_BACKSLASH_ESCAPES` and `ANSI_QUOTES`, `time_zone = '+00:00'`, utf8mb4. A connection goes back to the pool after each statement, as it is. There is no reset on release: the package's `resetAfterUse` is ignored on MySQL (it sends `COM_RESET_CONNECTION` only to MariaDB), the reset would close every prepared statement on the connection, and no other driver or ORM resets by default (Drizzle, Kysely, node-postgres, Rails; `mysql2` added an opt-in in 2026). A raw `SET` a user runs stays on that connection for its lifetime, as on Postgres; the README says so.
+
+Other pool facts the driver relies on: the pool's `'error'` event needs a listener; a lost connection fails the running statement with error 45009 and `fatal: true`, which the driver uses to tell a lost connection from a statement error; `pool.end()` waits up to 10 seconds for borrowed connections, then destroys them, so `close()` waits for streams and held connections itself first.
+
+### Streams
+
+A query's rows stream through `prepare(sql)` and `statement.executeStream(values)`, which pauses the socket while the consumer is busy. Stopping early discards the remaining rows by reading them; MySQL cannot cancel a running statement on the same connection. A pooled stream that the caller stops early destroys its connection instead, so a large result is not downloaded only to be thrown away.
+
+### Authentication
+
+MySQL 8.4's default `caching_sha2_password` fails over plain TCP unless TLS is used or the client may fetch the server's key (`allowPublicKeyRetrieval`). The URL accepts TLS settings and an `allowPublicKeyRetrieval` parameter, off by default.
+
+### What this removes from the slice
+
+`mysql2` and its typings; the `CAST(? AS SIGNED)` integer casts and the raw-SQL `LIMIT`/`OFFSET` detection; the driver's statement cache code and its bound checks (the package's option replaces them). If (a) is chosen for placeholders, the lexer stays in the driver only.
+
+### Rejected
+
+- **`mysql2`.** Prisma abandoned it in 2025 for memory growth; it sends a `BigInt` as text, which forced the integer casts; it needs 3.24.0 (August 2026) for `LIMIT ?` with numbers.
+- **The text protocol**, as Drizzle and Kysely use. Neither project has stated why it chose it. It writes values into SQL on the client, which is what this design exists to avoid.
+- **A cache on by default.** The server-wide limit and the parameter-type problem above.
+- **Reset on release.** Ignored on MySQL by this package, and it would empty the statement cache.
+
 ## Settled by testing in the proof of concept
 
 These are SQL-shape details the slices decide against a live server, and record here.

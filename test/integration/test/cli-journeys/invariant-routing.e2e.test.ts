@@ -18,7 +18,6 @@
 
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { storageHashHex } from '@prisma/orm-postgres/components/control';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
 import {
@@ -42,6 +41,7 @@ import {
   timeouts,
   useDevDatabase,
 } from '../utils/journey-test-helpers';
+import { postgresDataMigrationHeader } from '../utils/journey-workspace-helpers';
 
 const INVARIANT_ID = 'backfill-user-name';
 /** The slots `--backfill User.name` writes, named by the field. */
@@ -613,24 +613,7 @@ withTempDir(({ createTempDir }) => {
         expect(draftManifest.from, 'S.03: scaffold has from === to').toBe(c1Hash);
         expect(draftManifest.to).toBe(c1Hash);
 
-        const endContractSpecifier = `../../snapshots/${storageHashHex(c1Hash)}/contract.json`;
-        const handAuthored = `import postgresAdapter from '@prisma/orm-postgres/adapter/runtime';
-import { Migration, MigrationCLI } from '@prisma/orm-postgres/migration';
-import postgresTarget from '@prisma/orm-postgres/target/runtime';
-import { sql } from '@prisma/orm-postgres/builder/runtime';
-import { createExecutionContext, createSqlExecutionStack } from '@prisma/orm-postgres/family-runtime';
-import endContractJson from '${endContractSpecifier}' with { type: 'json' };
-import { PostgresContractSerializer } from '@prisma/orm-postgres/target/runtime';
-
-const endContract = new PostgresContractSerializer().deserializeContract(endContractJson);
-
-const db = sql({
-  context: createExecutionContext({
-    contract: endContract,
-    stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
-  }),
-});
-
+        const handAuthored = `${postgresDataMigrationHeader(c1Hash)}
 export default class M extends Migration {
   override describe() {
     return { from: ${JSON.stringify(c1Hash)}, to: ${JSON.stringify(c1Hash)} };
@@ -766,24 +749,7 @@ MigrationCLI.run(import.meta.url, M);
             .at(-1)!,
         );
 
-        const endContractSpecifier = `../../snapshots/${storageHashHex(c1Hash)}/contract.json`;
-        const handAuthored = `import postgresAdapter from '@prisma/orm-postgres/adapter/runtime';
-import { Migration, MigrationCLI } from '@prisma/orm-postgres/migration';
-import postgresTarget from '@prisma/orm-postgres/target/runtime';
-import { sql } from '@prisma/orm-postgres/builder/runtime';
-import { createExecutionContext, createSqlExecutionStack } from '@prisma/orm-postgres/family-runtime';
-import endContractJson from '${endContractSpecifier}' with { type: 'json' };
-import { PostgresContractSerializer } from '@prisma/orm-postgres/target/runtime';
-
-const endContract = new PostgresContractSerializer().deserializeContract(endContractJson);
-
-const db = sql({
-  context: createExecutionContext({
-    contract: endContract,
-    stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
-  }),
-});
-
+        const handAuthored = `${postgresDataMigrationHeader(c1Hash)}
 export default class M extends Migration {
   override describe() {
     return { from: ${JSON.stringify(c1Hash)}, to: ${JSON.stringify(c1Hash)} };

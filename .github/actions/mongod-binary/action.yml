@@ -1,0 +1,25 @@
+name: MongoDB binary
+description: >
+  Restore or download the mongod binary that mongodb-memory-server starts, so
+  tests never download it. Runs after `pnpm install`. Without it, test packages
+  that start in parallel each download the binary into one shared folder and
+  fail on its lock file. The setup action turns off the install script's own
+  download, so this is the only step that downloads it.
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve MongoDB version
+      id: version
+      shell: bash
+      run: echo "version=$(node scripts/download-mongod-binary.mjs --print-version)" >> "$GITHUB_OUTPUT"
+
+    - name: Cache mongod binary
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      with:
+        path: ~/.cache/mongodb-binaries
+        key: mongod-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}
+
+    - name: Download mongod binary
+      shell: bash
+      run: node scripts/download-mongod-binary.mjs

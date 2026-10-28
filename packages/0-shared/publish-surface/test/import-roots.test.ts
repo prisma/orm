@@ -153,17 +153,24 @@ describe('resolveImportSpecifier', () => {
       );
     });
 
-    it('gives the MySQL facade no query surface, because the MySQL target has no runtime yet', () => {
-      for (const specifier of [
-        '@internal/sql-runtime',
-        '@internal/sql-orm-client',
-        '@internal/sql-builder',
-        '@internal/sql-relational-core',
-      ]) {
-        expect(() => resolveImportSpecifier(specifier, mysqlFacade)).toThrow(
-          /has no name under @prisma\/orm-mysql/,
-        );
-      }
+    it('resolves what a MySQL application queries with to the MySQL facade', () => {
+      expect(
+        [
+          '@internal/mysql/runtime',
+          '@internal/mysql/static',
+          '@internal/sql-runtime',
+          '@internal/sql-orm-client',
+          '@internal/sql-builder/runtime',
+          '@internal/sql-relational-core/ast',
+        ].map((specifier) => resolveImportSpecifier(specifier, mysqlFacade)),
+      ).toEqual([
+        '@prisma/orm-mysql/runtime',
+        '@prisma/orm-mysql/static',
+        '@prisma/orm-mysql/family-runtime',
+        '@prisma/orm-mysql/orm-client',
+        '@prisma/orm-mysql/builder/runtime',
+        '@prisma/orm-mysql/relational-core/ast',
+      ]);
     });
 
     it('rejects a non-facade shell as the facade', () => {

@@ -1,12 +1,12 @@
 # @internal/mysql
 
-MySQL configuration, contract builder and control client for Prisma 8.
+MySQL client, configuration, contract builder and control client for Prisma 8.
 
 ## Package Classification
 
 - **Domain**: extensions
 - **Layer**: adapters
-- **Plane**: multi-plane (shared, migration)
+- **Plane**: multi-plane (shared, migration, runtime)
 
 ## Purpose
 
@@ -18,7 +18,9 @@ Wires the MySQL target, adapter and driver together for a project's `prisma.conf
 - **`defineContract`** (`./contract-builder`): the TypeScript contract builder bound to the MySQL packs.
 - **`createMysqlControlClient`** (`./control`): a control client for `migration plan`, `db migrate`, `db verify`, `db sign` and introspection.
 - **`./migration`**: what a MySQL `migration.ts` imports: `Migration`, `MigrationCLI` and the column and constraint helpers.
-- **Not yet built**: the runtime client and the static entry point. This package has no public shell yet.
+- **`mysql({ contract, url })`** (`./runtime`): a lazy MySQL client with `orm`, `sql`, `raw`, `query`, `execute`, `transaction` and `close`, as `sqlite(...)` and `postgres(...)` have. It connects on its first query.
+- **`contractFromJson`** (`./static`): validates an emitted `contract.json` once; `mysqlStatic` gives the query surfaces without a driver.
+- Published as `@prisma/orm-mysql`.
 
 ## Testing
 

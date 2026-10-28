@@ -1,10 +1,13 @@
 {
   "name": "@prisma/orm-extension-middleware-cache",
-  "version": "8.0.0-rc.20",
+  "version": "8.0.0-rc.21",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
   "description": "Family-agnostic caching middleware for Prisma 8 runtimes",
+  "keywords": [
+    "prisma-orm-extension"
+  ],
   "files": [
     "dist"
   ],
@@ -14,12 +17,12 @@
     "clean": "rm -rf dist src-gen"
   },
   "dependencies": {
-    "@prisma/orm-framework": "workspace:8.0.0-rc.20"
+    "@prisma/orm-framework": "workspace:8.0.0-rc.21"
   },
   "devDependencies": {
-    "@internal/middleware-cache": "workspace:8.0.0-rc.20",
-    "@repo/tsconfig": "workspace:8.0.0-rc.20",
-    "@repo/tsdown": "workspace:8.0.0-rc.20",
+    "@internal/middleware-cache": "workspace:8.0.0-rc.21",
+    "@repo/tsconfig": "workspace:8.0.0-rc.21",
+    "@repo/tsdown": "workspace:8.0.0-rc.21",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },

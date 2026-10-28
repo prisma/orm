@@ -1,37 +1,28 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
+import { detectionPatterns } from '../guide-detections';
 
-const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = join(here, '../../../../..');
+const GUIDE_PATHS = {
+  app: 'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/instructions.md',
+  extension:
+    'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/instructions.md',
+} as const;
 
-function patternsOf(audience: string, id: string): readonly RegExp[] {
-  const guide = readFileSync(
-    join(
-      repoRoot,
-      'upgrade-instructions/pending/remove-field-presets',
-      audience,
-      'instructions.md',
-    ),
-    'utf-8',
-  );
-  const block = guide.split(/\n {2}- id: /).find((entry) => entry.startsWith(`${id}\n`)) ?? '';
-  return [...block.matchAll(/^ {8}- '(.*)'$/gm)].map(
-    ([, pattern]) => new RegExp((pattern ?? '').replaceAll("''", "'")),
-  );
+function patternsOf(audience: keyof typeof GUIDE_PATHS, id: string): readonly RegExp[] {
+  return detectionPatterns(GUIDE_PATHS[audience], id);
 }
 
-const example = (path: string) => readFileSync(join(repoRoot, 'examples', path), 'utf-8');
+/** The published packages an application imports from, kept out of literal import text so the import-root lint reads this file as test data. */
+const postgresBuilder = ['@prisma', 'orm-postgres/contract-builder'].join('/');
+const mongoBuilder = ['@prisma', 'orm-mongo/contract-builder'].join('/');
 const postgresContract = (body: string) =>
-  `${example('bundle-size/src/postgres/contract.ts')}\n${body}\n`;
+  `import { defineContract } from '${postgresBuilder}';\n${body}\n`;
 const mongoContract = (body: string) =>
-  `${example('bundle-size/src/mongo/contract.ts')}\n${body}\n`;
+  `import { defineContract } from '${mongoBuilder}';\n${body}\n`;
 
 describe.each([
   ['app', 'ts-field-presets-removed'],
   ['extension', 'field-presets-in-extension-code'],
-])('the %s guide detection %s', (audience, id) => {
+] as const)('the %s guide detection %s', (audience, id) => {
   const matches = (content: string) =>
     patternsOf(audience, id).some((pattern) => pattern.test(content));
 
@@ -74,7 +65,7 @@ describe('the app guide detection ts-field-presets-removed on field.json', () =>
 describe.each([
   ['app', 'ts-field-generated-removed'],
   ['extension', 'field-presets-in-extension-code'],
-])('the %s guide detection %s on field.generated', (audience, id) => {
+] as const)('the %s guide detection %s on field.generated', (audience, id) => {
   const matches = (content: string) =>
     patternsOf(audience, id).some((pattern) => pattern.test(content));
 

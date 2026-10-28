@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
-import { CliStructuredError } from '@internal/errors/control';
 import { EMPTY_DATA_TYPES, renameLegacyDirective } from '@internal/psl-parser';
 import { format, resolveFormatOptions } from '@internal/psl-parser/format';
+import { isStructuredError } from '@internal/utils/structured-error';
 import {
   type CompletionItem,
   type Connection,
@@ -549,11 +549,7 @@ export class Project {
       diagnostics: [
         {
           range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
-          message: CliStructuredError.is(error)
-            ? (error.why ?? error.message)
-            : error instanceof Error
-              ? error.message
-              : String(error),
+          message: configFailureMessage(error),
           code: CONFIG_LOAD_FAILED_CODE,
           severity: DiagnosticSeverity.Error,
           source: 'prisma',
@@ -565,6 +561,14 @@ export class Project {
   #sendDiagnostics(params: PublishDiagnosticsParams): void {
     void this.#options.connection.sendDiagnostics({ ...params, uri: normalizeFileUri(params.uri) });
   }
+}
+
+/** A failed config load as the user reads it: the cause (`why`, or the message), then the fix when the error carries one. */
+function configFailureMessage(error: unknown): string {
+  if (!isStructuredError(error)) {
+    return error instanceof Error ? error.message : String(error);
+  }
+  return [error.why ?? error.message, ...(error.fix === undefined ? [] : [error.fix])].join('\n');
 }
 
 function toDiagnostics(computed: readonly LspDiagnostic[]): Diagnostic[] {

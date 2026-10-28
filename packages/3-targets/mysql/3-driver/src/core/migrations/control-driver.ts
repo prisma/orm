@@ -6,26 +6,17 @@ import type {
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { redactDatabaseUrl } from '@internal/utils/redact-db-url';
-import { type Connection, createConnection } from 'mysql2/promise';
-import { mysqlConnectionOptions } from '../connection-options';
+import { type Connection, type ConnectionOptions, createConnection } from 'mysql2/promise';
+import { mysqlConnectionOptions, mysqlPoolSettings } from '../connection-options';
 import { mysqlDriverDescriptorMeta } from '../descriptor-meta';
-import { normalizeMysqlError } from '../normalize-error';
+import { connectionLost, isFatal, normalizeMysqlError, statementError } from '../normalize-error';
+import { positionalParams } from '../positional-params';
+import { assertPreparedCount } from '../prepared-count';
 import { serverText } from '../server-text';
-
-function isFatal(error: unknown): error is Error {
-  return error instanceof Error && 'fatal' in error && error.fatal === true;
-}
-
-function connectionLost(cause: Error) {
-  return errorRuntime('DRIVER.NOT_CONNECTED', 'MySQL connection lost or closed', {
-    why: cause.message,
-    fix: 'Create a new driver to connect again.',
-    cause,
-  });
-}
+import { SESSION_SETUP } from '../session-setup';
 
 /**
- * A MySQL connection for the control plane. It runs each statement through mysql2's text protocol, `query()`, which escapes parameters on the client; `multipleStatements` stays off whatever the URL says, so a parameter can never end the statement it is in.
+ * A MySQL connection for the control plane. A statement with values runs as a server-side prepared statement, `execute()`, so a value never travels inside the SQL; SQL with no values, which the control plane writes itself, runs through the text protocol, `query()`, and reads every column as the text MySQL sends. `multipleStatements` stays off whatever the URL says.
  */
 export class MysqlControlDriver implements SqlControlDriverInstance<'mysql'> {
   readonly familyId = 'sql' as const;
@@ -39,17 +30,20 @@ export class MysqlControlDriver implements SqlControlDriverInstance<'mysql'> {
     });
   }
 
+  /**
+   * Runs `sql` and returns its rows. A statement without values runs over the text protocol and reads every column as the text MySQL sends. A statement with values runs as a prepared statement over the binary protocol, so an integer reads as a number and a date as the text MySQL prints: the same query returns rows of a different shape depending on whether it has values.
+   */
   async query<Row = Record<string, unknown>>(
     sql: string,
     params?: readonly unknown[],
   ): Promise<{ readonly rows: Row[] }> {
     if (this.#lost !== undefined) throw connectionLost(this.#lost);
     try {
-      const [result] = await this.connection.query({
-        sql,
-        values: params === undefined ? [] : [...params],
-        typeCast: serverText,
-      });
+      const statement = positionalParams(sql, params ?? []);
+      const [result] =
+        statement.values.length === 0
+          ? await this.connection.query({ sql: statement.sql, typeCast: serverText })
+          : await this.#executeChecked(statement.sql, statement.values);
       return {
         rows: Array.isArray(result)
           ? blindCast<Row[], 'mysql2 returns the rows a SELECT produces, shaped by the query'>(
@@ -62,8 +56,13 @@ export class MysqlControlDriver implements SqlControlDriverInstance<'mysql'> {
         this.#lost = error;
         throw connectionLost(error);
       }
-      throw normalizeMysqlError(error);
+      throw statementError(error, sql);
     }
+  }
+
+  async #executeChecked(sql: string, values: unknown[]) {
+    assertPreparedCount(await this.connection.prepare(sql), values.length);
+    return this.connection.execute({ sql, values });
   }
 
   async databaseName(): Promise<string | undefined> {
@@ -77,14 +76,8 @@ export class MysqlControlDriver implements SqlControlDriverInstance<'mysql'> {
   }
 }
 
-/** The statements every new connection runs before any other. mysql2 escapes a quote in a parameter with a backslash, which MySQL reads as text under NO_BACKSLASH_ESCAPES, so the session clears that mode. The session runs in UTC, so `CURRENT_TIMESTAMP` writes the UTC time the codecs read. */
-const SESSION_SETUP = [
-  "SET SESSION sql_mode = TRIM(BOTH ',' FROM REPLACE(CONCAT(',', @@SESSION.sql_mode, ','), ',NO_BACKSLASH_ESCAPES,', ','))",
-  "SET SESSION time_zone = '+00:00'",
-] as const;
-
-async function connect(url: string, options?: ControlDriverConnectOptions): Promise<Connection> {
-  const connection = await createConnection(mysqlConnectionOptions(url, options?.connectTimeoutMs));
+async function connect(connectionOptions: ConnectionOptions): Promise<Connection> {
+  const connection = await createConnection(connectionOptions);
   try {
     for (const statement of SESSION_SETUP) await connection.query(statement);
     return connection;
@@ -97,8 +90,12 @@ async function connect(url: string, options?: ControlDriverConnectOptions): Prom
 const mysqlDriverDescriptor: ControlDriverDescriptor<'sql', 'mysql', MysqlControlDriver> = {
   ...mysqlDriverDescriptorMeta,
   async create(url: string, options?: ControlDriverConnectOptions): Promise<MysqlControlDriver> {
+    const connectionOptions = {
+      ...mysqlConnectionOptions(url, options?.connectTimeoutMs),
+      maxPreparedStatements: mysqlPoolSettings(url).statementCacheSize,
+    };
     try {
-      return new MysqlControlDriver(await connect(url, options));
+      return new MysqlControlDriver(await connect(connectionOptions));
     } catch (error) {
       const normalized = normalizeMysqlError(error);
       throw errorRuntime('DRIVER.CONNECTION_FAILED', 'Database connection failed', {
