@@ -13,10 +13,6 @@
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
-import type { Contract } from '@prisma/orm-postgres/contract/types';
-import type { SqlStorage } from '@prisma/orm-postgres/family-contract/types';
-import postgres from '@prisma/orm-postgres/runtime';
-import { contractFromJson } from '@prisma/orm-postgres/static';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
@@ -39,6 +35,7 @@ import {
   timeouts,
   useDevDatabase,
 } from '../utils/journey-test-helpers';
+import { createRowThroughOrm } from '../utils/journey-workspace-helpers';
 
 type Via = 'migrate' | 'db update';
 const VIAS: readonly Via[] = ['migrate', 'db update'];
@@ -262,29 +259,18 @@ async function insertError(connectionString: string, query: string): Promise<str
   return 'the insert was accepted';
 }
 
-interface UserOrm {
-  readonly public: {
-    readonly User: { create(row: Record<string, unknown>): Promise<unknown> };
-  };
-}
-
 /** Writes a user through the ORM of the emitted contract. */
-async function createUserThroughOrm(
+function createUserThroughOrm(
   ctx: JourneyContext,
   connectionString: string,
   row: Record<string, unknown>,
 ): Promise<unknown> {
-  const contractJson = JSON.parse(readFileSync(join(ctx.testDir, 'contract.json'), 'utf-8'));
-  const client = postgres({
-    contract: contractFromJson<Contract<SqlStorage>>(contractJson),
-    url: connectionString,
+  return createRowThroughOrm({
+    contractJson: JSON.parse(readFileSync(join(ctx.testDir, 'contract.json'), 'utf-8')),
+    connectionString,
+    model: 'User',
+    row,
   });
-  const runtime = await client.connect();
-  try {
-    return await (client.orm as unknown as UserOrm).public.User.create(row);
-  } finally {
-    await runtime.close();
-  }
 }
 
 withTempDir(({ createTempDir }) => {
