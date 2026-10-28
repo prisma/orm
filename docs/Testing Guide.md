@@ -1082,6 +1082,10 @@ Each CI job that runs MongoDB tests uses `.github/actions/mongod-binary` after i
 
 The script retries a failed download up to four times. Before each retry it deletes lock files and any binary that does not run.
 
+### Retrying CI setup steps
+
+CI setup steps that fetch over the network run through `scripts/retry-command.mjs`, which runs a command up to three times. Its `--before-retry` option undoes what a failed attempt left behind, as `supabase stop --no-backup` does before `supabase start` runs again. `pnpm install` retries failed package downloads five times (`fetchRetries` in `pnpm-workspace.yaml`). Wrap any new setup step that downloads or pulls images the same way.
+
 ### Test setup helpers
 
 **Integration tests** (`test/integration/test/mongo/setup.ts`):

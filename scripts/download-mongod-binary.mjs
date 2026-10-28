@@ -13,23 +13,10 @@ import { existsSync, readdirSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
+import { withRetries } from './retry-command.mjs';
 
 const repoRoot = join(fileURLToPath(new URL('.', import.meta.url)), '..');
-
-export async function withRetries(attempt, { attempts, delayMs, beforeRetry, wait = sleep }) {
-  for (let number = 1; ; number++) {
-    try {
-      return await attempt();
-    } catch (error) {
-      if (number === attempts) throw error;
-      console.warn(`Attempt ${number} of ${attempts} failed: ${error.message}`);
-      beforeRetry();
-      await wait(delayMs * number);
-    }
-  }
-}
 
 export function removeLockFiles(folder) {
   if (!existsSync(folder)) return;

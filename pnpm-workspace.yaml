@@ -14,6 +14,8 @@ allowBuilds:
 
 blockExoticSubdeps: true
 
+fetchRetries: 5
+
 catalog:
   '@prisma/dev': 0.25.2
   '@types/node': 26.1.2
