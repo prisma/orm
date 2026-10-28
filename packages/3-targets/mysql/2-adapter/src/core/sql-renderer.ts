@@ -36,15 +36,8 @@ import type {
 } from '@internal/sql-relational-core/ast';
 import { collectOrderedParamRefs } from '@internal/sql-relational-core/ast';
 import type { MysqlCodecDescriptorRegistry } from '@internal/target-mysql/codec-descriptor';
-import { mysqlBigint, mysqlInt } from '@internal/target-mysql/data-types';
 import { mysqlError, mysqlQueryNotYetSupported } from '@internal/target-mysql/errors';
-import {
-  escapeLiteral,
-  type MysqlPlaceholderToken,
-  type MysqlSqlToken,
-  quoteIdentifier,
-  tokenizeMysqlSql,
-} from '@internal/target-mysql/sql-utils';
+import { escapeLiteral, quoteIdentifier } from '@internal/target-mysql/sql-utils';
 import { assertNever, InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
 import { assertPlaceholdersMatchParams } from './placeholders';
@@ -300,61 +293,9 @@ function assertNoDigitAfterParam(parts: RawExpr['parts'] | RawQueryAst['parts'])
   });
 }
 
-function isParamPart(part: RawExpr['parts'][number]): part is AnyParamRef {
-  return (
-    typeof part !== 'string' && (part.kind === 'param-ref' || part.kind === 'prepared-param-ref')
-  );
-}
-
-const isKeyword = (token: MysqlSqlToken | undefined, keyword: string): boolean =>
-  token?.kind === 'word' && token.text.toUpperCase() === keyword;
-
-const isIntegerLiteral = (token: MysqlSqlToken | undefined): boolean =>
-  token?.kind === 'word' && [...token.text].every((char) => char >= '0' && char <= '9');
-
-/**
- * The raw parts that are the operand of `LIMIT` or `OFFSET`, which MySQL takes only as a bare placeholder: a param whose previous token, past whitespace and comments, is `LIMIT` or `OFFSET`, or is the comma of `LIMIT a, b` after an integer or a param that is itself an operand. The raw text is read with the target's lexer, so a keyword inside a quoted string or a comment does not count.
- */
-function limitOperandParts(parts: RawExpr['parts'] | RawQueryAst['parts']): ReadonlySet<number> {
-  const sql = parts
-    .map((part, index) =>
-      typeof part === 'string' ? part : isParamPart(part) ? `?${index + 1}` : ' 0 ',
-    )
-    .join('');
-  const tokens = tokenizeMysqlSql(sql).filter(
-    (token) => token.kind !== 'whitespace' && token.kind !== 'comment',
-  );
-  const partOf = (token: MysqlPlaceholderToken) => (token.number ?? 0) - 1;
-  const operands = new Set<number>();
-  tokens.forEach((token, position) => {
-    if (token.kind !== 'placeholder') return;
-    const [third, second, first] = [
-      tokens[position - 3],
-      tokens[position - 2],
-      tokens[position - 1],
-    ];
-    const afterKeyword = isKeyword(first, 'LIMIT') || isKeyword(first, 'OFFSET');
-    const afterLimitComma =
-      first?.kind === 'symbol' &&
-      first.text === ',' &&
-      ((isIntegerLiteral(second) && isKeyword(third, 'LIMIT')) ||
-        (second?.kind === 'placeholder' && operands.has(partOf(second))));
-    if (afterKeyword || afterLimitComma) operands.add(partOf(token));
-  });
-  return operands;
-}
-
 function renderParts(parts: RawExpr['parts'] | RawQueryAst['parts'], ctx: RenderContext): string {
   assertNoDigitAfterParam(parts);
-  const limitOperands = limitOperandParts(parts);
-  return parts
-    .map((part, index) => {
-      if (typeof part === 'string') return part;
-      return isParamPart(part) && limitOperands.has(index)
-        ? placeholder(part, ctx)
-        : renderExpr(part, ctx);
-    })
-    .join('');
+  return parts.map((part) => (typeof part === 'string' ? part : renderExpr(part, ctx))).join('');
 }
 
 function renderColumn(ref: ColumnRef): string {
@@ -517,14 +458,6 @@ function descriptorOf(codec: CodecRef, ctx: RenderContext, use: string) {
   return descriptor;
 }
 
-/**
- * The `CAST` target of a param by its codec's data type. mysql2 sends a bigint as text, so where no column gives the param a type MySQL reads an integer as a string: `?1 < ?2` with 10 and 9 compares text, and `JSON_ARRAY(?1)` holds `"5"`. Casting keeps it an integer everywhere except `LIMIT` and `OFFSET`, which take only a bare placeholder and read it as an integer.
- */
-const PARAMETER_CASTS: ReadonlyMap<string, string> = new Map([
-  [mysqlInt.id, 'SIGNED'],
-  [mysqlBigint.id, 'SIGNED'],
-]);
-
 function placeholder(ref: AnyParamRef, ctx: RenderContext): string {
   const number = ctx.placeholderNumbers.get(ref);
   if (number === undefined) {
@@ -533,13 +466,10 @@ function placeholder(ref: AnyParamRef, ctx: RenderContext): string {
   return `?${number}`;
 }
 
+/** A param as its numbered placeholder, refusing one whose codec the MySQL registry lacks. */
 function renderParam(ref: AnyParamRef, ctx: RenderContext): string {
-  const castType =
-    ref.codec === undefined
-      ? undefined
-      : PARAMETER_CASTS.get(descriptorOf(ref.codec, ctx, 'a parameter').dataType);
-  const written = placeholder(ref, ctx);
-  return castType === undefined ? written : `CAST(${written} AS ${castType})`;
+  if (ref.codec !== undefined) descriptorOf(ref.codec, ctx, 'a parameter');
+  return placeholder(ref, ctx);
 }
 
 function projectThroughCodec(
