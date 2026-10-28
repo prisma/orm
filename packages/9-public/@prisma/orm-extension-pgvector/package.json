@@ -5,6 +5,9 @@
   "type": "module",
   "sideEffects": false,
   "description": "pgvector embedding columns, distance operators, and indexes for Prisma 8",
+  "keywords": [
+    "prisma-orm-extension"
+  ],
   "files": [
     "dist"
   ],

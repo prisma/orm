@@ -5,6 +5,9 @@
   "type": "module",
   "sideEffects": false,
   "description": "Arktype-validated JSON columns for Prisma 8",
+  "keywords": [
+    "prisma-orm-extension"
+  ],
   "files": [
     "dist"
   ],

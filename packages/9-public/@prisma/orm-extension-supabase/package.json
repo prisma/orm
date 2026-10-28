@@ -5,6 +5,9 @@
   "type": "module",
   "sideEffects": false,
   "description": "Supabase auth schema, RLS policies, and request-scoped roles for Prisma 8",
+  "keywords": [
+    "prisma-orm-extension"
+  ],
   "files": [
     "dist"
   ],

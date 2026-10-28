@@ -5,6 +5,9 @@
   "type": "module",
   "sideEffects": false,
   "description": "PostGIS geometry types, operators, and indexes for Prisma 8",
+  "keywords": [
+    "prisma-orm-extension"
+  ],
   "files": [
     "dist"
   ],
