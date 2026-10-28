@@ -54,10 +54,10 @@ model Event {
 
 // After
 model Event {
-  id        UuidString          @id @onCreate(uuid())
+  id        UuidString         @id @onCreate(uuid())
   code      Char(12)
-  seenAt    TimeTemporal(3)     @onUpdate(now())
-  createdAt TimestamptzTemporal @onCreate(now())
+  seenAt    Time(3)            @onUpdate(now())
+  createdAt temporal.CreatedAt
   payload   Jsonb
 }
 ```
@@ -86,8 +86,8 @@ model Event {
       fields: {
         id: field.column(type.UuidString()).id().onCreate(gen.uuid()),
         code: field.column(type.Char(12)),
-        seenAt: field.column(type.TimeTemporal(3)).onUpdate(gen.now()),
-        createdAt: field.column(type.TimestamptzTemporal()).onCreate(gen.now()),
+        seenAt: field.column(type.Time(3)).onUpdate(gen.now()),
+        createdAt: field.column(type.temporal.CreatedAt()),
         payload: field.column(type.Jsonb()),
         slug: field.column(type.Char(16)).onCreate(gen.nanoid(16)),
       },
@@ -160,32 +160,30 @@ A TypeScript `id` preset's trailing `{ name }`, as in `field.id.uuidv4String({ n
 | `boolean()` | `pg/bool@1` | `Boolean` | `field.column(type.Boolean())` |
 | `json()` | `pg/jsonb@1` | `Jsonb` (not `Json`, which is `pg/json@1`) | `field.column(type.Jsonb())` |
 | `bytes()` | `pg/bytea@1` | `Bytes` | `field.column(type.Bytes())` |
-| `dateTime()` | `pg/timestamptz-temporal@1` | `TimestamptzTemporal` | `field.column(type.TimestamptzTemporal())` |
+| `dateTime()` | `pg/timestamptz-temporal@1` | `DateTime` | `field.column(type.DateTime())` |
 | `uuidNative()` | `pg/uuid@1` | `Uuid` | `field.column(type.Uuid())` |
 | `id.uuidv4Native()` | `pg/uuid@1`, `@id`, `uuidv4` | `Uuid @id @onCreate(uuid())` | `field.column(type.Uuid()).id().onCreate(gen.uuid())` |
 | `id.uuidv7Native()` | `pg/uuid@1`, `@id`, `uuidv7` | `Uuid @id @onCreate(uuid(7))` | `field.column(type.Uuid()).id().onCreate(gen.uuid(7))` |
-| `temporal.createdAt()` | `pg/timestamptz-temporal@1`, now on create | `TimestamptzTemporal @onCreate(now())` | `field.column(type.TimestamptzTemporal()).onCreate(gen.now())` |
-| `temporal.updatedAt()` | the same, on create and update | `TimestamptzTemporal @onCreate(now()) @onUpdate(now())` | `field.column(type.TimestamptzTemporal()).onCreate(gen.now()).onUpdate(gen.now())` |
-| `temporal.createdAtString()`, `temporal.updatedAtString()` | `pg/timestamptz-string@1` | `TimestamptzString` and the attributes | `field.column(type.TimestamptzString())` and the calls |
-| `temporal.createdAtJsDate()`, `temporal.updatedAtJsDate()` | `pg/timestamptz-date@1` | `TimestamptzJsDate` and the attributes | `field.column(type.TimestamptzJsDate())` and the calls |
+| `temporal.createdAt()` | `pg/timestamptz-temporal@1`, now on create | `temporal.CreatedAt` | `field.column(type.temporal.CreatedAt())` |
+| `temporal.updatedAt()` | the same, on create and update | `temporal.UpdatedAt` | `field.column(type.temporal.UpdatedAt())` |
+| `temporal.createdAtString()`, `temporal.updatedAtString()` | `pg/timestamptz-string@1` | `temporal.CreatedAtString`, `temporal.UpdatedAtString` | `field.column(type.temporal.CreatedAtString())`, `field.column(type.temporal.UpdatedAtString())` |
+| `temporal.createdAtJsDate()`, `temporal.updatedAtJsDate()` | `pg/timestamptz-date@1` | `temporal.CreatedAtJsDate`, `temporal.UpdatedAtJsDate` | `field.column(type.temporal.CreatedAtJsDate())`, `field.column(type.temporal.UpdatedAtJsDate())` |
 | `temporal.timestamp(p, onCreate: now, onUpdate: now)` | `pg/timestamp-temporal@1`, `{ precision: p }` | `TimestampTemporal(p) @onCreate(now()) @onUpdate(now())` | `field.column(type.TimestampTemporal(p)).onCreate(gen.now()).onUpdate(gen.now())` |
 | `temporal.timestamptz(...)` | `pg/timestamptz-temporal@1` | `TimestamptzTemporal(p)` and the attributes | `field.column(type.TimestamptzTemporal(p))` and the calls |
 | `temporal.timestampString(...)` | `pg/timestamp-string@1` | `TimestampString(p)` and the attributes | `field.column(type.TimestampString(p))` and the calls |
 | `temporal.timestamptzString(...)` | `pg/timestamptz-string@1` | `TimestamptzString(p)` and the attributes | `field.column(type.TimestamptzString(p))` and the calls |
 | `temporal.timestamptzJsDate(...)` | `pg/timestamptz-date@1` | `TimestamptzJsDate(p)` and the attributes | `field.column(type.TimestamptzJsDate(p))` and the calls |
-| `temporal.date(onCreate: now, onUpdate: now)` | `pg/date-temporal@1` | `DateTemporal` and the attributes | `field.column(type.DateTemporal())` and the calls |
+| `temporal.date(onCreate: now, onUpdate: now)` | `pg/date-temporal@1` | `Date` and the attributes | `field.column(type.Date())` and the calls |
 | `temporal.dateString(...)` | `pg/date-string@1` | `DateString` and the attributes | `field.column(type.DateString())` and the calls |
-| `temporal.time(p, ...)` | `pg/time-temporal@1` | `TimeTemporal(p)` and the attributes | `field.column(type.TimeTemporal(p))` and the calls |
+| `temporal.time(p, ...)` | `pg/time-temporal@1` | `Time(p)` and the attributes | `field.column(type.Time(p))` and the calls |
 | `temporal.timeString(p, ...)` | `pg/time-string@1` | `TimeString(p)` and the attributes | `field.column(type.TimeString(p))` and the calls |
 | `temporal.timetz(p, ...)` | `pg/timetz@1` | `Timetz(p)` and the attributes | `field.column(type.Timetz(p))` and the calls |
 
-The `temporal.<type>(...)` presets take an optional precision `p` (the first argument, or `precision: p`) and the phases `onCreate: now` and `onUpdate: now`. Write the precision as the constructor's argument, and leave it out when the preset left it out: `temporal.timestamptz()` is `TimestamptzTemporal`. Write each phase the preset set as its attribute, `@onCreate(now())` or `@onUpdate(now())`, and leave out a phase it did not set: `temporal.time(3, onUpdate: now)` is `TimeTemporal(3) @onUpdate(now())`. A preset with no phase is the bare constructor. The `createdAt` and `updatedAt` presets of each kind set `@onCreate(now())`, and the `updatedAt` ones `@onUpdate(now())` too.
+The `temporal.<type>(...)` presets take an optional precision `p` (the first argument, or `precision: p`) and the phases `onCreate: now` and `onUpdate: now`. Write the precision as the constructor's argument, and leave it out when the preset left it out: `temporal.timestamptz()` is `TimestamptzTemporal`. Write each phase the preset set as its attribute, `@onCreate(now())` or `@onUpdate(now())`, and leave out a phase it did not set: `temporal.time(3, onUpdate: now)` is `Time(3) @onUpdate(now())`. A preset with no phase is the bare constructor.
 
-On Postgres, `temporal.CreatedAt` and `temporal.UpdatedAt` are now built on `DateTime`, a `timestamptz(3)` column read as a JavaScript `Date`, so they do not store what `temporal.createdAt()` and `temporal.updatedAt()` stored; write the explicit type the table names to keep the contract.
+In TypeScript the precision and the phases are positional, and a phase is `'now'` or `undefined`: `field.temporal.timestamp(3, 'now', 'now')` is `field.column(type.TimestampTemporal(3)).onCreate(gen.now()).onUpdate(gen.now())`, `field.temporal.time(3, undefined, 'now')` is `field.column(type.Time(3)).onUpdate(gen.now())`, and `field.temporal.date('now')` is `field.column(type.Date()).onCreate(gen.now())`.
 
-In TypeScript the precision and the phases are positional, and a phase is `'now'` or `undefined`: `field.temporal.timestamp(3, 'now', 'now')` is `field.column(type.TimestampTemporal(3)).onCreate(gen.now()).onUpdate(gen.now())`, `field.temporal.time(3, undefined, 'now')` is `field.column(type.TimeTemporal(3)).onUpdate(gen.now())`, and `field.temporal.date('now')` is `field.column(type.DateTemporal()).onCreate(gen.now())`.
-
-Attributes and calls written after the preset stay after the replacement: `temporal.updatedAt() @map("updated_at")` is `TimestamptzTemporal @onCreate(now()) @onUpdate(now()) @map("updated_at")`, `field.temporal.createdAt().optional()` is `field.column(type.TimestamptzTemporal()).onCreate(gen.now()).optional()`, and `temporal.timestamptz(onUpdate: now) @onCreate(now())` is `TimestamptzTemporal @onCreate(now()) @onUpdate(now())`.
+Attributes and calls written after the preset stay after the replacement: `temporal.updatedAt() @map("updated_at")` is `temporal.UpdatedAt @map("updated_at")`, `field.temporal.createdAt().optional()` is `field.column(type.temporal.CreatedAt()).optional()`, and `temporal.timestamptz(onUpdate: now) @onCreate(now())` is `TimestamptzTemporal @onCreate(now()) @onUpdate(now())`.
 
 ### SQLite presets
 
@@ -226,7 +224,7 @@ Rewrite every preset call in your Prisma 8 schema files as the tables say. `pris
 
 ```text
 PSL_UNRESOLVED_REFERENCE: id.uuidv4String() was a field preset, and Prisma 8 removed field presets. Write UuidString @id @onCreate(uuid()).
-PSL_UNRESOLVED_REFERENCE: temporal.time(3, onUpdate: now) was a field preset, and Prisma 8 removed field presets. Write TimeTemporal(3) @onUpdate(now()).
+PSL_UNRESOLVED_REFERENCE: temporal.time(3, onUpdate: now) was a field preset, and Prisma 8 removed field presets. Write Time(3) @onUpdate(now()).
 ```
 
 The message writes the alias as the schema's target names it: `UuidString` on Postgres and `sql.UuidString` on SQLite. On Postgres you may write `sql.UuidString` too; both store the same column. If a preset was called with an argument it did not take, the message gives the type and tells you which attributes to add.
