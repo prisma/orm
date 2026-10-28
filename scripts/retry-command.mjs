@@ -56,13 +56,22 @@ function run(command, args) {
   }
 }
 
+function runCleanup(shellCommand) {
+  const result = spawnSync('bash', ['-c', shellCommand], { stdio: 'inherit' });
+  if (result.error || result.status !== 0) {
+    console.warn(
+      `${shellCommand} failed (${result.error?.message ?? result.status ?? result.signal}); retrying anyway`,
+    );
+  }
+}
+
 async function main() {
   const { attempts, beforeRetry, command, args } = parseArguments(process.argv.slice(2));
   await withRetries(() => run(command, args), {
     attempts,
     delayMs: 10_000,
     beforeRetry: () => {
-      if (beforeRetry !== undefined) spawnSync('bash', ['-c', beforeRetry], { stdio: 'inherit' });
+      if (beforeRetry !== undefined) runCleanup(beforeRetry);
     },
   });
 }

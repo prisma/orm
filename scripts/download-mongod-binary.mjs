@@ -36,11 +36,24 @@ function loadMongoMemoryServer() {
   };
 }
 
-async function downloadAndCheck(MongoBinary) {
+export function downloadMongod({ MongoBinary, DryMongoBinary, folder, ownsBinary, wait }) {
+  return withRetries(() => downloadAndCheck(MongoBinary, ownsBinary), {
+    attempts: 4,
+    delayMs: 5000,
+    beforeRetry: () => {
+      removeLockFiles(folder);
+      DryMongoBinary.binaryCache.clear();
+    },
+    wait,
+  });
+}
+
+async function downloadAndCheck(MongoBinary, ownsBinary) {
   const binary = await MongoBinary.getPath();
   try {
     execFileSync(binary, ['--version'], { stdio: 'ignore' });
   } catch (error) {
+    if (!ownsBinary) throw new Error(`${binary} does not run: ${error.message}`);
     rmSync(binary, { force: true });
     throw new Error(`${binary} does not run, so it was deleted: ${error.message}`);
   }
@@ -54,13 +67,12 @@ async function main() {
     return;
   }
   const folder = resolveConfig('DOWNLOAD_DIR') ?? join(homedir(), '.cache', 'mongodb-binaries');
-  const binary = await withRetries(() => downloadAndCheck(MongoBinary), {
-    attempts: 4,
-    delayMs: 5000,
-    beforeRetry: () => {
-      removeLockFiles(folder);
-      DryMongoBinary.binaryCache.clear();
-    },
+  const binary = await downloadMongod({
+    MongoBinary,
+    DryMongoBinary,
+    folder,
+    ownsBinary: resolveConfig('SYSTEM_BINARY') === undefined,
+    wait: undefined,
   });
   console.log(`mongod is ready at ${binary}`);
 }
