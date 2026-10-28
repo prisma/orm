@@ -3,6 +3,7 @@ import type { ContributedTypeNamespace } from '../src/contributed-type-scope';
 import { parse } from '../src/parse';
 import {
   describeRemovedFieldPreset,
+  presetType,
   removedPresetWithPhases,
   removedPresetWrittenAs,
 } from '../src/removed-field-presets';
@@ -23,13 +24,25 @@ function callOf(type: string): ResolvedTypeConstructorCall {
 }
 
 const stamp = { kind: 'typeConstructor', output: { codecId: 'test/stamp@1' } } as const;
+const text = { kind: 'typeConstructor', output: { codecId: 'test/text@1' } } as const;
+const moment = {
+  kind: 'typeChoice',
+  args: [
+    { kind: 'option', name: 'as', values: ['stamp', 'text'], default: 'text', optional: true },
+  ],
+  choices: [
+    { when: { as: 'stamp' }, type: 'Stamp' },
+    { when: { as: 'text' }, type: 'Text' },
+  ],
+} as const;
 const presets = {
   'ns.stamp': removedPresetWithPhases('Stamp', 'test/stamp@1', true),
-  plain: removedPresetWrittenAs('Stamp @id', 'test/stamp@1'),
+  plain: removedPresetWrittenAs('Stamp', 'test/stamp@1', '@id'),
   either: [
     ...removedPresetWrittenAs('Stamp', 'test/stamp@1'),
     ...removedPresetWrittenAs('ns.Stamp', 'test/stamp@1'),
   ],
+  chosen: removedPresetWithPhases(presetType('Moment', { as: 'stamp' }), 'test/stamp@1', true),
 };
 
 function describeCall(
@@ -43,11 +56,30 @@ function describeCall(
 describe('describeRemovedFieldPreset', () => {
   it('names the call and its rewrite', () => {
     expect(describeCall(callOf('ns.stamp(3, onUpdate: now)'), { Stamp: stamp })).toBe(
-      'ns.stamp(3, onUpdate: now) was a field preset, and Prisma 8 removed field presets. Write Stamp(3) @onUpdate(now()).',
+      'ns.stamp(3, onUpdate: now) was a field preset, and Prisma 8 removed field presets. Write Stamp(precision: 3) @onUpdate(now()).',
     );
     expect(describeCall(callOf('plain()'), { Stamp: stamp })).toBe(
       'plain() was a field preset, and Prisma 8 removed field presets. Write Stamp @id.',
     );
+  });
+
+  it('names a type choice called with options where that call resolves to the codec', () => {
+    const types = { Moment: moment, Stamp: stamp, Text: text };
+    expect([
+      describeCall(callOf('chosen(3, onCreate: now)'), types),
+      describeCall(callOf('chosen(onCreate: later)'), types),
+    ]).toEqual([
+      'chosen(3, onCreate: now) was a field preset, and Prisma 8 removed field presets. Write Moment(as: stamp, precision: 3) @onCreate(now()).',
+      'chosen(onCreate: later) was a field preset, and Prisma 8 removed field presets. Write Moment(as: stamp, ...) with @onCreate(now()) and @onUpdate(now()) for the phases the preset set.',
+    ]);
+  });
+
+  it('names nothing where the type choice call resolves to another codec', () => {
+    const textOnly = {
+      ...moment,
+      choices: [{ when: { as: 'stamp' }, type: 'Text' }],
+    } as const;
+    expect(describeCall(callOf('chosen()'), { Moment: textOnly, Text: text })).toBeUndefined();
   });
 
   it('names the rewrite of the first row that applies to the stack', () => {

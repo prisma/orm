@@ -1,5 +1,6 @@
 import type { ResolvedTypeConstructorCall } from '@internal/psl-parser';
 import {
+  presetType,
   type RemovedFieldPreset,
   type RemovedFieldPresets,
   removedPresetWithPhases,
@@ -33,8 +34,9 @@ function idAlias(
 ): readonly RemovedFieldPreset[] {
   return GENERATED_ID_COLUMN_ALIAS_NAMESPACES.flatMap((namespace) =>
     removedPresetWrittenAs(
-      `${qualified(namespace, alias)}${attributes === undefined ? '' : ` ${attributes}`}`,
+      qualified(namespace, alias),
       generatedIdColumnAliases[alias].output.type.codecId,
+      attributes,
     ),
   );
 }
@@ -47,7 +49,7 @@ function nanoid(id: boolean): readonly RemovedFieldPreset[] {
       return id ? `${column} @id @onCreate(nanoid(${size ?? ''}))` : column;
     };
     return {
-      type: [...namespace, 'Nanoid'],
+      type: presetType(qualified(namespace, 'Nanoid')),
       codecId: generatedIdColumnAliases.Nanoid.output.type.codecId,
       rewrite: (call) => {
         const options = nanoidSize(call);
@@ -59,7 +61,12 @@ function nanoid(id: boolean): readonly RemovedFieldPreset[] {
   });
 }
 
-/** The SQL family's removed field presets: each row applies only where its rewrite's type stores the preset's codec, and a row with no codec id writes a type alias only the targets with the preset contribute. A generated id preset is written with the target's top-level alias where it has one, and with the `sql.` alias elsewhere. */
+const TEMPORAL_DATE_TIME = presetType('DateTime', { as: 'temporal' });
+const STRING_DATE_TIME = presetType('DateTime', { as: 'string' });
+const CREATED = '@onCreate(now())';
+const UPDATED = '@onCreate(now()) @onUpdate(now())';
+
+/** The SQL family's removed field presets: each row applies only where its rewrite's type stores the preset's codec, and a row with no codec id writes a type alias only the targets with the preset contribute. A generated id preset is written with the target's top-level alias where it has one, and with the `sql.` alias elsewhere. A date and time preset is written with the convenience call that gives the explicit type it stored, where one does (ADR 279). */
 export const removedSqlFieldPresets: RemovedFieldPresets = {
   uuidString: idAlias('UuidString'),
   ulid: idAlias('Ulid'),
@@ -80,36 +87,37 @@ export const removedSqlFieldPresets: RemovedFieldPresets = {
   boolean: removedPresetWrittenAs('Boolean', 'pg/bool@1'),
   json: removedPresetWrittenAs('Jsonb', 'pg/jsonb@1'),
   bytes: removedPresetWrittenAs('Bytes', 'pg/bytea@1'),
-  dateTime: removedPresetWrittenAs('TimestamptzTemporal', 'pg/timestamptz-temporal@1'),
+  dateTime: removedPresetWrittenAs(TEMPORAL_DATE_TIME, 'pg/timestamptz-temporal@1'),
   uuidNative: removedPresetWrittenAs('Uuid', 'pg/uuid@1'),
-  'id.uuidv4Native': removedPresetWrittenAs('Uuid @id @onCreate(uuid())', 'pg/uuid@1'),
-  'id.uuidv7Native': removedPresetWrittenAs('Uuid @id @onCreate(uuid(7))', 'pg/uuid@1'),
+  'id.uuidv4Native': removedPresetWrittenAs('Uuid', 'pg/uuid@1', '@id @onCreate(uuid())'),
+  'id.uuidv7Native': removedPresetWrittenAs('Uuid', 'pg/uuid@1', '@id @onCreate(uuid(7))'),
   'temporal.createdAt': [
-    ...removedPresetWrittenAs('TimestamptzTemporal @onCreate(now())', 'pg/timestamptz-temporal@1'),
-    ...removedPresetWrittenAs('temporal.CreatedAt'),
+    ...removedPresetWrittenAs(TEMPORAL_DATE_TIME, 'pg/timestamptz-temporal@1', CREATED),
+    ...removedPresetWrittenAs('temporal.CreatedAt', undefined),
   ],
   'temporal.updatedAt': [
-    ...removedPresetWrittenAs(
-      'TimestamptzTemporal @onCreate(now()) @onUpdate(now())',
-      'pg/timestamptz-temporal@1',
-    ),
-    ...removedPresetWrittenAs('temporal.UpdatedAt'),
+    ...removedPresetWrittenAs(TEMPORAL_DATE_TIME, 'pg/timestamptz-temporal@1', UPDATED),
+    ...removedPresetWrittenAs('temporal.UpdatedAt', undefined),
   ],
   'temporal.createdAtString': removedPresetWrittenAs(
-    'TimestamptzString @onCreate(now())',
+    STRING_DATE_TIME,
     'pg/timestamptz-string@1',
+    CREATED,
   ),
   'temporal.updatedAtString': removedPresetWrittenAs(
-    'TimestamptzString @onCreate(now()) @onUpdate(now())',
+    STRING_DATE_TIME,
     'pg/timestamptz-string@1',
+    UPDATED,
   ),
   'temporal.createdAtJsDate': removedPresetWrittenAs(
-    'TimestamptzJsDate @onCreate(now())',
+    'TimestamptzJsDate',
     'pg/timestamptz-date@1',
+    CREATED,
   ),
   'temporal.updatedAtJsDate': removedPresetWrittenAs(
-    'TimestamptzJsDate @onCreate(now()) @onUpdate(now())',
+    'TimestamptzJsDate',
     'pg/timestamptz-date@1',
+    UPDATED,
   ),
   'temporal.timestamp': removedPresetWithPhases(
     'TimestampTemporal',
@@ -117,17 +125,17 @@ export const removedSqlFieldPresets: RemovedFieldPresets = {
     true,
   ),
   'temporal.timestamptz': removedPresetWithPhases(
-    'TimestamptzTemporal',
+    TEMPORAL_DATE_TIME,
     'pg/timestamptz-temporal@1',
     true,
   ),
   'temporal.timestampString': removedPresetWithPhases(
-    'TimestampString',
+    presetType('DateTime', { as: 'string', storage: 'timestamp' }),
     'pg/timestamp-string@1',
     true,
   ),
   'temporal.timestamptzString': removedPresetWithPhases(
-    'TimestamptzString',
+    STRING_DATE_TIME,
     'pg/timestamptz-string@1',
     true,
   ),
@@ -136,10 +144,22 @@ export const removedSqlFieldPresets: RemovedFieldPresets = {
     'pg/timestamptz-date@1',
     true,
   ),
-  'temporal.date': removedPresetWithPhases('DateTemporal', 'pg/date-temporal@1', false),
-  'temporal.dateString': removedPresetWithPhases('DateString', 'pg/date-string@1', false),
-  'temporal.time': removedPresetWithPhases('TimeTemporal', 'pg/time-temporal@1', true),
-  'temporal.timeString': removedPresetWithPhases('TimeString', 'pg/time-string@1', true),
-  'temporal.timetz': removedPresetWithPhases('Timetz', 'pg/timetz@1', true),
+  'temporal.date': removedPresetWithPhases(
+    presetType('Date', { as: 'temporal' }),
+    'pg/date-temporal@1',
+    false,
+  ),
+  'temporal.dateString': removedPresetWithPhases('Date', 'pg/date-string@1', false),
+  'temporal.time': removedPresetWithPhases(
+    presetType('Time', { as: 'temporal' }),
+    'pg/time-temporal@1',
+    true,
+  ),
+  'temporal.timeString': removedPresetWithPhases('Time', 'pg/time-string@1', true),
+  'temporal.timetz': removedPresetWithPhases(
+    presetType('Time', { storage: 'timetz' }),
+    'pg/timetz@1',
+    true,
+  ),
   'temporal.datetime': removedPresetWithPhases('DateTime', 'sqlite/datetime@1', false),
 };

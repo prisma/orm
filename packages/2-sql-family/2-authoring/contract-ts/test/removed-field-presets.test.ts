@@ -33,12 +33,41 @@ const postgresLike = {
   Jsonb: typeConstructor('pg/jsonb@1'),
   Uuid: typeConstructor('pg/uuid@1'),
   TimeTemporal: typeConstructor('pg/time-temporal@1'),
+  TimeString: typeConstructor('pg/time-string@1'),
   TimestamptzTemporal: typeConstructor('pg/timestamptz-temporal@1'),
   TimestamptzJsDate: typeConstructor('pg/timestamptz-date@1'),
   DateTime: {
     kind: 'typeChoice',
-    args: [{ kind: 'option', name: 'as', values: ['date'], default: 'date', optional: true }],
-    choices: [{ when: { as: 'date' }, type: 'TimestamptzJsDate' }],
+    args: [
+      {
+        kind: 'option',
+        name: 'as',
+        values: ['date', 'temporal'],
+        default: 'date',
+        optional: true,
+      },
+    ],
+    choices: [
+      { when: { as: 'date' }, type: 'TimestamptzJsDate' },
+      { when: { as: 'temporal' }, type: 'TimestamptzTemporal' },
+    ],
+  },
+  Time: {
+    kind: 'typeChoice',
+    args: [
+      {
+        kind: 'option',
+        name: 'as',
+        values: ['string', 'temporal'],
+        default: 'string',
+        optional: true,
+      },
+      { kind: 'value', name: 'precision', dataType: 'pg/int4', optional: true },
+    ],
+    choices: [
+      { when: { as: 'string' }, type: 'TimeString' },
+      { when: { as: 'temporal' }, type: 'TimeTemporal' },
+    ],
   },
   sql: { Char: typeConstructor('sql/char@1'), ...generatedIdAliases },
   temporal: {
@@ -108,11 +137,15 @@ describe('a read of a removed field preset from the SQL field helpers', () => {
     ['id.uuidv7Native', 'field.column(type.Uuid()).id().onCreate(gen.uuid(7))'],
     [
       'temporal.updatedAt',
-      'field.column(type.TimestamptzTemporal()).onCreate(gen.now()).onUpdate(gen.now())',
+      "field.column(type.DateTime({ as: 'temporal' })).onCreate(gen.now()).onUpdate(gen.now())",
     ],
     [
       'temporal.time',
-      'field.column(type.TimeTemporal(p)), with .onCreate(gen.now()) and .onUpdate(gen.now()) for the phases the preset set, and without p when it set no precision',
+      "field.column(type.Time({ as: 'temporal', precision: p })), with .onCreate(gen.now()) and .onUpdate(gen.now()) for the phases the preset set, and without precision: p when it set no precision",
+    ],
+    [
+      'temporal.timeString',
+      'field.column(type.Time({ precision: p })), with .onCreate(gen.now()) and .onUpdate(gen.now()) for the phases the preset set, and without precision: p when it set no precision',
     ],
     [
       'generated',
@@ -128,6 +161,20 @@ describe('a read of a removed field preset from the SQL field helpers', () => {
     ['temporal.updatedAt', 'the stack has no temporal.UpdatedAt'],
   ])('names the forms that replace presets for field.%s where %s', (path) => {
     expect(refusalOf(sqliteField, path)).toMatchObject(unknown(path));
+  });
+
+  it('names the forms that replace presets where the type choice call stores another codec', () => {
+    const jsDateOnly = {
+      ...postgresLike,
+      DateTime: {
+        ...postgresLike.DateTime,
+        choices: [{ when: { as: 'date' }, type: 'TimestamptzJsDate' }],
+      },
+      temporal: {},
+    } as const;
+    expect(
+      refusalOf(refusingRemovedFieldPresets(field, jsDateOnly), 'temporal.updatedAt'),
+    ).toMatchObject(unknown('temporal.updatedAt'));
   });
 
   it('names the forms that replace presets where the rewrite type is a type choice that stores another codec', () => {

@@ -132,28 +132,29 @@ export function contributedTypeAt(
   return contributedTypeAt(value, rest);
 }
 
-/** The codec a column typed by the type at `path` in `namespace`, written bare, is stored with, or `undefined` when none is contributed there or it is a type choice whose defaults choose no type. */
-export function bareContributedTypeCodecId(
+/** The codec a column typed by `call` is stored with, reading the call's arguments as the column does, or `undefined` when no type is contributed at its path or it is a type choice whose arguments choose no type. */
+export function writtenContributedTypeCodecId(
   namespace: ContributedTypeNamespace,
-  path: readonly string[],
+  call: ResolvedTypeConstructorCall,
 ): string | undefined {
-  return codecIdAtPath(namespace, path, []);
+  return codecIdAtPath(namespace, call.path, [], call);
 }
 
 function codecIdAtPath(
   namespace: ContributedTypeNamespace,
   path: readonly string[],
   prefix: readonly string[],
+  call: ResolvedTypeConstructorCall,
 ): string | undefined {
   const [name, ...rest] = path;
   if (name === undefined || !Object.hasOwn(namespace, name)) return undefined;
   const value = namespace[name];
   if (value === undefined) return undefined;
   const at = [...prefix, name];
-  if (!isContributedTypeDescriptor(value)) return codecIdAtPath(value, rest, at);
+  if (!isContributedTypeDescriptor(value)) return codecIdAtPath(value, rest, at, call);
   if (rest.length > 0) return undefined;
   return contributedTypeCodecId(
-    { symbol: contributedTypeSymbol(name, at, value, namespace), call: undefined },
+    { symbol: contributedTypeSymbol(name, at, value, namespace), call },
     EMPTY_DATA_TYPES,
   );
 }

@@ -1,15 +1,39 @@
 import { argumentsByParameter, printTypeConstructorCall } from './call-arguments';
 import {
-  bareContributedTypeCodecId,
   type ContributedTypeNamespace,
+  writtenContributedTypeCodecId,
 } from './contributed-type-scope';
 import type { ResolvedTypeConstructorCall } from './resolve';
+
+/** A type as a removed preset's rewrite writes it: its path, and the options it is called with, each written as a bare name, such as `as: temporal`. */
+export interface RemovedPresetType {
+  readonly path: readonly string[];
+  readonly options: Readonly<Record<string, string>>;
+}
+
+/** The type at the dotted `path`, called with `options`. */
+export function presetType(
+  path: string,
+  options: Readonly<Record<string, string>> = {},
+): RemovedPresetType {
+  return { path: path.split('.'), options };
+}
+
+/** The type as PSL writes it, with `extra` after its options, such as `precision: 3`. */
+export function writtenPresetType(type: RemovedPresetType, extra?: string): string {
+  const args = [
+    ...Object.entries(type.options).map(([name, value]) => `${name}: ${value}`),
+    ...(extra === undefined ? [] : [extra]),
+  ];
+  const path = type.path.join('.');
+  return args.length === 0 ? path : `${path}(${args.join(', ')})`;
+}
 
 /**
  * A field preset Prisma 8 removed, and how to write what it stored. The preset is named only where `type` resolves, and to `codecId` when one is given, so a row does not fire on a target the preset never existed on.
  */
 export interface RemovedFieldPreset {
-  readonly type: readonly string[];
+  readonly type: RemovedPresetType;
   readonly codecId?: string;
   readonly rewrite: (call: ResolvedTypeConstructorCall) => string;
 }
@@ -19,34 +43,40 @@ export type RemovedFieldPresets = Readonly<Record<string, readonly RemovedFieldP
 
 const PHASES = ['onCreate', 'onUpdate'] as const;
 
-/** The row of a preset whose rewrite is always `written`, such as `Ulid @id @onCreate(ulid())`; its type is the first word of `written`. */
+function asType(type: RemovedPresetType | string): RemovedPresetType {
+  return typeof type === 'string' ? presetType(type) : type;
+}
+
+/** The row of a preset whose rewrite always writes `type`, then `attributes` when given, such as `Ulid @id @onCreate(ulid())`. */
 export function removedPresetWrittenAs(
-  written: string,
-  codecId?: string,
+  type: RemovedPresetType | string,
+  codecId: string | undefined,
+  attributes?: string,
 ): readonly RemovedFieldPreset[] {
-  const [type = written] = written.split(/[ (]/);
+  const written = asType(type);
+  const suffix = attributes === undefined ? '' : ` ${attributes}`;
   return [
     {
-      type: type.split('.'),
+      type: written,
       ...(codecId === undefined ? {} : { codecId }),
-      rewrite: () => `Write ${written}.`,
+      rewrite: () => `Write ${writtenPresetType(written)}${suffix}.`,
     },
   ];
 }
 
 /**
- * The row of a preset that took `onCreate: now` and `onUpdate: now`, and a precision first when `takesPrecision`. Its rewrite writes `type`, with the precision as its argument and `@onCreate(now())` and `@onUpdate(now())` for the phases the call set.
+ * The row of a preset that took `onCreate: now` and `onUpdate: now`, and a precision first when `takesPrecision`. Its rewrite writes `type`, with the precision as its `precision` argument and `@onCreate(now())` and `@onUpdate(now())` for the phases the call set.
  */
 export function removedPresetWithPhases(
-  type: string,
+  type: RemovedPresetType | string,
   codecId: string,
   takesPrecision: boolean,
 ): readonly RemovedFieldPreset[] {
+  const written = asType(type);
   const parameters = takesPrecision ? ['precision', ...PHASES] : [...PHASES];
-  const fallback = `Write ${type}${takesPrecision ? '(...)' : ''} with @onCreate(now()) and @onUpdate(now()) for the phases the preset set.`;
   return [
     {
-      type: [type],
+      type: written,
       codecId,
       rewrite: (call) => {
         const args = argumentsByParameter(call.args, parameters);
@@ -56,19 +86,20 @@ export function removedPresetWithPhases(
           (precision !== undefined && !/^\d+$/.test(precision)) ||
           PHASES.some((phase) => args.has(phase) && args.get(phase) !== 'now')
         ) {
-          return fallback;
+          return `Write ${writtenPresetType(written, takesPrecision ? '...' : undefined)} with @onCreate(now()) and @onUpdate(now()) for the phases the preset set.`;
         }
         const attributes = PHASES.filter((phase) => args.has(phase)).map(
           (phase) => ` @${phase}(now())`,
         );
-        return `Write ${type}${precision === undefined ? '' : `(${precision})`}${attributes.join('')}.`;
+        const extra = precision === undefined ? undefined : `precision: ${precision}`;
+        return `Write ${writtenPresetType(written, extra)}${attributes.join('')}.`;
       },
     },
   ];
 }
 
 /**
- * The refusal of a call to a field preset Prisma 8 removed, naming what to write instead, or `undefined` when `presets` has no row for the call that applies to a stack whose types `types` holds. A row is skipped when `isDeclared` says the schema declares the first name of its type, because the rewrite would then name the schema's declaration.
+ * The refusal of a call to a field preset Prisma 8 removed, naming what to write instead, or `undefined` when `presets` has no row for the call that applies to a stack whose types `types` holds. A row applies where its type, called as the rewrite writes it, resolves as a column would, to the row's codec. A row is skipped when `isDeclared` says the schema declares the first name of its type, because the rewrite would then name the schema's declaration.
  */
 export function describeRemovedFieldPreset(
   presets: RemovedFieldPresets,
@@ -79,8 +110,17 @@ export function describeRemovedFieldPreset(
   const path = call.path.join('.');
   const rows = Object.hasOwn(presets, path) ? presets[path] : undefined;
   const preset = rows?.find((row) => {
-    const [name] = row.type;
-    const codecId = bareContributedTypeCodecId(types, row.type);
+    const [name] = row.type.path;
+    const codecId = writtenContributedTypeCodecId(types, {
+      path: row.type.path,
+      args: Object.entries(row.type.options).map(([option, value]) => ({
+        kind: 'named',
+        name: option,
+        value,
+        span: call.span,
+      })),
+      span: call.span,
+    });
     return (
       codecId !== undefined &&
       (name === undefined || !isDeclared(name)) &&

@@ -50,8 +50,58 @@ function temporalAliases(codecId: string) {
   } as const;
 }
 
+const precision = {
+  kind: 'value',
+  dataType: 'pg/int4',
+  name: 'precision',
+  optional: true,
+} as const;
+
+function option(name: string, values: readonly [string, ...string[]]) {
+  return { kind: 'option', name, values, default: values[0], optional: true } as const;
+}
+
+const convenienceTypes = {
+  DateTime: {
+    kind: 'typeChoice',
+    args: [
+      option('as', ['jsDate', 'temporal', 'string']),
+      option('storage', ['timestamptz', 'timestamp']),
+      precision,
+    ],
+    choices: [
+      {
+        when: { as: 'jsDate', storage: 'timestamptz' },
+        type: 'TimestamptzJsDate',
+        defaults: { precision: 3 },
+      },
+      { when: { as: 'temporal', storage: 'timestamptz' }, type: 'TimestamptzTemporal' },
+      { when: { as: 'string', storage: 'timestamptz' }, type: 'TimestamptzString' },
+      { when: { as: 'string', storage: 'timestamp' }, type: 'TimestampString' },
+    ],
+  },
+  Date: {
+    kind: 'typeChoice',
+    args: [option('as', ['string', 'temporal'])],
+    choices: [
+      { when: { as: 'string' }, type: 'DateString' },
+      { when: { as: 'temporal' }, type: 'DateTemporal' },
+    ],
+  },
+  Time: {
+    kind: 'typeChoice',
+    args: [option('as', ['string', 'temporal']), option('storage', ['time', 'timetz']), precision],
+    choices: [
+      { when: { as: 'string', storage: 'time' }, type: 'TimeString' },
+      { when: { as: 'temporal', storage: 'time' }, type: 'TimeTemporal' },
+      { when: { as: 'string', storage: 'timetz' }, type: 'Timetz' },
+    ],
+  },
+} as const satisfies AuthoringTypeNamespace;
+
 const postgresTypes: AuthoringTypeNamespace = {
   ...postgresScalarAuthoringTypes,
+  ...convenienceTypes,
   Char: char,
   ...generatedIdAliases,
   DateString: { kind: 'typeConstructor', output: { codecId: 'pg/date-string@1' } },
@@ -138,53 +188,62 @@ describe('a removed field preset in a SQL schema', () => {
       ['boolean()', 'Write Boolean.'],
       ['json()', 'Write Jsonb.'],
       ['bytes()', 'Write Bytes.'],
-      ['dateTime()', 'Write TimestamptzTemporal.'],
+      ['dateTime()', 'Write DateTime(as: temporal).'],
       ['uuidNative()', 'Write Uuid.'],
       ['id.uuidv4Native()', 'Write Uuid @id @onCreate(uuid()).'],
       ['id.uuidv7Native()', 'Write Uuid @id @onCreate(uuid(7)).'],
-      ['temporal.createdAt()', 'Write TimestamptzTemporal @onCreate(now()).'],
-      ['temporal.updatedAt()', 'Write TimestamptzTemporal @onCreate(now()) @onUpdate(now()).'],
-      ['temporal.createdAtString()', 'Write TimestamptzString @onCreate(now()).'],
-      ['temporal.updatedAtString()', 'Write TimestamptzString @onCreate(now()) @onUpdate(now()).'],
+      ['temporal.createdAt()', 'Write DateTime(as: temporal) @onCreate(now()).'],
+      ['temporal.updatedAt()', 'Write DateTime(as: temporal) @onCreate(now()) @onUpdate(now()).'],
+      ['temporal.createdAtString()', 'Write DateTime(as: string) @onCreate(now()).'],
+      [
+        'temporal.updatedAtString()',
+        'Write DateTime(as: string) @onCreate(now()) @onUpdate(now()).',
+      ],
       ['temporal.createdAtJsDate()', 'Write TimestamptzJsDate @onCreate(now()).'],
       ['temporal.updatedAtJsDate()', 'Write TimestamptzJsDate @onCreate(now()) @onUpdate(now()).'],
       [
         'temporal.timestamp(3, onCreate: now, onUpdate: now)',
-        'Write TimestampTemporal(3) @onCreate(now()) @onUpdate(now()).',
+        'Write TimestampTemporal(precision: 3) @onCreate(now()) @onUpdate(now()).',
       ],
       [
         'temporal.timestamp(precision: 6, onCreate: now)',
-        'Write TimestampTemporal(6) @onCreate(now()).',
+        'Write TimestampTemporal(precision: 6) @onCreate(now()).',
       ],
       [
         'temporal.timestamp(3, now, now)',
-        'Write TimestampTemporal(3) @onCreate(now()) @onUpdate(now()).',
+        'Write TimestampTemporal(precision: 3) @onCreate(now()) @onUpdate(now()).',
       ],
-      ['temporal.timestamptz()', 'Write TimestamptzTemporal.'],
-      ['temporal.timestamptz(onUpdate: now)', 'Write TimestamptzTemporal @onUpdate(now()).'],
-      ['temporal.timestampString(6, onUpdate: now)', 'Write TimestampString(6) @onUpdate(now()).'],
+      ['temporal.timestamptz()', 'Write DateTime(as: temporal).'],
+      ['temporal.timestamptz(onUpdate: now)', 'Write DateTime(as: temporal) @onUpdate(now()).'],
+      [
+        'temporal.timestampString(6, onUpdate: now)',
+        'Write DateTime(as: string, storage: timestamp, precision: 6) @onUpdate(now()).',
+      ],
       [
         'temporal.timestamptzString(3, onCreate: now, onUpdate: now)',
-        'Write TimestamptzString(3) @onCreate(now()) @onUpdate(now()).',
+        'Write DateTime(as: string, precision: 3) @onCreate(now()) @onUpdate(now()).',
       ],
       [
         'temporal.timestamptzJsDate(3, onCreate: now)',
-        'Write TimestamptzJsDate(3) @onCreate(now()).',
+        'Write TimestamptzJsDate(precision: 3) @onCreate(now()).',
       ],
-      ['temporal.date(onCreate: now)', 'Write DateTemporal @onCreate(now()).'],
+      ['temporal.date(onCreate: now)', 'Write Date(as: temporal) @onCreate(now()).'],
       [
         'temporal.dateString(onCreate: now, onUpdate: now)',
-        'Write DateString @onCreate(now()) @onUpdate(now()).',
+        'Write Date @onCreate(now()) @onUpdate(now()).',
       ],
-      ['temporal.time(3, onUpdate: now)', 'Write TimeTemporal(3) @onUpdate(now()).'],
+      [
+        'temporal.time(3, onUpdate: now)',
+        'Write Time(as: temporal, precision: 3) @onUpdate(now()).',
+      ],
       [
         'temporal.time(3, onUpdate: now, now)',
-        'Write TimeTemporal(3) @onCreate(now()) @onUpdate(now()).',
+        'Write Time(as: temporal, precision: 3) @onCreate(now()) @onUpdate(now()).',
       ],
-      ['temporal.timeString(3, onCreate: now)', 'Write TimeString(3) @onCreate(now()).'],
+      ['temporal.timeString(3, onCreate: now)', 'Write Time(precision: 3) @onCreate(now()).'],
       [
         'temporal.timetz(6, onCreate: now, onUpdate: now)',
-        'Write Timetz(6) @onCreate(now()) @onUpdate(now()).',
+        'Write Time(storage: timetz, precision: 6) @onCreate(now()) @onUpdate(now()).',
       ],
     ])('refuses %s with its rewrite', (call, rewrite) => {
       expect(diagnosticsOf(call, postgresInput)).toEqual(removed(call, rewrite));
@@ -196,8 +255,8 @@ describe('a removed field preset in a SQL schema', () => {
       ['temporal.timestamp(3, precision: 4)', 'TimestampTemporal(...)'],
       ['temporal.timestamp(frequency: now)', 'TimestampTemporal(...)'],
       ['temporal.timestamp(-1)', 'TimestampTemporal(...)'],
-      ['temporal.time(onCreate: now, 3, now)', 'TimeTemporal(...)'],
-      ['temporal.date(3)', 'DateTemporal'],
+      ['temporal.time(onCreate: now, 3, now)', 'Time(as: temporal, ...)'],
+      ['temporal.date(3)', 'Date(as: temporal)'],
     ])(
       'names the rewrite without the arguments of %s, which the preset did not take',
       (call, type) => {
@@ -251,7 +310,7 @@ describe('a removed field preset in a SQL schema', () => {
 
     it('refuses each preset field once, keeping the field modifiers out of the call', () => {
       expect(diagnosticsOf('temporal.createdAt()?', postgresInput)).toEqual(
-        removed('temporal.createdAt()', 'Write TimestamptzTemporal @onCreate(now()).'),
+        removed('temporal.createdAt()', 'Write DateTime(as: temporal) @onCreate(now()).'),
       );
     });
 
