@@ -321,7 +321,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     );
   });
 
-  it('returns every column type as text, binary columns as bytes and NULL as null, on a pooled and a held connection', async (test) => {
+  it('returns every column type as text, binary columns as bytes and NULL as null, on a pooled and a held connection, over the text protocol and prepared', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
       withDriver(url, async (driver) => {
         await driver.execute({
@@ -361,12 +361,15 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
           bt: new Uint8Array([1]),
           n: null,
         };
+        const prepared = { sql: 'SELECT * FROM t WHERE ?1 = ?1', params: [1] };
         const connection = await driver.acquireConnection();
         try {
           expect({
             pooled: await collect(driver.query({ sql: 'SELECT * FROM t' })),
             held: await collect(connection.query({ sql: 'SELECT * FROM t' })),
-          }).toEqual({ pooled: [row], held: [row] });
+            pooledPrepared: await collect(driver.query(prepared)),
+            heldPrepared: await collect(connection.query(prepared)),
+          }).toEqual({ pooled: [row], held: [row], pooledPrepared: [row], heldPrepared: [row] });
         } finally {
           await connection.release();
         }
