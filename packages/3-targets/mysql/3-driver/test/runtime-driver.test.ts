@@ -107,6 +107,7 @@ class FakePool extends EventEmitter {
   readonly end = vi.fn(async () => {});
   /** When set, `getConnection` waits until the test hands the connection over with `handOver`. */
   waits = false;
+  idle = 0;
   readonly #waiting: ((connection: FakeConnection) => void)[] = [];
   constructor(
     readonly options: { readonly logger?: { readonly error?: (error: Error) => void } },
@@ -127,6 +128,9 @@ class FakePool extends EventEmitter {
   }
   logError(error: Error): void {
     this.options.logger?.error?.(error);
+  }
+  idleConnections(): number {
+    return this.idle;
   }
 }
 
@@ -242,7 +246,6 @@ describe('MySQL runtime driver and its pool', () => {
     pool.waits = true;
     const waiting = [driver.execute({ sql: 'SELECT 1' }), driver.execute({ sql: 'SELECT 2' })];
     await new Promise((resolve) => setImmediate(resolve));
-    pool.logError(new Error('a statement failed'));
     pool.logError(
       Object.assign(new Error("Access denied for user 'app'"), {
         errno: 1045,
@@ -262,6 +265,98 @@ describe('MySQL runtime driver and its pool', () => {
       released: connection.release.mock.calls.length,
       ran: connection.query.mock.calls.length,
     }).toEqual({ released: 2, ran: 0 });
+    await driver.close();
+  });
+
+  it('fails the statements waiting for a connection at once, as not transient, when the package reports a refused connection or an unknown or unreachable host, as pg.Pool does', async () => {
+    const outcomes = [];
+    for (const code of ['ECONNREFUSED', 'ENOTFOUND', 'EHOSTUNREACH']) {
+      const driver = await connected();
+      const pool = lastPool();
+      pool.waits = true;
+      const waiting = driver.execute({ sql: 'SELECT 1' });
+      await new Promise((resolve) => setImmediate(resolve));
+      pool.logError(
+        Object.assign(new Error(`connect ${code}`), {
+          code,
+          errno: -1,
+          fatal: true,
+          sqlState: 'HY000',
+        }),
+      );
+      outcomes.push(await waiting.catch((error: unknown) => error));
+      await driver.close();
+    }
+    expect(outcomes).toEqual([
+      expect.objectContaining({ kind: 'sql_connection', transient: false }),
+      expect.objectContaining({ kind: 'sql_connection', transient: false }),
+      expect.objectContaining({ kind: 'sql_connection', transient: false }),
+    ]);
+  });
+
+  it('leaves the statements waiting for a connection waiting when the package reports the error of a statement, even one MySQL also refuses a sign-in with, or a lost connection', async () => {
+    const driver = await connected();
+    const pool = lastPool();
+    pool.waits = true;
+    const waiting = driver.execute({ sql: 'SELECT 1' });
+    await new Promise((resolve) => setImmediate(resolve));
+    pool.logError(
+      Object.assign(new Error("Plugin 'no_such_plugin' is not loaded"), {
+        errno: 1524,
+        sqlState: 'HY000',
+        sqlMessage: "Plugin 'no_such_plugin' is not loaded",
+        fatal: false,
+      }),
+    );
+    pool.logError(mariadbError(true));
+    pool.logError(
+      Object.assign(new Error('read ECONNRESET'), {
+        code: 'ECONNRESET',
+        errno: -54,
+        fatal: true,
+        sqlState: 'HY000',
+      }),
+    );
+    pool.handOver();
+    expect(await waiting).toEqual({ affectedRows: 0 });
+    await driver.close();
+  });
+
+  it('fails a later statement at once with the last connection failure while the pool has no idle connection, as pg.Pool fails each connect, until the pool opens a connection', async () => {
+    const driver = await connected();
+    const pool = lastPool();
+    pool.waits = true;
+    const first = driver.execute({ sql: 'SELECT 1' });
+    await new Promise((resolve) => setImmediate(resolve));
+    pool.logError(
+      Object.assign(new Error('connect ECONNREFUSED'), {
+        code: 'ECONNREFUSED',
+        errno: -61,
+        fatal: true,
+        sqlState: 'HY000',
+      }),
+    );
+    await first.catch(() => undefined);
+    const refused = expect.objectContaining({ kind: 'sql_connection', transient: false });
+    const later = await driver.execute({ sql: 'SELECT 2' }).catch((error: unknown) => error);
+    pool.idle = 1;
+    const withIdle = driver.execute({ sql: 'SELECT 3' });
+    await new Promise((resolve) => setImmediate(resolve));
+    pool.handOver();
+    pool.idle = 0;
+    pool.emit('connection', connection);
+    const afterOpened = driver.execute({ sql: 'SELECT 4' });
+    await new Promise((resolve) => setImmediate(resolve));
+    pool.handOver();
+    expect({
+      later,
+      withIdle: await withIdle,
+      afterOpened: await afterOpened,
+    }).toEqual({
+      later: refused,
+      withIdle: { affectedRows: 0 },
+      afterOpened: { affectedRows: 0 },
+    });
     await driver.close();
   });
 

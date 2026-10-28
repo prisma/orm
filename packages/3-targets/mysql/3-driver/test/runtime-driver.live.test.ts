@@ -747,6 +747,85 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     });
   });
 
+  it('runs a statement waiting for a pooled connection once one is free, when a statement on another connection fails with an error MySQL also refuses a sign-in with', async (test) => {
+    await withMysqlDatabase(test, ({ url, name }) =>
+      withDriver(
+        url,
+        async (driver) => {
+          const user = `${name.slice(-12)}_p`;
+          const held = await driver.acquireConnection();
+          try {
+            const sleeping = driver.execute({ sql: 'SELECT SLEEP(1)' });
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            const waiting = collect(driver.query({ sql: 'SELECT 1 AS n' }));
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            const failed = await held
+              .execute({ sql: `CREATE USER '${user}'@'%' IDENTIFIED WITH no_such_plugin` })
+              .catch((error: unknown) => error);
+            expect({ failed, waiting: await waiting, slept: await sleeping }).toEqual({
+              failed: expect.objectContaining({ kind: 'sql_query', sqlState: 'HY000' }),
+              waiting: [{ n: '1' }],
+              slept: { affectedRows: 0 },
+            });
+          } finally {
+            await held.execute({ sql: `DROP USER IF EXISTS '${user}'@'%'` });
+            await held.release();
+          }
+        },
+        { poolOptions: { max: 2 } },
+      ),
+    );
+  });
+
+  it('fails a statement at once as not transient when the server refuses the connection, as on Postgres', async (test) => {
+    await withMysqlDatabase(test, async ({ url }) => {
+      const closedPort = new URL(url);
+      closedPort.hostname = '127.0.0.1';
+      closedPort.port = '1';
+      const started = Date.now();
+      const error = await withDriver(
+        closedPort.toString(),
+        (driver) => driver.execute({ sql: 'SELECT 1' }),
+        { poolOptions: { connectionTimeoutMillis: 10_000 } },
+      ).catch((thrown: unknown) => thrown);
+      expect({ error, fast: Date.now() - started < 3000 }).toEqual({
+        error: expect.objectContaining({ kind: 'sql_connection', transient: false }),
+        fast: true,
+      });
+    });
+  });
+
+  it('fails each of several statements in a row at once when MySQL refuses the sign-in, as pg.Pool fails each connect', async (test) => {
+    await withMysqlDatabase(test, async ({ url, name }) => {
+      const admin = await mysqlControlDriver.create(url);
+      const user = `${name.slice(-12)}_r`;
+      try {
+        await admin.query(`CREATE USER '${user}'@'%' IDENTIFIED BY 'pw-repeat'`);
+        const wrong = new URL(url);
+        wrong.username = user;
+        wrong.password = 'wrong';
+        wrong.searchParams.set('allowPublicKeyRetrieval', 'true');
+        const outcomes = await withDriver(
+          wrong.toString(),
+          async (driver) => {
+            const out = [];
+            for (let i = 0; i < 5; i++) {
+              const started = Date.now();
+              const error = await driver.execute({ sql: 'SELECT 1' }).catch((e: unknown) => e);
+              out.push({ error: Object(error).sqlState, fast: Date.now() - started < 150 });
+            }
+            return out;
+          },
+          { poolOptions: { connectionTimeoutMillis: 10_000 } },
+        );
+        expect(outcomes).toEqual(Array(5).fill({ error: '28000', fast: true }));
+      } finally {
+        await admin.query(`DROP USER IF EXISTS '${user}'@'%'`).catch(() => undefined);
+        await admin.close();
+      }
+    });
+  });
+
   it('gives up waiting for a pooled connection after connectionTimeoutMillis', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
       withDriver(
