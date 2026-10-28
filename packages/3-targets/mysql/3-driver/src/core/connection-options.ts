@@ -1,6 +1,4 @@
 import { readFileSync } from 'node:fs';
-import type { SessionSettings } from '@internal/framework-components/components';
-import { quoteIdentifier, quoteLiteral } from '@internal/target-mysql/sql-utils';
 import { ifDefined } from '@internal/utils/defined';
 import { structuredError } from '@internal/utils/structured-error';
 import { type } from 'arktype';
@@ -138,22 +136,10 @@ function tlsOptions(parameters: UrlParameters): ConnectionConfig['ssl'] {
   };
 }
 
-/** The statements that set the session settings the target declares, in the order given. The names and values come from the target's descriptor, never from a caller, and the package runs `initSql` only as text, so they are written as a quoted identifier and a quoted literal, as the Postgres driver writes its own into a connection's startup options. */
-function sessionSettingStatements(sessionSettings: SessionSettings): string[] {
-  return Object.entries(sessionSettings).map(
-    ([name, value]) => `SET SESSION ${quoteIdentifier(name)} = ${quoteLiteral(value)}`,
-  );
-}
-
-interface ConnectionSettings {
-  readonly connectTimeoutMs: number | undefined;
-  readonly sessionSettings: SessionSettings | undefined;
-}
-
 function connectionOptions(
   parsed: URL,
   parameters: UrlParameters,
-  { connectTimeoutMs, sessionSettings }: ConnectionSettings,
+  connectTimeoutMs: number | undefined,
 ): ConnectionConfig {
   return {
     host: decodeURIComponent(parsed.hostname).replace(/^\[(.*)\]$/, '$1'),
@@ -164,7 +150,7 @@ function connectionOptions(
     ...ifDefined('ssl', tlsOptions(parameters)),
     allowPublicKeyRetrieval: parameters.allowPublicKeyRetrieval ?? false,
     connectTimeout: connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MILLIS,
-    initSql: [...SESSION_SETUP, ...sessionSettingStatements(sessionSettings ?? {})],
+    initSql: [...SESSION_SETUP],
     ...FIXED_OPTIONS,
   };
 }
@@ -172,33 +158,20 @@ function connectionOptions(
 /** The `mariadb` options for one connection to the server a `mysql://` URL names. Ignores a URL parameter the driver does not read, as `pg` does, and refuses a charset. */
 export function mysqlConnectionOptions(
   url: string,
-  settings?: Partial<ConnectionSettings>,
+  settings?: { readonly connectTimeoutMs?: number | undefined },
 ): ConnectionConfig {
   const { parsed, parameters } = readUrl(url);
-  return connectionOptions(parsed, parameters, {
-    connectTimeoutMs: settings?.connectTimeoutMs,
-    sessionSettings: settings?.sessionSettings,
-  });
+  return connectionOptions(parsed, parameters, settings?.connectTimeoutMs);
 }
 
 /**
  * The `mariadb` pool options for a `mysql://` URL, sized and timed as the Postgres driver's `pg.Pool`: it opens a connection only when one is needed (`minimumIdle: 0`), closes one idle for `idleTimeoutMillis`, and waits `connectionTimeoutMillis` both to open a connection and for a pooled one to come free.
  */
-export function mysqlPoolOptions(
-  url: string,
-  settings?: {
-    readonly poolOptions?: MysqlPoolOptions | undefined;
-    readonly sessionSettings?: SessionSettings | undefined;
-  },
-): PoolConfig {
+export function mysqlPoolOptions(url: string, poolOptions?: MysqlPoolOptions): PoolConfig {
   const { parsed, parameters } = readUrl(url);
-  const poolOptions = settings?.poolOptions;
   const timeoutMs = poolOptions?.connectionTimeoutMillis ?? DEFAULT_CONNECT_TIMEOUT_MILLIS;
   return {
-    ...connectionOptions(parsed, parameters, {
-      connectTimeoutMs: timeoutMs,
-      sessionSettings: settings?.sessionSettings,
-    }),
+    ...connectionOptions(parsed, parameters, timeoutMs),
     acquireTimeout: timeoutMs,
     minimumIdle: 0,
     idleTimeout: Math.ceil((poolOptions?.idleTimeoutMillis ?? DEFAULT_IDLE_TIMEOUT_MILLIS) / 1000),

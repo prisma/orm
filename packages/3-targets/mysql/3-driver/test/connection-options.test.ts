@@ -69,20 +69,10 @@ describe('mysqlConnectionOptions', () => {
     expect(mysqlConnectionOptions('mysql://root@localhost/app')).not.toHaveProperty('port');
   });
 
-  it('sets up each connection with the session statements and then the session settings the target declares, in utf8mb4, never logs values, never caches statements and counts matched rows', () => {
-    expect({
-      none: mysqlConnectionOptions('mysql://root@localhost/app').initSql,
-      settings: mysqlConnectionOptions('mysql://root@localhost/app', {
-        sessionSettings: { time_zone: '+00:00', 'odd`name': "it's" },
-      }).initSql,
-    }).toEqual({
-      none: [...SESSION_SETUP],
-      settings: [
-        ...SESSION_SETUP,
-        "SET SESSION `time_zone` = '+00:00'",
-        "SET SESSION `odd``name` = 'it''s'",
-      ],
-    });
+  it('sets up each connection with the session statements alone, in utf8mb4, never logs values, never caches statements and counts matched rows', () => {
+    expect(mysqlConnectionOptions('mysql://root@localhost/app').initSql).toEqual([
+      ...SESSION_SETUP,
+    ]);
     expect(mysqlConnectionOptions('mysql://root@localhost/app')).toMatchObject({
       collation: 'UTF8MB4_UNICODE_CI',
       prepareCacheLength: 0,
@@ -219,8 +209,9 @@ describe('mysqlPoolOptions', () => {
     expect({
       defaults: mysqlPoolOptions('mysql://root@localhost/app?ssl=true'),
       given: mysqlPoolOptions('mysql://root@localhost/app', {
-        poolOptions: { connectionTimeoutMillis: 2000, idleTimeoutMillis: 1500, max: 5 },
-        sessionSettings: { time_zone: '+00:00' },
+        connectionTimeoutMillis: 2000,
+        idleTimeoutMillis: 1500,
+        max: 5,
       }),
     }).toMatchObject({
       defaults: {
@@ -237,7 +228,7 @@ describe('mysqlPoolOptions', () => {
         acquireTimeout: 2000,
         connectTimeout: 2000,
         connectionLimit: 5,
-        initSql: [...SESSION_SETUP, "SET SESSION `time_zone` = '+00:00'"],
+        initSql: [...SESSION_SETUP],
       },
     });
     expect(mysqlPoolOptions('mysql://root@localhost/app')).not.toHaveProperty('connectionLimit');

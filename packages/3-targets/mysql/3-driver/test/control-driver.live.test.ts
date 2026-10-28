@@ -248,16 +248,31 @@ describe('MysqlControlDriver against a MySQL server', {
     });
   });
 
-  it('starts its session with the session settings the stack passes, the target UTC time zone among them', async (test) => {
+  it('starts its session with the session settings the stack passes, set with parameters, the target UTC time zone and an integer setting among them', async (test) => {
     await withMysqlDatabase(test, async ({ url }) => {
-      const driver = await mysqlDriver.create(url, { sessionSettings: { time_zone: '+00:00' } });
+      const driver = await mysqlDriver.create(url, {
+        sessionSettings: { time_zone: '+00:00', sql_select_limit: '7' },
+      });
       try {
-        expect(await driver.query('SELECT @@SESSION.time_zone AS tz')).toEqual({
-          rows: [{ tz: '+00:00' }],
-        });
+        expect(
+          await driver.query('SELECT @@SESSION.time_zone AS tz, @@SESSION.sql_select_limit AS sl'),
+        ).toEqual({ rows: [{ tz: '+00:00', sl: '7' }] });
       } finally {
         await driver.close();
       }
+    });
+  });
+
+  it('reports a session setting MySQL refuses as DRIVER.CONNECTION_FAILED with its reason', async (test) => {
+    await withMysqlDatabase(test, async ({ url }) => {
+      await expect(
+        mysqlDriver.create(url, {
+          sessionSettings: { time_zone: "+00:00' , sql_mode = 'ANSI_QUOTES" },
+        }),
+      ).rejects.toMatchObject({
+        code: 'DRIVER.CONNECTION_FAILED',
+        why: expect.stringContaining("time zone: '+00:00' , sql_mode = 'ANSI_QUOTES'"),
+      });
     });
   });
 

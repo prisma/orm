@@ -433,19 +433,57 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     );
   });
 
-  it('sets up every connection: no backslash escapes mode, and the session settings it is created with', async (test) => {
+  it('sets up every connection: no backslash escapes mode, and the session settings it is created with, an integer setting among them', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
       withDriver(
         url,
         async (driver) => {
-          const [row] = await collect(
-            driver.query<Record<string, string>>({
-              sql: "SELECT @@SESSION.time_zone AS tz, FIND_IN_SET('NO_BACKSLASH_ESCAPES', @@SESSION.sql_mode) AS nbe",
-            }),
-          );
-          expect(row).toEqual({ tz: '+03:00', nbe: '0' });
+          const read = () =>
+            collect(
+              driver.query<Record<string, string>>({
+                sql: "SELECT @@SESSION.time_zone AS tz, @@SESSION.sql_select_limit AS sl, FIND_IN_SET('NO_BACKSLASH_ESCAPES', @@SESSION.sql_mode) AS nbe",
+              }),
+            );
+          const held = await driver.acquireConnection();
+          try {
+            const [onHeld] = await collect(
+              held.query<Record<string, string>>({ sql: 'SELECT @@SESSION.time_zone AS tz' }),
+            );
+            expect({ pooled: await read(), held: onHeld }).toEqual({
+              pooled: [{ tz: '+03:00', sl: '7', nbe: '0' }],
+              held: { tz: '+03:00' },
+            });
+          } finally {
+            await held.release();
+          }
         },
-        { sessionSettings: { time_zone: '+03:00' } },
+        { sessionSettings: { time_zone: '+03:00', sql_select_limit: '7' } },
+      ),
+    );
+  });
+
+  it('sends a session setting as a parameter, so a value with a quote stays one value, and reports a setting MySQL refuses at once, as a SqlQueryError', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(
+        url,
+        async (driver) => {
+          const started = Date.now();
+          const error = await driver
+            .execute({ sql: 'SELECT 1' })
+            .catch((thrown: unknown) => thrown);
+          expect({
+            error: Object(error),
+            fast: Date.now() - started < 2000,
+          }).toMatchObject({
+            error: {
+              kind: 'sql_query',
+              sqlState: 'HY000',
+              message: expect.stringContaining("time zone: '+00:00' , sql_mode = 'ANSI_QUOTES'"),
+            },
+            fast: true,
+          });
+        },
+        { sessionSettings: { time_zone: "+00:00' , sql_mode = 'ANSI_QUOTES" } },
       ),
     );
   });

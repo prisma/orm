@@ -12,6 +12,7 @@ import { mysqlDriverDescriptorMeta } from '../descriptor-meta';
 import { connectionFix, connectionLost, isFatal, normalizeMysqlError } from '../normalize-error';
 import { assertPlaceholderCount } from '../placeholder-count';
 import { positionalParams } from '../positional-params';
+import { applySessionSettings, sessionSettingsStatement } from '../session-settings';
 
 /**
  * A MySQL connection for the control plane. It runs statements as the runtime driver does: one with values as a server-side prepared statement, so a value never travels inside the SQL, and one without values, a user's `rawSql` migration step included, over the text protocol, so `START TRANSACTION` and `LOCK TABLES`, which MySQL does not prepare, run too. Either way every column reads in one form, text or bytes.
@@ -82,10 +83,17 @@ const mysqlDriverDescriptor: ControlDriverDescriptor<'sql', 'mysql', MysqlContro
   async create(url: string, options?: ControlDriverConnectOptions): Promise<MysqlControlDriver> {
     const connectionOptions = mysqlConnectionOptions(url, {
       connectTimeoutMs: options?.connectTimeoutMs,
-      sessionSettings: options?.sessionSettings,
     });
+    const settings = sessionSettingsStatement(options?.sessionSettings ?? {});
     try {
-      return new MysqlControlDriver(await createConnection(connectionOptions));
+      const connection = await createConnection(connectionOptions);
+      if (settings !== undefined) {
+        await applySessionSettings(connection, settings).catch(async (error: unknown) => {
+          await connection.end().catch(() => {});
+          throw error;
+        });
+      }
+      return new MysqlControlDriver(connection);
     } catch (error) {
       const normalized = normalizeMysqlError(error);
       throw errorRuntime('DRIVER.CONNECTION_FAILED', 'Database connection failed', {

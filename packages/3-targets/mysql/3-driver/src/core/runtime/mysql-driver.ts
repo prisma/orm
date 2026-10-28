@@ -19,6 +19,7 @@ import { type MysqlPoolOptions, mysqlPoolOptions } from '../connection-options';
 import { isFatal, normalizeMysqlError } from '../normalize-error';
 import { assertPlaceholderCount } from '../placeholder-count';
 import { positionalParams } from '../positional-params';
+import { SessionSettingsGuard } from '../session-settings';
 
 /** Where the runtime driver connects: a `mysql://` URL. */
 export type MysqlBinding = { readonly kind: 'url'; readonly url: string };
@@ -349,7 +350,7 @@ type DriverState =
   | { readonly kind: 'closed' };
 
 /**
- * The MySQL runtime driver: a `mariadb` pool. A statement with values runs as a server-side prepared statement, so a value never travels inside the SQL. A query reads its whole result before the first row unless `stream` is set. The pool runs the session setup once on each physical connection, and a connection goes back to the pool after each statement as it is; a broken connection is destroyed. `close()` waits for every connection and stream it has handed out before it ends the pool.
+ * The MySQL runtime driver: a `mariadb` pool. A statement with values runs as a server-side prepared statement, so a value never travels inside the SQL. A query reads its whole result before the first row unless `stream` is set. The pool runs the session setup once on each physical connection, and the driver then sets the target's session settings on it with a prepared statement; a connection goes back to the pool after each statement as it is; a broken connection is destroyed. `close()` waits for every connection and stream it has handed out before it ends the pool.
  */
 export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
   readonly familyId = 'sql' as const;
@@ -359,10 +360,12 @@ export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
   #state: DriverState = { kind: 'unbound' };
   readonly #inUse = new ClientsInUse();
   readonly #options: MysqlDriverCreateOptions;
+  readonly #sessionSettings: SessionSettingsGuard;
 
   constructor(options: MysqlDriverCreateOptions = {}) {
     super(options.stream ?? false);
     this.#options = options;
+    this.#sessionSettings = new SessionSettingsGuard(options.sessionSettings ?? {});
   }
 
   get state(): SqlDriverState {
@@ -375,12 +378,7 @@ export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
         fix: 'Call close() before connecting again.',
       });
     }
-    const pool = createPool(
-      mysqlPoolOptions(binding.url, {
-        poolOptions: this.#options.poolOptions,
-        sessionSettings: this.#options.sessionSettings,
-      }),
-    );
+    const pool = createPool(mysqlPoolOptions(binding.url, this.#options.poolOptions));
     if (pool instanceof EventEmitter) pool.on('error', ignoreConnectionFailure);
     this.#state = { kind: 'connected', pool };
   }
@@ -405,12 +403,21 @@ export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
       );
     }
     this.#inUse.acquired();
+    let client: PoolConnection;
     try {
-      return await this.#state.pool.getConnection();
+      client = await this.#state.pool.getConnection();
     } catch (error) {
       this.#inUse.released();
       throw normalizeMysqlError(error);
     }
+    try {
+      await this.#sessionSettings.ensure(client);
+    } catch (error) {
+      client.destroy();
+      this.#inUse.released();
+      throw normalizeMysqlError(error);
+    }
+    return client;
   }
 
   protected async releaseClient(client: PoolConnection, { destroy }: Outcome): Promise<void> {

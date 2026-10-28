@@ -160,18 +160,65 @@ beforeEach(() => {
 });
 
 describe('MySQL runtime driver and its pool', () => {
-  it('creates the pool with the session setup, the session settings it is created with, the statement cache off and the pool options', async () => {
+  it('creates the pool with the session setup, the statement cache off and the pool options, and no value in its SQL text', async () => {
     const driver = mysqlRuntimeDriver.create(
       { poolOptions: { connectionTimeoutMillis: 250 } },
       { time_zone: '+00:00' },
     );
     await driver.connect({ kind: 'url', url: 'mysql://root@localhost/db' });
     expect(lastPool().options).toMatchObject({
-      initSql: [...SESSION_SETUP, "SET SESSION `time_zone` = '+00:00'"],
+      initSql: [...SESSION_SETUP],
       prepareCacheLength: 0,
       acquireTimeout: 250,
       minimumIdle: 0,
     });
+  });
+
+  it('sets the session settings with one prepared SET the first time it gets each connection, as the Postgres driver sets them with parameters, an integer setting as a number', async () => {
+    const driver = mysqlRuntimeDriver.create({}, { time_zone: '+00:00', sql_select_limit: '5' });
+    await driver.connect({ kind: 'url', url: 'mysql://root@localhost/db' });
+    await driver.execute({ sql: 'SELECT 1' });
+    await driver.execute({ sql: 'SELECT 2' });
+    const connectionHeld = await driver.acquireConnection();
+    await connectionHeld.release();
+    expect({
+      prepared: connection.prepared.map(({ sql, statement }) => ({
+        sql,
+        values: statement.execute.mock.calls,
+        closed: statement.close.mock.calls.length,
+      })),
+      text: connection.query.mock.calls.map(([sql]) => sql),
+    }).toEqual({
+      prepared: [
+        {
+          sql: 'SET SESSION `time_zone` = ?, `sql_select_limit` = ?',
+          values: [[['+00:00', 5n]]],
+          closed: 1,
+        },
+      ],
+      text: ['SELECT 1', 'SELECT 2'],
+    });
+  });
+
+  it('destroys a connection whose session settings MySQL refuses, and reports the error at once as the SqlQueryError MySQL raised', async () => {
+    connection.executeError = Object.assign(new Error("Unknown or incorrect time zone: 'x'"), {
+      errno: 1298,
+      sqlState: 'HY000',
+      sqlMessage: "Unknown or incorrect time zone: 'x'",
+      fatal: false,
+    });
+    const driver = mysqlRuntimeDriver.create({}, { time_zone: 'x' });
+    await driver.connect({ kind: 'url', url: 'mysql://root@localhost/db' });
+    await expect(driver.execute({ sql: 'SELECT 1' })).rejects.toMatchObject({
+      kind: 'sql_query',
+      sqlState: 'HY000',
+    });
+    expect({
+      destroyed: connection.destroy.mock.calls.length,
+      released: connection.release.mock.calls.length,
+      ran: connection.query.mock.calls.length,
+    }).toEqual({ destroyed: 1, released: 0, ran: 0 });
+    await driver.close();
   });
 
   it('listens to the pool, so a connection it fails to open does not crash the process', async () => {
