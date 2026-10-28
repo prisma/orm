@@ -3,7 +3,9 @@ description: >
   Restore or download the mongod binary that mongodb-memory-server starts, so
   tests never download it. Runs after `pnpm install`. Without it, test packages
   that start in parallel each download the binary into one shared folder and
-  fail on its lock file.
+  fail on its lock file. The cache holds both folders the binary can be in:
+  the install script downloads into node_modules/.cache, and the download
+  script into ~/.cache.
 
 runs:
   using: composite
@@ -16,7 +18,9 @@ runs:
     - name: Cache mongod binary
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
-        path: ~/.cache/mongodb-binaries
+        path: |
+          ~/.cache/mongodb-binaries
+          node_modules/.cache/mongodb-memory-server
         key: mongod-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}
 
     - name: Download mongod binary
