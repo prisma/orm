@@ -679,6 +679,47 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     });
   });
 
+  it('fails a statement at once when MySQL refuses the sign-in or the account needs the server public key, and neither is transient, as on Postgres', async (test) => {
+    await withMysqlDatabase(test, async ({ url, name }) => {
+      const admin = await mysqlControlDriver.create(url);
+      const user = `${name.slice(-12)}_s`;
+      try {
+        await admin.query(
+          `CREATE USER '${user}'@'%' IDENTIFIED WITH caching_sha2_password BY 'pw-sign-in'`,
+        );
+        const failure = async (password: string, allowPublicKeyRetrieval: boolean) => {
+          const asUser = new URL(url);
+          asUser.username = user;
+          asUser.password = password;
+          asUser.searchParams.set('allowPublicKeyRetrieval', String(allowPublicKeyRetrieval));
+          const started = Date.now();
+          const error = await withDriver(
+            asUser.toString(),
+            (driver) => driver.execute({ sql: 'SELECT 1' }),
+            { poolOptions: { connectionTimeoutMillis: 10_000 } },
+          ).catch((thrown: unknown) => thrown);
+          return { error: Object(error), fast: Date.now() - started < 3000 };
+        };
+        expect({
+          publicKey: await failure('pw-sign-in', false),
+          password: await failure('wrong', true),
+        }).toMatchObject({
+          publicKey: {
+            error: { kind: 'sql_connection', transient: false },
+            fast: true,
+          },
+          password: {
+            error: { kind: 'sql_query', sqlState: '28000' },
+            fast: true,
+          },
+        });
+      } finally {
+        await admin.query(`DROP USER IF EXISTS '${user}'@'%'`).catch(() => undefined);
+        await admin.close();
+      }
+    });
+  });
+
   it('gives up waiting for a pooled connection after connectionTimeoutMillis', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
       withDriver(

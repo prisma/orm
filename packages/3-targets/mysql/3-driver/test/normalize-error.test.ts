@@ -57,10 +57,10 @@ describe('normalizeMysqlError', () => {
 
   it('reports a pool that gave no connection in time as a transient SqlConnectionError, with the reason the pool could not connect', () => {
     const cause = sqlError({
-      errno: 1045,
-      sqlState: '28000',
-      fatal: false,
-      sqlMessage: "Access denied for user 'x'",
+      errno: 45012,
+      sqlState: '08S01',
+      fatal: true,
+      sqlMessage: 'connect ECONNREFUSED 127.0.0.1:1',
     });
     const error = Object.assign(
       sqlError({
@@ -75,7 +75,53 @@ describe('normalizeMysqlError', () => {
       expect.objectContaining({
         kind: 'sql_connection',
         transient: true,
-        message: expect.stringContaining('Access denied'),
+        message: expect.stringContaining('ECONNREFUSED'),
+        cause: error,
+      }),
+    );
+  });
+
+  it('reports a sign-in MySQL refuses as the SqlQueryError MySQL raised, as the Postgres driver reports 28P01, directly and as the reason a pool gave no connection', () => {
+    for (const [errno, sqlState] of [
+      [1045, '28000'],
+      [1698, '28000'],
+      [1524, 'HY000'],
+    ] as const) {
+      const refused = sqlError({ errno, sqlState, fatal: true, sqlMessage: 'Access denied' });
+      const timedOut = Object.assign(
+        sqlError({
+          errno: 45028,
+          sqlState: 'HY000',
+          fatal: false,
+          sqlMessage: 'pool timeout: failed to retrieve a connection from pool after 200ms',
+        }),
+        { cause: refused },
+      );
+      const expected = expect.objectContaining({
+        kind: 'sql_query',
+        sqlState,
+        message: 'Access denied',
+        cause: refused,
+      });
+      expect({
+        direct: normalizeMysqlError(refused),
+        pooled: normalizeMysqlError(timedOut),
+      }).toEqual({ direct: expected, pooled: expected });
+    }
+  });
+
+  it('reports session setup that fails on a new connection as a SqlConnectionError that will not pass on retry', () => {
+    const error = sqlError({
+      errno: 45030,
+      sqlState: '08S01',
+      fatal: true,
+      sqlMessage: 'Error executing initial sql command: Unknown system variable',
+    });
+    expect(normalizeMysqlError(error)).toEqual(
+      expect.objectContaining({
+        kind: 'sql_connection',
+        transient: false,
+        message: expect.stringContaining('Unknown system variable'),
         cause: error,
       }),
     );

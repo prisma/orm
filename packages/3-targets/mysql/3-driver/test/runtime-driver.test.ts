@@ -104,14 +104,24 @@ class FakeConnection extends EventEmitter {
 
 class FakePool extends EventEmitter {
   readonly end = vi.fn(async () => {});
+  /** When set, `getConnection` waits until the test hands the connection over with `handOver`. */
+  waits = false;
+  readonly #waiting: ((connection: FakeConnection) => void)[] = [];
   constructor(
-    readonly options: unknown,
+    readonly options: { readonly logger?: { readonly error?: (error: Error) => void } },
     private readonly connection: FakeConnection,
   ) {
     super();
   }
   async getConnection(): Promise<FakeConnection> {
-    return this.connection;
+    if (!this.waits) return this.connection;
+    return new Promise((resolve) => this.#waiting.push(resolve));
+  }
+  handOver(): void {
+    for (const resolve of this.#waiting.splice(0)) resolve(this.connection);
+  }
+  logError(error: Error): void {
+    this.options.logger?.error?.(error);
   }
 }
 
@@ -119,7 +129,7 @@ const state = vi.hoisted(() => ({ pools: [] as unknown[] }));
 let connection = new FakeConnection();
 
 vi.mock('mariadb', () => ({
-  createPool: (options: unknown) => {
+  createPool: (options: ConstructorParameters<typeof FakePool>[0]) => {
     const pool = new FakePool(options, connection);
     state.pools.push(pool);
     return pool;
@@ -218,6 +228,35 @@ describe('MySQL runtime driver and its pool', () => {
       released: connection.release.mock.calls.length,
       ran: connection.query.mock.calls.length,
     }).toEqual({ destroyed: 1, released: 0, ran: 0 });
+    await driver.close();
+  });
+
+  it('fails the statements waiting for a connection at once when the package reports a sign-in that cannot succeed, as pg.Pool rejects a connect, and releases a connection handed over later', async () => {
+    const driver = await connected();
+    const pool = lastPool();
+    pool.waits = true;
+    const waiting = [driver.execute({ sql: 'SELECT 1' }), driver.execute({ sql: 'SELECT 2' })];
+    await new Promise((resolve) => setImmediate(resolve));
+    pool.logError(new Error('a statement failed'));
+    pool.logError(
+      Object.assign(new Error("Access denied for user 'app'"), {
+        errno: 1045,
+        sqlState: '28000',
+        sqlMessage: "Access denied for user 'app'",
+        fatal: true,
+      }),
+    );
+    const refused = expect.objectContaining({ kind: 'sql_query', sqlState: '28000' });
+    expect(await Promise.allSettled(waiting)).toEqual([
+      { status: 'rejected', reason: refused },
+      { status: 'rejected', reason: refused },
+    ]);
+    pool.handOver();
+    await new Promise((resolve) => setImmediate(resolve));
+    expect({
+      released: connection.release.mock.calls.length,
+      ran: connection.query.mock.calls.length,
+    }).toEqual({ released: 2, ran: 0 });
     await driver.close();
   });
 

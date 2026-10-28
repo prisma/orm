@@ -16,7 +16,7 @@ import type {
 import { blindCast } from '@internal/utils/casts';
 import { createPool, type Pool, type PoolConnection } from 'mariadb';
 import { type MysqlPoolOptions, mysqlPoolOptions } from '../connection-options';
-import { isFatal, normalizeMysqlError } from '../normalize-error';
+import { connectingCannotSucceed, isFatal, normalizeMysqlError } from '../normalize-error';
 import { assertPlaceholderCount } from '../placeholder-count';
 import { positionalParams } from '../positional-params';
 import { SessionSettingsGuard } from '../session-settings';
@@ -350,6 +350,36 @@ class ClientsInUse {
 /** The pool reports a connection it failed to open on its `'error'` event, and again as the cause of a `getConnection` that times out; the driver reports it there. */
 function ignoreConnectionFailure(): void {}
 
+/**
+ * The statements waiting for a connection from the pool. The pool keeps retrying a sign-in it cannot complete and fails a waiting `getConnection` only when `connectionTimeoutMillis` ends; the package reports each failure to its `logger.error` as it happens. The driver fails the waiting statements with a failure no retry can get past at once, as `pg.Pool` rejects a connect whose connection fails.
+ */
+class WaitingForConnection {
+  readonly #fail = new Set<(error: unknown) => void>();
+
+  async race(getting: Promise<PoolConnection>): Promise<PoolConnection> {
+    let fail: (error: unknown) => void = () => {};
+    const failed = new Promise<never>((_, reject) => {
+      fail = reject;
+    });
+    this.#fail.add(fail);
+    try {
+      return await Promise.race([getting, failed]);
+    } finally {
+      this.#fail.delete(fail);
+    }
+  }
+
+  failAll(error: unknown): void {
+    for (const fail of this.#fail) fail(error);
+    this.#fail.clear();
+  }
+}
+
+/** Gives a connection the pool hands over after its statement stopped waiting back to the pool. */
+function releaseLate(getting: Promise<PoolConnection>): void {
+  getting.then((late) => late.release(), ignoreConnectionFailure).catch(ignoreConnectionFailure);
+}
+
 type DriverState =
   | { readonly kind: 'unbound' }
   | { readonly kind: 'connected'; readonly pool: Pool }
@@ -367,6 +397,7 @@ export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
   readonly #inUse = new ClientsInUse();
   readonly #options: MysqlDriverCreateOptions;
   readonly #sessionSettings: SessionSettingsGuard;
+  readonly #waiting = new WaitingForConnection();
 
   constructor(options: MysqlDriverCreateOptions = {}) {
     super(options.stream ?? false);
@@ -384,7 +415,14 @@ export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
         fix: 'Call close() before connecting again.',
       });
     }
-    const pool = createPool(mysqlPoolOptions(binding.url, this.#options.poolOptions));
+    const pool = createPool({
+      ...mysqlPoolOptions(binding.url, this.#options.poolOptions),
+      logger: {
+        error: (error) => {
+          if (connectingCannotSucceed(error)) this.#waiting.failAll(error);
+        },
+      },
+    });
     if (pool instanceof EventEmitter) pool.on('error', ignoreConnectionFailure);
     this.#state = { kind: 'connected', pool };
   }
@@ -409,10 +447,12 @@ export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
       );
     }
     this.#inUse.acquired();
+    const getting = this.#state.pool.getConnection();
     let client: PoolConnection;
     try {
-      client = await this.#state.pool.getConnection();
+      client = await this.#waiting.race(getting);
     } catch (error) {
+      releaseLate(getting);
       this.#inUse.released();
       throw normalizeMysqlError(error);
     }

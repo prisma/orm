@@ -32,7 +32,21 @@ export function connectionLost(cause: Error): SqlConnectionError {
 }
 
 const ER_GET_CONNECTION_TIMEOUT = 45028;
+const ER_INITIAL_SQL_ERROR = 45030;
 const ER_CANNOT_RETRIEVE_RSA_KEY = 45044;
+
+/** The errors MySQL refuses a sign-in with: access denied, access denied for a socket-authenticated account, and an authentication plugin the server has not loaded. Another attempt with the same URL fails the same way. */
+const SIGN_IN_REFUSED: ReadonlySet<number> = new Set([1045, 1698, 1524]);
+
+/** Whether `error` is one another attempt to connect with the same settings cannot get past: a refused sign-in, a sign-in that needs the server's public key, or session setup MySQL refuses. */
+export function connectingCannotSucceed(error: unknown): boolean {
+  return (
+    isMariadbError(error) &&
+    (SIGN_IN_REFUSED.has(error.errno) ||
+      error.errno === ER_CANNOT_RETRIEVE_RSA_KEY ||
+      error.errno === ER_INITIAL_SQL_ERROR)
+  );
+}
 
 const UNIQUE_VIOLATION = '23505';
 const FOREIGN_KEY_VIOLATION = '23503';
@@ -68,11 +82,9 @@ function publicKeyNeeded(error: MariadbError): SqlConnectionError {
   );
 }
 
-function poolTimedOut(error: MariadbError): SqlConnectionError {
+function poolTimedOut(error: MariadbError): unknown {
   const cause = error.cause;
-  if (isMariadbError(cause) && cause.errno === ER_CANNOT_RETRIEVE_RSA_KEY) {
-    return publicKeyNeeded(cause);
-  }
+  if (connectingCannotSucceed(cause)) return normalizeMysqlError(cause);
   return new SqlConnectionError(
     cause instanceof Error
       ? `Timed out waiting for a pooled MySQL connection; the pool could not open one: ${serverMessage(cause)}`
@@ -82,12 +94,15 @@ function poolTimedOut(error: MariadbError): SqlConnectionError {
 }
 
 /**
- * An error from the `mariadb` package as the driver reports it, in the family's types as the Postgres driver reports its own: a lost connection, a pool that gave no connection in time, and a sign-in that needs the server's public key as `SqlConnectionError`; an error MySQL reported about a statement as `SqlQueryError` with its SQLSTATE, a constraint violation with the SQLSTATE Postgres sends; and any other error unchanged.
+ * An error from the `mariadb` package as the driver reports it, in the family's types as the Postgres driver reports its own: a lost connection and a pool that gave no connection in time as a transient `SqlConnectionError`; a sign-in that needs the server's public key, and session setup that fails, as a `SqlConnectionError` that is not transient; a sign-in MySQL refuses, as Postgres's 28P01, and an error MySQL reported about a statement as `SqlQueryError` with its SQLSTATE, a constraint violation with the SQLSTATE Postgres sends; and any other error unchanged. A pool that timed out because it could not sign in reports the sign-in's error.
  */
 export function normalizeMysqlError(error: unknown): unknown {
   if (!isMariadbError(error)) return error;
   if (error.errno === ER_CANNOT_RETRIEVE_RSA_KEY) return publicKeyNeeded(error);
-  if (isFatal(error)) return connectionLost(error);
+  if (error.errno === ER_INITIAL_SQL_ERROR) {
+    return new SqlConnectionError(serverMessage(error), { cause: error, transient: false });
+  }
+  if (isFatal(error) && !SIGN_IN_REFUSED.has(error.errno)) return connectionLost(error);
   if (error.errno === ER_GET_CONNECTION_TIMEOUT) return poolTimedOut(error);
   if (typeof error.sqlState !== 'string') return error;
   return new SqlQueryError(error.sqlMessage ?? error.message, {
