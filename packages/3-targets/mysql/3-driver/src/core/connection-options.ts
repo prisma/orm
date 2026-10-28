@@ -16,6 +16,9 @@ const tlsSettings = type({
   'rejectUnauthorized?': 'boolean',
 }).onUndeclaredKey('reject');
 
+/** The largest statement cache a URL may ask for: at the pool's default of 10 connections, 1,000 each keeps one process at 10,000 open statements, under MySQL's server-wide default of 16,382. */
+const MAX_STATEMENT_CACHE_SIZE = 1000;
+
 /**
  * The URL parameters the driver reads. `ssl` is `true` or a JSON object of TLS settings; `statementCacheSize` is the number of prepared statements each connection keeps open, 0 (off) by default.
  */
@@ -25,7 +28,9 @@ const URL_PARAMETERS = {
   'allowPublicKeyRetrieval?': type("'true' | 'false'").pipe((text) => text === 'true'),
   'connectionLimit?': positiveInteger,
   'poolTimeout?': positiveInteger,
-  'statementCacheSize?': type('string.integer.parse').to('number.integer >= 0'),
+  'statementCacheSize?': type('string.integer.parse').to(
+    type('number.integer >= 0').atMost(MAX_STATEMENT_CACHE_SIZE),
+  ),
 } as const;
 
 const urlParameters = type(URL_PARAMETERS);
@@ -39,7 +44,7 @@ const PARAMETER_FORMS: Readonly<Record<ParameterName, string>> = {
   allowPublicKeyRetrieval: 'true or false',
   connectionLimit: 'a positive integer',
   poolTimeout: 'a positive integer of milliseconds',
-  statementCacheSize: 'a non-negative integer',
+  statementCacheSize: `an integer from 0 to ${MAX_STATEMENT_CACHE_SIZE}, so a process's connections stay under MySQL's server-wide limit on open prepared statements`,
 };
 
 const PARAMETER_NAMES = Object.keys(PARAMETER_FORMS);

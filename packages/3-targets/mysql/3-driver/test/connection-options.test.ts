@@ -57,17 +57,19 @@ describe('mysqlConnectionOptions', () => {
         .prepareCacheLength,
       on: mysqlConnectionOptions('mysql://root@localhost/app?statementCacheSize=20')
         .prepareCacheLength,
-    }).toEqual({ off: 0, zero: 0, on: 20 });
+      largest: mysqlConnectionOptions('mysql://root@localhost/app?statementCacheSize=1000')
+        .prepareCacheLength,
+    }).toEqual({ off: 0, zero: 0, on: 20, largest: 1000 });
   });
 
-  it('refuses a statementCacheSize that is not a non-negative integer', () => {
-    for (const size of ['-1', '1.5', 'many', '']) {
+  it('refuses a statementCacheSize that is not an integer from 0 to 1,000', () => {
+    for (const size of ['-1', '1.5', 'many', '', '1001']) {
       expect(() =>
         mysqlConnectionOptions(`mysql://root@localhost/app?statementCacheSize=${size}`),
       ).toThrow(
         expect.objectContaining({
           code: 'RUNTIME.BINDING_INVALID',
-          message: expect.stringContaining('statementCacheSize'),
+          message: expect.stringContaining('statementCacheSize must be an integer from 0 to 1000'),
         }),
       );
     }
