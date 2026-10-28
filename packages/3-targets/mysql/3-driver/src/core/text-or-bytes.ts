@@ -1,4 +1,5 @@
 import type { FieldInfo, TypeCastFunction } from 'mariadb';
+import { mysqlFloatText } from './float-text';
 
 /** MySQL's `binary` collation, which marks a string or blob column that holds bytes. */
 const BINARY_COLLATION = 63;
@@ -54,12 +55,12 @@ function withFractionDigits(time: string, digits: number): string {
 }
 
 /**
- * The column's text in one form whichever protocol carried it. Over the text protocol MySQL writes it; under a prepared statement MySQL sends numbers, dates and times in binary and the package writes them. They differ for five kinds of column, so each gets one form: YEAR and a ZEROFILL integer padded to the column's width and a TIME with the column's fraction digits, as MySQL writes them; a FLOAT as the decimal text of the double it widens to and a DOUBLE as JavaScript prints it, because MySQL's own printing of a binary float cannot be reproduced exactly.
+ * The column's text in one form whichever protocol carried it. Over the text protocol MySQL writes it; under a prepared statement MySQL sends numbers, dates and times in binary and the package writes them. They differ for five kinds of column, so each gets one form: YEAR and a ZEROFILL integer padded to the column's width and a TIME with the column's fraction digits, as MySQL writes them; a FLOAT as MySQL writes it over the text protocol; and a DOUBLE as JavaScript prints it.
  */
 function sameTextEitherProtocol(field: FieldInfo, text: string): string {
   switch (field.type) {
     case 'FLOAT':
-      return String(Math.fround(Number(text)));
+      return mysqlFloatText(Number(text));
     case 'DOUBLE':
       return String(Number(text));
     case 'TIME':
