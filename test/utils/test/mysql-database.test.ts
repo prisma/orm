@@ -24,7 +24,7 @@ async function asAdmin<T>(
 
 describe('withMysqlDatabase', () => {
   it(
-    'reaches a server that requires TLS when MYSQL_URL carries the ssl parameter',
+    'reaches a server that requires TLS when MYSQL_URL carries the TLS parameters the MySQL driver reads',
     async (test) => {
       const serverUrl = mysqlServerUrl();
       if (serverUrl === undefined) {
@@ -39,16 +39,16 @@ describe('withMysqlDatabase', () => {
         tlsUrl.username = user;
         tlsUrl.password = 'pw-tls';
         tlsUrl.searchParams.delete('allowPublicKeyRetrieval');
-        tlsUrl.searchParams.set('ssl', JSON.stringify({ rejectUnauthorized: false }));
+        tlsUrl.searchParams.set('sslmode', 'no-verify');
         process.env['MYSQL_URL'] = tlsUrl.toString();
         try {
           const created = await withMysqlDatabase(test, async ({ name, url }) => ({
             name,
-            ssl: new URL(url).searchParams.get('ssl'),
+            sslmode: new URL(url).searchParams.get('sslmode'),
           }));
           expect(created).toEqual({
             name: expect.stringMatching(/^prisma_test_/),
-            ssl: '{"rejectUnauthorized":false}',
+            sslmode: 'no-verify',
           });
         } finally {
           process.env['MYSQL_URL'] = serverUrl;

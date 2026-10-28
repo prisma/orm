@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { ifDefined } from '@internal/utils/defined';
 import { type ConnectionConfig, createConnection } from 'mariadb';
 
@@ -21,32 +22,32 @@ export function mysqlServerUrl(): string | undefined {
   return url === undefined || url.length === 0 ? undefined : url;
 }
 
-function textField(value: object, key: string): string | undefined {
-  const field: unknown = Reflect.get(value, key);
-  return typeof field === 'string' ? field : undefined;
-}
-
-/** The TLS settings of the URL's `ssl` parameter: `true`, `false` or a JSON object, read as the MySQL driver reads them. */
-function tlsOptions(text: string | null): ConnectionConfig['ssl'] {
-  if (text === null) return undefined;
-  const value: unknown = JSON.parse(text);
-  if (typeof value === 'boolean') return value;
-  if (typeof value !== 'object' || value === null) {
-    throw new Error('The ssl parameter of MYSQL_URL must be true, false or a JSON object');
+/**
+ * The TLS settings of the URL, read as the MySQL driver reads them, which is as `pg-connection-string` reads them for Postgres: `ssl` turns TLS on or off; `sslmode`, `sslcert`, `sslkey` or `sslrootcert` turn it on, the last three naming PEM files; `sslmode=disable` turns it off and `no-verify` accepts any certificate.
+ */
+function tlsOptions(url: URL): ConnectionConfig['ssl'] {
+  const parameter = (name: string) => url.searchParams.get(name) ?? undefined;
+  const sslmode = parameter('sslmode');
+  const files = {
+    cert: parameter('sslcert'),
+    key: parameter('sslkey'),
+    ca: parameter('sslrootcert'),
+  };
+  if (sslmode === undefined && Object.values(files).every((path) => path === undefined)) {
+    const ssl = parameter('ssl');
+    return ssl === undefined ? undefined : ssl === 'true' || ssl === '1';
   }
-  const rejectUnauthorized: unknown = Reflect.get(value, 'rejectUnauthorized');
+  if (sslmode === 'disable') return false;
   return {
-    ...ifDefined('ca', textField(value, 'ca')),
-    ...ifDefined('cert', textField(value, 'cert')),
-    ...ifDefined('key', textField(value, 'key')),
-    ...ifDefined('passphrase', textField(value, 'passphrase')),
-    ...ifDefined('servername', textField(value, 'servername')),
-    ...(typeof rejectUnauthorized === 'boolean' ? { rejectUnauthorized } : {}),
+    ...ifDefined('cert', files.cert === undefined ? undefined : readFileSync(files.cert, 'utf8')),
+    ...ifDefined('key', files.key === undefined ? undefined : readFileSync(files.key, 'utf8')),
+    ...ifDefined('ca', files.ca === undefined ? undefined : readFileSync(files.ca, 'utf8')),
+    ...(sslmode === 'no-verify' ? { rejectUnauthorized: false } : {}),
   };
 }
 
 /**
- * Connection options for the server a `mysql://` URL names, with its `ssl` and `allowPublicKeyRetrieval` parameters; the `mariadb` package reads only `mariadb://` URLs. The MySQL control driver reads the URL the same way, but this package cannot depend on it: the driver's tests depend on this package.
+ * Connection options for the server a `mysql://` URL names, with its TLS and `allowPublicKeyRetrieval` parameters; the `mariadb` package reads only `mariadb://` URLs. The MySQL control driver reads the URL the same way, but this package cannot depend on it: the driver's tests depend on this package.
  */
 function serverOptions(serverUrl: string): ConnectionConfig {
   const url = new URL(serverUrl);
@@ -55,7 +56,7 @@ function serverOptions(serverUrl: string): ConnectionConfig {
     ...(url.port === '' ? {} : { port: Number(url.port) }),
     user: decodeURIComponent(url.username),
     password: decodeURIComponent(url.password),
-    ...ifDefined('ssl', tlsOptions(url.searchParams.get('ssl'))),
+    ...ifDefined('ssl', tlsOptions(url)),
     allowPublicKeyRetrieval: url.searchParams.get('allowPublicKeyRetrieval') === 'true',
   };
 }
