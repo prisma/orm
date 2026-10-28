@@ -86,8 +86,7 @@ export default function mongo<
   const contract = validateMongoContract(options.contract);
   let binding = resolveOptionalMongoBinding(options);
 
-  const { context, stack, query, enums, enumsByNamespace, raw } =
-    buildMongoStaticContext<TContract>(contract);
+  const { context, stack, query, enums, raw } = buildMongoStaticContext<TContract>(contract);
 
   // Single source of truth for the lifecycle. `runtimePromise` is the in-flight
   // or settled build; `closed` is the terminal state set by `close()`. A failed
@@ -152,8 +151,7 @@ export default function mongo<
 
   const orm = mongoOrm<TContract>({
     context,
-    executor: { query: queryRows, execute: executeStats },
-    enums: enumsByNamespace,
+    runtime: { query: queryRows, execute: executeStats },
   });
 
   return {

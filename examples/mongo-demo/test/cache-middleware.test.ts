@@ -3,7 +3,6 @@ import { cacheAnnotation, createCacheMiddleware } from '@prisma/orm-extension-mi
 import mongoRuntimeAdapter from '@prisma/orm-mongo/adapter/runtime';
 import { createMongoDriver } from '@prisma/orm-mongo/driver';
 import {
-  buildMongoEnums,
   createMongoExecutionContext,
   createMongoExecutionStack,
   createMongoRuntime,
@@ -81,11 +80,7 @@ describe('mongo-demo cache middleware integration', {
       driver,
       middleware: [cache],
     });
-    const orm = mongoOrm({
-      context,
-      executor: runtime,
-      enums: buildMongoEnums(contract, context.codecs),
-    });
+    const orm = mongoOrm({ context, runtime: runtime });
     const query = mongoQuery({ context });
     return { runtime, orm, query, driver, driverExecuteSpy };
   }

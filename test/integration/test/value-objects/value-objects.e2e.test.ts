@@ -3,7 +3,6 @@ import postgresDriver from '@internal/driver-postgres/runtime';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
 import { mongoOrm } from '@internal/mongo-orm';
-import { buildMongoEnums } from '@internal/mongo-runtime';
 import { PostgresRuntimeImpl } from '@internal/postgres/runtime';
 import { orm as sqlOrm } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
@@ -25,11 +24,7 @@ describeWithMongoDB('value objects e2e: Mongo → real DB → typed ORM', (ctx) 
 
   it('create and read value objects with correct types', async () => {
     const context = executionContextFor(contract);
-    const ormClient = mongoOrm<MongoVOContract>({
-      context,
-      executor: ctx.runtime,
-      enums: buildMongoEnums(contract, context.codecs),
-    });
+    const ormClient = mongoOrm<MongoVOContract>({ context, runtime: ctx.runtime });
 
     const shopCollection = ormClient['shop']!;
     const created = await shopCollection.create({
@@ -81,11 +76,7 @@ describeWithMongoDB('value objects e2e: Mongo → real DB → typed ORM', (ctx) 
 
   it('non-null value object field roundtrips through update', async () => {
     const context = executionContextFor(contract);
-    const ormClient = mongoOrm<MongoVOContract>({
-      context,
-      executor: ctx.runtime,
-      enums: buildMongoEnums(contract, context.codecs),
-    });
+    const ormClient = mongoOrm<MongoVOContract>({ context, runtime: ctx.runtime });
     const shopCollection = ormClient['shop']!;
 
     await shopCollection.create({

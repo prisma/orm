@@ -11,22 +11,26 @@ changes:
         - '(?<![\s\S])(?=[\s\S]*\bimport\s*\*\s*as\s+([\w$]+)\s+from\s*[\x27\x22](?:@prisma/orm-(?:family-)?mongo/query-builder|@internal/mongo-query-builder)[\x27\x22])[\s\S]*(?<![\w$.])\1\s*\.\s*mongoQuery\s*\('
   - id: mongo-orm-takes-context
     summary: |
-      `mongoOrm()` and `mongoRaw()` take `{ context }`, an execution context, instead of `{ contract }`, as the SQL ORM does. `mongoOrm()` no longer has a `mutationDefaults` option: it fills generated fields such as `temporal.CreatedAt` through the context. The error code `ORM.MUTATION_DEFAULTS_MISSING` is gone, because the ORM can no longer be built without them. Use `db.orm` and `db.raw` from `mongo({ contract })`, or `mongoStatic({ contract }).raw`; code that builds the ORM itself passes `mongoOrm({ context, executor, enums })`. The detection matches files that call `mongoOrm` or `mongoRaw` with a `contract` option, pass `mutationDefaults`, or name `ORM.MUTATION_DEFAULTS_MISSING`.
+      `mongoOrm()` takes `{ context, runtime }`, as the SQL `orm({ context, runtime })` does: pass the execution context instead of the contract, rename `executor` to `runtime`, and drop `enums` and `mutationDefaults`, which the ORM now reads from the context. `mongoRaw()` takes `{ context }` instead of `{ contract }`. `createMongoCollection()` takes `({ context, runtime }, modelName)`. The `MongoOrmEnums` type and the error code `ORM.MUTATION_DEFAULTS_MISSING` are gone. Use `db.orm` and `db.raw` from `mongo({ contract })`, or `mongoStatic({ contract }).raw`. The detection matches files that call `mongoOrm` or `mongoRaw` with a `contract` option, call `mongoOrm` with `executor` or `enums`, call `createMongoCollection` without a context object, pass `mutationDefaults`, or name `MongoOrmEnums` or `ORM.MUTATION_DEFAULTS_MISSING`.
     detection:
       glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs,jsx}"
       matches:
         - '(?<![\w$.])mongo(?:Orm|Raw)\s*(?:<[^>()]*>)?\s*\(\s*\{\s*contract\b'
+        - '(?<![\w$.])mongoOrm\s*(?:<[^>()]*>)?\s*\(\s*\{(?:[^{}]|\{[^{}]*\})*\b(?:executor|enums)\b'
+        - '(?<![\w$.])createMongoCollection\s*(?:<[^>()]*>)?\s*\(\s*(?!\{)'
         - '(?<![\w$])mutationDefaults\s*:'
+        - '(?<![\w$])MongoOrmEnums(?![\w$])'
         - 'MUTATION_DEFAULTS_MISSING'
   - id: mongo-runtime-takes-adapter
     summary: |
-      `createMongoRuntime()` takes `{ context, adapter, driver }`, as the SQL runtime does: create the adapter with `stack.adapter.create(stack)` and pass it beside the context. The runtime reads the target from `context.contract.target`, so build the context over the validated contract. `MongoExecutionContext` no longer has a `stack` member or a second type parameter: write `MongoExecutionContext<Contract>`. `MongoExecutionStack` no longer has a `driver` member, and `createMongoExecutionStack()` no longer takes a `driver` option. The detection matches files that call `createMongoRuntime(`, read `.stack` from a context, give `MongoExecutionContext` two type arguments, or pass a driver to `createMongoExecutionStack`.
+      `createMongoRuntime()` takes `{ context, adapter, driver }`, as the SQL runtime does: create the adapter with `stack.adapter.create(stack)` and pass it beside the context. The runtime reads the target from `context.contract.target`, so build the context over the validated contract. `MongoExecutionContext` no longer has a `stack` member or a second type parameter, and its contract must be a MongoDB contract, as SQL's `ExecutionContext` requires a SQL contract: write `MongoExecutionContext<Contract>`, and build it with `createMongoExecutionContext({ contract, stack })` over a validated contract. `MongoExecutionStack` no longer has a `driver` member, and `createMongoExecutionStack()` no longer takes a `driver` option. The detection matches files that call `createMongoRuntime(`, read `.stack` from a context, give `MongoExecutionContext` two type arguments or a non-contract type argument, or pass a driver to `createMongoExecutionStack`.
     detection:
       glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs,jsx}"
       matches:
         - '(?<![\w$.])createMongoRuntime\s*\('
         - '(?<![\w$])[\w$]*[cC]ontext\s*\.\s*stack(?![\w$])'
         - '(?<![\w$])MongoExecutionContext\s*<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*,'
+        - '(?<![\w$])MongoExecutionContext\s*<\s*(?:unknown|\{)'
         - '(?<![\w$.])createMongoExecutionStack\s*(?:<[^>()]*>)?\s*\(\s*\{(?:[^{}]|\{[^{}]*\})*\bdriver\b'
 ---
 
@@ -54,9 +58,11 @@ Code that builds the ORM itself passes the context, which also fills generated f
 ```ts
 // Before
 const orm = mongoOrm({ contract, executor, mutationDefaults: context, enums });
+const users = createMongoCollection(contract, 'User', executor, enums, context);
 
-// After
-const orm = mongoOrm({ context, executor, enums });
+// After, as the SQL orm({ context, runtime })
+const orm = mongoOrm({ context, runtime: executor });
+const users = createMongoCollection({ context, runtime: executor }, 'User');
 ```
 
 The runtime takes an adapter beside the context, as the SQL runtime does, and reads the target from the context's contract:
@@ -71,4 +77,4 @@ const context = createMongoExecutionContext({ contract, stack });
 const runtime = createMongoRuntime({ context, adapter: stack.adapter.create(stack), driver });
 ```
 
-`MongoExecutionContext` takes one type parameter, the contract: `MongoExecutionContext<Contract>`.
+`MongoExecutionContext` takes one type parameter, a MongoDB contract: `MongoExecutionContext<Contract>`.

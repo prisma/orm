@@ -16,9 +16,7 @@ import ormContractJson from '../../../1-foundation/mongo-contract/test/fixtures/
 import { createMongoCollection } from '../src/collection';
 import type { MongoQueryExecutor } from '../src/executor';
 import { mongoOrm } from '../src/mongo-orm';
-import { noEnums } from './no-enums';
-
-const noCodecs = { get: () => undefined, has: () => false };
+import { collectionContext, contextOf } from './collection-context';
 
 const contract = ormContractJson as unknown as Contract;
 
@@ -107,7 +105,7 @@ function commandOf(plans: readonly MongoQueryPlan[], kind: string) {
 }
 
 function users(executor: MongoQueryExecutor, defaults: MutationDefaults) {
-  return createMongoCollection(contract, 'User', executor, noEnums, defaults);
+  return createMongoCollection(collectionContext(contract, executor, defaults), 'User');
 }
 
 const byEmail = MongoFieldFilter.eq('email', 'a@b.c');
@@ -307,9 +305,8 @@ describe('mongoOrm', () => {
       { insertedId: 'id-1', document: { _id: 'id-1' } },
     ]);
     const orm = mongoOrm({
-      context: { ...fakeMutationDefaults(), contract, codecs: noCodecs },
-      executor,
-      enums: noEnums,
+      context: contextOf(contract, fakeMutationDefaults()),
+      runtime: executor,
     });
     await orm.users.create(input(userData));
     expect(unwrap(commandOf(plans, 'insertOne')['document'])).toMatchObject({ loginCount: 7 });

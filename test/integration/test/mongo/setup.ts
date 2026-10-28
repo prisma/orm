@@ -1,6 +1,7 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
 import { createMongoDriver } from '@internal/driver-mongo';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
+import type { MongoContract } from '@internal/mongo-contract';
 import {
   createMongoExecutionContext,
   createMongoExecutionStack,
@@ -21,7 +22,7 @@ export const fixtureContract = new MongoContractSerializer().deserializeContract
   contractJson,
 ) as Contract;
 
-export function executionContextFor<TContract>(
+export function executionContextFor<TContract extends MongoContract>(
   contract: TContract,
 ): MongoExecutionContext<TContract> {
   const stack = createMongoExecutionStack({

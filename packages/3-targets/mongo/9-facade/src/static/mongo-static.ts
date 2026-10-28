@@ -13,7 +13,6 @@ import {
   buildMongoEnums,
   createMongoExecutionContext,
   createMongoExecutionStack,
-  type MongoEnumAccessors,
   type MongoExecutionContext,
   type MongoExecutionStack,
 } from '@internal/mongo-runtime';
@@ -35,11 +34,10 @@ export interface MongoStaticContext<
   readonly raw: MongoRawClient<TContract>;
 }
 
-/** A {@link MongoStaticContext} with the enum accessors of every namespace, which `mongo()` hands its ORM. */
+/** A {@link MongoStaticContext} with the stack `mongo()` creates its adapter from. */
 export interface MongoClientStaticContext<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
 > extends MongoStaticContext<TContract> {
-  readonly enumsByNamespace: MongoEnumAccessors;
   readonly stack: MongoExecutionStack;
 }
 
@@ -51,8 +49,7 @@ export function buildMongoStaticContext<
     adapter: mongoRuntimeAdapter,
   });
   const context = createMongoExecutionContext<TContract>({ contract, stack });
-  const enumsByNamespace = buildMongoEnums(contract, context.codecs);
-  const unbound = enumsByNamespace[UNBOUND_NAMESPACE_ID];
+  const unbound = buildMongoEnums(contract, context.codecs)[UNBOUND_NAMESPACE_ID];
   assertDefined(unbound, 'the unbound namespace always exists on a mongo builder output');
   const enums = blindCast<
     UnboundEnums<TContract>,
@@ -60,7 +57,7 @@ export function buildMongoStaticContext<
   >(unbound);
   const query = mongoQuery({ context });
   const raw = mongoRaw({ context });
-  return { context, contract, enums, enumsByNamespace, query, raw, stack };
+  return { context, contract, enums, query, raw, stack };
 }
 
 /**

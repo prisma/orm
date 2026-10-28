@@ -57,12 +57,24 @@ describe.each(['app', 'extension'] as const)('the %s ORM and raw detection', (au
     ['a raw client built from a contract', 'const raw = mongoRaw({ contract });'],
     ['the mutationDefaults option', 'mongoOrm({ context, executor, mutationDefaults: context })'],
     ['the removed error code', "if (error.code === 'ORM.MUTATION_DEFAULTS_MISSING') {}"],
+    ['an ORM with an executor', 'mongoOrm({ context, executor: runtime })'],
+    [
+      'an ORM with enum accessors',
+      'mongoOrm({\n  context,\n  runtime,\n  enums: buildMongoEnums(contract, codecs),\n})',
+    ],
+    [
+      'a collection built from a contract',
+      "createMongoCollection(contract, 'User', executor, enums)",
+    ],
+    ['the removed enum accessor type', 'let enums: MongoOrmEnums;'],
   ])('finds %s', (_name, content) => {
     expect(detects(audience, content, change)).toBe(true);
   });
 
   it.each([
-    ['an ORM built from a context', 'mongoOrm({ context, executor, enums })'],
+    ['an ORM built from a context', 'mongoOrm({ context, runtime })'],
+    ['a collection built from a context', "createMongoCollection({ context, runtime }, 'User')"],
+    ['enum accessors read from a client', 'const enums = db.enums;'],
     ['a raw client built from a context', 'mongoRaw({ context })'],
     ['the static raw client', 'const { raw } = mongoStatic({ contract });'],
     ['a method of the same name', 'db.mongoOrm({ contract })'],
@@ -87,6 +99,8 @@ describe.each(['app', 'extension'] as const)('the %s runtime adapter detection',
       'a stack built with a driver',
       'createMongoExecutionStack({\n  target,\n  adapter,\n  driver: mongoDriver,\n})',
     ],
+    ['a context type over unknown', 'MongoExecutionContext<unknown>'],
+    ['a context type over an object literal type', 'MongoExecutionContext<{ models: {} }>'],
   ])('finds %s', (_name, content) => {
     expect(detects(audience, content, change)).toBe(true);
   });
@@ -96,6 +110,7 @@ describe.each(['app', 'extension'] as const)('the %s runtime adapter detection',
     ['a method of the same name', 'factory.createMongoRuntime({ context })'],
     ['a stack on another object', 'options.stack.adapter'],
     ['a context type over one contract', 'MongoExecutionContext<Contract>'],
+    ['a context type over a contract typeof', 'MongoExecutionContext<typeof contract>'],
     ['a context type over a generic contract', 'MongoExecutionContext<MongoContract<Storage>>'],
     ['a stack built without a driver', 'createMongoExecutionStack({ target, adapter })'],
   ])('skips %s', (_name, content) => {

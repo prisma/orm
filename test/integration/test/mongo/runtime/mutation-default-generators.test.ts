@@ -1,7 +1,8 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
-import type { ExecutionMutationDefault } from '@internal/contract/types';
+import { type ExecutionMutationDefault, executionHash } from '@internal/contract/types';
 import type { RuntimeMutationDefaultGenerator } from '@internal/framework-components/runtime';
 import { newMongoCodecRegistry } from '@internal/mongo-codec';
+import type { MongoContract } from '@internal/mongo-contract';
 import {
   createMongoExecutionContext,
   createMongoExecutionStack,
@@ -9,11 +10,15 @@ import {
 } from '@internal/mongo-runtime';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { describe, expect, it } from 'vitest';
+import { fixtureContract } from '../setup';
 
 const NS = '__unbound__';
 
-function contractWith(defaults: readonly ExecutionMutationDefault[]) {
-  return { execution: { executionHash: 'test', mutations: { defaults } } };
+function contractWith(defaults: readonly ExecutionMutationDefault[]): MongoContract {
+  return {
+    ...fixtureContract,
+    execution: { executionHash: executionHash('test'), mutations: { defaults } },
+  };
 }
 
 function generator(id: string) {

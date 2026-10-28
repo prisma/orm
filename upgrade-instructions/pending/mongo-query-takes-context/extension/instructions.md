@@ -11,22 +11,26 @@ changes:
         - '(?<![\s\S])(?=[\s\S]*\bimport\s*\*\s*as\s+([\w$]+)\s+from\s*[\x27\x22](?:@prisma/orm-(?:family-)?mongo/query-builder|@internal/mongo-query-builder)[\x27\x22])[\s\S]*(?<![\w$.])\1\s*\.\s*mongoQuery\s*\('
   - id: mongo-orm-takes-context
     summary: |
-      `mongoOrm()` and `mongoRaw()` (`@internal/mongo-orm`, published as `@prisma/orm-family-mongo/orm` and `@prisma/orm-mongo/orm`) take `{ context }`, a `MongoExecutionContext`, instead of `{ contract }`, and read the contract from it. `MongoOrmOptions` loses `contract` and `mutationDefaults`: `mongoOrm({ context, executor, enums })` fills execution defaults through `context.applyMutationDefaults`. The error code `ORM.MUTATION_DEFAULTS_MISSING` is removed. The detection matches files that call `mongoOrm` or `mongoRaw` with a `contract` option, pass `mutationDefaults`, or name `ORM.MUTATION_DEFAULTS_MISSING`.
+      `mongoOrm()` (`@internal/mongo-orm`, published as `@prisma/orm-family-mongo/orm` and `@prisma/orm-mongo/orm`) takes `{ context, runtime }`, as the SQL `orm({ context, runtime })` does. `MongoOrmOptions` loses `contract`, `executor`, `enums` and `mutationDefaults`: the ORM reads the contract, the codecs it builds enum accessors from, and the execution defaults from the context, and `runtime` is the executor. `mongoRaw()` takes `{ context }`. `createMongoCollection()` takes `({ context, runtime }, modelName)` (`MongoCollectionContext`, as the SQL ORM's `CollectionContext`) and always fills execution defaults. `MongoOrmEnums` and `ORM.MUTATION_DEFAULTS_MISSING` are removed, and the ORM no longer raises `ORM.ARGUMENT_INVALID` for missing enum accessors. The detection matches files that call `mongoOrm` or `mongoRaw` with a `contract` option, call `mongoOrm` with `executor` or `enums`, call `createMongoCollection` without a context object, pass `mutationDefaults`, or name `MongoOrmEnums` or `ORM.MUTATION_DEFAULTS_MISSING`.
     detection:
       glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs,jsx}"
       matches:
         - '(?<![\w$.])mongo(?:Orm|Raw)\s*(?:<[^>()]*>)?\s*\(\s*\{\s*contract\b'
+        - '(?<![\w$.])mongoOrm\s*(?:<[^>()]*>)?\s*\(\s*\{(?:[^{}]|\{[^{}]*\})*\b(?:executor|enums)\b'
+        - '(?<![\w$.])createMongoCollection\s*(?:<[^>()]*>)?\s*\(\s*(?!\{)'
         - '(?<![\w$])mutationDefaults\s*:'
+        - '(?<![\w$])MongoOrmEnums(?![\w$])'
         - 'MUTATION_DEFAULTS_MISSING'
   - id: mongo-runtime-takes-adapter
     summary: |
-      `MongoRuntimeOptions` is `{ context, adapter, driver, middleware?, mode? }`, as the SQL runtime's options are: the caller creates the adapter with `stack.adapter.create(stack)`, and the runtime checks middleware against `context.contract.target`, so `context` is a `MongoExecutionContext<MongoContract>`. `MongoExecutionContext` is declared in `@prisma/orm-family-mongo/query-ast/execution` (`@internal/mongo-query-ast/execution`), still exported from the runtime entry; it has no `stack` member and no second type parameter (`TTargetId`). `MongoExecutionStack` has no `driver` member, and `createMongoExecutionStack()` takes no `driver` option. The detection matches files that call `createMongoRuntime(`, read `.stack` from a context, give `MongoExecutionContext` two type arguments, or pass a driver to `createMongoExecutionStack`.
+      `MongoRuntimeOptions` is `{ context, adapter, driver, middleware?, mode? }`, as the SQL runtime's options are: the caller creates the adapter with `stack.adapter.create(stack)`, and the runtime checks middleware against `context.contract.target`, so `context` is a `MongoExecutionContext<MongoContract>`. `MongoExecutionContext` is declared in `@prisma/orm-family-mongo/query-ast/execution` (`@internal/mongo-query-ast/execution`), still exported from the runtime entry; it has no `stack` member and no second type parameter (`TTargetId`), and its type parameter is constrained as SQL's `ExecutionContext` is: `MongoExecutionContext<TContract extends MongoContract = MongoContract>`, and `createMongoExecutionContext` takes the same constraint. `buildMongoEnums` and `MongoEnumAccessors` are declared beside it in `@internal/mongo-query-ast/execution` and still exported from the runtime entry. `MongoExecutionStack` has no `driver` member, and `createMongoExecutionStack()` takes no `driver` option. The detection matches files that call `createMongoRuntime(`, read `.stack` from a context, give `MongoExecutionContext` two type arguments or a non-contract type argument, or pass a driver to `createMongoExecutionStack`.
     detection:
       glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs,jsx}"
       matches:
         - '(?<![\w$.])createMongoRuntime\s*\('
         - '(?<![\w$])[\w$]*[cC]ontext\s*\.\s*stack(?![\w$])'
         - '(?<![\w$])MongoExecutionContext\s*<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*,'
+        - '(?<![\w$])MongoExecutionContext\s*<\s*(?:unknown|\{)'
         - '(?<![\w$.])createMongoExecutionStack\s*(?:<[^>()]*>)?\s*\(\s*\{(?:[^{}]|\{[^{}]*\})*\bdriver\b'
 ---
 
@@ -54,9 +58,11 @@ Code that builds the ORM itself passes the context, which also fills generated f
 ```ts
 // Before
 const orm = mongoOrm({ contract, executor, mutationDefaults: context, enums });
+const users = createMongoCollection(contract, 'User', executor, enums, context);
 
-// After
-const orm = mongoOrm({ context, executor, enums });
+// After, as the SQL orm({ context, runtime })
+const orm = mongoOrm({ context, runtime: executor });
+const users = createMongoCollection({ context, runtime: executor }, 'User');
 ```
 
 The runtime takes an adapter beside the context, as the SQL runtime does, and reads the target from the context's contract:
@@ -71,4 +77,4 @@ const context = createMongoExecutionContext({ contract, stack });
 const runtime = createMongoRuntime({ context, adapter: stack.adapter.create(stack), driver });
 ```
 
-`MongoExecutionContext` takes one type parameter, the contract: `MongoExecutionContext<Contract>`.
+`MongoExecutionContext` takes one type parameter, a MongoDB contract: `MongoExecutionContext<Contract>`.

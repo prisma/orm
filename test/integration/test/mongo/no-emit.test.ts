@@ -1,5 +1,4 @@
 import { mongoOrm } from '@internal/mongo-orm';
-import { buildMongoEnums } from '@internal/mongo-runtime';
 import { ObjectId } from 'mongodb';
 import { expect, expectTypeOf, it } from 'vitest';
 import { contract } from './fixtures/contract';
@@ -28,11 +27,7 @@ describeWithMongoDB('Mongo no-emit integration', (ctx) => {
     });
 
     const context = executionContextFor(contract);
-    const orm = mongoOrm({
-      context,
-      executor: ctx.runtime,
-      enums: buildMongoEnums(contract, context.codecs),
-    });
+    const orm = mongoOrm({ context, runtime: ctx.runtime });
     const tasks = await orm.tasks.include('assignee').all();
 
     expect(tasks).toHaveLength(1);

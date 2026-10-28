@@ -1,4 +1,3 @@
-import type { ContractExecutionSection } from '@internal/contract/types';
 import {
   createExecutionStack,
   type RuntimeAdapterDescriptor,
@@ -18,9 +17,9 @@ import {
 } from '@internal/framework-components/runtime';
 import type { MongoCodec } from '@internal/mongo-codec';
 import { type MongoCodecRegistry, newMongoCodecRegistry } from '@internal/mongo-codec';
+import type { MongoContract } from '@internal/mongo-contract';
 import type { MongoAdapter } from '@internal/mongo-lowering';
 import type { MongoExecutionContext } from '@internal/mongo-query-ast/execution';
-import { blindCast } from '@internal/utils/casts';
 
 /**
  * Mongo-specific static contributions a runtime descriptor declares.
@@ -86,7 +85,7 @@ export function createMongoExecutionStack<TTargetId extends string = 'mongo'>(op
 }
 
 export function createMongoExecutionContext<
-  TContract = unknown,
+  TContract extends MongoContract = MongoContract,
   TTargetId extends string = 'mongo',
 >(options: {
   readonly contract: TContract;
@@ -102,7 +101,7 @@ export function createMongoExecutionContext<
   ];
 
   const generators = collectMutationDefaultGenerators(contributors);
-  const execution = executionOf(options.contract);
+  const execution = options.contract.execution;
   assertMutationDefaultGeneratorsAvailable(execution, generators);
 
   for (const contributor of contributors) {
@@ -127,13 +126,6 @@ export function createMongoExecutionContext<
     applyMutationDefaults: (mutation: MutationDefaultsOptions) =>
       applyMutationDefaults(execution, generators, mutation),
   });
-}
-
-function executionOf(contract: unknown): ContractExecutionSection | undefined {
-  return blindCast<
-    { readonly execution?: ContractExecutionSection } | null | undefined,
-    'the execution context receives a validated contract, whose execution section (when present) has the framework shape'
-  >(contract)?.execution;
 }
 
 function* iterateCodecs(registry: MongoCodecRegistry): Iterable<MongoCodec<string>> {

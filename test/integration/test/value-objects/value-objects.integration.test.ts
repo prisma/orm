@@ -17,7 +17,6 @@ import {
 } from '@internal/mongo-contract-psl';
 import { mongoContextInput } from '@internal/mongo-contract-psl/test';
 import { mongoOrm } from '@internal/mongo-orm';
-import { buildMongoEnums } from '@internal/mongo-runtime';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
@@ -214,11 +213,7 @@ describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
     const validated = { contract: new MongoContractSerializer().deserializeContract(contract) };
 
     const context = executionContextFor(validated.contract);
-    const orm = mongoOrm({
-      context,
-      executor: ctx.runtime,
-      enums: buildMongoEnums(validated.contract, context.codecs),
-    });
+    const orm = mongoOrm({ context, runtime: ctx.runtime });
     const userCollection = orm['User']!;
 
     type CreateUser = Parameters<typeof userCollection.create>[0];
@@ -250,11 +245,7 @@ describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
 
     const validated = { contract: new MongoContractSerializer().deserializeContract(result.value) };
     const context = executionContextFor(validated.contract);
-    const orm = mongoOrm({
-      context,
-      executor: ctx.runtime,
-      enums: buildMongoEnums(validated.contract, context.codecs),
-    });
+    const orm = mongoOrm({ context, runtime: ctx.runtime });
     const userCollection = orm['User']!;
 
     type CreateUser = Parameters<typeof userCollection.create>[0];
@@ -294,11 +285,7 @@ type Address {
 
     const validated = { contract: new MongoContractSerializer().deserializeContract(result.value) };
     const context = executionContextFor(validated.contract);
-    const orm = mongoOrm({
-      context,
-      executor: ctx.runtime,
-      enums: buildMongoEnums(validated.contract, context.codecs),
-    });
+    const orm = mongoOrm({ context, runtime: ctx.runtime });
     const userCollection = orm['User']!;
 
     await userCollection.create({ name: 'NoAddr', address: null } as unknown as Parameters<

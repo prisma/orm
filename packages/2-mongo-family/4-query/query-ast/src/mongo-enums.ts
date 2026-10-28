@@ -1,7 +1,7 @@
 import { buildEnumsMapForNamespace, type EnumAccessor } from '@internal/contract/enum-accessor';
 import type { Contract } from '@internal/contract/types';
 import { runtimeError } from '@internal/framework-components/runtime';
-import type { MongoCodecLookup } from '@internal/mongo-query-ast/execution';
+import type { MongoCodecLookup } from './execution-context';
 
 /** A contract's enum accessors by namespace and enum name. */
 export type MongoEnumAccessors = Readonly<Record<string, Readonly<Record<string, EnumAccessor>>>>;

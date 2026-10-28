@@ -339,7 +339,7 @@ describe('mongo() facade', () => {
     'the ORM %s on a closed client rejects instead of throwing at the call',
     async (member) => {
       const db = mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb' });
-      const executor = mocks.mongoOrm.mock.calls.at(-1)?.[0].executor;
+      const executor = mocks.mongoOrm.mock.calls.at(-1)?.[0].runtime;
       await db.close();
 
       let result: PromiseLike<unknown> | undefined;

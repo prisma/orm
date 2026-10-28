@@ -101,13 +101,9 @@ describe('db.enums member types', () => {
   });
 });
 
-describe('the Mongo ORM checks a written enum value against the accessors db.enums holds', () => {
+describe('the Mongo ORM checks a written enum value against the enums of its context', () => {
   it('passes a member to the database and refuses a value outside the enum', async () => {
-    const orm = mongoOrm({
-      context,
-      executor: unreachableDatabase,
-      enums: buildMongoEnums(contract, context.codecs),
-    });
+    const orm = mongoOrm({ context, runtime: unreachableDatabase });
     await expect(orm.readings.create(reading)).rejects.toThrow('no database');
     await expect(orm.readings.create({ ...reading, int32: 7 as never })).rejects.toMatchObject({
       code: 'RUNTIME.ENCODE_FAILED',
@@ -116,54 +112,10 @@ describe('the Mongo ORM checks a written enum value against the accessors db.enu
     });
   });
 
-  it('refuses accessors without an enum of the contract when it is built', () => {
-    const { DoubleLevel: _doubleLevel, ...withoutDouble } = Object.getOwnPropertyDescriptors(
-      buildMongoEnums(contract, context.codecs)['__unbound__'],
-    );
-    const refusalFor = (enumName: string) =>
-      expect.objectContaining({
-        code: 'ORM.ARGUMENT_INVALID',
-        message: `mongoOrm() has no accessor for enum ${enumName} in namespace __unbound__, so it cannot check a value written to a field of that enum. Pass the contract's enum accessors: enums: buildMongoEnums(contract, context.codecs).`,
-        meta: { argument: 'enums', namespace: '__unbound__', enum: enumName },
-      });
-    expect(() => mongoOrm({ context, executor: unreachableDatabase, enums: {} })).toThrow(
-      refusalFor('TextLevel'),
-    );
-    expect(() =>
-      mongoOrm({
-        context,
-        executor: unreachableDatabase,
-        enums: { __unbound__: Object.defineProperties({}, withoutDouble) },
-      }),
-    ).toThrow(refusalFor('DoubleLevel'));
-  });
-
-  it('does not read an accessor when it is built', () => {
-    const unread = Object.defineProperties(
-      {},
-      Object.fromEntries(
-        Object.keys(contract.domain.namespaces['__unbound__']?.enum ?? {}).map((name) => [
-          name,
-          {
-            enumerable: true,
-            get: () => {
-              throw new Error(`read ${name}`);
-            },
-          },
-        ]),
-      ),
-    );
-    expect(() =>
-      mongoOrm({ context, executor: unreachableDatabase, enums: { __unbound__: unread } }),
-    ).not.toThrow();
-  });
-
-  it('refuses a collection write when the collection was built without the accessor of the enum', async () => {
-    const readings = createMongoCollection(contract, 'Reading', unreachableDatabase, {});
-    await expect(readings.create(reading)).rejects.toMatchObject({
-      code: 'ORM.ARGUMENT_INVALID',
-      message:
-        "The ORM has no accessor for enum TextLevel, so it cannot check the value written to text in collection 'readings'. Pass the contract's enum accessors: enums: buildMongoEnums(contract, context.codecs).",
+  it('refuses a value outside the enum written through a collection', async () => {
+    const readings = createMongoCollection({ context, runtime: unreachableDatabase }, 'Reading');
+    await expect(readings.create({ ...reading, text: 'medium' as never })).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
     });
   });
 

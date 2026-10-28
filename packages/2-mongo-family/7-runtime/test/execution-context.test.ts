@@ -1,7 +1,8 @@
-import type { ExecutionMutationDefault } from '@internal/contract/types';
+import { type ExecutionMutationDefault, executionHash } from '@internal/contract/types';
 import { type DataTypeValue, dataType, readJsonString } from '@internal/framework-components/codec';
 import type { RuntimeMutationDefaultGenerator } from '@internal/framework-components/runtime';
 import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
+import type { MongoContract } from '@internal/mongo-contract';
 import { describe, expect, it } from 'vitest';
 import {
   createMongoExecutionContext,
@@ -10,6 +11,7 @@ import {
   type MongoRuntimeExtensionDescriptor,
   type MongoRuntimeTargetDescriptor,
 } from '../src/mongo-execution-stack';
+import { testContract } from './mongo-middleware-fixtures';
 
 const NS = '__unbound__';
 
@@ -84,8 +86,11 @@ function counter(id: string, stability: RuntimeMutationDefaultGenerator['stabili
   return { id, stability, generate: () => ++next } satisfies RuntimeMutationDefaultGenerator;
 }
 
-function contractWith(defaults: readonly ExecutionMutationDefault[]) {
-  return { execution: { executionHash: 'test', mutations: { defaults } } };
+function contractWith(defaults: readonly ExecutionMutationDefault[]): MongoContract {
+  return {
+    ...testContract,
+    execution: { executionHash: executionHash('test'), mutations: { defaults } },
+  };
 }
 
 function contextFor(
@@ -124,7 +129,7 @@ describe('createMongoExecutionContext composition', () => {
       adapter: adapter(),
       extensions: [extension('test-extension', { codecIds: ['test/extension@1'] })],
     });
-    const context = createMongoExecutionContext({ contract: {}, stack });
+    const context = createMongoExecutionContext({ contract: testContract, stack });
     for (const id of ['test/target@1', 'test/adapter@1', 'test/extension@1']) {
       expect(context.codecs.has(id)).toBe(true);
     }
@@ -137,7 +142,7 @@ describe('createMongoExecutionContext composition', () => {
       adapter: adapter(),
       extensions: [extension('test-extension', { codecIds: ['test/adapter@1'] })],
     });
-    expect(() => createMongoExecutionContext({ contract: {}, stack })).toThrow(
+    expect(() => createMongoExecutionContext({ contract: testContract, stack })).toThrow(
       expect.objectContaining({
         code: 'RUNTIME.DUPLICATE_CODEC',
         details: expect.objectContaining({
@@ -154,7 +159,7 @@ describe('createMongoExecutionContext composition', () => {
       adapter: adapter([counter('clock', 'query')]),
       extensions: [extension('test-extension', { generators: [counter('clock', 'field')] })],
     });
-    expect(() => createMongoExecutionContext({ contract: {}, stack })).toThrow(
+    expect(() => createMongoExecutionContext({ contract: testContract, stack })).toThrow(
       expect.objectContaining({
         code: 'RUNTIME.DUPLICATE_MUTATION_DEFAULT_GENERATOR',
         details: expect.objectContaining({
@@ -189,7 +194,7 @@ describe('createMongoExecutionContext composition', () => {
 
   it('applies nothing for a contract without an execution section', () => {
     const stack = createMongoExecutionStack({ target: target(), adapter: adapter() });
-    const context = createMongoExecutionContext({ contract: {}, stack });
+    const context = createMongoExecutionContext({ contract: testContract, stack });
     expect(
       context.applyMutationDefaults({ op: 'create', namespace: NS, entry: 'posts', values: {} }),
     ).toEqual([]);

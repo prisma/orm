@@ -13,7 +13,6 @@ import {
   type StatementActivityRun,
   streamStatement,
 } from '@internal/framework-components/runtime';
-import type { MongoContract } from '@internal/mongo-contract';
 import type { MongoAdapter, MongoDriver } from '@internal/mongo-lowering';
 import type {
   MongoCodecLookup,
@@ -71,7 +70,7 @@ function invalidStatisticsResult(commandKind: string, countField: string): Error
  * The runtime takes a {@link MongoExecutionContext} (built via `createMongoExecutionContext`), an adapter, and a driver, as the SQL runtime does. Codecs and the target come from the context. See ADR — Mongo result-shape as a structural plan field, § Codec registry: stack aggregation, not user threading.
  */
 export interface MongoRuntimeOptions {
-  readonly context: MongoExecutionContext<MongoContract>;
+  readonly context: MongoExecutionContext;
   readonly adapter: MongoAdapter;
   readonly driver: MongoDriver;
   readonly middleware?: readonly MongoMiddleware[];
