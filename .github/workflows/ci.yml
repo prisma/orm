@@ -208,6 +208,8 @@ jobs:
         run: pnpm build
       - name: Link bins
         run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/mongod-binary
+        timeout-minutes: 10
       - name: Run package tests with coverage
         id: package-tests
         continue-on-error: true
@@ -285,6 +287,8 @@ jobs:
       - name: Fetch the Prisma 7 schema engine (prisma7-adoption)
         timeout-minutes: 5
         run: pnpm --filter prisma7-adoption exec prisma7 --version --config prisma7.config.ts
+      - uses: ./.github/actions/mongod-binary
+        timeout-minutes: 10
       - name: Test examples
         run: pnpm test:examples
       - name: Check working tree is clean
