@@ -63,7 +63,7 @@ One limitation to know about:
 
 ## PostgreSQL
 
-These are the current names. The Postgres and SQLite rename project will change several of them to the target's own type names and update this table.
+These are the current names. The date and time types below already follow ADR 257's suffix rule, and their old names `Timestamptz`, `Timestamp` and `Interval` were removed with no deprecated alias. The Postgres and SQLite rename project will change several of the other names to the target's own type names and update this table.
 
 The date and time types have two layers ([ADR 279](../architecture%20docs/adrs/ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md)). Each explicit type in the table below names one column type and one kind of value. The convenience types `DateTime`, `Date`, `Time` and `Duration` are named for what a field means, and each becomes one explicit type, chosen by its optional `as` and `storage` arguments: `as` is the value the application reads, and `storage` is the database type that stores it; `precision` is passed on to the explicit type. The contract stores only the explicit type, so `DateTime(as: temporal)` and `TimestamptzTemporal` emit the same contract.
 
