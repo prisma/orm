@@ -1,3 +1,4 @@
+import { connect, createServer } from 'node:net';
 import { inspect } from 'node:util';
 import { timeouts } from '@repo/test-utils';
 import { withMysqlDatabase } from '@repo/test-utils/mysql-database';
@@ -75,6 +76,15 @@ async function withCountedUser<T>(
     await admin.query(`DROP USER IF EXISTS '${user}'@'%'`).catch(() => undefined);
     await admin.close();
   }
+}
+
+async function freePort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  await new Promise((resolve) => server.close(resolve));
+  if (address === null || typeof address === 'string') throw new Error('no port');
+  return address.port;
 }
 
 async function connectionId(driver: ReturnType<typeof mysqlRuntimeDriver.create>) {
@@ -828,33 +838,39 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     });
   });
 
-  it('fails each of several statements in a row at once when MySQL refuses the sign-in, as pg.Pool fails each connect', async (test) => {
-    await withMysqlDatabase(test, async ({ url, name }) => {
-      const admin = await mysqlControlDriver.create(url);
-      const user = `${name.slice(-12)}_r`;
+  it('runs a statement once the server accepts connections again, after an earlier statement failed because it refused them, as pg.Pool tries each connect afresh', async (test) => {
+    await withMysqlDatabase(test, async ({ url }) => {
+      const server = new URL(url);
+      const port = await freePort();
+      const refusing = new URL(url);
+      refusing.hostname = '127.0.0.1';
+      refusing.port = String(port);
+      const proxy = createServer((client) => {
+        const upstream = connect(Number(server.port), server.hostname);
+        client.pipe(upstream).pipe(client);
+        client.on('error', () => upstream.destroy());
+        upstream.on('error', () => client.destroy());
+      });
       try {
-        await admin.query(`CREATE USER '${user}'@'%' IDENTIFIED BY 'pw-repeat'`);
-        const wrong = new URL(url);
-        wrong.username = user;
-        wrong.password = 'wrong';
-        wrong.searchParams.set('allowPublicKeyRetrieval', 'true');
         const outcomes = await withDriver(
-          wrong.toString(),
+          refusing.toString(),
           async (driver) => {
-            const out = [];
-            for (let i = 0; i < 5; i++) {
-              const started = Date.now();
-              const error = await driver.execute({ sql: 'SELECT 1' }).catch((e: unknown) => e);
-              out.push({ error: Object(error).sqlState, fast: Date.now() - started < 150 });
-            }
-            return out;
+            const refused = await driver
+              .execute({ sql: 'SELECT 1' })
+              .catch((error: unknown) => error);
+            await new Promise((resolve) => setTimeout(resolve, 700));
+            await new Promise<void>((resolve) => proxy.listen(port, '127.0.0.1', resolve));
+            const afterReturn = await collect(driver.query({ sql: 'SELECT 2 AS n' }));
+            return { refused, afterReturn };
           },
-          { poolOptions: { connectionTimeoutMillis: 10_000 } },
+          { poolOptions: { connectionTimeoutMillis: 500 } },
         );
-        expect(outcomes).toEqual(Array(5).fill({ error: '28000', fast: true }));
+        expect(outcomes).toEqual({
+          refused: expect.objectContaining({ kind: 'sql_connection', transient: false }),
+          afterReturn: [{ n: '2' }],
+        });
       } finally {
-        await admin.query(`DROP USER IF EXISTS '${user}'@'%'`).catch(() => undefined);
-        await admin.close();
+        await new Promise((resolve) => proxy.close(resolve));
       }
     });
   });

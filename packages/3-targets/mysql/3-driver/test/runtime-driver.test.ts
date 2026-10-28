@@ -107,7 +107,6 @@ class FakePool extends EventEmitter {
   readonly end = vi.fn(async () => {});
   /** When set, `getConnection` waits until the test hands the connection over with `handOver`. */
   waits = false;
-  idle = 0;
   readonly #waiting: ((connection: FakeConnection) => void)[] = [];
   constructor(
     readonly options: { readonly logger?: { readonly error?: (error: Error) => void } },
@@ -128,9 +127,6 @@ class FakePool extends EventEmitter {
   }
   logError(error: Error): void {
     this.options.logger?.error?.(error);
-  }
-  idleConnections(): number {
-    return this.idle;
   }
 }
 
@@ -322,7 +318,7 @@ describe('MySQL runtime driver and its pool', () => {
     await driver.close();
   });
 
-  it('fails a later statement at once with the last connection failure while the pool has no idle connection, as pg.Pool fails each connect, until the pool opens a connection', async () => {
+  it('sends a statement that arrives after a connection failure to the pool, which runs it once the pool opens a connection, as pg.Pool tries each connect afresh', async () => {
     const driver = await connected();
     const pool = lastPool();
     pool.waits = true;
@@ -336,26 +332,13 @@ describe('MySQL runtime driver and its pool', () => {
         sqlState: 'HY000',
       }),
     );
-    await first.catch(() => undefined);
-    const refused = expect.objectContaining({ kind: 'sql_connection', transient: false });
-    const later = await driver.execute({ sql: 'SELECT 2' }).catch((error: unknown) => error);
-    pool.idle = 1;
-    const withIdle = driver.execute({ sql: 'SELECT 3' });
+    const failed = await first.catch((error: unknown) => error);
+    const later = driver.execute({ sql: 'SELECT 2' });
     await new Promise((resolve) => setImmediate(resolve));
     pool.handOver();
-    pool.idle = 0;
-    pool.emit('connection', connection);
-    const afterOpened = driver.execute({ sql: 'SELECT 4' });
-    await new Promise((resolve) => setImmediate(resolve));
-    pool.handOver();
-    expect({
-      later,
-      withIdle: await withIdle,
-      afterOpened: await afterOpened,
-    }).toEqual({
-      later: refused,
-      withIdle: { affectedRows: 0 },
-      afterOpened: { affectedRows: 0 },
+    expect({ failed, later: await later }).toEqual({
+      failed: expect.objectContaining({ kind: 'sql_connection', transient: false }),
+      later: { affectedRows: 0 },
     });
     await driver.close();
   });

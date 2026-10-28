@@ -351,14 +351,12 @@ class ClientsInUse {
 function ignoreConnectionFailure(): void {}
 
 /**
- * The statements waiting for a connection from the pool, and the last failure to open one. The pool keeps retrying a connection it cannot open, with a growing pause between attempts, and fails a waiting `getConnection` only when `connectionTimeoutMillis` ends; the package reports each failure to its `logger.error` as it happens, together with every failed statement. `pg.Pool` instead rejects each connect whose connection fails, at once. So the driver fails the waiting statements at once with a failure no retry can get past, and fails a later statement with it at once while the pool has no idle connection, until the pool opens one.
+ * The statements waiting for a connection from the pool. The pool keeps retrying a connection it cannot open, with a growing pause between attempts, and fails a waiting `getConnection` only when `connectionTimeoutMillis` ends; the package reports each failure to its `logger.error` as it happens, together with every failed statement. `pg.Pool` instead rejects a pending connect whose connection fails, at once. So the driver fails the waiting statements at once with a failure no retry can get past. It keeps no failure: a later statement waits for the pool's next attempt.
  */
 class WaitingForConnection {
   readonly #fail = new Set<(error: unknown) => void>();
-  #failure: { readonly error: unknown } | undefined;
 
-  async race(getting: Promise<PoolConnection>, poolHasIdle: boolean): Promise<PoolConnection> {
-    if (this.#failure !== undefined && !poolHasIdle) throw this.#failure.error;
+  async race(getting: Promise<PoolConnection>): Promise<PoolConnection> {
     let fail: (error: unknown) => void = () => {};
     const failed = new Promise<never>((_, reject) => {
       fail = reject;
@@ -374,13 +372,8 @@ class WaitingForConnection {
   /** Reacts to an error the package reports: only a failure to connect, which the package marks fatal, that no retry can get past. A statement can fail with the same error number, such as 1524 for a missing authentication plugin, but not fatally. */
   reported(error: unknown): void {
     if (!isFatal(error) || !connectingCannotSucceed(error)) return;
-    this.#failure = { error };
     for (const fail of this.#fail) fail(error);
     this.#fail.clear();
-  }
-
-  opened(): void {
-    this.#failure = undefined;
   }
 }
 
@@ -428,7 +421,6 @@ export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
       ...mysqlPoolOptions(binding.url, this.#options.poolOptions),
       logger: { error: (error) => waiting.reported(error) },
     });
-    pool.on('connection', () => waiting.opened());
     if (pool instanceof EventEmitter) pool.on('error', ignoreConnectionFailure);
     this.#state = { kind: 'connected', pool, waiting };
   }
@@ -454,11 +446,10 @@ export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
     }
     const { pool, waiting } = this.#state;
     this.#inUse.acquired();
-    const poolHasIdle = pool.idleConnections() > 0;
     const getting = pool.getConnection();
     let client: PoolConnection;
     try {
-      client = await waiting.race(getting, poolHasIdle);
+      client = await waiting.race(getting);
     } catch (error) {
       releaseLate(getting);
       this.#inUse.released();
