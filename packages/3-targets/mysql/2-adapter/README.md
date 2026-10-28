@@ -28,7 +28,7 @@ Lowers the queries the ORM and the SQL builder build into MySQL SQL, and reads a
 
 ## Driver contract
 
-The SQL this adapter lowers is not runnable as written: each parameter is a numbered `?N`, which MySQL does not read. A driver used with this adapter must rewrite each `?N` to MySQL's positional `?`, order the values to match, and send them as a server-side prepared statement's parameters, never inside the SQL. `@internal/driver-mysql` does this. The adapter writes no casts on parameters, so the driver must send an integer as an integer type: a value sent as text compares as text where no column gives it a type, as in `?1 < ?2`, and `LIMIT ?1` refuses a value sent as a double.
+The SQL this adapter lowers is not runnable as written: each parameter is a numbered `?N`, which MySQL does not read. A driver used with this adapter must rewrite each `?N` to MySQL's positional `?`, order the values to match, and send them as a server-side prepared statement's parameters, never inside the SQL. `@internal/driver-mysql` does this. The adapter writes no casts on parameters, so the driver must send an integer as an integer type: a value sent as text compares as text where no column gives it a type, as in `?1 < ?2`, and `LIMIT ?1` refuses a value sent as a double. The driver's rules for the type each value is sent as are in [`parameter-values.ts`](../3-driver/src/core/parameter-values.ts).
 
 ## Exports
 
