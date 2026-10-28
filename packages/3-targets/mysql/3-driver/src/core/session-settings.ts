@@ -1,5 +1,6 @@
 import type { SessionSettings } from '@internal/framework-components/components';
 import { quoteIdentifier } from '@internal/target-mysql/sql-utils';
+import { assertDefined } from '@internal/utils/assertions';
 import type { Connection } from 'mariadb';
 
 const DECIMAL_INTEGER = /^-?\d+$/;
@@ -51,7 +52,8 @@ export class SessionSettingsGuard {
   }
 
   async ensure(connection: Connection): Promise<void> {
-    const key = connection.info ?? connection;
+    const key = connection.info;
+    assertDefined(key, 'the package gives every connection its info when it creates it');
     if (this.#statement === undefined || this.#ensured.has(key)) return;
     await applySessionSettings(connection, this.#statement);
     this.#ensured.add(key);

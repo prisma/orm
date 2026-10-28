@@ -76,6 +76,7 @@ class FakeStatement {
 }
 
 class FakeConnection extends EventEmitter {
+  readonly info = { threadId: 1 };
   readonly release = vi.fn(async () => {});
   readonly destroy = vi.fn();
   readonly beginTransaction = vi.fn(async () => {});
@@ -113,12 +114,16 @@ class FakePool extends EventEmitter {
   ) {
     super();
   }
+  /** A new wrapper over the one connection, as the package hands out for each `getConnection`. */
+  #wrapper(): FakeConnection {
+    return Object.create(this.connection);
+  }
   async getConnection(): Promise<FakeConnection> {
-    if (!this.waits) return this.connection;
+    if (!this.waits) return this.#wrapper();
     return new Promise((resolve) => this.#waiting.push(resolve));
   }
   handOver(): void {
-    for (const resolve of this.#waiting.splice(0)) resolve(this.connection);
+    for (const resolve of this.#waiting.splice(0)) resolve(this.#wrapper());
   }
   logError(error: Error): void {
     this.options.logger?.error?.(error);
