@@ -413,7 +413,7 @@ describe('native types as bare scalar types — parity with the live bare-type p
       {
         code: 'PSL_UNRESOLVED_REFERENCE',
         message:
-          'temporal.timestamptzJsDate(3, onCreate: now) was a field preset, and Prisma 8 removed field presets. Write TimestamptzJsDate(3) @onCreate(now()).',
+          'temporal.timestamptzJsDate(3, onCreate: now) was a field preset, and Prisma 8 removed field presets. Write DateTime @onCreate(now()).',
       },
     ]);
   });

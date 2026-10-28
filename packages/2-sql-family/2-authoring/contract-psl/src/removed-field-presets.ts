@@ -144,6 +144,7 @@ export const removedSqlFieldPresets: RemovedFieldPresets = {
     'TimestamptzJsDate',
     'pg/timestamptz-date@1',
     true,
+    { type: presetType('DateTime'), defaultPrecision: '3' },
   ),
   'temporal.date': removedPresetWithPhases(
     presetType('Date', { as: 'temporal' }),

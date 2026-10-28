@@ -66,13 +66,20 @@ export function removedPresetWrittenAs(
   ];
 }
 
+/** A convenience type that gives a row's explicit type for every written precision, and the precision it gives when none is written. */
+export interface RemovedPresetPrecisionType {
+  readonly type: RemovedPresetType;
+  readonly defaultPrecision: string;
+}
+
 /**
- * The row of a preset that took `onCreate: now` and `onUpdate: now`, and a precision first when `takesPrecision`. Its rewrite writes `type`, with the precision as its `precision` argument and `@onCreate(now())` and `@onUpdate(now())` for the phases the call set.
+ * The row of a preset that took `onCreate: now` and `onUpdate: now`, and a precision first when `takesPrecision`. Its rewrite writes `type`, with the precision as its `precision` argument and `@onCreate(now())` and `@onUpdate(now())` for the phases the call set. When the call writes a precision and `withPrecision` is given, it writes `withPrecision.type` instead, leaving out a precision equal to its default.
  */
 export function removedPresetWithPhases(
   type: RemovedPresetType | string,
   codecId: string,
   takesPrecision: boolean,
+  withPrecision?: RemovedPresetPrecisionType,
 ): readonly RemovedFieldPreset[] {
   const written = asType(type);
   const parameters = takesPrecision ? ['precision', ...PHASES] : [...PHASES];
@@ -93,8 +100,18 @@ export function removedPresetWithPhases(
         const attributes = PHASES.filter((phase) => args.has(phase)).map(
           (phase) => ` @${phase}(now())`,
         );
-        const extra = precision === undefined ? undefined : `precision: ${precision}`;
-        return `Write ${writtenPresetType(written, extra)}${modifier}${attributes.join('')}.`;
+        const typeText =
+          precision === undefined
+            ? writtenPresetType(written)
+            : withPrecision === undefined
+              ? writtenPresetType(written, `precision: ${precision}`)
+              : writtenPresetType(
+                  withPrecision.type,
+                  precision === withPrecision.defaultPrecision
+                    ? undefined
+                    : `precision: ${precision}`,
+                );
+        return `Write ${typeText}${modifier}${attributes.join('')}.`;
       },
     },
   ];

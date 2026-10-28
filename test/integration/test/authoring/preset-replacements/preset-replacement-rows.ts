@@ -396,7 +396,7 @@ export const postgresRows: readonly SqlRow<PostgresHelpers>[] = [
     model: 'TimestamptzJsDateOnCreate',
     psl: {
       preset: 'temporal.timestamptzJsDate(3, onCreate: now)',
-      replacement: 'TimestamptzJsDate(3) @onCreate(now())',
+      replacement: 'DateTime @onCreate(now())',
     },
     ts: ({ field, type, gen }) => field.column(type.TimestamptzJsDate(3)).onCreate(gen.now()),
   },

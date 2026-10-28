@@ -223,10 +223,12 @@ describe('a removed field preset in a SQL schema', () => {
         'temporal.timestamptzString(3, onCreate: now, onUpdate: now)',
         'Write DateTime(as: string, precision: 3) @onCreate(now()) @onUpdate(now()).',
       ],
+      ['temporal.timestamptzJsDate(3, onCreate: now)', 'Write DateTime @onCreate(now()).'],
       [
-        'temporal.timestamptzJsDate(3, onCreate: now)',
-        'Write TimestamptzJsDate(precision: 3) @onCreate(now()).',
+        'temporal.timestamptzJsDate(6, onCreate: now)',
+        'Write DateTime(precision: 6) @onCreate(now()).',
       ],
+      ['temporal.timestamptzJsDate(onCreate: now)', 'Write TimestamptzJsDate @onCreate(now()).'],
       ['temporal.date(onCreate: now)', 'Write Date(as: temporal) @onCreate(now()).'],
       [
         'temporal.dateString(onCreate: now, onUpdate: now)',
