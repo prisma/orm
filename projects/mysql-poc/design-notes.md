@@ -44,7 +44,7 @@ The reasoning behind each decision in [`spec.md`](./spec.md), the facts it rests
 - **Defaults.** MariaDB quotes literal defaults in `COLUMN_DEFAULT`, writes `current_timestamp()`, and has no `DEFAULT_GENERATED`.
 - **Types.** MariaDB reports integer display widths (`int(11)`) and has native `UUID`, `INET4` and `INET6`.
 - **Syntax.** MariaDB rejects MySQL's `AS new` row alias in upserts and `FOR SHARE`; it has `RETURNING` on `INSERT` and `DELETE` and MySQL has none.
-- **Shared:** wire protocol, drivers (`mysql2` serves both), `VALUES()` upserts, CTEs, window functions, identifier rules, implicit commit on DDL. That much sharing suits subclassing.
+- **Shared:** wire protocol, drivers (the `mariadb` package serves both), `VALUES()` upserts, CTEs, window functions, identifier rules, implicit commit on DDL. That much sharing suits subclassing.
 
 Hibernate makes the same split (`MariaDBDialect extends MySQLDialect`). TypeORM and Sequelize distinguish the two as well.
 
@@ -100,13 +100,13 @@ This section describes how the MySQL runtime driver and control driver talk to t
 
 ### The package: `mariadb`, for MySQL and MariaDB
 
-Both drivers use the `mariadb` npm package, version 3.5.4 or later, for MySQL and for MariaDB. Prisma 7's `@prisma/adapter-mariadb` uses it for both. Prisma chose it in June 2025 after a `mysql2` adapter was built and abandoned: `mysql2` held about 40 MB more for every test and never released it (Linear TML-761, closed 2025-06-20; TML-1129: "it's just too unreliable … we're pivoting to the `mariadb` driver for both MySQL and MariaDB"). 3.5.4 is the floor because earlier versions corrupt rows when a type conversion asks for a column's text under prepared statements (CONJS-363), and hang without pipelining (CONJS-361).
+Both drivers use the `mariadb` npm package, version 3.5.4 or later (pinned at 3.5.4), for MySQL and for MariaDB. Prisma 7's `@prisma/adapter-mariadb` uses it for both. Prisma chose it in June 2025 after a `mysql2` adapter was built and abandoned: `mysql2` held about 40 MB more for every test and never released it (Linear TML-761, closed 2025-06-20; TML-1129: "it's just too unreliable … we're pivoting to the `mariadb` driver for both MySQL and MariaDB"). 3.5.4 is the floor because earlier versions corrupt rows when a type conversion asks for a column's text under prepared statements (CONJS-363), and hang without pipelining (CONJS-361).
 
 ### Values never travel inside SQL text
 
 Every statement that carries values runs as a server-side prepared statement (`execute`): the SQL goes to the server with `?` placeholders, the server parses it, and the values follow separately. The driver never writes a value into SQL, and never uses the package's client-side escaping. This is the decision Will made on 2026-10-23 after three reviews found injections in client-side escaping; changing the package does not change it.
 
-A statement with no values that Prisma itself writes may run over the text protocol (`query`), because there is nothing in it to inject. That is needed for the statements MySQL refuses to prepare (error 1295, confirmed by probe): `START TRANSACTION`, `BEGIN`, `SAVEPOINT`, `ROLLBACK TO SAVEPOINT`, `RELEASE SAVEPOINT`, `LOCK TABLES` and `UNLOCK TABLES`. Transactions use the package's `beginTransaction()`, `commit()` and `rollback()`. Raw SQL a user writes always runs prepared, even with no values; a raw `START TRANSACTION` therefore fails with MySQL's own error.
+MySQL refuses to prepare some statements (error 1295, confirmed by probe): `START TRANSACTION`, `BEGIN`, `SAVEPOINT`, `ROLLBACK TO SAVEPOINT`, `RELEASE SAVEPOINT`, `LOCK TABLES` and `UNLOCK TABLES`. The runtime driver uses the package's `beginTransaction()`, `commit()` and `rollback()` for transactions, and runs all other statements prepared, raw SQL with no values included; a raw `START TRANSACTION` therefore fails with MySQL's own error. The control driver sends any statement without values over the text protocol (`query`), a user's raw migration SQL included, because migrations need `START TRANSACTION`. That is safe: a statement without values has nothing to inject, multiple statements are off, and the control connection is not shared. Every statement with values runs prepared on both drivers.
 
 ### Placeholders: numbered by the renderer, rewritten by the driver (Will, 2026-10-28)
 
@@ -141,7 +141,7 @@ Other pool facts the driver relies on: the pool's `'error'` event needs a listen
 
 ### Streams
 
-A query's rows stream through `prepare(sql)` and `statement.executeStream(values)`, which pauses the socket while the consumer is busy. Stopping early discards the remaining rows by reading them; MySQL cannot cancel a running statement on the same connection. A pooled stream that the caller stops early destroys its connection instead, so a large result is not downloaded only to be thrown away.
+A query's rows stream through `prepare(sql)` and `statement.executeStream(values)`, which pauses the socket while the consumer is busy. MySQL cannot cancel a running statement on the same connection. When the caller stops a pooled stream early and the whole result has already arrived, the driver drops the buffered rows and returns the connection to the pool. When rows are still arriving, it destroys the connection, so a large result is not downloaded only to be thrown away; the package then opens one short connection to send `KILL`. On a held connection (a transaction), the driver reads and drops the rest, and refuses another statement on that connection while a stream on it is still open (`DRIVER.CONNECTION_BUSY`), because the statement would otherwise wait forever behind the unread rows.
 
 ### Authentication
 
