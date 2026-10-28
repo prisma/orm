@@ -39,7 +39,7 @@ export function bindValue(value: unknown, index: number): unknown {
   if (typeof value === 'bigint') {
     if (withinBigint(value)) return value;
     throw unsendable(
-      `Parameter ${index + 1} is the integer ${value}, outside MySQL's signed 64-bit BIGINT`,
+      `Parameter ${index + 1} is an integer outside MySQL's signed 64-bit BIGINT`,
       index,
       'bigint',
     );

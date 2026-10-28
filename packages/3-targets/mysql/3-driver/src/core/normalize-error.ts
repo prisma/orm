@@ -52,7 +52,7 @@ const CONSTRAINT_SQLSTATES: ReadonlyMap<number, string> = new Map([
 ]);
 
 const PUBLIC_KEY_FIX =
-  'Add allowPublicKeyRetrieval=true to the URL, or connect over TLS with the ssl parameters. Fetching the key over plain TCP lets a machine between the client and the server pose as the server and read the password; TLS does not.';
+  'Add allowPublicKeyRetrieval=true to the URL, or connect over TLS with sslmode or ssl=true in the URL. Fetching the key over plain TCP lets a machine between the client and the server pose as the server and read the password; TLS does not.';
 
 /** The fix for a failed connection when the package's error names its cause, such as a sign-in that needs the server's public key. */
 export function connectionFix(error: unknown): string | undefined {

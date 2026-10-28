@@ -1,3 +1,4 @@
+import { inspect } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import { positionalParams } from '../src/core/positional-params';
 
@@ -32,15 +33,26 @@ describe('positionalParams', () => {
     ).toEqual([2n, 2147483647n, 2n ** 60n, -(2n ** 63n), 1.5, 2n, 1e20, -1e20, 2 ** 63]);
   });
 
-  it('refuses a bigint outside the signed 64-bit range before it reaches the package', () => {
-    for (const [index, value] of [-(2n ** 63n) - 1n, 2n ** 63n].entries()) {
-      expect(() => positionalParams('SELECT ?1', [value])).toThrow(
-        expect.objectContaining({
+  it('refuses a bigint outside the signed 64-bit range before it reaches the package, leaving the value out of the error', () => {
+    for (const value of [-(2n ** 63n) - 1n, 2n ** 63n]) {
+      const error = (() => {
+        try {
+          positionalParams('SELECT ?1', [value]);
+        } catch (thrown) {
+          return thrown;
+        }
+        throw new Error('accepted');
+      })();
+      expect({
+        error,
+        leaked: inspect(error, { depth: 10 }).includes(String(value).replace('-', '')),
+      }).toEqual({
+        error: expect.objectContaining({
           code: 'RUNTIME.ENCODE_FAILED',
           meta: { target: 'mysql', paramIndex: 0, received: 'bigint' },
         }),
-      );
-      expect(index).toBeLessThan(2);
+        leaked: false,
+      });
     }
     expect(positionalParams('SELECT ?1, ?2', [-(2n ** 63n), 2n ** 63n - 1n]).values).toEqual([
       -(2n ** 63n),
