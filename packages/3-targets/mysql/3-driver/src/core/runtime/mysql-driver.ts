@@ -16,8 +16,8 @@ import { blindCast } from '@internal/utils/casts';
 import { createPool, type Pool, type PoolConnection, type Prepare } from 'mariadb';
 import { mysqlPoolOptions } from '../connection-options';
 import { isFatal, normalizeMysqlError } from '../normalize-error';
+import { assertPlaceholderCount } from '../placeholder-count';
 import { positionalParams } from '../positional-params';
-import { assertPreparedCount } from '../prepared-count';
 
 /** Where the runtime driver connects: a `mysql://` URL. */
 export type MysqlBinding = { readonly kind: 'url'; readonly url: string };
@@ -38,7 +38,7 @@ async function prepareChecked(
   const { sql, values } = positionalParams(request.sql, request.params ?? []);
   const statement = await connection.prepare(sql);
   try {
-    assertPreparedCount(statement, values.length);
+    assertPlaceholderCount(statement, values.length);
   } catch (mismatch) {
     statement.close();
     throw mismatch;

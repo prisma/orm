@@ -10,8 +10,8 @@ import { type Connection, createConnection } from 'mariadb';
 import { mysqlConnectionOptions } from '../connection-options';
 import { mysqlDriverDescriptorMeta } from '../descriptor-meta';
 import { connectionFix, connectionLost, isFatal, normalizeMysqlError } from '../normalize-error';
+import { assertPlaceholderCount } from '../placeholder-count';
 import { positionalParams } from '../positional-params';
-import { assertPreparedCount } from '../prepared-count';
 
 /**
  * A MySQL connection for the control plane. A statement with values runs as a server-side prepared statement, so a value never travels inside the SQL. Any statement without values, a user's `rawSql` migration step included, runs through the text protocol, `query()`, because MySQL does not prepare some statements, such as `START TRANSACTION` and `LOCK TABLES`; with no values there is nothing written into the SQL to inject, and `multipleStatements` stays off. Either way every column reads as the text MySQL sends.
@@ -59,7 +59,7 @@ export class MysqlControlDriver implements SqlControlDriverInstance<'mysql'> {
   async #executeChecked(sql: string, values: unknown[]): Promise<unknown> {
     const statement = await this.connection.prepare(sql);
     try {
-      assertPreparedCount(statement, values.length);
+      assertPlaceholderCount(statement, values.length);
       return await statement.execute(values);
     } finally {
       statement.close();

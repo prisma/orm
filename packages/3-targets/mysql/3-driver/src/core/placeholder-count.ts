@@ -10,7 +10,7 @@ function preparedParameterCount(prepared: object): number {
 /**
  * Refuses a prepared statement for which MySQL reads a different number of placeholders than there are values. The driver's lexer and MySQL agree on the driver's session settings; a session a statement changed, such as one that turned on `NO_BACKSLASH_ESCAPES`, can make them disagree. The package refuses too few values, but binds too many to the placeholders it has, in order, so a value would land in the wrong place.
  */
-export function assertPreparedCount(prepared: object, values: number): void {
+export function assertPlaceholderCount(prepared: object, values: number): void {
   const count = preparedParameterCount(prepared);
   if (count === values) return;
   throw structuredError(
