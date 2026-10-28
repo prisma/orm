@@ -13,6 +13,7 @@ import {
   postgresTarget,
   testEnumEntityContributions,
   testEnumPslBlockDescriptor,
+  valueObjectsOf,
 } from './fixtures';
 
 const numeric = {
@@ -142,7 +143,7 @@ model Product {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.domain.namespaces['public']?.valueObjects?.['Price']?.fields).toEqual({
+    expect(valueObjectsOf(result.value)?.['Price']?.fields).toEqual({
       one: { nullable: false, type: numeric, many: false },
       many: { nullable: false, type: numeric, many: { elementNullable: false } },
     });

@@ -36,6 +36,10 @@ A stacked PR is justified only when its base PR is independently valuable to mer
 
 Projects that introduce durable architectural decisions (subsystems, patterns, conventions) write ADRs as part of close-out — `drive-close-project` migrates them into `docs/architecture docs/adrs/`. The mandatory-final retro is a natural surface for "did this project produce an ADR-worthy decision?"
 
+## Close-out runs the close-out procedure
+
+A project's `plan.md` close-out checklist is a reminder, not the procedure. Close-out runs the close-out procedure of the `drive-process` skill (`references/close-project.md`, installed from [prisma/ignite](https://github.com/prisma/ignite/tree/main/skills/.pilot)) step by step: the final retro first, then the project DoD criterion by criterion with evidence, confirmation that every review thread on every slice PR is resolved by a fix or by a reply that says why not, the reference scan, file classification and prose audit, migration, and a close-out PR whose description carries the DoD block, the classification and the reference-strip summary. (Added 2026-10-27, mongo-authoring-structure: the first close-out PR filed tickets, linked them from an ADR and deleted the folder, and skipped the retro, the DoD block, the classification and two references; the operator sent it back.)
+
 ## Close-out destinations
 
 `drive-close-project` uses these defaults when migrating long-lived methodology out of `projects/<project>/`:

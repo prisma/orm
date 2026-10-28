@@ -52,6 +52,7 @@
     "./types": "./dist/types.mjs",
     "./validate-domain": "./dist/validate-domain.mjs",
     "./validate-once": "./dist/validate-once.mjs",
+    "./validate-storage": "./dist/validate-storage.mjs",
     "./package.json": "./package.json"
   },
   "engines": {

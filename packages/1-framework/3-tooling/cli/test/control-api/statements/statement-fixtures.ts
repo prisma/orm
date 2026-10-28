@@ -14,9 +14,12 @@ interface ModelSpec {
   readonly fields?: readonly string[];
   readonly relations?: readonly string[];
   readonly base?: string;
-  /** The field's codec and whether it is optional, for a field `fields` lists; text and required otherwise. */
+  /** The field's codec or the value object of its namespace it holds, and whether it is optional, for a field `fields` lists; text and required otherwise. */
   readonly fieldTypes?: Readonly<
-    Record<string, { readonly codecId?: string; readonly nullable?: boolean }>
+    Record<
+      string,
+      { readonly codecId?: string; readonly valueObject?: string; readonly nullable?: boolean }
+    >
   >;
 }
 
@@ -33,6 +36,7 @@ const textField: ContractField = {
 };
 
 function fieldsOf(
+  namespaceId: string,
   names: readonly string[],
   types: ModelSpec['fieldTypes'] = {},
 ): Record<string, ContractField> {
@@ -45,21 +49,30 @@ function fieldsOf(
           ? textField
           : {
               nullable: type.nullable ?? false,
-              type: { kind: 'scalar', codecId: type.codecId ?? 'test/text@1' },
+              type:
+                type.valueObject === undefined
+                  ? { kind: 'scalar', codecId: type.codecId ?? 'test/text@1' }
+                  : {
+                      kind: 'valueObject',
+                      plane: 'storage',
+                      namespaceId,
+                      entityKind: 'valueObject',
+                      entityName: type.valueObject,
+                    },
             },
       ];
     }),
   );
 }
 
-function modelOf(spec: ModelSpec): ContractModelBase {
+function modelOf(namespaceId: string, spec: ModelSpec): ContractModelBase {
   const relation: ContractRelation = {
     to: crossRef('Other'),
     cardinality: '1:N',
     on: { localFields: ['id'], targetFields: ['ownerId'] },
   };
   return {
-    fields: fieldsOf(spec.fields ?? [], spec.fieldTypes),
+    fields: fieldsOf(namespaceId, spec.fields ?? [], spec.fieldTypes),
     relations: Object.fromEntries((spec.relations ?? []).map((name) => [name, relation])),
     storage: {},
     ...(spec.base !== undefined ? { base: crossRef(spec.base) } : {}),
@@ -67,24 +80,26 @@ function modelOf(spec: ModelSpec): ContractModelBase {
 }
 
 function valueObjectOf(fields: readonly string[]): ContractValueObject {
-  return { fields: fieldsOf(fields) };
+  return {
+    fields: Object.fromEntries(
+      fields.map((name) => [
+        name,
+        { nullable: false, type: { kind: 'scalar', codecId: 'test/text@1' } },
+      ]),
+    ),
+  };
 }
 
 export function contractOf(namespaces: Record<string, NamespaceSpec>): ContractWithDomain {
+  const entries = Object.entries(namespaces);
   return {
     domain: {
       namespaces: Object.fromEntries(
-        Object.entries(namespaces).map(([id, ns]) => [
+        entries.map(([id, ns]) => [
           id,
           {
             models: Object.fromEntries(
-              Object.entries(ns.models ?? {}).map(([name, spec]) => [name, modelOf(spec)]),
-            ),
-            valueObjects: Object.fromEntries(
-              Object.entries(ns.valueObjects ?? {}).map(([name, fields]) => [
-                name,
-                valueObjectOf(fields),
-              ]),
+              Object.entries(ns.models ?? {}).map(([name, spec]) => [name, modelOf(id, spec)]),
             ),
             ...(ns.enums === undefined
               ? {}
@@ -102,6 +117,24 @@ export function contractOf(namespaces: Record<string, NamespaceSpec>): ContractW
                     ]),
                   ),
                 }),
+          },
+        ]),
+      ),
+    },
+    storage: {
+      namespaces: Object.fromEntries(
+        entries.map(([id, ns]) => [
+          id,
+          {
+            id,
+            entries: {
+              valueObject: Object.fromEntries(
+                Object.entries(ns.valueObjects ?? {}).map(([name, fields]) => [
+                  name,
+                  valueObjectOf(fields),
+                ]),
+              ),
+            },
           },
         ]),
       ),

@@ -71,6 +71,7 @@ export type {
   MigrationScaffoldContext,
   OpFactoryCall,
   PlanOrigin,
+  RowsFailingCheck,
   RowsHoldingValue,
   RowsWithoutValue,
   SchemaEntityCoordinate,

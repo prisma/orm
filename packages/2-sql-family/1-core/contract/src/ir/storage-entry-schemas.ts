@@ -1,3 +1,4 @@
+import { ContractFieldTypeSchema, ContractValueObjectFieldSchema } from '@internal/contract/types';
 import { DATA_TYPE_ID_PATTERN } from '@internal/framework-components/codec';
 import { type Type, type } from 'arktype';
 import type { ForeignKeyIndex, ForeignKeyInput, ReferentialAction } from './foreign-key';
@@ -33,6 +34,18 @@ const StorageValueSetRefSchema = type({
   entityKind: "'valueSet'",
   entityName: 'string',
   'spaceId?': 'string',
+});
+
+/**
+ * The framework's value object schema, without what SQL does not store: no member is a union or a dictionary, since the derived check cannot enforce them.
+ */
+export const SqlStorageValueObjectSchema = type({
+  '+': 'reject',
+  fields: type({
+    '[string]': ContractValueObjectFieldSchema.omit('dict')
+      .merge({ type: ContractFieldTypeSchema.exclude({ kind: "'union'" }) })
+      .onUndeclaredKey('reject'),
+  }),
 });
 
 const StorageColumnSchema = type({

@@ -70,6 +70,7 @@ export class PgIntervalStringCodec extends CodecImpl<
 }
 
 export class PgIntervalStringDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
+  override readonly jsonType = 'string' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }

@@ -111,6 +111,8 @@ export type {
   MongoValidatorValidationLevel,
 } from '../ir/mongo-validator';
 export { MongoValidator } from '../ir/mongo-validator';
+export type { MongoValueObjectInput } from '../ir/mongo-value-object';
+export { MongoValueObject } from '../ir/mongo-value-object';
 export type { MongoValueSetInput } from '../ir/mongo-value-set';
 export { MongoValueSet } from '../ir/mongo-value-set';
 export { mongoValueSetsOf } from '../mongo-enum';

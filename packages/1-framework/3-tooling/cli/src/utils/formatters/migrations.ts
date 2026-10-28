@@ -3,6 +3,7 @@ import type {
   MigrationSubjectJson,
   OperationPreview,
 } from '@internal/framework-components/control';
+import type { ChangedStorageEntity } from '../../control-api/operations/changed-storage-entities';
 import type { AppliedStatementReport } from '../../control-api/statements/report-applied-statements';
 import type { TemporaryValueReport } from '../../control-api/statements/temporary-values';
 import type { PerSpaceExecutionEntry } from '../../control-api/types';
@@ -104,6 +105,8 @@ export interface MigrationCommandResult {
    * into a single ambiguous list. See {@link PerSpaceExecutionEntry}.
    */
   readonly perSpace?: ReadonlyArray<PerSpaceExecutionEntry>;
+  /** `db update` only: the storage entities that changed, when it signed the database with a changed contract and ran no operation. */
+  readonly changedStorageEntities?: readonly ChangedStorageEntity[];
   /** `db update` only: the statements the plan applied, in order; empty when none were given. */
   readonly appliedStatements?: readonly AppliedStatementReport[];
   /** `db update` only: the new required fields whose existing rows get a temporary value. */

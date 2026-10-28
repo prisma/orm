@@ -422,6 +422,8 @@ export interface MigrationRunnerFailureMeta {
   readonly rowsWithoutValue?: readonly RowsWithoutValue[];
   /** The data that still holds a stored enum value whose removal its storage cannot take, when that made a check fail. */
   readonly rowsHoldingValue?: RowsHoldingValue;
+  /** The existing rows that a check the failed operation adds refuses, when that made the operation fail. */
+  readonly rowsFailingCheck?: RowsFailingCheck;
   /** The objects in the database that kept the failed operation from running, such as a view on a table to drop. */
   readonly blockingObjects?: readonly BlockingObject[];
   /** The differences the schema check after apply found, when that check failed. */
@@ -506,6 +508,16 @@ export interface RowsHoldingValue {
   readonly operationIndex: number;
   /** The edit to the migration's `migration.ts` that keeps the data, when the target can say it. */
   readonly keepDataEdit?: KeepDataEdit;
+}
+
+/** The existing rows that a check the failed operation adds refuses. The failure's message names where the check is and how to find the rows. */
+export interface RowsFailingCheck {
+  /** The check, as the database names it. */
+  readonly check: string;
+  /** The check the plan drops before it adds this one, when the plan replaces a check. While it holds, the rows cannot be changed to fit the new check. */
+  readonly replacedCheck?: string;
+  /** The position of the operation in the operations of the failing space's plan. */
+  readonly operationIndex: number;
 }
 
 /** A field that is to become required while existing rows have no value for it. */

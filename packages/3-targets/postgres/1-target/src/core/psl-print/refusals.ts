@@ -13,7 +13,7 @@ import type {
   ContractField,
   ExecutionMutationDefaultValue,
   ScalarFieldType,
-  ValueObjectFieldType,
+  ValueObjectReference,
 } from '@internal/contract/types';
 import type { GeneratorPhase } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
@@ -302,7 +302,7 @@ export function refuseFieldColumnMismatch(input: {
 export function refuseUnwritableFieldShape(
   field: ContractField,
   coordinate: string,
-): asserts field is ContractField & { readonly type: ScalarFieldType | ValueObjectFieldType } {
+): asserts field is ContractField & { readonly type: ScalarFieldType | ValueObjectReference } {
   if (field.type.kind === 'union') {
     throw unsupported(
       `field ${coordinate} has a ${field.type.kind} type, which cannot be written in Prisma 8 PSL.`,
@@ -334,15 +334,15 @@ export function refuseUnderivedMemberValueSet(input: {
   if (valueSet === undefined) return;
   const domainEnum = input.domainEnums[valueSet.entityName];
   if (
-    sameJson(valueSet, derivedValueSetRefs(valueSet.entityName).domain) &&
+    sameJson(valueSet, derivedValueSetRefs(valueSet.entityName).storage) &&
     domainEnum?.codecId === type.codecId &&
     type.typeParams === undefined
   ) {
     return;
   }
   throw unsupported(
-    `value-object member ${coordinate} carries a value set other than an enum of the default namespace with that enum's codec and no type parameters, which cannot be written in Prisma 8 PSL.`,
-    "PSL types the member by the enum name, and the PSL source then points the member at that enum in the default namespace and gives it the enum's codec.",
+    `value-object member ${coordinate} carries a value set other than the value set of an enum of the default namespace, with that enum's codec and no type parameters, which cannot be written in Prisma 8 PSL.`,
+    "PSL types the member by the enum name, and the PSL source then points the member at that enum's value set in the default namespace and gives it the enum's codec.",
     KEEP_SOURCE,
     { coordinate },
   );
@@ -526,7 +526,7 @@ export function refuseValueObjectsOutsideDefaultNamespace(
   contract: Contract<SqlStorage>,
   namespaceId: string,
 ): void {
-  const names = Object.keys(contract.domain.namespaces[namespaceId]?.valueObjects ?? {});
+  const names = Object.keys(contract.storage.namespaces[namespaceId]?.entries.valueObject ?? {});
   if (namespaceId === DEFAULT_NAMESPACE_ID || names.length === 0) return;
   throw unsupported(
     `namespace "${namespaceId}" declares the value object${names.length === 1 ? '' : 's'} ${names.join(', ')}, which cannot be written in Prisma 8 PSL: the PSL source reads every value object into the default namespace.`,
@@ -572,7 +572,7 @@ export function refuseUnderivedChecks(
     if (check?.prefix === expected.prefix && check.expression === expected.expression) continue;
     throw unsupported(
       `table "${entry.namespaceId}"."${entry.tableName}" ${check === undefined ? 'lacks' : 'changes'} the check "${name}" the PSL source derives, so it cannot be written in Prisma 8 PSL.`,
-      'The PSL source derives a membership check for each column of a managed table typed by an enum, and an element-not-null check for each list column whose elements are not nullable.',
+      'The PSL source derives, on a managed table, a membership check for each column typed by an enum and for a discriminator column, an element-not-null check for each list column whose elements are not nullable, and a value object check for each column that holds a value object.',
       KEEP_SOURCE,
       { namespaceId: entry.namespaceId, table: entry.tableName, name },
     );
@@ -821,11 +821,7 @@ export function refuseUnwrittenNamespaces(input: {
   const storageNamespaces = new Set([DEFAULT_NAMESPACE_ID, ...input.writtenStorageNamespaces]);
   const defaultDomain = contract.domain.namespaces[DEFAULT_NAMESPACE_ID];
   const domainNamespaces = new Set(input.models.map((entry) => entry.namespaceId));
-  if (
-    domainNamespaces.size === 0 ||
-    Object.keys(defaultDomain?.valueObjects ?? {}).length > 0 ||
-    Object.keys(defaultDomain?.enum ?? {}).length > 0
-  ) {
+  if (domainNamespaces.size === 0 || Object.keys(defaultDomain?.enum ?? {}).length > 0) {
     domainNamespaces.add(DEFAULT_NAMESPACE_ID);
   }
   const planes = [
@@ -1078,6 +1074,7 @@ export function refuseUnwritableName(kind: string, name: string): void {
 const PRINTED_ENTRY_KINDS: ReadonlySet<string> = new Set([
   'table',
   'valueSet',
+  'valueObject',
   'native_enum',
   'rls',
   'policy',
@@ -1094,7 +1091,7 @@ export function refuseUnprintedEntryKinds(
     if (names.length === 0) continue;
     throw unsupported(
       `namespace "${namespaceId}" declares ${names.length} "${kind}" ${names.length === 1 ? 'entity' : 'entities'} (${names.join(', ')}), which the Postgres printer cannot write.`,
-      'The printer writes tables, value sets, native enums, row-level security settings, policies and roles, and no other entity kind.',
+      'The printer writes tables, value sets, value objects, native enums, row-level security settings, policies and roles, and no other entity kind.',
       KEEP_SOURCE,
       { namespaceId, kind, names },
     );

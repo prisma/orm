@@ -25,6 +25,20 @@
             "users": {},
             "posts": {},
             "tasks": {}
+          },
+          "valueObject": {
+            "HomeAddress": {
+              "fields": {
+                "city": {
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "mongo/string@1"
+                  },
+                  "nullable": false,
+                  "many": false
+                }
+              }
+            }
           }
         }
       }
@@ -88,7 +102,10 @@
               "home": {
                 "type": {
                   "kind": "valueObject",
-                  "name": "HomeAddress"
+                  "plane": "storage",
+                  "namespaceId": "__unbound__",
+                  "entityKind": "valueObject",
+                  "entityName": "HomeAddress"
                 },
                 "nullable": true,
                 "many": false
@@ -303,20 +320,6 @@
             "base": {
               "model": "Task",
               "namespace": "__unbound__"
-            }
-          }
-        },
-        "valueObjects": {
-          "HomeAddress": {
-            "fields": {
-              "city": {
-                "type": {
-                  "kind": "scalar",
-                  "codecId": "mongo/string@1"
-                },
-                "nullable": false,
-                "many": false
-              }
             }
           }
         }

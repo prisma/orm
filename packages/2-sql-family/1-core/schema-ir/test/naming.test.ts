@@ -92,13 +92,15 @@ describe('the naming union', () => {
 });
 
 describe('composeCheckWirePrefix', () => {
-  it('spells the membership and element-not-null kinds distinctly', () => {
+  it('spells each kind distinctly', () => {
     expect({
       membership: composeCheckWirePrefix('User', 'role', 'membership'),
       elementNotNull: composeCheckWirePrefix('User', 'tags', 'elementNotNull'),
+      shape: composeCheckWirePrefix('User', 'address', 'shape'),
     }).toEqual({
       membership: 'User_role_check',
       elementNotNull: 'User_tags_elem_not_null',
+      shape: 'User_address_shape',
     });
   });
 
@@ -314,8 +316,10 @@ describe('derivedCheckPrefixes', () => {
       new Set([
         composeCheckWirePrefix('User', 'role', 'membership'),
         composeCheckWirePrefix('User', 'role', 'elementNotNull'),
+        composeCheckWirePrefix('User', 'role', 'shape'),
         composeCheckWirePrefix('User', 'tags', 'membership'),
         composeCheckWirePrefix('User', 'tags', 'elementNotNull'),
+        composeCheckWirePrefix('User', 'tags', 'shape'),
       ]),
     );
   });
@@ -339,6 +343,7 @@ describe('derivedCheckPrefixes', () => {
       new Set([
         'custom_oauth_providers_acceptable_client_ids_check',
         'custom_oauth_providers_acceptable_client_ids_elem_not_',
+        'custom_oauth_providers_acceptable_client_ids_shape',
       ]),
     );
   });

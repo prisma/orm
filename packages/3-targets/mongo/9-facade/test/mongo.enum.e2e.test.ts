@@ -80,7 +80,7 @@ const storageValueSets = blindCast<
 const ACCOUNT_VALIDATOR = deriveCollectionValidators({
   models: ns?.models ?? {},
   lookups: { codecLookup, dataTypeLookup: createDataTypeLookup(mongoDataTypes) },
-  valueObjects: {},
+  storage: { namespaces: {} },
   valueSets: storageValueSets,
   controlPolicies: { collections: {}, defaultControlPolicy: undefined },
 })['accounts'];

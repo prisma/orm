@@ -22,8 +22,11 @@
               "content": {
                 "nullable": true,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "CommentContent",
                   "kind": "valueObject",
-                  "name": "CommentContent"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               },
               "country": {
@@ -62,8 +65,11 @@
               "content": {
                 "nullable": false,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "CommentContent",
                   "kind": "valueObject",
-                  "name": "CommentContent"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               },
               "country": {
@@ -93,47 +99,6 @@
                 },
                 "id": {
                   "field": "_id"
-                }
-              }
-            }
-          }
-        },
-        "valueObjects": {
-          "CommentContent": {
-            "fields": {
-              "text": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "upvotes": {
-                "many": {
-                  "elementNullable": false
-                },
-                "nullable": false,
-                "type": {
-                  "kind": "valueObject",
-                  "name": "CommentContentUpvotes"
-                }
-              }
-            }
-          },
-          "CommentContentUpvotes": {
-            "fields": {
-              "userId": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "vote": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/bool@1",
-                  "kind": "scalar"
                 }
               }
             }
@@ -271,13 +236,57 @@
                 "validationLevel": "strict"
               }
             }
+          },
+          "valueObject": {
+            "CommentContent": {
+              "fields": {
+                "text": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "upvotes": {
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": false,
+                  "type": {
+                    "entityKind": "valueObject",
+                    "entityName": "CommentContentUpvotes",
+                    "kind": "valueObject",
+                    "namespaceId": "__unbound__",
+                    "plane": "storage"
+                  }
+                }
+              }
+            },
+            "CommentContentUpvotes": {
+              "fields": {
+                "userId": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "vote": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/bool@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            }
           }
         },
         "id": "__unbound__",
         "kind": "mongo-database"
       }
     },
-    "storageHash": "95ba06155628a6148dd6c81cf187f68d1e0d09c7289de3530bbd4b58ac311fcd"
+    "storageHash": "20ad63fd1abaddd34b269a096dfe71a87c028cddcd13c1af679cbfbfb63a3b34"
   },
   "capabilities": {},
   "extensions": {},

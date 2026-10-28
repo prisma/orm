@@ -115,9 +115,25 @@ model Item {
     if (!result.ok) throw new Error(JSON.stringify(result.failure));
     expect(result.value.domain.namespaces[UNBOUND_NAMESPACE_ID]?.models['Item']?.fields).toEqual({
       id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false, many: false },
-      label: { type: { kind: 'valueObject', name: 'String' }, nullable: false, many: false },
+      label: {
+        type: {
+          kind: 'valueObject',
+          plane: 'storage',
+          namespaceId: '__unbound__',
+          entityKind: 'valueObject',
+          entityName: 'String',
+        },
+        nullable: false,
+        many: false,
+      },
     });
-    expect(result.value.domain.namespaces[UNBOUND_NAMESPACE_ID]?.valueObjects).toEqual({
+    expect(
+      JSON.parse(
+        JSON.stringify(
+          result.value.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries['valueObject'],
+        ),
+      ),
+    ).toEqual({
       String: {
         fields: {
           length: {

@@ -32,7 +32,7 @@ it(
           .prepared.all(),
       );
       expectTypeOf(all.query(runtime, { first: 1, second: 2 })).toEqualTypeOf<
-        AsyncIterableResult<{ id: number; title: string; type: string }>
+        AsyncIterableResult<{ id: number; title: string; type: 'bug' | 'epic' | 'feature' }>
       >();
       expect(await all.query(runtime, { first: 1, second: 2 })).toEqual([
         { id: 1, title: 'Bug', type: 'bug' },

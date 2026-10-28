@@ -3,11 +3,7 @@ import type { SqlPslBuildContext } from '@internal/family-sql/control';
 import type { InferredTypeConstructors } from '@internal/family-sql/psl-build';
 import type { PslField, PslFieldAttribute } from '@internal/framework-components/psl-ast';
 import { escapePslString } from '@internal/sql-contract/data-type-support';
-import {
-  nonEmptyTypeParams,
-  type SqlStorage,
-  type StorageColumn,
-} from '@internal/sql-contract/types';
+import { nonEmptyTypeParams, type SqlStorage, StorageColumn } from '@internal/sql-contract/types';
 import { pslFieldMapName } from '@internal/sql-contract-psl/map-names';
 import { assertDefined } from '@internal/utils/assertions';
 import { ifDefined } from '@internal/utils/defined';
@@ -20,7 +16,11 @@ import {
 } from '../psl-build/psl-literals';
 import { buildColumnDefault } from './column-defaults';
 import { buildColumnType, type PslColumnType } from './column-types';
-import type { ModelWithTable, VariantInfo } from './contract-model-index';
+import {
+  discriminatorValueSetOf,
+  type ModelWithTable,
+  type VariantInfo,
+} from './contract-model-index';
 import type { NativeEnumEmission } from './enum-blocks';
 import { buildGeneratorAttributes } from './generated-values';
 import {
@@ -107,11 +107,17 @@ export function buildScalarFields(input: {
     input;
   const primaryKeyColumns = variant === undefined ? (entry.table.primaryKey?.columns ?? []) : [];
   const fields: PslField[] = [];
+  const discriminatorField =
+    discriminatorValueSetOf(entry) === undefined ? undefined : entry.model.discriminator?.field;
 
   for (const [fieldName, fieldStorage] of Object.entries(entry.storage.fields)) {
     const columnName = fieldStorage.column;
     const coordinate = `"${entry.namespaceId}"."${entry.tableName}"."${columnName}"`;
-    const column = entry.table.columns[columnName];
+    const storedColumn = entry.table.columns[columnName];
+    const column =
+      fieldName === discriminatorField && storedColumn !== undefined
+        ? withoutValueSet(storedColumn)
+        : storedColumn;
     const field = entry.model.fields[fieldName];
     assertDefined(column, `column ${coordinate} is not declared by its table`);
     if (field === undefined) refuseStorageOfUndeclaredField({ entry, fieldName, coordinate });
@@ -129,7 +135,7 @@ export function buildScalarFields(input: {
     });
     const columnType: PslColumnType =
       field.type.kind === 'valueObject'
-        ? { kind: 'valueObject', typeName: field.type.name }
+        ? { kind: 'valueObject', typeName: field.type.entityName }
         : buildColumnType({
             column,
             inferredConstructors,
@@ -186,4 +192,17 @@ export function buildScalarFields(input: {
   }
 
   return fields;
+}
+
+/** A discriminator column without the value set the PSL source writes for it from the variants, so it is written as the plain column it is declared as. */
+function withoutValueSet(column: StorageColumn): StorageColumn {
+  return new StorageColumn({
+    dataType: column.dataType,
+    codecId: column.codecId,
+    nullable: column.nullable,
+    many: column.many,
+    ...ifDefined('typeParams', column.typeParams),
+    ...ifDefined('default', column.default),
+    ...ifDefined('control', column.control),
+  });
 }

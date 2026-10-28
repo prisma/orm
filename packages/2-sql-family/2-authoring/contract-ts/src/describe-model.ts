@@ -13,7 +13,7 @@ import {
 } from './contract-definition';
 import { contractError } from './contract-errors';
 import { describeColumn } from './describe-column';
-import { buildDomainField } from './domain-fields';
+import { buildDomainField, valueObjectReference } from './domain-fields';
 import { modelNamespaceId } from './model-references';
 import { lowerRelations } from './model-relations';
 import { type ForeignKeyResolutionContext, resolveForeignKey } from './resolve-foreign-key';
@@ -89,7 +89,7 @@ export function describeModel(
       context,
     ),
   );
-  const storage = describeModelStorage(model, namespaceId, foreignKeys);
+  const storage = describeModelStorage(model, namespaceId, foreignKeys, context.defaultNamespaceId);
 
   const storageFields: Record<string, { readonly column: string }> = {};
   for (const [fieldName, columnName] of Object.entries(fieldToColumn)) {
@@ -106,6 +106,9 @@ export function describeModel(
         storage: { table: tableName, namespaceId, fields: storageFields },
         fields: domainFields,
         relations: lowerRelations(model, columnToField, context),
+        ...ifDefined('discriminator', model.discriminator),
+        ...ifDefined('variants', model.variants),
+        ...ifDefined('base', model.base),
       },
       executionDefaults,
     },
@@ -119,9 +122,12 @@ function describeModelStorage(
   model: ModelNode,
   namespaceId: string,
   foreignKeys: readonly ForeignKeyAuthoringInput[],
+  defaultNamespaceId: string,
 ): ModelStorage {
   const { tableName } = model;
-  const columns = model.fields.map((field) => describeFieldColumn(model.modelName, field));
+  const columns = model.fields.map((field) =>
+    describeFieldColumn(model.modelName, field, defaultNamespaceId),
+  );
   if (model.sharesBaseTable) {
     if (model.checks && model.checks.length > 0) {
       throw contractError(
@@ -149,18 +155,28 @@ function describeModelStorage(
   };
 }
 
-function describeFieldColumn(modelName: string, field: ModelField): ColumnDescription {
+function describeFieldColumn(
+  modelName: string,
+  field: ModelField,
+  defaultNamespaceId: string,
+): ColumnDescription {
   const site = { kind: 'field', modelName, fieldName: field.fieldName } as const;
   if (isValueObjectMember(field)) {
-    return describeColumn(
-      {
-        columnName: field.columnName,
-        descriptor: field.descriptor,
-        nullable: field.nullable,
-        ...ifDefined('default', field.default),
+    return {
+      ...describeColumn(
+        {
+          columnName: field.columnName,
+          descriptor: field.descriptor,
+          nullable: field.nullable,
+          ...ifDefined('default', field.default),
+        },
+        site,
+      ),
+      valueObject: {
+        reference: valueObjectReference(field.valueObjectName, defaultNamespaceId),
+        many: field.many === true ? { elementNullable: field.elementNullable === true } : false,
       },
-      site,
-    );
+    };
   }
   return describeColumn(field, site);
 }

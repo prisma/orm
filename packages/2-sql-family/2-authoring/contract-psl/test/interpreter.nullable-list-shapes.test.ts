@@ -11,6 +11,7 @@ import {
   postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
   postgresTarget,
+  valueObjectRef,
   valueObjectsOf,
 } from './fixtures';
 
@@ -221,7 +222,7 @@ model User {
 
     expect(model?.fields['addresses']).toEqual({
       nullable: false,
-      type: { kind: 'valueObject', name: 'Address' },
+      type: valueObjectRef('Address'),
       many: { elementNullable: true },
     });
     expect(addressesColumn).toEqual({

@@ -1,11 +1,11 @@
 #!/usr/bin/env -S node
 import { createIndex, Migration, MigrationCLI } from '@prisma/orm-mongo/target/migration';
-import type { Contract as End } from '../../snapshots/977a060afe52c4a56f93f2f33d65b8b6b4cc4ded04d16fe6b4f8e7e9e61192d3/contract';
-import endContract from '../../snapshots/977a060afe52c4a56f93f2f33d65b8b6b4cc4ded04d16fe6b4f8e7e9e61192d3/contract.json' with {
+import type { Contract as End } from '../../snapshots/32b49a010a6bec06827848a71ade1588d7863e429644edc402becee50580be78/contract';
+import endContract from '../../snapshots/32b49a010a6bec06827848a71ade1588d7863e429644edc402becee50580be78/contract.json' with {
   type: 'json',
 };
-import type { Contract as Start } from '../../snapshots/6969147309c36a2e1cef69c2077abfa7ddb568d171ad99f03506d9f428b0a595/contract';
-import startContract from '../../snapshots/6969147309c36a2e1cef69c2077abfa7ddb568d171ad99f03506d9f428b0a595/contract.json' with {
+import type { Contract as Start } from '../../snapshots/917a8cff4030fa9140b93367a663f33d66cd14e92547b51e23a9ff82ffabf27f/contract';
+import startContract from '../../snapshots/917a8cff4030fa9140b93367a663f33d66cd14e92547b51e23a9ff82ffabf27f/contract.json' with {
   type: 'json',
 };
 

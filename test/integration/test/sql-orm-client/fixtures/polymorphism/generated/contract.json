@@ -957,6 +957,13 @@
               "uniques": []
             },
             "tasks": {
+              "checks": [
+                {
+                  "expression": "\"type\" IN ('bug', 'epic', 'feature')",
+                  "name": "tasks_type_check_b3d5b43f",
+                  "prefix": "tasks_type_check"
+                }
+              ],
               "columns": {
                 "bug_assignee_person_id": {
                   "codecId": "pg/int4@1",
@@ -995,7 +1002,13 @@
                 "type": {
                   "codecId": "pg/text@1",
                   "dataType": "pg/text",
-                  "nullable": false
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Task.type",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
                 }
               },
               "foreignKeys": [
@@ -1124,6 +1137,13 @@
               "uniques": []
             },
             "users": {
+              "checks": [
+                {
+                  "expression": "\"kind\" IN ('admin', 'regular')",
+                  "name": "users_kind_check_dc69a8d4",
+                  "prefix": "users_kind_check"
+                }
+              ],
               "columns": {
                 "account_id": {
                   "codecId": "pg/int4@1",
@@ -1147,7 +1167,13 @@
                 "kind": {
                   "codecId": "pg/text@1",
                   "dataType": "pg/text",
-                  "nullable": false
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "User.kind",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
                 },
                 "name": {
                   "codecId": "pg/text@1",
@@ -1203,13 +1229,30 @@
               },
               "uniques": []
             }
+          },
+          "valueSet": {
+            "Task.type": {
+              "kind": "valueSet",
+              "values": [
+                "bug",
+                "epic",
+                "feature"
+              ]
+            },
+            "User.kind": {
+              "kind": "valueSet",
+              "values": [
+                "admin",
+                "regular"
+              ]
+            }
           }
         },
         "id": "public",
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "2ccba7c309ee13e4714b958e47eb88ca06415dac60cd475a51940499c3331f8a"
+    "storageHash": "00913b83286a9e6492e6621c3ba277633d43a309cdda39f9cb46f0a54752c1eb"
   },
   "capabilities": {
     "postgres": {

@@ -63,9 +63,11 @@ const origin = {
       },
     },
   },
+  storage: { namespaces: {} },
 };
 const destination = {
   domain: { namespaces: { app: { models: { User: { fields: {}, relations: {}, storage: {} } } } } },
+  storage: { namespaces: {} },
 };
 const contracts = {
   origin,

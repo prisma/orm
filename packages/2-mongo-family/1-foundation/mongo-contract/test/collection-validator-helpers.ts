@@ -1,4 +1,10 @@
-import type { ContractEmbedRelation, ContractField, ContractModel } from '@internal/contract/types';
+import type {
+  ContractEmbedRelation,
+  ContractField,
+  ContractModel,
+  ContractValueObject,
+  StorageBase,
+} from '@internal/contract/types';
 import { type CrossReference, crossRef } from '@internal/contract/types';
 import type { MongoModelStorage } from '../src/contract-types';
 import {
@@ -47,14 +53,30 @@ export function embedMany(to: string): ContractEmbedRelation {
   return { to: crossRef(to), cardinality: '1:N' };
 }
 
+/** Storage holding `valueObjects` in the unbound namespace, where the test helpers' value object fields point. */
+export function storageWithValueObjects(
+  valueObjects: Record<string, ContractValueObject>,
+): Pick<StorageBase, 'namespaces'> {
+  return {
+    namespaces: { __unbound__: { id: '__unbound__', entries: { valueObject: valueObjects } } },
+  };
+}
+
+/** Test inputs that may give value objects by name, as stored in the unbound namespace, in place of storage. */
+export type ValidatorTestSources = Partial<
+  Pick<CollectionValidatorsInput, 'storage' | 'valueSets' | 'controlPolicies'> & {
+    readonly valueObjects: Record<string, ContractValueObject>;
+  }
+>;
+
 /** The validators of `models`, with each model in `roots` stored in the collection that keys it. */
 export function derive(
   input: {
     readonly roots: Record<string, CrossReference>;
   } & Pick<CollectionValidatorsInput, 'models'> &
-    Partial<Pick<CollectionValidatorsInput, 'valueObjects' | 'valueSets' | 'controlPolicies'>>,
+    ValidatorTestSources,
 ) {
-  const { roots, models, ...sources } = input;
+  const { roots, models, valueObjects, ...sources } = input;
   const stored = { ...models };
   for (const [collection, root] of Object.entries(roots)) {
     const model = stored[root.model];
@@ -64,7 +86,7 @@ export function derive(
   }
   return deriveCollectionValidators({
     lookups: mongoTypeLookups,
-    valueObjects: {},
+    storage: storageWithValueObjects(valueObjects ?? {}),
     valueSets: {},
     controlPolicies: { collections: {}, defaultControlPolicy: undefined },
     ...sources,
@@ -87,7 +109,7 @@ function itemsValidator(validators: Record<string, MongoValidator>): MongoValida
 /** The validator of collection `items`, whose root model has `fields`. */
 export function rootValidator(
   fields: Record<string, ContractField>,
-  sources: Partial<Pick<CollectionValidatorsInput, 'valueObjects' | 'valueSets'>> = {},
+  sources: Pick<ValidatorTestSources, 'valueObjects' | 'valueSets'> = {},
 ): MongoValidator {
   return itemsValidator(
     derive({ roots: { items: crossRef('Item') }, models: { Item: model(fields) }, ...sources }),

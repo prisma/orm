@@ -268,27 +268,29 @@ describe('value objects', () => {
   it('refuses a value object outside the default namespace, which the PSL source would move', () => {
     expect(
       printingWidget({
-        domainNamespaces: {
-          auth: { models: {}, valueObjects: { Address: { fields: { street: TEXT_FIELD } } } },
+        storageNamespaces: {
+          auth: {
+            id: 'auth',
+            entries: { table: {}, valueObject: { Address: { fields: { street: TEXT_FIELD } } } },
+          },
         },
-        storageNamespaces: { auth: { id: 'auth', entries: { table: {} } } },
       }),
     ).toThrow(refusal({ namespaceId: 'auth', names: ['Address'] }));
   });
 
-  it('refuses a value-object member whose type is a union', () => {
-    expect(
-      withAddress({
+  it('never reaches a value-object member that is a union, which deserializing refuses', () => {
+    expect(() =>
+      addressContract({
         many: false,
         nullable: false,
         type: { kind: 'union', members: [{ kind: 'scalar', codecId: 'pg/text@1' }] },
       }),
-    ).toThrow(refusal({ coordinate: '"public".Address.street', kind: 'union' }));
+    ).toThrow('value object "public:Address" member "street" is a union');
   });
 
-  it('refuses a value-object member that is a dictionary', () => {
-    expect(withAddress({ ...TEXT_FIELD, dict: true })).toThrow(
-      refusal({ coordinate: '"public".Address.street' }),
+  it('never reaches a value-object member that is a dictionary, which deserializing refuses', () => {
+    expect(() => addressContract({ ...TEXT_FIELD, dict: true })).toThrow(
+      'value object "public:Address" member "street" is a dictionary',
     );
   });
 
@@ -328,25 +330,22 @@ describe('value objects', () => {
     );
   });
 
-  it('refuses a value-object member whose value set is not a domain enum of the default namespace', () => {
+  it('refuses a value set no enum derives, in the namespace that holds it', () => {
     expect(
-      withAddress({
-        ...TEXT_FIELD,
-        valueSet: {
-          plane: 'domain',
-          entityKind: 'enum',
-          namespaceId: 'public',
-          entityName: 'Label',
-        },
-      }),
-    ).toThrow(refusal({ coordinate: '"public".Address.street' }));
+      printing(
+        withCountryMembers(
+          { label: { ...TEXT_FIELD, valueSet: { ...countryValueSet, entityName: 'Label' } } },
+          { Label: { kind: 'valueSet', values: ['x'] } },
+        ),
+      ),
+    ).toThrow(refusal({ namespaceId: 'public', name: 'Label' }));
   });
 
-  it('refuses a value-object member whose value set names an enum the domain does not declare', () => {
+  it('refuses a value-object member whose value set is not the one the enum of its name derives', () => {
     expect(
       printing(
         withCountryMembers({
-          country: { ...TEXT_FIELD, valueSet: { ...countryValueSet, entityName: 'Missing' } },
+          country: { ...TEXT_FIELD, valueSet: { ...countryValueSet, spaceId: 'other' } },
         }),
       ),
     ).toThrow(refusal({ coordinate: '"public".Address.country' }));

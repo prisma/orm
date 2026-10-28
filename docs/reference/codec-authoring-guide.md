@@ -96,6 +96,7 @@ export class PgTextDescriptor extends PostgresCodecDescriptor<void> {
     return expression;
   }
   override readonly dataType = pgText.id;
+  override readonly jsonType = 'string' as const;
   override readonly codecId = 'pg/text@1' as const;
   override readonly traits = ['equality', 'order', 'textual'] as const;
   override readonly paramsSchema = undefined;
@@ -148,6 +149,7 @@ export class PgVectorDescriptor extends PostgresCodecDescriptor<VectorParams> {
     return CastExpr.as(expression, 'text');
   }
   override readonly dataType = pgvectorVector.id;
+  override readonly jsonType = 'array' as const;
   override readonly codecId = 'pg/vector@1' as const;
   override readonly traits = ['equality'] as const;
   override readonly paramsSchema: StandardSchemaV1<VectorParams> = pgvectorVectorParams;
@@ -234,6 +236,7 @@ export class ArktypeJsonDescriptor extends PostgresCodecDescriptor<ArktypeJsonTy
     return CastExpr.as(expression, 'text');
   }
   override readonly dataType = pgJsonb.id;
+  override readonly jsonType = 'any' as const;
   override readonly codecId = 'arktype/json@1' as const;
   override readonly traits = ['equality'] as const;
   override readonly paramsSchema = type({
@@ -289,7 +292,7 @@ import { pgVectorDescriptor } from './codecs';
 export const codecDescriptors = definePostgresCodecs([pgVectorDescriptor]);
 ```
 
-The descriptor does not say how its column type is written: the data type it represents does, for DDL, schema verification and PostgreSQL's parameter casts alike. `jsonProjection(expression, params)` declares the scalar AST transformation. Identity is an explicit, behavior-preserving declaration during the 0.17 transition, not an implicit default.
+The descriptor does not say how its column type is written: the data type it represents does, for DDL, schema verification and PostgreSQL's parameter casts alike. `jsonProjection(expression, params)` declares the scalar AST transformation. `jsonType` declares the JSON type the codec's value is written as inside a JSON document: `'string'`, `'number'`, `'boolean'`, `'object'`, `'array'`, or `'any'` for a value that can be any JSON value, including `null`. The derived check of a value object column requires a member to be of its codec's JSON type, and a required member is never JSON `null` unless the type is `'any'`. A registry accepts a descriptor that declares none, but a contract build refuses a value object member whose codec declares none, with `CONTRACT.CODEC_JSON_TYPE_MISSING`. Identity is an explicit, behavior-preserving declaration during the 0.17 transition, not an implicit default.
 
 The public `projectJson(expression, ref)` method validates parameters and dispatches scalar versus stored-array projection. For `ref.many === true`, the default `jsonArrayProjection` binds the input expression once, unnests with ordinality, applies the scalar hook to each non-null element, and preserves a null array, an empty array, null elements, and element order. Override `jsonArrayProjection` only when the target codec has an equivalent optimized transformation.
 
@@ -307,7 +310,7 @@ const postgresSqlIntDescriptor = postgresCodec(sqlIntDescriptor, {
 });
 ```
 
-The adapter delegates the wrapped descriptor's codec id, traits, literals and renderers, and builds codecs with the `factory` it is given, which receives the adapted descriptor, the data type and the column's parameters. A template's own factory builds no codec, because it names no data type. A target may pass a subclass of the family codec with its own wire rules, as PostgreSQL does for `int4`. The adapter's parameter schema is the data type's `params`, not the wrapped descriptor's, so a parameter's bound is declared once, on the data type. It adds the PostgreSQL discriminant and target methods.
+The adapter delegates the wrapped descriptor's codec id, traits, JSON type, literals and renderers, and builds codecs with the `factory` it is given, which receives the adapted descriptor, the data type and the column's parameters. A template's own factory builds no codec, because it names no data type. A target may pass a subclass of the family codec with its own wire rules, as PostgreSQL does for `int4`. The adapter's parameter schema is the data type's `params`, not the wrapped descriptor's, so a parameter's bound is declared once, on the data type. It adds the PostgreSQL discriminant and target methods.
 
 ### SQLite
 

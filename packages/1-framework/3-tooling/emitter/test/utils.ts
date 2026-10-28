@@ -19,10 +19,7 @@ const identitySerialize = (c: Contract): JsonObject => c as unknown as JsonObjec
 const identityDeserialize = (json: Record<string, unknown>): Contract => {
   const contract = structuredClone(json) as unknown as Contract;
   for (const namespace of Object.values(contract.domain.namespaces)) {
-    for (const entity of [
-      ...Object.values(namespace.models),
-      ...Object.values(namespace.valueObjects ?? {}),
-    ]) {
+    for (const entity of Object.values(namespace.models)) {
       for (const [name, field] of Object.entries(entity.fields)) {
         entity.fields[name] = { ...field, many: field.many ?? false };
       }

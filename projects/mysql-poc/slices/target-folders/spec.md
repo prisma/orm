@@ -48,7 +48,7 @@ One reviewer reads this as renames plus a short list of path edits. Splitting Mo
 | Package scripts with relative paths, e.g. the Postgres facade's `emit` script `cd ../../../test/integration` | Recompute for the new depth |
 | `pnpm-lock.yaml` records importer paths | Regenerate with `pnpm install` |
 | Test fixtures and generated `contract.json` files with paths | Run `pnpm fixtures:check`; regenerate only if paths are stored in them |
-| Concurrent branch `projects/mongo-authoring-structure` edits `2-mongo-family/2-authoring` | Not moved here; no conflict beyond config files |
+| Concurrent MongoDB authoring work (prisma/orm#30832, prisma/orm#30846) edits `2-mongo-family/2-authoring` | Not moved here; no conflict beyond config files |
 | Destructive git operations | Forbidden without orchestrator approval |
 
 ## Done when

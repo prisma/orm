@@ -4,10 +4,7 @@ import type {
   ContractSourceDiagnostics,
 } from '@internal/config/config-types';
 import type { Contract, JsonValue } from '@internal/contract/types';
-import {
-  domainModelsAtDefaultNamespace,
-  domainValueObjectsAtDefaultNamespace,
-} from '@internal/contract/types';
+import { type ContractValueObject, domainModelsAtDefaultNamespace } from '@internal/contract/types';
 import {
   type AuthoringContributions,
   type AuthoringEntityContext,
@@ -37,6 +34,7 @@ import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import type { DocumentAst, PslSources, SourceFile } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import { bindPslSchema } from '@internal/psl-parser/test';
+import type { CheckExpressionInput } from '@internal/sql-contract/check-expressions';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import { type EnumTypeHandle, enumType } from '@internal/sql-contract-ts/contract-builder';
 import type { Result } from '@internal/utils/result';
@@ -130,13 +128,7 @@ export const sqliteEnumInferenceCodecs = {
  * fixture without one emits no checks at all and every assertion about checks
  * would hold vacuously — the PSL/TS parity test in particular.
  */
-export function testRenderCheckExpressions(input: {
-  readonly tableName: string;
-  readonly columnName: string;
-  readonly many: boolean;
-  readonly elementNullable: boolean;
-  readonly memberValues: readonly (string | number)[] | undefined;
-}): ReadonlyArray<{
+export function testRenderCheckExpressions(input: CheckExpressionInput): ReadonlyArray<{
   readonly kind: 'membership' | 'elementNotNull';
   readonly columnName: string;
   readonly expression: string;
@@ -162,7 +154,7 @@ export function testRenderCheckExpressions(input: {
         : `${column} IN (${members})`,
     });
   }
-  if (input.many && !input.elementNullable) {
+  if (input.many !== false && !input.many.elementNullable) {
     candidates.push({
       kind: 'elementNotNull',
       columnName: input.columnName,
@@ -594,8 +586,25 @@ export function modelsOf(contract: Contract) {
   return domainModelsAtDefaultNamespace(contract.domain);
 }
 
-export function valueObjectsOf(contract: Contract) {
-  return domainValueObjectsAtDefaultNamespace(contract.domain);
+/** A field type that refers to the storage value object `entityName` in `namespaceId`. */
+export function valueObjectRef(entityName: string, namespaceId = 'public') {
+  return {
+    kind: 'valueObject',
+    plane: 'storage',
+    namespaceId,
+    entityKind: 'valueObject',
+    entityName,
+  } as const;
+}
+
+/** The storage value objects of every namespace, as plain JSON; `undefined` when the contract has none. */
+export function valueObjectsOf(
+  contract: Contract,
+): Record<string, ContractValueObject> | undefined {
+  const slots = Object.values(contract.storage.namespaces).flatMap((namespace) =>
+    namespace.entries['valueObject'] === undefined ? [] : [namespace.entries['valueObject']],
+  );
+  return slots.length === 0 ? undefined : JSON.parse(JSON.stringify(Object.assign({}, ...slots)));
 }
 
 export function documentScopedTypes(contract: { readonly storage?: unknown }) {

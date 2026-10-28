@@ -11,6 +11,7 @@ export function describeColumn(column: ColumnNode, site: ColumnSite): ColumnDesc
     many: column.many === true ? { elementNullable: column.elementNullable === true } : false,
     default: column.default,
     enumTypeHandle: column.enumTypeHandle,
+    valueObject: undefined,
     site,
   };
 }

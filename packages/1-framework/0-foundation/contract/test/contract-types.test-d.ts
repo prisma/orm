@@ -1,5 +1,5 @@
 import { expectTypeOf, test } from 'vitest';
-import type { Contract } from '../src/contract-types';
+import type { Contract, ContractValueObjectAt } from '../src/contract-types';
 import type { CrossReference } from '../src/cross-reference';
 import type { ContractField, ContractModel, ModelStorageBase } from '../src/domain-types';
 import type { NamespaceId } from '../src/namespace-id';
@@ -114,4 +114,23 @@ test('old many: true does not satisfy ContractField', () => {
 
 test('ContractField has no sibling elementNullable property', () => {
   expectTypeOf<ContractField>().not.toHaveProperty('elementNullable');
+});
+
+test('ContractValueObjectAt finds the value object a reference names in its storage namespace', () => {
+  type Point = { readonly fields: { readonly x: ContractField } };
+  type Geo = { readonly fields: { readonly lat: ContractField } };
+  type Storage = {
+    readonly namespaces: {
+      readonly public: { readonly entries: { readonly valueObject: { readonly Point: Point } } };
+      readonly geo: { readonly entries: { readonly valueObject: { readonly Point: Geo } } };
+    };
+  };
+  type Ref<Ns extends string, Name extends string> = {
+    readonly namespaceId: Ns;
+    readonly entityName: Name;
+  };
+  expectTypeOf<ContractValueObjectAt<Storage, Ref<'public', 'Point'>>>().toEqualTypeOf<Point>();
+  expectTypeOf<ContractValueObjectAt<Storage, Ref<'geo', 'Point'>>>().toEqualTypeOf<Geo>();
+  expectTypeOf<ContractValueObjectAt<Storage, Ref<'public', 'Missing'>>>().toBeNever();
+  expectTypeOf<ContractValueObjectAt<Storage, Ref<'missing', 'Point'>>>().toBeNever();
 });

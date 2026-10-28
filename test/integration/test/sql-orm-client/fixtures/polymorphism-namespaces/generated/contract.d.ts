@@ -23,7 +23,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'20f073da80d13b3d30479280c2ff02efa9594c42efebfbb14f233b93e9df3d2f'>;
+  StorageHashBase<'b4c46998d16621f5bfb704da34f41ffc3a24a4029fb2c0ef7d2c10f9878597cc'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -269,22 +269,60 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
   : Encoded;
 type ParameterizedOutputTypeFunctions = PgParameterizedOutputTypes;
 
-type FieldTypeOverrides = {};
+type FieldTypeOverrides = {
+  readonly a: {
+    readonly models: {
+      readonly Task: {
+        readonly type: {
+          readonly output: 'b-epic' | 'bug' | 'c-epic' | 'chore' | 'feature';
+          readonly input: 'b-epic' | 'bug' | 'c-epic' | 'chore' | 'feature';
+        };
+      };
+    };
+  };
+  readonly b: {
+    readonly models: {
+      readonly Doc: { readonly kind: { readonly output: 'memo'; readonly input: 'memo' } };
+    };
+  };
+  readonly c: {
+    readonly models: {
+      readonly Doc: { readonly kind: { readonly output: 'note'; readonly input: 'note' } };
+    };
+  };
+};
 export type FieldOutputTypes = FieldTypesFromDomain<
   ContractBase['domain']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'output'
+  'output',
+  ContractBase['storage']['namespaces']
 >;
 export type FieldInputTypes = FieldTypesFromDomain<
   ContractBase['domain']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'input'
+  'input',
+  ContractBase['storage']['namespaces']
 >;
-type ColumnTypeOverrides = {};
+type ColumnTypeOverrides = {
+  readonly a: {
+    readonly tasks: {
+      readonly type: {
+        readonly output: 'b-epic' | 'bug' | 'c-epic' | 'chore' | 'feature';
+        readonly input: 'b-epic' | 'bug' | 'c-epic' | 'chore' | 'feature';
+      };
+    };
+  };
+  readonly b: {
+    readonly docs: { readonly kind: { readonly output: 'memo'; readonly input: 'memo' } };
+  };
+  readonly c: {
+    readonly docs: { readonly kind: { readonly output: 'note'; readonly input: 'note' } };
+  };
+};
 export type StorageColumnTypes = ColumnTypesFromStorage<
   ContractBase['storage'],
   CodecTypes,
@@ -548,6 +586,12 @@ type ContractBase = Omit<
               ];
             };
           };
+          readonly valueSet: {
+            readonly 'Task.type': {
+              readonly kind: 'valueSet';
+              readonly values: readonly ['b-epic', 'bug', 'c-epic', 'chore', 'feature'];
+            };
+          };
         };
       };
       readonly b: {
@@ -693,6 +737,9 @@ type ContractBase = Omit<
               ];
             };
           };
+          readonly valueSet: {
+            readonly 'Doc.kind': { readonly kind: 'valueSet'; readonly values: readonly ['memo'] };
+          };
         };
       };
       readonly c: {
@@ -759,6 +806,9 @@ type ContractBase = Omit<
                 },
               ];
             };
+          };
+          readonly valueSet: {
+            readonly 'Doc.kind': { readonly kind: 'valueSet'; readonly values: readonly ['note'] };
           };
         };
       };
@@ -1101,7 +1151,6 @@ type ContractBase = Omit<
   };
   readonly extensions: {};
   readonly meta: {};
-
   readonly profileHash: ProfileHash;
 };
 

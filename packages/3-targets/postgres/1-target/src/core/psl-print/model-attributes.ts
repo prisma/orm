@@ -1,4 +1,5 @@
 import type { PslModelAttribute } from '@internal/framework-components/psl-ast';
+import type { ResolvedColumnValueObject } from '@internal/sql-contract/check-expressions';
 import { escapePslString } from '@internal/sql-contract/data-type-support';
 import type { StorageTable } from '@internal/sql-contract/types';
 import { pslModelMapName } from '@internal/sql-contract-psl/map-names';
@@ -36,30 +37,35 @@ export interface DerivedCheck {
  * The checks the PSL source derives itself for a table, keyed by name, so
  * they are not also written as `@@check`. A table that is not managed derives
  * none. A managed one derives a membership check for each column typed by a
- * domain enum and an element-not-null check for each list column whose
- * elements are not nullable.
+ * domain enum and for a discriminator column, an element-not-null check for
+ * each list column whose elements are not nullable, and a value object check
+ * for each column that holds a value object.
  */
 export function derivedChecks(input: {
   readonly table: StorageTable;
   readonly tableName: string;
   readonly managed: boolean;
-  readonly domainEnumValues: ReadonlyMap<string, readonly unknown[]>;
+  /** The values of each value set a domain enum or a discriminator writes, by name. */
+  readonly memberValueSets: ReadonlyMap<string, readonly unknown[]>;
+  /** The value object field each column that holds one stores, by column name. */
+  readonly columnValueObjects: ReadonlyMap<string, ResolvedColumnValueObject>;
 }): ReadonlyMap<string, DerivedCheck> {
   const checks = new Map<string, DerivedCheck>();
   if (!input.managed) return checks;
   for (const [columnName, column] of Object.entries(input.table.columns)) {
-    const enumValues =
+    const setValues =
       column.codecId === PG_ENUM_CODEC_ID || column.valueSet === undefined
         ? undefined
-        : input.domainEnumValues.get(column.valueSet.entityName);
-    const memberValues = enumValues?.filter(
+        : input.memberValueSets.get(column.valueSet.entityName);
+    const memberValues = setValues?.filter(
       (value): value is string | number => typeof value === 'string' || typeof value === 'number',
     );
     for (const candidate of postgresRenderCheckExpressions({
       tableName: input.tableName,
       columnName,
       many: column.many,
-      memberValues: memberValues?.length === enumValues?.length ? memberValues : undefined,
+      memberValues: memberValues?.length === setValues?.length ? memberValues : undefined,
+      valueObject: input.columnValueObjects.get(columnName),
     })) {
       const prefix = composeCheckWirePrefix(input.tableName, columnName, candidate.kind);
       checks.set(formatWireName(prefix, computeCheckContentHash(candidate.expression)), {

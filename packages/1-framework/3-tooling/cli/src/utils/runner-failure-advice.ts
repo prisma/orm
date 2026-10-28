@@ -9,6 +9,7 @@ import { basename, join } from 'pathe';
 import { statementFlag } from '../control-api/statements/statement-flag';
 import type {
   FailedTypeChangeReport,
+  RowsFailingCheckReport,
   RowsHoldingValueReport,
   RowsWithoutValueReport,
   RunnerFailureFacts,
@@ -201,6 +202,63 @@ function migrateRowsHoldingValueAdvice(
       `put any code you copied into the migration.ts it writes, ${runWrittenFile(invocation)}`,
     ),
     ...byHand,
+  ];
+}
+
+/** Where the operation that updates the rows goes among the operations of a migration.ts that replaces a check. */
+function betweenTheChecks(report: RowsFailingCheckReport, replacedCheck: string): string {
+  return `after the operation that drops check "${replacedCheck}" and before the operation that adds check "${report.check}"`;
+}
+
+function updateOperation(report: RowsFailingCheckReport): string {
+  return `an operation that updates those rows to fit check "${report.check}"`;
+}
+
+function fixRowsFirst(report: RowsFailingCheckReport, rerun: string): NextAction {
+  return chooseAction(
+    `Update or delete those rows so they fit check "${report.check}", then re-run ${quoted(rerun)}`,
+  );
+}
+
+/** The way out when existing rows fail a check `db update` adds: it cannot keep the data while the check it replaces holds. */
+export function dbUpdateRowsFailingCheckAdvice(
+  report: RowsFailingCheckReport,
+  databaseStorageHash: string | undefined,
+  invocation: CliInvocation,
+): RunnerAdvice {
+  const update = cliCommand(invocation, 'db update', invocation.rerunArgs ?? []);
+  const { replacedCheck } = report;
+  if (replacedCheck === undefined) return [fixRowsFirst(report, update)];
+  const cannotKeep = `${quoted(cliCommand(invocation, 'db update'))} cannot keep this data`;
+  if (databaseStorageHash === undefined) {
+    return [
+      chooseAction(
+        `${cannotKeep}, and no migration ends at the contract the database is at, so ${quoted(cliCommand(invocation, 'migration plan'))} cannot plan from it. Drop check "${replacedCheck}" in the database yourself, update those rows to fit check "${report.check}", then re-run ${quoted(update)}`,
+      ),
+    ];
+  }
+  const plan = printedPlanCommand(invocation, databaseStorageHash, invocation.statementArgs ?? []);
+  return [
+    chooseAction(
+      `${cannotKeep}. Plan the change with ${quoted(plan)}, add ${updateOperation(report)} to the migration.ts it writes, ${betweenTheChecks(report, replacedCheck)}, ${runWrittenFile(invocation)}`,
+    ),
+  ];
+}
+
+function migrateRowsFailingCheckAdvice(
+  report: RowsFailingCheckReport,
+  failedMigration: FailedMigrationText | undefined,
+  invocation: CliInvocation,
+): RunnerAdvice {
+  const { replacedCheck } = report;
+  if (replacedCheck === undefined) {
+    return [fixRowsFirst(report, cliCommand(invocation, 'db migrate', invocation.rerunArgs ?? []))];
+  }
+  const { file, run } = failedMigrationFile(failedMigration);
+  return [
+    editFileAction(
+      `To keep the data, add ${updateOperation(report)} to ${file}, ${betweenTheChecks(report, replacedCheck)}, ${run}, and re-run ${dbMigrateCommand(invocation)}`,
+    ),
   ];
 }
 
@@ -476,6 +534,9 @@ export function migrateAdvice(
   }
   if (facts.rowsHoldingValue !== undefined) {
     return migrateRowsHoldingValueAdvice(facts.rowsHoldingValue, failedMigration, invocation);
+  }
+  if (facts.rowsFailingCheck !== undefined) {
+    return migrateRowsFailingCheckAdvice(facts.rowsFailingCheck, failedMigration, invocation);
   }
   if (schemaCheckIssues(failure) !== undefined) {
     return migrateSchemaCheckAdvice(failedMigration, invocation);

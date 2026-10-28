@@ -223,6 +223,7 @@ function updateDocument(inputs: {
           },
         }),
     ...ifDefined('perSpace', value.perSpace),
+    ...ifDefined('changedStorageEntities', value.changedStorageEntities),
     appliedStatements: value.appliedStatements,
     temporaryValues: value.temporaryValues,
     ...(value.mode === 'plan'

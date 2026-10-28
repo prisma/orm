@@ -1,4 +1,9 @@
-import type { Contract, ContractField, ContractModelBase } from '@internal/contract/types';
+import type {
+  Contract,
+  ContractField,
+  ContractModelBase,
+  StorageBase,
+} from '@internal/contract/types';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import {
@@ -63,6 +68,14 @@ describe('renderCodecTypeOverride', () => {
   });
 });
 
+const addressRef = {
+  kind: 'valueObject',
+  plane: 'storage',
+  namespaceId: 'shared',
+  entityKind: 'valueObject',
+  entityName: 'Address',
+} as const;
+
 describe('resolveFieldTypeOverride', () => {
   const scalar = (typeParams?: Record<string, unknown>): ContractField => ({
     nullable: true,
@@ -103,16 +116,13 @@ describe('resolveFieldTypeOverride', () => {
     const valueObject: ContractField = {
       nullable: true,
       many: false,
-      type: { kind: 'valueObject', name: 'Address' },
+      type: addressRef,
     };
     const union: ContractField = {
       nullable: false,
       type: {
         kind: 'union',
-        members: [
-          { kind: 'scalar', codecId: 'demo/text@1' },
-          { kind: 'valueObject', name: 'Address' },
-        ],
+        members: [{ kind: 'scalar', codecId: 'demo/text@1' }, addressRef],
       },
     };
     expect([
@@ -212,7 +222,8 @@ describe('generateFieldTypeOverridesMap', () => {
           },
         },
       },
-    } satisfies Pick<Contract, 'domain'>;
+      storage: { namespaces: {} },
+    } satisfies Pick<Contract, 'domain'> & { storage: Pick<StorageBase, 'namespaces'> };
     const resolveValueSet = (_model: string, field: string) =>
       field === 'mood' ? { encodedValues: ['up', 'down'], codecId: 'demo/text@1' } : undefined;
 
@@ -240,7 +251,8 @@ describe('generateFieldTypeOverridesMap', () => {
           },
         },
       },
-    } satisfies Pick<Contract, 'domain'>;
+      storage: { namespaces: {} },
+    } satisfies Pick<Contract, 'domain'> & { storage: Pick<StorageBase, 'namespaces'> };
     const resolveValueSet = () => ({ encodedValues: ['storage'], codecId: 'demo/text@1' });
 
     expect(generateFieldTypeOverridesMap(contract, literalLookup, resolveValueSet)).toBe(
@@ -248,56 +260,32 @@ describe('generateFieldTypeOverridesMap', () => {
     );
   });
 
-  it('collects the override of each value object field, from the domain enum its value set names or its codec text', () => {
+  it('collects the override of each value object field, keyed by its storage namespace, from the storage value set its value set names or its codec text', () => {
     const contract = {
-      domain: {
+      domain: { namespaces: { public: { models: {} } } },
+      storage: {
         namespaces: {
-          public: {
-            models: {},
-            enum: { Kind: kindEnum },
-            valueObjects: {
-              Address: {
-                fields: {
-                  street: { nullable: false, type: { kind: 'scalar', codecId: 'demo/text@1' } },
-                  kind: {
-                    nullable: true,
-                    type: { kind: 'scalar', codecId: 'demo/text@1' },
-                    valueSet: kindRef,
-                  },
-                  embedding: {
-                    nullable: false,
-                    type: { kind: 'scalar', codecId: 'demo/vector@1', typeParams: { length: 2 } },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    } as const satisfies Pick<Contract, 'domain'>;
-
-    expect(generateFieldTypeOverridesMap(contract, literalLookup, undefined)).toBe(
-      '{ readonly public: { readonly valueObjects: { readonly Address: { readonly embedding: { readonly output: Vector<2>; readonly input: VectorInput<2> }; readonly kind: { readonly output: "home" | "work"; readonly input: "home" | "work" } } } } }',
-    );
-  });
-
-  it('gives no override for a value object field whose value set is held in storage, which it cannot name', () => {
-    const contract = {
-      domain: {
-        namespaces: {
-          public: {
-            models: {},
-            valueObjects: {
-              Address: {
-                fields: {
-                  kind: {
-                    nullable: false,
-                    type: { kind: 'scalar', codecId: 'demo/text@1' },
-                    valueSet: {
-                      plane: 'storage',
-                      entityKind: 'valueSet',
-                      namespaceId: 'public',
-                      entityName: 'Kind',
+          shared: {
+            id: 'shared',
+            entries: {
+              valueSet: { Kind: { values: ['home', 'work'] } },
+              valueObject: {
+                Address: {
+                  fields: {
+                    street: { nullable: false, type: { kind: 'scalar', codecId: 'demo/text@1' } },
+                    kind: {
+                      nullable: true,
+                      type: { kind: 'scalar', codecId: 'demo/text@1' },
+                      valueSet: {
+                        plane: 'storage',
+                        entityKind: 'valueSet',
+                        namespaceId: 'shared',
+                        entityName: 'Kind',
+                      },
+                    },
+                    embedding: {
+                      nullable: false,
+                      type: { kind: 'scalar', codecId: 'demo/vector@1', typeParams: { length: 2 } },
                     },
                   },
                 },
@@ -306,7 +294,42 @@ describe('generateFieldTypeOverridesMap', () => {
           },
         },
       },
-    } as const satisfies Pick<Contract, 'domain'>;
+    } as const satisfies Pick<Contract, 'domain'> & { storage: Pick<StorageBase, 'namespaces'> };
+
+    expect(generateFieldTypeOverridesMap(contract, literalLookup, undefined)).toBe(
+      '{ readonly shared: { readonly valueObjects: { readonly Address: { readonly embedding: { readonly output: Vector<2>; readonly input: VectorInput<2> }; readonly kind: { readonly output: "home" | "work"; readonly input: "home" | "work" } } } } }',
+    );
+  });
+
+  it('gives no override for a value object field whose value set storage does not have', () => {
+    const contract = {
+      domain: { namespaces: { public: { models: {} } } },
+      storage: {
+        namespaces: {
+          shared: {
+            id: 'shared',
+            entries: {
+              valueObject: {
+                Address: {
+                  fields: {
+                    kind: {
+                      nullable: false,
+                      type: { kind: 'scalar', codecId: 'demo/text@1' },
+                      valueSet: {
+                        plane: 'storage',
+                        entityKind: 'valueSet',
+                        namespaceId: 'shared',
+                        entityName: 'Kind',
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    } as const satisfies Pick<Contract, 'domain'> & { storage: Pick<StorageBase, 'namespaces'> };
     const resolveValueSet = () => ({ encodedValues: ['storage'], codecId: 'demo/text@1' });
 
     expect(generateFieldTypeOverridesMap(contract, literalLookup, resolveValueSet)).toBe('{  }');

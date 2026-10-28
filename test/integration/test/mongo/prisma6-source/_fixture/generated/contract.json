@@ -82,8 +82,11 @@
               "address": {
                 "nullable": true,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Address",
                   "kind": "valueObject",
-                  "name": "Address"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               },
               "addresses": {
@@ -92,8 +95,11 @@
                 },
                 "nullable": false,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Address",
                   "kind": "valueObject",
-                  "name": "Address"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               },
               "id": {
@@ -143,19 +149,6 @@
               }
             }
           }
-        },
-        "valueObjects": {
-          "Address": {
-            "fields": {
-              "zip": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/int64Number@1",
-                  "kind": "scalar"
-                }
-              }
-            }
-          }
         }
       }
     }
@@ -171,13 +164,26 @@
             "Tally": {
               "kind": "mongo-collection"
             }
+          },
+          "valueObject": {
+            "Address": {
+              "fields": {
+                "zip": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/int64Number@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            }
           }
         },
         "id": "__unbound__",
         "kind": "mongo-database"
       }
     },
-    "storageHash": "4437f81a7adbcbf818bc57a01eeae876338e847c850fca1b59a3de9110919258"
+    "storageHash": "a0963d77119ea552aa28834b70bc7ce8969caaae10055d4d07deec4ad11ff5be"
   },
   "capabilities": {},
   "extensions": {},

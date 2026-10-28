@@ -167,7 +167,11 @@ model Item {
   id  ObjectId @id @map("_id")
   ref Ref
 }`);
-    expect(contract.domain.namespaces[UNBOUND_NAMESPACE_ID]?.valueObjects?.['Ref']).toEqual({
+    expect(
+      JSON.parse(
+        JSON.stringify(contract.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries['valueObject']),
+      )['Ref'],
+    ).toEqual({
       fields: {
         target: {
           type: { kind: 'scalar', codecId: 'mongo/objectId@1' },

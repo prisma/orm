@@ -106,7 +106,7 @@ The reasoning and the alternatives rejected are in [`design-notes.md`](./design-
 - **Transactional DDL fallback.** [ADR 037](../../docs/architecture%20docs/adrs/ADR%20037%20-%20Transactional%20DDL%20Fallback.md) designed commit groups and compensation for targets without transactional DDL. It was never built.
 - **Package layout.** [ADR 140](../../docs/architecture%20docs/adrs/ADR%20140%20-%20Package%20Layering%20&%20Target-Family%20Namespacing.md), `docs/architecture docs/Package-Layering.md`, `docs/onboarding/Repo-Map-and-Layering.md` and `.agents/rules/directory-layout.mdc` describe the current layout and name `packages/3-targets/**` (by role) as the home for SQL targets. Decision 1 replaces that. Folder paths are hard-coded in `architecture.config.json`, `packages/0-shared/publish-surface/src/shells.ts`, `coverage.config.json`, `tsconfig.base.json` and three lint scripts.
 - **No target branches.** `.agents/rules/no-target-branches.mdc` forbids naming a target in shared code. The coupling register lists the places that do.
-- **Concurrent work.** The project "Mongo authoring follows the Postgres structure" (`projects/mongo-authoring-structure/`) edits `2-mongo-family/2-authoring`. The layout move touches its paths only in config files.
+- **Concurrent work.** The project "Mongo authoring follows the Postgres structure" (merged in prisma/orm#30832 and prisma/orm#30846) edits `2-mongo-family/2-authoring`. The layout move touches its paths only in config files.
 
 ## Cross-cutting requirements
 

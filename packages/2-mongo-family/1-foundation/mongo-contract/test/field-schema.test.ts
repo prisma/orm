@@ -2,32 +2,41 @@ import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { MongoContractSchema } from '../src/contract-schema';
 
-function contractWithField(kind: 'models' | 'valueObjects', field: Record<string, unknown>) {
-  const entry =
-    kind === 'models'
-      ? { fields: { name: field }, storage: { fields: { name: { field: 'name' } } } }
-      : { fields: { name: field } };
-  return {
-    targetFamily: 'mongo',
-    roots: {},
-    domain: {
-      namespaces: {
-        app: { models: {}, [kind]: { Item: entry } },
-      },
-    },
-    storage: { namespaces: {} },
-  };
+function contractWithField(kind: 'model' | 'storage value object', field: Record<string, unknown>) {
+  return kind === 'model'
+    ? {
+        targetFamily: 'mongo',
+        roots: {},
+        domain: {
+          namespaces: {
+            app: {
+              models: {
+                Item: { fields: { name: field }, storage: { fields: { name: { field: 'name' } } } },
+              },
+            },
+          },
+        },
+        storage: { namespaces: {} },
+      }
+    : {
+        targetFamily: 'mongo',
+        roots: {},
+        domain: { namespaces: { app: { models: {} } } },
+        storage: {
+          namespaces: {
+            app: { id: 'app', entries: { valueObject: { Item: { fields: { name: field } } } } },
+          },
+        },
+      };
 }
 
-describe.each(['models', 'valueObjects'] as const)('%s field schema', (kind) => {
+describe.each(['model', 'storage value object'] as const)('%s field schema', (kind) => {
   const fieldType = { kind: 'scalar', codecId: 'mongo/string@1' };
 
-  it('normalizes an absent many property to false', () => {
-    const field = { type: fieldType };
-    expect(Object.hasOwn(field, 'many')).toBe(false);
-    expect(MongoContractSchema(contractWithField(kind, field))).toEqual(
-      contractWithField(kind, { type: fieldType, nullable: false, many: false }),
-    );
+  it('accepts a field with no many property', () => {
+    expect(
+      MongoContractSchema(contractWithField(kind, { type: fieldType, nullable: false })),
+    ).not.toBeInstanceOf(type.errors);
   });
 
   it.each([false, { elementNullable: false }, { elementNullable: true }])(
@@ -46,8 +55,8 @@ describe.each(['models', 'valueObjects'] as const)('%s field schema', (kind) => 
     { elementNullable: 'false' },
     { elementNullable: 0 },
   ])('rejects malformed many %j', (many) => {
-    expect(MongoContractSchema(contractWithField(kind, { type: fieldType, many }))).toBeInstanceOf(
-      type.errors,
-    );
+    expect(
+      MongoContractSchema(contractWithField(kind, { type: fieldType, nullable: false, many })),
+    ).toBeInstanceOf(type.errors);
   });
 });

@@ -2,6 +2,8 @@
 
 ## At a glance
 
+> **Note:** this ADR describes value objects in the domain plane, where they first lived. They are now storage entities ([ADR 309](ADR%20309%20-%20Value%20objects%20are%20storage%20entities%2C%20and%20a%20discriminator%20column%20names%20a%20value%20set.md)); the shapes of their members below are unchanged, and a field now refers to its value object by storage coordinate rather than by name.
+
 A User model with scalar fields and value object fields. Value objects are defined in a separate `valueObjects` section — they share the same field descriptor shape (`{ nullable, codecId }`) as models, but the framework makes fundamentally different promises about them.
 
 ```json
@@ -103,6 +105,8 @@ This extends the framework commitment hierarchy:
 
 ### Value objects are a top-level contract section
 
+> **Superseded:** value objects now live in the storage plane, at `storage.namespaces.<ns>.entries.valueObject`, and a domain field refers to one by its storage coordinate. See [ADR 309](ADR%20309%20-%20Value%20objects%20are%20storage%20entities%2C%20and%20a%20discriminator%20column%20names%20a%20value%20set.md).
+
 Value objects live in a `valueObjects` section alongside `models`. They use the same field shape (`{ nullable, codecId }`) as model fields. Refer to the [At a glance](#at-a-glance) example for the complete structure.
 
 **Why not inside `models`?** The `models` section carries an implicit promise: everything here is a full framework citizen. Mixing in value objects conflates two concepts with different guarantees. Consumers iterating `models` (the ORM building its graph, migration tooling planning DDL, validation checking integrity constraints) would need to filter by kind.
@@ -167,6 +171,8 @@ If the positions have semantic meaning — and they almost always do — use nam
 You say `boundingBox.topLeft`, not `boundingBox[0]`. Length constraints on homogeneous lists are a validation concern, not a structural one.
 
 ### Value objects need no special storage mapping
+
+> **Superseded:** the value object's definition is now a storage entity, so a change to its fields changes the storage hash. See [ADR 309](ADR%20309%20-%20Value%20objects%20are%20storage%20entities%2C%20and%20a%20discriminator%20column%20names%20a%20value%20set.md).
 
 Value object fields use `storage.fields` like any other field. The storage layer maps domain field names to physical locations without knowing whether the field holds a scalar or a composite:
 

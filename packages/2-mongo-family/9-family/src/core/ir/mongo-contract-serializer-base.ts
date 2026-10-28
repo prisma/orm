@@ -1,5 +1,8 @@
 import type { ContractModel } from '@internal/contract/types';
-import { validateContractDomain } from '@internal/contract/validate-domain';
+import {
+  removedDomainKeyProblems,
+  validateContractDomain,
+} from '@internal/contract/validate-domain';
 import { withDerivedToOneRelationNullability } from '@internal/contract-authoring';
 import type { ContractSerializer } from '@internal/framework-components/control';
 import {
@@ -120,11 +123,18 @@ export abstract class MongoContractSerializerBase<TContract>
    * `storage.namespaces[namespaceId].entries.collection[collectionName]` (each value is a
    * `MongoCollection`, with nested `MongoIndex` / `MongoValidator` /
    * `MongoCollectionOptions` constructed by the `MongoCollection` constructor).
-   * The rest of the contract envelope (models, valueObjects, capabilities, …)
+   * The rest of the contract envelope (models, capabilities, …)
    * remains in plain-JSON form; those IR layers are handled by sibling
    * subsystems and don't sit behind this SPI.
    */
   protected parseMongoContractStructure(json: unknown): MongoContract {
+    const removedKeys = removedDomainKeyProblems(json);
+    if (removedKeys.length > 0) {
+      throw structuredError(
+        'CONTRACT.VALIDATION_FAILED',
+        `Contract structural validation failed: ${removedKeys.join('; ')}`,
+      );
+    }
     const schema = this.contractSchema ?? MongoContractSchema;
     const parsed = schema(json);
     if (parsed instanceof arktypeType.errors) {

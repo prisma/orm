@@ -5,7 +5,7 @@ describe('names PSL writes as identifiers', () => {
   it('refuses a value object name that is not an identifier', () => {
     expect(
       printingWidget({
-        domain: { valueObjects: { 'Postal Address': { fields: { street: TEXT_FIELD } } } },
+        entries: { valueObject: { 'Postal Address': { fields: { street: TEXT_FIELD } } } },
       }),
     ).toThrow(refusal({ kind: 'value object', name: 'Postal Address' }));
   });
@@ -19,7 +19,7 @@ describe('names PSL writes as identifiers', () => {
   it('refuses a value-object field name that is not an identifier', () => {
     expect(
       printingWidget({
-        domain: { valueObjects: { Address: { fields: { 'street line': TEXT_FIELD } } } },
+        entries: { valueObject: { Address: { fields: { 'street line': TEXT_FIELD } } } },
       }),
     ).toThrow(refusal({ kind: 'field', name: 'street line' }));
   });

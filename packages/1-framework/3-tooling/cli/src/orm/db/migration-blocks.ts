@@ -163,6 +163,7 @@ function applySummaryText(result: MigrationCommandResult): string {
   const executed = result.execution?.operationsExecuted ?? 0;
   const spaces = result.perSpace?.length ?? 0;
   const across = spaces > 0 ? ` across ${spaces} contract space${spaces === 1 ? '' : 's'}` : '';
+  if (result.changedStorageEntities !== undefined) return result.summary;
   if (executed === 0) {
     return `Database already matches contract${across}`;
   }

@@ -52,8 +52,11 @@
                 },
                 "nullable": true,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Entry",
                   "kind": "valueObject",
-                  "name": "Entry"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               },
               "optionalNullableEntries": {
@@ -62,8 +65,11 @@
                 },
                 "nullable": true,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Entry",
                   "kind": "valueObject",
-                  "name": "Entry"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               },
               "optionalNullableStrings": {
@@ -127,19 +133,6 @@
                 },
                 "strings": {
                   "field": "strings"
-                }
-              }
-            }
-          }
-        },
-        "valueObjects": {
-          "Entry": {
-            "fields": {
-              "value": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
                 }
               }
             }
@@ -264,13 +257,26 @@
                 "validationLevel": "strict"
               }
             }
+          },
+          "valueObject": {
+            "Entry": {
+              "fields": {
+                "value": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            }
           }
         },
         "id": "__unbound__",
         "kind": "mongo-database"
       }
     },
-    "storageHash": "5eedd9b568f168145ab3967dfddcafb7efb16c59c1d5babaed9d71cae6a75923"
+    "storageHash": "3959359f149bf7501cc3d923e3f0975b8c1820f99af796db88df3fc9d138ecd7"
   },
   "capabilities": {},
   "extensions": {},

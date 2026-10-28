@@ -14,8 +14,9 @@ describe('numeric membership checks in Postgres', () => {
             const checks = postgresRenderCheckExpressions({
               tableName: 'members',
               columnName: 'value',
-              many,
+              many: many ? { elementNullable: false } : false,
               memberValues,
+              valueObject: undefined,
             });
             await client.query(
               `CREATE TABLE members (value ${storageType}${many ? '[]' : ''}, ${checks.map(({ expression }) => `CHECK (${expression})`).join(', ')})`,
@@ -59,6 +60,7 @@ describe('list membership checks in Postgres', () => {
               columnName,
               many: { elementNullable: false },
               memberValues: members,
+              valueObject: undefined,
             }),
           );
           await client.query(
@@ -127,6 +129,7 @@ describe('list membership checks in Postgres', () => {
               columnName: many ? 'list' : 'scalar',
               many: many ? { elementNullable: false } : false,
               memberValues: members,
+              valueObject: undefined,
             }),
           );
           await client.query(

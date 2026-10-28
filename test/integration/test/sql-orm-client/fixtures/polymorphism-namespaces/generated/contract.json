@@ -565,6 +565,13 @@
               "uniques": []
             },
             "tasks": {
+              "checks": [
+                {
+                  "expression": "\"type\" IN ('b-epic', 'bug', 'c-epic', 'chore', 'feature')",
+                  "name": "tasks_type_check_fb4446ef",
+                  "prefix": "tasks_type_check"
+                }
+              ],
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
@@ -589,7 +596,13 @@
                 "type": {
                   "codecId": "pg/text@1",
                   "dataType": "pg/text",
-                  "nullable": false
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Task.type",
+                    "namespaceId": "a",
+                    "plane": "storage"
+                  }
                 }
               },
               "foreignKeys": [
@@ -630,6 +643,18 @@
               },
               "uniques": []
             }
+          },
+          "valueSet": {
+            "Task.type": {
+              "kind": "valueSet",
+              "values": [
+                "b-epic",
+                "bug",
+                "c-epic",
+                "chore",
+                "feature"
+              ]
+            }
           }
         },
         "id": "a",
@@ -639,6 +664,13 @@
         "entries": {
           "table": {
             "docs": {
+              "checks": [
+                {
+                  "expression": "\"kind\" IN ('memo')",
+                  "name": "docs_kind_check_97646eca",
+                  "prefix": "docs_kind_check"
+                }
+              ],
               "columns": {
                 "body": {
                   "codecId": "pg/text@1",
@@ -653,7 +685,13 @@
                 "kind": {
                   "codecId": "pg/text@1",
                   "dataType": "pg/text",
-                  "nullable": false
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Doc.kind",
+                    "namespaceId": "b",
+                    "plane": "storage"
+                  }
                 }
               },
               "foreignKeys": [],
@@ -806,6 +844,14 @@
               },
               "uniques": []
             }
+          },
+          "valueSet": {
+            "Doc.kind": {
+              "kind": "valueSet",
+              "values": [
+                "memo"
+              ]
+            }
           }
         },
         "id": "b",
@@ -815,6 +861,13 @@
         "entries": {
           "table": {
             "docs": {
+              "checks": [
+                {
+                  "expression": "\"kind\" IN ('note')",
+                  "name": "docs_kind_check_144bbad4",
+                  "prefix": "docs_kind_check"
+                }
+              ],
               "columns": {
                 "body": {
                   "codecId": "pg/text@1",
@@ -829,7 +882,13 @@
                 "kind": {
                   "codecId": "pg/text@1",
                   "dataType": "pg/text",
-                  "nullable": false
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Doc.kind",
+                    "namespaceId": "c",
+                    "plane": "storage"
+                  }
                 }
               },
               "foreignKeys": [],
@@ -884,6 +943,14 @@
               },
               "uniques": []
             }
+          },
+          "valueSet": {
+            "Doc.kind": {
+              "kind": "valueSet",
+              "values": [
+                "note"
+              ]
+            }
           }
         },
         "id": "c",
@@ -897,7 +964,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "20f073da80d13b3d30479280c2ff02efa9594c42efebfbb14f233b93e9df3d2f"
+    "storageHash": "b4c46998d16621f5bfb704da34f41ffc3a24a4029fb2c0ef7d2c10f9878597cc"
   },
   "capabilities": {
     "postgres": {

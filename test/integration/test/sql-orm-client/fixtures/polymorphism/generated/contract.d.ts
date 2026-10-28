@@ -23,7 +23,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'2ccba7c309ee13e4714b958e47eb88ca06415dac60cd475a51940499c3331f8a'>;
+  StorageHashBase<'00913b83286a9e6492e6621c3ba277633d43a309cdda39f9cb46f0a54752c1eb'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -269,22 +269,53 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
   : Encoded;
 type ParameterizedOutputTypeFunctions = PgParameterizedOutputTypes;
 
-type FieldTypeOverrides = {};
+type FieldTypeOverrides = {
+  readonly public: {
+    readonly models: {
+      readonly Task: {
+        readonly type: {
+          readonly output: 'bug' | 'epic' | 'feature';
+          readonly input: 'bug' | 'epic' | 'feature';
+        };
+      };
+      readonly User: {
+        readonly kind: {
+          readonly output: 'admin' | 'regular';
+          readonly input: 'admin' | 'regular';
+        };
+      };
+    };
+  };
+};
 export type FieldOutputTypes = FieldTypesFromDomain<
   ContractBase['domain']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'output'
+  'output',
+  ContractBase['storage']['namespaces']
 >;
 export type FieldInputTypes = FieldTypesFromDomain<
   ContractBase['domain']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'input'
+  'input',
+  ContractBase['storage']['namespaces']
 >;
-type ColumnTypeOverrides = {};
+type ColumnTypeOverrides = {
+  readonly public: {
+    readonly tasks: {
+      readonly type: {
+        readonly output: 'bug' | 'epic' | 'feature';
+        readonly input: 'bug' | 'epic' | 'feature';
+      };
+    };
+    readonly users: {
+      readonly kind: { readonly output: 'admin' | 'regular'; readonly input: 'admin' | 'regular' };
+    };
+  };
+};
 export type StorageColumnTypes = ColumnTypesFromStorage<
   ContractBase['storage'],
   CodecTypes,
@@ -884,6 +915,16 @@ type ContractBase = Omit<
               ];
             };
           };
+          readonly valueSet: {
+            readonly 'Task.type': {
+              readonly kind: 'valueSet';
+              readonly values: readonly ['bug', 'epic', 'feature'];
+            };
+            readonly 'User.kind': {
+              readonly kind: 'valueSet';
+              readonly values: readonly ['admin', 'regular'];
+            };
+          };
         };
       };
     };
@@ -1363,7 +1404,6 @@ type ContractBase = Omit<
   };
   readonly extensions: {};
   readonly meta: {};
-
   readonly profileHash: ProfileHash;
 };
 

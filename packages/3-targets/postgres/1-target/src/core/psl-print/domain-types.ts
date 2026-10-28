@@ -68,7 +68,7 @@ function buildMemberType(input: {
   refuseUnwritableFieldShape(field, coordinate);
   const { type } = field;
   if (type.kind === 'valueObject') {
-    return { kind: 'valueObject', typeName: type.name };
+    return { kind: 'valueObject', typeName: type.entityName };
   }
   refuseUnderivedMemberValueSet({
     field,
@@ -95,7 +95,7 @@ function buildMemberType(input: {
   });
 }
 
-/** The `type` blocks of one namespace, one per value object the domain declares there. */
+/** The `type` blocks of one namespace, one per value object its storage holds. */
 export function buildCompositeTypes(input: {
   readonly contract: Contract<SqlStorage>;
   readonly namespaceId: string;
@@ -105,7 +105,8 @@ export function buildCompositeTypes(input: {
   readonly domainEnums: Readonly<Record<string, ContractEnum>>;
 }): readonly PslCompositeType[] {
   refuseValueObjectsOutsideDefaultNamespace(input.contract, input.namespaceId);
-  const valueObjects = input.contract.domain.namespaces[input.namespaceId]?.valueObjects ?? {};
+  const valueObjects =
+    input.contract.storage.namespaces[input.namespaceId]?.entries.valueObject ?? {};
   return Object.entries(valueObjects).map(([name, valueObject]) => {
     refuseUnwritableName('value object', name);
     return {

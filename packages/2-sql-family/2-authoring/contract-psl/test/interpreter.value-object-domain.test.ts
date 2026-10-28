@@ -10,6 +10,7 @@ import {
   postgresTarget,
   testEnumEntityContributions,
   testEnumPslBlockDescriptor,
+  valueObjectsOf,
 } from './fixtures';
 
 const pslBlockDescriptors = { enum: testEnumPslBlockDescriptor };
@@ -40,8 +41,8 @@ const countryEnum = `enum Country {
 }
 `;
 
-describe('interpretPslDocumentToSqlContract value objects in the domain', () => {
-  it('gives an enum-typed composite member the domain valueSet a model field of that enum has, single and list', () => {
+describe('interpretPslDocumentToSqlContract value objects in the storage plane', () => {
+  it('gives an enum-typed composite member the storage value set of that enum, single and list', () => {
     const result = interpretPostgres(`${countryEnum}
 type Address {
   country   Country
@@ -69,9 +70,18 @@ model User {
         entityName: 'Country',
       },
     });
-    expect(namespace?.valueObjects?.['Address']?.fields).toEqual({
-      country: modelField,
-      countries: { ...modelField, many: { elementNullable: false } },
+    const member = {
+      ...modelField,
+      valueSet: {
+        plane: 'storage',
+        entityKind: 'valueSet',
+        namespaceId: 'public',
+        entityName: 'Country',
+      },
+    };
+    expect(valueObjectsOf(result.value)?.['Address']?.fields).toEqual({
+      country: member,
+      countries: { ...member, many: { elementNullable: false } },
     });
   });
 
@@ -110,7 +120,7 @@ model User {
       inline: fields?.['inline'],
       email: fields?.['email'],
     }).toEqual({ code: short, inline: short, email });
-    expect(namespace?.valueObjects?.['Label']?.fields).toEqual({
+    expect(valueObjectsOf(result.value)?.['Label']?.fields).toEqual({
       code: short,
       codes: { ...short, many: { elementNullable: false } },
       email,
@@ -137,7 +147,7 @@ model Order {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const text = { kind: 'scalar', codecId: 'pg/text@1' };
-    expect(result.value.domain.namespaces['public']?.valueObjects).toEqual({
+    expect(valueObjectsOf(result.value)).toEqual({
       Address: {
         fields: {
           street: { nullable: false, type: text, many: false },
@@ -147,7 +157,17 @@ model Order {
       },
       ShippingInfo: {
         fields: {
-          address: { nullable: false, type: { kind: 'valueObject', name: 'Address' }, many: false },
+          address: {
+            nullable: false,
+            type: {
+              kind: 'valueObject',
+              plane: 'storage',
+              namespaceId: 'public',
+              entityKind: 'valueObject',
+              entityName: 'Address',
+            },
+            many: false,
+          },
           notes: { nullable: false, type: text, many: false },
         },
       },
@@ -232,13 +252,13 @@ model User {
     ]);
   });
 
-  it('omits valueObjects from the contract when no composite types exist', () => {
+  it('writes no valueObject slot when no composite types exist', () => {
     const result = interpretPostgres(`model User {
   id Int @id
 }`);
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.domain.namespaces['public']?.valueObjects).toBeUndefined();
+    expect(valueObjectsOf(result.value)).toBeUndefined();
   });
 });

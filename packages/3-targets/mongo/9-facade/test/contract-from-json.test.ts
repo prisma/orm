@@ -5,7 +5,14 @@ import type { Contract } from '../../../../2-mongo-family/1-foundation/mongo-con
 import fixtureContractJson from '../../../../2-mongo-family/1-foundation/mongo-contract/test/fixtures/orm-contract.json' with {
   type: 'json',
 };
-import { defineContract, enumType, field, member, model } from '../src/exports/contract-builder';
+import {
+  defineContract,
+  enumType,
+  field,
+  member,
+  model,
+  valueObject,
+} from '../src/exports/contract-builder';
 import mongo from '../src/exports/runtime';
 import mongoStatic, { contractFromJson } from '../src/exports/static';
 
@@ -81,5 +88,43 @@ describe('validating a contract once', () => {
     expect(deserialize).toHaveBeenCalledTimes(1);
     expect(second.contract).toBe(first.contract);
     expect(fromFirst.contract).toBe(first.contract);
+  });
+
+  it('takes a TypeScript-authored contract with a value object', () => {
+    const Address = valueObject('Address', {
+      fields: { street: field.string(), zip: field.string().optional() },
+    });
+    const authored = defineContract({
+      valueObjects: { Address },
+      models: {
+        Shop: model('Shop', {
+          collection: 'shops',
+          fields: { _id: field.objectId(), address: field.valueObject(Address) },
+        }),
+      },
+    });
+
+    const { contract } = mongo({ contract: authored });
+
+    expect(
+      JSON.parse(
+        JSON.stringify(
+          Object.values(contract.storage.namespaces).map(
+            (namespace) => namespace.entries['valueObject'],
+          ),
+        ),
+      ),
+    ).toContainEqual({
+      Address: {
+        fields: {
+          street: {
+            nullable: false,
+            many: false,
+            type: { kind: 'scalar', codecId: 'mongo/string@1' },
+          },
+          zip: { nullable: true, many: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+        },
+      },
+    });
   });
 });

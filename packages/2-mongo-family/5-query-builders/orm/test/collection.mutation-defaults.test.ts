@@ -188,6 +188,11 @@ describe('ORM create paths apply onCreate defaults', () => {
   });
 });
 
+/** The payload a JavaScript caller passes with `field` set to `undefined`, which the typed input refuses. */
+function withUndefinedField<Payload extends object>(payload: Payload, field: string): Payload {
+  return Object.assign(payload, { [field]: undefined });
+}
+
 describe('ORM update paths apply onUpdate defaults', () => {
   it('update adds the generated value to $set', async () => {
     const defaults = fakeMutationDefaults();
@@ -203,7 +208,7 @@ describe('ORM update paths apply onUpdate defaults', () => {
   it('update whose only field is undefined adds nothing', async () => {
     const defaults = fakeMutationDefaults();
     const { executor, plans } = recordingExecutor([]);
-    await users(executor, defaults).where(byEmail).update({ name: undefined });
+    await users(executor, defaults).where(byEmail).update(withUndefinedField({}, 'name'));
     expect(unwrap(commandOf(plans, 'findOneAndUpdate')['update'])).toEqual({ $set: {} });
     expect(defaults.calls[0]?.values).toEqual({});
   });

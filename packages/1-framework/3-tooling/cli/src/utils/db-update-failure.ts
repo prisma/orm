@@ -6,6 +6,7 @@ import { type CliInvocation, cliCommand } from './printed-command';
 import {
   blockingObjectsAdvice,
   dbUpdateFailedTypeChangeAdvice,
+  dbUpdateRowsFailingCheckAdvice,
   dbUpdateRowsHoldingValueAdvice,
   dbUpdateRowsWithoutValueAdvice,
 } from './runner-failure-advice';
@@ -44,16 +45,22 @@ export function dbUpdateRunnerFailureError(
                 databaseStorageHash,
                 invocation,
               )
-            : schemaCheckIssues(failure) !== undefined
-              ? [
-                  editFileAction(
-                    `Change the contract source to resolve the issues listed, re-run \`${cliCommand(invocation, 'contract emit')}\`, then re-run \`${update}\``,
-                  ),
-                ]
-              : [
-                  chooseAction(
-                    `Inspect the reported conflict, reconcile schema drift if needed, then re-run \`${update}\``,
-                  ),
-                ];
+            : facts.rowsFailingCheck !== undefined
+              ? dbUpdateRowsFailingCheckAdvice(
+                  facts.rowsFailingCheck,
+                  databaseStorageHash,
+                  invocation,
+                )
+              : schemaCheckIssues(failure) !== undefined
+                ? [
+                    editFileAction(
+                      `Change the contract source to resolve the issues listed, re-run \`${cliCommand(invocation, 'contract emit')}\`, then re-run \`${update}\``,
+                    ),
+                  ]
+                : [
+                    chooseAction(
+                      `Inspect the reported conflict, reconcile schema drift if needed, then re-run \`${update}\``,
+                    ),
+                  ];
   return runnerFailureError(failure, advice);
 }

@@ -11,6 +11,7 @@ import type {
   MigrationOperationPolicy,
   MigrationRunnerFailure,
   MigrationSubject,
+  RowsFailingCheck,
   RowsHoldingValue,
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
@@ -34,6 +35,7 @@ import type {
   FailedTypeChangeReport,
   OnControlProgress,
   PerSpaceExecutionEntry,
+  RowsFailingCheckReport,
   RowsHoldingValueReport,
   RunnerFailureFacts,
 } from '../types';
@@ -85,23 +87,36 @@ function rowsHoldingValueReport(
   };
 }
 
+function rowsFailingCheckReport(
+  fact: RowsFailingCheck | undefined,
+): RowsFailingCheckReport | undefined {
+  if (fact === undefined) return undefined;
+  const { operationIndex: _operationIndex, ...report } = fact;
+  return report;
+}
+
 /** What the runner said blocked the failed operation, named as the advice names it. */
 function failureReports(
   failure: MigrationRunnerFailure,
   resolutions: readonly OrderedResolution[],
 ): Pick<
   RunnerFailureFacts,
-  'failedTypeChange' | 'rowsWithoutValue' | 'rowsHoldingValue' | 'failedMigration'
+  | 'failedTypeChange'
+  | 'rowsWithoutValue'
+  | 'rowsHoldingValue'
+  | 'rowsFailingCheck'
+  | 'failedMigration'
 > {
   const resolution = resolutions.find(({ spaceId }) => spaceId === failure.meta.failingSpace);
   if (resolution === undefined) return {};
   const fieldText = (field: MigrationSubject) =>
     subjectText(field, { origin: resolution.entry.destinationContract, statements: [] });
-  const { failedTypeChange, rowsWithoutValue, rowsHoldingValue } = failure.meta;
+  const { failedTypeChange, rowsWithoutValue, rowsHoldingValue, rowsFailingCheck } = failure.meta;
   const operationIndex =
     failedTypeChange?.operationIndex ??
     rowsWithoutValue?.[0]?.operationIndex ??
-    rowsHoldingValue?.operationIndex;
+    rowsHoldingValue?.operationIndex ??
+    rowsFailingCheck?.operationIndex;
   const edge =
     operationIndex !== undefined
       ? edgeOfOperation(resolution.entry.migrationEdges, operationIndex)
@@ -129,6 +144,7 @@ function failureReports(
         ? undefined
         : rowsHoldingValueReport(rowsHoldingValue, resolution.entry.destinationContract),
     ),
+    ...ifDefined('rowsFailingCheck', rowsFailingCheckReport(rowsFailingCheck)),
     ...ifDefined(
       'failedMigration',
       edge === undefined ? undefined : { spaceId: resolution.spaceId, edge },

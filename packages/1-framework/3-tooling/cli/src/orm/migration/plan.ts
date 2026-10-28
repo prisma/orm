@@ -200,7 +200,11 @@ function planBlocks(result: MigrationPlanResult, migrationsRelative: string): re
   }
   return [
     ...warningBlocks(result),
-    { kind: 'summary', status: 'ok', text: result.summary },
+    {
+      kind: 'summary',
+      status: result.operations.length === 0 ? 'warn' : 'ok',
+      text: result.summary,
+    },
     ...originNoticeBlocks(result),
     ...operationBlocks(result),
     ...temporaryValueBlocks(result),

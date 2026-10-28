@@ -7,6 +7,8 @@ import {
   type ContractFieldType,
   type ContractModelBase,
   type ContractWithDomain,
+  type StorageBase,
+  valueObjectAt,
 } from '@internal/contract/types';
 import type { CliStructuredError } from '@internal/errors/control';
 import {
@@ -190,8 +192,19 @@ function modelIn(
   return Object.hasOwn(namespace.models, name) ? namespace.models[name] : undefined;
 }
 
-function hasValueObject(namespace: ApplicationDomainNamespace, name: string): boolean {
-  return namespace.valueObjects !== undefined && Object.hasOwn(namespace.valueObjects, name);
+function hasValueObject(
+  storage: Pick<StorageBase, 'namespaces'>,
+  namespaceId: string,
+  name: string,
+): boolean {
+  return (
+    valueObjectAt(storage, {
+      plane: 'storage',
+      namespaceId,
+      entityKind: 'valueObject',
+      entityName: name,
+    }) !== undefined
+  );
 }
 
 function modelAt(
@@ -239,7 +252,7 @@ function lookupModelInNamespace(
       model,
     };
   }
-  if (hasValueObject(namespace, name)) {
+  if (hasValueObject(contract.contract.storage, namespaceId, name)) {
     return { kind: 'refused', ...valueObjectRefusal(displayName(namespaceId, name)) };
   }
   return {
@@ -293,7 +306,12 @@ function lookupModel(
       fix: `Name the model with its namespace, for example ${candidates[0]}.`,
     };
   }
-  if (Object.values(namespaces).some((namespace) => hasValueObject(namespace, name))) {
+  const storageNamespaceIds = Object.keys(contract.contract.storage.namespaces);
+  if (
+    storageNamespaceIds.some((namespaceId) =>
+      hasValueObject(contract.contract.storage, namespaceId, name),
+    )
+  ) {
     return { kind: 'refused', ...valueObjectRefusal(name) };
   }
   return {
@@ -1217,7 +1235,7 @@ function typeText(type: ContractFieldType): string {
         ? type.codecId
         : `${type.codecId}(${JSON.stringify(type.typeParams)})`;
     case 'valueObject':
-      return type.name;
+      return type.entityName;
     case 'union':
       return type.members.map(typeText).join(' | ');
   }

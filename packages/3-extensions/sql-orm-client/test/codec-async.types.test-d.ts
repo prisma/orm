@@ -11,6 +11,7 @@
  */
 
 import type { Expression, ScopeField } from '@internal/sql-relational-core/expression';
+import type { JsonValue } from '@internal/utils/json';
 import { expectTypeOf, test } from 'vitest';
 import type { Collection } from '../src/collection';
 import type {
@@ -22,8 +23,9 @@ import type {
   UniqueConstraintCriterion,
 } from '../src/types';
 import type { Contract } from './fixtures/generated/contract';
+import type { Contract as ValueObjectContract } from './fixtures/value-objects/generated/contract';
 
-// `User.address` is jsonb-backed (a value object whose fields and the field itself flow through the `pg/jsonb@1` codec); `User.invitedById` is int4 and nullable. Both codecs are lifted to async dispatch at the codec boundary regardless of whether the author wrote sync or async functions, so these columns are representative of "async codec columns" at the runtime boundary.
+// `User.address` is jsonb-backed: in the value-objects fixture it holds a value object, whose fields and the field itself flow through the `pg/jsonb@1` codec. `User.invitedById` is int4 and nullable. Both codecs are lifted to async dispatch at the codec boundary regardless of whether the author wrote sync or async functions, so these columns are representative of "async codec columns" at the runtime boundary.
 //
 // See `packages/1-framework/1-core/framework-components/src/shared/codec.ts` (`Codec` interface — `encode`/`decode` return `Promise<…>`) — every author function is wrapped at the class boundary, which means every column is an "async codec" at the runtime layer.
 
@@ -36,6 +38,9 @@ type AddressShape = {
 type IsPromiseLike<T> = T extends Promise<unknown> ? true : false;
 
 type UserRow = DefaultModelRow<Contract, 'User'>;
+type ValueObjectUserRow = DefaultModelRow<ValueObjectContract, 'User'>;
+type ValueObjectUserCreate = CreateInput<ValueObjectContract, 'User'>;
+type ValueObjectUserUpdate = MutationUpdateInput<ValueObjectContract, 'User'>;
 type UserCreate = CreateInput<Contract, 'User'>;
 type UserUpdate = MutationUpdateInput<Contract, 'User'>;
 type UserUnique = UniqueConstraintCriterion<Contract, 'User'>;
@@ -56,7 +61,7 @@ test('DefaultModelRow exposes plain `T | null` for nullable pg/int4@1 columns', 
 });
 
 test('DefaultModelRow exposes plain object value (no Promise) for jsonb-backed value object', () => {
-  expectTypeOf<UserRow['address']>().toEqualTypeOf<AddressShape | null>();
+  expectTypeOf<ValueObjectUserRow['address']>().toEqualTypeOf<AddressShape | null>();
 });
 
 test('InferRootRow for non-polymorphic model equals DefaultModelRow', () => {
@@ -75,7 +80,7 @@ test('Collection.first() resolves to a plain row | null (no Promise<T> on row fi
   type Row = Exclude<FirstAwaited, null>;
   expectTypeOf<Row['name']>().toEqualTypeOf<string>();
   expectTypeOf<Row['id']>().toEqualTypeOf<number>();
-  expectTypeOf<Row['address']>().toEqualTypeOf<AddressShape | null>();
+  expectTypeOf<Row['address']>().toEqualTypeOf<JsonValue | null>();
   expectTypeOf<IsPromiseLike<Row['name']>>().toEqualTypeOf<false>();
 });
 
@@ -84,7 +89,7 @@ test('Collection async iteration yields a plain row (no Promise<T> on row fields
   type IteratedRow = UserCollectionRow<UserCollection>;
   expectTypeOf<IteratedRow['name']>().toEqualTypeOf<string>();
   expectTypeOf<IteratedRow['id']>().toEqualTypeOf<number>();
-  expectTypeOf<IteratedRow['address']>().toEqualTypeOf<AddressShape | null>();
+  expectTypeOf<IteratedRow['address']>().toEqualTypeOf<JsonValue | null>();
   expectTypeOf<IsPromiseLike<IteratedRow['name']>>().toEqualTypeOf<false>();
 });
 
@@ -104,11 +109,11 @@ test('CreateInput accepts plain `string` for pg/text@1 fields', () => {
 });
 
 test('CreateInput accepts plain object for jsonb-backed value-object field', () => {
-  expectTypeOf<UserCreate['address']>().toEqualTypeOf<AddressShape | null | undefined>();
+  expectTypeOf<ValueObjectUserCreate['address']>().toEqualTypeOf<AddressShape | null | undefined>();
 });
 
 test('MutationUpdateInput accepts plain T for jsonb-backed value-object field', () => {
-  expectTypeOf<UserUpdate['address']>().toEqualTypeOf<AddressShape | null | undefined>();
+  expectTypeOf<ValueObjectUserUpdate['address']>().toEqualTypeOf<AddressShape | null | undefined>();
 });
 
 test('MutationUpdateInput accepts plain `string` for pg/text@1 fields', () => {

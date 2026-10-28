@@ -1,3 +1,4 @@
+import type { ContractValueObject } from '@internal/contract/types';
 import { MongoFieldFilter, MongoProjectStage } from '@internal/mongo-query-ast/execution';
 import { describe, expect, it } from 'vitest';
 import { mongoQuery } from '../src/query';
@@ -6,6 +7,25 @@ import {
   contractModelToMongoResultShape,
 } from '../src/result-shape';
 import { testContract } from './fixtures/test-contract';
+
+function valueObjectRef(entityName: string, namespaceId = '__unbound__') {
+  return {
+    kind: 'valueObject',
+    plane: 'storage',
+    namespaceId,
+    entityKind: 'valueObject',
+    entityName,
+  } as const;
+}
+
+function storageWith(
+  valueObjects: Readonly<Record<string, ContractValueObject>>,
+  namespaceId = '__unbound__',
+) {
+  return {
+    namespaces: { [namespaceId]: { id: namespaceId, entries: { valueObject: valueObjects } } },
+  };
+}
 
 describe('contractModelToMongoResultShape', () => {
   it('treats omitted cardinality as scalar', () => {
@@ -34,10 +54,10 @@ describe('contractModelToMongoResultShape', () => {
   });
 
   it('maps a value-object field to a document of its own fields, nested value objects too', () => {
-    const namespace = testContract.domain.namespaces.__unbound__!;
-    const shape = contractModelToMongoResultShape(namespace.models['Customer'], {
-      valueObjects: namespace.valueObjects,
-    });
+    const shape = contractModelToMongoResultShape(
+      testContract.domain.namespaces.__unbound__!.models['Customer'],
+      { storage: testContract.storage },
+    );
     if (shape.kind !== 'document') throw new Error('expected document');
     const address = {
       street: { kind: 'leaf', codecId: 'mongo/string@1', nullable: false },
@@ -60,12 +80,12 @@ describe('contractModelToMongoResultShape', () => {
 
   it.each([false, true])('maps value-object lists with elementNullable=%s', (elementNullable) => {
     const shape = contractFieldToMongoFieldShape(
-      { type: { kind: 'valueObject', name: 'Point' }, nullable: false, many: { elementNullable } },
-      {
+      { type: valueObjectRef('Point'), nullable: false, many: { elementNullable } },
+      storageWith({
         Point: {
           fields: { x: { type: { kind: 'scalar', codecId: 'mongo/double@1' }, nullable: false } },
         },
-      },
+      }),
     );
     expect(shape).toEqual({
       kind: 'array',
@@ -80,15 +100,15 @@ describe('contractModelToMongoResultShape', () => {
 
   it('stops at a value object that contains itself', () => {
     const shape = contractFieldToMongoFieldShape(
-      { type: { kind: 'valueObject', name: 'Node' }, nullable: false },
-      {
+      { type: valueObjectRef('Node'), nullable: false },
+      storageWith({
         Node: {
           fields: {
             label: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-            child: { type: { kind: 'valueObject', name: 'Node' }, nullable: true },
+            child: { type: valueObjectRef('Node'), nullable: true },
           },
         },
-      },
+      }),
     );
     expect(shape).toEqual({
       kind: 'document',
@@ -100,7 +120,41 @@ describe('contractModelToMongoResultShape', () => {
     });
   });
 
-  it('maps a value-object field to unknown when no value objects are given', () => {
+  it('finds a value object in the storage namespace its reference names', () => {
+    const shape = contractFieldToMongoFieldShape(
+      { type: valueObjectRef('Point', 'geo'), nullable: false },
+      {
+        namespaces: {
+          ...storageWith({ Point: { fields: {} } }).namespaces,
+          ...storageWith(
+            {
+              Point: {
+                fields: {
+                  x: { type: { kind: 'scalar', codecId: 'mongo/double@1' }, nullable: false },
+                },
+              },
+            },
+            'geo',
+          ).namespaces,
+        },
+      },
+    );
+    expect(shape).toEqual({
+      kind: 'document',
+      nullable: false,
+      fields: { x: { kind: 'leaf', codecId: 'mongo/double@1', nullable: false } },
+    });
+  });
+
+  it('maps a value-object field to unknown when storage has no such value object', () => {
+    const shape = contractFieldToMongoFieldShape(
+      { type: valueObjectRef('Missing'), nullable: false },
+      storageWith({}),
+    );
+    expect(shape).toEqual({ kind: 'unknown' });
+  });
+
+  it('maps a value-object field to unknown when no storage is given', () => {
     const model = testContract.domain.namespaces.__unbound__!.models['Customer'];
     const shape = contractModelToMongoResultShape(model);
     if (shape.kind !== 'document') throw new Error('expected document');
@@ -199,6 +253,19 @@ describe('PipelineChain build resultShape', () => {
   it('identity pipeline attaches document shape from bound model', () => {
     const plan = mongoQuery({ contract: testContract }).from('orders').build();
     expect(plan.resultShape?.kind).toBe('document');
+  });
+
+  it('decodes a value-object field through the value object storage holds', () => {
+    const plan = mongoQuery({ contract: testContract }).from('customers').build();
+    if (plan.resultShape?.kind !== 'document') throw new Error('expected document');
+    expect(plan.resultShape.fields['stats']).toEqual({
+      kind: 'document',
+      nullable: false,
+      fields: {
+        visits: { kind: 'leaf', codecId: 'mongo/double@1', nullable: false },
+        lastSeen: { kind: 'leaf', codecId: 'mongo/date@1', nullable: true },
+      },
+    });
   });
 
   it('project stage reifies a document shape retaining _id and the projected field', () => {

@@ -1,4 +1,8 @@
-import type { ContractField } from '@internal/contract/types';
+import type {
+  ContractField,
+  ContractValueObjectField,
+  EntityCoordinate,
+} from '@internal/contract/types';
 import { nonEmptyTypeParams } from '@internal/sql-contract/types';
 import { ifDefined } from '@internal/utils/defined';
 import {
@@ -6,20 +10,38 @@ import {
   type ScalarMemberNode,
   type ValueObjectMemberNode,
 } from './contract-definition';
-import { enumValueSetRefs } from './enum-members';
+import { type EnumValueSetRefs, enumValueSetRefs } from './enum-members';
 
-export function buildDomainField(
-  field: ScalarMemberNode | ValueObjectMemberNode,
+type Member = ScalarMemberNode | ValueObjectMemberNode;
+
+/** The storage coordinate of a value object. Value objects are all in the default namespace. */
+export function valueObjectReference(
+  valueObjectName: string,
   defaultNamespaceId: string,
-): ContractField {
+): EntityCoordinate<'storage', 'valueObject'> {
+  return {
+    plane: 'storage',
+    namespaceId: defaultNamespaceId,
+    entityKind: 'valueObject',
+    entityName: valueObjectName,
+  };
+}
+
+function fieldWithoutValueSet(
+  field: Member,
+  defaultNamespaceId: string,
+): Omit<ContractField, 'valueSet'> {
+  const many = field.many ? { elementNullable: field.elementNullable === true } : false;
   if (isValueObjectMember(field)) {
     return {
-      type: { kind: 'valueObject', name: field.valueObjectName },
+      type: {
+        kind: 'valueObject',
+        ...valueObjectReference(field.valueObjectName, defaultNamespaceId),
+      },
       nullable: field.nullable,
-      many: field.many ? { elementNullable: field.elementNullable === true } : false,
+      many,
     };
   }
-
   return {
     type: {
       kind: 'scalar',
@@ -27,7 +49,31 @@ export function buildDomainField(
       ...ifDefined('typeParams', nonEmptyTypeParams(field.descriptor.typeParams)),
     },
     nullable: field.nullable,
-    many: field.many ? { elementNullable: field.elementNullable === true } : false,
-    ...ifDefined('valueSet', enumValueSetRefs(field.enumTypeHandle, defaultNamespaceId)?.domain),
+    many,
+  };
+}
+
+function enumRefsOf(field: Member, defaultNamespaceId: string): EnumValueSetRefs | undefined {
+  return isValueObjectMember(field)
+    ? undefined
+    : enumValueSetRefs(field.enumTypeHandle, defaultNamespaceId);
+}
+
+/** A model field in the domain plane. A value object is referred to by its storage coordinate, an enum by the domain enum. */
+export function buildDomainField(field: Member, defaultNamespaceId: string): ContractField {
+  return {
+    ...fieldWithoutValueSet(field, defaultNamespaceId),
+    ...ifDefined('valueSet', enumRefsOf(field, defaultNamespaceId)?.domain),
+  };
+}
+
+/** A member of a storage value object. Storage never refers to the domain plane, so an enum member refers to the storage value set. */
+export function buildValueObjectMember(
+  field: Member,
+  defaultNamespaceId: string,
+): ContractValueObjectField {
+  return {
+    ...fieldWithoutValueSet(field, defaultNamespaceId),
+    ...ifDefined('valueSet', enumRefsOf(field, defaultNamespaceId)?.storage),
   };
 }

@@ -76,33 +76,83 @@ describe('MongoContractSerializerBase', () => {
       expect(() => serializer.deserializeContract(json)).toThrow(/missing_collection/);
     });
 
-    it('rejects when a field references a value object that does not exist', () => {
-      const serializer = new RecordingSerializer();
-      const json = mongoContractJson({
-        models: {
-          Item: {
-            fields: {
-              _id: {
-                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
-                nullable: false,
-                many: false,
+    describe('given a model field that holds a value object', () => {
+      function contractJsonWith(storageValueObjects: Record<string, unknown>) {
+        return mongoContractJson({
+          models: {
+            Item: {
+              fields: {
+                _id: {
+                  type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                  nullable: false,
+                  many: false,
+                },
+                data: {
+                  type: {
+                    kind: 'valueObject',
+                    plane: 'storage',
+                    namespaceId: '__unbound__',
+                    entityKind: 'valueObject',
+                    entityName: 'Address',
+                  },
+                  nullable: false,
+                  many: false,
+                },
               },
-              data: {
-                type: { kind: 'valueObject', name: 'Missing' },
-                nullable: false,
-                many: false,
+              storage: {
+                fields: { _id: { field: '_id' }, data: { field: 'data' } },
+                collection: 'items',
               },
+              relations: {},
             },
-            storage: {
-              fields: { _id: { field: '_id' }, data: { field: 'data' } },
-              collection: 'items',
-            },
-            relations: {},
           },
+          storageValueObjects,
+        });
+      }
+
+      const address = {
+        fields: {
+          city: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
         },
+      };
+
+      it('accepts it when storage has the value object', () => {
+        const result = new RecordingSerializer().deserializeContract(
+          contractJsonWith({ Address: address }),
+        );
+        expect(result.contract.storage.namespaces['__unbound__']?.entries['valueObject']).toEqual({
+          Address: {
+            fields: {
+              city: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
+            },
+          },
+        });
       });
 
-      expect(() => serializer.deserializeContract(json)).toThrow();
+      it('refuses it when storage does not have the value object, naming the field and the coordinate', () => {
+        expect(() => new RecordingSerializer().deserializeContract(contractJsonWith({}))).toThrow(
+          'Model "__unbound__:Item" field "data" refers to value object "Address" in storage namespace "__unbound__", which storage.namespaces.__unbound__.entries.valueObject does not have',
+        );
+      });
+
+      it('refuses a contract that stores value objects in the domain plane, and says to re-emit', () => {
+        const json = contractJsonWith({ Address: address });
+        const old = {
+          ...json,
+          domain: {
+            namespaces: {
+              __unbound__: { ...json.domain.namespaces['__unbound__'], valueObjects: {} },
+            },
+          },
+        };
+        expect(() => new RecordingSerializer().deserializeContract(old)).toThrow(
+          'Contract structural validation failed: domain.namespaces.__unbound__.valueObjects: contracts no longer store value objects in the domain plane; they are storage entities under storage.namespaces.<namespace>.entries.valueObject, so re-emit the contract from its source, or rewrite a stored contract such as a migration snapshot with value-objects-in-storage.ts, which ships in the value-objects-in-storage scripts of the Prisma 8 upgrade guide',
+        );
+      });
     });
 
     it('rejects an unknown entries kind at hydration naming the kind and the namespace id', () => {

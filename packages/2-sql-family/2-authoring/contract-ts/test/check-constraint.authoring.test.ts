@@ -2,6 +2,7 @@ import { applySpecifierDefaultControlPolicy } from '@internal/contract/apply-spe
 import type { Contract, ControlPolicy } from '@internal/contract/types';
 import { emptyCodecLookup } from '@internal/framework-components/codec';
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
+import type { CheckExpressionInput } from '@internal/sql-contract/check-expressions';
 import { sql } from '@internal/sql-contract/sql-expression';
 import {
   CheckConstraint,
@@ -36,13 +37,7 @@ const sqlFamilyPack = {
   version: '0.0.1',
 } as const satisfies FamilyPackRef<'sql'>;
 
-interface RenderInput {
-  readonly tableName: string;
-  readonly columnName: string;
-  readonly many: boolean;
-  readonly elementNullable: boolean;
-  readonly memberValues: readonly (string | number)[] | undefined;
-}
+type RenderInput = CheckExpressionInput;
 
 /**
  * Stands in for the Postgres pack's `renderCheckExpressions`, reproducing the
@@ -79,7 +74,7 @@ function renderCheckExpressions(input: RenderInput): ReadonlyArray<{
         : `${column} IN (${members})`,
     });
   }
-  if (input.many && !input.elementNullable) {
+  if (input.many !== false && !input.many.elementNullable) {
     candidates.push({
       kind: 'elementNotNull',
       columnName: input.columnName,
@@ -315,8 +310,8 @@ describe('check emission — entity-ref-resolved value set (native enum shape)',
       tableName: 'User',
       columnName: 'role',
       many: false,
-      elementNullable: false,
       memberValues: undefined,
+      valueObject: undefined,
     });
   });
 });
@@ -526,9 +521,9 @@ describe('check emission — guards', () => {
       expect(hookCalls.at(-1)).toEqual({
         tableName: 'User',
         columnName: 'special',
-        many,
-        elementNullable: false,
+        many: many ? { elementNullable: false } : false,
         memberValues: [1.5, 'NaN'],
+        valueObject: undefined,
       });
     },
   );

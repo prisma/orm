@@ -211,18 +211,22 @@ describe('migration plan --rename', () => {
     expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
   });
 
-  it('fails planning when the storage changed but the planner planned nothing, statements or not', async () => {
+  it('writes a migration with no operations when the storage changed but the planner planned nothing', async () => {
     const project = await renamingProject();
     const run = await harness(project, { operations: [] }).run(
-      ['migration', 'plan', '--rename', 'Profile:User', '--json'],
+      ['migration', 'plan', '--name', 'delta', '--rename', 'Profile:User', '--json'],
       { cwd: project.dir },
     );
 
-    expect(run.json.at(-1)).toMatchObject({
-      kind: 'result',
-      envelope: { ok: false, error: { code: 'MIGRATION.PLANNING_FAILED' } },
+    expect(run.presented?.data).toMatchObject({
+      noOp: false,
+      operations: [],
+      appliedStatements: [{ statement: profileToUser, operationIndexes: [] }],
     });
-    expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
+    expect((await plannedDirs(project)).map((dir) => dir.replace(/^\d{8}T\d{4}_/, ''))).toEqual([
+      'initial',
+      'delta',
+    ]);
   });
 
   it('passes the statements to the delta of an auto-baseline plan only', async () => {
@@ -331,7 +335,7 @@ describe('migration plan --rename', () => {
     });
   });
 
-  it('writes nothing when the auto-baseline delta is refused, and only the baseline when it has no operations', async () => {
+  it('writes nothing when the auto-baseline delta is refused, and the baseline and the delta when it has no operations', async () => {
     const refusedProject = await renamingProject({ history: false });
     const refused = await harness(refusedProject, { refuseStatements: true }).run(
       ['migration', 'plan', '--name', 'delta', '--rename', 'Profile:User', '--json'],
@@ -360,7 +364,7 @@ describe('migration plan --rename', () => {
       },
     }).toEqual({
       refused: { kind: 'statementRefused', dirs: [] },
-      empty: { kind: 'noDatabaseChange', dirs: ['baseline'] },
+      empty: { kind: undefined, dirs: ['baseline', 'delta'] },
     });
   });
 });

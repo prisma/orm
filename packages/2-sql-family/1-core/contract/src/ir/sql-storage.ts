@@ -16,6 +16,7 @@ import {
   type StorageTypeInstanceInput,
   toStorageTypeInstance,
 } from './storage-type-instance';
+import type { StorageValueObject } from './storage-value-object';
 import type { StorageValueSet } from './storage-value-set';
 
 /**
@@ -91,13 +92,14 @@ export interface SqlStorageInput<THash extends string = string> {
  */
 /**
  * The typed `entries` shape for SQL family namespaces. The open dictionary
- * is intersected with optional known-kind maps so that `ns.entries.table`
- * and `ns.entries.valueSet` resolve without a cast, while unknown pack-
+ * is intersected with optional known-kind maps so that `ns.entries.table`,
+ * `ns.entries.valueSet` and `ns.entries.valueObject` resolve without a cast, while unknown pack-
  * contributed kinds remain valid (the `Record` part allows any string key).
  */
 export type SqlNamespaceEntries = Readonly<Record<string, Readonly<Record<string, unknown>>>> & {
   readonly table?: Readonly<Record<string, StorageTable>>;
   readonly valueSet?: Readonly<Record<string, StorageValueSet>>;
+  readonly valueObject?: Readonly<Record<string, StorageValueObject>>;
 };
 
 /**

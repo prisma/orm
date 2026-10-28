@@ -1,5 +1,4 @@
-import type { ApplicationDomain } from '@internal/contract/types';
-import type { EntityCoordinate } from './storage';
+import type { ApplicationDomain, EntityCoordinate } from '@internal/contract/types';
 
 /**
  * Lazy walk over every named domain entity in a {@link ApplicationDomain},

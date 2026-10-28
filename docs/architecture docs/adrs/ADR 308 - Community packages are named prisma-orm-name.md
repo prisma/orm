@@ -49,6 +49,7 @@ A package that provides only a driver for a database Prisma 8 already supports i
 ## Consequences
 
 - A listing site or search tool finds community packages by the `prisma-orm-extension` keyword. It cannot tell a database package from middleware or data types without reading the package itself.
+- Prisma's own extension packages, `@prisma/orm-extension-<name>`, list the keyword too, so the search finds them beside the community ones. Prisma's database packages, such as `@prisma/orm-postgres`, do not, and neither does `@prisma/orm-extension-paradedb`, which is a proof of concept.
 - The convention is guidance in the docs, not a check anywhere in Prisma 8. A package that ignores it still works.
 - No revisit-if condition is recorded.
 

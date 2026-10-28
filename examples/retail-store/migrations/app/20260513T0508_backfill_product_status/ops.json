@@ -124,7 +124,7 @@
           },
           "meta": {
             "target": "mongo",
-            "storageHash": "9af6d90aaa4cd03bf7eb2040a1c1b5c1225a2b33883ea3d0552f312f4684f8dc",
+            "storageHash": "c529f34639ba48ec978d133093cd95ac2a5a76196ea39b3fa71179a9ef2c3467",
             "lane": "mongo-pipeline"
           }
         },
@@ -155,7 +155,7 @@
         },
         "meta": {
           "target": "mongo",
-          "storageHash": "9af6d90aaa4cd03bf7eb2040a1c1b5c1225a2b33883ea3d0552f312f4684f8dc",
+          "storageHash": "c529f34639ba48ec978d133093cd95ac2a5a76196ea39b3fa71179a9ef2c3467",
           "lane": "mongo-raw"
         }
       }
@@ -185,7 +185,7 @@
           },
           "meta": {
             "target": "mongo",
-            "storageHash": "9af6d90aaa4cd03bf7eb2040a1c1b5c1225a2b33883ea3d0552f312f4684f8dc",
+            "storageHash": "c529f34639ba48ec978d133093cd95ac2a5a76196ea39b3fa71179a9ef2c3467",
             "lane": "mongo-pipeline"
           }
         },
