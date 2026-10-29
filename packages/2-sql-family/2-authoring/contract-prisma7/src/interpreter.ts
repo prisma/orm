@@ -1159,7 +1159,7 @@ type Prisma7FieldType =
     };
 
 function nativeTypeMessage(label: string, nativeType: string): string {
-  return `${label}: native type "@db.${nativeType}" has no Prisma 8 codec yet, and Prisma 8 cannot read this schema until it supports the column type. @ignore on the field or @@ignore on the model does not help: Prisma 8 keeps the columns of ignored fields and models in the contract. Changing the field's type to one Prisma 8 supports changes the column type on Prisma 7's next migration.`;
+  return `${label}: native type "@db.${nativeType}" is not one the target knows, and Prisma 7 refuses it too. Correct the spelling.`;
 }
 
 function extensionPackMissingMessage(

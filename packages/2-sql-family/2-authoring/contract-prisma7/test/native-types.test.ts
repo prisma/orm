@@ -62,3 +62,25 @@ model Account {
     ]);
   });
 });
+
+describe('a native type the target does not know', () => {
+  it('asks for the spelling to be corrected', () => {
+    const result = interpretSchemaTextResult(`datasource db {
+  provider = "postgresql"
+}
+
+model Account {
+  id   Int    @id
+  name String @db.Txt
+}
+`);
+    if (result.ok) throw new Error('expected the schema to be refused');
+    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      {
+        code: 'PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED',
+        message:
+          'Field "Account.name": native type "@db.Txt" is not one the target knows, and Prisma 7 refuses it too. Correct the spelling.',
+      },
+    ]);
+  });
+});
