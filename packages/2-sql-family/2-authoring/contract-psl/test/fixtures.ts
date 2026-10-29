@@ -436,6 +436,9 @@ function contextForInterpretOptions(
       ...(authoring?.valueObjectStorageType === undefined
         ? {}
         : { valueObjectStorageType: authoring.valueObjectStorageType }),
+      ...(authoring?.renamedTypeConstructors === undefined
+        ? {}
+        : { renamedTypeConstructors: authoring.renamedTypeConstructors }),
     },
     pslDiagnostics: {
       describeUnsupportedAttribute: describeUnsupportedSqlAttribute,

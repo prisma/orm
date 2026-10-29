@@ -347,7 +347,9 @@ export function createBinder(input: CreateBinderInput): BinderResult {
     generatorFunctions: context.generatorFunctions,
     dataTypes: context.dataTypes,
     ...(describeUnsupportedAttributeFactory !== undefined
-      ? { describeUnsupportedAttribute: describeUnsupportedAttributeFactory(sources) }
+      ? {
+          describeUnsupportedAttribute: describeUnsupportedAttributeFactory(sources, contributions),
+        }
       : {}),
     ...(describeUnresolvedTypeFactory !== undefined
       ? { describeUnresolvedType: describeUnresolvedTypeFactory(contributions) }

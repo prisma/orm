@@ -109,4 +109,38 @@ model Event {
       },
     ]);
   });
+
+  it('recommends the constructor the target maps a renamed Prisma 7 native type to', () => {
+    const result = interpretSqlContract(
+      `types {
+  Amount = Decimal @db.Decimal(10, 2)
+}
+
+model Post {
+  id   Int    @id
+  body String @db.Text
+}
+`,
+      {
+        ...baseInput,
+        authoringContributions: {
+          type: postgresScalarAuthoringTypes,
+          renamedTypeConstructors: { Text: 'String', Decimal: 'Numeric' },
+        },
+      },
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      {
+        code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+        message: '@db.Text is no longer supported; use String in type position',
+      },
+      {
+        code: 'PSL_UNSUPPORTED_NAMED_TYPE_ATTRIBUTE',
+        message: '@db.Decimal(10, 2) is no longer supported; use Numeric(10, 2) in type position',
+      },
+    ]);
+  });
 });

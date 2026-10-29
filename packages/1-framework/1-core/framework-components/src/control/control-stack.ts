@@ -79,6 +79,8 @@ export interface AssembledAuthoringContributions {
   readonly dataTypes: Readonly<Record<string, DataTypeAuthoringEntry>>;
   /** The single {@link AuthoringContributions.valueObjectStorageType} declared across the composed components, validated at assembly against the merged `type` namespace. */
   readonly valueObjectStorageType?: string;
+  /** Every component's {@link AuthoringContributions.renamedTypeConstructors}, merged. */
+  readonly renamedTypeConstructors?: Readonly<Record<string, string>>;
 }
 
 export interface ControlStack<
@@ -252,6 +254,12 @@ export function assembleAuthoringContributions(
     }
   };
 
+  const renamedTypeConstructors = descriptors.flatMap((descriptor) =>
+    descriptor.authoring?.renamedTypeConstructors === undefined
+      ? []
+      : [descriptor.authoring.renamedTypeConstructors],
+  );
+
   let valueObjectStorageDeclaration:
     | { readonly name: string; readonly ownerId: string }
     | undefined;
@@ -373,6 +381,9 @@ export function assembleAuthoringContributions(
     attributeSpecs,
     ...(valueObjectStorageDeclaration !== undefined
       ? { valueObjectStorageType: valueObjectStorageDeclaration.name }
+      : {}),
+    ...(renamedTypeConstructors.length > 0
+      ? { renamedTypeConstructors: Object.assign({}, ...renamedTypeConstructors) }
       : {}),
   };
 }

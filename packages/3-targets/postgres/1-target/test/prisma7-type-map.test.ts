@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { prisma7PostgresTypeMap, prisma7PostgresTypes } from '../src/core/prisma7-type-map';
+import { postgresTargetDescriptorMeta } from '../src/core/descriptor-meta';
+import {
+  prisma7PostgresRenamedNativeTypes,
+  prisma7PostgresTypeMap,
+  prisma7PostgresTypes,
+} from '../src/core/prisma7-type-map';
 
 describe('the Prisma 7 type table', () => {
   it('writes each Prisma 7 type with the constructor marked inferred for its data type and every parameter Prisma 7 gives it', () => {
@@ -57,5 +62,23 @@ describe('the Prisma 7 type table', () => {
       Char: { dataType: 'pg/char', params: { length: 1 } },
       Timetz: { dataType: 'pg/timetz', params: {} },
     });
+  });
+
+  it('contributes the native types whose Prisma 8 constructor has another name', () => {
+    expect(prisma7PostgresRenamedNativeTypes).toEqual({
+      Text: 'String',
+      Integer: 'Int',
+      DoublePrecision: 'Float',
+      Decimal: 'Numeric',
+      Timestamp: 'TimestampJsDate',
+      Timestamptz: 'TimestamptzJsDate',
+      Date: 'DateString',
+      Time: 'TimeString',
+      JsonB: 'Jsonb',
+      ByteA: 'Bytes',
+    });
+    expect(postgresTargetDescriptorMeta.authoring.renamedTypeConstructors).toBe(
+      prisma7PostgresRenamedNativeTypes,
+    );
   });
 });

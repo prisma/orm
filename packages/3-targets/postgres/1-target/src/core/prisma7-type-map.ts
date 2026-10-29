@@ -132,3 +132,11 @@ export const prisma7PostgresTypeMap = {
   scalars: mappingsOf(prisma7PostgresTypes.scalars),
   nativeTypes: mappingsOf(prisma7PostgresTypes.nativeTypes),
 };
+
+/** The Prisma 7 `@db.*` names whose Prisma 8 constructor has another name, such as `Text` to `String`. */
+export const prisma7PostgresRenamedNativeTypes: Readonly<Record<string, string>> =
+  Object.fromEntries(
+    Object.entries(prisma7PostgresTypeMap.nativeTypes).flatMap(([name, { constructorName }]) =>
+      constructorName === name ? [] : [[name, constructorName]],
+    ),
+  );

@@ -581,6 +581,10 @@ export interface AuthoringContributions {
    * The data types whose values are text, such as a target's variable-length, fixed-length and bounded text types. A family uses the list where only text is meaningful, such as a polymorphic model's discriminator column. Assembly takes every component's list.
    */
   readonly textDataTypes?: readonly DataTypeId[];
+  /**
+   * Former names of this component's type constructors, each mapped to the constructor that replaced it, such as `Text` to `String`. A diagnostic that meets a former name suggests its replacement. Assembly merges every component's map.
+   */
+  readonly renamedTypeConstructors?: Readonly<Record<string, string>>;
 }
 
 /** Refuses the `authoring.field` key, which held field presets before Prisma 8 removed them. A component built against the old types would otherwise lose its presets silently. */

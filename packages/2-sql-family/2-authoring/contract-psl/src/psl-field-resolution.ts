@@ -8,7 +8,10 @@ import type {
   CapabilityMatrix,
   GeneratorFunctionRegistry,
 } from '@internal/framework-components/components';
-import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
+import type {
+  AssembledAuthoringContributions,
+  ControlMutationDefaultRegistry,
+} from '@internal/framework-components/control';
 import type {
   Binder,
   BlockSymbol,
@@ -155,7 +158,10 @@ const REMOVED_ATTRIBUTE_RULES: ReadonlyMap<string, RemovedAttributeRule> = new M
   }
 }
 
-export function describeUnsupportedSqlAttribute(sources: PslSources): DescribeUnsupportedAttribute {
+export function describeUnsupportedSqlAttribute(
+  sources: PslSources,
+  contributions: Pick<AssembledAuthoringContributions, 'renamedTypeConstructors'>,
+): DescribeUnsupportedAttribute {
   return ({ attribute, level, owner, field }) => {
     // A composite type takes no attributes at all; `buildValueObjectNodes` refuses each one once.
     if (owner.kind === 'compositeType') return undefined;
@@ -175,7 +181,10 @@ export function describeUnsupportedSqlAttribute(sources: PslSources): DescribeUn
     if (attribute.name.startsWith('db.')) {
       return {
         code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
-        message: formatDbAttributeMigrationMessage(attribute),
+        message: formatDbAttributeMigrationMessage(
+          attribute,
+          contributions.renamedTypeConstructors,
+        ),
         ...source.at(attribute.span),
       };
     }

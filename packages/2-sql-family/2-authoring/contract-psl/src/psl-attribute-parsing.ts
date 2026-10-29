@@ -29,7 +29,10 @@ export function getAttribute<TNode extends FieldAttributeAst | ModelAttributeAst
   return attributes?.find((attribute) => attribute.name === name);
 }
 
-export function formatDbAttributeMigrationMessage(attribute: ResolvedAttribute): string {
+export function formatDbAttributeMigrationMessage(
+  attribute: ResolvedAttribute,
+  renamedTypeConstructors: Readonly<Record<string, string>> | undefined,
+): string {
   const renderedArguments = attribute.args
     .map((argument) =>
       argument.kind === 'named' && argument.name !== undefined
@@ -38,7 +41,12 @@ export function formatDbAttributeMigrationMessage(attribute: ResolvedAttribute):
     )
     .join(', ');
   const argumentList = attribute.args.length === 0 ? '' : `(${renderedArguments})`;
-  const constructorName = attribute.name.slice('db.'.length);
+  const nativeType = attribute.name.slice('db.'.length);
+  const renamed =
+    renamedTypeConstructors !== undefined && Object.hasOwn(renamedTypeConstructors, nativeType)
+      ? renamedTypeConstructors[nativeType]
+      : undefined;
+  const constructorName = renamed ?? nativeType;
 
   return `@${attribute.name}${argumentList} is no longer supported; use ${constructorName}${argumentList} in type position`;
 }
