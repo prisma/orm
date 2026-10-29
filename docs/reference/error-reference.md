@@ -821,7 +821,7 @@ A model in the same schema as an implicit many-to-many junction has the junction
 
 ### PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED
 
-A `@db.*` type with no Prisma 8 codec yet (`Citext`, `Bit`, `VarBit`, `Xml`, `Oid`, `Money`, or an unknown spelling). Prisma 8 cannot read the schema until it supports the column type. `@ignore` and `@@ignore` do not help, because Prisma 8 keeps the columns of ignored fields and models in the contract. Changing the field's type to one Prisma 8 supports changes the column type on Prisma 7's next migration. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+A `@db.*` type with no Prisma 8 codec yet (`Citext`, or an unknown spelling). Prisma 8 cannot read the schema until it supports the column type. `@ignore` and `@@ignore` do not help, because Prisma 8 keeps the columns of ignored fields and models in the contract. Changing the field's type to one Prisma 8 supports changes the column type on Prisma 7's next migration. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_PROVIDER_MISMATCH
 
@@ -1318,6 +1318,10 @@ An `AsyncIterableResult` (the return value of `query()`) was iterated a second t
 ### RUNTIME.JSON_SCHEMA_VALIDATION_FAILED
 
 The `arktype-json` codec rejected a JSON value that does not satisfy the column's arktype schema, on writing (`toWire`, `toDataTypeValue`) or reading (`fromWire`, `fromDataTypeValue`). Also thrown when the schema itself cannot be rehydrated from the contract's stored JSON IR. Payload: `codecId`, `issues` (validation) or `jsonIr` (rehydration).
+
+### RUNTIME.LC_MONETARY_NOT_C
+
+The PostgreSQL `money` codec (`pg/money@1`) read a value PostgreSQL printed under an `lc_monetary` other than `C`, such as `1.234,56 €` under a German locale: the driver could not ensure the `lc_monetary=C` the PostgreSQL target requires. The driver starts each connection it opens with `lc_monetary=C` as a startup option, and sets it with a statement on a connection of a `pg.Pool` or `pg.Client` the application supplies before first use and after an exclusive use ends. So a statement in the application set another `lc_monetary` on a connection Prisma uses, or a connection pooler dropped the startup option or runs each statement on another server connection. Do not change `lc_monetary` on a connection Prisma uses; behind a pooler, set `lc_monetary` to `C` on the role or database. The PostgreSQL adapter sends each `money` parameter as `numeric` and casts it to `money` in SQL, so a write does not depend on the locale's separators; PostgreSQL still scales it by the locale's number of fraction digits, so under a locale whose number is not two, such as `ja_JP`, a write is stored wrong as well. On a flat read the envelope surfaces as it is; on an `.include()` read it is the `cause` of a `RUNTIME.DECODE_FAILED`. Payload: `codecId`, `received` (the text, cut to 100 characters).
 
 ### RUNTIME.MIDDLEWARE_FAMILY_MISMATCH
 

@@ -4,6 +4,7 @@ import { createDataTypeLookup, type DataTypeId } from '@internal/framework-compo
 import type { SqlTypeParams } from '@internal/sql-contract/data-type';
 import { InternalError } from '@internal/utils/internal-error';
 import {
+  pgBit,
   pgBool,
   pgBytea,
   pgChar,
@@ -16,14 +17,18 @@ import {
   pgInt8,
   pgJson,
   pgJsonb,
+  pgMoney,
   pgNumeric,
+  pgOid,
   pgText,
   pgTime,
   pgTimestamp,
   pgTimestamptz,
   pgTimetz,
   pgUuid,
+  pgVarbit,
   pgVarchar,
+  pgXml,
   postgresDataTypes,
 } from './data-types';
 import { postgresCodecDescriptorRegistry } from './registry';
@@ -47,7 +52,7 @@ const of = (type: { readonly id: DataTypeId }, params: SqlTypeParams = {}): Pris
 });
 
 /**
- * What Prisma 7.10.0 creates in Postgres for each Prisma 7 scalar and `@db.*` native type, as a data type and its parameters. Derived from the SQL recorded in `test/integration/test/fixtures/prisma7-source/reference/migration.sql`. A `@db.*` attribute's own arguments replace the parameters; without any, the column gets these, so `@db.Char` is the `character(1)` Postgres stores for Prisma 7's `CHAR`.
+ * What Prisma 7.10.0 creates in Postgres for each Prisma 7 scalar and `@db.*` native type, as a data type and its parameters. Derived from the SQL recorded in `test/integration/test/fixtures/prisma7-source/reference/migration.sql`. A `@db.*` attribute's own arguments replace the parameters; without any, the column gets these, so `@db.Char` is the `character(1)` Postgres stores for Prisma 7's `CHAR`, and `@db.Bit` the `bit(1)` it stores for `BIT`.
  */
 export const prisma7PostgresTypes = {
   scalars: {
@@ -82,6 +87,11 @@ export const prisma7PostgresTypes = {
     Json: of(pgJson),
     JsonB: of(pgJsonb),
     ByteA: of(pgBytea),
+    Bit: of(pgBit, { length: 1 }),
+    VarBit: of(pgVarbit),
+    Xml: of(pgXml),
+    Oid: of(pgOid),
+    Money: of(pgMoney),
   },
 } as const;
 

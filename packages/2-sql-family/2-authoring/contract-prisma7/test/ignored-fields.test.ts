@@ -89,7 +89,7 @@ describe('an @ignore field whose type has no Prisma 8 codec', () => {
     const result = await loadFixtureSchema('ignored-field-no-codec');
     expect(
       result.ok ? [] : result.failure.diagnostics.map((diagnostic) => diagnostic.code),
-    ).toEqual(['PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED', 'PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED']);
+    ).toEqual(['PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED']);
   });
 });
 

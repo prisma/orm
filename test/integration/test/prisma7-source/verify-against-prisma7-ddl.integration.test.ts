@@ -34,7 +34,9 @@ describe('db verify against the DDL Prisma 7 generates', () => {
 
   async function applySql(statements: readonly string[]): Promise<void> {
     await withClient(getConnectionString(), async (client) => {
-      await client.query('DROP TABLE IF EXISTS "Post", "User", "LegacyThing", "Tag", "Timestamps"');
+      await client.query(
+        'DROP TABLE IF EXISTS "Post", "User", "LegacyThing", "Tag", "Timestamps", "NativeTypes"',
+      );
       for (const statement of statements) {
         await client.query(statement);
       }
@@ -127,6 +129,43 @@ describe('db verify against the DDL Prisma 7 generates', () => {
       expect(clockTimestamp.schema.issues.map((issue) => issue.path)).toEqual([
         ['database', 'public', 'Timestamps', 'column:createdAt', 'default'],
       ]);
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'bit, varbit, xml, oid and money columns verify against the Prisma 7 DDL with zero findings',
+    async () => {
+      await applySql([
+        `CREATE TABLE "NativeTypes" (
+            "id" INTEGER NOT NULL,
+            "bit" BIT(8) NOT NULL,
+            "varBit" VARBIT(8) NOT NULL,
+            "xml" XML NOT NULL,
+            "oid" OID NOT NULL DEFAULT 42,
+            "money" MONEY NOT NULL DEFAULT 12.5,
+            "moneyNeg" MONEY NOT NULL DEFAULT -1234.56,
+            CONSTRAINT "NativeTypes_pkey" PRIMARY KEY ("id")
+          )`,
+      ]);
+      const contract = defineContract({
+        models: {
+          NativeTypes: model('NativeTypes', {
+            fields: {
+              id: field.column(int4Column).id(),
+              bit: field.column({ codecId: 'pg/bit@1', typeParams: { length: 8 } } as const),
+              varBit: field.column({ codecId: 'pg/varbit@1', typeParams: { length: 8 } } as const),
+              xml: field.column({ codecId: 'pg/xml@1' } as const),
+              oid: field.column({ codecId: 'pg/oid@1' } as const).default(42),
+              money: field.column({ codecId: 'pg/money@1' } as const).default('12.50'),
+              moneyNeg: field.column({ codecId: 'pg/money@1' } as const).default('-1234.56'),
+            },
+          }).sql({ table: 'NativeTypes' }),
+        },
+      });
+
+      const strict = await runSchemaVerify(getConnectionString(), contract, { strict: true });
+      expect(strict).toMatchObject({ ok: true, schema: { issues: [] } });
     },
     timeouts.spinUpPpgDev,
   );

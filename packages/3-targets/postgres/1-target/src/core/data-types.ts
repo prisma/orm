@@ -543,6 +543,108 @@ export const pgVarbit = sqlDataType('pg/varbit', {
   casts: fromText,
 });
 
+export const pgXml = namedOnly('pg/xml', 'xml', readString('pg/xml'), fromText);
+
+const OID_RANGE = { min: 0, max: 4294967295 } as const;
+
+/** Whether a number is one `oid` stores: a whole number from 0 to 4294967295. */
+export function isPgOid(value: number): boolean {
+  return Number.isInteger(value) && value >= OID_RANGE.min && value <= OID_RANGE.max;
+}
+
+/** An integer as `oid` stores it: an unsigned 32-bit number, refused outside that range. */
+const asOid: Cast = (value) => {
+  if (typeof value !== 'number' && typeof value !== 'string') {
+    return refuseWrongShape(value, 'a number or digit text');
+  }
+  const converted = Number(value);
+  if (isPgOid(converted)) {
+    return converted;
+  }
+  throw structuredError(
+    'CONTRACT.CAST_REFUSED',
+    `${value} is out of range: oid holds a whole number from ${OID_RANGE.min} to ${OID_RANGE.max}.`,
+    {
+      why: 'oid stores an unsigned 32-bit integer.',
+      fix: `Use a whole number from ${OID_RANGE.min} to ${OID_RANGE.max}.`,
+    },
+  );
+};
+
+export const pgOid = sqlDataType('pg/oid', {
+  texts: [writtenAndCatalog('oid')],
+  read: (json) => readJsonInteger('pg/oid', json, OID_RANGE),
+  casts: { [pgInt2.id]: asOid, [pgInt4.id]: asOid, [pgInt8.id]: asOid },
+});
+
+/** `money` holds a signed 64-bit count of cents. */
+const MONEY_CENTS_RANGE = INT64_RANGE;
+const MONEY_RANGE_TEXT = 'from -92233720368547758.08 to 92233720368547758.07';
+
+/** The cents a decimal numeral holds, or undefined when it has a third significant fraction digit or lies outside `money`'s range. */
+function moneyCents(text: string): bigint | undefined {
+  if (!DECIMAL_NUMERAL_TEXT.test(text)) return undefined;
+  const negative = text.startsWith('-');
+  const [whole = '', fraction = ''] = text.replace(/^-/, '').split('.');
+  if (withoutTrailing(fraction, '0').length > 2) return undefined;
+  const magnitude = BigInt(`${whole}${fraction.slice(0, 2).padEnd(2, '0')}`);
+  const cents = negative ? -magnitude : magnitude;
+  return cents >= MONEY_CENTS_RANGE.min && cents <= MONEY_CENTS_RANGE.max ? cents : undefined;
+}
+
+/** Cents as `money`'s stored form: digit text with exactly two fraction digits. */
+export function moneyTextOfCents(cents: bigint): string {
+  const magnitude = cents < 0n ? -cents : cents;
+  const digits = magnitude.toString().padStart(3, '0');
+  return `${cents < 0n ? '-' : ''}${digits.slice(0, -2)}.${digits.slice(-2)}`;
+}
+
+/** A decimal numeral as `money`'s stored form, or undefined when `money` does not hold it exactly. */
+export function pgMoneyStoredText(text: string): string | undefined {
+  const cents = moneyCents(text);
+  return cents === undefined ? undefined : moneyTextOfCents(cents);
+}
+
+const readMoney: DataTypeReader = (json) =>
+  typeof json === 'string' && moneyCents(json) !== undefined
+    ? json
+    : refuseJsonValue(
+        'pg/money',
+        `a decimal string with at most two fraction digits, ${MONEY_RANGE_TEXT}`,
+        json,
+      );
+
+const spellMoney: DataTypeSpelling = (json) =>
+  typeof json === 'string' ? (pgMoneyStoredText(json) ?? json) : json;
+
+/** A number as `money` stores it, refused rather than rounded when it has a third fraction digit, and refused outside `money`'s range. */
+const asMoney: Cast = (value) => {
+  const text = typeof value === 'number' ? asNumeralText(value) : value;
+  if (typeof text !== 'string') return refuseWrongShape(value, 'a number or numeral text');
+  const stored = pgMoneyStoredText(text);
+  if (stored !== undefined) return stored;
+  throw structuredError(
+    'CONTRACT.CAST_REFUSED',
+    `${text} is not a money value: money holds a number with at most two fraction digits, ${MONEY_RANGE_TEXT}.`,
+    {
+      why: 'money stores a whole number of cents, and PostgreSQL rounds a value with a third fraction digit.',
+      fix: 'Write the amount with at most two fraction digits.',
+    },
+  );
+};
+
+export const pgMoney = sqlDataType('pg/money', {
+  texts: [writtenAndCatalog('money')],
+  read: readMoney,
+  spell: spellMoney,
+  casts: {
+    [pgInt2.id]: asMoney,
+    [pgInt4.id]: asMoney,
+    [pgInt8.id]: asMoney,
+    [pgNumeric.id]: asMoney,
+  },
+});
+
 const INFINITIES: ReadonlySet<string> = new Set(['infinity', '-infinity']);
 
 /**
@@ -749,6 +851,9 @@ export const postgresDataTypes: readonly DataType[] = [
   pgInet,
   pgBit,
   pgVarbit,
+  pgXml,
+  pgOid,
+  pgMoney,
   pgTimetz,
   pgInterval,
   pgBytea,

@@ -36,6 +36,11 @@ describe('the Prisma 7 type table', () => {
         Json: { constructorName: 'Json', args: [] },
         JsonB: { constructorName: 'Jsonb', args: [] },
         ByteA: { constructorName: 'Bytes', args: [] },
+        Bit: { constructorName: 'Bit', args: [1] },
+        VarBit: { constructorName: 'VarBit', args: [] },
+        Xml: { constructorName: 'Xml', args: [] },
+        Oid: { constructorName: 'Oid', args: [] },
+        Money: { constructorName: 'Money', args: [] },
       },
     });
   });

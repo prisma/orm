@@ -26,6 +26,7 @@ export type PostgresTargetErrorCode =
   | 'RUNTIME.DATE_STYLE_NOT_ISO'
   | 'RUNTIME.DECODE_FAILED'
   | 'RUNTIME.ENCODE_FAILED'
+  | 'RUNTIME.LC_MONETARY_NOT_C'
   | 'RUNTIME.TEMPORAL_UNAVAILABLE'
   | 'RUNTIME.TYPE_PARAMS_INVALID';
 
@@ -145,6 +146,19 @@ export function errorDateStyleNotIso(codecId: string, received: string): Structu
     {
       why: 'PostgreSQL prints a date or timestamp in the DateStyle of the connection. The PostgreSQL driver ensures DateStyle=ISO on every connection it uses: it starts each connection it opens with it, and sets it on a connection the application supplies before first use. A statement that sets DateStyle on a connection undoes that, and so does a connection pooler between Prisma and PostgreSQL that drops the startup option or runs each statement on another server connection.',
       fix: "Do not change DateStyle on a connection Prisma uses. Behind a connection pooler, set DateStyle on the role or database (ALTER ROLE <role> SET DateStyle = 'ISO'), so every server connection holds it.",
+      meta: { codecId, received: received.slice(0, 100) },
+    },
+  );
+}
+
+/** A money codec read text PostgreSQL printed under an `lc_monetary` other than C, which no codec reads. */
+export function errorLcMonetaryNotC(codecId: string, received: string): StructuredError {
+  return postgresError(
+    'RUNTIME.LC_MONETARY_NOT_C',
+    `Codec '${codecId}' read ${JSON.stringify(received)}, which PostgreSQL prints only when the connection's lc_monetary is not C: the driver could not ensure the lc_monetary=C the PostgreSQL target requires. Prisma reads money only as PostgreSQL prints it under lc_monetary C, as in $1,234.56 and -$1,234.56.`,
+    {
+      why: "PostgreSQL prints a money value in the lc_monetary locale of the connection, with that locale's currency symbol, separators and sign. The PostgreSQL driver ensures lc_monetary=C on every connection it uses: it starts each connection it opens with it, and sets it on a connection the application supplies before first use. A statement that sets lc_monetary on a connection undoes that, and so does a connection pooler between Prisma and PostgreSQL that drops the startup option or runs each statement on another server connection.",
+      fix: "Do not change lc_monetary on a connection Prisma uses. Behind a connection pooler, set lc_monetary on the role or database (ALTER ROLE <role> SET lc_monetary = 'C'), so every server connection holds it.",
       meta: { codecId, received: received.slice(0, 100) },
     },
   );

@@ -66,7 +66,7 @@ describe('answerMissingPropertyReads', () => {
       ['column'],
       '[object Object]',
       '{}',
-      '{ column: [Function: column] }',
+      expect.stringContaining('{ column: [Function: column] }'),
     ]);
     expect(reads).toEqual([]);
   });

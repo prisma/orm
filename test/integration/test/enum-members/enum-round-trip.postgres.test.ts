@@ -57,6 +57,8 @@ const storedMembers: Readonly<Record<string, JsonValue>> = {
   'pg/varbit': '101',
   'pg/uuid': 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
   'pg/inet': '10.0.0.0/8',
+  'pg/oid': 4294967295,
+  'pg/money': '-1234.56',
   'pg/interval': 'P1D',
   'pg/text-array': ['low', 'high'],
 };

@@ -52,6 +52,19 @@ describe('column defaults', () => {
     },
   );
 
+  it.each([
+    ['pg/money', 'pg/money@1', '-1234.50', '@default(-1234.5)'],
+    ['pg/oid', 'pg/oid@1', 4294967295, '@default(4294967295)'],
+    ['pg/xml', 'pg/xml@1', '<a>b</a>', '@default("<a>b</a>")'],
+  ])(
+    'prints a %s default as a literal its type casts from',
+    (dataType, codecId, value, printed) => {
+      expect(
+        defaultOf({ dataType, codecId, nullable: false, default: { kind: 'literal', value } }),
+      ).toBe(printed);
+    },
+  );
+
   it('prints an integer default unquoted', () => {
     expect(defaultOf({ ...INT_COLUMN, default: { kind: 'literal', value: 42 } })).toBe(
       '@default(42)',
