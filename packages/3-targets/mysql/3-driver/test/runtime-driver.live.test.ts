@@ -169,7 +169,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     });
   });
 
-  it('keeps every hostile value inside its literal and reads it back exactly, with NO_BACKSLASH_ESCAPES turned on and off again on a held connection', async (test) => {
+  it('keeps every hostile value inside its literal and reads it back exactly, refuses them while a held connection has NO_BACKSLASH_ESCAPES on, and takes them again once it is off', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
       withDriver(url, async (driver) => {
         const texts = [
@@ -214,7 +214,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
           await setMode(
             "SET SESSION sql_mode = CONCAT(@@SESSION.sql_mode, ',NO_BACKSLASH_ESCAPES')",
           );
-          const on = await run();
+          const on = await run().catch((error: unknown) => error);
           await setMode(
             "SET SESSION sql_mode = REPLACE(@@SESSION.sql_mode, 'NO_BACKSLASH_ESCAPES', '')",
           );
@@ -222,8 +222,41 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
           const exact = { leaked: [], read: [...texts, bytes] };
           expect({ before, on, off }).toEqual({
             before: { ...exact, mode: { nbe: '0' } },
-            on: { ...exact, mode: { nbe: '1' } },
+            on: expect.objectContaining({
+              code: 'RUNTIME.PARAM_PLACEHOLDER_MISMATCH',
+              meta: { reason: 'no-backslash-escapes', params: 1 },
+            }),
             off: { ...exact, mode: { nbe: '0' } },
+          });
+        } finally {
+          await connection.destroy();
+        }
+      }),
+    );
+  });
+
+  it('refuses raw SQL whose backslash-quote ends a string early under NO_BACKSLASH_ESCAPES, so its value cannot run as SQL, and still runs a statement without values', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(url, async (driver) => {
+        const connection = await driver.acquireConnection();
+        try {
+          await connection.execute({
+            sql: "SET SESSION sql_mode = CONCAT(@@SESSION.sql_mode, ',NO_BACKSLASH_ESCAPES')",
+          });
+          const injected = await collect(
+            connection.query({
+              sql: "SELECT 'a\\' AS p, ' AS q, ?1 AS r",
+              params: [', CURRENT_USER() AS leak -- '],
+            }),
+          ).catch((error: unknown) => error);
+          const [withoutValues] = await collect(connection.query({ sql: "SELECT 'a\\' AS p" }));
+          expect({ injected, withoutValues }).toEqual({
+            injected: expect.objectContaining({
+              code: 'RUNTIME.PARAM_PLACEHOLDER_MISMATCH',
+              message: expect.stringContaining('NO_BACKSLASH_ESCAPES'),
+              meta: { reason: 'no-backslash-escapes', params: 1 },
+            }),
+            withoutValues: { p: 'a\\' },
           });
         } finally {
           await connection.destroy();

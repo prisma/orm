@@ -63,7 +63,7 @@ function resultStream(behaviour: StreamBehaviour, closed: () => void): Readable 
 }
 
 class FakeConnection extends EventEmitter {
-  readonly info = { threadId: 1 };
+  readonly info = { threadId: 1, status: 0 };
   readonly release = vi.fn(async () => {});
   readonly destroy = vi.fn();
   readonly beginTransaction = vi.fn(async () => {});
@@ -129,6 +129,9 @@ async function connected(options?: Parameters<typeof mysqlRuntimeDriver.create>[
 const streaming = { stream: true } as const;
 
 const valued = { sql: 'SELECT n FROM t WHERE n > ?1', params: [0] };
+
+/** The server status flag MySQL sets while the session's sql_mode includes NO_BACKSLASH_ESCAPES. */
+const NO_BACKSLASH_ESCAPES = 1 << 9;
 
 function lastPool(): FakePool {
   const pool = state.pools.at(-1);
@@ -361,6 +364,30 @@ describe('MySQL runtime driver and its pool', () => {
         ['SELECT n FROM t', []],
       ],
       released: 2,
+    });
+  });
+
+  it('refuses a statement with values while the server reports NO_BACKSLASH_ESCAPES, without sending it, and runs one without values', async () => {
+    connection.info.status = NO_BACKSLASH_ESCAPES;
+    const driver = await connected(streaming);
+    const refusal = {
+      code: 'RUNTIME.PARAM_PLACEHOLDER_MISMATCH',
+      message: expect.stringContaining('NO_BACKSLASH_ESCAPES'),
+      meta: { reason: 'no-backslash-escapes', params: 1 },
+    };
+    await expect(driver.execute(valued)).rejects.toMatchObject(refusal);
+    await expect(collect(driver.query(valued))).rejects.toMatchObject(refusal);
+    await driver.execute({ sql: "SET SESSION sql_mode = ''" });
+    expect({
+      sent: connection.query.mock.calls,
+      streamed: connection.queryStream.mock.calls.length,
+      released: connection.release.mock.calls.length,
+      destroyed: connection.destroy.mock.calls.length,
+    }).toEqual({
+      sent: [["SET SESSION sql_mode = ''", []]],
+      streamed: 0,
+      released: 3,
+      destroyed: 0,
     });
   });
 

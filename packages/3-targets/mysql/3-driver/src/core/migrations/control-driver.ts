@@ -10,8 +10,8 @@ import { type Connection, createConnection } from 'mariadb';
 import { mysqlConnectionOptions } from '../connection-options';
 import { mysqlDriverDescriptorMeta } from '../descriptor-meta';
 import { connectionFix, connectionLost, isFatal, normalizeMysqlError } from '../normalize-error';
-import { positionalParams } from '../positional-params';
 import { applySessionSettings, sessionSettingsStatement } from '../session-settings';
+import { statementFor } from '../statement';
 
 /**
  * A MySQL connection for the control plane. It runs every statement as the runtime driver does, a user's `rawSql` migration step included: in one round trip over the text protocol, the package writing its values into it.
@@ -35,7 +35,7 @@ export class MysqlControlDriver implements SqlControlDriverInstance<'mysql'> {
   ): Promise<{ readonly rows: Row[] }> {
     if (this.#lost !== undefined) throw connectionLost(this.#lost);
     try {
-      const statement = positionalParams(sql, params ?? []);
+      const statement = statementFor(this.connection, sql, params ?? []);
       const result: unknown = await this.connection.query(statement.sql, statement.values);
       return {
         rows: Array.isArray(result)

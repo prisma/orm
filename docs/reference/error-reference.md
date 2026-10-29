@@ -1353,11 +1353,12 @@ At query-render time a table references a namespace that is not present, or not 
 
 The SQLite SQL renderer wrote a statement whose placeholders do not match its parameters: a bare `?` or a numbered placeholder no parameter has, usually a `?` written into raw SQL text, or a parameter no placeholder binds. The renderer refuses the statement rather than bind a value to the wrong place. Pass values into raw SQL by interpolation, not as a `?` in the text. The message and payload give the counts and the first five placeholders written. Payload: `placeholderCount`, `paramCount`, `firstPlaceholders`.
 
-MySQL raises it in three places, each refusing the statement before it runs:
+MySQL raises it in four places, each refusing the statement before it runs:
 
 - The MySQL adapter, after lowering, when a placeholder is not a numbered `?N` naming one of the statement's parameters, or a parameter has no placeholder, usually because of a `?` written into raw SQL text. Payload: `placeholders`, `params`.
 - The MySQL adapter, when raw SQL puts a digit right after an interpolated value, which would read as part of the value's `?N` (`?1` followed by `0` reads as `?10`). Payload: `reason: 'digit-after-value'`, `part`.
 - The MySQL drivers, when a statement mixes numbered `?N` and bare `?` placeholders, or its placeholders and values do not match. Payload: `placeholders`, `params`.
+- The MySQL drivers, for a statement with values while the connection's `sql_mode` includes `NO_BACKSLASH_ESCAPES`, which only a raw `SET` turns on, since the drivers turn it off on every new connection. In that mode MySQL ends a string at a backslash and a quote where the `mariadb` package, which finds the placeholders, does not, so a value could land outside its literal. Turn the mode off on the connection; a statement without values still runs. Payload: `reason: 'no-backslash-escapes'`, `params`.
 
 ### RUNTIME.PARAM_REF_CODEC_REQUIRED
 

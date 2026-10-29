@@ -17,8 +17,8 @@ import { blindCast } from '@internal/utils/casts';
 import { createPool, type Pool, type PoolConnection } from 'mariadb';
 import { type MysqlPoolOptions, mysqlPoolOptions } from '../connection-options';
 import { connectingCannotSucceed, isFatal, normalizeMysqlError } from '../normalize-error';
-import { positionalParams } from '../positional-params';
 import { SessionSettingsGuard } from '../session-settings';
+import { statementFor } from '../statement';
 
 /** Where the runtime driver connects: a `mysql://` URL. */
 export type MysqlBinding = { readonly kind: 'url'; readonly url: string };
@@ -72,7 +72,7 @@ function acquireClientQueryLock(client: object): Promise<() => void> {
 
 /** Runs `request` on `client` in one round trip and returns its result: its `?N` placeholders written as `?`, and its values handed to the package, which writes them into the statement. Throws the package's error as it is. */
 async function run(client: PoolConnection, request: SqlExecuteRequest): Promise<unknown> {
-  const { sql, values } = positionalParams(request.sql, request.params ?? []);
+  const { sql, values } = statementFor(client, request.sql, request.params ?? []);
   return client.query(sql, values);
 }
 
@@ -83,7 +83,7 @@ function startStream(
   outcome: Outcome,
 ): Readable {
   try {
-    const { sql, values } = positionalParams(request.sql, request.params ?? []);
+    const { sql, values } = statementFor(client, request.sql, request.params ?? []);
     return client.queryStream(sql, values);
   } catch (error) {
     throw settle(error, outcome);
