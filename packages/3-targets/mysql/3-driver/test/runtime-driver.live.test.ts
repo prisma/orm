@@ -1,4 +1,4 @@
-import { connect, createServer } from 'node:net';
+import { connect, createServer, type Socket } from 'node:net';
 import { inspect } from 'node:util';
 import { timeouts } from '@repo/test-utils';
 import { withMysqlDatabase } from '@repo/test-utils/mysql-database';
@@ -47,45 +47,66 @@ const single = { stream: true, poolOptions: { max: 1 } } as const;
 const twoHundredNumbers =
   'WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE n < 200) SELECT n FROM s';
 
+/** MySQL's names for the commands a client sends, by the first byte of the command packet. */
+const COMMAND_NAMES: Readonly<Record<number, string>> = {
+  1: 'COM_QUIT',
+  3: 'COM_QUERY',
+  14: 'COM_PING',
+  22: 'COM_STMT_PREPARE',
+  23: 'COM_STMT_EXECUTE',
+  25: 'COM_STMT_CLOSE',
+  31: 'COM_RESET_CONNECTION',
+};
+
 /**
- * Runs `fn` with a URL for a new user of its own on the test database, a function that counts the connections that user has opened on the server, and one that counts the commands the server received from that user, by the name MySQL records each under. A user of its own keeps the counts apart from other tests sharing the server.
+ * Runs `fn` with a URL that reaches the server through a local proxy, which counts the connections the client opens and the commands it sends, by MySQL's name for each. They are counted where the client makes them: the server's own statistics for an account miss a connection for a moment while it closes, so a count read then is one short.
  */
-async function withCountedUser<T>(
+async function withCountingProxy<T>(
   url: string,
-  name: string,
   fn: (
-    userUrl: URL,
-    opened: () => Promise<number>,
-    commands: () => Promise<Record<string, number>>,
+    proxyUrl: URL,
+    counts: { opened(): number; commands(): Record<string, number> },
   ) => Promise<T>,
 ): Promise<T> {
-  const admin = await mysqlControlDriver.create(url);
-  const user = `${name.slice(-12)}_c`;
+  const target = new URL(url);
+  let opened = 0;
+  const commands: Record<string, number> = {};
+  const sockets = new Set<Socket>();
+  const proxy = createServer((client) => {
+    opened += 1;
+    const upstream = connect(Number(target.port), target.hostname);
+    for (const socket of [client, upstream]) {
+      sockets.add(socket);
+      socket.on('close', () => sockets.delete(socket));
+    }
+    let pending = Buffer.alloc(0);
+    client.on('data', (chunk: Buffer) => {
+      pending = Buffer.concat([pending, chunk]);
+      while (pending.length >= 4 && pending.length >= 4 + pending.readUIntLE(0, 3)) {
+        const length = pending.readUIntLE(0, 3);
+        const startsCommand = pending[3] === 0 && length > 0;
+        if (startsCommand) {
+          const name = COMMAND_NAMES[pending[4] ?? -1] ?? `0x${pending[4]?.toString(16)}`;
+          commands[name] = (commands[name] ?? 0) + 1;
+        }
+        pending = pending.subarray(4 + length);
+      }
+    });
+    client.pipe(upstream).pipe(client);
+    client.on('error', () => upstream.destroy());
+    upstream.on('error', () => client.destroy());
+  });
+  await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+  const address = proxy.address();
+  if (address === null || typeof address === 'string') throw new Error('no port');
+  const proxyUrl = new URL(url);
+  proxyUrl.hostname = '127.0.0.1';
+  proxyUrl.port = String(address.port);
   try {
-    await admin.query(`CREATE USER '${user}'@'%' IDENTIFIED BY 'pw-counted'`);
-    await admin.query(`GRANT ALL ON \`${name}\`.* TO '${user}'@'%'`);
-    const userUrl = new URL(url);
-    userUrl.username = user;
-    userUrl.password = 'pw-counted';
-    userUrl.searchParams.set('allowPublicKeyRetrieval', 'true');
-    const opened = async () => {
-      const { rows } = await admin.query<{ n: string }>(
-        'SELECT COALESCE(SUM(TOTAL_CONNECTIONS), 0) AS n FROM performance_schema.accounts WHERE USER = ?',
-        [user],
-      );
-      return Number(rows[0]?.n);
-    };
-    const commands = async () => {
-      const { rows } = await admin.query<{ command: string; n: string }>(
-        'SELECT EVENT_NAME AS command, COUNT_STAR AS n FROM performance_schema.events_statements_summary_by_account_by_event_name WHERE USER = ? AND COUNT_STAR > 0',
-        [user],
-      );
-      return Object.fromEntries(rows.map(({ command, n }) => [command, Number(n)]));
-    };
-    return await fn(userUrl, opened, commands);
+    return await fn(proxyUrl, { opened: () => opened, commands: () => ({ ...commands }) });
   } finally {
-    await admin.query(`DROP USER IF EXISTS '${user}'@'%'`).catch(() => undefined);
-    await admin.close();
+    for (const socket of sockets) socket.destroy();
+    await new Promise((resolve) => proxy.close(resolve));
   }
 }
 
@@ -281,10 +302,10 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
   });
 
   it('sends every statement in one round trip and prepares none: session setup, a query with values, a stream and a transaction', async (test) => {
-    await withMysqlDatabase(test, ({ url, name }) =>
-      withCountedUser(url, name, async (userUrl, _opened, commands) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withCountingProxy(url, async (proxyUrl, counts) => {
         await withDriver(
-          userUrl.toString(),
+          proxyUrl.toString(),
           async (driver) => {
             await driver.execute({ sql: 'CREATE TABLE t (n INT)' });
             await driver.execute({ sql: 'INSERT INTO t VALUES (?1), (?2)', params: [1, 2] });
@@ -299,20 +320,18 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
             } finally {
               await connection.release();
             }
-            expect(streamed).toEqual([{ n: '1' }, { n: '2' }]);
+            expect({
+              streamed,
+              opened: counts.opened(),
+              commands: counts.commands(),
+            }).toEqual({
+              streamed: [{ n: '1' }, { n: '2' }],
+              opened: 1,
+              commands: { COM_QUERY: 9 },
+            });
           },
           { ...single, sessionSettings: { time_zone: '+00:00' } },
         );
-        expect(await commands()).toEqual({
-          'statement/sql/set_option': 3,
-          'statement/sql/create_table': 1,
-          'statement/sql/insert': 1,
-          'statement/sql/select': 1,
-          'statement/sql/begin': 1,
-          'statement/sql/delete': 1,
-          'statement/sql/commit': 1,
-          'statement/com/Quit': 1,
-        });
       }),
     );
   });
@@ -703,20 +722,20 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
   });
 
   it('returns a pooled connection whose stream the caller stops early to the pool when the whole result has arrived, opening no connection', async (test) => {
-    await withMysqlDatabase(test, ({ url, name }) =>
-      withCountedUser(url, name, async (userUrl, opened) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withCountingProxy(url, async (proxyUrl, { opened }) => {
         await withDriver(
-          userUrl.toString(),
+          proxyUrl.toString(),
           async (driver) => {
             const first = await connectionId(driver);
-            const before = await opened();
+            const before = opened();
             for (let round = 0; round < 10; round += 1) {
               for (const sql of [numbers, twoHundredNumbers]) {
                 for await (const _row of driver.query({ sql })) break;
               }
             }
             expect({
-              opened: (await opened()) - before,
+              opened: opened() - before,
               same: (await connectionId(driver)) === first,
             }).toEqual({
               opened: 0,
@@ -730,16 +749,16 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
   });
 
   it('destroys a pooled connection whose stream the caller stops early while a large rest of the result is still to come', async (test) => {
-    await withMysqlDatabase(test, ({ url, name }) =>
-      withCountedUser(url, name, async (userUrl, opened) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withCountingProxy(url, async (proxyUrl, { opened }) => {
         await withDriver(
-          userUrl.toString(),
+          proxyUrl.toString(),
           async (driver) => {
             const first = await connectionId(driver);
-            const before = await opened();
+            const before = opened();
             for await (const _row of driver.query({ sql: slowRows })) break;
             const next = await connectionId(driver);
-            expect({ opened: (await opened()) - before > 0, replaced: next !== first }).toEqual({
+            expect({ opened: opened() - before > 0, replaced: next !== first }).toEqual({
               opened: true,
               replaced: true,
             });
@@ -981,51 +1000,51 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
   });
 
   it('returns each connection the pool hands to a statement that already failed straight to the pool, so the pool serves every such request and then runs the next statement on its one connection', async (test) => {
-    await withMysqlDatabase(test, ({ url, name }) =>
-      withCountedUser(url, name, async (userUrl, opened) => {
-        const port = await freePort();
-        const refusing = new URL(userUrl);
-        refusing.hostname = '127.0.0.1';
-        refusing.port = String(port);
-        const proxy = createServer((client) => {
-          const upstream = connect(Number(userUrl.port), userUrl.hostname);
-          client.pipe(upstream).pipe(client);
-          client.on('error', () => upstream.destroy());
-          upstream.on('error', () => client.destroy());
+    await withMysqlDatabase(test, async ({ url }) => {
+      const server = new URL(url);
+      const port = await freePort();
+      const refusing = new URL(url);
+      refusing.hostname = '127.0.0.1';
+      refusing.port = String(port);
+      let opened = 0;
+      const proxy = createServer((client) => {
+        opened += 1;
+        const upstream = connect(Number(server.port), server.hostname);
+        client.pipe(upstream).pipe(client);
+        client.on('error', () => upstream.destroy());
+        upstream.on('error', () => client.destroy());
+      });
+      try {
+        const outcomes = await withDriver(
+          refusing.toString(),
+          async (driver) => {
+            const refused = await Promise.all(
+              Array.from({ length: 5 }, (_, n) =>
+                driver.execute({ sql: `SELECT ${n}` }).catch((error: unknown) => error),
+              ),
+            );
+            await new Promise<void>((resolve) => proxy.listen(port, '127.0.0.1', resolve));
+            const started = Date.now();
+            const afterReturn = await collect(driver.query({ sql: 'SELECT 2 AS n' }));
+            const waited = Date.now() - started;
+            const next = await collect(driver.query({ sql: 'SELECT 3 AS n' }));
+            return { refused, afterReturn, next, beforeTimeout: waited < 2000 };
+          },
+          { poolOptions: { max: 1, connectionTimeoutMillis: 2500 } },
+        );
+        expect({ ...outcomes, opened }).toEqual({
+          refused: Array.from({ length: 5 }, () =>
+            expect.objectContaining({ kind: 'sql_connection', transient: false }),
+          ),
+          afterReturn: [{ n: '2' }],
+          next: [{ n: '3' }],
+          beforeTimeout: true,
+          opened: 1,
         });
-        try {
-          const before = await opened();
-          const outcomes = await withDriver(
-            refusing.toString(),
-            async (driver) => {
-              const refused = await Promise.all(
-                Array.from({ length: 5 }, (_, n) =>
-                  driver.execute({ sql: `SELECT ${n}` }).catch((error: unknown) => error),
-                ),
-              );
-              await new Promise<void>((resolve) => proxy.listen(port, '127.0.0.1', resolve));
-              const started = Date.now();
-              const afterReturn = await collect(driver.query({ sql: 'SELECT 2 AS n' }));
-              const waited = Date.now() - started;
-              const next = await collect(driver.query({ sql: 'SELECT 3 AS n' }));
-              return { refused, afterReturn, next, beforeTimeout: waited < 2000 };
-            },
-            { poolOptions: { max: 1, connectionTimeoutMillis: 2500 } },
-          );
-          expect({ ...outcomes, opened: (await opened()) - before }).toEqual({
-            refused: Array.from({ length: 5 }, () =>
-              expect.objectContaining({ kind: 'sql_connection', transient: false }),
-            ),
-            afterReturn: [{ n: '2' }],
-            next: [{ n: '3' }],
-            beforeTimeout: true,
-            opened: 1,
-          });
-        } finally {
-          await new Promise((resolve) => proxy.close(resolve));
-        }
-      }),
-    );
+      } finally {
+        await new Promise((resolve) => proxy.close(resolve));
+      }
+    });
   });
 
   it('gives up waiting for a pooled connection after connectionTimeoutMillis', async (test) => {
@@ -1045,14 +1064,14 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
   });
 
   it('opens no connection before the first statement needs one, as pg.Pool does', async (test) => {
-    await withMysqlDatabase(test, ({ url, name }) =>
-      withCountedUser(url, name, async (userUrl, opened) => {
-        const before = await opened();
-        await withDriver(userUrl.toString(), async (driver) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withCountingProxy(url, async (proxyUrl, { opened }) => {
+        const before = opened();
+        await withDriver(proxyUrl.toString(), async (driver) => {
           await new Promise((resolve) => setTimeout(resolve, 300));
-          const atConnect = (await opened()) - before;
+          const atConnect = opened() - before;
           await collect(driver.query({ sql: 'SELECT 1 AS n' }));
-          expect({ atConnect, afterOne: (await opened()) - before }).toEqual({
+          expect({ atConnect, afterOne: opened() - before }).toEqual({
             atConnect: 0,
             afterOne: 1,
           });
