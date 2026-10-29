@@ -39,7 +39,6 @@
     }
   },
   "exports": {
-    "./citext": "./dist/citext.mjs",
     "./citext/codec-types": "./dist/citext__codec-types.mjs",
     "./citext/column-types": "./dist/citext__column-types.mjs",
     "./citext/control": "./dist/citext__control.mjs",

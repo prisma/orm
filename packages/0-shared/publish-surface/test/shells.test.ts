@@ -90,6 +90,24 @@ describe('publicShells', () => {
     expect(dangling).toEqual([]);
   });
 
+  it('publishes each contrib module only through its per-plane entrypoints', () => {
+    const manifest: unknown = JSON.parse(
+      readFileSync(
+        join(repoRoot, 'packages/9-public/@prisma/orm-postgres-contrib', 'package.json'),
+        'utf8',
+      ),
+    );
+
+    expect(Object.keys((manifest as { exports?: Record<string, unknown> }).exports ?? {})).toEqual([
+      './citext/codec-types',
+      './citext/column-types',
+      './citext/control',
+      './citext/pack',
+      './citext/runtime',
+      './package.json',
+    ]);
+  });
+
   it('publishes the Prisma schema sources only through the entrypoints applications import', () => {
     const published = (shellDir: string, pattern: RegExp): string[] => {
       const manifest: unknown = JSON.parse(

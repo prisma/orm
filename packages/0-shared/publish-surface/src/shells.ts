@@ -852,6 +852,7 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           dir: 'packages/3-extensions/citext',
           name: '@internal/extension-citext',
           entry: 'citext',
+          subpaths: ['codec-types', 'column-types', 'control', 'pack', 'runtime'],
         },
       ],
       peerShells: ['@prisma/orm-target-postgres'],
