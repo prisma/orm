@@ -106,7 +106,25 @@ describe('mongo() facade — e2e (replica set)', {
   );
 
   it(
-    'connect() rejects when called twice',
+    'connect() after a query resolves with the runtime the query used',
+    async () => {
+      const db = mongo({
+        contract,
+        uri: replSet.getUri(),
+        dbName: 'facade_after_query',
+      });
+      try {
+        await db.orm.users.all();
+        await expect(db.connect()).resolves.toBe(await db.runtime());
+      } finally {
+        await db.close();
+      }
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'connect() with options rejects when the client is connected',
     async () => {
       const db = mongo({
         contract,
@@ -116,7 +134,7 @@ describe('mongo() facade — e2e (replica set)', {
       try {
         await db.connect();
         await expect(db.connect({ uri: replSet.getUri(), dbName: 'facade_twice' })).rejects.toThrow(
-          'Mongo client already connected',
+          'Mongo client is already bound',
         );
       } finally {
         await db.close();

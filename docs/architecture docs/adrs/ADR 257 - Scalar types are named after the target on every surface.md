@@ -2,7 +2,7 @@
 
 Status: **Accepted**
 
-**Amended by [ADR 279](ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md) (2026-10-22):** where a stored type has several codecs, every one of them carries a suffix naming its kind of value, not only the second (`TimestamptzTemporal`, `TimestamptzJsDate`, `TimestamptzString`). The unsuffixed name of the concept, such as `DateTime`, `Date`, `Time` and `Duration` on PostgreSQL, belongs to a convenience type, a type choice that becomes one of the suffixed types.
+**Amended by [ADR 279](ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md) (2026-10-22):** where a stored type has several codecs, every one of them carries a suffix naming its kind of value, not only the second (`TimestamptzTemporal`, `TimestamptzJsDate`, `TimestamptzString`). The unsuffixed name of the concept, such as `DateTime`, `Date`, `Time` and `Duration` on PostgreSQL, belongs to a convenience type, a type choice that becomes one of the suffixed types. Those renames were made before the release candidate, so the old names were removed at once, with no deprecated alias for a release line; the upgrade instructions give each rewrite. A type named before this amendment with no suffix beside a suffixed one, such as MongoDB's `Int64` beside `Int64Number` below, keeps its name until it is renamed under the alias rule.
 
 ## Decision
 
@@ -86,13 +86,13 @@ On PostgreSQL and SQLite, `Json` columns store JSON text, so what is stored is a
 
 ## Renaming a surface name
 
-A renamed PSL name stays available as a deprecated alias of the new one for one release line, then is removed. The alias resolves to the same codec, so the contract does not change. A type constructor marks itself with `deprecated: { replacement }` on its `AuthoringTypeConstructorDescriptor`, and the PSL interpreter reports `PSL_DEPRECATED_SCALAR_NAME` at the type's span through the contract source's warning channel: a `ContractSourceDiagnostic` with `severity: 'warning'`, delivered to `ContractSourceContext.reportWarning`. `contract emit` prints it and still emits; the language server shows it as a warning and lists the deprecated names last in completion, struck through.
+A renamed PSL name stays available as a deprecated alias of the new one for one release line, then is removed. The one exception is the PostgreSQL date and time renames of ADR 279, made before the release candidate, which removed the old names at once. The alias resolves to the same codec, so the contract does not change. A type constructor marks itself with `deprecated: { replacement }` on its `AuthoringTypeConstructorDescriptor`, and the PSL interpreter reports `PSL_DEPRECATED_SCALAR_NAME` at the type's span through the contract source's warning channel: a `ContractSourceDiagnostic` with `severity: 'warning'`, delivered to `ContractSourceContext.reportWarning`. `contract emit` prints it and still emits; the language server shows it as a warning and lists the deprecated names last in completion, struck through.
 
 A codec id is never renamed under this decision. If one ever has to change, the reserved mechanism is: the codec registry registers the same codec under both ids, the emitter always writes the new id, the contract validator accepts both, `CodecTypes` carries both keys mapped to the same type, and an upgrade instruction tells users to re-emit and re-sign; after one release line the old id is removed with an error naming the new one.
 
 ## Consequences
 
-- Every target follows the same rule and the same deprecation path for a renamed PSL name. The current per-target names and the cross-target concept table are listed in [Scalar types](../../reference/scalar-types.md); other docs link there instead of repeating them.
+- Every target follows the same rule and the same deprecation path for a renamed PSL name, apart from the pre-release exception above. The current per-target names and the cross-target concept table are listed in [Scalar types](../../reference/scalar-types.md); other docs link there instead of repeating them.
 - Readers of Prisma 6 and Prisma 7 schemas map the old names to codec ids through their target bindings and are unaffected by PSL names.
 - An extension that contributes a codec names its PSL type and TypeScript helper after the codec id's token, and declares every BSON type its codec stores in the `bsonTypes` of the codec's data type; the MongoDB validator derivation reads the whole list.
 

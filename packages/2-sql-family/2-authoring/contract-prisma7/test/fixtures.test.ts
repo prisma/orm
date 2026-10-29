@@ -7,7 +7,7 @@ import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { basename, dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { prisma7Contract } from '../src/provider';
-import { postgresSourceContext } from './support';
+import { composedExtensionsOf, postgresSourceContext, withComposedExtensions } from './support';
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const update = process.env['UPDATE_PRISMA7_FIXTURES'] === '1';
@@ -58,6 +58,14 @@ describe('Prisma 7 fixtures', () => {
       'enum-native',
       'enum-unreferenced',
       'explicit-relations',
+      'extensions-map-refused',
+      'extensions-no-pack',
+      'extensions-pack-composed',
+      'extensions-pack-missing',
+      'extensions-pack-schema-mismatch',
+      'extensions-preview-feature-missing',
+      'extensions-schema',
+      'extensions-version-refused',
       'generator-optional',
       'generators',
       'ignore',
@@ -93,15 +101,15 @@ describe('Prisma 7 fixtures', () => {
       'multi-file-relation-unresolved',
       'multi-schema',
       'naming',
+      'native-type-bit',
+      'native-type-defaults',
+      'native-type-defaults-refused',
       'native-type-model-ignored',
-      'native-type-rejected-bit',
+      'native-type-money',
+      'native-type-oid',
       'native-type-rejected-citext',
-      'native-type-rejected-defaults',
-      'native-type-rejected-money',
-      'native-type-rejected-oid',
-      'native-type-rejected-uses',
-      'native-type-rejected-varbit',
-      'native-type-rejected-xml',
+      'native-type-varbit',
+      'native-type-xml',
       'native-types-accepted',
       'native-types-without-arguments',
       'number-default-spellings',
@@ -158,7 +166,12 @@ describe('Prisma 7 fixtures', () => {
         ? directory
         : join(fixturesDir, caseName, 'schema.prisma');
       const config = prisma7Contract(schemaPath, { binding: prisma7PostgresBinding });
-      const result = await config.source.load(postgresSourceContext([schemaPath]));
+      const result = await config.source.load(
+        withComposedExtensions(
+          postgresSourceContext([schemaPath]),
+          composedExtensionsOf(join(fixturesDir, caseName)),
+        ),
+      );
       const diagnosticsPath = expectedPath(caseName, 'expected-diagnostics.json');
       const contractPath = expectedPath(caseName, 'expected-contract.json');
 

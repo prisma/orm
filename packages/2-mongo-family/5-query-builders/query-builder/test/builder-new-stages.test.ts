@@ -24,10 +24,11 @@ import {
 } from '@internal/mongo-query-ast/execution';
 import { describe, expect, it } from 'vitest';
 import { mongoQuery } from '../src/query';
+import { contextOf } from './fixtures/test-context';
 import { testContract } from './fixtures/test-contract';
 
 function createOrdersBuilder() {
-  return mongoQuery({ contract: testContract }).from('orders');
+  return mongoQuery({ context: contextOf(testContract) }).from('orders');
 }
 
 describe('new stage builder methods', () => {

@@ -1,0 +1,40 @@
+[
+  {
+    "id": "paradedb.install-pg-search-extension",
+    "label": "Enable extension \"pg_search\"",
+    "operationClass": "additive",
+    "invariantId": "paradedb:install-pg-search-v1",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "dependency",
+        "name": "pg_search"
+      }
+    },
+    "precheck": [
+      {
+        "description": "verify extension \"pg_search\" is not already enabled",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_extension\" WHERE \"extname\" = $1) AS \"result\"",
+        "params": [
+          "pg_search"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create extension \"pg_search\"",
+        "sql": "CREATE EXTENSION IF NOT EXISTS pg_search"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "confirm extension \"pg_search\" is enabled",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_extension\" WHERE \"extname\" = $1) AS \"result\"",
+        "params": [
+          "pg_search"
+        ]
+      }
+    ]
+  }
+]

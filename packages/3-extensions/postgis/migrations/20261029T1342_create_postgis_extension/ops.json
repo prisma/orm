@@ -1,0 +1,60 @@
+[
+  {
+    "id": "schema.public",
+    "label": "Create schema \"public\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres"
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "Create schema \"public\"",
+        "sql": "CREATE SCHEMA IF NOT EXISTS \"public\"",
+        "params": []
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "extension.postgis",
+    "label": "Create extension \"postgis\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "dependency",
+        "name": "postgis"
+      }
+    },
+    "precheck": [
+      {
+        "description": "verify extension \"postgis\" is not installed",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_extension\" WHERE \"extname\" = $1) AS \"result\"",
+        "params": ["postgis"],
+        "expectation": {
+          "expects": "absent",
+          "object": "extension \"postgis\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create extension \"postgis\"",
+        "sql": "CREATE EXTENSION IF NOT EXISTS \"postgis\" WITH SCHEMA \"public\""
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "confirm extension \"postgis\" is installed",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_extension\" WHERE \"extname\" = $1) AS \"result\"",
+        "params": ["postgis"],
+        "expectation": {
+          "expects": "present",
+          "object": "extension \"postgis\""
+        }
+      }
+    ]
+  }
+]

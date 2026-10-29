@@ -1,4 +1,5 @@
 import mysqlDriver from '@internal/driver-mysql/runtime';
+import { blindCast } from '@internal/utils/casts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import mysql from '../../src/exports/runtime';
 import mysqlStatic, { contractFromJson } from '../../src/exports/static';
@@ -45,6 +46,56 @@ describe('a MySQL client with no database', () => {
       },
       driverCreated: 0,
     });
+  });
+
+  it('refuses a URL that is empty, cannot be parsed or names another scheme, as the Postgres facade does', async () => {
+    const refusals = ['', 'not a url', 'postgres://root@localhost/app'].map((url) => {
+      try {
+        mysql({ contract, url });
+        return undefined;
+      } catch (error) {
+        return Object(error).code;
+      }
+    });
+    await expect(
+      mysql({ contract }).connect({ url: 'postgres://root@localhost/app' }),
+    ).rejects.toMatchObject({ code: 'RUNTIME.BINDING_INVALID' });
+    expect(refusals).toEqual(Array.from({ length: 3 }, () => 'RUNTIME.BINDING_INVALID'));
+  });
+
+  it('creates its driver reading whole results unless stream is set, with the pool options it is given', () => {
+    mysql({ contract }).runtime();
+    mysql({
+      contract,
+      stream: true,
+      poolOptions: { max: 3, connectionTimeoutMillis: 1000, idleTimeoutMillis: 2000 },
+    }).runtime();
+    expect(driverCreate.mock.calls.map((call: unknown[]) => call[0])).toEqual([
+      { stream: false },
+      {
+        stream: true,
+        poolOptions: { max: 3, connectionTimeoutMillis: 1000, idleTimeoutMillis: 2000 },
+      },
+    ]);
+  });
+
+  it('checks the stream option when the factory is called, as the Postgres facade checks cursor', () => {
+    for (const received of ['yes', 1, { batchSize: 10 }]) {
+      expect(() =>
+        mysql({
+          contract,
+          stream: blindCast<boolean, 'a value a caller passes past the types'>(received),
+        }),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'RUNTIME.ARGUMENT_INVALID',
+          message: 'Invalid stream option',
+          fix: expect.stringContaining('leave stream unset'),
+          meta: { extension: 'mysql', helper: 'mysql', argument: 'stream', received },
+        }),
+      );
+    }
+    expect(() => mysql({ contract, stream: false })).not.toThrow();
   });
 
   it('refuses to connect without a URL', async () => {

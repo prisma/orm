@@ -66,6 +66,7 @@ const frameworkComponents = [
 ] as const;
 
 const emptySchema = new PostgresDatabaseSchemaNode({
+  extensions: undefined,
   namespaces: {},
   roles: [],
   existingSchemas: ['public'],

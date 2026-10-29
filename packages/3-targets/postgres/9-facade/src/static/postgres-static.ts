@@ -6,7 +6,7 @@ import type { Db, RawLane } from '@internal/sql-builder/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type {
   ExecutionContext,
-  SqlExecutionStackWithDriver,
+  SqlExecutionStack,
   SqlRuntimeExtensionDescriptor,
   ToSqlMember,
 } from '@internal/sql-runtime';
@@ -33,7 +33,7 @@ export interface PostgresStaticContext<TContract extends Contract<SqlStorage>> e
 export function buildPostgresStaticContext<TContract extends Contract<SqlStorage>>(
   contract: TContract,
   context: ExecutionContext<TContract>,
-  stack: SqlExecutionStackWithDriver<PostgresTargetId>,
+  stack: SqlExecutionStack<PostgresTargetId>,
 ): PostgresStaticContext<TContract> {
   const { rawCodecInferer } = stack.adapter;
   const sqlDb: Db<TContract> = sql<TContract>({ context, rawCodecInferer });

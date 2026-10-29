@@ -26,4 +26,8 @@ pnpm dlx prisma@7.10.0 migrate diff --from-empty --to-schema schema.prisma --scr
 
 Copy the resulting `migration.sql` into the case folder unchanged.
 
+A case with a `composed-extensions.json`, a list of extension pack ids, is read with those packs composed, here and in the integration test.
+
+`extensions-schema` puts `pg_trgm` in a schema no model uses. Prisma 7.10.0 does not create that schema, so a database it manages must already have it; the case's `migration.sql` is the generated script with `CREATE SCHEMA IF NOT EXISTS "extensions";` added first.
+
 `unsupported-type-ignored` has an `Unsupported` field marked `@ignore`, which `prisma@7.10.0 validate` refuses although the attribute changes no DDL. Its `migration.sql` is generated from the same schema without `@ignore`.

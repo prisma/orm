@@ -11,6 +11,7 @@ import {
   type MongoRuntimeAdapterInstance,
 } from '../src/mongo-execution-stack';
 import { createMongoRuntime } from '../src/mongo-runtime';
+import { testContract } from './mongo-middleware-fixtures';
 
 const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
 
@@ -63,8 +64,8 @@ function runtimeOver(driver: MongoDriver) {
       create: () => adapterInstance,
     },
   });
-  const context = createMongoExecutionContext({ contract: {}, stack });
-  return createMongoRuntime({ context, driver });
+  const context = createMongoExecutionContext({ contract: testContract, stack });
+  return createMongoRuntime({ context, adapter: stack.adapter.create(stack), driver });
 }
 
 function driverYielding(rows: readonly Record<string, unknown>[]): MongoDriver {

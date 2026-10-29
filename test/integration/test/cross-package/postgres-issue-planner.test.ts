@@ -75,6 +75,7 @@ function makeContract(
 
 /** An empty introspected tree — every table in `contract` surfaces as `not-found`. */
 const emptyRoot = new PostgresDatabaseSchemaNode({
+  extensions: undefined,
   namespaces: {},
   roles: [],
   existingSchemas: ['public'],
@@ -190,6 +191,7 @@ describe('planIssues', () => {
 
     function actualWithoutStatus(): PostgresDatabaseSchemaNode {
       return new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {
           public: new PostgresNamespaceSchemaNode({
             schemaName: 'public',
@@ -265,6 +267,7 @@ describe('planIssues', () => {
         },
       });
       const actual = new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {
           public: new PostgresNamespaceSchemaNode({
             schemaName: 'public',
@@ -316,6 +319,7 @@ describe('planIssues', () => {
   describe('typeChange call strategy', () => {
     function actualWithAge(typeText: string, codecId: string): PostgresDatabaseSchemaNode {
       return new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {
           public: new PostgresNamespaceSchemaNode({
             schemaName: 'public',
@@ -445,6 +449,7 @@ describe('planIssues', () => {
   describe('index missing on an existing table', () => {
     function actualDocWithoutIndex(): PostgresDatabaseSchemaNode {
       return new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {
           public: new PostgresNamespaceSchemaNode({
             schemaName: 'public',
@@ -608,6 +613,7 @@ describe('planIssues', () => {
         },
       });
       const actual = new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {
           public: new PostgresNamespaceSchemaNode({
             schemaName: 'public',
@@ -667,6 +673,7 @@ describe('planIssues', () => {
         },
       });
       const actual = new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {
           public: new PostgresNamespaceSchemaNode({
             schemaName: 'public',
@@ -783,6 +790,7 @@ describe('planIssues', () => {
         auth: { entries: { table: { user: userTable } } },
       });
       const actual = new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {},
         roles: [],
         existingSchemas: ['public'],
@@ -803,6 +811,7 @@ describe('planIssues', () => {
     it('emits a CREATE SCHEMA IF NOT EXISTS DDL statement', async () => {
       const toContract = makeNamespacedContract({ auth: { entries: { table: {} } } });
       const actual = new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {},
         roles: [],
         existingSchemas: ['public'],
@@ -853,6 +862,7 @@ describe('planIssues', () => {
         meta: {},
       };
       const actual = new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {},
         roles: [],
         existingSchemas: ['public', 'tenant_a', 'tenant_b'],

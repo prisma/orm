@@ -12,6 +12,7 @@ import { blindCast } from '@internal/utils/casts';
 import { postgresResolveDefault } from '../default-normalizer';
 import type { PostgresContract } from '../postgres-schema';
 import { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
+import { PostgresExtensionSchemaNode } from '../schema-ir/postgres-extension-schema-node';
 import { PostgresNamespaceSchemaNode } from '../schema-ir/postgres-namespace-schema-node';
 import {
   postgresDiffSubjectGranularity,
@@ -45,6 +46,17 @@ function nodeNamespaceId(node: DiffableNode): string | undefined {
   >(node).namespaceId;
 }
 
+/**
+ * The installed extension a `not-expected` issue reports, if it reports one. An extension the contract does not declare is never this contract's to report or drop: Postgres always has `plpgsql`, hosts preinstall many more, and a sibling contract space may declare it. Only a plan drops one, and only one its origin contract declared.
+ */
+function undeclaredExtensionName(issue: SchemaDiffIssue): string | undefined {
+  if (issueOutcome(issue) !== 'not-expected' || issue.actual === undefined) return undefined;
+  const node = blindCast<SqlSchemaIRNode, 'every Postgres diff-tree node is a SqlSchemaIRNode'>(
+    issue.actual,
+  );
+  return PostgresExtensionSchemaNode.is(node) ? node.name : undefined;
+}
+
 function ownedSchemaNames(expected: PostgresDatabaseSchemaNode): ReadonlySet<string> {
   const policyNamespaces = Object.values(expected.namespaces).flatMap((ns) =>
     Object.values(ns.tables).flatMap((t) => t.policies.map((p) => p.namespaceId)),
@@ -73,6 +85,7 @@ function pruneTableLessNamespaces(
   return new PostgresDatabaseSchemaNode({
     namespaces,
     roles: [...expected.roles],
+    extensions: [...expected.extensions],
     existingSchemas: expected.existingSchemas.filter((s) => namespaces[s] !== undefined),
     pgVersion: expected.pgVersion,
   });
@@ -142,6 +155,7 @@ export function diffPostgresSchema(input: {
   const relationalOwned = ownedSchemaNames(expected);
   const structuralOwned = ownedSchemaNames(fullExpected);
   const issues = diffSchemas(expected, actual).filter((issue) => {
+    if (undeclaredExtensionName(issue) !== undefined) return false;
     if (issueOutcome(issue) !== 'not-expected') return true;
     if (isClusterScopedIssue(issue)) return true;
     const granularity = classifyDiffSubjectGranularity(issue, postgresDiffSubjectGranularity);
@@ -191,6 +205,7 @@ function padActualNamespaces(
   return new PostgresDatabaseSchemaNode({
     namespaces,
     roles: [...actual.roles],
+    extensions: [...actual.extensions],
     existingSchemas: [...actual.existingSchemas],
     pgVersion: actual.pgVersion,
   });
@@ -226,6 +241,8 @@ export function buildPostgresPlanDiff(input: {
    * so a schema the destination no longer declares reaches the diff as extras to drop.
    */
   readonly originSchemas?: readonly string[];
+  /** The extensions the plan's origin contract declares: one the destination no longer declares is dropped. */
+  readonly originExtensions?: readonly string[];
 }): PostgresPlanDiff {
   const postgresContract = blindCast<
     PostgresContract,
@@ -244,12 +261,15 @@ export function buildPostgresPlanDiff(input: {
   const expected = pruneTableLessNamespaces(fullExpected);
   const paddedActual = padActualNamespaces(expected, actual);
   const originSchemas = input.originSchemas ?? [];
+  const originExtensions = new Set(input.originExtensions ?? []);
   const relationalOwned = new Set([...ownedSchemaNames(expected), ...originSchemas]);
   const structuralOwned = new Set([...ownedSchemaNames(fullExpected), ...originSchemas]);
   const issues = blindCast<
     readonly SchemaDiffIssue<SqlSchemaDiffNode>[],
     'both trees are PostgresDatabaseSchemaNodes, so every diff-issue node is a SqlSchemaDiffNode'
   >(diffSchemas(expected, paddedActual)).filter((issue) => {
+    const extensionName = undeclaredExtensionName(issue);
+    if (extensionName !== undefined) return originExtensions.has(extensionName);
     if (issueOutcome(issue) !== 'not-expected') return true;
     if (isClusterScopedIssue(issue)) return true;
     const granularity = classifyDiffSubjectGranularity(issue, postgresDiffSubjectGranularity);

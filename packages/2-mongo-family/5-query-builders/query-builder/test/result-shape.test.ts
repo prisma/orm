@@ -6,6 +6,7 @@ import {
   contractFieldToMongoFieldShape,
   contractModelToMongoResultShape,
 } from '../src/result-shape';
+import { contextOf } from './fixtures/test-context';
 import { testContract } from './fixtures/test-contract';
 
 function valueObjectRef(entityName: string, namespaceId = '__unbound__') {
@@ -251,12 +252,16 @@ describe('contractFieldToMongoFieldShape', () => {
 
 describe('PipelineChain build resultShape', () => {
   it('identity pipeline attaches document shape from bound model', () => {
-    const plan = mongoQuery({ contract: testContract }).from('orders').build();
+    const plan = mongoQuery({ context: contextOf(testContract) })
+      .from('orders')
+      .build();
     expect(plan.resultShape?.kind).toBe('document');
   });
 
   it('decodes a value-object field through the value object storage holds', () => {
-    const plan = mongoQuery({ contract: testContract }).from('customers').build();
+    const plan = mongoQuery({ context: contextOf(testContract) })
+      .from('customers')
+      .build();
     if (plan.resultShape?.kind !== 'document') throw new Error('expected document');
     expect(plan.resultShape.fields['stats']).toEqual({
       kind: 'document',
@@ -269,7 +274,7 @@ describe('PipelineChain build resultShape', () => {
   });
 
   it('project stage reifies a document shape retaining _id and the projected field', () => {
-    const plan = mongoQuery({ contract: testContract })
+    const plan = mongoQuery({ context: contextOf(testContract) })
       .from('orders')
       .match(MongoFieldFilter.eq('status', 'x'))
       .project('status')

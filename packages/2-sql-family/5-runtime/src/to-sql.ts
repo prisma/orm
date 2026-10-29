@@ -2,7 +2,7 @@ import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { lowerSqlPlan } from './lower-sql-plan';
-import type { SqlExecutionStackWithDriver, SqlRuntimeAdapterInstance } from './sql-context';
+import type { SqlExecutionStack, SqlRuntimeAdapterInstance } from './sql-context';
 import { validateSqlPlan } from './sql-family-adapter';
 
 export interface RenderedSql {
@@ -20,7 +20,7 @@ export interface ToSqlMember {
 }
 
 export function createToSql<TTargetId extends string>(
-  stack: SqlExecutionStackWithDriver<TTargetId>,
+  stack: SqlExecutionStack<TTargetId>,
   contract: Contract<SqlStorage>,
 ): ToSqlMember['toSql'] {
   let adapter: SqlRuntimeAdapterInstance<TTargetId> | undefined;

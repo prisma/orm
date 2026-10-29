@@ -268,7 +268,7 @@ $ prisma-next migrate     # ✗ MIGRATION.EXTENSION_DESCRIPTOR_NOT_FOUND
                           #   isn't installed. Run: pnpm install
 ```
 
-`migrate` (authoring-time) needs the descriptor to read the extension's *current* state for diffing. Apply-time (`db init` / `db update`) and verify-time (`db verify`) do not.
+`migrate` (authoring-time) needs the descriptor to read the extension's *current* state for diffing. Apply-time (`db init` / `db update`) and verify-time (`db verify`) do not. `contract emit` also writes the pinned files from the descriptors ([ADR 311](ADR%20311%20-%20A%20Postgres%20extension%20is%20a%20contract%20entity%2C%20and%20db%20sign%20refuses%20a%20space%20with%20unmet%20invariants.md)), so a project that never runs `migrate` can still sign and verify.
 
 ### Verifier integrity checks
 
@@ -293,7 +293,7 @@ The contract IR continues to admit only what a column or field can name as its t
 
 The same boundary applies across all spaces. Cipherstash's space declares `eql_v2_configuration` (table), `eql_v2_configuration_state` (enum), `eql_v2_encrypted` (composite), and the `eql_v2.{bloom_filter,hmac_256,blake3}` domains in its `contract.json` (~3-5 KB). The remaining ~5,750 lines of bundle SQL — functions, operators, casts, op classes — live as the body of one migration op (`installEqlBundle`) inside cipherstash's migration graph, with its own `invariantId`. The verifier is symmetrically blind to those objects on both sides — `verifySqlSchema` doesn't enumerate them, and the IR doesn't declare them — so strict mode is preserved without rejecting them.
 
-Pgvector's `vector` type is in its IR; `CREATE EXTENSION vector` is the body of one migration op. Same shape.
+Pgvector's `vector` type is in its IR, and so is the `vector` extension itself: [ADR 311](ADR%20311%20-%20A%20Postgres%20extension%20is%20a%20contract%20entity%2C%20and%20db%20sign%20refuses%20a%20space%20with%20unmet%20invariants.md) makes a Postgres extension a contract entity, so the planner creates it from the contract and `db sign` can check it is installed.
 
 ## Migration JSON shape
 

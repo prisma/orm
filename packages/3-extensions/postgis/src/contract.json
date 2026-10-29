@@ -15,13 +15,19 @@
     "namespaces": {
       "public": {
         "entries": {
+          "extension": {
+            "postgis": {
+              "kind": "extension",
+              "name": "postgis"
+            }
+          },
           "table": {}
         },
         "id": "public",
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "2db551a8a5619d0d97710f29130eaea0eccbdd5238f015ee9d18408d438e0f8a",
+    "storageHash": "6e985087b60584f70ad4f223d8926dfe553db727cc4d58524fe5c38628fef393",
     "types": {
       "geometry": {
         "codecId": "pg/geometry@1",

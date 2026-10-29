@@ -3,7 +3,6 @@ import postgresDriver from '@internal/driver-postgres/runtime';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
 import { mongoOrm } from '@internal/mongo-orm';
-import { buildMongoEnums } from '@internal/mongo-runtime';
 import { PostgresRuntimeImpl } from '@internal/postgres/runtime';
 import { orm as sqlOrm } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
@@ -11,7 +10,7 @@ import postgresTarget from '@internal/target-postgres/runtime';
 import { timeouts, withClient, withDevDatabase } from '@repo/test-utils';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { TestSqlContractSerializer as SqlContractSerializer } from '../../../../packages/2-sql-family/9-family/test/test-sql-contract-serializer';
-import { describeWithMongoDB } from '../mongo/setup';
+import { describeWithMongoDB, executionContextFor } from '../mongo/setup';
 import { setupTestDatabase } from '../utils';
 import type { Contract as MongoVOContract } from './fixtures/generated/mongo-contract.d';
 import mongoContractJson from './fixtures/generated/mongo-contract.json';
@@ -24,11 +23,8 @@ describeWithMongoDB('value objects e2e: Mongo → real DB → typed ORM', (ctx) 
   ) as unknown as MongoVOContract;
 
   it('create and read value objects with correct types', async () => {
-    const ormClient = mongoOrm<MongoVOContract>({
-      contract,
-      executor: ctx.runtime,
-      enums: buildMongoEnums(contract, ctx.codecs),
-    });
+    const context = executionContextFor(contract);
+    const ormClient = mongoOrm<MongoVOContract>({ context, runtime: ctx.runtime });
 
     const shopCollection = ormClient['shop']!;
     const created = await shopCollection.create({
@@ -79,11 +75,8 @@ describeWithMongoDB('value objects e2e: Mongo → real DB → typed ORM', (ctx) 
   });
 
   it('non-null value object field roundtrips through update', async () => {
-    const ormClient = mongoOrm<MongoVOContract>({
-      contract,
-      executor: ctx.runtime,
-      enums: buildMongoEnums(contract, ctx.codecs),
-    });
+    const context = executionContextFor(contract);
+    const ormClient = mongoOrm<MongoVOContract>({ context, runtime: ctx.runtime });
     const shopCollection = ormClient['shop']!;
 
     await shopCollection.create({

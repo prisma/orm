@@ -73,6 +73,7 @@ import {
 import {
   buildSqlContractFromDefinition,
   type ColumnNode,
+  composedExtensionPackRefs,
   type FieldNode,
   type ModelNode,
   type TableNode,
@@ -95,6 +96,11 @@ import {
   unmappedFieldDiagnostics,
   unmappedFieldInPrimaryKey,
 } from './diagnostics';
+import {
+  type DatasourceExtension,
+  type DeclaringPack,
+  readDatasourceExtensions,
+} from './extensions';
 import { type IndexAttribute, indexNode, parseIndexAttribute } from './indexes';
 import { prisma7NativeTypeMapping, prisma7ScalarMapping } from './native-types';
 import {
@@ -142,6 +148,8 @@ export interface InterpretPrisma7DocumentsInput {
   readonly codecLookup: CodecLookupWithDescriptors;
   readonly dataTypes: DataTypeSupport;
   readonly composedExtensions: readonly string[];
+  /** Each composed pack's contract, by the pack's id. */
+  readonly composedExtensionContracts: ReadonlyMap<string, Contract>;
   readonly defaultNamespaceId: string;
 }
 
@@ -290,6 +298,7 @@ export function interpretPrisma7Documents(
   const diagnostics: ContractSourceDiagnostic[] = [...input.seedDiagnostics];
   const { defaultNamespaceId } = input;
   const datasources: SourceBlock[] = [];
+  const generators: SourceBlock[] = [];
   const enumBlocks: SourceBlock[] = [];
   const models: ModelDeclaration[] = [];
   // The symbol table catches duplicates within one file; a name declared
@@ -354,6 +363,7 @@ export function interpretPrisma7Documents(
           reportDottedBlockValues(block, sourceId, sources, diagnostics);
           break;
         case 'generator':
+          generators.push({ block, sourceId, sources, sourceFile });
           reportDottedBlockValues(block, sourceId, sources, diagnostics);
           break;
         case 'enum':
@@ -433,6 +443,24 @@ export function interpretPrisma7Documents(
     if (declaration !== undefined) enums.set(declaration.name, declaration);
   }
   const namespaceEntities = lowerNativeEnums(enums, input, diagnostics);
+  const [datasource] = datasources;
+  if (datasource !== undefined) {
+    const extensions = readDatasourceExtensions({
+      datasource,
+      generators,
+      binding: binding.extensions,
+      composedExtensions: new Set(input.composedExtensions),
+      declaringPack: (extensionName) =>
+        packDeclaring(
+          input.composedExtensionContracts,
+          binding.extensions.entityKind,
+          extensionName,
+        ),
+      defaultNamespaceId,
+      diagnostics,
+    });
+    lowerDatasourceExtensions(extensions, namespaceEntities, input, diagnostics);
+  }
 
   const modelNames = new Set(models.map((model) => model.symbol.name));
   const ignoredModels = new Set(
@@ -613,6 +641,10 @@ export function interpretPrisma7Documents(
         target: binding.target,
         warnings: undefined,
         createNamespace,
+        ...ifDefined(
+          'extensions',
+          composedExtensionPackRefs(binding.target, input.composedExtensions),
+        ),
         ...(namespaceEntities.size > 0 ? { namespaces: [...namespaceEntities.keys()] } : {}),
         models: modelNodes,
         ...(tables.length > 0 ? { tables } : {}),
@@ -928,6 +960,81 @@ function readEnumDeclaration(
   return { name: block.name, typeName, namespaceId, members, span: block.span, sourceId };
 }
 
+function packDeclaring(
+  packContracts: ReadonlyMap<string, Contract>,
+  entityKind: string,
+  name: string,
+): DeclaringPack | undefined {
+  for (const [packId, contract] of packContracts) {
+    for (const [namespaceId, namespace] of Object.entries(contract.storage.namespaces)) {
+      if (Object.hasOwn(namespace.entries[entityKind] ?? {}, name)) return { packId, namespaceId };
+    }
+  }
+  return undefined;
+}
+
+function entityContext(
+  input: InterpretPrisma7DocumentsInput,
+  sourceId: string,
+  diagnostics: ContractSourceDiagnostic[],
+): AuthoringEntityContext {
+  return {
+    family: input.binding.target.familyId,
+    target: input.binding.target.targetId,
+    codecLookup: input.codecLookup,
+    dataTypes: input.dataTypes,
+    sourceId,
+    diagnostics: {
+      push: (diagnostic) => {
+        diagnostics.push(
+          blindCast<ContractSourceDiagnostic, 'entity factory diagnostics are span-compatible'>(
+            diagnostic,
+          ),
+        );
+      },
+    },
+  };
+}
+
+/** Files each extension the application's contract declares under its namespace, as the target's extension entity. */
+function lowerDatasourceExtensions(
+  extensions: readonly DatasourceExtension[],
+  namespaceEntities: NamespaceEntities,
+  input: InterpretPrisma7DocumentsInput,
+  diagnostics: ContractSourceDiagnostic[],
+): void {
+  if (extensions.length === 0) return;
+  const { entityKind } = input.binding.extensions;
+  const descriptor = buildEntityTypesByDiscriminator(input.authoringContributions).get(entityKind);
+  if (descriptor === undefined) {
+    throw new InternalError(
+      `The Prisma 7 binding names the extension entity kind "${entityKind}", which target "${input.binding.target.targetId}" does not register.`,
+    );
+  }
+  for (const extension of extensions) {
+    const block: ParsedPslExtensionBlock & { readonly namespaceId: string } = {
+      kind: entityKind,
+      keyword: entityKind,
+      name: extension.name,
+      values: {},
+      writtenValues: {},
+      parameterSpans: {},
+      attributes: {},
+      span: extension.span,
+      namespaceId: extension.namespaceId,
+    };
+    const entity: unknown = instantiateAuthoringEntityType(
+      entityKind,
+      descriptor,
+      [block],
+      entityContext(input, extension.sourceId, diagnostics),
+    );
+    const entities = namespaceEntities.get(extension.namespaceId) ?? {};
+    namespaceEntities.set(extension.namespaceId, entities);
+    entities[entityKind] = { ...entities[entityKind], [extension.name]: entity };
+  }
+}
+
 function lowerNativeEnums(
   enums: ReadonlyMap<string, EnumDeclaration>,
   input: InterpretPrisma7DocumentsInput,
@@ -951,22 +1058,7 @@ function lowerNativeEnums(
       );
       continue;
     }
-    const context: AuthoringEntityContext = {
-      family: input.binding.target.familyId,
-      target: input.binding.target.targetId,
-      codecLookup: input.codecLookup,
-      dataTypes: input.dataTypes,
-      sourceId: declaration.sourceId,
-      diagnostics: {
-        push: (diagnostic) => {
-          diagnostics.push(
-            blindCast<ContractSourceDiagnostic, 'entity factory diagnostics are span-compatible'>(
-              diagnostic,
-            ),
-          );
-        },
-      },
-    };
+    const context = entityContext(input, declaration.sourceId, diagnostics);
     const values: Record<string, string> = Object.create(null);
     const writtenValues: Record<string, WrittenValue> = Object.create(null);
     const parameterSpans: Record<string, PslSpan> = Object.create(null);

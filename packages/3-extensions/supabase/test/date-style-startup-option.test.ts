@@ -23,7 +23,7 @@ describe('a connection the Supabase client opens from a URL', () => {
   });
 
   it(
-    'sends DateStyle=ISO in the startup message of a connection it opens',
+    'sends DateStyle=ISO and lc_monetary=C in the startup message of a connection it opens',
     async () => {
       const db = await supabase({
         contract,
@@ -35,7 +35,7 @@ describe('a connection the Supabase client opens from a URL', () => {
       await anon.execute(anon.raw.sql`SELECT 1`.affectedCount().build()).catch(() => undefined);
       await db.close().catch(() => undefined);
 
-      expect((await recorder.next())['options']).toBe('-c DateStyle=ISO');
+      expect((await recorder.next())['options']).toBe('-c DateStyle=ISO -c lc_monetary=C');
     },
     timeouts.databaseOperation,
   );

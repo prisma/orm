@@ -1,5 +1,9 @@
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
-import type { Activity, ActivityFinalizedResult } from '@internal/framework-components/runtime';
+import type {
+  Activity,
+  ActivityFinalizedResult,
+  RuntimeMode,
+} from '@internal/framework-components/runtime';
 import {
   type MarkerReadResult,
   RawQueryAst,
@@ -144,7 +148,7 @@ export interface SetupOptions {
   readonly beforeHookFailure?: Error;
   readonly readMarker?: () => Promise<MarkerReadResult>;
   readonly log?: Log;
-  readonly mode?: 'strict' | 'permissive';
+  readonly mode?: RuntimeMode;
   /** Middleware registered after the recorder. */
   readonly middleware?: readonly SqlMiddleware[];
   /** When false, the recorder implements no `activityFinalized`. */

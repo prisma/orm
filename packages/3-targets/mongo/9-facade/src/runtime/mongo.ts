@@ -1,5 +1,5 @@
 import { MongoDriverImpl } from '@internal/driver-mongo';
-import { AsyncIterableResult } from '@internal/framework-components/runtime';
+import { AsyncIterableResult, type RuntimeMode } from '@internal/framework-components/runtime';
 import type {
   AnyMongoTypeMaps,
   MongoContract,
@@ -41,7 +41,7 @@ export interface MongoClient<
 }
 
 export interface MongoOptionsBase {
-  readonly mode?: 'strict' | 'permissive';
+  readonly mode?: RuntimeMode;
   /**
    * Optional middleware chain applied to every Mongo execution.
    */
@@ -86,8 +86,7 @@ export default function mongo<
   const contract = validateMongoContract(options.contract);
   let binding = resolveOptionalMongoBinding(options);
 
-  const { context, query, enums, enumsByNamespace, raw } =
-    buildMongoStaticContext<TContract>(contract);
+  const { context, stack, query, enums, raw } = buildMongoStaticContext<TContract>(contract);
 
   // Single source of truth for the lifecycle. `runtimePromise` is the in-flight
   // or settled build; `closed` is the terminal state set by `close()`. A failed
@@ -95,6 +94,8 @@ export default function mongo<
   let runtimePromise: Promise<MongoRuntime> | undefined;
   let closed = false;
   let ownedDispose: (() => Promise<void>) | undefined;
+
+  const closedError = () => mongoError('DRIVER.NOT_CONNECTED', 'Mongo client is closed');
 
   const buildRuntime = async (resolvedBinding: MongoBinding): Promise<MongoRuntime> => {
     const driver =
@@ -106,6 +107,7 @@ export default function mongo<
     }
     return createMongoRuntime({
       context,
+      adapter: stack.adapter.create(stack),
       driver,
       ...ifDefined('mode', options.mode),
       ...ifDefined('middleware', options.middleware),
@@ -114,7 +116,7 @@ export default function mongo<
 
   const getRuntime = (): Promise<MongoRuntime> => {
     if (closed) {
-      return Promise.reject(mongoError('DRIVER.NOT_CONNECTED', 'Mongo client is closed'));
+      return Promise.reject(closedError());
     }
     if (runtimePromise !== undefined) {
       return runtimePromise;
@@ -150,10 +152,8 @@ export default function mongo<
   }
 
   const orm = mongoOrm<TContract>({
-    contract,
-    executor: { query: queryRows, execute: executeStats },
-    mutationDefaults: context,
-    enums: enumsByNamespace,
+    context,
+    runtime: { query: queryRows, execute: executeStats },
   });
 
   return {
@@ -166,10 +166,18 @@ export default function mongo<
 
     async connect(bindingInput?: MongoBindingInput): Promise<MongoRuntime> {
       if (closed) {
-        throw mongoError('DRIVER.NOT_CONNECTED', 'Mongo client is closed');
+        throw closedError();
       }
       if (runtimePromise !== undefined) {
-        throw mongoError('DRIVER.ALREADY_CONNECTED', 'Mongo client already connected');
+        if (bindingInput !== undefined) {
+          throw mongoError('DRIVER.ALREADY_CONNECTED', 'Mongo client is already bound', {
+            why: 'connect() was given options after the client was bound to a database.',
+            fix: 'Call connect() without options, or create a new client for another database.',
+          });
+        }
+        const runtime = await runtimePromise;
+        if (closed) throw closedError();
+        return runtime;
       }
       if (bindingInput !== undefined) {
         binding = resolveMongoBinding(bindingInput);
@@ -180,7 +188,9 @@ export default function mongo<
           'Mongo binding not configured. Pass url/uri+dbName/mongoClient+dbName/binding to mongo(...) or call db.connect({ ... }).',
         );
       }
-      return getRuntime();
+      const runtime = await getRuntime();
+      if (closed) throw closedError();
+      return runtime;
     },
 
     runtime(): Promise<MongoRuntime> {

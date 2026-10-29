@@ -89,6 +89,7 @@ import {
   type LoweredPackEntity,
   providesPslEntityPlacement,
   type ResolvedPslModelRefs,
+  requiresNameUniqueAcrossNamespaces,
 } from '@internal/sql-contract/entity-handle-lowering-hook';
 import { FOREIGN_KEY_INDEX_UNRESOLVED } from '@internal/sql-contract/foreign-key-materialization';
 import { isAuthoredIndexInput } from '@internal/sql-contract/index-naming';
@@ -102,6 +103,7 @@ import { deriveValueSetFromEntity } from '@internal/sql-contract/value-set-deriv
 import {
   buildSqlContractFromDefinition,
   type CheckNode,
+  composedExtensionPackRefs,
   type EnumTypeHandle,
   type FieldNode,
   type ForeignKeyNode,
@@ -195,32 +197,6 @@ export interface InterpretPslDocumentToSqlContractInput {
   /** The target's default codec ids for an `enum` block that omits `@@type`. */
   readonly enumInferenceCodecs?: { readonly text: string; readonly int: string };
   readonly capabilities: CapabilityMatrix;
-}
-
-function buildComposedExtensionPackRefs(
-  target: TargetPackRef<'sql', string>,
-  extensionIds: readonly string[],
-  extensionPackRefs: readonly ExtensionPackRef<'sql', string>[] = [],
-): Record<string, ExtensionPackRef<'sql', string>> | undefined {
-  if (extensionIds.length === 0) {
-    return undefined;
-  }
-
-  const extensionPackRefById = new Map(extensionPackRefs.map((packRef) => [packRef.id, packRef]));
-
-  return Object.fromEntries(
-    extensionIds.map((extensionId) => [
-      extensionId,
-      extensionPackRefById.get(extensionId) ??
-        ({
-          kind: 'extension',
-          id: extensionId,
-          familyId: target.familyId,
-          targetId: target.targetId,
-          version: '0.0.1',
-        } satisfies ExtensionPackRef<'sql', string>),
-    ]),
-  );
 }
 
 function declarationsHoldingModels(namespace: NamespaceSymbol): ReadonlySet<SyntaxNode> {
@@ -2450,6 +2426,29 @@ export function interpretPslDocumentToSqlContract(
       extensionBlocks,
     );
   }
+  for (const descriptor of entityTypesByDiscriminator.values()) {
+    if (!requiresNameUniqueAcrossNamespaces(descriptor.output)) continue;
+    const namespacesByName = new Map<string, string[]>();
+    for (const [namespaceId, entities] of namespaceExtensionEntities) {
+      for (const name of Object.keys(entities[descriptor.discriminator] ?? {})) {
+        namespacesByName.set(name, [...(namespacesByName.get(name) ?? []), namespaceId]);
+      }
+    }
+    for (const [name, namespaceIds] of namespacesByName) {
+      if (namespaceIds.length < 2) continue;
+      const sorted = [...namespaceIds].sort();
+      const block = [...extensionBlocksByNamespace]
+        .filter(([namespace]) => namespace.id === sorted[sorted.length - 1])
+        .flatMap(([, blocks]) => Object.values(blocks))
+        .find((candidate) => candidate.name === name);
+      invariant(block !== undefined, 'A lowered entity has an owning block');
+      diagnostics.pushUnlocated({
+        code: 'PSL_ENTITY_DECLARED_IN_MANY_NAMESPACES',
+        message: `${descriptor.discriminator} "${name}" is declared in namespaces ${sorted.map((namespaceId) => `"${namespaceId}"`).join(' and ')}; declare it in one namespace only.`,
+        ...diagnosticSource(input.sources, block.node.syntax).at(),
+      });
+    }
+  }
 
   // A domain `enum` and an extension-derived value-set (e.g. from a
   // `native_enum`) that share a name in one namespace would both target the
@@ -2826,9 +2825,9 @@ export function interpretPslDocumentToSqlContract(
         warnings: authoringWarnings.length > 0 ? authoringWarnings : undefined,
         ...ifDefined(
           'extensions',
-          buildComposedExtensionPackRefs(
+          composedExtensionPackRefs(
             input.target,
-            [...composedExtensions].sort(compareStrings),
+            composedExtensions,
             input.composedExtensionPackRefs,
           ),
         ),

@@ -1,0 +1,253 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "NativeTypeDefaults": {
+            "storage": {
+              "table": "NativeTypeDefaults",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "bit": {
+                  "column": "bit"
+                },
+                "varBit": {
+                  "column": "varBit"
+                },
+                "xml": {
+                  "column": "xml"
+                },
+                "oid": {
+                  "column": "oid"
+                },
+                "oidMax": {
+                  "column": "oidMax"
+                },
+                "money": {
+                  "column": "money"
+                },
+                "moneyNeg": {
+                  "column": "moneyNeg"
+                },
+                "moneyInt": {
+                  "column": "moneyInt"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "bit": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/bit@1",
+                  "typeParams": {
+                    "length": 8
+                  }
+                },
+                "nullable": false,
+                "many": false
+              },
+              "varBit": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/varbit@1",
+                  "typeParams": {
+                    "length": 8
+                  }
+                },
+                "nullable": false,
+                "many": false
+              },
+              "xml": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/xml@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "oid": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/oid@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "oidMax": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/oid@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "money": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/money@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "moneyNeg": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/money@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "moneyInt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/money@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "NativeTypeDefaults": {
+      "namespace": "public",
+      "model": "NativeTypeDefaults"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "4ea1338cc36f076b61abe8ec42b11c58c8613d6e7a5925193b44d6aedf240ecc",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "NativeTypeDefaults": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "bit": {
+                  "dataType": "pg/bit",
+                  "codecId": "pg/bit@1",
+                  "nullable": false,
+                  "many": false,
+                  "typeParams": {
+                    "length": 8
+                  },
+                  "default": {
+                    "kind": "literal",
+                    "value": "10101010"
+                  }
+                },
+                "varBit": {
+                  "dataType": "pg/varbit",
+                  "codecId": "pg/varbit@1",
+                  "nullable": false,
+                  "many": false,
+                  "typeParams": {
+                    "length": 8
+                  },
+                  "default": {
+                    "kind": "literal",
+                    "value": "101"
+                  }
+                },
+                "xml": {
+                  "dataType": "pg/xml",
+                  "codecId": "pg/xml@1",
+                  "nullable": false,
+                  "many": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": "<a>b</a>"
+                  }
+                },
+                "oid": {
+                  "dataType": "pg/oid",
+                  "codecId": "pg/oid@1",
+                  "nullable": false,
+                  "many": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": 42
+                  }
+                },
+                "oidMax": {
+                  "dataType": "pg/oid",
+                  "codecId": "pg/oid@1",
+                  "nullable": false,
+                  "many": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": 4294967295
+                  }
+                },
+                "money": {
+                  "dataType": "pg/money",
+                  "codecId": "pg/money@1",
+                  "nullable": false,
+                  "many": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": "12.50"
+                  }
+                },
+                "moneyNeg": {
+                  "dataType": "pg/money",
+                  "codecId": "pg/money@1",
+                  "nullable": false,
+                  "many": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": "-1234.56"
+                  }
+                },
+                "moneyInt": {
+                  "dataType": "pg/money",
+                  "codecId": "pg/money@1",
+                  "nullable": false,
+                  "many": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": "1000.00"
+                  }
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

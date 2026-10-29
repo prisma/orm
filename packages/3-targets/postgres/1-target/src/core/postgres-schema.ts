@@ -21,12 +21,14 @@ import { ifDefined } from '@internal/utils/defined';
 import { PostgresTableSource } from './ast/table-source';
 import { PG_TEXT_CODEC_ID } from './codec-ids';
 import {
+  extensionEntityKind,
   nativeEnumEntityKind,
   policyEntityKind,
   rlsEnablementEntityKind,
   roleEntityKind,
 } from './entity-kinds';
 import { assertFullTextIndexes } from './full-text-index-definition';
+import type { PostgresExtension } from './postgres-extension';
 import { PostgresNativeEnum } from './postgres-native-enum';
 import type { PostgresRlsEnablement } from './postgres-rls-enablement';
 import type { PostgresRlsPolicy } from './postgres-rls-policy';
@@ -40,6 +42,7 @@ export type PostgresNamespaceEntries = SqlNamespaceEntries & {
   readonly role?: Readonly<Record<string, PostgresRole>>;
   readonly rls?: Readonly<Record<string, PostgresRlsEnablement>>;
   readonly native_enum?: Readonly<Record<string, PostgresNativeEnum>>;
+  readonly extension?: Readonly<Record<string, PostgresExtension>>;
 };
 
 export interface PostgresSchemaInput {
@@ -86,6 +89,7 @@ export class PostgresSchema extends SqlNamespaceBase {
         roleEntityKind,
         rlsEnablementEntityKind,
         nativeEnumEntityKind,
+        extensionEntityKind,
       ]),
       'carry',
     );
@@ -124,7 +128,7 @@ export class PostgresSchema extends SqlNamespaceBase {
     this.entries = Object.freeze(
       blindCast<
         PostgresNamespaceEntries,
-        'composeSqlEntityKinds([policyEntityKind, roleEntityKind, rlsEnablementEntityKind, nativeEnumEntityKind]) supplies table→StorageTable, valueSet→StorageValueSet, policy→PostgresRlsPolicy, role→PostgresRole, rls→PostgresRlsEnablement, native_enum→PostgresNativeEnum descriptors'
+        'composeSqlEntityKinds([policyEntityKind, roleEntityKind, rlsEnablementEntityKind, nativeEnumEntityKind, extensionEntityKind]) supplies table→StorageTable, valueSet→StorageValueSet, policy→PostgresRlsPolicy, role→PostgresRole, rls→PostgresRlsEnablement, native_enum→PostgresNativeEnum, extension→PostgresExtension descriptors'
       >(entriesInput),
     );
     for (const table of Object.values(this.entries.table ?? {})) assertFullTextIndexes(table);
@@ -155,6 +159,10 @@ export class PostgresSchema extends SqlNamespaceBase {
 
   get rls(): Readonly<Record<string, PostgresRlsEnablement>> {
     return this.entries.rls ?? Object.freeze({});
+  }
+
+  get extension(): Readonly<Record<string, PostgresExtension>> {
+    return this.entries.extension ?? Object.freeze({});
   }
 
   /**

@@ -14,7 +14,7 @@ This extension pack adds support for the `vector` data type and vector similarit
 - **CLI Integration**: Provides extension descriptor for `prisma.config.ts` configuration
 - **Runtime Extension**: Registers codecs and operations at runtime for vector column operations
 - **Pack Ref Export**: Ships a pure `/pack` entrypoint for TypeScript contract authoring without runtime filesystem access
-- **Baseline Migration**: Ships an on-disk baseline migration in its contract space that installs the `vector` Postgres extension (`CREATE EXTENSION IF NOT EXISTS vector`) when the extension is composed into an application
+- **Extension in the contract**: The pack's contract declares the `vector` Postgres extension, so the planner creates it and verification checks that it is installed
 
 ## Installation
 
@@ -24,15 +24,13 @@ pnpm add @internal/extension-pgvector
 
 ## Database Setup
 
-The pgvector extension ships an on-disk baseline migration in its contract space; applying that migration installs pgvector with `CREATE EXTENSION IF NOT EXISTS vector`. When the extension is composed into an application via `extensions`, `prisma db init` and `prisma db update` apply the baseline (and any subsequent migrations) automatically.
-
-For manual database setup, the equivalent DDL is:
+The pack's contract declares the `vector` extension. When the pack is composed into an application via `extensions`, `prisma contract emit` writes the pack's files under `migrations/pgvector/`, and `prisma db init`, `prisma db update` and `prisma db migrate` create the extension if it is missing:
 
 ```sql
-CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS "vector" WITH SCHEMA "public";
 ```
 
-Ensure the baseline migration (or equivalent DDL) has been applied before running workloads that use vector columns.
+A database that already has the extension needs no migration: `prisma db sign` checks that the extension is installed and records the pack's marker. A database whose pgvector marker records the old `pgvector:install-vector-v1` invariant moves to the current head with `prisma db migrate`.
 
 ## Configuration
 
@@ -88,22 +86,13 @@ The `vector(N)` factory is registered through the unified `CodecDescriptor<{ len
 
 ### Runtime Setup
 
-Register the extension when creating your execution stack:
+Register the extension when creating the client:
 
 ```typescript
-import { instantiateExecutionStack } from '@internal/framework-components/execution';
-import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
-import postgresAdapter from '@internal/adapter-postgres/runtime';
-import postgresTarget from '@internal/target-postgres/runtime';
-import pgvector from '@internal/extension-pgvector/runtime';
+import postgres from '@prisma/orm-postgres/runtime';
+import pgvector from '@prisma/orm-extension-pgvector/runtime';
 
-const stack = createSqlExecutionStack({
-  target: postgresTarget,
-  adapter: postgresAdapter,
-  extensions: [pgvector],
-});
-const context = createExecutionContext({ contract, stack });
-const stackInstance = instantiateExecutionStack(stack);
+const db = postgres({ contract, url, extensions: [pgvector] });
 ```
 
 ### Query Usage

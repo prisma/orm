@@ -110,6 +110,7 @@ function actualSchema(options: {
   readonly policies?: readonly PostgresRlsPolicy[];
 }): PostgresDatabaseSchemaNode {
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',

@@ -20,6 +20,7 @@ export {
   DropColumnCall,
   DropConstraintCall,
   DropDefaultCall,
+  DropExtensionCall,
   DropIndexCall,
   DropNativeEnumTypeCall,
   DropNotNullCall,
@@ -37,6 +38,7 @@ export {
   RenameTableCall,
   ReplaceStoredValueCall,
   SetDefaultCall,
+  SetExtensionSchemaCall,
   SetNotNullCall,
   SetTableSchemaCall,
 } from '../core/migrations/op-factory-call';

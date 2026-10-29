@@ -7,7 +7,7 @@ import type { Db, RawLane } from '@internal/sql-builder/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type {
   ExecutionContext,
-  SqlExecutionStackWithDriver,
+  SqlExecutionStack,
   SqlRuntimeExtensionDescriptor,
   ToSqlMember,
 } from '@internal/sql-runtime';
@@ -38,7 +38,7 @@ export interface MysqlStaticContext<TContract extends Contract<SqlStorage>> exte
 export function buildMysqlStaticContext<TContract extends Contract<SqlStorage>>(
   contract: TContract,
   context: ExecutionContext<TContract>,
-  stack: SqlExecutionStackWithDriver<MysqlTargetId>,
+  stack: SqlExecutionStack<MysqlTargetId>,
 ): MysqlStaticContext<TContract> {
   const { rawCodecInferer } = stack.adapter;
   const sqlNamespace = sql<TContract>({ context, rawCodecInferer })[UNBOUND_NAMESPACE_ID];
@@ -59,7 +59,7 @@ export function buildMysqlStaticContext<TContract extends Contract<SqlStorage>>(
 
 /**
  * The query surfaces of a MySQL client without a driver: `sql`, `raw`, `enums` and `toSql`. Use
- * it where loading the mysql2 driver is not wanted.
+ * it where loading the MySQL driver is not wanted.
  *
  * @example
  * ```ts

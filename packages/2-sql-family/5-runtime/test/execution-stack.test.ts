@@ -129,6 +129,30 @@ describe('createExecutionStack', () => {
 });
 
 describe('createSqlExecutionStack', () => {
+  it('creates its driver with the session settings the target declares', () => {
+    const received: unknown[] = [];
+    const driver = {
+      kind: 'driver' as const,
+      id: 'test-driver',
+      version: '0.0.1',
+      familyId: 'sql' as const,
+      targetId: 'postgres' as const,
+      create: (...args: unknown[]) => {
+        received.push(args);
+        return {} as never;
+      },
+    };
+    const stack = createSqlExecutionStack({
+      target: { ...createStubTargetDescriptor(), sessionSettings: { DateStyle: 'ISO' } },
+      adapter: createStubAdapterDescriptor(),
+      driver,
+    });
+
+    stack.driver.create({ cursor: { disabled: true } });
+
+    expect(received).toEqual([[{ cursor: { disabled: true } }, { DateStyle: 'ISO' }]]);
+  });
+
   it('preserves descriptor references and defaults extensions', () => {
     const target = createStubTargetDescriptor();
     const adapter = createStubAdapterDescriptor();

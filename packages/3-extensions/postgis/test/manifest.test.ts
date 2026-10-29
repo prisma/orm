@@ -28,9 +28,4 @@ describe('postgis descriptor', () => {
       alias: 'PostgisQueryOperationTypes',
     });
   });
-
-  it('exposes the postgis baseline contract space with the install-postgis invariant', () => {
-    const headRef = postgisExtensionDescriptor.contractSpace?.headRef;
-    expect(headRef?.invariants).toContain('postgis:install-postgis-v1');
-  });
 });

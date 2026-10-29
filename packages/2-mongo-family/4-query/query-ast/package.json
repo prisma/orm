@@ -18,6 +18,7 @@
   "dependencies": {
     "@internal/contract": "workspace:8.0.0-rc.21",
     "@internal/framework-components": "workspace:8.0.0-rc.21",
+    "@internal/mongo-codec": "workspace:8.0.0-rc.21",
     "@internal/mongo-contract": "workspace:8.0.0-rc.21",
     "@internal/mongo-value": "workspace:8.0.0-rc.21",
     "@internal/utils": "workspace:8.0.0-rc.21",

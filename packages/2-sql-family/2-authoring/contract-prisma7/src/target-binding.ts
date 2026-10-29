@@ -30,6 +30,23 @@ export interface Prisma7FinerThanColumn {
   readonly stored: string;
 }
 
+/** An extension pack, and the import a config writes to compose it: `import <importName> from '<importPath>'`. */
+export interface Prisma7ExtensionPack {
+  readonly id: string;
+  readonly importName: string;
+  readonly importPath: string;
+}
+
+/** How the target reads the datasource `extensions` list. */
+export interface Prisma7DatabaseExtensions {
+  /** The generator preview feature without which Prisma 7 refuses the list. */
+  readonly previewFeature: string;
+  /** The entity kind the target registers for a database extension. */
+  readonly entityKind: string;
+  /** The extensions an extension pack declares, by name, with that pack. */
+  readonly packs: Readonly<Record<string, Prisma7ExtensionPack>>;
+}
+
 /** Everything a target supplies to the Prisma 7 interpreter. */
 export interface Prisma7TargetBinding {
   readonly target: TargetPackRef<'sql', string>;
@@ -43,6 +60,7 @@ export interface Prisma7TargetBinding {
     readonly entityKind: string;
     readonly typeConstructor: readonly string[];
   };
+  readonly extensions: Prisma7DatabaseExtensions;
   /** Prisma 7 index `type` names to the target's index types. */
   readonly indexTypes: Readonly<Record<string, string>>;
   /** The longest identifier the database keeps, in bytes. Prisma 7 cuts the names it generates to fit. */

@@ -72,12 +72,15 @@ export interface StartActivity<K extends ClientActivityKind = ClientActivityKind
   readonly annotations?: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>>;
 }
 
+/** How middleware treats a guardrail violation. `'strict'`, the default, makes `budgets` throw on every violation; `'permissive'` lets a violation whose severity is `'warn'` go to `log.warn`. */
+export type RuntimeMode = 'strict' | 'permissive';
+
 /**
  * The context of one activity. Every hook of the activity receives the same object.
  */
 export interface ActivityContext {
   readonly contract: unknown;
-  readonly mode: 'strict' | 'permissive';
+  readonly mode: RuntimeMode;
   readonly now: () => number;
   readonly log: RuntimeLog;
   /**

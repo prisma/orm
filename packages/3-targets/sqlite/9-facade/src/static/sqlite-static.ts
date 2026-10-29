@@ -7,7 +7,7 @@ import type { Db, RawLane } from '@internal/sql-builder/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type {
   ExecutionContext,
-  SqlExecutionStackWithDriver,
+  SqlExecutionStack,
   SqlRuntimeExtensionDescriptor,
   ToSqlMember,
 } from '@internal/sql-runtime';
@@ -38,7 +38,7 @@ export interface SqliteStaticContext<TContract extends Contract<SqlStorage>> ext
 export function buildSqliteStaticContext<TContract extends Contract<SqlStorage>>(
   contract: TContract,
   context: ExecutionContext<TContract>,
-  stack: SqlExecutionStackWithDriver<SqliteTargetId>,
+  stack: SqlExecutionStack<SqliteTargetId>,
 ): SqliteStaticContext<TContract> {
   const { rawCodecInferer } = stack.adapter;
   const sqlNamespace = sql<TContract>({ context, rawCodecInferer })[UNBOUND_NAMESPACE_ID];

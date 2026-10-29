@@ -75,6 +75,15 @@ test/**/fixtures/generated/
 .devin/
 .windsurf/
 
+# Pinned extension-pack files `contract emit` writes beside emit-only test
+# fixtures, which never migrate a database.
+packages/3-extensions/supabase/test/fixtures/migrations/
+test/e2e/framework/test/fixtures/migrations/
+test/integration/test/planner-golden/fixtures/postgres/migrations/
+test/integration/test/sql-builder/fixtures/migrations/
+test/integration/test/sql-orm-client/fixtures/collection-methods/migrations/
+test/integration/test/sql-orm-client/fixtures/migrations/
+
 # Temp config written by scripts/regen-example-migrations.mjs during emit; it is
 # unlinked after each migration, but a signal-killed run must never leave one
 # committable.

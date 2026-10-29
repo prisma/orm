@@ -53,6 +53,7 @@ describe('Postgres schema nodes carry no role/granularity of their own', () => {
     [
       'PostgresDatabaseSchemaNode',
       new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {},
         roles: [],
         existingSchemas: [],

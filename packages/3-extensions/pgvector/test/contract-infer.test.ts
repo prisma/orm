@@ -20,6 +20,7 @@ function inferFrom(extensions: readonly (typeof pgvectorControl)[]) {
   });
   const vector = { text: 'vector(3)', kind: undefined, schema: 'public', name: 'vector' };
   const tree = new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',

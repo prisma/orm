@@ -13,12 +13,23 @@ The v1 surface covers the `key_field` storage parameter only. Per-field tokenize
 - **bm25 index registration**: declares a `'bm25'` entry via `defineIndexTypes()` carrying an arktype validator for the bm25 options shape
 - **Extension descriptor**: declares the `paradedb/bm25` capability for contract-level feature detection
 - **Pack ref export**: ships a pure `/pack` entrypoint for TypeScript contract authoring
+- **Extension in the contract**: the pack's contract declares the `pg_search` Postgres extension, so the planner creates it and verification checks that it is installed
 
 ## Installation
 
 ```bash
 pnpm add @internal/extension-paradedb
 ```
+
+## Database Setup
+
+The pack's contract declares the `pg_search` extension. When the pack is composed into an application via `extensions`, `prisma contract emit` writes the pack's files under `migrations/paradedb/`, and `prisma db init`, `prisma db update` and `prisma db migrate` create the extension if it is missing:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS "pg_search" WITH SCHEMA "public";
+```
+
+The database server must have ParadeDB's `pg_search` available to install. A database that already has the extension needs no migration: `prisma db sign` checks that the extension is installed and records the pack's marker. A database whose paradedb marker records the old `paradedb:install-pg-search-v1` invariant moves to the current head with `prisma db migrate`.
 
 ## Usage
 

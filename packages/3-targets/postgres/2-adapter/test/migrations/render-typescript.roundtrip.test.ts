@@ -31,6 +31,7 @@ import {
   CreateSchemaCall,
   CreateTableCall,
   DisableRowLevelSecurityCall,
+  DropExtensionCall,
   DropPostgresRlsPolicyCall,
   DropSchemaCall,
   DropTableCall,
@@ -42,6 +43,7 @@ import {
   RenameSchemaCall,
   ReplaceStoredValueCall,
   SetDefaultCall,
+  SetExtensionSchemaCall,
   SetTableSchemaCall,
 } from '@internal/target-postgres/op-factory-call';
 import { TypeScriptRenderablePostgresMigration } from '@internal/target-postgres/planner-produced-postgres-migration';
@@ -142,7 +144,9 @@ describe('TypeScriptRenderablePostgresMigration round-trip', () => {
     timeout: timeouts.typeScriptCompilation,
   }, async () => {
     const calls = [
-      new CreateExtensionCall('citext'),
+      new CreateExtensionCall('public', 'citext'),
+      new SetExtensionSchemaCall('citext', 'app'),
+      new DropExtensionCall('app', 'citext'),
       new CreateSchemaCall('app'),
       new CreateTableCall(
         'public',

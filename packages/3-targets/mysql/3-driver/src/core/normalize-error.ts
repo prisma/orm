@@ -1,82 +1,135 @@
-import { errorRuntime } from '@internal/errors/execution';
-import { SqlQueryError } from '@internal/sql-errors';
+import { SqlConnectionError, SqlQueryError } from '@internal/sql-errors';
 import { ifDefined } from '@internal/utils/defined';
 
-interface Mysql2Error extends Error {
-  readonly sqlState?: string;
-  readonly sqlMessage?: string;
+/** The fields of the `mariadb` package's `SqlError` the driver reads. */
+interface MariadbError extends Error {
+  readonly errno: number;
+  readonly sqlState?: string | null;
+  readonly sqlMessage?: string | null;
+  readonly fatal?: boolean;
 }
 
-function isMysql2Error(error: unknown): error is Mysql2Error {
-  return error instanceof Error && 'sqlState' in error && typeof error.sqlState === 'string';
+function isMariadbError(error: unknown): error is MariadbError {
+  return error instanceof Error && 'errno' in error && typeof error.errno === 'number';
 }
 
-/** A query error MySQL reported, as the family's `SqlQueryError` with its SQLSTATE; any other error unchanged. */
-export function normalizeMysqlError(error: unknown): unknown {
-  if (!isMysql2Error(error)) return error;
-  return new SqlQueryError(error.sqlMessage ?? error.message, {
-    cause: error,
-    ...ifDefined('sqlState', error.sqlState),
-  });
-}
-
-/** Whether mysql2 reported `error` as fatal, which leaves its connection unusable. */
-export function isFatal(error: unknown): error is Error {
+/** Whether `error` left its connection unusable: the package marks a lost socket, and a server error of SQLSTATE class 08, as fatal. */
+export function isFatal(error: unknown): boolean {
   return error instanceof Error && 'fatal' in error && error.fatal === true;
 }
 
-/** The error a statement ends with when its connection is lost or closed under it. */
-export function connectionLost(cause?: unknown): Error {
-  return errorRuntime('DRIVER.NOT_CONNECTED', 'MySQL connection lost or closed', {
-    why: cause instanceof Error ? cause.message : 'The connection ended.',
-    fix: 'Retry the work; the driver opens a new connection.',
-    ...(cause === undefined ? {} : { cause }),
+function serverMessage(error: Error): string {
+  return isMariadbError(error) ? (error.sqlMessage ?? error.message) : error.message;
+}
+
+/** The error a statement ends with when its connection is lost or closed under it: a `SqlConnectionError` a retry on a new connection can get past, as on Postgres. */
+export function connectionLost(cause: Error): SqlConnectionError {
+  return new SqlConnectionError(serverMessage(cause), {
+    cause,
+    transient: true,
+    ...ifDefined('sqlState', isMariadbError(cause) ? (cause.sqlState ?? undefined) : undefined),
   });
 }
 
-const ER_WRONG_ARGUMENTS = 1210;
-const ER_UNSUPPORTED_PS = 1295;
-const ER_MAX_PREPARED_STMT_COUNT_REACHED = 1461;
+/** Node's socket and DNS error codes, and whether a retry can succeed after each, as the Postgres driver classifies them. */
+const NODE_CONNECTION_CODES: ReadonlyMap<string, boolean> = new Map([
+  ['ECONNRESET', true],
+  ['ETIMEDOUT', true],
+  ['EPIPE', true],
+  ['EAI_AGAIN', true],
+  ['ECONNREFUSED', false],
+  ['ENOTFOUND', false],
+  ['EHOSTUNREACH', false],
+]);
 
-function errnoOf(error: unknown): unknown {
-  return error instanceof Error && 'errno' in error ? error.errno : undefined;
+/** Whether a retry can succeed after `error`, for a Node socket or DNS error; undefined for any other. */
+function nodeConnectionTransience(error: unknown): boolean | undefined {
+  return error instanceof Error && 'code' in error && typeof error.code === 'string'
+    ? NODE_CONNECTION_CODES.get(error.code)
+    : undefined;
+}
+
+const ER_GET_CONNECTION_TIMEOUT = 45028;
+const ER_INITIAL_SQL_ERROR = 45030;
+const ER_CANNOT_RETRIEVE_RSA_KEY = 45044;
+
+/** The errors MySQL refuses a sign-in with: access denied, access denied for a socket-authenticated account, and an authentication plugin the server has not loaded. Another attempt with the same URL fails the same way. */
+const SIGN_IN_REFUSED: ReadonlySet<number> = new Set([1045, 1698, 1524]);
+
+/** Whether `error` is one another attempt to connect with the same settings cannot get past: a refused connection, an unknown or unreachable host, a refused sign-in, a sign-in that needs the server's public key, or session setup MySQL refuses. */
+export function connectingCannotSucceed(error: unknown): boolean {
+  if (nodeConnectionTransience(error) === false) return true;
+  return (
+    isMariadbError(error) &&
+    (SIGN_IN_REFUSED.has(error.errno) ||
+      error.errno === ER_CANNOT_RETRIEVE_RSA_KEY ||
+      error.errno === ER_INITIAL_SQL_ERROR)
+  );
+}
+
+const UNIQUE_VIOLATION = '23505';
+const FOREIGN_KEY_VIOLATION = '23503';
+const NOT_NULL_VIOLATION = '23502';
+const CHECK_VIOLATION = '23514';
+
+/** The SQLSTATE Postgres sends for each constraint MySQL reports under a shared SQLSTATE, as the SQLite driver maps its own codes, so a consumer such as `isUniqueConstraintViolation` reads them alike. */
+const CONSTRAINT_SQLSTATES: ReadonlyMap<number, string> = new Map([
+  [1062, UNIQUE_VIOLATION],
+  [1586, UNIQUE_VIOLATION],
+  [1216, FOREIGN_KEY_VIOLATION],
+  [1217, FOREIGN_KEY_VIOLATION],
+  [1451, FOREIGN_KEY_VIOLATION],
+  [1452, FOREIGN_KEY_VIOLATION],
+  [1048, NOT_NULL_VIOLATION],
+  [3819, CHECK_VIOLATION],
+]);
+
+const PUBLIC_KEY_FIX =
+  'Add allowPublicKeyRetrieval=true to the URL, or connect over TLS with sslmode or ssl=true in the URL. Fetching the key over plain TCP lets a machine between the client and the server pose as the server and read the password; TLS does not.';
+
+/** The fix for a failed connection when the package's error names its cause, such as a sign-in that needs the server's public key. */
+export function connectionFix(error: unknown): string | undefined {
+  return isMariadbError(error) && error.errno === ER_CANNOT_RETRIEVE_RSA_KEY
+    ? PUBLIC_KEY_FIX
+    : undefined;
+}
+
+function publicKeyNeeded(error: MariadbError): SqlConnectionError {
+  return new SqlConnectionError(
+    `MySQL sign-in needs the server's public key: the account signs in with caching_sha2_password or sha256_password over a connection without TLS. ${PUBLIC_KEY_FIX}`,
+    { cause: error, transient: false },
+  );
+}
+
+function poolTimedOut(error: MariadbError): unknown {
+  const cause = error.cause;
+  if (connectingCannotSucceed(cause)) return normalizeMysqlError(cause);
+  return new SqlConnectionError(
+    cause instanceof Error
+      ? `Timed out waiting for a pooled MySQL connection; the pool could not open one: ${serverMessage(cause)}`
+      : 'Timed out waiting for a pooled MySQL connection; every connection in the pool was in use.',
+    { cause: error, transient: true },
+  );
 }
 
 /**
- * A statement's error, by MySQL's error number: `DRIVER.PREPARE_FAILED` for a statement MySQL cannot prepare or for the server's limit on open prepared statements, `RUNTIME.ARGUMENT_INVALID` for a value MySQL refused for a placeholder, such as a `LIMIT` that is not an integer, and otherwise the driver's usual normalization.
+ * An error from the `mariadb` package as the driver reports it, in the family's types as the Postgres driver reports its own: a Node socket or DNS error as a `SqlConnectionError`, transient as the Postgres driver's table says; a lost connection and a pool that gave no connection in time as a transient `SqlConnectionError`; a sign-in that needs the server's public key, and session setup that fails, as a `SqlConnectionError` that is not transient; a sign-in MySQL refuses, as Postgres's 28P01, and an error MySQL reported about a statement as `SqlQueryError` with its SQLSTATE, a constraint violation with the SQLSTATE Postgres sends; and any other error unchanged. A pool that timed out because it could not connect in a way no retry can get past reports that error.
  */
-export function statementError(error: unknown, sql: string): unknown {
-  switch (errnoOf(error)) {
-    case ER_UNSUPPORTED_PS:
-      return errorRuntime(
-        'DRIVER.PREPARE_FAILED',
-        'MySQL cannot run this statement as a prepared statement',
-        {
-          why: 'The runtime driver sends every statement as a server-side prepared statement, so values never travel inside the SQL, and MySQL refuses to prepare a few statements, such as LOCK TABLES.',
-          fix: 'Run the statement outside the Prisma runtime.',
-          meta: { sql },
-          cause: error,
-        },
-      );
-    case ER_MAX_PREPARED_STMT_COUNT_REACHED:
-      return errorRuntime(
-        'DRIVER.PREPARE_FAILED',
-        'MySQL has reached its limit on open prepared statements',
-        {
-          why: 'Every connection keeps up to statementCacheSize prepared statements open, and the server caps them across all connections (max_prepared_stmt_count, 16,382 by default).',
-          fix: 'Lower statementCacheSize or connectionLimit in the URL, run fewer processes against the server, or raise max_prepared_stmt_count on the server.',
-          meta: { sql },
-          cause: error,
-        },
-      );
-    case ER_WRONG_ARGUMENTS:
-      return errorRuntime('RUNTIME.ARGUMENT_INVALID', 'MySQL refused a value for a placeholder', {
-        why: 'A placeholder MySQL reads as an integer, such as a LIMIT or OFFSET, received a value that is not one.',
-        fix: 'Pass an integer.',
-        meta: { sql },
-        cause: error,
-      });
-    default:
-      return normalizeMysqlError(error);
+export function normalizeMysqlError(error: unknown): unknown {
+  const transient = nodeConnectionTransience(error);
+  if (transient !== undefined && error instanceof Error) {
+    return new SqlConnectionError(error.message, { cause: error, transient });
   }
+  if (!isMariadbError(error)) return error;
+  if (error.errno === ER_CANNOT_RETRIEVE_RSA_KEY) return publicKeyNeeded(error);
+  if (error.errno === ER_INITIAL_SQL_ERROR) {
+    return new SqlConnectionError(serverMessage(error), { cause: error, transient: false });
+  }
+  if (isFatal(error) && !SIGN_IN_REFUSED.has(error.errno)) return connectionLost(error);
+  if (error.errno === ER_GET_CONNECTION_TIMEOUT) return poolTimedOut(error);
+  if (typeof error.sqlState !== 'string') return error;
+  return new SqlQueryError(error.sqlMessage ?? error.message, {
+    cause: error,
+    sqlState: CONSTRAINT_SQLSTATES.get(error.errno) ?? error.sqlState,
+  });
 }

@@ -93,6 +93,27 @@ export const prisma7PostgresBinding = {
   providers: ['postgresql', 'postgres'],
   typeMap: prisma7PostgresTypeMap,
   nativeEnum: { entityKind: 'native_enum', typeConstructor: ['pg', 'enum'] },
+  extensions: {
+    previewFeature: 'postgresqlExtensions',
+    entityKind: 'extension',
+    packs: {
+      vector: {
+        id: 'pgvector',
+        importName: 'pgvector',
+        importPath: '@prisma/orm-extension-pgvector/control',
+      },
+      postgis: {
+        id: 'postgis',
+        importName: 'postgis',
+        importPath: '@prisma/orm-extension-postgis/control',
+      },
+      pg_search: {
+        id: 'paradedb',
+        importName: 'paradedb',
+        importPath: '@prisma/orm-extension-paradedb/control',
+      },
+    },
+  },
   indexTypes: {
     BTree: 'btree',
     Hash: 'hash',

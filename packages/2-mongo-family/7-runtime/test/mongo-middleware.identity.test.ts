@@ -5,7 +5,7 @@ import {
   createMockAdapter,
   createMockDriver,
   createPlan,
-  makeContext,
+  makeExecution,
 } from './mongo-middleware-fixtures';
 
 describe('MongoRuntime statement activity identity', () => {
@@ -33,7 +33,7 @@ describe('MongoRuntime statement activity identity', () => {
   it('gives every hook of one query the same activity id and context', async () => {
     const log: Observation[] = [];
     const runtime = createMongoRuntime({
-      context: makeContext(createMockAdapter()),
+      ...makeExecution(createMockAdapter()),
       driver: createMockDriver([{ _id: '1' }]),
       middleware: [observerMiddleware(log)],
     });
@@ -51,7 +51,7 @@ describe('MongoRuntime statement activity identity', () => {
   it('gives two queries of the same plan instance distinct activities', async () => {
     const log: Observation[] = [];
     const runtime = createMongoRuntime({
-      context: makeContext(createMockAdapter()),
+      ...makeExecution(createMockAdapter()),
       driver: createMockDriver([{ _id: '1' }]),
       middleware: [observerMiddleware(log)],
     });
@@ -77,7 +77,7 @@ describe('MongoRuntime middleware compatibility validation', () => {
     const middleware: MongoMiddleware = { name: 'generic' };
     expect(() =>
       createMongoRuntime({
-        context: makeContext(createMockAdapter()),
+        ...makeExecution(createMockAdapter()),
         driver: createMockDriver(),
         middleware: [middleware],
       }),
@@ -88,7 +88,7 @@ describe('MongoRuntime middleware compatibility validation', () => {
     const middleware: MongoMiddleware = { name: 'mongo-specific', familyId: 'mongo' };
     expect(() =>
       createMongoRuntime({
-        context: makeContext(createMockAdapter()),
+        ...makeExecution(createMockAdapter()),
         driver: createMockDriver(),
         middleware: [middleware],
       }),
@@ -103,7 +103,7 @@ describe('MongoRuntime middleware compatibility validation', () => {
     } as unknown as MongoMiddleware;
     expect(() =>
       createMongoRuntime({
-        context: makeContext(createMockAdapter()),
+        ...makeExecution(createMockAdapter()),
         driver: createMockDriver(),
         middleware: [middleware],
       }),

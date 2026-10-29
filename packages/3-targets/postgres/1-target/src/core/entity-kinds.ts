@@ -1,9 +1,11 @@
 import type { EntityKindDescriptor } from '@internal/framework-components/ir';
+import { PostgresExtension, type PostgresExtensionInput } from './postgres-extension';
 import { PostgresNativeEnum, type PostgresNativeEnumInput } from './postgres-native-enum';
 import { PostgresRlsEnablement, type PostgresRlsEnablementInput } from './postgres-rls-enablement';
 import { PostgresRlsPolicy } from './postgres-rls-policy';
 import { PostgresRole, type PostgresRoleInput } from './postgres-role';
 import {
+  PostgresExtensionSchema,
   PostgresNativeEnumSchema,
   PostgresRlsEnablementSchema,
   PostgresRlsPolicySchema,
@@ -40,3 +42,10 @@ export const nativeEnumEntityKind: EntityKindDescriptor<
   schema: PostgresNativeEnumSchema,
   construct: (input) => new PostgresNativeEnum(input),
 };
+
+export const extensionEntityKind: EntityKindDescriptor<PostgresExtensionInput, PostgresExtension> =
+  {
+    kind: 'extension',
+    schema: PostgresExtensionSchema,
+    construct: (input) => new PostgresExtension(input),
+  };

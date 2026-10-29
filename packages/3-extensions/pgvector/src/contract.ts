@@ -41,11 +41,11 @@
  */
 
 import { assembleDataTypes } from '@internal/framework-components/codec';
-import { defineContract } from '@internal/postgres/contract-builder';
+import { defineContract, extension } from '@internal/postgres/contract-builder';
 import { assemblePostgresCodecRegistryWithBuiltins } from '@internal/target-postgres/codecs';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { VECTOR_CODEC_ID } from './core/constants';
-import { PGVECTOR_NATIVE_TYPE } from './core/contract-space-constants';
+import { PGVECTOR_EXTENSION_NAME, PGVECTOR_NATIVE_TYPE } from './core/contract-space-constants';
 import { pgvectorDataTypes } from './core/data-types';
 import { pgvectorCodecRegistry } from './core/registry';
 
@@ -67,6 +67,7 @@ export const contract = defineContract({ codecLookup, dataTypeLookup }, () => ({
     },
   },
   models: {},
+  entities: [extension(PGVECTOR_EXTENSION_NAME)],
 }));
 
 export default contract;

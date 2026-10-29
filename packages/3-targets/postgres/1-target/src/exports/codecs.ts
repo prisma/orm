@@ -24,13 +24,16 @@ export type {
   PgIntervalDescriptor,
   PgJsonbDescriptor,
   PgJsonDescriptor,
+  PgMoneyDescriptor,
   PgNumericDescriptor,
+  PgOidDescriptor,
   PgTextDescriptor,
   PgTimetzDescriptor,
   PgUnboundedIntDescriptor,
   PgUuidDescriptor,
   PgVarbitDescriptor,
   PgVarcharDescriptor,
+  PgXmlDescriptor,
 } from '../core/codecs';
 export {
   isPgEnumParams,
@@ -50,13 +53,16 @@ export {
   pgIntervalColumn,
   pgJsonbColumn,
   pgJsonColumn,
+  pgMoneyColumn,
   pgNumericColumn,
+  pgOidColumn,
   pgTextColumn,
   pgTimetzColumn,
   pgUnboundedIntColumn,
   pgUuidColumn,
   pgVarbitColumn,
   pgVarcharColumn,
+  pgXmlColumn,
 } from '../core/codecs';
 export type { PgInterval } from '../core/data-type-values';
 export {

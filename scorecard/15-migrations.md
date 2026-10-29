@@ -158,9 +158,11 @@ Legend:
 
 | Feature | Postgres | SQLite | MongoDB | Prisma 8 evidence |
 | --- | --- | --- | --- | --- |
-| `installExtension` | ✅ | — | — | `test/integration/test/extension-pgvector-scenario-a.e2e.integration.test.ts` |
-| `createExtension` | 🟡 | — | — | |
-| Extension version / schema / relocation management | ❌ | — | — | |
+| `installExtension` | ✅ | — | — | Kept in each pack's first migration; `packages/3-targets/postgres/1-target/test/postgres-migration-op-builders.test.ts` |
+| `createExtension`, `dropExtension`, `setExtensionSchema` planned from an `extension` entity | ✅ | — | — | `packages/3-targets/postgres/2-adapter/test/migrations/extension-lifecycle.integration.test.ts` |
+| Adopting a database with extensions by `db sign` | ✅ | — | — | `test/integration/test/cli-journeys/extensions-adoption.e2e.test.ts`, `test/integration/test/extension-packs.db-sign-migrate.e2e.test.ts` |
+| Extension schema and relocation | ✅ | — | — | `packages/3-targets/postgres/2-adapter/test/migrations/extension-lifecycle.integration.test.ts` |
+| Extension version management | ❌ | — | — | Not recorded by design (ADR 311) |
 | Extension-type modifier diffing | ❌ | — | — | |
 
 ## Migrations — views

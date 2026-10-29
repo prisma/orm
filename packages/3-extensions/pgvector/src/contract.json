@@ -15,13 +15,19 @@
     "namespaces": {
       "public": {
         "entries": {
+          "extension": {
+            "vector": {
+              "kind": "extension",
+              "name": "vector"
+            }
+          },
           "table": {}
         },
         "id": "public",
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "4a96b488a4ce92b434e5f7d6607b6435c0955f0d36b0018077045787764240e6",
+    "storageHash": "698fc52f21eb891517203ef4b229823d17c49c3f802e2374be292a9b6a560c97",
     "types": {
       "vector": {
         "codecId": "pg/vector@1",

@@ -10,6 +10,7 @@ import {
 } from '@internal/mongo-runtime';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import { fixtureContract } from '../setup';
 
 const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
 
@@ -30,14 +31,14 @@ const STANDARD_CODEC_IDS = [
 ];
 
 describe('createMongoExecutionStack', () => {
-  it('builds a stack from target + adapter (no extensions, no driver)', () => {
+  it('builds a stack from target + adapter (no extensions)', () => {
     const stack = createMongoExecutionStack({
       target: mongoRuntimeTarget,
       adapter: mongoRuntimeAdapter,
     });
     expect(stack.target).toBe(mongoRuntimeTarget);
     expect(stack.adapter).toBe(mongoRuntimeAdapter);
-    expect(stack.driver).toBeUndefined();
+    expect(stack).not.toHaveProperty('driver');
     expect(stack.extensions).toEqual([]);
   });
 
@@ -66,7 +67,7 @@ describe('createMongoExecutionContext', () => {
       target: mongoRuntimeTarget,
       adapter: mongoRuntimeAdapter,
     });
-    const context = createMongoExecutionContext({ contract: {}, stack });
+    const context = createMongoExecutionContext({ contract: fixtureContract, stack });
     for (const id of STANDARD_CODEC_IDS) {
       expect(context.codecs.get(id), `codec ${id} should be registered`).toBeDefined();
     }
@@ -98,7 +99,7 @@ describe('createMongoExecutionContext', () => {
       adapter: mongoRuntimeAdapter,
       extensions: [pack],
     });
-    const context = createMongoExecutionContext({ contract: {}, stack });
+    const context = createMongoExecutionContext({ contract: fixtureContract, stack });
     expect(context.codecs.get('test/custom@1')).toBe(customCodec);
     expect(context.codecs.get('mongo/string@1')).toBeDefined();
   });
@@ -132,7 +133,7 @@ describe('createMongoExecutionContext', () => {
 
     let caught: unknown;
     try {
-      createMongoExecutionContext({ contract: {}, stack });
+      createMongoExecutionContext({ contract: fixtureContract, stack });
     } catch (e) {
       caught = e;
     }
@@ -149,16 +150,15 @@ describe('createMongoExecutionContext', () => {
     });
   });
 
-  it('returns a frozen { contract, codecs, stack } object', () => {
+  it('returns a frozen { contract, codecs } object with no stack', () => {
     const stack = createMongoExecutionStack({
       target: mongoRuntimeTarget,
       adapter: mongoRuntimeAdapter,
     });
-    const contract = { models: {} };
-    const context = createMongoExecutionContext({ contract, stack });
+    const context = createMongoExecutionContext({ contract: fixtureContract, stack });
     expect(Object.isFrozen(context)).toBe(true);
-    expect(context.contract).toBe(contract);
-    expect(context.stack).toBe(stack);
+    expect(context.contract).toBe(fixtureContract);
+    expect(Object.keys(context)).not.toContain('stack');
   });
 
   it('preserves the TContract type on context.contract (no unknown widening)', () => {
@@ -166,10 +166,9 @@ describe('createMongoExecutionContext', () => {
       target: mongoRuntimeTarget,
       adapter: mongoRuntimeAdapter,
     });
-    const contract = { target: 'mongo' as const, storageHash: 'test' };
-    const context = createMongoExecutionContext({ contract, stack });
-    expectTypeOf(context).toMatchTypeOf<MongoExecutionContext<typeof contract>>();
-    expectTypeOf(context.contract).toEqualTypeOf<typeof contract>();
+    const context = createMongoExecutionContext({ contract: fixtureContract, stack });
+    expectTypeOf(context).toMatchTypeOf<MongoExecutionContext<typeof fixtureContract>>();
+    expectTypeOf(context.contract).toEqualTypeOf<typeof fixtureContract>();
   });
 });
 

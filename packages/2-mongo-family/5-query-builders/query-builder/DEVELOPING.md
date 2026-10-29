@@ -6,7 +6,7 @@ Internal architecture notes for contributors.
 
 | File | Responsibility |
 |------|---------------|
-| `query.ts` | Entry point (`mongoQuery`) — validates root, creates initial builder |
+| `query.ts` | Entry point (`mongoQuery({ context })`) — reads the contract from the execution context, creates initial builder |
 | `builder.ts` | `PipelineBuilder` class — immutable; each stage method returns a new instance with the appended stage |
 | `types.ts` | Core type machinery: `DocField`, `DocShape`, `ModelToDocShape`, `ResolveRow`, shape transformers (`ProjectedShape`, `GroupedDocShape`, `UnwoundShape`, etc.) |
 | `field-proxy.ts` | `Proxy`-based `FieldProxy<Shape>` — intercepts property access to produce `TypedAggExpr` nodes |

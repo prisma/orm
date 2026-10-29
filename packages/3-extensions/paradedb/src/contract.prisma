@@ -1,0 +1,3 @@
+// use prisma-8
+
+extension pg_search {}

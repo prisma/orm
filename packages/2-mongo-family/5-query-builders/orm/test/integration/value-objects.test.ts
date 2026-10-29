@@ -5,9 +5,9 @@ import type {
   MongoContract,
   MongoContractWithTypeMaps,
 } from '@internal/mongo-contract';
+import type { MongoExecutionContext } from '@internal/mongo-query-ast/execution';
 import { MongoFieldFilter, type MongoFilterExpr } from '@internal/mongo-query-ast/execution';
 import {
-  buildMongoEnums,
   createMongoExecutionContext,
   createMongoExecutionStack,
   createMongoRuntime,
@@ -18,7 +18,6 @@ import { timeouts } from '@repo/test-utils';
 import { MongoClient, ObjectId } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { MongoOrmEnums } from '../../src/collection';
 import type { FieldExpression, FieldOperation } from '../../src/field-accessor';
 import { mongoOrm } from '../../src/mongo-orm';
 
@@ -121,7 +120,7 @@ describe('value objects in the Mongo ORM', { timeout: timeouts.spinUpMongoMemory
   let replSet: MongoMemoryReplSet;
   let client: MongoClient;
   let runtime: MongoRuntime;
-  let enums: MongoOrmEnums;
+  let context: MongoExecutionContext<typeof contract>;
   const dbName = 'orm_value_objects_test';
 
   beforeAll(async () => {
@@ -134,10 +133,9 @@ describe('value objects in the Mongo ORM', { timeout: timeouts.spinUpMongoMemory
       target: mongoRuntimeTarget,
       adapter: mongoRuntimeAdapter,
     });
-    const context = createMongoExecutionContext({ contract: {}, stack });
+    context = createMongoExecutionContext({ contract, stack });
     const driver = await createMongoDriver(replSet.getUri(), dbName);
-    runtime = createMongoRuntime({ context, driver });
-    enums = buildMongoEnums(contract, context.codecs);
+    runtime = createMongoRuntime({ context, adapter: stack.adapter.create(stack), driver });
   }, timeouts.spinUpMongoMemoryServer);
 
   beforeEach(async () => {
@@ -149,7 +147,7 @@ describe('value objects in the Mongo ORM', { timeout: timeouts.spinUpMongoMemory
   }, timeouts.spinUpMongoMemoryServer);
 
   it('writes and reads a nested and a list value object through the codecs of their members', async () => {
-    const places = placesOf(mongoOrm({ contract, executor: runtime, enums }));
+    const places = placesOf(mongoOrm({ context, runtime }));
     const landmarkId = new ObjectId().toHexString();
     const stopId = new ObjectId().toHexString();
     const created = await places.create({
@@ -178,7 +176,7 @@ describe('value objects in the Mongo ORM', { timeout: timeouts.spinUpMongoMemory
   });
 
   it('filters and updates by a dot path into a nested value object', async () => {
-    const places = placesOf(mongoOrm({ contract, executor: runtime, enums }));
+    const places = placesOf(mongoOrm({ context, runtime }));
     const landmarkId = new ObjectId().toHexString();
     await places.create({
       address: { city: 'Lyon', landmark: { label: 'Fourvière', placeId: landmarkId } },
@@ -197,7 +195,7 @@ describe('value objects in the Mongo ORM', { timeout: timeouts.spinUpMongoMemory
   });
 
   it('filters by a dot path through a list index into a list of value objects', async () => {
-    const places = placesOf(mongoOrm({ contract, executor: runtime, enums }));
+    const places = placesOf(mongoOrm({ context, runtime }));
     const firstId = new ObjectId().toHexString();
     const secondId = new ObjectId().toHexString();
     await places.create({

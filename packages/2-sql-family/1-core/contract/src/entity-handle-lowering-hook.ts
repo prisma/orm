@@ -108,3 +108,21 @@ export function providesPslEntityPlacement(output: unknown): output is SqlPslEnt
   const { pslPlacement } = output;
   return typeof pslPlacement === 'function';
 }
+
+/**
+ * An entity-type output whose entities are unique by name across the whole contract, not per namespace: the PSL interpreter refuses one name declared in two namespaces.
+ */
+export interface SqlNameUniqueAcrossNamespacesOutput {
+  readonly nameUniqueAcrossNamespaces: true;
+}
+
+export function requiresNameUniqueAcrossNamespaces(
+  output: unknown,
+): output is SqlNameUniqueAcrossNamespacesOutput {
+  return (
+    typeof output === 'object' &&
+    output !== null &&
+    'nameUniqueAcrossNamespaces' in output &&
+    output.nameUniqueAcrossNamespaces === true
+  );
+}

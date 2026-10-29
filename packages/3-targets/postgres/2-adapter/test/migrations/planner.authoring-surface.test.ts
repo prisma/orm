@@ -55,6 +55,7 @@ describe('PostgresMigrationPlanner authoring surface', () => {
       const planner = makeFrameworkPlanner();
       const contract = createEmptyContract();
       const fromSchemaIR = new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {
           public: new PostgresNamespaceSchemaNode({
             schemaName: 'public',

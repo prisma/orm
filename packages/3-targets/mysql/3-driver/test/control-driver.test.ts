@@ -1,14 +1,14 @@
 import { EventEmitter } from 'node:events';
-import type { Connection } from 'mysql2/promise';
+import type { Connection } from 'mariadb';
 import { describe, expect, it } from 'vitest';
 import { MysqlControlDriver } from '../src/core/migrations/control-driver';
 
 class FakeConnection extends EventEmitter {
   queries = 0;
 
-  async query(): Promise<[unknown[]]> {
+  async query(): Promise<unknown[]> {
     this.queries += 1;
-    return [[]];
+    return [];
   }
 }
 
@@ -19,8 +19,9 @@ describe('MysqlControlDriver', () => {
 
     expect(() => connection.emit('error', new Error('Connection lost'))).not.toThrow();
     await expect(driver.query('SELECT 1')).rejects.toMatchObject({
-      code: 'DRIVER.NOT_CONNECTED',
-      why: 'Connection lost',
+      kind: 'sql_connection',
+      transient: true,
+      message: 'Connection lost',
     });
     expect(connection.queries).toBe(0);
   });

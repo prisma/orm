@@ -1,10 +1,20 @@
 import type { MongoContract } from '@internal/mongo-contract';
-import type { RawMongoCommand } from '@internal/mongo-query-ast/execution';
+import type { MongoExecutionContext, RawMongoCommand } from '@internal/mongo-query-ast/execution';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import type { Contract } from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract';
 import ormContractJson from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract.json';
 import { mongoRaw } from '../src/mongo-raw';
+
+function contextOf<TContract extends MongoContract>(
+  contract: TContract,
+): MongoExecutionContext<TContract> {
+  return {
+    contract,
+    codecs: { get: () => undefined, has: () => false },
+    applyMutationDefaults: () => [],
+  };
+}
 
 // JSON import loses literal types; typed Contract .d.ts is the source of truth
 const contract = blindCast<Contract, 'orm fixture JSON carries domain.namespaces envelope'>(
@@ -12,7 +22,7 @@ const contract = blindCast<Contract, 'orm fixture JSON carries domain.namespaces
 );
 
 describe('mongoRaw', () => {
-  const raw = mongoRaw({ contract });
+  const raw = mongoRaw({ context: contextOf(contract) });
 
   describe('collection name resolution', () => {
     it('resolves root name to storage collection via contract', () => {
@@ -25,7 +35,7 @@ describe('mongoRaw', () => {
         ...ormContractJson,
         roots: { ghost: { namespace: '__unbound__', model: 'NoSuchModel' } },
       } as unknown as MongoContract;
-      const badRaw = mongoRaw({ contract: badContract });
+      const badRaw = mongoRaw({ context: contextOf(badContract) });
       expect(() => badRaw.collection('ghost')).toThrow(
         'Unknown model "NoSuchModel" for root "ghost"',
       );

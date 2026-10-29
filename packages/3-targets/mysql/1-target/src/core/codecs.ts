@@ -1,5 +1,5 @@
 /**
- * The MySQL target's codecs. The driver hands every column to a codec as the text MySQL sends for it (ADR 155), so each `fromWire` reads that text; `toWire` writes the value MySQL reads for a parameter.
+ * The MySQL target's codecs. The driver hands every column to a codec as text, or bytes for a binary column (ADR 155), so each `fromWire` reads that text; `toWire` writes the value MySQL reads for a parameter.
  */
 
 import type { JsonValue } from '@internal/contract/types';
@@ -128,7 +128,7 @@ export class MysqlTextDescriptor extends MysqlCodecDescriptor<void> {
 
 export const mysqlTextDescriptor = new MysqlTextDescriptor();
 
-/** A MySQL `int` as a JavaScript number. MySQL sends it as decimal text. */
+/** A MySQL `int` as a JavaScript number. A row carries it as decimal text, and an include's JSON as a number. */
 export class MysqlIntCodec extends CodecImpl<
   typeof MYSQL_INT_CODEC_ID,
   readonly ['equality', 'order', 'numeric'],
@@ -174,14 +174,14 @@ export class MysqlIntDescriptor extends MysqlCodecDescriptor<void> {
 
 export const mysqlIntDescriptor = new MysqlIntDescriptor();
 
-/** A MySQL `bigint` as a JavaScript bigint. The driver reads it as its decimal text and sends a bigint as a 64-bit integer, which MySQL compares exactly. */
+/** A MySQL `bigint` as a JavaScript bigint. A row, an include's JSON and a parameter carry it as decimal text, as the Postgres `int8` codec does; MySQL reads a text parameter beside a `bigint` column exactly. */
 export class MysqlBigintCodec extends CodecImpl<
   typeof MYSQL_BIGINT_CODEC_ID,
   readonly ['equality', 'order', 'numeric'],
-  string | bigint,
+  string,
   bigint
 > {
-  async toWire(value: bigint, _ctx: CodecCallContext): Promise<bigint> {
+  async toWire(value: bigint, _ctx: CodecCallContext): Promise<string> {
     if (typeof value !== 'bigint' || value < BIGINT_MIN || value > BIGINT_MAX) {
       return encodeFailed(
         MYSQL_BIGINT_CODEC_ID,
@@ -189,10 +189,9 @@ export class MysqlBigintCodec extends CodecImpl<
         value,
       );
     }
-    return value;
+    return value.toString();
   }
-  async fromWire(wire: string | bigint, _ctx: CodecCallContext): Promise<bigint> {
-    if (typeof wire === 'bigint') return wire;
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<bigint> {
     if (!DECIMAL_INTEGER.test(wire)) {
       return decodeFailed(MYSQL_BIGINT_CODEC_ID, 'the decimal text of an integer', wire);
     }

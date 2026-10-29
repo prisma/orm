@@ -158,7 +158,7 @@ describe('postgres', () => {
 
     const first = db.connect();
     await expect(db.connect({ url: 'postgres://localhost:5432/db2' })).rejects.toThrow(
-      'Postgres client already connected',
+      'Postgres client is already bound',
     );
     await first;
   });

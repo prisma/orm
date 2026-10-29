@@ -38,6 +38,7 @@ const context = createMongoExecutionContext({ contract, stack });
 
 const runtime = createMongoRuntime({
   context,
+  adapter: stack.adapter.create(stack),
   driver: await createMongoDriver(url, dbName),
 });
 ```
@@ -46,9 +47,8 @@ Custom or third-party codecs (encryption, vendor scalars) are contributed via an
 
 ## Responsibilities
 
-- **Stack/context composition**: `createMongoExecutionStack` and `createMongoExecutionContext` mirror SQL's `createSqlExecutionStack` / `createExecutionContext`. The context aggregates codec contributions from `[stack.target, stack.adapter, ...stack.extensions]` into a single `MongoCodecRegistry`.
-- **Enum accessors**: `buildMongoEnums(contract, context.codecs)` builds the contract's enum accessors by namespace: what `db.enums` holds and what `mongoOrm({ enums })` checks a written enum value against. A contract whose enum codec the context lacks is refused here with `RUNTIME.CODEC_DESCRIPTOR_MISSING`.
-- **Runtime executor**: `createMongoRuntime({ context, driver, ... })` composes context and driver into a `MongoRuntime` with separate `query(plan)` and `execute(plan)` operations accepting `MongoQueryPlan<Row>` from `@internal/mongo-query-ast`. `query()` yields decoded rows, while `execute()` returns statement statistics. Both operations reach the adapter via `context.stack.adapter` (instantiated lazily through the stack's `create(stack)` factory), lower the plan, and run the wire command on the driver; `query()` **optionally decodes** each row when `plan.resultShape` is present.
+- **Stack/context composition**: `createMongoExecutionStack` and `createMongoExecutionContext` mirror SQL's `createSqlExecutionStack` / `createExecutionContext`. The context aggregates codec contributions from `[stack.target, stack.adapter, ...stack.extensions]` into a single `MongoCodecRegistry`. The `MongoExecutionContext` type is declared in `@internal/mongo-query-ast`, as SQL's `ExecutionContext` is declared in relational-core, and holds no stack: the query lanes build against it, and the runtime receives the adapter as its own option.
+- **Runtime executor**: `createMongoRuntime({ context, adapter, driver, ... })` composes context, adapter and driver into a `MongoRuntime`, as the SQL runtime does. The caller creates the adapter with `stack.adapter.create(stack)`, and the runtime checks middleware against the target named by `context.contract.target`. The runtime has separate `query(plan)` and `execute(plan)` operations accepting `MongoQueryPlan<Row>` from `@internal/mongo-query-ast`. `query()` yields decoded rows, while `execute()` returns statement statistics. Both operations lower the plan with the adapter, and run the wire command on the driver; `query()` **optionally decodes** each row when `plan.resultShape` is present.
 - **Operation flow**: Row-producing work uses `query(plan)` and the query middleware lifecycle; statistics-producing work uses `execute(plan)` and the execute middleware lifecycle. Each operation allocates its own `CodecCallContext` and threads it through its codec dispatches.
 - **Lowering**: Happens in the adapter (`lower(plan)`), wrapped by the runtime's `lower` override into a `MongoExecutionPlan`.
 - **Middleware lifecycle inheritance**: `MongoRuntime` extends `RuntimeCore<MongoQueryPlan, MongoExecutionPlan, MongoMiddleware>` and runs every `query()` and `execute()` as a statement activity: `activityStarted`, `beforeEncode` (before `resolveParams`), `intercept.onQuery` / `intercept.onExecute`, `onRow`, `activityEnded`, then `activityFinalized` right away, because Mongo has no transactions. Mongo does **not** override `runBeforeCompile` (Mongo middleware has no `beforeCompile` hook today).

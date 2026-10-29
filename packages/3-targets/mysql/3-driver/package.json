@@ -22,7 +22,8 @@
     "@internal/sql-relational-core": "workspace:8.0.0-rc.21",
     "@internal/target-mysql": "workspace:8.0.0-rc.21",
     "@internal/utils": "workspace:8.0.0-rc.21",
-    "mysql2": "3.15.3"
+    "arktype": "^2.2.2",
+    "mariadb": "3.5.4"
   },
   "devDependencies": {
     "@repo/test-utils": "workspace:8.0.0-rc.21",

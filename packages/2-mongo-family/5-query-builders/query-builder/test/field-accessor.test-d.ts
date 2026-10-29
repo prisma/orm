@@ -9,6 +9,7 @@ import { createFieldAccessor } from '../src/field-accessor';
 import { mongoQuery } from '../src/query';
 import type { ModelNestedShape, NestedDocShape, ObjectField } from '../src/resolve-path';
 import type { DocField, ModelToDocShape } from '../src/types';
+import { contextOf } from './fixtures/test-context';
 import type { TContract, TestContract } from './fixtures/test-contract';
 
 declare const contract: TContract;
@@ -212,20 +213,20 @@ describe('FieldAccessor.rawPath escape hatch', () => {
 
 describe('Pipeline integration — N threading', () => {
   it('CollectionHandle.match callback allows callable dot-path access', () => {
-    const p = mongoQuery({ contract });
+    const p = mongoQuery({ context: contextOf(contract) });
     p.from('customers').match((f) => f('address.city').eq('London'));
     p.from('customers').match((f) => f('address.geo.lat').gt(0));
   });
 
   it('FilteredCollection.updateMany callback allows callable dot-path access', () => {
-    const p = mongoQuery({ contract });
+    const p = mongoQuery({ context: contextOf(contract) });
     p.from('customers')
       .match((f) => f('address.city').eq('London'))
       .updateMany((f) => [f('address.zip').set('SW1'), f('stats.visits').inc(1)]);
   });
 
   it('rejects bogus paths in match callback', () => {
-    const p = mongoQuery({ contract });
+    const p = mongoQuery({ context: contextOf(contract) });
     p.from('customers').match((f) =>
       // @ts-expect-error -- 'address.bogus' is not a valid path
       f('address.bogus').eq('x'),
@@ -233,7 +234,7 @@ describe('Pipeline integration — N threading', () => {
   });
 
   it('additive stages (sort/addFields/redact) preserve callable dot-paths', () => {
-    const p = mongoQuery({ contract });
+    const p = mongoQuery({ context: contextOf(contract) });
     p.from('customers')
       .sort({ name: 1 })
       .match((f) => f('address.city').eq('London'));
@@ -244,7 +245,7 @@ describe('Pipeline integration — N threading', () => {
   });
 
   it('replacement stages (group/project/replaceRoot) disable callable dot-paths', () => {
-    const p = mongoQuery({ contract });
+    const p = mongoQuery({ context: contextOf(contract) });
     const grouped = p.from('customers').group((f) => ({ _id: f.name, count: f._id }));
     // After group, N has been reset. The flat Shape no longer contains
     // value objects, and the callable form rejects any string.

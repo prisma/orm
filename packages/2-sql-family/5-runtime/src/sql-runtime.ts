@@ -14,6 +14,7 @@ import {
   RuntimeCore,
   type RuntimeExecuteOptions,
   type RuntimeLog,
+  type RuntimeMode,
   runtimeError,
   type StartActivity,
   type StatementActivityRun,
@@ -126,9 +127,6 @@ export type Log = RuntimeLog;
  * When `close()` starts refusing new runtime-scope work. `'when-idle'` (the default) waits until the runtime has been idle for one turn of the event loop, so work that keeps it busy from the close onward is admitted; use it for an owner with one caller, such as a per-request connection. `'at-once'` refuses from the call of `close()`; use it for an owner that many callers share. Both wait for work already in flight, and an activity already open when `close()` is called, such as an ORM call, finishes its work: its statements, its transaction and the activities started beneath it are admitted until it ends.
  */
 export type CloseRefusal = 'when-idle' | 'at-once';
-
-/** How middleware treats a guardrail violation. `'strict'`, the default, makes `budgets` throw on every violation; `'permissive'` lets a violation whose severity is `'warn'` go to `log.warn`. */
-export type RuntimeMode = 'strict' | 'permissive';
 
 export interface RuntimeOptions<TContract extends Contract<SqlStorage> = Contract<SqlStorage>> {
   readonly context: ExecutionContext<TContract>;

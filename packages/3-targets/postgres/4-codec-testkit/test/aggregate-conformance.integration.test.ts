@@ -28,8 +28,8 @@
  * `READS_A_COMPUTED_TYPE`, which the matrix measures against.
  *
  * The pairs PostgreSQL refuses, and which therefore carry no descriptor:
- * `sum`/`avg` over every non-numeric, non-temporal type (including `money`,
- * which has a `sum` but no `avg`, and no codec of its own in this target); and
+ * `sum`/`avg` over every non-numeric, non-temporal type (including `oid`, and
+ * `money`'s `avg`, although it has a `sum`); and
  * `min`/`max` over `bool`, `uuid`, `bytea`, `bit`, `bit varying`, `json`, and
  * `jsonb` — all of which advertise `equality` or `order` and would have been
  * swept up by a trait fallback inferred from traits rather than probed. That

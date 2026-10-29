@@ -1,5 +1,5 @@
 import { crossRef, type NamespaceId } from '@internal/contract/types';
-import { contractFromJson } from '@internal/mongo/static';
+import mongoStatic, { contractFromJson } from '@internal/mongo/static';
 import type {
   MongoContract,
   MongoContractWithTypeMaps,
@@ -19,7 +19,7 @@ import {
   MongoRedactStage,
   MongoSortStage,
 } from '@internal/mongo-query-ast/execution';
-import { acc, fn, mongoQuery } from '@internal/mongo-query-builder';
+import { acc, fn } from '@internal/mongo-query-builder';
 import { describe, expect, it } from 'vitest';
 import { describeWithMongoDB } from './setup';
 
@@ -194,7 +194,7 @@ const contractJson = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const query = mongoQuery({ contract: contractFromJson<TContract>(contractJson) });
+const query = mongoStatic({ contract: contractFromJson<TContract>(contractJson) }).query;
 
 function products() {
   return query.from('products');

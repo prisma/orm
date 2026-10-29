@@ -48,6 +48,7 @@ async function pslWithPolicies(
   rlsEnabled = true,
 ): Promise<string> {
   const tree = new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',
@@ -214,6 +215,7 @@ async function pslFromTables(
   nativeEnums: readonly PostgresNativeEnumSchemaNode[] = [],
 ): Promise<string> {
   const tree = new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({ schemaName: 'public', tables, nativeEnums }),
     },

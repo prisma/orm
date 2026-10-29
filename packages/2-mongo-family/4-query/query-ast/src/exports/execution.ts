@@ -26,6 +26,8 @@ export {
   UpdateManyCommand,
   UpdateOneCommand,
 } from '../commands';
+export type { MongoCodecLookup, MongoExecutionContext } from '../execution-context';
+export { enumMemberCodecFor } from '../execution-context';
 export type { MongoFilterExpr } from '../filter-expressions';
 export {
   isMongoFilterExpr,

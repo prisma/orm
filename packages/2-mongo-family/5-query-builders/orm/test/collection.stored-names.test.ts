@@ -16,9 +16,9 @@ import { MongoParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
 import { createMongoCollection } from '../src/collection';
 import type { MongoQueryExecutor } from '../src/executor';
+import { collectionContext } from './collection-context';
 import type { Contract } from './fixtures/stored-names-contract';
 import storedNamesContractJson from './fixtures/stored-names-contract.json';
-import { noEnums } from './no-enums';
 
 const contract = storedNamesContractJson as unknown as Contract;
 
@@ -94,13 +94,15 @@ const userRow = {
 describe('a model whose fields are stored under other names', () => {
   it('reads each document as a row of fields, leaving out stored names no field stores', async () => {
     const { executor } = recordingExecutor([{ ...storedUser, legacy: true }]);
-    const rows = await createMongoCollection(contract, 'User', executor, noEnums).all().toArray();
+    const rows = await createMongoCollection(collectionContext(contract, executor), 'User')
+      .all()
+      .toArray();
     expect(rows).toEqual([userRow]);
   });
 
   it('filters, selects and sorts by stored names', async () => {
     const { executor, plans } = recordingExecutor([]);
-    await createMongoCollection(contract, 'User', executor, noEnums)
+    await createMongoCollection(collectionContext(contract, executor), 'User')
       .where({ id: 'u1' })
       .select('displayName')
       .orderBy({ createdAt: -1 })
@@ -121,7 +123,7 @@ describe('a model whose fields are stored under other names', () => {
 
   it('translates the field of a raw filter expression', async () => {
     const { executor, plans } = recordingExecutor([]);
-    await createMongoCollection(contract, 'User', executor, noEnums)
+    await createMongoCollection(collectionContext(contract, executor), 'User')
       .where(MongoFieldFilter.eq('home.city', 'London'))
       .all()
       .toArray();
@@ -142,7 +144,7 @@ describe('a model whose fields are stored under other names', () => {
 
   it('translates field references inside $expr, leaving variables alone', async () => {
     const { executor, plans } = recordingExecutor([]);
-    await createMongoCollection(contract, 'User', executor, noEnums)
+    await createMongoCollection(collectionContext(contract, executor), 'User')
       .where(
         MongoExprFilter.of(
           MongoAggOperator.of('$eq', [
@@ -176,7 +178,7 @@ describe('a model whose fields are stored under other names', () => {
     'refuses %s, a name every object inherits, as a field it does not have',
     async (name) => {
       const { executor } = recordingExecutor();
-      const users = createMongoCollection(contract, 'User', executor, noEnums);
+      const users = createMongoCollection(collectionContext(contract, executor), 'User');
       const unknown = expect.objectContaining({
         code: 'ORM.FIELD_UNKNOWN',
         message: `Model "User" has no field "${name}"`,
@@ -193,7 +195,9 @@ describe('a model whose fields are stored under other names', () => {
   it('refuses a stored name passed as a field, naming the field that stores it', () => {
     const { executor } = recordingExecutor();
     expect(() =>
-      createMongoCollection(contract, 'User', executor, noEnums).where({ _id: 'u1' } as never),
+      createMongoCollection(collectionContext(contract, executor), 'User').where({
+        _id: 'u1',
+      } as never),
     ).toThrow(
       expect.objectContaining({
         code: 'ORM.FIELD_UNKNOWN',
@@ -206,11 +210,8 @@ describe('a model whose fields are stored under other names', () => {
   it('writes a create under stored names, applies execution defaults to the stored document, and returns a row', async () => {
     const { executor, plans } = recordingExecutor([{ insertedId: 'u1', document: storedUser }]);
     const row = await createMongoCollection(
-      contract,
+      collectionContext(contract, executor, createdAtDefaults),
       'User',
-      executor,
-      noEnums,
-      createdAtDefaults,
     ).create({
       displayName: 'Ada',
       email: null,
@@ -229,7 +230,9 @@ describe('a model whose fields are stored under other names', () => {
 
   it('updates and upserts under stored names, and refuses a change to the field stored as _id', async () => {
     const { executor, plans } = recordingExecutor([storedUser], [storedUser]);
-    const users = createMongoCollection(contract, 'User', executor, noEnums).where({ id: 'u1' });
+    const users = createMongoCollection(collectionContext(contract, executor), 'User').where({
+      id: 'u1',
+    });
     const updated = await users.update((u) => [u.displayName.set('Grace')]);
     const upserted = await users.upsert({
       create: { displayName: 'Ada', createdAt: 'now' } as never,
@@ -268,7 +271,7 @@ describe('a model whose fields are stored under other names', () => {
     const { executor, plans } = recordingExecutor([
       { _id: 'p1', author_id: 'u1', title: 'Hi', author: storedUser },
     ]);
-    const rows = await createMongoCollection(contract, 'Post', executor, noEnums)
+    const rows = await createMongoCollection(collectionContext(contract, executor), 'Post')
       .include('author')
       .all()
       .toArray();
@@ -282,7 +285,7 @@ describe('a model whose fields are stored under other names', () => {
   it('reads and writes a variant by the stored discriminator and variant field names', async () => {
     const storedBug = { _id: 't1', _kind: 'bug', task_title: 'Crash', bug_severity: 'high' };
     const { executor, plans } = recordingExecutor([storedBug], [storedBug], [{ insertedCount: 1 }]);
-    const tasks = createMongoCollection(contract, 'Task', executor, noEnums);
+    const tasks = createMongoCollection(collectionContext(contract, executor), 'Task');
     const read = await tasks.all().toArray();
     const created = await tasks.variant('bug').all().toArray();
     await tasks.variant('bug').createAndCount([{ title: 'Crash', severity: 'high' } as never]);

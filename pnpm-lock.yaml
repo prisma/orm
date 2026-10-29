@@ -665,9 +665,6 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 26.1.2
-      mysql2:
-        specifier: 3.15.3
-        version: 3.15.3
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -2171,6 +2168,9 @@ importers:
       '@internal/framework-components':
         specifier: workspace:8.0.0-rc.21
         version: link:../../../1-framework/1-core/framework-components
+      '@internal/mongo-codec':
+        specifier: workspace:8.0.0-rc.21
+        version: link:../../1-foundation/mongo-codec
       '@internal/mongo-contract':
         specifier: workspace:8.0.0-rc.21
         version: link:../../1-foundation/mongo-contract
@@ -3236,9 +3236,9 @@ importers:
       '@internal/operations':
         specifier: workspace:8.0.0-rc.21
         version: link:../../1-framework/1-core/operations
-      '@internal/sql-contract-ts':
+      '@internal/sql-contract-psl':
         specifier: workspace:8.0.0-rc.21
-        version: link:../../2-sql-family/2-authoring/contract-ts
+        version: link:../../2-sql-family/2-authoring/contract-psl
       '@internal/target-postgres':
         specifier: workspace:8.0.0-rc.21
         version: link:../../3-targets/postgres/1-target
@@ -4098,9 +4098,12 @@ importers:
       '@internal/utils':
         specifier: workspace:8.0.0-rc.21
         version: link:../../../1-framework/0-foundation/utils
-      mysql2:
-        specifier: 3.15.3
-        version: 3.15.3
+      arktype:
+        specifier: ^2.2.2
+        version: 2.2.7
+      mariadb:
+        specifier: 3.5.4
+        version: 3.5.4
     devDependencies:
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.21
@@ -4171,6 +4174,9 @@ importers:
       '@internal/utils':
         specifier: workspace:8.0.0-rc.21
         version: link:../../../1-framework/0-foundation/utils
+      arktype:
+        specifier: 'catalog:'
+        version: 2.2.7
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -5464,6 +5470,9 @@ importers:
       '@prisma/orm-toolchain':
         specifier: workspace:8.0.0-rc.21
         version: link:../orm-toolchain
+      arktype:
+        specifier: 'catalog:'
+        version: 2.2.7
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -5636,9 +5645,9 @@ importers:
       arktype:
         specifier: ^2.2.2
         version: 2.2.7
-      mysql2:
-        specifier: 3.15.3
-        version: 3.15.3
+      mariadb:
+        specifier: 3.5.4
+        version: 3.5.4
     devDependencies:
       '@internal/adapter-mysql':
         specifier: workspace:8.0.0-rc.21
@@ -6438,9 +6447,9 @@ importers:
       '@types/pg':
         specifier: 'catalog:'
         version: 8.20.4
-      mysql2:
-        specifier: 3.15.3
-        version: 3.15.3
+      mariadb:
+        specifier: 3.5.4
+        version: 3.5.4
       pg:
         specifier: 'catalog:'
         version: 8.22.0
@@ -10982,6 +10991,10 @@ packages:
   make-dir@4.0.0:
     resolution: {integrity: sha512-hXdUTZYIVOt1Ex//jAQi+wTZZpUpwBj/0QsOzqegb3rGMMeJiSEu5xLHnYfBrRV4RH2+OCSOO95Is/7x1WJ4bw==}
     engines: {node: '>=10'}
+
+  mariadb@3.5.4:
+    resolution: {integrity: sha512-3m0vdfgRkjle5/9hHl4R7rlVvnDA7QfuFSNkdIAQNROWKOS0J3b9IQK9HaZSCGEVKiDUbFXFiINfC+cmR5P/aA==}
+    engines: {node: '>= 20.0.0'}
 
   marked@14.0.0:
     resolution: {integrity: sha512-uIj4+faQ+MgHgwUW1l2PsPglZLOLOT1uErt06dAPtx2kjteLAkbsd/0FiYg/MGS+i7ZKLb7w2WClxHkzOOuryQ==}
@@ -16483,6 +16496,14 @@ snapshots:
   make-dir@4.0.0:
     dependencies:
       semver: 7.8.5
+
+  mariadb@3.5.4:
+    dependencies:
+      '@types/geojson': 7946.0.16
+      '@types/node': 26.1.2
+      denque: 2.1.0
+      iconv-lite: 0.7.3
+      lru-cache: 11.5.2
 
   marked@14.0.0: {}
 

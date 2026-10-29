@@ -19,8 +19,11 @@ import {
   makePslNamespaceEntries,
   UNSPECIFIED_PSL_NAMESPACE_ID,
 } from '@internal/framework-components/psl-ast';
+import { isPslIdentifier } from '@internal/psl-parser';
 import { type SqlColumnIR, SqlSchemaIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { postgresError } from '../errors';
+import { DEFAULT_NAMESPACE_ID } from '../namespace-ids';
+import { buildExtensionBlock } from '../psl-build/extension-block';
 import { SYNTHETIC_SPAN } from '../psl-build/psl-literals';
 import type { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
 import type { PostgresPolicySchemaNode } from '../schema-ir/postgres-policy-schema-node';
@@ -252,7 +255,45 @@ export async function inferPostgresPslContract(
     },
     wrapNamespaceName,
     { rlsEnabledTables, policiesByTable },
+    [],
+    inferredExtensionBlocks(tree, describedContracts ?? []),
   );
+}
+
+/** Postgres installs it in every database, so a contract never declares it. */
+const ALWAYS_INSTALLED_EXTENSION = 'plpgsql';
+
+/**
+ * One `extension` block per installed extension, keyed by the schema that holds its objects. An extension a composed pack declares is that pack's to declare, in whatever namespace it chose, since an extension's name is unique in the database.
+ */
+function inferredExtensionBlocks(
+  tree: PostgresDatabaseSchemaNode,
+  describedContracts: readonly SqlDescribedContractSpace[],
+): ReadonlyMap<string, readonly PslExtensionBlock[]> {
+  const packExtensions = new Set(
+    describedContracts.flatMap(({ contract }) =>
+      Object.values(contract.storage.namespaces).flatMap((namespace) =>
+        Object.keys(namespace.entries['extension'] ?? {}),
+      ),
+    ),
+  );
+  const blocksBySchema = new Map<string, PslExtensionBlock[]>();
+  for (const extension of tree.extensions) {
+    if (extension.name === ALWAYS_INSTALLED_EXTENSION || packExtensions.has(extension.name)) {
+      continue;
+    }
+    if (!isPslIdentifier(extension.name)) {
+      throw postgresError(
+        'CONTRACT.INFER_UNSUPPORTED',
+        `contract infer: extension "${extension.name}" is installed, and its name cannot be written as a PSL block name. Declare it in a TypeScript contract with extension("${extension.name}").`,
+        { meta: { extensionName: extension.name } },
+      );
+    }
+    const blocks = blocksBySchema.get(extension.schemaName) ?? [];
+    blocks.push(buildExtensionBlock(extension.name));
+    blocksBySchema.set(extension.schemaName, blocks);
+  }
+  return blocksBySchema;
 }
 
 /** Per-table RLS emission inputs collected from the Postgres schema tree. */
@@ -296,6 +337,7 @@ export function buildPslDocumentAst(
   namespaceName?: string,
   rlsExtras?: RlsEmissionExtras,
   topLevelExtensionBlocks: readonly PslExtensionBlock[] = [],
+  extensionBlocksBySchema: ReadonlyMap<string, readonly PslExtensionBlock[]> = new Map(),
 ): PslDocumentAst {
   const { columnTypes, defaultMapping, defaultOf } = options;
   const { extraRelationsByTable, crossSpaceFieldNamesByTable, danglingForeignKeysByTable } =
@@ -432,6 +474,7 @@ export function buildPslDocumentAst(
       }),
     );
   }
+  const mainSchema = namespaceName ?? DEFAULT_NAMESPACE_ID;
   namespaces.push(
     makePslNamespace({
       kind: 'namespace',
@@ -441,6 +484,7 @@ export function buildPslDocumentAst(
         [],
         [
           ...(separateTopLevelBucket ? [] : topLevelExtensionBlocks),
+          ...(extensionBlocksBySchema.get(mainSchema) ?? []),
           ...enumBlocks,
           ...policyEmission.blocks,
         ],
@@ -448,6 +492,17 @@ export function buildPslDocumentAst(
       span: SYNTHETIC_SPAN,
     }),
   );
+  for (const [schemaName, blocks] of extensionBlocksBySchema) {
+    if (schemaName === mainSchema) continue;
+    namespaces.push(
+      makePslNamespace({
+        kind: 'namespace',
+        name: schemaName,
+        entries: makePslNamespaceEntries([], [], blocks),
+        span: SYNTHETIC_SPAN,
+      }),
+    );
+  }
 
   const ast: PslDocumentAst = {
     kind: 'document',

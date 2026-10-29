@@ -195,9 +195,6 @@ export default function postgresServerless<
       const url = validatePostgresUrl(binding.url);
 
       const driverDescriptor = stack.driver;
-      if (!driverDescriptor) {
-        throw new InternalError('Driver descriptor missing from execution stack');
-      }
 
       const adapter = stack.adapter.create(stack);
       const driver = driverDescriptor.create({

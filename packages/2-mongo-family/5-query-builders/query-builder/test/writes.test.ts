@@ -10,9 +10,10 @@ import {
 } from '@internal/mongo-query-ast/execution';
 import { describe, expect, it } from 'vitest';
 import { mongoQuery } from '../src/query';
+import { contextOf } from './fixtures/test-context';
 import { testContract } from './fixtures/test-contract';
 
-const orders = () => mongoQuery({ contract: testContract }).from('orders');
+const orders = () => mongoQuery({ context: contextOf(testContract) }).from('orders');
 
 describe('M2 write terminals', () => {
   describe('inserts (CollectionHandle)', () => {

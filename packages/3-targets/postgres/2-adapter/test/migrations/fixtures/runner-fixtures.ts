@@ -66,6 +66,7 @@ export const contract: Contract<SqlStorage> = {
 };
 
 export const emptySchema = new PostgresDatabaseSchemaNode({
+  extensions: undefined,
   namespaces: {},
   roles: [],
   existingSchemas: ['public'],

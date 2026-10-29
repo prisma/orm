@@ -12,6 +12,7 @@ import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { timeouts } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { fixtureContract } from '../setup';
 
 export interface MongodContext {
   readonly connectionUri: string;
@@ -52,9 +53,9 @@ export async function withMongod<T>(fn: (ctx: MongodContext) => Promise<T>): Pro
     target: mongoRuntimeTarget,
     adapter: mongoRuntimeAdapter,
   });
-  const context = createMongoExecutionContext({ contract: {}, stack });
+  const context = createMongoExecutionContext({ contract: fixtureContract, stack });
   const driver = await createMongoDriver(connectionUri, dbName);
-  const runtime = createMongoRuntime({ context, driver });
+  const runtime = createMongoRuntime({ context, adapter: stack.adapter.create(stack), driver });
 
   // Cast back to `MongoCodecRegistry` — the test setup is the one place that
   // legitimately mutates the per-execution registry mid-flight (to install

@@ -28,7 +28,7 @@ import {
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { RefResolutionError } from '@internal/migration-tools/ref-resolution';
 import { ifDefined } from '@internal/utils/defined';
-import type { NextAction } from '@prisma/cli-engine/protocol';
+import type { Diagnostic, NextAction } from '@prisma/cli-engine/protocol';
 import { statementFlag } from '../control-api/statements/statement-flag';
 import type { StatementText } from '../control-api/statements/statement-text';
 import { chooseAction, runCommandAction } from './next-actions';
@@ -92,6 +92,7 @@ export class ActionableCliError extends CliStructuredError {
       readonly meta?: Record<string, unknown>;
       readonly docsUrl?: string;
       readonly cause?: unknown;
+      readonly diagnostics?: readonly Diagnostic[];
     },
   ) {
     super(code, summary, options);
@@ -167,12 +168,16 @@ function notSignedSentence(
 }
 
 /**
- * `db sign` wrote the markers, then failed to write one or more refs or their snapshots. The database is signed; running the command again writes the refs. The error also names the spaces it did not sign: those whose schema failed verification, and those whose marker changed while it ran.
+ * `db sign` wrote the markers, then failed to write one or more refs or their snapshots. The database is signed; running the command again writes the refs. The error also names the spaces it did not sign: those whose schema failed verification, those whose marker changed while it ran, and those whose marker lacks invariants their head ref requires, and it carries each of those spaces' findings.
  */
 export function errorSignRefsNotWritten(options: {
   readonly signedSpaces: readonly string[];
   readonly failedSpaces: readonly string[];
   readonly conflictSpaces: readonly string[];
+  readonly refusedSpaces: readonly {
+    readonly space: string;
+    readonly missingInvariants: readonly string[];
+  }[];
   readonly unwrittenRefs: readonly UnwrittenRef[];
   readonly advancedRefs: readonly {
     readonly space: string;
@@ -180,9 +185,12 @@ export function errorSignRefsNotWritten(options: {
     readonly hash: string;
   }[];
   readonly rerunCommand: string;
+  readonly migrateCommand: string;
+  readonly diagnostics: readonly Diagnostic[];
   readonly cause: unknown;
 }): ActionableCliError {
-  const { signedSpaces, failedSpaces, conflictSpaces, unwrittenRefs, rerunCommand } = options;
+  const { signedSpaces, failedSpaces, conflictSpaces, refusedSpaces, unwrittenRefs, rerunCommand } =
+    options;
   const markers =
     signedSpaces.length === 1
       ? `the marker of space ${quotedSpaces(signedSpaces)} holds its contract`
@@ -197,6 +205,11 @@ export function errorSignRefsNotWritten(options: {
       conflictSpaces,
       'its marker changed while db sign ran',
       'their markers changed while db sign ran',
+    ) +
+    notSignedSentence(
+      refusedSpaces.map(({ space }) => space),
+      'its marker does not record invariants its head ref requires',
+      'their markers do not record invariants their head refs require',
     );
   const refs = unwrittenRefs
     .map((ref) => `ref "${ref.name}" of space "${ref.space}" (${ref.reason})`)
@@ -210,14 +223,24 @@ export function errorSignRefsNotWritten(options: {
       fix: `Fix what stopped the write, then run \`${rerunCommand}\` again: the markers already hold the contracts, so it writes only the refs.`,
       nextActions: [
         runCommandAction('Sign again to write the refs that were not written', rerunCommand),
+        ...(refusedSpaces.length === 0
+          ? []
+          : [
+              runCommandAction(
+                'Run the migrations that provide the missing invariants, then sign again',
+                options.migrateCommand,
+              ),
+            ]),
       ],
       meta: {
         signedSpaces,
         failedSpaces,
         conflictSpaces,
+        refusedSpaces,
         unwrittenRefs,
         advancedRefs: options.advancedRefs,
       },
+      diagnostics: options.diagnostics,
       cause: options.cause,
     },
   );

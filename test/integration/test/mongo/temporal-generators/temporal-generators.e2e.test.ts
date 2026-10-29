@@ -246,7 +246,7 @@ describe('Mongo date generators end to end', () => {
 });
 
 describe('Mongo mutation default generator registration', () => {
-  const contract = JSON.parse(JSON.stringify(contractJson)) as unknown;
+  const contract = contractFromJson<Contract>(contractJson);
 
   it('throws RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING when no component provides timestampNow', () => {
     const { mutationDefaultGenerators: _, ...adapterWithoutGenerators } = mongoRuntimeAdapter;

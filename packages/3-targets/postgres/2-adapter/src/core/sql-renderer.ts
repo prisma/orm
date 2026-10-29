@@ -64,6 +64,7 @@ import {
   pgInt4,
   pgInt8,
   pgInterval,
+  pgMoney,
   pgNumeric,
   pgText,
   pgTime,
@@ -105,6 +106,13 @@ const POSTGRES_INFERRABLE_DATA_TYPES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Data types whose parameter PostgreSQL first reads as another type, because their own input function depends on a session setting. `money` input reads the decimal point and thousands separator of `lc_monetary`, so `12.50` is 1250.00 under `de_DE`; converting `numeric` to `money` reads no separators.
+ */
+const POSTGRES_PARAMETER_READ_AS: ReadonlyMap<string, string> = new Map([
+  [pgMoney.id, sqlBaseName(pgNumeric, {})],
+]);
+
+/**
  * A parameter's cast names its data type's base name, which leaves out its parameters: an explicit
  * cast to `varchar(n)` truncates and to `numeric(p,s)` rounds. A data type whose name is its catalog
  * text has no base name, so its parameter is never cast, in any position, and the column's own input
@@ -143,7 +151,9 @@ function renderTypedParam(
   if (forceCast || !POSTGRES_INFERRABLE_DATA_TYPES.has(dataType.id) || many) {
     const params = isPlainRecord(typeParams) ? typeParams : undefined;
     const baseName = sqlBaseName(dataType, dataTypeParams(dataType, params));
-    return `$${index}::${baseName}${arraySuffix}`;
+    const readAs = POSTGRES_PARAMETER_READ_AS.get(dataType.id);
+    const readAsCast = readAs === undefined ? '' : `::${readAs}${arraySuffix}`;
+    return `$${index}${readAsCast}::${baseName}${arraySuffix}`;
   }
   return `$${index}`;
 }

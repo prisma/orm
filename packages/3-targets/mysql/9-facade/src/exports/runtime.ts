@@ -1,3 +1,4 @@
+export type { MysqlPoolOptions } from '@internal/driver-mysql/runtime';
 export type { MysqlBindingInput } from '../runtime/binding';
 export type {
   MysqlClient,

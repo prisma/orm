@@ -394,14 +394,18 @@ export function createTestStackInstance(options?: {
     SqlRuntimeDriverInstance<'postgres'>
   >;
 }) {
-  const stack = createSqlExecutionStack({
+  const parts = {
     target: createTestTargetDescriptor(),
     adapter: createTestAdapterDescriptor(createStubAdapter()),
-    driver: options?.driver,
     extensions: options?.extensions ?? [],
-  });
+  };
+  const driver = options?.driver;
 
-  return instantiateExecutionStack(stack);
+  return instantiateExecutionStack(
+    driver === undefined
+      ? createSqlExecutionStack(parts)
+      : createSqlExecutionStack({ ...parts, driver }),
+  );
 }
 
 /**

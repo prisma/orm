@@ -48,6 +48,7 @@ function makeSchema(existingSchemas?: readonly string[]): SqlSchemaIRNode {
     return new SqlSchemaIR({ tables: {} });
   }
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {},
     roles: [],
     existingSchemas,

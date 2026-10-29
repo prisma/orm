@@ -1,0 +1,113 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "NativeType": {
+            "storage": {
+              "table": "NativeType",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                },
+                "unbounded": {
+                  "column": "unbounded"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "value": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/varbit@1",
+                  "typeParams": {
+                    "length": 8
+                  }
+                },
+                "nullable": false,
+                "many": false
+              },
+              "unbounded": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/varbit@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "NativeType": {
+      "namespace": "public",
+      "model": "NativeType"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "d7b7b2aaf32d95454ba2dd78810fe2be631efbe840a36a4262bdc635252d4d19",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "NativeType": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "value": {
+                  "dataType": "pg/varbit",
+                  "codecId": "pg/varbit@1",
+                  "nullable": false,
+                  "many": false,
+                  "typeParams": {
+                    "length": 8
+                  }
+                },
+                "unbounded": {
+                  "dataType": "pg/varbit",
+                  "codecId": "pg/varbit@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

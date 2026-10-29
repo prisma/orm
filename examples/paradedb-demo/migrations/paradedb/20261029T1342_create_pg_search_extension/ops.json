@@ -1,0 +1,64 @@
+[
+  {
+    "id": "schema.public",
+    "label": "Create schema \"public\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres"
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "Create schema \"public\"",
+        "sql": "CREATE SCHEMA IF NOT EXISTS \"public\"",
+        "params": []
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "extension.pg_search",
+    "label": "Create extension \"pg_search\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "dependency",
+        "name": "pg_search"
+      }
+    },
+    "precheck": [
+      {
+        "description": "verify extension \"pg_search\" is not installed",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_extension\" WHERE \"extname\" = $1) AS \"result\"",
+        "params": [
+          "pg_search"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "extension \"pg_search\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create extension \"pg_search\"",
+        "sql": "CREATE EXTENSION IF NOT EXISTS \"pg_search\" WITH SCHEMA \"public\""
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "confirm extension \"pg_search\" is installed",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_extension\" WHERE \"extname\" = $1) AS \"result\"",
+        "params": [
+          "pg_search"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "extension \"pg_search\""
+        }
+      }
+    ]
+  }
+]

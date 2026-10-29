@@ -18,6 +18,7 @@ import {
 } from '@internal/mongo-runtime';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { describe, expect, it, vi } from 'vitest';
+import { fixtureContract } from '../mongo/setup';
 
 /**
  * Minimal cross-family observer for tests. Records `beforeEncode` and
@@ -162,12 +163,18 @@ function mockAdapterDescriptor(adapter: MongoAdapter): MongoRuntimeAdapterDescri
   };
 }
 
-function makeMongoContext(adapter: MongoAdapter): MongoExecutionContext {
+function makeMongoExecution(adapter: MongoAdapter): {
+  readonly context: MongoExecutionContext<typeof fixtureContract>;
+  readonly adapter: MongoAdapter;
+} {
   const stack = createMongoExecutionStack({
     target: mongoRuntimeTarget,
     adapter: mockAdapterDescriptor(adapter),
   });
-  return createMongoExecutionContext({ contract: {}, stack });
+  return {
+    context: createMongoExecutionContext({ contract: fixtureContract, stack }),
+    adapter: stack.adapter.create(stack),
+  };
 }
 
 function createMockMongoDriver(rows: Record<string, unknown>[] = []): MongoDriver {
@@ -246,7 +253,7 @@ describe('cross-family middleware proof', () => {
 
     const mongoAdapter = createMockMongoAdapter();
     const mongoRuntime = createMongoRuntime({
-      context: makeMongoContext(mongoAdapter),
+      ...makeMongoExecution(mongoAdapter),
       driver: createMockMongoDriver([
         { _id: '1', name: 'Bob' },
         { _id: '2', name: 'Carol' },
@@ -281,7 +288,7 @@ describe('cross-family middleware proof', () => {
 
     const mongoAdapter = createMockMongoAdapter();
     const mongoRuntime = createMongoRuntime({
-      context: makeMongoContext(mongoAdapter),
+      ...makeMongoExecution(mongoAdapter),
       driver: createMockMongoDriver([{ _id: '1' }]),
       middleware: [middleware],
     });
@@ -343,7 +350,7 @@ describe('cross-family middleware proof', () => {
     const mongoAdapter = createMockMongoAdapter();
     const mongoDriver = createMockMongoDriver([{ _id: 'should-not-appear' }]);
     const mongoRuntime = createMongoRuntime({
-      context: makeMongoContext(mongoAdapter),
+      ...makeMongoExecution(mongoAdapter),
       driver: mongoDriver,
       middleware: [interceptor, observer],
     });

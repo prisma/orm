@@ -173,6 +173,7 @@ function liveTree(options: {
 }): PostgresDatabaseSchemaNode {
   const nativeEnums = options.nativeEnums ?? [];
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       sales: new PostgresNamespaceSchemaNode({
         schemaName: 'sales',
@@ -586,6 +587,7 @@ describe('D2-F1: enum drop-safety resolves ownership by physical type name', () 
 
   function liveInPublic(nativeEnums: readonly { typeName: string; values: readonly string[] }[]) {
     return new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         public: new PostgresNamespaceSchemaNode({
           schemaName: 'public',

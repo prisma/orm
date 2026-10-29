@@ -1,0 +1,20 @@
+[
+  {
+    "code": "PSL.PRISMA7_EXTENSION_PACK_MISSING",
+    "file": "schema.prisma",
+    "line": 3,
+    "message": "Extension \"vector\" is declared by the \"pgvector\" extension pack, which is not available. Add the pack to extensions in prisma.config.ts: import pgvector from '@prisma/orm-extension-pgvector/control', then extensions: [pgvector]."
+  },
+  {
+    "code": "PSL.PRISMA7_EXTENSION_PACK_MISSING",
+    "file": "schema.prisma",
+    "line": 3,
+    "message": "Extension \"postgis\" is declared by the \"postgis\" extension pack, which is not available. Add the pack to extensions in prisma.config.ts: import postgis from '@prisma/orm-extension-postgis/control', then extensions: [postgis]."
+  },
+  {
+    "code": "PSL.PRISMA7_EXTENSION_PACK_MISSING",
+    "file": "schema.prisma",
+    "line": 3,
+    "message": "Extension \"pg_search\" is declared by the \"paradedb\" extension pack, which is not available. Add the pack to extensions in prisma.config.ts: import paradedb from '@prisma/orm-extension-paradedb/control', then extensions: [paradedb]."
+  }
+]

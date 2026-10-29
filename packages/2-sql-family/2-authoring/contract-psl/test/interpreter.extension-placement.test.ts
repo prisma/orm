@@ -6,6 +6,7 @@ import type { PslBlockSpecDescriptor } from '@internal/psl-parser';
 import { entityRef, optional, str, structBlock } from '@internal/psl-parser';
 import type {
   ResolvedPslModelRefs,
+  SqlNameUniqueAcrossNamespacesOutput,
   SqlPslEntityPlacementOutput,
 } from '@internal/sql-contract/entity-handle-lowering-hook';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
@@ -79,7 +80,9 @@ function contributionsWith(
     | typeof placedGuardOutput
     | typeof unplacedGuardOutput
     | (AuthoringEntityTypeFactoryOutput<AnnotatedGuardBlock, GuardEntity | undefined> &
-        SqlPslEntityPlacementOutput),
+        SqlPslEntityPlacementOutput)
+    | (AuthoringEntityTypeFactoryOutput<AnnotatedGuardBlock, GuardEntity | undefined> &
+        SqlNameUniqueAcrossNamespacesOutput),
 ): AuthoringContributions {
   return {
     entityTypes: {
@@ -323,5 +326,54 @@ model Widget {
       ),
     ).toHaveLength(1);
     expect(capturedEntries['audit']?.['guard']).toBeUndefined();
+  });
+});
+
+describe('extension-block lowering — names unique across namespaces', () => {
+  const uniqueGuardOutput = {
+    factory: guardFactory,
+    nameUniqueAcrossNamespaces: true,
+  } as const satisfies AuthoringEntityTypeFactoryOutput<
+    AnnotatedGuardBlock,
+    GuardEntity | undefined
+  > &
+    SqlNameUniqueAcrossNamespacesOutput;
+
+  const twoNamespaces = `
+namespace audit {
+  guard_rule shared {
+    target = Widget
+  }
+}
+
+namespace billing {
+  guard_rule shared {
+    target = Widget
+  }
+}
+
+model Widget {
+  id Int @id
+}
+`;
+
+  it('refuses one name declared in two namespaces when the output requires it', () => {
+    const { result } = interpretWith(twoNamespaces, contributionsWith(uniqueGuardOutput));
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_ENTITY_DECLARED_IN_MANY_NAMESPACES',
+        message:
+          'guard "shared" is declared in namespaces "audit" and "billing"; declare it in one namespace only.',
+      }),
+    ]);
+  });
+
+  it('accepts one name in two namespaces when the output does not require uniqueness', () => {
+    const { result } = interpretWith(twoNamespaces, contributionsWith(unplacedGuardOutput));
+
+    expect(result.ok).toBe(true);
   });
 });

@@ -112,7 +112,7 @@ For each default of `(namespace, entry)` with a phase for `op` (`onCreate` for `
 - **A field is applied at most once per call**, even when two defaults name it.
 - **`namespace` is required.** Refs are namespace-scoped, so only defaults declared for `(namespace, entry)` apply; that is what tells two same-named tables in different schemas apart. Requiring it keeps the coordinate part of every match: a missing namespace is a caller bug, not a quiet fallback to matching by entry name alone.
 
-`MutationDefaults` is the interface an ORM depends on: `applyMutationDefaults(options): ReadonlyArray<AppliedMutationDefault>`. The SQL lane `ExecutionContext` and `MongoExecutionContext` extend it, and the Mongo ORM takes it as `mongoOrm({ contract, executor, mutationDefaults })`.
+`MutationDefaults` is the interface an ORM depends on: `applyMutationDefaults(options): ReadonlyArray<AppliedMutationDefault>`. The SQL lane `ExecutionContext` and `MongoExecutionContext` extend it, and the Mongo ORM reads it from the context it takes, `mongoOrm({ context, runtime })`, as the SQL ORM reads it from `orm({ context, runtime })`.
 
 ## The execution section
 

@@ -56,7 +56,6 @@ import {
 import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
 import { createRemoteJWKSet, decodeProtectedHeader, type JWTVerifyResult, jwtVerify } from 'jose';
 import type { Pool } from 'pg';
@@ -400,9 +399,6 @@ export default async function supabase<
     }
 
     const driverDescriptor = stack.driver;
-    if (!driverDescriptor) {
-      throw new InternalError('Driver descriptor missing from execution stack');
-    }
     const adapter = stack.adapter.create(stack);
     const driver = driverDescriptor.create({ cursor: { disabled: true } });
     const sharedOptions = {

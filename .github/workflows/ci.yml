@@ -171,7 +171,7 @@ jobs:
         index: [1, 2, 3, 4]
     env:
       TEST_TIMEOUT_MULTIPLIER: 2
-      MYSQL_URL: mysql://root:root@127.0.0.1:3306/mysql
+      MYSQL_URL: mysql://root:root@127.0.0.1:3306/mysql?allowPublicKeyRetrieval=true
     services:
       postgres:
         image: postgres:15
@@ -242,7 +242,7 @@ jobs:
       # container, because GitHub Actions service containers can't override
       # the postgres CMD to enable shared_preload_libraries=pg_stat_statements).
       WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgres://postgres:postgres@127.0.0.1:5433/prisma_8_cloudflare_worker
-      MYSQL_URL: mysql://root:root@127.0.0.1:3306/mysql
+      MYSQL_URL: mysql://root:root@127.0.0.1:3306/mysql?allowPublicKeyRetrieval=true
     services:
       postgres:
         image: postgres:15

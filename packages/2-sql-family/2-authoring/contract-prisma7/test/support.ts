@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import postgresAdapter from '@internal/adapter-postgres/control';
 import type { ContractSourceContext } from '@internal/config/config-types';
@@ -38,6 +38,37 @@ export function postgresSourceContext(resolvedInputs: readonly string[]): Contra
     generatorFunctions: stack.generatorFunctions,
     resolvedInputs,
     capabilities: stack.capabilities,
+  };
+}
+
+/** The extension pack ids a fixture's `composed-extensions.json` lists; none when the fixture has no such file. */
+export function composedExtensionsOf(caseDirectory: string): readonly string[] {
+  const path = join(caseDirectory, 'composed-extensions.json');
+  return existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as string[]) : [];
+}
+
+const extensionPacksDir = join(fixturesDir, '../../../../../3-extensions');
+
+/** The contract the extension pack `packId` publishes, read from the pack's `src/contract.json`. */
+export function packContract(packId: string): Contract {
+  const path = join(extensionPacksDir, packId, 'src/contract.json');
+  return new PostgresContractSerializer().deserializeContract(
+    JSON.parse(readFileSync(path, 'utf8')),
+  );
+}
+
+/** `context` with the extension packs whose ids are `packIds` composed as well, each with the contract it publishes. */
+export function withComposedExtensions(
+  context: ContractSourceContext,
+  packIds: readonly string[],
+): ContractSourceContext {
+  return {
+    ...context,
+    composedExtensions: [...context.composedExtensions, ...packIds],
+    composedExtensionContracts: new Map([
+      ...context.composedExtensionContracts,
+      ...packIds.map((packId): [string, Contract] => [packId, packContract(packId)]),
+    ]),
   };
 }
 
@@ -105,6 +136,14 @@ export function serializedTable(
   return table;
 }
 
+/** The namespaces of `contract`'s serialized storage, by id. */
+export function serializedNamespaces(
+  contract: Contract<SqlStorage>,
+): Record<string, { readonly entries: Record<string, unknown> }> {
+  return JSON.parse(JSON.stringify(new PostgresContractSerializer().serializeContract(contract)))
+    .storage.namespaces;
+}
+
 /** A fixture's `schema.prisma` text. */
 export function fixtureSchemaText(caseName: string): string {
   return readFileSync(join(fixturesDir, caseName, 'schema.prisma'), 'utf8');
@@ -114,6 +153,8 @@ export function fixtureSchemaText(caseName: string): string {
 export function interpretSchemaTextResult(
   text: string,
   binding: Prisma7TargetBinding = prisma7PostgresBinding,
+  composedPacks: ReadonlyMap<string, Contract> = new Map(),
+  defaultNamespaceId = postgresSourceContext(['schema.prisma']).defaultNamespaceId,
 ) {
   const context = postgresSourceContext(['schema.prisma']);
   const { document, sources } = parse(text, 'schema.prisma', { grammar: 'prisma-7' });
@@ -127,14 +168,15 @@ export function interpretSchemaTextResult(
       },
     ],
     seedDiagnostics: [],
-    defaultNamespaceId: context.defaultNamespaceId,
+    defaultNamespaceId,
     binding,
     controlMutationDefaults: context.controlMutationDefaults,
     generatorFunctions: context.generatorFunctions,
     authoringContributions: context.authoringContributions,
     codecLookup: context.codecLookup,
     dataTypes: context.dataTypes,
-    composedExtensions: context.composedExtensions,
+    composedExtensions: [...context.composedExtensions, ...composedPacks.keys()],
+    composedExtensionContracts: new Map([...context.composedExtensionContracts, ...composedPacks]),
   });
 }
 

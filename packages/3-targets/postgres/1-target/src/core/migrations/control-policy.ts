@@ -242,6 +242,7 @@ const POSTGRES_NODE_CREATION_FACTORY: Readonly<Record<string, string>> = Object.
   [PostgresSchemaNodeKind.namespace]: 'createSchema',
   [PostgresSchemaNodeKind.table]: 'createTable',
   [PostgresSchemaNodeKind.nativeEnum]: 'createNativeEnumType',
+  [PostgresSchemaNodeKind.extension]: 'createExtension',
 });
 
 /**
@@ -327,7 +328,11 @@ export function resolvePostgresNodeIssueControlPolicySubject(
 
   const coordinate = postgresNodeStorageCoordinate(node);
   if (coordinate !== undefined) {
-    const namespaceId = resolveNamespaceIdForEntity(contract, coordinate, issue.path[1]);
+    const namespaceId = resolveNamespaceIdForEntity(
+      contract,
+      coordinate,
+      node.nodeKind === PostgresSchemaNodeKind.extension ? undefined : issue.path[1],
+    );
     const entityControl = entityAt<{ readonly control?: ControlPolicy }>(contract.storage, {
       namespaceId,
       ...coordinate,

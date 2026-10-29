@@ -9,7 +9,6 @@
  * use for it: the contract's, or the one the planner derives.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import postgresAdapter from '@internal/adapter-postgres/control';
 import type { Contract } from '@internal/contract/types';
 import postgresDriver from '@internal/driver-postgres/control';
@@ -21,14 +20,12 @@ import postgres from '@internal/target-postgres/control';
 import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-binding';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { withClient } from '@repo/test-utils';
-import { dirname, join } from 'pathe';
+import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { runSchemaVerify, timeouts, useDevDatabase } from '../family.schema-verify.helpers';
+import { fixtureExtensionPacks, prisma7FixturesDir } from './fixture-extension-packs';
 
-const fixturesDir = join(
-  dirname(fileURLToPath(import.meta.url)),
-  '../../../../packages/2-sql-family/2-authoring/contract-prisma7/test/fixtures',
-);
+const fixturesDir = prisma7FixturesDir;
 
 const successFixtures = readdirSync(fixturesDir, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
@@ -122,11 +119,11 @@ async function interpret(fixture: string): Promise<Contract<SqlStorage>> {
     target: postgres,
     adapter: postgresAdapter,
     driver: postgresDriver,
-    extensions: [],
+    extensions: fixtureExtensionPacks(fixture),
   });
   const loaded = await prisma7Contract(schemaPath, { binding: prisma7PostgresBinding }).source.load(
     {
-      composedExtensions: [],
+      composedExtensions: stack.extensions.map((extension) => extension.id),
       defaultNamespaceId: stack.target.defaultNamespaceId,
       composedExtensionContracts: stack.extensionContracts,
       authoringContributions: stack.authoringContributions,

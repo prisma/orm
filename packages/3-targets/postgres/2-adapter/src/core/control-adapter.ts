@@ -107,6 +107,7 @@ import { POLICY_COMMAND_SQL, policyRoleList } from '@internal/target-postgres/rl
 import { escapeLiteral, inlineLiteral, quoteIdentifier } from '@internal/target-postgres/sql-utils';
 import {
   PostgresDatabaseSchemaNode,
+  PostgresExtensionSchemaNode,
   PostgresNamespaceSchemaNode,
   PostgresNativeEnumSchemaNode,
   PostgresPolicySchemaNode,
@@ -716,10 +717,12 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       }
 
       const roles = await this.introspectRoles(driver);
+      const extensions = await this.introspectExtensions(driver);
       const existingSchemas = await this.listExistingSchemas(driver);
       return new PostgresDatabaseSchemaNode({
         namespaces,
         roles,
+        extensions,
         existingSchemas,
         pgVersion,
       });
@@ -742,6 +745,26 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     );
     return rolesResult.rows.map(
       (row) => new PostgresRoleSchemaNode({ name: row.rolname, namespaceId: UNBOUND_NAMESPACE_ID }),
+    );
+  }
+
+  /** Reads every installed extension with the schema that holds its objects. */
+  private async introspectExtensions(
+    driver: SqlControlDriverInstance<'postgres'>,
+  ): Promise<readonly PostgresExtensionSchemaNode[]> {
+    const result = await driver.query<{ extname: string; nspname: string }>(
+      `SELECT e.extname, n.nspname
+       FROM pg_catalog.pg_extension e
+       JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace
+       ORDER BY e.extname`,
+    );
+    return result.rows.map(
+      (row) =>
+        new PostgresExtensionSchemaNode({
+          name: row.extname,
+          schemaName: row.nspname,
+          control: undefined,
+        }),
     );
   }
 

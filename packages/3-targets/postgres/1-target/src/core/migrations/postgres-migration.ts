@@ -41,6 +41,7 @@ import {
   AddUniqueCall,
   AlterColumnTypeCall,
   alterColumnTypeCallText,
+  CreateExtensionCall,
   CreateIndexCall,
   CreateNativeEnumTypeCall,
   CreatePostgresRlsPolicyCall,
@@ -51,6 +52,7 @@ import {
   DropColumnCall,
   DropConstraintCall,
   DropDefaultCall,
+  DropExtensionCall,
   DropIndexCall,
   DropNativeEnumTypeCall,
   DropNotNullCall,
@@ -65,6 +67,7 @@ import {
   RenameSchemaCall,
   ReplaceStoredValueCall,
   SetDefaultCall,
+  SetExtensionSchemaCall,
   SetNotNullCall,
   SetTableSchemaCall,
 } from './op-factory-call';
@@ -855,6 +858,38 @@ export abstract class PostgresMigration<
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
     return new DropIndexCall(options.schema, options.table, options.index).toOp(
       this.controlAdapterFor('dropIndex'),
+    );
+  }
+
+  /**
+   * Emit a `CREATE EXTENSION … WITH SCHEMA …` migration operation, checked to find the extension absent before and present after.
+   */
+  protected createExtension(options: {
+    readonly schema: string;
+    readonly extension: string;
+  }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
+    return new CreateExtensionCall(options.schema, options.extension).toOp(
+      this.controlAdapterFor('createExtension'),
+    );
+  }
+
+  /** Emit a `DROP EXTENSION` migration operation, without `CASCADE`. */
+  protected dropExtension(options: {
+    readonly schema: string;
+    readonly extension: string;
+  }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
+    return new DropExtensionCall(options.schema, options.extension).toOp(
+      this.controlAdapterFor('dropExtension'),
+    );
+  }
+
+  /** Emit an `ALTER EXTENSION … SET SCHEMA …` migration operation. */
+  protected setExtensionSchema(options: {
+    readonly extension: string;
+    readonly schema: string;
+  }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
+    return new SetExtensionSchemaCall(options.extension, options.schema).toOp(
+      this.controlAdapterFor('setExtensionSchema'),
     );
   }
 

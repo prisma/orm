@@ -263,6 +263,26 @@ export const postgresNativeAuthoringTypes = {
       typeParams: { length: { kind: 'arg', index: 0 } },
     },
   },
+  Xml: {
+    kind: 'typeConstructor',
+    inferred: true,
+    documentation: 'An XML document or content fragment stored as PostgreSQL xml.',
+    output: { codecId: 'pg/xml@1' },
+  },
+  Oid: {
+    kind: 'typeConstructor',
+    inferred: true,
+    documentation:
+      'An object identifier: an unsigned 32-bit integer stored as PostgreSQL oid and represented as a JavaScript number.',
+    output: { codecId: 'pg/oid@1' },
+  },
+  Money: {
+    kind: 'typeConstructor',
+    inferred: true,
+    documentation:
+      'A currency amount in cents stored as PostgreSQL money and represented as decimal text with two fraction digits, such as "-1234.56".',
+    output: { codecId: 'pg/money@1' },
+  },
   IntervalParts: {
     kind: 'typeConstructor',
     documentation:

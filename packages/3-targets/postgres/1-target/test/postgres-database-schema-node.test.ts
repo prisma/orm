@@ -39,6 +39,7 @@ const role = new PostgresRoleSchemaNode({
 const baseInput: PostgresDatabaseSchemaNodeInput = {
   namespaces: { public: nsPublic, app: nsApp },
   roles: [role],
+  extensions: undefined,
   existingSchemas: ['public', 'app'],
   pgVersion: '15.2',
 };
@@ -79,12 +80,14 @@ describe('PostgresDatabaseSchemaNode', () => {
       namespaceId: UNBOUND_NAMESPACE_ID,
     });
     const expected = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: { public: nsPublic },
       roles: [collidingRole],
       existingSchemas: ['public'],
       pgVersion: '15.2',
     });
     const actual = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: { public: nsPublic },
       roles: [collidingRole],
       existingSchemas: ['public'],

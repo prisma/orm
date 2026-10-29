@@ -138,6 +138,22 @@ describe('row-level security entries the PSL source would file differently', () 
     ).toThrow(refusal({ namespaceId: '__unbound__', kind: 'role', name: 'app' }));
   });
 
+  it('refuses an extension carrying its own control policy', () => {
+    expect(
+      printingWidget({
+        entries: {
+          extension: { vector: { kind: 'extension', name: 'vector', control: 'external' } },
+        },
+      }),
+    ).toThrow(refusal({ namespaceId: 'public', name: 'vector', control: 'external' }));
+  });
+
+  it('refuses an extension not keyed by its name', () => {
+    expect(
+      printingWidget({ entries: { extension: { trgm: { kind: 'extension', name: 'pg_trgm' } } } }),
+    ).toThrow(refusal({ namespaceId: 'public', kind: 'extension', name: 'trgm' }));
+  });
+
   it('refuses a policy that records another namespace', () => {
     expect(
       printingWidget({

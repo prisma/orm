@@ -9,5 +9,6 @@ Typed AST for MongoDB filters, pipeline stages, and command variants, plus the u
 - **Commands**: `AnyMongoCommand` and related command types (reads, writes, aggregates) carried on a plan
 - **Query plan**: `MongoQueryPlan<Row>` — a branded typed representation with shape `{ collection, command: AnyMongoCommand, meta: PlanMeta }`
 - **Visitors**: `MongoFilterVisitor`, `MongoFilterRewriter`, `MongoStageVisitor` interfaces for traversing and transforming AST nodes
+- **Execution context**: `MongoExecutionContext<TContract extends MongoContract>` — the contract, a read-only codec lookup and the mutation defaults the query lanes build against, as SQL's `ExecutionContext` is
 
 Lowering typed nodes to wire BSON is performed by `@internal/adapter-mongo` via `lower(plan)` on `MongoQueryPlan`, which dispatches on `command.kind` and uses internal helpers for filters and pipelines.

@@ -82,7 +82,7 @@ const db = postgres({
 ### Context
 
 - `createExecutionContext` - Create an execution context from contract + descriptors-only stack
-- `createSqlExecutionStack` - SQL-specific stack factory that preserves descriptor types
+- `createSqlExecutionStack` - SQL-specific stack factory that preserves descriptor types. Given a driver it returns `SqlExecutionStackWithDriver`; without one it returns `SqlExecutionStack`
 - `ExecutionContext` - Context type for SQL operations
 
 ### Descriptors & Stack
@@ -90,8 +90,8 @@ const db = postgres({
 - `SqlStaticContributions` - Interface for descriptor-level static contributions (codecs, operations, parameterized codecs, mutation default generators typed by the framework's `RuntimeMutationDefaultGenerator` from `@internal/framework-components/runtime`)
 - `SqlRuntimeTargetDescriptor`, `SqlRuntimeAdapterDescriptor`, `SqlRuntimeExtensionDescriptor` - Structural descriptor types requiring `SqlStaticContributions`
 - `SqlRuntimeAdapterInstance`, `SqlRuntimeDriverInstance`, `SqlRuntimeExtensionInstance` - Instance types
-- `SqlExecutionStack` - Descriptors-only stack type for static context creation
-- `SqlExecutionStackWithDriver` - Descriptor stack including driver for runtime instantiation
+- `SqlExecutionStack` - Stack with no driver, for the query surface, static entries and `toSql`
+- `SqlExecutionStackWithDriver` - Stack whose driver is required, for clients that connect
 - `RuntimeParameterizedCodecDescriptor` - Parameterized codec descriptor type
 
 ### Codecs

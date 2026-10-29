@@ -37,16 +37,14 @@ async function materialisePgvectorPinnedArtifacts(projectRoot: string): Promise<
   if (!space) {
     throw new Error('pgvector descriptor must declare a contractSpace');
   }
-  const baseline = space.migrations[0];
-  if (!baseline) {
-    throw new Error('pgvector contract-space must ship at least one baseline migration');
-  }
   await emitContractSpaceArtifacts(migrationsDir, 'pgvector', {
     contract: space.contractJson,
     contractDts: '// rendered .d.ts for pgvector contract space\nexport interface Contract {}\n',
     headRef: { hash: space.headRef.hash, invariants: [...space.headRef.invariants] },
   });
-  await materialiseMigrationPackage(join(migrationsDir, 'pgvector'), baseline);
+  for (const migration of space.migrations) {
+    await materialiseMigrationPackage(join(migrationsDir, 'pgvector'), migration);
+  }
   return migrationsDir;
 }
 

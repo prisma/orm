@@ -17,7 +17,6 @@ import {
 } from '@internal/mongo-contract-psl';
 import { mongoContextInput } from '@internal/mongo-contract-psl/test';
 import { mongoOrm } from '@internal/mongo-orm';
-import { buildMongoEnums } from '@internal/mongo-runtime';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
@@ -32,7 +31,7 @@ import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/code
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
-import { describeWithMongoDB } from '../mongo/setup';
+import { describeWithMongoDB, executionContextFor } from '../mongo/setup';
 
 const mongoPsl = `
 model User {
@@ -229,11 +228,8 @@ describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
       contract: new MongoContractSerializer().deserializeContract(contract),
     };
 
-    const orm = mongoOrm({
-      contract: validated.contract,
-      executor: ctx.runtime,
-      enums: buildMongoEnums(validated.contract, ctx.codecs),
-    });
+    const context = executionContextFor(validated.contract);
+    const orm = mongoOrm({ context, runtime: ctx.runtime });
     const userCollection = orm['User']!;
 
     type CreateUser = Parameters<typeof userCollection.create>[0];
@@ -263,14 +259,9 @@ describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
     const result = interpretMongoPsl(mongoPsl);
     if (!result.ok) throw new Error(`Interpretation failed: ${result.failure.summary}`);
 
-    const validated = {
-      contract: new MongoContractSerializer().deserializeContract(result.value),
-    };
-    const orm = mongoOrm({
-      contract: validated.contract,
-      executor: ctx.runtime,
-      enums: buildMongoEnums(validated.contract, ctx.codecs),
-    });
+    const validated = { contract: new MongoContractSerializer().deserializeContract(result.value) };
+    const context = executionContextFor(validated.contract);
+    const orm = mongoOrm({ context, runtime: ctx.runtime });
     const userCollection = orm['User']!;
 
     type CreateUser = Parameters<typeof userCollection.create>[0];
@@ -308,14 +299,9 @@ type Address {
     const result = interpretMongoPsl(schema);
     if (!result.ok) throw new Error(`Interpretation failed: ${result.failure.summary}`);
 
-    const validated = {
-      contract: new MongoContractSerializer().deserializeContract(result.value),
-    };
-    const orm = mongoOrm({
-      contract: validated.contract,
-      executor: ctx.runtime,
-      enums: buildMongoEnums(validated.contract, ctx.codecs),
-    });
+    const validated = { contract: new MongoContractSerializer().deserializeContract(result.value) };
+    const context = executionContextFor(validated.contract);
+    const orm = mongoOrm({ context, runtime: ctx.runtime });
     const userCollection = orm['User']!;
 
     await userCollection.create({ name: 'NoAddr', address: null } as unknown as Parameters<

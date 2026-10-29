@@ -54,6 +54,7 @@ function expectedColumn(dataType: string, codecId: string, expression: string): 
   const { expected } = buildPostgresPlanDiff({
     contract,
     actualSchema: new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {},
       roles: [],
       existingSchemas: ['public'],

@@ -1,10 +1,12 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
 import { createMongoDriver } from '@internal/driver-mongo';
+import { MongoContractSerializer } from '@internal/family-mongo/ir';
+import type { MongoContract } from '@internal/mongo-contract';
 import {
   createMongoExecutionContext,
   createMongoExecutionStack,
   createMongoRuntime,
-  type MongoCodecLookup,
+  type MongoExecutionContext,
   type MongoRuntime,
 } from '@internal/mongo-runtime';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
@@ -12,6 +14,22 @@ import { timeouts } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, describe } from 'vitest';
+import type { Contract } from './fixtures/generated/contract';
+import contractJson from './fixtures/generated/contract.json';
+
+export const fixtureContract = new MongoContractSerializer().deserializeContract(
+  contractJson,
+) as Contract;
+
+export function executionContextFor<TContract extends MongoContract>(
+  contract: TContract,
+): MongoExecutionContext<TContract> {
+  const stack = createMongoExecutionStack({
+    target: mongoRuntimeTarget,
+    adapter: mongoRuntimeAdapter,
+  });
+  return createMongoExecutionContext({ contract, stack });
+}
 
 export async function withMongod<T>(fn: (ctx: MongodContext) => Promise<T>): Promise<T> {
   let replSet: MongoMemoryReplSet | undefined;
@@ -34,11 +52,17 @@ export async function withMongod<T>(fn: (ctx: MongodContext) => Promise<T>): Pro
       target: mongoRuntimeTarget,
       adapter: mongoRuntimeAdapter,
     });
-    const context = createMongoExecutionContext({ contract: {}, stack });
+    const context = createMongoExecutionContext({ contract: fixtureContract, stack });
     const driver = await createMongoDriver(connectionUri, dbName);
-    runtime = createMongoRuntime({ context, driver });
+    runtime = createMongoRuntime({ context, adapter: stack.adapter.create(stack), driver });
 
-    const ctx: MongodContext = { connectionUri, dbName, client, runtime, codecs: context.codecs };
+    const ctx: MongodContext = {
+      connectionUri,
+      dbName,
+      client,
+      runtime,
+      context,
+    };
     return await fn(ctx);
   } finally {
     await runtime?.close();
@@ -52,8 +76,8 @@ export interface MongodContext {
   readonly dbName: string;
   readonly client: MongoClient;
   readonly runtime: MongoRuntime;
-  /** The execution context's codecs, which `buildMongoEnums()` reads enum members through. */
-  readonly codecs: MongoCodecLookup;
+  /** The execution context over the fixture contract, which `mongoOrm()` and `mongoRaw()` take. */
+  readonly context: MongoExecutionContext<Contract>;
 }
 
 export function describeWithMongoDB(name: string, fn: (ctx: MongodContext) => void): void {
@@ -61,7 +85,7 @@ export function describeWithMongoDB(name: string, fn: (ctx: MongodContext) => vo
     let replSet: MongoMemoryReplSet;
     let client: MongoClient;
     let runtime: MongoRuntime;
-    let codecs: MongoCodecLookup;
+    let context: MongoExecutionContext<Contract>;
     const dbName = 'test';
 
     const ctx: MongodContext = {
@@ -75,8 +99,8 @@ export function describeWithMongoDB(name: string, fn: (ctx: MongodContext) => vo
       get runtime() {
         return runtime;
       },
-      get codecs() {
-        return codecs;
+      get context() {
+        return context;
       },
     };
 
@@ -94,10 +118,9 @@ export function describeWithMongoDB(name: string, fn: (ctx: MongodContext) => vo
         target: mongoRuntimeTarget,
         adapter: mongoRuntimeAdapter,
       });
-      const context = createMongoExecutionContext({ contract: {}, stack });
+      context = createMongoExecutionContext({ contract: fixtureContract, stack });
       const driver = await createMongoDriver(replSet.getUri(), dbName);
-      runtime = createMongoRuntime({ context, driver });
-      codecs = context.codecs;
+      runtime = createMongoRuntime({ context, adapter: stack.adapter.create(stack), driver });
     }, timeouts.spinUpMongoMemoryServer);
 
     beforeEach(async () => {

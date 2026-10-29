@@ -1,0 +1,9 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model NativeType {
+  id        Int    @id
+  value     String @db.VarBit(8)
+  unbounded String @db.VarBit
+}
