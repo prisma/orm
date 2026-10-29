@@ -20,7 +20,7 @@ function receivedKind(value: unknown): string {
 }
 
 /**
- * The value the `mariadb` package sends for a parameter. An integer number within the signed 64-bit range goes as a BIGINT, because the package sends a number as INT only below 2^31 - 1 and otherwise as DOUBLE, which MySQL refuses in `LIMIT`; any other finite number goes as the DOUBLE it is. A bigint must fit a signed BIGINT: the package crashes the process on one below -2^63, and sends one at or above 2^63 as DECIMAL text, so the parameter's type would depend on its value. A `Uint8Array` goes as a Buffer over the same bytes, because the package sends any other `Uint8Array` as JSON text. A `Date` is refused: the package encodes it in the process's local time zone, and the MySQL codecs send dates as text.
+ * The value the `mariadb` package writes into the statement for a parameter. A finite number or a bigint goes as it is, and the package writes its digits. A non-finite number is refused, because the package would write `NaN` or `Infinity` into the SQL. A bigint must fit a signed BIGINT, so a parameter's type never depends on its value. A `Uint8Array` goes as a Buffer over the same bytes, because the package writes any other `Uint8Array` as JSON text. A `Date` is refused: the package writes it in the process's local time zone, and the MySQL codecs send dates as text.
  */
 export function bindValue(value: unknown, index: number): unknown {
   if (value === null || value === undefined) return null;
@@ -32,9 +32,7 @@ export function bindValue(value: unknown, index: number): unknown {
         String(value),
       );
     }
-    if (!Number.isInteger(value)) return value;
-    const integer = BigInt(value);
-    return withinBigint(integer) ? integer : value;
+    return value;
   }
   if (typeof value === 'bigint') {
     if (withinBigint(value)) return value;

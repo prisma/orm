@@ -10,12 +10,11 @@ import { type Connection, createConnection } from 'mariadb';
 import { mysqlConnectionOptions } from '../connection-options';
 import { mysqlDriverDescriptorMeta } from '../descriptor-meta';
 import { connectionFix, connectionLost, isFatal, normalizeMysqlError } from '../normalize-error';
-import { assertPlaceholderCount } from '../placeholder-count';
 import { positionalParams } from '../positional-params';
 import { applySessionSettings, sessionSettingsStatement } from '../session-settings';
 
 /**
- * A MySQL connection for the control plane. It runs statements as the runtime driver does: one with values as a server-side prepared statement, so a value never travels inside the SQL, and one without values, a user's `rawSql` migration step included, over the text protocol, so `START TRANSACTION` and `LOCK TABLES`, which MySQL does not prepare, run too. Either way every column reads in one form, text or bytes.
+ * A MySQL connection for the control plane. It runs every statement as the runtime driver does, a user's `rawSql` migration step included: in one round trip over the text protocol, the package writing its values into it.
  */
 export class MysqlControlDriver implements SqlControlDriverInstance<'mysql'> {
   readonly familyId = 'sql' as const;
@@ -37,10 +36,7 @@ export class MysqlControlDriver implements SqlControlDriverInstance<'mysql'> {
     if (this.#lost !== undefined) throw connectionLost(this.#lost);
     try {
       const statement = positionalParams(sql, params ?? []);
-      const result: unknown =
-        statement.values.length === 0
-          ? await this.connection.query(statement.sql)
-          : await this.#executeChecked(statement.sql, statement.values);
+      const result: unknown = await this.connection.query(statement.sql, statement.values);
       return {
         rows: Array.isArray(result)
           ? blindCast<Row[], 'the package returns the rows a SELECT produces, shaped by the query'>(
@@ -54,16 +50,6 @@ export class MysqlControlDriver implements SqlControlDriverInstance<'mysql'> {
         throw connectionLost(error);
       }
       throw normalizeMysqlError(error);
-    }
-  }
-
-  async #executeChecked(sql: string, values: unknown[]): Promise<unknown> {
-    const statement = await this.connection.prepare(sql);
-    try {
-      assertPlaceholderCount(statement, values.length);
-      return await statement.execute(values);
-    } finally {
-      statement.close();
     }
   }
 

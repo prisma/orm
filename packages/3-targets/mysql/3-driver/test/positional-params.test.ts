@@ -17,20 +17,19 @@ describe('positionalParams', () => {
     });
   });
 
-  it('sends an integer number within the signed 64-bit range as a bigint, so MySQL reads it as BIGINT, and any other number as a double', () => {
+  it('passes a finite number and a bigint within the signed 64-bit range as they are, for the package to write as digits', () => {
     expect(
-      positionalParams('SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9', [
+      positionalParams('SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8', [
         2,
         2147483647,
         2 ** 60,
-        -(2 ** 63),
         1.5,
         2n,
-        1e20,
-        -1e20,
-        2 ** 63,
+        1e21,
+        -0,
+        -(2n ** 63n),
       ]).values,
-    ).toEqual([2n, 2147483647n, 2n ** 60n, -(2n ** 63n), 1.5, 2n, 1e20, -1e20, 2 ** 63]);
+    ).toEqual([2, 2147483647, 2 ** 60, 1.5, 2n, 1e21, -0, -(2n ** 63n)]);
   });
 
   it('refuses a bigint outside the signed 64-bit range before it reaches the package, leaving the value out of the error', () => {
