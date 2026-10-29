@@ -425,6 +425,37 @@ describe('assembleAuthoringContributions', () => {
     );
   });
 
+  it('merges every descriptor renamedTypeConstructors', () => {
+    const result = assembleAuthoringContributions([
+      createDescriptor({ id: 'target-a', authoring: { renamedTypeConstructors: { Old: 'New' } } }),
+      createDescriptor({ id: 'other' }),
+      createDescriptor({ id: 'adapter-a', authoring: { renamedTypeConstructors: { Was: 'Is' } } }),
+    ]);
+    expect(result.renamedTypeConstructors).toEqual({ Old: 'New', Was: 'Is' });
+  });
+
+  it('leaves renamedTypeConstructors absent when no descriptor declares it', () => {
+    const result = assembleAuthoringContributions([createDescriptor()]);
+    expect('renamedTypeConstructors' in result).toBe(false);
+  });
+
+  it('rejects two descriptors renaming the same type constructor naming both', () => {
+    expect(() =>
+      assembleAuthoringContributions([
+        createDescriptor({
+          id: 'target-a',
+          authoring: { renamedTypeConstructors: { Old: 'New' } },
+        }),
+        createDescriptor({
+          id: 'adapter-b',
+          authoring: { renamedTypeConstructors: { Old: 'Other' } },
+        }),
+      ]),
+    ).toThrow(
+      /Duplicate authoring renamed type constructor "Old"\. Descriptor "adapter-b" conflicts with "target-a"/,
+    );
+  });
+
   it('rejects a valueObjectStorageType that names no constructor in the assembled namespace', () => {
     expect(() =>
       assembleAuthoringContributions([
