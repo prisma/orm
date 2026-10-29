@@ -58,6 +58,8 @@ export interface LowerPrisma7DefaultInput {
   readonly nativeTypeName: string | undefined;
   readonly codecLookup: CodecLookupWithDescriptors;
   readonly literalForm: Prisma7LiteralDefaultForm | undefined;
+  /** The SQL expression of a default whose value the column's codec cannot hold exactly; see `Prisma7TargetBinding.literalDefaultExpression`. */
+  readonly literalDefaultExpression: (stored: JsonValue) => string;
   /** Storage value per member name when the field is typed by a Prisma 7 enum. */
   readonly enumMembers: ReadonlyMap<string, string> | undefined;
   readonly controlMutationDefaults: ControlMutationDefaults;
@@ -113,24 +115,39 @@ export function lowerPrisma7Default(
     return lowerFunction(call, expression, input, label, unknown);
   }
 
-  const scalar = scalarValue(expression, input, unknown);
-  if (scalar === undefined) return undefined;
-  return { storage: { kind: 'literal', value: scalar, inStoredForm: true }, onCreate: undefined };
+  const storage = scalarValue(expression, input, unknown);
+  return storage === undefined ? undefined : { storage, onCreate: undefined };
 }
 
 /**
- * The stored value of a written default: an enum member resolves through the enum's members, and
+ * The stored default of a written value: an enum member resolves through the enum's members, and
  * every other value is read by the authoring entry for its syntax, cast into the column's data type
- * and validated by the column's codec — the same path the current schema language takes.
+ * and validated by the column's codec — the same path the current schema language takes. A value
+ * the column's type holds but its codec cannot hold exactly, such as a timestamp with digits below
+ * a millisecond on a column read as a JavaScript `Date`, is kept as the SQL expression the target
+ * writes for it.
  */
 function scalarValue(
   expression: ExpressionAst,
   input: LowerPrisma7DefaultInput,
   unknown: (reason: string, span: PslSpan) => undefined,
-): AuthoredColumnDefaultLiteralValue | undefined {
+): AuthoredColumnDefault | undefined {
+  const literal = scalarLiteral(expression, input, unknown);
+  if (literal === undefined || 'expression' in literal) return literal;
+  return { kind: 'literal', value: literal.value, inStoredForm: true };
+}
+
+function scalarLiteral(
+  expression: ExpressionAst,
+  input: LowerPrisma7DefaultInput,
+  unknown: (reason: string, span: PslSpan) => undefined,
+):
+  | { readonly value: AuthoredColumnDefaultLiteralValue }
+  | { readonly kind: 'function'; readonly expression: string }
+  | undefined {
   const span = input.attribute.span;
   const enumValue = enumMemberValue(expression, input);
-  if (enumValue !== undefined) return enumValue;
+  if (enumValue !== undefined) return { value: enumValue };
 
   const array = ArrayLiteralAst.cast(expression.syntax);
   const elements = array === undefined ? undefined : [...array.elements()];
@@ -143,7 +160,7 @@ function scalarValue(
       }
       values.push(value);
     }
-    return values;
+    return { value: values };
   }
 
   const finer = finerThanColumn(elements ?? [expression], elements !== undefined, input);
@@ -153,7 +170,7 @@ function scalarValue(
   if (written === undefined) return unreadableValue(expression, input, unknown);
 
   const jsonNull = jsonNullDefault(written, expression, input);
-  if (jsonNull !== undefined) return jsonNull;
+  if (jsonNull !== undefined) return { value: jsonNull };
 
   const read = readDataTypeDefault({
     written,
@@ -163,7 +180,12 @@ function scalarValue(
     dataTypes: input.dataTypes,
     fieldPath: `${input.modelName}.${input.field.name}`,
   });
-  return read.ok ? read.value : unknown(refusalReason(read.refusal), span);
+  if (read.ok) return { value: read.value };
+  const { refusal } = read;
+  if (refusal.kind === 'refused-by-codec') {
+    return { kind: 'function', expression: input.literalDefaultExpression(refusal.stored) };
+  }
+  return unknown(refusalReason(refusal), span);
 }
 
 /**
@@ -325,6 +347,7 @@ function refusalReason(refusal: DefaultRefusal): string {
     case 'no-element-cast':
       return `holds a ${refusal.valueType} value${at}, which the list cast of ${refusal.receivingType} does not take; it takes ${refusal.elementTypes.join(', ')}.`;
     case 'refused-by-column':
+    case 'refused-by-codec':
       return `holds a value${at} that ${refusal.codecId} does not read: ${refusal.message}`;
   }
 }

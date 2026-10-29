@@ -17,8 +17,10 @@ test('limits Date authoring to the JsDate types', () => {
     expectTypeOf(t.temporal).not.toHaveProperty('CreatedAtDate');
     expectTypeOf(t.temporal).not.toHaveProperty('UpdatedAtDate');
     expectTypeOf(t).toHaveProperty('TimestamptzJsDate');
-    expectTypeOf(t.temporal).toHaveProperty('CreatedAtJsDate');
-    expectTypeOf(t.temporal).toHaveProperty('UpdatedAtJsDate');
+    expectTypeOf(t.temporal).not.toHaveProperty('CreatedAtJsDate');
+    expectTypeOf(t.temporal).not.toHaveProperty('UpdatedAtJsDate');
+    expectTypeOf(t.temporal).toHaveProperty('CreatedAt');
+    expectTypeOf(t.temporal).toHaveProperty('UpdatedAt');
     return {};
   });
 });

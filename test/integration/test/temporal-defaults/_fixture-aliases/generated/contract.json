@@ -18,15 +18,11 @@
               "createdAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/timestamptz-temporal@1",
-                  "kind": "scalar"
-                }
-              },
-              "createdAtText": {
-                "nullable": false,
-                "type": {
-                  "codecId": "pg/timestamptz-string@1",
-                  "kind": "scalar"
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
                 }
               },
               "id": {
@@ -46,15 +42,11 @@
               "updatedAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/timestamptz-temporal@1",
-                  "kind": "scalar"
-                }
-              },
-              "updatedAtText": {
-                "nullable": false,
-                "type": {
-                  "codecId": "pg/timestamptz-string@1",
-                  "kind": "scalar"
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
                 }
               }
             },
@@ -64,9 +56,6 @@
                 "createdAt": {
                   "column": "createdAt"
                 },
-                "createdAtText": {
-                  "column": "createdAtText"
-                },
                 "id": {
                   "column": "id"
                 },
@@ -75,9 +64,6 @@
                 },
                 "updatedAt": {
                   "column": "updatedAt"
-                },
-                "updatedAtText": {
-                  "column": "updatedAtText"
                 }
               },
               "namespaceId": "public",
@@ -96,14 +82,12 @@
             "reading": {
               "columns": {
                 "createdAt": {
-                  "codecId": "pg/timestamptz-temporal@1",
+                  "codecId": "pg/timestamptz-date@1",
                   "dataType": "pg/timestamptz",
-                  "nullable": false
-                },
-                "createdAtText": {
-                  "codecId": "pg/timestamptz-string@1",
-                  "dataType": "pg/timestamptz",
-                  "nullable": false
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
                 },
                 "id": {
                   "codecId": "pg/int4@1",
@@ -116,14 +100,12 @@
                   "nullable": false
                 },
                 "updatedAt": {
-                  "codecId": "pg/timestamptz-temporal@1",
+                  "codecId": "pg/timestamptz-date@1",
                   "dataType": "pg/timestamptz",
-                  "nullable": false
-                },
-                "updatedAtText": {
-                  "codecId": "pg/timestamptz-string@1",
-                  "dataType": "pg/timestamptz",
-                  "nullable": false
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
                 }
               },
               "foreignKeys": [],
@@ -141,16 +123,19 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "0390a420cce478c0e3a83722ef67ca5c5cee0029919f8b950ef83fc5e6b97fa4"
+    "storageHash": "28b63df973d82396c9d1242834b6c0b55bb341a68354a8c69ace7a77828fcfde"
   },
   "execution": {
-    "executionHash": "094fab307f2b28070b48b8e4b97fb2c86739cfacf1c3412304356e5c5a43e05e",
+    "executionHash": "ffef81acb63dde0c1f9cecb125bbe5f651bfcb4dceae4abe22902f9e2350038f",
     "mutations": {
       "defaults": [
         {
           "onCreate": {
-            "id": "instantNow",
-            "kind": "generator"
+            "id": "timestampNow",
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
           },
           "ref": {
             "entry": "reading",
@@ -160,42 +145,22 @@
         },
         {
           "onCreate": {
-            "id": "timestamptzStringNow",
-            "kind": "generator"
-          },
-          "ref": {
-            "entry": "reading",
-            "field": "createdAtText",
-            "namespace": "public"
-          }
-        },
-        {
-          "onCreate": {
-            "id": "instantNow",
-            "kind": "generator"
+            "id": "timestampNow",
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
           },
           "onUpdate": {
-            "id": "instantNow",
-            "kind": "generator"
+            "id": "timestampNow",
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
           },
           "ref": {
             "entry": "reading",
             "field": "updatedAt",
-            "namespace": "public"
-          }
-        },
-        {
-          "onCreate": {
-            "id": "timestamptzStringNow",
-            "kind": "generator"
-          },
-          "onUpdate": {
-            "id": "timestamptzStringNow",
-            "kind": "generator"
-          },
-          "ref": {
-            "entry": "reading",
-            "field": "updatedAtText",
             "namespace": "public"
           }
         }

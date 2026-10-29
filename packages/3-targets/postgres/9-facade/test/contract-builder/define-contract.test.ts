@@ -36,8 +36,8 @@ describe('postgres defineContract wrap', () => {
             id: f.column(type.Char(36)).id().onCreate(gen.uuid()),
             at: f.column(type.TimestamptzJsDate()),
             precise: f.column(type.TimestamptzJsDate(3)).onCreate(gen.now()).onUpdate(gen.now()),
-            created: f.column(type.temporal.CreatedAtJsDate()),
-            updated: f.column(type.temporal.UpdatedAtJsDate()),
+            created: f.column(type.temporal.CreatedAt()),
+            updated: f.column(type.temporal.UpdatedAt()),
           },
         }),
       },
@@ -54,8 +54,9 @@ describe('postgres defineContract wrap', () => {
                   created: {
                     codecId: 'pg/timestamptz-date@1',
                     dataType: 'pg/timestamptz',
+                    typeParams: { precision: 3 },
                   },
-                  updated: { codecId: 'pg/timestamptz-date@1' },
+                  updated: { codecId: 'pg/timestamptz-date@1', typeParams: { precision: 3 } },
                 },
               },
             },
@@ -68,7 +69,7 @@ describe('postgres defineContract wrap', () => {
     );
     expect(result.execution?.mutations?.defaults).toContainEqual({
       ref: { namespace: 'public', entry: 'Event', field: 'created' },
-      onCreate: { kind: 'generator', id: 'timestampNow' },
+      onCreate: { kind: 'generator', id: 'timestampNow', params: { precision: 3 } },
     });
   });
 

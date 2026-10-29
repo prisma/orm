@@ -72,12 +72,12 @@ describe('templates', () => {
       expect(schema).toContain('id: field.column(type.Uuid()).id().onCreate(gen.uuid(7))');
       expect(schema).toContain('authorId: field.column(type.Uuid())');
       expect(schema).not.toContain('type.Char(');
-      expect(schema).toContain('updatedAt: field.column(type.temporal.UpdatedAtString())');
+      expect(schema).toContain('updatedAt: field.column(type.temporal.UpdatedAt())');
       expect(schema).not.toMatch(/field\.(id|temporal)\.|field\.(text|uuidString)\(/);
     });
 
     it('writes no field preset into the postgres PSL starter schema', () => {
-      expect(starterSchema('postgres', 'psl')).toContain('updatedAt temporal.UpdatedAtString\n');
+      expect(starterSchema('postgres', 'psl')).toContain('updatedAt temporal.UpdatedAt\n');
     });
 
     it('uses defineContract for mongo TypeScript imported from facade', () => {

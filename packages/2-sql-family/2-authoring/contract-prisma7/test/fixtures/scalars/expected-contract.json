@@ -265,7 +265,7 @@
               "dateTime": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "typeParams": {
                     "precision": 3
                   }
@@ -276,7 +276,7 @@
               "dateTimeOpt": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "typeParams": {
                     "precision": 3
                   }
@@ -287,7 +287,7 @@
               "dateTimeList": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "typeParams": {
                     "precision": 3
                   }
@@ -367,7 +367,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "936fa7188bbe44706b929d6392eb9f0b9c0329f0b3cd9a513c78ac9126b64424",
+    "storageHash": "1578dc0d71fb46e51ae88d63cbaad7cb666f0a37b99de9921ea55d88892603e7",
     "namespaces": {
       "public": {
         "id": "public",
@@ -510,7 +510,7 @@
                 },
                 "dateTime": {
                   "dataType": "pg/timestamp",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -519,7 +519,7 @@
                 },
                 "dateTimeOpt": {
                   "dataType": "pg/timestamp",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "nullable": true,
                   "many": false,
                   "typeParams": {
@@ -528,7 +528,7 @@
                 },
                 "dateTimeList": {
                   "dataType": "pg/timestamp",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "nullable": true,
                   "many": {
                     "elementNullable": true

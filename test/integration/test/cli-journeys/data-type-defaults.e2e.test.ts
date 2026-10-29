@@ -36,7 +36,7 @@ model Account {
   meta    Jsonb    @default(json\`{ "plan": "free", "seats": 1 }\`)
   scores  Int[]    @default([1, 2])
   docs    Jsonb[]  @default([json\`{}\`, json\`[]\`])
-  expires DateTime @default(sql\`(now() + '3 days'::interval)\`)
+  expires TimestamptzTemporal @default(sql\`(now() + '3 days'::interval)\`)
 }
 `;
 

@@ -39,12 +39,7 @@ export function describeUnresolvedMongoType(
   const scalars = collectScalarTypeConstructors(types);
   return ({ field, owner, written, isDeclared }) => {
     if (field.typeConstructor !== undefined) {
-      return describeRemovedFieldPreset(
-        removedMongoFieldPresets,
-        field.typeConstructor,
-        types,
-        isDeclared,
-      );
+      return describeRemovedFieldPreset(removedMongoFieldPresets, field, types, isDeclared);
     }
     if (field.typeNamespaceId !== undefined) {
       return undefined;

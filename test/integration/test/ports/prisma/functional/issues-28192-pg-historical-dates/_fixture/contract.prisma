@@ -18,7 +18,7 @@
 // types in Prisma 8 PSL.
 model TestData {
   id          String     @id @onCreate(cuid(2))
-  date        Date
+  date        DateTemporal
   timestamp   TimestampTemporal
   timestamptz TimestamptzTemporal
   @@map("testData")

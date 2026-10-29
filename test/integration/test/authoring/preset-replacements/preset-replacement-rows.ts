@@ -272,8 +272,8 @@ export const postgresRows: readonly SqlRow<PostgresHelpers>[] = [
   },
   {
     model: 'DateTimeColumn',
-    psl: { preset: 'dateTime()', replacement: 'DateTime' },
-    ts: ({ field, type }) => field.column(type.DateTime()),
+    psl: { preset: 'dateTime()', replacement: 'TimestamptzTemporal' },
+    ts: ({ field, type }) => field.column(type.TimestamptzTemporal()),
   },
   {
     model: 'UuidNative',
@@ -294,33 +294,51 @@ export const postgresRows: readonly SqlRow<PostgresHelpers>[] = [
   },
   {
     model: 'CreatedAt',
-    psl: { preset: 'temporal.createdAt()', replacement: 'temporal.CreatedAt' },
-    ts: ({ field, type }) => field.column(type.temporal.CreatedAt()),
+    psl: { preset: 'temporal.createdAt()', replacement: 'TimestamptzTemporal @onCreate(now())' },
+    ts: ({ field, type, gen }) => field.column(type.TimestamptzTemporal()).onCreate(gen.now()),
   },
   {
     model: 'UpdatedAt',
-    psl: { preset: 'temporal.updatedAt()', replacement: 'temporal.UpdatedAt' },
-    ts: ({ field, type }) => field.column(type.temporal.UpdatedAt()),
+    psl: {
+      preset: 'temporal.updatedAt()',
+      replacement: 'TimestamptzTemporal @onCreate(now()) @onUpdate(now())',
+    },
+    ts: ({ field, type, gen }) =>
+      field.column(type.TimestamptzTemporal()).onCreate(gen.now()).onUpdate(gen.now()),
   },
   {
     model: 'CreatedAtString',
-    psl: { preset: 'temporal.createdAtString()', replacement: 'temporal.CreatedAtString' },
-    ts: ({ field, type }) => field.column(type.temporal.CreatedAtString()),
+    psl: {
+      preset: 'temporal.createdAtString()',
+      replacement: 'TimestamptzString @onCreate(now())',
+    },
+    ts: ({ field, type, gen }) => field.column(type.TimestamptzString()).onCreate(gen.now()),
   },
   {
     model: 'UpdatedAtString',
-    psl: { preset: 'temporal.updatedAtString()', replacement: 'temporal.UpdatedAtString' },
-    ts: ({ field, type }) => field.column(type.temporal.UpdatedAtString()),
+    psl: {
+      preset: 'temporal.updatedAtString()',
+      replacement: 'TimestamptzString @onCreate(now()) @onUpdate(now())',
+    },
+    ts: ({ field, type, gen }) =>
+      field.column(type.TimestamptzString()).onCreate(gen.now()).onUpdate(gen.now()),
   },
   {
     model: 'CreatedAtJsDate',
-    psl: { preset: 'temporal.createdAtJsDate()', replacement: 'temporal.CreatedAtJsDate' },
-    ts: ({ field, type }) => field.column(type.temporal.CreatedAtJsDate()),
+    psl: {
+      preset: 'temporal.createdAtJsDate()',
+      replacement: 'TimestamptzJsDate @onCreate(now())',
+    },
+    ts: ({ field, type, gen }) => field.column(type.TimestamptzJsDate()).onCreate(gen.now()),
   },
   {
     model: 'UpdatedAtJsDate',
-    psl: { preset: 'temporal.updatedAtJsDate()', replacement: 'temporal.UpdatedAtJsDate' },
-    ts: ({ field, type }) => field.column(type.temporal.UpdatedAtJsDate()),
+    psl: {
+      preset: 'temporal.updatedAtJsDate()',
+      replacement: 'TimestamptzJsDate @onCreate(now()) @onUpdate(now())',
+    },
+    ts: ({ field, type, gen }) =>
+      field.column(type.TimestamptzJsDate()).onCreate(gen.now()).onUpdate(gen.now()),
   },
   {
     model: 'TimestampBothPhases',
@@ -378,14 +396,14 @@ export const postgresRows: readonly SqlRow<PostgresHelpers>[] = [
     model: 'TimestamptzJsDateOnCreate',
     psl: {
       preset: 'temporal.timestamptzJsDate(3, onCreate: now)',
-      replacement: 'TimestamptzJsDate(3) @onCreate(now())',
+      replacement: 'DateTime @onCreate(now())',
     },
     ts: ({ field, type, gen }) => field.column(type.TimestamptzJsDate(3)).onCreate(gen.now()),
   },
   {
     model: 'DateColumn',
-    psl: { preset: 'temporal.date(onCreate: now)', replacement: 'Date @onCreate(now())' },
-    ts: ({ field, type, gen }) => field.column(type.Date()).onCreate(gen.now()),
+    psl: { preset: 'temporal.date(onCreate: now)', replacement: 'DateTemporal @onCreate(now())' },
+    ts: ({ field, type, gen }) => field.column(type.DateTemporal()).onCreate(gen.now()),
   },
   {
     model: 'DateStringBothPhases',
@@ -398,13 +416,16 @@ export const postgresRows: readonly SqlRow<PostgresHelpers>[] = [
   },
   {
     model: 'TimeOnUpdate',
-    psl: { preset: 'temporal.time(3, onUpdate: now)', replacement: 'Time(3) @onUpdate(now())' },
-    ts: ({ field, type, gen }) => field.column(type.Time(3)).onUpdate(gen.now()),
+    psl: {
+      preset: 'temporal.time(3, onUpdate: now)',
+      replacement: 'TimeTemporal(3) @onUpdate(now())',
+    },
+    ts: ({ field, type, gen }) => field.column(type.TimeTemporal(3)).onUpdate(gen.now()),
   },
   {
     model: 'TimeWithoutPrecision',
-    psl: { preset: 'temporal.time(onCreate: now)', replacement: 'Time @onCreate(now())' },
-    ts: ({ field, type, gen }) => field.column(type.Time()).onCreate(gen.now()),
+    psl: { preset: 'temporal.time(onCreate: now)', replacement: 'TimeTemporal @onCreate(now())' },
+    ts: ({ field, type, gen }) => field.column(type.TimeTemporal()).onCreate(gen.now()),
   },
   {
     model: 'TimeStringOnCreate',
@@ -425,16 +446,22 @@ export const postgresRows: readonly SqlRow<PostgresHelpers>[] = [
   },
   {
     model: 'OptionalCreatedAt',
-    psl: { preset: 'temporal.createdAt()?', replacement: 'temporal.CreatedAt?' },
-    ts: ({ field, type }) => field.column(type.temporal.CreatedAt()).optional(),
+    psl: { preset: 'temporal.createdAt()?', replacement: 'TimestamptzTemporal? @onCreate(now())' },
+    ts: ({ field, type, gen }) =>
+      field.column(type.TimestamptzTemporal()).onCreate(gen.now()).optional(),
   },
   {
     model: 'MappedUpdatedAt',
     psl: {
       preset: 'temporal.updatedAt() @map("updated_at")',
-      replacement: 'temporal.UpdatedAt @map("updated_at")',
+      replacement: 'TimestamptzTemporal @onCreate(now()) @onUpdate(now()) @map("updated_at")',
     },
-    ts: ({ field, type }) => field.column(type.temporal.UpdatedAt()).column('updated_at'),
+    ts: ({ field, type, gen }) =>
+      field
+        .column(type.TimestamptzTemporal())
+        .onCreate(gen.now())
+        .onUpdate(gen.now())
+        .column('updated_at'),
   },
   {
     model: 'UpdateOnlyWithOnCreate',

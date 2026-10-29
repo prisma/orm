@@ -212,7 +212,7 @@ test('integrated callback authoring exposes composition-shaped type helpers', ()
         pgvector: pgvectorPack,
       },
     },
-    ({ type, field, model }) => {
+    ({ type, field, model, gen }) => {
       const Embedding = type.pgvector.Vector(1536);
 
       expectTypeOf(Embedding.codecId).toEqualTypeOf<'pg/vector@1'>();
@@ -229,7 +229,7 @@ test('integrated callback authoring exposes composition-shaped type helpers', ()
               score: field.column(type.Float()).optional(),
               profile: field.column(type.Jsonb()).optional(),
               embedding: field.column(Embedding).optional(),
-              createdAt: field.column(type.temporal.CreatedAt()),
+              createdAt: field.column(type.TimestamptzTemporal()).onCreate(gen.now()),
             },
           }).sql({
             table: 'user',

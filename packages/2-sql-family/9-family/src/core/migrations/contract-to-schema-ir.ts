@@ -158,8 +158,7 @@ function contractDefaultValue(
 }
 
 /**
- * The column's type as the database reports it, from the type it is stored as: the written name with its normal-form parameters (`character(1)` for a bare `character`), or for a
- * type that claims a kind (an enum), its type name as stored.
+ * The column's type as the database reports it, from the type it is stored as: the written name with the parameters the catalog prints for those written (`character(1)` for a bare `character`, `timestamptz` for a bare `timestamptz`), or for a type that claims a kind (an enum), its type name as stored.
  */
 function schemaTypeText(
   type: SqlDataType,
@@ -167,7 +166,7 @@ function schemaTypeText(
 ): string {
   const params = dataTypeParams(type, typeParams);
   return type.sql.claimsKind === undefined
-    ? renderSqlTypeName(type, type.sql.normalize(params))
+    ? renderSqlTypeName(type, type.sql.catalogParams(params))
     : unquotedSqlBaseName(type, params);
 }
 

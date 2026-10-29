@@ -602,7 +602,7 @@ describe('createBinder — binding a mixin body once', () => {
     );
 
     expect(diagnostics).toEqual([]);
-    expect(fieldContexts.map((ctx) => ctx.typeConstructor?.name)).toEqual([
+    expect(fieldContexts.map((ctx) => ctx.contributedType?.symbol.name)).toEqual([
       'Int',
       'Int',
       undefined,

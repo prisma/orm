@@ -1,6 +1,7 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type {
   AuthoringArgumentDescriptor,
+  AuthoringTypeChoiceOption,
   DataTypeAuthoringEntry,
   DataTypeSupport,
 } from '@internal/framework-components/authoring';
@@ -64,7 +65,7 @@ const definition = { kind: 'value', dataType: 'sql/expression', name: 'sql' } as
 
 function callWith(
   argumentText: string,
-  descriptors: readonly AuthoringArgumentDescriptor[],
+  descriptors: readonly (AuthoringArgumentDescriptor | AuthoringTypeChoiceOption)[],
 ): { result: readonly unknown[] | undefined; diagnostics: ContractSourceDiagnostic[] } {
   const cursor = new Cursor('schema.prisma', `@x(${argumentText})`);
   const root = createSyntaxTree(parseAttribute(cursor));
@@ -195,6 +196,37 @@ describe('mapPslHelperArgs on a value argument with no expression', () => {
         name: 'InternalError',
         message: expect.stringContaining('received argument #1 with no expression'),
       }),
+    );
+  });
+});
+
+describe('a number written where an option is expected', () => {
+  const option = {
+    kind: 'option',
+    name: 'as',
+    values: ['string', 'temporal'],
+    default: 'string',
+    optional: true,
+  } as const;
+  const message = (refusal: { diagnostics: ContractSourceDiagnostic[] }) =>
+    refusal.diagnostics[0]?.message;
+
+  it('says to write the one value argument that takes a number by name', () => {
+    expect(message(callWith('3', [option, { ...length, name: 'precision' }]))).toBe(
+      'Field "Model.field" constructor "Sized" argument #1 is 3, but argument "as" takes one of these names, written without quotes: string, temporal. Write precision by name, as in precision: 3.',
+    );
+  });
+
+  it('says only which names the option takes when no value argument takes a number', () => {
+    const label = { kind: 'value', dataType: 'pg/text', name: 'label', optional: true } as const;
+    expect(message(callWith('3', [option, label]))).toBe(
+      'Field "Model.field" constructor "Sized" argument #1 is 3, but argument "as" takes one of these names, written without quotes: string, temporal.',
+    );
+  });
+
+  it('says only which names the option takes when two value arguments take a number', () => {
+    expect(message(callWith('3', [option, length, { ...length, name: 'scale' }]))).toBe(
+      'Field "Model.field" constructor "Sized" argument #1 is 3, but argument "as" takes one of these names, written without quotes: string, temporal.',
     );
   });
 });

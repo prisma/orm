@@ -39,7 +39,7 @@ Record of the design discussion between the operator and the orchestrator on 202
 
 **The Prisma 7 reader gives back `Date`.** Prisma 7's `DateTime` is a `timestamp(3)` column read as a `Date`. Mapping it to `DateTime(storage: timestamp)` keeps an upgraded app's code compiling. This reverses the choice made when inferred and Prisma 7 columns moved to string types, which rejected `Date` only because no `timestamp` `Date` codec existed.
 
-**TypeScript follows the `type.*` helpers.** The field-preset removal project gives every PSL type constructor a `type.*` helper. This project makes the builder's compile-time resolver evaluate a codec chosen by arguments, so `type.DateTime(...)` types precisely once the helpers land, instead of building a separate TypeScript surface now.
+**TypeScript helpers take one object.** `type.DateTime({ as: 'string', precision: 6 })`, with one overload per row of the table, so a call is typed as the explicit type it picks and an unlisted combination does not compile (settled 2026-10-23). Explicit constructors stay positional.
 
 **PostgreSQL only.** A convenience name must mean the same on every target. SQLite's `DateTime` and MongoDB's `Date` already use the names for explicit types, and MongoDB's `Date` is a moment in time. Resolving them is TML-3714.
 
@@ -66,6 +66,6 @@ None. Settled on 2026-10-22:
 
 ## References
 
-- ADR 279 (draft) and ADR 241, 246, 254, 257, 275.
+- ADR 279 and ADR 241, 254, 257, 275.
 - Architecture overview: "Domain-first surfaces", "Explicit over implicit".
 - The research report (private artifact, 2026-10-21).

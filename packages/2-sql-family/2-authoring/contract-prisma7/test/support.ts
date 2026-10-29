@@ -14,6 +14,7 @@ import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { dirname, join } from 'pathe';
 import { interpretPrisma7Documents } from '../src/interpreter';
 import { prisma7Contract } from '../src/provider';
+import type { Prisma7TargetBinding } from '../src/target-binding';
 
 export const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -110,7 +111,10 @@ export function fixtureSchemaText(caseName: string): string {
 }
 
 /** Interprets Prisma 7 schema text with the Postgres composition. */
-export function interpretSchemaTextResult(text: string) {
+export function interpretSchemaTextResult(
+  text: string,
+  binding: Prisma7TargetBinding = prisma7PostgresBinding,
+) {
   const context = postgresSourceContext(['schema.prisma']);
   const { document, sources } = parse(text, 'schema.prisma', { grammar: 'prisma-7' });
   return interpretPrisma7Documents({
@@ -124,7 +128,7 @@ export function interpretSchemaTextResult(text: string) {
     ],
     seedDiagnostics: [],
     defaultNamespaceId: context.defaultNamespaceId,
-    binding: prisma7PostgresBinding,
+    binding,
     controlMutationDefaults: context.controlMutationDefaults,
     generatorFunctions: context.generatorFunctions,
     authoringContributions: context.authoringContributions,

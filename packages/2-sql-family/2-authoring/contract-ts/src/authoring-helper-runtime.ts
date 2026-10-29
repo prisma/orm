@@ -1,6 +1,7 @@
 import { assertSafeAuthoringHelperKey } from '@internal/contract-authoring';
 import type {
   AuthoringArgumentDescriptor,
+  AuthoringTypeChoiceOption,
   AuthoringTypeNamespace,
   DataTypeSupport,
   WrittenScalar,
@@ -10,9 +11,14 @@ import {
   instantiateAuthoringTypeAlias,
   instantiateAuthoringTypeConstructor,
   isAuthoringTypeAliasDescriptor,
+  isAuthoringTypeChoiceDescriptor,
   isAuthoringTypeConstructorDescriptor,
   readWrittenValueAs,
+  resolveAuthoringTypeChoice,
+  typeChoiceArgumentsFromObject,
+  typeConstructorLookup,
   validateAuthoringHelperArguments,
+  validateAuthoringTypeChoiceParams,
   validateAuthoringTypeParams,
 } from '@internal/framework-components/authoring';
 import {
@@ -67,17 +73,17 @@ function readValueArgument(
 }
 
 /**
- * The arguments of a type constructor call as the constructor receives them: each `value` argument read as a value of its data type, through the same read and cast as a PSL argument, so both give the same parameters. ADR 129, ADR 254.
+ * The arguments of a type constructor or type choice call as the constructor receives them: each `value` argument read as a value of its data type, through the same read and cast as a PSL argument, so both give the same parameters. ADR 129, ADR 254.
  */
 export function readValueArguments(
   helperPath: string,
-  descriptors: readonly AuthoringArgumentDescriptor[] | undefined,
+  descriptors: readonly (AuthoringArgumentDescriptor | AuthoringTypeChoiceOption)[] | undefined,
   args: readonly unknown[],
   dataTypes: DataTypeSupport,
 ): readonly unknown[] {
   return args.map((value, index) => {
     const descriptor = descriptors?.[index];
-    if (descriptor === undefined || value === undefined) return value;
+    if (descriptor?.kind !== 'value' || value === undefined) return value;
     const label =
       descriptor.name === undefined
         ? `Argument #${index + 1} of ${helperPath}`
@@ -106,6 +112,35 @@ export function createTypeHelpersFromNamespace(
         validateAuthoringTypeParams(
           helperPath,
           value.output,
+          output.typeParams,
+          lookups.codecLookup.descriptorFor(output.codecId)?.paramsSchema,
+        );
+        return {
+          kind: CODEC_INSTANCE_KIND,
+          codecId: output.codecId,
+          typeParams: output.typeParams ?? {},
+        };
+      };
+      continue;
+    }
+
+    if (isAuthoringTypeChoiceDescriptor(value)) {
+      const helperPath = currentPath.join('.');
+      const constructorNamed = typeConstructorLookup(namespace);
+      helpers[key] = (...written: readonly unknown[]): AuthoredStorageTypeInstance => {
+        const args = typeChoiceArgumentsFromObject(helperPath, value, written);
+        validateAuthoringHelperArguments(helperPath, value.args, args);
+        const chosen = resolveAuthoringTypeChoice({
+          helperPath,
+          descriptor: value,
+          args: readValueArguments(helperPath, value.args, args, lookups.dataTypes),
+          constructorNamed,
+        });
+        const output = instantiateAuthoringTypeConstructor(chosen.descriptor, chosen.args);
+        validateAuthoringTypeChoiceParams(
+          helperPath,
+          value,
+          chosen.descriptor,
           output.typeParams,
           lookups.codecLookup.descriptorFor(output.codecId)?.paramsSchema,
         );

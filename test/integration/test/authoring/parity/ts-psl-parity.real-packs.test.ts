@@ -3,7 +3,10 @@ import sqliteAdapter from '@internal/adapter-sqlite/control';
 import pgvectorControl from '@internal/extension-pgvector/control';
 import pgvectorPack from '@internal/extension-pgvector/pack';
 import sqlFamilyControl from '@internal/family-sql/control';
-import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
+import {
+  type AuthoringTypeNamespace,
+  isAuthoringTypeConstructorDescriptor,
+} from '@internal/framework-components/authoring';
 import { createControlStack } from '@internal/framework-components/control';
 import {
   defineContract,
@@ -70,9 +73,10 @@ const SAMPLE_ARGUMENTS: Readonly<Record<string, number>> = { length: 10, precisi
 
 /** Every PSL type constructor of a namespace, called with no arguments and, when it takes any, with a sample value for each. */
 function constructorCalls(
-  constructors: Readonly<Record<string, AuthoringTypeConstructorDescriptor>>,
+  constructors: AuthoringTypeNamespace,
 ): readonly { readonly column: string; readonly name: string; readonly args: readonly number[] }[] {
   return Object.entries(constructors).flatMap(([name, descriptor]) => {
+    if (!isAuthoringTypeConstructorDescriptor(descriptor)) return [];
     const declared = descriptor.args ?? [];
     const sampled = declared.map((arg) => {
       const value = arg.name === undefined ? undefined : SAMPLE_ARGUMENTS[arg.name];
@@ -340,6 +344,53 @@ describe('type.* helpers and PSL type constructors', () => {
     const interpreted = interpretWithRealPacks(`model Sample {
   id Int @id
 ${calls.map((call) => `  ${call.column} ${pslFieldType(call)}`).join('\n')}
+}
+`);
+
+    expect(interpreted.ok).toBe(true);
+    if (!interpreted.ok) return;
+
+    expect(interpreted.value).toEqual(tsContract);
+  });
+
+  it('give the same column for each convenience date and time type and the same arguments', () => {
+    const tsContract = defineContract(
+      { extensions: { pgvector: pgvectorPack } },
+      ({ type, field, model }) => ({
+        models: {
+          Sample: model('Sample', {
+            fields: {
+              id: field.column(int4Column).id(),
+              paid: field.column(type.DateTime()),
+              settled: field.column(type.DateTime({ as: 'temporal' })),
+              legacy: field.column(
+                type.DateTime({ as: 'jsDate', storage: 'timestamp', precision: 6 }),
+              ),
+              text: field.column(type.DateTime({ as: 'string', storage: 'timestamp' })),
+              ship: field.column(type.Date()),
+              shipT: field.column(type.Date({ as: 'temporal' })),
+              opens: field.column(type.Time({ precision: 0 })),
+              local: field.column(type.Time({ as: 'string', storage: 'timetz' })),
+              period: field.column(type.Duration({ precision: 3 })),
+              parts: field.column(type.Duration({ as: 'parts' })),
+            },
+          }).sql({ table: 'Sample' }),
+        },
+      }),
+    );
+
+    const interpreted = interpretWithRealPacks(`model Sample {
+  id      Int @id
+  paid    DateTime
+  settled DateTime(as: temporal)
+  legacy  DateTime(jsDate, timestamp, 6)
+  text    DateTime(as: string, storage: timestamp)
+  ship    Date
+  shipT   Date(temporal)
+  opens   Time(precision: 0)
+  local   Time(storage: timetz)
+  period  Duration(precision: 3)
+  parts   Duration(as: parts)
 }
 `);
 

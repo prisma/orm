@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { resolveWrittenSqlTypes as resolveWritten } from '../src/sql-data-type';
-import { char, character, int4, numeric, timestamp } from './sql-data-type-fixtures';
+import { char, character, int4, numeric, timestamp, timestamptz } from './sql-data-type-fixtures';
 
 /** resolveWrittenSqlTypes, with each resolved data type named by its id for the expectations. */
 const resolveWrittenSqlTypes = (...args: Parameters<typeof resolveWritten>) =>
@@ -33,6 +33,21 @@ describe('resolveWrittenSqlTypes', () => {
       [{ dataType: 't/numeric', typeParams: { precision: 10, scale: 0 } }],
       [{ dataType: 't/char', typeParams: { length: 1 } }],
       [{ dataType: 't/timestamp', typeParams: { precision: 3 } }],
+    ]);
+  });
+
+  it('keeps the parameters as the text writes them beside their normal form', () => {
+    expect(
+      ['timestamptz', 'timestamptz(6)', 'numeric(10)'].map((text) =>
+        resolveWritten(text, [timestamptz, numeric]).map(({ typeParams, writtenTypeParams }) => ({
+          typeParams,
+          writtenTypeParams,
+        })),
+      ),
+    ).toEqual([
+      [{ typeParams: { precision: 6 }, writtenTypeParams: {} }],
+      [{ typeParams: { precision: 6 }, writtenTypeParams: { precision: 6 } }],
+      [{ typeParams: { precision: 10, scale: 0 }, writtenTypeParams: { precision: 10 } }],
     ]);
   });
 

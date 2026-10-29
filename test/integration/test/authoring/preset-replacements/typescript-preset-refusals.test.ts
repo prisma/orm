@@ -56,11 +56,24 @@ const generated =
   ([code = '']) =>
     code.replace('(n)', `(${length})`).replace('gen.fn()', `gen.${generator}`);
 
+/** The column with `precision` for `p`, or without the precision when it is empty: `type.X(p)` for an explicit type, `precision: p` in the options of a type choice. */
+function withPrecision(column: string, precision: string): string {
+  if (precision !== '') {
+    return column
+      .replace('(p)', `(${precision})`)
+      .replace('precision: p', `precision: ${precision}`);
+  }
+  return column
+    .replace('(p)', '()')
+    .replace('({ precision: p })', '()')
+    .replace(', precision: p', '');
+}
+
 /** The column the rewrite names, with `precision` for `p` (`undefined` when the preset took no precision, so the rewrite must name none), and the rewrite's `.onCreate(...)` and `.onUpdate(...)` for the phases the preset set. */
 const withPhases =
   (precision: string | undefined, phases: readonly ('onCreate' | 'onUpdate')[]): Write =>
   ([column = '', ...modifiers]) => {
-    if (precision === undefined && column.includes('(p)')) {
+    if (precision === undefined && /\(p\)|precision: p/.test(column)) {
       throw new Error(`the rewrite ${column} names a precision the preset did not take`);
     }
     const modifiersOfPhases = phases.map((phase) => {
@@ -68,7 +81,7 @@ const withPhases =
       if (modifier === undefined) throw new Error(`the rewrite names no .${phase}(...)`);
       return modifier;
     });
-    return column.replace('(p)', `(${precision ?? ''})`) + modifiersOfPhases.join('');
+    return withPrecision(column, precision ?? '') + modifiersOfPhases.join('');
   };
 
 const BOTH = ['onCreate', 'onUpdate'] as const;

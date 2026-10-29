@@ -9,6 +9,7 @@ import {
   type CodecInstanceContext,
   type DataTypeValue,
   decimalTextBigintLiteral,
+  refuseJsonValue,
   renderTsLiteral,
 } from '@internal/framework-components/codec';
 import { sqlRawDataType } from '@internal/sql-contract/data-type';
@@ -259,6 +260,13 @@ export class MysqlDatetimeCodec extends CodecImpl<
     return decodeMysqlDatetime(wire);
   }
   fromDataTypeValue(value: DataTypeValue<string>): Date {
+    if (/[1-9]/.test(/\.(\d+)/.exec(value.value)?.[1]?.slice(3) ?? '')) {
+      return refuseJsonValue(
+        this.id,
+        `a datetime with no digits below a millisecond, which a Date drops: ${JSON.stringify(value.value)} has them`,
+        value.value,
+      );
+    }
     return new Date(`${value.value}Z`);
   }
   toDataTypeValue(input: Date): DataTypeValue {

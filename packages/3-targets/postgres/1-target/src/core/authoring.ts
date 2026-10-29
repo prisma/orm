@@ -56,12 +56,7 @@ import { assertWireNamePrefixLength, normalizeSqlBody } from '@internal/sql-sche
 import { assertDefined, invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import {
-  PG_ENUM_CODEC_ID,
-  PG_TIMESTAMPTZ_DATE_CODEC_ID,
-  PG_TIMESTAMPTZ_STRING_CODEC_ID,
-  PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
-} from './codec-ids';
+import { PG_ENUM_CODEC_ID, PG_TIMESTAMPTZ_DATE_CODEC_ID } from './codec-ids';
 import { postgresError } from './errors';
 import {
   describeFullTextIndexProblem,
@@ -155,27 +150,15 @@ export const postgresAuthoringTypes = {
   temporal: postgresTemporalTypeAliases(),
 } as const satisfies AuthoringTypeNamespace;
 
+/**
+ * The created-at and updated-at aliases, on the type bare `DateTime` becomes: a `timestamptz(3)` column read as a JavaScript `Date` (ADR 279).
+ */
 /* @__NO_SIDE_EFFECTS__ */
 function postgresTemporalTypeAliases() {
-  const temporal = temporalTypeAliases(
-    { codecId: PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID },
-    'a Temporal.Instant',
-  );
-  const string = temporalTypeAliases(
-    { codecId: PG_TIMESTAMPTZ_STRING_CODEC_ID },
-    'a string, the timestamp as Postgres writes it, such as 2024-01-02 03:04:05+00',
-  );
-  const jsDate = temporalTypeAliases(
-    { codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID },
+  return temporalTypeAliases(
+    { codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID, typeParams: { precision: 3 } },
     'a JavaScript Date',
   );
-  return {
-    ...temporal,
-    CreatedAtString: string.CreatedAt,
-    UpdatedAtString: string.UpdatedAt,
-    CreatedAtJsDate: jsDate.CreatedAt,
-    UpdatedAtJsDate: jsDate.UpdatedAt,
-  } as const;
 }
 
 const policyTargetParam = {

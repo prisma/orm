@@ -52,12 +52,6 @@ export const postgresScalarAuthoringTypes = {
     documentation: 'An exact decimal value stored as PostgreSQL numeric.',
     output: { codecId: 'pg/numeric@1' },
   },
-  DateTime: {
-    kind: 'typeConstructor',
-    documentation:
-      'An instant stored as PostgreSQL timestamptz and represented as Temporal.Instant.',
-    output: { codecId: 'pg/timestamptz-temporal@1' },
-  },
   Json: {
     kind: 'typeConstructor',
     inferred: true,
@@ -143,15 +137,6 @@ export const postgresNativeAuthoringTypes = {
       typeParams: { precision: { kind: 'arg', index: 0 } },
     },
   },
-  Time: {
-    kind: 'typeConstructor',
-    documentation: 'A time of day without a time zone, represented as Temporal.PlainTime.',
-    args: [{ kind: 'value', dataType: PG_SIZE_TYPE, name: 'precision', optional: true }],
-    output: {
-      codecId: 'pg/time-temporal@1',
-      typeParams: { precision: { kind: 'arg', index: 0 } },
-    },
-  },
   Timetz: {
     kind: 'typeConstructor',
     inferred: true,
@@ -192,14 +177,6 @@ export const postgresNativeAuthoringTypes = {
     documentation: 'A calendar date represented as Temporal.PlainDate.',
     output: { codecId: 'pg/date-temporal@1' },
   },
-  Date: {
-    kind: 'typeConstructor',
-    documentation: 'A calendar date represented as Temporal.PlainDate.',
-    output: { codecId: 'pg/date-temporal@1' },
-  },
-  // The representation-explicit spellings. Same columns, same precision, same native types — the
-  // only difference is that a read hands back ISO 8601 text instead of a `Temporal.*`, so a value
-  // Temporal cannot express still round-trips.
   DateString: {
     kind: 'typeConstructor',
     inferred: true,
@@ -208,7 +185,6 @@ export const postgresNativeAuthoringTypes = {
   },
   TimestampString: {
     kind: 'typeConstructor',
-    inferred: true,
     documentation: 'A timestamp without a time zone represented as ISO 8601 text.',
     args: [{ kind: 'value', dataType: PG_SIZE_TYPE, name: 'precision', optional: true }],
     output: {
@@ -218,6 +194,7 @@ export const postgresNativeAuthoringTypes = {
   },
   TimestamptzJsDate: {
     kind: 'typeConstructor',
+    inferred: true,
     documentation:
       'An instant stored as PostgreSQL timestamptz and represented as a JavaScript Date.',
     args: [{ kind: 'value', dataType: PG_SIZE_TYPE, name: 'precision', optional: true }],
@@ -228,6 +205,7 @@ export const postgresNativeAuthoringTypes = {
   },
   TimestampJsDate: {
     kind: 'typeConstructor',
+    inferred: true,
     documentation:
       'A date and time stored as PostgreSQL timestamp and represented as a JavaScript Date, read and written as UTC.',
     args: [{ kind: 'value', dataType: PG_SIZE_TYPE, name: 'precision', optional: true }],
@@ -248,7 +226,6 @@ export const postgresNativeAuthoringTypes = {
   },
   TimestamptzString: {
     kind: 'typeConstructor',
-    inferred: true,
     documentation: 'A timestamp with time zone represented as ISO 8601 text, the instant in UTC.',
     args: [{ kind: 'value', dataType: PG_SIZE_TYPE, name: 'precision', optional: true }],
     output: {
@@ -288,7 +265,6 @@ export const postgresNativeAuthoringTypes = {
   },
   IntervalParts: {
     kind: 'typeConstructor',
-    inferred: true,
     documentation:
       'A span of time stored as PostgreSQL interval and represented as { months, days, micros }, with optional fractional-second precision.',
     args: [{ kind: 'value', dataType: PG_SIZE_TYPE, name: 'precision', optional: true }],
@@ -299,6 +275,7 @@ export const postgresNativeAuthoringTypes = {
   },
   IntervalString: {
     kind: 'typeConstructor',
+    inferred: true,
     documentation:
       'A span of time stored as PostgreSQL interval and represented as an ISO 8601 duration such as P1Y2M, with optional fractional-second precision.',
     args: [{ kind: 'value', dataType: PG_SIZE_TYPE, name: 'precision', optional: true }],
@@ -309,10 +286,134 @@ export const postgresNativeAuthoringTypes = {
   },
 } as const satisfies AuthoringTypeNamespace;
 
+const precision = {
+  kind: 'value',
+  dataType: PG_SIZE_TYPE,
+  name: 'precision',
+  optional: true,
+} as const;
+
+/**
+ * The convenience date and time types. Each is a type choice: its `as` and `storage` arguments choose the explicit type it becomes, and `precision` is passed on to that type. ADR 279.
+ */
+export const postgresConvenienceDateTimeTypes = {
+  DateTime: {
+    kind: 'typeChoice',
+    documentation:
+      'A moment in time. `as` is what the application reads: jsDate (a JavaScript Date), temporal (Temporal.Instant) or string. `storage` is timestamptz or timestamp, a timestamp read and written as UTC.',
+    args: [
+      {
+        kind: 'option',
+        name: 'as',
+        values: ['jsDate', 'temporal', 'string'],
+        default: 'jsDate',
+        optional: true,
+      },
+      {
+        kind: 'option',
+        name: 'storage',
+        values: ['timestamptz', 'timestamp'],
+        default: 'timestamptz',
+        optional: true,
+      },
+      precision,
+    ],
+    choices: [
+      {
+        when: { as: 'jsDate', storage: 'timestamptz' },
+        type: 'TimestamptzJsDate',
+        defaults: { precision: 3 },
+      },
+      { when: { as: 'temporal', storage: 'timestamptz' }, type: 'TimestamptzTemporal' },
+      { when: { as: 'string', storage: 'timestamptz' }, type: 'TimestamptzString' },
+      {
+        when: { as: 'jsDate', storage: 'timestamp' },
+        type: 'TimestampJsDate',
+        defaults: { precision: 3 },
+      },
+      { when: { as: 'temporal', storage: 'timestamp' }, type: 'TimestampInstant' },
+      { when: { as: 'string', storage: 'timestamp' }, type: 'TimestampString' },
+    ],
+  },
+  Date: {
+    kind: 'typeChoice',
+    documentation:
+      'A calendar date. `as` is what the application reads: string, such as "2024-02-29", or temporal (Temporal.PlainDate).',
+    args: [
+      {
+        kind: 'option',
+        name: 'as',
+        values: ['string', 'temporal'],
+        default: 'string',
+        optional: true,
+      },
+      { kind: 'option', name: 'storage', values: ['date'], default: 'date', optional: true },
+    ],
+    choices: [
+      { when: { as: 'string', storage: 'date' }, type: 'DateString' },
+      { when: { as: 'temporal', storage: 'date' }, type: 'DateTemporal' },
+    ],
+  },
+  Time: {
+    kind: 'typeChoice',
+    documentation:
+      'A time of day. `as` is what the application reads: string, such as "09:30:00", or temporal (Temporal.PlainTime). `storage` is time, or timetz with as: string.',
+    args: [
+      {
+        kind: 'option',
+        name: 'as',
+        values: ['string', 'temporal'],
+        default: 'string',
+        optional: true,
+      },
+      {
+        kind: 'option',
+        name: 'storage',
+        values: ['time', 'timetz'],
+        default: 'time',
+        optional: true,
+      },
+      precision,
+    ],
+    choices: [
+      { when: { as: 'string', storage: 'time' }, type: 'TimeString' },
+      { when: { as: 'temporal', storage: 'time' }, type: 'TimeTemporal' },
+      { when: { as: 'string', storage: 'timetz' }, type: 'Timetz' },
+    ],
+  },
+  Duration: {
+    kind: 'typeChoice',
+    documentation:
+      'A length of time. `as` is what the application reads: string, an ISO 8601 duration such as "P1M", or parts, the object { months, days, micros }.',
+    args: [
+      {
+        kind: 'option',
+        name: 'as',
+        values: ['string', 'parts'],
+        default: 'string',
+        optional: true,
+      },
+      {
+        kind: 'option',
+        name: 'storage',
+        values: ['interval'],
+        default: 'interval',
+        optional: true,
+      },
+      precision,
+    ],
+    choices: [
+      { when: { as: 'string', storage: 'interval' }, type: 'IntervalString' },
+      { when: { as: 'parts', storage: 'interval' }, type: 'IntervalParts' },
+    ],
+  },
+} as const satisfies AuthoringTypeNamespace;
+
 /**
  * The base scalars and native types as type constructors. The target contributes them, so PSL and the TypeScript builder's `type.*` see the same names.
  */
 export const postgresScalarAndNativeTypeConstructors = {
   ...postgresNativeAuthoringTypes,
   ...postgresScalarAuthoringTypes,
+  ...postgresConvenienceDateTimeTypes,
 } as const satisfies AuthoringTypeNamespace;

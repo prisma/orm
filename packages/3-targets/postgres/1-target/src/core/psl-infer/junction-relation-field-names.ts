@@ -57,7 +57,7 @@ export function junctionRelationFieldNames(
       tables: { [tableA]: idTable(tableA), [tableB]: idTable(tableB), [junctionName]: junction },
     }),
     {
-      columnTypes: () => ({ path: ['Int'], args: [], values: [] }),
+      columnTypes: () => ({ path: ['Int'], args: [], explicit: { path: ['Int'], values: [] } }),
       defaultMapping: createPostgresDefaultMapping(),
       defaultOf: noInferredDefaults,
       columnDefaults: noColumnDefaults,

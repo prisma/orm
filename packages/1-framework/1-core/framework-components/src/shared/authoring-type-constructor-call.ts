@@ -4,8 +4,8 @@ import {
   type AuthoringTypeNamespace,
   instantiateAuthoringTypeConstructor,
   isAuthoringArgRef,
-  isAuthoringTypeAliasDescriptor,
   isAuthoringTypeConstructorDescriptor,
+  isAuthoringTypeDescriptor,
 } from './framework-authoring';
 
 /** What a type constructor call produces for a column. */
@@ -28,13 +28,14 @@ export function* authoringTypeConstructors(
   for (const [name, value] of Object.entries(namespace)) {
     if (isAuthoringTypeConstructorDescriptor(value)) {
       yield { path: [...path, name], descriptor: value };
-    } else if (!isAuthoringTypeAliasDescriptor(value)) {
+    } else if (!isAuthoringTypeDescriptor(value)) {
       yield* authoringTypeConstructors(value, [...path, name]);
     }
   }
 }
 
-function produces(
+/** Whether `produced` is exactly `wanted`: the same codec and the same type parameters, an absent set of parameters counting as an empty one. */
+export function sameAuthoringTypeConstructorOutput(
   produced: AuthoringTypeConstructorOutput,
   wanted: AuthoringTypeConstructorOutput,
 ): boolean {
@@ -69,7 +70,10 @@ export function authoringTypeConstructorArguments(
   const requiredArgs = (descriptor.args ?? []).filter((arg) => arg.optional !== true).length;
   if (args.length < requiredArgs || Array.from(args).includes(undefined)) return undefined;
   try {
-    return produces(instantiateAuthoringTypeConstructor(descriptor, args), output)
+    return sameAuthoringTypeConstructorOutput(
+      instantiateAuthoringTypeConstructor(descriptor, args),
+      output,
+    )
       ? args
       : undefined;
   } catch {

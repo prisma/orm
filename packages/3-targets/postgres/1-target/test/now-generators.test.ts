@@ -144,6 +144,11 @@ describe('the text "now" generators', () => {
     expect(postgresNowGeneratorTakesPrecision).toMatchObject({
       'pg/timestamp-string@1': true,
       'pg/timestamptz-string@1': true,
+      'pg/timestamptz-date@1': true,
+      'pg/timestamp-date@1': true,
+      'pg/timestamptz-temporal@1': true,
+      'pg/timestamp-temporal@1': true,
+      'pg/timestamp-instant@1': true,
     });
   });
 
@@ -178,6 +183,31 @@ describe('the time "now" generators', () => {
       time,
     ]);
   });
+});
+
+describe('the Temporal timestamp "now" generators', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it.each([
+    [0, '2024-01-02T23:59:59'],
+    [1, '2024-01-02T23:59:59.9'],
+    [2, '2024-01-02T23:59:59.99'],
+    [3, '2024-01-02T23:59:59.999'],
+    [6, '2024-01-02T23:59:59.999'],
+    [undefined, '2024-01-02T23:59:59.999'],
+  ])(
+    'round down to precision %s, so the column stores the value the client holds',
+    (precision, text) => {
+      vi.useFakeTimers({ now: new Date('2024-01-02T23:59:59.999Z') });
+      const params = precision === undefined ? undefined : { precision };
+      expect([instantNow(params).toString(), plainDateTimeNow(params).toString()]).toEqual([
+        `${text}Z`,
+        text,
+      ]);
+    },
+  );
 });
 
 describe('the Temporal date and time "now" generators', () => {

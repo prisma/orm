@@ -124,13 +124,13 @@ describe('generated values', () => {
   it('writes a now generator on create and on update', () => {
     const now = generator(postgresNowGeneratorIds[PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID]);
     expect(withGenerator(timestamptz, { onCreate: now, onUpdate: now })).toBe(
-      'value TimestamptzTemporal @onCreate(now()) @onUpdate(now())',
+      'value DateTime(as: temporal) @onCreate(now()) @onUpdate(now())',
     );
   });
 
   it("writes a time now generator whose precision is the column's as @onUpdate(now())", () => {
     expect(withGenerator(time3, { onUpdate: generator('plainTimeNow', { precision: 3 }) })).toBe(
-      'value TimeTemporal(3) @onUpdate(now())',
+      'value Time(as: temporal, precision: 3) @onUpdate(now())',
     );
   });
 
@@ -140,7 +140,7 @@ describe('generated values', () => {
         { ...timestamptz, default: { kind: 'function', expression: 'now()' } },
         { onCreate: generator('instantNow') },
       ),
-    ).toBe('value TimestamptzTemporal @default(now()) @onCreate(now())');
+    ).toBe('value DateTime(as: temporal) @default(now()) @onCreate(now())');
   });
 
   it('writes a generator through the generator function an extension contributes', () => {

@@ -28,7 +28,7 @@ const REPRESENTATIVE_SCHEMA = `model sample {
   unbounded UnboundedInt
   ratio     Float
   price     Decimal
-  createdAt DateTime
+  createdAt TimestamptzTemporal
   payload   Json
   document  Jsonb
   raw       Bytes
@@ -68,7 +68,6 @@ describe('postgres scalar types derived from the unified namespace', () => {
       Float: { codecId: 'pg/float8@1' },
       Inet: { codecId: 'pg/inet@1' },
       Decimal: { codecId: 'pg/numeric@1' },
-      DateTime: { codecId: 'pg/timestamptz-temporal@1' },
       Json: { codecId: 'pg/json@1' },
       Jsonb: { codecId: 'pg/jsonb@1' },
       Bytes: { codecId: 'pg/bytea@1' },
@@ -77,13 +76,11 @@ describe('postgres scalar types derived from the unified namespace', () => {
       Numeric: { codecId: 'pg/numeric@1' },
       TimestampTemporal: { codecId: 'pg/timestamp-temporal@1' },
       TimestamptzTemporal: { codecId: 'pg/timestamptz-temporal@1' },
-      Time: { codecId: 'pg/time-temporal@1' },
       TimeTemporal: { codecId: 'pg/time-temporal@1' },
       Timetz: { codecId: 'pg/timetz@1' },
       Uuid: { codecId: 'pg/uuid@1' },
       SmallInt: { codecId: 'pg/int2@1' },
       Real: { codecId: 'pg/float4@1' },
-      Date: { codecId: 'pg/date-temporal@1' },
       DateTemporal: { codecId: 'pg/date-temporal@1' },
       DateString: { codecId: 'pg/date-string@1' },
       TimestampString: { codecId: 'pg/timestamp-string@1' },
@@ -96,6 +93,10 @@ describe('postgres scalar types derived from the unified namespace', () => {
       IntervalString: { codecId: 'pg/interval-string@1' },
       TimestampJsDate: { codecId: 'pg/timestamp-date@1' },
       TimestampInstant: { codecId: 'pg/timestamp-instant@1' },
+      DateTime: { codecId: 'pg/timestamptz-date@1', typeParams: { precision: 3 } },
+      Date: { codecId: 'pg/date-string@1' },
+      Time: { codecId: 'pg/time-string@1' },
+      Duration: { codecId: 'pg/interval-string@1' },
     });
   });
 
@@ -112,6 +113,7 @@ describe('postgres scalar types derived from the unified namespace', () => {
       'DateTemporal',
       'DateTime',
       'Decimal',
+      'Duration',
       'Float',
       'Inet',
       'Int',

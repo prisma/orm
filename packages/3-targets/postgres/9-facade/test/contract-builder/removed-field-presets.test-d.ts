@@ -28,9 +28,9 @@ const contract = defineContract({}, ({ field, model, type, gen }) => ({
       fields: {
         id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
         code: field.column(type.Char(12)),
-        seenAt: field.column(type.Time(3)).onUpdate(gen.now()),
-        createdAt: field.column(type.temporal.CreatedAt()),
-        updatedAt: field.column(type.temporal.UpdatedAt()),
+        seenAt: field.column(type.TimeTemporal(3)).onUpdate(gen.now()),
+        createdAt: field.column(type.TimestamptzTemporal()).onCreate(gen.now()),
+        updatedAt: field.column(type.TimestamptzTemporal()).onCreate(gen.now()).onUpdate(gen.now()),
         payload: field.column(type.Jsonb()).optional(),
         slug: field.column(type.Char(16)).onCreate(gen.nanoid(16)),
         title: field.column(type.String()),

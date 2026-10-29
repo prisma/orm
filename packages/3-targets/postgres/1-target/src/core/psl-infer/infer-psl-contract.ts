@@ -38,7 +38,11 @@ import {
 import { buildModel } from './infer-model-blocks';
 import { buildFieldNamesByTable, buildTopLevelNameMap, topologicalSort } from './infer-names';
 import { buildIntrospectedPolicyBlocks } from './infer-policy-blocks';
-import { type InferredDefaultOf, readInferredDefaults } from './infer-read-defaults';
+import {
+  columnTypeReadsDefault,
+  type InferredDefaultOf,
+  readInferredDefaults,
+} from './infer-read-defaults';
 import { createPostgresDefaultMapping } from './postgres-default-mapping';
 
 /**
@@ -218,15 +222,17 @@ export async function inferPostgresPslContract(
   const enumInfo: EnumInfo = { definitions: enumDefinitions };
   const isEnumColumn = (column: SqlColumnIR) =>
     adoptedEnumTypeName(column, enumInfo.definitions, wrapNamespaceName) !== undefined;
-  const columnTypes = inferColumnTypes({
+  const columnTypes = await inferColumnTypes({
     tables: introspectedTables,
     constructors: inferredTypeConstructors({
       authoringTypes: context.authoringContributions.type,
       codecLookup: context.codecLookup,
       dataTypeLookup: context.dataTypes.lookup,
     }),
+    authoringTypes: context.authoringContributions.type,
     dataTypes: context.dataTypes,
     isEnumColumn,
+    readsDefault: columnTypeReadsDefault(context),
   });
   const options: PostgresPslInferOptions = {
     columnTypes,

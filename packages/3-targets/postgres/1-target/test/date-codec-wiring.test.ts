@@ -35,11 +35,11 @@ describe('Postgres Date codec wiring', () => {
     );
   });
 
-  it('provides opt-in Date type aliases that store the Date codec', () => {
-    const { CreatedAtJsDate, UpdatedAtJsDate } = postgresAuthoringTypes.temporal;
-    expect([CreatedAtJsDate.output.type, UpdatedAtJsDate.output.type]).toEqual([
-      { codecId },
-      { codecId },
+  it('builds the created-at and updated-at aliases on the Date codec at millisecond precision', () => {
+    const { CreatedAt, UpdatedAt } = postgresAuthoringTypes.temporal;
+    expect([CreatedAt.output.type, UpdatedAt.output.type]).toEqual([
+      { codecId, typeParams: { precision: 3 } },
+      { codecId, typeParams: { precision: 3 } },
     ]);
   });
 });

@@ -110,11 +110,11 @@ describe('printPsl literal defaults', () => {
         // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
         model RawDefaults {
-          id       Int                @id
-          stamp    TimestampString(3) @default(timestamp\`2024-01-01T00:00:00\`)
-          day      DateString         @default(date\`2024-01-01\`)
-          jsonNull Jsonb?             @default(json\`null\`)
-          textNull VarChar(32)?       @default(sql\`NULL::character varying\`)
+          id       Int                          @id
+          stamp    DateTime(storage: timestamp) @default(timestamp\`2024-01-01T00:00:00\`)
+          day      Date                         @default(date\`2024-01-01\`)
+          jsonNull Jsonb?                       @default(json\`null\`)
+          textNull VarChar(32)?                 @default(sql\`NULL::character varying\`)
 
           @@map("raw_defaults")
         }
@@ -158,12 +158,12 @@ describe('printPsl literal defaults', () => {
         // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
         model SpecialValueDefaults {
-          id           Int     @id
-          floatNaN     Float   @default(NaN)
-          floatNegInf  Float   @default(-Infinity)
-          realNaN      Real    @default(NaN)
-          decimalNaN   Numeric @default(NaN)
-          timeWithZone Timetz  @default(timetz\`12:34:56Z\`)
+          id           Int                   @id
+          floatNaN     Float                 @default(NaN)
+          floatNegInf  Float                 @default(-Infinity)
+          realNaN      Real                  @default(NaN)
+          decimalNaN   Numeric               @default(NaN)
+          timeWithZone Time(storage: timetz) @default(timetz\`12:34:56Z\`)
 
           @@map("special_value_defaults")
         }
@@ -254,8 +254,8 @@ describe('printPsl literal defaults', () => {
         // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
         model RawListDefaults {
-          id         Int                    @id
-          timestamps TimestampString(3)?[]? @default([timestamp\`2024-01-01T00:00:00\`])
+          id         Int                              @id
+          timestamps DateTime(storage: timestamp)?[]? @default([timestamp\`2024-01-01T00:00:00\`])
 
           @@map("raw_list_defaults")
         }

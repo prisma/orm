@@ -32,8 +32,8 @@ export const contract = defineContract(
       fields: {
         id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
         email: field.column(type.String()),
-        createdAt: field.column(type.temporal.CreatedAt()),
-        updatedAt: field.column(type.temporal.UpdatedAt()),
+        createdAt: field.column(timestamptzTemporalColumn).onCreate(gen.now()),
+        updatedAt: field.column(timestamptzTemporalColumn).onCreate(gen.now()).onUpdate(gen.now()),
         kind: field.namedType(UserEnum),
         address: field.column(type.Jsonb()).optional(),
       },
@@ -46,11 +46,11 @@ export const contract = defineContract(
         body: field.column(type.String()).optional(),
         userId: field.column(type.Char(36)),
         priority: field.namedType(Priority).default(Priority.members.Low),
-        createdAt: field.column(type.temporal.CreatedAt()),
+        createdAt: field.column(timestamptzTemporalColumn).onCreate(gen.now()),
         expiresAt: field
           .column(timestamptzTemporalColumn)
           .default(sql`(now() + '7 days'::interval)`),
-        updatedAt: field.column(type.temporal.UpdatedAt()),
+        updatedAt: field.column(timestamptzTemporalColumn).onCreate(gen.now()).onUpdate(gen.now()),
         embedding: Embedding1536.optional(),
       },
     });

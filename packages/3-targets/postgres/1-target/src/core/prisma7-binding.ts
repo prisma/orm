@@ -1,3 +1,6 @@
+import type { JsonValue } from '@internal/contract/types';
+import { isSqlDataType, renderSqlTypeName } from '@internal/sql-contract/data-type';
+import { InternalError } from '@internal/utils/internal-error';
 import { postgresDataTypeEntries } from './data-type-entries';
 import {
   pgBytea,
@@ -8,13 +11,16 @@ import {
   pgTimestamp,
   pgTimestamptz,
   pgTimetz,
+  postgresDataTypes,
 } from './data-types';
 import { defaultForeignKeyName, defaultPrimaryKeyName } from './default-constraint-names';
 import { postgresTargetDescriptorMeta } from './descriptor-meta';
 import { postgresCreateNamespace } from './postgres-schema';
+import { postgresYearText } from './postgres-year-text';
 import { prisma7TemporalStored, prisma7TemporalTagBody } from './prisma7-temporal-defaults';
 import { prisma7PostgresTypeMap } from './prisma7-type-map';
 import { junctionRelationFieldNames } from './psl-infer/junction-relation-field-names';
+import { inlineLiteral } from './sql-utils';
 
 /** The date and time types a Prisma 7 `DateTime` default can be written on. */
 const DATE_TIME_TYPES: ReadonlySet<string> = new Set([
@@ -44,6 +50,36 @@ function base64ToHex(base64: string): string | undefined {
   return `\\x${Buffer.from(base64, 'base64').toString('hex')}`;
 }
 
+/** The column's type as a migration writes it, such as `timestamp(6)`. */
+function writtenTypeName(
+  dataType: string,
+  typeParams: Readonly<Record<string, unknown>> | undefined,
+): string {
+  const type = postgresDataTypes.find((candidate) => candidate.id === dataType);
+  if (type === undefined || !isSqlDataType(type)) {
+    throw new InternalError(`The Postgres target registers no SQL data type "${dataType}".`);
+  }
+  return renderSqlTypeName(type, typeParams ?? {});
+}
+
+/** The SQL expression of a literal default, written as DDL writes the value: one literal, or for a list an array of them cast to an array of the column type. A date or time is written with the year text PostgreSQL reads. */
+function literalDefaultExpression(
+  stored: JsonValue,
+  column: {
+    readonly dataType: string;
+    readonly typeParams?: Readonly<Record<string, unknown>> | undefined;
+  },
+): string {
+  const typeName = writtenTypeName(column.dataType, column.typeParams);
+  const text = (value: JsonValue) =>
+    typeof value === 'string' && DATE_TIME_TYPES.has(column.dataType)
+      ? postgresYearText(value)
+      : value;
+  return Array.isArray(stored)
+    ? inlineLiteral(stored.map(text), `${typeName}[]`)
+    : inlineLiteral(text(stored), typeName);
+}
+
 /**
  * What the Postgres target supplies to the Prisma 7 interpreter. A `Bytes` or
  * `DateTime` default is read through the tag its column type's authoring entry
@@ -69,6 +105,7 @@ export const prisma7PostgresBinding = {
   identifierMaxBytes: 63,
   defaultConstraintNames: { primaryKey: defaultPrimaryKeyName, foreignKey: defaultForeignKeyName },
   junctionRelationFieldNames,
+  literalDefaultExpression,
   literalDefaultForm: ({
     dataType,
     typeParams,

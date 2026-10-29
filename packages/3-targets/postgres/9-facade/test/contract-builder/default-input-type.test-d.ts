@@ -38,14 +38,14 @@ test('.default() takes the input type of the field codec', () => {
           fields: {
             id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
             instant: field
-              .column(type.DateTime())
+              .column(type.TimestamptzTemporal())
               .default(Temporal.Instant.from('2024-01-01T00:00:00Z')),
             big: field.column(type.BigInt()).default(1n),
             bytes: field.column(type.Bytes()).default(new Uint8Array([120])),
             text: field.column(type.String()).default('x'),
             jsDate: field.column(type.TimestamptzJsDate()).default(new Date()),
             isoString: field.column(type.TimestamptzString()).default('2024-01-01T00:00:00Z'),
-            generatedNow: field.column(type.DateTime()).default(now()),
+            generatedNow: field.column(type.TimestamptzTemporal()).default(now()),
             rawSql: field.column(type.String()).default(sql`'x'`),
             optionalThenDefault: field.column(type.BigInt()).optional().default(1n),
             list: field.column(type.BigInt()).many().default([1n, 2n]),
@@ -72,7 +72,7 @@ test('.default() takes the input type of the field codec', () => {
           fields: {
             id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
             // @ts-expect-error pg/timestamptz-temporal@1 takes a Temporal.Instant, not a string
-            instant: field.column(type.DateTime()).default('2024-01-01'),
+            instant: field.column(type.TimestamptzTemporal()).default('2024-01-01'),
             // @ts-expect-error pg/text@1 takes a string, not a number
             text: field.column(type.String()).default(1),
             // @ts-expect-error pg/int8@1 takes a bigint, not a number

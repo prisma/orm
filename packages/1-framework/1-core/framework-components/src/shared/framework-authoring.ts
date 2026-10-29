@@ -10,6 +10,10 @@ import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { Type } from 'arktype';
+import type {
+  AuthoringTypeChoiceDescriptor,
+  AuthoringTypeChoiceOption,
+} from './authoring-type-choice';
 import type { CodecLookupWithDescriptors } from './codec-types';
 import type { DataTypeId } from './data-type';
 import type {
@@ -85,7 +89,7 @@ export interface AuthoringTypeConstructorDescriptor {
   readonly entityRefArg?: AuthoringTypeConstructorEntityRef;
   /** Present when this name is kept only as an alias of `replacement` and will be removed; it resolves as before, and a source may warn. */
   readonly deprecated?: { readonly replacement: string };
-  /** Marks the constructor written for a column of its codec's data type when no schema names one: `contract infer` writes it, and the Prisma 7 reader will. `contract print` writes it when it produces the column's codec, and otherwise the first constructor in the stack that does, so a `timestamptz` column with the `Temporal` codec prints `DateTime`. At most one per data type. */
+  /** Marks the constructor written for a column of its codec's data type when no schema names one: `contract infer` and the reader of an earlier Prisma version's schema pick it. `contract print` picks it when it produces the column's codec, and otherwise the first constructor in the stack that does; either writes a type choice that becomes it instead, where one does. At most one per data type. */
   readonly inferred?: true;
 }
 
@@ -105,14 +109,22 @@ export interface AuthoringTypeAliasDescriptor {
 }
 
 export type AuthoringTypeNamespace = {
-  readonly [name: string]:
-    | AuthoringTypeConstructorDescriptor
-    | AuthoringTypeAliasDescriptor
-    | AuthoringTypeNamespace;
+  readonly [name: string]: AuthoringTypeNamespaceMember;
 };
 
+/** A leaf of a `type` namespace, or a sub-namespace. */
+export type AuthoringTypeNamespaceMember =
+  | AuthoringTypeConstructorDescriptor
+  | AuthoringTypeAliasDescriptor
+  | AuthoringTypeChoiceDescriptor
+  | AuthoringTypeNamespace;
+
 /** The descriptor kinds a `type` namespace holds as leaves. */
-export const AUTHORING_TYPE_DESCRIPTOR_KINDS = ['typeConstructor', 'typeAlias'] as const;
+export const AUTHORING_TYPE_DESCRIPTOR_KINDS = [
+  'typeConstructor',
+  'typeAlias',
+  'typeChoice',
+] as const;
 
 /**
  * Context surfaced to entity-type factories at call time. Currently a
@@ -596,22 +608,35 @@ function isAuthoringTemplateRecord(value: unknown): value is Record<string, unkn
 }
 
 export function isAuthoringTypeConstructorDescriptor(
-  value: AuthoringTypeConstructorDescriptor | AuthoringTypeAliasDescriptor | AuthoringTypeNamespace,
+  value: object,
 ): value is AuthoringTypeConstructorDescriptor {
   return 'kind' in value && value.kind === 'typeConstructor';
 }
 
 export function isAuthoringTypeAliasDescriptor(
-  value: AuthoringTypeConstructorDescriptor | AuthoringTypeAliasDescriptor | AuthoringTypeNamespace,
+  value: AuthoringTypeNamespaceMember,
 ): value is AuthoringTypeAliasDescriptor {
   return 'kind' in value && value.kind === 'typeAlias';
 }
 
-/** Whether `value` is a leaf of a `type` namespace: a type constructor or a type alias. */
+export function isAuthoringTypeChoiceDescriptor(
+  value: AuthoringTypeNamespaceMember,
+): value is AuthoringTypeChoiceDescriptor {
+  return 'kind' in value && value.kind === 'typeChoice';
+}
+
+/** Whether `value` is a leaf of a `type` namespace: a type constructor, a type alias or a type choice. */
 export function isAuthoringTypeDescriptor(
-  value: AuthoringTypeConstructorDescriptor | AuthoringTypeAliasDescriptor | AuthoringTypeNamespace,
-): value is AuthoringTypeConstructorDescriptor | AuthoringTypeAliasDescriptor {
-  return isAuthoringTypeConstructorDescriptor(value) || isAuthoringTypeAliasDescriptor(value);
+  value: AuthoringTypeNamespaceMember,
+): value is
+  | AuthoringTypeConstructorDescriptor
+  | AuthoringTypeAliasDescriptor
+  | AuthoringTypeChoiceDescriptor {
+  return (
+    isAuthoringTypeConstructorDescriptor(value) ||
+    isAuthoringTypeAliasDescriptor(value) ||
+    isAuthoringTypeChoiceDescriptor(value)
+  );
 }
 
 /** The type constructor at `path` in the contributions' type namespace, or `undefined` when none is there. */
@@ -619,11 +644,7 @@ export function getAuthoringTypeConstructor(
   contributions: { readonly type?: AuthoringTypeNamespace } | undefined,
   path: readonly string[],
 ): AuthoringTypeConstructorDescriptor | undefined {
-  let current:
-    | AuthoringTypeConstructorDescriptor
-    | AuthoringTypeAliasDescriptor
-    | AuthoringTypeNamespace
-    | undefined = contributions?.type;
+  let current: AuthoringTypeNamespaceMember | undefined = contributions?.type;
   for (const segment of path) {
     if (typeof current !== 'object' || current === null || 'kind' in current) {
       return undefined;
@@ -689,6 +710,13 @@ function isWellFormedDescriptor(
       const output = value.output;
       return typeof output === 'object' && output !== null;
     }
+    case 'typeChoice':
+      return (
+        'args' in value &&
+        Array.isArray(value.args) &&
+        'choices' in value &&
+        Array.isArray(value.choices)
+      );
     case 'typeAlias': {
       if (!('output' in value)) return false;
       const output = value.output;
@@ -923,34 +951,6 @@ export interface ScalarTypeConstructorOutput {
   readonly typeParams?: Record<string, unknown>;
 }
 
-/**
- * Derives the scalar view of an assembled authoring type namespace: every
- * **top-level** type constructor that is instantiable with an empty argument
- * list — all declared args optional and no entity-ref argument. A bare type
- * name `T` in a schema is semantically the zero-arg instantiation `T()`, so
- * each entry is exactly what that call produces (defaulted template values
- * applied, absent optional-arg typeParams keys omitted). Constructors
- * registered under a namespace segment, constructors with required args, and
- * entity-ref constructors are not scalars and are excluded.
- *
- * Eligibility needs no template inspection: templates that cannot resolve
- * for their legal call shapes are rejected at the composition boundary by
- * {@link assertResolvableTypeConstructorTemplates}, so the zero-arg
- * instantiation below cannot fail for an eligible constructor.
- */
-export function collectScalarTypeConstructors(
-  namespace: AuthoringTypeNamespace,
-): ReadonlyMap<string, ScalarTypeConstructorOutput> {
-  const result = new Map<string, ScalarTypeConstructorOutput>();
-  for (const [name, value] of Object.entries(namespace)) {
-    if (!isAuthoringTypeConstructorDescriptor(value)) continue;
-    if (value.entityRefArg !== undefined) continue;
-    if (value.args?.some((arg) => arg.optional !== true)) continue;
-    result.set(name, instantiateAuthoringTypeConstructor(value, []));
-  }
-  return result;
-}
-
 function visitTemplateArgRefs(
   template: AuthoringTemplateValue | undefined,
   visit: (ref: AuthoringArgRef) => void,
@@ -999,6 +999,7 @@ export function assertResolvableTypeConstructorTemplates(
       }
       continue;
     }
+    if (isAuthoringTypeChoiceDescriptor(value)) continue;
     if (!isAuthoringTypeConstructorDescriptor(value)) {
       assertResolvableTypeConstructorTemplates(value, contributedBy, currentPath);
       continue;
@@ -1372,7 +1373,7 @@ export function resolveAuthoringTemplateValue(
 
 export function validateAuthoringHelperArguments(
   helperPath: string,
-  descriptors: readonly AuthoringArgumentDescriptor[] | undefined,
+  descriptors: readonly HelperArgumentDescriptor[] | undefined,
   args: readonly unknown[],
 ): void {
   const expected = descriptors ?? [];
@@ -1397,9 +1398,12 @@ export function validateAuthoringHelperArguments(
   });
 }
 
+/** An argument of a type constructor, or of a type choice, whose call a helper checks. */
+type HelperArgumentDescriptor = AuthoringArgumentDescriptor | AuthoringTypeChoiceOption;
+
 function argumentLabel(
   helperPath: string,
-  descriptor: AuthoringArgumentDescriptor,
+  descriptor: HelperArgumentDescriptor,
   index: number,
 ): string {
   return descriptor.name === undefined
@@ -1466,6 +1470,31 @@ export function validateAuthoringTypeParams(
       ? `The type parameters of ${helperPath} are invalid: ${issue.message}`
       : `Authoring helper argument at ${helperPath}[${argumentIndex}] is invalid: ${issue.message}`,
     { helperPath, ...ifDefined('argumentIndex', argumentIndex) },
+  );
+}
+
+/**
+ * {@link validateAuthoringTypeParams} for a call of the type choice `choice` that chose `chosen`: a failure names the choice's own argument the failing parameter came from, by its name and its index in the choice's arguments.
+ */
+export function validateAuthoringTypeChoiceParams(
+  helperPath: string,
+  choice: AuthoringTypeChoiceDescriptor,
+  chosen: AuthoringTypeConstructorDescriptor,
+  typeParams: Record<string, unknown> | undefined,
+  paramsSchema: StandardSchemaV1<unknown> | undefined,
+): void {
+  const issue = authoringTypeParamsIssue(chosen.output, typeParams, paramsSchema);
+  if (issue === undefined) return;
+  const name =
+    issue.argumentIndex === undefined ? undefined : chosen.args?.[issue.argumentIndex]?.name;
+  const argumentIndex =
+    name === undefined ? -1 : choice.args.findIndex((argument) => argument.name === name);
+  throw runtimeError(
+    'CONTRACT.ARGUMENT_INVALID',
+    argumentIndex < 0
+      ? `The type parameters of ${helperPath} are invalid: ${issue.message}`
+      : `Argument "${name}" of ${helperPath} is invalid: ${issue.message}`,
+    { helperPath, ...ifDefined('argumentIndex', argumentIndex < 0 ? undefined : argumentIndex) },
   );
 }
 

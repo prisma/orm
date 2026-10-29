@@ -1,4 +1,5 @@
 import {
+  type ArgTypeFromDescriptor,
   type CanonicalArguments,
   type CodecTypeMap,
   composePackAuthoringNamespace,
@@ -16,6 +17,9 @@ import type {
   AuthoringArgumentDescriptor,
   AuthoringEntityTypeNamespace,
   AuthoringTypeAliasDescriptor,
+  AuthoringTypeChoiceArgument,
+  AuthoringTypeChoiceDescriptor,
+  AuthoringTypeChoiceRow,
   AuthoringTypeConstructorDescriptor,
   AuthoringTypeNamespace,
   DataTypeComponent,
@@ -23,6 +27,7 @@ import type {
 import {
   assembleDataTypeSupport,
   assertNoCrossRegistryCollisions,
+  assertTypeChoicesValid,
 } from '@internal/framework-components/authoring';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import {
@@ -101,6 +106,161 @@ type TypeHelperFunction<
     ) => StorageTypeFromDescriptor<Descriptor, CanonicalArguments<Args, Params, ValueTypes>>
   : () => StorageTypeFromDescriptor<Descriptor, readonly []>;
 
+type RowDefault<Row extends AuthoringTypeChoiceRow, Name extends string> = Row extends {
+  readonly defaults: infer Defaults;
+}
+  ? Name extends keyof Defaults
+    ? Defaults[Name]
+    : undefined
+  : undefined;
+
+/** The arguments a type choice passes on to the constructor its row chooses, by that constructor's argument positions: the written value, or the row's default. */
+type PassedOnArguments<
+  Parameters extends readonly AuthoringArgumentDescriptor[],
+  Written extends object,
+  Row extends AuthoringTypeChoiceRow,
+> = {
+  readonly [Index in keyof Parameters]: Parameters[Index] extends {
+    readonly name: infer Name extends string;
+  }
+    ? Name extends keyof Written
+      ? Written[Name] extends undefined
+        ? RowDefault<Row, Name>
+        : Written[Name]
+      : RowDefault<Row, Name>
+    : undefined;
+};
+
+type ChosenStorageType<
+  Chosen,
+  Written extends object,
+  Row extends AuthoringTypeChoiceRow,
+  ValueTypes extends DataTypeArgumentTypes,
+> = Chosen extends AuthoringTypeConstructorDescriptor
+  ? Chosen extends {
+      readonly args: infer Parameters extends readonly AuthoringArgumentDescriptor[];
+    }
+    ? StorageTypeFromDescriptor<
+        Chosen,
+        CanonicalArguments<Parameters, PassedOnArguments<Parameters, Written, Row>, ValueTypes>
+      >
+    : StorageTypeFromDescriptor<Chosen, readonly []>
+  : never;
+
+type ParameterNames<Chosen> = Chosen extends {
+  readonly args: readonly (infer Parameter)[];
+}
+  ? Parameter extends { readonly name: infer Name extends string }
+    ? Name
+    : never
+  : never;
+
+type RowValue<
+  Row extends AuthoringTypeChoiceRow,
+  Name extends string,
+> = Name extends keyof Row['when'] ? Row['when'][Name] : never;
+
+/** Whether `Row` gives the option `Argument` its default, so a call choosing the row may leave it out. */
+type RowTakesDefault<
+  Argument extends AuthoringTypeChoiceArgument,
+  Row extends AuthoringTypeChoiceRow,
+> = Argument extends { readonly default: infer Default }
+  ? RowValue<Row, Argument['name']> extends Default
+    ? true
+    : false
+  : true;
+
+/** The options a call choosing `Row` must write: those whose value in the row is not their default. */
+type RequiredRowOptions<
+  Args extends readonly AuthoringTypeChoiceArgument[],
+  Row extends AuthoringTypeChoiceRow,
+> = {
+  readonly [Argument in Args[number] as Argument extends { readonly kind: 'option' }
+    ? RowTakesDefault<Argument, Row> extends true
+      ? never
+      : Argument['name']
+    : never]: RowValue<Row, Argument['name']>;
+};
+
+/** What else a call choosing `Row` may write: an option the row gives its default, and an argument the chosen constructor takes. */
+type OptionalRowArguments<
+  Args extends readonly AuthoringTypeChoiceArgument[],
+  Row extends AuthoringTypeChoiceRow,
+  Chosen,
+  ValueTypes extends DataTypeArgumentTypes,
+> = {
+  readonly [Argument in Args[number] as Argument extends { readonly kind: 'option' }
+    ? RowTakesDefault<Argument, Row> extends true
+      ? Argument['name']
+      : never
+    : Argument['name'] extends ParameterNames<Chosen>
+      ? Argument['name']
+      : never]?:
+    | (Argument extends { readonly kind: 'option' }
+        ? RowValue<Row, Argument['name']>
+        : Argument extends AuthoringArgumentDescriptor
+          ? ArgTypeFromDescriptor<Argument, ValueTypes>
+          : never)
+    | undefined;
+};
+
+/** `Params`, with every key `Allowed` does not name typed `never`, so a call writing such a key does not compile. */
+type OnlyKeys<Params, Allowed extends PropertyKey> = Params & {
+  readonly [Key in Exclude<keyof Params, Allowed>]: never;
+};
+
+type RowArguments<
+  Args extends readonly AuthoringTypeChoiceArgument[],
+  Row extends AuthoringTypeChoiceRow,
+  Chosen,
+  ValueTypes extends DataTypeArgumentTypes,
+> = RequiredRowOptions<Args, Row> & OptionalRowArguments<Args, Row, Chosen, ValueTypes>;
+
+type RowObjectHelperFunction<
+  Args extends readonly AuthoringTypeChoiceArgument[],
+  Row extends AuthoringTypeChoiceRow,
+  Chosen,
+  ValueTypes extends DataTypeArgumentTypes,
+> = <const Params extends RowArguments<Args, Row, Chosen, ValueTypes>>(
+  args: OnlyKeys<Params, keyof RowArguments<Args, Row, Chosen, ValueTypes>>,
+) => ChosenStorageType<Chosen, Params, Row, ValueTypes>;
+
+/** A call choosing `Row`: with no arguments too when the row gives every option its default. */
+type RowHelperFunction<
+  Args extends readonly AuthoringTypeChoiceArgument[],
+  Row extends AuthoringTypeChoiceRow,
+  Chosen,
+  ValueTypes extends DataTypeArgumentTypes,
+> = keyof RequiredRowOptions<Args, Row> extends never
+  ? (() => ChosenStorageType<Chosen, Record<never, never>, Row, ValueTypes>) &
+      RowObjectHelperFunction<Args, Row, Chosen, ValueTypes>
+  : RowObjectHelperFunction<Args, Row, Chosen, ValueTypes>;
+
+type RowOverloads<
+  Args extends readonly AuthoringTypeChoiceArgument[],
+  Rows extends readonly AuthoringTypeChoiceRow[],
+  Namespace,
+  ValueTypes extends DataTypeArgumentTypes,
+> = Rows extends readonly [
+  infer Row extends AuthoringTypeChoiceRow,
+  ...infer Rest extends readonly AuthoringTypeChoiceRow[],
+]
+  ? RowHelperFunction<
+      Args,
+      Row,
+      Row['type'] extends keyof Namespace ? Namespace[Row['type']] : never,
+      ValueTypes
+    > &
+      RowOverloads<Args, Rest, Namespace, ValueTypes>
+  : unknown;
+
+/** A type choice's helper, which takes its arguments as one object keyed by name: one overload per row, so a call is typed by the row its option values choose, and a combination with no row, an unknown key, or an argument the chosen type does not take does not compile. */
+type TypeChoiceHelperFunction<
+  Descriptor extends AuthoringTypeChoiceDescriptor,
+  Namespace,
+  ValueTypes extends DataTypeArgumentTypes,
+> = RowOverloads<Descriptor['args'], Descriptor['choices'], Namespace, ValueTypes>;
+
 type AliasGeneratorCalls<Output> = (Output extends { readonly onCreate: GeneratorFunctionCall }
   ? { readonly onCreate: GeneratorFunctionCall }
   : unknown) &
@@ -127,9 +287,11 @@ type TypeHelpersFromNamespace<Namespace, ValueTypes extends DataTypeArgumentType
     ? TypeHelperFunction<Namespace[K], ValueTypes>
     : Namespace[K] extends AuthoringTypeAliasDescriptor
       ? TypeAliasHelperFunction<Namespace[K]>
-      : Namespace[K] extends Record<string, unknown>
-        ? TypeHelpersFromNamespace<Namespace[K], ValueTypes>
-        : never;
+      : Namespace[K] extends AuthoringTypeChoiceDescriptor
+        ? TypeChoiceHelperFunction<Namespace[K], Namespace, ValueTypes>
+        : Namespace[K] extends Record<string, unknown>
+          ? TypeHelpersFromNamespace<Namespace[K], ValueTypes>
+          : never;
 };
 
 type MergeExtensionDataTypeArgumentTypes<Extensions> =
@@ -291,6 +453,9 @@ export function createComposedAuthoringHelpers<
   // `createControlStack`, the TS DSL composes here. Both seams need the guard.
   assertNoCrossRegistryCollisions(typeNamespace, entityNamespace);
   assertNoBuiltInEntityCollisions(entityNamespace);
+  for (const component of components) {
+    assertTypeChoicesValid(component.authoring?.type ?? {}, component.id ?? '<unknown>');
+  }
   const { support } = assembleDataTypeSupport(
     components,
     (codecId) => options.codecLookup.descriptorFor(codecId)?.dataType,

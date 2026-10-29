@@ -66,6 +66,7 @@ import {
   type DiagnosticSource,
   diagnosticSource,
   interpretExtensionBlocks,
+  isContributedTypeChoice,
   mapPslDiagnostics,
   nodePslSpan,
   type PslDiagnosticCollector,
@@ -121,6 +122,7 @@ import {
   type ResolvedTypeAlias,
   type ResolvedTypeAliases,
   resolveMongoTypeAliases,
+  scalarTypeOfChoice,
   scalarTypeOfConstructor,
 } from './type-aliases';
 
@@ -184,6 +186,7 @@ interface ScalarNames {
 interface FieldResolutionContext {
   readonly sources: PslSources;
   readonly diagnostics: PslDiagnosticCollector;
+  readonly dataTypes: DataTypeSupport;
 }
 
 /**
@@ -239,7 +242,11 @@ function resolvePhysicalNames(input: {
             ...specContext,
             field,
             typeResolution: fieldTypeResolution(field, binder),
-            typeConstructor: contributedTypeOf(fieldTypeResolution(field, binder), binder),
+            contributedType: contributedTypeOf(
+              fieldTypeResolution(field, binder),
+              binder,
+              field.typeConstructor,
+            ),
           }),
           model,
           field,
@@ -600,7 +607,11 @@ function collectIndexes(
         ...specContext,
         field,
         typeResolution: fieldTypeResolution(field, binder),
-        typeConstructor: contributedTypeOf(fieldTypeResolution(field, binder), binder),
+        contributedType: contributedTypeOf(
+          fieldTypeResolution(field, binder),
+          binder,
+          field.typeConstructor,
+        ),
       }),
       model: pslModel,
       field,
@@ -784,6 +795,7 @@ function resolveNonRelationField(
   context: FieldResolutionContext,
   scalarNames: ScalarNames,
   typeAliases: ResolvedTypeAliases,
+  codecLookup: CodecLookupWithDescriptors,
 ): ResolvedNonRelationField | undefined {
   const ownerName = owner.name;
   if (resolution?.kind === 'compositeType') {
@@ -849,10 +861,31 @@ function resolveNonRelationField(
   if (resolution?.kind !== 'contributedType') {
     return undefined;
   }
-  const { descriptor, path } = resolution.symbol;
   const call = field.typeConstructor;
   const entityLabel = `Field "${ownerName}.${field.name}"`;
   const source = diagnosticSource(context.sources, field.node.syntax);
+  if (isContributedTypeChoice(resolution.symbol)) {
+    const type = scalarTypeOfChoice({
+      symbol: resolution.symbol,
+      call,
+      span: field.span,
+      codecLookup,
+      diagnostics: context.diagnostics,
+      source,
+      entityLabel,
+      dataTypes: context.dataTypes,
+    });
+    return type === undefined
+      ? undefined
+      : {
+          field: {
+            type,
+            nullable: field.optional,
+            many: field.list ? { elementNullable: field.elementOptional } : false,
+          },
+        };
+  }
+  const { descriptor, path } = resolution.symbol;
   if (descriptor.kind === 'typeAlias') {
     if (call !== undefined) {
       context.diagnostics.push({
@@ -1014,7 +1047,11 @@ export function interpretPslDocumentToMongoContract(
 ): Result<Contract, ContractSourceDiagnostics> {
   const { symbolTable, sources, codecLookup } = input;
   const diagnostics = createPslDiagnosticCollector(sources);
-  const fieldResolution: FieldResolutionContext = { sources, diagnostics };
+  const fieldResolution: FieldResolutionContext = {
+    sources,
+    diagnostics,
+    dataTypes: input.dataTypes,
+  };
   const scalarNames: ScalarNames = {
     warnDeprecated: deprecatedScalarWarner({ sources, reportWarning: input.reportWarning }),
   };
@@ -1106,6 +1143,7 @@ export function interpretPslDocumentToMongoContract(
     defaultFunctionRegistry: input.defaultFunctionRegistry,
     generatorFunctions,
     dataTypes: input.dataTypes,
+    codecLookup: input.codecLookup,
     authoringTypes: input.authoringContributions?.type,
   });
 
@@ -1156,7 +1194,11 @@ export function interpretPslDocumentToMongoContract(
                 ...specContext,
                 field,
                 typeResolution: fieldTypeResolution(field, binder),
-                typeConstructor: contributedTypeOf(fieldTypeResolution(field, binder), binder),
+                contributedType: contributedTypeOf(
+                  fieldTypeResolution(field, binder),
+                  binder,
+                  field.typeConstructor,
+                ),
               }),
               model: pslModel,
               field,
@@ -1218,6 +1260,7 @@ export function interpretPslDocumentToMongoContract(
         fieldResolution,
         scalarNames,
         typeAliases,
+        codecLookup,
       );
       if (
         resolved === undefined ||
@@ -1242,7 +1285,7 @@ export function interpretPslDocumentToMongoContract(
           ...specContext,
           field,
           typeResolution: resolution,
-          typeConstructor: contributedTypeOf(resolution, binder),
+          contributedType: contributedTypeOf(resolution, binder, field.typeConstructor),
         },
         generatorFunctions,
         sources,
@@ -1270,7 +1313,11 @@ export function interpretPslDocumentToMongoContract(
           ...specContext,
           field,
           typeResolution: fieldTypeResolution(field, binder),
-          typeConstructor: contributedTypeOf(fieldTypeResolution(field, binder), binder),
+          contributedType: contributedTypeOf(
+            fieldTypeResolution(field, binder),
+            binder,
+            field.typeConstructor,
+          ),
         }),
         model: pslModel,
         field,
@@ -1337,6 +1384,7 @@ export function interpretPslDocumentToMongoContract(
         fieldResolution,
         scalarNames,
         typeAliases,
+        codecLookup,
       );
       if (resolved === undefined) {
         droppedFields.add(siteKey);

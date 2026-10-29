@@ -1,5 +1,6 @@
 export type {
   ResolvedSqlType,
+  ResolvedWrittenSqlType,
   SqlColumnTypeFields,
   SqlDataType,
   SqlDataTypeCollision,

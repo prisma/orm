@@ -62,6 +62,32 @@ export const timestamp = sqlDataType('t/timestamp', {
   ],
 });
 
+/** Like the Postgres timestamp types: an omitted precision is the precision 6 the database stores either way, though its catalog prints the precision as written. */
+export const timestamptz = sqlDataType('t/timestamptz', {
+  read: (json) => json,
+  params: type({ 'precision?': 'number.integer >= 0 & number.integer <= 6' }),
+  texts: [
+    { text: 'timestamptz', written: true },
+    { text: 'timestamptz({precision})', written: true },
+    { text: 'timestamp with time zone', catalog: true },
+    { text: 'timestamp({precision}) with time zone', catalog: true },
+  ],
+  normalize: (params) => (params.precision === undefined ? { ...params, precision: 6 } : params),
+  catalogParams: (params) => params,
+});
+
+/** Like MySQL's datetime: precision 0 is the normal form of no precision, and the catalog prints neither. */
+export const datetime = sqlDataType('t/datetime', {
+  read: (json) => json,
+  params: type({ 'precision?': 'number.integer >= 0 & number.integer <= 6' }),
+  texts: [
+    { text: 'datetime', written: true, catalog: true },
+    { text: 'datetime({precision})', written: true, catalog: true },
+  ],
+  normalize: ({ precision, ...rest }) =>
+    precision === undefined || precision === 0 ? rest : { ...rest, precision },
+});
+
 /** Like the SQLite character types: the length is written, then forgotten. */
 export const character = sqlDataType('t/character', {
   read: (json) => json,

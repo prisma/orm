@@ -2,7 +2,7 @@
 
 model TelemetryEvent {
   id             BigInt   @id @default(autoincrement())
-  ingestedAt     DateTime @default(now())
+  ingestedAt     DateTime(as: temporal) @default(now())
   installationId String
   version        String
   command        String

@@ -270,7 +270,7 @@
               "createdAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "kind": "scalar",
                   "typeParams": {
                     "precision": 3
@@ -311,7 +311,7 @@
               "updatedAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "kind": "scalar",
                   "typeParams": {
                     "precision": 3
@@ -490,7 +490,7 @@
             "User": {
               "columns": {
                 "createdAt": {
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "dataType": "pg/timestamp",
                   "default": {
                     "expression": "now()",
@@ -539,7 +539,7 @@
                   }
                 },
                 "updatedAt": {
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "dataType": "pg/timestamp",
                   "nullable": false,
                   "typeParams": {
@@ -654,15 +654,15 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "9268d6eef6e976bf77ca87083b15cd8eb247c9bf7fe4d2929f56a23bfa36d9ec"
+    "storageHash": "97963644c7d9359d5e31879ed1c6bfdc39b666d0fd1d0f152525b055d3c574c3"
   },
   "execution": {
-    "executionHash": "8552d69a879d0f7c4482b9b7a2e9932db9ea33b3421ed778e87bf04b17076b10",
+    "executionHash": "9a5883a46a0f8f232598bc988951650620bebba27bb6d25c01513cb5e3fd94b9",
     "mutations": {
       "defaults": [
         {
           "onCreate": {
-            "id": "timestampStringNow",
+            "id": "timestampNow",
             "kind": "generator",
             "params": {
               "precision": 3
@@ -676,14 +676,14 @@
         },
         {
           "onCreate": {
-            "id": "timestampStringNow",
+            "id": "timestampNow",
             "kind": "generator",
             "params": {
               "precision": 3
             }
           },
           "onUpdate": {
-            "id": "timestampStringNow",
+            "id": "timestampNow",
             "kind": "generator",
             "params": {
               "precision": 3

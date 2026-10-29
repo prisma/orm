@@ -12,6 +12,7 @@ import {
   instantiateAuthoringTypeConstructor,
   resolveTypeAliasGenerators,
 } from '@internal/framework-components/authoring';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type { GeneratorFunctionRegistry } from '@internal/framework-components/components';
 import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
 import {
@@ -33,11 +34,22 @@ import {
   typeAttributeSubjectLabel,
   typeGeneratorAttributeSpec,
 } from '@internal/psl-parser';
+import { instantiatePslTypeChoice } from '@internal/psl-parser/interpret';
 import type { FieldAttributeAst, PslSources } from '@internal/psl-parser/syntax';
 import { ifDefined } from '@internal/utils/defined';
 import { unloweredAttributeHint } from './mongo-attribute-specs';
 
 type ScalarFieldType = Extract<ContractField['type'], { readonly kind: 'scalar' }>;
+
+/** The field type a use of a type choice gives: the column of the constructor its call chooses, read and refused as a SQL column's is. `undefined`, with a diagnostic pushed, when the call is refused. */
+export function scalarTypeOfChoice(
+  input: Parameters<typeof instantiatePslTypeChoice>[0],
+): ScalarFieldType | undefined {
+  const output = instantiatePslTypeChoice(input);
+  return output === undefined
+    ? undefined
+    : { kind: 'scalar', codecId: output.codecId, ...ifDefined('typeParams', output.typeParams) };
+}
 
 /** The field type a type constructor gives, keeping a bare constructor's fixed type params. */
 export function scalarTypeOfConstructor(
@@ -75,6 +87,7 @@ interface ResolveMongoTypeAliasesInput {
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly generatorFunctions: GeneratorFunctionRegistry;
   readonly dataTypes: DataTypeSupport;
+  readonly codecLookup: CodecLookupWithDescriptors;
   readonly authoringTypes: AuthoringTypeNamespace | undefined;
 }
 
@@ -144,6 +157,19 @@ function aliasType(
   const { base, symbol } = alias;
   if (base.kind === 'typeConstructor') {
     return { type: scalarTypeOfConstructor(base.descriptor, base.call), valueSet: undefined };
+  }
+  if (base.kind === 'typeChoice') {
+    const type = scalarTypeOfChoice({
+      symbol: base.symbol,
+      call: base.call,
+      span: symbol.span,
+      codecLookup: input.codecLookup,
+      diagnostics: input.diagnostics,
+      source: diagnosticSource(input.sources, symbol.node.syntax),
+      entityLabel: `Type alias "${symbol.name}"`,
+      dataTypes: input.dataTypes,
+    });
+    return type === undefined ? undefined : { type, valueSet: undefined };
   }
   if (base.symbol.keyword !== 'enum') {
     input.diagnostics.push({

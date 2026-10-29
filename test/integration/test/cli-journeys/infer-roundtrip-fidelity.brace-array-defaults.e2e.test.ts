@@ -69,7 +69,7 @@ withTempDir(({ createTempDir }) => {
               flags Boolean?[]?       @default([true, false])
               roles pg.enum(Role)?[]? @default(["USER"])
               names VarChar?[]?       @default(["x"])
-              days  DateString?[]?    @default([date\`2024-01-01\`])
+              days  Date?[]?          @default([date\`2024-01-01\`])
 
               @@map("brace_defaults")
             }

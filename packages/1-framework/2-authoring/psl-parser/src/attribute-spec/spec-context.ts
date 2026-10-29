@@ -4,7 +4,7 @@ import type { GeneratorFunctionRegistry } from '@internal/framework-components/c
 import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
 import type { Resolution } from '../binder';
 import type { BlockSpecContext } from '../block-spec/types';
-import type { ContributedTypeSymbol } from '../contributed-type-scope';
+import type { ContributedTypeUse } from '../contributed-type-scope';
 import type { FieldSymbol, MixinSymbol, ModelSymbol, SymbolTable } from '../symbol-table';
 import type {
   AttributeSpec,
@@ -31,8 +31,8 @@ export const EMPTY_DATA_TYPES: DataTypeSupport = {
 export interface FieldAttributeSpecContext extends AttributeSpecContext {
   readonly field: FieldSymbol;
   readonly typeResolution: Resolution | undefined;
-  /** The type constructor the field's type resolves to, through a named type when it is declared with one. */
-  readonly typeConstructor: ContributedTypeSymbol | undefined;
+  /** The contributed type the field's type resolves to, through a named type when it is declared with one, with the call it is written with. */
+  readonly contributedType: ContributedTypeUse | undefined;
 }
 
 /** The declaration an attribute that reads its type is written on: a field, or a type alias whose fields take the attribute. */
@@ -54,8 +54,8 @@ export interface TypeAttributeSpecContext extends Omit<AttributeSpecContext, 'mo
   /** The type as written, such as an enum's name. */
   readonly typeName: string;
   readonly typeResolution: Resolution | undefined;
-  /** The type constructor the type resolves to, through a named type when it is declared with one. */
-  readonly typeConstructor: ContributedTypeSymbol | undefined;
+  /** The contributed type the type resolves to, through a named type when it is declared with one, with the call it is written with. */
+  readonly contributedType: ContributedTypeUse | undefined;
 }
 
 export function typeAttributeSpecContextOfField(
@@ -70,7 +70,7 @@ export function typeAttributeSpecContextOfField(
     list: ctx.field.list,
     typeName: ctx.field.typeName,
     typeResolution: ctx.typeResolution,
-    typeConstructor: ctx.typeConstructor,
+    contributedType: ctx.contributedType,
   };
 }
 

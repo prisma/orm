@@ -37,6 +37,7 @@ import {
   parseDefaultAttributeString,
   positionalArg,
   SYNTHETIC_SPAN,
+  typeArgument,
 } from '../psl-build/psl-literals';
 import { createUniqueFieldName } from '../psl-build/unique-name';
 import type { InferredColumnDefaults } from './infer-default-codec';
@@ -253,7 +254,7 @@ function buildScalarField(
   const pslType =
     enumPslName === undefined
       ? columnTypes(table.name, column.name)
-      : { path: [enumPslName], args: [], values: [] };
+      : { path: [enumPslName], args: [], explicit: { path: [enumPslName], values: [] } };
   const typeName = pslType.path.join('.');
   const typeConstructor: PslTypeConstructorCall | undefined =
     enumPslName !== undefined
@@ -267,7 +268,7 @@ function buildScalarField(
         ? {
             kind: 'typeConstructor',
             path: pslType.path,
-            args: pslType.args.map(positionalArg),
+            args: pslType.args.map(typeArgument),
             span: SYNTHETIC_SPAN,
           }
         : undefined;
@@ -284,11 +285,12 @@ function buildScalarField(
     defaultOf(table.name, column),
     {
       ...defaultMapping,
-      ...ifDefined('columnCodec', columnDefaults.codecOf(pslType, isEnumColumn)),
-      ...ifDefined('typeParams', columnDefaults.typeParamsOf(pslType, isEnumColumn)),
+      ...ifDefined('columnCodec', columnDefaults.codecOf(pslType.explicit, isEnumColumn)),
+      ...ifDefined('typeParams', columnDefaults.typeParamsOf(pslType.explicit, isEnumColumn)),
       list: column.many === true,
     },
-    (value) => columnDefaults.readsBack(value, pslType, isEnumColumn, column.many === true),
+    (value) =>
+      columnDefaults.readsBack(value, pslType.explicit, isEnumColumn, column.many === true),
     noteDefaultThatDoesNotReadBack,
   );
   if (defaultAttribute !== undefined) {

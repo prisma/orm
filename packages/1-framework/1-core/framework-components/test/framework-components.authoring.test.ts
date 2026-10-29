@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { collectScalarTypeConstructors } from '../src/shared/authoring-type-choice';
 import type {
   AuthoringTypeConstructorDescriptor,
   AuthoringTypeNamespace,
@@ -6,7 +7,6 @@ import type {
 import {
   assertNoCrossRegistryCollisions,
   classifyEnumMemberType,
-  collectScalarTypeConstructors,
   instantiateAuthoringTypeConstructor,
   isAuthoringArgRef,
   isAuthoringTypeConstructorDescriptor,

@@ -26,6 +26,7 @@ import {
   resolveTypeAliases,
   typeAliasSpecContext,
 } from '@internal/psl-parser';
+import { instantiatePslTypeChoice } from '@internal/psl-parser/interpret';
 import type { FieldAttributeAst, PslSources } from '@internal/psl-parser/syntax';
 import { sqlCodecColumnLength } from '@internal/sql-contract/data-type';
 import type {
@@ -91,6 +92,18 @@ function aliasDescriptor(
 ): ColumnDescriptor | undefined {
   const { base, symbol } = alias;
   const source = diagnosticSource(input.sources, symbol.node.syntax);
+  if (base.kind === 'typeChoice') {
+    return instantiatePslTypeChoice({
+      symbol: base.symbol,
+      call: base.call,
+      span: symbol.span,
+      codecLookup: input.codecLookup,
+      diagnostics: input.diagnostics,
+      source,
+      entityLabel: `Type alias "${symbol.name}"`,
+      dataTypes: input.dataTypes,
+    });
+  }
   if (base.kind === 'typeConstructor') {
     if (base.call === undefined) return instantiateAuthoringTypeConstructor(base.descriptor, []);
     return instantiatePslTypeConstructor({

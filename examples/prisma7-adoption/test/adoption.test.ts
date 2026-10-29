@@ -56,8 +56,12 @@ describe('adopting Prisma 8 beside Prisma 7', () => {
           expect(prisma8Read).toMatch(/Created post \d+ through Prisma 8, tagged orm/);
           const advanced = /updatedAt advanced: (\S+) -> (\S+)/.exec(prisma8Read);
           expect(advanced, prisma8Read).not.toBeNull();
-          const [, before, after] = advanced ?? [];
-          expect(new Date(`${after}Z`).getTime()).toBeGreaterThan(new Date(`${before}Z`).getTime());
+          const [, before = '', after = ''] = advanced ?? [];
+          expect({ before, after }).toEqual({
+            before: new Date(before).toISOString(),
+            after: new Date(after).toISOString(),
+          });
+          expect(new Date(after).getTime()).toBeGreaterThan(new Date(before).getTime());
           expect(await tsx('src/v7-read.ts')).toContain('Written through Prisma 8');
 
           writeFileSync(join(dir, 'prisma/schema.prisma'), FINAL_SCHEMA);

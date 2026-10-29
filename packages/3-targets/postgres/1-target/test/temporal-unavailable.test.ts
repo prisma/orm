@@ -102,7 +102,7 @@ describe('Temporal-backed codecs in a runtime without Temporal', () => {
     expect(decoded).toBe('infinity');
   });
 
-  it('fails the instantNow generator with the capability error, naming its *String alternative', async () => {
+  it('fails the instantNow generator with the capability error, naming the convenience default', async () => {
     const outcome = await withoutTemporal(async () => {
       await Promise.resolve();
       try {
@@ -113,7 +113,9 @@ describe('Temporal-backed codecs in a runtime without Temporal', () => {
         return {
           threw: true,
           code: structured.code,
-          namesTheStringAlias: (structured.fix ?? '').includes('temporal.UpdatedAtString'),
+          namesTheConvenienceDefault: (structured.fix ?? '').includes(
+            '`DateTime` reads a JavaScript `Date`',
+          ),
           meta: structured.meta,
         };
       }
@@ -122,7 +124,7 @@ describe('Temporal-backed codecs in a runtime without Temporal', () => {
     expect(outcome).toEqual({
       threw: true,
       code: 'RUNTIME.TEMPORAL_UNAVAILABLE',
-      namesTheStringAlias: true,
+      namesTheConvenienceDefault: true,
       meta: { generatorId: 'instantNow' },
     });
   });

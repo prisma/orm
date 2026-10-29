@@ -3237,7 +3237,7 @@
     "storageHash": "d44d725316bd8067730874483a24dfcaeef20dc26199e383a7b408b314483b10"
   },
   "execution": {
-    "executionHash": "ceb90e72bf9e61b35dd8432c4b5d055abb98d2f8718136762e9a3e1c488a8e79",
+    "executionHash": "25bb2ac1c0dec5bb0c70bb42d1fd88c55a14ef0795982ee25194e84990ad77dd",
     "mutations": {
       "defaults": [
         {
@@ -3571,11 +3571,17 @@
         {
           "onCreate": {
             "id": "plainDateTimeNow",
-            "kind": "generator"
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
           },
           "onUpdate": {
             "id": "plainDateTimeNow",
-            "kind": "generator"
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
           },
           "ref": {
             "entry": "TimestampBothPhases",
@@ -3586,7 +3592,10 @@
         {
           "onCreate": {
             "id": "plainDateTimeNow",
-            "kind": "generator"
+            "kind": "generator",
+            "params": {
+              "precision": 6
+            }
           },
           "ref": {
             "entry": "TimestampNamedPrecision",
@@ -3611,7 +3620,10 @@
         {
           "onCreate": {
             "id": "timestampNow",
-            "kind": "generator"
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
           },
           "ref": {
             "entry": "TimestamptzJsDateOnCreate",

@@ -14,7 +14,7 @@ model TestModel {
   bytes2  Bytes?
   bool    Boolean?
   bool2   Boolean?
-  dt      DateTime?
-  dt2     DateTime?
+  dt      TimestamptzTemporal?
+  dt2     TimestamptzTemporal?
   @@map("testModel")
 }

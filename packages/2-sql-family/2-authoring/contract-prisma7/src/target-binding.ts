@@ -1,3 +1,4 @@
+import type { JsonValue } from '@internal/contract/types';
 import type { TargetPackRef } from '@internal/framework-components/components';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import type { Prisma7TypeMap } from './native-types';
@@ -62,4 +63,6 @@ export interface Prisma7TargetBinding {
   ) => readonly [string, string];
   /** How a literal `@default` on the column is read; `undefined` when the codec takes the written value. */
   readonly literalDefaultForm: (column: Prisma7ColumnType) => Prisma7LiteralDefaultForm | undefined;
+  /** The SQL expression of a default whose value the column's type holds but its codec cannot hold exactly, such as a timestamp with digits below a millisecond read as a JavaScript `Date`: `stored` is the value, or a list column's elements, as the type stores them. */
+  readonly literalDefaultExpression: (stored: JsonValue, column: Prisma7ColumnType) => string;
 }

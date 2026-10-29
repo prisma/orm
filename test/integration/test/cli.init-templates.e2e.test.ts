@@ -120,8 +120,8 @@ const CELLS: ReadonlyArray<{
     target: 'postgres',
     authoring: 'psl',
     hashes: {
-      storageHash: 'a51b4833fdaffe730572670ccc27dd89af7e0726ab3de7f428d21702d687cc15',
-      executionHash: '3730158042e7c88d23f35529e89ad90532db0cd5c528c13e701f93cb45aa8a9c',
+      storageHash: '920a87b50729a867e21706dd0fa5c3739e273a84ed89eb2f3525633b2d6ef85c',
+      executionHash: '0ff7f5c55037616d53a67c7c581c1178658b41c7a674a85dd59fc3b8f9dd8a49',
       profileHash: POSTGRES_PROFILE_HASH,
     },
   },
@@ -129,8 +129,8 @@ const CELLS: ReadonlyArray<{
     target: 'postgres',
     authoring: 'typescript',
     hashes: {
-      storageHash: 'cc9d4ebfe093981ab7ea8fdc2332c00214f9c7d0267e723ca3983ffb5e68cbe6',
-      executionHash: '91162cb5749f09907ced481b9863bd25166b8a213775335fede5c23e58eb135c',
+      storageHash: 'd901307c194c817cfa0a28ababa391bd1b2342a2ebb5f8ac3280534f2295f96f',
+      executionHash: 'c478b201602051bfaeddbe71eb44664a34764bf959a3d00c206e7dcf71393533',
       profileHash: POSTGRES_PROFILE_HASH,
     },
   },

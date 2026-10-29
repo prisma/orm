@@ -50,6 +50,18 @@ describe('MySQL codecs read the text MySQL sends', () => {
     expect(codec.fromDataTypeValue(value(mysqlBigint, '12'))).toBe(12n);
   });
 
+  it('refuses a stored datetime with digits below a millisecond, and reads a row with them at the millisecond', async () => {
+    const codec = mysqlDatetimeDescriptor.factory({ precision: 6 })(instance);
+    expect(() =>
+      codec.fromDataTypeValue(
+        mysqlDatetime.valueFrom('2024-01-02T03:04:05.678912', { precision: 6 }),
+      ),
+    ).toThrow(/2024-01-02T03:04:05\.678912/);
+    expect(await codec.fromWire('2024-01-02 03:04:05.678912', ctx)).toEqual(
+      new Date('2024-01-02T03:04:05.678Z'),
+    );
+  });
+
   it('reads a datetime as the instant it names in UTC', async () => {
     const codec = mysqlDatetimeDescriptor.factory({ precision: 3 })(instance);
     const instant = new Date('2024-01-02T03:04:05.678Z');

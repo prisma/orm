@@ -14,7 +14,7 @@ export const contract = defineContract({}, ({ field, model, type }) => ({
       fields: {
         id: field.column(int4Column).id(),
         instant: field
-          .column(type.DateTime())
+          .column(type.TimestamptzTemporal())
           .default(Temporal.Instant.from('2024-01-01T00:00:00.5Z')),
         local: field
           .column(timestampTemporalColumn)

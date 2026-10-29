@@ -14,7 +14,7 @@
 
 model User {
   id        String   @id @onCreate(cuid(2))
-  createdAt DateTime @default(now())
-  updatedAt temporal.UpdatedAt
+  createdAt TimestamptzTemporal @default(now())
+  updatedAt TimestamptzTemporal @onCreate(now()) @onUpdate(now())
   @@map("user")
 }

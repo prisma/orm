@@ -33,7 +33,7 @@ import { blockSpecFactoryOf } from './block-spec/descriptor';
 import { blockSpecContext } from './block-spec/spec-context';
 import {
   type ContributedTypeNamespace,
-  type ContributedTypeSymbol,
+  type ContributedTypeUse,
   contributedTypeScope,
 } from './contributed-type-scope';
 import { diagnosticSource } from './diagnostic';
@@ -44,7 +44,7 @@ import {
 } from './entity-reference';
 import { findBlockDescriptor } from './extension-block';
 import type { ParseDiagnostic } from './parse';
-import type { ResolvedAttribute } from './resolve';
+import type { ResolvedAttribute, ResolvedTypeConstructorCall } from './resolve';
 import {
   contributedScope,
   documentScope,
@@ -202,20 +202,27 @@ export function typeReferenceNode(symbol: FieldSymbol | NamedTypeSymbol): Syntax
   return symbol.node.typeAnnotation()?.name()?.syntax;
 }
 
+/**
+ * The contributed type a field's or type alias's type resolves to, through a named type when it is declared with one, and the call it is written with there: `call`, the field's own, for a contributed type, or the named type's.
+ */
 export function contributedTypeOf(
   resolution: Resolution | undefined,
   binder: Binder,
-): ContributedTypeSymbol | undefined {
-  return contributedTypeOfResolution(resolution, (base) => binder.symbolForNode(base));
+  call: ResolvedTypeConstructorCall | undefined,
+): ContributedTypeUse | undefined {
+  return contributedTypeOfResolution(resolution, (base) => binder.symbolForNode(base), call);
 }
 
 function contributedTypeOfResolution(
   resolution: Resolution | undefined,
   resolve: (node: SyntaxNode) => Resolution | undefined,
-): ContributedTypeSymbol | undefined {
-  const base = resolution?.kind === 'namedType' ? typeReferenceNode(resolution.symbol) : undefined;
+  call: ResolvedTypeConstructorCall | undefined,
+): ContributedTypeUse | undefined {
+  const named = resolution?.kind === 'namedType' ? resolution.symbol : undefined;
+  const base = named === undefined ? undefined : typeReferenceNode(named);
   const target = base === undefined ? resolution : resolve(base);
-  return target?.kind === 'contributedType' ? target.symbol : undefined;
+  if (target?.kind !== 'contributedType') return undefined;
+  return { symbol: target.symbol, call: named === undefined ? call : named.typeConstructor };
 }
 
 class PslBinder implements Binder {
@@ -513,10 +520,12 @@ function bind(options: BindingInputs): BinderResult {
           if (specContext === undefined) return undefined;
           const node = typeReferenceNode(field);
           const typeResolution = node === undefined ? undefined : references.get(node);
-          const typeConstructor = contributedTypeOfResolution(typeResolution, (base) =>
-            references.get(base),
+          const contributedType = contributedTypeOfResolution(
+            typeResolution,
+            (base) => references.get(base),
+            field.typeConstructor,
           );
-          return factory({ ...specContext, field, typeResolution, typeConstructor });
+          return factory({ ...specContext, field, typeResolution, contributedType });
         },
         { ...context, field },
       );

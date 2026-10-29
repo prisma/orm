@@ -29,7 +29,7 @@ model Vote {
   userId      Int
   objectiveId Int
   followerId  Int
-  createdAt   DateTime        @default(now())
+  createdAt   TimestamptzTemporal        @default(now())
   user        User            @relation(fields: [userId], references: [id])
   userObjective UserToObjective @relation(fields: [objectiveId, followerId], references: [userId, objectiveId], onDelete: NoAction, onUpdate: NoAction)
 

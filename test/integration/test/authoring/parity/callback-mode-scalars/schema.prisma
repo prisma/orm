@@ -12,7 +12,7 @@ model User {
   score Float?
   profile Jsonb?
   embedding Embedding?
-  createdAt DateTime @default(now())
+  createdAt TimestamptzTemporal @default(now())
   @@map("user")
 }
 

@@ -14,7 +14,7 @@ model Post {
   id          Int      @id @default(autoincrement())
   authorId    Int
   title       String
-  publishedAt DateTime?
+  publishedAt TimestamptzTemporal?
   author      User     @relation(fields: [authorId], references: [id])
 
   @@map("posts")

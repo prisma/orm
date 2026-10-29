@@ -28,7 +28,7 @@ model User {
   id          Uuid      @id @onCreate(uuid())
   email       String
   displayName String
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime(as: temporal)  @default(now())
   kind        user_type
   address     Address?
   posts       Post[]
@@ -42,8 +42,8 @@ model Post {
   title     String
   userId    Uuid
   priority  Priority @default(Low)
-  createdAt DateTime       @default(now())
-  expiresAt DateTime       @default(sql`(now() + '7 days'::interval)`)
+  createdAt DateTime(as: temporal)       @default(now())
+  expiresAt DateTime(as: temporal)       @default(sql`(now() + '7 days'::interval)`)
   embedding Embedding1536?
 
   // Three engagement counters, one per integer representation. They are
@@ -96,7 +96,7 @@ model Task {
   status      String   @default("open")
   type        String
   userId      Uuid
-  createdAt   DateTime @default(now())
+  createdAt   DateTime(as: temporal) @default(now())
 
   user User @relation(fields: [userId], references: [id])
 

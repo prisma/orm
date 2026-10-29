@@ -84,7 +84,7 @@ describe('every generated value the stack reads prints as PSL that reads back', 
       aliases: temporalTypeAliases(stack.authoringContributions.type),
       now: nowGeneratedTypes(stack),
     }).toMatchObject({
-      aliases: expect.arrayContaining(['temporal.CreatedAt', 'temporal.UpdatedAtJsDate']),
+      aliases: expect.arrayContaining(['temporal.CreatedAt', 'temporal.UpdatedAt']),
       now: expect.arrayContaining(['TimestamptzTemporal @onCreate(now()) @onUpdate(now())']),
     });
   });
@@ -144,8 +144,8 @@ describe('every generated value the stack reads prints as PSL that reads back', 
 model Event {
   id        String      @id @onCreate(uuid(7))
   code      VarChar(32) @onCreate(nanoid())
-  seenAt    Time(3)     @onUpdate(now())
-  createdAt DateTime    @default(now()) @onCreate(now())
+  seenAt    TimeTemporal(3)     @onUpdate(now())
+  createdAt TimestamptzTemporal    @default(now()) @onCreate(now())
 }
 `);
       const fieldLines = printContract(authored)
@@ -180,8 +180,8 @@ model Event {
         fieldLines: [
           'id String @id @onCreate(uuid(7))',
           'code VarChar(32) @onCreate(nanoid())',
-          'seenAt TimeTemporal(3) @onUpdate(now())',
-          'createdAt TimestamptzTemporal @default(now()) @onCreate(now())',
+          'seenAt Time(as: temporal, precision: 3) @onUpdate(now())',
+          'createdAt DateTime(as: temporal) @default(now()) @onCreate(now())',
         ],
         roundTrip: serializedWithoutCapabilities(authored),
       });

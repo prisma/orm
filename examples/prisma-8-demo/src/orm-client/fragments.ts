@@ -7,7 +7,7 @@ import { db } from '../prisma/db';
  * A scope for any model with a `createdAt` timestamp, such as `User`, `Post` and `Task`: rows created since `since`.
  */
 export function createdSince(since: Temporal.Instant) {
-  return db.orm.fragment({ createdAt: field.column(type.TimestamptzTemporal()) }, (rows) =>
+  return db.orm.fragment({ createdAt: field.column(type.DateTime({ as: 'temporal' })) }, (rows) =>
     rows.where((row) => row.createdAt.gte(since)),
   );
 }

@@ -130,6 +130,7 @@ type WrittenTypeRead =
       readonly ok: true;
       readonly type: SqlDataType;
       readonly typeParams: SqlTypeParams;
+      readonly writtenTypeParams: SqlTypeParams;
       readonly many: boolean;
     }
   | { readonly ok: false; readonly reason: string };
@@ -147,14 +148,25 @@ function readWrittenType(type: string, dataTypes: readonly DataType[]): WrittenT
       reason: `more than one data type of the configured stack reads the type "${type}", as ${named}`,
     };
   }
-  const resolved = byText[0] ?? resolvedByKind(base, sqlTypes);
-  if (resolved === undefined) {
+  const [written] = byText;
+  if (written !== undefined) {
+    return {
+      ok: true,
+      type: written.dataType,
+      typeParams: written.typeParams,
+      writtenTypeParams: written.writtenTypeParams,
+      many: array !== null,
+    };
+  }
+  const byKind = resolvedByKind(base, sqlTypes);
+  if (byKind === undefined) {
     return { ok: false, reason: `no data type of the configured stack reads the type "${type}"` };
   }
   return {
     ok: true,
-    type: resolved.dataType,
-    typeParams: resolved.typeParams,
+    type: byKind.dataType,
+    typeParams: byKind.typeParams,
+    writtenTypeParams: byKind.typeParams,
     many: array !== null,
   };
 }
@@ -177,7 +189,7 @@ function readColumnTypeCheck(
       },
     };
   }
-  const text = renderSqlCatalogText(read.type, read.typeParams);
+  const text = renderSqlCatalogText(read.type, read.writtenTypeParams);
   return { ok: true, check: { kind: 'catalog-text', text: `${text}${read.many ? '[]' : ''}` } };
 }
 

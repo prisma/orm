@@ -75,7 +75,7 @@
               "tsZ": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "typeParams": {
                     "precision": 3
                   }
@@ -86,7 +86,7 @@
               "tsMs": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "typeParams": {
                     "precision": 3
                   }
@@ -97,7 +97,7 @@
               "tsPlus": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "typeParams": {
                     "precision": 3
                   }
@@ -108,7 +108,7 @@
               "tsMinus": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "typeParams": {
                     "precision": 3
                   }
@@ -119,7 +119,7 @@
               "tsMicro": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "typeParams": {
                     "precision": 6
                   }
@@ -130,7 +130,7 @@
               "tzZ": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamptz-string@1",
+                  "codecId": "pg/timestamptz-date@1",
                   "typeParams": {
                     "precision": 6
                   }
@@ -141,7 +141,7 @@
               "tzPlus": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamptz-string@1",
+                  "codecId": "pg/timestamptz-date@1",
                   "typeParams": {
                     "precision": 6
                   }
@@ -254,7 +254,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "feda26d6f6cfb7e3e2fd75cf177cc4e5c1e7ff60deff04d5ab208cf114426e02",
+    "storageHash": "5772a67257453bdad9ff5ce4e2b5098608b3719f70f3479194fe2bfd6b446050",
     "namespaces": {
       "public": {
         "id": "public",
@@ -271,7 +271,7 @@
                 },
                 "tsZ": {
                   "dataType": "pg/timestamp",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -284,7 +284,7 @@
                 },
                 "tsMs": {
                   "dataType": "pg/timestamp",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -297,7 +297,7 @@
                 },
                 "tsPlus": {
                   "dataType": "pg/timestamp",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -310,7 +310,7 @@
                 },
                 "tsMinus": {
                   "dataType": "pg/timestamp",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -323,20 +323,20 @@
                 },
                 "tsMicro": {
                   "dataType": "pg/timestamp",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
                     "precision": 6
                   },
                   "default": {
-                    "kind": "literal",
-                    "value": "2024-01-02T03:04:05.123456"
+                    "kind": "function",
+                    "expression": "'2024-01-02T03:04:05.123456'::timestamp(6)"
                   }
                 },
                 "tzZ": {
                   "dataType": "pg/timestamptz",
-                  "codecId": "pg/timestamptz-string@1",
+                  "codecId": "pg/timestamptz-date@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -349,7 +349,7 @@
                 },
                 "tzPlus": {
                   "dataType": "pg/timestamptz",
-                  "codecId": "pg/timestamptz-string@1",
+                  "codecId": "pg/timestamptz-date@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {

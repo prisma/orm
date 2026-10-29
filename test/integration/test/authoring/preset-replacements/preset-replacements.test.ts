@@ -76,6 +76,14 @@ function refusalOf<Row>(targetCase: TargetCase<Row>, row: Row) {
   };
 }
 
+/** The field written with `rewrite` in place of `call` and the `?` or `[]` after it, which the rewrite writes itself. */
+function withRewrite(preset: string, call: string, rewrite: string): string {
+  const start = preset.indexOf(call);
+  const end = start + call.length;
+  const modifier = /^(?:\?|\[\])?/.exec(preset.slice(end))?.[0] ?? '';
+  return `${preset.slice(0, start)}${rewrite}${preset.slice(end + modifier.length)}`;
+}
+
 function describeTarget<Row extends PresetReplacementRow<never, unknown>>(
   targetCase: TargetCase<Row>,
 ): void {
@@ -91,7 +99,7 @@ function describeTarget<Row extends PresetReplacementRow<never, unknown>>(
           );
           const rewritten = {
             ...row,
-            psl: { replacement: preset.replace(call ?? '', rewrite ?? '') },
+            psl: { replacement: withRewrite(preset, call ?? '', rewrite ?? '') },
           };
           expect(await emitted(targetCase, 'psl', [rewritten], 'replacement')).toEqual(
             await emitted(targetCase, 'psl', [row], 'replacement'),

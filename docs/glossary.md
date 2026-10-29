@@ -213,6 +213,14 @@ A specific feature that a database may or may not support (e.g., `RETURNING` cla
 
 Handles the translation between JavaScript values and database values. When you read a timestamp from the database, a codec converts it to a JavaScript `Date`; when you write it back, the codec converts it the other way. Extensions provide codecs for specialized types like vectors or geometries.
 
+### Convenience type
+
+A type, in PSL or the TypeScript builder (`type.DateTime(...)`), named for what a field means in the application, such as `DateTime`, `Date`, `Time` or `Duration`, that becomes exactly one explicit type. Optional arguments choose which, with defaults. The contract stores only the explicit type. See ADR 279.
+
+### Explicit type
+
+A type, in PSL or the TypeScript builder, that fixes one codec, so it fixes both the column type and the value the application reads. It is named after the database, with a suffix for the kind of value when a column type has several codecs: `TimestamptzTemporal`, `TimestamptzJsDate`, `DateString`. See ADR 257 and ADR 279.
+
 ### Marker
 
 A small record stored in the database that tracks which contract the database is currently migrated to. Before running queries or migrations, Prisma 8 checks that the marker matches the contract the application is carrying. This catches situations where the database and application have drifted out of sync — for example, if a migration was run but the application wasn't redeployed.
@@ -226,6 +234,10 @@ A unique name that identifies an extension. Namespaces keep extensions from coll
 Where a database object's name comes from. An object is **wire-named** when Prisma 8 derives the name (see [wire name](#wire-name)), or **exact-named** when you supply the name and Prisma 8 adopts it verbatim — `map:` on an index, `@@map` on an RLS policy block. The two modes differ in how drift is detected: a wire name commits to the object's content, so comparing names is comparing content; an exact name says nothing about content, so the body is compared byte-for-byte against the database's own reprint.
 
 Naming mode is independent of [control policy](architecture%20docs/adrs/ADR%20224%20-%20Control%20Policy%20—%20framework-locked%20vocabulary%20and%20family-owned%20dispatch.md), which answers a different question: whether Prisma 8 may write to the object at all.
+
+### Type choice
+
+The declaration a pack contributes for a convenience type: its option arguments with their values and defaults, the arguments it passes on, and a table from each allowed combination of option values to the name of an explicit type constructor. See ADR 279.
 
 ### Wire Name
 

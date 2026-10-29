@@ -52,6 +52,7 @@ import type {
 import {
   type DiagnosticSource,
   diagnosticSource,
+  isContributedTypeChoice,
   nodePslSpan,
   type PslDiagnosticCollector,
   typeAttributeSpecContextOfField,
@@ -59,6 +60,9 @@ import {
   typeGeneratorAttributeSpec,
 } from '@internal/psl-parser';
 import {
+  argumentIndexOf,
+  argumentSpan,
+  instantiatePslTypeChoice,
   isBareTypeConstructor,
   mapPslHelperArgs,
   reportTypeConstructorNotCalled,
@@ -109,18 +113,6 @@ export type ColumnDescriptor = {
   readonly valueSet?: ValueSetRef;
 };
 
-function argumentSpan(
-  call: ResolvedTypeConstructorCall,
-  descriptors: readonly AuthoringArgumentDescriptor[] | undefined,
-  index: number | undefined,
-): PslSpan {
-  if (index === undefined) return call.span;
-  const name = descriptors?.[index]?.name;
-  const named = call.args.find((arg) => arg.kind === 'named' && arg.name === name);
-  const positional = call.args.filter((arg) => arg.kind === 'positional')[index];
-  return (named ?? positional)?.span ?? call.span;
-}
-
 /**
  * Checks the type parameters a constructor produced against its codec's parameter schema,
  * reporting a failure at the argument the failing parameter came from. Returns whether they passed.
@@ -153,15 +145,6 @@ export function checkPslTypeParams(input: {
     });
     return false;
   }
-}
-
-function argumentIndexOf(error: unknown): number | undefined {
-  if (typeof error !== 'object' || error === null || !('details' in error)) return undefined;
-  const { details } = error;
-  if (typeof details !== 'object' || details === null || !('argumentIndex' in details)) {
-    return undefined;
-  }
-  return typeof details.argumentIndex === 'number' ? details.argumentIndex : undefined;
 }
 
 /**
@@ -500,6 +483,19 @@ export function resolveFieldTypeDescriptor(
     case 'mixin':
       return NOT_RESOLVED;
     case 'contributedType': {
+      if (isContributedTypeChoice(resolution.symbol)) {
+        const instantiated = instantiatePslTypeChoice({
+          symbol: resolution.symbol,
+          call,
+          span: field.span,
+          codecLookup: input.codecLookup,
+          diagnostics,
+          source,
+          entityLabel,
+          dataTypes: input.dataTypes,
+        });
+        return instantiated === undefined ? NOT_RESOLVED : { ok: true, descriptor: instantiated };
+      }
       const { descriptor, path } = resolution.symbol;
       const written = path.join('.');
       if (descriptor.kind === 'typeAlias') {

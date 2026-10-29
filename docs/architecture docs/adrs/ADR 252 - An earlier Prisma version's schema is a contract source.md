@@ -112,7 +112,7 @@ flowchart LR
 
 **Rules of the language live in the family authoring package.** `@internal/sql-contract-prisma7` holds everything that is true of the Prisma 7 language for the SQL family: blocks and attributes, relation pairing, junction tables, defaults, and the diagnostics. It knows nothing about a particular database and depends on no Prisma 7 package.
 
-**Facts about the database come from the target through one binding.** `Prisma7TargetBinding` is the complete list of what a target must answer: the target pack and namespace factory, the datasource providers it accepts, the type map of what the earlier version creates for each scalar and native-type attribute, the native enum entity kind, the index types, the identifier byte limit, the junction relation field names, the "now" generator for each column codec, and how a literal default is read for a column whose codec does not take the written value. The Postgres target exports one instance.
+**Facts about the database come from the target through one binding.** `Prisma7TargetBinding` is the complete list of what a target must answer: the target pack and namespace factory, the datasource providers it accepts, the type map of what the earlier version creates for each scalar and native-type attribute, the native enum entity kind, the index types, the identifier byte limit, the junction relation field names, the "now" generator for each column codec, how a literal default is read for a column whose codec does not take the written value, and the SQL expression of a default whose value the column's type holds but its codec cannot hold exactly. The Postgres target exports one instance.
 
 **The facade publishes one function** that wires the two together:
 

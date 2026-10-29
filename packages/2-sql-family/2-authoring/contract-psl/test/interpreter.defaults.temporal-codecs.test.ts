@@ -52,7 +52,13 @@ stamped ${field}
       columnAndDefaults(model('TimestampTemporal(3) @onCreate(now()) @onUpdate(now())')),
     ).toEqual({
       column: { ...timestamp, typeParams: { precision: 3 } },
-      defaults: [{ ref: stampedRef, onCreate: plainDateTimeNow, onUpdate: plainDateTimeNow }],
+      defaults: [
+        {
+          ref: stampedRef,
+          onCreate: { ...plainDateTimeNow, params: { precision: 3 } },
+          onUpdate: { ...plainDateTimeNow, params: { precision: 3 } },
+        },
+      ],
     });
   });
 

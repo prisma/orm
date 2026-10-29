@@ -3,7 +3,7 @@ import type { Temporal } from 'temporal-spec';
 import { requireTemporal } from './require-temporal';
 
 /**
- * The Postgres "now" generators, one per date and time codec except `pg/timestamptz-date@1`, which uses the framework's `timestampNow`. All read the clock through `Date.now()` and write UTC. The time generators and the string timestamp generators round down to their `precision` param, so the column stores the value as written. The string generators are named after the codec they serve and write the codec's stored form (ADR 254, "Date and time types") in UTC, with milliseconds and no trailing zeros in the fraction.
+ * The Postgres "now" generators, one per date and time codec except `pg/timestamptz-date@1` and `pg/timestamp-date@1`, which use the SQL family's `timestampNow`. All read the clock through `Date.now()` and write UTC. The time and timestamp generators round down to their `precision` param, so the column stores the value as written. The string generators are named after the codec they serve and write the codec's stored form (ADR 254, "Date and time types") in UTC, with milliseconds and no trailing zeros in the fraction.
  */
 export const INSTANT_NOW_GENERATOR_ID = 'instantNow' as const;
 export const PLAIN_DATE_TIME_NOW_GENERATOR_ID = 'plainDateTimeNow' as const;
@@ -17,6 +17,7 @@ export const TIMETZ_NOW_GENERATOR_ID = 'timetzNow' as const;
 
 const UTC_OFFSET = 'Z';
 const MAX_TIME_PRECISION = 6;
+const MILLISECOND_DIGITS = 3;
 
 type GeneratorParams = Readonly<Record<string, unknown>> | undefined;
 
@@ -50,20 +51,32 @@ function truncateTime(time: Temporal.PlainTime, fractionDigits: number): Tempora
   });
 }
 
-function utcDateTimeNow(generatorId: string): Temporal.ZonedDateTime {
-  return requireTemporal({ generatorId })
-    .Instant.fromEpochMilliseconds(Date.now())
-    .toZonedDateTimeISO('UTC');
+function epochMillisecondsNow(fractionDigits = MAX_TIME_PRECISION): number {
+  const now = Date.now();
+  if (fractionDigits >= MILLISECOND_DIGITS) return now;
+  const step = 10 ** (MILLISECOND_DIGITS - Math.max(fractionDigits, 0));
+  return Math.floor(now / step) * step;
 }
 
-export function instantNow(): Temporal.Instant {
-  return requireTemporal({ generatorId: INSTANT_NOW_GENERATOR_ID }).Instant.fromEpochMilliseconds(
-    Date.now(),
+function utcInstantNow(generatorId: string, fractionDigits?: number): Temporal.Instant {
+  return requireTemporal({ generatorId }).Instant.fromEpochMilliseconds(
+    epochMillisecondsNow(fractionDigits),
   );
 }
 
-export function plainDateTimeNow(): Temporal.PlainDateTime {
-  return utcDateTimeNow(PLAIN_DATE_TIME_NOW_GENERATOR_ID).toPlainDateTime();
+function utcDateTimeNow(generatorId: string, fractionDigits?: number): Temporal.ZonedDateTime {
+  return utcInstantNow(generatorId, fractionDigits).toZonedDateTimeISO('UTC');
+}
+
+export function instantNow(params?: GeneratorParams): Temporal.Instant {
+  return utcInstantNow(INSTANT_NOW_GENERATOR_ID, fractionDigitsOf(params));
+}
+
+export function plainDateTimeNow(params?: GeneratorParams): Temporal.PlainDateTime {
+  return utcDateTimeNow(
+    PLAIN_DATE_TIME_NOW_GENERATOR_ID,
+    fractionDigitsOf(params),
+  ).toPlainDateTime();
 }
 
 export function plainDateNow(): Temporal.PlainDate {

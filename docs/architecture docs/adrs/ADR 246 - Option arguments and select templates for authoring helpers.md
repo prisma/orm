@@ -1,6 +1,6 @@
 # ADR 246 — Option arguments and select templates for authoring helpers
 
-**Status:** Superseded 2026-10-22 by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md), except its two omission rules. Field presets, the `option` argument kind and the `select` template node were removed. The two omission rules, no empty `typeParams` and no empty `executionDefaults`, stand as canonicalization rules in [Data Contract](../subsystems/1.%20Data%20Contract.md#deterministic-emission). The content below is preserved as a historical record.
+**Status:** Superseded 2026-10-22 by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md), except its two omission rules. Field presets, the `option` argument kind and the `select` template node were removed; [ADR 279](ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md) gives a type choice its own `option` arguments, which only a type choice takes. The two omission rules, no empty `typeParams` and no empty `executionDefaults`, stand as canonicalization rules in [Data Contract](../subsystems/1.%20Data%20Contract.md#deterministic-emission). The content below is preserved as a historical record.
 
 ## At a glance
 

@@ -8,11 +8,22 @@ export {
   fkRelationPairKey,
   requiredOneToOneBackrelationDiagnostic,
 } from '../relation-backrelations';
-export type { RemovedFieldPreset, RemovedFieldPresets } from '../removed-field-presets';
+export type {
+  RemovedFieldPreset,
+  RemovedFieldPresets,
+  RemovedPresetType,
+} from '../removed-field-presets';
 export {
   describeRemovedFieldPreset,
+  presetType,
   removedPresetWithPhases,
   removedPresetWrittenAs,
+  writtenPresetType,
 } from '../removed-field-presets';
+export {
+  argumentIndexOf,
+  argumentSpan,
+  instantiatePslTypeChoice,
+} from '../type-choice-calls';
 export { isBareTypeConstructor, reportTypeConstructorNotCalled } from '../type-constructor-calls';
 export { claimedBlockKeywords, unsupportedBlockDiagnostic } from '../unclaimed-blocks';

@@ -2,14 +2,14 @@
 
 model Event {
   id      Int          @id
-  a       DateTime     @default(timestamptz`2024-01-01T00:00:00Z`)
-  b       DateTime     @default(timestamptz`2024-01-01T00:00:00.000Z`)
-  c       DateTime     @default(timestamptz`2024-01-01T01:00:00+01:00`)
+  a       TimestamptzTemporal     @default(timestamptz`2024-01-01T00:00:00Z`)
+  b       TimestamptzTemporal     @default(timestamptz`2024-01-01T00:00:00.000Z`)
+  c       TimestamptzTemporal     @default(timestamptz`2024-01-01T01:00:00+01:00`)
   localAt TimestampTemporal(3) @default(timestamp`2024-01-01 12:34:56.500`)
-  day     Date         @default(date`2024-01-01`)
-  clock   Time         @default(time`12:34`)
+  day     DateTemporal         @default(date`2024-01-01`)
+  clock   TimeTemporal         @default(time`12:34`)
   zoned   Timetz       @default(timetz`12:34:56+02`)
-  history DateTime[]   @default([timestamptz`2024-01-01T00:00:00.000Z`, timestamptz`2024-06-30 12:34:56+00`])
+  history TimestamptzTemporal[]   @default([timestamptz`2024-01-01T00:00:00.000Z`, timestamptz`2024-06-30 12:34:56+00`])
 
   @@map("event")
 }

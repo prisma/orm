@@ -30,11 +30,11 @@ function fromUntypedCaller(value: unknown): never {
 }
 
 describe('postgres defineContract encodes literal defaults through the column codec', () => {
-  describe('field.column(type.DateTime())', () => {
+  describe('field.column(type.TimestamptzTemporal())', () => {
     it('refuses a string, naming the model and field and carrying the codec message', () => {
       expect(() =>
         storedDefault(({ field, type }) =>
-          field.column(type.DateTime()).default(fromUntypedCaller('2024-01-01')),
+          field.column(type.TimestamptzTemporal()).default(fromUntypedCaller('2024-01-01')),
         ),
       ).toThrow(
         expect.objectContaining({
@@ -55,7 +55,9 @@ describe('postgres defineContract encodes literal defaults through the column co
     it('stores the text the codec produces for a Temporal.Instant', () => {
       expect(
         storedDefault(({ field, type }) =>
-          field.column(type.DateTime()).default(Temporal.Instant.from('2024-01-01T00:00:00Z')),
+          field
+            .column(type.TimestamptzTemporal())
+            .default(Temporal.Instant.from('2024-01-01T00:00:00Z')),
         ),
       ).toEqual({ kind: 'literal', value: '2024-01-01T00:00:00Z' });
     });
@@ -226,7 +228,7 @@ describe('postgres defineContract encodes literal defaults through the column co
             fields: {
               id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
               at: field
-                .column(type.DateTime())
+                .column(type.TimestamptzTemporal())
                 .default(Temporal.Instant.from('2024-01-01T00:00:00Z')),
             },
           }),

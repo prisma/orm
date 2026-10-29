@@ -15,7 +15,7 @@ model Child {
   float Float[]
   bytes Bytes[]
   bool Boolean[]
-  dt DateTime[]
+  dt TimestamptzTemporal[]
   empty Int[]
   unset Int[]
   @@map("child")

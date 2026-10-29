@@ -24,66 +24,11 @@ import {
 } from '../../src/core/authoring';
 import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-registry';
 import { type PostgresSchema, postgresCreateNamespace } from '../../src/core/postgres-schema';
+import { postgresScalarAndNativeTypeConstructors } from '../../src/core/type-constructors';
 import { postgresDataTypeSupport } from '../fixtures/postgres-data-type-support';
 import { printPslFromFlat } from './fixtures';
 
-const authoringTypes = {
-  Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1' } },
-  Uuid: { kind: 'typeConstructor', output: { codecId: 'pg/uuid@1' } },
-  Inet: { kind: 'typeConstructor', output: { codecId: 'pg/inet@1' } },
-  TimestampString: {
-    kind: 'typeConstructor',
-    args: [{ kind: 'value', dataType: 'pg/int4', name: 'precision', optional: true }],
-    output: {
-      codecId: 'pg/timestamp-string@1',
-      typeParams: { precision: { kind: 'arg', index: 0 } },
-    },
-  },
-  TimestamptzString: {
-    kind: 'typeConstructor',
-    args: [{ kind: 'value', dataType: 'pg/int4', name: 'precision', optional: true }],
-    output: {
-      codecId: 'pg/timestamptz-string@1',
-      typeParams: { precision: { kind: 'arg', index: 0 } },
-    },
-  },
-  DateString: {
-    kind: 'typeConstructor',
-    output: { codecId: 'pg/date-string@1' },
-  },
-  TimeString: {
-    kind: 'typeConstructor',
-    args: [{ kind: 'value', dataType: 'pg/int4', name: 'precision', optional: true }],
-    output: {
-      codecId: 'pg/time-string@1',
-      typeParams: { precision: { kind: 'arg', index: 0 } },
-    },
-  },
-  VarChar: {
-    kind: 'typeConstructor',
-    args: [{ kind: 'value', dataType: 'pg/int4', name: 'length', optional: true }],
-    output: {
-      codecId: 'sql/varchar@1',
-      typeParams: { length: { kind: 'arg', index: 0 } },
-    },
-  },
-  Numeric: {
-    kind: 'typeConstructor',
-    args: [
-      { kind: 'value', dataType: 'pg/int4', name: 'precision', optional: true },
-      { kind: 'value', dataType: 'pg/int4', name: 'scale', optional: true },
-    ],
-    output: {
-      codecId: 'pg/numeric@1',
-      typeParams: {
-        precision: { kind: 'arg', index: 0 },
-        scale: { kind: 'arg', index: 1 },
-      },
-    },
-  },
-  Json: { kind: 'typeConstructor', output: { codecId: 'pg/json@1' } },
-  Jsonb: { kind: 'typeConstructor', output: { codecId: 'pg/jsonb@1' } },
-} as const satisfies AuthoringTypeNamespace;
+const authoringTypes: AuthoringTypeNamespace = postgresScalarAndNativeTypeConstructors;
 
 const assembled = assembleAuthoringContributions([
   {
@@ -180,10 +125,10 @@ describe('Postgres PSL inference round trip', () => {
     expect(inferred).not.toContain('bareAmount Numeric()');
     expect(inferred).toMatch(/jsonValue\s+Json/);
     expect(inferred).toMatch(/jsonbValue\s+Jsonb/);
-    expect(inferred).toMatch(/occurredAt\s+TimestamptzString\s/);
-    expect(inferred).toMatch(/loggedAt\s+TimestampString\(3\)/);
-    expect(inferred).toMatch(/dueOn\s+DateString\s/);
-    expect(inferred).toMatch(/opensAt\s+TimeString\s/);
+    expect(inferred).toMatch(/occurredAt\s+DateTime\(precision: 6\)\s/);
+    expect(inferred).toMatch(/loggedAt\s+DateTime\(storage: timestamp\)\s/);
+    expect(inferred).toMatch(/dueOn\s+Date\s/);
+    expect(inferred).toMatch(/opensAt\s+Time\s/);
     expect(inferred).toMatch(/label\s+VarChar\(191\)/);
 
     const emitted = parseAndEmit(inferred);
@@ -237,13 +182,14 @@ describe('Postgres PSL inference round trip', () => {
                 many: false,
               },
               occurred_at: {
-                codecId: 'pg/timestamptz-string@1',
+                codecId: 'pg/timestamptz-date@1',
                 dataType: 'pg/timestamptz',
                 nullable: false,
                 many: false,
+                typeParams: { precision: 6 },
               },
               logged_at: {
-                codecId: 'pg/timestamp-string@1',
+                codecId: 'pg/timestamp-date@1',
                 dataType: 'pg/timestamp',
                 nullable: false,
                 many: false,

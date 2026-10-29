@@ -22,7 +22,7 @@ model TestModel {
   float  Float?
   bytes  Bytes?
   bool   Boolean?
-  dt     DateTime?
+  dt     TimestamptzTemporal?
   dec    Decimal?
   @@map("testModel")
 }

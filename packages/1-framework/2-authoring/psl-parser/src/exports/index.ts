@@ -173,15 +173,23 @@ export type {
   MapBlockSpec,
   StructBlockSpec,
 } from '../block-spec/types';
+export { printTypeConstructorCall } from '../call-arguments';
 export type {
   ContributedMember,
   ContributedNamespaceSymbol,
+  ContributedTypeChoiceSymbol,
   ContributedTypeDescriptor,
   ContributedTypeNamespace,
   ContributedTypeScope,
   ContributedTypeSymbol,
+  ContributedTypeUse,
 } from '../contributed-type-scope';
-export { contributedTypeAt, contributedTypeCodecId } from '../contributed-type-scope';
+export {
+  chosenTypeConstructor,
+  contributedTypeAt,
+  contributedTypeCodecId,
+  isContributedTypeChoice,
+} from '../contributed-type-scope';
 export type { DiagnosticSource, PslDiagnostic, PslDiagnosticCollector } from '../diagnostic';
 export {
   createPslDiagnosticCollector,

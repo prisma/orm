@@ -7,7 +7,7 @@ function reported(text: string, rest: Partial<ReportedSqlType> = {}): ReportedSq
   return { text, kind: undefined, schema: 'pg_catalog', name: undefined, ...rest };
 }
 
-/** Each Postgres data type with a marked constructor, as Postgres reports a column of it, and what infer prints. */
+/** Each Postgres data type with a marked constructor, as Postgres reports a column of it, and what infer prints: the type choice that becomes the marked constructor where one does. */
 const COLUMN_TYPES = [
   ['text', 'String'],
   ['boolean', 'Boolean'],
@@ -29,21 +29,23 @@ const COLUMN_TYPES = [
   ['character varying(20)', 'VarChar(20)'],
   ['uuid', 'Uuid'],
   ['inet', 'Inet'],
-  ['date', 'DateString'],
-  ['time without time zone', 'TimeString'],
-  ['time(3) without time zone', 'TimeString(3)'],
-  ['time with time zone', 'Timetz'],
-  ['time(2) with time zone', 'Timetz(2)'],
-  ['timestamp without time zone', 'TimestampString'],
-  ['timestamp(3) without time zone', 'TimestampString(3)'],
-  ['timestamp with time zone', 'TimestamptzString'],
-  ['timestamp(6) with time zone', 'TimestamptzString(6)'],
+  ['date', 'Date'],
+  ['time without time zone', 'Time'],
+  ['time(0) without time zone', 'Time(precision: 0)'],
+  ['time(3) without time zone', 'Time(precision: 3)'],
+  ['time with time zone', 'Time(storage: timetz)'],
+  ['time(2) with time zone', 'Time(storage: timetz, precision: 2)'],
+  ['timestamp without time zone', 'DateTime(storage: timestamp, precision: 6)'],
+  ['timestamp(3) without time zone', 'DateTime(storage: timestamp)'],
+  ['timestamp with time zone', 'DateTime(precision: 6)'],
+  ['timestamp(3) with time zone', 'DateTime'],
+  ['timestamp(6) with time zone', 'DateTime(precision: 6)'],
   ['bit(1)', 'Bit'],
   ['bit(8)', 'Bit(8)'],
   ['bit varying', 'VarBit'],
   ['bit varying(16)', 'VarBit(16)'],
-  ['interval', 'IntervalParts'],
-  ['interval(3)', 'IntervalParts(3)'],
+  ['interval', 'Duration'],
+  ['interval(3)', 'Duration(precision: 3)'],
 ] as const;
 
 function tableWith(columns: Record<string, { reportedType: ReportedSqlType; many?: true }>) {
@@ -75,7 +77,7 @@ function printedFieldTypes(printed: string): Record<string, string> {
 }
 
 describe('contract infer picks each column type through its data type', () => {
-  it('prints the marked constructor with the fewest arguments, for a scalar and a list', async () => {
+  it('prints the type choice with the arguments that differ from its defaults, or else the marked constructor with the fewest arguments, for a scalar and a list', async () => {
     const columns = Object.fromEntries(
       COLUMN_TYPES.flatMap(([text], index) => [
         [`c${index * 2}`, { reportedType: reported(text) }],

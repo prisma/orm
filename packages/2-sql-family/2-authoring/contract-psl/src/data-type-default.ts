@@ -57,13 +57,23 @@ export interface DefaultColumn {
   readonly typeParams?: Record<string, unknown> | undefined;
 }
 
-/** A value in its stored JSON form that the column's type, under the column's parameters, or the column's codec refuses. */
-type CodecRefusal = {
-  readonly kind: 'refused-by-column';
-  readonly codecId: string;
-  readonly message: string;
-  readonly elementIndex: number | undefined;
-};
+/**
+ * A value in its stored JSON form that the column refuses: `refused-by-column` when its type, under the column's parameters, refuses it, and `refused-by-codec` when the type holds it as `stored` but the column's codec cannot hold it exactly, as a JavaScript `Date` cannot hold digits below a millisecond. On a list column, `stored` holds every element, and `elementIndex` is the first the codec refuses.
+ */
+type CodecRefusal =
+  | {
+      readonly kind: 'refused-by-column';
+      readonly codecId: string;
+      readonly message: string;
+      readonly elementIndex: number | undefined;
+    }
+  | {
+      readonly kind: 'refused-by-codec';
+      readonly codecId: string;
+      readonly message: string;
+      readonly elementIndex: number | undefined;
+      readonly stored: JsonValue;
+    };
 
 /**
  * Why a default was refused, in parts, so each contract source words its own diagnostic: the cast
@@ -89,8 +99,10 @@ export type DefaultRefusal = {
       /** The element types the receiving type's list cast takes. */
       readonly elementTypes: readonly DataTypeId[];
     }
-  | Omit<CodecRefusal, 'elementIndex'>
+  | DistributiveOmit<CodecRefusal, 'elementIndex'>
 );
+
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
 export type ReadDefaultResult =
   | { readonly ok: true; readonly value: JsonValue }
@@ -195,11 +207,9 @@ function storedValueReader(input: {
   const suggestedTypes = [descriptor.dataType];
   const params = dataTypeParams(codec.dataType, input.column.typeParams);
   const read = (written: JsonValue, elementIndex: number | undefined): StoredReadResult => {
-    let stored: JsonValue;
+    let value: ReturnType<typeof codec.dataType.valueFrom>;
     try {
-      const value = codec.dataType.valueFrom(written, params);
-      codec.fromDataTypeValue(value);
-      stored = codec.dataType.toContract(value);
+      value = codec.dataType.valueFrom(written, params);
     } catch (error) {
       if (isInternalError(error)) throw error;
       return {
@@ -209,6 +219,23 @@ function storedValueReader(input: {
           codecId: input.column.codecId,
           message: messageOf(error),
           elementIndex,
+        },
+        suggestedTypes,
+      };
+    }
+    const stored = codec.dataType.toContract(value);
+    try {
+      codec.fromDataTypeValue(value);
+    } catch (error) {
+      if (isInternalError(error)) throw error;
+      return {
+        ok: false,
+        refusal: {
+          kind: 'refused-by-codec',
+          codecId: input.column.codecId,
+          message: messageOf(error),
+          elementIndex,
+          stored,
         },
         suggestedTypes,
       };
@@ -289,13 +316,33 @@ export function readDataTypeDefault(input: {
 
   if (input.isList) {
     const elements: JsonValue[] = [];
+    let codecRefusal: Extract<DefaultRefusal, { kind: 'refused-by-codec' }> | undefined;
     for (const [elementIndex, written] of input.written.elements.entries()) {
       if (written.kind === 'list') return nestedList(elementIndex, suggestedTypes);
       const element = readOne(written, elementIndex);
-      if (!element.ok) return element;
+      if (!element.ok && element.refusal.kind === 'refused-by-codec') {
+        codecRefusal ??= element.refusal;
+        elements.push(element.refusal.stored);
+        continue;
+      }
+      if (!element.ok) {
+        return codecRefusal === undefined
+          ? element
+          : refused(
+              {
+                kind: 'refused-by-column',
+                codecId: codecRefusal.codecId,
+                message: codecRefusal.message,
+                elementIndex: codecRefusal.elementIndex,
+              },
+              suggestedTypes,
+            );
+      }
       elements.push(element.value);
     }
-    return { ok: true, value: elements };
+    return codecRefusal === undefined
+      ? { ok: true, value: elements }
+      : refused({ ...codecRefusal, stored: elements }, suggestedTypes);
   }
 
   return readListIntoScalar({ ...input, written: input.written, columnType, readStored });
@@ -450,11 +497,7 @@ function codecRefusalMessage(refusal: CodecRefusal, subject: string): RefusalMes
 }
 
 function storedRefusalMessage(refusal: StoredRefusal, subject: string): RefusalMessage {
-  if (refusal.kind === 'refused-by-column') return codecRefusalMessage(refusal, subject);
-  return {
-    code: 'PSL_INVALID_LITERAL',
-    message: `${location(subject, refusal.elementIndex)}: ${refusal.message}`,
-  };
+  return codecRefusalMessage(refusal, subject);
 }
 
 /** A refusal worded as a PSL diagnostic's code and message; `guidance` says what to write instead. */
@@ -472,6 +515,7 @@ function refusalMessage(
         message: `${where}: this column holds a list, so its default is a list literal, as in [1, 2]`,
       };
     case 'refused-by-column':
+    case 'refused-by-codec':
       return codecRefusalMessage(refusal, subject);
     case 'no-list-cast':
       return {
@@ -494,6 +538,7 @@ function refusalSpan(refusal: DefaultRefusal, spans: DefaultSpans, subject: stri
   switch (refusal.kind) {
     case 'not-a-list':
     case 'refused-by-column':
+    case 'refused-by-codec':
       return spans.attribute;
     default:
       return writtenValueSpan(spans, refusal.elementIndex, subject);

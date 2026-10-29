@@ -36,8 +36,8 @@ model User {
 
 model Post {
   id        String   @id @onCreate(cuid(2))
-  createdAt DateTime @default(now())
-  updatedAt temporal.UpdatedAt
+  createdAt TimestamptzTemporal @default(now())
+  updatedAt TimestamptzTemporal @onCreate(now()) @onUpdate(now())
   title     String
   content   String?
   published Boolean  @default(false)

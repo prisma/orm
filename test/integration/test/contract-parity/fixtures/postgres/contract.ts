@@ -2,7 +2,11 @@
  * The type constructors, id generators, parameterized codecs and relation shapes the planner golden fixture leaves out, so the parity test compares them with their emitted types.
  */
 
-import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
+import {
+  int4Column,
+  textColumn,
+  timestamptzTemporalColumn,
+} from '@internal/adapter-postgres/column-types';
 import { arktypeJson } from '@internal/extension-arktype-json/column-types';
 import arktypeJsonPack from '@internal/extension-arktype-json/pack';
 import {
@@ -54,8 +58,8 @@ const User = model('User', {
     shortNanoid: field.column(type.Char(10)),
     cuid2: field.column(type.Char(24)),
     ksuid: field.column(type.Char(27)),
-    createdAt: field.column(type.temporal.CreatedAt()),
-    updatedAt: field.column(type.temporal.UpdatedAt()),
+    createdAt: field.column(timestamptzTemporalColumn).onCreate(gen.now()),
+    updatedAt: field.column(timestamptzTemporalColumn).onCreate(gen.now()).onUpdate(gen.now()),
     timestamp: field.column(type.TimestampTemporal(3)),
     timestamptz: field.column(type.TimestamptzTemporal(6)).onCreate(gen.now()),
     timestampString: field.column(type.TimestampString(3)),

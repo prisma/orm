@@ -85,6 +85,16 @@ const fixedCharacterType = sqlDataType('test/fixed-character', {
   ],
   normalize: (params) => (params.length === undefined ? { ...params, length: 1 } : params),
 });
+const preciseTimestamptzType = sqlDataType('test/precise-timestamptz', {
+  read: (json) => json,
+  params: type({ 'precision?': 'number.integer >= 0 & number.integer <= 6' }),
+  texts: [
+    { text: 'timestamptz', written: true },
+    { text: 'timestamptz({precision})', written: true },
+  ],
+  normalize: (params) => (params.precision === undefined ? { ...params, precision: 6 } : params),
+  catalogParams: (params) => params,
+});
 const codeType = sqlDataType('test/code', {
   read: (json) => json,
   params: type({ 'length?': 'number.integer >= 1' }),
@@ -113,6 +123,7 @@ const dataTypeOfCodec: Readonly<Record<string, DataType>> = {
   'pg/timestamptz@1': timestamptzType,
   'pg/numeric@1': numericType,
   'pg/char@1': fixedCharacterType,
+  'test/precise-timestamptz@1': preciseTimestamptzType,
   'pg/enum@1': enumType,
   'test/code@1': codeType,
   'sql/raw@1': sqlRawDataType,
@@ -149,6 +160,7 @@ function dataTypeOf(codecId: string): string {
 }
 
 const testDataTypes = createDataTypeLookup([
+  preciseTimestamptzType,
   textType,
   characterType,
   vectorType,
@@ -393,6 +405,23 @@ describe('contractToSchemaIR', () => {
       whole: { typeText: 'numeric(10,0)' },
       scaled: { typeText: 'numeric(10,2)' },
       bare: { typeText: 'character(1)' },
+    });
+  });
+
+  it('writes a column type with the parameters the catalog prints for those written, where the type declares them', () => {
+    const storage = unboundStorage('test' as StorageHashBase<string>, {
+      T: table({
+        columns: {
+          bare: col({ codecId: 'test/precise-timestamptz@1' }),
+          micro: col({ codecId: 'test/precise-timestamptz@1', typeParams: { precision: 6 } }),
+        },
+      }),
+    });
+
+    const columns = contractToSchemaIR(wrap(storage)).tables['T']!.columns;
+    expect({ bare: columns['bare']!.typeText, micro: columns['micro']!.typeText }).toEqual({
+      bare: 'timestamptz',
+      micro: 'timestamptz(6)',
     });
   });
 

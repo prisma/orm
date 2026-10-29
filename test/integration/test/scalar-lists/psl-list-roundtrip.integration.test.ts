@@ -178,7 +178,7 @@ describe('PSL scalar-list end-to-end', { concurrent: false }, () => {
 
 model Reading {
   id       Int        @id
-  dates    DateTime[]
+  dates    TimestamptzTemporal[]
   payloads Bytes[]
   amounts  Amount[]
 }`);

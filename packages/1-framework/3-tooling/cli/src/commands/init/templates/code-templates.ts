@@ -181,23 +181,23 @@ function starterSchemaPslPostgres(): string {
   return `// use prisma-8
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
+  id        Int                @id @default(autoincrement())
+  email     String             @unique
   username  String?
   name      String?
   posts     Post[]
-  createdAt TimestamptzString @default(now())
-  updatedAt temporal.UpdatedAtString
+  createdAt DateTime           @default(now()) @onCreate(now())
+  updatedAt temporal.UpdatedAt
 }
 
 model Post {
-  id        Int      @id @default(autoincrement())
+  id        Int                @id @default(autoincrement())
   title     String
   content   String?
-  author    User     @relation(fields: [authorId], references: [id])
+  author    User               @relation(fields: [authorId], references: [id])
   authorId  Int
-  createdAt TimestamptzString @default(now())
-  updatedAt temporal.UpdatedAtString
+  createdAt DateTime           @default(now()) @onCreate(now())
+  updatedAt temporal.UpdatedAt
 }
 `;
 }
@@ -226,7 +226,7 @@ model Post {
 }
 
 function starterSchemaTsPostgres(builder: string): string {
-  return `import { defineContract } from '${builder}';
+  return `import { defineContract, now } from '${builder}';
 
 export const contract = defineContract({}, ({ field, model, rel, gen, type }) => {
   const User = model('User', {
@@ -235,8 +235,8 @@ export const contract = defineContract({}, ({ field, model, rel, gen, type }) =>
       email: field.column(type.String()).unique(),
       username: field.column(type.String()).optional(),
       name: field.column(type.String()).optional(),
-      createdAt: field.column(type.temporal.CreatedAtString()),
-      updatedAt: field.column(type.temporal.UpdatedAtString()),
+      createdAt: field.column(type.DateTime()).default(now()).onCreate(gen.now()),
+      updatedAt: field.column(type.temporal.UpdatedAt()),
     },
   });
 
@@ -246,8 +246,8 @@ export const contract = defineContract({}, ({ field, model, rel, gen, type }) =>
       title: field.column(type.String()),
       content: field.column(type.String()).optional(),
       authorId: field.column(type.Uuid()),
-      createdAt: field.column(type.temporal.CreatedAtString()),
-      updatedAt: field.column(type.temporal.UpdatedAtString()),
+      createdAt: field.column(type.DateTime()).default(now()).onCreate(gen.now()),
+      updatedAt: field.column(type.temporal.UpdatedAt()),
     },
   });
 

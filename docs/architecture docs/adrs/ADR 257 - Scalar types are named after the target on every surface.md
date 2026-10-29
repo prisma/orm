@@ -2,6 +2,8 @@
 
 Status: **Accepted**
 
+**Amended by [ADR 279](ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md) (2026-10-22):** where a stored type has several codecs, every one of them carries a suffix naming its kind of value, not only the second (`TimestamptzTemporal`, `TimestamptzJsDate`, `TimestamptzString`). The unsuffixed name of the concept, such as `DateTime`, `Date`, `Time` and `Duration` on PostgreSQL, belongs to a convenience type, a type choice that becomes one of the suffixed types.
+
 ## Decision
 
 A scalar type's name says what the database stores, in the database's own vocabulary. Each type has one token, written exactly as its codec id writes it (`objectId` keeps its inner capital), and the three surfaces a user writes derive from it: the codec id is `<target>/<token>@<version>`, the PSL name is the token with its first letter uppercased, and the TypeScript builder helper is `field.<token>()`. Where a codec id already carries a name, the codec id is the source of the token, and no codec id is renamed to fit a surface name.

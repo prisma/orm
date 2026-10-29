@@ -53,11 +53,11 @@ describe('printPsl', () => {
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Post {
-        id          Int               @id @default(autoincrement())
-        title       String            @default("Untitled")
-        isPublished Boolean           @default(false) @map("is_published")
-        viewCount   Int               @default(0) @map("view_count")
-        createdAt   TimestamptzString @default(now()) @map("created_at")
+        id          Int                    @id @default(autoincrement())
+        title       String                 @default("Untitled")
+        isPublished Boolean                @default(false) @map("is_published")
+        viewCount   Int                    @default(0) @map("view_count")
+        createdAt   DateTime(precision: 6) @default(now()) @map("created_at")
 
         @@map("post")
       }
@@ -374,9 +374,9 @@ describe('printPsl', () => {
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Schedule {
-        id       Uuid          @id
-        bookedOn DateString    @map("booked_on")
-        slot     TimeString(3)
+        id       Uuid               @id
+        bookedOn Date               @map("booked_on")
+        slot     Time(precision: 3)
         rating   SmallInt
         payload  Json
 
@@ -425,10 +425,10 @@ describe('printPsl', () => {
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Data {
-        id        Int               @id
-        computed  String            @default(sql\`my_custom_func()\`)
-        payload   Jsonb             @default(json\`{}\`)
-        touchedAt TimestamptzString @default(sql\`clock_timestamp()\`) @map("touched_at")
+        id        Int                    @id
+        computed  String                 @default(sql\`my_custom_func()\`)
+        payload   Jsonb                  @default(json\`{}\`)
+        touchedAt DateTime(precision: 6) @default(sql\`clock_timestamp()\`) @map("touched_at")
 
         @@map("data")
       }

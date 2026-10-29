@@ -35,7 +35,7 @@ describe('inferredTypeConstructors', () => {
     ).toEqual({
       'pg/text': ['String'],
       'pg/numeric': ['Numeric'],
-      'pg/timestamptz': ['TimestamptzString'],
+      'pg/timestamptz': ['TimestamptzJsDate'],
       'pg/bit': ['Bit'],
       'pg/enum': ['pg', 'enum'],
     });
@@ -69,7 +69,7 @@ describe('fewestArgumentsCall', () => {
       char5: { path: ['Char'], args: [5] },
       bit1: { path: ['Bit'], args: [] },
       varbit: { path: ['VarBit'], args: [] },
-      timestamptz3: { path: ['TimestamptzString'], args: [3] },
+      timestamptz3: { path: ['TimestamptzJsDate'], args: [3] },
       text: { path: ['String'], args: [] },
     });
   });

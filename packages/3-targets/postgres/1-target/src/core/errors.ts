@@ -71,13 +71,16 @@ export function errorPostgresMigrationStackMissing(operation: string): CliStruct
   );
 }
 
+const TEMPORAL_UNAVAILABLE_FIX =
+  'Run on a runtime with Temporal available, install a Temporal polyfill before creating the client, or write the column as a convenience type at its default, which needs no Temporal: `DateTime` reads a JavaScript `Date`, and `Date`, `Time` and `Duration` read ISO 8601 strings.';
+
 export function errorTemporalUnavailable(codecId: string, operation: string): StructuredError {
   return postgresError(
     'RUNTIME.TEMPORAL_UNAVAILABLE',
     `Codec '${codecId}' cannot ${operation} a value because this runtime has no global Temporal implementation.`,
     {
       why: 'Temporal-backed codecs read and write their values through the global Temporal API, which this runtime does not provide.',
-      fix: 'Run on a runtime with Temporal available, install a Temporal polyfill before creating the client, or author the column with its *String type to read and write ISO 8601 text instead.',
+      fix: TEMPORAL_UNAVAILABLE_FIX,
       meta: { codecId, operation },
     },
   );
@@ -88,8 +91,8 @@ export function errorTemporalUnavailableForDefault(generatorId: string): Structu
     'RUNTIME.TEMPORAL_UNAVAILABLE',
     `Mutation default generator '${generatorId}' cannot produce a value because this runtime has no global Temporal implementation.`,
     {
-      why: 'The generator answers a Temporal-backed column, so the value it produces is a Temporal.Instant, which this runtime cannot construct.',
-      fix: 'Run on a runtime with Temporal available, install a Temporal polyfill before creating the client, or author the column with `temporal.CreatedAtString` / `temporal.UpdatedAtString` to store ISO 8601 text instead.',
+      why: 'The generator answers a Temporal-backed column, so the value it produces is a Temporal value, which this runtime cannot construct.',
+      fix: TEMPORAL_UNAVAILABLE_FIX,
       meta: { generatorId },
     },
   );

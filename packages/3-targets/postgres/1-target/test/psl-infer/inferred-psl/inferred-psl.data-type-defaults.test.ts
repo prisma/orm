@@ -1,9 +1,12 @@
 import { inferredTypeConstructors } from '@internal/family-sql/psl-build';
+import type { Codec } from '@internal/framework-components/codec';
 import { type SqlColumnIRInput, SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
+import { pgTimestamp } from '../../../src/core/data-types';
 import { inferredColumnDefaults } from '../../../src/core/psl-infer/infer-default-codec';
+import { readDefaultWithCodec } from '../../../src/core/psl-infer/infer-read-defaults';
 import { inferBuildContext, printPslFromFlat } from '../fixtures';
 
 /** The backtick fencing a tagged literal, as an escape so no quoted string in this file holds one. */
@@ -150,12 +153,61 @@ describe('printPsl writes each default as the literal the column data type takes
     },
   );
 
-  it.each([
-    ['infinity', 'timestamp', "'infinity'::timestamp without time zone"],
-    ['-infinity', 'timestamp', "'-infinity'::timestamp without time zone"],
-    ['infinity', 'timestamptz', "'infinity'::timestamp with time zone"],
-    ['-infinity', 'date', "'-infinity'::date"],
-  ])(
+  it('prints a default with digits below a millisecond, which a Date cannot hold, as its raw expression', async () => {
+    const rawDefault = "'2024-01-01 01:00:00.123456+00'::timestamp(6) with time zone";
+    expect(await printedDefaults([introspected('stamp', 'timestamptz(6)', rawDefault)])).toEqual({
+      stamp: `@default(sql\`${rawDefault}\`)`,
+    });
+  });
+
+  it('prints a list default with an element a Date cannot hold as its raw expression, and one it holds as a literal list', async () => {
+    const micro =
+      "ARRAY['2024-01-01 01:00:00.123+00'::timestamp with time zone, '2024-01-01 01:00:00.123456+00'::timestamp with time zone]";
+    const milli =
+      "ARRAY['2024-01-01 01:00:00.123+00'::timestamp with time zone, '2024-01-01 01:00:00.5+00'::timestamp with time zone]";
+    expect(
+      await printedDefaults([
+        introspected('micro', 'timestamptz(6)', micro, { many: true }),
+        introspected('milli', 'timestamptz(6)', milli, { many: true }),
+      ]),
+    ).toEqual({
+      micro: `@default(sql\`${micro}\`)`,
+      milli:
+        '@default([timestamptz`2024-01-01T01:00:00.123Z`, timestamptz`2024-01-01T01:00:00.5Z`])',
+    });
+  });
+
+  it('prints the raw expression when the codec refuses the value its data type reads from the body', async () => {
+    const codec = {
+      id: 'test/strict-timestamp@1',
+      dataType: pgTimestamp,
+      fromWire: async () => new Date('2024-01-01T00:00:00Z'),
+      toDataTypeValue: () => pgTimestamp.valueFrom('2024-01-01T00:00:00', {}),
+      fromDataTypeValue: () => {
+        throw new Error('the application value cannot hold this instant exactly');
+      },
+      toWire: async () => '',
+    } as unknown as Codec;
+    const raw = "'2024-01-01 00:00:00'::timestamp without time zone";
+    expect(await readDefaultWithCodec(raw, false, codec)).toEqual({
+      kind: 'function',
+      expression: raw,
+    });
+  });
+
+  it('prints a timestamp default written with an offset as the instant, when a Date holds it', async () => {
+    expect(
+      await printedDefaults([
+        introspected(
+          'stamp',
+          'timestamptz(6)',
+          "'2024-01-01 03:00:00.5+02'::timestamp with time zone",
+        ),
+      ]),
+    ).toEqual({ stamp: '@default(timestamptz`2024-01-01T01:00:00.5Z`)' });
+  });
+
+  it.each([['-infinity', 'date', "'-infinity'::date"]])(
     'prints the %s sentinel on a %s column with the column type tag',
     async (sentinel, typeText, rawDefault) => {
       expect(await printedDefaults([introspected('stamp', typeText, rawDefault)])).toEqual({
