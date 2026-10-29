@@ -4,6 +4,8 @@ import type { Contract, JsonValue } from '@internal/contract/types';
 import postgresDriverControl from '@internal/driver-postgres/control';
 import arktypeJsonControl from '@internal/extension-arktype-json/control';
 import arktypeJsonPack from '@internal/extension-arktype-json/pack';
+import citextControl from '@internal/extension-citext/control';
+import citextPack from '@internal/extension-citext/pack';
 import pgvectorControl from '@internal/extension-pgvector/control';
 import pgvectorPack from '@internal/extension-pgvector/pack';
 import postgisControl from '@internal/extension-postgis/control';
@@ -33,7 +35,7 @@ const stack = createControlStack({
   target: postgresTargetControl,
   adapter: postgresAdapterControl,
   driver: postgresDriverControl,
-  extensions: [pgvectorControl, postgisControl, arktypeJsonControl],
+  extensions: [pgvectorControl, postgisControl, arktypeJsonControl, citextControl],
 });
 
 /** The stored form of one member for each data type a codec an enum can use represents. */
@@ -93,6 +95,8 @@ const extensionRefusals: Readonly<Record<string, string>> = {
     'The contract stores a vector member as an array of numbers, which no CHECK can list. No enum can use a vector codec; use a text enum instead.',
   'pg/geometry@1':
     'Enums over a geometry codec are not supported yet, because no test proves that a shape reads back as its member. Use a text enum that names each shape instead.',
+  'pg/citext@1':
+    'A CHECK on a citext column compares without regard to case, so it admits a value that differs from a member only in case, and that value reads back as no member. No enum can use a citext codec; use a text enum instead.',
 };
 
 /** The literal a codec should render for the value read: none for a codec whose value keeps the form it was written in, since a read can return a member in another form. */
@@ -112,6 +116,7 @@ const extensionPacks = {
   pgvector: pgvectorPack,
   postgis: postgisPack,
   arktypeJson: arktypeJsonPack,
+  citext: citextPack,
 };
 
 function contractWith(
