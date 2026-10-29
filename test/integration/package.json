@@ -32,6 +32,7 @@
     "@internal/driver-sqlite": "workspace:8.0.0-rc.21",
     "@internal/emitter": "workspace:8.0.0-rc.21",
     "@internal/extension-arktype-json": "workspace:8.0.0-rc.21",
+    "@internal/extension-citext": "workspace:8.0.0-rc.21",
     "@internal/extension-paradedb": "workspace:8.0.0-rc.21",
     "@internal/extension-pgvector": "workspace:8.0.0-rc.21",
     "@internal/extension-postgis": "workspace:8.0.0-rc.21",

@@ -344,6 +344,7 @@ export const knownInternalNamesInDist: readonly string[] = [
   '@internal/errors/control',
   '@internal/extension-arktype-json',
   '@internal/extension-arktype-json/codec-types',
+  '@internal/extension-citext/codec-types',
   '@internal/extension-paradedb/operation-types',
   '@internal/extension-pgvector',
   '@internal/extension-pgvector/codec-types',

@@ -45,6 +45,7 @@ function declarationErrors(source: string): readonly string[] {
 describe('declaration emit of an exported contract, or of rows read through one, through the public packages', () => {
   it('has a source per contract shape', () => {
     expect(sources).toEqual([
+      'citext.ts',
       'indexes.ts',
       'mixed.ts',
       'mongo.ts',
