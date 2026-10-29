@@ -112,6 +112,11 @@ export const prisma7PostgresBinding = {
         importName: 'paradedb',
         importPath: '@prisma/orm-extension-paradedb/control',
       },
+      citext: {
+        id: 'citext',
+        importName: 'citext',
+        importPath: '@prisma/orm-postgres-contrib/citext/control',
+      },
     },
   },
   indexTypes: {

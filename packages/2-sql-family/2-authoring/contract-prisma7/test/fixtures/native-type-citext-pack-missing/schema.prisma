@@ -1,0 +1,10 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Account {
+  id      Int      @id
+  email   String   @unique @db.Citext
+  aliases String[] @db.Citext
+  region  String   @default("eu") @db.Citext
+}

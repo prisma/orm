@@ -1,4 +1,9 @@
-export type { Prisma7TypeMap, Prisma7TypeMapping } from '../native-types';
+export type {
+  Prisma7ExtensionPack,
+  Prisma7ExtensionTypeMapping,
+  Prisma7TypeMap,
+  Prisma7TypeMapping,
+} from '../native-types';
 export { type Prisma7ContractOptions, prisma7Contract } from '../provider';
 export type {
   Prisma7ColumnType,

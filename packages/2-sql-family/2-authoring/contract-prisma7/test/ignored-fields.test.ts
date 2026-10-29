@@ -84,12 +84,12 @@ describe('an @ignore relation field', () => {
   });
 });
 
-describe('an @ignore field whose type has no Prisma 8 codec', () => {
-  it('is refused', async () => {
+describe('an @ignore field whose type needs an extension pack that is not available', () => {
+  it('is refused, because the contract keeps its column', async () => {
     const result = await loadFixtureSchema('ignored-field-no-codec');
     expect(
       result.ok ? [] : result.failure.diagnostics.map((diagnostic) => diagnostic.code),
-    ).toEqual(['PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED']);
+    ).toEqual(['PSL.PRISMA7_EXTENSION_PACK_MISSING']);
   });
 });
 

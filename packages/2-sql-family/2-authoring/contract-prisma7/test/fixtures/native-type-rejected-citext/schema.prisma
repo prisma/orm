@@ -1,8 +1,0 @@
-datasource db {
-  provider = "postgresql"
-}
-
-model Rejected {
-  id    Int
-  value String @db.Citext
-}

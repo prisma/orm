@@ -5,7 +5,10 @@ import type { ContractSourceContext } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import postgresDriver from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
-import { createControlStack } from '@internal/framework-components/control';
+import {
+  type ControlExtensionDescriptor,
+  createControlStack,
+} from '@internal/framework-components/control';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import postgres from '@internal/target-postgres/control';
@@ -18,14 +21,17 @@ import type { Prisma7TargetBinding } from '../src/target-binding';
 
 export const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
-/** The same composition `prisma contract emit` builds for a Postgres config. */
-export function postgresSourceContext(resolvedInputs: readonly string[]): ContractSourceContext {
+/** The same composition `prisma contract emit` builds for a Postgres config with these extensions. */
+export function postgresSourceContext(
+  resolvedInputs: readonly string[],
+  extensions: readonly ControlExtensionDescriptor<'sql', 'postgres'>[] = [],
+): ContractSourceContext {
   const stack = createControlStack({
     family: sql,
     target: postgres,
     adapter: postgresAdapter,
     driver: postgresDriver,
-    extensions: [],
+    extensions,
   });
   return {
     composedExtensions: stack.extensions.map((extension) => extension.id),
@@ -149,14 +155,15 @@ export function fixtureSchemaText(caseName: string): string {
   return readFileSync(join(fixturesDir, caseName, 'schema.prisma'), 'utf8');
 }
 
-/** Interprets Prisma 7 schema text with the Postgres composition. */
+/** Interprets Prisma 7 schema text with the Postgres composition and `extensions`, with `composedPacks` composed as well. */
 export function interpretSchemaTextResult(
   text: string,
   binding: Prisma7TargetBinding = prisma7PostgresBinding,
   composedPacks: ReadonlyMap<string, Contract> = new Map(),
   defaultNamespaceId = postgresSourceContext(['schema.prisma']).defaultNamespaceId,
+  extensions: readonly ControlExtensionDescriptor<'sql', 'postgres'>[] = [],
 ) {
-  const context = postgresSourceContext(['schema.prisma']);
+  const context = postgresSourceContext(['schema.prisma'], extensions);
   const { document, sources } = parse(text, 'schema.prisma', { grammar: 'prisma-7' });
   return interpretPrisma7Documents({
     documents: [
