@@ -784,6 +784,9 @@ importers:
       '@prisma/orm-postgres':
         specifier: workspace:8.0.0-rc.21
         version: link:../../packages/9-public/@prisma/orm-postgres
+      '@prisma/orm-postgres-contrib':
+        specifier: workspace:8.0.0-rc.21
+        version: link:../../packages/9-public/@prisma/orm-postgres-contrib
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2

@@ -30,17 +30,19 @@ The guide's phases, and what this example does in each.
 
 ### 2. Add Prisma 8
 
-`prisma.config.ts` is the guide's file with the contract line changed:
+`prisma.config.ts` is the guide's file with the contract line changed and the citext pack added:
 
 ```ts
 import 'dotenv/config';
 import { definePrismaConfig } from '@prisma/cli-engine';
 import { defineConfig as definePostgresConfig, prisma7Schema } from '@prisma/orm-postgres/config';
+import citext from '@prisma/orm-postgres-contrib/citext/control';
 
 export default definePrismaConfig({
   orm: definePostgresConfig({
     contract: prisma7Schema('prisma/schema.prisma'),
     output: 'generated/prisma8',
+    extensions: [citext],
     db: {
       connection: process.env['DATABASE_URL']!,
     },
@@ -52,6 +54,8 @@ In your own project the first import is `import { definePrismaConfig } from 'pri
 
 `prisma7Schema` replaces the guide's `prisma contract infer` step and the hand edit after it (adding `@@map` to every model): the source reads the Prisma 7 schema itself, so model names stay as written. Neither `prisma contract infer` nor the source puts Prisma 7's `_prisma_migrations` table in the contract. `pnpm emit` writes `generated/prisma8/contract.json` and `contract.d.ts`; `pnpm sign` verifies the live schema against that contract and writes Prisma 8's marker; `pnpm verify` reports nothing when they match.
 
+`User.email` is `@db.Citext`, a column type of Postgres's `citext` extension, which the schema lists in the datasource's `extensions` (with the `postgresqlExtensions` preview feature, as Prisma 7 requires), so Prisma 7's first migration creates the extension. Prisma 8 reads `@db.Citext` only with the citext pack composed: `extensions: [citext]` from `@prisma/orm-postgres-contrib/citext/control` in `prisma.config.ts`, and `extensions: [citext]` from `@prisma/orm-postgres-contrib/citext/runtime` in `src/db.ts`. Without the pack, `pnpm emit` fails with `PSL.PRISMA7_EXTENSION_PACK_MISSING`, which names that import. The pack's own contract declares the extension, so the application's contract does not; `pnpm emit` writes the pack's contract and its one migration to `migrations/citext/`.
+
 Two rules to know before you start:
 
 - A database last migrated on Prisma 5 or earlier must migrate on Prisma 7 first. Since Prisma 6.0.0 the implicit many-to-many junction tables (`_PostToTag` here) carry a primary key on `(A, B)` instead of a unique index, and the source describes that shape; on an older database `db sign` reports the difference.
@@ -59,7 +63,7 @@ Two rules to know before you start:
 
 ### 3. Move routes one at a time
 
-`src/db.ts` instantiates both clients over the same `DATABASE_URL`, as the guide's `src/db.ts` does: `prisma` (Prisma 7, through `@prisma/adapter-pg`) and `db` (Prisma 8, `postgres({ url, contract })`, with `contract` from `contractFromJson<Contract>(contractJson)`). `scripts/seed.ts` and `src/v7-read.ts` are the routes that have not moved: they use the Prisma 7 client. `src/main.ts` is a route that has: it lists users with their posts and the posts' tags through `db.orm.public.User.include('posts', ...)`, reaching the tags through the `_PostToTag` junction Prisma 7 created, creates a post connected to an existing tag through `db.orm.public.Post.include('tags').create({ ..., tags: (tags) => tags.connect([...]) })`, and renames a user through `db.orm.public.User.where(...).update(...)`, printing the `updatedAt` before and after: Prisma 8's own generator sets it, as Prisma 7's `@updatedAt` did. Run `pnpm start` and then `pnpm v7:read` to see the post Prisma 8 wrote come back through Prisma 7.
+`src/db.ts` instantiates both clients over the same `DATABASE_URL`, as the guide's `src/db.ts` does: `prisma` (Prisma 7, through `@prisma/adapter-pg`) and `db` (Prisma 8, `postgres({ url, contract })`, with `contract` from `contractFromJson<Contract>(contractJson)`). `scripts/seed.ts` and `src/v7-read.ts` are the routes that have not moved: they use the Prisma 7 client. `src/main.ts` is a route that has: it lists users with their posts and the posts' tags through `db.orm.public.User.include('posts', ...)`, reaching the tags through the `_PostToTag` junction Prisma 7 created, creates a post connected to an existing tag through `db.orm.public.Post.include('tags').create({ ..., tags: (tags) => tags.connect([...]) })`, finds Alice by `ALICE@EXAMPLE.COM` through `db.orm.public.User.where({ email })`, because a citext column compares without regard to case, and renames a user through `db.orm.public.User.where(...).update(...)`, printing the `updatedAt` before and after: Prisma 8's own generator sets it, as Prisma 7's `@updatedAt` did. Run `pnpm start` and then `pnpm v7:read` to see the post Prisma 8 wrote come back through Prisma 7.
 
 ### 4. Transfer migration ownership, then 5. remove Prisma 7
 
@@ -89,7 +93,7 @@ The test runs that loop three times, then makes two edits that plan nothing, the
 
 What each step does:
 
-- **The first `migration plan` writes two packages.** The migrations directory has no migrations yet, only the `db` ref that `prisma db sign` wrote. So the first plan first writes a baseline package, from an empty database to the signed contract. It then writes the package for your change, from the signed contract to the new one. There is no separate baseline step. `db migrate` never runs the baseline on this database, because the database's marker already sits at the signed contract. The baseline is there so that a fresh database, such as a new developer's or a CI database, can be built from `migrations/` alone. The test proves it: `prisma db migrate` against a second, empty database applies all five packages, and `db verify --strict` then passes with nothing unclaimed.
+- **The first `migration plan` writes two packages.** `migrations/app/` has no migrations yet, only the `db` ref that `prisma db sign` wrote. So the first plan first writes a baseline package, from an empty database to the signed contract. It then writes the package for your change, from the signed contract to the new one. There is no separate baseline step. `db migrate` never runs the baseline on this database, because the database's marker already sits at the signed contract. The baseline is there so that a fresh database, such as a new developer's or a CI database, can be built from `migrations/` alone. The test proves it: `prisma db migrate` against a second, empty database applies all five packages and the citext pack's migration, which creates the extension before the tables, and `db verify --strict` then passes with nothing unclaimed.
 - **`db migrate --advance-ref db` moves the `db` ref along with the marker.** Plain `db migrate` moves only the database marker. The next `migration plan` starts from the `db` ref, so without the flag it would plan from the contract before your last change.
 - **`db verify --strict` passes with nothing unclaimed.** Strict mode fails on any table no contract declares, but it leaves out `_prisma_migrations`: that table is Prisma 7's migration ledger, not part of your application's schema. `prisma contract infer` leaves it out for the same reason. Any finding is real drift.
 - **`prisma7 migrate diff` shows Prisma 7 agrees with the database.** An empty migration means the tables, indexes and constraints Prisma 8 created are the ones Prisma 7 would have created from the same schema.
@@ -111,7 +115,7 @@ A Prisma 7 schema that uses `@ignore`, `@@ignore` or `Unsupported("...")` fields
 - Prisma 7 rejects `url` inside the `datasource` block; the URL lives only in `prisma7.config.ts` (Prisma 7) and `prisma.config.ts` (Prisma 8), both reading the same `DATABASE_URL` from `.env`.
 - Where Prisma 7 named a primary key or foreign key differently from Prisma 8, the contract states Prisma 7's name: a `map` on `@id`, `@@id` or `@relation`, a junction's primary key such as `_PostToTag_AB_pkey`, and a foreign key name Prisma 7 cut to 63 bytes. `db verify` does not compare these names, but migrations drop and rename constraints by them.
 - Prisma 8 reads a `DateTime` column as a JavaScript `Date`, as Prisma 7 did: `prisma7Schema` reads it as `DateTime(storage: timestamp)`, a `timestamp(3)` column whose value is stored as UTC. A `@db.Timestamptz` column also reads as a `Date`; `@db.Date` and `@db.Time` columns read as ISO 8601 strings, such as `2026-09-14` and `10:00:00`. The application needs no `Temporal`.
-- `pnpm sign` creates `migrations/` (a snapshot of the signed contract and the `db` ref). It is Prisma 8's record of what was signed and is committed here; in phase 4 the first `migration plan` builds the baseline from it.
+- `pnpm sign` creates `migrations/app/` (a snapshot of the signed contract and the `db` ref) and records the citext pack's marker beside the application's. It is Prisma 8's record of what was signed and is committed here; in phase 4 the first `migration plan` builds the baseline from it.
 - The Prisma 8 CLI prints JSON only with `--json`. Without it, a pipe, a file or an agent receives the command's tab-separated data lines on stdout, and the human output goes to stderr.
 
 ## Files
@@ -120,7 +124,8 @@ A Prisma 7 schema that uses `@ignore`, `@@ignore` or `Unsupported("...")` fields
 |---|---|
 | `prisma/schema.prisma`, `prisma/migrations/` | The Prisma 7 schema and its migrations; Prisma 7 owns both. |
 | `prisma7.config.ts` | Prisma 7's config (`@prisma/prisma7/config`). |
-| `prisma.config.ts` | Prisma 8's config; `prisma7Schema('prisma/schema.prisma')` is the contract source. |
+| `prisma.config.ts` | Prisma 8's config; `prisma7Schema('prisma/schema.prisma')` is the contract source, and the citext pack is composed. |
+| `migrations/` | Prisma 8's record of what was signed, and the citext pack's contract and migration (committed). |
 | `generated/prisma8/` | `contract.json` and `contract.d.ts` emitted by Prisma 8 (committed). |
 | `generated/prisma7/` | The Prisma 7 client (`pnpm v7:generate`, gitignored). |
 | `src/db.ts` | Both clients over one `DATABASE_URL`. |
