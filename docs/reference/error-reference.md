@@ -1287,7 +1287,7 @@ The SQL integer codecs also check the JS type of the value they are given, and r
 
 The exact integer codecs make one exception, and only for a stored value. `toDataTypeValue` on `pg/int8@1`, `pg/unboundedint@1`, and `sqlite/bigint@1` also accepts a `number`, because a schema language writes no `bigint` literal. The number must be an integer within the safe range, and a value that is not raises `<codec> number literal must be an integer within the safe integer range, got <value>`: a `number` past that range was already rounded before the codec saw it, so its digits no longer name the value that was written. The PSL interpreter therefore does not hand these codecs a rounded number: it reads a number `@default` from its source text, gives the codec the plain number when that reads, and the decimal text of the literal when it does not, so `BigInt @default(0)` still arrives as the JSON number `0` while `BigInt @default(9007199254739999999)` arrives as its digits. `toWire`, the path a query parameter travels, takes no such number; it requires the `bigint`.
 
-The MySQL drivers raise this code for a parameter value they cannot send, before the statement runs, with `meta.target: 'mysql'`, `meta.paramIndex` (counted from 0) and `meta.received`: a `bigint` outside the signed 64-bit range (`received: 'bigint'`; the `mariadb` package crashes the process on one below -2^63 and sends one at or above 2^63 as a DECIMAL), a `Date` (the package would encode it in the process's local time zone; the MySQL codecs send dates as text), an object, an array, `NaN` or an infinity. A whole number outside the signed 64-bit range is sent as a double, not refused. The refused value is not in the message.
+The MySQL drivers raise this code for a parameter value they cannot send, before the statement runs, with `meta.target: 'mysql'`, `meta.paramIndex` (counted from 0) and `meta.received`: a `bigint` outside the signed 64-bit range (`received: 'bigint'`, so a parameter's type never depends on its value), a `Date` (the `mariadb` package would write it in the process's local time zone; the MySQL codecs send dates as text), an object, an array, `NaN` or an infinity, which the package would write into the statement as `NaN` or `Infinity`. A number of any other size is written as its digits, not refused. The refused value is not in the message.
 
 ### RUNTIME.EXECUTION_RESULT_MISSING
 
@@ -1353,12 +1353,11 @@ At query-render time a table references a namespace that is not present, or not 
 
 The SQLite SQL renderer wrote a statement whose placeholders do not match its parameters: a bare `?` or a numbered placeholder no parameter has, usually a `?` written into raw SQL text, or a parameter no placeholder binds. The renderer refuses the statement rather than bind a value to the wrong place. Pass values into raw SQL by interpolation, not as a `?` in the text. The message and payload give the counts and the first five placeholders written. Payload: `placeholderCount`, `paramCount`, `firstPlaceholders`.
 
-MySQL raises it in four places, each refusing the statement before it runs:
+MySQL raises it in three places, each refusing the statement before it runs:
 
 - The MySQL adapter, after lowering, when a placeholder is not a numbered `?N` naming one of the statement's parameters, or a parameter has no placeholder, usually because of a `?` written into raw SQL text. Payload: `placeholders`, `params`.
 - The MySQL adapter, when raw SQL puts a digit right after an interpolated value, which would read as part of the value's `?N` (`?1` followed by `0` reads as `?10`). Payload: `reason: 'digit-after-value'`, `part`.
 - The MySQL drivers, when a statement mixes numbered `?N` and bare `?` placeholders, or its placeholders and values do not match. Payload: `placeholders`, `params`.
-- The MySQL drivers, when the number of placeholders MySQL reads in the prepared statement differs from the number of values, usually because a statement changed `sql_mode`, as turning on `NO_BACKSLASH_ESCAPES` or `ANSI_QUOTES` does. Payload: `prepared`, `params`.
 
 ### RUNTIME.PARAM_REF_CODEC_REQUIRED
 
