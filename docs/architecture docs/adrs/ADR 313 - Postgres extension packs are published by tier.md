@@ -1,6 +1,7 @@
-# ADR 312 — Postgres extension packs are published by tier
+# ADR 313 — Postgres extension packs are published by tier
 
-Status: **Proposed**
+**Status:** Accepted
+**Date:** 2026-10-29
 
 ## Decision
 
@@ -46,7 +47,7 @@ Putting the trusted contrib packs on the `@prisma/orm-postgres` facade was consi
 - A module's tier is the one PostgreSQL's documentation gives it when its pack is first published. A pack never moves to another package afterwards, so a later PostgreSQL release that changes whether a module is trusted changes no import path.
 - [ADR 242](ADR%20242%20-%20Public%20npm%20surface%20-%20single%20%40prisma%20scope%20with%20consolidated%20publish%20packages.md)'s packaging rule holds: each pack's code is published from exactly one package, as re-exported entrypoints. The public surface grows by one package for the trusted contrib tier.
 - The contrib package is named after what it holds, `orm-postgres-contrib`, without the `orm-extension-` prefix of the packages that hold one extension each. The name says it is Postgres's contrib, which no single-extension name could. Each pack's internal package keeps the `@internal/extension-<name>` name [ADR 153](ADR%20153%20-%20Extension%20Package%20Naming%20Convention.md) requires, so `@internal/extension-citext` is the source of `@prisma/orm-postgres-contrib/citext/*`. A search of published names for `extension-` no longer finds every extension; the contrib package's README lists the modules it holds.
-- A pack for a contrib module declares its extension in its own contract, as pgvector's does, so `db sign` adopts a database that already has the extension and a database built from `migrations/` alone gets it before any column uses it ([ADR 311](ADR%20311%20-%20A%20Postgres%20extension%20is%20a%20contract%20entity%2C%20and%20db%20sign%20refuses%20a%20space%20with%20unmet%20invariants.md)).
+- A pack for a contrib module declares its extension in its own contract, as pgvector's does, so `db sign` adopts a database that already has the extension and a database built from `migrations/` alone gets it before any column uses it ([ADR 312](ADR%20312%20-%20A%20Postgres%20extension%20is%20a%20contract%20entity%2C%20and%20db%20sign%20refuses%20a%20space%20with%20unmet%20invariants.md)).
 
 ## Alternatives considered
 

@@ -21,7 +21,7 @@ Today the reader refuses all five with `PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED`, so
    - every third-party extension has its own published package (pgvector, postgis and paradedb already do; nothing moves);
    - the 20 contrib modules PostgreSQL marks trusted share one published package, `@prisma/orm-postgres-contrib`, one entrypoint group per module (`/citext/...`);
    - the other 30 contrib modules will share one more package, created when the first of them needs a pack.
-   ADR 312 records this rule and why `orm-postgres-contrib` does not carry the `orm-extension-` prefix of the six existing packs.
+   ADR 313 records this rule and why `orm-postgres-contrib` does not carry the `orm-extension-` prefix of the six existing packs.
 5. **(Later PR, delivered.) The Prisma 7 reader maps `@db.Citext` to `citext.Citext` only when the citext pack is composed.** Without it, the reader refuses the field with `PSL.PRISMA7_EXTENSION_PACK_MISSING`, naming the edit: add `citext` from `@prisma/orm-postgres-contrib/citext/control` to `extensions` in `prisma.config.ts`. The Postgres binding's extension-to-pack map has a `citext` entry, and the type map says `@db.Citext` is provided by the extension `citext`, so the native type and a datasource `extensions = [citext]` entry are read through one entry and refused with one diagnostic.
 
 ## Requirements
@@ -30,11 +30,11 @@ Today the reader refuses all five with `PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED`, so
 - `db verify` against the database Prisma 7's own SQL built, with a column of each type, reports nothing (extend the reference SQL recorded from Prisma 7.10.0 and the verify test that runs it).
 - Prisma 8 PSL and the TypeScript builder can declare each type; `contract infer` prints each column with its inferred constructor; the printer round-trips each.
 - The codec conformance test kit covers each new codec against a real database, including `money` values that are negative and at least 1,000, and both ends of `oid`'s range.
-- `docs/reference/scalar-types.md`, the error reference entry for `PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED`, and the Postgres facade README's table list only what is still refused (of these six, only `@db.Citext`).
+- `docs/reference/scalar-types.md`, the error reference entry for `PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED`, and the Postgres facade README's table list no refusal for any of the six; `PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED` is left only for a misspelled `@db.*` type.
 
 ## Non-goals
 
-- Reading the Prisma 7 datasource `extensions` list, or planning `CREATE EXTENSION` from a contract (TML-3460).
+- Reading the Prisma 7 datasource `extensions` list and planning `CREATE EXTENSION` from a contract. The Postgres extensions slice delivered both, and citext builds on them.
 - Moving pgvector, postgis or paradedb.
 - Packs for any other contrib module.
 
