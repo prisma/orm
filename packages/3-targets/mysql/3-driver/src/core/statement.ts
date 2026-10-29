@@ -1,3 +1,4 @@
+import { assertDefined } from '@internal/utils/assertions';
 import { structuredError } from '@internal/utils/structured-error';
 import type { Connection } from 'mariadb';
 import { positionalParams } from './positional-params';
@@ -25,8 +26,9 @@ export function statementFor(
   sql: string,
   params: readonly unknown[],
 ): { readonly sql: string; readonly values: unknown[] } {
-  const status = connection.info?.status ?? 0;
-  if (params.length > 0 && (status & NO_BACKSLASH_ESCAPES) !== 0) {
+  const { info } = connection;
+  assertDefined(info, 'the package gives every connection its info when it creates it');
+  if (params.length > 0 && (info.status & NO_BACKSLASH_ESCAPES) !== 0) {
     throw backslashEscapesOff(params.length);
   }
   return positionalParams(sql, params);
