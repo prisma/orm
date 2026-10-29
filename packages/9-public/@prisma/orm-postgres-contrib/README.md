@@ -19,7 +19,7 @@ Every trusted contrib module gets its pack here, as one group of entrypoints nam
 Add the pack to `extensions` in `prisma.config.ts`:
 
 ```typescript
-import { definePrismaConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from 'prisma/config';
 import citext from '@prisma/orm-postgres-contrib/citext/control';
 import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
 

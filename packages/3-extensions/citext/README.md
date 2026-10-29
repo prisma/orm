@@ -17,7 +17,7 @@ PostgreSQL `citext` extension pack for Prisma 8. Published as the `/citext` entr
 ## Configuration
 
 ```typescript
-import { definePrismaConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from 'prisma/config';
 import citext from '@prisma/orm-postgres-contrib/citext/control';
 import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
 
