@@ -58,7 +58,6 @@ export function assembleAttributeSpecs(
 
 export type DescribeUnsupportedAttributeFactory = (
   sources: PslSources,
-  contributions: AssembledAuthoringContributions,
 ) => DescribeUnsupportedAttribute;
 
 export function resolveDescribeUnsupportedAttribute(

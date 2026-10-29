@@ -79,8 +79,6 @@ export interface AssembledAuthoringContributions {
   readonly dataTypes: Readonly<Record<string, DataTypeAuthoringEntry>>;
   /** The single {@link AuthoringContributions.valueObjectStorageType} declared across the composed components, validated at assembly against the merged `type` namespace. */
   readonly valueObjectStorageType?: string;
-  /** Every component's {@link AuthoringContributions.renamedTypeConstructors}, merged; two components may not rename the same constructor. */
-  readonly renamedTypeConstructors?: Readonly<Record<string, string>>;
 }
 
 export interface ControlStack<
@@ -254,25 +252,6 @@ export function assembleAuthoringContributions(
     }
   };
 
-  const renamedTypeConstructors: Record<string, string> = {};
-  const renamedTypeConstructorOwners = new Map<string, string>();
-  for (const descriptor of descriptors) {
-    const descriptorId = descriptor.id ?? '<unknown>';
-    for (const [formerName, replacement] of Object.entries(
-      descriptor.authoring?.renamedTypeConstructors ?? {},
-    )) {
-      const existingOwner = renamedTypeConstructorOwners.get(formerName);
-      if (existingOwner !== undefined) {
-        throw new InternalError(
-          `Duplicate authoring renamed type constructor "${formerName}". ` +
-            `Descriptor "${descriptorId}" conflicts with "${existingOwner}".`,
-        );
-      }
-      renamedTypeConstructorOwners.set(formerName, descriptorId);
-      renamedTypeConstructors[formerName] = replacement;
-    }
-  }
-
   let valueObjectStorageDeclaration:
     | { readonly name: string; readonly ownerId: string }
     | undefined;
@@ -395,7 +374,6 @@ export function assembleAuthoringContributions(
     ...(valueObjectStorageDeclaration !== undefined
       ? { valueObjectStorageType: valueObjectStorageDeclaration.name }
       : {}),
-    ...(renamedTypeConstructorOwners.size > 0 ? { renamedTypeConstructors } : {}),
   };
 }
 

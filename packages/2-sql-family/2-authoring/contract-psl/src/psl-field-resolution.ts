@@ -8,10 +8,7 @@ import type {
   CapabilityMatrix,
   GeneratorFunctionRegistry,
 } from '@internal/framework-components/components';
-import type {
-  AssembledAuthoringContributions,
-  ControlMutationDefaultRegistry,
-} from '@internal/framework-components/control';
+import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
 import type {
   Binder,
   BlockSymbol,
@@ -36,11 +33,7 @@ import {
 } from '@internal/sql-contract-ts/contract-builder';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
-import {
-  formatDbAttributeMigrationMessage,
-  getAttribute,
-  storageName,
-} from './psl-attribute-parsing';
+import { getAttribute, storageName } from './psl-attribute-parsing';
 import type { ColumnDescriptor } from './psl-column-resolution';
 import {
   fieldAttributeOwner,
@@ -158,10 +151,7 @@ const REMOVED_ATTRIBUTE_RULES: ReadonlyMap<string, RemovedAttributeRule> = new M
   }
 }
 
-export function describeUnsupportedSqlAttribute(
-  sources: PslSources,
-  contributions: Pick<AssembledAuthoringContributions, 'renamedTypeConstructors'>,
-): DescribeUnsupportedAttribute {
+export function describeUnsupportedSqlAttribute(sources: PslSources): DescribeUnsupportedAttribute {
   return ({ attribute, level, owner, field }) => {
     // A composite type takes no attributes at all; `buildValueObjectNodes` refuses each one once.
     if (owner.kind === 'compositeType') return undefined;
@@ -175,19 +165,9 @@ export function describeUnsupportedSqlAttribute(
       };
     }
 
-    if (field === undefined) return undefined;
+    // `reportFieldDbAttributes` refuses `@db.*`: its suggestion needs the target.
+    if (field === undefined || attribute.name.startsWith('db.')) return undefined;
     const source = diagnosticSource(sources, field.node.syntax);
-
-    if (attribute.name.startsWith('db.')) {
-      return {
-        code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
-        message: formatDbAttributeMigrationMessage(
-          attribute,
-          contributions.renamedTypeConstructors,
-        ),
-        ...source.at(attribute.span),
-      };
-    }
 
     const baseMessage = `Field "${owner.name}.${field.name}" uses unsupported attribute "@${attribute.name}"`;
     const removedRule = REMOVED_ATTRIBUTE_RULES.get(attribute.name);
