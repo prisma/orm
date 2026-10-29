@@ -86,3 +86,13 @@ One reviewer reads this as "the MySQL driver sends each statement once". It touc
 - The injection tests pass in both backslash modes.
 - The every-column-type live test reads the same values as before.
 - The example app runs in CI.
+
+## Changed during the slice (2026-10-29)
+
+Implementation showed two claims in the chosen design were false.
+
+- **The bigint codec writes a JS `bigint`, not decimal text.** Over the text protocol the package quotes a string, and MySQL compares a quoted number with an expression as a DOUBLE, so `big + 0 = '9007199254740993'` also matched 9007199254740992. A `bigint` is written as bare digits, which MySQL reads as an exact integer. This is a change in the MySQL target's codec only. Postgres's codec sends text because `pg` lets the server type it from context; MySQL's text protocol has no such typing.
+- **A statement with values is refused while `NO_BACKSLASH_ESCAPES` is on.**
+  - The package escapes values correctly in both modes, but it finds the `?` placeholders without checking the mode.
+  - With the mode on, raw SQL such as `'a\'` makes the package and the server disagree about where a string ends. A value can then land outside its literal and run as SQL; a probe ran `CURRENT_USER()`.
+  - The driver turns the mode off at sign-in, and only a user's raw `SET` can turn it on. The driver reads the server's status flag that the package records after each reply, and refuses a statement with values while the flag is set. The error says to turn the mode off. A statement without values still runs, so the user can turn it back off.
