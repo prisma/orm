@@ -269,4 +269,47 @@ describe('SqliteMigrationRunner database policies', { timeout: timeouts.database
       policies: marker?.meta['policies'],
     }).toEqual({ started: [], invariants: [], policies: MIGRATE_ONLY });
   });
+
+  it('reports policies it cannot read inside its transaction as a corrupt marker, keeping the row', async () => {
+    await applyContract();
+    await driver.query(`UPDATE _prisma_marker SET meta = '{"policies":"strict"}' WHERE space = ?`, [
+      APP_SPACE_ID,
+    ]);
+
+    await expect(
+      run([{ plan: selfEdgePlan(), migrationEdges: [] }], {
+        expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+      }),
+    ).rejects.toMatchObject({ code: 'CONTRACT.MARKER_ROW_CORRUPT' });
+    expect(await recordedPolicies()).toBe('strict');
+  });
+
+  it("ignores policies an extension space's marker carries: the application space's marker governs", async () => {
+    await applyContract();
+    const extension = createLedgerTestPlan({
+      destinationHash: contract.storage.storageHash,
+      migrationEdges: [],
+      operations: [],
+    });
+    (await run([{ plan: extension, migrationEdges: synthEdges(extension) }])).assertOk();
+    await driver.query('UPDATE _prisma_marker SET meta = ? WHERE space = ?', [
+      JSON.stringify({ policies: MIGRATE_ONLY }),
+      LEDGER_TEST_SPACE_ID,
+    ]);
+
+    const result = await run(
+      [{ plan: selfEdgePlan(), migrationEdges: [], databasePolicies: RECONCILE_ONLY }],
+      { expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES },
+    );
+
+    result.assertOk();
+    const extensionMarker = await familyInstance.readMarker({
+      driver,
+      space: LEDGER_TEST_SPACE_ID,
+    });
+    expect({
+      app: await recordedPolicies(),
+      extension: extensionMarker?.meta['policies'],
+    }).toEqual({ app: RECONCILE_ONLY, extension: MIGRATE_ONLY });
+  });
 });

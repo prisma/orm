@@ -313,4 +313,25 @@ describe('MySQL database policies', { timeout: timeouts.databaseOperation }, () 
       }),
     );
   });
+
+  it('reports policies it cannot read under the marker lock as a corrupt marker, keeping the row', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(url, async (driver, family) => {
+        await applyContract(family, driver);
+        await driver.query(
+          `UPDATE \`_prisma_marker\` SET meta = '{"policies": "strict"}' WHERE space = 'app'`,
+        );
+
+        await expect(
+          executeRuns(
+            family,
+            driver,
+            [{ plan: selfEdgePlan(), migrationEdges: [] }],
+            DEFAULT_DATABASE_POLICIES,
+          ),
+        ).rejects.toMatchObject({ code: 'CONTRACT.MARKER_ROW_CORRUPT' });
+        expect(await recordedPolicies(family, driver)).toBe('strict');
+      }),
+    );
+  });
 });
