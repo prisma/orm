@@ -240,7 +240,9 @@ describe('resolveStatements, model renames', () => {
         UNRESOLVED,
         'value object renames are not supported in this release',
       );
-      expect(failure.fix).toBe('Leave value objects and their fields out of the statements.');
+      expect(failure.fix).toBe(
+        'Leave the value object itself out of the statements. A statement can rename, delete or backfill its fields, as --rename Address.<field>:Address.<new name>.',
+      );
     });
   });
 
