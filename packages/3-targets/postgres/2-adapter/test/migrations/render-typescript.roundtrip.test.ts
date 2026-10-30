@@ -30,6 +30,7 @@ import {
   CreatePostgresRlsPolicyCall,
   CreateSchemaCall,
   CreateTableCall,
+  DeleteRowsCall,
   DisableRowLevelSecurityCall,
   DropExtensionCall,
   DropPostgresRlsPolicyCall,
@@ -226,6 +227,7 @@ describe('TypeScriptRenderablePostgresMigration round-trip', () => {
         code: "it's",
         n: [1, null],
       }),
+      new DeleteRowsCall('public', 'user', 'nickname', 'gone'),
       new ReplaceStoredValueCall('public', 'user', 'rank', '7', '8', false, {
         codecRef: { codecId: 'pg/int8@1' },
         codecs: createPostgresBuiltinCodecLookup(),

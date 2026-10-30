@@ -83,3 +83,21 @@ export function removeStoredValue(
     postcheck: [valueAbsentCheck(tableName, columnName, value)],
   };
 }
+
+export function deleteRows(tableName: string, columnName: string, value: string | number): Op {
+  return {
+    id: `deleteRows.${tableName}.${columnName}.${idText(value)}`,
+    label: `Delete the rows of "${tableName}" that hold value ${storedValueText(value)} in column "${columnName}"`,
+    operationClass: 'destructive',
+    target: { id: 'sqlite', details: buildTargetDetails('column', columnName, tableName) },
+    precheck: [],
+    execute: [
+      step(
+        `delete the rows of "${tableName}" that hold value ${storedValueText(value)} in column "${columnName}"`,
+        `DELETE FROM ${quoteIdentifier(tableName)} WHERE ${quoteIdentifier(columnName)} = ?1`,
+        [value],
+      ),
+    ],
+    postcheck: [valueAbsentCheck(tableName, columnName, value)],
+  };
+}

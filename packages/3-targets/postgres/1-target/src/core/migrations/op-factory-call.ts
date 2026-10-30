@@ -136,7 +136,12 @@ import {
   removeStoredKey,
   renameStoredKey,
 } from './operations/stored-keys';
-import { removeStoredValue, replaceStoredValue, storedValueText } from './operations/stored-values';
+import {
+  deleteRows,
+  removeStoredValue,
+  replaceStoredValue,
+  storedValueText,
+} from './operations/stored-values';
 import { dropTable, renameTable } from './operations/tables';
 import { buildAddNotNullColumnWithTemporaryDefaultOperation } from './planner-recipes';
 import {
@@ -2488,6 +2493,63 @@ export class RemoveStoredValueCall extends PostgresOpFactoryCallNode {
   }
 }
 
+/** Deletes the rows whose column holds one stored value. */
+export class DeleteRowsCall extends PostgresOpFactoryCallNode {
+  readonly factoryName = 'deleteRows' as const;
+  readonly operationClass = 'destructive' as const;
+  readonly schemaName: string;
+  readonly tableName: string;
+  readonly columnName: string;
+  readonly value: string | number;
+  /** The column's codec, which writes `value` as the database stores it. */
+  readonly codec: StoredValueCodec | undefined;
+  readonly label: string;
+
+  constructor(
+    schemaName: string,
+    tableName: string,
+    columnName: string,
+    value: string | number,
+    codec?: StoredValueCodec,
+  ) {
+    super();
+    this.codec = codec;
+    this.schemaName = schemaName;
+    this.tableName = tableName;
+    this.columnName = columnName;
+    this.value = requireStoredValue(
+      value,
+      this.factoryName,
+      columnCallLocation(schemaName, tableName, columnName),
+      'value',
+    );
+    this.label = `Delete the rows of "${tableName}" that hold value ${storedValueText(value)} in column "${columnName}"`;
+    this.freeze();
+  }
+
+  async toOp(): Promise<Op> {
+    return deleteRows(
+      this.schemaName,
+      this.tableName,
+      this.columnName,
+      await encodeStoredValue(this.value, this.codec),
+    );
+  }
+
+  renderTypeScript(): string {
+    const opts = [
+      ...columnCallLocation(this.schemaName, this.tableName, this.columnName),
+      `value: ${jsonToTsSource(this.value)}`,
+      ...codecRefSource(this.codec),
+    ];
+    return `this.deleteRows({ ${opts.join(', ')} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+}
+
 // ============================================================================
 // Stored keys
 // ============================================================================
@@ -3002,6 +3064,7 @@ export type PostgresOpFactoryCall =
   | RenameStoredKeyCall
   | RemoveStoredKeyCall
   | FillStoredKeyCall
+  | DeleteRowsCall
   | CreatePostgresRlsPolicyCall
   | DropPostgresRlsPolicyCall
   | EnableRowLevelSecurityCall

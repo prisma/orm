@@ -23,6 +23,7 @@ import {
   AddColumnCall,
   CreateIndexCall,
   CreateTableCall,
+  DeleteRowsCall,
   DropTableCall,
   FillStoredKeyCall,
   RawSqlCall,
@@ -190,6 +191,7 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
       new RenameStoredKeyCall('user', 'profile', "$['a b'][*].lat", 'latitude'),
       new RemoveStoredKeyCall('user', 'profile', '$.trace'),
       new FillStoredKeyCall('user', 'profile', '$.country', { code: "it's", n: [1, null] }),
+      new DeleteRowsCall('user', 'email', 'gone'),
       new ReplaceStoredValueCall('user', 'rank', '7', '8', {
         codecRef: { codecId: 'sqlite/integer@1' },
         codecs: createSqliteBuiltinCodecLookup(),

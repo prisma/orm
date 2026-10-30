@@ -19,6 +19,7 @@ import {
   AddColumnWithTemporaryDefaultCall,
   AlterColumnTypeCall,
   CreatePostgresRlsPolicyCall,
+  DeleteRowsCall,
   DisableRowLevelSecurityCall,
   DropColumnCall,
   DropPostgresRlsPolicyCall,
@@ -78,7 +79,7 @@ function rawSqlTarget(locator: Locator, call: RawSqlCall): SubjectStorage {
 }
 
 function knownTarget(locator: Locator, call: OpFactoryCall): SubjectStorage | undefined {
-  if (call instanceof DropTableCall) {
+  if (call instanceof DropTableCall || call instanceof DeleteRowsCall) {
     return target(locator, call.schemaName, call.tableName, undefined);
   }
   if (

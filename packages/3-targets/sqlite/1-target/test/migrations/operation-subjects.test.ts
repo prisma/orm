@@ -10,6 +10,7 @@ import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import {
+  DeleteRowsCall,
   RemoveStoredKeyCall,
   RemoveStoredValueCall,
   RenameStoredKeyCall,
@@ -204,6 +205,19 @@ describe('stored key operations', () => {
         },
         loss: 'drop',
         label: 'Remove key "lat" at path "$[*]" in column "email" of "User"',
+      },
+    ]);
+  });
+});
+
+describe('deleteRows', () => {
+  it('names the model whose rows it deletes', () => {
+    expect(subjectsOf([new DeleteRowsCall('User', 'email', 'x')], [])).toEqual([
+      {
+        operationIndex: 0,
+        subject: { kind: 'model', namespaceId: asNamespaceId(UNBOUND_NAMESPACE_ID), model: 'User' },
+        loss: 'drop',
+        label: 'Delete the rows of "User" that hold value "x" in column "email"',
       },
     ]);
   });

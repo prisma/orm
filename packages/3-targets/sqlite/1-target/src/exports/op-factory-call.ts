@@ -3,6 +3,7 @@ export {
   CreateIndexCall,
   CreateTableCall,
   DataTransformCall,
+  DeleteRowsCall,
   DropColumnCall,
   DropIndexCall,
   DropTableCall,

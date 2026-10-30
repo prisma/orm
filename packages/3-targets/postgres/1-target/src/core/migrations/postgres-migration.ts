@@ -47,6 +47,7 @@ import {
   CreatePostgresRlsPolicyCall,
   CreateSchemaCall,
   CreateTableCall,
+  DeleteRowsCall,
   DisableRowLevelSecurityCall,
   DropCheckConstraintCall,
   DropColumnCall,
@@ -407,6 +408,26 @@ export abstract class PostgresMigration<
         options.value,
       ).toOp(),
     );
+  }
+
+  /**
+   * Emit a `DELETE` operation that deletes the rows whose `column` holds the stored value `value`. The value is a stored value, as for `replaceStoredValue`, and is passed as a parameter. Foreign keys that reference the rows act as they do for any `DELETE`. The operation is destructive.
+   */
+  protected deleteRows(options: {
+    readonly schema?: string;
+    readonly table: string;
+    readonly column: string;
+    readonly value: string | number;
+    /** The column's codec, as for `replaceStoredValue`. */
+    readonly codecRef?: CodecRef;
+  }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
+    return new DeleteRowsCall(
+      options.schema ?? UNBOUND_NAMESPACE_ID,
+      options.table,
+      options.column,
+      options.value,
+      this.storedValueCodec('deleteRows', options.codecRef),
+    ).toOp();
   }
 
   /**

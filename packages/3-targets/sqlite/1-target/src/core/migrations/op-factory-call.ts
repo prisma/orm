@@ -66,7 +66,12 @@ import {
   removeStoredKey,
   renameStoredKey,
 } from './operations/stored-keys';
-import { removeStoredValue, replaceStoredValue, storedValueText } from './operations/stored-values';
+import {
+  deleteRows,
+  removeStoredValue,
+  replaceStoredValue,
+  storedValueText,
+} from './operations/stored-values';
 import {
   type ColumnShape,
   indexDefinitionCheck,
@@ -1261,6 +1266,55 @@ export class RemoveStoredValueCall extends SqliteOpFactoryCallNode {
   }
 }
 
+/** Deletes the rows whose column holds one stored value. */
+export class DeleteRowsCall extends SqliteOpFactoryCallNode {
+  readonly factoryName = 'deleteRows' as const;
+  readonly operationClass = 'destructive' as const;
+  readonly tableName: string;
+  readonly columnName: string;
+  readonly value: string | number;
+  /** The column's codec, which writes `value` as the database stores it. */
+  readonly codec: StoredValueCodec | undefined;
+  readonly label: string;
+
+  constructor(
+    tableName: string,
+    columnName: string,
+    value: string | number,
+    codec?: StoredValueCodec,
+  ) {
+    super();
+    this.codec = codec;
+    this.tableName = tableName;
+    this.columnName = columnName;
+    this.value = requireStoredValue(value, this.factoryName, tableName, columnName, 'value');
+    this.label = `Delete the rows of "${tableName}" that hold value ${storedValueText(value)} in column "${columnName}"`;
+    this.freeze();
+  }
+
+  async toOp(): Promise<Op> {
+    return deleteRows(
+      this.tableName,
+      this.columnName,
+      await encodeStoredValue(this.value, this.codec),
+    );
+  }
+
+  renderTypeScript(): string {
+    const opts = [
+      `table: ${jsonToTsSource(this.tableName)}`,
+      `column: ${jsonToTsSource(this.columnName)}`,
+      `value: ${jsonToTsSource(this.value)}`,
+      ...codecRefSource(this.codec),
+    ];
+    return `this.deleteRows({ ${opts.join(', ')} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+}
+
 // ============================================================================
 // Stored keys
 // ============================================================================
@@ -1545,6 +1599,7 @@ export type SqliteOpFactoryCall =
   | RenameStoredKeyCall
   | RemoveStoredKeyCall
   | FillStoredKeyCall
+  | DeleteRowsCall
   | DataTransformCall
   | RawSqlCall;
 

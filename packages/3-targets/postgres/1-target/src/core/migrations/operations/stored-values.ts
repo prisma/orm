@@ -110,6 +110,29 @@ export function removeStoredValue(
   };
 }
 
+export function deleteRows(
+  schemaName: string,
+  tableName: string,
+  columnName: string,
+  value: string | number,
+): Op {
+  return {
+    id: `deleteRows.${tableName}.${columnName}.${idText(value)}`,
+    label: `Delete the rows of "${tableName}" that hold value ${storedValueText(value)} in column "${columnName}"`,
+    operationClass: 'destructive',
+    target: targetDetails('column', columnName, schemaName, tableName),
+    precheck: [],
+    execute: [
+      step(
+        `delete the rows of "${tableName}" that hold value ${storedValueText(value)} in column "${columnName}"`,
+        `DELETE FROM ${qualifyTableName(schemaName, tableName)} WHERE ${quoteIdentifier(columnName)} = $1`,
+        [value],
+      ),
+    ],
+    postcheck: [valueAbsentCheck(schemaName, tableName, columnName, value, false)],
+  };
+}
+
 function schemaSqlExpression(schemaName: string): string {
   return postgresCreateNamespace({ id: schemaName, entries: { table: {} } }).schemaSqlExpression();
 }

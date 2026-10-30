@@ -11,6 +11,7 @@ import type { MigrationDataLossKind, OpFactoryCall } from '@internal/framework-c
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ifDefined } from '@internal/utils/defined';
 import {
+  DeleteRowsCall,
   DropColumnCall,
   DropTableCall,
   RawSqlCall,
@@ -92,6 +93,7 @@ export function sqliteCallSubjects(
         !(call instanceof RawSqlCall) &&
         !(call instanceof RemoveStoredValueCall) &&
         !(call instanceof RemoveStoredKeyCall) &&
+        !(call instanceof DeleteRowsCall) &&
         !fieldEvents.has(call),
     ),
   );
@@ -119,6 +121,15 @@ export function sqliteCallSubjects(
         operationCount,
         label,
         dataLoss: alreadyLost ? [] : [lost(columnTarget(call.tableName, call.columnName))],
+        accessChanges: [],
+        temporaryValues: [],
+      };
+    }
+    if (call instanceof DeleteRowsCall) {
+      return {
+        operationCount,
+        label,
+        dataLoss: [lost(tableTarget(call.tableName))],
         accessChanges: [],
         temporaryValues: [],
       };

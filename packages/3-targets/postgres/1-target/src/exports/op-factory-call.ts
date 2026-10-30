@@ -15,6 +15,7 @@ export {
   CreateSchemaCall,
   CreateTableCall,
   DataTransformCall,
+  DeleteRowsCall,
   DisableRowLevelSecurityCall,
   DropCheckConstraintCall,
   DropColumnCall,

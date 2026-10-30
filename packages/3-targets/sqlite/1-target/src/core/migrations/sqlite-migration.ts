@@ -31,6 +31,7 @@ import {
   AddColumnCall,
   CreateIndexCall,
   CreateTableCall,
+  DeleteRowsCall,
   DropColumnCall,
   DropIndexCall,
   DropTableCall,
@@ -367,6 +368,24 @@ export abstract class SqliteMigration<
     return Promise.resolve(
       new FillStoredKeyCall(options.table, options.column, options.path, options.value).toOp(),
     );
+  }
+
+  /**
+   * Emit a `DELETE` operation that deletes the rows whose `column` holds the stored value `value`. The value is a stored value, as for `replaceStoredValue`, and is passed as a parameter. The migration runner checks foreign keys after the whole migration, so the apply fails if another table still references a deleted row. The operation is destructive.
+   */
+  protected deleteRows(options: {
+    readonly table: string;
+    readonly column: string;
+    readonly value: string | number;
+    /** The column's codec, as for `replaceStoredValue`. */
+    readonly codecRef?: CodecRef;
+  }): Promise<Op> {
+    return new DeleteRowsCall(
+      options.table,
+      options.column,
+      options.value,
+      this.storedValueCodec('deleteRows', options.codecRef),
+    ).toOp();
   }
 
   protected createIndex(options: {
