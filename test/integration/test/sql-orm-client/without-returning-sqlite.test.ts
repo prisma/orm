@@ -35,6 +35,8 @@ const schema = `
   create table accounts (id integer primary key autoincrement, email text not null unique, handle text not null unique);
   create table tags (code text primary key, label text not null);
   create table badges (id text primary key default (lower(hex(randomblob(16)))), label text not null, user_id integer not null references users(id));
+  create table tasks (id integer primary key autoincrement, title text not null, type text not null, severity text);
+  create table features (id integer primary key references tasks(id) on delete cascade, priority integer not null);
   create table tokens (id text primary key default (lower(hex(randomblob(16)))), label text not null);
 `;
 
@@ -312,6 +314,48 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
         'SELECT "users"."email" AS "email", "users"."id" AS "id", "users"."name" AS "name" FROM "users" WHERE "users"."id" IN (?1, ?2)',
       ]);
       expect(await db.User.where({ name: 'Pioneer' }).updateAndCount({ name: 'P' })).toBe(2);
+    });
+  });
+
+  it('updates and deletes rows of a variant stored in the base table', async () => {
+    await withDatabase(async ({ db, database }) => {
+      database.exec(
+        "insert into tasks (id, title, type, severity) values (1, 'Crash', 'bug', 'low'), (2, 'Leak', 'bug', 'low')",
+      );
+      const bugs = db.Task.variant('bug');
+      expect({
+        updated: await bugs.where({ id: 1 }).update({ title: 'Crash!' }),
+        updatedAll: await bugs.where({ title: 'Leak' }).updateAll({ title: 'Leak!' }),
+        deleted: await bugs.where({ id: 1 }).delete(),
+        deletedAll: await bugs.where({ id: 2 }).deleteAll(),
+        remaining: rowsOf(database, 'tasks'),
+      }).toEqual({
+        updated: { id: 1, title: 'Crash!', type: 'bug', severity: 'low' },
+        updatedAll: [{ id: 2, title: 'Leak!', type: 'bug', severity: 'low' }],
+        deleted: { id: 1, title: 'Crash!', type: 'bug', severity: 'low' },
+        deletedAll: [{ id: 2, title: 'Leak!', type: 'bug', severity: 'low' }],
+        remaining: [],
+      });
+    });
+  });
+
+  it('updates and deletes rows of a variant stored in its own table', async () => {
+    await withDatabase(async ({ db, database }) => {
+      database.exec(
+        "insert into tasks (id, title, type) values (1, 'Dark mode', 'feature'), (2, 'Sync', 'feature'); insert into features (id, priority) values (1, 1), (2, 1)",
+      );
+      const features = db.Task.variant('feature');
+      expect({
+        updated: await features.where({ id: 1 }).update({ title: 'Dark mode v2' }),
+        updatedAll: await features.where({ id: 2 }).updateAll({ title: 'Sync v2' }),
+        deleted: await features.where({ id: 1 }).delete(),
+        tasks: rowsOf(database, 'tasks'),
+      }).toEqual({
+        updated: { id: 1, title: 'Dark mode v2', type: 'feature', priority: 1 },
+        updatedAll: [{ id: 2, title: 'Sync v2', type: 'feature', priority: 1 }],
+        deleted: { id: 1, title: 'Dark mode v2', type: 'feature', priority: 1 },
+        tasks: [{ id: 2, title: 'Sync v2', type: 'feature', severity: null }],
+      });
     });
   });
 

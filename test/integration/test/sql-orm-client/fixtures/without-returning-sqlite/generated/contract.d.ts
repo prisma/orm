@@ -19,7 +19,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'2e166e0348814aa99c84e7acb7cf8ce4bd3dc4a0277236d191f1df8c3cd02468'>;
+  StorageHashBase<'8c4cb473819f6a198ef2f5e00c6e5aace9b6ef350b813e88802721734412f7a2'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
@@ -133,7 +133,15 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
   : Encoded;
 type ParameterizedOutputTypeFunctions = never;
 
-type FieldTypeOverrides = {};
+type FieldTypeOverrides = {
+  readonly __unbound__: {
+    readonly models: {
+      readonly Task: {
+        readonly type: { readonly output: 'bug' | 'feature'; readonly input: 'bug' | 'feature' };
+      };
+    };
+  };
+};
 export type FieldOutputTypes = FieldTypesFromDomain<
   ContractBase['domain']['namespaces'],
   CodecTypes,
@@ -150,7 +158,13 @@ export type FieldInputTypes = FieldTypesFromDomain<
   'input',
   ContractBase['storage']['namespaces']
 >;
-type ColumnTypeOverrides = {};
+type ColumnTypeOverrides = {
+  readonly __unbound__: {
+    readonly tasks: {
+      readonly type: { readonly output: 'bug' | 'feature'; readonly input: 'bug' | 'feature' };
+    };
+  };
+};
 export type StorageColumnTypes = ColumnTypesFromStorage<
   ContractBase['storage'],
   CodecTypes,
@@ -180,6 +194,20 @@ export namespace Models {
     user: User;
     readonly [RelationKeys]?: 'user';
   };
+  export type Bug = {
+    id: FieldOutputTypes['__unbound__']['Task']['id'];
+    title: FieldOutputTypes['__unbound__']['Task']['title'];
+    type: 'bug';
+    severity: FieldOutputTypes['__unbound__']['Bug']['severity'];
+    readonly [RelationKeys]?: never;
+  };
+  export type Feature = {
+    id: FieldOutputTypes['__unbound__']['Task']['id'];
+    title: FieldOutputTypes['__unbound__']['Task']['title'];
+    type: 'feature';
+    priority: FieldOutputTypes['__unbound__']['Feature']['priority'];
+    readonly [RelationKeys]?: never;
+  };
   export type Post = {
     authorId: FieldOutputTypes['__unbound__']['Post']['authorId'];
     id: FieldOutputTypes['__unbound__']['Post']['id'];
@@ -190,6 +218,12 @@ export namespace Models {
   export type Tag = {
     code: FieldOutputTypes['__unbound__']['Tag']['code'];
     label: FieldOutputTypes['__unbound__']['Tag']['label'];
+    readonly [RelationKeys]?: never;
+  };
+  export type Task = {
+    id: FieldOutputTypes['__unbound__']['Task']['id'];
+    title: FieldOutputTypes['__unbound__']['Task']['title'];
+    type: 'bug' | 'feature';
     readonly [RelationKeys]?: never;
   };
   export type Token = {
@@ -205,15 +239,20 @@ export namespace Models {
     posts: Post[];
     readonly [RelationKeys]?: 'badges' | 'posts';
   };
+  export type AnyTask = Bug | Feature;
 }
 
 export declare const models: {
   Account: Models.Account;
   Badge: Models.Badge;
+  Bug: Models.Bug;
+  Feature: Models.Feature;
   Post: Models.Post;
   Tag: Models.Tag;
+  Task: Models.Task;
   Token: Models.Token;
   User: Models.User;
+  AnyTask: Models.AnyTask;
 };
 
 export type TypeMaps = TypeMapsType<
@@ -317,6 +356,39 @@ type ContractBase = Omit<
                 },
               ];
             };
+            readonly features: {
+              columns: {
+                readonly id: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly priority: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'features';
+                    readonly columns: readonly ['id'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'tasks';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
+            };
             readonly posts: {
               columns: {
                 readonly author_id: {
@@ -387,6 +459,42 @@ type ContractBase = Omit<
               indexes: readonly [];
               foreignKeys: readonly [];
             };
+            readonly tasks: {
+              columns: {
+                readonly id: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'function';
+                    readonly expression: 'autoincrement()';
+                  };
+                  readonly many: false;
+                };
+                readonly severity: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly title: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly type: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [];
+              foreignKeys: readonly [];
+            };
             readonly tokens: {
               columns: {
                 readonly id: {
@@ -442,6 +550,12 @@ type ContractBase = Omit<
               foreignKeys: readonly [];
             };
           };
+          readonly valueSet: {
+            readonly 'Task.type': {
+              readonly kind: 'valueSet';
+              readonly values: readonly ['bug', 'feature'];
+            };
+          };
         };
       };
     };
@@ -459,6 +573,7 @@ type ContractBase = Omit<
     readonly badges: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Badge' };
     readonly posts: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Post' };
     readonly tags: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Tag' };
+    readonly tasks: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Task' };
     readonly tokens: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Token' };
     readonly users: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'User' };
   };
@@ -531,6 +646,42 @@ type ContractBase = Omit<
               };
             };
           };
+          readonly Bug: {
+            readonly fields: {
+              readonly severity: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'tasks';
+              readonly namespaceId: '__unbound__';
+              readonly fields: { readonly severity: { readonly column: 'severity' } };
+            };
+            readonly base: {
+              readonly namespace: '__unbound__' & NamespaceId;
+              readonly model: 'Task';
+            };
+          };
+          readonly Feature: {
+            readonly fields: {
+              readonly priority: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'features';
+              readonly namespaceId: '__unbound__';
+              readonly fields: { readonly priority: { readonly column: 'priority' } };
+            };
+            readonly base: {
+              readonly namespace: '__unbound__' & NamespaceId;
+              readonly model: 'Task';
+            };
+          };
           readonly Post: {
             readonly fields: {
               readonly authorId: {
@@ -588,6 +739,43 @@ type ContractBase = Omit<
               readonly fields: {
                 readonly code: { readonly column: 'code' };
                 readonly label: { readonly column: 'label' };
+              };
+            };
+          };
+          readonly Task: {
+            readonly fields: {
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly title: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly type: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'tasks';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly id: { readonly column: 'id' };
+                readonly title: { readonly column: 'title' };
+                readonly type: { readonly column: 'type' };
+              };
+            };
+            readonly discriminator: { readonly field: 'type' };
+            readonly variants: {
+              readonly bug: {
+                readonly namespace: '__unbound__' & NamespaceId;
+                readonly model: 'Bug';
+              };
+              readonly feature: {
+                readonly namespace: '__unbound__' & NamespaceId;
+                readonly model: 'Feature';
               };
             };
           };
