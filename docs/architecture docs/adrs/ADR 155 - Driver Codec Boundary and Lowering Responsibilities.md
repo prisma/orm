@@ -2,14 +2,12 @@
 
 > **Update — `targetTypes` is removed** by [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md): a codec names the data type it represents, and the data type declares how the database names the type. Where this ADR names `targetTypes`, it describes the codec shape of its time.
 
-> **Update (2026-10-30) — the MySQL driver lets its library substitute values.** It hands `sql` and the values to the `mariadb` package's `query`, which writes each value into the statement as an escaped literal and sends it in one round trip. A server-side prepared statement costs a second round trip for every statement. Our code still never writes a value into SQL. Over this text protocol MySQL types a quoted number as text, and compares it with an expression as a double, so the MySQL `bigint` codec sends a JavaScript `bigint`, which the library writes as bare digits. The [MySQL driver's README](../../../packages/3-targets/mysql/3-driver/README.md) states what the database and the application must guarantee for this to keep values in their literals.
-
 Prisma Next executes parameterized query Plans:
 
 - lanes build an AST and a separate `params[]` array (no SQL literal concatenation)
 - adapters lower AST → SQL text with placeholders
 - codecs encode parameters and decode rows
-- drivers bind `sql + params` and execute against the database
+- drivers take `sql` and `params` separately and get them to the database however they choose
 
 In practice, we’ve been mixing responsibilities between adapters, codecs, and drivers. That creates hidden coupling:
 
@@ -27,7 +25,7 @@ Quick glossary (for this ADR):
 - **lane**: an authoring surface (SQL DSL, raw SQL, ORM) that produces Plans.
 - **adapter**: lowers an AST to SQL text for a dialect (placeholders, casts, syntax).
 - **codec**: encodes params and decodes rows.
-- **driver**: binds `sql + params` and executes via an underlying DB library, normalizing values at the boundary.
+- **driver**: takes `sql` and `params` separately, gets them to the database through an underlying DB library, and normalizes row values at the boundary.
 
 ## What problem are we solving?
 
@@ -35,18 +33,18 @@ We’re separating three things that are easy to conflate:
 
 1. **Lowering**: converting intent (AST) into SQL text (dialect-specific)
 2. **Value encoding/decoding**: converting between JS/domain values and bindable/returnable values
-3. **Transport**: binding parameters and executing SQL via a driver/library
+3. **Transport**: getting SQL and parameters to the database and executing it, via a driver/library
 
 If these responsibilities are not explicit, we get accidental coupling:
 
 - Codecs can be contributed by many components (adapters, targets, extension packs), but driver boundary values are determined by whichever underlying JS library a driver uses.
 - Drivers are intended to be swappable, but swapping underlying libraries changes those boundary value shapes and silently invalidates codec assumptions.
 
-Finally: we explicitly do **not** solve this by inlining SQL literals. Parameterization is a core architecture constraint for safety and stability.
+Finally: nothing above the driver ever writes a value into SQL. SQL and values travel separately as far as the driver, and how they reach the database is the driver's choice.
 
 ## Design constraints (the “why” behind the decision)
 
-- **Parameterized Plans**: we execute `sql + params`, not “SQL with values substituted”.
+- **Parameterized Plans**: a Plan carries `sql` and `params` separately. No lane, adapter, codec or runtime writes a value into SQL text. The driver receives them separately; how it gets them to the database is its own implementation detail.
 - **Lowering must be value-independent**: adapters must not call `encode(value)` or otherwise depend on runtime values to decide SQL shape. Plans and lowering should be stable across different parameter values.
   - Lowering can use type metadata (for example `codecId`, `dataType`, and column references), but not the runtime value in `params[]`.
 - **Codecs are component-provided**: adapters, targets, and extension packs can contribute codecs; codecs are not owned by drivers.
@@ -160,7 +158,7 @@ Codecs do **not** render SQL text.
 
 Drivers (Prisma Next wrappers around DB libraries) are responsible for:
 
-- binding parameters and executing SQL
+- taking `sql` and the encoded parameters separately and getting them to the database. How it does that (a wire protocol, HTTP, server-side binding, its library's own value substitution) is the driver's implementation detail; the framework does not dictate it
 - streaming row results
 - normalizing the underlying library’s parameter/row representations to a canonical boundary
 
@@ -172,8 +170,8 @@ This is the end-to-end order the system follows:
 
 1. The lane builds an AST and stores JS/domain parameter values separately in `params[]`.
 2. The adapter lowers the AST to SQL text with placeholders and (when needed) explicit casts.
-3. The runtime encodes the JS/domain params using codecs into boundary values (`string | Uint8Array | null`).
-4. The driver binds and executes `sql + encodedParams` and normalizes returned row values into boundary values.
+3. The runtime encodes the JS/domain params using codecs into boundary values.
+4. The driver takes `sql` and the encoded params separately, gets them to the database and executes the statement, and normalizes returned row values into boundary values.
 5. The runtime decodes boundary row values back into JS/domain values using codecs.
 
 The key point is that (2) happens before (3): lowering decisions are based on **SQL context + type intent** from the contract/Plan, not on runtime values.
@@ -182,7 +180,7 @@ The key point is that (2) happens before (3): lowering decisions are based on **
 
 The boundary between codecs and drivers is standardized as:
 
-- parameter values: `string | Uint8Array | null`
+- parameter values: what the target's codecs produce for its driver. That is a canonical `string`, a `Uint8Array` or `null`, or a JS `number`, `boolean` or `bigint` where a target's codec chooses one so that its driver delivers the value with the database type it needs (Postgres's `int4` codec sends a `number`; MySQL's `bigint` codec sends a `bigint`).
 - row values: `string | Uint8Array | null`
 
 Meaning:
@@ -193,7 +191,7 @@ Meaning:
 
 A row value with no codec, such as a computed projection whose codec the composed stack cannot build, reaches the user as that server text. The driver does not fall back to library parsing for it.
 
-This intentionally excludes driver-library-specific JS types (`Date`, `bigint`, `Buffer`, custom wrappers).
+Row values intentionally exclude driver-library-specific JS types (`Date`, `bigint`, `Buffer`, custom wrappers).
 In Node, `Buffer` is a `Uint8Array`; drivers may accept `Buffer` internally but must expose `Uint8Array` at the boundary.
 
 ### Encoding shape: codecs do not alternate text vs binary for a `codecId`
@@ -229,7 +227,7 @@ This is a behavioral contract, not just a TS type alias. We enforce it via:
 
 - **Conformance tests** (ADR 026): per driver/target, prove that:
   - returned row values normalize to `string | Uint8Array | null` for representative types
-  - bound params accept `string | Uint8Array | null` and execute correctly
+  - every parameter value its target's codecs produce reaches the database with the right type and value
 - **Optional dev-mode validation:** fail fast if a driver returns a row value outside the canonical set (e.g. a `Date`).
 
 For the Postgres driver, [`driver.server-text.integration.test.ts`](../../../packages/3-targets/postgres/3-driver/test/driver.server-text.integration.test.ts) is that conformance test. It reads `bool`, `int2`, `int4`, `float8` (including `NaN` and both infinities), `bytea`, `oid`, `interval`, `json` and `jsonb` through the buffered, cursor and named-cursor paths and asserts that every value is the server's text, and that the global `pg` type parsers are unchanged.
@@ -238,9 +236,9 @@ For the Postgres driver, [`driver.server-text.integration.test.ts`](../../../pac
 
 ### “Why not just escape values and substitute them into SQL?”
 
-Because substitution turns “data” into “code” again. Modern database protocols and libraries bind parameters as values, not SQL snippets. Binding gives us stronger safety guarantees than escaping, and it keeps Plans stable (important for identity, caching, and observability).
+Our code never does: hand-written escaping turns data into code again. Plans keep `sql` and `params` apart, which keeps them stable (important for identity, caching, and observability) and keeps value handling out of lanes, adapters and codecs.
 
-This ADR is specifically about keeping that parameterized architecture while still allowing codecs and drivers to be independently swappable components.
+Below that line, getting the values to the database is the driver's implementation detail.
 
 ### “What is ‘canonical string encoding’?”
 
@@ -299,9 +297,9 @@ INSERT INTO "post" ("embedding") VALUES ($1::vector)
 - codec encodes to a `string`:
   - `"[0.1,1,42]"`
 
-This is a bound parameter value, not SQL text.
+This is a parameter value, not SQL text.
 
-#### D) Driver binds and executes
+#### D) Driver delivers and executes
 
 - driver executes:
   - SQL: `... VALUES ($1::vector)`
@@ -355,7 +353,7 @@ The key point is that *the codec*, not the driver, owns this decision.
 
 #### D–F) Driver and decode (unchanged)
 
-- Driver still binds a string parameter.
+- Driver still delivers a string parameter.
 - Driver still normalizes row values to strings.
 - Codec still parses the text vector format back into domain values (possibly with its own explicit precision policy).
 
@@ -397,15 +395,15 @@ The exact cast form is dialect-specific; the point is that the adapter owns it.
 - codec encodes to a `string`:
   - `"1234.567890123456789012345678901"`
 
-This is a bound parameter value, not SQL text.
+This is a parameter value, not SQL text.
 
-#### D) Driver binds and executes
+#### D) Driver delivers and executes
 
 - driver executes:
   - SQL: `... VALUES (CAST(? AS DECIMAL(65,30)))`
   - params: `["1234.567890123456789012345678901"]`
 
-The database parses the bound string into a DECIMAL value according to the SQL cast.
+The database parses the string into a DECIMAL value according to the SQL cast.
 
 #### E) Driver returns canonical row values
 
