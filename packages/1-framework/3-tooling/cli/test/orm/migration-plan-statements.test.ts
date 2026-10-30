@@ -476,54 +476,34 @@ describe('migration plan --convert and --backfill', () => {
     });
   });
 
-  describe('a plan whose operation waits to refuse until its questions are answered', () => {
-    const refusal = errorMigrationPlanningFailed({
-      conflicts: [
-        {
-          kind: 'nullabilityConflict',
-          summary: 'Value object field "GeoPoint.country" is required',
-          why: 'Add --backfill GeoPoint.country to write the value the plan fills them with.',
-        },
-      ],
-    });
-
-    it('asks its questions first', async () => {
+  it.each([
+    ['an error', new Error('codec lookup failed'), 'CLI.UNEXPECTED'],
+    [
+      'a planning refusal',
+      errorMigrationPlanningFailed({
+        conflicts: [
+          {
+            kind: 'nullabilityConflict',
+            summary: 'Value object field "GeoPoint.country" is required',
+          },
+        ],
+      }),
+      'MIGRATION.PLANNING_FAILED',
+    ],
+  ])(
+    'fails on %s an operation rejects with beside a placeholder, and writes nothing',
+    async (_, rejection, code) => {
       const project = await typeChangeProject();
       const run = await harness(project, {
-        dataLoss: [ageChange],
         operations: [ADDITIVE_OP],
-        throwOnOperations: refusal,
+        throwOnOperations: errorUnfilledPlaceholder('backfill'),
+        alsoThrowOnOperations: rejection,
       }).run(['migration', 'plan', '--json'], { cwd: project.dir });
 
-      expect(run.exitCode).toBe(2);
-      expect(JSON.stringify(envelopeOf(run))).toContain('--delete User.age');
+      expect(envelopeOf(run)).toMatchObject({ ok: false, error: { code } });
       expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
-    });
-
-    it('refuses after a delete answers them, and writes nothing', async () => {
-      const project = await typeChangeProject();
-      const run = await harness(project, {
-        dataLoss: [ageChange],
-        operations: [ADDITIVE_OP],
-        throwOnOperations: refusal,
-      }).run(['migration', 'plan', '--delete', 'User.age', '--json'], { cwd: project.dir });
-
-      expect(envelopeOf(run)).toMatchObject({
-        ok: false,
-        error: {
-          code: 'MIGRATION.PLANNING_FAILED',
-          why: 'Value object field "GeoPoint.country" is required',
-          nextActions: [
-            {
-              kind: 'user-choice',
-              label: 'Add --backfill GeoPoint.country to write the value the plan fills them with.',
-            },
-          ],
-        },
-      });
-      expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
-    });
-  });
+    },
+  );
 
   it('reports a delete that answers a type change as accepting the lossy type change', async () => {
     const project = await typeChangeProject();

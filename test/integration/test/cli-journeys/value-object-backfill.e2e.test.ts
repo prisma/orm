@@ -6,12 +6,12 @@
  * - B1: `migration plan` without a statement is refused, naming `--backfill Address.country`. With it, the plan writes one `fillStoredKey` per column and path whose value is `placeholder("Address.country:value")`, and `ops.json` stays empty. A value the field's data type refuses, such as `12`, fails `node migration.ts` with `CONTRACT.ARGUMENT_INVALID` before `ops.json` is written. Writing a string and running `node migration.ts` writes `ops.json`; `db migrate` fills every object, the new check accepts the rows, and a further plan is empty.
  * - B2: `db update` fills the field with a temporary value, `""`, and prints it with the `--backfill` statement that chooses the value. Adding `seen DateTime` next is refused, since `""` is no date, naming `migration plan --backfill Address.seen`.
  *
- * - B3: when `Address` also loses `zip`, which no statement renames, `migration plan` first asks about `zip`, offering `--rename Address.zip:Address.country`. After `--delete Address.zip` it still refuses, offering the rename first and then `--backfill Address.country`, and writes nothing. With `--backfill Address.country` the plan writes the placeholder; once it is filled, `node migration.ts` and `db migrate` remove `zip` and fill `country`.
+ * - B3: when `Address` also loses `zip`, which no statement renames, `migration plan` refuses at once, offering `--rename Address.zip:Address.country` first, then `--backfill Address.country`, and saying that `--delete Address.zip` still needs `--backfill`. With `--rename` it plans the rename and no fill. With `--delete Address.zip --backfill Address.country` the plan writes the placeholder; once it is filled, `node migration.ts` and `db migrate` remove `zip` and fill `country`.
  *
  * Each reads the rows back, shows the shape checks of both columns were replaced over the filled rows, and ends with `db verify --schema-only` clean and a further plan empty.
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
@@ -298,7 +298,7 @@ withTempDir(({ createTempDir }) => {
     const db = useDevDatabase();
 
     it(
-      'asks about the lost field first, still needs --backfill after --delete, and fills once the value is written',
+      'refuses at once offering --rename then --backfill, plans the rename, and fills once the value is written after --delete --backfill',
       async () => {
         const ctx = setupJourney({
           connectionString: db.connectionString,
@@ -314,28 +314,35 @@ withTempDir(({ createTempDir }) => {
         await emit(ctx, ADDRESS_WITH_COUNTRY, 'B3.03');
         const initialDir = latestMigrationDirName(ctx);
         const from = ['--name', 'country', '--from', initialDir];
-        const asked = await runMigrationPlan(ctx, [...from, '--json']);
-        expect(asked.exitCode, 'B3.04: asks about the lost field').not.toBe(0);
-        expect(JSON.stringify(engineError(asked)), 'B3.04: the rename offered').toContain(
-          '--rename Address.zip:Address.country',
-        );
-
-        const deleted = await runMigrationPlan(ctx, [...from, '--delete', 'Address.zip', '--json']);
-        expect(deleted.exitCode, 'B3.05: still refused after --delete').not.toBe(0);
+        const refused = await runMigrationPlan(ctx, [...from, '--json']);
+        expect(refused.exitCode, 'B3.04: refused').not.toBe(0);
         expect(
-          engineError(deleted),
-          'B3.05: offers the rename first, then the backfill',
+          engineError(refused),
+          'B3.04: offers the rename first, then the backfill',
         ).toMatchObject({
           code: 'MIGRATION.PLANNING_FAILED',
           why: expect.stringContaining('Value object field "Address.country" is required'),
           nextActions: [
             expect.objectContaining({
               label:
-                'If it is a field renamed, add --rename Address.zip:Address.country. Otherwise add --backfill Address.country to write the value the plan fills them with.',
+                'If it is a field renamed, add --rename Address.zip:Address.country. Otherwise add --backfill Address.country to write the value the plan fills them with. With --delete Address.zip, the new field still needs --backfill Address.country.',
             }),
           ],
         });
-        expect(latestMigrationDirName(ctx), 'B3.05: nothing written').toBe(initialDir);
+        expect(latestMigrationDirName(ctx), 'B3.04: nothing written').toBe(initialDir);
+
+        const renamed = await runMigrationPlan(ctx, [
+          ...from,
+          '--rename',
+          'Address.zip:Address.country',
+          '--json',
+        ]);
+        expect(renamed.exitCode, `B3.05: plan --rename: ${renamed.stderr}`).toBe(0);
+        const renameDir = join(ctx.testDir, 'migrations/app', latestMigrationDirName(ctx));
+        const renameTs = readFileSync(join(renameDir, 'migration.ts'), 'utf-8');
+        expect(renameTs, 'B3.05: the rename planned').toContain('this.renameStoredKey(');
+        expect(renameTs, 'B3.05: no fill').not.toContain('fillStoredKey');
+        rmSync(renameDir, { recursive: true });
 
         const planned = await runMigrationPlan(ctx, [
           ...from,

@@ -192,11 +192,12 @@ function backfillAdvice(
 ): string {
   const backfill = `--backfill ${text} to write the value the plan fills them with.`;
   if (required.removedFields.length === 0) return `Add ${backfill}`;
-  const renames = required.removedFields.map(
-    (field) =>
-      `--rename ${valueObjectFieldStatementText(contract, { ...required.valueObjectField, field })}:${text}`,
+  const removed = required.removedFields.map((field) =>
+    valueObjectFieldStatementText(contract, { ...required.valueObjectField, field }),
   );
-  return `If it is a field renamed, add ${renames.join(' or ')}. Otherwise add ${backfill}`;
+  const renames = removed.map((from) => `--rename ${from}:${text}`).join(' or ');
+  const deletes = removed.map((from) => `--delete ${from}`).join(' or ');
+  return `If it is a field renamed, add ${renames}. Otherwise add ${backfill} With ${deletes}, the new field still needs --backfill ${text}.`;
 }
 
 function placeText(place: ValueObjectPlace): string {
@@ -262,10 +263,8 @@ function fillAt(
  * backfill statement fills it with a value the user writes in `migration.ts`. Without one,
  * `unnamed` decides: `refuse` names the statement, and `temporaryValue` fills a scalar field whose
  * codec has a temporary value its data type takes, and refuses any other. Under `refuse`, when the
- * value object also lost a field no statement renames, the refusal offers that rename first, and it
- * waits in the fill's value so that the plan asks about the lost field first: a rename answers it and
- * plans again without the fill, and a delete leaves the refusal. Each fill acts on every column of the working
- * schema whose field holds the value object, at every path to its objects, nested or in lists, as
+ * value object also lost a field no statement renames, the refusal offers that rename first. Each
+ * fill acts on every column of the working schema whose field holds the value object, at every path to its objects, nested or in lists, as
  * the destination names them. A column that holds the value object where its paths cannot be listed
  * is refused. With no origin contract, nothing is known to have changed.
  */
@@ -313,19 +312,9 @@ export function planValueObjectFieldFills(input: {
           ? new UnfilledValue(`${text}:value`)
           : undefined;
     if (value === undefined) {
-      const refusal = needsValue(
-        required,
-        [first, ...rest],
-        text,
-        backfillAdvice(contract, required, text),
+      return notOk(
+        needsValue(required, [first, ...rest], text, backfillAdvice(contract, required, text)),
       );
-      if (required.removedFields.length === 0) return notOk(refusal);
-      fills.push(
-        ...places.value.map((place) =>
-          fillAt(required, place, text, new UnfilledValue(`${text}:value`, refusal)),
-        ),
-      );
-      continue;
     }
     fills.push(...places.value.map((place) => fillAt(required, place, text, value)));
   }

@@ -86,7 +86,7 @@ describe('migrationWithUnfilledPlaceholders', () => {
         FILLED.replace("'NO'", "'NO' /* fill placeholder('x') later */ // placeholder("),
       ],
       ['a string', FILLED.replace("'NO'", '"call placeholder(here)"')],
-      ['a template string', FILLED.replace("'NO'", '`placeholder(${1})`')],
+      ['a template string', FILLED.replace("'NO'", `\`placeholder(${'$'}{1})\``)],
       [
         'a function of its own named placeholder',
         `import { Migration } from '@internal/sqlite/migration';
@@ -114,7 +114,7 @@ export default class M extends m.Migration {
   override get operations() { return [this.fillStoredKey({ value: m.placeholder('x') })]; }
 }`,
       ],
-      ['a template expression', FILLED.replace("'NO'", "`${placeholder('x')}`")],
+      ['a template expression', FILLED.replace("'NO'", `\`${'$'}{placeholder('x')}\``)],
     ])('finds a placeholder called through %s', async (_, source) => {
       expect(await unfilled(source)).toBe(join(migrationsDir, named));
     });

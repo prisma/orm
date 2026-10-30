@@ -235,29 +235,22 @@ describe('planValueObjectFieldFills', () => {
     });
   });
 
-  it('fills nothing no statement asked for when the value object lost a field: the fill carries the refusal, asked after the question about that field, offering the rename first', () => {
+  it('refuses a required field no backfill statement names when the value object lost a field, offering the rename first', () => {
     expect(
-      fills(plan({ from: { GeoPoint: GEO }, to: { GeoPoint: { country: 'scalar' } } })).map(
-        ({ path, value }) => ({ path, value }),
-      ),
-    ).toEqual([
-      {
-        path: '$.country',
-        value: new UnfilledValue('GeoPoint.country:value', {
-          kind: 'nullabilityConflict',
-          summary:
-            'Value object field "GeoPoint.country" is required, and existing objects may have no value for it, at:\n- path "$" in column "location" of "place"',
-          why: 'If it is a field renamed, add --rename GeoPoint.lat:GeoPoint.country. Otherwise add --backfill GeoPoint.country to write the value the plan fills them with.',
-          location: {
-            namespaceId: 'app',
-            entityKind: 'table',
-            entityName: 'place',
-            column: 'location',
-          },
-          meta: { valueObjectField: country },
-        }),
+      refusal(plan({ from: { GeoPoint: GEO }, to: { GeoPoint: { country: 'scalar' } } })),
+    ).toEqual({
+      kind: 'nullabilityConflict',
+      summary:
+        'Value object field "GeoPoint.country" is required, and existing objects may have no value for it, at:\n- path "$" in column "location" of "place"',
+      why: 'If it is a field renamed, add --rename GeoPoint.lat:GeoPoint.country. Otherwise add --backfill GeoPoint.country to write the value the plan fills them with. With --delete GeoPoint.lat, the new field still needs --backfill GeoPoint.country.',
+      location: {
+        namespaceId: 'app',
+        entityKind: 'table',
+        entityName: 'place',
+        column: 'location',
       },
-    ]);
+      meta: { valueObjectField: country },
+    });
   });
 
   it('names every column and path in the refusal', () => {
