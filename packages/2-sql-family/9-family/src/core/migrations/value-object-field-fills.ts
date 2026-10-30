@@ -57,7 +57,8 @@ export type UnnamedFieldFill = 'refuse' | 'temporaryValue';
 /**
  * A policy that allows `data` operations plans a migration whose `migration.ts` the user can fill,
  * so it refuses; any other, as `db update` runs, fills a temporary value, as it does for a new
- * required column.
+ * required column. It assumes that a policy that allows `data` operations means a `migration.ts` is
+ * written, which holds while `migration plan` is the only command whose planner policy allows them.
  */
 export function unnamedFieldFillOf(policy: MigrationOperationPolicy): UnnamedFieldFill {
   return policy.allowedOperationClasses.includes('data') ? 'refuse' : 'temporaryValue';
