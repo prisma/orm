@@ -57,7 +57,7 @@ describe('migration status --to <ref>, the ref declares policies', () => {
     expect(output).toContain('differences');
     expect(output).toContain('change: ref declares migrate, database has migrate, reconcile');
     expect(output).toContain(
-      'dataLoss: ref declares data-loss-forbidden, database has data-loss-with-consent',
+      'dataProtection.dataLoss: ref declares data-loss-forbidden, database has data-loss-with-consent',
     );
     expect(output).toContain('Up to date; policies differ from production');
   });
@@ -70,7 +70,7 @@ describe('migration status --to <ref>, the ref declares policies', () => {
       summary: 'Up to date; policies differ from production',
       policyDifferences: [
         {
-          setting: 'dataLoss',
+          setting: 'dataProtection.dataLoss',
           declared: 'data-loss-forbidden',
           inForce: 'data-loss-with-consent',
         },

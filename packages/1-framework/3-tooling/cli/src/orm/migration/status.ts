@@ -1,9 +1,8 @@
 import { ormConfigSection } from '@internal/config-loader';
 import type { ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import {
-  DEFAULT_POLICIES,
-  type PolicyDifference,
-  policyDifferences,
+  type DatabasePolicyDifference,
+  databasePolicyDifferences,
 } from '@internal/framework-components/control';
 import {
   type AggregateContractSpace,
@@ -30,7 +29,7 @@ import {
   loadContractRawSafely,
   refusePackageCorruptionOnAggregate,
 } from '../../control-api/operations/contract-space-aggregate-loader';
-import { policiesInForce } from '../../control-api/operations/database-policies';
+import { databasePoliciesInForce } from '../../control-api/operations/database-policies';
 import { hasMigrationPath } from '../../control-api/operations/graph-queries';
 import {
   refuseMissingInvariantPath,
@@ -65,6 +64,7 @@ import { createToneMigrationListStyler } from '../../utils/formatters/migration-
 import type { MigrationListEntry } from '../../utils/formatters/migration-list-types';
 import { toneDrawing } from '../../utils/formatters/tone-markup';
 import type { GlyphMode } from '../../utils/glyph-mode';
+import { databasePolicyValueText } from '../../utils/policy-errors';
 import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
@@ -214,18 +214,14 @@ function sectionBlock(section: SpaceSection): Block {
   return { kind: 'drawing', lines: [...heading, ...body] };
 }
 
-function settingValue(value: PolicyDifference['declared']): string {
-  return typeof value === 'string' ? value : value.join(', ');
-}
-
-function policyDifferenceJson(difference: PolicyDifference) {
+function policyDifferenceJson(difference: DatabasePolicyDifference) {
   return difference.setting === 'change'
     ? { ...difference, declared: [...difference.declared], inForce: [...difference.inForce] }
     : difference;
 }
 
 /** Each policy setting the ref declares that differs from the one the database records. */
-function differencesBlock(differences: readonly PolicyDifference[]): Block {
+function differencesBlock(differences: readonly DatabasePolicyDifference[]): Block {
   return {
     kind: 'drawing',
     lines: [
@@ -233,7 +229,7 @@ function differencesBlock(differences: readonly PolicyDifference[]): Block {
       ...differences.map(
         ({ setting, declared, inForce }): Text => [
           {
-            text: `  ${setting}: ref declares ${settingValue(declared)}, database has ${settingValue(inForce)}`,
+            text: `  ${setting}: ref declares ${databasePolicyValueText(declared)}, database has ${databasePolicyValueText(inForce)}`,
           },
         ],
       ),
@@ -248,7 +244,7 @@ function statusPresentations(inputs: {
   readonly migrationsDir: string;
   readonly database: string | undefined;
   readonly ref: string | undefined;
-  readonly differences: readonly PolicyDifference[];
+  readonly differences: readonly DatabasePolicyDifference[];
   readonly from: string | undefined;
   readonly space: string | undefined;
   readonly legend: string | undefined;
@@ -569,13 +565,11 @@ export const migrationStatusCommand = defineOrmCommand({
       }
     }
 
-    const differences: readonly PolicyDifference[] | undefined =
+    const differences: readonly DatabasePolicyDifference[] | undefined =
       connects && activeRefEntry?.policies !== undefined
-        ? policyDifferences(
+        ? databasePolicyDifferences(
             activeRefEntry.policies,
-            policiesInForce(database.markersBySpace, [aggregate.app.spaceId], markerLocation).get(
-              aggregate.app.spaceId,
-            ) ?? DEFAULT_POLICIES,
+            databasePoliciesInForce(database.markersBySpace, aggregate.app.spaceId, markerLocation),
           )
         : undefined;
 

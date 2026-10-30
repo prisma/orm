@@ -11,7 +11,7 @@ import {
 } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { MigrationToolsError } from '@internal/migration-tools/errors';
-import type { Refs } from '@internal/migration-tools/refs';
+import type { NamedRef, Refs } from '@internal/migration-tools/refs';
 import { readRefs } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -27,7 +27,7 @@ import { createControlClient } from '../client';
 import type { CreateControlClient } from '../types';
 import { errorFromCaught } from './caught-errors';
 import { buildReadAggregate } from './contract-space-aggregate-loader';
-import { policiesInForce } from './database-policies';
+import { checkRunPolicies, databasePoliciesInForce } from './database-policies';
 import { planEverySpace, planSpaces, type SpacePathOutcome } from './migrate';
 import {
   liveMarkerUse,
@@ -53,6 +53,8 @@ export interface ExecuteMigrateShowPlanOptions {
   readonly db?: string;
   readonly to?: string;
   readonly from?: string;
+  /** Consents to the ref's declared policies, as `db migrate --permit-policy-change` would. */
+  readonly permitPolicyChange?: boolean;
   /** The command line printed advice repeats. */
   readonly invocation: CliInvocation;
   /** Client factory used when the plan needs the live DB marker; defaults to the real client. */
@@ -139,6 +141,7 @@ export async function executeMigrateShowPlan(
   // same target invariants that real migrate would use (refInvariants ?? headRef.invariants).
   let targetHash: string = contractHash;
   let refInvariants: readonly string[] | undefined;
+  let namedRef: NamedRef | undefined;
   const refContext = { graph: appGraph, refs: allRefs, contractHash };
   if (options.to && !liveTarget) {
     const toResult = resolveContractRef(options.to, refContext);
@@ -147,8 +150,12 @@ export async function executeMigrateShowPlan(
     }
     targetHash = toResult.value.hash;
     if (toResult.value.provenance.kind === 'ref') {
-      const refEntry = allRefs[toResult.value.provenance.refName];
-      if (refEntry) refInvariants = refEntry.invariants;
+      const refName = toResult.value.provenance.refName;
+      const refEntry = allRefs[refName];
+      if (refEntry) {
+        refInvariants = refEntry.invariants;
+        namedRef = { name: refName, ...refEntry };
+      }
     }
   }
 
@@ -217,6 +224,20 @@ export async function executeMigrateShowPlan(
       if (liveTarget) {
         targetHash = contractHashAtMarker(appMarker);
       }
+      // The preview refuses a run the database's policies would refuse, with the same envelope.
+      const inForce = databasePoliciesInForce(allMarkers, aggregate.app.spaceId, markerLocation);
+      const permitted = checkRunPolicies({
+        command: 'db migrate',
+        appSpaceId: aggregate.app.spaceId,
+        inForce,
+        ref: namedRef,
+        permitPolicyChange: options.permitPolicyChange ?? false,
+        targetHash,
+        invocation: options.invocation,
+      });
+      if (!permitted.ok) {
+        return notOk(permitted.failure);
+      }
       // Whichever end of the preview the database supplies, its markers are checked against their
       // graphs exactly as db migrate checks them.
       const checked = await planEverySpace({
@@ -225,11 +246,7 @@ export async function executeMigrateShowPlan(
         migrationsDir,
         invocation: options.invocation,
         readLedger: (spaceId) => client.readLedger(spaceId),
-        policiesInForce: policiesInForce(
-          allMarkers,
-          allSpaces.map(({ spaceId }) => spaceId),
-          markerLocation,
-        ),
+        change: inForce.change,
       });
       if (!checked.ok) {
         return notOk(checked.failure);

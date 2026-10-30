@@ -14,7 +14,7 @@ describe('errorPolicyMismatch', () => {
         inForce: ['migrate', 'reconcile'],
       },
       {
-        setting: 'dataLoss',
+        setting: 'dataProtection.dataLoss',
         declared: 'data-loss-forbidden',
         inForce: 'data-loss-with-consent',
       },
@@ -29,7 +29,7 @@ describe('errorPolicyMismatch', () => {
       code: 'MIGRATION.POLICY_MISMATCH',
       severity: 'error',
       summary: "The ref's policies differ from the database's",
-      why: 'production declares change: migrate; the database has change: migrate, reconcile. production declares dataLoss: data-loss-forbidden; the database has dataLoss: data-loss-with-consent.',
+      why: 'production declares change: migrate; the database has change: migrate, reconcile. production declares dataProtection.dataLoss: data-loss-forbidden; the database has dataProtection.dataLoss: data-loss-with-consent.',
       fix: recovery,
       nextActions: [{ kind: 'user-choice', label: recovery }],
       meta: { spaceId: 'app', refName: 'production', differences },
@@ -46,6 +46,7 @@ describe('errorChangePolicyForbids', () => {
         spaceId: 'app',
         command: 'db update',
         change: ['migrate'],
+        source: { kind: 'marker' },
         targetHash: TARGET,
         invocation,
       }).toEnvelope(),
@@ -67,6 +68,7 @@ describe('errorChangePolicyForbids', () => {
         spaceId: 'app',
         command: 'db sign',
         change: ['migrate'],
+        source: { kind: 'marker' },
         targetHash: TARGET,
         invocation,
       }).toEnvelope(),
@@ -85,6 +87,7 @@ describe('errorChangePolicyForbids', () => {
         spaceId: 'app',
         command: 'db migrate',
         change: ['reconcile'],
+        source: { kind: 'marker' },
         targetHash: TARGET,
         invocation,
       }).toEnvelope(),
@@ -97,6 +100,22 @@ describe('errorChangePolicyForbids', () => {
       fix: `Reconcile the database: ${reconcile}`,
       nextActions: [{ kind: 'run-command', label: 'Reconcile the database', command: reconcile }],
       meta: { spaceId: 'app', command: 'db migrate', change: ['reconcile'] },
+    });
+  });
+
+  it("names the ref when the refused change policy is the ref's declaration", () => {
+    expect(
+      errorChangePolicyForbids({
+        spaceId: 'app',
+        command: 'db update',
+        change: ['migrate'],
+        source: { kind: 'ref', refName: 'production' },
+        targetHash: TARGET,
+        invocation,
+      }).toEnvelope(),
+    ).toMatchObject({
+      why: 'production declares change: migrate, so db update may not move it.',
+      meta: { spaceId: 'app', command: 'db update', change: ['migrate'] },
     });
   });
 });

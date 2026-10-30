@@ -313,13 +313,13 @@ describe('migrate --to reserved references and refs', () => {
     expect(run.exitCode).toBe(0);
     expect(mocks.migrate).toHaveBeenCalledWith(
       expect.objectContaining({
-        ref: { hash: C1, invariants: [] },
+        targetHash: C1,
         contract: expect.objectContaining({
           storage: expect.objectContaining({ storageHash: C1 }),
         }),
       }),
     );
-    expect(mocks.migrate.mock.calls[0]?.[0]?.ref).not.toHaveProperty('name');
+    expect(mocks.migrate.mock.calls[0]?.[0]).not.toHaveProperty('ref');
     expect(run.presented?.data).toMatchObject({
       ok: true,
       migrationsApplied: 0,
@@ -340,9 +340,7 @@ describe('migrate --to reserved references and refs', () => {
     });
 
     expect(run.exitCode).toBe(0);
-    expect(mocks.migrate).toHaveBeenCalledWith(
-      expect.objectContaining({ ref: { hash: EMPTY, invariants: [] } }),
-    );
+    expect(mocks.migrate).toHaveBeenCalledWith(expect.objectContaining({ targetHash: EMPTY }));
   });
 
   it('passes the resolved ref name for a ref target', async () => {

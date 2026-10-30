@@ -170,30 +170,22 @@ async function projectWithProductionRef(): Promise<string> {
 }
 
 describe('db migrate --permit-policy-change', () => {
-  it('refuses a ref whose policies differ from the database, before it applies anything', async () => {
+  it('leaves the policy check to the control client, handing it the ref without consent', async () => {
     const cwd = await projectWithProductionRef();
 
-    const run = await harness(ormConfig(cwd)).run(
-      ['db', 'migrate', '--to', 'production', '--json'],
-      { cwd },
-    );
+    await harness(ormConfig(cwd)).run(['db', 'migrate', '--to', 'production', '--json'], { cwd });
 
-    expect(run.exitCode).toBe(2);
-    expect(run.json.at(-1)).toMatchObject({
-      envelope: {
-        ok: false,
-        error: {
-          code: 'MIGRATION.POLICY_MISMATCH',
-          why: 'production declares change: migrate; the database has change: migrate, reconcile.',
-        },
-      },
-    });
-    expect(mocks.migrate).not.toHaveBeenCalled();
+    expect(mocks.migrate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ref: { name: 'production', hash: C2, invariants: [], policies: PRODUCTION_POLICIES },
+      }),
+    );
+    expect(mocks.migrate.mock.calls[0]?.[0]).not.toHaveProperty('permitPolicyChange');
   });
 
   it('hands the client the ref and the consent, and reports the policies it updated', async () => {
     const cwd = await projectWithProductionRef();
-    const policiesUpdated = [
+    const databasePoliciesUpdated = [
       { setting: 'change', declared: ['migrate'], inForce: ['migrate', 'reconcile'] },
     ];
     mocks.migrate.mockResolvedValue(
@@ -203,7 +195,7 @@ describe('db migrate --permit-policy-change', () => {
         applied: [],
         summary: 'Policies updated: change: migrate',
         perSpace: [],
-        policiesUpdated,
+        databasePoliciesUpdated,
       }),
     );
 
@@ -217,11 +209,14 @@ describe('db migrate --permit-policy-change', () => {
       expect.objectContaining({
         ref: { name: 'production', hash: C2, invariants: [], policies: PRODUCTION_POLICIES },
         permitPolicyChange: true,
+        invocation: expect.objectContaining({
+          rerunArgs: ['--to', 'production', '--permit-policy-change'],
+        }),
       }),
     );
     expect(run.presented?.data).toMatchObject({
       summary: 'Policies updated: change: migrate',
-      policiesUpdated,
+      databasePoliciesUpdated,
     });
   });
 
@@ -231,5 +226,6 @@ describe('db migrate --permit-policy-change', () => {
     await harness(ormConfig(cwd)).run(['db', 'migrate', '--json'], { cwd });
 
     expect(mocks.migrate.mock.calls[0]?.[0]).not.toHaveProperty('permitPolicyChange');
+    expect(mocks.migrate.mock.calls[0]?.[0].invocation.rerunArgs).toEqual([]);
   });
 });

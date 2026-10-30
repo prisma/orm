@@ -22,9 +22,10 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { CliStructuredError } from '../../utils/cli-errors';
+import type { CliInvocation } from '../../utils/printed-command';
 import type { OnControlProgress } from '../types';
 import { buildContractSpaceAggregate } from './contract-space-aggregate-loader';
-import { checkRunPolicies, policiesInForce } from './database-policies';
+import { checkRunPolicies, databasePoliciesInForce } from './database-policies';
 import { runIntrospection } from './db-verify';
 
 export interface ExecuteDbSignOptions<TFamilyId extends string, TTargetId extends string> {
@@ -37,6 +38,8 @@ export interface ExecuteDbSignOptions<TFamilyId extends string, TTargetId extend
   readonly extensions: ReadonlyArray<ControlExtensionDescriptor<TFamilyId, TTargetId>>;
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>;
   readonly verifySnapshotContent?: SnapshotContentVerifier;
+  /** The command line the advice of a refusal repeats. */
+  readonly invocation: CliInvocation;
   readonly onProgress?: OnControlProgress;
 }
 
@@ -90,6 +93,7 @@ export async function executeDbSign<TFamilyId extends string, TTargetId extends 
     familyInstance,
     aggregate: loaded.value,
     frameworkComponents: options.frameworkComponents,
+    invocation: options.invocation,
     ...ifDefined('onProgress', options.onProgress),
   });
 }
@@ -99,6 +103,8 @@ export interface SignContractSpacesOptions<TFamilyId extends string, TTargetId e
   readonly familyInstance: ControlFamilyInstance<TFamilyId, unknown>;
   readonly aggregate: ContractSpaceAggregate;
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>;
+  /** The command line the advice of a refusal repeats. */
+  readonly invocation: CliInvocation;
   readonly onProgress?: OnControlProgress;
 }
 
@@ -133,19 +139,22 @@ export async function signContractSpaces<TFamilyId extends string, TTargetId ext
 ): Promise<ExecuteDbSignResult> {
   const { driver, familyInstance, aggregate, frameworkComponents, onProgress } = options;
   const markers = await familyInstance.readAllMarkers({ driver });
-  const signedSpaceIds = [aggregate.app, ...aggregate.extensions]
-    .map(({ spaceId }) => spaceId)
-    .filter((spaceId) => markers.has(spaceId));
-  const permitted = checkRunPolicies({
-    command: 'db sign',
-    appSpaceId: aggregate.app.spaceId,
-    inForce: policiesInForce(markers, signedSpaceIds, familyInstance.markerLocation),
-    ref: undefined,
-    permitPolicyChange: false,
-    targetHash: aggregate.app.contract().storage.storageHash,
-    invocation: undefined,
-  });
-  if (!permitted.ok) return notOk(permitted.failure);
+  const appSpaceId = aggregate.app.spaceId;
+  const inForce = markers.has(appSpaceId)
+    ? databasePoliciesInForce(markers, appSpaceId, familyInstance.markerLocation)
+    : undefined;
+  if (inForce !== undefined) {
+    const permitted = checkRunPolicies({
+      command: 'db sign',
+      appSpaceId,
+      inForce,
+      ref: undefined,
+      permitPolicyChange: false,
+      targetHash: aggregate.app.contract().storage.storageHash,
+      invocation: options.invocation,
+    });
+    if (!permitted.ok) return notOk(permitted.failure);
+  }
 
   const schemaIntrospection = await runIntrospection({
     action: 'dbSign',
@@ -200,6 +209,7 @@ export async function signContractSpaces<TFamilyId extends string, TTargetId ext
       space: space.spaceId,
       contract: space.contract(),
       expected: markerHashes(markers.get(space.spaceId)),
+      ...(space.spaceId === appSpaceId ? ifDefined('expectedDatabasePolicies', inForce) : {}),
     }));
 
   onProgress?.({ action: 'dbSign', kind: 'spanStart', spanId: 'sign', label: 'Signing database' });

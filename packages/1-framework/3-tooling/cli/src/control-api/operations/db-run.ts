@@ -9,13 +9,13 @@ import type {
   ControlDriverInstance,
   ControlExtensionDescriptor,
   ControlFamilyInstance,
+  DatabasePolicyDifference,
   MigrationOperationPolicy,
   MigrationOperationSubject,
   MigrationPlannerConflict,
   MigrationPlanOperation,
   MigrationPlanSubjects,
   OperationPreview,
-  PolicyDifference,
   ResolvedMigrationStatement,
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
@@ -41,6 +41,7 @@ import {
   type SnapshotContentVerifier,
 } from '@internal/migration-tools/contract-snapshot-store';
 import { MigrationToolsError } from '@internal/migration-tools/errors';
+import type { NamedRef } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
@@ -55,6 +56,7 @@ import {
 } from '../../utils/extension-path-failure';
 import { dbUpdateKeepDataEditAdvice } from '../../utils/keep-data-edit-advice';
 import { planningRefusedError } from '../../utils/planning-refused-error';
+import { declaredSettingsText } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
 import {
   type AnswerPlanQuestions,
@@ -84,7 +86,6 @@ import type {
   OnControlProgress,
   PerSpaceExecutionEntry,
   PlannerWarningsListener,
-  TargetRef,
 } from '../types';
 import {
   type ChangedStorageEntity,
@@ -96,10 +97,9 @@ import {
   buildContractSpaceAggregate,
 } from './contract-space-aggregate-loader';
 import {
+  type CheckedDatabasePolicies,
   checkRunPolicies,
-  type PoliciesToWrite,
-  policiesInForce,
-  writtenSettingsText,
+  databasePoliciesInForce,
 } from './database-policies';
 import { stripOperations } from './migration-helpers';
 import { structuralPathOf } from './no-invariant-path';
@@ -172,7 +172,7 @@ export type ExecuteRunOptions<
         readonly answerQuestions: AnswerPlanQuestions;
         readonly acceptDataLoss: boolean;
         readonly acceptAccessChanges: boolean;
-        readonly ref?: TargetRef;
+        readonly ref?: NamedRef;
         readonly permitPolicyChange: boolean;
       }
   );
@@ -235,14 +235,19 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
   const markerRows = await familyInstance.readAllMarkers({ driver });
 
   // 2c. The database's policies decide whether `db update` may move it, before anything is planned.
-  let policiesToWrite: PoliciesToWrite | undefined;
+  let checkedPolicies: CheckedDatabasePolicies | undefined;
   if (options.action === 'dbUpdate') {
+    if (options.ref !== undefined && options.ref.hash !== contract.storage.storageHash) {
+      throw new InternalError(
+        `db update was given ref "${options.ref.name}" at ${options.ref.hash}, but reconciles to ${contract.storage.storageHash}; the ref and the contract must name the same contract.`,
+      );
+    }
     const checked = checkRunPolicies({
       command: 'db update',
       appSpaceId: aggregate.app.spaceId,
-      inForce: policiesInForce(
+      inForce: databasePoliciesInForce(
         markerRows,
-        [aggregate.app, ...aggregate.extensions].map(({ spaceId }) => spaceId),
+        aggregate.app.spaceId,
         familyInstance.markerLocation,
       ),
       ref: options.ref,
@@ -253,8 +258,9 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     if (!checked.ok) {
       return notOk(checked.failure);
     }
-    policiesToWrite = checked.value;
+    checkedPolicies = checked.value;
   }
+  const policiesToWrite = checkedPolicies?.toWrite;
 
   // 2b. The application space's origin is the contract its marker names, read from the snapshot
   // store. The planner names each subject it would lose through it, and rename statements resolve
@@ -543,6 +549,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     frameworkComponents,
     policy,
     ...ifDefined('databasePolicies', policiesToWrite?.policies),
+    ...ifDefined('expectedDatabasePolicies', checkedPolicies?.inForce),
     action,
     ...ifDefined('onProgress', onProgress),
   });
@@ -574,7 +581,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
   const summary =
     policiesToWrite === undefined
       ? runSummary
-      : `${runSummary}; policies updated: ${writtenSettingsText(policiesToWrite.differences)}`;
+      : `${runSummary}; policies updated: ${declaredSettingsText(policiesToWrite.differences)}`;
 
   return wrapApplyResult({
     operations: aggregateOps,
@@ -589,7 +596,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     changedStorageEntities: signedWithoutOperations
       ? changedStorageEntities(fromContract, contract)
       : undefined,
-    policiesUpdated: policiesToWrite?.differences,
+    databasePoliciesUpdated: policiesToWrite?.differences,
   });
 }
 
@@ -853,11 +860,11 @@ function wrapApplyResult(args: {
   readonly databaseStorageHash: string | undefined;
   /** Set when `db update` signed the database with a changed contract and ran no operation. */
   readonly changedStorageEntities: readonly ChangedStorageEntity[] | undefined;
-  readonly policiesUpdated: readonly PolicyDifference[] | undefined;
+  readonly databasePoliciesUpdated: readonly DatabasePolicyDifference[] | undefined;
 }): DbInitResult | DbUpdateResult {
   const success: DbInitSuccess | DbUpdateSuccess = {
     mode: 'apply',
-    ...ifDefined('policiesUpdated', args.policiesUpdated),
+    ...ifDefined('databasePoliciesUpdated', args.databasePoliciesUpdated),
     ...ifDefined('databaseStorageHash', args.databaseStorageHash),
     ...ifDefined('changedStorageEntities', args.changedStorageEntities),
     ...ifDefined('appliedStatements', args.appliedStatements),

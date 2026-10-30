@@ -332,11 +332,23 @@ describe('db update --to bundle resolution', () => {
     );
 
     expect(
-      mocks.dbUpdate.mock.calls.map(([options]) => [options.ref, options.permitPolicyChange]),
+      mocks.dbUpdate.mock.calls.map(([options]) => [
+        options.ref,
+        options.permitPolicyChange,
+        options.invocation.rerunArgs,
+      ]),
     ).toEqual([
-      [{ name: 'production', hash: HASH_B, invariants: [], policies }, undefined],
-      [undefined, undefined],
-      [{ name: 'production', hash: HASH_B, invariants: [], policies }, true],
+      [
+        { name: 'production', hash: HASH_B, invariants: [], policies },
+        undefined,
+        ['--to', 'production'],
+      ],
+      [undefined, undefined, ['--to', dirNext]],
+      [
+        { name: 'production', hash: HASH_B, invariants: [], policies },
+        true,
+        ['--to', 'production', '--permit-policy-change'],
+      ],
     ]);
   });
 });

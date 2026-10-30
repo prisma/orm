@@ -1,25 +1,26 @@
 import { rm } from 'node:fs/promises';
 import type { Contract, ContractMarkerRecord } from '@internal/contract/types';
-import type {
-  ControlDriverInstance,
-  ControlFamilyInstance,
-  DatabasePolicies,
-  MigrationPlanOperation,
-  MigrationRunner,
-  MigrationRunnerPerSpaceOptions,
-  TargetMigrationsCapability,
+import {
+  type ControlDriverInstance,
+  type ControlFamilyInstance,
+  type DatabasePolicies,
+  DEFAULT_DATABASE_POLICIES,
+  type MigrationPlanOperation,
+  type MigrationRunner,
+  type MigrationRunnerPerSpaceOptions,
+  type TargetMigrationsCapability,
 } from '@internal/framework-components/control';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
+import type { NamedRef } from '@internal/migration-tools/refs';
 import { blindCast } from '@internal/utils/casts';
 import { ok } from '@internal/utils/result';
 import { createSqlContract } from '@repo/test-utils';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import { executeMigrate } from '../../src/control-api/operations/migrate';
-import type { TargetRef } from '../../src/control-api/types';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const APP_CONTRACT: Contract = createSqlContract();
@@ -121,7 +122,7 @@ function recordingMigrations() {
 
 async function migrate(args: {
   readonly markers: ReadonlyMap<string, ContractMarkerRecord>;
-  readonly ref?: TargetRef;
+  readonly ref?: NamedRef;
   readonly permitPolicyChange?: boolean;
 }) {
   const migrationsDir = await migrationsDirWithOneAppEdge();
@@ -147,7 +148,7 @@ async function migrate(args: {
   return { result, runnerCalls };
 }
 
-const PRODUCTION: TargetRef = {
+const PRODUCTION: NamedRef = {
   name: 'production',
   hash: APP_HEAD,
   invariants: [],
@@ -178,17 +179,22 @@ describe('executeMigrate, database policies', () => {
       permitPolicyChange: true,
     });
 
-    expect(runnerCalls.map((call) => call.map((o) => [o.space, o.databasePolicies]))).toEqual([
-      [['app', MIGRATE_ONLY_WRITTEN]],
-    ]);
+    expect(
+      runnerCalls.map((call) =>
+        call.map((o) => [o.space, o.databasePolicies, o.expectedDatabasePolicies]),
+      ),
+    ).toEqual([[['app', MIGRATE_ONLY_WRITTEN, DEFAULT_DATABASE_POLICIES]]]);
     expect(
       result.ok
-        ? { summary: result.value.summary, policiesUpdated: result.value.policiesUpdated }
+        ? {
+            summary: result.value.summary,
+            databasePoliciesUpdated: result.value.databasePoliciesUpdated,
+          }
         : result.failure,
     ).toEqual({
       summary:
         'Applied 1 migration(s) (1 operation(s)) across 1 contract space(s); policies updated: change: migrate',
-      policiesUpdated: [CHANGE_DIFFERENCE],
+      databasePoliciesUpdated: [CHANGE_DIFFERENCE],
     });
   });
 
@@ -216,13 +222,13 @@ describe('executeMigrate, database policies', () => {
         ? {
             summary: result.value.summary,
             migrationsApplied: result.value.migrationsApplied,
-            policiesUpdated: result.value.policiesUpdated,
+            databasePoliciesUpdated: result.value.databasePoliciesUpdated,
           }
         : result.failure,
     ).toEqual({
       summary: 'Policies updated: change: migrate',
       migrationsApplied: 0,
-      policiesUpdated: [CHANGE_DIFFERENCE],
+      databasePoliciesUpdated: [CHANGE_DIFFERENCE],
     });
   });
 
@@ -265,14 +271,19 @@ describe('executeMigrate, database policies', () => {
       permitPolicyChange: true,
     });
 
-    expect(result.ok ? undefined : result.failure.code).toBe('MIGRATION.CHANGE_POLICY_FORBIDS');
+    expect(result.ok ? undefined : result.failure.toEnvelope()).toMatchObject({
+      code: 'MIGRATION.CHANGE_POLICY_FORBIDS',
+      why: 'production declares change: reconcile, so db migrate may not move it.',
+      meta: { change: ['reconcile'] },
+    });
   });
 
-  it('reports a marker whose policies are not valid as an unreadable marker of its space', async () => {
+  it('reports a marker whose policies are not valid as a corrupt marker row of the application space', async () => {
     await expect(
       migrate({ markers: new Map([['app', markerAt(APP_HEAD, { policies: 'strict' })]]) }),
     ).rejects.toMatchObject({
-      code: 'CONTRACT.MARKER_READ_FAILED',
+      code: 'CONTRACT.MARKER_ROW_CORRUPT',
+      why: expect.stringContaining("The marker's meta.policies is not a valid policy declaration"),
       meta: { space: 'app' },
     });
   });

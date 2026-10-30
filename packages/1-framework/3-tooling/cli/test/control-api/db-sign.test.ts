@@ -5,6 +5,7 @@ import type {
   SpaceSignature,
   SpaceToSign,
 } from '@internal/framework-components/control';
+import { DEFAULT_DATABASE_POLICIES } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   createAggregateContractSpace,
@@ -104,6 +105,8 @@ function familySigning(
 
 const driver = blindCast<ControlDriverInstance<string, string>, 'never queried'>({});
 
+const INVOCATION = { cwd: '/work/app', configPath: 'config/prisma.config.ts', dbGiven: true };
+
 function signedEverySpace(spaces: readonly SpaceToSign[]): SpaceSignature[] {
   return spaces.map(({ space: spaceId, contract }) => ({
     status: 'created',
@@ -121,6 +124,7 @@ describe('signContractSpaces', () => {
       familyInstance: family.familyInstance,
       aggregate,
       frameworkComponents: [],
+      invocation: INVOCATION,
     });
 
     expect(family.calls).toEqual(['readAllMarkers', 'introspect', 'signSpaces']);
@@ -131,6 +135,7 @@ describe('signContractSpaces', () => {
           space: 'app',
           contract: appContract,
           expected: { storageHash: 'old-app', profileHash: 'old-app-profile' },
+          expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
         },
       ],
     ]);
@@ -156,6 +161,7 @@ describe('signContractSpaces', () => {
       familyInstance: family.familyInstance,
       aggregate,
       frameworkComponents: [],
+      invocation: INVOCATION,
     });
 
     expect(result.assertOk().spaces).toEqual([
@@ -188,6 +194,7 @@ describe('signContractSpaces', () => {
       familyInstance: family.familyInstance,
       aggregate,
       frameworkComponents: [],
+      invocation: INVOCATION,
     });
 
     expect(result.assertOk().spaces[1]).toMatchObject({
@@ -212,11 +219,19 @@ describe('signContractSpaces', () => {
       familyInstance: family.familyInstance,
       aggregate,
       frameworkComponents: [],
+      invocation: INVOCATION,
     });
 
     expect(result.ok ? undefined : result.failure.toEnvelope()).toMatchObject({
       code: 'MIGRATION.CHANGE_POLICY_FORBIDS',
       why: 'The marker records change: migrate, so db sign may not move it.',
+      nextActions: [
+        {
+          kind: 'user-choice',
+          label:
+            'Author a migration with {bin} migration plan --config config/prisma.config.ts, then deploy it.',
+        },
+      ],
       meta: { spaceId: 'app', command: 'db sign', change: ['migrate'] },
     });
     expect(family.calls).toEqual(['readAllMarkers']);
@@ -230,6 +245,7 @@ describe('signContractSpaces', () => {
       familyInstance: family.familyInstance,
       aggregate,
       frameworkComponents: [],
+      invocation: INVOCATION,
     });
 
     expect(result.ok).toBe(true);
@@ -261,6 +277,7 @@ describe('signContractSpaces with invariants the head ref requires', () => {
       familyInstance: family.familyInstance,
       aggregate: aggregateWith(space('pgvector', extContract, [INSTALL_VECTOR])),
       frameworkComponents: [],
+      invocation: INVOCATION,
     });
 
     expect(family.signed.flat().map((toSign) => toSign.space)).toEqual(['app']);
@@ -283,6 +300,7 @@ describe('signContractSpaces with invariants the head ref requires', () => {
       familyInstance: family.familyInstance,
       aggregate: aggregateWith(space('pgvector', extContract, [INSTALL_VECTOR])),
       frameworkComponents: [],
+      invocation: INVOCATION,
     });
 
     expect(family.signed.flat().map((toSign) => toSign.space)).toEqual(['app']);
@@ -305,6 +323,7 @@ describe('signContractSpaces with invariants the head ref requires', () => {
       familyInstance: family.familyInstance,
       aggregate: aggregateWith(space('pgvector', extContract, [INSTALL_VECTOR])),
       frameworkComponents: [],
+      invocation: INVOCATION,
     });
 
     expect(family.signed).toEqual([
@@ -331,6 +350,7 @@ describe('signContractSpaces with invariants the head ref requires', () => {
       familyInstance: family.familyInstance,
       aggregate,
       frameworkComponents: [],
+      invocation: INVOCATION,
     });
 
     expect(family.calls).toContain('signSpaces');
@@ -348,6 +368,7 @@ describe('signContractSpaces with invariants the head ref requires', () => {
       familyInstance: family.familyInstance,
       aggregate: aggregateWith(space('pgvector', extContract, [INSTALL_VECTOR])),
       frameworkComponents: [],
+      invocation: INVOCATION,
     });
 
     expect(family.signed).toEqual([
@@ -356,6 +377,7 @@ describe('signContractSpaces with invariants the head ref requires', () => {
           space: 'app',
           contract: appContract,
           expected: { storageHash: 'old-app', profileHash: 'old-app-profile' },
+          expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
         },
       ],
     ]);
@@ -388,6 +410,7 @@ describe('signContractSpaces with invariants the head ref requires', () => {
       familyInstance: family.familyInstance,
       aggregate: aggregateWith(space('pgvector', extContract, [INSTALL_VECTOR])),
       frameworkComponents: [],
+      invocation: INVOCATION,
     });
 
     expect(result.assertOk().spaces.map((outcome) => outcome.status)).toEqual([
@@ -404,6 +427,7 @@ describe('signContractSpaces with invariants the head ref requires', () => {
       familyInstance: family.familyInstance,
       aggregate: aggregateWith(space('pgvector', extContract, [INSTALL_VECTOR])),
       frameworkComponents: [],
+      invocation: INVOCATION,
     });
 
     expect(result.assertOk().spaces[1]).toEqual({
@@ -433,6 +457,7 @@ describe('signContractSpaces with invariants the head ref requires', () => {
       familyInstance: family.familyInstance,
       aggregate: aggregateWith(space('pgvector', extContract, [INSTALL_VECTOR])),
       frameworkComponents: [],
+      invocation: INVOCATION,
     });
 
     expect(result.assertOk().spaces[1]).not.toHaveProperty('schema');

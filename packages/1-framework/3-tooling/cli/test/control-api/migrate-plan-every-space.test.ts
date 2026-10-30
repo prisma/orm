@@ -1,8 +1,5 @@
 import type { Contract, LedgerEntryRecord } from '@internal/contract/types';
-import {
-  DEFAULT_POLICIES,
-  type MigrationPlanOperation,
-} from '@internal/framework-components/control';
+import type { MigrationPlanOperation } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { createAggregateContractSpace } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
@@ -106,7 +103,7 @@ function planned(args: {
     migrationsDir: '/work/app/migrations',
     invocation,
     readLedger: args.readLedger ?? (async () => []),
-    policiesInForce: new Map(),
+    change: ['migrate', 'reconcile'],
   });
 }
 
@@ -267,7 +264,7 @@ describe('planEverySpace', () => {
       migrationsDir: '/work/app/migrations',
       invocation,
       readLedger: async () => [],
-      policiesInForce: new Map([['app', { ...DEFAULT_POLICIES, change: ['migrate'] }]]),
+      change: ['migrate'],
     });
 
     expect(result.ok ? undefined : result.failure.toEnvelope()).toMatchObject({

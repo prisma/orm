@@ -17,7 +17,7 @@ import {
   parseContractRef,
   type RefResolutionWrongGrammar,
 } from '@internal/migration-tools/ref-resolution';
-import type { RefEntry } from '@internal/migration-tools/refs';
+import type { NamedRef } from '@internal/migration-tools/refs';
 import { blindCast, castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
@@ -69,7 +69,7 @@ export interface ResolveContractRefToSnapshotSuccess {
   readonly contractJsonPath: string;
   readonly source: 'snapshot' | 'emitted';
   /** The ref the input named, with everything it declares; absent when the input named no ref. */
-  readonly ref?: { readonly name: string } & RefEntry;
+  readonly ref?: NamedRef;
 }
 
 function reservedRefRefusal(

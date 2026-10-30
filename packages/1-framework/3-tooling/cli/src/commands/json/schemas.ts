@@ -1,3 +1,8 @@
+import {
+  ACCESS_WIDENING_LEVELS,
+  CHANGE_STRATEGIES,
+  DATA_LOSS_LEVELS,
+} from '@internal/framework-components/control';
 import { type } from 'arktype';
 
 export const migrationEntrySchema = type({
@@ -112,17 +117,21 @@ export const migrationStatusSpaceSchema = type({
 
 export type MigrationStatusSpace = typeof migrationStatusSpaceSchema.infer;
 
+const changeStrategies = type.enumerated(...CHANGE_STRATEGIES).array();
+const dataLossLevel = type.enumerated(...DATA_LOSS_LEVELS);
+const accessWideningLevel = type.enumerated(...ACCESS_WIDENING_LEVELS);
+
 const policyDifferenceSchema = type({
   setting: '"change"',
-  declared: 'string[]',
-  inForce: 'string[]',
-}).or(
-  type({
-    setting: '"dataLoss" | "accessWidening"',
-    declared: 'string',
-    inForce: 'string',
-  }),
-);
+  declared: changeStrategies,
+  inForce: changeStrategies,
+})
+  .or({ setting: '"dataProtection.dataLoss"', declared: dataLossLevel, inForce: dataLossLevel })
+  .or({
+    setting: '"dataProtection.accessWidening"',
+    declared: accessWideningLevel,
+    inForce: accessWideningLevel,
+  });
 
 export const migrationStatusJsonResultSchema = successEnvelopeBaseSchema.and(
   type({

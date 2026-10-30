@@ -7,11 +7,12 @@ import type {
   MigrationRunnerResult,
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
+import type { NamedRef } from '@internal/migration-tools/refs';
+import { isInternalError } from '@internal/utils/internal-error';
 import { ok } from '@internal/utils/result';
 import { describe, expect, it, vi } from 'vitest';
 import { executeDbUpdate } from '../../src/control-api/operations/db-update';
 import type { PlanQuestion } from '../../src/control-api/statements/plan-questions';
-import type { TargetRef } from '../../src/control-api/types';
 
 const TEST_INVOCATION = { cwd: '/work/app', configPath: undefined, dbGiven: false };
 
@@ -129,7 +130,7 @@ const MIGRATE_ONLY = { policies: { change: ['migrate'] } };
 function update(args: {
   readonly mode: 'plan' | 'apply';
   readonly markers: ReadonlyMap<string, ContractMarkerRecord>;
-  readonly ref?: TargetRef;
+  readonly ref?: NamedRef;
   readonly permitPolicyChange?: boolean;
   readonly executeSpy?: ReturnType<typeof vi.fn>;
 }) {
@@ -221,14 +222,17 @@ describe('executeDbUpdate, database policies', () => {
 
     expect(
       result.ok
-        ? { summary: result.value.summary, policiesUpdated: result.value.policiesUpdated }
+        ? {
+            summary: result.value.summary,
+            databasePoliciesUpdated: result.value.databasePoliciesUpdated,
+          }
         : result.failure,
     ).toEqual({
       summary:
-        'Applied 1 operation(s) across 1 space(s), signature updated; policies updated: dataLoss: data-loss-permitted',
-      policiesUpdated: [
+        'Applied 1 operation(s) across 1 space(s), signature updated; policies updated: dataProtection.dataLoss: data-loss-permitted',
+      databasePoliciesUpdated: [
         {
-          setting: 'dataLoss',
+          setting: 'dataProtection.dataLoss',
           declared: 'data-loss-permitted',
           inForce: 'data-loss-with-consent',
         },
@@ -252,6 +256,16 @@ describe('executeDbUpdate, database policies', () => {
     const result = await update({ mode: 'apply', markers: new Map(), executeSpy: execute });
 
     expect(execute.mock.calls[0]?.[0].perSpaceOptions[0]).not.toHaveProperty('databasePolicies');
-    expect(result.ok ? result.value : result.failure).not.toHaveProperty('policiesUpdated');
+    expect(result.ok ? result.value : result.failure).not.toHaveProperty('databasePoliciesUpdated');
+  });
+
+  it('fails as an internal error when the ref names another contract than the one it reconciles to', async () => {
+    await expect(
+      update({
+        mode: 'plan',
+        markers: new Map(),
+        ref: { name: 'dev', hash: 'elsewhere', invariants: [] },
+      }),
+    ).rejects.toSatisfy(isInternalError);
   });
 });

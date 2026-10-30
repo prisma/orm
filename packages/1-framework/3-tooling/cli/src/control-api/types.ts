@@ -14,6 +14,7 @@ import type {
   ControlFamilyDescriptor,
   ControlTargetDescriptor,
   CoreSchemaView,
+  DatabasePolicyDifference,
   FailedCast,
   FailedConversion,
   FailedTypeChange,
@@ -26,14 +27,13 @@ import type {
   MigrationPlanOperation,
   MigrationPlanSubjects,
   OperationPreview,
-  PolicyDifference,
   RowsFailingCheck,
   VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
 import type { AggregateMigrationEdgeRef } from '@internal/migration-tools/aggregate';
-import type { RefEntry } from '@internal/migration-tools/refs';
+import type { NamedRef } from '@internal/migration-tools/refs';
 import type { Result } from '@internal/utils/result';
 import type { CliStructuredError } from '../utils/cli-errors';
 import type { CliInvocation } from '../utils/printed-command';
@@ -244,11 +244,10 @@ export interface DbUpdateOptions extends PlannerWarningsListener {
   /** Consents to every operation that would change who can read or write data, without asking. */
   readonly acceptAccessChanges?: boolean;
   /**
-   * The application space's target, when `--to` named one: its hash, the invariants a path must
-   * provide and, for a ref, its name and the policies it declares. Without it the application space
-   * walks to the emitted contract. Extension spaces always walk to their own head.
+   * The ref `--to` named, whose declared policies the run checks and, with consent, records. The
+   * database moves to `contract`, so the ref's hash must be that contract's storage hash.
    */
-  readonly ref?: TargetRef;
+  readonly ref?: NamedRef;
   /** Consents to writing the ref's declared policies into the database when they differ from those in force. */
   readonly permitPolicyChange?: boolean;
   /**
@@ -313,6 +312,8 @@ export interface DbVerifyOptions {
 export interface DbSignOptions {
   /** The app space's contract, already deserialized through the family seam. */
   readonly contract: Contract;
+  /** The command line the advice of a refusal repeats: its directory, `--config` and whether `--db` was given. */
+  readonly invocation: CliInvocation;
   readonly migrationsDir: string;
   readonly connection?: unknown;
   readonly onProgress?: OnControlProgress;
@@ -513,7 +514,7 @@ export interface DbUpdateSuccess
   readonly changedStorageEntities?: readonly ChangedStorageEntity[];
   readonly summary: string;
   /** The settings the run recorded as the database's policies, with the values they replaced. Present only when it recorded some. */
-  readonly policiesUpdated?: readonly PolicyDifference[];
+  readonly databasePoliciesUpdated?: readonly DatabasePolicyDifference[];
 }
 
 /**
@@ -636,12 +637,6 @@ export type EmitResult = Result<EmitSuccess, EmitFailure>;
 // ============================================================================
 
 /**
- * A target `--to` named: a ref carries its `name`, and the policies it declares; a contract hash or
- * the database's own contract carries neither.
- */
-export type TargetRef = { readonly name?: string } & RefEntry;
-
-/**
  * Options for the aggregate-walking `migrate` operation.
  *
  * The control-api operation is responsible for: loading the
@@ -660,11 +655,16 @@ export interface MigrateOptions {
   /** Migrations root directory (`migrations/` under the project). */
   readonly migrationsDir: string;
   /**
-   * The application space's target, when `--to` named one: its hash, the invariants a path must
-   * provide and, for a ref, its name and the policies it declares. Without it the application space
-   * walks to the emitted contract. Extension spaces always walk to their own head.
+   * The ref `--to` named: the application space walks to its hash, by a path that provides its
+   * invariants, and the run checks and, with consent, records the policies it declares.
    */
-  readonly ref?: TargetRef;
+  readonly ref?: NamedRef;
+  /**
+   * The application space's target when `--to` named a contract rather than a ref: a hash, `@db`
+   * or `@empty`. Without it or `ref` the application space walks to the emitted contract. Extension
+   * spaces always walk to their own head.
+   */
+  readonly targetHash?: string;
   /** Consents to writing the ref's declared policies into the database when they differ from those in force. */
   readonly permitPolicyChange?: boolean;
   /**
@@ -772,7 +772,7 @@ export interface MigrateSuccess {
    */
   readonly pathDecision?: MigratePathDecision;
   /** The settings the run recorded as the database's policies, with the values they replaced. Present only when it recorded some. */
-  readonly policiesUpdated?: readonly PolicyDifference[];
+  readonly databasePoliciesUpdated?: readonly DatabasePolicyDifference[];
 }
 
 /** The result of `db migrate`: a failure is the structured error the command reports. */

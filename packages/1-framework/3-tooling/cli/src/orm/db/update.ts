@@ -224,7 +224,7 @@ function updateDocument(inputs: {
         }),
     ...ifDefined('perSpace', value.perSpace),
     ...ifDefined('changedStorageEntities', value.changedStorageEntities),
-    ...ifDefined('policiesUpdated', value.policiesUpdated),
+    ...ifDefined('databasePoliciesUpdated', value.databasePoliciesUpdated),
     appliedStatements: value.appliedStatements,
     temporaryValues: value.temporaryValues,
     ...(value.mode === 'plan'
@@ -401,6 +401,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           ...(args.flags.advanceRef === undefined
             ? []
             : ['--advance-ref', shellQuoted(args.flags.advanceRef)]),
+          ...(args.flags.permitPolicyChange === true ? ['--permit-policy-change'] : []),
           ...statementArgs,
         ];
         const result = await client.dbUpdate({

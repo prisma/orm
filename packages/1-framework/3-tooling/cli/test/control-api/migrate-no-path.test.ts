@@ -120,7 +120,7 @@ function migrate(args: {
     migrationsDir: join(args.projectDir, 'migrations'),
     extensions: [],
     targetId: 'postgres',
-    ...(args.refHash === undefined ? {} : { ref: { hash: args.refHash, invariants: [] } }),
+    ...(args.refHash === undefined ? {} : { targetHash: args.refHash }),
   });
 }
 

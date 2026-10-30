@@ -9,6 +9,8 @@ import {
   type FixtureControlClient,
 } from '../../../src/control-api/testing/fixture-client';
 
+const INVOCATION = { cwd: '/work/app', configPath: undefined, dbGiven: false };
+
 const TEST_INVOCATION = { cwd: '/work/app', configPath: undefined, dbGiven: false };
 
 describe('createFixtureControlClient', () => {
@@ -56,7 +58,11 @@ describe('createFixtureControlClient', () => {
     });
     expect(dbVerify.assertOk().appSpaceId).toBe(APP_SPACE_ID);
 
-    const dbSign = await client.dbSign({ contract: {} as never, migrationsDir: 'migrations' });
+    const dbSign = await client.dbSign({
+      contract: {} as never,
+      migrationsDir: 'migrations',
+      invocation: INVOCATION,
+    });
     expect(dbSign.assertOk().spaces).toMatchObject([{ space: APP_SPACE_ID, status: 'created' }]);
 
     const marker = await client.readMarker();
@@ -167,7 +173,11 @@ describe('createFixtureControlClient', () => {
     > = [
       ['verify', (c) => c.verify({ contract: {} })],
       ['schemaVerify', (c) => c.schemaVerify({ contract: {} })],
-      ['dbSign', (c) => c.dbSign({ contract: {} as never, migrationsDir: 'migrations' })],
+      [
+        'dbSign',
+        (c) =>
+          c.dbSign({ contract: {} as never, migrationsDir: 'migrations', invocation: INVOCATION }),
+      ],
       [
         'dbInit',
         (c) =>

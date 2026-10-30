@@ -11,6 +11,7 @@ import type {
   FailedTypeChange,
   MigrationOperationPolicy,
   MigrationRunnerFailure,
+  MigrationRunnerPerSpaceOptions,
   MigrationSubject,
   RowsFailingCheck,
   RowsHoldingValue,
@@ -209,6 +210,8 @@ export interface RunMigrationInputs<TFamilyId extends string, TTargetId extends 
   readonly policy: MigrationOperationPolicy;
   /** When set, the application space's marker update records these as the database's policies. */
   readonly databasePolicies?: DatabasePolicies;
+  /** The database's policies as the caller checked them; the runner fails the run as a concurrent change when the marker no longer records them. */
+  readonly expectedDatabasePolicies?: DatabasePolicies;
   readonly action: RunAction;
   readonly onProgress?: OnControlProgress;
 }
@@ -267,9 +270,17 @@ export async function runMigration<TFamilyId extends string, TTargetId extends s
     frameworkComponents,
     policy,
     databasePolicies,
+    expectedDatabasePolicies,
     action,
     onProgress,
   } = inputs;
+  const appSpacePolicies: Pick<
+    MigrationRunnerPerSpaceOptions,
+    'databasePolicies' | 'expectedDatabasePolicies'
+  > = {
+    ...ifDefined('databasePolicies', databasePolicies),
+    ...ifDefined('expectedDatabasePolicies', expectedDatabasePolicies),
+  };
 
   const orderedResolutions = collectOrdered(applyOrder, perSpacePlans);
 
@@ -288,10 +299,7 @@ export async function runMigration<TFamilyId extends string, TTargetId extends s
     driver,
     destinationContract: r.entry.destinationContract,
     policy,
-    ...ifDefined(
-      'databasePolicies',
-      r.spaceId === aggregate.app.spaceId ? databasePolicies : undefined,
-    ),
+    ...(r.spaceId === aggregate.app.spaceId ? appSpacePolicies : {}),
     frameworkComponents,
     migrationEdges: r.entry.migrationEdges,
     // Per-space post-apply schema verification is non-strict: each

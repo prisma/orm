@@ -601,6 +601,7 @@ export function createDbSignCommand(
         const signed = await client.dbSign({
           contract,
           migrationsDir,
+          invocation: cliInvocation(ctx, args.flags.db),
           connection: dbConnection,
           onProgress: controlProgressReporter(ctx.report),
         });

@@ -487,6 +487,7 @@ class ControlClientImpl implements ControlClient {
       targetId: this.options.target.targetId,
       extensions: this.options.extensions ?? [],
       frameworkComponents,
+      invocation: options.invocation,
       ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),
     });
@@ -546,6 +547,7 @@ class ControlClientImpl implements ControlClient {
       extensions: this.options.extensions ?? [],
       targetId: this.options.target.targetId,
       ...ifDefined('ref', options.ref),
+      ...ifDefined('targetHash', options.targetHash),
       ...ifDefined('permitPolicyChange', options.permitPolicyChange),
       ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),

@@ -3,7 +3,7 @@
  */
 
 import type { PrismaNextConfig } from '@internal/config/config-types';
-import type { DeclaredPolicies } from '@internal/framework-components/control';
+import type { DeclaredDatabasePolicies } from '@internal/framework-components/control';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import {
   contractSnapshotDir,
@@ -42,7 +42,7 @@ export interface RefSetResult {
   readonly ref: string;
   readonly hash: string;
   readonly invariants: readonly string[];
-  readonly policies?: DeclaredPolicies;
+  readonly policies?: DeclaredDatabasePolicies;
 }
 
 export interface RefDeleteResult {

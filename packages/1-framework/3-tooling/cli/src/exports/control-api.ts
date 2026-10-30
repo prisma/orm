@@ -181,7 +181,6 @@ export type {
   IntrospectOptions,
   OnControlProgress,
   SchemaVerifyOptions,
-  TargetRef,
   VerifyOptions,
 } from '../control-api/types';
 // Lifecycle helpers for hosts that publish to many output paths

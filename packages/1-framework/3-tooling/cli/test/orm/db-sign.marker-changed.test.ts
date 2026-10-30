@@ -177,4 +177,13 @@ describe('db sign when a marker changes while it runs', () => {
 
     expect(`${run.stdout}${run.stderr}`).toContain('or its marker changed while db sign ran');
   });
+
+  it('hands the control client the invocation, so a refusal repeats the --db the user gave', async () => {
+    const dir = await projectDir();
+    mocks.dbSign.mockResolvedValue(ok({ spaces: [signedSpace('app', HASH_A)] }));
+
+    await harness(ormConfig()).run(['db', 'sign', '--db', CONNECTION, '--json'], { cwd: dir });
+
+    expect(mocks.dbSign.mock.calls[0]?.[0].invocation).toMatchObject({ dbGiven: true });
+  });
 });

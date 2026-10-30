@@ -1,6 +1,9 @@
 import { ormConfigSection } from '@internal/config-loader';
 import type { Contract } from '@internal/contract/types';
-import { createControlStack, type PolicyDifference } from '@internal/framework-components/control';
+import {
+  createControlStack,
+  type DatabasePolicyDifference,
+} from '@internal/framework-components/control';
 import { contractHashAtMarker } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
@@ -20,7 +23,7 @@ import {
   loadContractSpaceAggregateForCli,
   refuseContractSpaceIntegrity,
 } from '../control-api/operations/contract-space-aggregate-loader';
-import { checkRunPolicies, policiesInForce } from '../control-api/operations/database-policies';
+import { databasePoliciesInForce } from '../control-api/operations/database-policies';
 import { refuseUnknownInvariants } from '../control-api/operations/invariants';
 import { planEverySpace } from '../control-api/operations/migrate';
 import {
@@ -92,7 +95,7 @@ interface MigrateDocument {
   readonly pathDecision?: MigratePathDecision;
   readonly timings: { readonly total: number };
   readonly advancedRef?: { readonly name: string; readonly hash: string } | null;
-  readonly policiesUpdated?: readonly PolicyDifference[];
+  readonly databasePoliciesUpdated?: readonly DatabasePolicyDifference[];
 }
 
 function statusAction(invocation: CliInvocation): NextAction {
@@ -296,6 +299,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           ...ifDefined('db', args.flags.db),
           ...ifDefined('to', args.flags.to),
           ...ifDefined('from', args.flags.from),
+          ...(args.flags.permitPolicyChange === true ? { permitPolicyChange: true } : {}),
         });
         if (!planned.ok) {
           return notOk(normalizeError(planned.failure));
@@ -417,28 +421,12 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           offlineTarget === undefined ? liveMarkerTarget(appMarker) : offlineTarget.value;
 
         const refEntry = target.entry;
-        const ref =
-          refEntry === undefined
-            ? undefined
-            : { ...refEntry, ...ifDefined('name', target.refName) };
         const permitPolicyChange = args.flags.permitPolicyChange === true;
-        const inForce = policiesInForce(
+        const inForce = databasePoliciesInForce(
           markers,
-          [aggregate.app, ...aggregate.extensions].map(({ spaceId }) => spaceId),
+          aggregate.app.spaceId,
           familyInstance.markerLocation,
         );
-        const checkedPolicies = checkRunPolicies({
-          command: 'db migrate',
-          appSpaceId: aggregate.app.spaceId,
-          inForce,
-          ref,
-          permitPolicyChange,
-          targetHash: refEntry?.hash ?? appContract.storage.storageHash,
-          invocation: cliInvocation(ctx, args.flags.db),
-        });
-        if (!checkedPolicies.ok) {
-          return notOk(normalizeError(checkedPolicies.failure));
-        }
         const planned = await planEverySpace({
           aggregate,
           markers,
@@ -451,7 +439,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           migrationsDir,
           invocation: cliInvocation(ctx, args.flags.db),
           readLedger: (spaceId) => client.readLedger(spaceId),
-          policiesInForce: inForce,
+          change: inForce.change,
         });
         if (!planned.ok) {
           return notOk(normalizeError(planned.failure));
@@ -528,10 +516,13 @@ export function createMigrateCommand(createClient: CreateControlClient) {
               ...(args.flags.advanceRef === undefined
                 ? []
                 : ['--advance-ref', shellQuoted(args.flags.advanceRef)]),
+              ...(permitPolicyChange ? ['--permit-policy-change'] : []),
             ],
           },
           onProgress: controlProgressReporter(ctx.report),
-          ...ifDefined('ref', ref),
+          ...(target.refName === undefined || refEntry === undefined
+            ? ifDefined('targetHash', refEntry?.hash)
+            : { ref: { name: target.refName, ...refEntry } }),
           ...(permitPolicyChange ? { permitPolicyChange } : {}),
         });
         if (!applied.ok) {
@@ -565,7 +556,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           ...ifDefined('pathDecision', value.pathDecision),
           timings: { total: Date.now() - startedAt },
           advancedRef,
-          ...ifDefined('policiesUpdated', value.policiesUpdated),
+          ...ifDefined('databasePoliciesUpdated', value.databasePoliciesUpdated),
         };
       } catch (error) {
         return notOk(

@@ -1,47 +1,72 @@
-import { DEFAULT_POLICIES } from '@internal/framework-components/control';
+import {
+  type DatabasePolicies,
+  DEFAULT_DATABASE_POLICIES,
+} from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import { checkRunPolicies } from '../../src/control-api/operations/database-policies';
 
 const TARGET = 'b'.repeat(64);
 
+function check(args: {
+  readonly command: 'db update' | 'db migrate';
+  readonly inForce: DatabasePolicies;
+  readonly declared?: { readonly change: readonly ('migrate' | 'reconcile')[] };
+  readonly permitPolicyChange: boolean;
+}) {
+  return checkRunPolicies({
+    command: args.command,
+    appSpaceId: 'app',
+    inForce: args.inForce,
+    ref:
+      args.declared === undefined
+        ? undefined
+        : { name: 'production', hash: TARGET, invariants: [], policies: args.declared },
+    permitPolicyChange: args.permitPolicyChange,
+    targetHash: TARGET,
+    invocation: undefined,
+  });
+}
+
 describe('checkRunPolicies', () => {
-  it('refuses db update when an extension space changes only through migrations', () => {
-    const result = checkRunPolicies({
+  it('refuses db update when the database changes only through migrations, naming the marker', () => {
+    const result = check({
       command: 'db update',
-      appSpaceId: 'app',
-      inForce: new Map([
-        ['app', DEFAULT_POLICIES],
-        ['pgvector', { ...DEFAULT_POLICIES, change: ['migrate'] }],
-      ]),
-      ref: undefined,
+      inForce: { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] },
       permitPolicyChange: false,
-      targetHash: TARGET,
-      invocation: undefined,
     });
 
-    expect(result.ok ? undefined : result.failure.meta).toEqual({
-      spaceId: 'pgvector',
+    expect(result.ok ? undefined : result.failure.toEnvelope()).toMatchObject({
+      why: 'The marker records change: migrate, so db update may not move it.',
+      meta: { spaceId: 'app', command: 'db update', change: ['migrate'] },
+    });
+  });
+
+  it('refuses, with consent, a ref whose declared change policy forbids the command, naming the ref', () => {
+    const result = check({
       command: 'db update',
-      change: ['migrate'],
+      inForce: DEFAULT_DATABASE_POLICIES,
+      declared: { change: ['migrate'] },
+      permitPolicyChange: true,
+    });
+
+    expect(result.ok ? undefined : result.failure.toEnvelope()).toMatchObject({
+      code: 'MIGRATION.CHANGE_POLICY_FORBIDS',
+      why: 'production declares change: migrate, so db update may not move it.',
+      meta: { spaceId: 'app', command: 'db update', change: ['migrate'] },
     });
   });
 
   it('writes nothing when the ref declares only settings already in force', () => {
-    const result = checkRunPolicies({
+    const result = check({
       command: 'db migrate',
-      appSpaceId: 'app',
-      inForce: new Map([['app', DEFAULT_POLICIES]]),
-      ref: {
-        name: 'production',
-        hash: TARGET,
-        invariants: [],
-        policies: { dataProtection: { dataLoss: 'data-loss-with-consent' } },
-      },
+      inForce: DEFAULT_DATABASE_POLICIES,
+      declared: { change: ['reconcile', 'migrate'] },
       permitPolicyChange: false,
-      targetHash: TARGET,
-      invocation: undefined,
     });
 
-    expect(result.ok ? result.value : result.failure).toBeUndefined();
+    expect(result.ok ? result.value : result.failure).toEqual({
+      inForce: DEFAULT_DATABASE_POLICIES,
+      toWrite: undefined,
+    });
   });
 });
