@@ -1,25 +1,43 @@
 import type { ContractMarkerRecord } from '@internal/contract/types';
 import {
   compareMarkerDatabasePolicies,
-  DATABASE_POLICIES_META_KEY,
   type DatabasePolicies,
-  type MarkerDatabasePoliciesComparison,
 } from '@internal/framework-components/control';
-import type { CheckedMarkerPolicies } from './control-adapter';
 
-/** How the policies the application space's marker records compare with `checked`; when they hold, the raw value to guard its write with. */
-export type MarkerPoliciesCheck =
-  | { readonly kind: 'held'; readonly policies: CheckedMarkerPolicies }
-  | Exclude<MarkerDatabasePoliciesComparison, { readonly kind: 'held' }>;
+/** Why a marker's compare-and-swap failed, read from the marker as it is afterwards. */
+export type MarkerSwapFailure =
+  | { readonly kind: 'storageHashMoved'; readonly found: ContractMarkerRecord | null }
+  | {
+      readonly kind: 'policiesMoved';
+      readonly checked: DatabasePolicies;
+      readonly found: DatabasePolicies;
+    }
+  | {
+      readonly kind: 'policiesUnreadable';
+      readonly checked: DatabasePolicies;
+      readonly why: string;
+    };
 
-export function checkMarkerPolicies(
-  marker: ContractMarkerRecord | null,
-  checked: DatabasePolicies,
-): MarkerPoliciesCheck {
-  const comparison = compareMarkerDatabasePolicies(marker, checked);
-  if (comparison.kind !== 'held') return comparison;
-  return {
-    kind: 'held',
-    policies: { checked, raw: { value: marker?.meta[DATABASE_POLICIES_META_KEY] } },
-  };
+/**
+ * Why the swap of a marker expected at `expectedStorageHash`, guarded by `heldPolicies` when given,
+ * failed. `found` is the marker read after the swap. A marker that holds both again was changed and
+ * restored by another process in between, which is reported as a moved marker.
+ */
+export function markerSwapFailure(
+  found: ContractMarkerRecord | null,
+  expectedStorageHash: string,
+  heldPolicies: DatabasePolicies | undefined,
+): MarkerSwapFailure {
+  if (heldPolicies === undefined || found?.storageHash !== expectedStorageHash) {
+    return { kind: 'storageHashMoved', found };
+  }
+  const comparison = compareMarkerDatabasePolicies(found, heldPolicies);
+  switch (comparison.kind) {
+    case 'moved':
+      return { kind: 'policiesMoved', checked: heldPolicies, found: comparison.found };
+    case 'unreadable':
+      return { kind: 'policiesUnreadable', checked: heldPolicies, why: comparison.why };
+    case 'held':
+      return { kind: 'storageHashMoved', found };
+  }
 }

@@ -7,7 +7,7 @@ export {
 export type { MongoControlTargetDescriptor } from '../core/control-target-descriptor';
 export type { MongoControlExtensionDescriptor } from '../core/control-types';
 export { type FieldRewrite, fieldRewriteOf } from '../core/field-rewrite';
-export { checkMarkerPolicies, type MarkerPoliciesCheck } from '../core/marker-policies';
+export { type MarkerSwapFailure, markerSwapFailure } from '../core/marker-policies';
 export {
   formatMongoOperations,
   mongoOperationsToPreview,

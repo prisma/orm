@@ -3,13 +3,13 @@ import { withMarkerReadErrorHandling } from '@internal/errors/execution';
 import type {
   MongoControlAdapter,
   MongoRunnerDependencies,
-  RawStoredPolicies,
 } from '@internal/family-mongo/control-adapter';
 import {
   APP_SPACE_ID,
   type ControlDriverInstance,
   DATABASE_POLICIES_META_KEY,
   type DatabasePolicies,
+  DEFAULT_DATABASE_POLICIES,
   type MarkerDestination,
   storedDatabasePolicies,
 } from '@internal/framework-components/control';
@@ -18,10 +18,12 @@ import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
 import type { AnyMongoDdlCommand } from '@internal/mongo-query-ast/control';
 import {
   type AnyMongoCommand,
+  MongoAggCond,
   type MongoAggExpr,
   MongoAggFieldRef,
   MongoAggLiteral,
   MongoAggOperator,
+  MongoExprFilter,
   type MongoQueryPlan,
 } from '@internal/mongo-query-ast/execution';
 import { expr, fn } from '@internal/mongo-query-builder';
@@ -49,6 +51,66 @@ function policiesDocument(policies: DatabasePolicies): MongoValue {
 }
 
 const POLICIES_PATH = `meta.${DATABASE_POLICIES_META_KEY}`;
+
+function typeOf(path: string): MongoAggExpr {
+  return MongoAggOperator.of('$type', MongoAggFieldRef.of(path));
+}
+
+function missingOrObject(path: string): MongoAggExpr {
+  return MongoAggOperator.of('$in', [typeOf(path), MongoAggLiteral.of(['missing', 'object'])]);
+}
+
+function missingWhenDefault(path: string, isDefault: boolean): MongoAggExpr {
+  return isDefault
+    ? MongoAggOperator.of('$eq', [typeOf(path), MongoAggLiteral.of('missing')])
+    : MongoAggLiteral.of(false);
+}
+
+function settingHolds(path: string, value: string, defaultValue: string): MongoAggExpr {
+  return MongoAggOperator.of('$or', [
+    MongoAggOperator.of('$eq', [MongoAggFieldRef.of(path), MongoAggLiteral.of(value)]),
+    missingWhenDefault(path, value === defaultValue),
+  ]);
+}
+
+function sameStrategies(a: readonly string[], b: readonly string[]): boolean {
+  const left = new Set(a);
+  const right = new Set(b);
+  return left.size === right.size && [...left].every((strategy) => right.has(strategy));
+}
+
+/**
+ * An aggregation predicate that holds while the marker's `meta.policies` reads as `held`, however it
+ * is stored: `change` compared as a set, each data protection setting by value, and an absent setting
+ * matching only when `held` has its default there.
+ */
+function policiesHoldExpr(held: DatabasePolicies): MongoAggExpr {
+  const changePath = `${POLICIES_PATH}.change`;
+  const dataProtectionPath = `${POLICIES_PATH}.dataProtection`;
+  const defaults = DEFAULT_DATABASE_POLICIES;
+  return MongoAggOperator.of('$and', [
+    missingOrObject(POLICIES_PATH),
+    MongoAggCond.of(
+      MongoAggOperator.of('$isArray', MongoAggFieldRef.of(changePath)),
+      MongoAggOperator.of('$setEquals', [
+        MongoAggFieldRef.of(changePath),
+        MongoAggLiteral.of([...held.change]),
+      ]),
+      missingWhenDefault(changePath, sameStrategies(held.change, defaults.change)),
+    ),
+    missingOrObject(dataProtectionPath),
+    settingHolds(
+      `${dataProtectionPath}.dataLoss`,
+      held.dataProtection.dataLoss,
+      defaults.dataProtection.dataLoss,
+    ),
+    settingHolds(
+      `${dataProtectionPath}.accessWidening`,
+      held.dataProtection.accessWidening,
+      defaults.dataProtection.accessWidening,
+    ),
+  ]);
+}
 
 /**
  * Mongo control adapter for control-plane operations like introspection
@@ -199,7 +261,7 @@ export class MongoControlAdapterImpl implements MongoControlAdapter<'mongo'> {
     space: string,
     expectedFrom: string,
     destination: MarkerDestination,
-    rawPolicies?: RawStoredPolicies,
+    heldPolicies?: DatabasePolicies,
   ): Promise<boolean> {
     const { invariants, databasePolicies } = destination;
     const fields: Record<string, MongoAggExpr> = {
@@ -222,20 +284,9 @@ export class MongoControlAdapterImpl implements MongoControlAdapter<'mongo'> {
       .match((f) => f.space.eq(space))
       .match((f) => f.storageHash.eq(expectedFrom));
     const guarded =
-      rawPolicies === undefined
+      heldPolicies === undefined
         ? atExpectedHash
-        : atExpectedHash.match((f) =>
-            rawPolicies.value === undefined
-              ? f.rawPath(POLICIES_PATH).exists(false)
-              : f
-                  .rawPath(POLICIES_PATH)
-                  .eq(
-                    blindCast<
-                      MongoValue,
-                      'read back from the marker document, so it is a BSON value'
-                    >(rawPolicies.value),
-                  ),
-          );
+        : atExpectedHash.match(() => MongoExprFilter.of(policiesHoldExpr(heldPolicies)));
     const docs = await this.#execute(
       driver,
       guarded.findOneAndUpdate((f) => [f.stage.set(fields)], { upsert: false }),
@@ -344,8 +395,8 @@ export class MongoControlAdapterImpl implements MongoControlAdapter<'mongo'> {
         markerLocation: this.markerLocation,
         readMarker: (space) => this.readMarker(controlDriver, space),
         initMarker: (space, destination) => this.initMarker(controlDriver, space, destination),
-        updateMarker: (space, expectedFrom, destination, rawPolicies) =>
-          this.updateMarker(controlDriver, space, expectedFrom, destination, rawPolicies),
+        updateMarker: (space, expectedFrom, destination, heldPolicies) =>
+          this.updateMarker(controlDriver, space, expectedFrom, destination, heldPolicies),
         writeLedgerEntry: (space, entry) => this.writeLedgerEntry(controlDriver, space, entry),
       },
       introspectSchema: () => this.introspectSchema(controlDriver),

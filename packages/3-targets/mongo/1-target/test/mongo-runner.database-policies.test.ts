@@ -5,6 +5,7 @@ import type {
   MongoRunnerDependencies,
 } from '@internal/family-mongo/control-adapter';
 import {
+  compareMarkerDatabasePolicies,
   type DatabasePolicies,
   DEFAULT_DATABASE_POLICIES,
   type MigrationOperationPolicy,
@@ -82,7 +83,7 @@ class MarkerStore {
 
   constructor(public marker: ContractMarkerRecord | null = null) {}
 
-  ops: MarkerOperations = {
+  readonly ops: MarkerOperations = {
     markerLocation: '_prisma_migrations',
     readMarker: async () => this.marker,
     initMarker: async (_space, destination) => {
@@ -97,11 +98,11 @@ class MarkerStore {
         invariants: [...(destination.invariants ?? [])],
       };
     },
-    updateMarker: async (_space, expectedFrom, destination, rawPolicies) => {
+    updateMarker: async (_space, expectedFrom, destination, heldPolicies) => {
       if (this.marker?.storageHash !== expectedFrom) return false;
       if (
-        rawPolicies !== undefined &&
-        JSON.stringify(this.marker.meta['policies']) !== JSON.stringify(rawPolicies.value)
+        heldPolicies !== undefined &&
+        compareMarkerDatabasePolicies(this.marker, heldPolicies).kind !== 'held'
       ) {
         return false;
       }
@@ -384,7 +385,7 @@ describe('MongoMigrationRunner database policies', () => {
     expect(store.marker?.storageHash).toBe('start');
   });
 
-  it('writes the marker when its policies are stored again in another form that reads the same', async () => {
+  it('writes the marker when another process stored the same policies in another form', async () => {
     const store = new MarkerStore(markerAt('start', {}));
 
     const result = await runSpaces(
@@ -408,54 +409,6 @@ describe('MongoMigrationRunner database policies', () => {
     expect({ storageHash: store.marker?.storageHash, meta: store.marker?.meta }).toEqual({
       storageHash: DEST,
       meta: { policies: RECONCILE_ONLY },
-    });
-  });
-
-  it('fails as a concurrent change when the retried swap also fails because the policies were stored again', async () => {
-    const store = new MarkerStore(markerAt('start', {}));
-    const update = store.ops.updateMarker;
-    const forms: unknown[] = [DEFAULT_DATABASE_POLICIES, { change: ['migrate', 'reconcile'] }];
-    let swaps = 0;
-    store.ops = {
-      ...store.ops,
-      updateMarker: async (...args) => {
-        const form = forms[swaps++];
-        if (store.marker !== null && form !== undefined) {
-          store.marker = { ...store.marker, meta: { policies: form } };
-        }
-        return update(...args);
-      },
-    };
-
-    const result = await runSpaces(
-      makeDependencies(store),
-      [
-        {
-          space: 'app',
-          plan: makePlan([createCollection('items')], 'start'),
-          migrationEdges: [edge('start', DEST, '002_items')],
-          databasePolicies: RECONCILE_ONLY,
-        },
-      ],
-      DEFAULT_DATABASE_POLICIES,
-    );
-
-    expect({
-      failure: result.assertNotOk(),
-      swaps,
-      storageHash: store.marker?.storageHash,
-    }).toMatchObject({
-      failure: {
-        code: 'MIGRATION.MARKER_CAS_FAILURE',
-        why: "Another process stored the database's policies again after this run checked them, with the same settings in a different form. Run the command again to check them anew. The operations that ran before the failure stay applied.",
-        meta: {
-          reason: 'databasePolicies',
-          checkedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
-          foundDatabasePolicies: DEFAULT_DATABASE_POLICIES,
-        },
-      },
-      swaps: 2,
-      storageHash: 'start',
     });
   });
 

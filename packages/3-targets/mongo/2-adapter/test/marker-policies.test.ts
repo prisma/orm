@@ -99,32 +99,78 @@ describe('database policies in the marker', { timeout: timeouts.databaseOperatio
     });
   });
 
-  it('updateMarker given the recorded policies swaps only while the marker still records them', async () => {
-    await controlAdapter.initMarker(driver, 'app', {
-      storageHash: 'a1',
-      profileHash: 'p',
-      databasePolicies: MIGRATE_ONLY,
+  describe('updateMarker given the policies the caller checked', () => {
+    const RECONCILE_FIRST = {
+      change: ['reconcile', 'migrate'],
+      dataProtection: {
+        accessWidening: 'access-widening-with-consent',
+        dataLoss: 'data-loss-with-consent',
+      },
+    };
+
+    async function swapWithStored(
+      meta: Record<string, unknown>,
+      held: DatabasePolicies,
+    ): Promise<boolean> {
+      await controlAdapter.initMarker(driver, 'app', { storageHash: 'a1', profileHash: 'p' });
+      await db
+        .collection<{ _id: string }>('_prisma_migrations')
+        .updateOne({ _id: 'app' }, { $set: { meta } });
+      return controlAdapter.updateMarker(
+        driver,
+        'app',
+        'a1',
+        { storageHash: 'a2', profileHash: 'p' },
+        held,
+      );
+    }
+
+    it.each([
+      ['the same settings', { policies: MIGRATE_ONLY }, MIGRATE_ONLY],
+      [
+        'the same settings in another field order',
+        {
+          policies: {
+            dataProtection: {
+              accessWidening: 'access-widening-forbidden',
+              dataLoss: 'data-loss-forbidden',
+            },
+            change: ['migrate'],
+          },
+        },
+        MIGRATE_ONLY,
+      ],
+      [
+        'the same strategies in another array order',
+        { policies: RECONCILE_FIRST },
+        DEFAULT_DATABASE_POLICIES,
+      ],
+      ['no policies, when the defaults were checked', {}, DEFAULT_DATABASE_POLICIES],
+      [
+        'only the settings that differ from the defaults',
+        { policies: { change: ['migrate'] } },
+        { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] },
+      ],
+    ] as const)('swaps when the marker stores %s', async (_name, meta, held) => {
+      expect(await swapWithStored(meta, held)).toBe(true);
     });
-    const stored = (await controlAdapter.readMarker(driver, 'app'))?.meta['policies'];
 
-    const whenNoneRecorded = await controlAdapter.updateMarker(
-      driver,
-      'app',
-      'a1',
-      { storageHash: 'a2', profileHash: 'p' },
-      { value: undefined },
-    );
-    const whenUnchanged = await controlAdapter.updateMarker(
-      driver,
-      'app',
-      'a1',
-      { storageHash: 'a2', profileHash: 'p' },
-      { value: stored },
-    );
-
-    expect({ whenNoneRecorded, whenUnchanged }).toEqual({
-      whenNoneRecorded: false,
-      whenUnchanged: true,
+    it.each([
+      ['other settings', { policies: MIGRATE_ONLY }, DEFAULT_DATABASE_POLICIES],
+      ['no policies, when others were checked', {}, MIGRATE_ONLY],
+      ['policies that are not an object', { policies: 'strict' }, DEFAULT_DATABASE_POLICIES],
+      [
+        'data protection that is not an object',
+        { policies: { dataProtection: 'x' } },
+        DEFAULT_DATABASE_POLICIES,
+      ],
+      [
+        'a change that is not a list',
+        { policies: { change: 'migrate' } },
+        DEFAULT_DATABASE_POLICIES,
+      ],
+    ] as const)('does not swap when the marker stores %s', async (_name, meta, held) => {
+      expect(await swapWithStored(meta, held)).toBe(false);
     });
   });
 });

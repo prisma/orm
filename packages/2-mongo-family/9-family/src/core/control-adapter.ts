@@ -14,23 +14,6 @@ import type {
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 
 /**
- * The raw value of a marker's `meta.policies` as it was read: `value` is `undefined` when the marker
- * had no policies. A compare-and-swap given it matches only while the marker still stores exactly that.
- */
-export interface RawStoredPolicies {
-  readonly value: unknown;
-}
-
-/**
- * The policies a run checked, and the raw `meta.policies` of the application space's marker that held
- * them. Its marker is written only while it still stores that raw value.
- */
-export interface CheckedMarkerPolicies {
-  readonly checked: DatabasePolicies;
-  readonly raw: RawStoredPolicies;
-}
-
-/**
  * Marker / ledger operations the Mongo runner depends on. Every method
  * takes a `space` parameter so each loaded contract space addresses its
  * own marker row independently — see ADR 212 for the per-space
@@ -45,7 +28,7 @@ export interface MarkerOperations {
     space: string,
     expectedFrom: string,
     destination: MarkerDestination,
-    rawPolicies?: RawStoredPolicies,
+    heldPolicies?: DatabasePolicies,
   ): Promise<boolean>;
   writeLedgerEntry(
     space: string,
@@ -121,17 +104,14 @@ export interface MongoControlAdapter<TTarget extends string = string>
   ): Promise<void>;
 
   /**
-   * Atomically updates the marker document for `space` (CAS on
-   * `expectedFrom`, and on `rawPolicies` when given). Returns `true`
-   * when the CAS succeeded, `false` when another process changed the
-   * marker first.
+   * Atomically updates the marker document for `space` while it holds `expectedFrom` and, when `heldPolicies` is given, while its `meta.policies` reads as them, however it is stored. Returns `true` when the swap succeeded, `false` when another process changed the marker first.
    */
   updateMarker(
     driver: ControlDriverInstance<'mongo', TTarget>,
     space: string,
     expectedFrom: string,
     destination: MarkerDestination,
-    rawPolicies?: RawStoredPolicies,
+    heldPolicies?: DatabasePolicies,
   ): Promise<boolean>;
 
   /**

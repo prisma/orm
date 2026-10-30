@@ -5,7 +5,6 @@ import type {
 } from '@internal/family-mongo/control';
 import { contractToMongoSchemaIR } from '@internal/family-mongo/control';
 import type {
-  CheckedMarkerPolicies,
   MongoControlAdapter,
   MongoRunnerDependencies,
 } from '@internal/family-mongo/control-adapter';
@@ -106,7 +105,6 @@ export const mongoTargetDescriptor: MongoControlTargetDescriptor<MongoTargetCont
           perSpaceOptions,
           expectedDatabasePolicies,
         }): Promise<MigrationRunnerResult> {
-          let checkedPolicies: CheckedMarkerPolicies | undefined;
           if (expectedDatabasePolicies !== undefined) {
             cachedDeps ??= family.createRunnerDependencies({ driver });
             const checked = await checkDatabasePolicies(
@@ -114,7 +112,6 @@ export const mongoTargetDescriptor: MongoControlTargetDescriptor<MongoTargetCont
               expectedDatabasePolicies,
             );
             if (!checked.ok) return notOk(checked.failure);
-            checkedPolicies = checked.value;
           }
           const contracts = perSpaceOptions.map((opts) =>
             blindCast<Contract, 'destinationContract validated at aggregate boundary'>(
@@ -141,7 +138,9 @@ export const mongoTargetDescriptor: MongoControlTargetDescriptor<MongoTargetCont
               ...runnerOptions,
               scopeVerifyResult,
               databaseChangedBefore: changedDatabase,
-              ...(space === APP_SPACE_ID ? ifDefined('checkedPolicies', checkedPolicies) : {}),
+              ...(space === APP_SPACE_ID
+                ? ifDefined('checkedPolicies', expectedDatabasePolicies)
+                : {}),
             });
             if (!result.ok) {
               return notOk(withFailingSpace(result.failure, space));

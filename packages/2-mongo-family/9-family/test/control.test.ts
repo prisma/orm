@@ -1,5 +1,8 @@
+import type { ContractMarkerRecord } from '@internal/contract/types';
 import {
+  compareMarkerDatabasePolicies,
   createControlStack,
+  type DatabasePolicies,
   DEFAULT_DATABASE_POLICIES,
   hasSchemaView,
 } from '@internal/framework-components/control';
@@ -264,12 +267,7 @@ describe('createMongoFamilyInstance', () => {
     const migrateOnly = { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] as const };
     const expected = { storageHash: 'old', profileHash: 'old-profile' };
 
-    function policiesStore(
-      options: {
-        readonly policiesAfterCheck?: unknown;
-        readonly policiesAtEachWrite?: readonly unknown[];
-      } = {},
-    ) {
+    function policiesStore(options: { readonly policiesAfterCheck?: unknown } = {}) {
       const writes: unknown[][] = [];
       let policies: unknown = recorded;
       let changed = false;
@@ -280,14 +278,18 @@ describe('createMongoFamilyInstance', () => {
         },
         updateMarker: async (...args: unknown[]) => {
           writes.push(['update', ...args.slice(1)]);
-          const rewritten = options.policiesAtEachWrite?.[writes.length - 1];
-          if (rewritten !== undefined) policies = rewritten;
           if (options.policiesAfterCheck !== undefined && !changed) {
             policies = options.policiesAfterCheck;
             changed = true;
           }
-          const raw = args[4] as { readonly value: unknown } | undefined;
-          return raw === undefined || JSON.stringify(raw.value) === JSON.stringify(policies);
+          const held = args[4] as DatabasePolicies | undefined;
+          return (
+            held === undefined ||
+            compareMarkerDatabasePolicies(
+              { ...expected, meta: { policies } } as unknown as ContractMarkerRecord,
+              held,
+            ).kind === 'held'
+          );
         },
       } as unknown as MongoControlAdapter<'mongo'>;
       const instance = createMongoFamilyInstance(
@@ -343,7 +345,7 @@ describe('createMongoFamilyInstance', () => {
 
       expect({ status: signature?.status, writes }).toEqual({
         status: 'updated',
-        writes: [['update', 'app', 'old', contractHashes, { value: recorded }]],
+        writes: [['update', 'app', 'old', contractHashes, migrateOnly]],
       });
     });
 
@@ -421,30 +423,7 @@ describe('createMongoFamilyInstance', () => {
       });
     });
 
-    it('reports a second failed swap, with the policies stored again in another form each time, as moved policies', async () => {
-      const { instance, contract, driver, writes } = policiesStore({
-        policiesAtEachWrite: [migrateOnly, recorded],
-      });
-
-      const [signature] = await instance.signSpaces({
-        driver,
-        spaces: [{ space: 'app', contract, expected }],
-        expectedDatabasePolicies: migrateOnly,
-      });
-
-      expect({ signature, swaps: writes.length }).toEqual({
-        signature: {
-          status: 'conflict',
-          reason: 'databasePolicies',
-          space: 'app',
-          checked: migrateOnly,
-          comparison: { kind: 'moved', found: migrateOnly },
-        },
-        swaps: 2,
-      });
-    });
-
-    it('signs when the policies are stored again in another form that reads the same', async () => {
+    it('signs when another process stored the same policies in another form', async () => {
       const { instance, contract, driver, contractHashes, writes } = policiesStore({
         policiesAfterCheck: migrateOnly,
       });
@@ -457,10 +436,7 @@ describe('createMongoFamilyInstance', () => {
 
       expect({ status: signature?.status, writes }).toEqual({
         status: 'updated',
-        writes: [
-          ['update', 'app', 'old', contractHashes, { value: recorded }],
-          ['update', 'app', 'old', contractHashes, { value: migrateOnly }],
-        ],
+        writes: [['update', 'app', 'old', contractHashes, migrateOnly]],
       });
     });
   });
