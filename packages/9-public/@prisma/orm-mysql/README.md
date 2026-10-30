@@ -14,7 +14,7 @@ pnpm add @prisma/orm-mysql
 └── @prisma/orm-toolchain    ORM command family for the `prisma` CLI, emitter, config loader
 ```
 
-MySQL support is early. Today the package covers contracts and migrations: `prisma contract emit`, `prisma migration plan`, `prisma db migrate`, `prisma db verify` and `prisma db sign`. The query client (`/runtime`) and the statically composed runtime (`/static`) have not landed yet.
+MySQL support is early. The package covers contracts and migrations (`prisma contract emit`, `prisma migration plan`, `prisma db migrate`, `prisma db verify` and `prisma db sign`) and reads: `mysql({ contract, url })` from `/runtime` runs ORM and SQL builder reads, raw SQL and transactions, sending every value as a server-side prepared-statement parameter. Writing rows through the ORM or the SQL builder, row locks such as `FOR UPDATE`, and `LATERAL` joins are refused as not supported on MySQL yet.
 
 ## Entrypoints
 
@@ -23,6 +23,8 @@ MySQL support is early. Today the package covers contracts and migrations: `pris
 | `/config` | `defineConfig` for `prisma.config.ts` |
 | `/contract-builder` | `defineContract` and MySQL contract authoring |
 | `/migration`, `/control` | migration planning and the control client |
+| `/runtime` | `mysql({ contract, url })`, the query client |
+| `/static` | `contractFromJson` and the statically composed runtime |
 
 Generated contract files import their types from the facade, so an application never has to depend on a package it did not install:
 
