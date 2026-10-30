@@ -2,7 +2,7 @@
 changes:
   - id: re-emit-for-the-insert-conflict-target-capability
     summary: |
-      The Postgres and SQLite adapters report a new capability key, `sql.insertOnConflictTarget`: an insert's conflict clause applies only to the unique columns it names. `upsert()` and `createAll`/`createAndCount` with `{ onConflict: 'skip', conflictOn }` now require it. A `contract.json` emitted before this release does not carry it, so against such a contract `upsert()` is refused with `ORM.CAPABILITY_MISSING` unless the named columns are the only unique key the create values can collide on, and the skip option with `conflictOn` is always refused. Run `prisma contract emit` to pick up the key.
+      The Postgres and SQLite adapters report a new capability key, `sql.insertOnConflictTarget`: an insert's conflict clause applies only to the unique columns it names. `upsert()` and `createAll`/`createAndCount` with `{ onConflict: 'skip', conflictOn }` now require it. A `contract.json` emitted before this release does not carry it. Against such a contract, `upsert()` is refused with `ORM.CAPABILITY_MISSING` when another unique key can collide; otherwise the ORM sends it without conflict columns, which the Postgres and SQLite adapters refuse with `RUNTIME.AST_INVALID`. The skip option with `conflictOn` is always refused. Run `prisma contract emit` to pick up the key.
     detection:
       glob: "**/contract.json"
       matches:
@@ -25,7 +25,7 @@ await db.orm.User.upsert({
 await db.orm.User.createAll(rows, { onConflict: 'skip', conflictOn: ['email'] });
 ```
 
-A `contract.json` emitted before this release does not carry the key. Against such a contract, `upsert()` is refused with `ORM.CAPABILITY_MISSING` unless every other primary key and unique constraint of the table contains an auto-increment column the create values leave out. `onConflict: 'skip'` with `conflictOn` is always refused.
+A `contract.json` emitted before this release does not carry the key. Against such a contract, the ORM treats the database as one whose conflict clause fires on any unique key, as MySQL's does. `upsert()` is refused with `ORM.CAPABILITY_MISSING` unless every other primary key and unique constraint of the table contains an auto-increment column the create values leave out; when it is allowed, the ORM sends it without conflict columns, and the Postgres and SQLite adapters refuse that with `RUNTIME.AST_INVALID`. `onConflict: 'skip'` with `conflictOn` is always refused.
 
 Re-emit your contract to pick up the key:
 
