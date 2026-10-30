@@ -36,13 +36,14 @@ shipBy: field.scalar(type.Date({ as: 'temporal' })),
 ## Decisions
 
 - **`Date` changes concept at once.** Today `Date` is `mongo/date@1`, a moment in time. It becomes the calendar date. `DateTime`, deprecated today, becomes the convenience type whose default is today's `Date`, renamed `DateJsDate`, so `createdAt DateTime` emits today's contract. The upgrade instruction rewrites `Date` to `DateTime` in MongoDB schemas and `type.Date()` to `type.DateTime()` in TypeScript contracts, with a script. A missed rewrite fails on the first read of a value with a time of day: the calendar codecs refuse a BSON date not at midnight UTC, naming the field.
-- **A calendar date is a BSON date at midnight UTC,** the form MongoDB's Java (`LocalDateCodec`) and C# (`DateOnlySerializer`) drivers write and Prisma 6's `DateTime @db.Date` stored. The collection validator stays `bsonType: 'date'`.
+- **A calendar date is a BSON date at midnight UTC,** the form MongoDB's Java (`LocalDateCodec`) and C# (`DateOnlySerializer`) drivers write. The collection validator stays `bsonType: 'date'`.
 - **`Time` and `Duration` are BSON strings,** with new data types `mongo/time` and `mongo/duration` (`bsonTypes: ['string']`), text forms as on SQLite: three fraction digits for a time; a duration as written.
 - **Writes** refuse digits below a millisecond rather than round, as on SQLite; a Temporal value of the wrong kind or a non-ISO calendar is refused naming the codec.
 - **`now()`:** `@onCreate`/`@onUpdate(now())` generators for every new codec, from `@internal/type-implementations`. MongoDB has no database defaults.
 - **`temporal.CreatedAt` and `temporal.UpdatedAt`** are `DateTime`.
 - **Temporal fallback:** the MongoDB target's control entry sets it; `temporal-polyfill` becomes a required peer of `@prisma/orm-mongo` and `@prisma/orm-target-mongo`; application entries do not load it (published-entry test through `@repo/test-utils/temporal-fallback-entries`).
-- **Prisma 6 reader:** `DateTime @db.Date` maps to `mongo/date-string@1`; plain `DateTime` stays `mongo/date@1`.
+- **Prisma 6 reader:** `DateTime` and `DateTime @db.Date` both stay `mongo/date@1`: Prisma 6 stores the full instant under `@db.Date`, and `prisma db pull` writes `@db.Date` on every BSON date.
+- **The calendar date has its own data type,** `mongo/calendar-date`, stored as a BSON date, beside the instant's `mongo/date`.
 - **Removed preset row:** `temporal.timestamp` in `packages/2-mongo-family/2-authoring/contract-psl/src/removed-field-presets.ts` is written as `DateTime`.
 - **Every MongoDB schema, fixture and example** that writes `Date` for an instant is rewritten to `DateTime`; contracts emit unchanged.
 

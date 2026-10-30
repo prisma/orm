@@ -29,7 +29,7 @@ PostgreSQL has the convenience types `DateTime`, `Date`, `Time` and `Duration` (
 - **An existing `DateTime` keeps its contract** on SQLite, MySQL and MongoDB: each becomes a type choice whose default is the type it has today. The explicit type gets a suffixed name.
 - **SQLite** stores every date and time type as TEXT, so `storage:` lists only `text`. New data types `sqlite/date`, `sqlite/time` and `sqlite/duration`.
 - **MySQL** gets the data types `mysql/timestamp`, `mysql/date` and `mysql/time` beside `mysql/datetime`. `DateTime` offers `storage: datetime` (default) and `timestamp`.
-- **MongoDB `Date`** is a calendar date stored as a BSON date at midnight UTC, the form MongoDB's Java and C# drivers write for a date without a time and Prisma 6's `@db.Date` stored. Its codecs refuse a BSON date that is not at midnight UTC. `Time` and `Duration` are BSON strings.
+- **MongoDB `Date`** is a calendar date stored as a BSON date at midnight UTC, the form MongoDB's Java and C# drivers write for a date without a time. (Prisma 6's `@db.Date` stores the full instant, so the Prisma 6 reader keeps it an instant.) Its codecs refuse a BSON date that is not at midnight UTC. `Time` and `Duration` are BSON strings.
 - **MongoDB's `Date` changes concept at once,** as PostgreSQL's renames did. The upgrade instructions rewrite today's `Date` to `DateTime`. A missed rewrite fails on the first read of a value with a time of day, naming the field.
 - **MongoDB's TypeScript builder takes its helpers from the contributed type constructors,** like the SQL builder (ADR 241, ADR 275), before MongoDB gets its convenience types. Today its helpers are hard-coded in the family package and name the target's codec ids. That slice has its own design.
 - **The SQL family's `DefaultResolverColumn` carries `dataTypeId`.** SQLite stores every date and time type as text, so the column's type text cannot tell a `Date`'s `now()` (`date('now')`) from a `DateTime`'s. The value is already computed where the resolver is called.
@@ -72,7 +72,7 @@ MongoDB:
 - Every row works end to end on its target: emit, plan, migrate, read and write, with and without a global `Temporal`.
 - `@onCreate(now())` and `@onUpdate(now())` work on every new explicit type that can hold the current time, as on PostgreSQL.
 - `temporal.CreatedAt` and `temporal.UpdatedAt` are built on each target's `DateTime`; MySQL gains them.
-- Each target's tools write the convenience types where they exist. SQLite and MySQL have no `contract infer`, `contract print` or Prisma 7 reader; `prisma orm init`'s templates use the convenience types. MongoDB's Prisma 6 reader maps to codec ids and needs no change beyond `@db.Date`, which becomes `DateString`'s codec.
+- Each target's tools write the convenience types where they exist. SQLite and MySQL have no `contract infer`, `contract print` or Prisma 7 reader; `prisma orm init`'s templates use the convenience types. MongoDB's Prisma 6 reader maps to codec ids and needs no change.
 - Each slice extends the target's example app, which runs it in CI.
 - Docs: `docs/reference/scalar-types.md`, ADR 279's "Not decided here", ADR 278, ADR 257's `field.<token>()` sentence, `docs/architecture docs/Package-Layering.md`, `docs/reference/error-reference.md`, the subsystem docs, the `prisma-8` skill and the pending upgrade instructions.
 
