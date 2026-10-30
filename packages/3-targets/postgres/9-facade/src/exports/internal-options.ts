@@ -1,5 +1,5 @@
 export { resolveOptionalPostgresBinding } from '../runtime/binding';
-export { createUrlPool } from '../runtime/postgres';
+export { toRuntimeBinding } from '../runtime/postgres';
 export {
   toDriverCursorOptions,
   toRuntimeOptions,

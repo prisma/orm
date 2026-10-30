@@ -72,10 +72,10 @@ export type PostgresOptions<
 
 type ConnectedBinding = Exclude<DriverPostgresBinding, { readonly kind: 'url' }>;
 
-function toRuntimeBinding<
-  TContract extends Contract<SqlStorage>,
-  TCollections extends CollectionClasses,
->(binding: PostgresBinding, options: PostgresOptions<TContract, TCollections>): ConnectedBinding {
+export function toRuntimeBinding(
+  binding: PostgresBinding,
+  options: Pick<PostgresOptionsBase, 'poolOptions'>,
+): ConnectedBinding {
   if (binding.kind !== 'url') {
     return { ...binding, ownedByDriver: false };
   }
@@ -83,22 +83,18 @@ function toRuntimeBinding<
   return {
     kind: 'pgPool',
     ownedByDriver: true,
-    pool: createUrlPool(binding.url, options.poolOptions),
-  } as const;
-}
-
-export function createUrlPool(url: string, poolOptions: PostgresOptionsBase['poolOptions']): Pool {
-  return suppressIdleConnectionErrors(
-    createPgPool(
-      {
-        connectionString: url,
-        connectionTimeoutMillis:
-          poolOptions?.connectionTimeoutMillis ?? DEFAULT_CONNECT_TIMEOUT_MILLIS,
-        idleTimeoutMillis: poolOptions?.idleTimeoutMillis ?? 30_000,
-      },
-      postgresTarget.sessionSettings ?? {},
+    pool: suppressIdleConnectionErrors(
+      createPgPool(
+        {
+          connectionString: binding.url,
+          connectionTimeoutMillis:
+            options.poolOptions?.connectionTimeoutMillis ?? DEFAULT_CONNECT_TIMEOUT_MILLIS,
+          idleTimeoutMillis: options.poolOptions?.idleTimeoutMillis ?? 30_000,
+        },
+        postgresTarget.sessionSettings ?? {},
+      ),
     ),
-  );
+  } as const;
 }
 
 /**

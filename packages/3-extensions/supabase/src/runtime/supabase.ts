@@ -1,28 +1,30 @@
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import type { NamespacedEnums } from '@internal/contract/enum-accessor';
 import type { Contract } from '@internal/contract/types';
-import postgresDriver from '@internal/driver-postgres/runtime';
+import postgresDriver, {
+  type PostgresBinding as DriverPostgresBinding,
+} from '@internal/driver-postgres/runtime';
 import type {
   AsyncIterableResult,
   RuntimeExecuteOptions,
 } from '@internal/framework-components/runtime';
 import {
-  createUrlPool,
   resolveOptionalPostgresBinding,
   toDriverCursorOptions,
+  toRuntimeBinding,
   toRuntimeOptions,
   validateCursorOptions,
 } from '@internal/postgres/internal/options';
 import { buildPostgresStaticContext } from '@internal/postgres/internal/static-context';
 import { buildPostgresQueryMembers } from '@internal/postgres/internal/transaction-members';
 import { validatePostgresContract } from '@internal/postgres/internal/validate-contract';
-import {
-  isPgPool,
-  type NamespacedNativeEnums,
-  type PostgresBinding,
-  type PostgresOptionsBase,
-  type PostgresQueryMembers,
-  type PostgresTransactionContext,
+import type {
+  NamespacedNativeEnums,
+  PostgresBinding,
+  PostgresBindingOptions,
+  PostgresOptionsBase,
+  PostgresQueryMembers,
+  PostgresTransactionContext,
 } from '@internal/postgres/runtime';
 import type { Db } from '@internal/sql-builder/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
@@ -150,11 +152,10 @@ export interface SupabaseDb<
 
 type SupabaseBinding = Exclude<PostgresBinding, { readonly kind: 'pgClient' }>;
 
-interface SupabaseBindingOptions {
+type SupabaseBindingOptions = Omit<PostgresBindingOptions, 'binding' | 'pg'> & {
   readonly binding?: SupabaseBinding;
-  readonly url?: string;
   readonly pg?: Pool;
-}
+};
 
 type JwtSecretOption = {
   readonly jwtSecret: string;
@@ -182,14 +183,7 @@ interface SupabaseRuntimes<TContract extends Contract<SqlStorage>> {
   readonly runtime: SupabaseRuntimeImpl<TContract>;
   readonly extRuntime: SupabaseRuntimeImpl<SupabaseExtensionContract>;
   readonly driver: { close(): Promise<void> };
-  readonly poolBinding: PoolBinding | undefined;
 }
-
-type PoolBinding = {
-  readonly kind: 'pgPool';
-  readonly pool: Pool;
-  readonly ownedByDriver: boolean;
-};
 
 function closedClientError() {
   return structuredError('DRIVER.NOT_CONNECTED', 'Runtime is closed', {
@@ -264,42 +258,20 @@ function algKeyMismatchReason(jwt: string, kind: KeyMaterial['kind']): string | 
   return undefined;
 }
 
-const singleConnectionWhy =
-  'Each role-bound query needs a connection of its own, which a single pg.Client cannot give.';
-
-function checkPgOption(pg: Pool | undefined): void {
-  if (pg === undefined || (typeof pg === 'object' && pg !== null && isPgPool(pg))) return;
-  throw supabaseError('SUPABASE.CONFIG_INVALID', 'The pg option takes a pg.Pool', {
-    why: singleConnectionWhy,
-    fix: 'Pass a pg.Pool as pg, or pass url.',
-    meta: { reason: 'pg is not a pg.Pool' },
-  });
-}
-
 function resolveSupabaseBinding(options: SupabaseBindingOptions): SupabaseBinding | undefined {
-  checkPgOption(options.pg);
   const binding = resolveOptionalPostgresBinding(options);
   if (binding?.kind === 'pgClient') {
     throw supabaseError(
       'SUPABASE.CONFIG_INVALID',
-      'The binding option takes a url or pgPool binding',
+      'Supabase takes a pg.Pool or a url, not a pg.Client',
       {
-        why: singleConnectionWhy,
-        fix: "Pass binding: { kind: 'pgPool', pool } or binding: { kind: 'url', url }.",
-        meta: { reason: 'binding is a pgClient binding' },
+        why: 'Each role-bound query needs a connection of its own, which a single pg.Client cannot give.',
+        fix: "Pass a pg.Pool as pg, a url, or binding: { kind: 'pgPool', pool } or { kind: 'url', url }.",
+        meta: { reason: 'the database input is a pg.Client' },
       },
     );
   }
   return binding;
-}
-
-function toPoolBinding(
-  binding: SupabaseBinding,
-  poolOptions: PostgresOptionsBase['poolOptions'],
-): PoolBinding {
-  return binding.kind === 'pgPool'
-    ? { kind: 'pgPool', pool: binding.pool, ownedByDriver: false }
-    : { kind: 'pgPool', pool: createUrlPool(binding.url, poolOptions), ownedByDriver: true };
 }
 
 function withSupabaseDescriptor(
@@ -416,15 +388,17 @@ export default async function supabase<
       verifyMarker: false,
     });
 
-    const poolBinding = binding && toPoolBinding(binding, options.poolOptions);
-    if (poolBinding) {
-      driver.connect(poolBinding).catch(async (err: unknown) => {
+    if (binding !== undefined) {
+      const runtimeBinding: DriverPostgresBinding = toRuntimeBinding(binding, options);
+      driver.connect(runtimeBinding).catch(async (err: unknown) => {
         connectError = { error: err };
-        if (poolBinding.ownedByDriver) await poolBinding.pool.end().catch(() => undefined);
+        if (runtimeBinding.kind === 'pgPool' && runtimeBinding.ownedByDriver) {
+          await runtimeBinding.pool.end().catch(() => undefined);
+        }
       });
     }
 
-    runtimes = { runtime, extRuntime, driver, poolBinding };
+    runtimes = { runtime, extRuntime, driver };
     return runtimes;
   }
 

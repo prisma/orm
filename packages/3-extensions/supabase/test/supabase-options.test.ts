@@ -101,6 +101,24 @@ describe('supabase() cursor option', () => {
     expect(recorded.cursorReadSizes).toEqual([100]);
   });
 
+  it('reads the Supabase contract through the same cursor, on the shared driver', async () => {
+    const db = await supabase({
+      contract,
+      jwtSecret,
+      url,
+      verifyMarker: false,
+      cursor: { batchSize: 7 },
+    });
+    try {
+      const internal = db.asServiceRole().supabase;
+      await internal.query(internal.sql.auth.users.select('id').build()).toArray();
+    } finally {
+      await db.close();
+    }
+
+    expect(recorded.cursorReadSizes).toEqual([7]);
+  });
+
   it('rejects a batchSize that is not a positive integer', async () => {
     await expect(
       supabase({ contract, jwtSecret, url, cursor: { batchSize: 0 } }),
@@ -128,13 +146,24 @@ describe('supabase() binding option', () => {
     expect(pool.end).not.toHaveBeenCalled();
   });
 
-  it('rejects a pgClient binding with SUPABASE.CONFIG_INVALID', async () => {
+  it('rejects a pg.Client, as pg or as a pgClient binding, with one SUPABASE.CONFIG_INVALID error', async () => {
     const client = new Client();
     const binding = { kind: 'pgClient', client } as unknown as NonNullable<ReadOptions['binding']>;
-
-    await expect(supabase({ contract, jwtSecret, binding })).rejects.toMatchObject({
+    const pg = client as unknown as Pool;
+    const refusal = {
       code: 'SUPABASE.CONFIG_INVALID',
-      message: 'The binding option takes a url or pgPool binding',
+      message: 'Supabase takes a pg.Pool or a url, not a pg.Client',
+    };
+
+    await expect(supabase({ contract, jwtSecret, binding })).rejects.toMatchObject(refusal);
+    await expect(supabase({ contract, jwtSecret, pg })).rejects.toMatchObject(refusal);
+  });
+
+  it('rejects a pg object that is neither a pool nor a client with RUNTIME.BINDING_INVALID, as postgres() does', async () => {
+    const pg = {} as unknown as Pool;
+
+    await expect(supabase({ contract, jwtSecret, pg })).rejects.toMatchObject({
+      code: 'RUNTIME.BINDING_INVALID',
     });
   });
 

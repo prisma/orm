@@ -5,9 +5,9 @@ import * as runtimeEntry from '../src/exports/runtime';
 describe('the internal options entry', () => {
   it('exports the option helpers a facade built on postgres() reuses, and the runtime entry does not', () => {
     const helpers = [
-      'createUrlPool',
       'resolveOptionalPostgresBinding',
       'toDriverCursorOptions',
+      'toRuntimeBinding',
       'toRuntimeOptions',
       'validateCursorOptions',
     ];

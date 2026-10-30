@@ -1,8 +1,10 @@
 import type {
   PostgresBinding,
+  PostgresBindingOptions,
   PostgresCursorOptions,
   PostgresOptionsBase,
 } from '@internal/postgres/runtime';
+import type { Pool } from 'pg';
 import { expectTypeOf, test } from 'vitest';
 import type { SupabaseOptions } from '../src/exports/runtime';
 import type { Contract } from './fixtures/example-app/contract';
@@ -24,4 +26,10 @@ test('the binding option takes the url and pgPool forms of a postgres() binding'
   expectTypeOf<Options['binding']>().toEqualTypeOf<
     Exclude<PostgresBinding, { readonly kind: 'pgClient' }> | undefined
   >();
+});
+
+test('every other database input is the postgres() input of the same name', () => {
+  type Shared = Exclude<keyof PostgresBindingOptions, 'binding' | 'pg'>;
+  expectTypeOf<Pick<Options, Shared>>().toEqualTypeOf<Pick<PostgresBindingOptions, Shared>>();
+  expectTypeOf<Options['pg']>().toEqualTypeOf<Pool | undefined>();
 });
