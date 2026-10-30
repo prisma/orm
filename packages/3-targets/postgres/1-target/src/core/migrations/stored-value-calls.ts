@@ -5,11 +5,13 @@ import type {
   StoredValueCallClasses,
   StoredValueCodec,
   StoredValueRewrite,
+  VariantRowRewrite,
 } from '@internal/family-sql/control';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { enumValueCoordinateJson } from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import {
+  DeleteRowsCall,
   type PostgresOpFactoryCall,
   RemoveStoredKeyCall,
   RemoveStoredValueCall,
@@ -71,6 +73,33 @@ export function postgresStoredKeyCalls(
               rewrite.column,
               rewrite.path,
               rewrite.to,
+            );
+      return [call, rewrite];
+    }),
+  );
+}
+
+/** The calls that carry out a plan's row rewrites of variants, each with the rewrite it carries out. */
+export function postgresVariantRowCalls(
+  rewrites: readonly VariantRowRewrite[],
+  contract: Contract<SqlStorage>,
+  codecs: Pick<CodecLookupWithDescriptors, 'descriptorFor'>,
+): ReadonlyMap<PostgresOpFactoryCall, VariantRowRewrite> {
+  return new Map(
+    rewrites.map((rewrite): readonly [PostgresOpFactoryCall, VariantRowRewrite] => {
+      const schemaName = emissionSchemaForNamespace(contract, rewrite.namespaceId);
+      const codec: StoredValueCodec = { codecRef: rewrite.codecRef, codecs };
+      const call =
+        rewrite.to === undefined
+          ? new DeleteRowsCall(schemaName, rewrite.table, rewrite.column, rewrite.from, codec)
+          : new ReplaceStoredValueCall(
+              schemaName,
+              rewrite.table,
+              rewrite.column,
+              rewrite.from,
+              rewrite.to,
+              false,
+              codec,
             );
       return [call, rewrite];
     }),

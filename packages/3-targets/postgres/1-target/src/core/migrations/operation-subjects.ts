@@ -10,6 +10,7 @@ import {
 } from '@internal/family-sql/control';
 import type {
   MigrationDataLossKind,
+  ModelCoordinate,
   OpFactoryCall,
   ValueObjectFieldCoordinate,
 } from '@internal/framework-components/control';
@@ -42,6 +43,8 @@ interface Locator {
   readonly storedValues?: ReadonlyMap<OpFactoryCall, StoredValueSubject>;
   /** The key removals the planner made for value object fields, each with its value object field. */
   readonly storedKeys?: ReadonlyMap<OpFactoryCall, ValueObjectFieldCoordinate>;
+  /** The row deletions the planner made for variants, each with its variant as the origin names it. */
+  readonly variantRows?: ReadonlyMap<OpFactoryCall, ModelCoordinate>;
 }
 
 /**
@@ -85,8 +88,14 @@ function rawSqlTarget(locator: Locator, call: RawSqlCall): SubjectStorage {
 }
 
 function knownTarget(locator: Locator, call: OpFactoryCall): SubjectStorage | undefined {
-  if (call instanceof DropTableCall || call instanceof DeleteRowsCall) {
+  if (call instanceof DropTableCall) {
     return target(locator, call.schemaName, call.tableName, undefined);
+  }
+  if (call instanceof DeleteRowsCall) {
+    return {
+      ...target(locator, call.schemaName, call.tableName, undefined),
+      ...ifDefined('model', locator.variantRows?.get(call)),
+    };
   }
   if (call instanceof DropColumnCall || call instanceof AlterColumnTypeCall) {
     return target(locator, call.schemaName, call.tableName, call.columnName);

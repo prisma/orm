@@ -8,6 +8,7 @@ import type {
   StoredKeyRewrite,
   StoredValueRewrite,
   SuppressionRecord,
+  VariantRowRewrite,
 } from '@internal/family-sql/control';
 import {
   appliedStatementsInOrder,
@@ -24,6 +25,7 @@ import {
   plannerFailure,
   planStatements,
   planValueObjectFieldRewrites,
+  planVariantRowRewrites,
   sqlTypeLookupsOf,
   storedValueOperationIndexes,
   storedValueSubjects,
@@ -115,6 +117,7 @@ import {
   postgresStoredKeyCalls,
   postgresStoredValueCallClasses,
   postgresStoredValueCalls,
+  postgresVariantRowCalls,
   storedValueCallsStrategy,
 } from './stored-value-calls';
 import {
@@ -399,6 +402,20 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       options.contract,
       types.codecLookup,
     );
+    const variantRewrites = planVariantRowRewrites({
+      statements: options.statements,
+      fromContract: options.fromContract,
+      contract: options.contract,
+      tables,
+    });
+    if (!variantRewrites.ok) {
+      return plannerFailure([variantRewrites.failure]);
+    }
+    const variantRowCalls = postgresVariantRowCalls(
+      variantRewrites.value,
+      options.contract,
+      types.codecLookup,
+    );
     // Strategies get two views of the start state. `schema` is one namespace node, for probes by bare table name in the planned namespace (shared-temp-default safety, FK/unique probes); a flat merge of every namespace would collide same-named tables. `startTree` and `endTree` are the whole trees, for decisions that cross tables and namespaces, such as the foreign keys that depend on a primary key.
     const relationalSchema = relationalNamespaceNode(schema, schemaName);
 
@@ -491,7 +508,11 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
         dropRemovedSchemasStrategy(
           removedSchemas.filter((schemaName) => !keptSchema(options, schemaName)),
         ),
-        storedValueCallsStrategy([...storedKeyCalls.keys(), ...storedValueCalls.keys()]),
+        storedValueCallsStrategy([
+          ...storedKeyCalls.keys(),
+          ...storedValueCalls.keys(),
+          ...variantRowCalls.keys(),
+        ]),
       ],
     });
 
@@ -597,9 +618,10 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
         (statement) =>
           storedValueOperationIndexes(
             calls,
-            new Map<OpFactoryCall, StoredValueRewrite | StoredKeyRewrite>([
+            new Map<OpFactoryCall, StoredValueRewrite | StoredKeyRewrite | VariantRowRewrite>([
               ...storedKeyCalls,
               ...storedValueCalls,
+              ...variantRowCalls,
             ]),
             statement,
           ),
@@ -612,12 +634,18 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
           storedKeys: new Map(
             [...storedKeyCalls].map(([call, rewrite]) => [call, rewrite.valueObjectField]),
           ),
+          variantRows: new Map(
+            [...variantRowCalls].map(([call, rewrite]) => [call, rewrite.model]),
+          ),
         }),
         {
           fromContract: options.fromContract,
           contract: options.contract,
           origins: statements.value.origins,
           byHand: postgresTableRenameByHand(options.contract),
+          removedVariants: variantRewrites.value.flatMap(({ model, removed }) =>
+            removed ? [model] : [],
+          ),
         },
       ),
       namespaces: {

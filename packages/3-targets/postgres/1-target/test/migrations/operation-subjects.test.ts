@@ -89,6 +89,7 @@ function subjectsOf(calls: readonly OpFactoryCall[], fieldEvents: readonly Field
       fromContract: contract,
       contract,
       byHand: postgresTableRenameByHand(contract),
+      removedVariants: [],
       origins: NO_RENAMED_ORIGINS,
     },
   ).dataLoss;
