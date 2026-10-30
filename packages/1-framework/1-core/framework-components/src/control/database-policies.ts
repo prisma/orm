@@ -74,26 +74,34 @@ const changeSchema = type
 const dataLossSchema = type.enumerated(...DATA_LOSS_LEVELS);
 const accessWideningSchema = type.enumerated(...ACCESS_WIDENING_LEVELS);
 
+function notAList<T>(data: T, ctx: { mustBe(expected: string): false }): boolean {
+  return !Array.isArray(data) || ctx.mustBe('an object, not a list');
+}
+
+const partialDataProtectionSchema = type({
+  '+': 'reject',
+  'dataLoss?': dataLossSchema,
+  'accessWidening?': accessWideningSchema,
+}).narrow(notAList);
+
 /** Policies with any setting left out: what a ref declares, and what a marker may record. */
 export const PartialDatabasePoliciesSchema = type({
   '+': 'reject',
   'change?': changeSchema,
-  'dataProtection?': {
-    '+': 'reject',
-    'dataLoss?': dataLossSchema,
-    'accessWidening?': accessWideningSchema,
-  },
-});
+  'dataProtection?': partialDataProtectionSchema,
+}).narrow(notAList);
+
+const dataProtectionSchema = type({
+  '+': 'reject',
+  dataLoss: dataLossSchema,
+  accessWidening: accessWideningSchema,
+}).narrow(notAList);
 
 export const DatabasePoliciesSchema = type({
   '+': 'reject',
   change: changeSchema,
-  dataProtection: {
-    '+': 'reject',
-    dataLoss: dataLossSchema,
-    accessWidening: accessWideningSchema,
-  },
-});
+  dataProtection: dataProtectionSchema,
+}).narrow(notAList);
 
 function sortedStrategies(change: readonly ChangeStrategy[]): readonly ChangeStrategy[] {
   return [...new Set(change)].sort();

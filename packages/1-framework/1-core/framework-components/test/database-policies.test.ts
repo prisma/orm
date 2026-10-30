@@ -165,6 +165,19 @@ describe('the policy key lists', () => {
   });
 });
 
+describe('a policy declaration that is a list', () => {
+  it.each([
+    ['the policies', []],
+    ['data protection', { dataProtection: [] }],
+  ])('is rejected when %s are a list', (_name, value) => {
+    expect(PartialDatabasePoliciesSchema.allows(value)).toBe(false);
+  });
+
+  it('makes a marker that records one unreadable, not the default policies', () => {
+    expect(databasePoliciesOf(markerWithMeta({ policies: [] }))).toMatchObject({ ok: false });
+  });
+});
+
 describe('compareMarkerDatabasePolicies', () => {
   it('holds the defaults when the marker records nothing', () => {
     expect(compareMarkerDatabasePolicies(markerWithMeta({}), DEFAULT_DATABASE_POLICIES)).toEqual({

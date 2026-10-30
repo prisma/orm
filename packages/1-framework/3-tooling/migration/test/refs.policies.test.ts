@@ -62,6 +62,8 @@ describe('a ref that declares policies', () => {
     ['an unknown strategy', { change: ['deploy'] }],
     ['an empty change policy', { change: [] }],
     ['an unknown level', { dataProtection: { accessWidening: 'open' } }],
+    ['a list instead of an object', []],
+    ['a list as data protection', { dataProtection: [] }],
   ])('is rejected as an invalid ref file when its policies carry %s', async (_, policies) => {
     await writeFile(
       join(refsDir, 'production.json'),
