@@ -38,8 +38,23 @@ export function pgConnectionConfig(
   const { connectionString, ...rest } = config;
   const merged: ClientConfig = { ...rest };
   if (connectionString !== undefined) {
-    const parsed = parse(connectionString);
+    let hadSyntheticHost = false;
+    const normalizedConnectionString = connectionString.replace(
+      /^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([^/?#]*)/,
+      (_match, scheme: string, authority: string) => {
+        const atIndex = authority.lastIndexOf('@');
+        const userinfo = atIndex !== -1 ? authority.slice(0, atIndex + 1) : '';
+        let hostpart = atIndex !== -1 ? authority.slice(atIndex + 1) : authority;
+        if (hostpart.startsWith(':')) {
+          hadSyntheticHost = true;
+          hostpart = `dummy-host${hostpart}`;
+        }
+        return `${scheme}${userinfo}${hostpart}`;
+      },
+    );
+    const parsed = parse(normalizedConnectionString);
     for (const setting of CONNECTION_SETTINGS) {
+      if (hadSyntheticHost && setting === 'host' && parsed.host === 'dummy-host') continue;
       const value: unknown = Reflect.get(parsed, setting);
       if (value !== undefined) Object.assign(merged, { [setting]: value });
     }
