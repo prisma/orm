@@ -303,31 +303,41 @@ describe('planValueObjectFieldFills', () => {
     });
 
     it.each([
-      ['holds a value object', { valueObject: 'Label' }],
+      [
+        'holds a value object',
+        { valueObject: 'Label' },
+        'it holds a value object, and no one value stands for every object',
+      ],
       [
         'holds an enum value',
         fieldWith({ valueSet: { ...valueObjectRef('Color', 'app'), entityKind: 'valueSet' } }),
+        'it holds an enum value, and no one member stands for every object',
       ],
       [
         'has a codec whose data type refuses the empty value of its JSON type',
         fieldWith({ type: { kind: 'scalar', codecId: DATE_CODEC_ID } }),
+        'the data type of its codec "test/date@1" does not take the empty value ""',
       ],
       [
         'has a codec with no JSON type',
         fieldWith({ type: { kind: 'scalar', codecId: 'test/other@1' } }),
+        'its codec "test/other@1" declares no JSON type, so it has no empty value',
       ],
-    ] as const)('refuses a field that %s, naming migration plan --backfill', (_, spec) => {
-      const result = plan({
-        from: { GeoPoint: GEO, Label: GEO },
-        to: { GeoPoint: { ...GEO, country: spec }, Label: GEO },
-        unnamed: 'temporaryValue',
-      });
+    ] as const)(
+      'refuses a field that %s, saying why and naming migration plan --backfill',
+      (_, spec, reason) => {
+        const result = plan({
+          from: { GeoPoint: GEO, Label: GEO },
+          to: { GeoPoint: { ...GEO, country: spec }, Label: GEO },
+          unnamed: 'temporaryValue',
+        });
 
-      expect(refusal(result)).toMatchObject({
-        kind: 'nullabilityConflict',
-        why: 'db update cannot choose a value for a field that holds a value object or an enum value, or whose codec has no temporary value. Plan a migration with prisma migration plan --backfill GeoPoint.country instead, and write the value in its migration.ts.',
-      });
-    });
+        expect(refusal(result)).toMatchObject({
+          kind: 'nullabilityConflict',
+          why: `db update cannot choose a value for field "GeoPoint.country": ${reason}. Plan a migration with prisma migration plan --backfill GeoPoint.country instead, and write the value in its migration.ts.`,
+        });
+      },
+    );
   });
 
   it('refuses a column whose paths to the value object cannot be listed', () => {

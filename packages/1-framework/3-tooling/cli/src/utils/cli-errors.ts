@@ -685,6 +685,17 @@ const MIGRATION_PLAN_VERBS: readonly string[] = ['rename', 'delete', 'convert', 
  * `databaseStorageHash`, the contract the database is at, when it is known. Its commands repeat the
  * `--config` of `invocation`.
  */
+function needsMigrationFileReason(refused: readonly StatementText[]): string {
+  const converts = refused.some(({ verb }) => verb === 'convert');
+  const backfills = refused.some(({ verb }) => verb === 'backfill');
+  if (converts && backfills) {
+    return '--convert of a field and --backfill ask for a migration file with a slot for the code that converts the values or the value that fills the field';
+  }
+  return converts
+    ? '--convert of a field asks for a migration file with a slot for the code that converts its values'
+    : '--backfill asks for a migration file with a slot for the value that fills the field';
+}
+
 export function errorStatementNeedsMigrationFile(
   statements: readonly StatementText[],
   refused: readonly StatementText[],
@@ -703,7 +714,7 @@ export function errorStatementNeedsMigrationFile(
     'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
     `db update cannot carry out ${listed}`,
     {
-      why: '--convert and --backfill ask for a migration file with a slot for the code that converts or fills in the values, and db update has no migration file to fill: it applies its plan directly.',
+      why: `${needsMigrationFileReason(refused)}, and db update has no migration file to fill: it applies its plan directly.`,
       fix: `Plan the change with ${plan}, fill in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with ${cliCommand(invocation, 'db migrate')}. Or leave out these statements: db update then asks before it loses any data.`,
       nextActions: [
         runCommandAction('Plan the change into a migration file to fill in', plan),

@@ -7,7 +7,7 @@ import {
   valueObjectAt,
   valueObjectsWithCoordinates,
 } from '@internal/contract/types';
-import type { CodecRef, TypeLookups } from '@internal/framework-components/codec';
+import type { TypeLookups } from '@internal/framework-components/codec';
 import {
   type MigrationOperationPolicy,
   type ResolvedMigrationStatement,
@@ -76,32 +76,38 @@ const TEMPORARY_JSON_VALUES: Readonly<Record<string, JsonValue>> = {
   array: [],
 };
 
-function codecRefOf(field: ContractValueObjectField): CodecRef | undefined {
-  const { type } = field;
-  if (type.kind !== 'scalar' || (field.many !== undefined && field.many !== false)) {
-    return undefined;
-  }
-  return buildColumnCodecRef(type, undefined);
-}
-
 /**
  * The temporary value of a field, as JSON: an empty list for any list, and for a scalar the empty
  * value of the JSON type its codec declares, when the codec's data type takes it. A field that
  * holds one value object or one enum value has none, since no one value stands for every object or
- * member; nor does a scalar whose data type refuses the empty value, as a date refuses `""`.
+ * member; nor does a scalar whose data type refuses the empty value, as a date refuses `""`. Without
+ * one, the result says why.
  */
 function temporaryValueOf(
   field: ContractValueObjectField,
   types: TypeLookups,
-): JsonValue | undefined {
-  if (field.many !== undefined && field.many !== false) return [];
-  const codecRef = codecRefOf(field);
-  if (codecRef === undefined || field.valueSet !== undefined) return undefined;
+): Result<JsonValue, string> {
+  if (field.many !== undefined && field.many !== false) return ok([]);
+  if (field.type.kind !== 'scalar') {
+    return notOk('it holds a value object, and no one value stands for every object');
+  }
+  if (field.valueSet !== undefined) {
+    return notOk('it holds an enum value, and no one member stands for every object');
+  }
+  const codecRef = buildColumnCodecRef(field.type, undefined);
   const descriptor = types.codecLookup.descriptorFor(codecRef.codecId);
   const jsonType = descriptor === undefined ? undefined : declaredJsonType(descriptor);
   const empty = jsonType === undefined ? undefined : TEMPORARY_JSON_VALUES[jsonType];
-  if (empty === undefined) return undefined;
-  return acceptedByDataType(empty, codecRef, types) ? empty : undefined;
+  if (empty === undefined) {
+    return notOk(
+      `its codec ${JSON.stringify(codecRef.codecId)} declares no JSON type, so it has no empty value`,
+    );
+  }
+  return acceptedByDataType(empty, codecRef, types)
+    ? ok(empty)
+    : notOk(
+        `the data type of its codec ${JSON.stringify(codecRef.codecId)} does not take the empty value ${JSON.stringify(empty)}`,
+      );
 }
 
 interface RequiredField {
@@ -255,23 +261,33 @@ export function planValueObjectFieldFills(input: {
     }
     const [first, ...rest] = places.value;
     if (first === undefined) continue;
+    const temporary =
+      required.statement === undefined && input.unnamed === 'temporaryValue'
+        ? temporaryValueOf(required.field, input.types)
+        : undefined;
+    if (temporary !== undefined && !temporary.ok) {
+      return notOk(
+        needsValue(
+          required,
+          [first, ...rest],
+          text,
+          `db update cannot choose a value for field "${text}": ${temporary.failure}. Plan a migration with prisma migration plan --backfill ${text} instead, and write the value in its migration.ts.`,
+        ),
+      );
+    }
     const value =
-      required.statement !== undefined
-        ? new UnfilledValue(`${text}:value`)
-        : input.unnamed === 'temporaryValue'
-          ? temporaryValueOf(required.field, input.types)
-          : required.removedFields.length > 0
-            ? new UnfilledValue(`${text}:value`)
-            : undefined;
+      temporary !== undefined
+        ? temporary.value
+        : required.statement !== undefined || required.removedFields.length > 0
+          ? new UnfilledValue(`${text}:value`)
+          : undefined;
     if (value === undefined) {
       return notOk(
         needsValue(
           required,
           [first, ...rest],
           text,
-          input.unnamed === 'refuse'
-            ? `Add --backfill ${text} to write the value the plan fills them with.`
-            : `db update cannot choose a value for a field that holds a value object or an enum value, or whose codec has no temporary value. Plan a migration with prisma migration plan --backfill ${text} instead, and write the value in its migration.ts.`,
+          `Add --backfill ${text} to write the value the plan fills them with.`,
         ),
       );
     }
