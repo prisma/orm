@@ -150,6 +150,26 @@ describe('binding validation raises RUNTIME.BINDING_INVALID', () => {
   });
 });
 
+describe('postgres() given null as its database input', () => {
+  type Options = Parameters<typeof postgres<typeof contract>>[0];
+
+  it.each([
+    ['pg', { pg: null }, 'The pg option must be a pg.Pool or a pg.Client'],
+    ['url', { url: null }, 'The url option must be a string'],
+    ['binding', { binding: null }, 'The binding option must be an object with a kind'],
+  ])('raises RUNTIME.BINDING_INVALID for %s: null', (_name, input, message) => {
+    const error = capture(() => postgres({ contract, ...input } as unknown as Options));
+    expect(isStructuredError(error)).toBe(true);
+    expect(error).toMatchObject({
+      code: 'RUNTIME.BINDING_INVALID',
+      message,
+      why: expect.any(String),
+      fix: expect.any(String),
+      meta: { extension: 'postgres', received: null },
+    });
+  });
+});
+
 describe('facade lifecycle codes', () => {
   it('connect() without a binding raises RUNTIME.BINDING_MISSING', async () => {
     const db = postgres({ contract } as Parameters<typeof postgres<typeof contract>>[0]);

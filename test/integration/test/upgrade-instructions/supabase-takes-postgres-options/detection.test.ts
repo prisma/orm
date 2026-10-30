@@ -16,6 +16,12 @@ describe('the supabase-one-binding-input detection', () => {
     ['a type argument', 'await supabase<Contract>({\n  contract,\n  url,\n})'],
     ['a spread call on a new line', 'supabase(\n  { ...config, contract },\n)'],
     ['a match on the old message', "expect(error.message).toBe('The pg option takes a pg.Pool');"],
+    ['a null pg', 'postgres({ contract, pg: null })'],
+    [
+      'a url that falls back to null',
+      "postgres({ contract, url: process.env['DATABASE_URL'] ?? null })",
+    ],
+    ['a binding that falls back to null', 'const options = { binding: config.binding ?? null };'],
   ])('finds %s', (_name, content) => {
     expect(detects(content)).toBe(true);
   });
@@ -26,6 +32,12 @@ describe('the supabase-one-binding-input detection', () => {
     ['a longer name', 'createSupabaseClient(options); mysupabase(options);'],
     ['a name that starts with supabase', 'supabaseClient(options)'],
     ['an import', "import { supabase } from '@prisma/orm-extension-supabase/runtime';"],
+    [
+      'a url that falls back to a string',
+      "postgres({ contract, url: env.url ?? 'postgres://localhost' })",
+    ],
+    ['a property whose name ends in url', 'const options = { imageUrl: null };'],
+    ['a member access named pg', 'const pool = config.pg ?? null;'],
   ])('skips %s', (_name, content) => {
     expect(detects(content)).toBe(false);
   });

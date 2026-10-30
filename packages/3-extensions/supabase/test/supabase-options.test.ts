@@ -167,6 +167,21 @@ describe('supabase() binding option', () => {
     });
   });
 
+  it.each([
+    ['pg', { pg: null }],
+    ['url', { url: null }],
+    ['binding', { binding: null }],
+  ])('rejects %s: null with RUNTIME.BINDING_INVALID', async (_name, input) => {
+    await expect(
+      supabase({ contract, jwtSecret, ...(input as unknown as ReadOptions) }),
+    ).rejects.toMatchObject({
+      code: 'RUNTIME.BINDING_INVALID',
+      why: expect.any(String),
+      fix: expect.any(String),
+      meta: { received: null },
+    });
+  });
+
   it('rejects more than one binding input with RUNTIME.BINDING_INVALID', async () => {
     await expect(
       supabase({ contract, jwtSecret, url, binding: { kind: 'url', url } }),
