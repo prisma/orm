@@ -1,5 +1,5 @@
 /**
- * Journey: a SQLite schema written with the convenience date and time types `DateTime`, `Date`, `Time` and `Duration`, with every `as:` choice, emits each field as the explicit type it chooses, migrates, and is written and read by the ORM. Each column holds the text its data type stores, in one form for each value. The client generates `now()` values for `@onCreate`, the database fills `@default(now())` for an instant, a date and a time of day, and `db verify` reads those defaults back as `now()`. A later migration adds required date and time columns to a table with a row, which takes each type's temporary value, and changing a `DateTime @default(now())` field to `Date` is a change `db verify` reports and the next migration makes. A bare `DateTime` emits the contract it emitted before the convenience types.
+ * Journey: a SQLite schema written with the convenience date and time types `DateTime`, `Date`, `Time` and `Duration`, with every `as:` choice, emits each field as the explicit type it chooses, migrates, and is written and read by the ORM. Each column holds the text its data type stores, in one form for each value. The client generates `now()` values for `@onCreate`, the database fills `@default(now())` for an instant, a date and a time of day, and `db verify` reads those defaults back as `now()`. A later migration adds required date and time columns to a table with a row, which takes each type's temporary value, and changing a `DateTime @default(now())` field to `Date` is a change `db verify` reports and the next migration makes. A bare `DateTime` emits the contract `DatetimeJsDate` emits, a `sqlite/datetime@1` column, as `DateTime` did before the convenience types.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
@@ -291,13 +291,34 @@ withTempDir(({ createTempDir }) => {
     );
 
     it(
-      'emits a bare DateTime exactly as it emitted before the convenience types',
+      'emits a bare DateTime exactly as DatetimeJsDate, the sqlite/datetime@1 column DateTime named before the convenience types',
       async () => {
+        const bare = readFileSync(
+          join(import.meta.dirname, 'fixtures/sqlite-bare-datetime/contract.prisma'),
+          'utf-8',
+        );
         const ctx = setupSqliteJourney(createTempDir);
-        const fixtures = join(import.meta.dirname, 'fixtures/sqlite-bare-datetime');
-        await emitContract(ctx, readFileSync(join(fixtures, 'contract.prisma'), 'utf-8'));
-        expect(readFileSync(join(ctx.testDir, 'contract.json'), 'utf-8')).toBe(
-          readFileSync(join(fixtures, 'emitted-before-convenience-types/contract.json'), 'utf-8'),
+        await emitContract(ctx, bare);
+        const emittedBare = readFileSync(join(ctx.testDir, 'contract.json'), 'utf-8');
+        await emitContract(ctx, bare.replace(/\bDateTime\b/g, 'DatetimeJsDate'));
+        const emittedExplicit = readFileSync(join(ctx.testDir, 'contract.json'), 'utf-8');
+
+        expect(emittedBare).toBe(emittedExplicit);
+        const columns = JSON.parse(emittedBare).storage.namespaces.__unbound__.entries.table.event
+          .columns as Record<string, { codecId: string; dataType: string }>;
+        expect(
+          Object.fromEntries(
+            Object.entries(columns)
+              .filter(([name]) => name !== 'id')
+              .map(([name, { codecId, dataType }]) => [name, { codecId, dataType }]),
+          ),
+        ).toEqual(
+          Object.fromEntries(
+            ['at', 'maybe', 'createdAt', 'updatedAt', 'fixed'].map((name) => [
+              name,
+              { codecId: 'sqlite/datetime@1', dataType: 'sqlite/datetime' },
+            ]),
+          ),
         );
       },
       timeouts.spinUpPpgDev,
