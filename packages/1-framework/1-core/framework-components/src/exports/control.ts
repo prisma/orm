@@ -150,6 +150,8 @@ export {
   type ChangeStrategy,
   compareMarkerDatabasePolicies,
   DATA_LOSS_LEVELS,
+  DATA_PROTECTION_KEYS,
+  DATABASE_POLICIES_KEYS,
   DATABASE_POLICIES_META_KEY,
   type DatabasePolicies,
   type DatabasePolicyDifference,

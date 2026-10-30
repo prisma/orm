@@ -263,11 +263,14 @@ function markerConflictDiagnostic(
   rerun: string,
 ): Diagnostic {
   const { expected, found } = outcome;
+  const changedBack = expected !== null && found?.storageHash === expected.storageHash;
   return {
     code: 'MIGRATION.MARKER_CAS_FAILURE',
     severity: 'error',
     summary: `Marker of space "${outcome.space}" changed while db sign ran`,
-    why: `Another process, such as migrate, changed the marker from ${expected?.storageHash ?? 'no marker'} to ${found?.storageHash ?? 'no marker'} after db sign read it, so db sign did not sign the space.`,
+    why: changedBack
+      ? 'Another process changed the marker and changed it back while db sign was writing it, so db sign did not sign the space.'
+      : `Another process, such as migrate, changed the marker from ${expected?.storageHash ?? 'no marker'} to ${found?.storageHash ?? 'no marker'} after db sign read it, so db sign did not sign the space.`,
     nextActions: [
       {
         kind: 'run-command',
@@ -276,7 +279,7 @@ function markerConflictDiagnostic(
       },
     ],
     meta: {
-      reason: 'storageHash',
+      reason: changedBack ? 'markerChanged' : 'storageHash',
       space: outcome.space,
       expectedStorageHash: expected?.storageHash ?? null,
       foundStorageHash: found?.storageHash ?? null,

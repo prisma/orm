@@ -123,7 +123,7 @@ export interface MongoMigrationRunnerExecuteOptions
   readonly migrationEdges: readonly AggregateMigrationEdgeRef[];
   /** Whether an earlier space of the same apply already changed the database. */
   readonly databaseChangedBefore?: boolean;
-  /** The policies the run checked, and the marker's `meta.policies` it found holding them; the marker update swaps only while the marker still stores that value. */
+  /** The policies the run checked; the application space's marker is written only while its policies read as these. */
   readonly checkedPolicies?: DatabasePolicies;
 }
 
@@ -165,6 +165,26 @@ function storageHashMovedFailure(
         space,
         expectedStorageHash: expectedFrom,
         foundStorageHash: found?.storageHash ?? null,
+        destinationStorageHash: destination.storageHash,
+      },
+    },
+  );
+}
+
+function markerChangedFailure(
+  space: string,
+  expectedFrom: string,
+  destination: MarkerDestination,
+): MongoMigrationRunnerFailure & { readonly code: 'MIGRATION.MARKER_CAS_FAILURE' } {
+  return migrationRunnerFailure(
+    'MIGRATION.MARKER_CAS_FAILURE',
+    'Marker was modified by another process during migration execution.',
+    {
+      why: 'Another process changed the marker and changed it back while this run was writing it. Run the command again.',
+      meta: {
+        reason: 'markerChanged',
+        space,
+        expectedStorageHash: expectedFrom,
         destinationStorageHash: destination.storageHash,
       },
     },
@@ -516,19 +536,16 @@ export class MongoMigrationRunner {
     if (await markerOps.updateMarker(space, expectedFrom, destination, checkedPolicies)) {
       return undefined;
     }
-    const failure = markerSwapFailure(
-      await markerOps.readMarker(space),
-      expectedFrom,
-      checkedPolicies,
-    );
-    switch (failure.kind) {
-      case 'storageHashMoved':
-        return storageHashMovedFailure(space, expectedFrom, failure.found, destination);
-      case 'policiesMoved':
-        return databasePoliciesMovedFailure(failure.checked, failure.found);
-      case 'policiesUnreadable':
-        throw markerPoliciesCorrupt(markerOps, failure.why);
+    const found = await markerOps.readMarker(space);
+    const failure = markerSwapFailure(found, expectedFrom, checkedPolicies);
+    if (failure.kind === 'policiesUnreadable') throw markerPoliciesCorrupt(markerOps, failure.why);
+    if (failure.kind === 'policiesMoved' && checkedPolicies !== undefined) {
+      return databasePoliciesMovedFailure(checkedPolicies, failure.found);
     }
+    if (failure.kind === 'markerChanged') {
+      return markerChangedFailure(space, expectedFrom, destination);
+    }
+    return storageHashMovedFailure(space, expectedFrom, found, destination);
   }
 
   private async recordLedgerEntries(

@@ -93,6 +93,33 @@ describe('db sign when a marker changes while it runs', () => {
     ]);
   });
 
+  it('says the marker was changed and changed back when it holds the hash read before', async () => {
+    const dir = await projectDir();
+    const previous = { storageHash: HASH_PREVIOUS, profileHash: 'profile' };
+    mocks.dbSign.mockResolvedValue(
+      ok({
+        spaces: [
+          { ...conflictSpace('app', HASH_A), expected: previous, found: previous },
+          signedSpace('pgvector', HASH_EXT),
+        ],
+      }),
+    );
+
+    const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+    expect(diagnosticsOf(run)).toMatchObject([
+      {
+        code: 'MIGRATION.MARKER_CAS_FAILURE',
+        why: 'Another process changed the marker and changed it back while db sign was writing it, so db sign did not sign the space.',
+        meta: {
+          reason: 'markerChanged',
+          expectedStorageHash: HASH_PREVIOUS,
+          foundStorageHash: HASH_PREVIOUS,
+        },
+      },
+    ]);
+  });
+
   it('repeats the contract and ref arguments in the command to sign again', async () => {
     const dir = await projectDir();
     await writeRef(refsDirOf(dir), 'production', { hash: HASH_A, invariants: [] });

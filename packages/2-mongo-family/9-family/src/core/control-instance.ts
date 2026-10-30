@@ -253,37 +253,31 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
     if (existing.storageHash === storageHash && existing.profileHash === profileHash) {
       return { ...signed, status: 'unchanged' };
     }
-    const heldPolicies = space === APP_SPACE_ID ? checkedPolicies : undefined;
+    const guardedBy = space === APP_SPACE_ID ? checkedPolicies : undefined;
     const updated = await controlAdapter.updateMarker(
       driver,
       space,
       existing.storageHash,
       { storageHash, profileHash },
-      heldPolicies,
+      guardedBy,
     );
     if (updated) return { ...signed, status: 'updated', previous: existing };
-    const failure = markerSwapFailure(
-      await controlAdapter.readMarker(driver, space),
-      existing.storageHash,
-      heldPolicies,
-    );
-    switch (failure.kind) {
-      case 'storageHashMoved':
-        return {
-          ...signed,
-          status: 'conflict',
-          reason: 'storageHash',
-          expected,
-          found:
-            failure.found === null
-              ? null
-              : { storageHash: failure.found.storageHash, profileHash: failure.found.profileHash },
-        };
-      case 'policiesMoved':
-        return databasePoliciesConflict(failure.checked, { kind: 'moved', found: failure.found });
-      case 'policiesUnreadable':
-        return databasePoliciesConflict(failure.checked, { kind: 'unreadable', why: failure.why });
+    const found = await controlAdapter.readMarker(driver, space);
+    const failure = markerSwapFailure(found, existing.storageHash, guardedBy);
+    if (guardedBy !== undefined && failure.kind === 'policiesMoved') {
+      return databasePoliciesConflict(guardedBy, { kind: 'moved', found: failure.found });
     }
+    if (guardedBy !== undefined && failure.kind === 'policiesUnreadable') {
+      return databasePoliciesConflict(guardedBy, { kind: 'unreadable', why: failure.why });
+    }
+    return {
+      ...signed,
+      status: 'conflict',
+      reason: 'storageHash',
+      expected,
+      found:
+        found === null ? null : { storageHash: found.storageHash, profileHash: found.profileHash },
+    };
   }
 
   async function databasePoliciesHeld(

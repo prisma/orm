@@ -2,6 +2,8 @@ import type { ContractMarkerRecord } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import {
   compareMarkerDatabasePolicies,
+  DATA_PROTECTION_KEYS,
+  DATABASE_POLICIES_KEYS,
   DATABASE_POLICIES_META_KEY,
   type DatabasePolicies,
   DEFAULT_DATABASE_POLICIES,
@@ -135,6 +137,30 @@ describe('withDeclaredDatabasePolicies', () => {
         dataLoss: 'data-loss-with-consent',
         accessWidening: 'access-widening-forbidden',
       },
+    });
+  });
+});
+
+describe('the policy key lists', () => {
+  it('name every key a declaration may carry, and the parser rejects any other', () => {
+    const full = {
+      change: ['migrate'],
+      dataProtection: Object.fromEntries(
+        DATA_PROTECTION_KEYS.map((key) => [key, DEFAULT_DATABASE_POLICIES.dataProtection[key]]),
+      ),
+    };
+    expect({
+      keys: Object.keys(full),
+      full: PartialDatabasePoliciesSchema.allows(full),
+      extra: PartialDatabasePoliciesSchema.allows({ ...full, extra: 1 }),
+      extraDataProtection: PartialDatabasePoliciesSchema.allows({
+        dataProtection: { ...full.dataProtection, extra: 1 },
+      }),
+    }).toEqual({
+      keys: [...DATABASE_POLICIES_KEYS],
+      full: true,
+      extra: false,
+      extraDataProtection: false,
     });
   });
 });

@@ -28,7 +28,7 @@ export interface MarkerOperations {
     space: string,
     expectedFrom: string,
     destination: MarkerDestination,
-    heldPolicies?: DatabasePolicies,
+    checkedPolicies?: DatabasePolicies,
   ): Promise<boolean>;
   writeLedgerEntry(
     space: string,
@@ -104,14 +104,14 @@ export interface MongoControlAdapter<TTarget extends string = string>
   ): Promise<void>;
 
   /**
-   * Atomically updates the marker document for `space` while it holds `expectedFrom` and, when `heldPolicies` is given, while its `meta.policies` reads as them, however it is stored. Returns `true` when the swap succeeded, `false` when another process changed the marker first.
+   * Atomically updates the marker document for `space` while it holds `expectedFrom` and, when `checkedPolicies` is given, while its `meta.policies` reads as them, however it is stored. Returns `true` when the swap succeeded, `false` when another process changed the marker first.
    */
   updateMarker(
     driver: ControlDriverInstance<'mongo', TTarget>,
     space: string,
     expectedFrom: string,
     destination: MarkerDestination,
-    heldPolicies?: DatabasePolicies,
+    checkedPolicies?: DatabasePolicies,
   ): Promise<boolean>;
 
   /**

@@ -44,6 +44,18 @@ export interface DeclaredDatabasePolicies {
   };
 }
 
+/** The keys a policy declaration may carry; any other key makes it invalid. */
+export const DATABASE_POLICIES_KEYS = [
+  'change',
+  'dataProtection',
+] as const satisfies readonly (keyof DatabasePolicies)[];
+
+/** The keys a policy declaration's `dataProtection` may carry; any other key makes it invalid. */
+export const DATA_PROTECTION_KEYS = [
+  'dataLoss',
+  'accessWidening',
+] as const satisfies readonly (keyof DatabasePolicies['dataProtection'])[];
+
 /** The key of the marker's `meta` that holds the database's policies. */
 export const DATABASE_POLICIES_META_KEY = 'policies';
 

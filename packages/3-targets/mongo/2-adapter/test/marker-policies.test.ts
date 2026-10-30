@@ -169,6 +169,16 @@ describe('database policies in the marker', { timeout: timeouts.databaseOperatio
         { policies: { change: 'migrate' } },
         DEFAULT_DATABASE_POLICIES,
       ],
+      [
+        'a key the policies may not carry',
+        { policies: { change: ['migrate', 'reconcile'], extra: 1 } },
+        DEFAULT_DATABASE_POLICIES,
+      ],
+      [
+        'a key data protection may not carry',
+        { policies: { dataProtection: { extra: 1 } } },
+        DEFAULT_DATABASE_POLICIES,
+      ],
     ] as const)('does not swap when the marker stores %s', async (_name, meta, held) => {
       expect(await swapWithStored(meta, held)).toBe(false);
     });

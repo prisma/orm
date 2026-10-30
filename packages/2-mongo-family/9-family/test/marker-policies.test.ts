@@ -33,11 +33,11 @@ describe('markerSwapFailure', () => {
     });
   });
 
-  it('reports a swap that guarded no policies as a moved storage hash', () => {
+  it('reports a swap that guarded no policies, with the hash held, as a changed marker', () => {
     const found = marker('expected', { policies: { change: ['migrate'] } });
 
     expect(markerSwapFailure(found, 'expected', undefined)).toEqual({
-      kind: 'storageHashMoved',
+      kind: 'markerChanged',
       found,
     });
   });
@@ -51,7 +51,6 @@ describe('markerSwapFailure', () => {
       ),
     ).toEqual({
       kind: 'policiesMoved',
-      checked: DEFAULT_DATABASE_POLICIES,
       found: { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] },
     });
   });
@@ -63,14 +62,14 @@ describe('markerSwapFailure', () => {
         'expected',
         DEFAULT_DATABASE_POLICIES,
       ),
-    ).toMatchObject({ kind: 'policiesUnreadable', checked: DEFAULT_DATABASE_POLICIES });
+    ).toMatchObject({ kind: 'policiesUnreadable' });
   });
 
-  it('reports a marker that holds both again, changed and restored in between, as a moved storage hash', () => {
+  it('reports a marker that holds both again, changed and changed back in between, as a changed marker', () => {
     const found = marker('expected', {});
 
     expect(markerSwapFailure(found, 'expected', DEFAULT_DATABASE_POLICIES)).toEqual({
-      kind: 'storageHashMoved',
+      kind: 'markerChanged',
       found,
     });
   });

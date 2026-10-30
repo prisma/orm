@@ -98,11 +98,11 @@ class MarkerStore {
         invariants: [...(destination.invariants ?? [])],
       };
     },
-    updateMarker: async (_space, expectedFrom, destination, heldPolicies) => {
+    updateMarker: async (_space, expectedFrom, destination, checkedPolicies) => {
       if (this.marker?.storageHash !== expectedFrom) return false;
       if (
-        heldPolicies !== undefined &&
-        compareMarkerDatabasePolicies(this.marker, heldPolicies).kind !== 'held'
+        checkedPolicies !== undefined &&
+        compareMarkerDatabasePolicies(this.marker, checkedPolicies).kind !== 'held'
       ) {
         return false;
       }
@@ -409,6 +409,31 @@ describe('MongoMigrationRunner database policies', () => {
     expect({ storageHash: store.marker?.storageHash, meta: store.marker?.meta }).toEqual({
       storageHash: DEST,
       meta: { policies: RECONCILE_ONLY },
+    });
+  });
+
+  it('says the marker was changed and changed back when the swap fails while the marker holds the hash and the policies', async () => {
+    const store = new MarkerStore(markerAt('start', {}));
+    const dependencies = makeDependencies(store);
+
+    const result = await runSpaces(
+      { ...dependencies, markerOps: { ...store.ops, updateMarker: async () => false } },
+      [
+        {
+          space: 'app',
+          plan: makePlan([createCollection('items')], 'start'),
+          migrationEdges: [edge('start', DEST, '002_items')],
+        },
+      ],
+      DEFAULT_DATABASE_POLICIES,
+    );
+
+    expect(result.assertNotOk()).toMatchObject({
+      code: 'MIGRATION.MARKER_CAS_FAILURE',
+      why: expect.stringContaining(
+        'Another process changed the marker and changed it back while this run was writing it. Run the command again.',
+      ),
+      meta: { reason: 'markerChanged', space: 'app', expectedStorageHash: 'start' },
     });
   });
 
