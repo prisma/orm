@@ -19,7 +19,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'3801bc4a566aee00c177563ff3ffe445b2f1c99f04e7fa3525f7fa1a675f6f19'>;
+  StorageHashBase<'2e166e0348814aa99c84e7acb7cf8ce4bd3dc4a0277236d191f1df8c3cd02468'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
@@ -173,6 +173,13 @@ export namespace Models {
     id: FieldOutputTypes['__unbound__']['Account']['id'];
     readonly [RelationKeys]?: never;
   };
+  export type Badge = {
+    id: FieldOutputTypes['__unbound__']['Badge']['id'];
+    label: FieldOutputTypes['__unbound__']['Badge']['label'];
+    userId: FieldOutputTypes['__unbound__']['Badge']['userId'];
+    user: User;
+    readonly [RelationKeys]?: 'user';
+  };
   export type Post = {
     authorId: FieldOutputTypes['__unbound__']['Post']['authorId'];
     id: FieldOutputTypes['__unbound__']['Post']['id'];
@@ -194,13 +201,15 @@ export namespace Models {
     email: FieldOutputTypes['__unbound__']['User']['email'];
     id: FieldOutputTypes['__unbound__']['User']['id'];
     name: FieldOutputTypes['__unbound__']['User']['name'];
+    badges: Badge[];
     posts: Post[];
-    readonly [RelationKeys]?: 'posts';
+    readonly [RelationKeys]?: 'badges' | 'posts';
   };
 }
 
 export declare const models: {
   Account: Models.Account;
+  Badge: Models.Badge;
   Post: Models.Post;
   Tag: Models.Tag;
   Token: Models.Token;
@@ -257,6 +266,56 @@ type ContractBase = Omit<
               ];
               indexes: readonly [];
               foreignKeys: readonly [];
+            };
+            readonly badges: {
+              columns: {
+                readonly id: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'function';
+                    readonly expression: '(lower(hex(randomblob(16))))';
+                  };
+                  readonly many: false;
+                };
+                readonly label: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly user_id: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'badges_user_id_idx_6c952402';
+                  readonly prefix: 'badges_user_id_idx';
+                  readonly columns: readonly ['user_id'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'badges';
+                    readonly columns: readonly ['user_id'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'users';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
             };
             readonly posts: {
               columns: {
@@ -397,6 +456,7 @@ type ContractBase = Omit<
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'Account';
     };
+    readonly badges: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Badge' };
     readonly posts: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Post' };
     readonly tags: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Tag' };
     readonly tokens: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Token' };
@@ -429,6 +489,45 @@ type ContractBase = Omit<
                 readonly email: { readonly column: 'email' };
                 readonly handle: { readonly column: 'handle' };
                 readonly id: { readonly column: 'id' };
+              };
+            };
+          };
+          readonly Badge: {
+            readonly fields: {
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly label: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly userId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+            };
+            readonly relations: {
+              readonly user: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'User';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['userId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'badges';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly id: { readonly column: 'id' };
+                readonly label: { readonly column: 'label' };
+                readonly userId: { readonly column: 'user_id' };
               };
             };
           };
@@ -529,6 +628,17 @@ type ContractBase = Omit<
               };
             };
             readonly relations: {
+              readonly badges: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'Badge';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['userId'];
+                };
+              };
               readonly posts: {
                 readonly to: {
                   readonly namespace: '__unbound__' & NamespaceId;

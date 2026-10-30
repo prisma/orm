@@ -8,6 +8,10 @@
       "model": "Account",
       "namespace": "__unbound__"
     },
+    "badges": {
+      "model": "Badge",
+      "namespace": "__unbound__"
+    },
     "posts": {
       "model": "Post",
       "namespace": "__unbound__"
@@ -68,6 +72,64 @@
               },
               "namespaceId": "__unbound__",
               "table": "accounts"
+            }
+          },
+          "Badge": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "label": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "userId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "user": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "userId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "label": {
+                  "column": "label"
+                },
+                "userId": {
+                  "column": "user_id"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "badges"
             }
           },
           "Post": {
@@ -215,6 +277,21 @@
               }
             },
             "relations": {
+              "badges": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "userId"
+                  ]
+                },
+                "to": {
+                  "model": "Badge",
+                  "namespace": "__unbound__"
+                }
+              },
               "posts": {
                 "cardinality": "1:N",
                 "on": {
@@ -297,6 +374,66 @@
                   ]
                 }
               ]
+            },
+            "badges": {
+              "columns": {
+                "id": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "default": {
+                    "expression": "(lower(hex(randomblob(16))))",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "label": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "user_id": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "badges_user_id_idx_6c952402"
+                  },
+                  "source": {
+                    "columns": [
+                      "user_id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "badges"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "users"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "user_id"
+                  ],
+                  "name": "badges_user_id_idx_6c952402",
+                  "prefix": "badges_user_id_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
             },
             "posts": {
               "columns": {
@@ -448,7 +585,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "3801bc4a566aee00c177563ff3ffe445b2f1c99f04e7fa3525f7fa1a675f6f19"
+    "storageHash": "2e166e0348814aa99c84e7acb7cf8ce4bd3dc4a0277236d191f1df8c3cd02468"
   },
   "capabilities": {
     "sql": {

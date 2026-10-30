@@ -9,7 +9,8 @@ model User {
   email String @unique
   name  String
 
-  posts Post[]
+  posts  Post[]
+  badges Badge[]
 
   @@map("users")
 }
@@ -44,4 +45,14 @@ model Token {
   label String
 
   @@map("tokens")
+}
+
+model Badge {
+  id     String @id @default(sql`(lower(hex(randomblob(16))))`)
+  label  String
+  userId Int    @map("user_id")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("badges")
 }

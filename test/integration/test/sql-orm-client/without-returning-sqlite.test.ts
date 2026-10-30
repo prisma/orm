@@ -34,6 +34,7 @@ const schema = `
   create table posts (id integer primary key autoincrement, title text not null, author_id integer not null references users(id));
   create table accounts (id integer primary key autoincrement, email text not null unique, handle text not null unique);
   create table tags (code text primary key, label text not null);
+  create table badges (id text primary key default (lower(hex(randomblob(16)))), label text not null, user_id integer not null references users(id));
   create table tokens (id text primary key default (lower(hex(randomblob(16)))), label text not null);
 `;
 
@@ -210,6 +211,29 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
         tokens: [],
       });
       expect(await db.Token.create({ id: 't1', label: 'x' })).toEqual({ id: 't1', label: 'x' });
+    });
+  });
+
+  it('refuses a nested create before running when a child key column gets a database default other than auto-increment', async () => {
+    await withDatabase(async ({ db, database, statements }) => {
+      await expect(
+        db.User.create({ ...ada, badges: (badges) => badges.create([{ label: 'First' }]) }),
+      ).rejects.toMatchObject({
+        code: 'ORM.CAPABILITY_MISSING',
+        message: expect.stringContaining(
+          'create() on model "Badge" cannot find the row it inserts',
+        ),
+      });
+      expect(statements).toEqual([]);
+      const { id } = await db.User.create(ada);
+      statements.length = 0;
+      await expect(
+        db.User.where({ id }).update({ badges: (badges) => badges.create([{ label: 'First' }]) }),
+      ).rejects.toMatchObject({ code: 'ORM.CAPABILITY_MISSING' });
+      expect({ statements, users: rowsOf(database, 'users').length }).toEqual({
+        statements: [],
+        users: 1,
+      });
     });
   });
 
