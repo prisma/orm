@@ -72,7 +72,7 @@ beforeEach(() => {
   mocks.close.mockReset().mockResolvedValue(undefined);
   mocks.readAllMarkers
     .mockReset()
-    .mockResolvedValue(new Map([['app', { storageHash: C2, invariants: [] }]]));
+    .mockResolvedValue(new Map([['app', { storageHash: C2, invariants: [], meta: {} }]]));
   mocks.migrate
     .mockReset()
     .mockResolvedValue(
@@ -165,8 +165,10 @@ function ormConfig(cwd: string, overrides: Record<string, unknown> = {}): Record
   };
 }
 
-function markerAt(storageHash: string): Map<string, { storageHash: string; invariants: string[] }> {
-  return new Map([['app', { storageHash, invariants: [] }]]);
+function markerAt(
+  storageHash: string,
+): Map<string, { storageHash: string; invariants: string[]; meta: Record<string, unknown> }> {
+  return new Map([['app', { storageHash, invariants: [], meta: {} }]]);
 }
 
 function harness(config: Record<string, unknown>) {

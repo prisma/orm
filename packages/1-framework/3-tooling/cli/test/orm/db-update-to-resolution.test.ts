@@ -326,10 +326,17 @@ describe('db update --to bundle resolution', () => {
 
     await harness(cwd).run(['db', 'update', '--to', 'production', '--dry-run', '--json'], { cwd });
     await harness(cwd).run(['db', 'update', '--to', dirNext, '--dry-run', '--json'], { cwd });
+    await harness(cwd).run(
+      ['db', 'update', '--to', 'production', '--permit-policy-change', '--dry-run', '--json'],
+      { cwd },
+    );
 
-    expect(mocks.dbUpdate.mock.calls.map(([options]) => options.ref)).toEqual([
-      { name: 'production', hash: HASH_B, invariants: [], policies },
-      undefined,
+    expect(
+      mocks.dbUpdate.mock.calls.map(([options]) => [options.ref, options.permitPolicyChange]),
+    ).toEqual([
+      [{ name: 'production', hash: HASH_B, invariants: [], policies }, undefined],
+      [undefined, undefined],
+      [{ name: 'production', hash: HASH_B, invariants: [], policies }, true],
     ]);
   });
 });

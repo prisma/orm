@@ -10,3 +10,8 @@ export const dbFlag = flag.string({
   brief: 'Database connection string',
   placeholder: 'url',
 });
+
+/** Consent for `db migrate` and `db update` to write the ref's declared policies into the database. */
+export const permitPolicyChangeFlag = flag.boolean({
+  brief: "Write the ref's declared policies into the database before enforcing them",
+});
