@@ -637,6 +637,15 @@ export type EmitResult = Result<EmitSuccess, EmitFailure>;
 // ============================================================================
 
 /**
+ * What `migrate` moves the application space to: the ref `--to` named, which it walks to by a path
+ * that provides the ref's invariants, checking and, with consent, recording the policies it
+ * declares; or a contract `--to` named by its hash (`@db` and `@empty` resolve to one).
+ */
+export type MigrateTarget =
+  | { readonly kind: 'ref'; readonly ref: NamedRef }
+  | { readonly kind: 'hash'; readonly hash: string };
+
+/**
  * Options for the aggregate-walking `migrate` operation.
  *
  * The control-api operation is responsible for: loading the
@@ -647,15 +656,6 @@ export type EmitResult = Result<EmitSuccess, EmitFailure>;
  * just resolves the descriptor surface (config, refs, contract
  * envelope, app-space migration packages) and hands the inputs in.
  */
-/**
- * What `migrate` moves the application space to: the ref `--to` named, which it walks to by a path
- * that provides the ref's invariants, checking and, with consent, recording the policies it
- * declares; or a contract `--to` named by its hash (`@db` and `@empty` resolve to one).
- */
-export type MigrateTarget =
-  | { readonly kind: 'ref'; readonly ref: NamedRef }
-  | { readonly kind: 'hash'; readonly hash: string };
-
 export interface MigrateOptions {
   /** The command line the advice of a failure repeats: its directory, `--config` and whether `--db` was given. */
   readonly invocation: CliInvocation;
