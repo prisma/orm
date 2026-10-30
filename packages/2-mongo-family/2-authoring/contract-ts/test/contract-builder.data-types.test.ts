@@ -7,9 +7,10 @@ import type {
 import { mongoDataType } from '@internal/mongo-contract/data-type';
 import { mongoTestCodecDescriptors, mongoTestDataTypes } from '@internal/mongo-contract/test';
 import { blindCast } from '@internal/utils/casts';
-import { type } from 'arktype';
+import { type as arktype } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { defineContract } from '../src/contract-builder';
+import { mongoTargetPack as testTargetPack } from './mongo-test-packs';
 
 const mongoFamilyPack = {
   kind: 'family',
@@ -56,15 +57,10 @@ describe('mongo defineContract data types', () => {
   });
 });
 
-const vectorParams = type({ 'length?': 'number.integer >= 1' });
+const vectorParams = arktype({ 'length?': 'number.integer >= 1' });
 
 const vectorTargetPack = {
-  kind: 'target',
-  id: 'mongo',
-  familyId: 'mongo',
-  targetId: 'mongo',
-  version: '0.0.1',
-  defaultNamespaceId: '__unbound__',
+  ...testTargetPack,
   dataTypes: [
     ...mongoTestDataTypes.filter((each) => each.id !== 'mongo/vector'),
     mongoDataType('mongo/vector', {
@@ -93,21 +89,27 @@ const vectorTargetPack = {
   },
 } as const satisfies TargetPackRef<'mongo', 'mongo'>;
 
+const vectorOfLength = (length: number) =>
+  ({ kind: 'scalar', codecId: 'mongo/vector@1', typeParams: { length } }) as const;
+
 describe('mongo defineContract type parameters', () => {
   const build = (length: number, inValueObject = false) =>
     defineContract(
       { family: mongoFamilyPack, target: vectorTargetPack },
-      ({ field, model, valueObject }) => {
+      ({ field, model, valueObject, type }) => {
         const Embedding = valueObject('Embedding', {
-          fields: { values: field.vector({ typeParams: { length } }) },
+          fields: { values: field.scalar(vectorOfLength(length)) },
         });
         return {
           models: {
             Doc: model('Doc', {
               collection: 'docs',
               fields: inValueObject
-                ? { _id: field.objectId(), embedding: field.valueObject(Embedding) }
-                : { _id: field.objectId(), embedding: field.vector({ typeParams: { length } }) },
+                ? { _id: field.scalar(type.ObjectId()), embedding: field.valueObject(Embedding) }
+                : {
+                    _id: field.scalar(type.ObjectId()),
+                    embedding: field.scalar(vectorOfLength(length)),
+                  },
             }),
           },
           valueObjects: { Embedding },

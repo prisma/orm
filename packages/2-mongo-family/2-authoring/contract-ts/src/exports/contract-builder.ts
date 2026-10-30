@@ -18,6 +18,7 @@ export type {
 } from '../contract-builder';
 export {
   buildBoundContract,
+  createContractAuthoringHelpers,
   defineContract,
   field,
   index,

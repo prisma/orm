@@ -6,7 +6,14 @@ import type {
   MongoContractWithTypeMaps,
 } from '@internal/mongo-contract';
 import { describe, expect, it } from 'vitest';
-import { defineContract, enumType, field, member, model } from '../src/exports/contract-builder';
+import {
+  defineContract,
+  enumType,
+  field,
+  member,
+  model,
+  type,
+} from '../src/exports/contract-builder';
 import mongoStatic from '../src/static/mongo-static';
 
 type AnyMongoContract = MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>;
@@ -21,7 +28,7 @@ const Role = enumType(
 const Account = model('Account', {
   collection: 'accounts',
   fields: {
-    _id: field.objectId(),
+    _id: field.scalar(type.ObjectId()),
     role: field.namedType(Role),
   },
 });

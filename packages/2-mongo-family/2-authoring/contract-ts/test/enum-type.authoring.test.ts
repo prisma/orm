@@ -11,11 +11,11 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { MongoContractSchema } from '@internal/mongo-contract';
 import { mongoDataType } from '@internal/mongo-contract/data-type';
 import { mongoTestCodecDescriptors } from '@internal/mongo-contract/test';
-import { type } from 'arktype';
+import { type as arktype } from 'arktype';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { defineContract, field, model } from '../src/contract-builder';
 import { enumType, member } from '../src/enum-type';
-import { mongoFamilyPack, mongoTargetPack as mongoTestTargetPack } from './mongo-test-packs';
+import { mongoFamilyPack, mongoTargetPack as mongoTestTargetPack, type } from './mongo-test-packs';
 
 const testDataTypes: Readonly<Record<string, DataType>> = {
   'test/object': mongoDataType('test/object', { read: (json) => json, bsonTypes: ['object'] }),
@@ -25,9 +25,9 @@ const testDataTypes: Readonly<Record<string, DataType>> = {
 };
 
 function testDataTypeOf(codecId: string): DataType {
-  const type = testDataTypes[codecId.replace(/@\d+$/, '')];
-  if (type === undefined) throw new Error(`no test data type for ${codecId}`);
-  return type;
+  const dataType = testDataTypes[codecId.replace(/@\d+$/, '')];
+  if (dataType === undefined) throw new Error(`no test data type for ${codecId}`);
+  return dataType;
 }
 
 /** A codec over the test data type of `id`, which stores `toStored(value)` and reads back `fromStored(stored)`. */
@@ -36,13 +36,13 @@ function testCodec(
   toStored: (value: unknown) => unknown = (value) => value,
   fromStored: (stored: unknown) => unknown = (stored) => stored,
 ): Codec {
-  const type = testDataTypeOf(id);
+  const dataType = testDataTypeOf(id);
   return {
     id,
-    dataType: type,
+    dataType,
     toWire: async (v: unknown) => v,
     fromWire: async (v: unknown) => v,
-    toDataTypeValue: (v: unknown) => type.valueFrom(toStored(v) as JsonValue, {}),
+    toDataTypeValue: (v: unknown) => dataType.valueFrom(toStored(v) as JsonValue, {}),
     fromDataTypeValue: (value: DataTypeValue) => fromStored(value.value),
   } satisfies Codec;
 }
@@ -103,7 +103,7 @@ describe('builder accumulation + contract-schema acceptance', () => {
   const Account = model('Account', {
     collection: 'accounts',
     fields: {
-      _id: field.objectId(),
+      _id: field.scalar(type.ObjectId()),
       role: field.namedType(Role),
     },
   });
@@ -161,7 +161,7 @@ describe('builder accumulation + contract-schema acceptance', () => {
   it('passes Mongo arktype contract-schema validation', () => {
     const envelope = JSON.parse(JSON.stringify(contract)) as unknown;
     const result = MongoContractSchema(envelope);
-    expect(result instanceof type.errors).toBe(false);
+    expect(result instanceof arktype.errors).toBe(false);
   });
 });
 
@@ -169,7 +169,7 @@ describe('MongoContractSchema — enum validation', () => {
   const Role = enumType('Role', mongoString, member('User', 'user'), member('Admin', 'admin'));
   const Account = model('Account', {
     collection: 'accounts',
-    fields: { _id: field.objectId(), role: field.namedType(Role) },
+    fields: { _id: field.scalar(type.ObjectId()), role: field.namedType(Role) },
   });
   const baseContract = JSON.parse(
     JSON.stringify(
@@ -201,7 +201,7 @@ describe('MongoContractSchema — enum validation', () => {
       },
     };
     const result = MongoContractSchema(malformed);
-    expect(result instanceof type.errors).toBe(true);
+    expect(result instanceof arktype.errors).toBe(true);
   });
 });
 
@@ -245,7 +245,7 @@ describe('defineContract() — members compared as the codec stores them', () =>
   function build(handle: ReturnType<typeof enumType>) {
     const Holder = model('Holder', {
       collection: 'holders',
-      fields: { _id: field.objectId(), value: field.namedType(handle) },
+      fields: { _id: field.scalar(type.ObjectId()), value: field.namedType(handle) },
     });
     return defineContract({
       family: mongoFamilyPack,
@@ -329,7 +329,7 @@ describe('defineContract() — undeclared enum reference', () => {
     const Role = enumType('Role', mongoString, member('User', 'user'));
     const Account = model('Account', {
       collection: 'accounts',
-      fields: { _id: field.objectId(), role: field.namedType(Role) },
+      fields: { _id: field.scalar(type.ObjectId()), role: field.namedType(Role) },
     });
     expect(() =>
       defineContract({
@@ -353,7 +353,7 @@ describe('defineContract() — enum declaration key mismatch', () => {
     const Role = enumType('Role', mongoString, member('User', 'user'));
     const Account = model('Account', {
       collection: 'accounts',
-      fields: { _id: field.objectId(), role: field.namedType(Role) },
+      fields: { _id: field.scalar(type.ObjectId()), role: field.namedType(Role) },
     });
     const run = () =>
       defineContract({
@@ -392,7 +392,7 @@ describe('defineContract() — codec-encoded value set', () => {
   const Role = enumType('Role', upperCodec, member('Admin', 'admin'), member('Author', 'author'));
   const Account = model('Account', {
     collection: 'accounts',
-    fields: { _id: field.objectId(), role: field.namedType(Role) },
+    fields: { _id: field.scalar(type.ObjectId()), role: field.namedType(Role) },
   });
 
   const contract = defineContract({
@@ -431,7 +431,7 @@ describe('defineContract() — codec-encoded value set', () => {
     const Missing = enumType('Missing', upperCodec, member('One', 'one'));
     const WithMissing = model('WithMissing', {
       collection: 'withMissing',
-      fields: { _id: field.objectId(), value: field.namedType(Missing) },
+      fields: { _id: field.scalar(type.ObjectId()), value: field.namedType(Missing) },
     });
     expect(() =>
       defineContract({
@@ -461,7 +461,7 @@ describe('an enum whose codec does not declare the equality trait', () => {
     } as const satisfies TargetPackRef<'mongo', 'mongo'>;
     const WithShape = model('WithShape', {
       collection: 'withShape',
-      fields: { _id: field.objectId(), shape: field.namedType(Shape) },
+      fields: { _id: field.scalar(type.ObjectId()), shape: field.namedType(Shape) },
     });
 
     expect(() =>

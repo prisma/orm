@@ -2,22 +2,22 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
 import { defineContract, field, model, valueObject } from '../src/contract-builder';
 import { enumType, member } from '../src/enum-type';
-import { mongoFamilyPack, mongoTargetPack } from './mongo-test-packs';
+import { mongoFamilyPack, mongoTargetPack, type } from './mongo-test-packs';
 
 const Role = enumType('Role', { codecId: 'mongo/string@1' }, member('Admin', 'admin'));
 
 function contractWith(street: 'street' | 'line1') {
-  const Geo = valueObject('Geo', { fields: { lat: field.double() } });
+  const Geo = valueObject('Geo', { fields: { lat: field.scalar(type.Double()) } });
   const Address = valueObject('Address', {
     fields: {
-      [street]: field.string(),
+      [street]: field.scalar(type.String()),
       role: field.namedType(Role),
       geo: field.valueObject(Geo).optional(),
     },
   });
   const User = model('User', {
     collection: 'users',
-    fields: { _id: field.objectId(), address: field.valueObject(Address) },
+    fields: { _id: field.scalar(type.ObjectId()), address: field.valueObject(Address) },
   });
   return defineContract({
     family: mongoFamilyPack,

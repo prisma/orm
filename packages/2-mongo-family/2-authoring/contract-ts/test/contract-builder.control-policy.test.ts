@@ -7,10 +7,10 @@ import {
   type MongoContract,
   type MongoStorageShape,
 } from '@internal/mongo-contract';
-import { type } from 'arktype';
+import { type as arktype } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { defineContract, field, index, model } from '../src/contract-builder';
-import { mongoFamilyPack, mongoTargetPack } from './mongo-test-packs';
+import { mongoFamilyPack, mongoTargetPack, type } from './mongo-test-packs';
 
 function unboundCollections(storage: MongoStorageShape): Record<string, MongoCollection> {
   const namespace = storage.namespaces[UNBOUND_NAMESPACE_ID];
@@ -51,7 +51,7 @@ describe('defineContract defaultControlPolicy', () => {
       models: {
         User: model('User', {
           collection: 'users',
-          fields: { _id: field.objectId() },
+          fields: { _id: field.scalar(type.ObjectId()) },
         }),
       },
     });
@@ -66,7 +66,7 @@ describe('defineContract defaultControlPolicy', () => {
       models: {
         User: model('User', {
           collection: 'users',
-          fields: { _id: field.objectId() },
+          fields: { _id: field.scalar(type.ObjectId()) },
         }),
       },
     });
@@ -85,7 +85,7 @@ describe('defineContract per-collection controlPolicy', () => {
           User: model('User', {
             collection: 'users',
             controlPolicy,
-            fields: { _id: field.objectId() },
+            fields: { _id: field.scalar(type.ObjectId()) },
           }),
         },
       });
@@ -107,7 +107,7 @@ describe('defineContract per-collection controlPolicy', () => {
       models: {
         User: model('User', {
           collection: 'users',
-          fields: { _id: field.objectId() },
+          fields: { _id: field.scalar(type.ObjectId()) },
         }),
       },
     });
@@ -127,17 +127,17 @@ describe('defineContract mixed default and per-collection controlPolicy', () => 
       models: {
         User: model('User', {
           collection: 'users',
-          fields: { _id: field.objectId() },
+          fields: { _id: field.scalar(type.ObjectId()) },
         }),
         Profile: model('Profile', {
           collection: 'profiles',
           controlPolicy: 'managed',
-          fields: { _id: field.objectId() },
+          fields: { _id: field.scalar(type.ObjectId()) },
         }),
         Audit: model('Audit', {
           collection: 'audit_log',
           controlPolicy: 'tolerated',
-          fields: { _id: field.objectId(), ts: field.string() },
+          fields: { _id: field.scalar(type.ObjectId()), ts: field.scalar(type.String()) },
           indexes: [index({ ts: 1 })],
         }),
       },
@@ -157,7 +157,7 @@ describe('defineContract mixed default and per-collection controlPolicy', () => 
 
     const envelope = JSON.parse(JSON.stringify(built)) as unknown;
     const contractSchema = createMongoContractSchema();
-    expect(contractSchema(envelope) instanceof type.errors).toBe(false);
+    expect(contractSchema(envelope) instanceof arktype.errors).toBe(false);
 
     type RoundTrippedCollection = { readonly control?: ControlPolicy };
     type RoundTrippedEnvelope = {
@@ -211,7 +211,7 @@ describe('defineContract collection validators under a control policy', () => {
           model(controlPolicy, {
             collection: controlPolicy,
             controlPolicy,
-            fields: { _id: field.objectId(), name: field.string() },
+            fields: { _id: field.scalar(type.ObjectId()), name: field.scalar(type.String()) },
           }),
         ]),
       ),
@@ -226,11 +226,11 @@ describe('defineContract collection validators under a control policy', () => {
       target: mongoTargetPack,
       defaultControlPolicy: 'observed',
       models: {
-        Job: model('Job', { collection: 'jobs', fields: { _id: field.objectId() } }),
+        Job: model('Job', { collection: 'jobs', fields: { _id: field.scalar(type.ObjectId()) } }),
         User: model('User', {
           collection: 'users',
           controlPolicy: 'managed',
-          fields: { _id: field.objectId() },
+          fields: { _id: field.scalar(type.ObjectId()) },
         }),
       },
     });
@@ -247,7 +247,7 @@ describe('defineContract collection validators under a control policy', () => {
         User: model('User', {
           collection: 'users',
           controlPolicy: 'managed',
-          fields: { _id: field.objectId() },
+          fields: { _id: field.scalar(type.ObjectId()) },
         }),
       },
     });

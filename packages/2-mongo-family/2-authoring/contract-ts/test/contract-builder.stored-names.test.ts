@@ -3,7 +3,7 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { type MongoContract, MongoIndex } from '@internal/mongo-contract';
 import { describe, expect, it } from 'vitest';
 import { defineContract, field, index, model, rel, valueObject } from '../src/contract-builder';
-import { mongoFamilyPack, mongoTargetPack } from './mongo-test-packs';
+import { mongoFamilyPack, mongoTargetPack, type } from './mongo-test-packs';
 
 function build<const Models extends Record<string, ReturnType<typeof model>>>(models: Models) {
   return defineContract({ family: mongoFamilyPack, target: mongoTargetPack, models });
@@ -18,9 +18,9 @@ describe('stored names in the Mongo contract builder', () => {
     const User = model('User', {
       collection: 'users',
       fields: {
-        id: field.objectId().mongo({ field: '_id' }),
-        displayName: field.string().optional().mongo({ field: 'display_name' }),
-        email: field.string(),
+        id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+        displayName: field.scalar(type.String()).optional().mongo({ field: 'display_name' }),
+        email: field.scalar(type.String()),
       },
     });
     const models = domainModelsAtDefaultNamespace(build({ User }).domain);
@@ -44,8 +44,8 @@ describe('stored names in the Mongo contract builder', () => {
     const Tagged = model('Tagged', {
       collection: 'tagged',
       fields: {
-        id: field.objectId().mongo({ field: '_id' }),
-        tags: field.string().mongo({ field: 'tag_list' }).optional().many(),
+        id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+        tags: field.scalar(type.String()).mongo({ field: 'tag_list' }).optional().many(),
       },
     });
     const models = domainModelsAtDefaultNamespace(build({ Tagged }).domain);
@@ -59,9 +59,9 @@ describe('stored names in the Mongo contract builder', () => {
     const Task = model('Task', {
       collection: 'tasks',
       fields: {
-        id: field.objectId().mongo({ field: '_id' }),
-        kind: field.string().mongo({ field: 'task_kind' }),
-        title: field.string().mongo({ field: 'task_title' }),
+        id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+        kind: field.scalar(type.String()).mongo({ field: 'task_kind' }),
+        title: field.scalar(type.String()).mongo({ field: 'task_title' }),
       },
       indexes: [index({ title: 1 })],
       discriminator: { field: 'kind', variants: { Bug: { value: 'bug' } } },
@@ -69,7 +69,7 @@ describe('stored names in the Mongo contract builder', () => {
     const Bug = model('Bug', {
       collection: 'tasks',
       base: Task,
-      fields: { severity: field.string().mongo({ field: 'level' }) },
+      fields: { severity: field.scalar(type.String()).mongo({ field: 'level' }) },
       indexes: [index({ severity: -1 })],
     });
     const contract = build({ Task, Bug });
@@ -87,13 +87,13 @@ describe('stored names in the Mongo contract builder', () => {
   it('keeps relation fields as field names', () => {
     const User = model('User', {
       collection: 'users',
-      fields: { id: field.objectId().mongo({ field: '_id' }) },
+      fields: { id: field.scalar(type.ObjectId()).mongo({ field: '_id' }) },
     });
     const Post = model('Post', {
       collection: 'posts',
       fields: {
-        id: field.objectId().mongo({ field: '_id' }),
-        authorId: field.objectId().mongo({ field: 'author_id' }),
+        id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+        authorId: field.scalar(type.ObjectId()).mongo({ field: 'author_id' }),
       },
       relations: { author: rel.belongsTo(User, { from: 'authorId', to: User.ref('id') }) },
     });
@@ -112,8 +112,8 @@ describe('stored names in the Mongo contract builder', () => {
     const User = model('User', {
       collection: 'users',
       fields: {
-        id: field.objectId().mongo({ field: '_id' }),
-        otherId: field.objectId().mongo({ field: '_id' }),
+        id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+        otherId: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
       },
     });
     expect(() => build({ User })).toThrow(
@@ -128,8 +128,8 @@ describe('stored names in the Mongo contract builder', () => {
     const User = model('User', {
       collection: 'users',
       fields: {
-        id: field.objectId().mongo({ field: '_id' }),
-        label: field.string().mongo({ field: '__proto__' }),
+        id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+        label: field.scalar(type.String()).mongo({ field: '__proto__' }),
       },
     });
     expect(() => build({ User })).toThrow(
@@ -144,12 +144,12 @@ describe('stored names in the Mongo contract builder', () => {
 
   it('refuses a stored name on a field of a value object', () => {
     const Address = valueObject('Address', {
-      fields: { street: field.string().mongo({ field: 'st' }) },
+      fields: { street: field.scalar(type.String()).mongo({ field: 'st' }) },
     });
     const User = model('User', {
       collection: 'users',
       fields: {
-        id: field.objectId().mongo({ field: '_id' }),
+        id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
         address: field.valueObject(Address),
       },
     });

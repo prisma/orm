@@ -6,7 +6,7 @@ import type { Contract } from '../../../../2-mongo-family/1-foundation/mongo-con
 import contractJson from '../../../../2-mongo-family/1-foundation/mongo-contract/test/fixtures/orm-contract.json' with {
   type: 'json',
 };
-import { defineContract, field, model } from '../src/exports/contract-builder';
+import { defineContract, field, model, type } from '../src/exports/contract-builder';
 import mongo from '../src/runtime/mongo';
 import { contractFromJson } from '../src/static/contract-from-json';
 
@@ -16,7 +16,7 @@ const accountsContract = defineContract({
   models: {
     Account: model('Account', {
       collection: 'accounts',
-      fields: { _id: field.objectId(), email: field.string() },
+      fields: { _id: field.scalar(type.ObjectId()), email: field.scalar(type.String()) },
     }),
   },
 });

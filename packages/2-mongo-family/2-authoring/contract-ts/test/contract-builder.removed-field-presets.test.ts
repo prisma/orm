@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defineContract, field, model } from '../src/contract-builder';
-import { mongoFamilyPack, mongoTargetPack } from './mongo-test-packs';
+import { mongoFamilyPack, mongoTargetPack, type } from './mongo-test-packs';
 
 const GUIDE = 'The upgrade guide "Field presets are removed" lists every rewrite.';
 
@@ -19,11 +19,11 @@ function refusalOf(path: string) {
 
 describe('a read of a field helper the MongoDB builder does not have', () => {
   it.each([
-    ['temporal.createdAt', 'field.date().onCreate(gen.now())'],
-    ['temporal.updatedAt', 'field.date().onCreate(gen.now()).onUpdate(gen.now())'],
+    ['temporal.createdAt', 'field.scalar(type.temporal.CreatedAt())'],
+    ['temporal.updatedAt', 'field.scalar(type.temporal.UpdatedAt())'],
     [
       'temporal.timestamp',
-      'field.date(), with .onCreate(gen.now()) and .onUpdate(gen.now()) for the phases the preset set',
+      'field.scalar(type.Date()), with .onCreate(gen.now()) and .onUpdate(gen.now()) for the phases the preset set',
     ],
   ])('refuses the removed preset field.%s with its rewrite', (path, rewrite) => {
     expect(refusalOf(path)).toMatchObject({
@@ -33,7 +33,40 @@ describe('a read of a field helper the MongoDB builder does not have', () => {
     });
   });
 
-  it('reads every name that was never a preset as on the helpers', () => {
+  it.each([
+    ['objectId', 'field.scalar(type.ObjectId())'],
+    ['string', 'field.scalar(type.String())'],
+    ['double', 'field.scalar(type.Double())'],
+    ['int32', 'field.scalar(type.Int32())'],
+    ['bool', 'field.scalar(type.Bool())'],
+    ['date', 'field.scalar(type.Date())'],
+    ['int64', 'field.scalar(type.Int64())'],
+    ['int64Number', 'field.scalar(type.Int64Number())'],
+    ['decimal128', 'field.scalar(type.Decimal128())'],
+    ['binary', 'field.scalar(type.Binary())'],
+    ['json', 'field.scalar(type.Json())'],
+    ['bson', 'field.scalar(type.Bson())'],
+    ['vector', 'field.scalar(type.Vector()), or field.scalar(type.Vector(n)) for a length n'],
+  ])('refuses the removed scalar helper field.%s with its rewrite', (name, rewrite) => {
+    expect(refusalOf(name)).toMatchObject({
+      code: 'CONTRACT.FIELD_HELPER_UNKNOWN',
+      message: `field.${name}() was removed. Write ${rewrite}.`,
+      meta: { helper: `field.${name}` },
+    });
+  });
+
+  it('refuses field.scalar given a codec id, with its rewrite', () => {
+    expect(() => Reflect.apply(field.scalar, field, ['mongo/string@1'])).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.FIELD_HELPER_UNKNOWN',
+        message:
+          'field.scalar() takes a type from the type helpers, such as field.scalar(type.String()), and was given "mongo/string@1". Prisma 8 removed field.scalar(codecId).',
+        meta: { helper: 'field.scalar' },
+      }),
+    );
+  });
+
+  it('reads every name that was never a helper as on the helpers', () => {
     expect(
       ['length', 'name', 'default', 'text', 'temporal.now', 'temporal.length'].map((path) =>
         readPath(field, path),
@@ -43,13 +76,13 @@ describe('a read of a field helper the MongoDB builder does not have', () => {
 
   it('refuses the read in a defineContract callback', () => {
     expect(() =>
-      defineContract({ family: mongoFamilyPack, target: mongoTargetPack }, ({ field: f }) => ({
+      defineContract({ family: mongoFamilyPack, target: mongoTargetPack }, (helpers) => ({
         models: {
           Post: model('Post', {
             collection: 'posts',
             fields: {
-              _id: f.objectId(),
-              createdAt: Reflect.get(Object(Reflect.get(f, 'temporal')), 'createdAt'),
+              _id: helpers.field.scalar(helpers.type.ObjectId()),
+              createdAt: Reflect.get(Object(Reflect.get(helpers.field, 'temporal')), 'createdAt'),
             },
           }),
         },
@@ -58,9 +91,12 @@ describe('a read of a field helper the MongoDB builder does not have', () => {
   });
 
   it('keeps every helper the builder has', () => {
-    expect([field.date().__type, Object.keys(field).includes('json')]).toEqual([
-      { kind: 'scalar', codecId: 'mongo/date@1' },
-      true,
-    ]);
+    expect({
+      scalar: field.scalar(type.Date()).__type,
+      helpers: Object.keys(field).sort(),
+    }).toEqual({
+      scalar: { kind: 'scalar', codecId: 'mongo/date@1' },
+      helpers: ['namedType', 'scalar', 'valueObject'],
+    });
   });
 });

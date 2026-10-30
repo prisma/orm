@@ -12,7 +12,6 @@ export type {
   ValueObjectBuilder,
 } from '@internal/mongo-contract-ts/contract-builder';
 export {
-  field,
   index,
   member,
   model,
@@ -21,4 +20,4 @@ export {
 } from '@internal/mongo-contract-ts/contract-builder';
 export { defineContract } from '../contract/define-contract';
 export { enumType } from '../contract/enum-type';
-export { gen } from '../contract/gen';
+export { field, gen, type } from '../contract/field';

@@ -18,7 +18,14 @@ import { timeouts } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
-import { defineContract, enumType, field, member, model } from '../src/exports/contract-builder';
+import {
+  defineContract,
+  enumType,
+  field,
+  member,
+  model,
+  type,
+} from '../src/exports/contract-builder';
 import mongo, { type MongoClient as MongoFacadeClient } from '../src/runtime/mongo';
 
 const Role = enumType(
@@ -41,7 +48,7 @@ const Status = enumType(
 const Account = model('Account', {
   collection: 'accounts',
   fields: {
-    _id: field.objectId(),
+    _id: field.scalar(type.ObjectId()),
     role: field.namedType(Role),
     mood: field.namedType(Role).optional(),
     tags: field.namedType(Role).many(),

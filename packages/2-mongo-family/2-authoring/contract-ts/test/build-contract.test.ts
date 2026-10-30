@@ -6,7 +6,7 @@ import { extractCodecLookup } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { MongoContract } from '@internal/mongo-contract';
 import { mongoDataType } from '@internal/mongo-contract/data-type';
-import { type } from 'arktype';
+import { type as arktype } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { buildMongoContractFromDefinition } from '../src/build-contract';
 import type { RestatedFieldDifference } from '../src/build-refusals';
@@ -18,6 +18,7 @@ import {
   identityCodecDescriptor,
   mongoFamilyPack,
   mongoTargetPack,
+  type,
 } from './mongo-test-packs';
 
 const codecLookup = extractCodecLookup([mongoFamilyPack, mongoTargetPack]);
@@ -25,10 +26,10 @@ const { support: dataTypes } = assembleDataTypeSupport(
   [mongoFamilyPack, mongoTargetPack],
   (codecId) => codecLookup.descriptorFor(codecId)?.dataType,
 );
-const objectIdType = field.objectId().__type;
-const stringType = field.string().__type;
-const int32Type = field.int32().__type;
-const vectorType = field.vector().__type;
+const objectIdType = field.scalar(type.ObjectId()).__type;
+const stringType = field.scalar(type.String()).__type;
+const int32Type = field.scalar(type.Int32()).__type;
+const vectorType = field.scalar(type.Vector()).__type;
 const now = { kind: 'generator', id: TIMESTAMP_NOW_GENERATOR_ID } as const;
 
 function scalar(fieldName: string, overrides: Partial<FieldNode> = {}): FieldNode {
@@ -107,9 +108,9 @@ describe('buildMongoContractFromDefinition', () => {
     const Task = model('Task', {
       collection: 'tasks',
       fields: {
-        _id: field.objectId(),
-        type: field.string(),
-        title: field.string().mongo({ field: 't' }),
+        _id: field.scalar(type.ObjectId()),
+        type: field.scalar(type.String()),
+        title: field.scalar(type.String()).mongo({ field: 't' }),
       },
       indexes: [index({ title: 1 })],
       discriminator: { field: 'type', variants: { Bug: { value: 'bug' } } },
@@ -117,7 +118,7 @@ describe('buildMongoContractFromDefinition', () => {
     const Bug = model('Bug', {
       collection: 'tasks',
       base: Task,
-      fields: { severity: field.string() },
+      fields: { severity: field.scalar(type.String()) },
       indexes: [index({ severity: 1 })],
     });
 
@@ -575,7 +576,7 @@ describe('buildMongoContractFromDefinition refusals with their whole data', () =
   const sized = mongoDataType('test/sized', {
     read: (json) => json,
     bsonTypes: ['string'],
-    params: type({ 'length?': 'number.integer >= 1' }),
+    params: arktype({ 'length?': 'number.integer >= 1' }),
   });
   const choosy = mongoDataType('test/choosy', { read: (json) => json, bsonTypes: ['string'] });
   const target = {

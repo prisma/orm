@@ -1,4 +1,5 @@
 import type { JsonValue } from '@internal/contract/types';
+import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import type {
   AnyCodecDescriptor,
   Codec,
@@ -8,8 +9,34 @@ import type {
 import { dataTypeId } from '@internal/framework-components/codec';
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { mongoTestCodecDescriptors, mongoTestDataTypes } from '@internal/mongo-contract/test';
+import { createContractAuthoringHelpers } from '../src/contract-builder';
 
 const mongoString = dataTypeId('mongo/string');
+const mongoInt32 = dataTypeId('mongo/int32');
+
+const scalar = <const CodecId extends string>(codecId: CodecId) =>
+  ({ kind: 'typeConstructor', output: { codecId } }) as const;
+
+/** The MongoDB scalar type constructors, as the target contributes them. */
+export const mongoTestScalarTypes = {
+  String: scalar('mongo/string@1'),
+  Int32: scalar('mongo/int32@1'),
+  Bool: scalar('mongo/bool@1'),
+  Date: scalar('mongo/date@1'),
+  ObjectId: scalar('mongo/objectId@1'),
+  Double: scalar('mongo/double@1'),
+  Int64: scalar('mongo/int64@1'),
+  Int64Number: scalar('mongo/int64Number@1'),
+  Decimal128: scalar('mongo/decimal128@1'),
+  Binary: scalar('mongo/binary@1'),
+  Json: scalar('mongo/json@1'),
+  Bson: scalar('mongo/bson@1'),
+  Vector: {
+    kind: 'typeConstructor',
+    args: [{ kind: 'value', dataType: 'mongo/int32', name: 'length', optional: true }],
+    output: { codecId: 'mongo/vector@1', typeParams: { length: { kind: 'arg', index: 0 } } },
+  },
+} as const satisfies AuthoringTypeNamespace;
 
 export const mongoFamilyPack = {
   kind: 'family',
@@ -18,7 +45,7 @@ export const mongoFamilyPack = {
   version: '0.0.1',
 } as const satisfies FamilyPackRef<'mongo'>;
 
-export const mongoTargetPack = {
+const mongoTargetPackBase = {
   kind: 'target',
   id: 'mongo',
   familyId: 'mongo',
@@ -28,16 +55,33 @@ export const mongoTargetPack = {
   dataTypes: mongoTestDataTypes,
   types: { codecTypes: { codecDescriptors: mongoTestCodecDescriptors } },
   authoring: {
+    type: mongoTestScalarTypes,
     dataTypes: {
       [mongoString]: {
         written: { kind: 'plain', syntax: 'string', parse: (text) => text },
         print: (value) => String(value),
         documentation: 'Text.',
       },
+      [mongoInt32]: {
+        written: {
+          kind: 'plain',
+          syntax: 'number',
+          types: [mongoInt32],
+          classify: (text) => ({ type: mongoInt32, value: Number(text) }),
+        },
+        print: (value) => String(value),
+        documentation: 'A number.',
+      },
     },
     textDataTypes: [mongoString],
   },
 } as const satisfies TargetPackRef<'mongo', 'mongo'>;
+
+export const mongoTargetPack: typeof mongoTargetPackBase & {
+  readonly __dataTypeArguments?: {
+    readonly 'mongo/int32': { readonly argument: number; readonly parameter: number };
+  };
+} = mongoTargetPackBase;
 
 /** An identity codec `codecId` over `dataType`. */
 export function identityCodec(codecId: string, dataType: DataType): Codec {
@@ -62,3 +106,9 @@ export function identityCodecDescriptor(codecId: string, dataType: DataType): An
     factory: () => () => identityCodec(codecId, dataType),
   };
 }
+
+/** The `type` helpers of the test packs, for fields declared outside a `defineContract` callback. */
+export const { type } = createContractAuthoringHelpers({
+  family: mongoFamilyPack,
+  target: mongoTargetPack,
+});

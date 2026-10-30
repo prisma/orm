@@ -13,7 +13,14 @@ import type {
 import type { MongoExecutionContext } from '@internal/mongo-runtime';
 import { expectTypeOf, test } from 'vitest';
 import type { Contract } from '../../../../2-mongo-family/1-foundation/mongo-contract/test/fixtures/orm-contract';
-import { defineContract, enumType, field, member, model } from '../src/exports/contract-builder';
+import {
+  defineContract,
+  enumType,
+  field,
+  member,
+  model,
+  type,
+} from '../src/exports/contract-builder';
 import type { MongoClient } from '../src/runtime/mongo';
 import type { MongoStaticContext } from '../src/static/mongo-static';
 
@@ -137,7 +144,10 @@ const Role = enumType(
 const dslContract = defineContract({
   enums: { Role },
   models: {
-    Account: model('Account', { collection: 'accounts', fields: { _id: field.objectId() } }),
+    Account: model('Account', {
+      collection: 'accounts',
+      fields: { _id: field.scalar(type.ObjectId()) },
+    }),
   },
 });
 
@@ -174,7 +184,7 @@ const r5Contract = defineContract({
     Account: model('Account', {
       collection: 'accounts',
       fields: {
-        _id: field.objectId(),
+        _id: field.scalar(type.ObjectId()),
         role: field.namedType(R5Role),
         mood: field.namedType(R5Role).optional(),
         tags: field.namedType(R5Role).many(),
