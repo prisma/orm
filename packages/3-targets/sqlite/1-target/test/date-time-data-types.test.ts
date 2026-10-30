@@ -151,3 +151,13 @@ describe('an instant written at the millisecond', () => {
     );
   });
 });
+
+describe('the date and time tags print what they read', () => {
+  it.each([
+    ['sqlite/date', '2024-02-29'],
+    ['sqlite/time', '09:30:00.000'],
+    ['sqlite/duration', 'PT1H30M'],
+  ])('%s prints %s as written', (dataTypeId, stored) => {
+    expect(entries[dataTypeId]?.print(stored)).toBe(stored);
+  });
+});

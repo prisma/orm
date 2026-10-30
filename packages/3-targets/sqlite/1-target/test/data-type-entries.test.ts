@@ -157,3 +157,30 @@ describe('the blob tag this target contributes', () => {
     expect(blob.print('68656C6C6F')).toBe('68656c6c6f');
   });
 });
+
+describe('how each entry prints a stored value', () => {
+  it('prints each stored value as PSL writes it back', () => {
+    expect({
+      text: entry('sqlite/text').print('hello'),
+      integer: entry('sqlite/real').print('42'),
+      real: entry('sqlite/real').print(1.5),
+      json: entry('sqlite/json').print('{"a":1}'),
+      blob: entry('sqlite/blob').print('6869'),
+      datetime: entry('sqlite/datetime').print('2024-01-01T00:00:00.000Z'),
+    }).toEqual({
+      text: 'hello',
+      integer: '42',
+      real: '1.5',
+      json: '{"a":1}',
+      blob: '6869',
+      datetime: '2024-01-01T00:00:00.000Z',
+    });
+  });
+
+  it('reads plain text as itself', () => {
+    const written = entry('sqlite/text').written;
+    expect(
+      written.kind === 'plain' && written.syntax === 'string' ? written.parse('a b') : '',
+    ).toBe('a b');
+  });
+});

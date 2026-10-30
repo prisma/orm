@@ -1,12 +1,19 @@
 import { Temporal as otherTemporal } from 'temporal-polyfill/implementation';
 import { describe, expect, it } from 'vitest';
 import {
+  sqliteDateStringColumn,
   sqliteDateStringDescriptor,
+  sqliteDateTemporalColumn,
   sqliteDateTemporalDescriptor,
+  sqliteDatetimeStringColumn,
   sqliteDatetimeStringDescriptor,
+  sqliteDatetimeTemporalColumn,
   sqliteDatetimeTemporalDescriptor,
+  sqliteDurationStringColumn,
   sqliteDurationStringDescriptor,
+  sqliteTimeStringColumn,
   sqliteTimeStringDescriptor,
+  sqliteTimeTemporalColumn,
   sqliteTimeTemporalDescriptor,
 } from '../src/core/date-time-codecs';
 import { fromContractJson, toContractJson } from './contract-json';
@@ -227,5 +234,47 @@ describe('the JSON path carries the same values as the wire path', () => {
 
   it('refuses a string value in a form other than the stored one', () => {
     expect(() => toContractJson(timeString, '09:30')).toThrow(DECODE_FAILED);
+  });
+});
+
+describe('the column helper of each date and time codec', () => {
+  it('builds a column of that codec, with no parameters', () => {
+    expect(
+      [
+        sqliteDatetimeTemporalColumn(),
+        sqliteDatetimeStringColumn(),
+        sqliteDateStringColumn(),
+        sqliteDateTemporalColumn(),
+        sqliteTimeStringColumn(),
+        sqliteTimeTemporalColumn(),
+        sqliteDurationStringColumn(),
+      ].map(({ codecId, typeParams }) => ({ codecId, typeParams })),
+    ).toEqual([
+      { codecId: 'sqlite/datetime-temporal@1', typeParams: undefined },
+      { codecId: 'sqlite/datetime-string@1', typeParams: undefined },
+      { codecId: 'sqlite/date-string@1', typeParams: undefined },
+      { codecId: 'sqlite/date-temporal@1', typeParams: undefined },
+      { codecId: 'sqlite/time-string@1', typeParams: undefined },
+      { codecId: 'sqlite/time-temporal@1', typeParams: undefined },
+      { codecId: 'sqlite/duration-string@1', typeParams: undefined },
+    ]);
+  });
+
+  it('builds a codec that reads through the JSON projection the stored text unchanged', () => {
+    const expression = { kind: 'column-ref' } as never;
+    expect(
+      [
+        sqliteDatetimeTemporalDescriptor,
+        sqliteDatetimeStringDescriptor,
+        sqliteDateStringDescriptor,
+        sqliteDateTemporalDescriptor,
+        sqliteTimeStringDescriptor,
+        sqliteTimeTemporalDescriptor,
+        sqliteDurationStringDescriptor,
+      ].map(
+        (descriptor) =>
+          descriptor.projectJson(expression, { codecId: descriptor.codecId }) === expression,
+      ),
+    ).toEqual([true, true, true, true, true, true, true]);
   });
 });
