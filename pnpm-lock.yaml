@@ -4977,6 +4977,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      temporal-spec:
+        specifier: 1.0.1
+        version: 1.0.1
       tinyglobby:
         specifier: 'catalog:'
         version: 0.2.17
@@ -4993,6 +4996,9 @@ importers:
       '@repo/tsdown':
         specifier: workspace:8.0.0-rc.21
         version: link:../../../0-config/tsdown
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
       tsdown:
         specifier: 'catalog:'
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
@@ -5599,6 +5605,12 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
+      temporal-spec:
+        specifier: 1.0.1
+        version: 1.0.1
       tinyglobby:
         specifier: 'catalog:'
         version: 0.2.17
@@ -5795,6 +5807,12 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
+      temporal-spec:
+        specifier: 1.0.1
+        version: 1.0.1
     devDependencies:
       '@internal/adapter-sqlite':
         specifier: workspace:8.0.0-rc.21

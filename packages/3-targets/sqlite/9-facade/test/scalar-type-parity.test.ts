@@ -67,6 +67,17 @@ describe('sqlite scalar types derived from the unified namespace', () => {
       DateTime: { codecId: 'sqlite/datetime@1' },
       Json: { codecId: 'sqlite/json@1' },
       Bytes: { codecId: 'sqlite/blob@1' },
+      DatetimeJsDate: { codecId: 'sqlite/datetime@1' },
+      DatetimeTemporal: { codecId: 'sqlite/datetime-temporal@1' },
+      DatetimeString: { codecId: 'sqlite/datetime-string@1' },
+      DateString: { codecId: 'sqlite/date-string@1' },
+      DateTemporal: { codecId: 'sqlite/date-temporal@1' },
+      TimeString: { codecId: 'sqlite/time-string@1' },
+      TimeTemporal: { codecId: 'sqlite/time-temporal@1' },
+      DurationString: { codecId: 'sqlite/duration-string@1' },
+      Date: { codecId: 'sqlite/date-string@1' },
+      Time: { codecId: 'sqlite/time-string@1' },
+      Duration: { codecId: 'sqlite/duration-string@1' },
     });
   });
 
@@ -75,12 +86,23 @@ describe('sqlite scalar types derived from the unified namespace', () => {
       'BigInt',
       'BigIntNumber',
       'Bytes',
+      'Date',
+      'DateString',
+      'DateTemporal',
       'DateTime',
+      'DatetimeJsDate',
+      'DatetimeString',
+      'DatetimeTemporal',
       'Decimal',
+      'Duration',
+      'DurationString',
       'Float',
       'Int',
       'Json',
       'String',
+      'Time',
+      'TimeString',
+      'TimeTemporal',
     ]);
   });
 

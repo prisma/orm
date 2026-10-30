@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest run --passWithNoTests",
-    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "typecheck": "tsc --project tsconfig.json --noEmit && tsc --project tsconfig.no-temporal-global.json --noEmit",
     "lint": "biome check . --error-on-warnings",
     "lint:fix": "biome check --write .",
     "lint:fix:unsafe": "biome check --write --unsafe .",
@@ -33,6 +33,7 @@
     "@internal/target-sqlite": "workspace:8.0.0-rc.21",
     "@internal/utils": "workspace:8.0.0-rc.21",
     "pathe": "^2.0.3",
+    "temporal-spec": "1.0.1",
     "tinyglobby": "catalog:"
   },
   "devDependencies": {
@@ -40,11 +41,13 @@
     "@repo/test-utils": "workspace:8.0.0-rc.21",
     "@repo/tsconfig": "workspace:8.0.0-rc.21",
     "@repo/tsdown": "workspace:8.0.0-rc.21",
+    "temporal-polyfill": "^1.0.4",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
+    "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
