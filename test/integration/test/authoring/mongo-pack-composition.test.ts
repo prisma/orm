@@ -1,4 +1,4 @@
-import { defineContract, field, model } from '@internal/mongo/contract-builder';
+import { defineContract, field, model, type } from '@internal/mongo/contract-builder';
 import { describe, expect, it } from 'vitest';
 
 describe('Mongo pack composition', () => {
@@ -6,8 +6,8 @@ describe('Mongo pack composition', () => {
     const User = model('User', {
       collection: 'users',
       fields: {
-        _id: field.objectId(),
-        email: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        email: field.scalar(type.String()),
       },
     });
 

@@ -159,7 +159,7 @@ function discriminatorFieldError(
       const { dataType } = refusal.refusal;
       return contractError(
         'CONTRACT.ARGUMENT_INVALID',
-        `${field} must be text, such as field.string(), but its data type is ${dataType === undefined ? 'not a scalar' : `"${dataType}"`}.`,
+        `${field} must be text, such as field.scalar(type.String()), but its data type is ${dataType === undefined ? 'not a scalar' : `"${dataType}"`}.`,
         { meta: { ...meta, dataType, reason: 'discriminator-not-text' } },
       );
     }

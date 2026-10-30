@@ -1,4 +1,11 @@
-import { defineContract, enumType, field, member, model } from '@internal/mongo/contract-builder';
+import {
+  defineContract,
+  enumType,
+  field,
+  member,
+  model,
+  type,
+} from '@internal/mongo/contract-builder';
 import { MongoFieldFilter } from '@internal/mongo-query-ast/execution';
 import { ObjectId } from 'mongodb';
 import { describe, expect, it } from 'vitest';
@@ -27,7 +34,7 @@ const mongoContract = defineContract({
     TestModel: model('TestModel', {
       collection: 'TestModel',
       fields: {
-        _id: field.objectId(),
+        _id: field.scalar(type.ObjectId()),
         my_enum: field.namedType(MyEnum).optional(),
       },
     }),

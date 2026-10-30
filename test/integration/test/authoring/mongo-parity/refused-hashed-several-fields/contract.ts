@@ -1,4 +1,4 @@
-import { defineContract, field, index, model } from '@internal/mongo/contract-builder';
+import { defineContract, field, index, model, type } from '@internal/mongo/contract-builder';
 
 export function buildContract() {
   return defineContract({
@@ -6,9 +6,9 @@ export function buildContract() {
       Doc: model('Doc', {
         collection: 'docs',
         fields: {
-          id: field.objectId().mongo({ field: '_id' }),
-          a: field.string(),
-          b: field.string(),
+          id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+          a: field.scalar(type.String()),
+          b: field.scalar(type.String()),
         },
         indexes: [index({ a: 'hashed', b: 'hashed' })],
       }),

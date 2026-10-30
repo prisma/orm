@@ -1,11 +1,11 @@
-import { defineContract, field, model } from '@internal/mongo/contract-builder';
+import { defineContract, field, model, type } from '@internal/mongo/contract-builder';
 
 const Task = model('Task', {
   collection: 'tasks',
   fields: {
-    id: field.objectId().mongo({ field: '_id' }),
-    type: field.string(),
-    title: field.string().mongo({ field: 't' }),
+    id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+    type: field.scalar(type.String()),
+    title: field.scalar(type.String()).mongo({ field: 't' }),
   },
   discriminator: { field: 'type', variants: { Bug: { value: 'bug' } } },
 });
@@ -16,9 +16,9 @@ export const contract = defineContract({
     Bug: model('Bug', {
       base: Task,
       fields: {
-        id: field.objectId().mongo({ field: '_id' }),
-        title: field.string().mongo({ field: 't' }),
-        sev: field.string(),
+        id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+        title: field.scalar(type.String()).mongo({ field: 't' }),
+        sev: field.scalar(type.String()),
       },
     }),
   },

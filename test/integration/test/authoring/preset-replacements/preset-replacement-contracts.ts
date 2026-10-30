@@ -177,7 +177,7 @@ export function mongoTs(rows: readonly MongoRow[]): Contract {
         helpers.model(row.model, {
           collection: row.model,
           fields: {
-            id: helpers.field.objectId().mongo({ field: '_id' }),
+            id: helpers.field.scalar(helpers.type.ObjectId()).mongo({ field: '_id' }),
             value: row.ts(helpers),
           },
         }),

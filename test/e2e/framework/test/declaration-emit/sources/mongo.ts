@@ -4,6 +4,7 @@ import {
   field,
   member,
   model,
+  type,
   valueObject,
 } from '@prisma/orm-mongo/contract-builder';
 
@@ -14,7 +15,7 @@ const Role = enumType(
   member('Admin', 'admin'),
 );
 
-const Address = valueObject('Address', { fields: { street: field.string() } });
+const Address = valueObject('Address', { fields: { street: field.scalar(type.String()) } });
 
 export const mongo = defineContract({
   enums: { Role },
@@ -23,10 +24,10 @@ export const mongo = defineContract({
     User: model('User', {
       collection: 'users',
       fields: {
-        _id: field.objectId(),
+        _id: field.scalar(type.ObjectId()),
         role: field.namedType(Role),
         address: field.valueObject(Address).optional(),
-        embedding: field.vector({ typeParams: { length: 3 } }),
+        embedding: field.scalar(type.Vector(3)),
       },
     }),
   },

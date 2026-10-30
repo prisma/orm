@@ -6,6 +6,7 @@ import {
   member,
   model,
   rel,
+  type,
   valueObject,
 } from '@internal/mongo/contract-builder';
 
@@ -17,15 +18,15 @@ const Role = enumType(
 );
 
 const Point = valueObject('Point', {
-  fields: { lat: field.double(), lng: field.double() },
+  fields: { lat: field.scalar(type.Double()), lng: field.scalar(type.Double()) },
 });
 
 const Address = valueObject('Address', {
   fields: {
-    street: field.string(),
-    zip: field.string().optional(),
+    street: field.scalar(type.String()),
+    zip: field.scalar(type.String()).optional(),
     location: field.valueObject(Point).optional(),
-    tags: field.string().many(),
+    tags: field.scalar(type.String()).many(),
     kind: field.namedType(Role).optional(),
   },
 });
@@ -33,24 +34,24 @@ const Address = valueObject('Address', {
 const User = model('User', {
   collection: 'users',
   fields: {
-    _id: field.objectId(),
-    email: field.string(),
-    nickname: field.string().optional(),
-    age: field.int32(),
-    score: field.double(),
-    scores: field.double().many(),
-    visits: field.int64(),
-    balance: field.decimal128(),
-    active: field.bool(),
-    joinedAt: field.date(),
-    avatar: field.binary().optional(),
-    settings: field.json(),
-    raw: field.bson().optional(),
+    _id: field.scalar(type.ObjectId()),
+    email: field.scalar(type.String()),
+    nickname: field.scalar(type.String()).optional(),
+    age: field.scalar(type.Int32()),
+    score: field.scalar(type.Double()),
+    scores: field.scalar(type.Double()).many(),
+    visits: field.scalar(type.Int64()),
+    balance: field.scalar(type.Decimal128()),
+    active: field.scalar(type.Bool()),
+    joinedAt: field.scalar(type.Date()),
+    avatar: field.scalar(type.Binary()).optional(),
+    settings: field.scalar(type.Json()),
+    raw: field.scalar(type.Bson()).optional(),
     role: field.namedType(Role),
     pastRoles: field.namedType(Role).many({ elementsNullable: true }),
-    nicknames: field.string().optional().many(),
-    embedding: field.vector({ typeParams: { length: 3 } }),
-    rawEmbedding: field.vector(),
+    nicknames: field.scalar(type.String()).optional().many(),
+    embedding: field.scalar(type.Vector(3)),
+    rawEmbedding: field.scalar(type.Vector()),
     home: field.valueObject(Address).optional(),
     pastHomes: field.valueObject(Address).many(),
   },
@@ -60,10 +61,10 @@ const User = model('User', {
 const Post = model('Post', {
   collection: 'posts',
   fields: {
-    _id: field.objectId(),
-    authorId: field.objectId(),
-    title: field.string(),
-    kind: field.string(),
+    _id: field.scalar(type.ObjectId()),
+    authorId: field.scalar(type.ObjectId()),
+    title: field.scalar(type.String()),
+    kind: field.scalar(type.String()),
   },
   relations: {
     author: rel.belongsTo(User, { from: 'authorId', to: User.ref('_id') }),
@@ -77,13 +78,13 @@ const Post = model('Post', {
 const Article = model('Article', {
   collection: 'posts',
   base: Post,
-  fields: { body: field.string() },
+  fields: { body: field.scalar(type.String()) },
 });
 
 const Link = model('Link', {
   collection: 'posts',
   base: Post,
-  fields: { url: field.string() },
+  fields: { url: field.scalar(type.String()) },
 });
 
 export const contract = defineContract({

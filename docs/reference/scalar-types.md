@@ -8,19 +8,19 @@ Columns: the PSL name, the TypeScript builder helper (inside the `defineContract
 
 | PSL name | TS helper | Codec id | Storage type (BSON) | Application type |
 | --- | --- | --- | --- | --- |
-| `String` | `field.string()` | `mongo/string@1` | `string` | `string` |
-| `Int32` | `field.int32()` | `mongo/int32@1` | `int` | `number` |
-| `Int64` | `field.int64()` | `mongo/int64@1` | `long` | `bigint` |
-| `Int64Number` | `field.int64Number()` | `mongo/int64Number@1` | `long` | `number` (safe-integer range) |
-| `Double` | `field.double()` | `mongo/double@1` | `double` | `number` |
-| `Decimal128` | `field.decimal128()` | `mongo/decimal128@1` | `decimal` | `string` (decimal text without an exponent; a stored value with an extreme exponent such as `1E-6176` reads back as a digit string of about 6,100 characters) |
-| `Bool` | `field.bool()` | `mongo/bool@1` | `bool` | `boolean` |
-| `Date` | `field.date()` | `mongo/date@1` | `date` | `Date` |
-| `ObjectId` | `field.objectId()` | `mongo/objectId@1` | `objectId` | `string` (hex) |
-| `Binary` | `field.binary()` | `mongo/binary@1` | `binData` | `Uint8Array` |
-| `Json` | `field.json()` | `mongo/json@1` | `object`, `array`, `string`, `double`, `int`, `long`, `bool` or `null` | `JsonValue` |
-| `Bson` | `field.bson()` | `mongo/bson@1` | any BSON type; the validator does not constrain it (a list field must still be an array) | `BsonValue` |
-| — | `field.vector()` | `mongo/vector@1` | `array` | `readonly number[]` |
+| `String` | `field.scalar(type.String())` | `mongo/string@1` | `string` | `string` |
+| `Int32` | `field.scalar(type.Int32())` | `mongo/int32@1` | `int` | `number` |
+| `Int64` | `field.scalar(type.Int64())` | `mongo/int64@1` | `long` | `bigint` |
+| `Int64Number` | `field.scalar(type.Int64Number())` | `mongo/int64Number@1` | `long` | `number` (safe-integer range) |
+| `Double` | `field.scalar(type.Double())` | `mongo/double@1` | `double` | `number` |
+| `Decimal128` | `field.scalar(type.Decimal128())` | `mongo/decimal128@1` | `decimal` | `string` (decimal text without an exponent; a stored value with an extreme exponent such as `1E-6176` reads back as a digit string of about 6,100 characters) |
+| `Bool` | `field.scalar(type.Bool())` | `mongo/bool@1` | `bool` | `boolean` |
+| `Date` | `field.scalar(type.Date())` | `mongo/date@1` | `date` | `Date` |
+| `ObjectId` | `field.scalar(type.ObjectId())` | `mongo/objectId@1` | `objectId` | `string` (hex) |
+| `Binary` | `field.scalar(type.Binary())` | `mongo/binary@1` | `binData` | `Uint8Array` |
+| `Json` | `field.scalar(type.Json())` | `mongo/json@1` | `object`, `array`, `string`, `double`, `int`, `long`, `bool` or `null` | `JsonValue` |
+| `Bson` | `field.scalar(type.Bson())` | `mongo/bson@1` | any BSON type; the validator does not constrain it (a list field must still be an array) | `BsonValue` |
+| — | `field.scalar(type.Vector())` | `mongo/vector@1` | `array` | `readonly number[]` |
 
 `Json` holds a JSON value and nothing else: writing or reading a `Date`, `ObjectId`, `Decimal128`, `Binary` or other non-JSON BSON value inside it fails with the path of the value. `Bson` holds any BSON value, `Code`, `MinKey`, `MaxKey` and `BSONSymbol` included, and reads it back as the driver produces it: a stored regex as a native `RegExp` (a `BSONRegExp` appears only with a driver configured with `bsonRegExp: true`), and a `{ $ref, $id }` subdocument, which the driver reads as a `DBRef`, as that document. A write also accepts a `Uint8Array` or `Buffer`, stored as binData and read back as `Binary`, and refuses anything else outside `BsonValue` (a `Map`, `Set`, class instance, other typed array, or sparse-array hole) with its path. `BsonValue` and the write type `BsonInputValue` are exported from `@prisma/orm-mongo/target/codec-types`. `Bson` returns numbers as the driver reads them: a stored `long` in the safe-integer range and an integral `double` read back as a JavaScript `number`, and writing that `number` back stores a BSON `int` when it fits in 32 bits. Wrap a value in `Long` or `Double` to keep its BSON type across a read and a write.
 

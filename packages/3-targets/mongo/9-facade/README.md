@@ -29,11 +29,11 @@ export default defineConfig({
 
 ```typescript
 // prisma/contract.ts
-import { defineContract, field, model } from '@internal/mongo/contract-builder';
+import { defineContract, field, model, type } from '@internal/mongo/contract-builder';
 
 export default defineContract({
   models: {
-    User: model('User', { fields: { id: field.objectId() } }),
+    User: model('User', { fields: { id: field.scalar(type.ObjectId()) } }),
   },
 });
 ```
@@ -148,11 +148,11 @@ Code that moves from the Prisma 6 client to the Prisma 8 client reads the same d
 TypeScript contract authoring DSL (`defineContract`, `field`, `model`, `rel`, `index`, `valueObject`, …). The `defineContract` facade pre-binds `family` and `target` — callers do not pass those fields.
 
 ```typescript
-import { defineContract, field, model } from '@internal/mongo/contract-builder';
+import { defineContract, field, model, type } from '@internal/mongo/contract-builder';
 
 export default defineContract({
   models: {
-    User: model('User', { fields: { id: field.objectId() } }),
+    User: model('User', { fields: { id: field.scalar(type.ObjectId()) } }),
   },
 });
 ```

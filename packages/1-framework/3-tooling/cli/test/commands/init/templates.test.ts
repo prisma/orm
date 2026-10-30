@@ -85,7 +85,7 @@ describe('templates', () => {
 
       expect(schema).toContain('defineContract');
       expect(schema).toContain("from '@internal/mongo/contract-builder'");
-      expect(schema).toContain('username: field.string().optional()');
+      expect(schema).toContain('username: field.scalar(type.String()).optional()');
     });
 
     it('only imports from the facade package for postgres TypeScript', () => {

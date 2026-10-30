@@ -59,8 +59,8 @@ import mongoTarget from '@internal/target-mongo/pack';
 
 const Address = valueObject('Address', {
   fields: {
-    street: field.string(),
-    zip: field.string().optional(),
+    street: field.scalar(type.String()),
+    zip: field.scalar(type.String()).optional(),
   },
 });
 
@@ -70,8 +70,8 @@ const Task = model('Task', {
     comments: { field: 'comments' },
   },
   fields: {
-    _id: field.objectId(),
-    type: field.string(),
+    _id: field.scalar(type.ObjectId()),
+    type: field.scalar(type.String()),
     metadata: field.valueObject(Address).optional(),
   },
   relations: {
@@ -88,8 +88,8 @@ const Task = model('Task', {
 const Comment = model('Comment', {
   owner: Task,
   fields: {
-    _id: field.objectId(),
-    text: field.string(),
+    _id: field.scalar(type.ObjectId()),
+    text: field.scalar(type.String()),
   },
 });
 
