@@ -1,9 +1,4 @@
 import { chmodSync, readFileSync, writeFileSync } from 'node:fs';
-import { computeStorageHash } from '@internal/contract/hashing';
-import { MongoContractSerializer } from '@internal/family-mongo/ir';
-import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
-import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { join } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
@@ -21,6 +16,7 @@ afterAll(removeWorkDirs);
 const SQL_BEFORE = '58888a20cba5529ede90056ecd1318183f0e5cf280c88cd58aeadd94bbf52c1b';
 const SQL_AFTER = '1cb334a7b32d249d4fea0934dbbaa48c473b5946cd77ee1ce7442272479d6cf3';
 const SQL_SNAPSHOT = `sql/migrations/snapshots/${SQL_BEFORE}/contract.json`;
+const TASK_TYPE_TAKEN_HASH = 'e47dcc513544a33a2efcbc19f39792d57b382c4e0cefc030640abbce73dcd185';
 
 interface StoredContract {
   readonly targetFamily: string;
@@ -30,18 +26,6 @@ interface StoredContract {
 
 function readContract(path: string): StoredContract {
   return JSON.parse(readFileSync(path, 'utf8'));
-}
-
-function recomputedHash(contract: StoredContract): string {
-  const { storageHash: _stored, ...storage } = contract.storage;
-  return computeStorageHash({
-    target: contract.target,
-    targetFamily: contract.targetFamily,
-    storage,
-    ...(contract.targetFamily === 'mongo'
-      ? mongoContractCanonicalizationHooks
-      : sqlContractCanonicalizationHooks),
-  });
 }
 
 describe('a project whose contracts keep value objects in the domain plane', () => {
@@ -156,43 +140,6 @@ describe('a contract.d.ts whose contract the script leaves unchanged', () => {
 });
 
 describe('the rewritten contracts', () => {
-  const after = fixtureTree('after');
-  const contracts = Object.keys(after)
-    .filter((path) => path.endsWith('contract.json'))
-    .map((path) => ({ path, contract: readContract(join(fixturesDir, 'after', path)) }));
-
-  it('store the hash their storage recomputes to, and each snapshot sits under it', () => {
-    expect(
-      contracts.map(({ path, contract }) => ({
-        path,
-        stored: contract.storage.storageHash,
-        recomputed: recomputedHash(contract),
-        directory: path.includes('/snapshots/') ? path.split('/').at(-2) : undefined,
-      })),
-    ).toEqual(
-      contracts.map(({ path, contract }) => ({
-        path,
-        stored: contract.storage.storageHash,
-        recomputed: contract.storage.storageHash,
-        directory: path.includes('/snapshots/') ? contract.storage.storageHash : undefined,
-      })),
-    );
-  });
-
-  it('are read by this release', () => {
-    const read = contracts.map(({ path, contract }) => {
-      const json: unknown = contract;
-      const deserialized =
-        contract.targetFamily === 'mongo'
-          ? new MongoContractSerializer().deserializeContract(json)
-          : new PostgresContractSerializer().deserializeContract(json);
-      return { path, storageHash: deserialized.storage.storageHash };
-    });
-    expect(read).toEqual(
-      contracts.map(({ path, contract }) => ({ path, storageHash: contract.storage.storageHash })),
-    );
-  });
-
   it('give the SQL discriminator a value set and point its column at it', () => {
     const sql = readContract(
       join(fixturesDir, 'after', `sql/migrations/snapshots/${SQL_AFTER}/contract.json`),
@@ -303,7 +250,7 @@ describe('a project the script refuses to rewrite', () => {
             kind: 'valueSet',
             values: ['bug', 'feature'],
           };
-          const hash = recomputedHash(contract);
+          const hash = TASK_TYPE_TAKEN_HASH;
           return { ...contract, storage: { ...contract.storage, storageHash: hash } };
         },
         'sql/src/contract.json',

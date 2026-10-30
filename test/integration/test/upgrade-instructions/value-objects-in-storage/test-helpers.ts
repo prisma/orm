@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'pathe';
 
 const SCRIPT_PATHS = {
-  app: 'upgrade-instructions/pending/value-objects-in-storage/app/scripts/value-objects-in-storage/value-objects-in-storage.ts',
+  app: 'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.21-to-8.0.0-rc.22/scripts/value-objects-in-storage/value-objects-in-storage.ts',
 } as const;
 
 const here = dirname(fileURLToPath(import.meta.url));
