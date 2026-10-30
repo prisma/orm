@@ -3,6 +3,7 @@
  */
 
 import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { DeclaredPolicies } from '@internal/framework-components/control';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import {
   contractSnapshotDir,
@@ -13,12 +14,13 @@ import { isGraphNode } from '@internal/migration-tools/migration-graph';
 import { parseContractRef } from '@internal/migration-tools/ref-resolution';
 import type { RefEntry } from '@internal/migration-tools/refs';
 import {
+  advanceRef,
   deleteRef,
   readRefs,
   validateRefName,
   validateRefValue,
-  writeRef,
 } from '@internal/migration-tools/refs';
+import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { join } from 'pathe';
 import {
@@ -40,6 +42,7 @@ export interface RefSetResult {
   readonly ref: string;
   readonly hash: string;
   readonly invariants: readonly string[];
+  readonly policies?: DeclaredPolicies;
 }
 
 export interface RefDeleteResult {
@@ -130,9 +133,14 @@ export async function executeRefSetCommand(
       throw readError;
     }
 
-    const entry: RefEntry = { hash: resolvedHash, invariants: [] };
-    await writeRef(refsDir, name, entry);
-    return ok({ ok: true as const, ref: name, hash: resolvedHash, invariants: [] });
+    const written = await advanceRef(refsDir, name, resolvedHash);
+    return ok({
+      ok: true as const,
+      ref: name,
+      hash: written.hash,
+      invariants: written.invariants,
+      ...ifDefined('policies', written.policies),
+    });
   } catch (error) {
     return notOk(errorFromCaught(error, (message) => message));
   }

@@ -1,5 +1,6 @@
 export type { RefEntry, Refs } from '../refs';
 export {
+  advanceRef,
   deleteRef,
   HEAD_REF_NAME,
   readRef,

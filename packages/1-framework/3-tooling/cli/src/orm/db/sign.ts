@@ -7,7 +7,7 @@ import {
   type VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import { MigrationToolsError } from '@internal/migration-tools/errors';
-import { readRef, writeRef } from '@internal/migration-tools/refs';
+import { advanceRef, readRef } from '@internal/migration-tools/refs';
 import { spaceMigrationDirectory, spaceRefsDirectory } from '@internal/migration-tools/spaces';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk as notOkResult, ok as okResult, type Result } from '@internal/utils/result';
@@ -384,7 +384,7 @@ async function advanceExtensionRef(args: {
 }): Promise<Result<void, CliStructuredError>> {
   const refsDir = spaceRefsDirectory(spaceMigrationDirectory(args.migrationsDir, args.space));
   try {
-    await writeRef(refsDir, args.name, { hash: args.hash, invariants: [] });
+    await advanceRef(refsDir, args.name, args.hash);
     return okResult(undefined);
   } catch (error) {
     if (MigrationToolsError.is(error)) {

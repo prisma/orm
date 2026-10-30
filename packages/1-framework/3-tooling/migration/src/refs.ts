@@ -1,4 +1,9 @@
 import { mkdir, readdir, readFile, rename, rmdir, unlink, writeFile } from 'node:fs/promises';
+import {
+  type DeclaredPolicies,
+  DeclaredPoliciesSchema,
+} from '@internal/framework-components/control';
+import { ifDefined } from '@internal/utils/defined';
 import { type } from 'arktype';
 import { dirname, join, relative } from 'pathe';
 import {
@@ -11,6 +16,7 @@ import {
 export interface RefEntry {
   readonly hash: string;
   readonly invariants: readonly string[];
+  readonly policies?: DeclaredPolicies;
 }
 
 export type Refs = Readonly<Record<string, RefEntry>>;
@@ -56,6 +62,7 @@ export function validateRefValue(value: string): boolean {
 const RefEntrySchema = type({
   hash: 'string',
   invariants: 'string[]',
+  'policies?': DeclaredPoliciesSchema,
 }).narrow((entry, ctx) => {
   if (!validateRefValue(entry.hash))
     return ctx.mustBe(`a valid contract hash (got "${entry.hash}")`);
@@ -250,11 +257,33 @@ export async function writeRef(refsDir: string, name: string, entry: RefEntry): 
   await mkdir(dir, { recursive: true });
 
   const tmpPath = join(dir, `.${name.split('/').pop()}.json.${Date.now()}.tmp`);
-  await writeFile(
-    tmpPath,
-    `${JSON.stringify({ hash: entry.hash, invariants: [...entry.invariants] }, null, 2)}\n`,
-  );
+  const content = {
+    hash: entry.hash,
+    invariants: [...entry.invariants],
+    ...ifDefined('policies', entry.policies),
+  };
+  await writeFile(tmpPath, `${JSON.stringify(content, null, 2)}\n`);
   await rename(tmpPath, filePath);
+}
+
+/**
+ * Points ref `name` at `hash`, keeping everything else the ref declares. A ref that does not exist
+ * yet is written with no invariants. Returns the entry as written.
+ */
+export async function advanceRef(refsDir: string, name: string, hash: string): Promise<RefEntry> {
+  const existing = await readExistingRef(refsDir, name);
+  const entry: RefEntry = existing === undefined ? { hash, invariants: [] } : { ...existing, hash };
+  await writeRef(refsDir, name, entry);
+  return entry;
+}
+
+async function readExistingRef(refsDir: string, name: string): Promise<RefEntry | undefined> {
+  try {
+    return await readRef(refsDir, name);
+  } catch (error) {
+    if (MigrationToolsError.is(error) && error.code === 'MIGRATION.UNKNOWN_REF') return undefined;
+    throw error;
+  }
 }
 
 export async function deleteRef(refsDir: string, name: string): Promise<void> {
