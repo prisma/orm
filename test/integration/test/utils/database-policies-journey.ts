@@ -5,13 +5,17 @@
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import type { ContractMarkerRecord } from '@internal/contract/types';
-import type { DeclaredPolicies } from '@internal/framework-components/control';
+import type { DeclaredDatabasePolicies } from '@internal/framework-components/control';
 import { readRef, writeRef } from '@internal/migration-tools/refs';
 import { createMongoControlClient } from '@internal/mongo/control';
 import { createMysqlControlClient } from '@internal/mysql/control';
 import { createPostgresControlClient } from '@internal/postgres/control';
 import { createSqliteControlClient } from '@internal/sqlite/control';
+import { withClient } from '@repo/test-utils';
+import { queryMysqlDatabase } from '@repo/test-utils/mysql-database';
+import { MongoClient } from 'mongodb';
 import { join } from 'pathe';
 import { expect } from 'vitest';
 import { writeProjectManifest } from './cli-test-helpers';
@@ -23,6 +27,7 @@ import {
   parseJsonOutput,
   planMigrationAndSelfEmit,
   runContractEmit,
+  runDbSchema,
   runMigrationLog,
   sqlitePslConfigFixture,
 } from './journey-test-helpers';
@@ -213,7 +218,7 @@ export async function writePolicyRef(
   project: PolicyProject,
   name: string,
   hash: string,
-  policies: DeclaredPolicies,
+  policies: DeclaredDatabasePolicies,
   invariants: readonly string[] = [],
 ): Promise<void> {
   await writeRef(appRefsDir(project), name, { hash, invariants, policies });
@@ -260,7 +265,7 @@ export function errorOf(run: EngineCommandResult): Record<string, unknown> {
   return parseJsonOutput(run);
 }
 
-export const MIGRATE_ONLY_DECLARED: DeclaredPolicies = { change: ['migrate'] };
+export const MIGRATE_ONLY_DECLARED: DeclaredDatabasePolicies = { change: ['migrate'] };
 
 /** What the marker records after a run consents to {@link MIGRATE_ONLY_DECLARED} on a database with no policies. */
 export const MIGRATE_ONLY_RECORDED = {
@@ -270,3 +275,50 @@ export const MIGRATE_ONLY_RECORDED = {
     accessWidening: 'access-widening-with-consent',
   },
 };
+
+/** Two users with the same email, so a migration that makes email unique fails on them. */
+export async function insertDuplicateUsers(project: PolicyProject): Promise<void> {
+  switch (project.target) {
+    case 'postgres':
+      await withClient(project.connection, (client) =>
+        client.query(`insert into "user" (id, email) values (1, 'a@x.io'), (2, 'a@x.io')`),
+      );
+      return;
+    case 'sqlite': {
+      const db = new DatabaseSync(project.connection);
+      try {
+        db.exec(`insert into "user" (id, email) values (1, 'a@x.io'), (2, 'a@x.io')`);
+      } finally {
+        db.close();
+      }
+      return;
+    }
+    case 'mysql':
+      await queryMysqlDatabase(
+        project.connection,
+        "insert into `user` (id, email) values (1, 'a@x.io'), (2, 'a@x.io')",
+      );
+      return;
+    case 'mongo': {
+      const client = new MongoClient(project.connection);
+      try {
+        await client.connect();
+        await client
+          .db()
+          .collection('users')
+          .insertMany([{ email: 'a@x.io' }, { email: 'a@x.io' }]);
+      } finally {
+        await client.close();
+      }
+      return;
+    }
+  }
+}
+
+/** The database's schema, as `db schema --json` reports it. */
+export async function schemaOf(project: PolicyProject): Promise<unknown> {
+  const shown = await runDbSchema(project.ctx, ['--json']);
+  expect(shown.exitCode, `db schema: ${shown.stdout}\n${shown.stderr}`).toBe(0);
+  const { timings: _timings, ...schema } = parseJsonOutput<{ readonly timings?: unknown }>(shown);
+  return schema;
+}

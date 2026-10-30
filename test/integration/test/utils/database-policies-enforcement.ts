@@ -135,7 +135,7 @@ export function definePolicyEnforcementJourneys(
         await planTo(project, 'base', 'initial');
         const migrated = await runMigrate(project.ctx, ['--json']);
         expect(migrated.exitCode, `db migrate: ${migrated.stdout}\n${migrated.stderr}`).toBe(0);
-        expect(parseJsonOutput(migrated)).not.toHaveProperty('policiesUpdated');
+        expect(parseJsonOutput(migrated)).not.toHaveProperty('databasePoliciesUpdated');
 
         writeContract(project, 'next');
         expect((await runContractEmit(project.ctx)).exitCode).toBe(0);

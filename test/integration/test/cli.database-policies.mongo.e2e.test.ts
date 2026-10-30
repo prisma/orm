@@ -22,6 +22,11 @@ import {
   setupPolicyProject,
   writePolicyRef,
 } from './utils/database-policies-journey';
+import {
+  DATA_LOSS_PERMITTED_RECORDED,
+  definePolicyMigrateJourneys,
+  recordedDataLossPermitted,
+} from './utils/database-policies-migrate';
 import { runMigrate } from './utils/journey-test-helpers';
 
 let replSet: MongoMemoryReplSet;
@@ -59,48 +64,48 @@ withTempDir(({ createTempDir }) => {
 
     definePolicyEnforcementJourneys(onMongo, timeouts.spinUpMongoMemoryServer);
 
-    it('leaves the recorded policies as they were when the second of two migrations fails', async () => {
+    definePolicyMigrateJourneys(onMongo, timeouts.spinUpMongoMemoryServer);
+
+    it('keeps the first migration applied when the second fails, and records the policies on a retry', async () => {
       const { url, name } = nextDatabaseUrl();
       const project = setupPolicyProject('mongo', createTempDir(), url);
-      const base = await planTo(project, 'base', 'initial');
-      expect((await runMigrate(project.ctx)).exitCode).toBe(0);
-      await writePolicyRef(project, 'production', base, {
-        dataProtection: { dataLoss: 'data-loss-permitted' },
-      });
-      const recorded = await runMigrate(project.ctx, [
-        '--to',
-        'production',
-        '--permit-policy-change',
-      ]);
-      expect(recorded.exitCode, `${recorded.stdout}\n${recorded.stderr}`).toBe(0);
-      await client
-        .db(name)
-        .collection('users')
-        .insertMany([{ email: 'a@x.io' }, { email: 'a@x.io' }]);
+      const base = await recordedDataLossPermitted(project);
+      const users = client.db(name).collection('users');
+      await users.insertMany([{ email: 'a@x.io' }, { email: 'a@x.io' }]);
       await planTo(project, 'next', 'add-name');
       const unique = await planTo(project, 'unique', 'unique-email');
       await writePolicyRef(project, 'production', unique, MIGRATE_ONLY_DECLARED);
+      const deploy = ['--to', 'production', '--permit-policy-change', '--json'];
 
-      const failed = await runMigrate(project.ctx, [
-        '--to',
-        'production',
-        '--permit-policy-change',
-        '--json',
-      ]);
+      const failed = await runMigrate(project.ctx, deploy);
+      errorOf(failed);
+      const afterFailure = await appMarker(project);
+      const [usersCollection] = await client.db(name).listCollections({ name: 'users' }).toArray();
+      await users.deleteOne({ email: 'a@x.io' });
+      const retried = await runMigrate(project.ctx, deploy);
 
-      expect(errorOf(failed)).toMatchObject({
-        why: expect.stringContaining('E11000 duplicate key'),
+      expect({
+        storageHash: afterFailure?.storageHash,
+        policies: afterFailure?.meta['policies'],
+        nameInValidator: JSON.stringify(
+          usersCollection !== undefined && 'options' in usersCollection
+            ? usersCollection.options
+            : {},
+        ).includes('"name"'),
+        retried: retried.exitCode,
+      }).toEqual({
+        storageHash: base,
+        policies: DATA_LOSS_PERMITTED_RECORDED,
+        nameInValidator: true,
+        retried: 0,
       });
       const marker = await appMarker(project);
       expect({ storageHash: marker?.storageHash, meta: marker?.meta }).toEqual({
-        storageHash: base,
+        storageHash: unique,
         meta: {
           policies: {
-            change: ['migrate', 'reconcile'],
-            dataProtection: {
-              dataLoss: 'data-loss-permitted',
-              accessWidening: 'access-widening-with-consent',
-            },
+            ...DATA_LOSS_PERMITTED_RECORDED,
+            change: ['migrate'],
           },
         },
       });

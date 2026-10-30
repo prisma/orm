@@ -1,23 +1,15 @@
 /**
- * Database policies on PostgreSQL alone: a run whose migration fails leaves the recorded policies
- * as they were, and a database that changes only through migrations, whose marker is outside the
- * migration graph, is told to author migrations rather than run `db update`.
+ * Database policies on PostgreSQL alone: a database that changes only through migrations, whose
+ * marker is outside the migration graph, is told to author migrations rather than run `db update`.
  */
 
 import { readFileSync, rmSync } from 'node:fs';
 import { writeRef } from '@internal/migration-tools/refs';
-import { timeouts, withClient, withDevDatabase } from '@repo/test-utils';
+import { timeouts, withDevDatabase } from '@repo/test-utils';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from './utils/cli-test-helpers';
-import {
-  appMarker,
-  errorOf,
-  MIGRATE_ONLY_DECLARED,
-  planTo,
-  setupPolicyProject,
-  writePolicyRef,
-} from './utils/database-policies-journey';
+import { errorOf, MIGRATE_ONLY_DECLARED } from './utils/database-policies-journey';
 import {
   getLatestMigrationDir,
   type JourneyContext,
@@ -28,14 +20,6 @@ import {
   swapContract,
 } from './utils/journey-test-helpers';
 
-const DATA_LOSS_PERMITTED_RECORDED = {
-  change: ['migrate', 'reconcile'],
-  dataProtection: {
-    dataLoss: 'data-loss-permitted',
-    accessWidening: 'access-widening-with-consent',
-  },
-};
-
 function migrationTo(ctx: JourneyContext, dirName: string): string {
   const manifest = JSON.parse(
     readFileSync(join(ctx.testDir, 'migrations', 'app', dirName, 'migration.json'), 'utf-8'),
@@ -45,46 +29,6 @@ function migrationTo(ctx: JourneyContext, dirName: string): string {
 
 withTempDir(({ createTempDir }) => {
   describe('database policies (PostgreSQL only)', () => {
-    it(
-      'leaves the recorded policies as they were when the run fails',
-      async () => {
-        await withDevDatabase(async ({ connectionString }) => {
-          const project = setupPolicyProject('postgres', createTempDir(), connectionString);
-          const base = await planTo(project, 'base', 'initial');
-          expect((await runMigrate(project.ctx)).exitCode).toBe(0);
-          await writePolicyRef(project, 'production', base, {
-            dataProtection: { dataLoss: 'data-loss-permitted' },
-          });
-          const recorded = await runMigrate(project.ctx, [
-            '--to',
-            'production',
-            '--permit-policy-change',
-          ]);
-          expect(recorded.exitCode, `${recorded.stdout}\n${recorded.stderr}`).toBe(0);
-          await withClient(connectionString, (client) =>
-            client.query(`insert into "user" (id, email) values (1, 'a@x.io'), (2, 'a@x.io')`),
-          );
-          const unique = await planTo(project, 'unique', 'unique-email');
-          await writePolicyRef(project, 'production', unique, MIGRATE_ONLY_DECLARED);
-
-          const failed = await runMigrate(project.ctx, [
-            '--to',
-            'production',
-            '--permit-policy-change',
-            '--json',
-          ]);
-
-          expect(errorOf(failed)).toMatchObject({ meta: { failingSpace: 'app' } });
-          const marker = await appMarker(project);
-          expect({ storageHash: marker?.storageHash, meta: marker?.meta }).toEqual({
-            storageHash: base,
-            meta: { policies: DATA_LOSS_PERMITTED_RECORDED },
-          });
-        });
-      },
-      timeouts.spinUpPpgDev,
-    );
-
     it(
       'gives only the migrations recovery for a marker outside the graph on a migrations-only database',
       async () => {

@@ -10,20 +10,51 @@ import type { WithPolicyProject } from './database-policies-enforcement';
 import {
   appMarker,
   errorOf,
+  insertDuplicateUsers,
   ledgerLength,
   MIGRATE_ONLY_DECLARED,
   MIGRATE_ONLY_RECORDED,
   type PolicyProject,
   planTo,
+  schemaOf,
   writePolicyRef,
 } from './database-policies-journey';
-import { parseJsonOutput, runMigrate, runMigrationStatus } from './journey-test-helpers';
+import {
+  parseJsonOutput,
+  runDbUpdate,
+  runMigrate,
+  runMigrationStatus,
+} from './journey-test-helpers';
 
 const CHANGE_DIFFERENCE = {
   setting: 'change',
   declared: ['migrate'],
   inForce: ['migrate', 'reconcile'],
 };
+
+export const DATA_LOSS_PERMITTED_RECORDED = {
+  change: ['migrate', 'reconcile'],
+  dataProtection: {
+    dataLoss: 'data-loss-permitted',
+    accessWidening: 'access-widening-with-consent',
+  },
+};
+
+/** A database migrated to the base contract, whose marker records `dataLoss: data-loss-permitted`. */
+export async function recordedDataLossPermitted(project: PolicyProject): Promise<string> {
+  const base = await planTo(project, 'base', 'initial');
+  const migrated = await runMigrate(project.ctx);
+  expect(migrated.exitCode, `db migrate: ${migrated.stdout}\n${migrated.stderr}`).toBe(0);
+  await writePolicyRef(project, 'production', base, {
+    dataProtection: { dataLoss: 'data-loss-permitted' },
+  });
+  const recorded = await runMigrate(project.ctx, ['--to', 'production', '--permit-policy-change']);
+  expect(recorded.exitCode, `policy-only run: ${recorded.stdout}\n${recorded.stderr}`).toBe(0);
+  expect((await appMarker(project))?.meta).toEqual({
+    policies: DATA_LOSS_PERMITTED_RECORDED,
+  });
+  return base;
+}
 
 /** A database migrated to the base contract, a planned migration to the next, and ref `production` at the next declaring `change: [migrate]`. */
 async function pendingRefWithPolicies(project: PolicyProject) {
@@ -39,7 +70,7 @@ interface MigrateJson {
   readonly migrationsApplied: number;
   readonly markerHash: string;
   readonly summary: string;
-  readonly policiesUpdated?: readonly unknown[];
+  readonly databasePoliciesUpdated?: readonly unknown[];
 }
 
 export function definePolicyMigrateJourneys(withProject: WithPolicyProject, timeout: number): void {
@@ -49,6 +80,7 @@ export function definePolicyMigrateJourneys(withProject: WithPolicyProject, time
       await withProject(test, async (project) => {
         const { base } = await pendingRefWithPolicies(project);
         const ledgerBefore = await ledgerLength(project);
+        const schemaBefore = await schemaOf(project);
 
         const refused = await runMigrate(project.ctx, ['--to', 'production', '--json']);
 
@@ -74,6 +106,73 @@ export function definePolicyMigrateJourneys(withProject: WithPolicyProject, time
           meta: marker?.meta,
           ledger: await ledgerLength(project),
         }).toEqual({ storageHash: base, meta: {}, ledger: ledgerBefore });
+        expect(await schemaOf(project)).toEqual(schemaBefore);
+      });
+    },
+    timeout,
+  );
+
+  it(
+    'records the policies with db update --to <ref> on a database at its contract, and writes no ledger entry',
+    async (test) => {
+      await withProject(test, async (project) => {
+        const base = await planTo(project, 'base', 'initial');
+        const migrated = await runMigrate(project.ctx);
+        expect(migrated.exitCode, `db migrate: ${migrated.stdout}\n${migrated.stderr}`).toBe(0);
+        await writePolicyRef(project, 'production', base, {
+          dataProtection: { dataLoss: 'data-loss-permitted' },
+        });
+        const ledgerBefore = await ledgerLength(project);
+
+        const updated = await runDbUpdate(project.ctx, [
+          '--to',
+          'production',
+          '--permit-policy-change',
+          '--json',
+        ]);
+
+        expect(updated.exitCode, `db update: ${updated.stdout}\n${updated.stderr}`).toBe(0);
+        expect(parseJsonOutput(updated)).toMatchObject({
+          databasePoliciesUpdated: [
+            {
+              setting: 'dataProtection.dataLoss',
+              declared: 'data-loss-permitted',
+              inForce: 'data-loss-with-consent',
+            },
+          ],
+        });
+        expect({
+          meta: (await appMarker(project))?.meta,
+          ledger: await ledgerLength(project),
+        }).toEqual({ meta: { policies: DATA_LOSS_PERMITTED_RECORDED }, ledger: ledgerBefore });
+      });
+    },
+    timeout,
+  );
+
+  it(
+    'leaves the recorded policies as they were when the run fails on its second migration',
+    async (test) => {
+      await withProject(test, async (project) => {
+        const base = await recordedDataLossPermitted(project);
+        await insertDuplicateUsers(project);
+        await planTo(project, 'next', 'add-name');
+        const unique = await planTo(project, 'unique', 'unique-email');
+        await writePolicyRef(project, 'production', unique, MIGRATE_ONLY_DECLARED);
+
+        const failed = await runMigrate(project.ctx, [
+          '--to',
+          'production',
+          '--permit-policy-change',
+          '--json',
+        ]);
+
+        errorOf(failed);
+        const marker = await appMarker(project);
+        expect({ storageHash: marker?.storageHash, meta: marker?.meta }).toEqual({
+          storageHash: base,
+          meta: { policies: DATA_LOSS_PERMITTED_RECORDED },
+        });
       });
     },
     timeout,
@@ -97,7 +196,7 @@ export function definePolicyMigrateJourneys(withProject: WithPolicyProject, time
         expect(document).toMatchObject({
           migrationsApplied: 1,
           markerHash: next,
-          policiesUpdated: [CHANGE_DIFFERENCE],
+          databasePoliciesUpdated: [CHANGE_DIFFERENCE],
         });
         expect(document.summary).toMatch(
           /^Applied 1 migration\(s\) \(\d+ operation\(s\)\) across 1 contract space\(s\); policies updated: change: migrate$/,
@@ -133,7 +232,7 @@ export function definePolicyMigrateJourneys(withProject: WithPolicyProject, time
         expect(parseJsonOutput<MigrateJson>(recorded)).toMatchObject({
           migrationsApplied: 0,
           summary: 'Policies updated: change: migrate',
-          policiesUpdated: [CHANGE_DIFFERENCE],
+          databasePoliciesUpdated: [CHANGE_DIFFERENCE],
         });
         expect({
           meta: (await appMarker(project))?.meta,
