@@ -1,3 +1,5 @@
 # Deferred
 
 - **MySQL fills an unwritten precision only into the storage column.** A `datetime`, `timestamp` or `time` column written without a precision gets `precision: 0` in its storage column when the namespace is built, so its writes are cut to whole seconds. The model field keeps no precision, so `TimeString` and `TimeString(0)` give contracts that differ in the field only. Nothing encodes from the field, so no value is wrong. Enum members are filled the same way. Revisit if a consumer reads precision from the field.
+- **The four targets' date and time codecs repeat the same write and read wrappers** (refuse digits below a millisecond, convert a Temporal value, raise the target's error). The value logic is shared through `@internal/type-implementations`; the wrappers around it are not. Fold them in when a fifth copy would appear.
+- **MongoDB's collection validator checks only `bsonType`.** A `Time` or `Duration` string written outside Prisma in another form is not refused by MongoDB, only on read. A `pattern` in the derived JSON schema would close it; that is validator work for every string type, not this project's.
