@@ -52,14 +52,14 @@ export interface StoredKeyFill {
  * names the statement that would fill it, and `temporaryValue` fills it with one temporary value
  * when its codec has one.
  */
-export type UnnamedMemberFill = 'refuse' | 'temporaryValue';
+export type UnnamedFieldFill = 'refuse' | 'temporaryValue';
 
 /**
  * A policy that allows `data` operations plans a migration whose `migration.ts` the user can fill,
  * so it refuses; any other, as `db update` runs, fills a temporary value, as it does for a new
  * required column.
  */
-export function unnamedMemberFillOf(policy: MigrationOperationPolicy): UnnamedMemberFill {
+export function unnamedFieldFillOf(policy: MigrationOperationPolicy): UnnamedFieldFill {
   return policy.allowedOperationClasses.includes('data') ? 'refuse' : 'temporaryValue';
 }
 
@@ -91,8 +91,8 @@ function acceptedByDataType(
 }
 
 /**
- * The temporary value of a member, as JSON: an empty list for a list, and for a scalar the empty
- * value of the JSON type its codec declares, when the codec's data type takes it. A member that
+ * The temporary value of a field, as JSON: an empty list for a list, and for a scalar the empty
+ * value of the JSON type its codec declares, when the codec's data type takes it. A field that
  * holds a value object or an enum value has none, since no one value stands for every object or
  * member; nor does a scalar whose data type refuses the empty value, as a date refuses `""`.
  */
@@ -110,7 +110,7 @@ function temporaryValueOf(
   return acceptedByDataType(empty, type.codecId, type.typeParams, types) ? empty : undefined;
 }
 
-interface RequiredMember {
+interface RequiredField {
   readonly valueObjectField: ValueObjectFieldCoordinate;
   readonly target: ValueObjectRef;
   readonly field: ContractValueObjectField;
@@ -128,11 +128,11 @@ function sameField(left: ValueObjectFieldCoordinate, right: ValueObjectFieldCoor
 }
 
 /** The fields each value object of both contracts makes required: new to the destination, or optional in the origin. */
-function requiredMembers(
+function requiredFields(
   fromContract: Contract<SqlStorage>,
   contract: Contract<SqlStorage>,
   statements: readonly ResolvedMigrationStatement[],
-): readonly RequiredMember[] {
+): readonly RequiredField[] {
   const originNamespaces = new Map<string, string>();
   const renamedFrom = new Map<string, ValueObjectFieldCoordinate>();
   const backfills: ResolvedValueObjectFieldBackfillStatement[] = [];
@@ -146,7 +146,7 @@ function requiredMembers(
       renamedFrom.set(JSON.stringify(statement.to), statement.from);
     }
   }
-  const members: RequiredMember[] = [];
+  const fields: RequiredField[] = [];
   for (const { coordinate, valueObject } of valueObjectsWithCoordinates(contract.storage)) {
     const origin: ContractValueObject | undefined = valueObjectAt(fromContract.storage, {
       ...coordinate,
@@ -173,7 +173,7 @@ function requiredMembers(
         ? origin.fields[originName]
         : undefined;
       if (originField !== undefined && !originField.nullable) continue;
-      members.push({
+      fields.push({
         valueObjectField,
         target: coordinate,
         field,
@@ -182,19 +182,19 @@ function requiredMembers(
       });
     }
   }
-  return members;
+  return fields;
 }
 
 function backfillAdvice(
   contract: Contract<SqlStorage>,
-  member: RequiredMember,
+  required: RequiredField,
   text: string,
 ): string {
   const backfill = `--backfill ${text} to write the value the plan fills them with.`;
-  if (member.removedFields.length === 0) return `Add ${backfill}`;
-  const renames = member.removedFields.map(
+  if (required.removedFields.length === 0) return `Add ${backfill}`;
+  const renames = required.removedFields.map(
     (field) =>
-      `--rename ${valueObjectFieldStatementText(contract, { ...member.valueObjectField, field })}:${text}`,
+      `--rename ${valueObjectFieldStatementText(contract, { ...required.valueObjectField, field })}:${text}`,
   );
   return `If it is a field renamed, add ${renames.join(' or ')}. Otherwise add ${backfill}`;
 }
@@ -204,7 +204,7 @@ function placeText(place: ValueObjectPlace): string {
 }
 
 function needsValue(
-  member: RequiredMember,
+  required: RequiredField,
   place: ValueObjectPlace,
   text: string,
   why: string,
@@ -219,7 +219,7 @@ function needsValue(
       entityName: place.table,
       column: place.column,
     },
-    meta: { valueObjectField: member.valueObjectField },
+    meta: { valueObjectField: required.valueObjectField },
   };
 }
 
@@ -241,30 +241,30 @@ const REACH_REASONS = {
  * The fills of value object fields a plan makes. A field of a value object that both contracts have
  * is filled when the destination makes it required and the origin lacks it or makes it optional. A
  * backfill statement fills it with a value the user writes in `migration.ts`. Without one,
- * `unnamed` decides: `refuse` names the statement, and `temporaryValue` fills a scalar member whose
+ * `unnamed` decides: `refuse` names the statement, and `temporaryValue` fills a scalar field whose
  * codec has a temporary value its data type takes, and refuses any other.
  * Each fill acts on every column of the working
  * schema whose field holds the value object, at every path to its objects, nested or in lists, as
  * the destination names them. A column that holds the value object where its paths cannot be listed
  * is refused. With no origin contract, nothing is known to have changed.
  */
-export function planValueObjectMemberFills(input: {
+export function planValueObjectFieldFills(input: {
   readonly statements: readonly ResolvedMigrationStatement[];
   readonly fromContract: Contract<SqlStorage> | null;
   readonly contract: Contract<SqlStorage>;
   readonly tables: SchemaTables;
   readonly types: TypeLookups;
-  readonly unnamed: UnnamedMemberFill;
+  readonly unnamed: UnnamedFieldFill;
 }): Result<readonly StoredKeyFill[], SqlPlannerConflict> {
   const { fromContract, contract } = input;
   if (fromContract === null) return ok([]);
-  const members = requiredMembers(fromContract, contract, input.statements);
-  if (members.length === 0) return ok([]);
+  const newlyRequired = requiredFields(fromContract, contract, input.statements);
+  if (newlyRequired.length === 0) return ok([]);
   const placesOf = valueObjectPlaces(contract, input.tables);
   const fills: StoredKeyFill[] = [];
-  for (const member of members) {
-    const text = valueObjectFieldStatementText(contract, member.valueObjectField);
-    const places = placesOf(member.target);
+  for (const required of newlyRequired) {
+    const text = valueObjectFieldStatementText(contract, required.valueObjectField);
+    const places = placesOf(required.target);
     if (!places.ok) {
       const { column, reach } = places.failure;
       return notOk(unlisted(text, column.column, column.table, REACH_REASONS[reach.kind]));
@@ -272,35 +272,35 @@ export function planValueObjectMemberFills(input: {
     const [first] = places.value;
     if (first === undefined) continue;
     const value =
-      member.statement !== undefined
+      required.statement !== undefined
         ? new UnfilledValue(`${text}:value`)
         : input.unnamed === 'temporaryValue'
-          ? temporaryValueOf(member.field, input.types)
+          ? temporaryValueOf(required.field, input.types)
           : undefined;
     if (value === undefined) {
       return notOk(
         needsValue(
-          member,
+          required,
           first,
           text,
           input.unnamed === 'refuse'
-            ? backfillAdvice(contract, member, text)
+            ? backfillAdvice(contract, required, text)
             : `db update cannot choose a value for a field that holds a value object or an enum value, or whose codec has no temporary value. Plan a migration with prisma migration plan --backfill ${text} instead, and write the value in its migration.ts.`,
         ),
       );
     }
     for (const place of places.value) {
       fills.push({
-        valueObjectField: member.valueObjectField,
+        valueObjectField: required.valueObjectField,
         namespaceId: place.namespaceId,
         table: place.table,
         column: place.column,
         path: jsonPathText([
           ...place.steps,
-          { kind: 'member', name: member.valueObjectField.field },
+          { kind: 'member', name: required.valueObjectField.field },
         ]),
         value,
-        statement: member.statement,
+        statement: required.statement,
       });
     }
   }

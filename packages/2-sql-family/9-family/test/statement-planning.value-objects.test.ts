@@ -40,8 +40,8 @@ describe('a value object field rename', () => {
   });
 });
 
-describe('a value object member backfill and a variant convert', () => {
-  const memberBackfill = {
+describe('a value object field backfill and a variant convert', () => {
+  const fieldBackfill = {
     kind: 'backfill',
     entity: 'valueObjectField',
     field: { namespaceId: app, valueObject: 'Place', field: 'location' },
@@ -53,23 +53,23 @@ describe('a value object member backfill and a variant convert', () => {
   } as const;
 
   it('name no column for the field strategies', () => {
-    expect(fieldStatementColumns([memberBackfill, variantConvert], contract)).toEqual({
+    expect(fieldStatementColumns([fieldBackfill, variantConvert], contract)).toEqual({
       convert: [],
       backfill: [],
     });
   });
 
   it('are not refused as a backfill of a defaulted field', () => {
-    expect(backfillOfDefaultedField([memberBackfill], contract, contract)).toBeUndefined();
+    expect(backfillOfDefaultedField([fieldBackfill], contract, contract)).toBeUndefined();
   });
 
   it('are planned with the diff, so the target places their operations', () => {
     expect(
-      appliedStatementsInOrder([memberBackfill, variantConvert], [], (statement) =>
-        statement === memberBackfill ? [2] : [3],
+      appliedStatementsInOrder([fieldBackfill, variantConvert], [], (statement) =>
+        statement === fieldBackfill ? [2] : [3],
       ),
     ).toEqual([
-      { statement: memberBackfill, operationIndexes: [2] },
+      { statement: fieldBackfill, operationIndexes: [2] },
       { statement: variantConvert, operationIndexes: [3] },
     ]);
   });

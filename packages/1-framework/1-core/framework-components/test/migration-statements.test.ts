@@ -453,7 +453,7 @@ describe('a value object field rename', () => {
   });
 });
 
-describe('a value object member backfill', () => {
+describe('a value object field backfill', () => {
   const statement: ResolvedMigrationStatement = {
     kind: 'backfill',
     entity: 'valueObjectField',

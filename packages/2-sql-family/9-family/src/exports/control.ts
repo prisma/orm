@@ -207,15 +207,15 @@ export {
 } from '../core/migrations/unconverted-field';
 export { UnfilledValue } from '../core/migrations/unfilled-value';
 export {
+  planValueObjectFieldFills,
+  type StoredKeyFill,
+  type UnnamedFieldFill,
+  unnamedFieldFillOf,
+} from '../core/migrations/value-object-field-fills';
+export {
   planValueObjectFieldRewrites,
   type StoredKeyRewrite,
 } from '../core/migrations/value-object-field-planning';
-export {
-  planValueObjectMemberFills,
-  type StoredKeyFill,
-  type UnnamedMemberFill,
-  unnamedMemberFillOf,
-} from '../core/migrations/value-object-member-fills';
 export {
   planVariantRowRewrites,
   type VariantRowRewrite,

@@ -24,7 +24,7 @@ const ALL_CLASSES: MigrationOperationPolicy = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'],
 };
 
-type MemberSpec =
+type ValueObjectFieldSpec =
   | { readonly kind: 'status'; readonly nullable?: boolean; readonly many?: boolean }
   | { readonly kind: 'valueObject'; readonly name: string; readonly many?: boolean };
 
@@ -44,7 +44,7 @@ function reference(name: string) {
   } as const;
 }
 
-function memberOf(spec: MemberSpec): ContractValueObjectField {
+function valueObjectFieldOf(spec: ValueObjectFieldSpec): ContractValueObjectField {
   if (spec.kind === 'valueObject') {
     return { nullable: false, type: reference(spec.name), ...(spec.many === true ? listOf : {}) };
   }
@@ -64,7 +64,7 @@ function memberOf(spec: MemberSpec): ContractValueObjectField {
 /** `Ticket`, in table `ticket`, holds `Meta` in `meta` and a list of `Visit` in `visits`; enum `Status` has `values`. */
 function ticketContract(
   values: Readonly<Record<string, string>>,
-  valueObjects: Readonly<Record<string, Readonly<Record<string, MemberSpec>>>>,
+  valueObjects: Readonly<Record<string, Readonly<Record<string, ValueObjectFieldSpec>>>>,
   seed: string,
 ): Contract<SqlStorage> {
   return {
@@ -92,7 +92,10 @@ function ticketContract(
                 name,
                 {
                   fields: Object.fromEntries(
-                    Object.entries(members).map(([field, spec]) => [field, memberOf(spec)]),
+                    Object.entries(members).map(([field, spec]) => [
+                      field,
+                      valueObjectFieldOf(spec),
+                    ]),
                   ),
                 },
               ]),
@@ -191,7 +194,7 @@ const ACTIVE_ARCHIVED = { ACTIVE: 'active', ARCHIVED: 'archived' };
 const ACTIVE = { ACTIVE: 'active' };
 const ACTIVE_RETIRED = { ACTIVE: 'active', RETIRED: 'retired' };
 
-function shapes(meta: Readonly<Record<string, MemberSpec>>) {
+function shapes(meta: Readonly<Record<string, ValueObjectFieldSpec>>) {
   return { Meta: meta, Visit: { meta: { kind: 'valueObject', name: 'Meta' } } } as const;
 }
 

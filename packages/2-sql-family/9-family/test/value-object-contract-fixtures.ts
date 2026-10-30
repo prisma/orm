@@ -9,7 +9,7 @@ import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
 import type { SchemaTables } from '../src/core/migrations/schema-tables';
 
-export type MemberSpec =
+export type ValueObjectFieldSpec =
   | 'scalar'
   | { readonly valueObject: string; readonly many?: boolean }
   | { readonly field: ContractValueObjectField };
@@ -31,7 +31,10 @@ export function valueObjectRef(name: string, namespaceId: string) {
 
 export const textType = { kind: 'scalar', codecId: 'test/text@1' } as const;
 
-function memberOf(spec: MemberSpec, namespaceId: string): ContractValueObjectField {
+function valueObjectFieldOf(
+  spec: ValueObjectFieldSpec,
+  namespaceId: string,
+): ContractValueObjectField {
   if (spec === 'scalar') return { nullable: false, type: textType };
   if ('field' in spec) return spec.field;
   return {
@@ -58,7 +61,7 @@ function fieldOf(spec: ColumnSpec, namespaceId: string): ContractField {
 }
 
 export function contractWith(options: {
-  readonly valueObjects: Readonly<Record<string, Readonly<Record<string, MemberSpec>>>>;
+  readonly valueObjects: Readonly<Record<string, Readonly<Record<string, ValueObjectFieldSpec>>>>;
   readonly columns: readonly ColumnSpec[];
   readonly namespace?: string;
 }): Contract<SqlStorage> {
@@ -75,13 +78,13 @@ export function contractWith(options: {
           id: namespaceId,
           entries: {
             valueObject: Object.fromEntries(
-              Object.entries(options.valueObjects).map(([name, members]) => [
+              Object.entries(options.valueObjects).map(([name, fields]) => [
                 name,
                 {
                   fields: Object.fromEntries(
-                    Object.entries(members).map(([member, spec]) => [
-                      member,
-                      memberOf(spec, namespaceId),
+                    Object.entries(fields).map(([field, spec]) => [
+                      field,
+                      valueObjectFieldOf(spec, namespaceId),
                     ]),
                   ),
                 },

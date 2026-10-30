@@ -16,7 +16,7 @@ import { createTestSqlNamespace } from '../../1-core/contract/test/test-support'
 import { planEnumValueRewrites } from '../src/core/migrations/enum-value-planning';
 import type { SchemaTables } from '../src/core/migrations/schema-tables';
 
-type MemberSpec =
+type ValueObjectFieldSpec =
   | { readonly kind: 'status'; readonly nullable?: boolean; readonly many?: boolean }
   | { readonly kind: 'scalar' }
   | { readonly kind: 'valueObject'; readonly name: string; readonly many?: boolean };
@@ -42,7 +42,7 @@ function valueObjectType(name: string) {
   } as const;
 }
 
-function memberOf(spec: MemberSpec): ContractValueObjectField {
+function valueObjectFieldOf(spec: ValueObjectFieldSpec): ContractValueObjectField {
   if (spec.kind === 'scalar') return { nullable: false, type: textType };
   if (spec.kind === 'valueObject') {
     return {
@@ -87,7 +87,7 @@ function fieldOf(spec: ColumnSpec): ContractField {
 /** A contract whose model `Ticket`, in table `ticket`, holds the columns, with enum `Status`. */
 function contractWith(options: {
   readonly members: Readonly<Record<string, string>>;
-  readonly valueObjects: Readonly<Record<string, Readonly<Record<string, MemberSpec>>>>;
+  readonly valueObjects: Readonly<Record<string, Readonly<Record<string, ValueObjectFieldSpec>>>>;
   readonly columns: readonly ColumnSpec[];
 }): Contract<SqlStorage> {
   return {
@@ -105,7 +105,10 @@ function contractWith(options: {
                 name,
                 {
                   fields: Object.fromEntries(
-                    Object.entries(members).map(([member, spec]) => [member, memberOf(spec)]),
+                    Object.entries(members).map(([member, spec]) => [
+                      member,
+                      valueObjectFieldOf(spec),
+                    ]),
                   ),
                 },
               ]),

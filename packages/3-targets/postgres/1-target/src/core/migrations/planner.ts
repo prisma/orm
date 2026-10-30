@@ -25,15 +25,15 @@ import {
   planFieldEventCalls,
   plannerFailure,
   planStatements,
+  planValueObjectFieldFills,
   planValueObjectFieldRewrites,
-  planValueObjectMemberFills,
   planVariantRowRewrites,
   sqlTypeLookupsOf,
   storedValueOperationIndexes,
   storedValueSubjects,
   subjectsOfCalls,
   type TargetRefusal,
-  unnamedMemberFillOf,
+  unnamedFieldFillOf,
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
@@ -391,18 +391,18 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       return plannerFailure([keyRewrites.failure]);
     }
     const storedKeyCalls = postgresStoredKeyCalls(keyRewrites.value, options.contract);
-    const memberFills = planValueObjectMemberFills({
+    const fieldFills = planValueObjectFieldFills({
       statements: options.statements,
       fromContract: options.fromContract,
       contract: options.contract,
       tables,
       types,
-      unnamed: unnamedMemberFillOf(options.policy),
+      unnamed: unnamedFieldFillOf(options.policy),
     });
-    if (!memberFills.ok) {
-      return plannerFailure([memberFills.failure]);
+    if (!fieldFills.ok) {
+      return plannerFailure([fieldFills.failure]);
     }
-    const storedKeyFillCalls = postgresStoredKeyFillCalls(memberFills.value, options.contract);
+    const storedKeyFillCalls = postgresStoredKeyFillCalls(fieldFills.value, options.contract);
     const rewrites = planEnumValueRewrites({
       statements: options.statements,
       fromContract: options.fromContract,

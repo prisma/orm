@@ -24,7 +24,7 @@ export const ALL_CLASSES: MigrationOperationPolicy = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'],
 };
 
-export type MemberSpec =
+export type ValueObjectFieldSpec =
   | 'scalar'
   | { readonly valueObject: string; readonly many?: boolean }
   | { readonly field: ContractValueObjectField };
@@ -51,7 +51,7 @@ export function reference(name: string) {
   } as const;
 }
 
-function member(spec: MemberSpec): ContractValueObjectField {
+function valueObjectFieldOf(spec: ValueObjectFieldSpec): ContractValueObjectField {
   if (spec === 'scalar') return { nullable: false, type: text };
   if ('field' in spec) return spec.field;
   return {
@@ -63,7 +63,7 @@ function member(spec: MemberSpec): ContractValueObjectField {
 
 /** A contract whose model `Place`, in table `place`, holds the columns' value objects. */
 export function placeContract(
-  valueObjects: Readonly<Record<string, Readonly<Record<string, MemberSpec>>>>,
+  valueObjects: Readonly<Record<string, Readonly<Record<string, ValueObjectFieldSpec>>>>,
   columns: readonly ColumnSpec[],
   seed: string,
 ): Contract<SqlStorage> {
@@ -91,11 +91,14 @@ export function placeContract(
               }),
             },
             valueObject: Object.fromEntries(
-              Object.entries(valueObjects).map(([name, members]) => [
+              Object.entries(valueObjects).map(([name, fields]) => [
                 name,
                 {
                   fields: Object.fromEntries(
-                    Object.entries(members).map(([field, spec]) => [field, member(spec)]),
+                    Object.entries(fields).map(([field, spec]) => [
+                      field,
+                      valueObjectFieldOf(spec),
+                    ]),
                   ),
                 },
               ]),

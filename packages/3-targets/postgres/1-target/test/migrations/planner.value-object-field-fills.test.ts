@@ -7,12 +7,12 @@ import { describe, expect, it } from 'vitest';
 import {
   ALL_CLASSES,
   conflictsOf,
-  type MemberSpec,
   placeContract,
   plan,
   renderedCalls,
   succeeded,
   text,
+  type ValueObjectFieldSpec,
 } from './value-object-planner-fixtures';
 
 const MIGRATION_PLAN: MigrationOperationPolicy = {
@@ -27,7 +27,7 @@ const backfill: ResolvedValueObjectFieldBackfillStatement = {
   field: country,
 };
 
-function required(overrides: Partial<ContractValueObjectField>): MemberSpec {
+function required(overrides: Partial<ContractValueObjectField>): ValueObjectFieldSpec {
   return { field: { nullable: false, type: text, ...overrides } };
 }
 
@@ -41,7 +41,7 @@ function placeholderFill(column: string, path: string): string {
   return `this.fillStoredKey({ schema: "public", table: "place", column: "${column}", path: "${path}", value: placeholder("GeoPoint.country:value") })`;
 }
 
-describe('Postgres planner, value object member fills', () => {
+describe('Postgres planner, value object field fills', () => {
   describe('migration plan --backfill GeoPoint.country', () => {
     it('fills a new required field with a placeholder value, and gives the statement its operation', async () => {
       const result = succeeded(

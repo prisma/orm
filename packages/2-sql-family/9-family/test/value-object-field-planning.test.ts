@@ -9,11 +9,11 @@ import {
   allTables,
   contractWith,
   field,
-  type MemberSpec,
   tablesOf,
+  type ValueObjectFieldSpec,
 } from './value-object-contract-fixtures';
 
-function renameMember(
+function renameField(
   valueObject: string,
   from: string,
   to: string,
@@ -44,7 +44,7 @@ const GEO_RENAMED = { latitude: 'scalar', lng: 'scalar' } as const;
 
 describe('planValueObjectFieldRewrites', () => {
   it('renames the key in a column that holds the value object, at the column value', () => {
-    const statement = renameMember('GeoPoint', 'lat', 'latitude');
+    const statement = renameField('GeoPoint', 'lat', 'latitude');
     expect(
       rewrites(
         planValueObjectFieldRewrites({
@@ -78,7 +78,7 @@ describe('planValueObjectFieldRewrites', () => {
     const columns = [place, stops];
     const result = rewrites(
       planValueObjectFieldRewrites({
-        statements: [renameMember('GeoPoint', 'lat', 'latitude')],
+        statements: [renameField('GeoPoint', 'lat', 'latitude')],
         fromContract: contractWith({ valueObjects: { GeoPoint: GEO }, columns }),
         contract: contractWith({ valueObjects: { GeoPoint: GEO_RENAMED }, columns }),
         tables: allTables(),
@@ -92,7 +92,7 @@ describe('planValueObjectFieldRewrites', () => {
 
   it('reaches the value object through nested value objects and lists of them', () => {
     const history = { model: 'Place', table: 'place', field: 'history', valueObject: 'Visit' };
-    const valueObjects = (geo: Readonly<Record<string, MemberSpec>>) => ({
+    const valueObjects = (geo: Readonly<Record<string, ValueObjectFieldSpec>>) => ({
       GeoPoint: geo,
       Visit: { stops: { valueObject: 'Stop', many: true }, point: { valueObject: 'GeoPoint' } },
       Stop: { point: { valueObject: 'GeoPoint' } },
@@ -116,8 +116,8 @@ describe('planValueObjectFieldRewrites', () => {
 
   it('runs an outer rename before an inner one, and writes the inner path with the outer new name', () => {
     const address = { model: 'Shop', table: 'shop', field: 'address', valueObject: 'Address' };
-    const outer = renameMember('Address', 'point', 'location');
-    const inner = renameMember('GeoPoint', 'lat', 'latitude');
+    const outer = renameField('Address', 'point', 'location');
+    const inner = renameField('GeoPoint', 'lat', 'latitude');
     const result = rewrites(
       planValueObjectFieldRewrites({
         statements: [inner, outer],
@@ -279,7 +279,7 @@ describe('planValueObjectFieldRewrites', () => {
       valueObject: 'NavItem',
       many: true,
     };
-    const navObjects = (label: Readonly<Record<string, MemberSpec>>) => ({
+    const navObjects = (label: Readonly<Record<string, ValueObjectFieldSpec>>) => ({
       NavItem: {
         children: { valueObject: 'NavItem', many: true },
         label: { valueObject: 'Label' },
@@ -288,7 +288,7 @@ describe('planValueObjectFieldRewrites', () => {
     });
 
     it('a rename whose path passes through a value object that contains itself, as the statement', () => {
-      const statement = renameMember('Label', 'text', 'caption');
+      const statement = renameField('Label', 'text', 'caption');
       const conflict = refusal(
         planValueObjectFieldRewrites({
           statements: [statement],
@@ -354,7 +354,7 @@ describe('planValueObjectFieldRewrites', () => {
 
     it('a column that holds a union or a dictionary of the value object, naming the column', () => {
       for (const shape of ['union', 'dictionary'] as const) {
-        const statement = renameMember('GeoPoint', 'lat', 'latitude');
+        const statement = renameField('GeoPoint', 'lat', 'latitude');
         const column = { ...place, shape };
         const conflict = refusal(
           planValueObjectFieldRewrites({

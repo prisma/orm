@@ -22,14 +22,14 @@ import {
   planFieldEventCalls,
   plannerFailure,
   planStatements,
+  planValueObjectFieldFills,
   planValueObjectFieldRewrites,
-  planValueObjectMemberFills,
   planVariantRowRewrites,
   sqlTypeLookupsOf,
   storedValueOperationIndexes,
   storedValueSubjects,
   subjectsOfCalls,
-  unnamedMemberFillOf,
+  unnamedFieldFillOf,
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
@@ -242,16 +242,16 @@ export class SqliteMigrationPlanner
     });
     if (!keyRewrites.ok) return plannerFailure([keyRewrites.failure]);
     const storedKeyCalls = sqliteStoredKeyCalls(keyRewrites.value);
-    const memberFills = planValueObjectMemberFills({
+    const fieldFills = planValueObjectFieldFills({
       statements: options.statements,
       fromContract: options.fromContract,
       contract: options.contract,
       tables,
       types,
-      unnamed: unnamedMemberFillOf(options.policy),
+      unnamed: unnamedFieldFillOf(options.policy),
     });
-    if (!memberFills.ok) return plannerFailure([memberFills.failure]);
-    const storedKeyFillCalls = sqliteStoredKeyFillCalls(memberFills.value);
+    if (!fieldFills.ok) return plannerFailure([fieldFills.failure]);
+    const storedKeyFillCalls = sqliteStoredKeyFillCalls(fieldFills.value);
     const rewrites = planEnumValueRewrites({
       statements: options.statements,
       fromContract: options.fromContract,

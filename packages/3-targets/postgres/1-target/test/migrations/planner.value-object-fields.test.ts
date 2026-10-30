@@ -2,12 +2,12 @@ import { asNamespaceId } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import {
   conflictsOf,
-  type MemberSpec,
   placeContract,
   plan,
   rename,
   renderedCalls,
   succeeded,
+  type ValueObjectFieldSpec,
 } from './value-object-planner-fixtures';
 
 const GEO = { lat: 'scalar', lng: 'scalar' } as const;
@@ -144,7 +144,7 @@ describe('Postgres planner, value object fields', () => {
 
   it('refuses a rename through a value object that contains itself', () => {
     const items = { field: 'items', valueObject: 'NavItem', many: true };
-    const nav = (label: Readonly<Record<string, MemberSpec>>) => ({
+    const nav = (label: Readonly<Record<string, ValueObjectFieldSpec>>) => ({
       NavItem: {
         children: { valueObject: 'NavItem', many: true },
         label: { valueObject: 'Label' },

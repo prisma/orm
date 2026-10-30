@@ -12,17 +12,17 @@ import { structuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { UnfilledValue } from '../src/core/migrations/unfilled-value';
 import {
-  planValueObjectMemberFills,
-  type UnnamedMemberFill,
-} from '../src/core/migrations/value-object-member-fills';
+  planValueObjectFieldFills,
+  type UnnamedFieldFill,
+} from '../src/core/migrations/value-object-field-fills';
 import { TEXT_CODEC_ID, testCodecLookup, textType as textDataType } from './enum-entity-fixtures';
 import {
   allTables,
   type ColumnSpec,
   contractWith,
   field,
-  type MemberSpec,
   textType,
+  type ValueObjectFieldSpec,
   valueObjectRef,
 } from './value-object-contract-fixtures';
 
@@ -53,7 +53,7 @@ function backfill(valueObject: string, name: string): ResolvedValueObjectFieldBa
   return { kind: 'backfill', entity: 'valueObjectField', field: field(valueObject, name) };
 }
 
-function member(overrides: Partial<ContractValueObjectField>): MemberSpec {
+function fieldWith(overrides: Partial<ContractValueObjectField>): ValueObjectFieldSpec {
   return { field: { nullable: false, type: textType, ...overrides } };
 }
 
@@ -74,20 +74,20 @@ const trip: ColumnSpec = { model: 'Trip', table: 'trip', field: 'route', valueOb
 
 const GEO = { lat: 'scalar' } as const;
 const GEO_WITH_COUNTRY = { lat: 'scalar', country: 'scalar' } as const;
-const GEO_OPTIONAL_COUNTRY = { lat: 'scalar', country: member({ nullable: true }) } as const;
+const GEO_OPTIONAL_COUNTRY = { lat: 'scalar', country: fieldWith({ nullable: true }) } as const;
 
 function plan(options: {
-  readonly from: Readonly<Record<string, Readonly<Record<string, MemberSpec>>>>;
-  readonly to: Readonly<Record<string, Readonly<Record<string, MemberSpec>>>>;
+  readonly from: Readonly<Record<string, Readonly<Record<string, ValueObjectFieldSpec>>>>;
+  readonly to: Readonly<Record<string, Readonly<Record<string, ValueObjectFieldSpec>>>>;
   readonly columns?: readonly ColumnSpec[];
   readonly statements?: readonly (
     | ResolvedValueObjectFieldBackfillStatement
     | ResolvedValueObjectFieldRenameStatement
   )[];
-  readonly unnamed?: UnnamedMemberFill;
+  readonly unnamed?: UnnamedFieldFill;
 }) {
   const columns = options.columns ?? [place];
-  return planValueObjectMemberFills({
+  return planValueObjectFieldFills({
     statements: options.statements ?? [],
     fromContract: contractWith({ valueObjects: options.from, columns }),
     contract: contractWith({ valueObjects: options.to, columns }),
@@ -97,19 +97,19 @@ function plan(options: {
   });
 }
 
-function fills(result: ReturnType<typeof planValueObjectMemberFills>) {
+function fills(result: ReturnType<typeof planValueObjectFieldFills>) {
   if (!result.ok) throw new Error(`expected fills, got: ${result.failure.summary}`);
   return result.value;
 }
 
-function refusal(result: ReturnType<typeof planValueObjectMemberFills>) {
+function refusal(result: ReturnType<typeof planValueObjectFieldFills>) {
   if (result.ok) throw new Error('expected a refusal');
   return result.failure;
 }
 
 const country = field('GeoPoint', 'country');
 
-describe('planValueObjectMemberFills', () => {
+describe('planValueObjectFieldFills', () => {
   it('fills a new required field a backfill statement names with a value the user writes', () => {
     const statement = backfill('GeoPoint', 'country');
 
@@ -203,7 +203,7 @@ describe('planValueObjectMemberFills', () => {
   it('fills nothing with no origin contract', () => {
     expect(
       fills(
-        planValueObjectMemberFills({
+        planValueObjectFieldFills({
           statements: [],
           fromContract: null,
           contract: contractWith({
@@ -251,7 +251,7 @@ describe('planValueObjectMemberFills', () => {
           GeoPoint: {
             ...GEO,
             country: 'scalar',
-            tags: member({ many: { elementNullable: false } }),
+            tags: fieldWith({ many: { elementNullable: false } }),
           },
         },
         unnamed: 'temporaryValue',
@@ -269,15 +269,15 @@ describe('planValueObjectMemberFills', () => {
       ['holds a value object', { valueObject: 'Label' }],
       [
         'holds an enum value',
-        member({ valueSet: { ...valueObjectRef('Color', 'app'), entityKind: 'valueSet' } }),
+        fieldWith({ valueSet: { ...valueObjectRef('Color', 'app'), entityKind: 'valueSet' } }),
       ],
       [
         'has a codec whose data type refuses the empty value of its JSON type',
-        member({ type: { kind: 'scalar', codecId: DATE_CODEC_ID } }),
+        fieldWith({ type: { kind: 'scalar', codecId: DATE_CODEC_ID } }),
       ],
       [
         'has a codec with no JSON type',
-        member({ type: { kind: 'scalar', codecId: 'test/other@1' } }),
+        fieldWith({ type: { kind: 'scalar', codecId: 'test/other@1' } }),
       ],
     ] as const)('refuses a field that %s, naming migration plan --backfill', (_, spec) => {
       const result = plan({

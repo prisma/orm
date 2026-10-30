@@ -991,7 +991,7 @@ export function backfillOfDefaultedField(
 }
 
 /**
- * The operations of a statement the statement planner does not take: a value object member backfill
+ * The operations of a statement the statement planner does not take: a value object field backfill
  * and a variant convert are planned with the diff; a field convert or backfill accounts for none.
  */
 function operationsOutsideStatementPlanner(
