@@ -125,8 +125,12 @@ The Mongo family domain (`packages/2-mongo-family/`) contains Mongo-specific pac
 
 The targets domain (`packages/3-targets/`) holds one folder per database, for every family ([ADR 278](../adrs/ADR%20278%20-%20Each%20database's%20packages%20live%20in%20one%20folder.md)). Target, adapter, driver and facade stay separate packages, so an application can replace one of them; the folder keeps them together. Inside a database folder the numbers give dependency order: the adapter imports the target, the facade imports all three, the driver imports none of them.
 
+`0-shared/` beside the database folders holds packages that several databases' packages share ([ADR 311](adrs/ADR%20311%20-%20Code%20shared%20by%20several%20targets'%20type%20implementations%20lives%20in%20one%20package.md)). Today that is `@internal/type-implementations`: value logic that more than one target's codecs, data types and `now()` generators use, depending on no database and no family. It is registered in the `targets` domain, plane `shared`, so both the target packs and the adapters can import it.
+
 ```text
 * 3-targets
+|-- 0-shared
+|   |-- type-implementations → @internal/type-implementations (value logic several targets' type implementations share)
 |-- postgres
 |   |-- 1-target          → @internal/target-postgres (target pack: descriptor, codecs, data types, migrations)
 |   |-- 2-adapter         → @internal/adapter-postgres (lowering, control adapter; multi-plane)
@@ -334,6 +338,7 @@ In `architecture.config.json` the target pack and facade are registered in the `
 | `packages/2-sql-family/4-lanes/relational-core/` | `@internal/sql-relational-core` |
 | `packages/2-sql-family/4-lanes/sql-builder/` | `@internal/sql-builder` |
 | `packages/2-sql-family/5-runtime/` | `@internal/sql-runtime` |
+| `packages/3-targets/0-shared/type-implementations/` | `@internal/type-implementations` |
 | `packages/3-targets/mongo/1-target/` | `@internal/target-mongo` |
 | `packages/3-targets/mongo/2-adapter/` | `@internal/adapter-mongo` |
 | `packages/3-targets/mongo/3-driver/` | `@internal/driver-mongo` |

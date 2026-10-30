@@ -4,6 +4,7 @@
 **Date:** 2026-10-22
 **Domain:** Repository layout, Adapters / Targets
 **Amends:** [ADR 140 — Package Layering & Target-Family Namespacing](ADR%20140%20-%20Package%20Layering%20&%20Target-Family%20Namespacing.md)
+**Amended by:** [ADR 311 — Code shared by several targets' type implementations lives in one package](ADR%20311%20-%20Code%20shared%20by%20several%20targets'%20type%20implementations%20lives%20in%20one%20package.md) (2026-10-30): `packages/3-targets/` also holds `0-shared/`, for packages several databases' packages share. The ordering check skips it.
 
 ---
 
