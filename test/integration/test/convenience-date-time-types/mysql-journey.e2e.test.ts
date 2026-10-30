@@ -87,7 +87,7 @@ const COLUMN_TYPES = {
   Record<string, readonly [string, Readonly<Record<string, number>> | undefined]>
 >;
 
-/** A parameter its column's codec encodes with the column's type parameters, as the ORM writes it: a codec writes a value rounded down to its column's precision, 0 when none is given. */
+/** A parameter its column's codec encodes with the column's type parameters, as the ORM writes it, so a value is written rounded down to its column's precision. */
 function columnParam(column: keyof typeof COLUMN_TYPES, value: unknown): ParamRef {
   const [codecId, typeParams] = COLUMN_TYPES[column];
   return ParamRef.of(value, {
