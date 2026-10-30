@@ -29,7 +29,7 @@ export interface MarkerOutsideGraph {
   /** The space's ledger in apply order, or undefined when it could not be read. */
   readonly ledger: readonly LedgerEntryRecord[] | undefined;
   readonly invocation: CliInvocation;
-  /** The space's change policy in force, which decides the recoveries the advice may give. */
+  /** The database's change policy in force, which decides the recoveries the advice may give. */
   readonly change: readonly ChangeStrategy[];
 }
 

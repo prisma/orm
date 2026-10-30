@@ -52,22 +52,27 @@ export interface DatabasePolicies {
 }
 
 /** What a ref declares: every key optional; an absent key declares nothing. */
-export type DeclaredPolicies = …;
+export interface DeclaredDatabasePolicies { … }
 
-export const DEFAULT_POLICIES: DatabasePolicies = {
+export const DEFAULT_DATABASE_POLICIES: DatabasePolicies = {
   change: ['migrate', 'reconcile'],
   dataProtection: { dataLoss: 'data-loss-with-consent', accessWidening: 'access-widening-with-consent' },
 };
 
-export function policiesOf(marker: ContractMarkerRecord | undefined): DatabasePolicies;
-export function policyDifferences(declared: DeclaredPolicies, inForce: DatabasePolicies): readonly PolicyDifference[];
+export function databasePoliciesOf(
+  marker: ContractMarkerRecord | null | undefined,
+): Result<DatabasePolicies, { readonly why: string }>;
+export function databasePolicyDifferences(
+  declared: DeclaredDatabasePolicies,
+  inForce: DatabasePolicies,
+): readonly DatabasePolicyDifference[];
 ```
 
-`policiesOf` reads `marker.meta.policies`, validates it with arktype, and fills every absent setting from `DEFAULT_POLICIES`. A `meta.policies` that fails validation is a corrupt marker row and fails as `CONTRACT.MARKER_ROW_CORRUPT`; the framework function returns a result and the CLI raises the error, with the space. `policyDifferences` compares only the keys the declaration carries. The name is `DatabasePolicies`, never `policy` alone: the runner's `options.policy` is already the allowed-operation-classes setting.
+`databasePoliciesOf` reads `marker.meta.policies`, validates it with arktype, and fills every absent setting from `DEFAULT_DATABASE_POLICIES`. A `meta.policies` that fails validation is a corrupt marker and fails as `CONTRACT.MARKER_ROW_CORRUPT`. The framework function returns a result. The CLI raises the error when it first reads the marker; the runners and `db sign` raise it when they read the policies again before writing. `databasePolicyDifferences` compares only the keys the declaration carries. The name is `DatabasePolicies`, never `policy` alone: the runner's `options.policy` is already the allowed-operation-classes setting.
 
 ### Refs
 
-`RefEntry` in `packages/1-framework/3-tooling/migration/src/refs.ts` gains `readonly policies?: DeclaredPolicies`, validated by the file's arktype schema with the same error (`MIGRATION.INVALID_REF_FILE`) for a bad value. Unknown keys inside `policies` are rejected, so a typo such as `dataloss` is caught when the ref is read.
+`RefEntry` in `packages/1-framework/3-tooling/migration/src/refs.ts` gains `readonly policies?: DeclaredDatabasePolicies`, validated by the file's arktype schema with the same error (`MIGRATION.INVALID_REF_FILE`) for a bad value. Unknown keys inside `policies` are rejected, so a typo such as `dataloss` is caught when the ref is read.
 
 **Every writer keeps what it did not change.** Today `migration ref set` (`control-api/operations/ref.ts`), ref advancement after `db init`, `db update` and `db migrate --advance-ref` (`control-api/operations/ref-advancement.ts`) and `db sign` (`orm/db/sign.ts`) each call `writeRef` with `{hash, invariants: []}`, which erases the invariants a person wrote. They are replaced by one primitive in `refs.ts`:
 
@@ -206,7 +211,7 @@ The architect and code reviews (in `reviews/`) found the following; each is deci
 | `change: []` was accepted, and its advice looped between the two commands | `change` holds at least one strategy, in the ref and in the marker. |
 | A policy-only `db update` wrote a zero-operation ledger row | The runner decides the marker write and the ledger write separately. A run that only records policies (no operation, marker already at its destination, no new invariant) writes no ledger row. An in-sync `db update` without the flag keeps writing the row it wrote before this slice, which the off-graph error reads. |
 | The CLI reported `MARKER_MISMATCH` and the control API `POLICY_MISMATCH` for a database that is off the graph and given a mismatching ref | Both detect the marker outside the graph first, then compare policies, then check the change policy. |
-| The policy check read the marker before the runner took its lock | The runner receives the policies the check used and compares them with the marker under its lock, as it already compares the hash; a difference fails the run as a concurrent change. |
+| The policy check read the marker before the runner took its lock | The runner receives the policies the check used. Once the runner holds its lock (on SQLite, its exclusive transaction), and before it applies the first space, it compares the policies the check used with the application space's marker. MongoDB has no lock: it compares them before the first space, and writes the application space's marker only while it still stores them. A concurrent policy change fails the run instead of being overridden. |
 | Postgres wrote `meta` back after reading it, so a concurrent write to another `meta` key could be lost | Postgres sets `meta.policies` with a server-side `jsonb` merge; SQLite and MySQL do it inside their exclusive transaction. |
 | `db migrate` checked the policies twice, in the command and in the control API | Once, in the control API. |
 | The `meta.policies` key and its stored form had no owner | The framework exports the key and the serialiser, and the overlay of a declaration on the policies in force; the targets and the CLI use them. Each value list is defined once, as a constant array the types and the schema derive from. |
