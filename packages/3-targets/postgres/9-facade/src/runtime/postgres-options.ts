@@ -47,7 +47,7 @@ const cursorOptionsSchema = type({
 
 export function validateCursorOptions(
   cursor: PostgresCursorOptions | undefined,
-  helper: 'postgres' | 'postgresServerless',
+  helper: string,
 ): PostgresCursorOptions | undefined {
   if (cursor === undefined) {
     return undefined;

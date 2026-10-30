@@ -1,20 +1,26 @@
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import type { NamespacedEnums } from '@internal/contract/enum-accessor';
 import type { Contract } from '@internal/contract/types';
-import postgresDriver, {
-  createPgPool,
-  suppressIdleConnectionErrors,
-} from '@internal/driver-postgres/runtime';
+import postgresDriver from '@internal/driver-postgres/runtime';
 import type {
   AsyncIterableResult,
   RuntimeExecuteOptions,
 } from '@internal/framework-components/runtime';
+import {
+  createUrlPool,
+  resolveOptionalPostgresBinding,
+  toDriverCursorOptions,
+  toRuntimeOptions,
+  validateCursorOptions,
+} from '@internal/postgres/internal/options';
 import { buildPostgresStaticContext } from '@internal/postgres/internal/static-context';
 import { buildPostgresQueryMembers } from '@internal/postgres/internal/transaction-members';
 import { validatePostgresContract } from '@internal/postgres/internal/validate-contract';
 import {
   isPgPool,
   type NamespacedNativeEnums,
+  type PostgresBinding,
+  type PostgresOptionsBase,
   type PostgresQueryMembers,
   type PostgresTransactionContext,
 } from '@internal/postgres/runtime';
@@ -31,13 +37,9 @@ import type { SqlStatementStats } from '@internal/sql-relational-core/ast';
 import type { SqlExecutionPlan, SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type {
   ExecutionContext,
-  Log,
-  RuntimeMode,
   SqlExecutionStackWithDriver,
-  SqlMiddleware,
   SqlRuntimeExtensionDescriptor,
   ToSqlMember,
-  VerifyMarkerOption,
 } from '@internal/sql-runtime';
 import {
   activitySource,
@@ -146,19 +148,10 @@ export interface SupabaseDb<
   [Symbol.asyncDispose](): Promise<void>;
 }
 
-export interface SupabaseOptionsBase {
-  readonly extensions?: readonly SqlRuntimeExtensionDescriptor<SupabaseTargetId>[];
-  readonly middleware?: readonly SqlMiddleware[];
-  readonly verifyMarker?: VerifyMarkerOption;
-  readonly log?: Log;
-  readonly mode?: RuntimeMode;
-  readonly poolOptions?: {
-    readonly connectionTimeoutMillis?: number;
-    readonly idleTimeoutMillis?: number;
-  };
-}
+type SupabaseBinding = Exclude<PostgresBinding, { readonly kind: 'pgClient' }>;
 
-export interface SupabaseBindingOptions {
+interface SupabaseBindingOptions {
+  readonly binding?: SupabaseBinding;
   readonly url?: string;
   readonly pg?: Pool;
 }
@@ -177,7 +170,7 @@ export type SupabaseOptions<
   TContract extends Contract<SqlStorage>,
   TCollections extends CollectionClasses = NoCollectionClasses,
 > = SupabaseBindingOptions &
-  SupabaseOptionsBase &
+  PostgresOptionsBase &
   (JwtSecretOption | JwksUrlOption) & {
     readonly contract: TContract;
     readonly collections?: TCollections;
@@ -271,38 +264,42 @@ function algKeyMismatchReason(jwt: string, kind: KeyMaterial['kind']): string | 
   return undefined;
 }
 
+const singleConnectionWhy =
+  'Each role-bound query needs a connection of its own, which a single pg.Client cannot give.';
+
 function checkPgOption(pg: Pool | undefined): void {
   if (pg === undefined || (typeof pg === 'object' && pg !== null && isPgPool(pg))) return;
   throw supabaseError('SUPABASE.CONFIG_INVALID', 'The pg option takes a pg.Pool', {
-    why: 'Each role-bound query needs a connection of its own, which a single pg.Client cannot give.',
+    why: singleConnectionWhy,
     fix: 'Pass a pg.Pool as pg, or pass url.',
     meta: { reason: 'pg is not a pg.Pool' },
   });
 }
 
-function toPoolBinding<TContract extends Contract<SqlStorage>>(
-  options: SupabaseOptions<TContract>,
-): PoolBinding | undefined {
-  if (options.pg !== undefined && isPgPool(options.pg)) {
-    return { kind: 'pgPool', pool: options.pg, ownedByDriver: false };
+function resolveSupabaseBinding(options: SupabaseBindingOptions): SupabaseBinding | undefined {
+  checkPgOption(options.pg);
+  const binding = resolveOptionalPostgresBinding(options);
+  if (binding?.kind === 'pgClient') {
+    throw supabaseError(
+      'SUPABASE.CONFIG_INVALID',
+      'The binding option takes a url or pgPool binding',
+      {
+        why: singleConnectionWhy,
+        fix: "Pass binding: { kind: 'pgPool', pool } or binding: { kind: 'url', url }.",
+        meta: { reason: 'binding is a pgClient binding' },
+      },
+    );
   }
-  if (typeof options.url === 'string') {
-    return {
-      kind: 'pgPool',
-      pool: suppressIdleConnectionErrors(
-        createPgPool(
-          {
-            connectionString: options.url,
-            connectionTimeoutMillis: options.poolOptions?.connectionTimeoutMillis ?? 20_000,
-            idleTimeoutMillis: options.poolOptions?.idleTimeoutMillis ?? 30_000,
-          },
-          postgresTarget.sessionSettings ?? {},
-        ),
-      ),
-      ownedByDriver: true,
-    };
-  }
-  return undefined;
+  return binding;
+}
+
+function toPoolBinding(
+  binding: SupabaseBinding,
+  poolOptions: PostgresOptionsBase['poolOptions'],
+): PoolBinding {
+  return binding.kind === 'pgPool'
+    ? { kind: 'pgPool', pool: binding.pool, ownedByDriver: false }
+    : { kind: 'pgPool', pool: createUrlPool(binding.url, poolOptions), ownedByDriver: true };
 }
 
 function withSupabaseDescriptor(
@@ -350,7 +347,8 @@ export default async function supabase<
   TCollections extends CollectionClasses = NoCollectionClasses,
 >(options: SupabaseOptions<TContract, TCollections>): Promise<SupabaseDb<TContract, TCollections>> {
   const keyMaterial = resolveKeyMaterial(options);
-  checkPgOption(options.pg);
+  const cursor = validateCursorOptions(options.cursor, 'supabase');
+  const binding = resolveSupabaseBinding(options);
   const contract = validatePostgresContract(options.contract);
 
   const stack = createSqlExecutionStack({
@@ -400,20 +398,17 @@ export default async function supabase<
 
     const driverDescriptor = stack.driver;
     const adapter = stack.adapter.create(stack);
-    const driver = driverDescriptor.create({ cursor: { disabled: true } });
+    const driver = driverDescriptor.create({ cursor: toDriverCursorOptions(cursor) });
     const sharedOptions = {
       adapter,
       driver,
-      ...ifDefined('middleware', options.middleware),
-      ...ifDefined('log', options.log),
-      ...ifDefined('mode', options.mode),
+      ...toRuntimeOptions(options),
       closeRefusal: 'at-once',
       ownsDriver: false,
     } as const;
     const runtime = new SupabaseRuntimeImpl({
       context,
       ...sharedOptions,
-      ...ifDefined('verifyMarker', options.verifyMarker),
     });
     const extRuntime = new SupabaseRuntimeImpl({
       context: extContext,
@@ -421,7 +416,7 @@ export default async function supabase<
       verifyMarker: false,
     });
 
-    const poolBinding = toPoolBinding(options);
+    const poolBinding = binding && toPoolBinding(binding, options.poolOptions);
     if (poolBinding) {
       driver.connect(poolBinding).catch(async (err: unknown) => {
         connectError = { error: err };

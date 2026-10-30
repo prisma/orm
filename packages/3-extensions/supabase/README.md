@@ -71,6 +71,10 @@ export const db = await supabase({
 });
 ```
 
+`supabase()` takes the options `postgres()` takes, with the same types (`PostgresOptionsBase` from `@internal/postgres/runtime`): `extensions`, `middleware`, `verifyMarker`, `log`, `mode`, `poolOptions` and `cursor`. Reads are buffered by default; pass `cursor: { batchSize: 500 }` to stream them through a server-side cursor in batches of 500 (`{}` gives batches of 100). The client's application runtime and the `.supabase` runtime share one driver, so both read the same way. A `batchSize` that is not a positive integer fails the call with `RUNTIME.ARGUMENT_INVALID`.
+
+Give the database as one of `url`, `pg` (a `pg.Pool`) or `binding` (`{ kind: 'url', url }` or `{ kind: 'pgPool', pool }`); passing more than one fails with `RUNTIME.BINDING_INVALID`. A `pg.Client`, as `pg` or as `binding: { kind: 'pgClient', client }`, fails with `SUPABASE.CONFIG_INVALID`: each role-bound query needs a connection of its own, which one client cannot give.
+
 Bind each request to the role that should run it. `asUser` is async (it verifies the JWT); `asAnon` / `asServiceRole` are sync:
 
 ```ts

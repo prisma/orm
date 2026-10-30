@@ -83,18 +83,22 @@ function toRuntimeBinding<
   return {
     kind: 'pgPool',
     ownedByDriver: true,
-    pool: suppressIdleConnectionErrors(
-      createPgPool(
-        {
-          connectionString: binding.url,
-          connectionTimeoutMillis:
-            options.poolOptions?.connectionTimeoutMillis ?? DEFAULT_CONNECT_TIMEOUT_MILLIS,
-          idleTimeoutMillis: options.poolOptions?.idleTimeoutMillis ?? 30_000,
-        },
-        postgresTarget.sessionSettings ?? {},
-      ),
-    ),
+    pool: createUrlPool(binding.url, options.poolOptions),
   } as const;
+}
+
+export function createUrlPool(url: string, poolOptions: PostgresOptionsBase['poolOptions']): Pool {
+  return suppressIdleConnectionErrors(
+    createPgPool(
+      {
+        connectionString: url,
+        connectionTimeoutMillis:
+          poolOptions?.connectionTimeoutMillis ?? DEFAULT_CONNECT_TIMEOUT_MILLIS,
+        idleTimeoutMillis: poolOptions?.idleTimeoutMillis ?? 30_000,
+      },
+      postgresTarget.sessionSettings ?? {},
+    ),
+  );
 }
 
 /**
