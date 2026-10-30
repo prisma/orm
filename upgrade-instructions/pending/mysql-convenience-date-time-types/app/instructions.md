@@ -11,7 +11,7 @@ changes:
       anyMatch: true
   - id: mysql-datetime-writes-are-checked
     summary: |
-      A MySQL `DateTime` field now refuses to write a year before 1000 or after 9999 with `RUNTIME.ENCODE_FAILED`, before the value reaches MySQL, and cuts a value with more fraction digits than its column holds instead of letting MySQL round it. Reads are unchanged, and no migration is needed.
+      A MySQL `DateTime` field now refuses to write a year before 1000 or after 9999 with `RUNTIME.ENCODE_FAILED`, before the value reaches MySQL. Reads are unchanged, and no migration is needed.
     detection:
       glob: "**/package.json"
       contains:
@@ -20,7 +20,7 @@ changes:
       anyMatch: true
 ---
 
-# MySQL: `temporal-polyfill` is a peer dependency, and `DateTime` writes are checked
+# MySQL: `temporal-polyfill` is a peer dependency, and `DateTime` writes are range-checked
 
 ## `temporal-polyfill-is-a-peer-dependency-of-mysql`
 
@@ -32,7 +32,4 @@ An existing MySQL contract needs no other change: `DateTime` with no arguments i
 
 ## `mysql-datetime-writes-are-checked`
 
-Nothing to change in code. Two writes behave differently on a MySQL `DateTime` field:
-
-- A `Date` before the year 1000 or after 9999 is refused with `RUNTIME.ENCODE_FAILED`. MySQL documents only those years for `datetime`. If the application writes such dates, keep them in range or store them in a `String` field.
-- A value with more fraction digits than the column holds is cut to the column's written precision. MySQL used to round it, so a `DateTime(precision: 0)` field written with `12:00:00.700` now holds `12:00:00`, not `12:00:01`.
+Nothing to change in code. A `Date` before the year 1000 or after 9999 written to a MySQL `DateTime` field is now refused with `RUNTIME.ENCODE_FAILED`. MySQL documents only those years for `datetime`. If the application writes such dates, keep them in range or store them in a `String` field.
