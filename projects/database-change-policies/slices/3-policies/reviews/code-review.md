@@ -366,3 +366,100 @@ Unchanged from round 3. Also: MongoDB's `initMarker` is a plain `insertOne`. A c
 | R7 | The runner compares the checked policies under its lock | PASS | PASS | Postgres, SQLite and MySQL use `checkDatabasePoliciesHeld` (`packages/2-sql-family/9-family/src/core/migrations/database-policies-check.ts`), unit-tested for held, moved and unreadable. MongoDB compares before the first space and guards the write. |
 
 Totals: 30 PASS of 30 edge cases and done conditions.
+
+## Round 5
+
+Reviews `4fa51b5430...HEAD` at `21b10444b4`. Persona: principal engineer.
+
+### Summary
+
+F16 and F17 are fixed. MongoDB now guards the application marker's write with an aggregation filter that compares the policy settings, not their stored form. That removes the retry and the "stored again in a different form" case. Runner and `db sign` share `markerSwapFailure`.
+
+I probed the new filter against a real in-memory MongoDB. It agrees with `databasePoliciesOf` in every case I tried except one: extra keys inside `meta.policies` (F18). A changed-and-restored marker is still reported with equal hashes (F19). One doc comment is stale (F20). All three are small.
+
+Verified by running, with output under `wip/`:
+
+- **Framework, CLI:** `wip/review5-fw.txt` (19), `wip/review5-cli.txt` (19).
+- **MongoDB family (`control.test.ts`, `marker-policies.test.ts`), runner, adapter:** `wip/review5-mongofamily.txt` (34), `wip/review5-mongo-runner.txt` (33), `wip/review5-mongo-adapter.txt` (13).
+- **Integration:** `cli.database-policies.mongo.e2e.test.ts` and `mongo/target-runner/runner-wire.test.ts`, `wip/review5-e2e.txt` (66).
+- **`pnpm typecheck`** in the four touched packages, and `pnpm check:error-reference` (`wip/review5-errref.txt`).
+- **Filter probe:** `wip/probe/filter-probe.test.ts`, a scratch file outside the test tree, run through the adapter package against `mongodb-memory-server`. For each stored `meta.policies` it records whether `databasePoliciesOf` reads it as the defaults and whether `updateMarker(…, DEFAULT_DATABASE_POLICIES)` swaps. Results: `wip/review5-probe-results.txt`.
+
+All pass.
+
+### Round-4 findings
+
+| Finding | Verdict | Evidence |
+|---|---|---|
+| F16 — the reference did not describe MongoDB's retry or equal payloads | Fixed in `c58489cd0b` and `21b10444b4` | The retry is gone, so equal checked and found policies can no longer occur. The `MARKER_CAS_FAILURE` entry now says MongoDB checks before the first space and guards the application marker's write "however they are stored". It also says a failure there can come after earlier spaces and carry `databaseUnchanged: false`. The `MARKER_ROW_CORRUPT` entry covers the unreadable case after a failed write. |
+| F17 — swap-failure classification written twice | Fixed in `c58489cd0b` | `markerSwapFailure` (`packages/2-mongo-family/9-family/src/core/marker-policies.ts`) returns `storageHashMoved`, `policiesMoved` or `policiesUnreadable`. Runner and family map it to their own types. Six unit tests in the family's `marker-policies.test.ts`. |
+
+### Probe: does the filter match exactly when `databasePoliciesOf` reads the stored value as the checked policies?
+
+Checked policies: the defaults. "Reads as" means `databasePoliciesOf` returns ok and equals the defaults.
+
+| Stored `meta.policies` | Reads as checked | Filter swaps | Agree |
+|---|---|---|---|
+| absent (adapter test) | yes | yes | yes |
+| `{}` | yes | yes | yes |
+| `{ dataProtection: {} }` | yes | yes | yes |
+| `change` with duplicates `[migrate, reconcile, migrate]` | yes | yes | yes |
+| strategies or fields in another order (adapter test) | yes | yes | yes |
+| `null` | no (unreadable) | no | yes |
+| `{ change: null }` | no | no | yes |
+| `{ dataProtection: { dataLoss: null } }` | no | no | yes |
+| `{ change: [] }` | no | no | yes |
+| `{ change: [migrate, reconcile, bogus] }` | no | no | yes |
+| `{ change: [[migrate, reconcile]] }` | no | no | yes |
+| an array of objects | no | no | yes |
+| `{ change: [migrate, reconcile], extra: 1 }` | no (unreadable) | **yes** | **no** |
+| `{ dataProtection: { extra: 1 } }` | no (unreadable) | **yes** | **no** |
+
+The adapter's own tests add other settings, absent when others were checked, a non-object value, a non-object `dataProtection`, and a non-list `change`. All agree. Partial stored settings agree by construction: an absent setting matches only when the checked value is its default (`missingWhenDefault`). A wrong-typed present setting never equals a valid level.
+
+### The other two questions
+
+- **Changed and restored, reported as a storage-hash conflict.** Failing is correct: the swap failed, so another process wrote the marker in between. Calling it `storageHash` is a guess, because the code cannot tell which field moved, and the payload then has equal hashes. See F19.
+- **Dropping the profile-hash comparison in `signSpaceMarker`.** No real case is lost. The swap filter matches on `storageHash` (and the policies) only, never on `profileHash`, so a profile-only change cannot make the swap fail. The only change in outcome is a marker whose profile hash and policies both moved. It is now reported as `policiesMoved` instead of `storageHash`. That is the condition that actually failed the filter. The pre-swap check still compares both hashes with `expected`. Not guarding `profileHash` in the swap predates the slice.
+
+### Findings
+
+#### F18 — The MongoDB filter accepts policies with extra keys, which `databasePoliciesOf` rejects
+
+Path: packages/3-targets/mongo/2-adapter/src/core/migrations/mongo-control-adapter.ts 55–113 (`policiesHoldExpr`).
+
+The schema rejects undeclared keys at both levels (`'+': 'reject'`). The filter checks only the three known settings. The probe shows `{ change: [migrate, reconcile], extra: 1 }` and `{ dataProtection: { extra: 1 } }` are unreadable to the reader but pass the swap.
+
+Effect: suppose another process adds an extra key after the run's first check. The application marker's write then succeeds instead of failing. The marker is left with unreadable policies (unless this run records new ones). The next command raises `MARKER_ROW_CORRUPT`, with advice that keeps the marker, so nothing is lost silently. The window is narrow.
+
+Suggestion: require the key sets as well. For example, `$setIsSubset` of the keys of `$objectToArray` on `meta.policies` against `['change', 'dataProtection']`, and on `dataProtection` against `['dataLoss', 'accessWidening']`. Add the two extra-key cases to the adapter's "does not swap" table.
+
+#### F19 — A changed-and-restored marker is reported with equal storage hashes
+
+Paths: packages/2-mongo-family/9-family/src/core/marker-policies.ts 34–41; packages/1-framework/3-tooling/cli/src/orm/db/sign.ts 270.
+
+When the swap fails but the marker read afterwards holds both the hash and the policies, `markerSwapFailure` returns `storageHashMoved`. `db sign` then prints "changed the marker from X to X". The runner's failure has `expectedStorageHash` equal to `foundStorageHash` and no `why`. This is the round-2 F12 message on a rarer path. The doc comment explains it, but the user does not see that comment.
+
+Suggestion: keep the code and reason. Give this case its own `why`, for example "Another process changed the marker and changed it back while this run was writing it. Run the command again." Either add a `restored` kind to `MarkerSwapFailure`, or let callers detect equal hashes.
+
+#### F20 — Stale doc comment on the runner's `checkedPolicies`
+
+Path: packages/3-targets/mongo/1-target/src/core/migrations/mongo-runner.ts 126.
+
+The comment still says "the marker's `meta.policies` it found holding them; the marker update swaps only while the marker still stores that value". The field is now just `DatabasePolicies`, and the swap compares settings, not the stored value.
+
+Suggestion: "The policies the run checked; the application marker is written only while its policies read as these."
+
+### Deferred
+
+Unchanged from round 4.
+
+### Acceptance rows these changes touch
+
+| # | Row | Round 4 | Round 5 | What I checked |
+|---|---|---|---|---|
+| E6 | MongoDB run fails on the second migration | PASS | PASS | The MongoDB integration file passes: first migration kept, policies unchanged, retry records them. |
+| E11 | Unreadable `meta.policies` keeps the marker | PASS | PASS | Unreadable after a failed swap raises `errorMarkerPoliciesCorrupt` in the runner and a `databasePolicies` conflict of kind `unreadable` in `db sign`; family and runner tests assert it. F18 is a narrow gap where the write is not refused, but the advice still keeps the marker. |
+| R7 | The runner compares the checked policies under its lock (MongoDB: before the first space, and at the guarded write) | PASS | PASS | `checkDatabasePolicies` before the first space; `updateMarker` guarded by `policiesHoldExpr`; adapter tests against a real MongoDB; the probe above. |
+
+Totals: 30 PASS of 30 edge cases and done conditions.

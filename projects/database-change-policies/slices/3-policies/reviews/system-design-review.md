@@ -375,3 +375,43 @@ Suggestion: after deciding A25, describe what the code then does in all three pl
 
 - `MarkerOperations.markerLocation` is a fact about the store those operations write to, so it belongs there. The runner no longer needs `family.markerLocation` passed beside the operations. The upgrade note announces the new required field.
 - `checkDatabasePoliciesHeld` is exported from `@internal/family-sql/control` and `checkMarkerPolicies` from `@internal/family-mongo/control`. Both are the family's rule, called by that family's targets, and neither leaks into the framework.
+
+## Round 5
+
+Re-reviewed at `21b10444b4`, covering `4fa51b5430...HEAD` (two commits). MongoDB now guards the application marker's write with a query that compares the policy settings, not their stored form. The retry is gone.
+
+### Verdicts on the fourth round
+
+| ID | Verdict | Evidence |
+|---|---|---|
+| A25 | Fixed | `movedDatabasePoliciesWhy` has no "nothing moved" branch (`framework-components/src/control/database-policies.ts` lines 203-215), so the framework carries no MongoDB-only text. `MongoControlAdapter.updateMarker` takes `heldPolicies: DatabasePolicies` and matches with `policiesHoldExpr`, a query predicate that compares `change` as a set and each data protection setting by value (`mongo/2-adapter/src/core/migrations/mongo-control-adapter.ts` lines 55-113, 287-289). A different stored form no longer fails the swap, so nothing retries, and a `moved` result always has a real difference. |
+| A26 | Fixed | The loop is gone. One family function, `markerSwapFailure` (`2-mongo-family/9-family/src/core/marker-policies.ts`), explains a failed swap. The runner (`mongo-runner.ts` `updateMarker`) and `signSpaceMarker` only map its three results to their own failure or conflict. The function belongs in the family because both a target and the family call it. The predicate belongs in the adapter because it builds a query. |
+| A27 | Fixed | The error reference describes MongoDB's write guard and the `databaseUnchanged: false` case under `MIGRATION.MARKER_CAS_FAILURE`, and says when `CONTRACT.MARKER_ROW_CORRUPT` is raised after a failed write. The upgrade note describes `heldPolicies` and `markerSwapFailure`, and says "Do not retry the update". |
+
+### New findings
+
+#### A28 — MongoDB's adapter now has its own reading of `meta.policies`, which ADR 314 says targets do not do, and it accepts markers the framework parser rejects (medium-low)
+
+Location: `packages/3-targets/mongo/2-adapter/src/core/migrations/mongo-control-adapter.ts` lines 55-113 (`policiesHoldExpr` and helpers); `packages/1-framework/1-core/framework-components/src/control/database-policies.ts` lines 66-74 (`PartialDatabasePoliciesSchema`, `'+': 'reject'`); ADR 314 line 48; `packages/3-targets/mongo/2-adapter/test/marker-policies.test.ts` lines 128-175.
+
+Issue: `policiesHoldExpr` decides in the database whether a marker records the given policies. To do that it repeats the framework's rules: an absent setting means its default, `change` is compared as a set, and each setting is compared by value. ADR 314 line 48 says the framework owns the parser and the comparison, and that targets write the value "without interpreting it". For MongoDB that is no longer true. The two readings also differ: the framework schema rejects unknown keys at both levels, while the predicate only checks that `policies` and `dataProtection` are objects. A marker storing `{ change: ['migrate'], …, extra: 1 }` is unreadable to `databasePoliciesOf`, but the predicate says it holds the checked policies, and the write goes ahead. No test covers an unknown key, so only reading the code shows that the two have drifted apart.
+
+The predicate may well be the right mechanism. MongoDB has no lock, and the write has to be guarded by the meaning of the settings, not their form. But it is a second implementation of a framework rule, and that should be stated and kept narrow.
+
+Suggestion: make the predicate reject unknown keys in `policies` and `dataProtection`, as the schema does. Build its key list from the framework's exports instead of literals, and add the unknown-key case to the adapter's test table. Change ADR 314 line 48 to say that MongoDB, which has no lock, also expresses the comparison as a query predicate on the marker write, built from the framework's key, value lists and defaults.
+
+#### A29 — A marker changed and then restored is reported as a moved storage hash, although the hash did not move (low)
+
+Location: `packages/2-mongo-family/9-family/src/core/marker-policies.ts` lines 8-9 and 39-41 (`case 'held'` returns `storageHashMoved`); `mongo-runner.ts` `storageHashMovedFailure`.
+
+Issue: When the swap fails but the marker read afterwards holds both the expected hash and the checked policies, another process changed the marker and put it back in between. The function reports this as `storageHashMoved`, so the runner returns `MIGRATION.MARKER_CAS_FAILURE` with `reason: 'storageHash'` and equal `expectedStorageHash` and `foundStorageHash`. The doc comment explains this, but the result's name says something that did not happen, and the error reference does not cover the case.
+
+Suggestion: name the result for what the code knows, "the marker changed under the swap". For example, rename the arm `markerChanged` and keep `found`. Add one sentence to the error reference: the found hash can equal the expected one when another process changed the marker and restored it.
+
+#### A30 — One value has three names on its way to the MongoDB marker write (low)
+
+Location: `MigrationRunner.execute` `expectedDatabasePolicies`; `MongoMigrationRunnerExecuteOptions.checkedPolicies` (`mongo-runner.ts` line 127) and `signSpaceMarker`'s `checkedPolicies`; `MarkerOperations.updateMarker` and `markerSwapFailure` `heldPolicies`; `MarkerSwapFailure` arms repeat it as `checked`.
+
+Issue: The same `DatabasePolicies` value is called "expected", "checked" and "held" across four hops. The `policiesMoved` and `policiesUnreadable` arms also return `checked`, which is just the argument the caller passed. Each name makes sense where it is used, but a reader following the value has to work out that they are one thing.
+
+Suggestion: use `checkedPolicies` from the runner down to the adapter, keeping "held" only for the comparison result. Drop `checked` from the `MarkerSwapFailure` arms, since the caller already has it.
