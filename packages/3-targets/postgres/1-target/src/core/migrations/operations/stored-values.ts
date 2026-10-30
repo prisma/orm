@@ -11,11 +11,12 @@ import { postgresCreateNamespace } from '../../postgres-schema';
 import { quoteIdentifier } from '../../sql-utils';
 import { qualifyTableName } from '../planner-sql-checks';
 import {
+  CHILD_EQUALS_FILTER,
   jsonPathMatches,
   jsonRewrite,
   keyLiteral,
   memberEqualsFilter,
-  rewrittenList,
+  rewrittenChildren,
 } from './json-rewrite';
 import { type Op, step, targetDetails } from './shared';
 
@@ -166,10 +167,10 @@ function holdsAtPath(column: string, path: JsonPath, param: string): string {
   const { reach, last } = pathParts(path);
   return last.kind === 'member'
     ? jsonPathMatches(column, reach, 'object', memberEqualsFilter(last.name), `${param}::jsonb`)
-    : jsonPathMatches(column, reach, 'array', 'exists(@[*] ? (@ == $v))', `${param}::jsonb`);
+    : jsonPathMatches(column, reach, 'container', CHILD_EQUALS_FILTER, `${param}::jsonb`);
 }
 
-/** The `jsonb` expression that sets the value at the end of `path` that equals `$1` to `replacement`, or removes it from a list when `replacement` is undefined. */
+/** The `jsonb` expression that sets the value at the end of `path` that equals `$1` to `replacement`, or, when `replacement` is undefined, removes it from a list or removes the member of an object that holds it. */
 function rewriteAtPath(column: string, path: JsonPath, replacement: string | undefined): string {
   const { reach, last } = pathParts(path);
   if (last.kind === 'member') {
@@ -181,22 +182,20 @@ function rewriteAtPath(column: string, path: JsonPath, replacement: string | und
         `CASE WHEN jsonb_typeof(${object}) = 'object' AND ${object} -> ${key} = $1::jsonb THEN jsonb_set(${object}, ARRAY[${key}], ${replacement ?? "'null'::jsonb"}) ELSE ${object} END`,
     );
   }
-  return jsonRewrite(column, reach, (list, depth) => {
-    const rewritten =
-      replacement === undefined
-        ? rewrittenList(
-            list,
-            depth,
-            (element) => element,
-            (element) => `${element} <> $1::jsonb`,
-          )
-        : rewrittenList(
-            list,
-            depth,
-            (element) => `CASE WHEN ${element} = $1::jsonb THEN ${replacement} ELSE ${element} END`,
-          );
-    return `CASE WHEN jsonb_typeof(${list}) = 'array' THEN ${rewritten} ELSE ${list} END`;
-  });
+  return jsonRewrite(column, reach, (container, depth) =>
+    replacement === undefined
+      ? rewrittenChildren(
+          container,
+          depth,
+          (child) => child,
+          (child) => `${child} <> $1::jsonb`,
+        )
+      : rewrittenChildren(
+          container,
+          depth,
+          (child) => `CASE WHEN ${child} = $1::jsonb THEN ${replacement} ELSE ${child} END`,
+        ),
+  );
 }
 
 function atPath(path: JsonPath, tableName: string, columnName: string): string {
@@ -261,9 +260,9 @@ export function replaceStoredValueAtPath(
 }
 
 /**
- * Removes a stored value inside JSON: takes it out of a list when `path` ends at `[*]`, else sets
- * the member to JSON `null`. When the member takes no null, the check fails while a row holds the
- * value.
+ * Removes a stored value inside JSON: takes it out of a list, or removes its member from an object,
+ * when `path` ends at a wildcard, else sets the member to JSON `null`. When the member takes no
+ * null, the check fails while a row holds the value.
  */
 export function removeStoredValueAtPath(
   schemaName: string,

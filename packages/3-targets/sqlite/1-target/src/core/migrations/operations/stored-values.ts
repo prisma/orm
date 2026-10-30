@@ -8,7 +8,7 @@ import {
 import { InternalError } from '@internal/utils/internal-error';
 import { quoteIdentifier } from '../../sql-utils';
 import { buildTargetDetails } from '../planner-target-details';
-import { jsonMatches, jsonRewrite, memberPath, rewrittenList, someElement } from './json-rewrite';
+import { jsonMatches, jsonRewrite, memberPath, rewrittenChildren, someChild } from './json-rewrite';
 import { type Op, step } from './shared';
 import { columnTakesNullOrValueAbsentCheck } from './structure-checks';
 
@@ -140,11 +140,11 @@ function holdsAtPath(
   return jsonMatches(column, reach, (value, depth) =>
     last.kind === 'member'
       ? memberHolds(value, last.name, stored, param)
-      : `(json_type(${value}) = 'array' AND ${someElement(value, depth, (element) => isStoredValue(element, stored, param))})`,
+      : someChild(value, depth, (child) => isStoredValue(child, stored, param)),
   );
 }
 
-/** The JSON text that sets the value at the end of `path` that equals `?1` to `replacement`, or removes it from a list when `replacement` is undefined. */
+/** The JSON text that sets the value at the end of `path` that equals `?1` to `replacement`, or, when `replacement` is undefined, removes it from a list or removes the member of an object that holds it. */
 function rewriteAtPath(
   column: string,
   path: JsonPath,
@@ -160,23 +160,21 @@ function rewriteAtPath(
         `CASE WHEN ${memberHolds(object, last.name, stored, '?1')} THEN json_set(${object}, ${memberPath(last.name)}, ${replacement ?? "json('null')"}) ELSE ${object} END`,
     );
   }
-  return jsonRewrite(column, reach, (list, depth) => {
-    const rewritten =
-      replacement === undefined
-        ? rewrittenList(
-            list,
-            depth,
-            (element) => element,
-            (element) => `NOT ${isStoredValue(element, stored, '?1')}`,
-          )
-        : rewrittenList(
-            list,
-            depth,
-            (element) =>
-              `CASE WHEN ${isStoredValue(element, stored, '?1')} THEN json_quote(${replacement}) ELSE ${element} END`,
-          );
-    return `CASE WHEN json_type(${list}) = 'array' THEN ${rewritten} ELSE ${list} END`;
-  });
+  return jsonRewrite(column, reach, (container, depth) =>
+    replacement === undefined
+      ? rewrittenChildren(
+          container,
+          depth,
+          (child) => child,
+          (child) => `NOT ${isStoredValue(child, stored, '?1')}`,
+        )
+      : rewrittenChildren(
+          container,
+          depth,
+          (child) =>
+            `CASE WHEN ${isStoredValue(child, stored, '?1')} THEN json_quote(${replacement}) ELSE ${child} END`,
+        ),
+  );
 }
 
 function atPath(path: JsonPath, tableName: string, columnName: string): string {
@@ -236,9 +234,9 @@ export function replaceStoredValueAtPath(
 }
 
 /**
- * Removes a stored value inside JSON: takes it out of a list when `path` ends at `[*]`, else sets
- * the member to JSON `null`. When the member takes no null, the check fails while a row holds the
- * value.
+ * Removes a stored value inside JSON: takes it out of a list, or removes its member from an object,
+ * when `path` ends at a wildcard, else sets the member to JSON `null`. When the member takes no
+ * null, the check fails while a row holds the value.
  */
 export function removeStoredValueAtPath(
   tableName: string,

@@ -1170,7 +1170,7 @@ function requireValuePath(
       factory,
       location,
       'path',
-      `path ${JSON.stringify(path)} does not end at a member name or a list wildcard [*]`,
+      `path ${JSON.stringify(path)} does not end at a member name or a wildcard ([*] or .*)`,
     );
   }
   if (codec !== undefined) {

@@ -13,7 +13,7 @@ function replaceAt(path: string): ReplaceStoredValueCall {
 
 describe('replaceStoredValue and removeStoredValue at a path', () => {
   it('compare the value at a member by its JSON type and value', async () => {
-    const holds = `(json_type("doc") = 'object' AND json_type("doc", '$."items"') IS NOT NULL AND (json_type(("doc" -> '$."items"')) = 'array' AND EXISTS (SELECT 1 FROM json_each(("doc" -> '$."items"')) AS e0 WHERE (json_type((("doc" -> '$."items"') -> e0.key)) = 'object' AND (json_type(((("doc" -> '$."items"') -> e0.key) -> '$."status"')) = 'text' AND (((("doc" -> '$."items"') -> e0.key) -> '$."status"') ->> '$') = ?1)))))`;
+    const holds = `(json_type("doc") = 'object' AND json_type("doc", '$."items"') IS NOT NULL AND (json_type(("doc" -> '$."items"')) IN ('array', 'object') AND EXISTS (SELECT 1 FROM json_each(("doc" -> '$."items"')) AS e0 WHERE (json_type((("doc" -> '$."items"') -> e0.fullkey)) = 'object' AND (json_type(((("doc" -> '$."items"') -> e0.fullkey) -> '$."status"')) = 'text' AND (((("doc" -> '$."items"') -> e0.fullkey) -> '$."status"') ->> '$') = ?1)))))`;
 
     expect(await replaceAt('$.items[*].status').toOp()).toMatchObject({
       id: 'replaceStoredValue.issue.doc.$.items[*].status.OPEN',
@@ -66,7 +66,7 @@ describe('replaceStoredValue and removeStoredValue at a path', () => {
     }).toEqual({
       fromList: [],
       list: expect.stringContaining(
-        `WHERE NOT (json_type((("doc" -> '$."ranks"') -> e0.key)) IN ('integer', 'real') AND ((("doc" -> '$."ranks"') -> e0.key) ->> '$') = ?1))`,
+        `WHERE NOT (json_type((("doc" -> '$."ranks"') -> e0.fullkey)) IN ('integer', 'real') AND ((("doc" -> '$."ranks"') -> e0.fullkey) ->> '$') = ?1))`,
       ),
       required: [
         {
@@ -89,7 +89,7 @@ describe('replaceStoredValue and removeStoredValue at a path', () => {
     });
   });
 
-  it.each(['$..status', '$.*', '$[0]', '$[0:2]', '$[?@.status]', "$['a','b']", '$'])(
+  it.each(['$..status', '$.**', '$[0]', '$[0:2]', '$[?@.status]', "$['a','b']", '$'])(
     'refuse the path %j when they are built',
     (path) => {
       expect(() => replaceAt(path)).toThrow(

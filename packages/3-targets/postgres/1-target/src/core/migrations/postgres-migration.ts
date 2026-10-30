@@ -323,7 +323,7 @@ export abstract class PostgresMigration<
     readonly many?: boolean;
     /** The column's codec: the values are then written as the contract stores them, and the codec writes them as the database does. */
     readonly codecRef?: CodecRef;
-    /** A JSON path inside the column, written as for `renameStoredKey`, that ends at a member name or at `[*]` for the elements of a list: the value there is replaced, compared as a JSON value. It takes neither `many` nor `codecRef`. */
+    /** A JSON path inside the column, written as for `renameStoredKey`, that ends at a member name or at a wildcard (`[*]`, `.*`), which selects the elements of a list and the member values of an object: the value there is replaced, compared as a JSON value. It takes neither `many` nor `codecRef`. */
     readonly path?: string;
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
     return new ReplaceStoredValueCall(
@@ -351,7 +351,7 @@ export abstract class PostgresMigration<
     readonly codecRef?: CodecRef;
     /** The enum value the stored value belongs to: the check that fails while rows of a required column hold the value then names it. */
     readonly enumValue?: EnumValueCoordinateJson;
-    /** A JSON path inside the column, as for `replaceStoredValue`: the value is taken out of a list when the path ends at `[*]`, else the member is set to JSON `null`. */
+    /** A JSON path inside the column, as for `replaceStoredValue`: the value is taken out of a list, or its member removed from an object, when the path ends at a wildcard, else the member is set to JSON `null`. */
     readonly path?: string;
     /** Whether the member at `path` takes JSON `null`. When it does not, the check fails while a row holds the value. */
     readonly nullable?: boolean;
@@ -370,7 +370,7 @@ export abstract class PostgresMigration<
   }
 
   /**
-   * Emit an `UPDATE` operation that renames the key at the end of `path` to `to`, in every object of `column` the path reaches. `path` is an RFC 9535 JSONPath of member names (`.lat`, `['lat']`) and list wildcards (`[*]`) from the column's value, `$`, and ends at the key: `'$[*].lat'` renames `lat` in each object of a list. Only rows that hold the key are written. Its check fails, and nothing changes, while an object holds both keys.
+   * Emit an `UPDATE` operation that renames the key at the end of `path` to `to`, in every object of `column` the path reaches. `path` is an RFC 9535 JSONPath of member names (`.lat`, `['lat']`) and wildcards (`[*]`, `.*`, each selecting the elements of a list and the member values of an object) from the column's value, `$`, and ends at the key: `'$[*].lat'` renames `lat` in each object of a list. Only rows that hold the key are written. Its check fails, and nothing changes, while an object holds both keys.
    */
   protected renameStoredKey(options: {
     readonly schema?: string;

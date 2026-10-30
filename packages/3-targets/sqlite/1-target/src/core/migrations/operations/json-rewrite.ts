@@ -17,34 +17,35 @@ export function keyLiteral(name: string): string {
   return `'${escapeLiteral(name)}'`;
 }
 
-function element(list: string, depth: number): string {
-  return `(${list} -> e${depth}.key)`;
-}
-
-/** A list rewritten element by element, keeping their order; `kept` filters the elements. */
-export function rewrittenList(
-  list: string,
-  depth: number,
-  rewrite: (element: string) => string,
-  kept?: (element: string) => string,
-): string {
-  const e = `e${depth}`;
-  const where = kept === undefined ? '' : ` WHERE ${kept(element(list, depth))}`;
-  return `(SELECT json_group_array(json(${rewrite(element(list, depth))}) ORDER BY ${e}.key) FROM json_each(${list}) AS ${e}${where})`;
-}
-
-/** Whether some element of the list passes `test`. */
-export function someElement(
-  list: string,
-  depth: number,
-  test: (element: string) => string,
-): string {
-  return `EXISTS (SELECT 1 FROM json_each(${list}) AS e${depth} WHERE ${test(element(list, depth))})`;
+function child(value: string, depth: number): string {
+  return `(${value} -> e${depth}.fullkey)`;
 }
 
 /**
- * The JSON text that rewrites `value` along `steps` with `leaf`. A step that meets no object with
- * the member, or no list, leaves the value as it is.
+ * The children of a list or an object rewritten one by one, keeping their order; `kept` filters
+ * them. Any other value is left as it is.
+ */
+export function rewrittenChildren(
+  value: string,
+  depth: number,
+  rewrite: (child: string) => string,
+  kept?: (child: string) => string,
+): string {
+  const e = `e${depth}`;
+  const each = `FROM json_each(${value}) AS ${e}${kept === undefined ? '' : ` WHERE ${kept(child(value, depth))}`}`;
+  const rewritten = `json(${rewrite(child(value, depth))})`;
+  return `CASE json_type(${value}) WHEN 'array' THEN (SELECT json_group_array(${rewritten} ORDER BY ${e}.key) ${each}) WHEN 'object' THEN (SELECT json_group_object(${e}.key, ${rewritten} ORDER BY ${e}.id) ${each}) ELSE ${value} END`;
+}
+
+/** Whether `value` is a list or an object with a child that passes `test`. */
+export function someChild(value: string, depth: number, test: (child: string) => string): string {
+  return `(json_type(${value}) IN ('array', 'object') AND EXISTS (SELECT 1 FROM json_each(${value}) AS e${depth} WHERE ${test(child(value, depth))}))`;
+}
+
+/**
+ * The JSON text that rewrites `value` along `steps` with `leaf`. A member step that meets no object
+ * with the member, or a wildcard step that meets neither a list nor an object, leaves the value as
+ * it is.
  */
 export function jsonRewrite(
   value: string,
@@ -59,13 +60,13 @@ export function jsonRewrite(
     const inner = jsonRewrite(`(${value} -> ${member})`, rest, leaf, depth);
     return `CASE WHEN json_type(${value}) = 'object' AND json_type(${value}, ${member}) IS NOT NULL THEN json_set(${value}, ${member}, json(${inner})) ELSE ${value} END`;
   }
-  return `CASE WHEN json_type(${value}) = 'array' THEN ${rewrittenList(value, depth, (e) => jsonRewrite(e, rest, leaf, depth + 1))} ELSE ${value} END`;
+  return rewrittenChildren(value, depth, (c) => jsonRewrite(c, rest, leaf, depth + 1));
 }
 
 /**
  * Whether the JSON text `value` holds, at the end of `steps`, a value that passes `test`. Each step
  * tests the type of what it reads first, so a SQL `NULL`, a JSON `null`, a missing member, a value
- * of another type or a `null` list element never fails the match.
+ * of another type, or a `null` element or member value never fails the match.
  */
 export function jsonMatches(
   value: string,
@@ -79,7 +80,7 @@ export function jsonMatches(
     const member = memberPath(first.name);
     return `(json_type(${value}) = 'object' AND json_type(${value}, ${member}) IS NOT NULL AND ${jsonMatches(`(${value} -> ${member})`, rest, test, depth)})`;
   }
-  return `(json_type(${value}) = 'array' AND ${someElement(value, depth, (e) => jsonMatches(e, rest, test, depth + 1))})`;
+  return someChild(value, depth, (c) => jsonMatches(c, rest, test, depth + 1));
 }
 
 /** Whether the JSON text `value` is an object that has member `name`. */

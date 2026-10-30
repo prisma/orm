@@ -27,6 +27,9 @@ describe('parseJsonPath', () => {
     ["$['it\\'s\\u0041']", [{ kind: 'member', name: "it'sA" }]],
     ['$[ * ][ "a" ]', [{ kind: 'wildcard' }, { kind: 'member', name: 'a' }]],
     ['$._x9', [{ kind: 'member', name: '_x9' }]],
+    ['$.*', [{ kind: 'wildcard' }]],
+    ['$.*.lat', [{ kind: 'wildcard' }, { kind: 'member', name: 'lat' }]],
+    ['$.a.*[*]', [{ kind: 'member', name: 'a' }, { kind: 'wildcard' }, { kind: 'wildcard' }]],
   ])('reads %s', (text, steps) => {
     expect(parseJsonPath(text).assertOk()).toEqual({ text, steps });
   });
@@ -35,7 +38,8 @@ describe('parseJsonPath', () => {
     'lat',
     '',
     '$..lat',
-    '$.*',
+    '$.**',
+    '$.*lat',
     '$[0]',
     '$[-1]',
     '$[0:2]',
@@ -50,7 +54,7 @@ describe('parseJsonPath', () => {
     '@.lat',
   ])('refuses %j', (text) => {
     expect(parseJsonPath(text).assertNotOk()).toBe(
-      `path ${JSON.stringify(text)} is not a JSONPath of member names (.name or ['name']) and list wildcards ([*]) from $`,
+      `path ${JSON.stringify(text)} is not a JSONPath of member names (.name or ['name']) and wildcards ([*] or .*) from $`,
     );
   });
 });

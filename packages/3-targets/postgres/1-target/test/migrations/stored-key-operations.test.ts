@@ -11,7 +11,7 @@ import { postgresTypeLookups } from '../postgres-type-lookups';
 
 const REFUSED_PATHS = [
   '$..lat',
-  '$.*',
+  '$.**',
   '$[0]',
   '$[-1]',
   '$[0:2]',
@@ -37,21 +37,21 @@ describe('renameStoredKey', () => {
         {
           description:
             'ensure no object at path "$[*]" in column "history" of "place" has both key "lat" and key "latitude"',
-          sql: `SELECT NOT EXISTS (SELECT 1 FROM "app"."place" WHERE jsonb_path_exists("history", 'strict $ ? (@.type() == "array")[*] ? (@.type() == "object" && exists(@.keyvalue() ? (@.key == "lat")) && exists(@.keyvalue() ? (@.key == "latitude")))')) AS result`,
+          sql: `SELECT NOT EXISTS (SELECT 1 FROM "app"."place" WHERE jsonb_path_exists("history", 'strict $ ? (@.type() == "array" || @.type() == "object").**{1} ? (@.type() == "object" && exists(@.keyvalue() ? (@.key == "lat")) && exists(@.keyvalue() ? (@.key == "latitude")))')) AS result`,
         },
       ],
       execute: [
         {
           description:
             'rename key "lat" to "latitude" at path "$[*]" in column "history" of "place"',
-          sql: `UPDATE "app"."place" SET "history" = CASE WHEN jsonb_typeof("history") = 'array' THEN (SELECT coalesce(jsonb_agg(CASE WHEN jsonb_typeof(e0.v) = 'object' AND e0.v ? 'lat' THEN (e0.v - 'lat') || jsonb_build_object('latitude', e0.v -> 'lat') ELSE e0.v END ORDER BY e0.i), '[]'::jsonb) FROM jsonb_array_elements("history") WITH ORDINALITY AS e0(v, i)) ELSE "history" END WHERE jsonb_path_exists("history", 'strict $ ? (@.type() == "array")[*] ? (@.type() == "object" && exists(@.keyvalue() ? (@.key == "lat")))')`,
+          sql: `UPDATE "app"."place" SET "history" = CASE jsonb_typeof("history") WHEN 'array' THEN (SELECT coalesce(jsonb_agg(CASE WHEN jsonb_typeof(e0.v) = 'object' AND e0.v ? 'lat' THEN (e0.v - 'lat') || jsonb_build_object('latitude', e0.v -> 'lat') ELSE e0.v END ORDER BY e0.i), '[]'::jsonb) FROM jsonb_array_elements("history") WITH ORDINALITY AS e0(v, i)) WHEN 'object' THEN (SELECT coalesce(jsonb_object_agg(e0.k, CASE WHEN jsonb_typeof(e0.v) = 'object' AND e0.v ? 'lat' THEN (e0.v - 'lat') || jsonb_build_object('latitude', e0.v -> 'lat') ELSE e0.v END), '{}'::jsonb) FROM jsonb_each("history") AS e0(k, v)) ELSE "history" END WHERE jsonb_path_exists("history", 'strict $ ? (@.type() == "array" || @.type() == "object").**{1} ? (@.type() == "object" && exists(@.keyvalue() ? (@.key == "lat")))')`,
         },
       ],
       postcheck: [
         {
           description:
             'verify no object at path "$[*]" in column "history" of "place" has key "lat"',
-          sql: `SELECT NOT EXISTS (SELECT 1 FROM "app"."place" WHERE jsonb_path_exists("history", 'strict $ ? (@.type() == "array")[*] ? (@.type() == "object" && exists(@.keyvalue() ? (@.key == "lat")))')) AS result`,
+          sql: `SELECT NOT EXISTS (SELECT 1 FROM "app"."place" WHERE jsonb_path_exists("history", 'strict $ ? (@.type() == "array" || @.type() == "object").**{1} ? (@.type() == "object" && exists(@.keyvalue() ? (@.key == "lat")))')) AS result`,
         },
       ],
     });
@@ -68,7 +68,7 @@ describe('renameStoredKey', () => {
     expect(() => new RenameStoredKeyCall('app', 'place', 'point', path, 'b')).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.ARGUMENT_INVALID',
-        message: `renameStoredKey({ schema: "app", table: "place", column: "point" }): path ${JSON.stringify(path)} is not a JSONPath of member names (.name or ['name']) and list wildcards ([*]) from $`,
+        message: `renameStoredKey({ schema: "app", table: "place", column: "point" }): path ${JSON.stringify(path)} is not a JSONPath of member names (.name or ['name']) and wildcards ([*] or .*) from $`,
       }),
     );
   });

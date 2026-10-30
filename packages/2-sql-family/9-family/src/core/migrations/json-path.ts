@@ -1,6 +1,6 @@
 import { notOk, ok, type Result } from '@internal/utils/result';
 
-/** One selector of a JSON path: a member name, or the wildcard over the elements of a list. */
+/** One selector of a JSON path: a member name, or the wildcard, which selects every child: the elements of a list and the member values of an object. */
 export type JsonPathStep =
   | { readonly kind: 'member'; readonly name: string }
   | { readonly kind: 'wildcard' };
@@ -107,12 +107,12 @@ function readBracket(reader: Reader): JsonPathStep | undefined {
 
 /**
  * Parses an RFC 9535 JSONPath that uses only member name selectors (`.lat`, `['lat']`) and the
- * wildcard selector over list elements (`[*]`). Any other JSONPath feature is refused with the
- * reason.
+ * wildcard selector (`[*]`, `.*`), which selects the elements of a list and the member values of an
+ * object. Any other JSONPath feature is refused with the reason.
  */
 export function parseJsonPath(text: string): Result<JsonPath, string> {
   const unsupported = notOk(
-    `path ${JSON.stringify(text)} is not a JSONPath of member names (.name or ['name']) and list wildcards ([*]) from $`,
+    `path ${JSON.stringify(text)} is not a JSONPath of member names (.name or ['name']) and wildcards ([*] or .*) from $`,
   );
   const reader = new Reader(text);
   if (reader.next() !== '$') return unsupported;
@@ -121,7 +121,10 @@ export function parseJsonPath(text: string): Result<JsonPath, string> {
     reader.skipBlank();
     const char = reader.peek();
     let step: JsonPathStep | undefined;
-    if (char === '.') {
+    if (char === '.' && reader.peek(1) === '*') {
+      reader.position += 2;
+      step = { kind: 'wildcard' };
+    } else if (char === '.') {
       reader.next();
       const name = readShorthandName(reader);
       step = name === undefined ? undefined : { kind: 'member', name };
