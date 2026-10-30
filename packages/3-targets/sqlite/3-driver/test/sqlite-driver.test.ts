@@ -80,7 +80,7 @@ describe('SqliteBoundDriver', () => {
     expect(run).toHaveBeenCalledOnce();
   });
 
-  it('reports the rowid of the one row an insert added, as decimal text, and none when a statement changed another number of rows', async () => {
+  it('reports the rowid of the one row an insert added, as decimal text, none when a statement changed another number of rows, and the last insert rowid after a one-row update, which a reader must not trust', async () => {
     const driver = createDriver();
     await executeSql(driver, 'CREATE TABLE t(id INTEGER PRIMARY KEY, value TEXT UNIQUE)');
     const one = await driver.execute({ sql: "INSERT INTO t(value) VALUES ('a')" });
@@ -89,11 +89,13 @@ describe('SqliteBoundDriver', () => {
       sql: "INSERT INTO t(value) VALUES ('a') ON CONFLICT DO NOTHING",
     });
     const updated = await driver.execute({ sql: "UPDATE t SET value = value || 'z'" });
-    expect({ one, two, skipped, updated }).toEqual({
+    const updatedOne = await driver.execute({ sql: "UPDATE t SET value = 'q' WHERE id = 1" });
+    expect({ one, two, skipped, updated, updatedOne }).toEqual({
       one: { affectedRows: 1, insertId: '1' },
       two: { affectedRows: 2 },
       skipped: { affectedRows: 0 },
       updated: { affectedRows: 3 },
+      updatedOne: { affectedRows: 1, insertId: '3' },
     });
     await driver.close();
   });
