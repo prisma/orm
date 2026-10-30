@@ -78,13 +78,13 @@ describe('the Prisma 6 reader on the contract builder', () => {
     expect(indexesOf(serializeMongoContract(result.value), collection)).toEqual(indexes);
   });
 
-  it.each<[string, string, readonly (readonly [number, string])[]]>([
+  it.each<[string, string, readonly [readonly [number, string], readonly [number, string]]]>([
     [
       '@unique and @@unique on one field',
       'unique-twice',
       [
         [8, '@unique on field "User.email"'],
-        [10, '@@unique on model "User"'],
+        [10, '@@unique([email]) on model "User"'],
       ],
     ],
     [
@@ -92,25 +92,46 @@ describe('the Prisma 6 reader on the contract builder', () => {
       'unique-and-index',
       [
         [8, '@unique on field "User.email"'],
-        [10, '@@index on model "User"'],
+        [10, '@@index([email]) on model "User"'],
       ],
     ],
     [
       '@@index and @@fulltext on one field',
       'fulltext-and-index',
       [
-        [10, '@@index on model "Post"'],
-        [11, '@@fulltext on model "Post"'],
+        [10, '@@index([title]) on model "Post"'],
+        [11, '@@fulltext([title]) on model "Post"'],
       ],
     ],
-  ])('refuses %s at both indexes, as Prisma 6 does', async (_, caseName, clashes) => {
-    expect(await diagnosticsOf(caseName)).toEqual(
-      clashes.map(([line, index]) => ({
+  ])(
+    'refuses %s at both indexes, naming the other, as Prisma 6 does',
+    async (_, caseName, [first, second]) => {
+      const message = (index: string, other: string) =>
+        `${index} has the same fields, with the same sort, as ${other}. Prisma 6 refuses this: "Index already exists in the model." Remove one of them.`;
+      expect(await diagnosticsOf(caseName)).toEqual([
+        {
+          code: 'PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS',
+          message: message(first[1], second[1]),
+          line: first[0],
+        },
+        {
+          code: 'PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS',
+          message: message(second[1], first[1]),
+          line: second[0],
+        },
+      ]);
+    },
+  );
+
+  it('refuses @unique(sort: Asc) beside @@unique on one field, which MongoDB holds as one index, showing the written sort', async () => {
+    expect(await diagnosticsOf('unique-sort-asc-and-unique')).toEqual([
+      {
         code: 'PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS',
-        message: `${index} has the same fields, with the same sort, as another index of the model. Prisma 6 refuses this: "Index already exists in the model." Remove one of them.`,
-        line,
-      })),
-    );
+        message:
+          '@@unique([email]) on model "User" and @unique(sort: Asc) on field "User.email" are the same index, with the same keys and options, in collection "User". MongoDB cannot hold two identical indexes in one collection. Remove one of them.',
+        line: 10,
+      },
+    ]);
   });
 
   it('refuses the same @@index on two models in one collection, naming both', async () => {

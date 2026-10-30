@@ -72,7 +72,12 @@ import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { basename } from 'pathe';
 import { prisma6Diagnostic } from './diagnostics';
-import { type IndexAttribute, parseFieldUnique, parseIndexAttribute } from './indexes';
+import {
+  type IndexAttribute,
+  type IndexDirection,
+  parseFieldUnique,
+  parseIndexAttribute,
+} from './indexes';
 import {
   fieldSiteKey,
   type IndexSite,
@@ -1490,15 +1495,19 @@ function readRelationFields(
 /**
  * The indexes of one model that Prisma 6 refuses with "Index already exists in the model.": each index whose fields, in order, have the same names and the same written sort as another index of the model, whatever the kind of either index. An unwritten sort differs from `sort: Asc`.
  */
-function clashingIndexes(attributes: readonly IndexAttribute[]): ReadonlySet<IndexAttribute> {
+function clashingIndexes(
+  attributes: readonly IndexAttribute[],
+): ReadonlyMap<IndexAttribute, readonly IndexAttribute[]> {
   const writtenKey = (attribute: IndexAttribute) =>
     JSON.stringify(attribute.fields.map((field) => [field.name, field.direction ?? null]));
-  const counts = new Map<string, number>();
+  const clashes = new Map<IndexAttribute, readonly IndexAttribute[]>();
   for (const attribute of attributes) {
-    const key = writtenKey(attribute);
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+    const others = attributes.filter(
+      (other) => other !== attribute && writtenKey(other) === writtenKey(attribute),
+    );
+    if (others.length > 0) clashes.set(attribute, others);
   }
-  return new Set(attributes.filter((attribute) => (counts.get(writtenKey(attribute)) ?? 0) > 1));
+  return clashes;
 }
 
 /** A model's indexes as the builder takes them, with where each is written. */
@@ -1537,11 +1546,13 @@ function buildIndexes(
       });
       continue;
     }
-    if (clashing.has(attribute)) {
+    const clashesWith = clashing.get(attribute);
+    if (clashesWith !== undefined) {
+      const others = clashesWith.map((other) => indexLabel(build, other)).join(' and ');
       diagnostics.push(
         prisma6Diagnostic(
           'PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS',
-          `${usedBy.text} has the same fields, with the same sort, as another index of the model. Prisma 6 refuses this: "Index already exists in the model." Remove one of them.`,
+          `${indexLabel(build, attribute)} has the same fields, with the same sort, as ${others}. Prisma 6 refuses this: "Index already exists in the model." Remove one of them.`,
           sourceId,
           attribute.span,
         ),
@@ -1571,12 +1582,13 @@ function buildIndexes(
 
 function indexLabel(build: ModelBuild, attribute: IndexAttribute): string {
   const model = build.located.symbol.name;
+  const sortOf = (direction: IndexDirection | undefined) =>
+    direction === undefined ? '' : `(sort: ${direction === 1 ? 'Asc' : 'Desc'})`;
   if (build.uniqueFields.includes(attribute)) {
-    return `@unique on field "${model}.${attribute.fields[0]?.name ?? ''}"`;
+    const [field] = attribute.fields;
+    return `@unique${sortOf(field?.direction)} on field "${model}.${field?.name ?? ''}"`;
   }
-  const fields = attribute.fields.map(({ name, direction }) =>
-    direction === undefined ? name : `${name}(sort: ${direction === 1 ? 'Asc' : 'Desc'})`,
-  );
+  const fields = attribute.fields.map(({ name, direction }) => `${name}${sortOf(direction)}`);
   return `@@${attribute.kind}([${fields.join(', ')}]) on model "${model}"`;
 }
 

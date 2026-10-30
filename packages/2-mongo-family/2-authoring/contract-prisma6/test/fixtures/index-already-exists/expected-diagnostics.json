@@ -3,13 +3,13 @@
     "code": "PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS",
     "file": "schema.prisma",
     "line": 8,
-    "message": "@unique on field \"User.email\" has the same fields, with the same sort, as another index of the model. Prisma 6 refuses this: \"Index already exists in the model.\" Remove one of them."
+    "message": "@unique on field \"User.email\" has the same fields, with the same sort, as @@unique([email]) on model \"User\". Prisma 6 refuses this: \"Index already exists in the model.\" Remove one of them."
   },
   {
     "code": "PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS",
     "file": "schema.prisma",
     "line": 11,
-    "message": "@@unique on model \"User\" has the same fields, with the same sort, as another index of the model. Prisma 6 refuses this: \"Index already exists in the model.\" Remove one of them."
+    "message": "@@unique([email]) on model \"User\" has the same fields, with the same sort, as @unique on field \"User.email\". Prisma 6 refuses this: \"Index already exists in the model.\" Remove one of them."
   },
   {
     "code": "PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS",
