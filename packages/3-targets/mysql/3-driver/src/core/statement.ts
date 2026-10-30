@@ -4,7 +4,7 @@ import type { Connection } from 'mariadb';
 import { positionalParams } from './positional-params';
 import { CLEAR_UNSUPPORTED_SQL_MODES, SET_UTF8MB4 } from './session-setup';
 
-/** The server status flag MySQL sets in every reply while the session's `sql_mode` includes `NO_BACKSLASH_ESCAPES`. */
+/** The server status flag MySQL sets in every reply while it reports `NO_BACKSLASH_ESCAPES` in the session's `sql_mode`. */
 const NO_BACKSLASH_ESCAPES = 1 << 9;
 
 function noBackslashEscapesRefusal(params: number): Error {
@@ -12,7 +12,7 @@ function noBackslashEscapesRefusal(params: number): Error {
     'RUNTIME.SQL_MODE_UNSUPPORTED',
     "MySQL reports NO_BACKSLASH_ESCAPES in this connection's sql_mode, which the MySQL target does not support, so the driver does not send a statement with values",
     {
-      why: 'In this mode MySQL ends a string at a backslash and a quote, while the mariadb package, which writes the values into the statement, finds its placeholders as if the backslash escaped the quote, so a value could land outside its string literal and run as SQL. The driver removes the mode on every connection it opens; a statement on this connection set it again, such as a raw SET sql_mode or a stored procedure, and it stays until the connection closes.',
+      why: 'In this mode MySQL ends a string at a backslash and a quote, while the mariadb package, which writes the values into the statement, finds its placeholders as if the backslash escaped the quote, so a value could land outside its string literal and run as SQL. The driver removes the mode on every connection it opens, so a statement on this connection made MySQL report it: a raw SET sql_mode that set it, which stays until the connection closes or a statement clears it, or a stored procedure that set it inside itself, after which MySQL restores the mode the connection had, which may be off, but keeps reporting this one until a statement sets sql_mode again.',
       fix: `Do not set NO_BACKSLASH_ESCAPES on a connection Prisma uses, in raw SQL, a stored procedure or a trigger. A raw SET run outside a transaction stays on whichever pooled connection ran it; restart the client to close that connection. A statement that needs the mode must run in a transaction or on a connection you hold, which must set the mode back before it is released, with ${CLEAR_UNSUPPORTED_SQL_MODES}. A statement without values still runs.`,
       meta: { sqlMode: 'NO_BACKSLASH_ESCAPES', params },
     },
