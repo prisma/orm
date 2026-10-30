@@ -17,9 +17,10 @@ async function questionsOf(input: {
   readonly subject: MigrationSubject;
   readonly labels?: readonly string[];
   readonly canConvert?: boolean;
+  readonly preAnswers?: readonly { readonly verb: 'delete'; readonly text: string }[];
 }) {
   const asked: PlanQuestion[] = [];
-  await askPlanQuestions({
+  const result = await askPlanQuestions({
     plan: {
       dataLoss: (input.labels ?? ['Remove key']).map((label, operationIndex) => ({
         operationIndex,
@@ -32,7 +33,7 @@ async function questionsOf(input: {
     askAccess: false,
     canConvert: input.canConvert ?? false,
     statements: [],
-    preAnswers: [],
+    preAnswers: input.preAnswers ?? [],
     consentAll: { delete: false, allow: false },
     origin: input.origin,
     originKnown: true,
@@ -43,7 +44,7 @@ async function questionsOf(input: {
     },
     replan: async () => ok({ dataLoss: [], accessChanges: [] }),
   });
-  return asked;
+  return { asked, consented: result.ok ? result.value.consented : undefined };
 }
 
 describe('a question about a value object field', () => {
@@ -65,7 +66,9 @@ describe('a question about a value object field', () => {
   } as const;
 
   it('names the field through its value object, lists every operation, and offers the one new field as the rename', async () => {
-    const [question] = await questionsOf({
+    const {
+      asked: [question],
+    } = await questionsOf({
       origin,
       destination,
       subject: lat,
@@ -86,8 +89,54 @@ describe('a question about a value object field', () => {
     );
   });
 
+  it('asks one question for a removed field, listing the operation on every column', async () => {
+    const removed = contractOf({
+      app: { models: { Place: place }, valueObjects: { GeoPoint: ['lat'] } },
+    });
+    const lng = { ...lat, field: 'lng' };
+    const { asked } = await questionsOf({
+      origin,
+      destination: removed,
+      subject: lng,
+      labels: [
+        'Remove key "lng" at path "$" in column "location" of "place"',
+        'Remove key "lng" at path "$[*]" in column "stops" of "trip"',
+      ],
+    });
+    expect(asked).toMatchObject([
+      {
+        subject: 'GeoPoint.lng',
+        question:
+          'Remove key "lng" at path "$" in column "location" of "place" and remove key "lng" at path "$[*]" in column "stops" of "trip" would lose the values of value object field "GeoPoint.lng".',
+        verbs: ['rename', 'delete'],
+      },
+    ]);
+  });
+
+  it('takes --delete GeoPoint.lng as the answer, so it asks nothing', async () => {
+    const removed = contractOf({
+      app: { models: { Place: place }, valueObjects: { GeoPoint: ['lat'] } },
+    });
+    const lng = { ...lat, field: 'lng' };
+    expect(
+      await questionsOf({
+        origin,
+        destination: removed,
+        subject: lng,
+        preAnswers: [{ verb: 'delete', text: 'GeoPoint.lng' }],
+      }),
+    ).toEqual({
+      asked: [],
+      consented: [
+        { verb: 'delete', subject: lng, text: 'GeoPoint.lng', operationIndex: 0, loss: 'drop' },
+      ],
+    });
+  });
+
   it('offers only delete for a field the destination value object still has', async () => {
-    const [question] = await questionsOf({
+    const {
+      asked: [question],
+    } = await questionsOf({
       origin,
       destination: origin,
       subject: { ...lat, field: 'lng' },
@@ -111,7 +160,9 @@ describe('a question about a variant whose discriminator value changed', () => {
   const bug = { kind: 'model', namespaceId: app, model: 'Bug' } as const;
 
   it('offers --convert first, then --delete, also where the command writes no migration file', async () => {
-    const [question] = await questionsOf({
+    const {
+      asked: [question],
+    } = await questionsOf({
       origin: tasks({ bug: 'Bug', epic: 'Epic' }),
       destination: tasks({ defect: 'Bug', epic: 'Epic' }),
       subject: bug,
@@ -129,7 +180,9 @@ describe('a question about a variant whose discriminator value changed', () => {
 
   it('offers only delete for a variant whose value did not change', async () => {
     const contract = tasks({ bug: 'Bug', epic: 'Epic' });
-    const [question] = await questionsOf({ origin: contract, destination: contract, subject: bug });
+    const {
+      asked: [question],
+    } = await questionsOf({ origin: contract, destination: contract, subject: bug });
     expect(question?.verbs).toEqual(['delete']);
   });
 });

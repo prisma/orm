@@ -237,3 +237,15 @@ Found in the review of the value object storage PR, 2026-10-23. Both limits are 
 ## The SQL TypeScript builder has no value objects
 
 `defineContract` in `@internal/postgres/contract-builder` cannot declare a value object, so a SQL contract written in TypeScript cannot have one. The main SQL ORM test contract (`test/integration/test/sql-orm-client/fixtures/contract.ts`) used to patch a value object into its built contract; it now stores `User.address` as a plain `jsonb` column, and the value object type tests read a PSL fixture (`fixtures/value-objects`). That contract cannot move to PSL, because PSL cannot write its to-one relation without a foreign key (`Article.reviewer`).
+
+## A value object rename (`--rename Address:Location`) stays refused
+
+**Found:** slice 3b PR 4, dispatch 24 (2026-10-30).
+
+The resolver refuses a statement that names a value object as a whole. The planner compares a value object of the origin only with the value object of the same name in the destination, so a value object renamed in the contract source is a value object removed and one added: no key is rewritten, and on Postgres the new shape check of each column that holds it is added over the old data. The JSON of a column does not name its value object, so a rename that keeps the fields changes no data; one that also renames fields would need the field comparison to follow the rename. The project design table lists a value object rename as reported as applied; the 3b spec does not list it.
+
+## A type change of a value object field is not a statement
+
+**Found:** slice 3b PR 4, dispatch 24 (2026-10-30).
+
+A field of a value object that changes type, such as `String` to `Int`, plans no rewrite. On Postgres the new shape check rejects every row whose JSON still holds the old type, so the apply fails at the check; on SQLite the rows keep the old type silently. A `--convert GeoPoint.lat` would need a placeholder for the conversion at every path, as `--convert Model.field` writes one for a column.
