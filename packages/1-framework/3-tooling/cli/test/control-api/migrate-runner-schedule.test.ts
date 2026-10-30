@@ -207,7 +207,9 @@ function migrateOptions(args: {
     migrationsDir: args.migrationsDir,
     extensions: args.extensions ?? [],
     targetId: 'postgres' as const,
-    ...(args.refHash === undefined ? {} : { target: { kind: 'hash', hash: args.refHash } }),
+    ...(args.refHash === undefined
+      ? {}
+      : { target: { kind: 'hash' as const, hash: args.refHash } }),
   };
 }
 
