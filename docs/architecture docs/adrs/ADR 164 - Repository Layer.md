@@ -48,7 +48,8 @@ Repository operations compose these primitives to implement multi-query workflow
 | Scenario | Why multi-query | Strategy |
 |----------|----------------|----------|
 | CREATE without RETURNING | Target lacks RETURNING | INSERT followed by SELECT using known key: the key values the client supplies, or the insert id the driver reports for a one-row insert |
-| UPDATE / DELETE without RETURNING | Target lacks RETURNING | SELECT the matching keys, write with the caller's filter, then SELECT by those keys (after an UPDATE) or return the rows read first (for a DELETE) |
+| UPDATE / DELETE without RETURNING | Target lacks RETURNING | SELECT the matching keys; write with the caller's filter (many rows) or by the selected key (one row); then SELECT by those keys, with any new key value the update set, or return the rows read first (DELETE) |
+| UPSERT without RETURNING | Target lacks RETURNING | INSERT with an update on conflict, then SELECT by the create's values for the conflict columns |
 | Nested creates | Parent + children across tables | Ordered INSERTs within a transaction, propagating generated keys |
 
 ### 6) Transaction policy
