@@ -67,11 +67,20 @@ describe('keyPathOf', () => {
       {
         path: parseJsonPath('$.a[*].b').assertOk(),
         objects: [{ kind: 'member', name: 'a' }, { kind: 'wildcard' }],
+        objectsText: '$.a[*]',
         key: 'b',
       },
       undefined,
       undefined,
     ]);
+  });
+
+  it('keeps the objects part of the path as it was written', () => {
+    expect(
+      ['$.*.lat', "$['x'] .* ['lat']", '$.lat'].map(
+        (text) => keyPathOf(parseJsonPath(text).assertOk())?.objectsText,
+      ),
+    ).toEqual(['$.*', "$['x'] .*", '$']);
   });
 });
 

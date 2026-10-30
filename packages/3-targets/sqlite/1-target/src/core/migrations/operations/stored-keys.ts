@@ -1,11 +1,11 @@
-import { type JsonKeyPath, jsonPathText } from '@internal/family-sql/control';
+import type { JsonKeyPath } from '@internal/family-sql/control';
 import { quoteIdentifier } from '../../sql-utils';
 import { buildTargetDetails } from '../planner-target-details';
 import { hasMember, jsonMatches, jsonRewrite, memberPath } from './json-rewrite';
 import { type Op, step } from './shared';
 
 function at(keyPath: JsonKeyPath): string {
-  return `at path ${JSON.stringify(jsonPathText(keyPath.objects))}`;
+  return `at path ${JSON.stringify(keyPath.objectsText)}`;
 }
 
 /** Where in a column a key operation acts, as its label and step descriptions write it. */

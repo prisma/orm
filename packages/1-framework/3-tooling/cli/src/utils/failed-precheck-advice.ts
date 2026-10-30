@@ -12,7 +12,7 @@ export function migrateFailedPrecheckAdvice(
   if (report.planStartsFromMarker) {
     return [
       chooseAction(
-        `The database has drifted from its migration history: it is not in the state the migrations before this one leave. See how it differs from the contract with \`${cliCommand(invocation, 'db verify')}\`, change the database or the migration so they agree, and run ${migrate} again`,
+        `If the check is about the rows, as one that no object holds both of two keys is, change the rows that fail it and run ${migrate} again. Otherwise the database has drifted from its migration history: it is not in the state the migrations before this one leave. See how it differs from the contract with \`${cliCommand(invocation, 'db verify')}\`, change the database or the migration so they agree, and run ${migrate} again`,
       ),
     ];
   }

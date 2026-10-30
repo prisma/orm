@@ -92,6 +92,14 @@ describe('renameStoredKey', () => {
     );
   });
 
+  it('names the path in its label and checks as it was written', () => {
+    const op = new RenameStoredKeyCall('place', 'byCountry', '$.*.lat', 'latitude').toOp();
+    expect([op.label, op.precheck[0]?.description]).toEqual([
+      'Rename key "lat" to "latitude" at path "$.*" in column "byCountry" of "place"',
+      'ensure no object at path "$.*" in column "byCountry" of "place" has both key "lat" and key "latitude"',
+    ]);
+  });
+
   it('renders the facade call with the path as written, and needs no import', () => {
     const call = new RenameStoredKeyCall('place', 'trips', "$[*]['stops'][*].lat", 'latitude');
 

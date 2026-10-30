@@ -48,7 +48,7 @@ describe('the advice for a check that fails before an operation runs', () => {
     ]);
   });
 
-  it('on db migrate with a marker, says the database drifted from its migration history and points to db verify', () => {
+  it('on db migrate with a marker, says to change the rows a data check is about, or else that the database drifted, and points to db verify', () => {
     const error = migrateError(
       {
         ...runnerFailed,
@@ -59,7 +59,7 @@ describe('the advice for a check that fails before an operation runs', () => {
 
     expect({ why: error.why, fix: error.fix }).toEqual({
       why: 'Before operation index.Item.Item_state_idx runs, it checks: ensure column "x" is missing. That check failed on this database.',
-      fix: 'The database has drifted from its migration history: it is not in the state the migrations before this one leave. See how it differs from the contract with `{bin} db verify`, change the database or the migration so they agree, and run `{bin} db migrate` again.',
+      fix: 'If the check is about the rows, as one that no object holds both of two keys is, change the rows that fail it and run `{bin} db migrate` again. Otherwise the database has drifted from its migration history: it is not in the state the migrations before this one leave. See how it differs from the contract with `{bin} db verify`, change the database or the migration so they agree, and run `{bin} db migrate` again.',
     });
   });
 
