@@ -2,6 +2,8 @@
 
 Status: **Accepted**.
 
+**Amended 2026-10-30 (TML-3714):** the rule that a target contributes the constructors that are TypeScript `type.*` helpers holds for MongoDB too. The MongoDB target, not its adapter, contributes its scalar type constructors, and the MongoDB TypeScript builder builds `type.*` from the family, target and extension packs, as the SQL builder does. A constructor marked `deprecated` stays PSL-only and is not a `type.*` helper.
+
 Amends: [ADR 170 — Pack-provided type constructors and field presets](ADR%20170%20-%20Pack-provided%20type%20constructors%20and%20field%20presets.md).
 
 Related: [ADR 171 — Parameterized native types in contracts](ADR%20171%20-%20Parameterized%20native%20types%20in%20contracts.md), [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md), [ADR 231 — Declarative attribute specifications](ADR%20231%20-%20Declarative%20attribute%20specifications.md).
