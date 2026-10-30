@@ -155,18 +155,17 @@ function newMember(reports: readonly RowsHoldingValueReport[], invocation: CliIn
   return `To keep that data under a new enum value, add a member to ${enums} in the contract source, run ${quoted(cliCommand(invocation, 'contract emit'))}`;
 }
 
-/** The edits the target gives that keep the data, as the advice writes them; undefined when it gives none. */
+/** The edits the target gives that keep the data, each call on its own lines as the migration.ts holds it; undefined when it gives none. */
 function swapCalls(reports: readonly RowsHoldingValueReport[]): string | undefined {
   const swaps = reports.flatMap(({ keepDataEdit }) =>
     keepDataEdit === undefined
       ? []
-      : [`replace ${keepDataEdit.remove} with ${keepDataEdit.replaceWith}`],
+      : [`Replace:\n${keepDataEdit.remove}\nwith:\n${keepDataEdit.replaceWith}`],
   );
-  if (swaps.length <= 1) return swaps[0];
-  return `${swaps.slice(0, -1).join(', ')}, and ${swaps.at(-1)}`;
+  return swaps.length === 0 ? undefined : swaps.join('\n');
 }
 
-const KEPT_VALUE = 'where "<stored value>" is a stored value the enum keeps';
+const KEPT_VALUE = 'where <stored value> is a stored value the enum keeps';
 
 /** The run's statements, without the deletes of the enum values that failed. */
 function otherStatements(
@@ -209,7 +208,7 @@ export function dbUpdateRowsHoldingValueAdvice(
   return [
     rename,
     chooseAction(
-      `To keep that data by hand, plan the change with ${quoted(plan)}, ${swaps} in the migration.ts it writes, ${KEPT_VALUE}, ${runWrittenFile(invocation)}`,
+      `To keep that data by hand, plan the change with ${quoted(plan)}, make the edits below in the migration.ts it writes, ${KEPT_VALUE}, ${runWrittenFile(invocation)}.\n${swaps}`,
     ),
   ];
 }
@@ -226,7 +225,7 @@ function migrateRowsHoldingValueAdvice(
       ? []
       : [
           editFileAction(
-            `To keep that data by hand, ${swaps} in ${file}, ${KEPT_VALUE}, ${run}, and re-run ${dbMigrateCommand(invocation)}`,
+            `To keep that data by hand, make the edits below in ${file}, ${KEPT_VALUE}, ${run}, and re-run ${dbMigrateCommand(invocation)}.\n${swaps}`,
           ),
         ];
   if (failedMigration === undefined) return byHand;

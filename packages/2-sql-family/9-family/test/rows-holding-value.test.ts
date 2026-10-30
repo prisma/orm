@@ -54,13 +54,20 @@ describe('rows that hold a removed stored value', () => {
   });
 
   it('says how many rows hold the value as the database stores it', () => {
-    expect(rowsHoldingValueSummary('task', 'status', 'archived', 1)).toBe(
+    expect(
+      rowsHoldingValueSummary({ table: 'task', column: 'status', storedValue: 'archived' }, 1),
+    ).toBe(
       '1 row of "task" holds "archived" in column "status", which takes no NULL, so the value cannot be removed.',
     );
-    expect(rowsHoldingValueSummary('task', 'rank', 3, 2)).toBe(
+    expect(rowsHoldingValueSummary({ table: 'task', column: 'rank', storedValue: 3 }, 2)).toBe(
       '2 rows of "task" hold 3 in column "rank", which takes no NULL, so the value cannot be removed.',
     );
-    expect(rowsHoldingValueSummary('task', 'details', 'archived', 1, '$.status')).toBe(
+    expect(
+      rowsHoldingValueSummary(
+        { table: 'task', column: 'details', storedValue: 'archived', path: '$.status' },
+        1,
+      ),
+    ).toBe(
       '1 row of "task" holds "archived" at path "$.status" in column "details", a member that takes no null, so the value cannot be removed.',
     );
   });
@@ -136,12 +143,18 @@ describe('rowsHoldingValueFailure', () => {
     const empty = removal(8, { ...mark, table: 'empty' });
     expect(await failure([project, optional, empty])).toEqual({
       summary:
-        '2 rows of "task" hold "archived" in column "status", which takes no NULL, so the value cannot be removed.',
+        'Rows hold values that the migration removes where no null is allowed, so the values cannot be removed:\n- 2 rows of "task" hold "archived" in column "status"\n- 4 rows of "project" hold "archived" in column "status"',
       reports: [
         { enumValue: mark.enumValue, value: 'archived', rows: 2, operationIndex: 3, keepDataEdit },
         { enumValue: mark.enumValue, value: 'archived', rows: 4, operationIndex: 5, keepDataEdit },
       ],
     });
+  });
+
+  it('names the one removal alone when no other holds rows', async () => {
+    expect((await failure([optional]))?.summary).toBe(
+      '2 rows of "task" hold "archived" in column "status", which takes no NULL, so the value cannot be removed.',
+    );
   });
 
   it('stops at the first other removal it cannot count, such as one of a column an earlier operation adds', async () => {

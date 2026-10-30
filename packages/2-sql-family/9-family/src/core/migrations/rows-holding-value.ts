@@ -85,19 +85,22 @@ function codecRefOf(codecRef: { codecId: string; typeParams?: unknown }): CodecR
       };
 }
 
+type HoldingPlace = Pick<RowsHoldingValueMark, 'table' | 'column' | 'storedValue' | 'path'>;
+
+function holdingText(place: HoldingPlace, rows: number): string {
+  const counted = `${rows} ${rows === 1 ? 'row' : 'rows'} of "${place.table}"`;
+  const holds = `${counted} ${rows === 1 ? 'holds' : 'hold'} ${JSON.stringify(place.storedValue)}`;
+  return place.path === undefined
+    ? `${holds} in column "${place.column}"`
+    : `${holds} at path ${JSON.stringify(place.path)} in column "${place.column}"`;
+}
+
 /** What a runner failure says of the rows that hold a stored value a column, or a member at a path inside it, cannot lose: the value as the database stores it. */
-export function rowsHoldingValueSummary(
-  table: string,
-  column: string,
-  storedValue: unknown,
-  rows: number,
-  path?: string,
-): string {
-  const counted = `${rows} ${rows === 1 ? 'row' : 'rows'} of "${table}"`;
-  const holds = `${counted} ${rows === 1 ? 'holds' : 'hold'} ${JSON.stringify(storedValue)}`;
-  return path === undefined
-    ? `${holds} in column "${column}", which takes no NULL, so the value cannot be removed.`
-    : `${holds} at path ${JSON.stringify(path)} in column "${column}", a member that takes no null, so the value cannot be removed.`;
+export function rowsHoldingValueSummary(place: HoldingPlace, rows: number): string {
+  const holds = holdingText(place, rows);
+  return place.path === undefined
+    ? `${holds}, which takes no NULL, so the value cannot be removed.`
+    : `${holds}, a member that takes no null, so the value cannot be removed.`;
 }
 
 /** A removal check of a plan's operation, with the {@link RowsHoldingValueMark} it carries. */
@@ -160,7 +163,7 @@ export async function rowsHoldingValueFailure<TOperation>(input: {
   } catch {
     return undefined;
   }
-  const reports = [report(failed, rows)];
+  const counted = [{ removal: failed, rows }];
   for (const other of input.others) {
     if (other.operationIndex === failed.operationIndex) continue;
     let otherRows: number;
@@ -169,11 +172,16 @@ export async function rowsHoldingValueFailure<TOperation>(input: {
     } catch {
       break;
     }
-    if (otherRows > 0) reports.push(report(other, otherRows));
+    if (otherRows > 0) counted.push({ removal: other, rows: otherRows });
   }
-  const { mark } = failed;
   return {
-    summary: rowsHoldingValueSummary(mark.table, mark.column, mark.storedValue, rows, mark.path),
-    reports,
+    summary:
+      counted.length === 1
+        ? rowsHoldingValueSummary(failed.mark, rows)
+        : [
+            'Rows hold values that the migration removes where no null is allowed, so the values cannot be removed:',
+            ...counted.map((each) => `- ${holdingText(each.removal.mark, each.rows)}`),
+          ].join('\n'),
+    reports: counted.map((each) => report(each.removal, each.rows)),
   };
 }

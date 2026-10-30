@@ -139,7 +139,7 @@ describe('SQLite runner, rows that hold a removed stored value', {
       kept: executed.failure.meta.rowsHoldingValue?.map(({ keepDataEdit }) => keepDataEdit?.remove),
     }).toEqual({
       message:
-        '1 row of "User" holds "guest" in column "role", which takes no NULL, so the value cannot be removed.',
+        'Rows hold values that the migration removes where no null is allowed, so the values cannot be removed:\n- 1 row of "User" holds "guest" in column "role"\n- 2 rows of "Member" hold "guest" in column "role"',
       reported: [
         { enumValue: guest, value: 'guest', rows: 1 },
         { enumValue: guest, value: 'guest', rows: 2 },

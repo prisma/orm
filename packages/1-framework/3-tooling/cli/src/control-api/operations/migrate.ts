@@ -31,6 +31,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { join } from 'pathe';
+import { withEditsAsWritten } from '../../utils/calls-as-written';
 import {
   type CliStructuredError,
   errorMigrationHasUnfilledPlaceholders,
@@ -305,7 +306,9 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
   });
 
   if (!applied.ok) {
-    const facts = runnerFailureFacts(applied.failure, collectOrdered(applyOrder, perSpacePlans));
+    const facts = await withEditsAsWritten(
+      runnerFailureFacts(applied.failure, collectOrdered(applyOrder, perSpacePlans)),
+    );
     return notOk(
       migrateRunnerFailureError(
         applied.failure,

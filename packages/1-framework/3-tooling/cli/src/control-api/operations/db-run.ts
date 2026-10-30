@@ -44,6 +44,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { join } from 'pathe';
+import { withEditsAsWritten } from '../../utils/calls-as-written';
 import { CliStructuredError, errorStatementNeedsMigrationFile } from '../../utils/cli-errors';
 import { dbInitPlanningFailedError, dbInitRunnerFailureError } from '../../utils/db-init-failure';
 import { dbUpdateRunnerFailureError } from '../../utils/db-update-failure';
@@ -526,7 +527,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     ...ifDefined('onProgress', onProgress),
   });
   if (!applied.ok) {
-    const facts = runnerFailureFacts(applied.failure, orderedResolutions);
+    const facts = await withEditsAsWritten(runnerFailureFacts(applied.failure, orderedResolutions));
     return notOk(
       action === 'dbInit'
         ? dbInitRunnerFailureError(applied.failure, facts, options.invocation)

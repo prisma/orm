@@ -519,13 +519,36 @@ withTempDir(({ createTempDir }) => {
         const dirName = latestMigrationDirName(ctx);
         const byHand = nextActionLabels(failed)[1] ?? '';
         expect(byHand).toBe(
-          `To keep that data by hand, replace this.removeStoredValue({ schema: "public", table: "task", column: "status", value: "archived", codecRef: { codecId: "pg/text@1" }, enumValue: { namespaceId: "public", enum: "Status", member: "ARCHIVED" } }) with this.replaceStoredValue({ schema: "public", table: "task", column: "status", from: "archived", to: "<stored value>", codecRef: { codecId: "pg/text@1" } }) in \`migrations/app/${dirName}/migration.ts\`, where "<stored value>" is a stored value the enum keeps, run \`node migrations/app/${dirName}/migration.ts\`, and re-run \`prisma-test db migrate\``,
+          [
+            `To keep that data by hand, make the edits below in \`migrations/app/${dirName}/migration.ts\`, where <stored value> is a stored value the enum keeps, run \`node migrations/app/${dirName}/migration.ts\`, and re-run \`prisma-test db migrate\`.`,
+            'Replace:',
+            'this.removeStoredValue({',
+            "        schema: 'public',",
+            "        table: 'task',",
+            "        column: 'status',",
+            "        value: 'archived',",
+            "        codecRef: { codecId: 'pg/text@1' },",
+            "        enumValue: { namespaceId: 'public', enum: 'Status', member: 'ARCHIVED' },",
+            '      })',
+            'with:',
+            'this.replaceStoredValue({',
+            "        schema: 'public',",
+            "        table: 'task',",
+            "        column: 'status',",
+            "        from: 'archived',",
+            "        to: '<stored value>',",
+            "        codecRef: { codecId: 'pg/text@1' },",
+            '      })',
+          ].join('\n'),
         );
 
         const file = join(ctx.testDir, 'migrations', 'app', dirName, 'migration.ts');
         writeFileSync(
           file,
-          followEdits(readFileSync(file, 'utf-8'), byHand.replace('"<stored value>"', '"active"')),
+          followEdits(
+            readFileSync(file, 'utf-8'),
+            byHand.replaceAll("'<stored value>'", "'active'"),
+          ),
         );
         const reEmit = await selfEmitMigration(ctx, ['--dir', `migrations/app/${dirName}`]);
         expect(reEmit.exitCode, `E7.07: node migration.ts: ${reEmit.stderr}`).toBe(0);
