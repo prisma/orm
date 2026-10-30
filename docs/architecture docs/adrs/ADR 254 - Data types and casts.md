@@ -179,7 +179,6 @@ authoring: {
 | `duration` | `mysql/duration` | the MySQL target |
 | `json` | `mongo/json` | the MongoDB target |
 | `date` | `mongo/date`; the body is ISO 8601 with a UTC offset, stored as the text `Date.toISOString()` writes | the MongoDB target |
-| `date` | `mongo/calendar-date`; the body is a calendar date such as `` date`2024-02-29` ``, stored as a BSON date at its midnight in UTC | the MongoDB target |
 | `time` | `mongo/time`; a time of day, stored with three fraction digits | the MongoDB target |
 | `duration` | `mongo/duration`; an ISO 8601 duration, stored as written | the MongoDB target |
 | `binary` | `mongo/binary`; the body is base64, as MongoDB prints bytes, `` binary`aGVsbG8=` `` | the MongoDB target |
@@ -359,7 +358,7 @@ Each date and time type has a tag named after it, listed under "How PSL writes a
 | `mysql/time` | a time of day: `12:34:56` | `00:00:00` | `23:59:59.999999` |
 | `mysql/duration` | an ISO 8601 duration, as written: `PT1H30M` | | |
 | `mongo/date` | the instant in UTC with three fraction digits: `2024-01-01T00:00:00.000Z` | | |
-| `mongo/calendar-date` | `2024-02-29`, stored as a BSON date at its midnight in UTC | | |
+| `mongo/calendar-date` | `2024-02-29`, stored as a BSON date at its midnight in UTC; written as a plain string, since a tag name is unique within a target and `date` is the instant's | | |
 | `mongo/time` | a time of day with three fraction digits, a BSON string: `12:34:56.000` | `00:00:00.000` | `23:59:59.999` |
 | `mongo/duration` | an ISO 8601 duration, as written, a BSON string: `PT1H30M` | | |
 
