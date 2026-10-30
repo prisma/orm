@@ -1,0 +1,54 @@
+// use prisma-8
+
+enum UserRole {
+  @@type("mongo/string@1")
+  Admin  = "admin"
+  Author = "author"
+  Reader = "reader"
+}
+
+type Address {
+  street  String
+  city    String
+  zip     String?
+  country String
+}
+
+model User {
+  id      ObjectId @id @map("_id")
+  name    String
+  email   String
+  bio     String?
+  birthday Date?
+  availableFrom Time?
+  role    UserRole
+  address Address?
+  posts   Post[]
+  @@map("users")
+}
+
+model Post {
+  id        ObjectId @id @map("_id")
+  title     String
+  content   String
+  kind      String
+  authorId  ObjectId
+  createdAt DateTime
+  author    User @relation(fields: [authorId], references: [id])
+  @@discriminator(kind)
+  @@index([authorId])
+  @@index([sort(createdAt, Desc), authorId])
+  @@map("posts")
+}
+
+model Article {
+  summary   String
+  @@base(Post, "article")
+  @@unique([summary])
+}
+
+model Tutorial {
+  difficulty String
+  duration   Int32
+  @@base(Post, "tutorial")
+}
