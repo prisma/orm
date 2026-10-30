@@ -22,10 +22,10 @@ const SCRIPT_PATHS = {
 } as const;
 
 const EXPECTED_STDOUT = [
+  "bookings/schema/booking.prisma: line 6: Date names the Date declared in bookings/schema/date.prisma line 1, not MongoDB's date; the script leaves this schema as it is.",
   'migrations/app/20260101T0000_initial/contract.prisma: rewrote 6 field types.',
   'src/contract.prisma: rewrote 6 field types.',
   'src/contract.ts: rewrote 2 type.Date() calls.',
-  "src/date-model.prisma: line 3: the schema declares its own Date, so the script cannot tell which fields typed Date are MongoDB's date; write each of those as DateTime.",
   'src/namespaced.ts: rewrote 1 type.Date() call.',
   'src/published.ts: rewrote 1 type.Date() call.',
   'src/unknown.ts: line 4: types.Date(): the script cannot tell this is the type of a MongoDB contract builder; if it is, write DateTime.',
@@ -100,12 +100,24 @@ describe.each(Object.entries(SCRIPT_PATHS))(
       });
     });
 
+    it('leaves a schema whose other file declares Date when it is given only the file that uses Date', () => {
+      const dir = copyBefore();
+      const result = run(script, dir, ['bookings/schema/booking.prisma']);
+      expect({
+        stdout: result.stdout,
+        booking: readFileSync(join(dir, 'bookings/schema/booking.prisma'), 'utf8'),
+      }).toEqual({
+        stdout: `${EXPECTED_STDOUT.split('\n')[0]}\nChanged 0 files.\n`,
+        booking: readFileSync(join(fixturesDir, 'before/bookings/schema/booking.prisma'), 'utf8'),
+      });
+    });
+
     it('leaves the files it rewrote unchanged on a second run', () => {
       const dir = copyBefore();
       run(script, dir);
       expect({ stdout: run(script, dir).stdout, files: filesOf(dir) }).toEqual({
         stdout: [
-          EXPECTED_STDOUT.split('\n').find((line) => line.startsWith('src/date-model.prisma')),
+          EXPECTED_STDOUT.split('\n').find((line) => line.startsWith('bookings/')),
           EXPECTED_STDOUT.split('\n').find((line) => line.startsWith('src/unknown.ts')),
           'Changed 0 files.',
           '',
