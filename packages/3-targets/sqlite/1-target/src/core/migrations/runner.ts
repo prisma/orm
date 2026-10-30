@@ -177,7 +177,12 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
       const markerResult = await this.upsertMarker(driver, options, existingMarker, space);
       if (!markerResult.ok) return markerResult;
     }
-    if (!isSelfEdgeNoOp) {
+    const recordsPoliciesOnly =
+      options.databasePolicies !== undefined &&
+      operationsExecuted === 0 &&
+      markerAtDestination &&
+      incomingIsSubsetOfExisting;
+    if (!isSelfEdgeNoOp && !recordsPoliciesOnly) {
       await this.recordLedgerEntries(driver, options, executedOperations);
     }
 

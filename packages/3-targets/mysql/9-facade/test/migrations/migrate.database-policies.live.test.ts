@@ -219,7 +219,14 @@ describe('MySQL database policies', { timeout: timeouts.databaseOperation }, () 
         const ledgerBefore = await ledgerLength(family, driver);
 
         const result = await execute(family, driver, {
-          plan: selfEdgePlan(),
+          plan: createMigrationPlan<MysqlPlanTargetDetails>({
+            targetId: 'mysql',
+            spaceId: 'app',
+            origin: null,
+            destination,
+            operations: [],
+            providedInvariants: [],
+          }),
           migrationEdges: [
             buildFabricatedMigrationEdge({
               currentMarkerStorageHash: destination.storageHash,

@@ -213,7 +213,14 @@ describe('PostgresMigrationRunner database policies', { concurrent: false }, () 
   }, async () => {
     await applyContract();
     const ledgerBefore = await ledgerLength();
-    const inSync = selfEdgePlan();
+    const inSync = createMigrationPlan<PostgresPlanTargetDetails>({
+      targetId: 'postgres',
+      spaceId: APP_SPACE_ID,
+      origin: null,
+      destination: toPlanContractInfo(contract),
+      operations: [],
+      providedInvariants: [],
+    });
 
     const result = await run([
       { plan: inSync, migrationEdges: synthEdges(inSync), databasePolicies: MIGRATE_ONLY },

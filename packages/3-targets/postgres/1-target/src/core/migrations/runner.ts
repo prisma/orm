@@ -258,7 +258,12 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
       const markerResult = await this.upsertMarker(driver, options, existingMarker, space);
       if (!markerResult.ok) return markerResult;
     }
-    if (!isSelfEdgeNoOp) {
+    const recordsPoliciesOnly =
+      options.databasePolicies !== undefined &&
+      applyValue.operationsExecuted === 0 &&
+      markerAtDestination &&
+      incomingIsSubsetOfExisting;
+    if (!isSelfEdgeNoOp && !recordsPoliciesOnly) {
       await this.recordLedgerEntries(
         driver,
         options,

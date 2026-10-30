@@ -222,16 +222,21 @@ class MysqlMigrationRunner implements SqlMigrationRunner<MysqlPlanTargetDetails>
     }
 
     const existingInvariants = new Set(existingMarker?.invariants ?? []);
-    const isSelfEdgeNoOp =
-      isSelfEdge &&
+    const incomingIsSubsetOfExisting = options.plan.providedInvariants.every((id) =>
+      existingInvariants.has(id),
+    );
+    const isSelfEdgeNoOp = isSelfEdge && applied.executedCount === 0 && incomingIsSubsetOfExisting;
+    const recordsPoliciesOnly =
+      options.databasePolicies !== undefined &&
       applied.executedCount === 0 &&
-      options.plan.providedInvariants.every((id) => existingInvariants.has(id));
+      atDestination &&
+      incomingIsSubsetOfExisting;
     if (!isSelfEdgeNoOp || options.databasePolicies !== undefined) {
       const written = await this.#writeMarkerAndLedger(
         driver,
         options,
         existingMarker,
-        isSelfEdgeNoOp ? undefined : applied.executed,
+        isSelfEdgeNoOp || recordsPoliciesOnly ? undefined : applied.executed,
         progress,
       );
       if (!written.ok) return written;

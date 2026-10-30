@@ -193,7 +193,14 @@ describe('SqliteMigrationRunner database policies', { timeout: timeouts.database
   it('records the policies and writes no ledger entry for a db update that changes nothing', async () => {
     await applyContract();
     const ledgerBefore = await ledgerLength();
-    const inSync = selfEdgePlan();
+    const inSync = createMigrationPlan<SqlitePlanTargetDetails>({
+      targetId: 'sqlite',
+      spaceId: APP_SPACE_ID,
+      origin: null,
+      destination: toPlanContractInfo(contract),
+      operations: [],
+      providedInvariants: [],
+    });
 
     const result = await run([
       { plan: inSync, migrationEdges: synthEdges(inSync), databasePolicies: MIGRATE_ONLY },
