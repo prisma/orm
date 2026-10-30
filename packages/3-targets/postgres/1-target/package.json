@@ -30,6 +30,7 @@
     "@internal/sql-relational-core": "workspace:8.0.0-rc.21",
     "@internal/sql-schema-ir": "workspace:8.0.0-rc.21",
     "@internal/ts-render": "workspace:8.0.0-rc.21",
+    "@internal/type-implementations": "workspace:8.0.0-rc.21",
     "@internal/utils": "workspace:8.0.0-rc.21",
     "@standard-schema/spec": "^1.1.0",
     "arktype": "^2.2.2",

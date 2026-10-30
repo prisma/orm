@@ -4,6 +4,7 @@
 
 import type { JsonValue } from '@internal/contract/types';
 import { readJsonMatching } from '@internal/framework-components/codec';
+import { ISO_DURATION } from '@internal/type-implementations/duration';
 import { structuredError } from '@internal/utils/structured-error';
 import { withoutTrailing } from '@internal/utils/text';
 import { postgresError } from './errors';
@@ -63,9 +64,6 @@ export interface PgInterval {
   readonly days: number;
   readonly micros: bigint;
 }
-
-export const ISO_DURATION =
-  /^P(?!$)(-?\d+Y)?(-?\d+M)?(-?\d+D)?(?:T(?!$)(-?\d+H)?(-?\d+M)?(-?\d+(?:\.\d+)?S)?)?$/;
 
 export const MICROS_PER_SECOND = 1_000_000n;
 

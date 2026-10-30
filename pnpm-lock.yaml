@@ -4275,6 +4275,9 @@ importers:
       '@internal/ts-render':
         specifier: workspace:8.0.0-rc.21
         version: link:../../../1-framework/1-core/ts-render
+      '@internal/type-implementations':
+        specifier: workspace:8.0.0-rc.21
+        version: link:../../0-shared/type-implementations
       '@internal/utils':
         specifier: workspace:8.0.0-rc.21
         version: link:../../../1-framework/0-foundation/utils
@@ -5376,6 +5379,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      temporal-spec:
+        specifier: 1.0.1
+        version: 1.0.1
       tinyglobby:
         specifier: 'catalog:'
         version: 0.2.17
@@ -5416,6 +5422,9 @@ importers:
       '@internal/ts-render':
         specifier: workspace:8.0.0-rc.21
         version: link:../../../1-framework/1-core/ts-render
+      '@internal/type-implementations':
+        specifier: workspace:8.0.0-rc.21
+        version: link:../../../3-targets/0-shared/type-implementations
       '@internal/utils':
         specifier: workspace:8.0.0-rc.21
         version: link:../../../1-framework/0-foundation/utils

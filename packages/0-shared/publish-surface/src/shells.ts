@@ -333,6 +333,11 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           name: '@internal/psl-printer',
           entry: 'psl-printer',
         },
+        {
+          dir: 'packages/3-targets/0-shared/type-implementations',
+          name: '@internal/type-implementations',
+          entry: 'type-implementations',
+        },
       ],
     },
   ],

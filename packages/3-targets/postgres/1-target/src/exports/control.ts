@@ -4,6 +4,7 @@ import type {
   ControlTargetInstance,
   MigrationRunner,
 } from '@internal/framework-components/control';
+import { setFallbackTemporal } from '@internal/type-implementations/temporal';
 import { blindCast } from '@internal/utils/casts';
 import { Temporal as fallbackTemporal } from 'temporal-polyfill/full/implementation';
 import { postgresTargetDescriptorMeta } from '../core/descriptor-meta';
@@ -16,7 +17,6 @@ import { createPostgresMigrationRunner } from '../core/migrations/runner';
 import { PostgresContractSerializer } from '../core/postgres-contract-serializer';
 import { inferPostgresPslContract } from '../core/psl-infer/infer-psl-contract';
 import { buildPostgresPslContract } from '../core/psl-print/psl-contract';
-import { setFallbackTemporal } from '../core/require-temporal';
 import { PostgresDatabaseSchemaNode } from '../core/schema-ir/postgres-database-schema-node';
 import {
   postgresDiffSubjectEntityKind,

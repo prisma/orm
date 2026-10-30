@@ -20,6 +20,10 @@ import { describe, expect, it } from 'vitest';
 const REPO_ROOT = resolve(import.meta.dirname, '../../../../..');
 const PUBLIC_PACKAGES_DIR = join(REPO_ROOT, 'packages/9-public');
 const INTERNAL_TARGET_DIR = join(REPO_ROOT, 'packages/3-targets/postgres/1-target');
+const TYPE_IMPLEMENTATIONS_DIR = join(
+  REPO_ROOT,
+  'packages/3-targets/0-shared/type-implementations',
+);
 const POLYFILL = 'temporal-polyfill';
 const IMPORT_SPECIFIER = /(?:\bfrom|\bimport)\s*\(?\s*["']([^"']+)["']/g;
 const FALLBACK_STATE_DEFINITION = 'function setFallbackTemporal(';
@@ -189,11 +193,16 @@ describe('the module that holds the fallback Temporal', () => {
     );
   }
 
-  it('is built once across the entries of the target package', () => {
+  it('is built once, in @internal/type-implementations, and in no entry of the target package', () => {
     const entries = entriesOf(INTERNAL_TARGET_DIR, '@internal/target-postgres');
 
     expect(entries.length).toBeGreaterThan(30);
-    expect(filesThatDefineTheFallback(entries)).toHaveLength(1);
+    expect({
+      target: filesThatDefineTheFallback(entries),
+      typeImplementations: filesThatDefineTheFallback(
+        entriesOf(TYPE_IMPLEMENTATIONS_DIR, '@internal/type-implementations'),
+      ),
+    }).toEqual({ target: [], typeImplementations: [expect.any(String)] });
   });
 
   it('is built once across the entries of the published Postgres packages', () => {

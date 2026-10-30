@@ -4,11 +4,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const hostTemporal = Temporal;
 
-type RequireTemporalModule = typeof import('../src/core/require-temporal');
+type RequireTemporalModule = typeof import('@internal/type-implementations/temporal') &
+  typeof import('../src/core/require-temporal');
 
 async function freshModule(): Promise<RequireTemporalModule> {
   vi.resetModules();
-  return import('../src/core/require-temporal');
+  return {
+    ...(await import('@internal/type-implementations/temporal')),
+    ...(await import('../src/core/require-temporal')),
+  };
 }
 
 const DECODE_A_DATE = { codecId: 'pg/date-temporal@1', operation: 'decode' } as const;

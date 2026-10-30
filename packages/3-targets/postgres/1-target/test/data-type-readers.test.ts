@@ -1,5 +1,6 @@
 import type { DataType } from '@internal/framework-components/codec';
 import { readContractValue } from '@internal/framework-components/codec';
+import { setFallbackTemporal } from '@internal/type-implementations/temporal';
 import { Temporal } from 'temporal-polyfill';
 import { describe, expect, it } from 'vitest';
 import { pgInt8NumberDescriptor, pgNumericDescriptor } from '../src/core/codecs';
@@ -22,7 +23,6 @@ import {
   pgVarchar,
 } from '../src/core/data-types';
 import { pgTimestamptzDateDescriptor } from '../src/core/date-codecs';
-import { setFallbackTemporal } from '../src/core/require-temporal';
 import { pgTimestamptzTemporalDescriptor } from '../src/core/temporal-codecs';
 
 setFallbackTemporal(Temporal);
