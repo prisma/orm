@@ -15,11 +15,11 @@ import type {
 } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
 import { createPool, type Pool, type PoolConnection } from 'mariadb';
+import { acquireClientQueryLock } from '../client-query-lock';
 import { type MysqlPoolOptions, mysqlPoolOptions } from '../connection-options';
 import { connectingCannotSucceed, isFatal, normalizeMysqlError } from '../normalize-error';
-import { assertPlaceholderCount } from '../placeholder-count';
-import { positionalParams } from '../positional-params';
 import { SessionSettingsGuard } from '../session-settings';
+import { statementFor } from '../statement';
 
 /** Where the runtime driver connects: a `mysql://` URL. */
 export type MysqlBinding = { readonly kind: 'url'; readonly url: string };
@@ -40,66 +40,23 @@ function notConnected(message: string) {
   });
 }
 
-class AsyncMutex {
-  #queue = Promise.resolve();
-
-  async lock(): Promise<() => void> {
-    const previous = this.#queue;
-    let releaseLock: (() => void) | undefined;
-    this.#queue = new Promise<void>((resolve) => {
-      releaseLock = resolve;
-    });
-    await previous;
-    return () => {
-      releaseLock?.();
-      releaseLock = undefined;
-    };
-  }
-}
-
-/**
- * One statement at a time on each client, in the order sent, as the Postgres driver's per-client lock runs them. The lock is held until the statement settles, or for a stream's whole life. The package queues a prepared statement's execution only after MySQL answers the prepare, so without the lock a commit sent meanwhile would run first.
- */
-const clientQueryLocks = new WeakMap<object, AsyncMutex>();
-
-function acquireClientQueryLock(client: object): Promise<() => void> {
-  let mutex = clientQueryLocks.get(client);
-  if (mutex === undefined) {
-    mutex = new AsyncMutex();
-    clientQueryLocks.set(client, mutex);
-  }
-  return mutex.lock();
-}
-
-/**
- * Runs `request` on `client` and returns its result. A statement with values runs as a server-side prepared statement, its `?N` placeholders written as `?`, after checking MySQL's placeholder count against the values. A statement without values runs over the text protocol, as `pg` runs one: nothing is written into it, so a raw `START TRANSACTION` or `LOCK TABLES`, which MySQL does not prepare, runs too. Throws the package's error as it is.
- */
+/** Runs `request` on `client` in one round trip and returns its result: its `?N` placeholders written as `?`, and its values handed to the package, which writes them into the statement. Throws the package's error as it is. */
 async function run(client: PoolConnection, request: SqlExecuteRequest): Promise<unknown> {
-  const { sql, values } = positionalParams(request.sql, request.params ?? []);
-  if (values.length === 0) return client.query(sql);
-  const statement = await client.prepare(sql);
-  try {
-    assertPlaceholderCount(statement, values.length);
-    return await statement.execute(values);
-  } finally {
-    statement.close();
-  }
+  const { sql, values } = statementFor(client, request.sql, request.params ?? []);
+  return client.query(sql, values);
 }
 
-/** Starts streaming the rows of `request` on `client`, prepared when it has values and over the text protocol when it has none, as {@link run} runs it. `close` closes the prepared statement, if any. Throws the package's error as it is. */
-async function startStream(
+/** Starts streaming the rows of `request` on `client`, sent as {@link run} sends it. Throws the error to report, after noting in `outcome` whether it left the client unusable. */
+function startStream(
   client: PoolConnection,
   request: SqlExecuteRequest,
-): Promise<{ readonly rows: Readable; readonly close: () => void }> {
-  const { sql, values } = positionalParams(request.sql, request.params ?? []);
-  if (values.length === 0) return { rows: client.queryStream(sql), close: () => {} };
-  const statement = await client.prepare(sql);
+  outcome: Outcome,
+): Readable {
   try {
-    assertPlaceholderCount(statement, values.length);
-    return { rows: statement.executeStream(values), close: () => statement.close() };
+    const { sql, values } = statementFor(client, request.sql, request.params ?? []);
+    return client.queryStream(sql, values);
   } catch (error) {
-    statement.close();
-    throw error;
+    throw settle(error, outcome);
   }
 }
 
@@ -191,13 +148,11 @@ abstract class MysqlQueryable implements SqlQueryable {
     const outcome: Outcome = { destroy: false };
     const releaseLock = await acquireClientQueryLock(client);
     try {
-      const stream = await startStream(client, request).catch((error: unknown) => {
-        throw settle(error, outcome);
-      });
-      stream.rows.on('error', ignoreAfterStop);
+      const rows = startStream(client, request, outcome);
+      rows.on('error', ignoreAfterStop);
       let settled = false;
       try {
-        for await (const row of stream.rows.iterator({ destroyOnReturn: false })) {
+        for await (const row of rows.iterator({ destroyOnReturn: false })) {
           yield blindCast<
             Row,
             'the package streams the rows the statement produces, shaped by the query'
@@ -208,9 +163,8 @@ abstract class MysqlQueryable implements SqlQueryable {
         settled = true;
         throw settle(error, outcome);
       } finally {
-        if (!settled) await this.#stopEarly(stream.rows, outcome);
-        if (outcome.destroy) stream.rows.destroy();
-        else stream.close();
+        if (!settled) await this.#stopEarly(rows, outcome);
+        if (outcome.destroy) rows.destroy();
       }
     } finally {
       releaseLock();
@@ -388,7 +342,7 @@ type DriverState =
   | { readonly kind: 'closed' };
 
 /**
- * The MySQL runtime driver: a `mariadb` pool. A statement with values runs as a server-side prepared statement, so a value never travels inside the SQL. A query reads its whole result before the first row unless `stream` is set. The pool runs the session setup once on each physical connection, and the driver then sets the target's session settings on it with a prepared statement; a connection goes back to the pool after each statement as it is; a broken connection is destroyed. `close()` waits for every connection and stream it has handed out before it ends the pool.
+ * The MySQL runtime driver: a `mariadb` pool. Every statement takes one round trip over the text protocol, the package writing its values into it. A query reads its whole result before the first row unless `stream` is set. The pool runs the session setup once on each physical connection, and the driver then sets the target's session settings on it; a connection goes back to the pool after each statement as it is; a broken connection is destroyed. `close()` waits for every connection and stream it has handed out before it ends the pool.
  */
 export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
   readonly familyId = 'sql' as const;

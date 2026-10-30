@@ -5,7 +5,7 @@
  * Each test exercises one of the DDL command kinds against mongodb-memory-server
  * and asserts the resulting database state.
  */
-import { MongoDriverImpl } from '@internal/driver-mongo';
+import mongoControlDriver, { type MongoControlDriver } from '@internal/driver-mongo/control';
 import {
   CollModCommand,
   CreateCollectionCommand,
@@ -25,6 +25,7 @@ import { MongoControlAdapterImpl } from '../src/exports/control';
 let replSet: MongoMemoryReplSet;
 let client: MongoClient;
 let db: Db;
+let controlDriver: MongoControlDriver;
 const dbName = 'command_executor_test';
 
 beforeAll(async () => {
@@ -34,9 +35,11 @@ beforeAll(async () => {
   client = new MongoClient(replSet.getUri());
   await client.connect();
   db = client.db(dbName);
+  controlDriver = await mongoControlDriver.create(replSet.getUri(dbName));
 });
 
 afterAll(async () => {
+  await controlDriver?.close();
   await client?.close();
   await replSet?.stop();
 });
@@ -60,8 +63,7 @@ async function execDdl(
     | CollModCommand,
 ): Promise<void> {
   const controlAdapter = new MongoControlAdapterImpl();
-  const driver = MongoDriverImpl.fromDb(db);
-  await controlAdapter.executeDdl(driver, cmd);
+  await controlAdapter.executeDdl(controlDriver, cmd);
 }
 
 describe('createIndex via executeDdl', () => {

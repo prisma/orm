@@ -1,7 +1,7 @@
 import type { CacheAnnotationOptions } from '@prisma/orm-extension-middleware-cache';
 import { cacheAnnotation, createCacheMiddleware } from '@prisma/orm-extension-middleware-cache';
 import mongoRuntimeAdapter from '@prisma/orm-mongo/adapter/runtime';
-import { createMongoDriver } from '@prisma/orm-mongo/driver';
+import mongoRuntimeDriver from '@prisma/orm-mongo/driver/runtime';
 import {
   createMongoExecutionContext,
   createMongoExecutionStack,
@@ -69,9 +69,11 @@ describe('mongo-demo cache middleware integration', {
     const stack = createMongoExecutionStack({
       target: mongoRuntimeTarget,
       adapter: mongoRuntimeAdapter,
+      driver: mongoRuntimeDriver,
     });
     const context = createMongoExecutionContext({ contract, stack });
-    const driver = await createMongoDriver(replSet.getUri(), dbName);
+    const driver = stack.driver.create();
+    await driver.connect({ kind: 'url', url: replSet.getUri(), dbName });
     const driverExecuteSpy = vi.spyOn(driver, 'execute');
     const cache = createCacheMiddleware();
     const runtime = createMongoRuntime({

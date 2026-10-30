@@ -1597,7 +1597,7 @@
       "plane": "migration"
     },
     {
-      "glob": "packages/3-targets/mongo/3-driver/src/exports/index.ts",
+      "glob": "packages/3-targets/mongo/3-driver/src/exports/runtime.ts",
       "domain": "targets",
       "layer": "drivers",
       "plane": "runtime"

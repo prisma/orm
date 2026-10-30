@@ -1,5 +1,5 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
-import { createMongoDriver } from '@internal/driver-mongo';
+import mongoRuntimeDriver from '@internal/driver-mongo/runtime';
 import type { MongoExecutionContext } from '@internal/mongo-query-ast/execution';
 import {
   createMongoExecutionContext,
@@ -50,9 +50,11 @@ describe('ORM ergonomics integration', {
     const stack = createMongoExecutionStack({
       target: mongoRuntimeTarget,
       adapter: mongoRuntimeAdapter,
+      driver: mongoRuntimeDriver,
     });
     context = createMongoExecutionContext({ contract, stack });
-    const driver = await createMongoDriver(replSet.getUri(), dbName);
+    const driver = stack.driver.create();
+    await driver.connect({ kind: 'url', url: replSet.getUri(), dbName });
     runtime = createMongoRuntime({ context, adapter: stack.adapter.create(stack), driver });
   }, timeouts.spinUpMongoMemoryServer);
 

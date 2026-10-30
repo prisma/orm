@@ -4,8 +4,10 @@ export { enumMemberCodecFor } from '@internal/mongo-query-ast/execution';
 export type { MongoExecutionPlan } from '../mongo-execution-plan';
 export type {
   MongoExecutionStack,
+  MongoExecutionStackWithDriver,
   MongoRuntimeAdapterDescriptor,
   MongoRuntimeAdapterInstance,
+  MongoRuntimeDriverInstance,
   MongoRuntimeExtensionDescriptor,
   MongoRuntimeExtensionInstance,
   MongoRuntimeTargetDescriptor,

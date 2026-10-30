@@ -42,3 +42,7 @@ Including `migrations/**` in the MySQL example's `tsconfig.json` fails with TS27
 From the system-design review of slice 3 (2026-10-23).
 
 The MySQL facade's client (about 440 lines) and the MySQL SQL renderer are copied from SQLite's. The renderer copy is justified for now, because the dialect differences are throughout it. The client copy has already drifted once: `main` gained `delegatingRuntime` while the MySQL copy kept its own, and slice 3 had to adopt it. The family-level builder should come first. Two follow-ups: a family-level builder for a target's `mysql(...)`/`sqlite(...)`/`postgres(...)` client, so each facade supplies only its driver and options; and a shared renderer core that targets extend for their dialect, so a fix like collecting parameters in written order lands once.
+
+## MySQL environment check at startup or deploy time (Will, 2026-10-30)
+
+The MySQL driver relies on mariadb's value substitution. That substitution is safe only when the session's `sql_mode` excludes `NO_BACKSLASH_ESCAPES` and `ANSI_QUOTES`, and when raw SQL avoids shapes mariadb's placeholder search misreads (see `slices/mysql-driver-protocol/spec.md`). Will's ideal: the driver offers a check at startup that the database is configured as the driver requires, and better still a deploy-time check. Not required for the proof of concept.

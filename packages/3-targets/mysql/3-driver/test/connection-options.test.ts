@@ -75,7 +75,6 @@ describe('mysqlConnectionOptions', () => {
     ]);
     expect(mysqlConnectionOptions('mysql://root@localhost/app')).toMatchObject({
       collation: 'UTF8MB4_UNICODE_CI',
-      prepareCacheLength: 0,
       foundRows: true,
       logParam: false,
       permitRedirect: false,
@@ -219,7 +218,6 @@ describe('mysqlPoolOptions', () => {
         idleTimeout: 30,
         acquireTimeout: 20_000,
         connectTimeout: 20_000,
-        prepareCacheLength: 0,
         ssl: true,
       },
       given: {

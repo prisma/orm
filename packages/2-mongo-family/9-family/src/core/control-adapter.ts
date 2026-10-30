@@ -4,7 +4,7 @@ import type {
   ControlAdapterInstance,
   ControlDriverInstance,
 } from '@internal/framework-components/control';
-import type { MongoAdapter, MongoDriver } from '@internal/mongo-lowering';
+import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
 import type {
   AnyMongoDdlCommand,
   MongoInspectionCommandVisitor,
@@ -55,7 +55,7 @@ export interface MarkerOperations {
 export interface MongoRunnerDependencies {
   readonly inspectionExecutor: MongoInspectionCommandVisitor<Promise<Record<string, unknown>[]>>;
   readonly adapter: MongoAdapter;
-  readonly driver: MongoDriver;
+  readonly driver: MongoQueryable;
   readonly executeDdl: (command: AnyMongoDdlCommand) => Promise<void>;
   readonly markerOps: MarkerOperations;
   readonly introspectSchema: () => Promise<MongoSchemaIR>;

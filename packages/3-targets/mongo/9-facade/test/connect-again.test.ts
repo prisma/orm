@@ -13,8 +13,8 @@ const mocks = vi.hoisted(() => ({
   createMongoExecutionStack: vi.fn(),
   createMongoExecutionContext: vi.fn(),
   createMongoRuntime: vi.fn(),
-  driverFromConnection: vi.fn(),
-  driverFromDb: vi.fn(),
+  createDriver: vi.fn(),
+  driverConnect: vi.fn(),
   deserializeContract: vi.fn(),
   mongoOrm: vi.fn(),
   mongoRaw: vi.fn(),
@@ -29,12 +29,7 @@ vi.mock('@internal/mongo-runtime', async (importOriginal) => ({
   createMongoExecutionContext: mocks.createMongoExecutionContext,
   createMongoRuntime: mocks.createMongoRuntime,
 }));
-vi.mock('@internal/driver-mongo', () => ({
-  MongoDriverImpl: {
-    fromConnection: mocks.driverFromConnection,
-    fromDb: mocks.driverFromDb,
-  },
-}));
+vi.mock('@internal/driver-mongo/runtime', () => ({ default: { id: 'driver' } }));
 vi.mock('@internal/family-mongo/ir', () => ({
   MongoContractSerializer: class {
     deserializeContract(json: unknown) {
@@ -56,7 +51,10 @@ const fakeContract = {
   domain: { namespaces: { [UNBOUND_NAMESPACE_ID]: { models: {} } } },
 } as unknown as AnyMongoContract;
 const url = 'mongodb://localhost:27017/mydb';
-const fakeRuntime = { execute: vi.fn().mockResolvedValue({ affectedCount: 0 }) };
+const fakeRuntime = {
+  execute: vi.fn().mockResolvedValue({ affectedCount: 0 }),
+  close: vi.fn().mockResolvedValue(undefined),
+};
 const closed = { code: 'DRIVER.NOT_CONNECTED', message: 'Mongo client is closed' };
 const alreadyBound = { code: 'DRIVER.ALREADY_CONNECTED' };
 
@@ -91,10 +89,9 @@ function driverConnectsWhenReleased() {
   const settled = new Promise<{ readonly error?: Error }>((resolve) => {
     release = resolve;
   });
-  mocks.driverFromConnection.mockImplementationOnce(async () => {
+  mocks.driverConnect.mockImplementationOnce(async () => {
     const { error } = await settled;
     if (error !== undefined) throw error;
-    return { close: vi.fn().mockResolvedValue(undefined) };
   });
   return release;
 }
@@ -102,12 +99,19 @@ function driverConnectsWhenReleased() {
 beforeEach(() => {
   for (const fn of Object.values(mocks)) fn.mockReset();
   mocks.deserializeContract.mockReturnValue(fakeContract);
-  mocks.createMongoExecutionStack.mockReturnValue({ adapter: { create: () => ({}) } });
+  mocks.createMongoExecutionStack.mockReturnValue({
+    adapter: { create: () => ({}) },
+    driver: { create: mocks.createDriver },
+  });
+  mocks.createDriver.mockReturnValue({
+    connect: mocks.driverConnect,
+    close: vi.fn().mockResolvedValue(undefined),
+  });
   mocks.createMongoExecutionContext.mockReturnValue({
     contract: fakeContract,
     codecs: { get: () => undefined },
   });
-  mocks.driverFromConnection.mockResolvedValue({ close: vi.fn().mockResolvedValue(undefined) });
+  mocks.driverConnect.mockResolvedValue(undefined);
   mocks.createMongoRuntime.mockReturnValue(fakeRuntime);
 });
 
@@ -116,7 +120,7 @@ describe('connect() on a mongo() client that is not connected', () => {
     const db = mongo({ contract: fakeContract });
 
     await expect(db.connect({ url })).resolves.toBe(fakeRuntime);
-    expect(mocks.driverFromConnection).toHaveBeenCalledWith(url, 'mydb');
+    expect(mocks.driverConnect).toHaveBeenCalledWith({ kind: 'url', url, dbName: 'mydb' });
   });
 });
 
@@ -132,7 +136,7 @@ describe('connect() on a mongo() client that is connecting', () => {
     const [a, b] = await Promise.all([first, second]);
     expect(a).toBe(b);
     expect(a).toBe(fakeRuntime);
-    expect(mocks.driverFromConnection).toHaveBeenCalledTimes(1);
+    expect(mocks.driverConnect).toHaveBeenCalledTimes(1);
   });
 
   it('waits for a connection a query started, then resolves with the runtime', async () => {
@@ -144,7 +148,7 @@ describe('connect() on a mongo() client that is connecting', () => {
     expect(await stillPending(connected)).toBe(true);
     release({});
     await expect(connected).resolves.toBe(fakeRuntime);
-    expect(mocks.driverFromConnection).toHaveBeenCalledTimes(1);
+    expect(mocks.driverConnect).toHaveBeenCalledTimes(1);
   });
 
   it('rejects with the error of a connection connect() started', async () => {
@@ -167,7 +171,7 @@ describe('connect() on a mongo() client that is connecting', () => {
 
     await expect(connected).rejects.toThrow('connect failed');
     await expect(db.connect()).resolves.toBe(fakeRuntime);
-    expect(mocks.driverFromConnection).toHaveBeenCalledTimes(2);
+    expect(mocks.driverConnect).toHaveBeenCalledTimes(2);
   });
 
   it('rejects options with DRIVER.ALREADY_CONNECTED', async () => {
@@ -200,7 +204,7 @@ describe('connect() on a mongo() client that is connected', () => {
     await query();
 
     await expect(db.connect()).resolves.toBe(fakeRuntime);
-    expect(mocks.driverFromConnection).toHaveBeenCalledTimes(1);
+    expect(mocks.driverConnect).toHaveBeenCalledTimes(1);
   });
 
   it('resolves with the same runtime when called twice', async () => {
@@ -208,7 +212,7 @@ describe('connect() on a mongo() client that is connected', () => {
     const first = await db.connect();
 
     await expect(db.connect()).resolves.toBe(first);
-    expect(mocks.driverFromConnection).toHaveBeenCalledTimes(1);
+    expect(mocks.driverConnect).toHaveBeenCalledTimes(1);
   });
 
   it('treats connect(undefined) as connect()', async () => {

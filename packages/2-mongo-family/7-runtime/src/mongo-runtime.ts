@@ -21,6 +21,7 @@ import type {
 } from '@internal/mongo-query-ast/execution';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { type StructuredError, structuredError } from '@internal/utils/structured-error';
 import { decodeMongoRow } from './codecs/decoding';
 import { computeMongoContentHash } from './content-hash';
 import type { MongoExecutionPlan } from './mongo-execution-plan';
@@ -64,6 +65,13 @@ function invalidStatisticsResult(commandKind: string, countField: string): Error
   );
 }
 
+function runtimeClosedError(): StructuredError {
+  return structuredError('DRIVER.NOT_CONNECTED', 'Runtime is closed', {
+    why: 'close() was called on this runtime, or on the client or connection that owns it. An await using scope calls close() when it ends.',
+    fix: 'Await every query before close(). The usual cause is a query returned without await from an await using scope.',
+  });
+}
+
 /**
  * Mongo runtime options.
  *
@@ -72,7 +80,7 @@ function invalidStatisticsResult(commandKind: string, countField: string): Error
 export interface MongoRuntimeOptions {
   readonly context: MongoExecutionContext;
   readonly adapter: MongoAdapter;
-  readonly driver: MongoDriver;
+  readonly driver: MongoDriver<unknown>;
   readonly middleware?: readonly MongoMiddleware[];
   readonly mode?: RuntimeMode;
 }
@@ -109,9 +117,10 @@ class MongoRuntimeImpl
   implements MongoRuntime
 {
   readonly #adapter: MongoAdapter;
-  readonly #driver: MongoDriver;
+  readonly #driver: MongoDriver<unknown>;
   readonly #codecs: MongoCodecLookup;
   readonly #contextFields: ActivityContextFields<MongoMiddlewareContext>;
+  #closed = false;
 
   constructor(options: MongoRuntimeOptions) {
     const middleware = options.middleware ?? [];
@@ -161,6 +170,9 @@ class MongoRuntimeImpl
   /* v8 ignore stop */
 
   protected override runDriver(exec: MongoExecutionPlan): AsyncIterable<Record<string, unknown>> {
+    if (this.#closed) {
+      throw runtimeClosedError();
+    }
     return this.#driver.execute<Record<string, unknown>>(exec.command);
   }
 
@@ -267,6 +279,9 @@ class MongoRuntimeImpl
   }
 
   async #readDriverStatistics(exec: MongoExecutionPlan): Promise<RuntimeStatementStats> {
+    if (this.#closed) {
+      throw runtimeClosedError();
+    }
     const countField = statisticsCountField(exec.command.kind);
     if (countField === undefined) {
       throw runtimeError(
@@ -294,6 +309,7 @@ class MongoRuntimeImpl
   }
 
   override async close(): Promise<void> {
+    this.#closed = true;
     await this.#driver.close();
   }
 }

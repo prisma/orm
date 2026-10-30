@@ -33,20 +33,9 @@ export interface MongoStaticContext<
   readonly raw: MongoRawClient<TContract>;
 }
 
-/** A {@link MongoStaticContext} with the stack `mongo()` creates its adapter from. */
-export interface MongoClientStaticContext<
-  TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
-> extends MongoStaticContext<TContract> {
-  readonly stack: MongoExecutionStack;
-}
-
 export function buildMongoStaticContext<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
->(contract: TContract): MongoClientStaticContext<TContract> {
-  const stack = createMongoExecutionStack({
-    target: mongoRuntimeTarget,
-    adapter: mongoRuntimeAdapter,
-  });
+>(contract: TContract, stack: MongoExecutionStack): MongoStaticContext<TContract> {
   const context = createMongoExecutionContext<TContract>({ contract, stack });
   const enums = Object.freeze(
     buildNamespacedEnums<TContract>(context.contract.domain, enumMemberCodecFor(context.codecs)),
@@ -54,7 +43,7 @@ export function buildMongoStaticContext<
   assertDefined(enums, 'the unbound namespace always exists on a mongo builder output');
   const query = mongoQuery({ context });
   const raw = mongoRaw({ context });
-  return { context, contract, enums, query, raw, stack };
+  return { context, contract, enums, query, raw };
 }
 
 /**
@@ -69,5 +58,9 @@ export function buildMongoStaticContext<
 export default function mongoStatic<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
 >(options: { readonly contract: TContract }): MongoStaticContext<TContract> {
-  return buildMongoStaticContext(validateMongoContract(options.contract));
+  const stack = createMongoExecutionStack({
+    target: mongoRuntimeTarget,
+    adapter: mongoRuntimeAdapter,
+  });
+  return buildMongoStaticContext(validateMongoContract(options.contract), stack);
 }

@@ -200,15 +200,11 @@ describe('normalizeMysqlError', () => {
 describe('normalizeMysqlError for errors MySQL reports about a statement', () => {
   it('reports every server error as a SqlQueryError with no detail of the driver own, as MySQL sends none', () => {
     const cases = [
+      { errno: 1146, sqlState: '42S02', sqlMessage: "Table 'app.t' doesn't exist" },
       {
-        errno: 1295,
-        sqlState: 'HY000',
-        sqlMessage: 'This command is not supported in the prepared statement protocol yet',
-      },
-      {
-        errno: 1461,
+        errno: 1064,
         sqlState: '42000',
-        sqlMessage: "Can't create more than max_prepared_stmt_count statements",
+        sqlMessage: 'You have an error in your SQL syntax',
       },
       { errno: 1210, sqlState: 'HY000', sqlMessage: 'Incorrect arguments to LIMIT' },
     ];

@@ -10,7 +10,7 @@ function patternsOf(id: string): readonly RegExp[] {
   const guide = readFileSync(
     join(
       repoRoot,
-      'upgrade-instructions/pending/tools-write-convenience-types/app/instructions.md',
+      'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.21-to-8.0.0-rc.22/instructions.md',
     ),
     'utf-8',
   );

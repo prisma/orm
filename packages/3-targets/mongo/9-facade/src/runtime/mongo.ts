@@ -1,4 +1,5 @@
-import { MongoDriverImpl } from '@internal/driver-mongo';
+import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
+import mongoRuntimeDriver, { type MongoBinding } from '@internal/driver-mongo/runtime';
 import { AsyncIterableResult, type RuntimeMode } from '@internal/framework-components/runtime';
 import type {
   AnyMongoTypeMaps,
@@ -8,12 +9,17 @@ import type {
 import type { MongoOrmClient, MongoQueryPlan, MongoRawClient } from '@internal/mongo-orm';
 import { mongoOrm } from '@internal/mongo-orm';
 import type { MongoMiddleware, MongoRuntime } from '@internal/mongo-runtime';
-import { createMongoRuntime, type MongoExecutionContext } from '@internal/mongo-runtime';
+import {
+  createMongoExecutionStack,
+  createMongoRuntime,
+  type MongoExecutionContext,
+  type MongoRuntimeDriverInstance,
+} from '@internal/mongo-runtime';
+import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { ifDefined } from '@internal/utils/defined';
 import { validateMongoContract } from '../static/contract-from-json';
 import { buildMongoStaticContext, type MongoStaticContext } from '../static/mongo-static';
 import {
-  type MongoBinding,
   type MongoBindingInput,
   resolveMongoBinding,
   resolveOptionalMongoBinding,
@@ -86,32 +92,43 @@ export default function mongo<
   const contract = validateMongoContract(options.contract);
   let binding = resolveOptionalMongoBinding(options);
 
-  const { context, stack, query, enums, raw } = buildMongoStaticContext<TContract>(contract);
+  const stack = createMongoExecutionStack({
+    target: mongoRuntimeTarget,
+    adapter: mongoRuntimeAdapter,
+    driver: mongoRuntimeDriver,
+  });
+  const { context, query, enums, raw } = buildMongoStaticContext<TContract>(contract, stack);
 
   // Single source of truth for the lifecycle. `runtimePromise` is the in-flight
   // or settled build; `closed` is the terminal state set by `close()`. A failed
   // build resets `runtimePromise` so a retry is possible (see test).
   let runtimePromise: Promise<MongoRuntime> | undefined;
   let closed = false;
-  let ownedDispose: (() => Promise<void>) | undefined;
+  let runtimeInstance:
+    | { readonly runtime: MongoRuntime; readonly driver: MongoRuntimeDriverInstance }
+    | undefined;
 
   const closedError = () => mongoError('DRIVER.NOT_CONNECTED', 'Mongo client is closed');
 
-  const buildRuntime = async (resolvedBinding: MongoBinding): Promise<MongoRuntime> => {
-    const driver =
-      resolvedBinding.kind === 'url'
-        ? await MongoDriverImpl.fromConnection(resolvedBinding.url, resolvedBinding.dbName)
-        : MongoDriverImpl.fromDb(resolvedBinding.client.db(resolvedBinding.dbName));
-    if (resolvedBinding.kind === 'url') {
-      ownedDispose = () => driver.close();
-    }
-    return createMongoRuntime({
+  // The runtime is created before the driver connects, as in postgres(), so a runtime that cannot be built opens no connection. The runtime owns the driver and closes it.
+  const createRuntime = () => {
+    if (runtimeInstance !== undefined) return runtimeInstance;
+    const driver = stack.driver.create();
+    const runtime = createMongoRuntime({
       context,
       adapter: stack.adapter.create(stack),
       driver,
       ...ifDefined('mode', options.mode),
       ...ifDefined('middleware', options.middleware),
     });
+    runtimeInstance = { runtime, driver };
+    return runtimeInstance;
+  };
+
+  const buildRuntime = async (resolvedBinding: MongoBinding): Promise<MongoRuntime> => {
+    const { runtime, driver } = createRuntime();
+    await driver.connect(resolvedBinding);
+    return runtime;
   };
 
   const getRuntime = (): Promise<MongoRuntime> => {
@@ -200,18 +217,9 @@ export default function mongo<
     async close(): Promise<void> {
       if (closed) return;
       closed = true;
-      if (runtimePromise === undefined) return;
-      // Await whatever the build resolved to. Swallow build failures because
-      // the user's intent is "release any resources we acquired" — there is
-      // nothing to close if the build never produced a runtime.
-      try {
-        await runtimePromise;
-      } catch {
-        // build failed; still attempt disposing any already-acquired owned driver.
-      }
-      const dispose = ownedDispose;
-      ownedDispose = undefined;
-      await dispose?.();
+      await runtimePromise?.catch(() => undefined);
+      // The runtime closes its driver, which closes a client it created from a URL and leaves a caller's mongoClient open.
+      await runtimeInstance?.runtime.close();
     },
 
     [Symbol.asyncDispose](): Promise<void> {

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import mysqlRuntimeDriver from '../src/core/runtime/runtime-driver';
 import { SESSION_SETUP } from '../src/core/session-setup';
 
-/** How a fake result arrives: row by row as the caller reads (`rows`), all at once with its end before the caller reads (`received`), or as an error on the stream (`fails`) or thrown by `executeStream` itself (`throws`). `hidesState` hides Node's internal `_readableState` from the driver. */
+/** How a fake result arrives: row by row as the caller reads (`rows`), all at once with its end before the caller reads (`received`), or as an error on the stream (`fails`) or thrown by `queryStream` itself (`throws`). `hidesState` hides Node's internal `_readableState` from the driver. */
 type StreamBehaviour = (
   | { kind: 'rows'; rows: unknown[] }
   | { kind: 'received'; rows: unknown[] }
@@ -35,72 +35,51 @@ function mariadbError(fatal: boolean): Error {
   );
 }
 
-class FakeStatement {
-  parameterCount = 0;
-  executeError: Error | undefined;
-  executeResult: unknown = { affectedRows: 3 };
-  readonly execute = vi.fn(async (_values?: unknown[]) => {
-    if (this.executeError !== undefined) throw this.executeError;
-    return this.executeResult;
+/** A result stream the fake connection returns from `queryStream`, closable as the package's is. */
+function resultStream(behaviour: StreamBehaviour, closed: () => void): Readable {
+  if (behaviour.kind === 'throws') throw behaviour.error;
+  const pending = behaviour.kind === 'rows' ? [...behaviour.rows] : [];
+  const stream = new Readable({
+    objectMode: true,
+    read() {
+      if (behaviour.kind === 'fails') {
+        queueMicrotask(() => this.emit('error', behaviour.error));
+        return;
+      }
+      if (behaviour.kind === 'rows') this.push(pending.length > 0 ? pending.shift() : null);
+    },
   });
-  readonly close = vi.fn();
-  readonly streamClosed = vi.fn();
-  constructor(private readonly behaviour: StreamBehaviour) {}
-
-  executeStream(_values?: unknown[]): Readable {
-    const behaviour = this.behaviour;
-    if (behaviour.kind === 'throws') throw behaviour.error;
-    const pending = behaviour.kind === 'rows' ? [...behaviour.rows] : [];
-    const stream = new Readable({
-      objectMode: true,
-      read() {
-        if (behaviour.kind === 'fails') {
-          queueMicrotask(() => this.emit('error', behaviour.error));
-          return;
-        }
-        if (behaviour.kind === 'rows') this.push(pending.length > 0 ? pending.shift() : null);
-      },
-    });
-    if (behaviour.kind === 'received') {
-      for (const row of behaviour.rows) stream.push(row);
-      stream.push(null);
-    }
-    const closable = Object.assign(stream, {
-      close: () => {
-        this.streamClosed();
-        pending.length = 0;
-      },
-    });
-    return behaviour.hidesState ? withoutReadableState(closable) : closable;
+  if (behaviour.kind === 'received') {
+    for (const row of behaviour.rows) stream.push(row);
+    stream.push(null);
   }
+  const closable = Object.assign(stream, {
+    close: () => {
+      closed();
+      pending.length = 0;
+    },
+  });
+  return behaviour.hidesState ? withoutReadableState(closable) : closable;
 }
 
 class FakeConnection extends EventEmitter {
-  readonly info = { threadId: 1 };
+  readonly info = { threadId: 1, status: 0, collation: { charset: 'utf8', maxLength: 4 } };
   readonly release = vi.fn(async () => {});
   readonly destroy = vi.fn();
   readonly beginTransaction = vi.fn(async () => {});
   readonly commit = vi.fn(async () => {});
   readonly rollback = vi.fn(async () => {});
-  textRows: unknown[] = [{ n: 1 }, { n: 2 }, { n: 3 }];
-  readonly query = vi.fn(async (_sql: string) => this.textRows);
-  readonly queryStream = vi.fn((_sql: string) => new FakeStatement(this.behaviour).executeStream());
-  readonly prepared: { sql: string; statement: FakeStatement }[] = [];
+  result: unknown = [{ n: 1 }, { n: 2 }, { n: 3 }];
+  queryError: Error | undefined;
+  readonly query = vi.fn(async (_sql: string, _values?: unknown[]) => {
+    if (this.queryError !== undefined) throw this.queryError;
+    return this.result;
+  });
+  readonly streamClosed = vi.fn();
+  readonly queryStream = vi.fn((_sql: string, _values?: unknown[]) =>
+    resultStream(this.behaviour, this.streamClosed),
+  );
   behaviour: StreamBehaviour = { kind: 'rows', rows: [{ n: 1 }, { n: 2 }, { n: 3 }] };
-  parameterCount = 1;
-  prepareError: Error | undefined;
-  executeError: Error | undefined;
-  executeResult: unknown = { affectedRows: 3 };
-
-  async prepare(sql: string): Promise<FakeStatement> {
-    if (this.prepareError !== undefined) throw this.prepareError;
-    const statement = new FakeStatement(this.behaviour);
-    statement.parameterCount = this.parameterCount;
-    statement.executeError = this.executeError;
-    statement.executeResult = this.executeResult;
-    this.prepared.push({ sql, statement });
-    return statement;
-  }
 }
 
 class FakePool extends EventEmitter {
@@ -149,14 +128,10 @@ async function connected(options?: Parameters<typeof mysqlRuntimeDriver.create>[
 
 const streaming = { stream: true } as const;
 
-/** A query with a value, so it runs as a prepared statement. */
 const valued = { sql: 'SELECT n FROM t WHERE n > ?1', params: [0] };
 
-function firstStatement(): FakeStatement {
-  const statement = connection.prepared[0]?.statement;
-  if (statement === undefined) throw new Error('no statement was prepared');
-  return statement;
-}
+/** The server status flag MySQL sets while the session's sql_mode includes NO_BACKSLASH_ESCAPES. */
+const NO_BACKSLASH_ESCAPES = 1 << 9;
 
 function lastPool(): FakePool {
   const pool = state.pools.at(-1);
@@ -175,7 +150,7 @@ beforeEach(() => {
 });
 
 describe('MySQL runtime driver and its pool', () => {
-  it('creates the pool with the session setup, the statement cache off and the pool options, and no value in its SQL text', async () => {
+  it('creates the pool with the session setup and the pool options, and no value in its SQL text', async () => {
     const driver = mysqlRuntimeDriver.create(
       { poolOptions: { connectionTimeoutMillis: 250 } },
       { time_zone: '+00:00' },
@@ -183,40 +158,27 @@ describe('MySQL runtime driver and its pool', () => {
     await driver.connect({ kind: 'url', url: 'mysql://root@localhost/db' });
     expect(lastPool().options).toMatchObject({
       initSql: [...SESSION_SETUP],
-      prepareCacheLength: 0,
       acquireTimeout: 250,
       minimumIdle: 0,
     });
   });
 
-  it('sets the session settings with one prepared SET the first time it gets each connection, as the Postgres driver sets them with parameters, an integer setting as a number', async () => {
+  it('sets the session settings with one SET the first time it gets each connection, each value given to the package to write, an integer setting as a number', async () => {
     const driver = mysqlRuntimeDriver.create({}, { time_zone: '+00:00', sql_select_limit: '5' });
     await driver.connect({ kind: 'url', url: 'mysql://root@localhost/db' });
     await driver.execute({ sql: 'SELECT 1' });
     await driver.execute({ sql: 'SELECT 2' });
     const connectionHeld = await driver.acquireConnection();
     await connectionHeld.release();
-    expect({
-      prepared: connection.prepared.map(({ sql, statement }) => ({
-        sql,
-        values: statement.execute.mock.calls,
-        closed: statement.close.mock.calls.length,
-      })),
-      text: connection.query.mock.calls.map(([sql]) => sql),
-    }).toEqual({
-      prepared: [
-        {
-          sql: 'SET SESSION `time_zone` = ?, `sql_select_limit` = ?',
-          values: [[['+00:00', 5n]]],
-          closed: 1,
-        },
-      ],
-      text: ['SELECT 1', 'SELECT 2'],
-    });
+    expect(connection.query.mock.calls).toEqual([
+      ['SET SESSION `time_zone` = ?, `sql_select_limit` = ?', ['+00:00', 5n]],
+      ['SELECT 1', undefined],
+      ['SELECT 2', undefined],
+    ]);
   });
 
   it('destroys a connection whose session settings MySQL refuses, and reports the error at once as the SqlQueryError MySQL raised', async () => {
-    connection.executeError = Object.assign(new Error("Unknown or incorrect time zone: 'x'"), {
+    connection.queryError = Object.assign(new Error("Unknown or incorrect time zone: 'x'"), {
       errno: 1298,
       sqlState: 'HY000',
       sqlMessage: "Unknown or incorrect time zone: 'x'",
@@ -231,8 +193,8 @@ describe('MySQL runtime driver and its pool', () => {
     expect({
       destroyed: connection.destroy.mock.calls.length,
       released: connection.release.mock.calls.length,
-      ran: connection.query.mock.calls.length,
-    }).toEqual({ destroyed: 1, released: 0, ran: 0 });
+      ran: connection.query.mock.calls.map(([sql]) => sql),
+    }).toEqual({ destroyed: 1, released: 0, ran: ['SET SESSION `time_zone` = ?'] });
     await driver.close();
   });
 
@@ -348,33 +310,28 @@ describe('MySQL runtime driver and its pool', () => {
     expect(() => lastPool().emit('error', new Error('connect ECONNREFUSED'))).not.toThrow();
   });
 
-  it('runs a statement with values prepared and one without over the text protocol, as pg does, returns the connection after each, and closes each prepared statement', async () => {
+  it('sends every statement once over the text protocol, its values given to the package to write, and returns the connection after each', async () => {
     const driver = await connected();
-    await driver.execute({ sql: 'SELECT ?1', params: [1] });
+    await driver.execute({ sql: 'SELECT ?2, ?1, ?2', params: ['a', 7] });
     await driver.execute({ sql: 'START TRANSACTION' });
     await collect(driver.query(valued));
-    await collect(driver.query({ sql: 'SELECT n FROM t' }));
     expect({
       released: connection.release.mock.calls.length,
       destroyed: connection.destroy.mock.calls.length,
-      prepared: connection.prepared.map(({ sql, statement }) => [
-        sql,
-        statement.close.mock.calls.length,
-      ]),
-      text: connection.query.mock.calls.map(([sql]) => sql),
+      sent: connection.query.mock.calls,
     }).toEqual({
-      released: 4,
+      released: 3,
       destroyed: 0,
-      prepared: [
-        ['SELECT ?', 1],
-        ['SELECT n FROM t WHERE n > ?', 1],
+      sent: [
+        ['SELECT ?, ?, ?', [7, 'a', 7]],
+        ['START TRANSACTION', undefined],
+        ['SELECT n FROM t WHERE n > ?', [0]],
       ],
-      text: ['START TRANSACTION', 'SELECT n FROM t'],
     });
   });
 
   it('reads the whole result and returns the connection before the first row unless it streams, as Postgres does without a cursor', async () => {
-    connection.executeResult = [{ n: 1 }, { n: 2 }];
+    connection.result = [{ n: 1 }, { n: 2 }];
     const driver = await connected();
     const rows = driver.query(valued)[Symbol.asyncIterator]();
     const first = await rows.next();
@@ -383,58 +340,72 @@ describe('MySQL runtime driver and its pool', () => {
       first,
       releasedAtFirstRow,
       rest: await collect({ [Symbol.asyncIterator]: () => rows }),
-      streamed: connection.prepared.map(({ statement }) => statement.execute.mock.calls.length),
+      streamed: connection.queryStream.mock.calls.length,
     }).toEqual({
       first: { done: false, value: { n: 1 } },
       releasedAtFirstRow: 1,
       rest: [{ n: 2 }],
-      streamed: [1],
+      streamed: 0,
     });
   });
 
-  it('streams the rows of a statement without values over the text protocol when it streams', async () => {
+  it('streams the rows of a statement over the text protocol when it streams, its values given to the package to write', async () => {
     const driver = await connected(streaming);
     expect({
-      rows: await collect(driver.query({ sql: 'SELECT n FROM t' })),
-      streamed: connection.queryStream.mock.calls.map(([sql]) => sql),
+      rows: await collect(driver.query(valued)),
+      none: await collect(driver.query({ sql: 'SELECT n FROM t' })),
+      streamed: connection.queryStream.mock.calls,
       released: connection.release.mock.calls.length,
     }).toEqual({
       rows: [{ n: 1 }, { n: 2 }, { n: 3 }],
-      streamed: ['SELECT n FROM t'],
-      released: 1,
+      none: [{ n: 1 }, { n: 2 }, { n: 3 }],
+      streamed: [
+        ['SELECT n FROM t WHERE n > ?', [0]],
+        ['SELECT n FROM t', undefined],
+      ],
+      released: 2,
+    });
+  });
+
+  it('refuses a statement with values while the server reports NO_BACKSLASH_ESCAPES, without sending it, and runs one without values', async () => {
+    connection.info.status = NO_BACKSLASH_ESCAPES;
+    const driver = await connected(streaming);
+    const refusal = {
+      code: 'RUNTIME.SQL_MODE_UNSUPPORTED',
+      message: expect.stringContaining('NO_BACKSLASH_ESCAPES'),
+      meta: { sqlMode: 'NO_BACKSLASH_ESCAPES', params: 1 },
+    };
+    await expect(driver.execute(valued)).rejects.toMatchObject(refusal);
+    await expect(collect(driver.query(valued))).rejects.toMatchObject(refusal);
+    await driver.execute({ sql: "SET SESSION sql_mode = ''" });
+    expect({
+      sent: connection.query.mock.calls,
+      streamed: connection.queryStream.mock.calls.length,
+      released: connection.release.mock.calls.length,
+      destroyed: connection.destroy.mock.calls.length,
+    }).toEqual({
+      sent: [["SET SESSION sql_mode = ''", undefined]],
+      streamed: 0,
+      released: 3,
+      destroyed: 0,
     });
   });
 
   it('reports the rows a statement changed', async () => {
+    connection.result = { affectedRows: 3 };
     const driver = await connected();
     expect(await driver.execute({ sql: 'DELETE FROM t WHERE n > ?1', params: [0] })).toEqual({
       affectedRows: 3,
     });
   });
 
-  it('refuses a statement whose placeholders MySQL counts differently from the values, without running it', async () => {
-    connection.parameterCount = 2;
-    const driver = await connected();
-    await expect(driver.execute({ sql: 'SELECT ?1', params: [1] })).rejects.toMatchObject({
-      code: 'RUNTIME.PARAM_PLACEHOLDER_MISMATCH',
-      meta: { prepared: 2, params: 1 },
-    });
-    const statement = firstStatement();
-    expect({
-      executed: statement.execute.mock.calls.length,
-      closed: statement.close.mock.calls.length,
-      released: connection.release.mock.calls.length,
-    }).toEqual({ executed: 0, closed: 1, released: 1 });
-  });
-
   it('destroys a pooled connection whose stream the caller stops early while the rest of the result is still arriving', async () => {
     const driver = await connected(streaming);
     for await (const _row of driver.query(valued)) break;
-    const statement = firstStatement();
     expect({
       destroyed: connection.destroy.mock.calls.length,
       released: connection.release.mock.calls.length,
-      drained: statement.streamClosed.mock.calls.length,
+      drained: connection.streamClosed.mock.calls.length,
     }).toEqual({ destroyed: 1, released: 0, drained: 0 });
   });
 
@@ -442,13 +413,11 @@ describe('MySQL runtime driver and its pool', () => {
     connection.behaviour = { kind: 'received', rows: [{ n: 1 }, { n: 2 }, { n: 3 }] };
     const driver = await connected(streaming);
     for await (const _row of driver.query(valued)) break;
-    const statement = firstStatement();
     expect({
       destroyed: connection.destroy.mock.calls.length,
       released: connection.release.mock.calls.length,
-      drained: statement.streamClosed.mock.calls.length,
-      closed: statement.close.mock.calls.length,
-    }).toEqual({ destroyed: 0, released: 1, drained: 1, closed: 1 });
+      drained: connection.streamClosed.mock.calls.length,
+    }).toEqual({ destroyed: 0, released: 1, drained: 1 });
   });
 
   it('destroys a pooled connection whose stream the caller stops early when Node keeps no record of whether the result has arrived', async () => {
@@ -462,7 +431,7 @@ describe('MySQL runtime driver and its pool', () => {
     expect({
       destroyed: connection.destroy.mock.calls.length,
       released: connection.release.mock.calls.length,
-      drained: firstStatement().streamClosed.mock.calls.length,
+      drained: connection.streamClosed.mock.calls.length,
     }).toEqual({ destroyed: 1, released: 0, drained: 0 });
   });
 
@@ -479,11 +448,11 @@ describe('MySQL runtime driver and its pool', () => {
     expect({
       destroyed: connection.destroy.mock.calls.length,
       released: connection.release.mock.calls.length,
-      drained: firstStatement().streamClosed.mock.calls.length,
+      drained: connection.streamClosed.mock.calls.length,
     }).toEqual({ destroyed: 0, released: 1, drained: 1 });
   });
 
-  it('closes the prepared statement and reports the error when executeStream throws, and returns the connection to the pool', async () => {
+  it('reports the error when queryStream throws, and returns the connection to the pool', async () => {
     connection.behaviour = { kind: 'throws', error: mariadbError(false) };
     const driver = await connected(streaming);
     await expect(collect(driver.query(valued))).rejects.toMatchObject({
@@ -491,19 +460,17 @@ describe('MySQL runtime driver and its pool', () => {
       sqlState: '42S02',
     });
     expect({
-      closed: firstStatement().close.mock.calls.length,
       released: connection.release.mock.calls.length,
       destroyed: connection.destroy.mock.calls.length,
-    }).toEqual({ closed: 1, released: 1, destroyed: 0 });
+    }).toEqual({ released: 1, destroyed: 0 });
   });
 
-  it('returns the connection to the pool after a statement error, from a stream, from execute and from prepare', async () => {
+  it('returns the connection to the pool after a statement error, from a stream and from execute', async () => {
     const outcomes = [];
-    for (const fail of ['stream', 'execute', 'prepare'] as const) {
+    for (const fail of ['stream', 'execute'] as const) {
       connection = new FakeConnection();
       if (fail === 'stream') connection.behaviour = { kind: 'fails', error: mariadbError(false) };
-      if (fail === 'execute') connection.executeError = mariadbError(false);
-      if (fail === 'prepare') connection.prepareError = mariadbError(false);
+      else connection.queryError = mariadbError(false);
       const driver = await connected(streaming);
       const run =
         fail === 'stream'
@@ -514,21 +481,19 @@ describe('MySQL runtime driver and its pool', () => {
         fail,
         released: connection.release.mock.calls.length,
         destroyed: connection.destroy.mock.calls.length,
-        closed: connection.prepared.map(({ statement }) => statement.close.mock.calls.length),
       });
     }
     expect(outcomes).toEqual([
-      { fail: 'stream', released: 1, destroyed: 0, closed: [1] },
-      { fail: 'execute', released: 1, destroyed: 0, closed: [1] },
-      { fail: 'prepare', released: 1, destroyed: 0, closed: [] },
+      { fail: 'stream', released: 1, destroyed: 0 },
+      { fail: 'execute', released: 1, destroyed: 0 },
     ]);
   });
 
-  it('destroys the connection when it is lost during prepare, from query as from execute', async () => {
+  it('destroys the connection when it is lost under a statement, from query as from execute', async () => {
     const outcomes = [];
     for (const call of ['query', 'execute'] as const) {
       connection = new FakeConnection();
-      connection.prepareError = mariadbError(true);
+      connection.queryError = mariadbError(true);
       const driver = await connected();
       const run =
         call === 'query'
@@ -553,13 +518,11 @@ describe('MySQL runtime driver and its pool', () => {
     for await (const _row of held.query(valued)) break;
     expect(await collect(held.query(valued))).toEqual([{ n: 1 }, { n: 2 }, { n: 3 }]);
     await held.release();
-    const first = firstStatement();
     expect({
       destroyed: connection.destroy.mock.calls.length,
       released: connection.release.mock.calls.length,
-      drained: first.streamClosed.mock.calls.length,
-      closed: first.close.mock.calls.length,
-    }).toEqual({ destroyed: 0, released: 1, drained: 1, closed: 1 });
+      drained: connection.streamClosed.mock.calls.length,
+    }).toEqual({ destroyed: 0, released: 1, drained: 1 });
   });
 
   it('destroys the connection of a stream that loses it, and reports a SqlConnectionError', async () => {

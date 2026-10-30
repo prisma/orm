@@ -128,6 +128,6 @@ The Mongo query builder doesn't yet expose a chainable `.annotate(...)` surface 
 | Target        | PostgreSQL                                  | MongoDB                                     |
 | Schema        | `schema.prisma` (PSL)                       | `contract.prisma` (PSL)                     |
 | Emission      | CLI (`prisma contract emit`)           | CLI (`prisma contract emit`)           |
-| Runtime       | `postgres()` one-liner                      | `createMongoAdapter()` + `createMongoDriver()` + `createMongoRuntime()` + `mongoOrm()` |
+| Runtime       | `postgres()` one-liner                      | `mongo()` one-liner                         |
 | Relations     | SQL joins                                   | `$lookup` aggregation pipeline              |
 | Tests         | Requires running PostgreSQL                 | Uses `mongodb-memory-server` (no external DB) |

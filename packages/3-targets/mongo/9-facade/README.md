@@ -195,7 +195,9 @@ Exports: `Binary`, `Decimal128`, `Long`, `MongoClient`, `ObjectId`, `Timestamp`.
 
 ### `@internal/mongo/runtime`
 
-Re-exports `createMongoRuntime` from `@internal/mongo-runtime` for composing the MongoDB execution pipeline.
+The default export is `mongo({ contract, ... })`, a lazy MongoDB client. It builds an execution stack from the MongoDB target, adapter and runtime driver descriptor (`@internal/driver-mongo/runtime`), as `postgres()` does. On the first query or `connect()` it creates the driver with `stack.driver.create()` and connects it to the binding resolved from `url`, `uri` + `dbName`, `mongoClient` + `dbName` or `binding`. `close()` closes the driver: a `MongoClient` the driver created from a URL is closed, and a `mongoClient` the caller passed stays open.
+
+Also exports the `MongoBinding`, `MongoBindingInput`, `MongoClient`, `MongoOptions` and `MongoTargetId` types.
 
 ### `@internal/mongo/family`
 

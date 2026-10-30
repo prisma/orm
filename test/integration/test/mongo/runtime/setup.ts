@@ -1,6 +1,6 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
 import type { PlanMeta } from '@internal/contract/types';
-import { createMongoDriver } from '@internal/driver-mongo';
+import mongoRuntimeDriver from '@internal/driver-mongo/runtime';
 import type { MongoCodecRegistry } from '@internal/mongo-codec';
 import {
   createMongoExecutionContext,
@@ -52,9 +52,11 @@ export async function withMongod<T>(fn: (ctx: MongodContext) => Promise<T>): Pro
   const stack = createMongoExecutionStack({
     target: mongoRuntimeTarget,
     adapter: mongoRuntimeAdapter,
+    driver: mongoRuntimeDriver,
   });
   const context = createMongoExecutionContext({ contract: fixtureContract, stack });
-  const driver = await createMongoDriver(connectionUri, dbName);
+  const driver = stack.driver.create();
+  await driver.connect({ kind: 'url', url: connectionUri, dbName });
   const runtime = createMongoRuntime({ context, adapter: stack.adapter.create(stack), driver });
 
   // Cast back to `MongoCodecRegistry` — the test setup is the one place that

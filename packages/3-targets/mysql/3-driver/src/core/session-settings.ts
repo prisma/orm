@@ -27,17 +27,12 @@ export function sessionSettingsStatement(
   };
 }
 
-/** Sets the session settings on `connection` with a prepared statement, so no value travels inside SQL text. Throws the package's error as it is. */
+/** Sets the session settings on `connection`, the package writing each value into the statement. Throws the package's error as it is. */
 export async function applySessionSettings(
   connection: Connection,
   statement: SessionSettingsStatement,
 ): Promise<void> {
-  const prepared = await connection.prepare(statement.sql);
-  try {
-    await prepared.execute([...statement.values]);
-  } finally {
-    prepared.close();
-  }
+  await connection.query(statement.sql, [...statement.values]);
 }
 
 /**

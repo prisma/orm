@@ -14,8 +14,8 @@ const mocks = vi.hoisted(() => ({
   createMongoExecutionStack: vi.fn(),
   createMongoExecutionContext: vi.fn(),
   createMongoRuntime: vi.fn(),
-  driverFromConnection: vi.fn(),
-  driverFromDb: vi.fn(),
+  createDriver: vi.fn(),
+  driverConnect: vi.fn(),
   deserializeContract: vi.fn(),
   mongoOrm: vi.fn(),
   mongoRaw: vi.fn(),
@@ -30,12 +30,7 @@ vi.mock('@internal/mongo-runtime', async (importOriginal) => ({
   createMongoExecutionContext: mocks.createMongoExecutionContext,
   createMongoRuntime: mocks.createMongoRuntime,
 }));
-vi.mock('@internal/driver-mongo', () => ({
-  MongoDriverImpl: {
-    fromConnection: mocks.driverFromConnection,
-    fromDb: mocks.driverFromDb,
-  },
-}));
+vi.mock('@internal/driver-mongo/runtime', () => ({ default: { id: 'driver' } }));
 vi.mock('@internal/family-mongo/ir', () => ({
   MongoContractSerializer: class {
     deserializeContract(json: unknown) {
@@ -185,16 +180,19 @@ describe('facade lifecycle structured codes', () => {
     mocks.createMongoExecutionStack.mockReturnValue({
       id: 'stack',
       adapter: { create: () => ({ id: 'adapter' }) },
+      driver: { create: mocks.createDriver },
     });
     mocks.createMongoExecutionContext.mockReturnValue({
       id: 'context',
       contract: { domain: { namespaces: { __unbound__: {} } } },
       codecs: { get: () => undefined },
     });
-    mocks.driverFromConnection.mockResolvedValue({
+    mocks.createDriver.mockReturnValue({
       id: 'driver',
+      connect: mocks.driverConnect,
       close: vi.fn().mockResolvedValue(undefined),
     });
+    mocks.driverConnect.mockResolvedValue(undefined);
     mocks.createMongoRuntime.mockReturnValue({ id: 'runtime' });
     mocks.mongoOrm.mockReturnValue({ id: 'orm' });
     mocks.mongoQuery.mockReturnValue({ id: 'query' });

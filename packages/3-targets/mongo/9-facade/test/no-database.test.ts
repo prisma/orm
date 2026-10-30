@@ -1,5 +1,5 @@
-import { MongoDriverImpl } from '@internal/driver-mongo';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import mongoRuntimeDriver from '@internal/driver-mongo/runtime';
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 import { defineContract, field, model } from '../src/exports/contract-builder';
 import mongo from '../src/runtime/mongo';
 
@@ -13,12 +13,12 @@ const Account = model('Account', {
 
 const contract = defineContract({ models: { Account } });
 
-let fromConnection: ReturnType<typeof vi.spyOn>;
-let fromDb: ReturnType<typeof vi.spyOn>;
+const connect = vi.fn(async () => undefined);
+let createDriver: MockInstance<typeof mongoRuntimeDriver.create>;
 
 beforeEach(() => {
-  fromConnection = vi.spyOn(MongoDriverImpl, 'fromConnection');
-  fromDb = vi.spyOn(MongoDriverImpl, 'fromDb');
+  connect.mockClear();
+  createDriver = vi.spyOn(mongoRuntimeDriver, 'create');
 });
 
 afterEach(() => {
@@ -32,24 +32,56 @@ describe('a mongo client with no database', () => {
     const plan = db.query.from('accounts').sort({ email: 1 }).build();
 
     expect(plan.collection).toBe('accounts');
-    expect(fromConnection).not.toHaveBeenCalled();
-    expect(fromDb).not.toHaveBeenCalled();
+    expect(createDriver).not.toHaveBeenCalled();
   });
 });
 
 describe('a mongo client given a URL', () => {
   it('creates its driver on the first use', async () => {
-    fromConnection.mockResolvedValue(
-      Object.assign(Object.create(MongoDriverImpl.prototype), { close: async () => undefined }),
-    );
+    createDriver.mockReturnValue({
+      familyId: 'mongo',
+      targetId: 'mongo',
+      connect,
+      execute: vi.fn(),
+      run: vi.fn(),
+      close: async () => undefined,
+    });
     const db = mongo({ contract, url: 'mongodb://localhost:27017/app' });
     db.query.from('accounts').build();
 
-    expect(fromConnection).not.toHaveBeenCalled();
+    expect(createDriver).not.toHaveBeenCalled();
 
     await db.runtime();
     await db.close();
 
-    expect(fromConnection).toHaveBeenCalledTimes(1);
+    expect(createDriver).toHaveBeenCalledTimes(1);
+    expect(connect).toHaveBeenCalledWith({
+      kind: 'url',
+      url: 'mongodb://localhost:27017/app',
+      dbName: 'app',
+    });
+  });
+});
+
+describe('a mongo client whose runtime cannot be built', () => {
+  const otherTarget = { name: 'for-other', familyId: 'mongo', targetId: 'other' } as const;
+  const mismatch = { code: 'RUNTIME.MIDDLEWARE_TARGET_MISMATCH' };
+
+  it('reports the middleware error on every try, without opening a connection', async () => {
+    createDriver.mockImplementation(() => ({
+      familyId: 'mongo',
+      targetId: 'mongo',
+      connect,
+      execute: vi.fn(),
+      run: vi.fn(),
+      close: async () => undefined,
+    }));
+    const db = mongo({ contract, url: 'mongodb://localhost:27017/app', middleware: [otherTarget] });
+
+    await expect(db.runtime()).rejects.toMatchObject(mismatch);
+    await expect(db.connect()).rejects.toMatchObject(mismatch);
+    await db.close();
+
+    expect(connect).not.toHaveBeenCalled();
   });
 });
