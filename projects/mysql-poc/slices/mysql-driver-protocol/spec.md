@@ -96,3 +96,22 @@ Implementation showed two claims in the chosen design were false.
   - The package escapes values correctly in both modes, but it finds the `?` placeholders without checking the mode.
   - With the mode on, raw SQL such as `'a\'` makes the package and the server disagree about where a string ends. A value can then land outside its literal and run as SQL; a probe ran `CURRENT_USER()`.
   - The driver turns the mode off at sign-in, and only a user's raw `SET` can turn it on. The driver reads the server's status flag that the package records after each reply, and refuses a statement with values while the flag is set. The error says to turn the mode off. A statement without values still runs, so the user can turn it back off.
+
+## Decided after review (Will, 2026-10-30)
+
+The review found that a value can run as SQL when one of these holds:
+- raw SQL has a shape that mariadb's placeholder search misreads: `?` followed by a quote, `/*/`, or `--` followed by DEL;
+- a stored procedure changed `sql_mode`, so MySQL reports the wrong backslash mode;
+- raw SQL turned on `ANSI_QUOTES`.
+
+Will decided to keep the library's substitution. The driver documents what the database and the application must guarantee for values to be safe.
+
+- **Environment requirements, in the driver README and the facade README.** One section, stated as requirements, not advice:
+  - The session's `sql_mode` must not contain `NO_BACKSLASH_ESCAPES` or `ANSI_QUOTES`. The driver sets this at sign-in. Raw SQL, stored procedures and triggers must not change it.
+  - The connection character set is utf8mb4, which the driver sets.
+  - Raw SQL must not contain the shapes mariadb misreads.
+
+  Each requirement says what goes wrong when it is broken.
+- **The driver keeps refusing a statement with values while MySQL reports `NO_BACKSLASH_ESCAPES`.** It uses the error code Postgres uses when a session setting the driver relies on has changed, if one exists. The error's advice must be something a user can do on a pooled connection.
+- **The migration driver gets the runtime driver's per-connection lock**, so two concurrent calls cannot interleave.
+- **Not in this slice:** a check, at startup or at deploy time, that the database is configured as the driver requires. Will thinks that is the ideal solution, but it is not required now. It is recorded in `deferred.md`.
