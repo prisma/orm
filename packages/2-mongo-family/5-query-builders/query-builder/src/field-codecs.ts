@@ -40,8 +40,8 @@ function paramOf(value: MongoValue, codecId: string, path: string, collection: s
     : new MongoParamRef(value, { codecId, name: path, collection });
 }
 
-/** A value of the field at `path`, encoded through the field's codec as the ORM encodes one: a list field's array element by element. A path that names no scalar field of the model keeps its value as it is. */
-export function encodedFieldValue(
+/** A filter value for the field at `path`, encoded through the field's codec as an ORM filter value is: a list field's array element by element. A path that names no scalar field of the model keeps its value as it is. */
+export function encodedFilterValue(
   codecs: FieldCodecs | undefined,
   path: string,
   value: MongoValue,
@@ -56,8 +56,8 @@ export function encodedFieldValue(
   return paramOf(value, field.codecId, path, codecs.collection);
 }
 
-/** Each value of a list for the field at `path`, such as an `$in` list, encoded as one value of the field, or one element of a list field. */
-export function encodedFieldValues(
+/** Each value of an `$in` or `$nin` list for the field at `path`, encoded as one value of the field. */
+export function encodedFilterValues(
   codecs: FieldCodecs | undefined,
   path: string,
   values: ReadonlyArray<MongoValue>,
@@ -65,40 +65,4 @@ export function encodedFieldValues(
   const field = codecs?.fields.get(path);
   if (codecs === undefined || field === undefined) return values;
   return values.map((value) => paramOf(value, field.codecId, path, codecs.collection));
-}
-
-function isPlainDocument(value: MongoValue): value is Readonly<Record<string, MongoValue>> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    Object.getPrototypeOf(value) === Object.prototype
-  );
-}
-
-/** One element of the list field at `path`, as `$push`, `$addToSet` and `$pull` take it: encoded through the field's codec. A `{ $each: [...] }` modifier has each element encoded; another document, such as a `$pull` condition, keeps its value as it is. */
-export function encodedElementValue(
-  codecs: FieldCodecs | undefined,
-  path: string,
-  value: MongoValue,
-): MongoValue {
-  const field = codecs?.fields.get(path);
-  if (codecs === undefined || field === undefined) return value;
-  if (isPlainDocument(value)) {
-    const each = value['$each'];
-    return Array.isArray(each)
-      ? { ...value, $each: encodedFieldValues(codecs, path, each) }
-      : value;
-  }
-  return paramOf(value, field.codecId, path, codecs.collection);
-}
-
-/** A document to insert, each of its model fields encoded through the field's codec. */
-export function encodedDocument(
-  codecs: FieldCodecs | undefined,
-  document: Readonly<Record<string, MongoValue>>,
-): Record<string, MongoValue> {
-  return Object.fromEntries(
-    Object.entries(document).map(([path, value]) => [path, encodedFieldValue(codecs, path, value)]),
-  );
 }

@@ -11,8 +11,6 @@ model Order {
   opensAt     Time
   closesAt    Time(as: temporal)
   lasts       Duration
-  days        Date[]
-  slots       Time[]
   createdAt   DateTime                @onCreate(now())
   createdAtT  DateTime(as: temporal)  @onCreate(now())
   createdAtS  DateTime(as: string)    @onCreate(now())

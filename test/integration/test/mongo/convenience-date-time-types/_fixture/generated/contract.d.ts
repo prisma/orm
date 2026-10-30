@@ -22,7 +22,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'20164b666314be10bc04bacdd6a3e7f8d686cf1366cd183e6ce8d60beffd7704'>;
+  StorageHashBase<'96fd4bea8254db05228455df843c892dfe9edebe4b8da75dbc8a13fb6f81dc21'>;
 export type ExecutionHash =
   ExecutionHashBase<'8deb7ec3cb9817982f0cb7af74d7d54b0d127c6ae0c4e6d47fcfc074b31c0d66'>;
 export type ProfileHash =
@@ -60,7 +60,6 @@ export namespace Models {
     createdAtTimeT: FieldOutputTypes['__unbound__']['Order']['createdAtTimeT'];
     createdOn: FieldOutputTypes['__unbound__']['Order']['createdOn'];
     createdOnT: FieldOutputTypes['__unbound__']['Order']['createdOnT'];
-    days: FieldOutputTypes['__unbound__']['Order']['days'];
     deliverBy: FieldOutputTypes['__unbound__']['Order']['deliverBy'];
     id: FieldOutputTypes['__unbound__']['Order']['id'];
     label: FieldOutputTypes['__unbound__']['Order']['label'];
@@ -70,7 +69,6 @@ export namespace Models {
     settledAt: FieldOutputTypes['__unbound__']['Order']['settledAt'];
     shipBy: FieldOutputTypes['__unbound__']['Order']['shipBy'];
     shippedAt: FieldOutputTypes['__unbound__']['Order']['shippedAt'];
-    slots: FieldOutputTypes['__unbound__']['Order']['slots'];
     readonly [RelationKeys]?: never;
   };
 }
@@ -107,10 +105,6 @@ type ContractBase = Omit<
                     readonly createdAtTimeT: { readonly bsonType: 'string' };
                     readonly createdOn: { readonly bsonType: 'date' };
                     readonly createdOnT: { readonly bsonType: 'date' };
-                    readonly days: {
-                      readonly bsonType: 'array';
-                      readonly items: { readonly bsonType: 'date' };
-                    };
                     readonly deliverBy: { readonly bsonType: 'date' };
                     readonly label: { readonly bsonType: 'string' };
                     readonly lasts: { readonly bsonType: 'string' };
@@ -119,10 +113,6 @@ type ContractBase = Omit<
                     readonly settledAt: { readonly bsonType: 'date' };
                     readonly shipBy: { readonly bsonType: 'date' };
                     readonly shippedAt: { readonly bsonType: 'date' };
-                    readonly slots: {
-                      readonly bsonType: 'array';
-                      readonly items: { readonly bsonType: 'string' };
-                    };
                   };
                   readonly required: readonly [
                     '_id',
@@ -134,7 +124,6 @@ type ContractBase = Omit<
                     'createdAtTimeT',
                     'createdOn',
                     'createdOnT',
-                    'days',
                     'deliverBy',
                     'label',
                     'lasts',
@@ -143,7 +132,6 @@ type ContractBase = Omit<
                     'settledAt',
                     'shipBy',
                     'shippedAt',
-                    'slots',
                   ];
                 };
                 readonly kind: 'mongo-validator';
@@ -217,11 +205,6 @@ type ContractBase = Omit<
                   readonly codecId: 'mongo/date-temporal@1';
                 };
               };
-              readonly days: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/date-string@1' };
-                readonly many: { readonly elementNullable: false };
-              };
               readonly deliverBy: {
                 readonly nullable: false;
                 readonly type: {
@@ -270,11 +253,6 @@ type ContractBase = Omit<
                   readonly codecId: 'mongo/date-instant-string@1';
                 };
               };
-              readonly slots: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/time-string@1' };
-                readonly many: { readonly elementNullable: false };
-              };
             };
             readonly relations: Record<string, never>;
             readonly storage: {
@@ -288,7 +266,6 @@ type ContractBase = Omit<
                 readonly createdAtTimeT: { readonly field: 'createdAtTimeT' };
                 readonly createdOn: { readonly field: 'createdOn' };
                 readonly createdOnT: { readonly field: 'createdOnT' };
-                readonly days: { readonly field: 'days' };
                 readonly deliverBy: { readonly field: 'deliverBy' };
                 readonly id: { readonly field: '_id' };
                 readonly label: { readonly field: 'label' };
@@ -298,7 +275,6 @@ type ContractBase = Omit<
                 readonly settledAt: { readonly field: 'settledAt' };
                 readonly shipBy: { readonly field: 'shipBy' };
                 readonly shippedAt: { readonly field: 'shippedAt' };
-                readonly slots: { readonly field: 'slots' };
               };
             };
           };

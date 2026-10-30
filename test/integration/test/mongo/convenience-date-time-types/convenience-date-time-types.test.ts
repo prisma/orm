@@ -13,8 +13,6 @@ const written = {
   opensAt: '09:30',
   closesAt: Temporal.PlainTime.from('17:45:00.25'),
   lasts: 'PT1H30M',
-  days: ['2024-02-29'],
-  slots: ['09:30'],
 };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;

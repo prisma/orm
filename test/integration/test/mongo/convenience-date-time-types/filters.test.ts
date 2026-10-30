@@ -16,8 +16,6 @@ const order = (label: string, day: string, time: string) => ({
   opensAt: time,
   closesAt: Temporal.PlainTime.from(time),
   lasts: 'PT1H30M',
-  days: [day],
-  slots: [time],
 });
 
 const ORDERS = [order('a', '2024-02-29', '09:30'), order('b', '2024-03-05', '17:45:00.25')];

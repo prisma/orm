@@ -3,7 +3,6 @@ import {
   FindOneAndUpdateCommand,
   UpdateOneCommand,
 } from '@internal/mongo-query-ast/execution';
-import { MongoParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
 import type { PipelineChain } from '../src/builder';
 import { mongoQuery } from '../src/query';
@@ -32,11 +31,6 @@ type FamReachableChain = PipelineChain<
   'past-leading'
 >;
 
-const string = (value: string, name: string) =>
-  new MongoParamRef(value, { codecId: 'mongo/string@1', name, collection: 'orders' });
-const double = (value: number, name: string) =>
-  new MongoParamRef(value, { codecId: 'mongo/double@1', name, collection: 'orders' });
-
 describe('M3 find-and-modify and upsert terminals', () => {
   describe('FilteredCollection.findOneAndUpdate', () => {
     it('emits FindOneAndUpdateCommand with the folded filter and update spec', () => {
@@ -45,10 +39,7 @@ describe('M3 find-and-modify and upsert terminals', () => {
         .findOneAndUpdate((f) => [f.status.set('processed'), f.amount.inc(1)]);
       expect(plan.command).toBeInstanceOf(FindOneAndUpdateCommand);
       expect(plan.command.collection).toBe('orders');
-      expect(plan.command.update).toEqual({
-        $set: { status: string('processed', 'status') },
-        $inc: { amount: 1 },
-      });
+      expect(plan.command.update).toEqual({ $set: { status: 'processed' }, $inc: { amount: 1 } });
       expect(plan.command.upsert).toBe(false);
       expect(plan.meta.lane).toBe('mongo-query');
     });
@@ -101,7 +92,7 @@ describe('M3 find-and-modify and upsert terminals', () => {
       const plan = chain.findOneAndUpdate((f) => [f.status.set('processed')]);
       expect(plan.command).toBeInstanceOf(FindOneAndUpdateCommand);
       expect(plan.command.sort).toEqual({ amount: -1 });
-      expect(plan.command.update).toEqual({ $set: { status: string('processed', 'status') } });
+      expect(plan.command.update).toEqual({ $set: { status: 'processed' } });
     });
 
     it('AND-folds multiple match stages', () => {
@@ -170,7 +161,7 @@ describe('M3 find-and-modify and upsert terminals', () => {
       );
       expect(plan.command).toBeInstanceOf(UpdateOneCommand);
       expect(plan.command.upsert).toBe(true);
-      expect(plan.command.update).toEqual({ $set: { amount: double(0, 'amount') } });
+      expect(plan.command.update).toEqual({ $set: { amount: 0 } });
     });
 
     it('FilteredCollection.upsertOne reuses the accumulated filter', () => {

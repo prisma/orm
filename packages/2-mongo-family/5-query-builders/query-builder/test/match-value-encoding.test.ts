@@ -77,38 +77,3 @@ describe('a match value on a model field', () => {
     });
   });
 });
-
-describe('an update value on a model field', () => {
-  const updateOf = (updater: Parameters<ReturnType<typeof orders>['updateAll']>[0]) =>
-    orders().updateAll(updater).command.update;
-
-  it('is encoded through the field codec: a whole value, or one element of a list field', () => {
-    expect(
-      updateOf((f) => [
-        f.status.set('done'),
-        f.notes.setOnInsert('first'),
-        f.amount.max(9),
-        f.tags.push('a'),
-        f.tags.addToSet({ $each: ['b', 'c'] }),
-        f.tags.pullAll(['d']),
-      ]),
-    ).toEqual({
-      $set: { status: param('done', 'mongo/string@1', 'status') },
-      $setOnInsert: { notes: param('first', 'mongo/string@1', 'notes') },
-      $max: { amount: param(9, 'mongo/double@1', 'amount') },
-      $push: { tags: param('a', 'mongo/string@1', 'tags') },
-      $addToSet: {
-        tags: {
-          $each: [param('b', 'mongo/string@1', 'tags'), param('c', 'mongo/string@1', 'tags')],
-        },
-      },
-      $pullAll: { tags: [param('d', 'mongo/string@1', 'tags')] },
-    });
-  });
-
-  it('leaves a $pull condition document as it is', () => {
-    expect(updateOf((f) => [f.tags.pull({ $in: ['a'] })])).toEqual({
-      $pull: { tags: { $in: ['a'] } },
-    });
-  });
-});

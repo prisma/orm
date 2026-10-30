@@ -40,7 +40,7 @@ import { InternalError } from '@internal/utils/internal-error';
 import { PipelineChain } from './builder';
 import { contractError } from './contract-errors';
 import { createFieldAccessor, type FieldAccessor } from './field-accessor';
-import { encodedDocument, type FieldCodecs, modelFieldCodecs } from './field-codecs';
+import { type FieldCodecs, modelFieldCodecs } from './field-codecs';
 import { ormError } from './orm-errors';
 import type { ModelNestedShape, NestedDocShape } from './resolve-path';
 import type { ModelToDocShape, ResolveRow } from './types';
@@ -67,11 +67,8 @@ function matchAllFilter(): MongoFilterExpr {
 function resolveUpdaterCallback<
   Shape extends ModelToDocShape<MongoContract, string>,
   Nested extends NestedDocShape,
->(
-  updaterFn: (fields: FieldAccessor<Shape, Nested>) => UpdaterResult,
-  codecs: FieldCodecs | undefined,
-): MongoUpdateSpec {
-  const accessor = createFieldAccessor<Shape, Nested>(codecs);
+>(updaterFn: (fields: FieldAccessor<Shape, Nested>) => UpdaterResult): MongoUpdateSpec {
+  const accessor = createFieldAccessor<Shape, Nested>();
   const items = updaterFn(accessor);
   return resolveUpdaterResult(items);
 }
@@ -185,8 +182,10 @@ export class CollectionHandle<
   // --- Inserts ---
 
   /**
-   * Insert a single document. Each model field's value is encoded through the
-   * field's codec, as the ORM encodes it.
+   * Insert a single document. Document fields are passed straight through to
+   * the wire `InsertOneCommand` — codec normalisation happens at the
+   * adapter/driver boundary, identically to the SQL builder (see Open Item
+   * #14 confirmation in the design conversation).
    *
    * Returns a `MongoQueryPlan<InsertOneResult>` whose row stream yields a
    * single result document with the server-assigned `insertedId`.
@@ -194,10 +193,7 @@ export class CollectionHandle<
   insertOne(
     document: Record<string, MongoValue>,
   ): MongoQueryPlan<InsertOneResult, InsertOneCommand> {
-    const command = new InsertOneCommand(
-      this.#ctx.collection,
-      encodedDocument(this.#fieldCodecs, document),
-    );
+    const command = new InsertOneCommand(this.#ctx.collection, document);
     return {
       collection: this.#ctx.collection,
       command,
@@ -215,10 +211,7 @@ export class CollectionHandle<
     if (documents.length === 0) {
       throw ormError('ORM.MUTATION_DATA_MISSING', 'insertMany() requires at least one document.');
     }
-    const command = new InsertManyCommand(
-      this.#ctx.collection,
-      documents.map((document) => encodedDocument(this.#fieldCodecs, document)),
-    );
+    const command = new InsertManyCommand(this.#ctx.collection, documents);
     return {
       collection: this.#ctx.collection,
       command,
@@ -246,7 +239,7 @@ export class CollectionHandle<
     const update = resolveUpdaterCallback<
       ModelToDocShape<TContract, ModelName>,
       ModelNestedShape<TContract, ModelName>
-    >(updaterFn, this.#fieldCodecs);
+    >(updaterFn);
     const command = new UpdateManyCommand(this.#ctx.collection, matchAllFilter(), update);
     return {
       collection: this.#ctx.collection,
@@ -303,7 +296,7 @@ export class CollectionHandle<
     const update = resolveUpdaterCallback<
       ModelToDocShape<TContract, ModelName>,
       ModelNestedShape<TContract, ModelName>
-    >(updaterFn, this.#fieldCodecs);
+    >(updaterFn);
     const command = new UpdateOneCommand(this.#ctx.collection, filter, update, true);
     return {
       collection: this.#ctx.collection,
@@ -467,7 +460,7 @@ export class FilteredCollection<
     const update = resolveUpdaterCallback<
       ModelToDocShape<TContract, ModelName>,
       ModelNestedShape<TContract, ModelName>
-    >(updaterFn, this.#fieldCodecs);
+    >(updaterFn);
     const command = new UpdateManyCommand(this.#ctx.collection, this.#foldedFilter(), update);
     return {
       collection: this.#ctx.collection,
@@ -493,7 +486,7 @@ export class FilteredCollection<
     const update = resolveUpdaterCallback<
       ModelToDocShape<TContract, ModelName>,
       ModelNestedShape<TContract, ModelName>
-    >(updaterFn, this.#fieldCodecs);
+    >(updaterFn);
     const command = new UpdateOneCommand(this.#ctx.collection, this.#foldedFilter(), update);
     return {
       collection: this.#ctx.collection,
@@ -546,7 +539,7 @@ export class FilteredCollection<
     const update = resolveUpdaterCallback<
       ModelToDocShape<TContract, ModelName>,
       ModelNestedShape<TContract, ModelName>
-    >(updaterFn, this.#fieldCodecs);
+    >(updaterFn);
     const command = new UpdateOneCommand(this.#ctx.collection, this.#foldedFilter(), update, true);
     return {
       collection: this.#ctx.collection,
@@ -583,7 +576,7 @@ export class FilteredCollection<
     const update = resolveUpdaterCallback<
       ModelToDocShape<TContract, ModelName>,
       ModelNestedShape<TContract, ModelName>
-    >(updaterFn, this.#fieldCodecs);
+    >(updaterFn);
     const command = new FindOneAndUpdateCommand(
       this.#ctx.collection,
       this.#foldedFilter(),

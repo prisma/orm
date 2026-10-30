@@ -71,16 +71,6 @@
                   "kind": "scalar"
                 }
               },
-              "days": {
-                "many": {
-                  "elementNullable": false
-                },
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/date-string@1",
-                  "kind": "scalar"
-                }
-              },
               "deliverBy": {
                 "nullable": false,
                 "type": {
@@ -143,16 +133,6 @@
                   "codecId": "mongo/date-instant-string@1",
                   "kind": "scalar"
                 }
-              },
-              "slots": {
-                "many": {
-                  "elementNullable": false
-                },
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/time-string@1",
-                  "kind": "scalar"
-                }
               }
             },
             "relations": {},
@@ -183,9 +163,6 @@
                 "createdOnT": {
                   "field": "createdOnT"
                 },
-                "days": {
-                  "field": "days"
-                },
                 "deliverBy": {
                   "field": "deliverBy"
                 },
@@ -212,9 +189,6 @@
                 },
                 "shippedAt": {
                   "field": "shippedAt"
-                },
-                "slots": {
-                  "field": "slots"
                 }
               }
             }
@@ -262,12 +236,6 @@
                     "createdOnT": {
                       "bsonType": "date"
                     },
-                    "days": {
-                      "bsonType": "array",
-                      "items": {
-                        "bsonType": "date"
-                      }
-                    },
                     "deliverBy": {
                       "bsonType": "date"
                     },
@@ -291,12 +259,6 @@
                     },
                     "shippedAt": {
                       "bsonType": "date"
-                    },
-                    "slots": {
-                      "bsonType": "array",
-                      "items": {
-                        "bsonType": "string"
-                      }
                     }
                   },
                   "required": [
@@ -309,7 +271,6 @@
                     "createdAtTimeT",
                     "createdOn",
                     "createdOnT",
-                    "days",
                     "deliverBy",
                     "label",
                     "lasts",
@@ -317,8 +278,7 @@
                     "paidAt",
                     "settledAt",
                     "shipBy",
-                    "shippedAt",
-                    "slots"
+                    "shippedAt"
                   ]
                 },
                 "kind": "mongo-validator",
@@ -332,7 +292,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "20164b666314be10bc04bacdd6a3e7f8d686cf1366cd183e6ce8d60beffd7704"
+    "storageHash": "96fd4bea8254db05228455df843c892dfe9edebe4b8da75dbc8a13fb6f81dc21"
   },
   "execution": {
     "executionHash": "8deb7ec3cb9817982f0cb7af74d7d54b0d127c6ae0c4e6d47fcfc074b31c0d66",
