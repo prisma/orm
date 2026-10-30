@@ -2,7 +2,7 @@
 changes:
   - id: mongo-merged-redundant-indexes
     summary: |
-      Every MongoDB contract source now merges identical and redundant indexes in a collection. Identical indexes, which TypeScript and PSL refused before (`CONTRACT.NAME_DUPLICATE`, `PSL_INVALID_INDEX`), become one index. So do two indexes that differ only in an option set to `false`, such as `{ unique: false }` beside the same index without it. A unique and a plain index on the same keys, such as `@unique` and `@@index` on one field, become one unique index. Before, a TypeScript or PSL contract held both indexes of such a pair, and the migration that created them failed. No source change is needed. Run `prisma contract emit`; a contract that held such a pair gets a new storage hash. Delete a migration planned earlier that creates both indexes, and plan it again.
+      MongoDB PSL and TypeScript `defineContract` now merge identical and redundant indexes in a collection. Identical indexes, which they refused before (`CONTRACT.NAME_DUPLICATE`, `PSL_INVALID_INDEX`), become one index. So do two indexes that differ only in an option set to `false`, such as `{ unique: false }` beside the same index without it. A unique and a plain index on the same keys, such as `@unique` and `@@index` on one field, become one unique index. Before, a TypeScript or PSL contract held both indexes of such a pair, and the migration that created them failed. No source change is needed. Run `prisma contract emit`; a contract that held such a pair gets a new storage hash. Delete a migration planned earlier that creates both indexes, and plan it again. A Prisma 6 schema read by `prisma6Schema()` with two indexes in one model on the same fields with the same sort is now refused with `PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS`, as Prisma 6 refuses it.
     detection:
       glob: "**/*.{ts,mts,cts,tsx,prisma}"
       matches:
@@ -13,7 +13,7 @@ changes:
         - '@prisma/orm-(?:mongo|family-mongo/contract-ts)/contract-builder[\x27"][\s\S]*\bindex\(\s*(\{[^}]*\})\s*\)[\s\S]*\bindex\(\s*\1\s*,\s*\{\s*unique\s*:\s*true\s*\}\s*\)'
 ---
 
-# MongoDB merges identical and redundant indexes
+# MongoDB PSL and TypeScript merge identical and redundant indexes
 
 Two indexes in one collection are identical when they have the same keys and the same options, counting an option set to `false` as unset. A plain index is redundant beside a unique index that is otherwise identical. The contract keeps the unique index, or the first of two identical ones, where it was written:
 
@@ -40,3 +40,5 @@ The detection matches a MongoDB schema or `defineContract` file that writes a un
    - If the collection existed before and the index created first is the plain one, drop it before you apply the new migration, or its `createIndex` fails again with `MIGRATION.PRECHECK_FAILED`. This happens when the plain index was written first, for example `index({ email: 1 })` before `index({ email: 1 }, { unique: true })`, or `@@index([email])` on a model before `email String @unique` on a later model in the same collection. In `mongosh`, drop it by its key pattern, so its name does not matter: `db.User.dropIndex({ email: 1 })`.
 
 In the `mongosh` commands above, replace `User` with your collection's name. It is the model name unless `@@map` changes it.
+
+A Prisma 6 schema read by `prisma6Schema()` is not merged. Two indexes in one model on the same fields with the same sort, such as `@unique` and `@@unique([email])`, are refused with `PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS`, because Prisma 6 refuses that schema too, so no Prisma 6 database holds such a pair. Remove one of the two indexes.
