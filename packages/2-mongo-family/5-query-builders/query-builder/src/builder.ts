@@ -788,7 +788,7 @@ export class PipelineChain<
     FindOneAndUpdateCommand
   > {
     const { filter, sort } = deconstructFindAndModifyChain(this.#state.stages);
-    const accessor = createFieldAccessor<Shape, N>();
+    const accessor = createFieldAccessor<Shape, N>(this.#state.fieldCodecs);
     const items = updaterFn(accessor);
     const update = resolveUpdaterResult(items);
     const command = new FindOneAndUpdateCommand(

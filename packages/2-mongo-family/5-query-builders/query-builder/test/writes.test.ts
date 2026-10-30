@@ -8,6 +8,7 @@ import {
   UpdateManyCommand,
   UpdateOneCommand,
 } from '@internal/mongo-query-ast/execution';
+import { MongoParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
 import { mongoQuery } from '../src/query';
 import { contextOf } from './fixtures/test-context';
@@ -15,13 +16,21 @@ import { testContract } from './fixtures/test-contract';
 
 const orders = () => mongoQuery({ context: contextOf(testContract) }).from('orders');
 
+const string = (value: string, name: string) =>
+  new MongoParamRef(value, { codecId: 'mongo/string@1', name, collection: 'orders' });
+const double = (value: number, name: string) =>
+  new MongoParamRef(value, { codecId: 'mongo/double@1', name, collection: 'orders' });
+
 describe('M2 write terminals', () => {
   describe('inserts (CollectionHandle)', () => {
     it('insertOne emits an InsertOneCommand carrying the document', () => {
       const plan = orders().insertOne({ status: 'new', amount: 10 });
       expect(plan.command).toBeInstanceOf(InsertOneCommand);
       expect(plan.command.collection).toBe('orders');
-      expect(plan.command.document).toEqual({ status: 'new', amount: 10 });
+      expect(plan.command.document).toEqual({
+        status: string('new', 'status'),
+        amount: double(10, 'amount'),
+      });
       expect(plan.meta.lane).toBe('mongo-query');
     });
 
@@ -32,7 +41,12 @@ describe('M2 write terminals', () => {
       ];
       const plan = orders().insertMany(docs);
       expect(plan.command).toBeInstanceOf(InsertManyCommand);
-      expect(plan.command.documents).toEqual(docs);
+      expect(plan.command.documents).toEqual(
+        docs.map(({ status, amount }) => ({
+          status: string(status, 'status'),
+          amount: double(amount, 'amount'),
+        })),
+      );
     });
 
     it('insertMany rejects an empty batch (no-op writes are nearly always a bug)', () => {
@@ -47,7 +61,7 @@ describe('M2 write terminals', () => {
       expect(plan.command.filter).toBeInstanceOf(MongoExistsExpr);
       expect((plan.command.filter as MongoExistsExpr).field).toBe('_id');
       expect((plan.command.filter as MongoExistsExpr).exists).toBe(true);
-      expect(plan.command.update).toEqual({ $set: { status: 'reviewed' } });
+      expect(plan.command.update).toEqual({ $set: { status: string('reviewed', 'status') } });
     });
 
     it('deleteAll emits DeleteManyCommand with a tautological match-all filter', () => {
@@ -70,7 +84,7 @@ describe('M2 write terminals', () => {
       expect(plan.command).toBeInstanceOf(UpdateManyCommand);
       expect(plan.command.filter.kind).toBe('and');
       expect(plan.command.update).toEqual({
-        $set: { status: 'processed' },
+        $set: { status: string('processed', 'status') },
         $inc: { amount: 1 },
       });
     });

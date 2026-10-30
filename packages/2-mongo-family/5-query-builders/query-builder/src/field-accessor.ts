@@ -13,7 +13,12 @@ import {
   MongoReplaceRootStage,
 } from '@internal/mongo-query-ast/execution';
 import type { MongoValue } from '@internal/mongo-value';
-import { encodedFilterValue, encodedFilterValues, type FieldCodecs } from './field-codecs';
+import {
+  encodedElementValue,
+  encodedFieldValue,
+  encodedFieldValues,
+  type FieldCodecs,
+} from './field-codecs';
 import type { NestedDocShape, ObjectField, ResolvePath, ValidPaths } from './resolve-path';
 import type { DocField, DocShape, TypedAggExpr } from './types';
 import type { TypedUpdateOp } from './update-ops';
@@ -225,9 +230,10 @@ export function expr(predicate: TypedAggExpr<DocField>): MongoFilterExpr {
 }
 
 function buildExpression<F extends DocField>(path: string, codecs?: FieldCodecs): Expression<F> {
-  const value = (filterValue: MongoValue) => encodedFilterValue(codecs, path, filterValue);
-  const values = (filterValues: ReadonlyArray<MongoValue>) =>
-    encodedFilterValues(codecs, path, filterValues);
+  const value = (fieldValue: MongoValue) => encodedFieldValue(codecs, path, fieldValue);
+  const values = (fieldValues: ReadonlyArray<MongoValue>) =>
+    encodedFieldValues(codecs, path, fieldValues);
+  const element = (elementValue: MongoValue) => encodedElementValue(codecs, path, elementValue);
   // The runtime object carries the full operator surface unconditionally;
   // `ObjectExpression` is a strict subset of `LeafExpression`, so a single
   // implementation satisfies both type-level shapes. Compile-time gating
@@ -251,23 +257,23 @@ function buildExpression<F extends DocField>(path: string, codecs?: FieldCodecs)
       flag === false ? MongoExistsExpr.notExists(path) : MongoExistsExpr.exists(path),
     type: (bsonType: MongoValue) => MongoFieldFilter.of(path, '$type', bsonType),
 
-    set: (value: MongoValue) => setOp(path, value),
+    set: (fieldValue: MongoValue) => setOp(path, value(fieldValue)),
     unset: () => unsetOp(path),
     rename: (newName: string) => renameOp(path, newName),
 
     inc: (amount: number) => incOp(path, amount),
     mul: (factor: number) => mulOp(path, factor),
-    min: (value: MongoValue) => minOp(path, value),
-    max: (value: MongoValue) => maxOp(path, value),
+    min: (fieldValue: MongoValue) => minOp(path, value(fieldValue)),
+    max: (fieldValue: MongoValue) => maxOp(path, value(fieldValue)),
 
-    push: (value: MongoValue) => pushOp(path, value),
-    addToSet: (value: MongoValue) => addToSetOp(path, value),
+    push: (elementValue: MongoValue) => pushOp(path, element(elementValue)),
+    addToSet: (elementValue: MongoValue) => addToSetOp(path, element(elementValue)),
     pop: (direction: 1 | -1 = 1) => popOp(path, direction),
-    pull: (value: MongoValue) => pullOp(path, value),
-    pullAll: (values: ReadonlyArray<MongoValue>) => pullAllOp(path, values),
+    pull: (elementValue: MongoValue) => pullOp(path, element(elementValue)),
+    pullAll: (elementValues: ReadonlyArray<MongoValue>) => pullAllOp(path, values(elementValues)),
 
     currentDate: () => currentDateOp(path),
-    setOnInsert: (value: MongoValue) => setOnInsertOp(path, value),
+    setOnInsert: (fieldValue: MongoValue) => setOnInsertOp(path, value(fieldValue)),
   } as unknown as Expression<F>;
 }
 
@@ -275,8 +281,8 @@ function buildExpression<F extends DocField>(path: string, codecs?: FieldCodecs)
  * Construct a unified `FieldAccessor<S, N>` proxy. Property access creates
  * an `Expression` using the property name as the field path; callable
  * form accepts a dot-path string validated against `N` at compile time.
- * With `codecs`, a filter value on a model field is encoded through the
- * field's codec, as an ORM filter value is.
+ * With `codecs`, every value given for a model field, in a filter or an
+ * update, is encoded through the field's codec, as the ORM encodes one.
  *
  * The proxy target is a function so the resulting object is both callable
  * and indexable. Symbol-keyed accesses (e.g. `Symbol.toPrimitive`) return
