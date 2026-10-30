@@ -35,3 +35,9 @@ const withFactory = defineContract({}, ({ model: m, field: f, type: t }) => ({
 }));
 expectTypeOf(withFactory.target).toEqualTypeOf<'mongo'>();
 expectTypeOf<SoleNamespaceModels<typeof withFactory>['Post']>().not.toBeNever();
+
+// The deprecated PSL scalar names are PSL names only
+expectTypeOf(type).not.toHaveProperty('Int');
+expectTypeOf(type).not.toHaveProperty('Float');
+expectTypeOf(type).not.toHaveProperty('Boolean');
+expectTypeOf(type).not.toHaveProperty('DateTime');

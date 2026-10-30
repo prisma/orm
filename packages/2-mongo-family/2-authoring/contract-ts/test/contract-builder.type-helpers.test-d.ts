@@ -55,6 +55,14 @@ test('a type choice combination with no row does not compile', () => {
   type.choices.Value({ as: 'binary' });
 });
 
+test('a constructor PSL keeps only as a deprecated name is not a type helper', () => {
+  expectTypeOf(type).not.toHaveProperty('Int');
+  expectTypeOf(type).not.toHaveProperty('Float');
+  expectTypeOf(type).not.toHaveProperty('Boolean');
+  expectTypeOf(type).not.toHaveProperty('DateTime');
+  expectTypeOf(type).toHaveProperty('Int32');
+});
+
 test('field.scalar takes a type, not a codec id', () => {
   // @ts-expect-error field.scalar(codecId) was removed
   field.scalar('mongo/string@1');

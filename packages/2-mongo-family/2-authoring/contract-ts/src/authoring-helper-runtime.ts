@@ -82,7 +82,7 @@ function fieldTypeOf(output: ScalarTypeConstructorOutput): MongoTypeInstance {
   };
 }
 
-/** The runtime `type` helpers of `namespace`: each type constructor, type choice and type alias as a function giving the MongoDB field type it stands for. */
+/** The runtime `type` helpers of `namespace`: each type constructor, type choice and type alias as a function giving the MongoDB field type it stands for. A constructor marked `deprecated` is a PSL name only, and has no helper. */
 export function createTypeHelpersFromNamespace(
   namespace: AuthoringTypeNamespace,
   lookups: AuthoringHelperLookups,
@@ -95,6 +95,7 @@ export function createTypeHelpersFromNamespace(
     const helperPath = [...path, key].join('.');
 
     if (isAuthoringTypeConstructorDescriptor(value)) {
+      if (value.deprecated !== undefined) continue;
       helpers[key] = (...written: readonly unknown[]): MongoTypeInstance => {
         validateAuthoringHelperArguments(helperPath, value.args, written);
         const args = readValueArguments(helperPath, value.args, written, lookups.dataTypes);

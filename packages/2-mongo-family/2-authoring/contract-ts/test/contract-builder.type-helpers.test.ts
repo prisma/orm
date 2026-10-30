@@ -73,6 +73,12 @@ describe('the MongoDB type helpers', () => {
     },
   );
 
+  it('leave out a constructor PSL keeps only as a deprecated name', () => {
+    expect(['Int', 'Float', 'Boolean', 'DateTime', 'Int32'].filter((name) => name in type)).toEqual(
+      ['Int32'],
+    );
+  });
+
   it('give a vector its length as a type parameter', () => {
     expect(field.scalar(type.Vector(3)).__type).toStrictEqual({
       kind: 'scalar',

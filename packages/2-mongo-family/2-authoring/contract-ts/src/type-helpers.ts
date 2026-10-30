@@ -244,9 +244,11 @@ type TypeAliasHelperFunction<Descriptor extends AuthoringTypeAliasDescriptor> =
       ? { readonly generatorCalls: AliasGeneratorCalls<Descriptor['output']> }
       : unknown);
 
-/** The `type` helpers of a type namespace: a call of a type constructor, type choice or type alias gives the field type it stands for. */
+/** The `type` helpers of a type namespace: a call of a type constructor, type choice or type alias gives the field type it stands for. A constructor marked `deprecated` is a PSL name only, and has no helper. */
 export type TypeHelpersFromNamespace<Namespace, ValueTypes extends DataTypeArgumentTypes> = {
-  readonly [K in keyof Namespace]: Namespace[K] extends AuthoringTypeConstructorDescriptor
+  readonly [K in keyof Namespace as Namespace[K] extends { readonly deprecated: unknown }
+    ? never
+    : K]: Namespace[K] extends AuthoringTypeConstructorDescriptor
     ? TypeHelperFunction<Namespace[K], ValueTypes>
     : Namespace[K] extends AuthoringTypeAliasDescriptor
       ? TypeAliasHelperFunction<Namespace[K]>
