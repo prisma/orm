@@ -285,3 +285,9 @@ The refusals for a column that holds a value object through a dictionary say the
 **Found:** slice 3b PR 4 manual QA (F19), dispatch 30 (2026-10-30).
 
 `prisma migration new` from the current contract, with only a `renameStoredKey` in its `migration.ts`, is refused by `db migrate` with `MIGRATION.CONTRACT_SPACE_VIOLATION` (source equal to target with no data invariant). Every operation of the statements can be called by hand, but for a `Json` column there is no contract change to attach a data rewrite to. The user has to make an unrelated contract change to carry it.
+
+## `db update` gives no query for a removed enum value inside a list when it does not know the database's contract
+
+**Found:** slice 3b PR 4 manual QA (F9), dispatch 30 (2026-10-30).
+
+When rows hold an enum value `db update` removes from a member that takes no null, and no migration on disk ends at the database's contract, the advice says to change the stored value in the database by hand, with no query. Inside a list this needs `jsonb_agg` over `jsonb_array_elements` on Postgres, or `json_group_array` over `json_each` on SQLite. The by-hand route through `migration plan --from <hash>`, which writes `replaceStoredValue` with a path, needs that contract. The advice to add a new member and `--rename` to it works inside lists too.
