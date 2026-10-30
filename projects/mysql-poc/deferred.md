@@ -58,3 +58,7 @@ Without `sql.insertOnConflictTarget`, the ORM allows an upsert only when the con
 ## Upsert without conflict columns (slice 4 system-design review, D02)
 
 When the capability is absent the ORM sends an upsert with no conflict columns, and only the MySQL renderer accepts that. Alternative recorded: the AST always keeps the named columns, and the MySQL renderer checks them against the contract instead.
+
+## `mariadb` 3.5.4 can raise an unhandled rejection after destroying a connection (slice 4, 2026-10-30)
+
+`Connection.destroy()` in `lib/connection.js` sends `KILL` on a background connection and chains `.finally()` with no `catch`. If that background connection drops, the rejection is unhandled in the application process, and the driver cannot catch it. Seen as a flaky test, fixed in the test. Report it to the `mariadb` package, and pin a version with the fix when one ships.
