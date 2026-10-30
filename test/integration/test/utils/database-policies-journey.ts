@@ -129,7 +129,7 @@ export default definePrismaConfig({
 });
 `;
 
-const MONGO_CONFIG = `import { defineConfig as ormConfig } from '@prisma/orm-mongo/config';
+const MONGO_CONFIG = `import { defineConfig as ormConfig } from '@internal/mongo/config';
 import { definePrismaConfig } from '@prisma/cli-engine';
 
 export default definePrismaConfig({
@@ -162,20 +162,7 @@ export function setupPolicyProject(
 ): PolicyProject {
   const configPath = join(testDir, 'prisma.config.ts');
   writeFileSync(configPath, configFor(target, connection), 'utf-8');
-  if (target === 'mongo') {
-    writeFileSync(
-      join(testDir, 'package.json'),
-      JSON.stringify({
-        name: 'database-policies-journey',
-        private: true,
-        type: 'module',
-        dependencies: { '@prisma/orm-mongo': 'workspace:0.16.0' },
-      }),
-      'utf-8',
-    );
-  } else {
-    writeProjectManifest(testDir);
-  }
+  writeProjectManifest(testDir);
   const project = {
     target,
     ctx: { testDir, configPath, outputDir: testDir },
