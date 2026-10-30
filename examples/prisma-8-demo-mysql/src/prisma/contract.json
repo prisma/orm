@@ -4,6 +4,10 @@
   "target": "mysql",
   "profileHash": "5212eb1a1220f2d24de13f4efadd4c703f3a1098a5f57e09da0dc26ebb7201d0",
   "roots": {
+    "Event": {
+      "model": "Event",
+      "namespace": "__unbound__"
+    },
     "Post": {
       "model": "Post",
       "namespace": "__unbound__"
@@ -32,6 +36,89 @@
           }
         },
         "models": {
+          "Event": {
+            "fields": {
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/datetime@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "day": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/date-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "opensAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/time-string@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                }
+              },
+              "startsAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/datetime@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "title": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "day": {
+                  "column": "day"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "opensAt": {
+                  "column": "opensAt"
+                },
+                "startsAt": {
+                  "column": "startsAt"
+                },
+                "title": {
+                  "column": "title"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Event"
+            }
+          },
           "Post": {
             "fields": {
               "authorId": {
@@ -168,6 +255,68 @@
       "__unbound__": {
         "entries": {
           "table": {
+            "Event": {
+              "columns": {
+                "createdAt": {
+                  "codecId": "mysql/datetime@1",
+                  "dataType": "mysql/datetime",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "day": {
+                  "codecId": "mysql/date-string@1",
+                  "dataType": "mysql/date",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "opensAt": {
+                  "codecId": "mysql/time-string@1",
+                  "dataType": "mysql/time",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "startsAt": {
+                  "codecId": "mysql/datetime@1",
+                  "dataType": "mysql/datetime",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "title": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "mysql/varchar",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "Post": {
               "columns": {
                 "authorId": {
@@ -297,7 +446,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "429ca5218dc113a8f28a4e8890ff6764e9810dff5c9a4c3924969488fb9dbb33"
+    "storageHash": "e5204ea7419455b72c116d69a1487d13716cb36a17aaf355fd880275065a9a23"
   },
   "capabilities": {
     "sql": {

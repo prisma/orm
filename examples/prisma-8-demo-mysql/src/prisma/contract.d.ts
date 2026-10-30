@@ -19,7 +19,7 @@ import type {
 } from '@prisma/orm-mysql/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'429ca5218dc113a8f28a4e8890ff6764e9810dff5c9a4c3924969488fb9dbb33'>;
+  StorageHashBase<'e5204ea7419455b72c116d69a1487d13716cb36a17aaf355fd880275065a9a23'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'5212eb1a1220f2d24de13f4efadd4c703f3a1098a5f57e09da0dc26ebb7201d0'>;
@@ -83,6 +83,15 @@ export type StorageColumnInputTypes = ColumnTypesFromStorage<
 >;
 
 export namespace Models {
+  export type Event = {
+    createdAt: FieldOutputTypes['__unbound__']['Event']['createdAt'];
+    day: FieldOutputTypes['__unbound__']['Event']['day'];
+    id: FieldOutputTypes['__unbound__']['Event']['id'];
+    opensAt: FieldOutputTypes['__unbound__']['Event']['opensAt'];
+    startsAt: FieldOutputTypes['__unbound__']['Event']['startsAt'];
+    title: FieldOutputTypes['__unbound__']['Event']['title'];
+    readonly [RelationKeys]?: never;
+  };
   export type Post = {
     authorId: FieldOutputTypes['__unbound__']['Post']['authorId'];
     id: FieldOutputTypes['__unbound__']['Post']['id'];
@@ -100,6 +109,7 @@ export namespace Models {
 }
 
 export declare const models: {
+  Event: Models.Event;
   Post: Models.Post;
   User: Models.User;
 };
@@ -122,6 +132,59 @@ type ContractBase = Omit<
         readonly kind: 'mysql-namespace';
         readonly entries: {
           readonly table: {
+            readonly Event: {
+              columns: {
+                readonly createdAt: {
+                  readonly dataType: 'mysql/datetime';
+                  readonly codecId: 'mysql/datetime@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly typeParams: { readonly precision: 3 };
+                  readonly many: false;
+                };
+                readonly day: {
+                  readonly dataType: 'mysql/date';
+                  readonly codecId: 'mysql/date-string@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'mysql/int';
+                  readonly codecId: 'mysql/int@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'function';
+                    readonly expression: 'autoincrement()';
+                  };
+                  readonly many: false;
+                };
+                readonly opensAt: {
+                  readonly dataType: 'mysql/time';
+                  readonly codecId: 'mysql/time-string@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly precision: 6 };
+                  readonly many: false;
+                };
+                readonly startsAt: {
+                  readonly dataType: 'mysql/datetime';
+                  readonly codecId: 'mysql/datetime@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly precision: 3 };
+                  readonly many: false;
+                };
+                readonly title: {
+                  readonly dataType: 'mysql/varchar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly length: 191 };
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [];
+              foreignKeys: readonly [];
+            };
             readonly Post: {
               columns: {
                 readonly authorId: {
@@ -222,6 +285,7 @@ type ContractBase = Omit<
   readonly target: 'mysql';
   readonly targetFamily: 'sql';
   readonly roots: {
+    readonly Event: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Event' };
     readonly Post: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Post' };
     readonly User: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'User' };
   };
@@ -229,6 +293,63 @@ type ContractBase = Omit<
     readonly namespaces: {
       readonly __unbound__: {
         readonly models: {
+          readonly Event: {
+            readonly fields: {
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'mysql/datetime@1';
+                  readonly typeParams: { readonly precision: 3 };
+                };
+              };
+              readonly day: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mysql/date-string@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mysql/int@1' };
+              };
+              readonly opensAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'mysql/time-string@1';
+                  readonly typeParams: { readonly precision: 6 };
+                };
+              };
+              readonly startsAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'mysql/datetime@1';
+                  readonly typeParams: { readonly precision: 3 };
+                };
+              };
+              readonly title: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 191 };
+                };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'Event';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly createdAt: { readonly column: 'createdAt' };
+                readonly day: { readonly column: 'day' };
+                readonly id: { readonly column: 'id' };
+                readonly opensAt: { readonly column: 'opensAt' };
+                readonly startsAt: { readonly column: 'startsAt' };
+                readonly title: { readonly column: 'title' };
+              };
+            };
+          };
           readonly Post: {
             readonly fields: {
               readonly authorId: {
