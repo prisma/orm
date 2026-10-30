@@ -19,6 +19,8 @@ import {
   plannerFailure,
   planStatements,
   sqlTypeLookupsOf,
+  storedValueOperationIndexes,
+  storedValueSubjects,
   subjectsOfCalls,
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
@@ -60,11 +62,7 @@ import {
 import { sqlitePlannerStrategies } from './planner-strategies';
 import type { SqlitePlanTargetDetails } from './planner-target-details';
 import { sqliteSchemaTables } from './schema-tables';
-import {
-  sqliteStoredValueCalls,
-  storedValueOperationIndexes,
-  storedValueSubjects,
-} from './stored-value-calls';
+import { sqliteStoredValueCallClasses, sqliteStoredValueCalls } from './stored-value-calls';
 import {
   renameTableByHandStatements,
   renderRenameTableCall,
@@ -316,7 +314,7 @@ export class SqliteMigrationPlanner
         sqliteCallSubjects(
           calls,
           new Map(fieldEventCalls.map((fieldEvent) => [fieldEvent.call, fieldEvent])),
-          storedValueSubjects(storedValueCalls),
+          storedValueSubjects(storedValueCalls, sqliteStoredValueCallClasses),
         ),
         {
           fromContract: options.fromContract,

@@ -13,11 +13,12 @@ import type {
 } from '@internal/family-sql/control';
 import {
   convertedColumnOf,
+  keepRowsEdit,
   type RequiredColumn,
   requiredColumnOf,
   requiredColumnsOfMigration,
+  rowsHoldingValueFailure,
   rowsHoldingValueOf,
-  rowsHoldingValueSummary,
   rowsWithoutValueFailure,
   runnerFailure,
   runnerSuccess,
@@ -27,7 +28,6 @@ import type {
   BlockingObject,
   FailedTypeChange,
   MigrationRunnerResult,
-  RowsHoldingValue,
 } from '@internal/framework-components/control';
 import {
   APP_SPACE_ID,
@@ -62,7 +62,7 @@ import {
   schemaContentsOf,
   schemaObjectsSummary,
 } from './schema-contents';
-import { keepRowsEdit } from './stored-value-calls';
+import { postgresMarkedRemoval, postgresStoredValueCallClasses } from './stored-value-calls';
 
 interface ApplyPlanSuccessValue {
   readonly operationsExecuted: number;
@@ -477,38 +477,27 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
    * Counts the rows that hold the stored value a removal check guards, as `rowsHoldingValueMeta`
    * marks the check. A count that fails leaves the failure without it.
    */
-  private async rowsHoldingValue(
+  private rowsHoldingValue(
     driver: SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>['driver'],
     step: SqlMigrationPlanOperationStep,
     operation: SqlMigrationPlanOperation<PostgresPlanTargetDetails>,
     operationIndex: number,
-  ): Promise<{ readonly summary: string; readonly report: RowsHoldingValue } | undefined> {
+  ): ReturnType<typeof rowsHoldingValueFailure> {
     const mark = rowsHoldingValueOf(step);
-    const details = operation.target.details;
-    const stored = step.params?.[0];
-    if (mark === undefined || details?.table === undefined) return undefined;
-    if (typeof stored !== 'string' && typeof stored !== 'number') return undefined;
-    const { table } = details;
-    let rows: number;
-    try {
-      const counted = await driver.query<{ rows: number }>(
-        `SELECT COUNT(*)::int AS rows FROM ${qualifyTableName(details.schema, table)} WHERE ${quoteIdentifier(details.name)} = $1`,
-        [stored],
-      );
-      rows = counted.rows[0]?.rows ?? 0;
-    } catch {
-      return undefined;
-    }
-    return {
-      summary: rowsHoldingValueSummary(table, details.name, stored, rows),
-      report: {
-        enumValue: mark.enumValue,
-        value: stored,
-        rows,
-        operationIndex,
-        keepDataEdit: keepRowsEdit({ ...details, table }, mark),
+    const schema = operation.target.details?.schema;
+    if (mark === undefined || schema === undefined) return Promise.resolve(undefined);
+    return rowsHoldingValueFailure({
+      failed: { operation, operationIndex, mark },
+      count: async ({ mark: counted }) => {
+        const rows = await driver.query<{ rows: number }>(
+          `SELECT COUNT(*)::int AS rows FROM ${qualifyTableName(schema, counted.table)} WHERE ${quoteIdentifier(counted.column)} = $1`,
+          [counted.storedValue],
+        );
+        return rows.rows[0]?.rows ?? 0;
       },
-    };
+      keepDataEdit: ({ mark: kept }) =>
+        keepRowsEdit(postgresMarkedRemoval(schema, kept), kept, postgresStoredValueCallClasses),
+    });
   }
 
   /**

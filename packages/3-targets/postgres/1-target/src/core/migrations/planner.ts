@@ -22,6 +22,8 @@ import {
   plannerFailure,
   planStatements,
   sqlTypeLookupsOf,
+  storedValueOperationIndexes,
+  storedValueSubjects,
   subjectsOfCalls,
   type TargetRefusal,
 } from '@internal/family-sql/control';
@@ -106,10 +108,9 @@ import {
 } from './resolve-ddl-schema';
 import { postgresSchemaTables } from './schema-tables';
 import {
+  postgresStoredValueCallClasses,
   postgresStoredValueCalls,
   storedValueCallsStrategy,
-  storedValueOperationIndexes,
-  storedValueSubjects,
 } from './stored-value-calls';
 import {
   postgresColumnRenameCall,
@@ -583,7 +584,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
         postgresCallSubjects(calls, {
           contract: options.fromContract ?? options.contract,
           fieldEvents: new Map(fieldEventCalls.map((fieldEvent) => [fieldEvent.call, fieldEvent])),
-          storedValues: storedValueSubjects(storedValueCalls),
+          storedValues: storedValueSubjects(storedValueCalls, postgresStoredValueCallClasses),
         }),
         {
           fromContract: options.fromContract,

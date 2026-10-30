@@ -97,11 +97,11 @@ export {
   resolveTableRenameAgainst,
   unmatchedTableRename,
 } from '../core/migrations/resolve-table-rename';
-export type { RowsHoldingValueMark } from '../core/migrations/rows-holding-value';
+export type { MarkedRemoval, RowsHoldingValueMark } from '../core/migrations/rows-holding-value';
 export {
+  rowsHoldingValueFailure,
   rowsHoldingValueMeta,
   rowsHoldingValueOf,
-  rowsHoldingValueSummary,
 } from '../core/migrations/rows-holding-value';
 export type {
   SqlSchemaDiffFn,
@@ -150,6 +150,15 @@ export {
   otherSpaceDeclaring,
   planStatements,
 } from '../core/migrations/statement-planning';
+export type {
+  StoredValueCallClasses,
+  StoredValueSubject,
+} from '../core/migrations/stored-value-calls';
+export {
+  keepRowsEdit,
+  storedValueOperationIndexes,
+  storedValueSubjects,
+} from '../core/migrations/stored-value-calls';
 export type { TableNameCaseGuardTable } from '../core/migrations/table-name-case-guard';
 export {
   detectTableNameCaseChanges,

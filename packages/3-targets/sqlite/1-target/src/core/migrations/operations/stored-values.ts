@@ -49,7 +49,7 @@ export function removeStoredValue(
   tableName: string,
   columnName: string,
   value: string | number,
-  mark: RowsHoldingValueMark | undefined,
+  mark: Pick<RowsHoldingValueMark, 'enumValue' | 'value' | 'codecRef'> | undefined,
 ): Op {
   const column = quoteIdentifier(columnName);
   const takesNull = `ensure column "${columnName}" of "${tableName}" takes NULL, or no row holds ${storedValueText(value)} in it`;
@@ -61,7 +61,16 @@ export function removeStoredValue(
     precheck: [
       {
         ...columnTakesNullOrValueAbsentCheck(tableName, columnName, value, takesNull),
-        ...(mark === undefined ? {} : { meta: rowsHoldingValueMeta(mark) }),
+        ...(mark === undefined
+          ? {}
+          : {
+              meta: rowsHoldingValueMeta({
+                ...mark,
+                table: tableName,
+                column: columnName,
+                storedValue: value,
+              }),
+            }),
       },
     ],
     execute: [

@@ -2,6 +2,7 @@ import {
   type CallSubjects,
   type FieldEventCall,
   fieldEventStorage,
+  type StoredValueSubject,
   type SubjectStorage,
   storageNameOfOperation,
   unknownCallNames,
@@ -16,7 +17,6 @@ import {
   RecreateTableCall,
   RemoveStoredValueCall,
 } from './op-factory-call';
-import type { StoredValueSubject } from './stored-value-calls';
 
 type LostStorage = CallSubjects['dataLoss'][number];
 

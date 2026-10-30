@@ -3,6 +3,7 @@ import {
   type CallSubjects,
   type FieldEventCall,
   fieldEventStorage,
+  type StoredValueSubject,
   type SubjectStorage,
   storageNameOfOperation,
   unknownCallNames,
@@ -25,7 +26,6 @@ import {
   RawSqlCall,
   RemoveStoredValueCall,
 } from './op-factory-call';
-import type { StoredValueSubject } from './stored-value-calls';
 
 interface Locator {
   /** The contract that names the namespaces: the origin contract when the plan has one. */

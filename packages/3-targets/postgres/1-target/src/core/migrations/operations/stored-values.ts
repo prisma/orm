@@ -67,7 +67,7 @@ export function removeStoredValue(
   columnName: string,
   value: string | number,
   many: boolean,
-  mark: RowsHoldingValueMark | undefined,
+  mark: Pick<RowsHoldingValueMark, 'enumValue' | 'value' | 'codecRef'> | undefined,
 ): Op {
   const column = quoteIdentifier(columnName);
   const qualified = qualifyTableName(schemaName, tableName);
@@ -87,7 +87,16 @@ export function removeStoredValue(
               `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = ${schemaSqlExpression(schemaName)} AND table_name = $2 AND column_name = $3 AND is_nullable = 'YES') OR NOT EXISTS (SELECT 1 FROM ${qualified} WHERE ${column} = $1) AS result`,
               [value, tableName, columnName],
             ),
-            ...(mark === undefined ? {} : { meta: rowsHoldingValueMeta(mark) }),
+            ...(mark === undefined
+              ? {}
+              : {
+                  meta: rowsHoldingValueMeta({
+                    ...mark,
+                    table: tableName,
+                    column: columnName,
+                    storedValue: value,
+                  }),
+                }),
           },
         ],
     execute: [

@@ -14,9 +14,10 @@ import type {
 import {
   convertedColumnOf,
   fieldOfColumn,
+  keepRowsEdit,
   requiredColumnsOfMigration,
+  rowsHoldingValueFailure,
   rowsHoldingValueOf,
-  rowsHoldingValueSummary,
   rowsWithoutValueFailure,
   runnerFailure,
   runnerSuccess,
@@ -25,7 +26,6 @@ import {
 import type {
   FailedConversion,
   MigrationRunnerResult,
-  RowsHoldingValue,
 } from '@internal/framework-components/control';
 import {
   APP_SPACE_ID,
@@ -48,7 +48,7 @@ import { quoteIdentifier } from '../sql-utils';
 import { verifySqliteDatabaseSchema } from './diff-database-schema';
 import { affinityStorageClasses, conversionCopyOf, rebuiltTableName } from './operations/tables';
 import type { SqlitePlanTargetDetails } from './planner-target-details';
-import { keepRowsEdit } from './stored-value-calls';
+import { sqliteMarkedRemoval, sqliteStoredValueCallClasses } from './stored-value-calls';
 
 const NOT_NULL_VIOLATION_SQLSTATE = '23502';
 
@@ -460,37 +460,26 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
    * Counts the rows that hold the stored value a removal check guards, as `rowsHoldingValueMeta`
    * marks the check. A count that fails leaves the failure without it.
    */
-  private async rowsHoldingValue(
+  private rowsHoldingValue(
     driver: SqlMigrationRunnerExecuteOptions<SqlitePlanTargetDetails>['driver'],
     step: SqlMigrationPlanOperationStep,
     operation: SqlMigrationPlanOperation<SqlitePlanTargetDetails>,
     operationIndex: number,
-  ): Promise<{ readonly summary: string; readonly report: RowsHoldingValue } | undefined> {
+  ): ReturnType<typeof rowsHoldingValueFailure> {
     const mark = rowsHoldingValueOf(step);
-    const details = operation.target.details;
-    const stored = step.params?.[0];
-    if (mark === undefined || details?.table === undefined) return undefined;
-    if (typeof stored !== 'string' && typeof stored !== 'number') return undefined;
-    let rows: number;
-    try {
-      const counted = await driver.query<{ rows: number }>(
-        `SELECT COUNT(*) AS rows FROM ${quoteIdentifier(details.table)} WHERE ${quoteIdentifier(details.name)} = ?`,
-        [stored],
-      );
-      rows = Number(counted.rows[0]?.rows ?? 0);
-    } catch {
-      return undefined;
-    }
-    return {
-      summary: rowsHoldingValueSummary(details.table, details.name, stored, rows),
-      report: {
-        enumValue: mark.enumValue,
-        value: stored,
-        rows,
-        operationIndex,
-        keepDataEdit: keepRowsEdit(details.table, details.name, mark),
+    if (mark === undefined) return Promise.resolve(undefined);
+    return rowsHoldingValueFailure({
+      failed: { operation, operationIndex, mark },
+      count: async ({ mark: counted }) => {
+        const rows = await driver.query<{ rows: number }>(
+          `SELECT COUNT(*) AS rows FROM ${quoteIdentifier(counted.table)} WHERE ${quoteIdentifier(counted.column)} = ?`,
+          [counted.storedValue],
+        );
+        return Number(rows.rows[0]?.rows ?? 0);
       },
-    };
+      keepDataEdit: ({ mark: kept }) =>
+        keepRowsEdit(sqliteMarkedRemoval(kept), kept, sqliteStoredValueCallClasses),
+    });
   }
 
   /** Names the first value of a retyped column that kept a storage class its new type does not hold. */

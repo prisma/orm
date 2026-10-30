@@ -199,12 +199,6 @@ Reproduction: emit a PSL contract with a `namespace public` block and a `namespa
 
 `db update --delete billing` against a database whose marker hash has no local snapshot fails with `CLI.CONSENT_UNUSED`: the planner has no origin contract, so it reports no removed namespace, and the namespace's tables stay. Nothing is lost, which is the right outcome, but the message does not say why. `--rename` in the same situation fails with `MIGRATION.STATEMENT_ORIGIN_UNKNOWN`, which names the hash and the snapshot directory. A namespace `--delete` that matches no question should say the same when the origin contract is unknown.
 
-## Stored value code is copied in both SQL targets, and the runners read the counted value from the check's parameters
-
-**Found:** slice 3b PR 2 system-design review (2026-10-22), S05.
-
-`stored-value-calls.ts` in `packages/3-targets/postgres/1-target` and `packages/3-targets/sqlite/1-target` are nearly the same (`storedValueSubjects`, `storedValueOperationIndexes`, `keepRowsEdit`), and each runner builds the `rowsHoldingValue` summary and report itself, counting the value it reads from `step.params[0]`, which ties it to the parameter order of the check SQL. To resolve it, add `rowsHoldingValueFailure({ mark, operationIndex, count })` in the SQL family beside `rowsWithoutValueFailure`, let the check's marker carry the encoded value to count, and share the subject and index helpers in the family with the call classes passed in.
-
 ## `rowsHoldingValue` reports one column where its sibling reports a list
 
 **Found:** slice 3b PR 2 system-design review (2026-10-22), S06.
