@@ -150,6 +150,64 @@ describe('the MySQL date and time codecs', () => {
     });
   });
 
+  describe('write a value rounded down to the column precision, so MySQL never rounds it up', () => {
+    it.each([
+      [
+        'DatetimeJsDate',
+        { precision: 1 },
+        mysqlDatetimeDescriptor,
+        new Date('2024-01-01T00:00:00.678Z'),
+        '2024-01-01 00:00:00.6',
+      ],
+      [
+        'DatetimeString',
+        {},
+        mysqlDatetimeStringDescriptor,
+        '2024-01-01T00:00:00.9Z',
+        '2024-01-01 00:00:00',
+      ],
+      [
+        'DatetimeTemporal',
+        { precision: 2 },
+        mysqlDatetimeTemporalDescriptor,
+        Temporal.Instant.from('2024-01-01T00:00:00.999Z'),
+        '2024-01-01 00:00:00.99',
+      ],
+      [
+        'TimestampJsDate',
+        { precision: 0 },
+        mysqlTimestampDateDescriptor,
+        new Date('2038-01-19T03:14:07.500Z'),
+        '2038-01-19 03:14:07',
+      ],
+      [
+        'TimestampString',
+        { precision: 0 },
+        mysqlTimestampStringDescriptor,
+        '2038-01-19T03:14:07.5Z',
+        '2038-01-19 03:14:07',
+      ],
+      [
+        'TimestampTemporal',
+        { precision: 3 },
+        mysqlTimestampTemporalDescriptor,
+        Temporal.Instant.from('2038-01-19T03:14:07.999999Z'),
+        '2038-01-19 03:14:07.999',
+      ],
+      ['TimeString', { precision: 0 }, mysqlTimeStringDescriptor, '23:59:59.6', '23:59:59'],
+      [
+        'TimeTemporal',
+        {},
+        mysqlTimeTemporalDescriptor,
+        Temporal.PlainTime.from('23:59:59.6'),
+        '23:59:59',
+      ],
+    ] as const)('%s with %j', async (_name, params, descriptor, value, wire) => {
+      const codec = descriptor.factory(params)(instance);
+      expect(await codec.toWire(value as never, ctx)).toBe(wire);
+    });
+  });
+
   describe('TimestampJsDate', () => {
     const codec = mysqlTimestampDateDescriptor.factory({ precision: 3 })(instance);
 

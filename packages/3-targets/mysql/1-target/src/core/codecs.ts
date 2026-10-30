@@ -56,7 +56,12 @@ import {
   mysqlTimestampTemporalDescriptor,
   mysqlTimeTemporalDescriptor,
 } from './date-time-codecs';
-import { dateOfWireText, storedWithinPrecision, wireTextOfDate } from './date-time-values';
+import {
+  dateOfWireText,
+  roundedDownToPrecision,
+  storedWithinPrecision,
+  wireTextOfDate,
+} from './date-time-values';
 import { mysqlError, mysqlQueryNotYetSupported } from './errors';
 
 const DECIMAL_INTEGER = /^-?\d+$/;
@@ -257,7 +262,7 @@ export class MysqlDatetimeCodec extends CodecImpl<
   Date
 > {
   async toWire(value: Date, _ctx: CodecCallContext): Promise<string> {
-    return encodeMysqlDatetime(value);
+    return roundedDownToPrecision(encodeMysqlDatetime(value), this.dataTypeParams);
   }
   async fromWire(wire: string, _ctx: CodecCallContext): Promise<Date> {
     return decodeMysqlDatetime(wire);

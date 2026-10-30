@@ -189,3 +189,11 @@ export function storedWithinPrecision(
     stored,
   );
 }
+
+/** Wire text with its fraction cut to the digits a column with `params` holds: MySQL rounds a value to its column, which could carry it to the next second, day or past the column's range. */
+export function roundedDownToPrecision(text: string, params: DataTypeParams): string {
+  const precision = precisionOf(params);
+  return text.replace(/\.(\d+)$/, (_fraction, digits: string) =>
+    precision === 0 ? '' : `.${digits.slice(0, precision)}`,
+  );
+}

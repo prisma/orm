@@ -1,5 +1,5 @@
 /**
- * The codecs of MySQL's date and time types other than `mysql/datetime@1`. Every instant is read and written in UTC, which every session runs in. A string codec reads the ISO 8601 text of its value with no trailing zeros in the fraction, as PostgreSQL's do; a `Temporal` codec reads `Temporal.Instant`, `Temporal.PlainDate` or `Temporal.PlainTime`. A write of a value MySQL does not hold, such as a date before the year 1000 or a `time` past 23:59:59.999999, is refused. A read takes what MySQL returns in any year; only the `time` codecs refuse a row, one that is no time of day. ADR 315.
+ * The codecs of MySQL's date and time types other than `mysql/datetime@1`. Every instant is read and written in UTC, which every session runs in. A string codec reads the ISO 8601 text of its value with no trailing zeros in the fraction, as PostgreSQL's do; a `Temporal` codec reads `Temporal.Instant`, `Temporal.PlainDate` or `Temporal.PlainTime`. A write of a value MySQL does not hold, such as a date before the year 1000 or a `time` past 23:59:59.999999, is refused. A write rounds a value down to its column's precision, so MySQL never rounds it up. A read takes what MySQL returns in any year; only the `time` codecs refuse a row, one that is no time of day. ADR 315.
  */
 
 import type { JsonValue } from '@internal/contract/types';
@@ -44,6 +44,7 @@ import {
 import {
   dateOfWireText,
   mysqlWireText,
+  roundedDownToPrecision,
   type StoredText,
   storedTextForWrite,
   storedTextFromWire,
@@ -105,7 +106,10 @@ export class MysqlTimestampDateCodec extends CodecImpl<
   Date
 > {
   async toWire(value: Date, _ctx: CodecCallContext): Promise<string> {
-    return wireTextOfDate(this.id, value, mysqlTimestampText);
+    return roundedDownToPrecision(
+      wireTextOfDate(this.id, value, mysqlTimestampText),
+      this.dataTypeParams,
+    );
   }
   async fromWire(wire: string, _ctx: CodecCallContext): Promise<Date> {
     return dateOfWireText(this.id, wire);
@@ -151,7 +155,7 @@ export class MysqlDatetimeTemporalCodec extends CodecImpl<
   Temporal.Instant
 > {
   async toWire(value: Temporal.Instant, _ctx: CodecCallContext): Promise<string> {
-    return mysqlWireText(this.stored(value));
+    return roundedDownToPrecision(mysqlWireText(this.stored(value)), this.dataTypeParams);
   }
   async fromWire(wire: string, _ctx: CodecCallContext): Promise<Temporal.Instant> {
     return instantOf(DATETIME_TEMPORAL, storedTextFromWire(this.id, wire, datetimeRow));
@@ -195,7 +199,7 @@ export class MysqlTimestampTemporalCodec extends CodecImpl<
   Temporal.Instant
 > {
   async toWire(value: Temporal.Instant, _ctx: CodecCallContext): Promise<string> {
-    return mysqlWireText(this.stored(value));
+    return roundedDownToPrecision(mysqlWireText(this.stored(value)), this.dataTypeParams);
   }
   async fromWire(wire: string, _ctx: CodecCallContext): Promise<Temporal.Instant> {
     return instantOf(TIMESTAMP_TEMPORAL, storedTextFromWire(this.id, wire, timestampRow));
@@ -244,7 +248,10 @@ export class MysqlDatetimeStringCodec extends CodecImpl<
   string
 > {
   async toWire(value: string, _ctx: CodecCallContext): Promise<string> {
-    return mysqlWireText(storedTextForWrite(this.id, value, instantIn(this.id, mysqlDatetimeText)));
+    return roundedDownToPrecision(
+      mysqlWireText(storedTextForWrite(this.id, value, instantIn(this.id, mysqlDatetimeText))),
+      this.dataTypeParams,
+    );
   }
   async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
     return `${storedTextFromWire(this.id, wire, datetimeRow)}Z`;
@@ -285,8 +292,9 @@ export class MysqlTimestampStringCodec extends CodecImpl<
   string
 > {
   async toWire(value: string, _ctx: CodecCallContext): Promise<string> {
-    return mysqlWireText(
-      storedTextForWrite(this.id, value, instantIn(this.id, mysqlTimestampText)),
+    return roundedDownToPrecision(
+      mysqlWireText(storedTextForWrite(this.id, value, instantIn(this.id, mysqlTimestampText))),
+      this.dataTypeParams,
     );
   }
   async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
@@ -408,7 +416,10 @@ export class MysqlTimeStringCodec extends CodecImpl<
   string
 > {
   async toWire(value: string, _ctx: CodecCallContext): Promise<string> {
-    return storedTextForWrite(this.id, value, mysqlTimeText);
+    return roundedDownToPrecision(
+      storedTextForWrite(this.id, value, mysqlTimeText),
+      this.dataTypeParams,
+    );
   }
   async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
     return storedTextFromWire(this.id, wire, mysqlTimeText);
@@ -447,7 +458,10 @@ export class MysqlTimeTemporalCodec extends CodecImpl<
   Temporal.PlainTime
 > {
   async toWire(value: Temporal.PlainTime, _ctx: CodecCallContext): Promise<string> {
-    return storedTextOfTemporal(TIME_TEMPORAL, value, mysqlTimeText);
+    return roundedDownToPrecision(
+      storedTextOfTemporal(TIME_TEMPORAL, value, mysqlTimeText),
+      this.dataTypeParams,
+    );
   }
   async fromWire(wire: string, _ctx: CodecCallContext): Promise<Temporal.PlainTime> {
     return this.plainTimeOf(storedTextFromWire(this.id, wire, mysqlTimeText));
