@@ -244,8 +244,8 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
           expect({ before, on, off }).toEqual({
             before: { ...exact, mode: { nbe: '0' } },
             on: expect.objectContaining({
-              code: 'RUNTIME.PARAM_PLACEHOLDER_MISMATCH',
-              meta: { reason: 'no-backslash-escapes', params: 1 },
+              code: 'RUNTIME.SQL_MODE_UNSUPPORTED',
+              meta: { sqlMode: 'NO_BACKSLASH_ESCAPES', params: 1 },
             }),
             off: { ...exact, mode: { nbe: '0' } },
           });
@@ -273,9 +273,9 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
           const [withoutValues] = await collect(connection.query({ sql: "SELECT 'a\\' AS p" }));
           expect({ injected, withoutValues }).toEqual({
             injected: expect.objectContaining({
-              code: 'RUNTIME.PARAM_PLACEHOLDER_MISMATCH',
+              code: 'RUNTIME.SQL_MODE_UNSUPPORTED',
               message: expect.stringContaining('NO_BACKSLASH_ESCAPES'),
-              meta: { reason: 'no-backslash-escapes', params: 1 },
+              meta: { sqlMode: 'NO_BACKSLASH_ESCAPES', params: 1 },
             }),
             withoutValues: { p: 'a\\' },
           });

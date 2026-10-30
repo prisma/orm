@@ -33,8 +33,8 @@ describe('MysqlControlDriver', () => {
     const driver = new MysqlControlDriver(connection as unknown as Connection);
 
     await expect(driver.query('SELECT ? AS v', ['x'])).rejects.toMatchObject({
-      code: 'RUNTIME.PARAM_PLACEHOLDER_MISMATCH',
-      meta: { reason: 'no-backslash-escapes', params: 1 },
+      code: 'RUNTIME.SQL_MODE_UNSUPPORTED',
+      meta: { sqlMode: 'NO_BACKSLASH_ESCAPES', params: 1 },
     });
     expect({ refused: connection.queries, ran: await driver.query('SELECT 1') }).toEqual({
       refused: 0,

@@ -14,7 +14,8 @@ export type MysqlTargetErrorCode =
   | 'RUNTIME.AST_INVALID'
   | 'RUNTIME.AST_UNSUPPORTED'
   | 'RUNTIME.DECODE_FAILED'
-  | 'RUNTIME.ENCODE_FAILED';
+  | 'RUNTIME.ENCODE_FAILED'
+  | 'RUNTIME.SQL_MODE_UNSUPPORTED';
 
 export function mysqlError(
   code: MysqlTargetErrorCode,

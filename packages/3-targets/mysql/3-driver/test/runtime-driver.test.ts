@@ -371,9 +371,9 @@ describe('MySQL runtime driver and its pool', () => {
     connection.info.status = NO_BACKSLASH_ESCAPES;
     const driver = await connected(streaming);
     const refusal = {
-      code: 'RUNTIME.PARAM_PLACEHOLDER_MISMATCH',
+      code: 'RUNTIME.SQL_MODE_UNSUPPORTED',
       message: expect.stringContaining('NO_BACKSLASH_ESCAPES'),
-      meta: { reason: 'no-backslash-escapes', params: 1 },
+      meta: { sqlMode: 'NO_BACKSLASH_ESCAPES', params: 1 },
     };
     await expect(driver.execute(valued)).rejects.toMatchObject(refusal);
     await expect(collect(driver.query(valued))).rejects.toMatchObject(refusal);
