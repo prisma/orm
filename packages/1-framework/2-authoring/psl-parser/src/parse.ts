@@ -87,7 +87,9 @@ export class Cursor {
       const token = this.#tokenizer.peek(rawIndex);
       if (token.kind === 'Eof') return newline;
       if (TRIVIA_KINDS.has(token.kind)) {
-        if (token.kind === 'Newline') newline = true;
+        if (token.kind === 'Newline' || (token.kind === 'Comment' && /[\r\n]/.test(token.text))) {
+          newline = true;
+        }
         rawIndex++;
         continue;
       }
