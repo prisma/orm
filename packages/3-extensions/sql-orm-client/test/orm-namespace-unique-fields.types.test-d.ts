@@ -287,3 +287,40 @@ test('each User facet rejects the unique field of the other namespace in create/
   // @ts-expect-error `token` belongs to auth.User, not public.User
   writeDb.public.User.where({ token: 'tok' });
 });
+
+test('each User facet resolves select/distinct/cursor/conflictOn fields within its own namespace', () => {
+  expectTypeOf(writeDb.public.User.select('email').all()).resolves.items.toEqualTypeOf<{
+    email: string;
+  }>();
+  expectTypeOf(writeDb.auth.User.select('token').all()).resolves.items.toEqualTypeOf<{
+    token: string;
+  }>();
+  expectTypeOf(writeDb.auth.User.select('id').all()).resolves.items.toEqualTypeOf<{
+    id: number;
+  }>();
+  writeDb.auth.User.distinct('token');
+  writeDb.auth.User.orderBy((user) => user.token.asc()).distinctOn('token');
+  writeDb.auth.User.orderBy((user) => user.token.asc()).cursor({ token: 'tok' });
+  writeDb.auth.User.createAll([{ token: 'tok' }], { onConflict: 'skip', conflictOn: ['token'] });
+});
+
+test('the auth-namespace User facet resolves upsert update input to its own field `token`', async () => {
+  await writeDb.auth.User.upsert({ create: { token: 'tok' }, update: { token: 'tok-2' } });
+});
+
+test('each User facet resolves upsert conflictOn and whereUnique within its own namespace', async () => {
+  await writeDb.auth.User.upsert({
+    create: { token: 'tok' },
+    update: {},
+    conflictOn: { token: 'tok' },
+  });
+  await writeDb.auth.User.upsert({
+    create: { token: 'tok' },
+    update: {},
+    // @ts-expect-error `email` belongs to public.User, not auth.User
+    conflictOn: { email: 'a@example.com' },
+  });
+  writeDb.auth.User.whereUnique({ token: 'tok' });
+  // @ts-expect-error `email` belongs to public.User, not auth.User
+  writeDb.auth.User.whereUnique({ email: 'a@example.com' });
+});

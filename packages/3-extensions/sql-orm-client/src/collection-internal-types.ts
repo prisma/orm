@@ -47,7 +47,8 @@ export type IncludedRelationsForRow<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   Row,
-> = Omit<Row, keyof DefaultModelRow<TContract, ModelName>>;
+  NsId extends string = never,
+> = Omit<Row, keyof DefaultModelRow<TContract, ModelName, NsId>>;
 
 export type IncludeRefinementTerminals =
   | 'all'
