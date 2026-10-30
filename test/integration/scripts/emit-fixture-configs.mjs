@@ -27,6 +27,7 @@ const fixtureRoots = [
   'test/mongo/bson-scalars',
   'test/mongo/list-filters',
   'test/mongo/temporal-generators',
+  'test/mongo/convenience-date-time-types',
   'test/mongo/prisma6-source',
   'test/mongo/recursive-value-objects',
   'test/value-objects/fixtures',
