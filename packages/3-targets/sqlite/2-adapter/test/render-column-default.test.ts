@@ -109,13 +109,14 @@ describe('the DEFAULT clause the SQLite adapter writes in every DDL statement', 
     ['sqlite/json@1', 'sqlite/json', 'TEXT'],
     ['sqlite/blob@1', 'sqlite/blob', 'BLOB'],
   ])(
-    'refuses now() on %s, whose data type holds no current date or time, with CONTRACT.DEFAULT_INVALID',
+    'refuses now() on %s, whose data type stores no date or time, with CONTRACT.DEFAULT_INVALID',
     async (codecId, dataType, typeSql) => {
       await expect(
         render(col('c', typeSql, { default: fn('now()'), codecRef: { codecId } })),
       ).rejects.toMatchObject({
         code: 'CONTRACT.DEFAULT_INVALID',
-        meta: { table: 't', column: 'c', dataType },
+        message: `The column "t"."c" has a now() default, but its data type ${dataType} stores no date or time, so there is no current value to write. Remove the default, or give the field a date or time type.`,
+        meta: { table: 't', column: 'c', dataType, reason: 'now-default-not-date-or-time' },
       });
     },
   );

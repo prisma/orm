@@ -172,7 +172,7 @@ describe('the expression a now() default is written as', () => {
   });
 
   it.each(['sqlite/duration', 'sqlite/integer', 'sqlite/real', 'sqlite/blob', 'sqlite/json'])(
-    'does not exist on %s, which holds no current date or time',
+    'does not exist on %s, which stores no date or time',
     (dataTypeId) => {
       expect(sqliteNowExpressionFor(dataTypeId)).toBeUndefined();
     },

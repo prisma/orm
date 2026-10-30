@@ -869,8 +869,15 @@ async function sqliteRenderDdlColumnDefault(
       if (now === undefined) {
         throw structuredError(
           'CONTRACT.DEFAULT_INVALID',
-          `The column "${where.table}"."${where.column}" has a now() default, but its data type ${dataType} holds no current date or time. Remove the default, or give the field a date or time type.`,
-          { meta: { table: where.table, column: where.column, dataType } },
+          `The column "${where.table}"."${where.column}" has a now() default, but its data type ${dataType} stores no date or time, so there is no current value to write. Remove the default, or give the field a date or time type.`,
+          {
+            meta: {
+              table: where.table,
+              column: where.column,
+              dataType,
+              reason: 'now-default-not-date-or-time',
+            },
+          },
         );
       }
       return `DEFAULT (${now})`;
