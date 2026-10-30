@@ -291,3 +291,9 @@ The refusals for a column that holds a value object through a dictionary say the
 **Found:** slice 3b PR 4 manual QA (F9), dispatch 30 (2026-10-30).
 
 When rows hold an enum value `db update` removes from a member that takes no null, and no migration on disk ends at the database's contract, the advice says to change the stored value in the database by hand, with no query. Inside a list this needs `jsonb_agg` over `jsonb_array_elements` on Postgres, or `json_group_array` over `json_each` on SQLite. The by-hand route through `migration plan --from <hash>`, which writes `replaceStoredValue` with a path, needs that contract. The advice to add a new member and `--rename` to it works inside lists too.
+
+## Question for Will: a migration package does not record unfilled placeholders
+
+**Found:** slice 3b PR 4 review round 3, dispatch 31 (2026-10-30).
+
+`migration plan` knows when a migration it writes has unfilled placeholders, but it writes `ops.json` as `[]`, the same as a migration with no operations. So `db migrate` must read the code of `migration.ts` to find a call of `placeholder`, and it cannot find one made from a helper file that `migration.ts` imports. Recording the unfilled state in the package needs a new field on `MigrationMetadata` (`packages/1-framework/3-tooling/migration`), which changes the on-disk format and the migration hash, so this PR does not do it. `migration new` has the same gap: its `ops.json` is `[]` until the user runs `node migration.ts`, so a migration the user forgot to emit is applied as zero operations. Recommendation: add the field in its own change, so both commands write it and `db migrate` refuses on it instead of reading `migration.ts`.
