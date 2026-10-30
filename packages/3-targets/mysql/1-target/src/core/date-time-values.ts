@@ -190,9 +190,10 @@ export function storedWithinPrecision(
   );
 }
 
-/** Wire text with its fraction cut to the digits a column with `params` holds: MySQL rounds a value to its column, which could carry it to the next second, day or past the column's range. */
+/** Wire text with its fraction cut to the digits the column's `precision` holds: MySQL rounds a value to its column, which could carry it to the next second, day or past the column's range. A codec reference that names no precision, as a raw parameter writes, describes no column, so its value is written whole. */
 export function roundedDownToPrecision(text: string, params: DataTypeParams): string {
-  const precision = precisionOf(params);
+  const precision = params['precision'];
+  if (typeof precision !== 'number') return text;
   return text.replace(/\.(\d+)$/, (_fraction, digits: string) =>
     precision === 0 ? '' : `.${digits.slice(0, precision)}`,
   );

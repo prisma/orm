@@ -161,7 +161,7 @@ describe('the MySQL date and time codecs', () => {
       ],
       [
         'DatetimeString',
-        {},
+        { precision: 0 },
         mysqlDatetimeStringDescriptor,
         '2024-01-01T00:00:00.9Z',
         '2024-01-01 00:00:00',
@@ -197,7 +197,7 @@ describe('the MySQL date and time codecs', () => {
       ['TimeString', { precision: 0 }, mysqlTimeStringDescriptor, '23:59:59.6', '23:59:59'],
       [
         'TimeTemporal',
-        {},
+        { precision: 0 },
         mysqlTimeTemporalDescriptor,
         Temporal.PlainTime.from('23:59:59.6'),
         '23:59:59',
@@ -205,6 +205,15 @@ describe('the MySQL date and time codecs', () => {
     ] as const)('%s with %j', async (_name, params, descriptor, value, wire) => {
       const codec = descriptor.factory(params)(instance);
       expect(await codec.toWire(value as never, ctx)).toBe(wire);
+    });
+
+    it('write a value whole when the codec reference names no precision, as a raw parameter does', async () => {
+      expect([
+        await mysqlDatetimeDescriptor
+          .factory({})(instance)
+          .toWire(new Date('2024-01-01T00:00:00.678Z'), ctx),
+        await mysqlTimeStringDescriptor.factory({})(instance).toWire('09:30:00.25', ctx),
+      ]).toEqual(['2024-01-01 00:00:00.678', '09:30:00.25']);
     });
   });
 
