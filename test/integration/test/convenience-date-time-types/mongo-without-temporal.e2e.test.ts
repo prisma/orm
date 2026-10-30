@@ -1,5 +1,5 @@
 /**
- * Journey: a MongoDB schema written with the convenience date and time types, run with no global `Temporal`. `contract emit`, `db init` and `db verify` run as child processes with no `Temporal`, through the fallback the MongoDB target's control entry sets. An application with no `Temporal` then writes and reads the default types: `DateTime` reads a JavaScript `Date`, and `Date`, `Time` and `Duration` read strings. The client generates `now()` values for them in that process, and no process gains a global `Temporal`. Reading a Temporal type in that application raises `RUNTIME.TEMPORAL_UNAVAILABLE`.
+ * Journey: a MongoDB schema written with the convenience date and time types, run with no global `Temporal`. `contract emit`, `db init` and `db verify` run as child processes with no `Temporal`, through the fallback the MongoDB target's control entry sets. An application with no `Temporal` then writes and reads the default types: `DateTime` reads a JavaScript `Date`, and `Date`, `Time` and `Duration` read strings. The client generates `now()` values for them in that process, and no process gains a global `Temporal`. Reading a Temporal type in that application raises `RUNTIME.TEMPORAL_UNAVAILABLE`, and reading a calendar date stored at another time than midnight UTC raises `RUNTIME.DECODE_FAILED`, naming the field.
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
@@ -72,6 +72,17 @@ try {
       temporalRead = error.code;
     }
     process.stdout.write(JSON.stringify({ temporalRead }));
+    process.exit(0);
+  }
+  if (process.env.JOURNEY_STEP === 'read-calendar') {
+    let calendarRead;
+    try {
+      await events.where({ label: 'b' }).first();
+      calendarRead = 'read';
+    } catch (error) {
+      calendarRead = { code: error.code, message: error.message };
+    }
+    process.stdout.write(JSON.stringify({ calendarRead }));
     process.exit(0);
   }
   await events.create({
@@ -158,13 +169,28 @@ describe('Journey: the MongoDB convenience date and time types in processes with
 
     const client = new MongoClient(dbUrl);
     try {
-      await client
-        .db()
-        .collection('events')
-        .updateOne({ label: 'a' }, { $set: { settledAt: new Date('2024-02-29T10:00:00.000Z') } });
+      const collection = client.db().collection('events');
+      const { _id: _ignored, ...written } = (await collection.findOne({ label: 'a' })) ?? {};
+      await collection.insertOne({
+        ...written,
+        label: 'b',
+        day: new Date('2024-02-29T09:30:00.000Z'),
+      });
+      await collection.updateOne(
+        { label: 'a' },
+        { $set: { settledAt: new Date('2024-02-29T10:00:00.000Z') } },
+      );
     } finally {
       await client.close();
     }
+    const readCalendar = await runNodeWithoutTemporal([script], {
+      cwd: testDir,
+      env: { JOURNEY_DB_URL: dbUrl, JOURNEY_STEP: 'read-calendar' },
+    });
+    expect(readCalendar, childOutput(readCalendar)).toMatchObject({
+      exitCode: 0,
+      ...NO_GLOBAL_TEMPORAL,
+    });
     const readTemporal = await runNodeWithoutTemporal([script], {
       cwd: testDir,
       env: { JOURNEY_DB_URL: dbUrl, JOURNEY_STEP: 'read-temporal' },
@@ -176,7 +202,8 @@ describe('Journey: the MongoDB convenience date and time types in processes with
 
     const { row } = JSON.parse(run.stdout);
     const { temporalRead } = JSON.parse(readTemporal.stdout);
-    expect({ row, temporalRead }).toEqual({
+    const { calendarRead } = JSON.parse(readCalendar.stdout);
+    expect({ row, temporalRead, calendarRead }).toEqual({
       row: {
         label: { kind: 'string', value: 'a' },
         at: { kind: 'Date', value: '2024-02-29T10:00:00.123Z' },
@@ -189,6 +216,12 @@ describe('Journey: the MongoDB convenience date and time types in processes with
         updatedAt: { kind: 'Date', value: expect.any(String) },
       },
       temporalRead: 'RUNTIME.TEMPORAL_UNAVAILABLE',
+      calendarRead: {
+        code: 'RUNTIME.DECODE_FAILED',
+        message: expect.stringMatching(
+          /^Failed to decode field day of the document with _id \w+ in collection 'events' with codec 'mongo\/date-string@1': Codec 'mongo\/date-string@1' cannot read 2024-02-29T09:30:00.000Z: a calendar date is stored as a BSON date at midnight UTC\./,
+        ),
+      },
     });
     const updatedAt = new Date(row.updatedAt.value).getTime();
     expect(updatedAt).toBeGreaterThanOrEqual(before);
