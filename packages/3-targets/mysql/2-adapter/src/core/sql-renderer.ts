@@ -155,7 +155,7 @@ function renderInsertValue(value: InsertValue | undefined, ctx: RenderContext): 
 }
 
 /**
- * An insert, with the bare table name: MySQL's `INSERT` takes no alias, so a column of the table is qualified by its name. A row without a value for a column gets `DEFAULT`. An upsert names its proposed row `new` and updates the existing row on any duplicate key: MySQL cannot limit `ON DUPLICATE KEY UPDATE` to the conflict columns the AST names, which is why the adapter does not report `insertOnConflictTarget`. Skipping a conflicting row is refused: `INSERT IGNORE` also hides foreign-key and `NOT NULL` errors.
+ * An insert, with the bare table name: MySQL's `INSERT` takes no alias, so a column of the table is qualified by its name. A row without a value for a column gets `DEFAULT`. An upsert names its proposed row `new` and updates the existing row on any duplicate key. MySQL cannot limit `ON DUPLICATE KEY UPDATE` to named conflict columns, so the adapter does not report `insertOnConflictTarget` and an upsert that names them is refused. Skipping a conflicting row is refused: `INSERT IGNORE` also hides foreign-key and `NOT NULL` errors.
  */
 function renderInsert(ast: InsertAst, ctx: RenderContext): string {
   refuseReturning(ast.returning, 'an insert');
@@ -182,6 +182,12 @@ function renderInsert(ast: InsertAst, ctx: RenderContext): string {
         'MySQL cannot skip a conflicting row without also hiding other errors: INSERT IGNORE turns foreign-key and NOT NULL errors into warnings',
       );
     case 'do-update-set': {
+      if (conflict.columns.length > 0) {
+        throw unsupported(
+          'insert-on-conflict-target',
+          'MySQL cannot limit ON DUPLICATE KEY UPDATE to named conflict columns: it fires on any unique key',
+        );
+      }
       const assignments = Object.entries(action.set);
       if (assignments.length === 0) {
         throw invalid('insert-on-conflict', 'An upsert requires at least one column to update');

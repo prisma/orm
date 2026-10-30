@@ -554,11 +554,11 @@ describe('MySQL lowering of writes', () => {
     );
   });
 
-  it('writes an upsert as an insert whose row is named new, updating the row on a duplicate key', () => {
+  it('writes an upsert with no conflict columns as an insert whose row is named new, updating the row on a duplicate key', () => {
     expect(
       lower(
         insertUser.withOnConflict(
-          InsertOnConflict.on([email]).doUpdateSet({ role: ParamRef.of('ADMIN') }),
+          InsertOnConflict.on([]).doUpdateSet({ role: ParamRef.of('ADMIN') }),
         ),
       ),
     ).toEqual({
@@ -577,7 +577,7 @@ describe('MySQL lowering of writes', () => {
         InsertAst.into(TableSource.named('user', 'u'))
           .withRows([{ email: ParamRef.of('a@b.c'), role: ParamRef.of('USER') }])
           .withOnConflict(
-            InsertOnConflict.on([ColumnRef.of('u', 'email')]).doUpdateSet({
+            InsertOnConflict.on([]).doUpdateSet({
               email: ColumnRef.of('excluded', 'email'),
               role: ColumnRef.of('u', 'role'),
             }),
@@ -614,7 +614,7 @@ describe('MySQL lowering of writes', () => {
     ['an update with nothing to set', UpdateAst.table(TableSource.named('user'))],
     [
       'an upsert with nothing to update',
-      insertUser.withOnConflict(InsertOnConflict.on([email]).doUpdateSet({})),
+      insertUser.withOnConflict(InsertOnConflict.on([]).doUpdateSet({})),
     ],
   ])('refuses %s with RUNTIME.AST_INVALID', (_name, ast) => {
     expect(() => sqlOf(ast)).toThrow(expect.objectContaining({ code: 'RUNTIME.AST_INVALID' }));
@@ -653,6 +653,12 @@ describe('MySQL lowering refusals', () => {
     [
       'an insert that skips a conflict on named columns',
       insertUser.withOnConflict(InsertOnConflict.on([email]).doNothing()),
+    ],
+    [
+      'an upsert that names its conflict columns, since ON DUPLICATE KEY UPDATE fires on any unique key',
+      insertUser.withOnConflict(
+        InsertOnConflict.on([email]).doUpdateSet({ role: ParamRef.of('ADMIN') }),
+      ),
     ],
   ])('refuses %s with RUNTIME.AST_UNSUPPORTED', (_name, ast) => {
     expect(() => sqlOf(ast)).toThrow(expect.objectContaining({ code: 'RUNTIME.AST_UNSUPPORTED' }));
