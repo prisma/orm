@@ -21,7 +21,8 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import { unfilledPlaceholderOperation } from '@internal/errors/migration';
+import { CliStructuredError } from '@internal/errors/control';
+import { errorUnfilledPlaceholder, unfilledPlaceholderOperation } from '@internal/errors/migration';
 import {
   checkSqlDefaultText,
   checkSqlExpressionText,
@@ -2793,6 +2794,31 @@ function requireFillValue(
 }
 
 /**
+ * The operation of a fill whose value is an unfilled placeholder: a promise that rejects with
+ * `MIGRATION.UNFILLED_PLACEHOLDER`, whose meta names the operation it stands for, so that a plan can
+ * list it before the user fills the value.
+ */
+function unfilledFillOperation(slot: string, standsFor: Op): Promise<never> {
+  const unfilled = errorUnfilledPlaceholder(slot);
+  const operation = Promise.reject(
+    new CliStructuredError(unfilled.code, unfilled.message, {
+      ...ifDefined('why', unfilled.why),
+      ...ifDefined('fix', unfilled.fix),
+      meta: {
+        slot,
+        operation: {
+          id: standsFor.id,
+          label: standsFor.label,
+          operationClass: standsFor.operationClass,
+        },
+      },
+    }),
+  );
+  operation.catch(() => undefined);
+  return operation;
+}
+
+/**
  * Sets the key at the end of a JSON path to a value, in every object of a column the path reaches that lacks it or holds JSON `null` there. An unfilled value is a placeholder the user fills in `migration.ts`; until then the call lowers to no operation.
  */
 export class FillStoredKeyCall extends PostgresOpFactoryCallNode {
@@ -2832,7 +2858,10 @@ export class FillStoredKeyCall extends PostgresOpFactoryCallNode {
 
   toOp(): Op | Promise<Op> {
     if (this.value instanceof UnfilledValue) {
-      return unfilledPlaceholderOperation(this.value.slot);
+      return unfilledFillOperation(
+        this.value.slot,
+        fillStoredKey(this.schemaName, this.tableName, this.columnName, this.path, 'null'),
+      );
     }
     return fillStoredKey(
       this.schemaName,

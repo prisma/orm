@@ -245,7 +245,14 @@ describe('fillStoredKey', () => {
     ]);
     await expect(call.toOp()).rejects.toMatchObject({
       code: 'MIGRATION.UNFILLED_PLACEHOLDER',
-      meta: { slot: 'GeoPoint.country:value' },
+      meta: {
+        slot: 'GeoPoint.country:value',
+        operation: {
+          id: 'fillStoredKey.place.point.$.country',
+          label: 'Fill key "country" at path "$" in column "point" of "place"',
+          operationClass: 'widening',
+        },
+      },
     });
   });
 });

@@ -126,6 +126,17 @@ withTempDir(({ createTempDir }) => {
         expect(parseJsonOutput<{ pendingPlaceholders?: boolean }>(planned)).toMatchObject({
           pendingPlaceholders: true,
         });
+        expect(
+          parseJsonOutput<{ operations: readonly { label: string }[] }>(planned).operations.map(
+            ({ label }) => label,
+          ),
+          'B1.05: the plan lists the fills',
+        ).toEqual(
+          expect.arrayContaining([
+            'Fill key "country" at path "$" in column "address" of "user"',
+            'Fill key "country" at path "$[*]" in column "previous" of "user"',
+          ]),
+        );
         const dir = join(ctx.testDir, 'migrations/app', latestMigrationDirName(ctx));
         const written = readFileSync(join(dir, 'migration.ts'), 'utf-8');
         const fills = [

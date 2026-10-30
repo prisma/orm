@@ -44,7 +44,7 @@ describe('withEditsAsWritten', () => {
   });
 
   it('leaves facts without stored values as they are', async () => {
-    const facts = { failedPrecheck: undefined };
+    const facts = {};
     expect(await withEditsAsWritten(facts)).toBe(facts);
   });
 });
