@@ -399,15 +399,20 @@ describe('MySQL runtime driver and its pool', () => {
     });
   });
 
-  it('reports the id MySQL generated for an insert, and leaves it out when MySQL reports none', async () => {
+  it('reports the insert id of a statement that changed one row, as decimal text, and none otherwise', async () => {
     const driver = await connected();
-    connection.result = { affectedRows: 1, insertId: 7n };
-    const inserted = await driver.execute({ sql: 'INSERT INTO t (n) VALUES (?1)', params: [1] });
-    connection.result = { affectedRows: 2, insertId: 0n };
-    const updated = await driver.execute({ sql: 'UPDATE t SET n = ?1', params: [2] });
-    expect({ inserted, updated }).toEqual({
-      inserted: { affectedRows: 1, lastInsertId: 7n },
-      updated: { affectedRows: 2 },
+    const resultOf = async (result: object) => {
+      connection.result = result;
+      return driver.execute({ sql: 'INSERT INTO t (n) VALUES (?1)', params: [1] });
+    };
+    expect({
+      inserted: await resultOf({ affectedRows: 1, insertId: 18446744073709551615n }),
+      none: await resultOf({ affectedRows: 1, insertId: 0n }),
+      several: await resultOf({ affectedRows: 2, insertId: 7n }),
+    }).toEqual({
+      inserted: { affectedRows: 1, insertId: '18446744073709551615' },
+      none: { affectedRows: 1 },
+      several: { affectedRows: 2 },
     });
   });
 

@@ -60,14 +60,16 @@ function startStream(
   }
 }
 
-/** What a statement's result reports: the rows it changed, and the id MySQL generated for the first row it inserted. MySQL reports 0 when it generated none. */
+/** What a statement's result reports: the rows it changed, and, when it changed one row, the value MySQL numbered for it. MySQL reports 0 when it numbered none. */
 function statementStats(result: unknown): SqlStatementStats {
   if (typeof result !== 'object' || result === null) return { affectedRows: 0 };
   const affectedRows =
     'affectedRows' in result && typeof result.affectedRows === 'number' ? result.affectedRows : 0;
   const insertId = 'insertId' in result ? result.insertId : undefined;
-  return typeof insertId === 'bigint' && insertId > 0n
-    ? { affectedRows, lastInsertId: insertId }
+  return affectedRows === 1 &&
+    (typeof insertId === 'bigint' || typeof insertId === 'number') &&
+    insertId > 0
+    ? { affectedRows, insertId: String(insertId) }
     : { affectedRows };
 }
 

@@ -23,8 +23,10 @@ export interface PreparedExecuteRequest extends SqlExecuteRequest {
 
 export interface SqlStatementStats {
   readonly affectedRows: number;
-  /** The id the database generated for the first row the statement inserted. A driver whose database reports none leaves it out. */
-  readonly lastInsertId?: bigint;
+  /**
+   * The value the database numbered automatically (an auto-increment column, or SQLite's rowid) for the one row the statement changed, as decimal text. A driver sets it only when the statement changed exactly one row and the database reported a value; it names the inserted row only after a one-row insert. A middleware that answers the statement in place of the database may leave it out, or supplies it as a claim that a row with that value exists.
+   */
+  readonly insertId?: string;
 }
 
 export interface SqlExplainResult<Row = Record<string, unknown>> {
