@@ -6,7 +6,8 @@ export type JsonLeaf = (value: string, depth: number) => string;
 
 /**
  * A column read as `jsonb`, so a `json` column takes the same path operations. A rewrite assigned
- * back to a `json` column is cast to `json` by the assignment.
+ * back to a `json` column is cast to `json` by the assignment, so each row it rewrites is stored in
+ * `jsonb` form: key order and spacing change, and duplicate keys collapse to the last one.
  */
 export function asJsonb(column: string): string {
   return `(${column}::jsonb)`;
