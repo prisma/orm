@@ -10,6 +10,7 @@ export default defineConfig({
     'mysql-database': 'src/mysql-database.ts',
     'operation-descriptors': 'src/operation-descriptors.ts',
     'semantic-lines': 'src/semantic-lines.ts',
+    'temporal-fallback-entries': 'src/temporal-fallback-entries.ts',
     timeouts: 'src/timeouts.ts',
     'typed-expectations': 'src/typed-expectations.ts',
   },

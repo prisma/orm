@@ -5774,6 +5774,9 @@ importers:
       '@internal/target-postgres':
         specifier: workspace:8.0.0-rc.21
         version: link:../../../3-targets/postgres/1-target
+      '@repo/test-utils':
+        specifier: workspace:8.0.0-rc.21
+        version: link:../../../../test/utils
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.21
         version: link:../../../0-config/tsconfig
@@ -5826,6 +5829,9 @@ importers:
       '@internal/target-sqlite':
         specifier: workspace:8.0.0-rc.21
         version: link:../../../3-targets/sqlite/1-target
+      '@repo/test-utils':
+        specifier: workspace:8.0.0-rc.21
+        version: link:../../../../test/utils
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.21
         version: link:../../../0-config/tsconfig

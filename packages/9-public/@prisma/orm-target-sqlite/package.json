@@ -27,6 +27,7 @@
     "@internal/adapter-sqlite": "workspace:8.0.0-rc.21",
     "@internal/driver-sqlite": "workspace:8.0.0-rc.21",
     "@internal/target-sqlite": "workspace:8.0.0-rc.21",
+    "@repo/test-utils": "workspace:8.0.0-rc.21",
     "@repo/tsconfig": "workspace:8.0.0-rc.21",
     "@repo/tsdown": "workspace:8.0.0-rc.21",
     "tsdown": "catalog:",

@@ -33,6 +33,7 @@
     "@internal/adapter-postgres": "workspace:8.0.0-rc.21",
     "@internal/driver-postgres": "workspace:8.0.0-rc.21",
     "@internal/target-postgres": "workspace:8.0.0-rc.21",
+    "@repo/test-utils": "workspace:8.0.0-rc.21",
     "@repo/tsconfig": "workspace:8.0.0-rc.21",
     "@repo/tsdown": "workspace:8.0.0-rc.21",
     "tsdown": "catalog:",
