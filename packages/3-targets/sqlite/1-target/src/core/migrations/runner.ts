@@ -151,7 +151,11 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
     const incomingInvariants = options.plan.providedInvariants;
     const existingInvariants = new Set(existingMarker?.invariants ?? []);
     const incomingIsSubsetOfExisting = incomingInvariants.every((id) => existingInvariants.has(id));
-    const isSelfEdgeNoOp = isSelfEdge && operationsExecuted === 0 && incomingIsSubsetOfExisting;
+    const isSelfEdgeNoOp =
+      isSelfEdge &&
+      operationsExecuted === 0 &&
+      incomingIsSubsetOfExisting &&
+      options.databasePolicies === undefined;
 
     if (!isSelfEdgeNoOp) {
       const markerResult = await this.upsertMarker(driver, options, existingMarker, space);
@@ -831,6 +835,7 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
         options.destinationContract.profileHash ??
         options.plan.destination.storageHash,
       invariants: options.plan.providedInvariants ?? [],
+      ...ifDefined('databasePolicies', options.databasePolicies),
     };
     if (!existingMarker) {
       await this.family.initMarker({ driver, space, destination });

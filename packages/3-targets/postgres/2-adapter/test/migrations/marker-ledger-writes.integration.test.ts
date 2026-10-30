@@ -1,4 +1,5 @@
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
+import { type DatabasePolicies, DEFAULT_POLICIES } from '@internal/framework-components/control';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -15,6 +16,14 @@ const adapter: SqlControlAdapter<'postgres'> = createTestPostgresControlAdapter(
   createPostgresBuiltinCodecLookup(),
   createPostgresBuiltinDataTypeLookup(),
 );
+
+const MIGRATE_ONLY: DatabasePolicies = {
+  change: ['migrate'],
+  dataProtection: {
+    dataLoss: 'data-loss-forbidden',
+    accessWidening: 'access-widening-forbidden',
+  },
+};
 
 async function bootstrap(driver: PostgresControlDriver): Promise<void> {
   for (const ddl of adapter.bootstrapControlTableQueries()) {
@@ -143,6 +152,58 @@ describe('PostgresControlAdapter marker/ledger writes (end-to-end)', { concurren
     expect(matched).toBe(false);
     const marker = await adapter.readMarker(driver!, 'app');
     expect(marker!.storageHash).toBe('core');
+  });
+
+  it('initMarker records databasePolicies in meta.policies', { timeout: testTimeout }, async () => {
+    await adapter.initMarker(driver!, 'app', {
+      storageHash: 'core',
+      profileHash: 'prof',
+      databasePolicies: MIGRATE_ONLY,
+    });
+
+    expect((await adapter.readMarker(driver!, 'app'))!.meta).toEqual({ policies: MIGRATE_ONLY });
+  });
+
+  it('re-stamping and advancing without databasePolicies leave meta as it was', {
+    timeout: testTimeout,
+  }, async () => {
+    await adapter.initMarker(driver!, 'app', {
+      storageHash: 'core',
+      profileHash: 'prof',
+      databasePolicies: MIGRATE_ONLY,
+    });
+    await adapter.initMarker(driver!, 'app', { storageHash: 'core2', profileHash: 'prof' });
+    await adapter.updateMarker(driver!, 'app', 'core2', {
+      storageHash: 'core3',
+      profileHash: 'prof',
+      invariants: ['inv-a'],
+    });
+
+    const marker = await adapter.readMarker(driver!, 'app');
+    expect({ storageHash: marker!.storageHash, meta: marker!.meta }).toEqual({
+      storageHash: 'core3',
+      meta: { policies: MIGRATE_ONLY },
+    });
+  });
+
+  it('updateMarker replaces the recorded policies when given new ones', {
+    timeout: testTimeout,
+  }, async () => {
+    await adapter.initMarker(driver!, 'app', {
+      storageHash: 'core',
+      profileHash: 'prof',
+      databasePolicies: MIGRATE_ONLY,
+    });
+
+    await adapter.updateMarker(driver!, 'app', 'core', {
+      storageHash: 'next',
+      profileHash: 'prof',
+      databasePolicies: DEFAULT_POLICIES,
+    });
+
+    expect((await adapter.readMarker(driver!, 'app'))!.meta).toEqual({
+      policies: DEFAULT_POLICIES,
+    });
   });
 
   it('writeLedgerEntry appends a readable ledger row', { timeout: testTimeout }, async () => {

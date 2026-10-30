@@ -232,7 +232,10 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
     const existingInvariants = new Set(existingMarker?.invariants ?? []);
     const incomingIsSubsetOfExisting = incomingInvariants.every((id) => existingInvariants.has(id));
     const isSelfEdgeNoOp =
-      isSelfEdge && applyValue.operationsExecuted === 0 && incomingIsSubsetOfExisting;
+      isSelfEdge &&
+      applyValue.operationsExecuted === 0 &&
+      incomingIsSubsetOfExisting &&
+      options.databasePolicies === undefined;
 
     if (!isSelfEdgeNoOp) {
       const markerResult = await this.upsertMarker(driver, options, existingMarker, space);
@@ -834,6 +837,7 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
         options.destinationContract.profileHash ??
         options.plan.destination.storageHash,
       invariants: options.plan.providedInvariants ?? [],
+      ...ifDefined('databasePolicies', options.databasePolicies),
     };
     if (!existingMarker) {
       await this.family.initMarker({ driver, space, destination });

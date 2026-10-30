@@ -7,6 +7,7 @@ import type {
   ControlFamilyInstance,
   ControlStack,
   CoreSchemaView,
+  DatabasePolicies,
   DiffSubjectGranularity,
   MarkerHashes,
   MigrationPlanOperation,
@@ -287,6 +288,7 @@ export interface SqlControlFamilyInstance
       readonly storageHash: string;
       readonly profileHash: string;
       readonly invariants?: readonly string[];
+      readonly databasePolicies?: DatabasePolicies;
     };
   }): Promise<void>;
 
@@ -302,6 +304,7 @@ export interface SqlControlFamilyInstance
       readonly storageHash: string;
       readonly profileHash: string;
       readonly invariants?: readonly string[];
+      readonly databasePolicies?: DatabasePolicies;
     };
   }): Promise<boolean>;
 
@@ -896,6 +899,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
         readonly storageHash: string;
         readonly profileHash: string;
         readonly invariants?: readonly string[];
+        readonly databasePolicies?: DatabasePolicies;
       };
     }): Promise<void> {
       return getControlAdapter().initMarker(options.driver, options.space, options.destination);
@@ -908,6 +912,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
         readonly storageHash: string;
         readonly profileHash: string;
         readonly invariants?: readonly string[];
+        readonly databasePolicies?: DatabasePolicies;
       };
     }): Promise<boolean> {
       return getControlAdapter().updateMarker(

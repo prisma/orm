@@ -27,7 +27,11 @@ import {
   type DataType,
   type DataTypeLookup,
 } from '@internal/framework-components/codec';
-import { APP_SPACE_ID, type SchemaNodeRef } from '@internal/framework-components/control';
+import {
+  APP_SPACE_ID,
+  type DatabasePolicies,
+  type SchemaNodeRef,
+} from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ledgerOriginFromStored } from '@internal/migration-tools/ledger-origin';
 import { REFERENTIAL_ACTION_SQL } from '@internal/sql-contract/referential-action-sql';
@@ -485,8 +489,10 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       readonly storageHash: string;
       readonly profileHash: string;
       readonly invariants?: readonly string[];
+      readonly databasePolicies?: DatabasePolicies;
     },
   ): Promise<void> {
+    const meta = await this.metaWithPolicies(driver, space, destination.databasePolicies);
     await execute(
       (query) => this.lower(query, { contract: undefined }),
       driver,
@@ -499,7 +505,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
           canonical_version: null,
           updated_at: NOW,
           app_tag: null,
-          meta: {},
+          meta: meta ?? {},
           invariants: destination.invariants ?? [],
         })
         .onConflict(marker.space)
@@ -510,7 +516,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
           canonical_version: excluded.canonical_version,
           updated_at: NOW,
           app_tag: excluded.app_tag,
-          meta: excluded.meta,
+          ...ifDefined('meta', meta === undefined ? undefined : excluded.meta),
           invariants: excluded.invariants,
         }))
         .build(),
@@ -529,6 +535,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       readonly storageHash: string;
       readonly profileHash: string;
       readonly invariants?: readonly string[];
+      readonly databasePolicies?: DatabasePolicies;
     },
   ): Promise<boolean> {
     const currentInvariants =
@@ -539,6 +546,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       destination.invariants === undefined
         ? undefined
         : mergeInvariants(currentInvariants, destination.invariants);
+    const meta = await this.metaWithPolicies(driver, space, destination.databasePolicies);
 
     const query = marker
       .update()
@@ -546,7 +554,8 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
         core_hash: destination.storageHash,
         profile_hash: destination.profileHash,
         updated_at: NOW,
-        ...(mergedInvariants !== undefined ? { invariants: mergedInvariants } : {}),
+        ...ifDefined('invariants', mergedInvariants),
+        ...ifDefined('meta', meta),
       })
       .where(marker.space.eq(space).and(marker.core_hash.eq(expectedFrom)))
       .returning(marker.space)
@@ -554,6 +563,16 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
 
     const rows = await execute((q) => this.lower(q, { contract: undefined }), driver, query);
     return rows.length > 0;
+  }
+
+  private async metaWithPolicies(
+    driver: SqlControlDriverInstance<'postgres'>,
+    space: string,
+    policies: DatabasePolicies | undefined,
+  ): Promise<Record<string, unknown> | undefined> {
+    if (policies === undefined) return undefined;
+    const current = await this.readMarker(driver, space);
+    return { ...(current?.meta ?? {}), policies };
   }
 
   async withTransaction<T>(

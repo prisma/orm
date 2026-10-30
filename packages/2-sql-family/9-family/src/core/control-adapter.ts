@@ -1,5 +1,9 @@
 import type { ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
-import type { ControlAdapterInstance, ControlStack } from '@internal/framework-components/control';
+import type {
+  ControlAdapterInstance,
+  ControlStack,
+  DatabasePolicies,
+} from '@internal/framework-components/control';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import type {
   AnyQueryAst,
@@ -120,6 +124,7 @@ export interface SqlControlAdapter<TTarget extends string = string>
       readonly storageHash: string;
       readonly profileHash: string;
       readonly invariants?: readonly string[];
+      readonly databasePolicies?: DatabasePolicies;
     },
   ): Promise<void>;
 
@@ -138,6 +143,7 @@ export interface SqlControlAdapter<TTarget extends string = string>
       readonly storageHash: string;
       readonly profileHash: string;
       readonly invariants?: readonly string[];
+      readonly databasePolicies?: DatabasePolicies;
     },
   ): Promise<boolean>;
 

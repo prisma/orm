@@ -1,8 +1,17 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
+import { type DatabasePolicies, DEFAULT_POLICIES } from '@internal/framework-components/control';
 import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
 import { describe, expect, it } from 'vitest';
 import { createTestSqliteControlAdapter } from './helpers/test-control-adapter';
+
+const MIGRATE_ONLY: DatabasePolicies = {
+  change: ['migrate'],
+  dataProtection: {
+    dataLoss: 'data-loss-forbidden',
+    accessWidening: 'access-widening-forbidden',
+  },
+};
 
 interface CapturedCall {
   readonly sql: string;
@@ -79,7 +88,7 @@ describe('SqliteControlAdapter marker/ledger write lowering', () => {
         '"profile_hash" = excluded."profile_hash", "contract_json" = excluded."contract_json", ' +
         '"canonical_version" = excluded."canonical_version", ' +
         '"updated_at" = strftime(\'%Y-%m-%dT%H:%M:%fZ\',\'now\'), "app_tag" = excluded."app_tag", ' +
-        '"meta" = excluded."meta", "invariants" = excluded."invariants"',
+        '"invariants" = excluded."invariants"',
     );
     expect(params[0]).toBe('app');
     expect(params[1]).toBe('core');
@@ -192,6 +201,50 @@ describe('SqliteControlAdapter marker/ledger writes (end-to-end)', () => {
       marker = await adapter.readMarker(driver, 'app');
       expect(marker!.storageHash).toBe('core2');
       expect(marker!.invariants).toEqual(['inv-x']);
+    });
+  });
+
+  it('initMarker records databasePolicies, and later writes without them leave meta', async () => {
+    await withDb(async (driver) => {
+      await adapter.initMarker(driver, 'app', {
+        storageHash: 'core',
+        profileHash: 'prof',
+        databasePolicies: MIGRATE_ONLY,
+      });
+      expect((await adapter.readMarker(driver, 'app'))!.meta).toEqual({ policies: MIGRATE_ONLY });
+
+      await adapter.initMarker(driver, 'app', { storageHash: 'core2', profileHash: 'prof' });
+      await adapter.updateMarker(driver, 'app', 'core2', {
+        storageHash: 'core3',
+        profileHash: 'prof',
+        invariants: ['inv-a'],
+      });
+
+      const marker = await adapter.readMarker(driver, 'app');
+      expect({ storageHash: marker!.storageHash, meta: marker!.meta }).toEqual({
+        storageHash: 'core3',
+        meta: { policies: MIGRATE_ONLY },
+      });
+    });
+  });
+
+  it('updateMarker replaces the recorded policies when given new ones', async () => {
+    await withDb(async (driver) => {
+      await adapter.initMarker(driver, 'app', {
+        storageHash: 'core',
+        profileHash: 'prof',
+        databasePolicies: MIGRATE_ONLY,
+      });
+
+      await adapter.updateMarker(driver, 'app', 'core', {
+        storageHash: 'next',
+        profileHash: 'prof',
+        databasePolicies: DEFAULT_POLICIES,
+      });
+
+      expect((await adapter.readMarker(driver, 'app'))!.meta).toEqual({
+        policies: DEFAULT_POLICIES,
+      });
     });
   });
 

@@ -5,6 +5,7 @@ import type {
   ContractSpace,
   ControlAdapterDescriptor,
   ControlExtensionDescriptor,
+  DatabasePolicies,
   MigrationOperationPolicy,
   MigrationPlan,
   MigrationPlannerConflict,
@@ -396,6 +397,8 @@ export interface SqlMigrationRunnerExecuteOptions<TTargetDetails> {
    * The runner validates each operation against this policy before execution.
    */
   readonly policy: MigrationOperationPolicy;
+  /** When set, the marker update at the end of the run records these as the database's policies. */
+  readonly databasePolicies?: DatabasePolicies;
   readonly strictVerification?: boolean;
   readonly callbacks?: SqlMigrationRunnerExecuteCallbacks<TTargetDetails>;
   readonly context?: OperationContext;
