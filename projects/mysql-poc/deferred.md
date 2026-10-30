@@ -50,3 +50,11 @@ The MySQL driver relies on mariadb's value substitution. That substitution is sa
 ## `onConflict: 'skip'` on MySQL (slice 4, 2026-10-30)
 
 MySQL has no form that skips only duplicate-key rows and counts correctly: `INSERT IGNORE` also turns foreign-key, `NOT NULL` and truncation errors into silent skips, and a no-op `ON DUPLICATE KEY UPDATE` counts a skipped duplicate as written while the driver sets `foundRows`. The ORM refuses the option on MySQL. MariaDB's `INSERT IGNORE … RETURNING` may change this in its slice.
+
+## Upsert on MySQL relies on the contract listing every unique index (slice 4 code review, 2026-10-30)
+
+Without `sql.insertOnConflictTarget`, the ORM allows an upsert only when the contract shows no other unique key can collide. `db verify` accepts unique indexes the contract does not list unless run with `--strict`, and against such an index an upsert can update another row and succeed (reproduced in the slice 4 code review). The requirement is documented. Fix candidates: the startup or deploy-time environment check (TML-3777) compares the table's unique indexes with the contract; or `db verify` refuses unlisted unique indexes on a target without the capability.
+
+## Upsert without conflict columns (slice 4 system-design review, D02)
+
+When the capability is absent the ORM sends an upsert with no conflict columns, and only the MySQL renderer accepts that. Alternative recorded: the AST always keeps the named columns, and the MySQL renderer checks them against the contract instead.
