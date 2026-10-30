@@ -9,11 +9,12 @@
  * with additional fields for execution (precheck SQL, execute SQL, etc.).
  */
 
-import type { Contract } from '@internal/contract/types';
+import type { Contract, ContractMarkerRecord } from '@internal/contract/types';
 import type { ImportRequirement } from '@internal/ts-render';
 import { ifDefined } from '@internal/utils/defined';
 import type { Result } from '@internal/utils/result';
 import { type StructuredError, structuredError } from '@internal/utils/structured-error';
+import { type } from 'arktype';
 import type { TargetBoundComponentDescriptor } from '../shared/framework-components';
 import type { ImportSpecifierResolver } from '../shared/import-specifier-resolver';
 import type {
@@ -115,6 +116,140 @@ export function planOriginOf(
  */
 export interface MigrationOperationPolicy {
   readonly allowedOperationClasses: readonly MigrationOperationClass[];
+}
+
+// ============================================================================
+// Database Policies
+// ============================================================================
+
+/** How a database may change: through migrations (`migrate`), through `db update` (`reconcile`), or both. */
+export type ChangeStrategy = 'migrate' | 'reconcile';
+
+export type DataLossLevel =
+  | 'data-loss-forbidden'
+  | 'data-loss-with-consent'
+  | 'data-loss-permitted';
+
+export type AccessWideningLevel =
+  | 'access-widening-forbidden'
+  | 'access-widening-with-consent'
+  | 'access-widening-permitted';
+
+/** The policies a database's marker records, every setting filled. */
+export interface DatabasePolicies {
+  readonly change: readonly ChangeStrategy[];
+  readonly dataProtection: {
+    readonly dataLoss: DataLossLevel;
+    readonly accessWidening: AccessWideningLevel;
+  };
+}
+
+/** What a ref declares: every key optional; an absent key declares nothing. */
+export interface DeclaredPolicies {
+  readonly change?: readonly ChangeStrategy[];
+  readonly dataProtection?: {
+    readonly dataLoss?: DataLossLevel;
+    readonly accessWidening?: AccessWideningLevel;
+  };
+}
+
+export const DEFAULT_POLICIES: DatabasePolicies = {
+  change: ['migrate', 'reconcile'],
+  dataProtection: {
+    dataLoss: 'data-loss-with-consent',
+    accessWidening: 'access-widening-with-consent',
+  },
+};
+
+export const DeclaredPoliciesSchema = type({
+  '+': 'reject',
+  'change?': "('migrate' | 'reconcile')[]",
+  'dataProtection?': {
+    '+': 'reject',
+    'dataLoss?': "'data-loss-forbidden' | 'data-loss-with-consent' | 'data-loss-permitted'",
+    'accessWidening?':
+      "'access-widening-forbidden' | 'access-widening-with-consent' | 'access-widening-permitted'",
+  },
+});
+
+function sortedStrategies(change: readonly ChangeStrategy[]): readonly ChangeStrategy[] {
+  return [...new Set(change)].sort();
+}
+
+/**
+ * The policies in force on a database: what its marker records, with every absent setting taken
+ * from {@link DEFAULT_POLICIES}. A recorded value that is not a valid declaration makes the
+ * marker unreadable.
+ */
+export function policiesOf(marker: ContractMarkerRecord | undefined): DatabasePolicies {
+  const recorded = marker?.meta['policies'];
+  if (recorded === undefined) return DEFAULT_POLICIES;
+  const declared = DeclaredPoliciesSchema(recorded);
+  if (declared instanceof type.errors) {
+    throw structuredError(
+      'CONTRACT.MARKER_READ_FAILED',
+      'Database error while reading contract marker',
+      {
+        why: `The marker's meta.policies is invalid: ${declared.summary}`,
+      },
+    );
+  }
+  return {
+    change: sortedStrategies(declared.change ?? DEFAULT_POLICIES.change),
+    dataProtection: {
+      dataLoss: declared.dataProtection?.dataLoss ?? DEFAULT_POLICIES.dataProtection.dataLoss,
+      accessWidening:
+        declared.dataProtection?.accessWidening ?? DEFAULT_POLICIES.dataProtection.accessWidening,
+    },
+  };
+}
+
+export type PolicyDifference =
+  | {
+      readonly setting: 'change';
+      readonly declared: readonly ChangeStrategy[];
+      readonly inForce: readonly ChangeStrategy[];
+    }
+  | {
+      readonly setting: 'dataLoss';
+      readonly declared: DataLossLevel;
+      readonly inForce: DataLossLevel;
+    }
+  | {
+      readonly setting: 'accessWidening';
+      readonly declared: AccessWideningLevel;
+      readonly inForce: AccessWideningLevel;
+    };
+
+/** The settings `declared` carries whose value differs from the one in force, in a fixed order. */
+export function policyDifferences(
+  declared: DeclaredPolicies,
+  inForce: DatabasePolicies,
+): readonly PolicyDifference[] {
+  const differences: PolicyDifference[] = [];
+  if (declared.change !== undefined) {
+    const declaredChange = sortedStrategies(declared.change);
+    const inForceChange = sortedStrategies(inForce.change);
+    if (declaredChange.join(',') !== inForceChange.join(',')) {
+      differences.push({ setting: 'change', declared: declaredChange, inForce: inForceChange });
+    }
+  }
+  const { dataLoss, accessWidening } = declared.dataProtection ?? {};
+  if (dataLoss !== undefined && dataLoss !== inForce.dataProtection.dataLoss) {
+    differences.push({
+      setting: 'dataLoss',
+      declared: dataLoss,
+      inForce: inForce.dataProtection.dataLoss,
+    });
+  }
+  if (accessWidening !== undefined && accessWidening !== inForce.dataProtection.accessWidening) {
+    differences.push({
+      setting: 'accessWidening',
+      declared: accessWidening,
+      inForce: inForce.dataProtection.accessWidening,
+    });
+  }
+  return differences;
 }
 
 // ============================================================================
@@ -768,6 +903,8 @@ export interface MigrationRunnerPerSpaceOptions<
   readonly driver: ControlDriverInstance<TFamilyId, TTargetId>;
   readonly destinationContract: unknown;
   readonly policy: MigrationOperationPolicy;
+  /** When set, the marker update at the end of the run records these as the database's policies. */
+  readonly databasePolicies?: DatabasePolicies;
   readonly executionChecks?: MigrationRunnerExecutionChecks;
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>;
   /**

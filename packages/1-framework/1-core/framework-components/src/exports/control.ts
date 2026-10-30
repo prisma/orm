@@ -43,8 +43,13 @@ export type {
   ControlTargetInstance,
 } from '../control/control-instances';
 export type {
+  AccessWideningLevel,
   BlockingObject,
+  ChangeStrategy,
   CheckExpectation,
+  DatabasePolicies,
+  DataLossLevel,
+  DeclaredPolicies,
   FailedCast,
   FailedCheck,
   FailedConversion,
@@ -71,6 +76,7 @@ export type {
   MigrationScaffoldContext,
   OpFactoryCall,
   PlanOrigin,
+  PolicyDifference,
   RowsFailingCheck,
   RowsHoldingValue,
   RowsWithoutValue,
@@ -79,8 +85,12 @@ export type {
   TargetMigrationsCapability,
 } from '../control/control-migration-types';
 export {
+  DEFAULT_POLICIES,
+  DeclaredPoliciesSchema,
   migrationRunnerFailure,
   planOriginOf,
+  policiesOf,
+  policyDifferences,
   withDatabaseUnchanged,
   withFailingSpace,
 } from '../control/control-migration-types';
