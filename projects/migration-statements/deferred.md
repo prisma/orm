@@ -261,3 +261,9 @@ The 3b spec's implementation notes ask to move MongoDB's variant lookup (`varian
 **Found:** slice 3b PR 4, dispatch 28 (2026-10-30).
 
 A field of a value object cannot declare a default in this release. So when a value object field becomes required, the planner has no default to fill existing objects with: `migration plan` needs `--backfill`, and `db update` uses a temporary value. A column field with a default is filled from its default instead. When value object fields can carry defaults, the fill should take the default first, as a column does, and `--backfill` should then be refused for a defaulted field, as it is for a column (`backfillOfDefaultedField`).
+
+## Question for Will: both families keep a model's empty `fields` in their own canonicalization hook
+
+**Found:** slice 3b PR 4 review, dispatch 29 (2026-10-30).
+
+A variant with no fields of its own has an empty `fields` object, which canonicalization would drop. So both `packages/2-sql-family/1-core/contract/src/canonicalization-hooks.ts` and `packages/2-mongo-family/1-foundation/mongo-contract/src/canonicalization-hooks.ts` keep the pattern `domain.namespaces.*.models.*.fields`. That path is in a framework type, `ContractModelBase.fields`, and the framework canonicalizer already keeps its siblings `relations` and `storage` itself (`DOMAIN_MODEL_RELATIONS_PATTERN` and `DOMAIN_MODEL_STORAGE_PATTERN` in `packages/1-framework/0-foundation/contract/src/canonicalization.ts`). Moving the pattern beside them would keep it once, but it changes the framework, which `.agents/rules/never-change-the-framework-domain.mdc` forbids without Will's approval. The second pattern, `models.*.storage.fields`, is family storage and stays in each family. Will to decide whether to move the first pattern into the framework canonicalizer.
