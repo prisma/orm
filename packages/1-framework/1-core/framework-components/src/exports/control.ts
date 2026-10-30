@@ -43,13 +43,8 @@ export type {
   ControlTargetInstance,
 } from '../control/control-instances';
 export type {
-  AccessWideningLevel,
   BlockingObject,
-  ChangeStrategy,
   CheckExpectation,
-  DatabasePolicies,
-  DataLossLevel,
-  DeclaredPolicies,
   FailedCast,
   FailedCheck,
   FailedConversion,
@@ -76,7 +71,6 @@ export type {
   MigrationScaffoldContext,
   OpFactoryCall,
   PlanOrigin,
-  PolicyDifference,
   RowsFailingCheck,
   RowsHoldingValue,
   RowsWithoutValue,
@@ -85,12 +79,8 @@ export type {
   TargetMigrationsCapability,
 } from '../control/control-migration-types';
 export {
-  DEFAULT_POLICIES,
-  DeclaredPoliciesSchema,
   migrationRunnerFailure,
   planOriginOf,
-  policiesOf,
-  policyDifferences,
   withDatabaseUnchanged,
   withFailingSpace,
 } from '../control/control-migration-types';
@@ -151,6 +141,30 @@ export {
   extractParameterizedOutputTypeImports,
   extractQueryOperationTypeImports,
 } from '../control/control-stack';
+export {
+  ACCESS_WIDENING_LEVELS,
+  type AccessWideningLevel,
+  CHANGE_STRATEGIES,
+  type ChangeStrategy,
+  DATA_LOSS_LEVELS,
+  DATABASE_POLICIES_META_KEY,
+  type DatabasePolicies,
+  DatabasePoliciesSchema,
+  type DatabasePoliciesUnreadable,
+  type DatabasePolicyDifference,
+  type DatabasePolicySetting,
+  type DataLossLevel,
+  DEFAULT_DATABASE_POLICIES,
+  type DeclaredDatabasePolicies,
+  databasePoliciesOf,
+  databasePolicyDifferences,
+  markerHoldsDatabasePolicies,
+  PartialDatabasePoliciesSchema,
+  type StoredDatabasePolicies,
+  storedDatabasePolicies,
+  withDeclaredDatabasePolicies,
+} from '../control/database-policies';
+export type { MarkerDestination } from '../control/marker-destination';
 export type {
   AppliedMigrationStatement,
   EnumValueCoordinate,

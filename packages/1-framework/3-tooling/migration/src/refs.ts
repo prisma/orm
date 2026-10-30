@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile, rename, rmdir, unlink, writeFile } from 'node:fs/promises';
 import {
-  type DeclaredPolicies,
-  DeclaredPoliciesSchema,
+  type DeclaredDatabasePolicies,
+  PartialDatabasePoliciesSchema,
 } from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
 import { type } from 'arktype';
@@ -16,8 +16,11 @@ import {
 export interface RefEntry {
   readonly hash: string;
   readonly invariants: readonly string[];
-  readonly policies?: DeclaredPolicies;
+  readonly policies?: DeclaredDatabasePolicies;
 }
+
+/** A ref with its name: what a `--to` naming a ref resolves to. */
+export type NamedRef = { readonly name: string } & RefEntry;
 
 export type Refs = Readonly<Record<string, RefEntry>>;
 
@@ -62,7 +65,7 @@ export function validateRefValue(value: string): boolean {
 const RefEntrySchema = type({
   hash: 'string',
   invariants: 'string[]',
-  'policies?': DeclaredPoliciesSchema,
+  'policies?': PartialDatabasePoliciesSchema,
 }).narrow((entry, ctx) => {
   if (!validateRefValue(entry.hash))
     return ctx.mustBe(`a valid contract hash (got "${entry.hash}")`);

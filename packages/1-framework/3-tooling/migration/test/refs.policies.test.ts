@@ -60,6 +60,7 @@ describe('a ref that declares policies', () => {
     ['an unknown key', { change: ['migrate'], dataloss: 'data-loss-forbidden' }],
     ['an unknown data protection key', { dataProtection: { dataloss: 'data-loss-forbidden' } }],
     ['an unknown strategy', { change: ['deploy'] }],
+    ['an empty change policy', { change: [] }],
     ['an unknown level', { dataProtection: { accessWidening: 'open' } }],
   ])('is rejected as an invalid ref file when its policies carry %s', async (_, policies) => {
     await writeFile(

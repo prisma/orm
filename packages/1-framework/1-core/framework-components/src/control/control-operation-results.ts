@@ -1,4 +1,5 @@
 import type { Contract } from '@internal/contract/types';
+import type { DatabasePolicies } from './database-policies';
 import type { SchemaDiffIssue } from './schema-diff';
 
 export const VERIFY_CODE_MARKER_MISSING = 'CONTRACT.MARKER_MISSING';
@@ -124,6 +125,8 @@ export interface SpaceToSign {
    * The space's marker as the caller read it before verifying the space, or `null` when it had none. The marker is written only while it still holds these hashes.
    */
   readonly expected: MarkerHashes | null;
+  /** The database's policies as the caller read them when it checked the signature; the marker is written only while it still records them. */
+  readonly expectedDatabasePolicies?: DatabasePolicies;
 }
 
 /**
