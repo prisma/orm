@@ -111,6 +111,7 @@ export type ExtractCodecTypesFromPack<P> = P extends { __codecTypes?: infer Code
 
 // This mirrors @internal/target-mongo/codec-types because authoring must stay decoupled from
 // the target layer while still exposing the built-in Mongo codec registry to type inference.
+// packages/3-targets/mongo/9-facade/test/codec-types.types.test-d.ts checks that the two are equal.
 type MongoCodecTypes = {
   readonly 'mongo/objectId@1': {
     readonly input: string;
