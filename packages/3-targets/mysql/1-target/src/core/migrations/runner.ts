@@ -205,7 +205,8 @@ class MysqlMigrationRunner implements SqlMigrationRunner<MysqlPlanTargetDetails>
     const isSelfEdgeNoOp =
       isSelfEdge &&
       applied.executedCount === 0 &&
-      options.plan.providedInvariants.every((id) => existingInvariants.has(id));
+      options.plan.providedInvariants.every((id) => existingInvariants.has(id)) &&
+      options.databasePolicies === undefined;
     if (!isSelfEdgeNoOp) {
       const written = await this.#writeMarkerAndLedger(
         driver,
@@ -343,6 +344,7 @@ class MysqlMigrationRunner implements SqlMigrationRunner<MysqlPlanTargetDetails>
         options.destinationContract.profileHash ??
         plan.destination.storageHash,
       invariants: plan.providedInvariants,
+      ...ifDefined('databasePolicies', options.databasePolicies),
     };
     await driver.query('START TRANSACTION');
     try {

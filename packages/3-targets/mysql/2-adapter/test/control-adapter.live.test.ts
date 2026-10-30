@@ -1,4 +1,5 @@
 import mysqlDriver, { type MysqlControlDriver } from '@internal/driver-mysql/control';
+import { type DatabasePolicies, DEFAULT_POLICIES } from '@internal/framework-components/control';
 import { acquireMarkerLock, releaseMarkerLock } from '@internal/target-mysql/marker-lock';
 import mysqlTarget from '@internal/target-mysql/runtime';
 import { ifDefined } from '@internal/utils/defined';
@@ -6,6 +7,14 @@ import { timeouts } from '@repo/test-utils';
 import { withMysqlDatabase } from '@repo/test-utils/mysql-database';
 import { describe, expect, it } from 'vitest';
 import { createAdapter } from './helpers';
+
+const MIGRATE_ONLY: DatabasePolicies = {
+  change: ['migrate'],
+  dataProtection: {
+    dataLoss: 'data-loss-forbidden',
+    accessWidening: 'access-widening-forbidden',
+  },
+};
 
 async function bootstrap(driver: MysqlControlDriver): Promise<void> {
   const adapter = createAdapter();
@@ -199,6 +208,65 @@ describe('MysqlControlAdapter against a MySQL server', {
           ledger: [
             { space: 'app', migrationName: '20261022_add', from: 'sha256:a2', to: 'sha256:a3' },
           ],
+        });
+      } finally {
+        await driver.close();
+      }
+    });
+  });
+
+  it('records database policies in meta, and later marker writes without them leave meta', async (test) => {
+    await withMysqlDatabase(test, async ({ url }) => {
+      const adapter = createAdapter();
+      const driver = await mysqlDriver.create(url);
+      try {
+        await bootstrap(driver);
+        await adapter.initMarker(driver, 'app', {
+          storageHash: 'sha256:a1',
+          profileHash: 'p',
+          databasePolicies: MIGRATE_ONLY,
+        });
+        const recorded = (await adapter.readMarker(driver, 'app'))?.meta;
+        await adapter.initMarker(driver, 'app', { storageHash: 'sha256:a2', profileHash: 'p' });
+        const afterUpsert = (await adapter.readMarker(driver, 'app'))?.meta;
+        await adapter.withTransaction(driver, () =>
+          adapter.updateMarker(driver, 'app', 'sha256:a2', {
+            storageHash: 'sha256:a3',
+            profileHash: 'p',
+            invariants: ['inv'],
+          }),
+        );
+        const afterSwap = (await adapter.readMarker(driver, 'app'))?.meta;
+        await adapter.withTransaction(driver, () =>
+          adapter.updateMarker(driver, 'app', 'sha256:a3', {
+            storageHash: 'sha256:a4',
+            profileHash: 'p',
+            databasePolicies: DEFAULT_POLICIES,
+          }),
+        );
+        await adapter.initMarker(driver, 'ext', {
+          storageHash: 'sha256:e1',
+          profileHash: 'p',
+          databasePolicies: MIGRATE_ONLY,
+        });
+        await adapter.initMarker(driver, 'ext', {
+          storageHash: 'sha256:e2',
+          profileHash: 'p',
+          databasePolicies: DEFAULT_POLICIES,
+        });
+
+        expect({
+          recorded,
+          afterUpsert,
+          afterSwap,
+          replaced: (await adapter.readMarker(driver, 'app'))?.meta,
+          replacedByUpsert: (await adapter.readMarker(driver, 'ext'))?.meta,
+        }).toEqual({
+          recorded: { policies: MIGRATE_ONLY },
+          afterUpsert: { policies: MIGRATE_ONLY },
+          afterSwap: { policies: MIGRATE_ONLY },
+          replaced: { policies: DEFAULT_POLICIES },
+          replacedByUpsert: { policies: DEFAULT_POLICIES },
         });
       } finally {
         await driver.close();
