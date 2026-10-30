@@ -415,3 +415,33 @@ Location: `MigrationRunner.execute` `expectedDatabasePolicies`; `MongoMigrationR
 Issue: The same `DatabasePolicies` value is called "expected", "checked" and "held" across four hops. The `policiesMoved` and `policiesUnreadable` arms also return `checked`, which is just the argument the caller passed. Each name makes sense where it is used, but a reader following the value has to work out that they are one thing.
 
 Suggestion: use `checkedPolicies` from the runner down to the adapter, keeping "held" only for the comparison result. Drop `checked` from the `MarkerSwapFailure` arms, since the caller already has it.
+
+## Round 6
+
+Re-reviewed at `fba225c8d5`, covering `f9d12b2dc7...HEAD`. The fourth-round fixes landed in `f9d12b2dc7` and `ac19db5296`, so the verdicts below cite those commits. New code read: the list check in the policy schemas, `errorInvalidRefFile` and `refFilePath` now exported from migration-tools and used by the contract-space loader, the policy-dependent advice and `meta.change` on `MIGRATION.MARKER_NOT_IN_HISTORY`, `targetRefName` on `MarkerOutsideGraph`, and the `db sign` wording of `CHANGE_POLICY_FORBIDS`.
+
+### Verdicts on the fifth round
+
+| ID | Verdict | Evidence |
+|---|---|---|
+| A28 | Fixed | The framework exports `DATABASE_POLICIES_KEYS` and `DATA_PROTECTION_KEYS` (`framework-components/src/control/database-policies.ts` lines 48-58). MongoDB's predicate requires the keys of `meta.policies` and of `dataProtection` to be among them, and checks the settings by iterating them. The adapter test covers the extra-key cases. ADR 314 line 48 now says MongoDB also expresses the comparison as a query predicate built from the framework's key lists, value lists and defaults. A list is type `array`, not `object`, for MongoDB's `$type`, so the predicate also rejects the list form the framework schema now rejects. |
+| A29 | Fixed | `MarkerSwapFailure` has a `markerChanged` arm (`2-mongo-family/9-family/src/core/marker-policies.ts`). The runner reports it as `MIGRATION.MARKER_CAS_FAILURE` with `reason: 'markerChanged'` and its own `why`. The error reference lists it as "The marker changed and changed back". |
+| A30 | Fixed | The adapter's parameter and `markerSwapFailure`'s are `checkedPolicies`, the same name the runner uses. The `policiesMoved` and `policiesUnreadable` arms no longer repeat `checked`. |
+
+### New findings
+
+#### A31 — The documentation of `MIGRATION.MARKER_NOT_IN_HISTORY` still gives `db sign` and `db update` for every database (low)
+
+Location: `docs/reference/error-reference.md` line 1743 (`MIGRATION.MARKER_NOT_IN_HISTORY`) and line 502 (`CONTRACT.MARKER_ROW_CORRUPT`); `skills/prisma-8/references/migration-review.md` line 61; code: `packages/1-framework/3-tooling/cli/src/orm/migration/status-findings.ts` lines 43-76, `.../orm/migration/status.ts` lines 486-494.
+
+Issue: `migration status` now follows the change policy. On a database that permits only migrations, the finding's hint and its one next action say to author migrations back onto the graph. The finding's `meta` also carries `change`. The error reference entry still says "Hints suggest `db sign` … or `db update`" and lists no payload. The skill's migration-review table recommends `db sign` or `db update` without a condition, which would send an agent to a command that the policy refuses with `CHANGE_POLICY_FORBIDS`. That is the kind of wrong advice ADR 314 was written to prevent. Also, `migration status` now reads the policies whenever a marker is off the graph, so it can raise `CONTRACT.MARKER_ROW_CORRUPT` without `--to`. The `MARKER_ROW_CORRUPT` entry still lists only `migration status --to <ref>`.
+
+Suggestion: in the error reference, say the advice follows the database's change policy (`db sign` and `db update` when it includes `reconcile`, otherwise author migrations), and give the payload as `space` and `change`. Make the same condition explicit in the skill row. In the `MARKER_ROW_CORRUPT` entry, write "`migration status` (with `--to <ref>`, or when a marker is outside the graph)".
+
+#### A32 — The CLI rebuilds a ref file's path that the migration loader already had (low)
+
+Location: `packages/1-framework/3-tooling/cli/src/control-api/operations/contract-space-aggregate-loader.ts` lines 187-193; `packages/1-framework/3-tooling/migration/src/aggregate/check-integrity.ts` lines 63-77 (`refUnreadable` carries `spaceId`, `refName`, `detail`); `packages/1-framework/3-tooling/migration/src/exports/refs.ts` (new `refFilePath` export).
+
+Issue: The loader reads each ref from a file path, but the `refUnreadable` violation keeps only the space and the ref name. To raise `MIGRATION.INVALID_REF_FILE` with a path, the CLI rebuilds it with three helpers, `spaceMigrationDirectory`, `spaceRefsDirectory` and the newly exported `refFilePath`. That repeats the loader's layout rule in a second place, and `refFilePath` is exported only to support the repetition. If the ref layout changes, the error would name a file that does not exist.
+
+Suggestion: give the `refUnreadable` violation the `path` the loader read, and pass it to `errorInvalidRefFile`. Then drop the `refFilePath` export. `errorInvalidRefFile` stays exported, since the CLI legitimately raises it.

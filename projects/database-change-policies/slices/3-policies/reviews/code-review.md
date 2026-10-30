@@ -511,3 +511,55 @@ All pass, with output under `wip/`:
 - **`pnpm typecheck`** in the five touched packages.
 
 The acceptance rows are unchanged: 30 of 30 PASS. F21 affects only a hand-edited marker; it does not change any listed edge case.
+
+## Round 7
+
+Reviews `5660babb36^...HEAD` at `fba225c8d5`: the F21 fix and four fixes from manual QA (`wip/qa/transcript.md`). Persona: principal engineer. Final round.
+
+### Verdicts
+
+| Item | Verdict | Evidence |
+|---|---|---|
+| F21 — the parser read an empty array as policies | Fixed in `5660babb36` | `notAList` narrows the top-level and `dataProtection` schemas, in both `PartialDatabasePoliciesSchema` and `DatabasePoliciesSchema`. The new `it.each` in `database-policies.test.ts` rejects a list at both levels; `refs.policies.test.ts` does the same for ref files. Parser and MongoDB write check now agree on the probe's last two cases. |
+| QA: `migration status` off-graph advice follows the change policy | Fixed in `ab5a9e2b22` | `markerNotInHistoryFinding` takes `change`. It gives the two `db sign`/`db update` actions only when `reconcile` is permitted; otherwise it gives one `user-choice` to author migrations. `meta.change` is added. Two tests in `migration-status-policies.test.ts`. See F22 for a regression. |
+| QA: an invalid ref file fails as `MIGRATION.INVALID_REF_FILE` wherever migrations load | Fixed in `aab6c27235` | `mapIntegrityViolations` maps a `refUnreadable` violation to `errorInvalidRefFile` with the file path. The fix lists the allowed values from the framework's value lists. There is a test in `map-integrity-violations.test.ts` and a journey that runs `db migrate` against a bad ref. |
+| QA: `MARKER_MISMATCH` names the ref the user gave | Fixed in `874788dc79` | `reconcileArgs` prints `--to <ref>` when a ref was the target and `db update` can reach it, else the hash, else no `--to`. Tests in `marker-mismatch.test.ts`; Postgres journey. |
+| QA: `db sign` wording | Fixed in `67880817b2` | `CHANGE_POLICY_FORBIDS` for `db sign` ends "may not sign it". `policy-errors.test.ts`, the control-API test and the reference all match. |
+
+### Findings
+
+#### F22 — `migration status` now fails outright on an off-graph marker whose policies cannot be read
+
+Path: packages/1-framework/3-tooling/cli/src/orm/migration/status.ts 486–495.
+
+To pick the advice, the new code calls `databasePoliciesInForce` inside the per-space loop. That function throws `CONTRACT.MARKER_ROW_CORRUPT` when `meta.policies` cannot be read.
+
+- Before this change, a database that was both off the graph and carrying unreadable policies got the full `migration status` report with a `MARKER_NOT_IN_HISTORY` warning.
+- Now the whole command fails, and the user loses the report.
+- An on-graph database with unreadable policies still reports normally. QA section f shows that case ("Up to date").
+
+`migration status` is a reporting command, and its findings exist so it can deliver a full report despite problems. Only the `--to <ref>` comparison was documented to raise this error.
+
+Suggestion: read the policies with `databasePoliciesOf` and, when it fails, fall back to the advice that does not depend on the policy, plus a finding that the policies cannot be read. Alternatively, compute the change policy once before the loop and treat unreadable policies as a finding. Add a test with an off-graph marker and `meta.policies: { change: 'nope' }`.
+
+### Verification
+
+All pass, with output under `wip/`:
+
+- **Framework:** `wip/review7-fw.txt` (23).
+- **Migration tools errors and refs:** `wip/review7-migration.txt` (34).
+- **CLI, seven files:** `wip/review7-cli.txt` (65).
+- **Integration:** `cli.database-policies.{postgres,migrate,enforcement}.e2e.test.ts` on PostgreSQL and SQLite, `wip/review7-e2e.txt` (56).
+- **`pnpm typecheck`** in the three touched packages.
+- **`pnpm lint:deps`** (`wip/review7-lintdeps.txt`) and **`pnpm check:error-reference`**.
+
+### Acceptance rows these changes touch
+
+| # | Row | Round 6 | Round 7 | What I checked |
+|---|---|---|---|---|
+| E11 | Unreadable `meta.policies` gives advice that keeps the marker | PASS | PASS | The parser now also rejects lists. The keep-the-marker advice is unchanged. F22 is about `migration status` losing its report, not about the advice. |
+| E15 | Off-graph marker, `change: [migrate]`: `MARKER_MISMATCH` with the single migration action | PASS | PASS | Unchanged for `db migrate`; `migration status` now gives the same single recovery. |
+| E16 | Off-graph marker, default policies: the two `db update` actions only | PASS | PASS | The actions now name the ref when one was given (`marker-mismatch.test.ts`). |
+| E9 | `db sign` on a migrations-only database is refused | PASS | PASS | Envelope wording updated and asserted in the enforcement journey. |
+
+Totals: 30 PASS of 30 edge cases and done conditions.
