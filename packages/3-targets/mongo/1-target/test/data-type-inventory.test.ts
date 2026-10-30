@@ -16,6 +16,13 @@ const EXPECTED: Readonly<Record<string, string>> = {
   'mongo/binary@1': 'mongo/binary',
   'mongo/json@1': 'mongo/json',
   'mongo/bson@1': 'mongo/bson',
+  'mongo/date-instant@1': 'mongo/date',
+  'mongo/date-instant-string@1': 'mongo/date',
+  'mongo/date-string@1': 'mongo/date',
+  'mongo/date-temporal@1': 'mongo/date',
+  'mongo/time-string@1': 'mongo/time',
+  'mongo/time-temporal@1': 'mongo/time',
+  'mongo/duration-string@1': 'mongo/duration',
 };
 
 describe('Mongo data type inventory', () => {

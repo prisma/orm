@@ -8,6 +8,7 @@ import type { RuntimeMutationDefaultGenerator } from '@internal/framework-compon
 import type { MongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoAdapter } from '@internal/mongo-lowering';
 import { buildStandardCodecRegistry } from '@internal/target-mongo/codecs';
+import { mongoNowGenerators } from '@internal/target-mongo/runtime';
 import { createMongoAdapter } from '../mongo-adapter';
 
 /**
@@ -33,7 +34,12 @@ const mongoRuntimeAdapterDescriptor: RuntimeAdapterDescriptor<
   targetId: 'mongo',
   version: '0.0.1',
   codecs: buildStandardCodecRegistry,
-  mutationDefaultGenerators: () => [timestampNowRuntimeGenerator()],
+  mutationDefaultGenerators: () => [
+    timestampNowRuntimeGenerator(),
+    ...mongoNowGenerators.map(
+      ({ id, generate }): RuntimeMutationDefaultGenerator => ({ id, generate, stability: 'query' }),
+    ),
+  ],
   create(_stack: ExecutionStack<'mongo', 'mongo'>): MongoRuntimeAdapterInstance {
     const adapter = createMongoAdapter();
     return {

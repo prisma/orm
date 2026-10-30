@@ -3,7 +3,8 @@
  *
  * A number is the smallest MongoDB type that holds it: an `int` in 32 bits, a `long` in 64, a
  * `decimal` when a Decimal128 holds it exactly, `NaN` and the infinities included, and a `double`
- * otherwise. The `date` tag yields `mongo/date`, stored as the text `Date.toISOString()` writes; the
+ * otherwise. The `date` tag yields `mongo/date`, stored as the text `Date.toISOString()` writes, a date
+ * alone as its midnight in UTC; the `time` and `duration` tags yield `mongo/time` and `mongo/duration`; the
  * `binary` tag `mongo/binary`, written in base64 as MongoDB prints bytes; the `json` tag `mongo/json`.
  * `mongo/bson` has no entry: no position takes a BSON value written in PSL. ADR 254.
  */
@@ -13,7 +14,6 @@ import type { DataTypeAuthoringEntry } from '@internal/framework-components/auth
 import {
   createNumberClassifier,
   type DataTypeId,
-  isoDateStringText,
   numeralText,
   parseJsonText,
   printJsonText,
@@ -27,11 +27,23 @@ import {
   mongoDate,
   mongoDecimal128,
   mongoDouble,
+  mongoDuration,
+  mongoDurationText,
+  mongoInstantText,
   mongoInt32,
   mongoInt64,
   mongoJson,
   mongoString,
+  mongoTime,
+  mongoTimeText,
 } from './data-types';
+
+const DATE_ALONE = /^[+-]?\d{4,6}-\d{2}-\d{2}$/;
+
+/** The instant a `date` tag names: a date alone is its midnight in UTC, the form a calendar date is stored in. */
+function dateTagText(text: string): string {
+  return mongoInstantText(DATE_ALONE.test(text) ? `${text}T00:00:00Z` : text);
+}
 
 const classifyAsDecimal = createNumberClassifier({
   integers: [
@@ -98,11 +110,23 @@ export function mongoDataTypeEntries(): Readonly<Record<string, DataTypeAuthorin
       written: {
         kind: 'tag',
         tag: 'date',
-        parse: (text) => isoDateStringText(text, mongoDate.id),
+        parse: dateTagText,
       },
       print: (value) => String(value),
       documentation:
-        'An instant, as in date`2024-01-01T00:00:00Z`. Reads ISO 8601 with a UTC offset and stores the instant in UTC with three fraction digits, as Date.toISOString() writes it.',
+        'An instant, as in date`2024-01-01T00:00:00Z`, or a calendar date, as in date`2024-02-29`, which is its midnight in UTC. Reads ISO 8601 with a UTC offset and stores the instant in UTC with three fraction digits, as Date.toISOString() writes it.',
+    },
+    [mongoTime.id]: {
+      written: { kind: 'tag', tag: 'time', parse: mongoTimeText },
+      print: (value) => String(value),
+      documentation:
+        'A time of day without a UTC offset, as in time`09:30:00`. Stores it with three fraction digits, as in 09:30:00.000.',
+    },
+    [mongoDuration.id]: {
+      written: { kind: 'tag', tag: 'duration', parse: mongoDurationText },
+      print: (value) => String(value),
+      documentation:
+        'A length of time, as in duration`PT1H30M`. Reads an ISO 8601 duration and stores it as written.',
     },
     [mongoBinary.id]: {
       written: { kind: 'tag', tag: 'binary', parse: base64Text },

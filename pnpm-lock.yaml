@@ -3773,6 +3773,9 @@ importers:
       '@internal/ts-render':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../1-framework/1-core/ts-render
+      '@internal/type-implementations':
+        specifier: workspace:8.0.0-rc.22
+        version: link:../../0-shared/type-implementations
       '@internal/utils':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../1-framework/0-foundation/utils
@@ -3782,6 +3785,9 @@ importers:
       bson:
         specifier: 'catalog:'
         version: 7.3.1
+      temporal-spec:
+        specifier: 1.0.1
+        version: 1.0.1
     devDependencies:
       '@internal/mongo-contract-psl':
         specifier: workspace:8.0.0-rc.22
@@ -3810,6 +3816,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
       tsdown:
         specifier: 'catalog:'
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)

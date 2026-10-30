@@ -16,6 +16,8 @@ const storedValues: Readonly<Record<string, JsonValue>> = {
   'mongo/binary': 'aGVsbG8=',
   'mongo/json': 'x',
   'mongo/bson': { a: 1 },
+  'mongo/time': '09:30:00.000',
+  'mongo/duration': 'PT1H',
 };
 
 describe('the literal each registered codec renders', () => {
@@ -41,6 +43,13 @@ describe('the literal each registered codec renders', () => {
       'mongo/binary@1': undefined,
       'mongo/json@1': undefined,
       'mongo/bson@1': undefined,
+      'mongo/date-instant@1': undefined,
+      'mongo/date-instant-string@1': '"2024-01-01T00:00:00.000Z"',
+      'mongo/date-string@1': '"2024-01-01"',
+      'mongo/date-temporal@1': undefined,
+      'mongo/time-string@1': '"09:30:00.000"',
+      'mongo/time-temporal@1': undefined,
+      'mongo/duration-string@1': '"PT1H"',
     });
   });
 });

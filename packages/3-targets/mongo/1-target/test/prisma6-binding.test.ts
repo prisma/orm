@@ -108,6 +108,19 @@ describe('prisma6MongoBinding', () => {
     },
   );
 
+  it('reads DateTime as a JavaScript Date and DateTime @db.Date as a calendar date', async () => {
+    const registry = buildStandardCodecRegistry();
+    const read = (codecId: string | undefined) =>
+      codecId === undefined
+        ? undefined
+        : registry.get(codecId)?.fromWire(new Date('2024-02-29T00:00:00.000Z'), {});
+
+    expect({
+      dateTime: await read(codecFor('DateTime', '')),
+      date: await read(codecFor('DateTime', 'db.Date')),
+    }).toEqual({ dateTime: new Date('2024-02-29T00:00:00.000Z'), date: '2024-02-29' });
+  });
+
   it('gives an @id the codec for the ObjectId Prisma 6 stores in _id', () => {
     expect(bsonTypesOf(prisma6MongoBinding.objectIdCodecId)).toContain('objectId');
   });

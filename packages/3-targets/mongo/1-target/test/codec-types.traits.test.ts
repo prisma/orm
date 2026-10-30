@@ -16,6 +16,13 @@ const traitsByCodec = {
   'mongo/binary@1': ['equality'],
   'mongo/json@1': [],
   'mongo/bson@1': [],
+  'mongo/date-instant@1': ['equality', 'order'],
+  'mongo/date-instant-string@1': ['equality', 'order'],
+  'mongo/date-string@1': ['equality', 'order'],
+  'mongo/date-temporal@1': ['equality', 'order'],
+  'mongo/time-string@1': ['equality', 'order'],
+  'mongo/time-temporal@1': ['equality', 'order'],
+  'mongo/duration-string@1': ['equality'],
 } as const;
 
 describe('Mongo CodecTypes traits', () => {

@@ -4,7 +4,8 @@ import { structuredError } from '@internal/utils/structured-error';
 export type MongoTargetErrorCode =
   | `MIGRATION.${MigrationSubcode}`
   | 'RUNTIME.DECODE_FAILED'
-  | 'RUNTIME.ENCODE_FAILED';
+  | 'RUNTIME.ENCODE_FAILED'
+  | 'RUNTIME.TEMPORAL_UNAVAILABLE';
 
 type MigrationSubcode =
   | 'DATA_TRANSFORM_CHECK_NOT_READ_ONLY'

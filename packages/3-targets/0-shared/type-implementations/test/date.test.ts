@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { hasDigitsBelowAMillisecond, isValidDate, utcIsoTextOf } from '../src/date';
+import {
+  hasDigitsBelowAMillisecond,
+  isValidDate,
+  utcIsoTextOf,
+  withoutZerosBelowAMillisecond,
+  withThreeFractionDigits,
+} from '../src/date';
 
 const EARLIEST = new Date('-004713-11-24T00:00:00Z').getTime();
 
@@ -45,5 +51,28 @@ describe('utcIsoTextOf', () => {
     ['a Date before the earliest instant', new Date(EARLIEST - 1)],
   ])('gives no text for %s', (_description, value) => {
     expect(utcIsoTextOf(value, EARLIEST)).toBeUndefined();
+  });
+});
+
+describe('withoutZerosBelowAMillisecond', () => {
+  it.each([
+    ['09:30:00.500000', '09:30:00.500'],
+    ['2024-01-01T00:00:00.123000Z', '2024-01-01T00:00:00.123Z'],
+    ['09:30:00.5', '09:30:00.5'],
+    ['09:30:00.123400', '09:30:00.123400'],
+    ['09:30:00', '09:30:00'],
+  ])('%s is %s', (text, expected) => {
+    expect(withoutZerosBelowAMillisecond(text)).toBe(expected);
+  });
+});
+
+describe('withThreeFractionDigits', () => {
+  it.each([
+    ['09:30:00', '09:30:00.000'],
+    ['09:30:00.5', '09:30:00.500'],
+    ['09:30:00.123', '09:30:00.123'],
+    ['2024-01-01T00:00:00Z', '2024-01-01T00:00:00.000Z'],
+  ])('%s is %s', (text, expected) => {
+    expect(withThreeFractionDigits(text)).toBe(expected);
   });
 });

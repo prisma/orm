@@ -4,18 +4,33 @@
  * types' values it takes and how. A cast is declared by the type that receives. ADR 254.
  */
 
-import type { Cast, DataType, DataTypeId } from '@internal/framework-components/codec';
+import type {
+  Cast,
+  DataType,
+  DataTypeId,
+  DataTypeReader,
+  DataTypeSpelling,
+} from '@internal/framework-components/codec';
 import {
   asFloat,
   asNumeralText,
   castUnchanged,
+  dateTimeStoredText,
   decimalTextEqualityKey,
+  isoDateStringText,
   readJsonBoolean,
   readJsonFloat,
   readJsonString,
+  refuseJsonValue,
   refuseWrongShape,
 } from '@internal/framework-components/codec';
 import { mongoDataType } from '@internal/mongo-contract/data-type';
+import {
+  withoutZerosBelowAMillisecond,
+  withThreeFractionDigits,
+} from '@internal/type-implementations/date';
+import { ISO_DURATION_AS_WRITTEN } from '@internal/type-implementations/duration';
+import { ifDefined } from '@internal/utils/defined';
 import { structuredError } from '@internal/utils/structured-error';
 import { type as arktype } from 'arktype';
 import { readBsonJson } from './bson-codec-helpers';
@@ -66,10 +81,79 @@ function vectorElements(elements: readonly unknown[]): number[] {
   });
 }
 
+/** The calendar dates a JavaScript `Date`, and so a BSON date, holds at midnight UTC. */
+const DATE_RANGE = { earliest: '-271821-04-20', latest: '+275760-09-13' } as const;
+
+/** An instant as `mongo/date` stores it, in UTC with three fraction digits, from ISO 8601 text with a UTC offset in which zeros past the third fraction digit are dropped. Throws `CONTRACT.CAST_REFUSED` for text that names no instant a `Date` holds. */
+export function mongoInstantText(text: string): string {
+  return isoDateStringText(withoutZerosBelowAMillisecond(text), 'mongo/date');
+}
+
+/** A calendar date as ISO 8601 text, `2024-02-29`, in the years a BSON date holds at midnight UTC. Throws `CONTRACT.CAST_REFUSED` for text that names no such date. */
+export function mongoCalendarDateText(text: string): string {
+  return dateTimeStoredText(text, { shape: 'date', ownerId: 'mongo/date', range: DATE_RANGE });
+}
+
+/** The value of `mongo/time`: a time of day with exactly three fraction digits, `09:30:00.000`, so the strings sort in the order of the times. Zeros past the third fraction digit are dropped; any other digit there is refused. Throws `CONTRACT.CAST_REFUSED` for text that names no such time. */
+export function mongoTimeText(text: string): string {
+  return withThreeFractionDigits(
+    dateTimeStoredText(
+      withoutZerosBelowAMillisecond(text),
+      { shape: 'time', ownerId: 'mongo/time', maxFractionDigits: 3 },
+      text,
+    ),
+  );
+}
+
+/** The value of `mongo/duration`: an ISO 8601 duration, stored as written. Throws `CONTRACT.CAST_REFUSED` for other text. */
+export function mongoDurationText(text: string): string {
+  if (ISO_DURATION_AS_WRITTEN.test(text)) return text;
+  throw structuredError(
+    'CONTRACT.CAST_REFUSED',
+    `mongo/duration cannot read "${text}". Write an ISO 8601 duration, as in "PT1H30M".`,
+    {
+      why: 'mongo/duration holds an ISO 8601 duration as Temporal.Duration writes it: an optional sign, P, then years, months, weeks and days, then T and hours, minutes and seconds. A sign on each component instead is read too.',
+      fix: 'Write the duration in ISO 8601, as in "P1Y2M3DT4H5M6.5S".',
+    },
+  );
+}
+
 export const mongoString = mongoDataType('mongo/string', {
   read: (json) => readJsonString('mongo/string', json),
   bsonTypes: ['string'],
 });
+
+/** What `stored` writes for `text`, or `undefined` when it refuses it. */
+function storedOrUndefined(stored: (text: string) => string, text: string): string | undefined {
+  try {
+    return stored(text);
+  } catch {
+    return undefined;
+  }
+}
+
+/** A BSON string type in one form for each value when `respell`: it reads any text `stored` takes, and spells it in the form `stored` writes. It takes a `mongo/string` value that `stored` reads. */
+function storedStringDataType(
+  id: string,
+  stored: (text: string) => string,
+  expected: string,
+  options: { readonly respell: boolean },
+) {
+  const fromString: Cast = (value) =>
+    typeof value === 'string' ? stored(value) : refuseWrongShape(value, 'text');
+  const read: DataTypeReader = (json) =>
+    typeof json === 'string' && storedOrUndefined(stored, json) !== undefined
+      ? json
+      : refuseJsonValue(id, expected, json);
+  const spell: DataTypeSpelling = (json) =>
+    typeof json === 'string' ? (storedOrUndefined(stored, json) ?? json) : json;
+  return mongoDataType(id, {
+    read,
+    ...ifDefined('spell', options.respell ? spell : undefined),
+    bsonTypes: ['string'],
+    casts: { [mongoString.id]: fromString },
+  });
+}
 export const mongoInt32 = mongoDataType('mongo/int32', {
   read: (json) => readInt32Json('mongo/int32', json),
   bsonTypes: ['int'],
@@ -108,6 +192,22 @@ export const mongoDate = mongoDataType('mongo/date', {
   read: (json) => readDateJson('mongo/date', json),
   bsonTypes: ['date'],
 });
+/** A time of day, stored as a BSON string with three fraction digits, `09:30:00.000`. */
+export const mongoTime = storedStringDataType(
+  'mongo/time',
+  mongoTimeText,
+  'ISO 8601 time of day text with at most three fraction digits, as in "09:30:00"',
+  { respell: true },
+);
+
+/** A length of time, stored as the ISO 8601 duration it was written as, `PT1H30M`. Equal durations can be written differently, `P1D` and `PT24H`, so a duration keeps its spelling. */
+export const mongoDuration = storedStringDataType(
+  'mongo/duration',
+  mongoDurationText,
+  'an ISO 8601 duration, as in "PT1H30M"',
+  { respell: false },
+);
+
 export const mongoVector = mongoDataType('mongo/vector', {
   read: (json, params) =>
     readVectorJson(
@@ -146,6 +246,8 @@ export const mongoDataTypes: readonly DataType[] = [
   mongoInt32,
   mongoBool,
   mongoDate,
+  mongoTime,
+  mongoDuration,
   mongoVector,
   mongoInt64,
   mongoDecimal128,

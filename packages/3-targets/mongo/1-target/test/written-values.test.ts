@@ -225,6 +225,56 @@ describe('written Mongo values', () => {
     );
   });
 
+  it('reads a date tag with a date alone as its midnight in UTC', () => {
+    expect({
+      instant: readInto('mongo/date@1', tag('date', '2024-02-29')),
+      calendarDate: readInto('mongo/date-string@1', tag('date', '2024-02-29')),
+    }).toEqual({
+      instant: ok('2024-02-29T00:00:00.000Z'),
+      calendarDate: ok('2024-02-29T00:00:00.000Z'),
+    });
+  });
+
+  it('refuses a date tag at another time for a calendar date', () => {
+    expect(readInto('mongo/date-string@1', tag('date', '2024-02-29T09:30:00Z'))).toMatchObject(
+      notOk({ code: 'PSL_VALUE_REFUSED' }),
+    );
+  });
+
+  it('reads a string as a time of day or a duration', () => {
+    expect({
+      time: readInto('mongo/time-string@1', string('09:30')),
+      duration: readInto('mongo/duration-string@1', string('PT1H')),
+    }).toEqual({ time: ok('09:30:00.000'), duration: ok('PT1H') });
+  });
+
+  it('reads a time tag as the time of day with three fraction digits', () => {
+    expect({
+      string: readInto('mongo/time-string@1', tag('time', '09:30')),
+      temporal: readInto('mongo/time-temporal@1', tag('time', '09:30:00.5')),
+    }).toEqual({ string: ok('09:30:00.000'), temporal: ok('09:30:00.500') });
+  });
+
+  it('refuses a time tag with a UTC offset', () => {
+    expect(readInto('mongo/time-string@1', tag('time', '09:30:00Z'))).toEqual(
+      notOk({
+        code: 'PSL_INVALID_LITERAL',
+        message:
+          'value: mongo/time holds no UTC offset, but "09:30:00Z" has one. Leave it out, as in "12:34:56".',
+      }),
+    );
+  });
+
+  it('reads a duration tag as written', () => {
+    expect(readInto('mongo/duration-string@1', tag('duration', 'P1DT2H'))).toEqual(ok('P1DT2H'));
+  });
+
+  it('refuses a duration tag that is not an ISO 8601 duration', () => {
+    expect(readInto('mongo/duration-string@1', tag('duration', '2 hours'))).toMatchObject(
+      notOk({ code: 'PSL_INVALID_LITERAL' }),
+    );
+  });
+
   it('reads a binary tag as base64 with its padding bits zero', () => {
     expect(readInto('mongo/binary@1', tag('binary', 'AB=='))).toEqual(ok('AA=='));
   });
@@ -297,6 +347,8 @@ describe('printing a stored Mongo value', () => {
       print('mongo/double', 1e21),
       print('mongo/double', '9007199254740993'),
       print('mongo/date', '2024-01-01T00:00:00.000Z'),
+      print('mongo/time', '09:30:00.000'),
+      print('mongo/duration', 'PT1H'),
       print('mongo/binary', 'AA=='),
       print('mongo/json', { plan: 'free' }),
     ]).toEqual([
@@ -306,6 +358,8 @@ describe('printing a stored Mongo value', () => {
       '1000000000000000000000',
       '9007199254740993',
       '2024-01-01T00:00:00.000Z',
+      '09:30:00.000',
+      'PT1H',
       'AA==',
       '{"plan":"free"}',
     ]);

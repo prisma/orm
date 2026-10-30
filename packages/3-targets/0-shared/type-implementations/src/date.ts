@@ -14,3 +14,16 @@ export function utcIsoTextOf(value: Date, earliestMilliseconds: number): string 
   if (!Number.isFinite(milliseconds) || milliseconds < earliestMilliseconds) return undefined;
   return value.toISOString();
 }
+
+/** The fraction of ISO text with any zeros past its third digit removed, so `09:30:00.500000` is the millisecond it names. */
+export function withoutZerosBelowAMillisecond(text: string): string {
+  return text.replace(/(\.\d{3})0+(?!\d)/, '$1');
+}
+
+/** The fraction of ISO text padded to exactly three digits, as `toISOString()` writes it. */
+export function withThreeFractionDigits(text: string): string {
+  return text.replace(
+    /(\d{2}:\d{2}:\d{2})(?:\.(\d{1,3}))?(?=Z?$)/,
+    (_whole, clock: string, fraction?: string) => `${clock}.${(fraction ?? '').padEnd(3, '0')}`,
+  );
+}
