@@ -1,11 +1,16 @@
 /**
  * Variant statements on SQLite.
  *
- * `Task` is stored in table `task` and discriminated by `type`. `Bug` is a variant stored in `task`, with its own column `severity`; `Epic` is a variant stored in `task` with its own column `scope`.
+ * The SQLite twin of `variant-statements.e2e.test.ts`. `Task` is stored in table `task` and discriminated by `type`. `Bug` and `Epic` are its variants. In the shared layout both are stored in `task`, `Bug` with its own column `severity`; in the own-table layout each has its own table, whose foreign key to `task` cascades.
  *
- * V1 changes the discriminator value of `Bug` from `bug` to `defect` under `db update`: refused, offering `--convert Bug` first and `--delete Bug` second, then `--convert Bug` rewrites the rows. V2 does the same with `migration plan --convert Bug`, and the `migration.ts` written reproduces itself. V3 removes `Bug`: one question about the model `Bug`, answered by `--delete Bug`, which deletes its rows and drops its column. V4 removes a variant with no fields of its own, so no column: the question about it is answered by `--delete Bug`, which deletes its rows.
+ * - V1: the discriminator value of `Bug` changes from `bug` to `defect`. Without a statement the change is refused, offering `--convert Bug` first and `--delete Bug` second; `--convert Bug` rewrites the rows. Through `migration plan`, `migration.ts` holds the `replaceStoredValue` call.
+ * - V2: `Bug` is renamed to `Defect`, whose value is `defect`: `--rename Bug:Defect` rewrites the rows.
+ * - V3: the value changes and `--delete Bug` deletes the rows that held it.
+ * - V4: `Bug` is removed from the own-table layout: `--delete Bug` deletes its base rows, the cascade deletes its table's rows, and its table is dropped.
+ * - V5: `Bug` is removed from the shared layout: one question about the model `Bug`, and `--delete Bug` deletes its rows and drops its column.
+ * - V6: `Bug`, with no fields of its own, is removed: `--delete Bug` deletes its rows.
  *
- * Every journey ends with `db verify --schema-only` clean and a further plan empty.
+ * Every journey runs twice: through `migration plan` and `migrate`, whose `migration.ts` is run again and reproduces its `ops.json`, and through `db update`. Each reads the rows back and ends with `db verify --schema-only` clean and a further plan empty.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -15,10 +20,10 @@ import { describe, expect, it } from 'vitest';
 import { withTempDir, writeProjectManifest } from '../utils/cli-test-helpers';
 import {
   engineError,
+  getMigrationDirs,
   type JourneyContext,
   latestMigrationDirName,
   parseJsonOutput,
-  planMigrationAndSelfEmit,
   runContractEmit,
   runDbUpdate,
   runDbVerify,
@@ -29,7 +34,23 @@ import {
   timeouts,
 } from '../utils/journey-test-helpers';
 
-function contractWith(bug: string | undefined): string {
+type Via = 'migrate' | 'db update';
+const VIAS: readonly Via[] = ['migrate', 'db update'];
+
+interface Variant {
+  readonly name: string;
+  readonly value: string;
+  readonly field?: string;
+}
+
+function taskContract(variants: readonly Variant[], ownTables: boolean): string {
+  const models = variants.map(
+    ({ name, value, field }) => `
+model ${name} {
+${field === undefined ? '' : `  ${field} String?\n`}  @@base(Task, "${value}")
+${ownTables ? `  @@map("${name.toLowerCase()}")\n` : ''}}
+`,
+  );
   return `// use prisma-8
 
 model Task {
@@ -38,27 +59,22 @@ model Task {
   @@discriminator(type)
   @@map("task")
 }
-${
-  bug === undefined
-    ? ''
-    : `
-model Bug {
-  severity String?
-  @@base(Task, "${bug}")
-}
-`
-}
-model Epic {
-  scope String?
-  @@base(Task, "epic")
-}
-`;
+${models.join('')}`;
 }
 
-const FROM_PSL = contractWith('bug');
-const CHANGED_PSL = contractWith('defect');
-const REMOVED_PSL = contractWith(undefined);
-const WITHOUT_FIELDS_PSL = FROM_PSL.replace('  severity String?\n', '');
+const BUG: Variant = { name: 'Bug', value: 'bug', field: 'severity' };
+const EPIC: Variant = { name: 'Epic', value: 'epic', field: 'scope' };
+
+const SHARED = taskContract([BUG, EPIC], false);
+const CHANGED = taskContract([{ ...BUG, value: 'defect' }, EPIC], false);
+const RENAMED = taskContract([{ ...BUG, name: 'Defect', value: 'defect' }, EPIC], false);
+const SHARED_REMOVED = taskContract([EPIC], false);
+const OWN_TABLES = taskContract([BUG, EPIC], true);
+const OWN_TABLES_REMOVED = taskContract([EPIC], true);
+const WITHOUT_FIELDS = taskContract([{ name: 'Bug', value: 'bug' }, EPIC], false);
+
+const SEED_SHARED = `INSERT INTO "task" (id, type, severity) VALUES (1, 'bug', 'high'), (2, 'epic', NULL), (3, 'bug', NULL)`;
+const SEED_WITHOUT_FIELDS = `INSERT INTO "task" (id, type) VALUES (1, 'bug'), (2, 'epic'), (3, 'bug')`;
 
 type SqliteJourney = JourneyContext & { readonly dbPath: string };
 
@@ -68,7 +84,6 @@ function setupSqliteJourney(createTempDir: () => string): SqliteJourney {
   const configPath = join(testDir, 'prisma.config.ts');
   const config = readFileSync(sqlitePslConfigFixture, 'utf-8').replace('{{DB_PATH}}', () => dbPath);
   writeFileSync(configPath, config, 'utf-8');
-  writeFileSync(join(testDir, 'contract.prisma'), FROM_PSL, 'utf-8');
   writeProjectManifest(testDir);
   return { testDir, configPath, outputDir: testDir, dbPath };
 }
@@ -82,27 +97,36 @@ function withDatabase<T>(dbPath: string, run: (db: DatabaseSync) => T): T {
   }
 }
 
-function seedRows(dbPath: string): void {
-  withDatabase(dbPath, (db) => {
-    db.exec(
-      `INSERT INTO "task" (id, type, severity) VALUES (1, 'bug', 'high'), (2, 'epic', NULL), (3, 'bug', NULL)`,
-    );
-  });
+function exec(dbPath: string, statement: string): void {
+  withDatabase(dbPath, (db) => db.exec(statement));
 }
 
-function tasks(dbPath: string): readonly unknown[] {
+function rows(dbPath: string, query: string): readonly unknown[] {
   return withDatabase(dbPath, (db) =>
     db
-      .prepare('SELECT id, type FROM "task" ORDER BY id')
+      .prepare(query)
       .all()
       .map((row) => ({ ...row })),
   );
 }
 
-function columns(dbPath: string): readonly string[] {
+function tasks(dbPath: string): readonly unknown[] {
+  return rows(dbPath, 'SELECT id, type FROM "task" ORDER BY id');
+}
+
+function columns(dbPath: string, table: string): readonly string[] {
   return withDatabase(dbPath, (db) =>
     db
-      .prepare(`SELECT name FROM pragma_table_info('task') ORDER BY cid`)
+      .prepare(`SELECT name FROM pragma_table_info('${table}') ORDER BY name`)
+      .all()
+      .map((row) => String(row['name'])),
+  );
+}
+
+function tables(dbPath: string): readonly string[] {
+  return withDatabase(dbPath, (db) =>
+    db
+      .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name`)
       .all()
       .map((row) => String(row['name'])),
   );
@@ -114,9 +138,59 @@ async function emit(ctx: JourneyContext, psl: string, label: string): Promise<vo
   expect(emitted.exitCode, `${label}: emit: ${emitted.stderr}`).toBe(0);
 }
 
-async function expectSettled(ctx: JourneyContext, label: string): Promise<void> {
+function fromLatest(ctx: JourneyContext): readonly string[] {
+  return getMigrationDirs(ctx).length === 0 ? [] : ['--from', latestMigrationDirName(ctx)];
+}
+
+/** Applies the emitted contract through `via`, with the statements given, and checks a written `migration.ts` reproduces its `ops.json`. Returns the `migration.ts` written, if any. */
+async function apply(
+  ctx: JourneyContext,
+  via: Via,
+  statements: readonly string[],
+  label: string,
+): Promise<string | undefined> {
+  if (via === 'db update') {
+    const update = await runDbUpdate(ctx, [...statements, '--no-interactive', '--json']);
+    expect(update.exitCode, `${label}: db update: ${JSON.stringify(engineError(update))}`).toBe(0);
+    return undefined;
+  }
+  const plan = await runMigrationPlan(ctx, [
+    ...fromLatest(ctx),
+    '--name',
+    label.replace(/\W/g, '-'),
+    ...statements,
+    '--json',
+  ]);
+  expect(plan.exitCode, `${label}: plan: ${plan.stderr}`).toBe(0);
+  const dir = join(ctx.testDir, 'migrations/app', latestMigrationDirName(ctx));
+  const ops = readFileSync(join(dir, 'ops.json'), 'utf-8');
+  const reEmit = await selfEmitMigration(ctx, ['--dir', dir]);
+  expect(reEmit.exitCode, `${label}: re-run migration.ts: ${reEmit.stderr}`).toBe(0);
+  expect(readFileSync(join(dir, 'ops.json'), 'utf-8'), `${label}: same ops.json`).toBe(ops);
+  const migrate = await runMigrate(ctx, ['--json']);
+  expect(migrate.exitCode, `${label}: migrate: ${JSON.stringify(engineError(migrate))}`).toBe(0);
+  return readFileSync(join(dir, 'migration.ts'), 'utf-8');
+}
+
+/** The text of the refusal of the emitted contract without statements. */
+async function refusal(ctx: JourneyContext, via: Via, label: string): Promise<string> {
+  const refused =
+    via === 'db update'
+      ? await runDbUpdate(ctx, ['--no-interactive', '--json'])
+      : await runMigrationPlan(ctx, [...fromLatest(ctx), '--name', 'refused', '--json']);
+  expect(refused.exitCode, `${label}: refused without a statement`).not.toBe(0);
+  return JSON.stringify(engineError(refused));
+}
+
+async function expectSettled(ctx: JourneyContext, via: Via, label: string): Promise<void> {
   const verify = await runDbVerify(ctx, ['--schema-only']);
   expect(verify.exitCode, `${label}: db verify --schema-only: ${verify.stderr}`).toBe(0);
+  if (via === 'migrate') {
+    const fresh = await runMigrationPlan(ctx, [...fromLatest(ctx), '--json']);
+    expect(fresh.exitCode, `${label}: plan with no change: ${fresh.stderr}`).toBe(0);
+    expect(parseJsonOutput<{ noOp: boolean }>(fresh).noOp, `${label}: plan is empty`).toBe(true);
+    return;
+  }
   const dryRun = await runDbUpdate(ctx, ['--dry-run', '--json']);
   expect(dryRun.exitCode, `${label}: db update --dry-run: ${dryRun.stderr}`).toBe(0);
   expect(
@@ -125,155 +199,183 @@ async function expectSettled(ctx: JourneyContext, label: string): Promise<void> 
   ).toEqual([]);
 }
 
-function nextActionText(result: Parameters<typeof engineError>[0]): string {
-  return JSON.stringify(engineError(result)?.nextActions ?? []);
-}
-
 withTempDir(({ createTempDir }) => {
-  describe('V1 (SQLite): convert a variant whose discriminator value changed, with db update', () => {
+  describe.each(VIAS)(
+    'V1 (SQLite, %s): convert a variant whose discriminator value changed',
+    (via) => {
+      it(
+        'is refused offering --convert Bug then --delete Bug, and --convert Bug rewrites the rows',
+        async () => {
+          const ctx = setupSqliteJourney(createTempDir);
+          await emit(ctx, SHARED, 'V1.01');
+          await apply(ctx, via, [], 'V1.02');
+          exec(ctx.dbPath, SEED_SHARED);
+          await emit(ctx, CHANGED, 'V1.03');
+
+          const offered = await refusal(ctx, via, 'V1.04');
+          expect(offered, 'V1.04: convert offered').toContain('--convert Bug');
+          expect(offered, 'V1.04: delete offered').toContain('--delete Bug');
+          expect(offered.indexOf('--convert Bug'), 'V1.04: convert first').toBeLessThan(
+            offered.indexOf('--delete Bug'),
+          );
+
+          const source = await apply(ctx, via, ['--convert', 'Bug'], 'V1.05');
+          if (source !== undefined) {
+            expect(source, 'V1.05: migration.ts rewrites the value').toContain(
+              [
+                '      this.replaceStoredValue({',
+                "        table: 'task',",
+                "        column: 'type',",
+                "        from: 'bug',",
+                "        to: 'defect',",
+                "        codecRef: { codecId: 'sqlite/text@1' },",
+                '      }),',
+              ].join('\n'),
+            );
+          }
+          expect(tasks(ctx.dbPath), 'V1.05: the rows hold the new value').toEqual([
+            { id: 1, type: 'defect' },
+            { id: 2, type: 'epic' },
+            { id: 3, type: 'defect' },
+          ]);
+          await expectSettled(ctx, via, 'V1.06');
+        },
+        timeouts.spinUpPpgDev,
+      );
+    },
+  );
+
+  describe.each(VIAS)('V2 (SQLite, %s): rename a variant and its discriminator value', (via) => {
     it(
-      'is refused offering --convert Bug then --delete Bug, and --convert Bug rewrites the rows',
+      '--rename Bug:Defect rewrites the rows to the new value',
       async () => {
         const ctx = setupSqliteJourney(createTempDir);
-        await emit(ctx, FROM_PSL, 'V1.01');
-        expect((await runDbUpdate(ctx, ['--json'])).exitCode, 'V1.02: create').toBe(0);
-        seedRows(ctx.dbPath);
-        await emit(ctx, CHANGED_PSL, 'V1.03');
+        await emit(ctx, SHARED, 'V2.01');
+        await apply(ctx, via, [], 'V2.02');
+        exec(ctx.dbPath, SEED_SHARED);
+        await emit(ctx, RENAMED, 'V2.03');
 
-        const refused = await runDbUpdate(ctx, ['--no-interactive', '--json']);
-        expect(engineError(refused)?.code, 'V1.04: nobody to answer').toBe('CLI.CONSENT_REQUIRED');
-        const offered = nextActionText(refused);
-        expect(offered, 'V1.04: convert offered').toContain('--convert Bug');
-        expect(offered, 'V1.04: delete offered').toContain('--delete Bug');
-        expect(offered.indexOf('--convert Bug'), 'V1.04: convert first').toBeLessThan(
-          offered.indexOf('--delete Bug'),
-        );
-
-        const update = await runDbUpdate(ctx, ['--convert', 'Bug', '--no-interactive', '--json']);
-        expect(update.exitCode, `V1.05: db update: ${JSON.stringify(engineError(update))}`).toBe(0);
-
-        expect(tasks(ctx.dbPath)).toEqual([
-          { id: 1, type: 'defect' },
-          { id: 2, type: 'epic' },
-          { id: 3, type: 'defect' },
+        await apply(ctx, via, ['--rename', 'Bug:Defect'], 'V2.04');
+        expect(
+          rows(ctx.dbPath, 'SELECT id, type, severity FROM "task" ORDER BY id'),
+          'V2.04: the rows hold the new value and keep their columns',
+        ).toEqual([
+          { id: 1, type: 'defect', severity: 'high' },
+          { id: 2, type: 'epic', severity: null },
+          { id: 3, type: 'defect', severity: null },
         ]);
-        await expectSettled(ctx, 'V1.06');
+        await expectSettled(ctx, via, 'V2.05');
       },
       timeouts.spinUpPpgDev,
     );
   });
 
-  describe('V2 (SQLite): convert a variant with migration plan', () => {
+  describe.each(VIAS)(
+    'V3 (SQLite, %s): delete the rows of a variant whose value changed',
+    (via) => {
+      it(
+        '--delete Bug deletes the rows that held the old value',
+        async () => {
+          const ctx = setupSqliteJourney(createTempDir);
+          await emit(ctx, SHARED, 'V3.01');
+          await apply(ctx, via, [], 'V3.02');
+          exec(ctx.dbPath, SEED_SHARED);
+          await emit(ctx, CHANGED, 'V3.03');
+
+          await apply(ctx, via, ['--delete', 'Bug'], 'V3.04');
+          expect(tasks(ctx.dbPath), 'V3.04: only the other variant is left').toEqual([
+            { id: 2, type: 'epic' },
+          ]);
+          await expectSettled(ctx, via, 'V3.05');
+        },
+        timeouts.spinUpPpgDev,
+      );
+    },
+  );
+
+  describe.each(VIAS)('V4 (SQLite, %s): remove a variant stored in its own table', (via) => {
     it(
-      'writes replaceStoredValue for the variant, and the migration reproduces itself',
+      'asks one question about Bug, and --delete Bug deletes its rows and drops its table',
       async () => {
         const ctx = setupSqliteJourney(createTempDir);
-        await emit(ctx, FROM_PSL, 'V2.01');
-        const initial = await planMigrationAndSelfEmit(ctx, ['--name', 'initial']);
-        expect(initial.exitCode, `V2.02: plan initial: ${initial.stderr}`).toBe(0);
-        expect((await runMigrate(ctx)).exitCode, 'V2.02: migrate initial').toBe(0);
-        seedRows(ctx.dbPath);
-        const origin = latestMigrationDirName(ctx);
-        await emit(ctx, CHANGED_PSL, 'V2.03');
-
-        const plan = await runMigrationPlan(ctx, [
-          '--name',
-          'defect',
-          '--from',
-          origin,
-          '--convert',
-          'Bug',
-          '--json',
-        ]);
-        expect(plan.exitCode, `V2.04: plan: ${plan.stderr}`).toBe(0);
-        const planned = parseJsonOutput<{
-          operations: readonly { label: string }[];
-          appliedStatements: readonly { description: string; operationIndexes: number[] }[];
-        }>(plan);
-        expect(planned.operations.map(({ label }) => label)).toEqual([
-          'Replace value "bug" with "defect" in column "type" of "task"',
-        ]);
-        expect(planned.appliedStatements).toMatchObject([{ operationIndexes: [0] }]);
-        const dirName = latestMigrationDirName(ctx);
-        const dir = join(ctx.testDir, 'migrations', 'app', dirName);
-        const source = readFileSync(join(dir, 'migration.ts'), 'utf-8');
-        expect(source).toContain(
-          [
-            '      this.replaceStoredValue({',
-            "        table: 'task',",
-            "        column: 'type',",
-            "        from: 'bug',",
-            "        to: 'defect',",
-            "        codecRef: { codecId: 'sqlite/text@1' },",
-            '      }),',
-          ].join('\n'),
+        await emit(ctx, OWN_TABLES, 'V4.01');
+        await apply(ctx, via, [], 'V4.02');
+        exec(
+          ctx.dbPath,
+          `INSERT INTO "task" (id, type) VALUES (1, 'bug'), (2, 'epic'), (3, 'bug')`,
         );
-        const ops = readFileSync(join(dir, 'ops.json'), 'utf-8');
-        const reEmit = await selfEmitMigration(ctx, ['--dir', `migrations/app/${dirName}`]);
-        expect(reEmit.exitCode, `V2.05: re-run migration.ts: ${reEmit.stderr}`).toBe(0);
-        expect(readFileSync(join(dir, 'ops.json'), 'utf-8')).toBe(ops);
-        expect((await runMigrate(ctx)).exitCode, 'V2.06: migrate').toBe(0);
+        exec(ctx.dbPath, `INSERT INTO "bug" (id, severity) VALUES (1, 'high'), (3, NULL)`);
+        exec(ctx.dbPath, `INSERT INTO "epic" (id, scope) VALUES (2, 'all')`);
+        await emit(ctx, OWN_TABLES_REMOVED, 'V4.03');
 
-        expect(tasks(ctx.dbPath)).toEqual([
-          { id: 1, type: 'defect' },
+        const offered = await refusal(ctx, via, 'V4.04');
+        expect(offered, 'V4.04: one statement for the model').toContain('--delete Bug');
+        expect(offered, 'V4.04: no question per field').not.toContain('Bug.severity');
+
+        await apply(ctx, via, ['--delete', 'Bug'], 'V4.05');
+        expect(tasks(ctx.dbPath), 'V4.05: its base rows are deleted').toEqual([
           { id: 2, type: 'epic' },
-          { id: 3, type: 'defect' },
         ]);
-        await expectSettled(ctx, 'V2.07');
+        expect(tables(ctx.dbPath), 'V4.05: its table is dropped').not.toContain('bug');
+        expect(
+          rows(ctx.dbPath, 'SELECT id, scope FROM "epic"'),
+          'V4.05: the other variant keeps its rows',
+        ).toEqual([{ id: 2, scope: 'all' }]);
+        await expectSettled(ctx, via, 'V4.06');
       },
       timeouts.spinUpPpgDev,
     );
   });
 
-  describe('V3 (SQLite): remove a variant with db update', () => {
+  describe.each(VIAS)('V5 (SQLite, %s): remove a variant stored in its base table', (via) => {
     it(
       'asks one question about the model Bug, and --delete Bug deletes its rows and drops its column',
       async () => {
         const ctx = setupSqliteJourney(createTempDir);
-        await emit(ctx, FROM_PSL, 'V3.01');
-        expect((await runDbUpdate(ctx, ['--json'])).exitCode, 'V3.02: create').toBe(0);
-        seedRows(ctx.dbPath);
-        await emit(ctx, REMOVED_PSL, 'V3.03');
+        await emit(ctx, SHARED, 'V5.01');
+        await apply(ctx, via, [], 'V5.02');
+        exec(ctx.dbPath, SEED_SHARED);
+        await emit(ctx, SHARED_REMOVED, 'V5.03');
 
-        const refused = await runDbUpdate(ctx, ['--no-interactive', '--json']);
-        expect(engineError(refused)?.code, 'V3.04: nobody to answer').toBe('CLI.CONSENT_REQUIRED');
-        const offered = nextActionText(refused);
-        expect(offered, 'V3.04: one flag for the model').toContain('--delete Bug');
-        expect(offered, 'V3.04: no question per field').not.toContain('Bug.severity');
+        const offered = await refusal(ctx, via, 'V5.04');
+        expect(offered, 'V5.04: one statement for the model').toContain('--delete Bug');
+        expect(offered, 'V5.04: no question per field').not.toContain('Bug.severity');
 
-        const update = await runDbUpdate(ctx, ['--delete', 'Bug', '--no-interactive', '--json']);
-        expect(update.exitCode, `V3.05: db update: ${JSON.stringify(engineError(update))}`).toBe(0);
-
-        expect(tasks(ctx.dbPath)).toEqual([{ id: 2, type: 'epic' }]);
-        expect(columns(ctx.dbPath)).toEqual(['id', 'scope', 'type']);
-        await expectSettled(ctx, 'V3.06');
+        await apply(ctx, via, ['--delete', 'Bug'], 'V5.05');
+        expect(tasks(ctx.dbPath), 'V5.05: its rows are deleted').toEqual([{ id: 2, type: 'epic' }]);
+        expect(columns(ctx.dbPath, 'task'), 'V5.05: its column is dropped').toEqual([
+          'id',
+          'scope',
+          'type',
+        ]);
+        await expectSettled(ctx, via, 'V5.06');
       },
       timeouts.spinUpPpgDev,
     );
   });
 
-  describe('V4 (SQLite): remove a variant with no columns of its own, with db update', () => {
+  describe.each(VIAS)('V6 (SQLite, %s): remove a variant with no columns of its own', (via) => {
     it(
       'asks one question about the model Bug, and --delete Bug deletes its rows',
       async () => {
         const ctx = setupSqliteJourney(createTempDir);
-        await emit(ctx, WITHOUT_FIELDS_PSL, 'V4.01');
-        expect((await runDbUpdate(ctx, ['--json'])).exitCode, 'V4.02: create').toBe(0);
-        withDatabase(ctx.dbPath, (db) => {
-          db.exec(`INSERT INTO "task" (id, type) VALUES (1, 'bug'), (2, 'epic')`);
-        });
-        await emit(ctx, REMOVED_PSL, 'V4.03');
+        await emit(ctx, WITHOUT_FIELDS, 'V6.01');
+        await apply(ctx, via, [], 'V6.02');
+        exec(ctx.dbPath, SEED_WITHOUT_FIELDS);
+        await emit(ctx, SHARED_REMOVED, 'V6.03');
 
-        const refused = await runDbUpdate(ctx, ['--no-interactive', '--json']);
-        expect(engineError(refused)?.code, 'V4.04: nobody to answer').toBe('CLI.CONSENT_REQUIRED');
-        expect(nextActionText(refused), 'V4.04: one flag for the model').toContain('--delete Bug');
+        expect(await refusal(ctx, via, 'V6.04'), 'V6.04: asked about the model').toContain(
+          '--delete Bug',
+        );
 
-        const update = await runDbUpdate(ctx, ['--delete', 'Bug', '--no-interactive', '--json']);
-        expect(update.exitCode, `V4.05: db update: ${JSON.stringify(engineError(update))}`).toBe(0);
-
-        expect(tasks(ctx.dbPath)).toEqual([{ id: 2, type: 'epic' }]);
-        expect(columns(ctx.dbPath)).toEqual(['id', 'scope', 'type']);
-        await expectSettled(ctx, 'V4.06');
+        await apply(ctx, via, ['--delete', 'Bug'], 'V6.05');
+        expect(tasks(ctx.dbPath), 'V6.05: its rows are deleted').toEqual([{ id: 2, type: 'epic' }]);
+        expect(columns(ctx.dbPath, 'task'), 'V6.05: no column dropped').toEqual([
+          'id',
+          'scope',
+          'type',
+        ]);
+        await expectSettled(ctx, via, 'V6.06');
       },
       timeouts.spinUpPpgDev,
     );
