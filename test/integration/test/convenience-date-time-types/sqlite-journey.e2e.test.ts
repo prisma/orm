@@ -1,5 +1,5 @@
 /**
- * Journey: a SQLite schema written with the convenience date and time types `DateTime`, `Date`, `Time` and `Duration`, with every `as:` choice, emits each field as the explicit type it chooses, migrates, and is written and read by the ORM. Each column holds the text its data type stores, in one form for each value. The client generates `now()` values for `@onCreate`, the database fills `@default(now())` for an instant, a date and a time of day, and `db verify` reads those defaults back as `now()`. A later migration adds required date and time columns to a table with a row, which takes each type's temporary value. A bare `DateTime` emits the contract it emitted before the convenience types.
+ * Journey: a SQLite schema written with the convenience date and time types `DateTime`, `Date`, `Time` and `Duration`, with every `as:` choice, emits each field as the explicit type it chooses, migrates, and is written and read by the ORM. Each column holds the text its data type stores, in one form for each value. The client generates `now()` values for `@onCreate`, the database fills `@default(now())` for an instant, a date and a time of day, and `db verify` reads those defaults back as `now()`. A later migration adds required date and time columns to a table with a row, which takes each type's temporary value, and changing a `DateTime @default(now())` field to `Date` is a change `db verify` reports and the next migration makes. A bare `DateTime` emits the contract it emitted before the convenience types.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
@@ -55,6 +55,11 @@ const WITH_REQUIRED_COLUMNS = SCHEMA.replace(
   stamp        DateTime(as: string)
 
   @@map("event")`,
+);
+
+const WITH_DB_AT_AS_DATE = WITH_REQUIRED_COLUMNS.replace(
+  'dbAt         DateTime               @default(now())',
+  'dbAt         Date                   @default(now())',
 );
 
 const COLUMN_CODECS = {
@@ -119,6 +124,17 @@ function storedRow(dbPath: string): Record<string, unknown> {
   const db = new DatabaseSync(dbPath);
   try {
     return { ...db.prepare('SELECT * FROM "event" WHERE "id" = 1').get() };
+  } finally {
+    db.close();
+  }
+}
+
+function storedDefaultOf(dbPath: string, column: string): unknown {
+  const db = new DatabaseSync(dbPath);
+  try {
+    return db
+      .prepare(`SELECT "dflt_value" FROM pragma_table_info('event') WHERE "name" = ?`)
+      .get(column)?.['dflt_value'];
   } finally {
     db.close();
   }
@@ -258,6 +274,18 @@ withTempDir(({ createTempDir }) => {
           span: 'PT0S',
           stamp: '1970-01-01T00:00:00.000Z',
         });
+
+        const beforeDateDefault = latestMigrationDirName(ctx);
+        await emitContract(ctx, WITH_DB_AT_AS_DATE);
+        const drifted = await runDbVerify(ctx, ['--schema-only', '--strict', '--json']);
+        expect(
+          drifted.exitCode,
+          `db verify after DateTime became Date\n${output(drifted)}`,
+        ).not.toBe(0);
+        await planAndMigrate(ctx, 'db-at-as-date', beforeDateDefault);
+        expect(storedDefaultOf(ctx.dbPath, 'dbAt')).toBe("date('now')");
+        const reverified = await runDbVerify(ctx, ['--schema-only', '--strict', '--json']);
+        expect(reverified.exitCode, `db verify\n${output(reverified)}`).toBe(0);
       },
       timeouts.spinUpPpgDev,
     );

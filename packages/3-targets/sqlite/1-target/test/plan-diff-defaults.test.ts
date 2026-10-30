@@ -8,7 +8,7 @@ import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { readSqliteDefault } from '../src/core/default-normalizer';
 import { columnSpecFromNode, ddlColumnFromNode } from '../src/core/migrations/column-ddl-rendering';
-import { buildSqlitePlanDiff } from '../src/core/migrations/diff-database-schema';
+import { buildSqlitePlanDiff, diffSqliteSchema } from '../src/core/migrations/diff-database-schema';
 import { sqliteCreateNamespace } from '../src/core/sqlite-unbound-database';
 import { introspectedColumn, sqliteTestComponents } from './sqlite-test-types';
 
@@ -34,14 +34,20 @@ function liveSchema(rawDefault: string): SqlSchemaIR {
   });
 }
 
-function contractWithDefault(columnDefault: ColumnDefault): Contract<SqlStorage> {
+function contractWithDefault(
+  columnDefault: ColumnDefault,
+  column: { readonly codecId: string; readonly dataType: string } = {
+    codecId: 'sqlite/text@1',
+    dataType: 'sqlite/text',
+  },
+): Contract<SqlStorage> {
   const event: StorageTable = {
     columns: {
       at: {
         many: false,
-        dataType: 'sqlite/text',
+        dataType: column.dataType,
         nullable: false,
-        codecId: 'sqlite/text@1',
+        codecId: column.codecId,
         default: columnDefault,
       },
     },
@@ -91,6 +97,64 @@ describe('buildSqlitePlanDiff derives the expected default like verify does', ()
       expect(diff.issues).toEqual([]);
     },
   );
+
+  const dateTimeColumns = {
+    DateTime: { codecId: 'sqlite/datetime@1', dataType: 'sqlite/datetime' },
+    Date: { codecId: 'sqlite/date-string@1', dataType: 'sqlite/date' },
+    Time: { codecId: 'sqlite/time-string@1', dataType: 'sqlite/time' },
+  } as const;
+  const nowStoredBy = {
+    DateTime: "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+    Date: "date('now')",
+    Time: "strftime('%H:%M:%f','now')",
+  } as const;
+  const fieldTypes = ['DateTime', 'Date', 'Time'] as const;
+
+  it.each(
+    fieldTypes.flatMap((contractType) =>
+      fieldTypes.map((liveType) => [contractType, liveType] as const),
+    ),
+  )(
+    'sees a now() default on a %s field against a live column whose default is the now() of a %s field as a change only when the two differ',
+    (contractType, liveType) => {
+      const diff = buildSqlitePlanDiff({
+        contract: contractWithDefault(
+          { kind: 'function', expression: 'now()' },
+          dateTimeColumns[contractType],
+        ),
+        actualSchema: liveSchema(`(${nowStoredBy[liveType]})`),
+        frameworkComponents: sqliteTestComponents,
+      });
+      expect(diff.issues.length > 0).toBe(contractType !== liveType);
+    },
+  );
+
+  it.each(['Date', 'Time'] as const)(
+    'sees a now() default on a %s field against a live column whose default is CURRENT_TIMESTAMP as a change',
+    (contractType) => {
+      const diff = buildSqlitePlanDiff({
+        contract: contractWithDefault(
+          { kind: 'function', expression: 'now()' },
+          dateTimeColumns[contractType],
+        ),
+        actualSchema: liveSchema('CURRENT_TIMESTAMP'),
+        frameworkComponents: sqliteTestComponents,
+      });
+      expect(diff.issues).not.toEqual([]);
+    },
+  );
+
+  it('has db verify report a now() default on a Date field against a live column that writes the current instant', () => {
+    const verdict = diffSqliteSchema({
+      contract: contractWithDefault(
+        { kind: 'function', expression: 'now()' },
+        dateTimeColumns.Date,
+      ),
+      schema: liveSchema(`(${nowStoredBy.DateTime})`),
+      frameworkComponents: sqliteTestComponents,
+    });
+    expect(verdict.issues).not.toEqual([]);
+  });
 
   it('names a now() default as introspection names it', () => {
     const diff = buildSqlitePlanDiff({

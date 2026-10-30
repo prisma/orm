@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mysqlResolveDefault, readMysqlDefault } from '../src/core/default-normalizer';
 
-const column = { typeText: 'datetime(3)', many: false };
+const column = { typeText: 'datetime(3)', dataTypeId: 'mysql/datetime', many: false };
 
 describe('readMysqlDefault', () => {
   it.each([

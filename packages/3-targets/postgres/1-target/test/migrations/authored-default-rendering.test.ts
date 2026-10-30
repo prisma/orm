@@ -112,7 +112,7 @@ describe("a literal-shaped sql`'{}'::jsonb` default on Postgres", () => {
     expect(
       postgresResolveDefault(
         { kind: 'function', expression: "'{}'::jsonb" },
-        { typeText: 'jsonb', many: false },
+        { typeText: 'jsonb', dataTypeId: 'pg/jsonb', many: false },
       ),
     ).toEqual({ kind: 'function', expression: "'{}'::jsonb" });
   });
