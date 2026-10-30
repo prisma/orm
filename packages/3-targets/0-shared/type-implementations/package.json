@@ -1,7 +1,7 @@
 {
   "name": "@internal/type-implementations",
   "private": true,
-  "version": "8.0.0-rc.21",
+  "version": "8.0.0-rc.22",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -19,8 +19,8 @@
     "temporal-spec": "1.0.1"
   },
   "devDependencies": {
-    "@repo/tsconfig": "workspace:8.0.0-rc.21",
-    "@repo/tsdown": "workspace:8.0.0-rc.21",
+    "@repo/tsconfig": "workspace:8.0.0-rc.22",
+    "@repo/tsdown": "workspace:8.0.0-rc.22",
     "temporal-polyfill": "^1.0.4",
     "tsdown": "catalog:",
     "typescript": "catalog:",

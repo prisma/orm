@@ -9,7 +9,7 @@ const facadePackage = ['@prisma', 'orm-mongo'].join('/');
 const familyPackage = ['@prisma', 'orm-family-mongo'].join('/');
 
 function detects(audience: 'app' | 'extension', content: string, change = id): boolean {
-  const path = `upgrade-instructions/pending/mongo-query-takes-context/${audience}/instructions.md`;
+  const path = `skills/prisma-8/upgrading/${audience}/upgrades/8.0.0-rc.21-to-8.0.0-rc.22/instructions.md`;
   const guide = readFileSync(join(repoRoot, path), 'utf-8');
   const entry = guide.split(/\n {2}- id: /).find((block) => block.startsWith(`${change}\n`));
   if (entry === undefined) throw new Error(`The ${audience} guide has no change ${change}`);
@@ -95,10 +95,6 @@ describe.each(['app', 'extension'] as const)('the %s runtime adapter detection',
       'a context type with a generic contract and a target id',
       'MongoExecutionContext<MongoContract<Storage>, TTargetId>',
     ],
-    [
-      'a stack built with a driver',
-      'createMongoExecutionStack({\n  target,\n  adapter,\n  driver: mongoDriver,\n})',
-    ],
     ['a context type over unknown', 'MongoExecutionContext<unknown>'],
     ['the removed enum helper', 'const enums = buildMongoEnums(contract, context.codecs);'],
     ['the removed enum accessor type', 'let enums: MongoEnumAccessors;'],
@@ -116,6 +112,10 @@ describe.each(['app', 'extension'] as const)('the %s runtime adapter detection',
     ['the enum accessors of a client', 'const { enums } = mongoStatic({ contract });'],
     ['a context type over a generic contract', 'MongoExecutionContext<MongoContract<Storage>>'],
     ['a stack built without a driver', 'createMongoExecutionStack({ target, adapter })'],
+    [
+      'a stack built with a driver',
+      'createMongoExecutionStack({\n  target,\n  adapter,\n  driver: mongoDriver,\n})',
+    ],
   ])('skips %s', (_name, content) => {
     expect(detects(audience, content, change)).toBe(false);
   });
