@@ -1,6 +1,7 @@
 /**
- * The data types this target owns: the MySQL integer, character and date-time types, and a native
- * `enum('A','B')` column type whose name is the text MySQL's catalog prints for it.
+ * The data types this target owns: the MySQL integer, character, date and time types, a duration
+ * stored as varchar, and a native `enum('A','B')` column type whose name is the text MySQL's catalog
+ * prints for it.
  *
  * ADR 254.
  */
@@ -23,6 +24,8 @@ import {
   refuseJsonValue,
 } from '@internal/framework-components/codec';
 import { sqlDataType, sqlRawDataType } from '@internal/sql-contract/data-type';
+import { ISO_DURATION_AS_WRITTEN } from '@internal/type-implementations/duration';
+import { ifDefined } from '@internal/utils/defined';
 import { structuredError } from '@internal/utils/structured-error';
 import { type as arktype } from 'arktype';
 import { mysqlError } from './errors';
@@ -115,15 +118,24 @@ export const mysqlChar = sqlDataType('mysql/char', {
   casts: fromText,
 });
 
-/** The fractional-second precision of `datetime`, 0 to 6; MySQL prints a precision of 0 as a bare `datetime`. */
+/** The fractional-second precision of `datetime`, `timestamp` and `time`, 0 to 6; MySQL prints a precision of 0 as the bare type. */
 export const mysqlDatetimeParams = arktype({
   'precision?': 'number.integer >= 0 & number.integer <= 6',
 });
 
-const DATETIME_RANGE = {
+/** The years MySQL holds in a `datetime` and a `date`. */
+export const MYSQL_DATETIME_RANGE = {
   earliest: '1000-01-01T00:00:00',
   latest: '9999-12-31T23:59:59.999999',
 } as const;
+
+/** The instants MySQL holds in a `timestamp`, in UTC. */
+export const MYSQL_TIMESTAMP_RANGE = {
+  earliest: '1970-01-01T00:00:01',
+  latest: '2038-01-19T03:14:07.999999',
+} as const;
+
+const MYSQL_DATE_RANGE = { earliest: '1000-01-01', latest: '9999-12-31' } as const;
 
 /**
  * The value of `mysql/datetime`: a date and time without a time zone, ISO 8601 text with a `T` and no trailing zeros in the fraction, within MySQL's range. Throws `CONTRACT.CAST_REFUSED` for text that names no such date and time.
@@ -132,29 +144,78 @@ export function mysqlDatetimeText(text: string): string {
   return dateTimeStoredText(text, {
     shape: 'dateTime',
     ownerId: 'mysql/datetime',
-    range: DATETIME_RANGE,
+    range: MYSQL_DATETIME_RANGE,
   });
 }
 
-function storedDatetime(text: string): string | undefined {
+/**
+ * The value of `mysql/timestamp`: the UTC date and time of an instant from 1970-01-01T00:00:01 to 2038-01-19T03:14:07.999999, in the form `mysql/datetime` stores. Throws `CONTRACT.CAST_REFUSED` for text that names no such date and time.
+ */
+export function mysqlTimestampText(text: string): string {
+  return dateTimeStoredText(text, {
+    shape: 'dateTime',
+    ownerId: 'mysql/timestamp',
+    range: MYSQL_TIMESTAMP_RANGE,
+  });
+}
+
+/** The value of `mysql/date`: a calendar date as ISO 8601 text, `2024-02-29`, in the years 1000 to 9999. Throws `CONTRACT.CAST_REFUSED` for other text. */
+export function mysqlDateText(text: string): string {
+  return dateTimeStoredText(text, {
+    shape: 'date',
+    ownerId: 'mysql/date',
+    range: MYSQL_DATE_RANGE,
+  });
+}
+
+/**
+ * The value of `mysql/time`: a time of day from 00:00:00 to 23:59:59.999999, ISO 8601 text with no trailing zeros in the fraction. MySQL's `time` also holds a negative time and hours past 23, which name no time of day, so they are refused. Throws `CONTRACT.CAST_REFUSED` for other text.
+ */
+export function mysqlTimeText(text: string): string {
+  return dateTimeStoredText(text, { shape: 'time', ownerId: 'mysql/time' });
+}
+
+/** The value of `mysql/duration`: an ISO 8601 duration, stored as written. Throws `CONTRACT.CAST_REFUSED` for other text. */
+export function mysqlDurationText(text: string): string {
+  if (ISO_DURATION_AS_WRITTEN.test(text)) return text;
+  throw structuredError(
+    'CONTRACT.CAST_REFUSED',
+    `mysql/duration cannot read "${text}". Write an ISO 8601 duration, as in "PT1H30M".`,
+    {
+      why: 'mysql/duration holds an ISO 8601 duration as Temporal.Duration writes it: an optional sign, P, then years, months, weeks and days, then T and hours, minutes and seconds. A sign on each component instead is read too.',
+      fix: 'Write the duration in ISO 8601, as in "P1Y2M3DT4H5M6.5S".',
+    },
+  );
+}
+
+/** What `stored` writes for `text`, or `undefined` when `stored` refuses it. */
+function storedOrUndefined(stored: (text: string) => string, text: string): string | undefined {
   try {
-    return mysqlDatetimeText(text);
+    return stored(text);
   } catch {
     return undefined;
   }
 }
 
-const readDatetime: DataTypeReader = (json) =>
-  typeof json === 'string' && storedDatetime(json) !== undefined
-    ? json
-    : refuseJsonValue(
-        'mysql/datetime',
-        'ISO 8601 date and time text without a UTC offset, as in "2024-01-01T00:00:00"',
-        json,
-      );
+function readStored(
+  id: string,
+  stored: (text: string) => string,
+  expected: string,
+): DataTypeReader {
+  return (json) =>
+    typeof json === 'string' && storedOrUndefined(stored, json) !== undefined
+      ? json
+      : refuseJsonValue(id, expected, json);
+}
 
-const spellDatetime: DataTypeSpelling = (json) =>
-  typeof json === 'string' ? (storedDatetime(json) ?? json) : json;
+function spellStored(stored: (text: string) => string): DataTypeSpelling {
+  return (json) => (typeof json === 'string' ? (storedOrUndefined(stored, json) ?? json) : json);
+}
+
+type PrecisionParams = typeof mysqlDatetimeParams.infer;
+
+const withoutZeroPrecision = ({ precision, ...rest }: PrecisionParams): PrecisionParams =>
+  precision === 0 ? rest : { ...rest, ...ifDefined('precision', precision) };
 
 export const mysqlDatetime = sqlDataType('mysql/datetime', {
   params: mysqlDatetimeParams,
@@ -162,9 +223,65 @@ export const mysqlDatetime = sqlDataType('mysql/datetime', {
     { text: 'datetime', written: true, catalog: true },
     { text: 'datetime({precision})', written: true, catalog: true },
   ],
-  read: readDatetime,
-  spell: spellDatetime,
-  normalize: ({ precision, ...rest }) => (precision === 0 ? rest : { ...rest, precision }),
+  read: readStored(
+    'mysql/datetime',
+    mysqlDatetimeText,
+    'ISO 8601 date and time text without a UTC offset, as in "2024-01-01T00:00:00"',
+  ),
+  spell: spellStored(mysqlDatetimeText),
+  normalize: withoutZeroPrecision,
+  casts: {},
+});
+
+/** An instant from 1970 to 2038, which MySQL converts between the session's time zone and UTC; every session runs in UTC. */
+export const mysqlTimestamp = sqlDataType('mysql/timestamp', {
+  params: mysqlDatetimeParams,
+  texts: [
+    { text: 'timestamp', written: true, catalog: true },
+    { text: 'timestamp({precision})', written: true, catalog: true },
+  ],
+  read: readStored(
+    'mysql/timestamp',
+    mysqlTimestampText,
+    'ISO 8601 date and time text in UTC without a UTC offset, from 1970-01-01T00:00:01 to 2038-01-19T03:14:07.999999',
+  ),
+  spell: spellStored(mysqlTimestampText),
+  normalize: withoutZeroPrecision,
+  casts: {},
+});
+
+export const mysqlDate = sqlDataType('mysql/date', {
+  texts: [{ text: 'date', written: true, catalog: true }],
+  read: readStored('mysql/date', mysqlDateText, 'ISO 8601 date text, as in "2024-02-29"'),
+  spell: spellStored(mysqlDateText),
+  casts: {},
+});
+
+export const mysqlTime = sqlDataType('mysql/time', {
+  params: mysqlDatetimeParams,
+  texts: [
+    { text: 'time', written: true, catalog: true },
+    { text: 'time({precision})', written: true, catalog: true },
+  ],
+  read: readStored(
+    'mysql/time',
+    mysqlTimeText,
+    'ISO 8601 time of day text from 00:00:00 to 23:59:59.999999, as in "09:30:00"',
+  ),
+  spell: spellStored(mysqlTimeText),
+  normalize: withoutZeroPrecision,
+  casts: {},
+});
+
+/** The length of the `varchar` a duration column is stored in. A codec reference with none, as a raw parameter writes, reads and writes the same values. */
+export const mysqlDurationParams = arktype({
+  'length?': 'number.integer >= 1 & number.integer <= 65535',
+});
+
+/** A length of time, stored in a `varchar` column as the ISO 8601 duration it was written as, `PT1H30M`, so that MySQL can index it. MySQL has no interval type, and equal durations can be written differently, `P1D` and `PT24H`, so a duration keeps its spelling. ADR 315. */
+export const mysqlDuration = sqlDataType('mysql/duration', {
+  storedAs: mysqlVarchar.id,
+  read: readStored('mysql/duration', mysqlDurationText, 'an ISO 8601 duration, as in "PT1H30M"'),
   casts: {},
 });
 
@@ -217,6 +334,10 @@ export const mysqlDataTypes: readonly DataType[] = [
   mysqlVarchar,
   mysqlChar,
   mysqlDatetime,
+  mysqlTimestamp,
+  mysqlDate,
+  mysqlTime,
+  mysqlDuration,
   mysqlEnum,
   sqlRawDataType,
 ];

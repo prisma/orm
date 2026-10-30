@@ -190,27 +190,63 @@ A write stores the stored text: a value in another ISO 8601 form is converted, a
 
 A `DateTime` default is written with the `datetime` tag, as in `@default(datetime`2024-01-01T00:00:00Z`)`, a `Date`, `Time` or `Duration` default with the `date`, `time` or `duration` tag, and a `Json` default with the `json` tag. A `DateTime` column has the data type `sqlite/datetime`, a `Date` column `sqlite/date`, a `Time` column `sqlite/time`, a `Duration` column `sqlite/duration` and a `Json` column `sqlite/json`, all stored as `text`. A `DateTime` default is stored as the instant in UTC with three fraction digits, the text every row holds, however it was written; [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states the form and the text it takes.
 
+## MySQL
+
+Write a TypeScript field as `field.column(type.X())` with the type of the PSL name, such as `field.column(type.DateTime())`. `sql.String(n)` and `sql.Char(n)` exist on every SQL target.
+
+MySQL has the convenience date and time types ([ADR 315](../architecture%20docs/adrs/ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md)). The defaults need no `Temporal`. A bare `DateTime` is `DatetimeJsDate(3)`, a `datetime(3)` column, the type `DateTime` named before, so its contract is unchanged.
+
+| Convenience type | `as` | `storage` | Becomes |
+| --- | --- | --- | --- |
+| `DateTime(as?, storage?, precision?)` | `jsDate` (default), `temporal`, `string` | `datetime` (default), `timestamp` | `DatetimeJsDate(3)`, `DatetimeTemporal(6)`, `DatetimeString(6)`, `TimestampJsDate(3)`, `TimestampTemporal(6)`, `TimestampString(6)` |
+| `Date(as?, storage?)` | `string` (default), `temporal` | `date` | `DateString`, `DateTemporal` |
+| `Time(as?, storage?, precision?)` | `string` (default), `temporal` | `time` | `TimeString(6)`, `TimeTemporal(6)` |
+| `Duration(as?, storage?)` | `string` | `varchar` | `DurationString` |
+
+The precision in brackets is the default when none is written. Every instant is read and written as UTC. `datetime` and `date` hold the years 1000 to 9999, and `timestamp` holds 1970-01-01T00:00:01Z to 2038-01-19T03:14:07.999999Z; a value outside them is refused on write. `Time` is a time of day, so a value outside 00:00:00 to 23:59:59.999999 is refused on write and on read, although MySQL's `time` holds more. A written value with more fraction digits than its column holds is cut to the column's precision, because MySQL would round it, possibly into the next day. A column with no written precision holds whole seconds, so a value written to it is cut to the second. `@default(now())` is `CURRENT_TIMESTAMP(p)`, `CURRENT_DATE` or `CURRENT_TIME(p)` by the column's type. `temporal.CreatedAt` and `temporal.UpdatedAt` are `DateTime`. The `Temporal` types need a global `Temporal` in the application; the MySQL target's control entry sets the fallback for the commands. A duration is stored as written, so a filter on `PT60M` does not match a row written as `PT1H`. MySQL's migration planner does not change a column's type yet, so changing a field between these types is reported by `db verify` and refused by `migration plan`.
+
+| PSL name | TS helper | Codec id | Storage type | Application type |
+| --- | --- | --- | --- | --- |
+| `String` | — | `sql/varchar@1` | `varchar(191)` | `string` |
+| `Int` | — | `mysql/int@1` | `int` | `number` |
+| `BigInt` | — | `mysql/bigint@1` | `bigint` | `bigint` |
+| `DatetimeJsDate(p?)` | — | `mysql/datetime@1` | `datetime(p)` | `Date` |
+| `DatetimeTemporal(p?)` | — | `mysql/datetime-temporal@1` | `datetime(p)` | `Temporal.Instant` |
+| `DatetimeString(p?)` | — | `mysql/datetime-string@1` | `datetime(p)` | `string`, the instant in UTC (ISO 8601) |
+| `TimestampJsDate(p?)` | — | `mysql/timestamp-date@1` | `timestamp(p)` | `Date` |
+| `TimestampTemporal(p?)` | — | `mysql/timestamp-temporal@1` | `timestamp(p)` | `Temporal.Instant` |
+| `TimestampString(p?)` | — | `mysql/timestamp-string@1` | `timestamp(p)` | `string`, the instant in UTC (ISO 8601) |
+| `DateString` | — | `mysql/date-string@1` | `date` | `string` (ISO 8601) |
+| `DateTemporal` | — | `mysql/date-temporal@1` | `date` | `Temporal.PlainDate` |
+| `TimeString(p?)` | — | `mysql/time-string@1` | `time(p)` | `string` (ISO 8601) |
+| `TimeTemporal(p?)` | — | `mysql/time-temporal@1` | `time(p)` | `Temporal.PlainTime` |
+| `DurationString` | — | `mysql/duration-string@1` | `varchar(191)` | `string`, an ISO 8601 duration |
+| `sql.String(n)` | `field.column(type.sql.String(n))` | `sql/varchar@1` | `varchar(n)` | `string` |
+| `sql.Char(n)` | `field.column(type.sql.Char(n))` | `sql/char@1` | `char(n)` | `string` |
+
+A default is written with the tag of its column type: `datetime`, `timestamp`, `date`, `time` or `duration`, as in `@default(datetime`2024-01-01T00:00:00`)`. [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states the stored form of each.
+
 ## Across targets
 
 The PSL name on each target for a concept, and the Prisma 6/7 name a migrating schema uses. A dash means the target has no scalar type for the concept.
 
-| Concept | Prisma 6/7 name | PostgreSQL | SQLite | MongoDB |
-| --- | --- | --- | --- | --- |
-| 32-bit integer | `Int` (on MongoDB, `Int @db.Int`) | `Int` | — (`Int` stores a 64-bit `integer`) | `Int32` |
-| 64-bit integer | `BigInt` | `BigInt` | `BigInt` | `Int64` |
-| 64-bit integer read as a `number` | `Int` on MongoDB, which Prisma 6 stores as a BSON long | `BigIntNumber` | `BigIntNumber` | `Int64Number` |
-| double | `Float` | `Float` | `Float` | `Double` |
-| decimal | `Decimal` | `Decimal`, `Numeric(p?, s?)` | `Decimal` (stored as text) | `Decimal128` |
-| boolean | `Boolean` | `Boolean` | — | `Bool` |
-| timestamp | `DateTime` | `DateTime` (a `TimestamptzJsDate(3)`) | `DateTime` (a `DatetimeJsDate`) | `Date` |
-| calendar date | `DateTime @db.Date` | `Date` (a `DateString`) | `Date` (a `DateString`) | — |
-| time of day | `DateTime @db.Time` | `Time` (a `TimeString`) | `Time` (a `TimeString`) | — |
-| duration | — | `Duration` (an `IntervalString`) | `Duration` (a `DurationString`) | — |
-| text | `String` | `String` | `String` | `String` |
-| bytes | `Bytes` | `Bytes` | `Bytes` | `Binary` |
-| JSON | `Json` | `Json`, `Jsonb` | `Json` | `Json` |
-| any value | — | — | — | `Bson` |
-| ObjectId | `String @db.ObjectId` (MongoDB) | — | — | `ObjectId` |
+| Concept | Prisma 6/7 name | PostgreSQL | SQLite | MySQL | MongoDB |
+| --- | --- | --- | --- | --- | --- |
+| 32-bit integer | `Int` (on MongoDB, `Int @db.Int`) | `Int` | — (`Int` stores a 64-bit `integer`) | `Int` | `Int32` |
+| 64-bit integer | `BigInt` | `BigInt` | `BigInt` | `BigInt` | `Int64` |
+| 64-bit integer read as a `number` | `Int` on MongoDB, which Prisma 6 stores as a BSON long | `BigIntNumber` | `BigIntNumber` | — | `Int64Number` |
+| double | `Float` | `Float` | `Float` | — | `Double` |
+| decimal | `Decimal` | `Decimal`, `Numeric(p?, s?)` | `Decimal` (stored as text) | — | `Decimal128` |
+| boolean | `Boolean` | `Boolean` | — | — | `Bool` |
+| timestamp | `DateTime` | `DateTime` (a `TimestamptzJsDate(3)`) | `DateTime` (a `DatetimeJsDate`) | `DateTime` (a `DatetimeJsDate(3)`) | `Date` |
+| calendar date | `DateTime @db.Date` | `Date` (a `DateString`) | `Date` (a `DateString`) | `Date` (a `DateString`) | — |
+| time of day | `DateTime @db.Time` | `Time` (a `TimeString`) | `Time` (a `TimeString`) | `Time` (a `TimeString(6)`) | — |
+| duration | — | `Duration` (an `IntervalString`) | `Duration` (a `DurationString`) | `Duration` (a `DurationString`) | — |
+| text | `String` | `String` | `String` | `String` | `String` |
+| bytes | `Bytes` | `Bytes` | `Bytes` | — | `Binary` |
+| JSON | `Json` | `Json`, `Jsonb` | `Json` | — | `Json` |
+| any value | — | — | — | — | `Bson` |
+| ObjectId | `String @db.ObjectId` (MongoDB) | — | — | — | `ObjectId` |
 
 A Prisma 6 MongoDB schema read with `prisma6Schema` may keep its native types. Each native type Prisma 6.19 accepts gives the field the MongoDB type of what Prisma 6 stores: `Int @db.Int` is `Int32`, `Int @db.Long` is `Int64Number` like a plain `Int`, `BigInt @db.Long` is `Int64`, `Bytes @db.ObjectId` is `ObjectId`, and `@db.String`, `@db.Bool`, `@db.Double`, `@db.Date`, `@db.BinData` and `@db.Json` are the same type as the plain field. `DateTime @db.Timestamp` stores a BSON timestamp, which no MongoDB scalar type holds, so `prisma6Schema` refuses it.
 

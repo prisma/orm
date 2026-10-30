@@ -1,4 +1,5 @@
 export {
+  hasDigitsBelow,
   hasDigitsBelowAMillisecond,
   isValidDate,
   utcIsoTextOf,

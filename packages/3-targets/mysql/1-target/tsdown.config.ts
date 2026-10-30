@@ -18,5 +18,6 @@ export default defineConfig({
     'src/exports/pack.ts',
     'src/exports/runtime.ts',
     'src/exports/sql-utils.ts',
+    'src/exports/types.ts',
   ],
 });

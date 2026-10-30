@@ -33,6 +33,47 @@ function columnsOf(database: MysqlDatabase) {
 }
 
 describe('mysqlCreateNamespace', () => {
+  it.each([
+    ['mysql/datetime', 'mysql/datetime@1'],
+    ['mysql/datetime', 'mysql/datetime-temporal@1'],
+    ['mysql/datetime', 'mysql/datetime-string@1'],
+    ['mysql/timestamp', 'mysql/timestamp-date@1'],
+    ['mysql/timestamp', 'mysql/timestamp-temporal@1'],
+    ['mysql/timestamp', 'mysql/timestamp-string@1'],
+    ['mysql/time', 'mysql/time-string@1'],
+    ['mysql/time', 'mysql/time-temporal@1'],
+  ])(
+    'writes precision 0, the fraction digits MySQL gives a bare %s, into a %s column that names none',
+    (dataType, codecId) => {
+      const database = mysqlCreateNamespace({
+        id: UNBOUND_NAMESPACE_ID,
+        entries: { table: { User: userTable({ dataType, codecId, nullable: false }) } },
+      });
+      expect(columnsOf(database).role.typeParams).toEqual({ precision: 0 });
+    },
+  );
+
+  it('keeps the precision a date and time column names, and leaves other columns alone', () => {
+    const database = mysqlCreateNamespace({
+      id: UNBOUND_NAMESPACE_ID,
+      entries: {
+        table: {
+          User: userTable({
+            dataType: 'mysql/time',
+            codecId: 'mysql/time-string@1',
+            nullable: false,
+            typeParams: { precision: 3 },
+          }),
+        },
+      },
+    });
+    expect(columnsOf(database)).toMatchObject({
+      id: { codecId: 'mysql/int@1' },
+      role: { typeParams: { precision: 3 } },
+    });
+    expect(columnsOf(database).id.typeParams).toBeUndefined();
+  });
+
   it('writes an enum column’s members into its type parameters in declared order', () => {
     const database = mysqlCreateNamespace({
       id: UNBOUND_NAMESPACE_ID,

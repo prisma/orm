@@ -12,7 +12,11 @@ import {
   renderOpaqueSql,
   type SqlExecuteRequest,
 } from '@internal/sql-relational-core/ast';
-import { encodeMysqlDatetime } from '@internal/target-mysql/codecs';
+import {
+  encodeMysqlDatetime,
+  mysqlCurrentValueFor,
+  mysqlNowExpression,
+} from '@internal/target-mysql/codecs';
 import type { MysqlCreateTable } from '@internal/target-mysql/ddl';
 import { quoteIdentifier, quoteLiteral } from '@internal/target-mysql/sql-utils';
 import { structuredError } from '@internal/utils/structured-error';
@@ -20,7 +24,7 @@ import { structuredError } from '@internal/utils/structured-error';
 /** Column types MySQL gives a default only when it is written as an expression in parentheses. */
 const EXPRESSION_DEFAULT_ONLY = /^(?:(?:tiny|medium|long)?(?:text|blob)|json|geometry)\b/i;
 
-const FRACTIONAL_SECONDS = /^(?:datetime|timestamp)\((\d)\)$/i;
+const FRACTIONAL_SECONDS = /^(?:datetime|timestamp|time)\((\d)\)$/i;
 
 function refusedDefault(where: LiteralDefaultColumn, why: string): never {
   throw structuredError(
@@ -50,10 +54,34 @@ function withinParentheses(columnType: string, literal: string): string {
   return EXPRESSION_DEFAULT_ONLY.test(columnType.trim()) ? `(${literal})` : literal;
 }
 
-/** `CURRENT_TIMESTAMP` with the column's fractional-second precision, which MySQL requires to match. */
-function currentTimestampFor(columnType: string): string {
+/**
+ * The expression a `now()` default is written as: the current value the column's data type holds, `CURRENT_TIMESTAMP`, `CURRENT_DATE` or `CURRENT_TIME`, with the column's fractional-second precision, which MySQL requires to match. A column of a data type that holds no date or time is refused.
+ */
+function nowExpressionFor(
+  columnType: string,
+  codecLookup: Pick<CodecLookupWithDescriptors, 'descriptorFor'>,
+  codecRef: CodecRef | undefined,
+  where: LiteralDefaultColumn,
+): string {
+  const dataType =
+    codecRef === undefined ? undefined : codecLookup.descriptorFor(codecRef.codecId)?.dataType;
+  const current = mysqlCurrentValueFor(dataType);
+  if (current === undefined) {
+    throw structuredError(
+      'CONTRACT.DEFAULT_INVALID',
+      `The column "${where.table}"."${where.column}" has a now() default, but its data type ${dataType} stores no date or time, so there is no current value to write. Remove the default, or give the field a date or time type.`,
+      {
+        meta: {
+          table: where.table,
+          column: where.column,
+          dataType,
+          reason: 'now-default-not-date-or-time',
+        },
+      },
+    );
+  }
   const precision = FRACTIONAL_SECONDS.exec(columnType.trim())?.[1];
-  return precision === undefined ? 'CURRENT_TIMESTAMP' : `CURRENT_TIMESTAMP(${precision})`;
+  return mysqlNowExpression(current, precision === undefined ? undefined : Number(precision));
 }
 
 /**
@@ -69,7 +97,9 @@ export async function renderMysqlColumnDefault(
   if (def.kind === 'function') {
     const text = def.expression.text;
     if (text === 'autoincrement()') return '';
-    if (text === 'now()') return `DEFAULT (${currentTimestampFor(columnType)})`;
+    if (text === 'now()') {
+      return `DEFAULT (${nowExpressionFor(columnType, codecLookup, codecRef, where)})`;
+    }
     if (checkSqlDefaultText(text) !== undefined) {
       throw structuredError(
         'CONTRACT.DEFAULT_INVALID',

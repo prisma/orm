@@ -48,9 +48,37 @@ A duration is stored as written, because ISO 8601 gives a duration no single for
 
 SQLite gets no `storage: integer` for epoch milliseconds, the form the Prisma ORM query engine wrote: `DatetimeJsDate` already reads such rows, and no Prisma 7 schema reader for SQLite exists to need it.
 
+## MySQL
+
+MySQL has `datetime`, `timestamp`, `date` and `time` columns, so its explicit types are named after them. It has no interval type, so `Duration` is ISO 8601 text.
+
+| Convenience type | `as` | `storage` | Explicit type | Codec | Column |
+| --- | --- | --- | --- | --- | --- |
+| `DateTime` | `jsDate` (default) | `datetime` (default) | `DatetimeJsDate`, precision 3 unless written | `mysql/datetime@1` | `datetime(p)` |
+| | `temporal` | `datetime` | `DatetimeTemporal`, precision 6 unless written | `mysql/datetime-temporal@1` | `datetime(p)` |
+| | `string` | `datetime` | `DatetimeString`, precision 6 unless written | `mysql/datetime-string@1` | `datetime(p)` |
+| | `jsDate` | `timestamp` | `TimestampJsDate`, precision 3 unless written | `mysql/timestamp-date@1` | `timestamp(p)` |
+| | `temporal` | `timestamp` | `TimestampTemporal`, precision 6 unless written | `mysql/timestamp-temporal@1` | `timestamp(p)` |
+| | `string` | `timestamp` | `TimestampString`, precision 6 unless written | `mysql/timestamp-string@1` | `timestamp(p)` |
+| `Date` | `string` (default) | `date` | `DateString` | `mysql/date-string@1` | `date` |
+| | `temporal` | `date` | `DateTemporal` | `mysql/date-temporal@1` | `date` |
+| `Time` | `string` (default) | `time` | `TimeString`, precision 6 unless written | `mysql/time-string@1` | `time(p)` |
+| | `temporal` | `time` | `TimeTemporal`, precision 6 unless written | `mysql/time-temporal@1` | `time(p)` |
+| `Duration` | `string` (default) | `varchar` | `DurationString` | `mysql/duration-string@1` | `varchar(191)` |
+
+- **Precision.** A MySQL `datetime`, `timestamp` or `time` column with no written precision holds whole seconds. So the `temporal` and `string` rows default to 6 fraction digits, which is what an omitted precision holds on PostgreSQL, and the `jsDate` rows to 3, which is what a `Date` holds. A bare `DateTime` is `DatetimeJsDate(3)`, a `datetime(3)` column, which is what `DateTime` named before.
+- **Every instant is UTC.** The driver sets each session's `time_zone` to `+00:00`, so `datetime` and `timestamp` both hold the instant in UTC, and both are read as an instant. That is why `TimestampTemporal` reads a `Temporal.Instant` on MySQL, while the same name reads a `Temporal.PlainDateTime` on PostgreSQL, whose `timestamp` has two Temporal codecs. A `datetime` read as a `Temporal.PlainDateTime` would need a name that says its Temporal type, as PostgreSQL's `TimestampInstant` does.
+- **Ranges.** `datetime` and `date` hold the years 1000 to 9999, and `timestamp` holds 1970-01-01T00:00:01Z to 2038-01-19T03:14:07.999999Z. A value outside its column's range is refused on write. A value MySQL returns is read as it is, so a row written outside Prisma with an earlier year still reads. MySQL's `time` holds -838:59:59 to 838:59:59, but `Time` is a time of day, so `TimeString` and `TimeTemporal` refuse a value outside 00:00:00 to 23:59:59.999999 on write and on read.
+- **Fraction digits.** MySQL rounds a value with more fraction digits than its column holds, which can carry it into the next second, the next day or past its range. So a write is cut to its column's precision before it is sent, where a column with no written precision holds whole seconds, and a literal default with more fraction digits than its column holds is refused. The `now()` generators also round down. A raw query parameter that names a codec but gives no precision is sent whole, because it names no column.
+- **`now()`.** `@default(now())` is `CURRENT_TIMESTAMP(p)` on a `datetime` or `timestamp` column, `CURRENT_DATE` on a `date` column and `CURRENT_TIME(p)` on a `time` column. MySQL reports them back as `current_timestamp(p)`, `curdate()` and `curtime(p)`, and each is read back under its own name, so `db verify` tells them apart. `now()` on a column that holds no date or time, such as a `Duration`, is refused.
+- **`Duration`** is stored as written, in `varchar(191)` like `String`, so a `Duration` field can be indexed, which MySQL refuses for a `text` column. As on SQLite, it compares its text, not its length.
+- **Codec ids.** `DatetimeJsDate` keeps `mysql/datetime@1`, which existing contracts record. Every new codec carries a suffix for its value, as on PostgreSQL, so the `timestamp` read as a `Date` is `mysql/timestamp-date@1`.
+- **Changing a field's type.** MySQL's migration planner does not change a column's type yet. Changing a field between these types makes `db verify` report the difference, and `migration plan` refuses it.
+- `temporal.CreatedAt` and `temporal.UpdatedAt` are `DateTime` on MySQL too.
+
 ## Not decided here
 
-MySQL and MongoDB. Until their tables are recorded here, MySQL's `DateTime` and MongoDB's `Date`, which is a moment in time, are explicit types.
+MongoDB. Until its tables are recorded here, MongoDB's `Date`, which is a moment in time, is an explicit type.
 
 ## Consequences
 

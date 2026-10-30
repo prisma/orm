@@ -20,8 +20,8 @@ import type {
 } from '@internal/sql-contract-ts/contract-builder';
 import { buildBoundContract } from '@internal/sql-contract-ts/contract-builder';
 import { assembleMysqlCodecRegistry } from '@internal/target-mysql/codecs';
-import { mysqlCreateNamespace } from '@internal/target-mysql/control';
 import mysqlPack from '@internal/target-mysql/pack';
+import { mysqlCreateNamespace } from '@internal/target-mysql/types';
 
 type SqlFamily = typeof sqlFamilyPack;
 type MysqlPack = typeof mysqlPack;

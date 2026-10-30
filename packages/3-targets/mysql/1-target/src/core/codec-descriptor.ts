@@ -19,6 +19,9 @@ import { InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 
+/** Projects a column whose JSON form, a number or a string, is what its `fromWire` reads. */
+export const identityJsonProjection = (expression: ProjectionExpr): ProjectionExpr => expression;
+
 const MYSQL_CODEC_DESCRIPTOR_KIND = 'mysql-codec' as const;
 
 export interface AnyMysqlCodecDescriptor extends AnyCodecDescriptor {

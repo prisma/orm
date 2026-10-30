@@ -30,11 +30,21 @@ describe('the MySQL target descriptor', () => {
     );
   });
 
-  it('maps String to varchar(191) and DateTime to datetime(3)', () => {
+  it('maps String to varchar(191) and DatetimeJsDate, a bare DateTime, to datetime(3)', () => {
     const types = mysqlTargetDescriptorMeta.authoring.type;
-    expect([types.String.output, types.DateTime.output, types.Int.output]).toEqual([
+    expect([
+      types.String.output,
+      types.DateTime.choices[0],
+      types.DatetimeJsDate.output,
+      types.Int.output,
+    ]).toEqual([
       { codecId: 'sql/varchar@1', typeParams: { length: 191 } },
-      { codecId: 'mysql/datetime@1', typeParams: { precision: 3 } },
+      {
+        when: { as: 'jsDate', storage: 'datetime' },
+        type: 'DatetimeJsDate',
+        defaults: { precision: 3 },
+      },
+      { codecId: 'mysql/datetime@1', typeParams: { precision: { kind: 'arg', index: 0 } } },
       { codecId: 'mysql/int@1' },
     ]);
   });

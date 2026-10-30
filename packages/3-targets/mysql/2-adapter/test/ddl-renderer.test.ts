@@ -110,6 +110,67 @@ describe('column defaults', () => {
     expect(await render(type, def)).toBe(clause);
   });
 
+  it.each([
+    ['datetime(3)', 'mysql/datetime@1', { precision: 3 }, 'DEFAULT (CURRENT_TIMESTAMP(3))'],
+    [
+      'timestamp(6)',
+      'mysql/timestamp-temporal@1',
+      { precision: 6 },
+      'DEFAULT (CURRENT_TIMESTAMP(6))',
+    ],
+    ['date', 'mysql/date-string@1', undefined, 'DEFAULT (CURRENT_DATE)'],
+    ['time(6)', 'mysql/time-string@1', { precision: 6 }, 'DEFAULT (CURRENT_TIME(6))'],
+    ['time', 'mysql/time-temporal@1', undefined, 'DEFAULT (CURRENT_TIME)'],
+    ['varchar(191)', 'sql/varchar@1', { length: 191 }, 'DEFAULT (CURRENT_TIMESTAMP)'],
+  ])(
+    'writes now() on a %s column of %s as the current value it holds',
+    async (type, codecId, typeParams, clause) => {
+      const column = col('c', type, {
+        default: fn('now()'),
+        codecRef: { codecId, ...(typeParams === undefined ? {} : { typeParams }) },
+      } as never);
+      expect(await adapter.renderColumnDefault(column, 't')).toBe(clause);
+    },
+  );
+
+  it.each([
+    ['int', 'mysql/int@1', 'mysql/int'],
+    ['varchar(191)', 'mysql/duration-string@1', 'mysql/duration'],
+  ])(
+    'refuses now() on a %s column of %s, which holds no date or time',
+    async (type, codecId, dataType) => {
+      const column = col('c', type, { default: fn('now()'), codecRef: { codecId } } as never);
+      await expect(adapter.renderColumnDefault(column, 't')).rejects.toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.DEFAULT_INVALID',
+          meta: { table: 't', column: 'c', dataType, reason: 'now-default-not-date-or-time' },
+        }),
+      );
+    },
+  );
+
+  it.each([
+    ['date', 'mysql/date-string@1', undefined, '2024-02-29', "DEFAULT '2024-02-29'"],
+    ['time(6)', 'mysql/time-string@1', { precision: 6 }, '09:30:00', "DEFAULT '09:30:00'"],
+    [
+      'timestamp(3)',
+      'mysql/timestamp-date@1',
+      { precision: 3 },
+      '2024-01-01T00:00:00.5',
+      "DEFAULT '2024-01-01 00:00:00.500'",
+    ],
+    ['varchar(191)', 'mysql/duration-string@1', { length: 191 }, 'PT1H30M', "DEFAULT 'PT1H30M'"],
+  ])(
+    'writes a literal default on a %s column of %s through its codec',
+    async (type, codecId, typeParams, value, clause) => {
+      const column = col('c', type, {
+        default: lit(value),
+        codecRef: { codecId, ...(typeParams === undefined ? {} : { typeParams }) },
+      } as never);
+      expect(await adapter.renderColumnDefault(column, 't')).toBe(clause);
+    },
+  );
+
   it('reads a literal through the column codec', async () => {
     const column = col('c', 'int', {
       default: lit(5),
