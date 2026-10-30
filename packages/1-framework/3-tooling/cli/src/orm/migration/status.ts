@@ -485,7 +485,13 @@ export const migrationStatusCommand = defineOrmCommand({
 
       if (markerDiverged) {
         divergedMarker ??= { space: entry.space, markerHash: readMarker.storageHash };
-        findings.push(markerNotInHistoryFinding(entry.space));
+        findings.push(
+          markerNotInHistoryFinding(
+            entry.space,
+            databasePoliciesInForce(database.markersBySpace, aggregate.app.spaceId, markerLocation)
+              .change,
+          ),
+        );
       }
       if (
         origin !== undefined &&

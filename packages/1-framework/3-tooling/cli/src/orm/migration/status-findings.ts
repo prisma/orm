@@ -1,7 +1,8 @@
+import type { ChangeStrategy } from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
 import type { Diagnostic } from '@prisma/cli-engine/protocol';
 import type { StatusDiagnosticJson } from '../../commands/json/schemas';
-import { runCommandAction } from '../../utils/next-actions';
+import { chooseAction, runCommandAction } from '../../utils/next-actions';
 
 /**
  * One condition `migration status` found while still delivering its full
@@ -39,12 +40,22 @@ export function contractUnreadableFinding(reason: string): StatusFinding {
   };
 }
 
-export function markerNotInHistoryFinding(space: string): StatusFinding {
+const AUTHOR_MIGRATIONS_BACK =
+  "This database's change policy permits only migrations: author migrations that bring it back onto the migration graph, commit them, and deploy again";
+
+/** The marker of `space` names no contract in the migration graph; the advice follows the database's change policy `change`. */
+export function markerNotInHistoryFinding(
+  space: string,
+  change: readonly ChangeStrategy[],
+): StatusFinding {
   const message = `Database was updated outside the migration system (marker for space "${space}" does not match any migration)`;
-  const hints = [
-    "Run '{bin} db sign' to overwrite the marker if the database already matches the contract",
-    "Run '{bin} db update' to push the current contract to the database",
-  ];
+  const reconciles = change.includes('reconcile');
+  const hints = reconciles
+    ? [
+        "Run '{bin} db sign' to overwrite the marker if the database already matches the contract",
+        "Run '{bin} db update' to push the current contract to the database",
+      ]
+    : [AUTHOR_MIGRATIONS_BACK];
   return {
     document: { code: 'MIGRATION.MARKER_NOT_IN_HISTORY', severity: 'warn', message, hints },
     diagnostic: {
@@ -52,14 +63,16 @@ export function markerNotInHistoryFinding(space: string): StatusFinding {
       severity: 'warn',
       summary: message,
       why: 'The marker the database carries names no contract in the on-disk migration graph.',
-      meta: { space },
-      nextActions: [
-        runCommandAction(
-          'Overwrite the marker if the database already matches the contract',
-          '{bin} db sign',
-        ),
-        runCommandAction('Or push the current contract to the database', '{bin} db update'),
-      ],
+      meta: { space, change: [...change] },
+      nextActions: reconciles
+        ? [
+            runCommandAction(
+              'Overwrite the marker if the database already matches the contract',
+              '{bin} db sign',
+            ),
+            runCommandAction('Or push the current contract to the database', '{bin} db update'),
+          ]
+        : [chooseAction(AUTHOR_MIGRATIONS_BACK)],
     },
   };
 }

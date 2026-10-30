@@ -7,18 +7,19 @@ import {
   driverConfig,
   fakeDatabase,
   HASH_HEAD,
+  HASH_UNKNOWN,
   harness,
   projectWithOneMigration,
 } from './fixtures/status-database';
 
 afterEach(removeOfflineProjects);
 
-function markerWithPolicies(policies: unknown) {
+function markerWithPolicies(policies: unknown, storageHash: string = HASH_HEAD) {
   return new Map([
     [
       'app',
       {
-        storageHash: HASH_HEAD,
+        storageHash,
         profileHash: '',
         contractJson: null,
         canonicalVersion: null,
@@ -85,5 +86,43 @@ describe('migration status --to <ref>, the ref declares policies', () => {
     });
 
     expect(run.presented?.data).toMatchObject({ summary: 'Up to date', policyDifferences: [] });
+  });
+});
+
+describe('migration status on a marker outside the migration graph', () => {
+  async function offGraphStatus(policies: unknown) {
+    const project = await projectWithOneMigration();
+    const db = fakeDatabase({ markers: markerWithPolicies(policies, HASH_UNKNOWN) });
+    return harness(driverConfig(project, db)).run(['migration', 'status', '--json'], {
+      cwd: project.dir,
+    });
+  }
+
+  it('advises only authoring migrations when the change policy permits only migrations', async () => {
+    const run = await offGraphStatus({ change: ['migrate'] });
+    const advice =
+      "This database's change policy permits only migrations: author migrations that bring it back onto the migration graph, commit them, and deploy again";
+
+    expect(run.presented?.diagnostics).toMatchObject([
+      {
+        code: 'MIGRATION.MARKER_NOT_IN_HISTORY',
+        meta: { space: 'app', change: ['migrate'] },
+        nextActions: [{ kind: 'user-choice', label: advice }],
+      },
+    ]);
+    expect(run.presented?.data).toMatchObject({
+      diagnostics: [{ code: 'MIGRATION.MARKER_NOT_IN_HISTORY', hints: [advice] }],
+    });
+  });
+
+  it('advises db sign and db update when the change policy permits reconciling', async () => {
+    const run = await offGraphStatus(undefined);
+
+    expect(run.presented?.diagnostics).toMatchObject([
+      {
+        code: 'MIGRATION.MARKER_NOT_IN_HISTORY',
+        nextActions: [{ command: 'prisma-test db sign' }, { command: 'prisma-test db update' }],
+      },
+    ]);
   });
 });
