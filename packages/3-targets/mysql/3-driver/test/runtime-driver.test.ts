@@ -63,7 +63,7 @@ function resultStream(behaviour: StreamBehaviour, closed: () => void): Readable 
 }
 
 class FakeConnection extends EventEmitter {
-  readonly info = { threadId: 1, status: 0 };
+  readonly info = { threadId: 1, status: 0, collation: { charset: 'utf8', maxLength: 4 } };
   readonly release = vi.fn(async () => {});
   readonly destroy = vi.fn();
   readonly beginTransaction = vi.fn(async () => {});

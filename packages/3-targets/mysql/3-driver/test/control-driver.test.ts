@@ -7,7 +7,7 @@ class FakeConnection extends EventEmitter {
   queries = 0;
   running = 0;
   mostRunning = 0;
-  readonly info = { status: 0 };
+  readonly info = { status: 0, collation: { charset: 'utf8', maxLength: 4 } };
 
   async query(): Promise<unknown[]> {
     this.queries += 1;

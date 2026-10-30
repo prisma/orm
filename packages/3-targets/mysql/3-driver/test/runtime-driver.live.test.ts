@@ -286,6 +286,40 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     );
   });
 
+  it.for([
+    ['sjis', 'ソ'],
+    ['big5', '許'],
+  ] as const)(
+    'refuses raw SQL with values after SET NAMES %s, whose character ending in a backslash byte would let a value run as SQL, and runs it again after SET NAMES utf8mb4',
+    async ([characterSet, character], test) => {
+      await withMysqlDatabase(test, ({ url }) =>
+        withDriver(url, async (driver) => {
+          const connection = await driver.acquireConnection();
+          const statement = {
+            sql: `SELECT '${character}' AS a, 'x?1 ' AS b, ?1 AS c`,
+            params: [' , CURRENT_USER() AS injected #'],
+          };
+          try {
+            await connection.execute({ sql: `SET NAMES ${characterSet}` });
+            const changed = await collect(connection.query(statement)).catch(
+              (error: unknown) => error,
+            );
+            await connection.execute({ sql: 'SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci' });
+            expect({ changed, restored: await collect(connection.query(statement)) }).toEqual({
+              changed: expect.objectContaining({
+                code: 'RUNTIME.CHARACTER_SET_UNSUPPORTED',
+                meta: { characterSet, params: 1 },
+              }),
+              restored: [{ a: character, b: 'x?1 ', c: ' , CURRENT_USER() AS injected #' }],
+            });
+          } finally {
+            await connection.destroy();
+          }
+        }),
+      );
+    },
+  );
+
   it('writes the values of numbered placeholders, repeated and reordered, beside a ? in a literal', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
       withDriver(url, async (driver) => {

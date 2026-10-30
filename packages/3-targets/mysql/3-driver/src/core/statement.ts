@@ -2,7 +2,7 @@ import { mysqlError } from '@internal/target-mysql/errors';
 import { assertDefined } from '@internal/utils/assertions';
 import type { Connection } from 'mariadb';
 import { positionalParams } from './positional-params';
-import { CLEAR_UNSUPPORTED_SQL_MODES } from './session-setup';
+import { CLEAR_UNSUPPORTED_SQL_MODES, SET_UTF8MB4 } from './session-setup';
 
 /** The server status flag MySQL sets in every reply while the session's `sql_mode` includes `NO_BACKSLASH_ESCAPES`. */
 const NO_BACKSLASH_ESCAPES = 1 << 9;
@@ -19,8 +19,35 @@ function noBackslashEscapesRefusal(params: number): Error {
   );
 }
 
+/** The character set MySQL last reported for the statements the connection sends, as the package records it: utf8mb3 and utf8mb4 both as `utf8`, told apart by their longest character. */
+function reportedCharacterSet(collation: unknown): string {
+  if (
+    typeof collation === 'object' &&
+    collation !== null &&
+    'charset' in collation &&
+    'maxLength' in collation
+  ) {
+    return collation.charset === 'utf8'
+      ? `utf8mb${String(collation.maxLength)}`
+      : String(collation.charset);
+  }
+  return 'unknown';
+}
+
+function characterSetRefusal(characterSet: string, params: number): Error {
+  return mysqlError(
+    'RUNTIME.CHARACTER_SET_UNSUPPORTED',
+    `MySQL reports the character set ${characterSet} for this connection's statements, which the MySQL target does not support, so the driver does not send a statement with values`,
+    {
+      why: 'The mariadb package, which writes the values into the statement, encodes the statement in the character set MySQL reports and finds its placeholders byte by byte. In a character set such as sjis, cp932, big5 or gbk, the second byte of some characters is a backslash, so the package can read the end of a string literal in the SQL differently from MySQL, and a value could run as SQL. The driver sets utf8mb4 on every connection it opens, so a statement on this connection changed it, such as a raw SET NAMES or SET character_set_client.',
+      fix: `Do not change the character set of a connection Prisma uses. A raw SET run outside a transaction stays on whichever pooled connection ran it; restart the client to close that connection. A statement that needs another character set must run in a transaction or on a connection you hold, which must set it back before it is released, with ${SET_UTF8MB4}. A statement without values still runs.`,
+      meta: { characterSet, params },
+    },
+  );
+}
+
 /**
- * The statement to hand to `connection`: `sql` with its placeholders written as `?` and the values in their order, for the package to write in. A statement without values comes back as written with no values, so the package sends it without searching it for placeholders. Refuses a statement with values while the server last reported `NO_BACKSLASH_ESCAPES` on, which only a statement the application sends can turn on. A statement without values still runs, so the mode can be turned off again; the driver's lexer still reads a backslash as an escape then, so at worst it refuses such a statement for a `?` it reads outside a string.
+ * The statement to hand to `connection`: `sql` with its placeholders written as `?` and the values in their order, for the package to write in. A statement without values comes back as written with no values, so the package sends it without searching it for placeholders. Refuses a statement with values while the server last reported `NO_BACKSLASH_ESCAPES` on, or a character set other than utf8mb4, either of which only a statement the application sends can cause. A statement without values still runs, so the setting can be put back; the driver's lexer still reads a backslash as an escape then, so at worst it refuses such a statement for a `?` it reads outside a string.
  */
 export function statementFor(
   connection: Pick<Connection, 'info'>,
@@ -29,8 +56,14 @@ export function statementFor(
 ): { readonly sql: string; readonly values: unknown[] | undefined } {
   const { info } = connection;
   assertDefined(info, 'the package gives every connection its info when it creates it');
-  if (params.length > 0 && (info.status & NO_BACKSLASH_ESCAPES) !== 0) {
-    throw noBackslashEscapesRefusal(params.length);
+  if (params.length > 0) {
+    if ((info.status & NO_BACKSLASH_ESCAPES) !== 0) {
+      throw noBackslashEscapesRefusal(params.length);
+    }
+    const characterSet = reportedCharacterSet(info.collation);
+    if (characterSet !== 'utf8mb4') {
+      throw characterSetRefusal(characterSet, params.length);
+    }
   }
   const statement = positionalParams(sql, params);
   return params.length > 0 ? statement : { sql, values: undefined };
