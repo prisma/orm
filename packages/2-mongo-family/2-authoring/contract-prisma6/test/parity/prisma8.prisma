@@ -14,7 +14,7 @@ model Post {
   note      String
   pinned    Bool
   score     Double
-  day       Date
+  day       DateTime
   blob      Binary
   legacyRef ObjectId
   total     Int64
