@@ -63,7 +63,7 @@ export function policiesOf(marker: ContractMarkerRecord | undefined): DatabasePo
 export function policyDifferences(declared: DeclaredPolicies, inForce: DatabasePolicies): readonly PolicyDifference[];
 ```
 
-`policiesOf` reads `marker.meta.policies`, validates it with arktype, and fills every absent setting from `DEFAULT_POLICIES`. A `meta.policies` that fails validation is a corrupt marker and fails as `CONTRACT.MARKER_READ_FAILED`, like any other unreadable marker. `policyDifferences` compares only the keys the declaration carries. The name is `DatabasePolicies`, never `policy` alone: the runner's `options.policy` is already the allowed-operation-classes setting.
+`policiesOf` reads `marker.meta.policies`, validates it with arktype, and fills every absent setting from `DEFAULT_POLICIES`. A `meta.policies` that fails validation is a corrupt marker row and fails as `CONTRACT.MARKER_ROW_CORRUPT`; the framework function returns a result and the CLI raises the error, with the space. `policyDifferences` compares only the keys the declaration carries. The name is `DatabasePolicies`, never `policy` alone: the runner's `options.policy` is already the allowed-operation-classes setting.
 
 ### Refs
 
@@ -112,7 +112,7 @@ Composer passes `refHash` today; the upgrade fragment under `upgrade-instruction
 5. If nothing is pending and no policy is to be written, return "already up to date" as today. If nothing is pending but policies are to be written, run the runner with zero edges so it writes the marker; the result says what changed.
 6. Run, writing `meta.policies` with the marker.
 
-Step 2 applies to the application space only; extension refs do not exist. Steps 1 and 3 apply to every space.
+The policies are the database's, not a space's: they are read from and written to the application space's marker, and steps 1 to 3 run once per run. An extension space's marker never carries policies; the application space's policies govern every space the run moves.
 
 **`dbUpdate`** (`control-api/operations/db-update.ts` and `db-run.ts`): steps 1 to 3 the same, with `reconcile` in step 3. In `plan` mode (the dry run) a refusal is reported the same way, so an agent previewing sees the refusal before it tries to apply.
 
@@ -124,7 +124,7 @@ Step 2 applies to the application space only; extension refs do not exist. Steps
 
 ### The CLI
 
-`db migrate` and `db update` gain `--permit-policy-change` (boolean). The flag's help text: `Write the ref's declared policies into the database before enforcing them`. Nothing else mentions it: no error, no next action, no hint when `POLICY_MISMATCH` is raised. The skill documents it.
+`db migrate` and `db update` gain `--permit-policy-change` (boolean). The flag's help text: `Write the ref's declared policies into the database before enforcing them`. No error suggests it: no next action proposes it, and `POLICY_MISMATCH` never hints at it. A next action that repeats the command the user ran (for example "run db migrate again" after a failed migration) repeats the flags the user gave, including this one; it never adds it. The skill documents it.
 
 `db migrate --to <ref>` and `db update --to <ref>` resolve the ref as today and also pass the whole entry as `ref`.
 
@@ -140,7 +140,7 @@ One line per field; the terminal wraps. Every code is registered in `docs/refere
 
 **`MIGRATION.CHANGE_POLICY_FORBIDS`**
 - summary, when `reconcile` is refused: `This database's change policy permits only migrations`; when `migrate` is refused: `This database's change policy permits only db update`.
-- why: `The marker records change: <strategies>, so <command> may not move it.`
+- why: `The marker records change: <strategies>, so <command> may not move it.` When the refusal comes from the ref's declaration under `--permit-policy-change`, `<ref> declares change: <strategies>, so <command> may not move it.`; `meta.change` is then the declared strategies.
 - next, `reconcile` refused: `user-choice`: `Author a migration with {bin} migration plan, then deploy it.` `migrate` refused: `run-command`, label `Reconcile the database`: `{bin} db update --to <target> [--db <url>]`.
 - meta: `spaceId`, `command` (`db update` | `db sign` | `db migrate`), `change` (the strategies in force).
 
@@ -192,3 +192,29 @@ The ref field, the marker field, the comparison and the enforcement are one feat
 - Unit tests: `policiesOf` defaults and validation; `policyDifferences`; `advanceRef` keeps invariants and policies for all three callers; both error builders assert whole envelopes; `marker-mismatch` for both policy cases.
 - The MySQL marker test proves `meta` survives an upsert.
 - `pnpm check:error-reference` passes; the skill, glossary and ADRs say what this spec says.
+
+## Decisions after the first review
+
+The architect and code reviews (in `reviews/`, not committed) found the following; each is decided here and fixed in the slice.
+
+| Finding | Decision |
+|---|---|
+| The ADR number 309 was taken on `main` while the branch was open | The decision record becomes the next free number after rebasing on `main`. |
+| Policies were read and enforced per contract space, but only the application space's were ever written | Policies belong to the database. They live on the application space's marker and govern every space. |
+| `TargetRef` (`{name?: string} & RefEntry`) let a nameless entry carry policies and meant different things on `migrate` and `dbUpdate` | `MigrateOptions` and `DbUpdateOptions` take `ref?: NamedRef` (`{name: string} & RefEntry`, required name) for policies and invariants, and `migrate` keeps a separate `targetHash?: string` for a `--to` that names a hash, `@db` or `@empty`. `dbUpdate` refuses, as an internal error, a `ref` whose hash is not the contract it reconciles to. |
+| An invalid `meta.policies` raised `CONTRACT.MARKER_READ_FAILED`, a connectivity error, rebuilt by catching it by code | `CONTRACT.MARKER_ROW_CORRUPT`, raised once in the CLI from a result the framework parser returns. |
+| `change: []` was accepted, and its advice looped between the two commands | `change` holds at least one strategy, in the ref and in the marker. |
+| A policy-only `db update` wrote a zero-operation ledger row | The runner decides the marker write and the ledger write separately; a run that applies no operation writes no ledger row. |
+| The policy check read the marker before the runner took its lock | The runner receives the policies the check used and compares them with the marker under its lock, as it already compares the hash; a difference fails the run as a concurrent change. |
+| Postgres wrote `meta` back after reading it, so a concurrent write to another `meta` key could be lost | Postgres sets `meta.policies` with a server-side `jsonb` merge; SQLite and MySQL do it inside their exclusive transaction. |
+| `db migrate` checked the policies twice, in the command and in the control API | Once, in the control API. |
+| The `meta.policies` key and its stored form had no owner | The framework exports the key and the serialiser, and the overlay of a declaration on the policies in force; the targets and the CLI use them. Each value list is defined once, as a constant array the types and the schema derive from. |
+| The internal names (`policiesOf`, `PolicyDifference`, `DEFAULT_POLICIES`, `policiesUpdated`) collide with the operation policy, control policy and row-level-security policies | Internal names say "database policies". The public codes `MIGRATION.POLICY_MISMATCH` and `MIGRATION.CHANGE_POLICY_FORBIDS` stay as the project spec names them. |
+| A difference named `dataLoss` while the ref file nests it under `dataProtection` | A difference names the ref file's key path: `change`, `dataProtection.dataLoss`, `dataProtection.accessWidening`. |
+| A re-run command in failure advice dropped `--permit-policy-change` | It repeats the flags the user gave (see *The CLI*). |
+| `db sign`'s refusal could not repeat `--config` | `DbSignOptions` gains `invocation`. |
+| `db migrate --show` did not preview a policy refusal | It reports the refusal the run would hit, with the same envelope. |
+| MySQL and MongoDB did not run the `db migrate --to <ref>` journeys; the failed-run guarantee was tested through the CLI only on Postgres and MongoDB | Both are added on all four targets. The MongoDB failed-run test also checks that the first migration stayed applied and that a retry with the flag records the policies. |
+| ADR 307 and the Migration System doc did not mention policies | ADR 307 gains a status note; the subsystem doc describes the ref field, the marker field and the checks. |
+
+Deferred: MongoDB reports a failed schema command as `CLI.UNEXPECTED` rather than `MIGRATION.EXECUTION_FAILED` ([TML-3779](https://linear.app/prisma-company/issue/TML-3779)); it predates this slice. The marker-destination shape declared in many places predates the slice; the slice adds the field through one framework type where the runners receive it, and the remaining copies are a separate refactor.
