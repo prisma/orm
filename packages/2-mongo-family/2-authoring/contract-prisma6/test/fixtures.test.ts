@@ -17,6 +17,7 @@ const CASES: readonly string[] = [
   'id-not-objectid',
   'ignore',
   'ignored-field-referenced',
+  'index-already-exists',
   'index-argument-unsupported',
   'indexes',
   'list-relation-unsupported',

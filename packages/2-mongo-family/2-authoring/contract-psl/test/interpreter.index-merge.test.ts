@@ -201,4 +201,26 @@ model Feature {
       { kind: 'mongo-index', keys: a, partialFilterExpression: { type: 'feature' } },
     ]);
   });
+
+  it('reports a refused index after a merged one at the line that writes it', () => {
+    const result = interpretMongoContract(
+      `model User {
+  id ObjectId @id @map("_id")
+  a  String   @unique
+  b  String
+  c  String
+  @@index([a])
+  @@textIndex([b])
+  @@textIndex([c])
+  @@map("users")
+}
+`,
+      lookups,
+    );
+    if (result.ok) throw new Error('Expected the schema to be refused');
+
+    expect(
+      result.failure.diagnostics.map(({ code, span }) => ({ code, line: span?.start.line })),
+    ).toEqual([{ code: 'PSL_INVALID_INDEX', line: 8 }]);
+  });
 });

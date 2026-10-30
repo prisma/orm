@@ -1,0 +1,20 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id    String @id @default(auto()) @map("_id") @db.ObjectId
+  email String
+
+  @@index([email])
+  @@map("people")
+}
+
+model Admin {
+  id    String @id @default(auto()) @map("_id") @db.ObjectId
+  email String
+
+  @@index([email])
+  @@map("people")
+}

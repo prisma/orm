@@ -8,6 +8,8 @@ model User {
   email  String @unique
   legacy String @ignore
   posts  Post[]
+
+  @@index([email(sort: Asc)])
 }
 
 model Post {

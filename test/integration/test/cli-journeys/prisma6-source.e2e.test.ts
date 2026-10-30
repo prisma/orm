@@ -4,8 +4,9 @@
  * `prisma6Schema('./schema.prisma')` runs `contract emit`, `db sign`, and
  * `db verify` through the real command family against a database laid out the
  * way Prisma 6 `db push` lays it out: a collection per model, no validators,
- * and indexes under Prisma 6's names. Verify reports zero findings in both
- * modes, since it matches indexes by keys and options, not by name. An index
+ * and indexes under Prisma 6's names, including a unique and a plain index on
+ * the same keys. Verify reports zero findings in both modes, since it matches
+ * indexes by keys and options, not by name. An index
  * the contract does not declare is a warning in lenient mode and an issue in
  * strict mode.
  */
@@ -40,6 +41,7 @@ function buildMongoUri(baseUri: string, dbName: string): string {
 async function pushLikePrisma6(db: Db): Promise<void> {
   await db.createCollection('User');
   await db.collection('User').createIndex({ email: 1 }, { unique: true, name: 'User_email_key' });
+  await db.collection('User').createIndex({ email: 1 }, { name: 'User_email_idx' });
   await db.createCollection('Post');
   await db.collection('Post').createIndex({ authorId: 1 }, { name: 'Post_authorId_idx' });
 }
@@ -144,7 +146,8 @@ withTempDir(({ createTempDir }) => {
         User: {
           kind: 'mongo-collection',
           indexes: [
-            expect.objectContaining({ keys: [{ field: 'email', direction: 1 }], unique: true }),
+            { kind: 'mongo-index', keys: [{ field: 'email', direction: 1 }], unique: true },
+            { kind: 'mongo-index', keys: [{ field: 'email', direction: 1 }] },
           ],
         },
         Post: {
