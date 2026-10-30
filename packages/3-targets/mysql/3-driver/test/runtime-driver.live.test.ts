@@ -170,6 +170,63 @@ async function withProxyAcceptingOnly<T>(
   }
 }
 
+/** Runs `fn` against a proxy that delivers every byte a connection sends after its first `KILL QUERY` four seconds late, in order, as a slow network would, even after the client closes it. */
+async function withKillDelayingProxy<T>(
+  url: string,
+  fn: (proxyUrl: URL) => Promise<T>,
+): Promise<T> {
+  const target = new URL(url);
+  const sockets = new Set<Socket>();
+  const timers = new Set<NodeJS.Timeout>();
+  const proxy = createServer((client) => {
+    const upstream = connect(Number(target.port || 3306), target.hostname);
+    for (const socket of [client, upstream]) {
+      sockets.add(socket);
+      socket.on('error', () => undefined);
+      socket.on('close', () => sockets.delete(socket));
+    }
+    let delayed = false;
+    let chain = Promise.resolve();
+    client.on('data', (chunk: Buffer) => {
+      if (chunk.includes(Buffer.from('KILL QUERY'))) delayed = true;
+      if (!delayed) {
+        upstream.write(chunk);
+        return;
+      }
+      chain = chain.then(
+        () =>
+          new Promise<void>((resolve) => {
+            const timer = setTimeout(() => {
+              timers.delete(timer);
+              if (!upstream.destroyed) upstream.write(chunk);
+              resolve();
+            }, 4000);
+            timers.add(timer);
+          }),
+      );
+    });
+    client.on('close', () => {
+      void chain.then(() => upstream.end());
+    });
+    upstream.on('data', (chunk: Buffer) => {
+      if (!client.destroyed) client.write(chunk);
+    });
+  });
+  await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+  const address = proxy.address();
+  if (address === null || typeof address === 'string') throw new Error('no port');
+  const proxyUrl = new URL(url);
+  proxyUrl.hostname = '127.0.0.1';
+  proxyUrl.port = String(address.port);
+  try {
+    return await fn(proxyUrl);
+  } finally {
+    for (const timer of timers) clearTimeout(timer);
+    for (const socket of sockets) socket.destroy();
+    await new Promise((resolve) => proxy.close(resolve));
+  }
+}
+
 /** Runs `fn` against a proxy that drops any connection on which the client sends `KILL`, as a network failure during the package's background `KILL` would. */
 async function withKillDroppingProxy<T>(
   url: string,
@@ -1100,6 +1157,56 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
       ),
     );
   });
+
+  it.for<[string, boolean]>([
+    ['a pooled stream', false],
+    ['a released held connection', true],
+  ])(
+    'does not let a KILL QUERY that arrives after the cancel limit interrupt the next statement on the pool, after %s',
+    { timeout: 20_000 },
+    async ([, held], test) => {
+      await withMysqlDatabase(test, ({ url }) =>
+        withKillDelayingProxy(url, async (proxyUrl) => {
+          await withDriver(
+            proxyUrl.toString(),
+            async (driver) => {
+              let stopped: string | undefined;
+              if (held) {
+                const connection = await driver.acquireConnection();
+                const rows = connection
+                  .query<{ cid: string }>({
+                    sql: manyRows.replace('SELECT a.n', 'SELECT CONNECTION_ID() AS cid, a.n'),
+                  })
+                  [Symbol.asyncIterator]();
+                const first = await rows.next();
+                stopped = first.done ? undefined : first.value.cid;
+                await connection.release();
+              } else {
+                for await (const row of driver.query<{ cid: string }>({
+                  sql: manyRows.replace('SELECT a.n', 'SELECT CONNECTION_ID() AS cid, a.n'),
+                })) {
+                  stopped = row.cid;
+                  break;
+                }
+              }
+              const started = Date.now();
+              const [next] = await collect(
+                driver.query<{ cid: string; slept: string }>({
+                  sql: 'SELECT CONNECTION_ID() AS cid, SLEEP(5) AS slept',
+                }),
+              );
+              expect({
+                slept: next?.slept,
+                ranFully: Date.now() - started >= 4900,
+                newConnection: next?.cid !== stopped,
+              }).toEqual({ slept: '0', ranFully: true, newConnection: true });
+            },
+            single,
+          );
+        }),
+      );
+    },
+  );
 
   it('runs the next statement on a thread that received a late KILL QUERY while idle', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>

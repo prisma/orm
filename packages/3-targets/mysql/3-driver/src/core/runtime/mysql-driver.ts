@@ -16,11 +16,15 @@ import type {
 import { blindCast } from '@internal/utils/casts';
 import { createPool, type Pool, type PoolConnection } from 'mariadb';
 import { acquireClientQueryLock } from '../client-query-lock';
-import { type MysqlPoolOptions, mysqlPoolOptions } from '../connection-options';
+import {
+  type MysqlPoolOptions,
+  mysqlPoolIdleTimeoutMillis,
+  mysqlPoolOptions,
+} from '../connection-options';
 import { connectingCannotSucceed, isFatal, normalizeMysqlError } from '../normalize-error';
 import { SessionSettingsGuard } from '../session-settings';
 import { statementFor } from '../statement';
-import { Canceller } from './canceller';
+import { Canceller, type CancelOutcome } from './canceller';
 
 /** Where the runtime driver connects: a `mysql://` URL. */
 export type MysqlBinding = { readonly kind: 'url'; readonly url: string };
@@ -122,7 +126,7 @@ function ignoreAfterStop(): void {}
 /**
  * Cancels the statement running on a connection, by its MySQL thread id, from another connection: MySQL cannot cancel a statement on its own connection. Resolves whether the cancel was sent. Never rejects.
  */
-type CancelStatement = (threadId: number | null) => Promise<boolean>;
+type CancelStatement = (threadId: number | null) => Promise<CancelOutcome>;
 
 /** MySQL's error for a statement `KILL QUERY` cancelled (`ER_QUERY_INTERRUPTED`). The package marks it fatal when it arrives in the middle of a result, but the connection stays usable. */
 function isQueryInterrupted(error: unknown): boolean {
@@ -237,10 +241,20 @@ abstract class MysqlQueryable implements SqlQueryable {
    * Ends a stream the caller stopped reading early, and keeps the client usable. While its result is still arriving, the statement is first cancelled with `KILL QUERY`, so a large result is not downloaded only to be thrown away; MySQL does not say how many rows remain. On a held connection or in a transaction, as on a pooled one: `KILL QUERY` ends only the statement, the session survives, and in a transaction MySQL rolls back only that statement. The rest of the result is then read and dropped, MySQL's error for the cancelled statement among it. The client is never destroyed while its statement runs: the package's `destroy()` would send `KILL` itself, on a connection whose failure it does not handle.
    */
   async #stopEarly(client: PoolConnection, rows: Readable, outcome: Outcome): Promise<void> {
-    const cancelled = !resultReceived(rows) && (await this.cancelStatement(client.threadId));
+    const cancel = resultReceived(rows) ? 'unsent' : await this.cancelStatement(client.threadId);
     await dropRest(rows).catch((error: unknown) => {
-      if (isFatal(error) && !(cancelled && isQueryInterrupted(error))) outcome.destroy = true;
+      if (isFatal(error) && !(cancel !== 'unsent' && isQueryInterrupted(error))) {
+        outcome.destroy = true;
+      }
     });
+    if (cancel === 'unconfirmed') this.cancelUnconfirmed(outcome);
+  }
+
+  /**
+   * A cancel that went out without an answer may still reach MySQL and interrupt the next statement on the client, so the client must not serve another caller. Once its rest has been read, nothing is receiving on it, so closing it sends no `KILL` of the package's own; a late `KILL QUERY` then finds no thread.
+   */
+  protected cancelUnconfirmed(outcome: Outcome): void {
+    outcome.destroy = true;
   }
 }
 
@@ -248,6 +262,8 @@ abstract class MysqlQueryable implements SqlQueryable {
 interface HeldState {
   /** The streams open on the client, which a release or destroy cancels and reads to their end. */
   readonly streams: Set<Readable>;
+  /** Set once a cancel on the client went out without an answer: a late `KILL QUERY` could interrupt a later statement, so the release closes the connection instead of returning it. */
+  cancelUnconfirmed: boolean;
   /** The statements that are not streams and hold the client's lock, which a release lets finish. */
   readonly running: Set<Promise<unknown>>;
   readonly cancel: CancelStatement;
@@ -289,6 +305,10 @@ abstract class MysqlHeldQueryable extends MysqlQueryable {
 
   protected override get handedBack(): boolean {
     return this.held.handedBack.done;
+  }
+
+  protected override cancelUnconfirmed(): void {
+    this.held.cancelUnconfirmed = true;
   }
 
   /** Takes the client's lock, or fails once the connection is handed back, whether the statement was sent after that or was still waiting for the lock. A lock taken after that is given straight back. */
@@ -355,7 +375,13 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
   ) {
     super(
       client,
-      { streams: new Set(), running: new Set(), cancel, handedBack: handedBackState() },
+      {
+        streams: new Set(),
+        cancelUnconfirmed: false,
+        running: new Set(),
+        cancel,
+        handedBack: handedBackState(),
+      },
       streams,
     );
     this.#onRelease = onRelease;
@@ -381,7 +407,8 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
     try {
       if (this.held.streams.size > 0) await this.#cancelRunning();
       await this.#runningSettled();
-      await this.client.release();
+      if (this.held.cancelUnconfirmed) await this.#close();
+      else await this.client.release();
     } finally {
       this.#released();
     }
@@ -394,15 +421,22 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
     try {
       if (this.held.streams.size > 0 || this.held.running.size > 0) await this.#cancelRunning();
       await this.#runningSettled();
-      await this.client.ping().catch(() => undefined);
-      this.client.destroy();
+      await this.#close();
     } finally {
       this.#released();
     }
   }
 
+  /** Closes the client once the `ping` queued behind anything left on it has answered, so nothing is receiving and the package's `destroy()` sends no `KILL` of its own. */
+  async #close(): Promise<void> {
+    await this.client.ping().catch(() => undefined);
+    this.client.destroy();
+  }
+
   async #cancelRunning(): Promise<void> {
-    await this.held.cancel(this.client.threadId);
+    if ((await this.held.cancel(this.client.threadId)) === 'unconfirmed') {
+      this.held.cancelUnconfirmed = true;
+    }
     await Promise.all([...this.held.streams].map((rows) => dropRest(rows).catch(() => undefined)));
   }
 
@@ -494,7 +528,7 @@ export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
   readonly #inUse = new ClientsInUse();
   #canceller: Canceller | undefined;
   protected readonly cancelStatement: CancelStatement = (threadId) =>
-    this.#canceller?.cancel(threadId) ?? Promise.resolve(false);
+    this.#canceller?.cancel(threadId) ?? Promise.resolve('unsent');
   readonly #options: MysqlDriverCreateOptions;
   readonly #sessionSettings: SessionSettingsGuard;
 
@@ -521,7 +555,10 @@ export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
     });
     if (pool instanceof EventEmitter) pool.on('error', ignoreConnectionFailure);
     this.#state = { kind: 'connected', pool, waiting };
-    this.#canceller = new Canceller(binding.url);
+    this.#canceller = new Canceller(
+      binding.url,
+      mysqlPoolIdleTimeoutMillis(this.#options.poolOptions),
+    );
   }
 
   async acquireConnection(): Promise<SqlConnection> {
@@ -569,7 +606,7 @@ export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
   }
 
   /**
-   * Destroys a client only after an error the package marks fatal. The package marks an error fatal when the connection's socket is gone or can no longer be trusted, and it has then already set the connection closed and failed every command on it (`fatalError` in its `connection.js`), so no command is receiving and its `destroy()` sends no `KILL`. A statement the caller stopped early is cancelled and read to its end instead (`#stopEarly`).
+   * Destroys a client only after an error the package marks fatal, or after a cancel that went out without an answer once the rest of its result was read (`cancelUnconfirmed`). The package marks an error fatal when the connection's socket is gone or can no longer be trusted, and it has then already set the connection closed and failed every command on it (`fatalError` in its `connection.js`), so no command is receiving and its `destroy()` sends no `KILL`. A statement the caller stopped early is cancelled and read to its end instead (`#stopEarly`).
    */
   protected async releaseClient(client: PoolConnection, { destroy }: Outcome): Promise<void> {
     try {
