@@ -74,7 +74,7 @@ describe('errorChangePolicyForbids', () => {
       }).toEnvelope(),
     ).toMatchObject({
       summary: "This database's change policy permits only migrations",
-      why: 'The marker records change: migrate, so db sign may not move it.',
+      why: 'The marker records change: migrate, so db sign may not sign it.',
       meta: { spaceId: 'app', command: 'db sign', change: ['migrate'] },
     });
   });

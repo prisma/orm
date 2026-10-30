@@ -62,7 +62,8 @@ export function errorChangePolicyForbids(args: {
 }): ActionableCliError {
   const { spaceId, command, change, invocation, source } = args;
   const holder = source.kind === 'ref' ? `${source.refName} declares` : 'The marker records';
-  const why = `${holder} change: ${change.join(', ')}, so ${command} may not move it.`;
+  const refusal = command === 'db sign' ? 'may not sign it' : 'may not move it';
+  const why = `${holder} change: ${change.join(', ')}, so ${command} ${refusal}.`;
   const meta = { spaceId, command, change };
   if (command === 'db migrate') {
     const reconcile = cliCommand(invocation, 'db update', ['--to', args.targetHash]);

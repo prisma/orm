@@ -42,7 +42,7 @@ function forbidsMigrationsOnly(command: 'db update' | 'db sign') {
     severity: 'error',
     docsUrl: `${DOCS}/MIGRATION.CHANGE_POLICY_FORBIDS`,
     summary: "This database's change policy permits only migrations",
-    why: `The marker records change: migrate, so ${command} may not move it.`,
+    why: `The marker records change: migrate, so ${command} ${command === 'db sign' ? 'may not sign it' : 'may not move it'}.`,
     nextActions: [{ kind: 'user-choice', label: recovery }],
     meta: { spaceId: 'app', command, change: ['migrate'] },
   };

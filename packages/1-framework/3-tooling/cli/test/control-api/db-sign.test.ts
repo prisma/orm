@@ -274,7 +274,7 @@ describe('signContractSpaces', () => {
 
     expect(result.ok ? undefined : result.failure.toEnvelope()).toMatchObject({
       code: 'MIGRATION.CHANGE_POLICY_FORBIDS',
-      why: 'The marker records change: migrate, so db sign may not move it.',
+      why: 'The marker records change: migrate, so db sign may not sign it.',
       nextActions: [
         {
           kind: 'user-choice',
