@@ -137,7 +137,7 @@ Work found after the plan was made goes here, so the first five streams keep the
 | PostgreSQL | Ready |
 | SQLite, MongoDB, MySQL/MariaDB | Can finish after GA. Labelled release candidate or early access until ready. They start once stream 1 has stopped changing what targets build on. |
 
-Outside the streams: MongoDB contracts written in TypeScript, PSL or Prisma 6 build through one builder (TML-3616), merged 2026-10-23; its close-out merged 2026-10-28. The MongoDB query builder takes an execution context like the SQL builder (TML-3686), merged 2026-10-29.
+Outside the streams: MongoDB contracts written in TypeScript, PSL or Prisma 6 build through one builder (TML-3616), merged 2026-10-23; its close-out merged 2026-10-28. Follow-ups to client surfaces (row 8 of stream 1), all merged: a Supabase client shuts down like a Postgres client (prisma/orm#30828, 2026-10-22); a closed client's members reject instead of throwing at the call (prisma/orm#30840, 2026-10-23); MongoDB queries take an execution context like SQL queries (TML-3686, prisma/orm#30865, 2026-10-29); `mongo()` creates its driver from the execution stack like `postgres()` (TML-3763, prisma/orm#30906, 2026-10-30). Plans for ORM writes (TML-3684) cancelled 2026-10-30 (Will): no user need. Left in the backlog until a user asks: TML-3682 (Supabase cannot stream large reads) and TML-3683 (MongoDB has no `prepare` or `extensions`).
 
 ## Beside the streams
 
