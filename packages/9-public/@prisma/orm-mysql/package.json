@@ -21,7 +21,8 @@
     "@prisma/orm-target-mysql": "workspace:8.0.0-rc.21",
     "@prisma/orm-toolchain": "workspace:8.0.0-rc.21",
     "arktype": "catalog:",
-    "pathe": "^2.0.3"
+    "pathe": "^2.0.3",
+    "temporal-spec": "1.0.1"
   },
   "devDependencies": {
     "@internal/mysql": "workspace:8.0.0-rc.21",
@@ -31,6 +32,7 @@
     "typescript": "catalog:"
   },
   "peerDependencies": {
+    "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
@@ -150,6 +152,7 @@
     "./target/pack": "./dist/target__pack.mjs",
     "./target/runtime": "./dist/target__runtime.mjs",
     "./target/sql-utils": "./dist/target__sql-utils.mjs",
+    "./target/types": "./dist/target__types.mjs",
     "./utils": "./dist/utils.mjs",
     "./utils/abortable": "./dist/utils__abortable.mjs",
     "./utils/array-equal": "./dist/utils__array-equal.mjs",

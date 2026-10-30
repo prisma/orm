@@ -11,7 +11,8 @@
   "scripts": {
     "build": "tsdown",
     "lint": "biome check . --error-on-warnings",
-    "clean": "rm -rf dist src-gen"
+    "clean": "rm -rf dist src-gen",
+    "test": "vitest run"
   },
   "dependencies": {
     "@prisma/orm-family-sql": "workspace:8.0.0-rc.21",
@@ -19,18 +20,22 @@
     "@prisma/orm-toolchain": "workspace:8.0.0-rc.21",
     "@standard-schema/spec": "1.1.0",
     "arktype": "^2.2.2",
-    "mariadb": "3.5.4"
+    "mariadb": "3.5.4",
+    "temporal-spec": "1.0.1"
   },
   "devDependencies": {
     "@internal/adapter-mysql": "workspace:8.0.0-rc.21",
     "@internal/driver-mysql": "workspace:8.0.0-rc.21",
     "@internal/target-mysql": "workspace:8.0.0-rc.21",
+    "@repo/test-utils": "workspace:8.0.0-rc.21",
     "@repo/tsconfig": "workspace:8.0.0-rc.21",
     "@repo/tsdown": "workspace:8.0.0-rc.21",
     "tsdown": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
+    "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
@@ -64,6 +69,7 @@
     "./target/pack": "./dist/target__pack.mjs",
     "./target/runtime": "./dist/target__runtime.mjs",
     "./target/sql-utils": "./dist/target__sql-utils.mjs",
+    "./target/types": "./dist/target__types.mjs",
     "./package.json": "./package.json"
   },
   "repository": {

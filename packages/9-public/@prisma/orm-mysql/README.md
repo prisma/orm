@@ -16,6 +16,8 @@ pnpm add @prisma/orm-mysql
 
 MySQL support is early. Today the package covers contracts and migrations: `prisma contract emit`, `prisma migration plan`, `prisma db migrate`, `prisma db verify` and `prisma db sign`. The query client (`/runtime`) and the statically composed runtime (`/static`) have not landed yet.
 
+`temporal-polyfill` is a required peer dependency. The control plane, such as the `prisma` commands, loads it as a fallback `Temporal` when the runtime has none, and a project that already installs it for its own code has one copy. npm, pnpm and bun install it automatically; with Yarn, add `temporal-polyfill` to your dependencies.
+
 ## Entrypoints
 
 | Namespace | Surface |
