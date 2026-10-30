@@ -3,6 +3,7 @@ import type {
   ControlAdapterDescriptor,
   ControlAdapterInstance,
   ControlDriverInstance,
+  DatabasePolicies,
 } from '@internal/framework-components/control';
 import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
 import type {
@@ -25,6 +26,7 @@ export interface MarkerOperations {
       readonly storageHash: string;
       readonly profileHash: string;
       readonly invariants?: readonly string[];
+      readonly databasePolicies?: DatabasePolicies;
     },
   ): Promise<void>;
   updateMarker(
@@ -34,6 +36,7 @@ export interface MarkerOperations {
       readonly storageHash: string;
       readonly profileHash: string;
       readonly invariants?: readonly string[];
+      readonly databasePolicies?: DatabasePolicies;
     },
   ): Promise<boolean>;
   writeLedgerEntry(
@@ -110,6 +113,7 @@ export interface MongoControlAdapter<TTarget extends string = string>
       readonly storageHash: string;
       readonly profileHash: string;
       readonly invariants?: readonly string[];
+      readonly databasePolicies?: DatabasePolicies;
     },
   ): Promise<void>;
 
@@ -126,6 +130,7 @@ export interface MongoControlAdapter<TTarget extends string = string>
       readonly storageHash: string;
       readonly profileHash: string;
       readonly invariants?: readonly string[];
+      readonly databasePolicies?: DatabasePolicies;
     },
   ): Promise<boolean>;
 

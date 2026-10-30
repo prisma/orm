@@ -8,6 +8,7 @@ import { verifyMongoSchema } from '@internal/family-mongo/schema-verify';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import {
   APP_SPACE_ID,
+  type DatabasePolicies,
   expectAbsent,
   expectPresent,
   type FailedCheck,
@@ -93,6 +94,8 @@ export interface MongoMigrationRunnerExecuteOptions {
   readonly plan: MigrationPlan;
   readonly destinationContract: MongoContract;
   readonly policy: MigrationOperationPolicy;
+  /** When set, the marker update at the end of the run records these as the database's policies. */
+  readonly databasePolicies?: DatabasePolicies;
   readonly callbacks?: {
     onOperationStart?(op: MigrationPlanOperation): void;
     onOperationComplete?(op: MigrationPlanOperation): void;
@@ -384,7 +387,10 @@ export class MongoMigrationRunner {
     // Mongo too, gate this `isNoOp` on a self-edge check (or, conversely,
     // align the SQL runners to skip non-self-edge no-ops uniformly).
     const isNoOp =
-      operationsExecuted === 0 && markerAlreadyAtDestination && incomingIsSubsetOfExisting;
+      operationsExecuted === 0 &&
+      markerAlreadyAtDestination &&
+      incomingIsSubsetOfExisting &&
+      options.databasePolicies === undefined;
 
     if (!isNoOp) {
       const liveSchema = await this.deps.introspectSchema();
@@ -415,6 +421,7 @@ export class MongoMigrationRunner {
           storageHash: destination.storageHash,
           profileHash,
           invariants: incomingInvariants,
+          ...ifDefined('databasePolicies', options.databasePolicies),
         });
         if (!updated) {
           const found = await markerOps.readMarker(space);
@@ -436,6 +443,7 @@ export class MongoMigrationRunner {
           storageHash: destination.storageHash,
           profileHash,
           invariants: incomingInvariants,
+          ...ifDefined('databasePolicies', options.databasePolicies),
         });
       }
       wrote();

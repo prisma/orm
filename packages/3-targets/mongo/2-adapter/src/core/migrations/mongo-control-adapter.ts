@@ -4,12 +4,17 @@ import type {
   MongoControlAdapter,
   MongoRunnerDependencies,
 } from '@internal/family-mongo/control-adapter';
-import { APP_SPACE_ID, type ControlDriverInstance } from '@internal/framework-components/control';
+import {
+  APP_SPACE_ID,
+  type ControlDriverInstance,
+  type DatabasePolicies,
+} from '@internal/framework-components/control';
 import { ledgerOriginFromStored } from '@internal/migration-tools/ledger-origin';
 import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
 import type { AnyMongoDdlCommand } from '@internal/mongo-query-ast/control';
 import {
   type AnyMongoCommand,
+  type MongoAggExpr,
   MongoAggFieldRef,
   MongoAggLiteral,
   MongoAggOperator,
@@ -20,6 +25,7 @@ import { collection } from '@internal/mongo-query-builder/contract-free';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import type { MongoValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import type { Document } from 'mongodb';
 import { createMongoAdapter } from '../../mongo-adapter';
 import { describeReceivedValue, mongoAdapterError } from '../errors';
@@ -32,6 +38,16 @@ import {
 import { MARKER_LEDGER_COLLECTION, type MarkerLedgerDocShape } from '../marker-ledger-collection';
 import { MongoInspectionExecutor } from './inspection-executor';
 import { extractDb, isMongoControlDriver, requireMongoControlDriver } from './mongo-control-driver';
+
+function policiesDocument(policies: DatabasePolicies): MongoValue {
+  return {
+    change: [...policies.change],
+    dataProtection: {
+      dataLoss: policies.dataProtection.dataLoss,
+      accessWidening: policies.dataProtection.accessWidening,
+    },
+  };
+}
 
 /**
  * Mongo control adapter for control-plane operations like introspection
@@ -160,8 +176,10 @@ export class MongoControlAdapterImpl implements MongoControlAdapter<'mongo'> {
       readonly storageHash: string;
       readonly profileHash: string;
       readonly invariants?: readonly string[];
+      readonly databasePolicies?: DatabasePolicies;
     },
   ): Promise<void> {
+    const { databasePolicies } = destination;
     const document: Record<string, MongoValue> = {
       _id: space,
       space,
@@ -171,7 +189,7 @@ export class MongoControlAdapterImpl implements MongoControlAdapter<'mongo'> {
       canonicalVersion: null,
       updatedAt: new Date(),
       appTag: null,
-      meta: {},
+      meta: databasePolicies === undefined ? {} : { policies: policiesDocument(databasePolicies) },
       invariants: [...(destination.invariants ?? [])],
     };
     await this.#execute(driver, this.#markerLedgerCollection.insertOne(document));
@@ -185,34 +203,32 @@ export class MongoControlAdapterImpl implements MongoControlAdapter<'mongo'> {
       readonly storageHash: string;
       readonly profileHash: string;
       readonly invariants?: readonly string[];
+      readonly databasePolicies?: DatabasePolicies;
     },
   ): Promise<boolean> {
-    const { invariants } = destination;
+    const { invariants, databasePolicies } = destination;
+    const fields: Record<string, MongoAggExpr> = {
+      storageHash: MongoAggLiteral.of(destination.storageHash),
+      profileHash: MongoAggLiteral.of(destination.profileHash),
+      updatedAt: MongoAggLiteral.of(new Date()),
+      ...ifDefined(
+        'invariants',
+        invariants === undefined ? undefined : this.#invariantMergeExpr(invariants),
+      ),
+      ...ifDefined(
+        'meta.policies',
+        databasePolicies === undefined
+          ? undefined
+          : MongoAggLiteral.of(policiesDocument(databasePolicies)),
+      ),
+    };
     const docs = await this.#execute(
       driver,
       this.#markerLedgerCollection
         .match((f) => f._id.eq(space))
         .match((f) => f.space.eq(space))
         .match((f) => f.storageHash.eq(expectedFrom))
-        .findOneAndUpdate(
-          (f) => [
-            f.stage.set(
-              invariants === undefined
-                ? {
-                    storageHash: MongoAggLiteral.of(destination.storageHash),
-                    profileHash: MongoAggLiteral.of(destination.profileHash),
-                    updatedAt: MongoAggLiteral.of(new Date()),
-                  }
-                : {
-                    storageHash: MongoAggLiteral.of(destination.storageHash),
-                    profileHash: MongoAggLiteral.of(destination.profileHash),
-                    updatedAt: MongoAggLiteral.of(new Date()),
-                    invariants: this.#invariantMergeExpr(invariants),
-                  },
-            ),
-          ],
-          { upsert: false },
-        ),
+        .findOneAndUpdate((f) => [f.stage.set(fields)], { upsert: false }),
     );
     return docs.length > 0;
   }
