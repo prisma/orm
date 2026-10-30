@@ -68,6 +68,11 @@ describe('the DEFAULT clause the SQLite adapter writes in every DDL statement', 
       "DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
     ],
     [
+      'now() on text, as the text sqlite/datetime stores',
+      col('c', 'TEXT', { default: fn('now()'), codecRef: { codecId: 'sqlite/text@1' } }),
+      "DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+    ],
+    [
       'autoincrement(), which the type writes',
       col('c', 'INTEGER', { default: fn('autoincrement()') }),
       '',
@@ -88,6 +93,24 @@ describe('the DEFAULT clause the SQLite adapter writes in every DDL statement', 
       await expect(render(col('c', 'TEXT', { default: fn(expression) }))).rejects.toMatchObject({
         code: 'CONTRACT.DEFAULT_INVALID',
         meta: { expression },
+      });
+    },
+  );
+
+  it.each([
+    ['sqlite/duration-string@1', 'sqlite/duration', 'TEXT'],
+    ['sqlite/integer@1', 'sqlite/integer', 'INTEGER'],
+    ['sqlite/real@1', 'sqlite/real', 'REAL'],
+    ['sqlite/json@1', 'sqlite/json', 'TEXT'],
+    ['sqlite/blob@1', 'sqlite/blob', 'BLOB'],
+  ])(
+    'refuses now() on %s, whose data type holds no current date or time, with CONTRACT.DEFAULT_INVALID',
+    async (codecId, dataType, typeSql) => {
+      await expect(
+        render(col('c', typeSql, { default: fn('now()'), codecRef: { codecId } })),
+      ).rejects.toMatchObject({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        meta: { table: 't', column: 'c', dataType },
       });
     },
   );

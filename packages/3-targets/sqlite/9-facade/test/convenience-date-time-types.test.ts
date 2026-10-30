@@ -148,6 +148,15 @@ describe('a SQLite convenience date and time type', () => {
     expect(failure(model(`at ${written}`))).toContain(message);
   });
 
+  it.each(['@onCreate(now())', '@onUpdate(now())'])(
+    'refuses Duration %s, since a duration holds no current time',
+    (attribute) => {
+      expect(failure(model(`lasts Duration ${attribute}`))).toContain(
+        'PSL_GENERATOR_NOT_APPLICABLE',
+      );
+    },
+  );
+
   it('refuses a default of another date and time type', () => {
     expect(failure(model('day Date @default(time`09:30`)'))).toContain(
       'PSL_VALUE_TYPE_INCOMPATIBLE',

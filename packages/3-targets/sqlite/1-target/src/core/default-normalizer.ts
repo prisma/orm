@@ -145,7 +145,9 @@ export function sqliteResolveDefault(
 ): ColumnDefault {
   if (def.kind !== 'function') return def;
   const expression =
-    def.expression === INSTANT_NOW ? sqliteNowExpressionFor(column.dataTypeId) : def.expression;
+    def.expression === INSTANT_NOW
+      ? (sqliteNowExpressionFor(column.dataTypeId) ?? def.expression)
+      : def.expression;
   const read = readSqliteDefault(expression, column.typeText);
   return read.kind === 'function' ? read : def;
 }

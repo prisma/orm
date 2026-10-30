@@ -146,21 +146,32 @@ describe('readSqliteDefault', () => {
 });
 
 describe('the expression a now() default is written as', () => {
-  it('is the current date on sqlite/date, the time of day on sqlite/time and the instant elsewhere', () => {
+  it('is the current date on sqlite/date, the time of day on sqlite/time, and the instant on sqlite/datetime, on text and on a column of no known data type', () => {
     expect({
       date: sqliteNowExpressionFor('sqlite/date'),
       time: sqliteNowExpressionFor('sqlite/time'),
       datetime: sqliteNowExpressionFor('sqlite/datetime'),
       text: sqliteNowExpressionFor('sqlite/text'),
+      character: sqliteNowExpressionFor('sqlite/character'),
+      characterVarying: sqliteNowExpressionFor('sqlite/character-varying'),
       unknown: sqliteNowExpressionFor(undefined),
     }).toEqual({
       date: "date('now')",
       time: "strftime('%H:%M:%f','now')",
       datetime: "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
       text: "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+      character: "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+      characterVarying: "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
       unknown: "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
     });
   });
+
+  it.each(['sqlite/duration', 'sqlite/integer', 'sqlite/real', 'sqlite/blob', 'sqlite/json'])(
+    'does not exist on %s, which holds no current date or time',
+    (dataTypeId) => {
+      expect(sqliteNowExpressionFor(dataTypeId)).toBeUndefined();
+    },
+  );
 
   it.each(['sqlite/datetime', 'sqlite/date', 'sqlite/time'])(
     'on %s, is read back as the contract names now() on that data type',
