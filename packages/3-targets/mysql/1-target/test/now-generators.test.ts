@@ -41,7 +41,7 @@ describe('the MySQL "now" generator for each codec', () => {
       'mysql/datetime@1': 'timestampNow',
       'mysql/datetime-temporal@1': 'instantNow',
       'mysql/datetime-string@1': 'instantStringNow',
-      'mysql/timestamp@1': 'timestampNow',
+      'mysql/timestamp-date@1': 'timestampNow',
       'mysql/timestamp-temporal@1': 'instantNow',
       'mysql/timestamp-string@1': 'instantStringNow',
       'mysql/date-string@1': 'dateStringNow',

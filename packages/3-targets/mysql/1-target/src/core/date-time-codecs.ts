@@ -23,7 +23,7 @@ import {
   MYSQL_DURATION_STRING_CODEC_ID,
   MYSQL_TIME_STRING_CODEC_ID,
   MYSQL_TIME_TEMPORAL_CODEC_ID,
-  MYSQL_TIMESTAMP_CODEC_ID,
+  MYSQL_TIMESTAMP_DATE_CODEC_ID,
   MYSQL_TIMESTAMP_STRING_CODEC_ID,
   MYSQL_TIMESTAMP_TEMPORAL_CODEC_ID,
 } from './codec-ids';
@@ -89,8 +89,8 @@ const instantOf = (identity: TemporalCodecIdentity, stored: string): Temporal.In
   temporalFromStoredText(identity, `${stored}Z`, (temporal, text) => temporal.Instant.from(text));
 
 /** A MySQL `timestamp` as a JavaScript `Date`, read and written in UTC. */
-export class MysqlTimestampCodec extends CodecImpl<
-  typeof MYSQL_TIMESTAMP_CODEC_ID,
+export class MysqlTimestampDateCodec extends CodecImpl<
+  typeof MYSQL_TIMESTAMP_DATE_CODEC_ID,
   readonly ['equality', 'order'],
   string,
   Date
@@ -116,20 +116,22 @@ export class MysqlTimestampCodec extends CodecImpl<
   }
 }
 
-export class MysqlTimestampDescriptor extends MysqlCodecDescriptor<PrecisionParams> {
+export class MysqlTimestampDateDescriptor extends MysqlCodecDescriptor<PrecisionParams> {
   override readonly dataType = mysqlTimestamp.id;
-  override readonly codecId = MYSQL_TIMESTAMP_CODEC_ID;
+  override readonly codecId = MYSQL_TIMESTAMP_DATE_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
   override readonly paramsSchema = mysqlDatetimeParams;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return rowTextJsonProjection(expression);
   }
-  override factory(params: PrecisionParams): (ctx: CodecInstanceContext) => MysqlTimestampCodec {
-    return () => new MysqlTimestampCodec(this, mysqlTimestamp, params);
+  override factory(
+    params: PrecisionParams,
+  ): (ctx: CodecInstanceContext) => MysqlTimestampDateCodec {
+    return () => new MysqlTimestampDateCodec(this, mysqlTimestamp, params);
   }
 }
 
-export const mysqlTimestampDescriptor = new MysqlTimestampDescriptor();
+export const mysqlTimestampDateDescriptor = new MysqlTimestampDateDescriptor();
 
 /** An instant read as `Temporal.Instant` from a `datetime` that holds it in UTC. */
 export class MysqlDatetimeTemporalCodec extends CodecImpl<

@@ -23,7 +23,7 @@ describe('the MySQL convenience date and time types', () => {
     ['DateTime', ['jsDate', 'datetime', 6], 'mysql/datetime@1', { precision: 6 }],
     ['DateTime', ['temporal'], 'mysql/datetime-temporal@1', { precision: 6 }],
     ['DateTime', ['string'], 'mysql/datetime-string@1', { precision: 6 }],
-    ['DateTime', ['jsDate', 'timestamp'], 'mysql/timestamp@1', { precision: 3 }],
+    ['DateTime', ['jsDate', 'timestamp'], 'mysql/timestamp-date@1', { precision: 3 }],
     ['DateTime', ['temporal', 'timestamp'], 'mysql/timestamp-temporal@1', { precision: 6 }],
     ['DateTime', ['string', 'timestamp', 0], 'mysql/timestamp-string@1', { precision: 0 }],
     ['Date', [], 'mysql/date-string@1', undefined],

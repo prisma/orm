@@ -76,7 +76,12 @@ const rows: readonly (readonly [
   ['DateTime(precision: 6)', 'DatetimeJsDate(6)', 'mysql/datetime@1', { precision: 6 }],
   ['DateTime(as: temporal)', 'DatetimeTemporal(6)', 'mysql/datetime-temporal@1', { precision: 6 }],
   ['DateTime(as: string)', 'DatetimeString(6)', 'mysql/datetime-string@1', { precision: 6 }],
-  ['DateTime(storage: timestamp)', 'TimestampJsDate(3)', 'mysql/timestamp@1', { precision: 3 }],
+  [
+    'DateTime(storage: timestamp)',
+    'TimestampJsDate(3)',
+    'mysql/timestamp-date@1',
+    { precision: 3 },
+  ],
   [
     'DateTime(as: temporal, storage: timestamp)',
     'TimestampTemporal(6)',

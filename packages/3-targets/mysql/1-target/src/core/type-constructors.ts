@@ -11,7 +11,7 @@ import {
   MYSQL_INT_CODEC_ID,
   MYSQL_TIME_STRING_CODEC_ID,
   MYSQL_TIME_TEMPORAL_CODEC_ID,
-  MYSQL_TIMESTAMP_CODEC_ID,
+  MYSQL_TIMESTAMP_DATE_CODEC_ID,
   MYSQL_TIMESTAMP_STRING_CODEC_ID,
   MYSQL_TIMESTAMP_TEMPORAL_CODEC_ID,
 } from './codec-ids';
@@ -85,7 +85,7 @@ export const mysqlDateTimeTypeConstructors = {
   ),
   TimestampJsDate: {
     ...withPrecision(
-      MYSQL_TIMESTAMP_CODEC_ID,
+      MYSQL_TIMESTAMP_DATE_CODEC_ID,
       'An instant from 1970 to 2038 stored as MySQL timestamp and represented as a JavaScript Date. `precision` is the fraction digits the column holds, 0 to 6.',
     ),
     inferred: true,

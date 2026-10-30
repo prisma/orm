@@ -46,7 +46,7 @@ export function timeStringNow(params?: GeneratorParams): string {
 }
 
 /**
- * The MySQL "now" generators, one per date and time codec except `mysql/datetime@1` and `mysql/timestamp@1`, which use the SQL family's `timestampNow`. All read the clock through `Date.now()` and write UTC. Each rounds down to the column's `precision` param, so MySQL, which rounds a value to the column's fraction digits, stores the value the client holds rather than rounding it up. The string generators write the text their codec reads, with no trailing zeros in the fraction.
+ * The MySQL "now" generators, one per date and time codec except `mysql/datetime@1` and `mysql/timestamp-date@1`, which use the SQL family's `timestampNow`. All read the clock through `Date.now()` and write UTC. Each rounds down to the column's `precision` param, so MySQL, which rounds a value to the column's fraction digits, stores the value the client holds rather than rounding it up. The string generators write the text their codec reads, with no trailing zeros in the fraction.
  */
 export const mysqlNowGenerators = [
   { id: INSTANT_NOW_GENERATOR_ID, generate: instantNow },

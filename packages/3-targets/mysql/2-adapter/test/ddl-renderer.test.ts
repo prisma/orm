@@ -154,7 +154,7 @@ describe('column defaults', () => {
     ['time(6)', 'mysql/time-string@1', { precision: 6 }, '09:30:00', "DEFAULT '09:30:00'"],
     [
       'timestamp(3)',
-      'mysql/timestamp@1',
+      'mysql/timestamp-date@1',
       { precision: 3 },
       '2024-01-01T00:00:00.5',
       "DEFAULT '2024-01-01 00:00:00.500'",

@@ -8,7 +8,7 @@ import {
   mysqlDatetimeTemporalDescriptor,
   mysqlDurationStringDescriptor,
   mysqlTimeStringDescriptor,
-  mysqlTimestampDescriptor,
+  mysqlTimestampDateDescriptor,
   mysqlTimestampStringDescriptor,
   mysqlTimestampTemporalDescriptor,
   mysqlTimeTemporalDescriptor,
@@ -30,7 +30,7 @@ describe('the MySQL date and time codecs', () => {
       ['mysql/datetime@1', 'mysql/datetime'],
       ['mysql/datetime-temporal@1', 'mysql/datetime'],
       ['mysql/datetime-string@1', 'mysql/datetime'],
-      ['mysql/timestamp@1', 'mysql/timestamp'],
+      ['mysql/timestamp-date@1', 'mysql/timestamp'],
       ['mysql/timestamp-temporal@1', 'mysql/timestamp'],
       ['mysql/timestamp-string@1', 'mysql/timestamp'],
       ['mysql/date-string@1', 'mysql/date'],
@@ -49,7 +49,7 @@ describe('the MySQL date and time codecs', () => {
   });
 
   describe('TimestampJsDate', () => {
-    const codec = mysqlTimestampDescriptor.factory({ precision: 3 })(instance);
+    const codec = mysqlTimestampDateDescriptor.factory({ precision: 3 })(instance);
 
     it('reads and writes a Date in UTC', async () => {
       const instant = new Date('2024-01-02T03:04:05.678Z');
