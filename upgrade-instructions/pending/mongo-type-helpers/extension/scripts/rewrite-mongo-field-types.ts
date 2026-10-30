@@ -19,6 +19,10 @@ const BUILDER_MODULE =
   /^(?:@prisma\/orm-mongo|@prisma\/orm-family-mongo\/contract-ts|@internal\/mongo|@internal\/mongo-contract-ts)\/contract-builder$/;
 const TYPE_EXPORTING_MODULE = /^(?:@prisma\/orm-mongo|@internal\/mongo)\/contract-builder$/;
 const WRITE_BY_HAND = 'write it as field.scalar(type.X(...))';
+const UNKNOWN: Origin = {
+  kind: 'unknown',
+  reason: "the script cannot tell this field is the MongoDB builder's",
+};
 
 const TYPE_OF_HELPER: Readonly<Record<string, string>> = {
   objectId: 'ObjectId',
@@ -72,7 +76,7 @@ type Origin =
       readonly ownType: TypeScript.Node | undefined;
     }
   | { readonly kind: 'other' }
-  | { readonly kind: 'unknown' };
+  | { readonly kind: 'unknown'; readonly reason: string };
 
 /** A binding of a name and the code it reaches. */
 interface Scoped<Value> {
@@ -120,6 +124,12 @@ function scopeOf(declaration: TypeScript.Node): TypeScript.Node {
     node = node.parent;
   }
   if (ts.isParameter(node)) return node.parent;
+  if (
+    (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) &&
+    node.parent !== undefined
+  ) {
+    node = node.parent;
+  }
   while (
     !ts.isBlock(node) &&
     !ts.isSourceFile(node) &&
@@ -142,6 +152,15 @@ function rewrite(file: TypeScript.SourceFile): FileResult {
   const otherDefines = new Set<string>();
   const mongoNamespaces = new Map<string, string>();
   const knownPatterns = new Set<TypeScript.Node>();
+  const constantStrings = new Map<string, Scoped<string>[]>();
+  const namesBuilder =
+    file.statements.some((statement) => {
+      const module = ts.isImportDeclaration(statement) ? moduleOf(statement) : undefined;
+      return module !== undefined && BUILDER_MODULE.test(module);
+    }) ||
+    /require\(\s*['"](?:@prisma\/orm-mongo|@prisma\/orm-family-mongo\/contract-ts|@internal\/mongo|@internal\/mongo-contract-ts)\/contract-builder['"]\s*\)/.test(
+      file.text,
+    );
   let rewritten = 0;
 
   const report = (node: TypeScript.Node, why: string) => {
@@ -230,7 +249,9 @@ function rewrite(file: TypeScript.SourceFile): FileResult {
         add(fields, element.name.text, {
           value: isMongo
             ? mongoOrigin(names.elements, TYPE_EXPORTING_MODULE.test(module), where)
-            : { kind: isOtherBuilder ? 'other' : 'unknown' },
+            : isOtherBuilder
+              ? { kind: 'other' }
+              : UNKNOWN,
           scope: file,
         });
       }
@@ -302,9 +323,34 @@ function rewrite(file: TypeScript.SourceFile): FileResult {
       const origin = innermost(helpersObjects.get(node.initializer.text), node);
       if (origin !== undefined) bindHelpers(node.name, origin, scopeOf(node));
     }
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+      const origin = node.initializer === undefined ? undefined : propertyOrigin(node.initializer);
+      if (origin !== undefined) {
+        add(fields, node.name.text, { value: origin, scope: scopeOf(node) });
+      } else if (node.name.text === 'field' && namesBuilder) {
+        add(fields, 'field', { value: UNKNOWN, scope: scopeOf(node) });
+      }
+      if (
+        node.initializer !== undefined &&
+        ts.isStringLiteralLike(node.initializer) &&
+        ts.isVariableDeclarationList(node.parent) &&
+        (node.parent.flags & ts.NodeFlags.Const) !== 0
+      ) {
+        add(constantStrings, node.name.text, {
+          value: node.initializer.text,
+          scope: scopeOf(node),
+        });
+      }
+    }
+    if (
+      (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) &&
+      node.name?.text === 'field' &&
+      namesBuilder
+    ) {
+      add(fields, 'field', { value: UNKNOWN, scope: scopeOf(node) });
+    }
     if (ts.isParameter(node) && ts.isIdentifier(node.name) && node.name.text === 'field') {
-      if (!isHelpersParameter(node))
-        add(fields, 'field', { value: { kind: 'unknown' }, scope: node.parent });
+      if (!isHelpersParameter(node)) add(fields, 'field', { value: UNKNOWN, scope: node.parent });
     }
     if (
       ts.isBindingElement(node) &&
@@ -312,7 +358,7 @@ function rewrite(file: TypeScript.SourceFile): FileResult {
       propertyNameOf(node) === 'field' &&
       !isKnownPattern(node.parent)
     ) {
-      add(fields, node.name.text, { value: { kind: 'unknown' }, scope: scopeOf(node) });
+      add(fields, node.name.text, { value: UNKNOWN, scope: scopeOf(node) });
     }
     const declared = declaredName(node);
     if (declared === 'type') typeDeclarations.push({ value: node, scope: scopeOf(node) });
@@ -360,24 +406,36 @@ function rewrite(file: TypeScript.SourceFile): FileResult {
     return undefined;
   }
 
+  /** The origin of `<object>.field`: a helpers object's, a namespace import's, or `require(<builder>).field`; undefined for any other expression. */
+  function propertyOrigin(expression: TypeScript.Expression): Origin | undefined {
+    if (!ts.isPropertyAccessExpression(expression) || expression.name.text !== 'field') {
+      return undefined;
+    }
+    const module = moduleOf(expression.expression);
+    if (module !== undefined) {
+      return BUILDER_MODULE.test(module)
+        ? {
+            kind: 'unknown',
+            reason:
+              'no type is bound beside this field, so import type from @prisma/orm-mongo/contract-builder',
+          }
+        : UNKNOWN;
+    }
+    if (!ts.isIdentifier(expression.expression)) return UNKNOWN;
+    const object = expression.expression.text;
+    const helpers = innermost(helpersObjects.get(object), expression);
+    const namespace = mongoNamespaces.get(object);
+    if (helpers === 'other') return { kind: 'other' };
+    if (helpers === 'mongo' || (namespace !== undefined && TYPE_EXPORTING_MODULE.test(namespace))) {
+      return { kind: 'mongo', typeText: `${object}.type`, bind: undefined, ownType: undefined };
+    }
+    return UNKNOWN;
+  }
+
   /** The origin of the `field` a call reads through `receiver`. */
   function originOf(receiver: TypeScript.Expression): Origin | undefined {
     if (ts.isIdentifier(receiver)) return innermost(fields.get(receiver.text), receiver);
-    if (
-      ts.isPropertyAccessExpression(receiver) &&
-      receiver.name.text === 'field' &&
-      ts.isIdentifier(receiver.expression)
-    ) {
-      const object = receiver.expression.text;
-      const helpers = innermost(helpersObjects.get(object), receiver);
-      const module = mongoNamespaces.get(object);
-      if (helpers === 'other') return { kind: 'other' };
-      if (helpers === 'mongo' || (module !== undefined && TYPE_EXPORTING_MODULE.test(module))) {
-        return { kind: 'mongo', typeText: `${object}.type`, bind: undefined, ownType: undefined };
-      }
-      return { kind: 'unknown' };
-    }
-    return undefined;
+    return propertyOrigin(receiver);
   }
 
   /** The length a `{ typeParams: { length } }` object gives, as written, or undefined when it holds anything else. */
@@ -415,7 +473,8 @@ function rewrite(file: TypeScript.SourceFile): FileResult {
         return 'keep';
       }
       if (!ts.isStringLiteralLike(codec)) {
-        return 'its argument is not a codec id string or a type.X() call';
+        const codecId = ts.isIdentifier(codec) ? constantStringOf(codec) : undefined;
+        return codecId === undefined ? 'keep' : `its argument is the codec id "${codecId}"`;
       }
       const typeName = TYPE_OF_CODEC[codec.text];
       if (typeName === undefined) return `codec "${codec.text}" has no type constructor here`;
@@ -450,9 +509,11 @@ function rewrite(file: TypeScript.SourceFile): FileResult {
       const typeCall = origin === undefined ? 'keep' : typeCallOf(callee.name.text, node.arguments);
       if (origin !== undefined && typeCall !== 'keep' && origin.kind !== 'other') {
         if (origin.kind === 'unknown') {
-          report(node, "the script cannot tell this field is the MongoDB builder's");
+          report(node, origin.reason);
         } else if (typeof typeCall === 'string') {
           report(node, typeCall);
+        } else if (holdsComment(callee.end, node.end)) {
+          report(node, 'a comment inside it would be lost');
         } else if (origin.typeText === 'type' && typeIsTaken(node, origin)) {
           report(node, 'type names another value here');
         } else {
@@ -469,6 +530,37 @@ function rewrite(file: TypeScript.SourceFile): FileResult {
       }
     }
     ts.forEachChild(node, visit);
+  }
+
+  /** Whether the text from `start` to `end` holds a comment. */
+  function holdsComment(start: number, end: number): boolean {
+    const scanner = ts.createScanner(
+      ts.ScriptTarget.Latest,
+      false,
+      file.languageVariant,
+      file.text,
+      undefined,
+      start,
+      end - start,
+    );
+    for (
+      let token = scanner.scan();
+      token !== ts.SyntaxKind.EndOfFileToken;
+      token = scanner.scan()
+    ) {
+      if (
+        token === ts.SyntaxKind.SingleLineCommentTrivia ||
+        token === ts.SyntaxKind.MultiLineCommentTrivia
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** The string a `const` that reaches `name` holds, when it is a string literal. */
+  function constantStringOf(name: TypeScript.Identifier): string | undefined {
+    return innermost(constantStrings.get(name.text), name);
   }
 
   collectModules(file);
