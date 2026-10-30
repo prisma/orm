@@ -1,5 +1,5 @@
 import { ifDefined } from '@internal/utils/defined';
-import { type StructuredError, structuredError } from '@internal/utils/structured-error';
+import type { StructuredError } from '@internal/utils/structured-error';
 import { mongoTargetError } from './mongo-target-errors';
 
 const TEMPORAL_UNAVAILABLE_FIX =
@@ -94,19 +94,6 @@ export function errorDateTimeUnwritable(options: {
       fix: 'Write a value the field holds, as the message shows.',
       meta: { codecId, received: received.slice(0, 100) },
       ...ifDefined('cause', options.cause),
-    },
-  );
-}
-
-/** A contract holds a value for a calendar date codec that is not a date at midnight UTC. */
-export function errorCalendarDateNotAtMidnight(codecId: string, value: string): StructuredError {
-  return structuredError(
-    'CONTRACT.CAST_REFUSED',
-    `${codecId} holds a calendar date, stored at midnight UTC, and ${value} is at another time.`,
-    {
-      why: 'A calendar date is stored as a BSON date at midnight UTC.',
-      fix: 'Write the date alone, as in date`2024-02-29`.',
-      meta: { codecId, value },
     },
   );
 }

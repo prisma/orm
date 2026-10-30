@@ -225,27 +225,25 @@ describe('written Mongo values', () => {
     );
   });
 
-  it('reads a date tag with a date alone as its midnight in UTC', () => {
-    expect({
-      instant: readInto('mongo/date@1', tag('date', '2024-02-29')),
-      calendarDate: readInto('mongo/date-string@1', tag('date', '2024-02-29')),
-    }).toEqual({
-      instant: ok('2024-02-29T00:00:00.000Z'),
-      calendarDate: ok('2024-02-29T00:00:00.000Z'),
-    });
-  });
-
-  it('refuses a date tag at another time for a calendar date', () => {
-    expect(readInto('mongo/date-string@1', tag('date', '2024-02-29T09:30:00Z'))).toMatchObject(
-      notOk({ code: 'PSL_VALUE_REFUSED' }),
+  it('refuses a date tag with a date alone for an instant', () => {
+    expect(readInto('mongo/date@1', tag('date', '2024-02-29'))).toMatchObject(
+      notOk({ code: 'PSL_INVALID_LITERAL' }),
     );
   });
 
-  it('reads a string as a time of day or a duration', () => {
+  it('reads a calendar date from a string, or from a date tag at midnight UTC', () => {
     expect({
-      time: readInto('mongo/time-string@1', string('09:30')),
-      duration: readInto('mongo/duration-string@1', string('PT1H')),
-    }).toEqual({ time: ok('09:30:00.000'), duration: ok('PT1H') });
+      string: readInto('mongo/date-string@1', string('2024-02-29')),
+      temporal: readInto('mongo/date-temporal@1', string('2024-02-29')),
+      tag: readInto('mongo/date-string@1', tag('date', '2024-02-29T00:00:00Z')),
+    }).toEqual({ string: ok('2024-02-29'), temporal: ok('2024-02-29'), tag: ok('2024-02-29') });
+  });
+
+  it('refuses a calendar date from a date tag at another time, or a string that is no date', () => {
+    expect({
+      tag: readInto('mongo/date-string@1', tag('date', '2024-02-29T09:30:00Z')).ok,
+      string: readInto('mongo/date-string@1', string('2024-02-30')).ok,
+    }).toEqual({ tag: false, string: false });
   });
 
   it('reads a time tag as the time of day with three fraction digits', () => {
@@ -347,6 +345,7 @@ describe('printing a stored Mongo value', () => {
       print('mongo/double', 1e21),
       print('mongo/double', '9007199254740993'),
       print('mongo/date', '2024-01-01T00:00:00.000Z'),
+      print('mongo/calendar-date', '2024-02-29'),
       print('mongo/time', '09:30:00.000'),
       print('mongo/duration', 'PT1H'),
       print('mongo/binary', 'AA=='),
@@ -358,6 +357,7 @@ describe('printing a stored Mongo value', () => {
       '1000000000000000000000',
       '9007199254740993',
       '2024-01-01T00:00:00.000Z',
+      undefined,
       '09:30:00.000',
       'PT1H',
       'AA==',

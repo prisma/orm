@@ -91,7 +91,11 @@ export function mongoInstantText(text: string): string {
 
 /** A calendar date as ISO 8601 text, `2024-02-29`, in the years a BSON date holds at midnight UTC. Throws `CONTRACT.CAST_REFUSED` for text that names no such date. */
 export function mongoCalendarDateText(text: string): string {
-  return dateTimeStoredText(text, { shape: 'date', ownerId: 'mongo/date', range: DATE_RANGE });
+  return dateTimeStoredText(text, {
+    shape: 'date',
+    ownerId: 'mongo/calendar-date',
+    range: DATE_RANGE,
+  });
 }
 
 /** The value of `mongo/time`: a time of day with exactly three fraction digits, `09:30:00.000`, so the strings sort in the order of the times. Zeros past the third fraction digit are dropped; any other digit there is refused. Throws `CONTRACT.CAST_REFUSED` for text that names no such time. */
@@ -208,6 +212,41 @@ export const mongoDuration = storedStringDataType(
   { respell: false },
 );
 
+const MILLISECONDS_PER_DAY = 86_400_000;
+
+/** A `mongo/date` value, an instant as `toISOString()` writes it, as the calendar date it names when it is at midnight UTC. */
+const asCalendarDate: Cast = (value) => {
+  if (typeof value !== 'string') return refuseWrongShape(value, 'text');
+  const instant = new Date(value);
+  if (instant.getTime() % MILLISECONDS_PER_DAY === 0) {
+    return mongoCalendarDateText(value.slice(0, value.indexOf('T')));
+  }
+  throw structuredError(
+    'CONTRACT.CAST_REFUSED',
+    `${value} is not a calendar date: a calendar date is stored as a BSON date at midnight UTC.`,
+    {
+      why: 'A calendar date holds no time of day.',
+      fix: 'Write the date alone, as in "2024-02-29".',
+    },
+  );
+};
+
+/** A calendar date, stored as a BSON date at midnight UTC. Its value is the ISO 8601 date text, `2024-02-29`. */
+export const mongoCalendarDate = mongoDataType('mongo/calendar-date', {
+  read: (json) =>
+    typeof json === 'string' && storedOrUndefined(mongoCalendarDateText, json) !== undefined
+      ? json
+      : refuseJsonValue('mongo/calendar-date', 'ISO 8601 date text, as in "2024-02-29"', json),
+  spell: (json) =>
+    typeof json === 'string' ? (storedOrUndefined(mongoCalendarDateText, json) ?? json) : json,
+  bsonTypes: ['date'],
+  casts: {
+    [mongoString.id]: (value) =>
+      typeof value === 'string' ? mongoCalendarDateText(value) : refuseWrongShape(value, 'text'),
+    [mongoDate.id]: asCalendarDate,
+  },
+});
+
 export const mongoVector = mongoDataType('mongo/vector', {
   read: (json, params) =>
     readVectorJson(
@@ -246,6 +285,7 @@ export const mongoDataTypes: readonly DataType[] = [
   mongoInt32,
   mongoBool,
   mongoDate,
+  mongoCalendarDate,
   mongoTime,
   mongoDuration,
   mongoVector,

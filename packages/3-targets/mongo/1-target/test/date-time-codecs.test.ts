@@ -139,23 +139,21 @@ describe('mongo/date-string@1', () => {
     ).rejects.toMatchObject({ code: 'RUNTIME.DECODE_FAILED' });
   });
 
-  it('stores the date in a contract as its midnight UTC and reads it back', () => {
+  it('stores the date in a contract as its ISO 8601 date text and reads it back', () => {
     const json = toContractJson(mongoDateStringCodec, '2024-02-29');
     expect({ json, read: fromContractJson(mongoDateStringCodec, json) }).toEqual({
-      json: '2024-02-29T00:00:00.000Z',
+      json: '2024-02-29',
       read: '2024-02-29',
     });
   });
 
-  it('refuses a contract value that is not at midnight UTC', () => {
-    expect(() => fromContractJson(mongoDateStringCodec, '2024-02-29T09:30:00.000Z')).toThrow(
-      expect.objectContaining({ code: 'CONTRACT.CAST_REFUSED' }),
-    );
+  it('refuses a contract value that is an instant, not a calendar date', () => {
+    expect(() => fromContractJson(mongoDateStringCodec, '2024-02-29T09:30:00.000Z')).toThrow();
   });
 
   it('renders a contract value as the date text the application reads', () => {
     const render = mongoDescriptorById('mongo/date-string@1')?.renderValueLiteral;
-    expect(render?.('2024-02-29T00:00:00.000Z', 'output')).toBe('"2024-02-29"');
+    expect(render?.('2024-02-29', 'output')).toBe('"2024-02-29"');
   });
 });
 
@@ -191,10 +189,10 @@ describe('mongo/date-temporal@1', () => {
     });
   });
 
-  it('stores the date in a contract as its midnight UTC', () => {
+  it('stores the date in a contract as its ISO 8601 date text', () => {
     const json = toContractJson(mongoDateTemporalCodec, Temporal.PlainDate.from('2024-02-29'));
     expect({ json, read: fromContractJson(mongoDateTemporalCodec, json).toString() }).toEqual({
-      json: '2024-02-29T00:00:00.000Z',
+      json: '2024-02-29',
       read: '2024-02-29',
     });
   });
@@ -260,8 +258,8 @@ describe('the date and time codec descriptors', () => {
   it.each([
     ['mongo/date-instant@1', 'mongo/date', ['equality', 'order']],
     ['mongo/date-instant-string@1', 'mongo/date', ['equality', 'order']],
-    ['mongo/date-string@1', 'mongo/date', ['equality', 'order']],
-    ['mongo/date-temporal@1', 'mongo/date', ['equality', 'order']],
+    ['mongo/date-string@1', 'mongo/calendar-date', ['equality', 'order']],
+    ['mongo/date-temporal@1', 'mongo/calendar-date', ['equality', 'order']],
     ['mongo/time-string@1', 'mongo/time', ['equality', 'order']],
     ['mongo/time-temporal@1', 'mongo/time', ['equality', 'order']],
     ['mongo/duration-string@1', 'mongo/duration', ['equality']],

@@ -14,6 +14,7 @@ const EXPECTED_BSON_TYPES: Readonly<Record<string, readonly string[]>> = {
   'mongo/int32': ['int'],
   'mongo/bool': ['bool'],
   'mongo/date': ['date'],
+  'mongo/calendar-date': ['date'],
   'mongo/time': ['string'],
   'mongo/duration': ['string'],
   'mongo/vector': ['array'],
@@ -87,6 +88,7 @@ describe('the Mongo data type declarations', () => {
       'mongo/int32': { casts: [], listCast: undefined },
       'mongo/bool': { casts: [], listCast: undefined },
       'mongo/date': { casts: [], listCast: undefined },
+      'mongo/calendar-date': { casts: ['mongo/string', 'mongo/date'], listCast: undefined },
       'mongo/time': { casts: ['mongo/string'], listCast: undefined },
       'mongo/duration': { casts: ['mongo/string'], listCast: undefined },
       'mongo/vector': {

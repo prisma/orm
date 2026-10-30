@@ -2,8 +2,7 @@
  * The codecs of MongoDB's date and time types other than `mongo/date@1`. An instant and a calendar date are BSON dates, a calendar date at midnight UTC, the form MongoDB's Java and C# drivers write for a date; a time of day is a BSON string with three fraction digits, which sorts in the order of the times; a duration is a BSON string as written. ADR 315.
  */
 
-import type { JsonValue } from '@internal/contract/types';
-import { type DataTypeValue, renderTsLiteral } from '@internal/framework-components/codec';
+import type { DataTypeValue } from '@internal/framework-components/codec';
 import { mongoCodec } from '@internal/mongo-codec';
 import type { Temporal } from 'temporal-spec';
 import {
@@ -16,6 +15,7 @@ import {
   MONGO_TIME_TEMPORAL_CODEC_ID,
 } from './codec-ids';
 import {
+  mongoCalendarDate,
   mongoCalendarDateText,
   mongoDate,
   mongoDuration,
@@ -24,12 +24,9 @@ import {
   mongoTime,
   mongoTimeText,
 } from './data-types';
-import { errorCalendarDateNotAtMidnight } from './date-time-errors';
 import {
   calendarDateFromWire,
-  calendarDateTextOf,
   dateFromWire,
-  isAtMidnightUtc,
   midnightUtcOf,
   storedTextForWrite,
   storedTextFromWire,
@@ -53,20 +50,6 @@ const PLAIN_TIME: TemporalCodecIdentity = {
   temporalTag: 'Temporal.PlainTime',
   stringType: 'TimeString',
 };
-
-/** The calendar date a contract's `mongo/date` value holds, which must be at midnight UTC. */
-function calendarDateOfDataTypeValue(codecId: string, value: DataTypeValue<string>): string {
-  const date = new Date(value.value);
-  if (!isAtMidnightUtc(date)) throw errorCalendarDateNotAtMidnight(codecId, value.value);
-  return calendarDateTextOf(date);
-}
-
-/** A calendar date as a TypeScript literal of the date text the application reads. */
-export function renderCalendarDateLiteral(value: JsonValue): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const date = new Date(value);
-  return isAtMidnightUtc(date) ? renderTsLiteral(calendarDateTextOf(date)) : undefined;
-}
 
 const instantText = (value: Temporal.Instant): string =>
   storedTextOfTemporal(INSTANT, value, mongoInstantText);
@@ -111,25 +94,22 @@ export const mongoDateInstantStringCodec = mongoCodec({
 /** A calendar date, stored as a BSON date at midnight UTC and read as `2024-02-29`. */
 export const mongoDateStringCodec = mongoCodec({
   typeId: MONGO_DATE_STRING_CODEC_ID,
-  dataType: mongoDate,
+  dataType: mongoCalendarDate,
   fromWire: (wire: Date) => calendarDateFromWire(MONGO_DATE_STRING_CODEC_ID, wire),
   toWire: (value: string) =>
     midnightUtcOf(storedTextForWrite(MONGO_DATE_STRING_CODEC_ID, value, mongoCalendarDateText)),
   toDataTypeValue: (value: string) =>
-    mongoDate.valueFrom(
-      midnightUtcOf(
-        storedTextForWrite(MONGO_DATE_STRING_CODEC_ID, value, mongoCalendarDateText),
-      ).toISOString(),
+    mongoCalendarDate.valueFrom(
+      storedTextForWrite(MONGO_DATE_STRING_CODEC_ID, value, mongoCalendarDateText),
       {},
     ),
-  fromDataTypeValue: (value: DataTypeValue<string>) =>
-    calendarDateOfDataTypeValue(MONGO_DATE_STRING_CODEC_ID, value),
+  fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
 });
 
 /** A calendar date, stored as a BSON date at midnight UTC and read as `Temporal.PlainDate`. */
 export const mongoDateTemporalCodec = mongoCodec({
   typeId: MONGO_DATE_TEMPORAL_CODEC_ID,
-  dataType: mongoDate,
+  dataType: mongoCalendarDate,
   fromWire: (wire: Date) =>
     temporalFromStoredText(
       PLAIN_DATE,
@@ -138,12 +118,10 @@ export const mongoDateTemporalCodec = mongoCodec({
     ),
   toWire: (value: Temporal.PlainDate) => midnightUtcOf(plainDateText(value)),
   toDataTypeValue: (value: Temporal.PlainDate) =>
-    mongoDate.valueFrom(midnightUtcOf(plainDateText(value)).toISOString(), {}),
+    mongoCalendarDate.valueFrom(plainDateText(value), {}),
   fromDataTypeValue: (value: DataTypeValue<string>) =>
-    temporalFromStoredText(
-      PLAIN_DATE,
-      calendarDateOfDataTypeValue(MONGO_DATE_TEMPORAL_CODEC_ID, value),
-      (temporal, text) => temporal.PlainDate.from(text),
+    temporalFromStoredText(PLAIN_DATE, value.value, (temporal, text) =>
+      temporal.PlainDate.from(text),
     ),
 });
 

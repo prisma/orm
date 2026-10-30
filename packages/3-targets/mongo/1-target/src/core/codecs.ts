@@ -87,7 +87,6 @@ import {
   mongoDurationStringCodec,
   mongoTimeStringCodec,
   mongoTimeTemporalCodec,
-  renderCalendarDateLiteral,
 } from './date-time-codecs';
 import { decodeJsonValue, encodeJsonValue } from './json-codec-helpers';
 
@@ -366,7 +365,7 @@ export const mongoCodecDescriptors: ReadonlyArray<CodecDescriptor> = [
   }),
   descriptorFor(mongoDateStringCodec, {
     traits: ['equality', 'order'],
-    renderValueLiteral: renderCalendarDateLiteral,
+    renderValueLiteral: renderTsLiteral,
   }),
   descriptorFor(mongoDateTemporalCodec, {
     traits: ['equality', 'order'],
