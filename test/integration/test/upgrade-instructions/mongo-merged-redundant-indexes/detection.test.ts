@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { detectionPatterns } from '../guide-detections';
 
-const APP_GUIDE = 'upgrade-instructions/pending/mongo-merged-redundant-indexes/app/instructions.md';
+const APP_GUIDE =
+  'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.21-to-8.0.0-rc.22/instructions.md';
 
 const EXTENSION_GUIDE =
-  'upgrade-instructions/pending/mongo-merged-redundant-indexes/extension/instructions.md';
+  'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.21-to-8.0.0-rc.22/instructions.md';
 
 const matches = (content: string) =>
   detectionPatterns(APP_GUIDE, 'mongo-merged-redundant-indexes').some((pattern) =>

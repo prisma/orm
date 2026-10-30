@@ -8,7 +8,10 @@ const repoRoot = join(here, '../../../../..');
 
 function patternsOf(id: string): readonly RegExp[] {
   const guide = readFileSync(
-    join(repoRoot, 'upgrade-instructions/pending/convenience-date-time-types/app/instructions.md'),
+    join(
+      repoRoot,
+      'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.21-to-8.0.0-rc.22/instructions.md',
+    ),
     'utf-8',
   );
   const block = guide.split(/\n {2}- id: /).find((entry) => entry.startsWith(`${id}\n`)) ?? '';

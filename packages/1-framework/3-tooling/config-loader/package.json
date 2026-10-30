@@ -1,7 +1,7 @@
 {
   "name": "@internal/config-loader",
   "private": true,
-  "version": "8.0.0-rc.21",
+  "version": "8.0.0-rc.22",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -16,10 +16,10 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/config": "workspace:8.0.0-rc.21",
-    "@internal/emitter": "workspace:8.0.0-rc.21",
-    "@internal/errors": "workspace:8.0.0-rc.21",
-    "@internal/utils": "workspace:8.0.0-rc.21",
+    "@internal/config": "workspace:8.0.0-rc.22",
+    "@internal/emitter": "workspace:8.0.0-rc.22",
+    "@internal/errors": "workspace:8.0.0-rc.22",
+    "@internal/utils": "workspace:8.0.0-rc.22",
     "arktype": "^2.2.2",
     "c12": "^3.3.4",
     "pathe": "^2.0.3",
@@ -27,9 +27,9 @@
   },
   "devDependencies": {
     "@prisma/cli-engine": "0.9.0",
-    "@repo/test-utils": "workspace:8.0.0-rc.21",
-    "@repo/tsconfig": "workspace:8.0.0-rc.21",
-    "@repo/tsdown": "workspace:8.0.0-rc.21",
+    "@repo/test-utils": "workspace:8.0.0-rc.22",
+    "@repo/tsconfig": "workspace:8.0.0-rc.22",
+    "@repo/tsdown": "workspace:8.0.0-rc.22",
     "@types/node": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
