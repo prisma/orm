@@ -5,10 +5,16 @@ import { MysqlControlDriver } from '../src/core/migrations/control-driver';
 
 class FakeConnection extends EventEmitter {
   queries = 0;
+  running = 0;
+  mostRunning = 0;
   readonly info = { status: 0 };
 
   async query(): Promise<unknown[]> {
     this.queries += 1;
+    this.running += 1;
+    this.mostRunning = Math.max(this.mostRunning, this.running);
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    this.running -= 1;
     return [];
   }
 }
@@ -39,6 +45,17 @@ describe('MysqlControlDriver', () => {
     expect({ refused: connection.queries, ran: await driver.query('SELECT 1') }).toEqual({
       refused: 0,
       ran: { rows: [] },
+    });
+  });
+
+  it('runs one statement at a time, so a call made while another runs waits for it', async () => {
+    const connection = new FakeConnection();
+    const driver = new MysqlControlDriver(connection as unknown as Connection);
+
+    await Promise.all([driver.query('SELECT 1'), driver.query('SELECT ? AS v', ['x'])]);
+    expect({ queries: connection.queries, mostRunning: connection.mostRunning }).toEqual({
+      queries: 2,
+      mostRunning: 1,
     });
   });
 });

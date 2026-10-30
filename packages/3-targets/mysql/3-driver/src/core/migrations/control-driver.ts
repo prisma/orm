@@ -7,6 +7,7 @@ import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { redactDatabaseUrl } from '@internal/utils/redact-db-url';
 import { type Connection, createConnection } from 'mariadb';
+import { acquireClientQueryLock } from '../client-query-lock';
 import { mysqlConnectionOptions } from '../connection-options';
 import { mysqlDriverDescriptorMeta } from '../descriptor-meta';
 import { connectionFix, connectionLost, isFatal, normalizeMysqlError } from '../normalize-error';
@@ -14,7 +15,7 @@ import { applySessionSettings, sessionSettingsStatement } from '../session-setti
 import { statementFor } from '../statement';
 
 /**
- * A MySQL connection for the control plane. It runs every statement as the runtime driver does, a user's `rawSql` migration step included: in one round trip over the text protocol, the package writing its values into it.
+ * A MySQL connection for the control plane. It runs every statement as the runtime driver does, a user's `rawSql` migration step included: in one round trip over the text protocol, the package writing its values into it, one at a time in the order sent, under the runtime driver's per-client lock.
  */
 export class MysqlControlDriver implements SqlControlDriverInstance<'mysql'> {
   readonly familyId = 'sql' as const;
@@ -33,8 +34,9 @@ export class MysqlControlDriver implements SqlControlDriverInstance<'mysql'> {
     sql: string,
     params?: readonly unknown[],
   ): Promise<{ readonly rows: Row[] }> {
-    if (this.#lost !== undefined) throw connectionLost(this.#lost);
+    const releaseLock = await acquireClientQueryLock(this.connection);
     try {
+      if (this.#lost !== undefined) throw connectionLost(this.#lost);
       const statement = statementFor(this.connection, sql, params ?? []);
       const result: unknown = await this.connection.query(statement.sql, statement.values);
       return {
@@ -50,6 +52,8 @@ export class MysqlControlDriver implements SqlControlDriverInstance<'mysql'> {
         throw connectionLost(error);
       }
       throw normalizeMysqlError(error);
+    } finally {
+      releaseLock();
     }
   }
 

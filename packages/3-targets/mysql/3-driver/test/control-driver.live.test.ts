@@ -222,6 +222,27 @@ describe('MysqlControlDriver against a MySQL server', {
     });
   });
 
+  it('runs concurrent calls one at a time in the order sent, so a statement with values sees the backslash mode a SET sent before it left', async (test) => {
+    await withMysqlDatabase(test, async ({ url }) => {
+      const driver = await mysqlDriver.create(url);
+      try {
+        const [set, valued] = await Promise.allSettled([
+          driver.query("SET SESSION sql_mode = 'NO_BACKSLASH_ESCAPES'"),
+          driver.query('SELECT ? AS v', ["x' , CURRENT_USER() AS injected #"]),
+        ]);
+        expect({ set, valued }).toEqual({
+          set: { status: 'fulfilled', value: { rows: [] } },
+          valued: {
+            status: 'rejected',
+            reason: expect.objectContaining({ code: 'RUNTIME.SQL_MODE_UNSUPPORTED' }),
+          },
+        });
+      } finally {
+        await driver.close();
+      }
+    });
+  });
+
   it('sends a statement with values in one round trip, preparing nothing, as one without', async (test) => {
     await withMysqlDatabase(test, async ({ url }) => {
       const driver = await mysqlDriver.create(url);

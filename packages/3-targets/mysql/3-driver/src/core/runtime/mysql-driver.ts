@@ -15,6 +15,7 @@ import type {
 } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
 import { createPool, type Pool, type PoolConnection } from 'mariadb';
+import { acquireClientQueryLock } from '../client-query-lock';
 import { type MysqlPoolOptions, mysqlPoolOptions } from '../connection-options';
 import { connectingCannotSucceed, isFatal, normalizeMysqlError } from '../normalize-error';
 import { SessionSettingsGuard } from '../session-settings';
@@ -37,37 +38,6 @@ function notConnected(message: string) {
   return errorRuntime('DRIVER.NOT_CONNECTED', message, {
     fix: 'Call connect(binding) before running queries, and do not use the driver after close().',
   });
-}
-
-class AsyncMutex {
-  #queue = Promise.resolve();
-
-  async lock(): Promise<() => void> {
-    const previous = this.#queue;
-    let releaseLock: (() => void) | undefined;
-    this.#queue = new Promise<void>((resolve) => {
-      releaseLock = resolve;
-    });
-    await previous;
-    return () => {
-      releaseLock?.();
-      releaseLock = undefined;
-    };
-  }
-}
-
-/**
- * One statement at a time on each client, in the order sent, as the Postgres driver's per-client lock runs them. The lock is held until the statement settles, or for a stream's whole life, so a statement sent while a stream is open waits for it.
- */
-const clientQueryLocks = new WeakMap<object, AsyncMutex>();
-
-function acquireClientQueryLock(client: object): Promise<() => void> {
-  let mutex = clientQueryLocks.get(client);
-  if (mutex === undefined) {
-    mutex = new AsyncMutex();
-    clientQueryLocks.set(client, mutex);
-  }
-  return mutex.lock();
 }
 
 /** Runs `request` on `client` in one round trip and returns its result: its `?N` placeholders written as `?`, and its values handed to the package, which writes them into the statement. Throws the package's error as it is. */
