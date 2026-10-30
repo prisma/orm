@@ -1,5 +1,6 @@
 import type {
   RowsHoldingValueMark,
+  StoredKeyFill,
   StoredKeyRewrite,
   StoredValueCallClasses,
   StoredValueRewrite,
@@ -9,6 +10,7 @@ import type { CodecLookupWithDescriptors } from '@internal/framework-components/
 import { enumValueCoordinateJson } from '@internal/framework-components/control';
 import {
   DeleteRowsCall,
+  FillStoredKeyCall,
   RemoveStoredKeyCall,
   RemoveStoredValueCall,
   RenameStoredKeyCall,
@@ -62,6 +64,18 @@ export function sqliteStoredKeyCalls(
         ? new RemoveStoredKeyCall(rewrite.table, rewrite.column, rewrite.path)
         : new RenameStoredKeyCall(rewrite.table, rewrite.column, rewrite.path, rewrite.to),
       rewrite,
+    ]),
+  );
+}
+
+/** The calls that carry out a plan's fills of value object fields, each with the fill it carries out. */
+export function sqliteStoredKeyFillCalls(
+  fills: readonly StoredKeyFill[],
+): ReadonlyMap<FillStoredKeyCall, StoredKeyFill> {
+  return new Map(
+    fills.map((fill) => [
+      new FillStoredKeyCall(fill.table, fill.column, fill.path, fill.value),
+      fill,
     ]),
   );
 }

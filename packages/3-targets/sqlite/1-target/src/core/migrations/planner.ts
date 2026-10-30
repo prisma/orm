@@ -6,6 +6,7 @@ import type {
   SqlMigrationPlannerPlanOptions,
   SqlPlannerConflict,
   SqlPlannerFailureResult,
+  StoredKeyFill,
   StoredKeyRewrite,
   StoredValueRewrite,
   VariantRowRewrite,
@@ -22,11 +23,13 @@ import {
   plannerFailure,
   planStatements,
   planValueObjectFieldRewrites,
+  planValueObjectMemberFills,
   planVariantRowRewrites,
   sqlTypeLookupsOf,
   storedValueOperationIndexes,
   storedValueSubjects,
   subjectsOfCalls,
+  unnamedMemberFillOf,
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
@@ -70,6 +73,7 @@ import type { SqlitePlanTargetDetails } from './planner-target-details';
 import { sqliteSchemaTables } from './schema-tables';
 import {
   sqliteStoredKeyCalls,
+  sqliteStoredKeyFillCalls,
   sqliteStoredValueCallClasses,
   sqliteStoredValueCalls,
   sqliteVariantRowCalls,
@@ -237,6 +241,16 @@ export class SqliteMigrationPlanner
     });
     if (!keyRewrites.ok) return plannerFailure([keyRewrites.failure]);
     const storedKeyCalls = sqliteStoredKeyCalls(keyRewrites.value);
+    const memberFills = planValueObjectMemberFills({
+      statements: options.statements,
+      fromContract: options.fromContract,
+      contract: options.contract,
+      tables,
+      codecs: codecLookup,
+      unnamed: unnamedMemberFillOf(options.policy),
+    });
+    if (!memberFills.ok) return plannerFailure([memberFills.failure]);
+    const storedKeyFillCalls = sqliteStoredKeyFillCalls(memberFills.value);
     const rewrites = planEnumValueRewrites({
       statements: options.statements,
       fromContract: options.fromContract,
@@ -256,6 +270,7 @@ export class SqliteMigrationPlanner
     const variantRowCalls = sqliteVariantRowCalls(variantRewrites.value, codecLookup);
     const disallowedStoredValueCalls = [
       ...storedKeyCalls.keys(),
+      ...storedKeyFillCalls.keys(),
       ...storedValueCalls.keys(),
       ...variantRowCalls.keys(),
     ].filter((call) => !options.policy.allowedOperationClasses.includes(call.operationClass));
@@ -312,6 +327,7 @@ export class SqliteMigrationPlanner
       ...replacedIndexes.calls,
       ...result.value.calls,
       ...storedKeyCalls.keys(),
+      ...storedKeyFillCalls.keys(),
       ...storedValueCalls.keys(),
       ...variantRowCalls.keys(),
       ...fieldEventOps,
@@ -343,11 +359,10 @@ export class SqliteMigrationPlanner
         (statement) =>
           storedValueOperationIndexes(
             calls,
-            new Map<OpFactoryCall, StoredValueRewrite | StoredKeyRewrite | VariantRowRewrite>([
-              ...storedKeyCalls,
-              ...storedValueCalls,
-              ...variantRowCalls,
-            ]),
+            new Map<
+              OpFactoryCall,
+              StoredValueRewrite | StoredKeyRewrite | StoredKeyFill | VariantRowRewrite
+            >([...storedKeyCalls, ...storedKeyFillCalls, ...storedValueCalls, ...variantRowCalls]),
             statement,
           ),
       ),
@@ -356,7 +371,12 @@ export class SqliteMigrationPlanner
           calls,
           new Map(fieldEventCalls.map((fieldEvent) => [fieldEvent.call, fieldEvent])),
           storedValueSubjects(storedValueCalls, sqliteStoredValueCallClasses),
-          new Map([...storedKeyCalls].map(([call, rewrite]) => [call, rewrite.valueObjectField])),
+          new Map(
+            [...storedKeyCalls, ...storedKeyFillCalls].map(([call, change]) => [
+              call,
+              change.valueObjectField,
+            ]),
+          ),
           new Map([...variantRowCalls].map(([call, rewrite]) => [call, rewrite.model])),
         ),
         {

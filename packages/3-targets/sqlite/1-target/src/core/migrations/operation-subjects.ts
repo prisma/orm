@@ -5,6 +5,7 @@ import {
   type StoredValueSubject,
   type SubjectStorage,
   storageNameOfOperation,
+  UnfilledValue,
   unknownCallNames,
 } from '@internal/family-sql/control';
 import type {
@@ -19,6 +20,7 @@ import {
   DeleteRowsCall,
   DropColumnCall,
   DropTableCall,
+  FillStoredKeyCall,
   RawSqlCall,
   RecreateTableCall,
   RemoveStoredKeyCall,
@@ -187,6 +189,26 @@ export function sqliteCallSubjects(
         dataLoss: [lost(tableTarget(call.tableName))],
         accessChanges: [],
         temporaryValues: [],
+      };
+    }
+    if (call instanceof FillStoredKeyCall) {
+      const valueObjectField = storedKeys.get(call);
+      return {
+        operationCount,
+        label,
+        dataLoss: [],
+        accessChanges: [],
+        temporaryValues:
+          call.value instanceof UnfilledValue || valueObjectField === undefined
+            ? []
+            : [
+                {
+                  table: call.tableName,
+                  column: call.columnName,
+                  value: JSON.stringify(call.value),
+                  valueObjectField,
+                },
+              ],
       };
     }
     if (call.operationClass !== 'destructive') {
