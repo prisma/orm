@@ -94,6 +94,12 @@ import {
   type BuildAggregateInputs,
   buildContractSpaceAggregate,
 } from './contract-space-aggregate-loader';
+import {
+  checkRunPolicies,
+  type PoliciesToWrite,
+  policiesInForce,
+  writtenSettingsText,
+} from './database-policies';
 import { stripOperations } from './migration-helpers';
 import { structuralPathOf } from './no-invariant-path';
 import {
@@ -226,6 +232,28 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
 
   // 2. Read live DB state (markers + schema).
   const markerRows = await familyInstance.readAllMarkers({ driver });
+
+  // 2c. The database's policies decide whether `db update` may move it, before anything is planned.
+  let policiesToWrite: PoliciesToWrite | undefined;
+  if (options.action === 'dbUpdate') {
+    const checked = checkRunPolicies({
+      command: 'db update',
+      appSpaceId: aggregate.app.spaceId,
+      inForce: policiesInForce(
+        markerRows,
+        [aggregate.app, ...aggregate.extensions].map(({ spaceId }) => spaceId),
+        familyInstance.markerLocation,
+      ),
+      ref: options.ref,
+      permitPolicyChange: options.permitPolicyChange,
+      targetHash: contract.storage.storageHash,
+      invocation: options.invocation,
+    });
+    if (!checked.ok) {
+      return notOk(checked.failure);
+    }
+    policiesToWrite = checked.value;
+  }
 
   // 2b. The application space's origin is the contract its marker names, read from the snapshot
   // store. The planner names each subject it would lose through it, and rename statements resolve
@@ -513,6 +541,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     migrations,
     frameworkComponents,
     policy,
+    ...ifDefined('databasePolicies', policiesToWrite?.policies),
     action,
     ...ifDefined('onProgress', onProgress),
   });
@@ -533,7 +562,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     action === 'dbUpdate' &&
     applied.value.totalOpsExecuted === 0 &&
     markerRows.get(aggregate.app.spaceId)?.storageHash !== appPlan.destination.storageHash;
-  const summary =
+  const runSummary =
     action === 'dbInit'
       ? `Applied ${applied.value.totalOpsExecuted} operation(s) across ${applied.value.orderedResolutions.length} space(s), database signed`
       : signedWithoutOperations
@@ -541,6 +570,10 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
         : applied.value.totalOpsExecuted === 0
           ? `Database already matches contract across ${applied.value.orderedResolutions.length} space(s), signature updated`
           : `Applied ${applied.value.totalOpsExecuted} operation(s) across ${applied.value.orderedResolutions.length} space(s), signature updated`;
+  const summary =
+    policiesToWrite === undefined
+      ? runSummary
+      : `${runSummary}; policies updated: ${writtenSettingsText(policiesToWrite.differences)}`;
 
   return wrapApplyResult({
     operations: aggregateOps,
