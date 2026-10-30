@@ -6,8 +6,9 @@ changes:
     detection:
       glob: "**/*.{prisma,ts,mts,cts,tsx,js,mjs,cjs,jsx}"
       matches:
-        - '(?<![\s\S])(?![\s\S]*(?<![\w$])datasource[ \t]+\w+[ \t]*\{)(?=[\s\S]*(?<![\w$])ObjectId(?![\w$]))[\s\S]*\n[ \t]+[A-Za-z_]\w*[ \t]+(?:=[ \t]*)?Date(?![\w$])'
+        - '(?<![\s\S])(?![\s\S]*(?<![\w$])datasource[ \t]+\w+[ \t]*\{)(?=[\s\S]*(?:(?<![\w$])ObjectId(?![\w$])|@map\("_id"\)))[\s\S]*\n[ \t]+[A-Za-z_]\w*[ \t]+(?:=[ \t]*)?Date(?![\w$])'
         - '(?<![\s\S])(?=[\s\S]*@(?:prisma/orm-(?:mongo|family-mongo/contract-ts)|internal/mongo)/contract-builder[\x27"])[\s\S]*(?<![\w$])[A-Za-z_$][\w$]*\s*\.\s*Date\s*\('
+        - '(?<![\s\S])(?=[\s\S]*[\x27"]@prisma/orm-mongo/config[\x27"])[\s\S]*(?<![\w$])contract\s*:\s*[\x27"][^\x27"]+\.prisma[\x27"]'
     script: scripts/rewrite-mongo-date-types.ts
   - id: temporal-polyfill-is-a-peer-dependency-of-mongo
     summary: |
