@@ -113,12 +113,12 @@ describe('the Prisma 6 reader on the contract builder', () => {
     );
   });
 
-  it('refuses the same @@index on two models in one collection', async () => {
+  it('refuses the same @@index on two models in one collection, naming both', async () => {
     expect(await diagnosticsOf('index-on-two-models')).toEqual([
       {
         code: 'PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS',
         message:
-          'Model "Admin" writes an index that model "User" writes too, and both are stored in collection "people". MongoDB cannot hold the same index twice in one collection. Remove it from one of the two models.',
+          '@@index([email]) on model "Admin" and @@index([email]) on model "User" are the same index, with the same keys and options, in collection "people". MongoDB cannot hold two identical indexes in one collection. Remove one of them.',
         line: 18,
       },
     ]);

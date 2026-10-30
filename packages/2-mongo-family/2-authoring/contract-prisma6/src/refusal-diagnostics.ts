@@ -8,12 +8,17 @@ import type { PslSpan } from '@internal/psl-parser';
 import { prisma6Diagnostic } from './diagnostics';
 
 /** Where a part of a Prisma 6 schema is written. */
-export interface IndexSite {
+export interface Site {
   readonly sourceId: string;
   readonly span: PslSpan;
 }
 
-export interface FieldSite extends IndexSite {
+export interface IndexSite extends Site {
+  /** How the schema writes the index, such as `@@index([email]) on model "User"`. */
+  readonly label: string;
+}
+
+export interface FieldSite extends Site {
   readonly storedName: string;
 }
 
@@ -83,12 +88,11 @@ export function refusalDiagnostic(
     }
     case 'indexDuplicate': {
       const site = sites.indexes.get(refusal.key.model)?.[refusal.key.position];
-      if (site === undefined) break;
+      const first = sites.indexes.get(refusal.firstModel)?.[refusal.firstPosition];
+      if (site === undefined || first === undefined) break;
       return prisma6Diagnostic(
         'PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS',
-        refusal.firstModel === refusal.key.model
-          ? `Model "${refusal.key.model}" has two indexes on the same fields that differ only in whether they write sort: Asc, which is the default sort. MongoDB holds them as one index, so the database cannot have both. Remove one of them.`
-          : `Model "${refusal.key.model}" writes an index that model "${refusal.firstModel}" writes too, and both are stored in collection "${refusal.collection}". MongoDB cannot hold the same index twice in one collection. Remove it from one of the two models.`,
+        `${site.label} and ${first.label} are the same index, with the same keys and options, in collection "${refusal.collection}". MongoDB cannot hold two identical indexes in one collection. Remove one of them.`,
         site.sourceId,
         site.span,
       );

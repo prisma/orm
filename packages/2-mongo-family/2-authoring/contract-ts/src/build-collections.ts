@@ -203,7 +203,7 @@ export function buildCollections(input: {
 }): Record<string, MongoCollectionInput> {
   const { models, variantValues, refusals } = input;
   const intermediate: Record<string, MongoCollectionInput> = {};
-  const indexOwnersByCollection = new Map<string, Map<string, string>>();
+  const indexOwnersByCollection = new Map<string, Map<string, IndexKey>>();
   const textIndexCollections = new Set<string>();
   const modelsByName = new Map(models.map((model) => [model.modelName, model]));
 
@@ -216,7 +216,7 @@ export function buildCollections(input: {
     const collectionKey = { kind: 'collectionSettings', model: modelName } as const;
     const existingCollection: MongoCollectionInput = intermediate[collection] ?? {};
     const existingIndexes = existingCollection.indexes ?? [];
-    const indexOwners = indexOwnersByCollection.get(collection) ?? new Map<string, string>();
+    const indexOwners = indexOwnersByCollection.get(collection) ?? new Map<string, IndexKey>();
     indexOwnersByCollection.set(collection, indexOwners);
 
     if (existingCollection.options && model.collectionOptions) {
@@ -252,12 +252,19 @@ export function buildCollections(input: {
         textIndexCollections.add(collection);
       }
       const lookupKey = indexLookupKey(checked.index);
-      const firstModel = indexOwners.get(lookupKey);
-      if (firstModel !== undefined) {
-        refusals.push({ kind: 'indexDuplicate', key, collection, firstModel, signature });
+      const first = indexOwners.get(lookupKey);
+      if (first !== undefined) {
+        refusals.push({
+          kind: 'indexDuplicate',
+          key,
+          collection,
+          firstModel: first.model,
+          firstPosition: first.position,
+          signature,
+        });
         return;
       }
-      indexOwners.set(lookupKey, modelName);
+      indexOwners.set(lookupKey, key);
       storageIndexes.push(checked.index);
     });
 

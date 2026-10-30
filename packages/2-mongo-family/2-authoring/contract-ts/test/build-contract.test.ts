@@ -687,6 +687,7 @@ describe('buildMongoContractFromDefinition refusals with their whole data', () =
         key: { kind: 'index', model: 'Admin', position: 0 },
         collection: 'users',
         firstModel: 'User',
+        firstPosition: 0,
         signature: '{"fields":{"a":1}}',
       },
     ]);

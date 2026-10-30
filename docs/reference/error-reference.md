@@ -717,7 +717,14 @@ An `@ignore`d field is used by `@unique`, `@@unique`, `@@index`, `@@fulltext`, o
 
 ### PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS
 
-Two indexes of one model, of any kind (`@unique`, `@@unique`, `@@index`, `@@fulltext`), whose fields have, position by position, the same names and the same written sort, such as `@unique` and `@@index([email])` on one field. An unwritten sort is not the same as `sort: Asc`, so `@unique` beside `@@index([email(sort: Asc)])` is accepted and gives a unique and a plain index. Prisma 6 refuses such a pair with "Index already exists in the model.", so no Prisma 6 database holds one; this code is reported at each index of the pair. It is also reported, at the second index, for two indexes Prisma 6 accepts but MongoDB holds as one: `@@index([name])` beside `@@index([name(sort: Asc)])`, or the same index on two models stored in one collection. Remove one of the two. The same fields in another order or with another sort are accepted. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+A Prisma 6 schema holds an index that already exists, in one of two senses. Remove one of the two indexes.
+
+- **Prisma 6 refuses the pair.** Two indexes of one model, of any kind (`@unique`, `@@unique`, `@@index`, `@@fulltext`), whose fields have, position by position, the same names and the same written sort, such as `@unique` and `@@index([email])` on one field. An unwritten sort is not the same as `sort: Asc`. Prisma 6 refuses such a schema with "Index already exists in the model.", so no Prisma 6 database holds the pair. The code is reported at each index of the pair, and the message quotes Prisma 6.
+- **MongoDB cannot hold the pair.** Two indexes that Prisma 6 accepts but that are identical in MongoDB, with the same keys and options, in one collection: `@@index([name])` beside `@@index([name(sort: Asc)])`, or the same index on two models stored in one collection. The code is reported at the second index, and the message names both.
+
+The same fields in another order or with another sort are accepted. So is `@unique` beside `@@index([email(sort: Asc)])`, which gives a unique and a plain index on the same keys, as Prisma 6 `db push` creates them.
+
+Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA6_MONGO_INDEX_ARGUMENT_UNSUPPORTED
 

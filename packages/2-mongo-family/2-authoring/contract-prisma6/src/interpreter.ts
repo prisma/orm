@@ -1564,9 +1564,20 @@ function buildIndexes(
       fields: Object.fromEntries(keys),
       ...(attribute.kind === 'unique' ? { options: { unique: true } } : {}),
     };
-    indexes.push({ index, sourceId, span: attribute.span });
+    indexes.push({ index, sourceId, span: attribute.span, label: indexLabel(build, attribute) });
   }
   return indexes;
+}
+
+function indexLabel(build: ModelBuild, attribute: IndexAttribute): string {
+  const model = build.located.symbol.name;
+  if (build.uniqueFields.includes(attribute)) {
+    return `@unique on field "${model}.${attribute.fields[0]?.name ?? ''}"`;
+  }
+  const fields = attribute.fields.map(({ name, direction }) =>
+    direction === undefined ? name : `${name}(sort: ${direction === 1 ? 'Asc' : 'Desc'})`,
+  );
+  return `@@${attribute.kind}([${fields.join(', ')}]) on model "${model}"`;
 }
 
 function textIndexLimitDiagnostic(

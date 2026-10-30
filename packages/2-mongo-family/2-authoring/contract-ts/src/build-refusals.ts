@@ -126,6 +126,7 @@ export type BuildRefusal =
       readonly key: IndexKey;
       readonly collection: string;
       readonly firstModel: string;
+      readonly firstPosition: number;
       readonly signature: string;
     }
   | { readonly kind: 'generatedOnValueObject'; readonly key: FieldKey }
