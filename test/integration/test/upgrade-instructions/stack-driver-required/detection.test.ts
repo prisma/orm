@@ -3,7 +3,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 
-const GUIDE_PATH = 'upgrade-instructions/pending/stack-driver-required/extension/instructions.md';
+const GUIDE_PATH =
+  'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.21-to-8.0.0-rc.22/instructions.md';
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../..');
 const id = 'sql-stack-with-driver-requires-driver';
 
