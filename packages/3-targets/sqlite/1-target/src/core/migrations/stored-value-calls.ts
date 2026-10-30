@@ -9,7 +9,7 @@ import {
   enumValueCoordinateJson,
   type KeepDataEdit,
   type OpFactoryCall,
-  type ResolvedEnumValueRenameStatement,
+  type ResolvedMigrationStatement,
 } from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
 import { RemoveStoredValueCall, ReplaceStoredValueCall } from './op-factory-call';
@@ -126,7 +126,7 @@ export function keepRowsEdit(
 export function storedValueOperationIndexes(
   planCalls: readonly OpFactoryCall[],
   calls: ReadonlyMap<StoredValueCall, StoredValueRewrite>,
-  statement: ResolvedEnumValueRenameStatement,
+  statement: ResolvedMigrationStatement,
 ): readonly number[] {
   const indexes: number[] = [];
   let position = 0;

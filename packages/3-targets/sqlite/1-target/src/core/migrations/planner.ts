@@ -20,7 +20,6 @@ import {
   planStatements,
   sqlTypeLookupsOf,
   subjectsOfCalls,
-  withEnumValueOperations,
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
@@ -308,8 +307,9 @@ export class SqliteMigrationPlanner
         destination,
         this.#lowerer,
       ),
-      appliedStatements: withEnumValueOperations(
-        appliedStatementsInOrder(options.statements, statements.value.appliedStatements),
+      appliedStatements: appliedStatementsInOrder(
+        options.statements,
+        statements.value.plannedStatements,
         (statement) => storedValueOperationIndexes(calls, storedValueCalls, statement),
       ),
       ...subjectsOfCalls(

@@ -7,7 +7,6 @@ import {
 import type { CodecLookupWithDescriptors, CodecRef } from '@internal/framework-components/codec';
 import { codecForRef, readContractValue } from '@internal/framework-components/codec';
 import {
-  type AppliedMigrationStatement,
   type EnumValueCoordinate,
   enumValueStatementText,
   type ResolvedEnumValueRenameStatement,
@@ -444,21 +443,6 @@ function keptData(
         : moved(change),
     ]),
   ];
-}
-
-/**
- * The applied statements with each enum value rename given the operations its rewrites lowered
- * to, at their positions in the plan: the rewrites are ordered with the diff, not with the renames.
- */
-export function withEnumValueOperations(
-  applied: readonly AppliedMigrationStatement[],
-  operationIndexesOf: (statement: ResolvedEnumValueRenameStatement) => readonly number[],
-): readonly AppliedMigrationStatement[] {
-  return applied.map(({ statement, operationIndexes }) =>
-    statement.kind === 'rename' && statement.entity === 'enumValue'
-      ? { statement, operationIndexes: operationIndexesOf(statement) }
-      : { statement, operationIndexes },
-  );
 }
 
 /** The codec of the column a stored value is in, and the stack's codecs, which build it. */

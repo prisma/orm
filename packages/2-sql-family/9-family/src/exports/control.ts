@@ -44,11 +44,7 @@ export type {
   StoredValueReplacement,
   StoredValueRewrite,
 } from '../core/migrations/enum-value-planning';
-export {
-  encodeStoredValue,
-  planEnumValueRewrites,
-  withEnumValueOperations,
-} from '../core/migrations/enum-value-planning';
+export { encodeStoredValue, planEnumValueRewrites } from '../core/migrations/enum-value-planning';
 export type {
   FieldEventCall,
   PlanFieldEventOperationsOptions,
@@ -132,9 +128,11 @@ export type {
   NamespaceRename,
   NamespaceStatementTarget,
   NoTable,
+  PlannedStatement,
   PlannedStatements,
   SingleOperationCall,
   StatementColumn,
+  StatementOperations,
   StatementOwnership,
   StatementPlanningTarget,
   TableMove,

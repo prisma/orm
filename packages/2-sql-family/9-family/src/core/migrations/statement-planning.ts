@@ -244,15 +244,34 @@ export const NO_RENAMED_ORIGINS: WorkingSchemaOrigins = {
   originColumn: (_origin, column) => column,
 };
 
+/**
+ * The operations a statement accounts for: `planned` among the statement planner's calls, or
+ * `plannedWithDiff`, which the target plans with the diff and whose positions it fills in.
+ */
+export type StatementOperations =
+  | { readonly kind: 'planned'; readonly operationIndexes: readonly number[] }
+  | { readonly kind: 'plannedWithDiff' };
+
+export interface PlannedStatement {
+  readonly statement: ResolvedMigrationStatement;
+  readonly operations: StatementOperations;
+}
+
+const PLANNED_WITH_DIFF: StatementOperations = { kind: 'plannedWithDiff' };
+
+function plannedAt(operationIndexes: readonly number[]): StatementOperations {
+  return { kind: 'planned', operationIndexes };
+}
+
 export interface PlannedStatements<TCall extends CallWithCompanions> {
   /**
-   * The calls, which a target puts first in its plan: each statement's `operationIndexes` count
-   * from the first operation of the first call.
+   * The calls, which a target puts first in its plan: each planned statement's `operationIndexes`
+   * count from the first operation of the first call.
    */
   readonly calls: readonly TCall[];
   readonly tableRenames: readonly TableRename[];
   readonly columnRenames: readonly ColumnRename[];
-  readonly appliedStatements: readonly AppliedMigrationStatement[];
+  readonly plannedStatements: readonly PlannedStatement[];
   readonly origins: WorkingSchemaOrigins;
 }
 
@@ -416,6 +435,12 @@ function columnRenameRefused(
   }
 }
 
+function planned(
+  operationIndexes: Result<readonly number[], SqlPlannerConflict>,
+): Result<StatementOperations, SqlPlannerConflict> {
+  return operationIndexes.ok ? ok(plannedAt(operationIndexes.value)) : operationIndexes;
+}
+
 class StatementPlanner<TCall extends CallWithCompanions> {
   readonly #fromContract: Contract<SqlStorage>;
   readonly #contract: Contract<SqlStorage>;
@@ -454,18 +479,18 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     this.#ownership = input.ownership;
   }
 
-  /** Plans one statement; the result is the positions of the operations it accounts for. */
-  plan(statement: ResolvedRenameStatement): Result<readonly number[], SqlPlannerConflict> {
+  /** Plans one statement; the result is the operations it accounts for. */
+  plan(statement: ResolvedRenameStatement): Result<StatementOperations, SqlPlannerConflict> {
     switch (statement.entity) {
       case 'namespace':
-        return this.#planNamespace(statement);
+        return planned(this.#planNamespace(statement));
       case 'model':
-        return this.#planModel(statement);
+        return planned(this.#planModel(statement));
       case 'field':
-        return this.#planField(statement);
+        return planned(this.#planField(statement));
       case 'enumValue':
       case 'valueObjectField':
-        return ok([]);
+        return ok(PLANNED_WITH_DIFF);
     }
   }
 
@@ -844,7 +869,7 @@ export function planStatements<TCall extends CallWithCompanions>(input: {
       calls: [],
       tableRenames: [],
       columnRenames: [],
-      appliedStatements: [],
+      plannedStatements: [],
       origins: NO_RENAMED_ORIGINS,
     });
   }
@@ -863,21 +888,21 @@ export function planStatements<TCall extends CallWithCompanions>(input: {
     fromContract,
     ownership: input.ownership,
   });
-  const appliedStatements: AppliedMigrationStatement[] = [];
+  const plannedStatements: PlannedStatement[] = [];
   const namespacesFirst = [
     ...input.statements.filter((statement) => statement.entity === 'namespace'),
     ...input.statements.filter((statement) => statement.entity !== 'namespace'),
   ];
   for (const statement of namespacesFirst) {
-    const operationIndexes = planner.plan(statement);
-    if (!operationIndexes.ok) return operationIndexes;
-    appliedStatements.push({ statement, operationIndexes: operationIndexes.value });
+    const operations = planner.plan(statement);
+    if (!operations.ok) return operations;
+    plannedStatements.push({ statement, operations: operations.value });
   }
   return ok({
     calls: planner.calls,
     tableRenames: planner.tableRenames,
     columnRenames: planner.columnRenames,
-    appliedStatements,
+    plannedStatements,
     origins: planner.origins(),
   });
 }
@@ -966,18 +991,42 @@ export function backfillOfDefaultedField(
 }
 
 /**
- * Every statement of a plan in the order given, with the operations it accounts for: a rename's
- * from `renames`, and none yet for any other statement.
+ * The operations of a statement the statement planner does not take: a value object member backfill
+ * and a variant convert are planned with the diff; a field convert or backfill accounts for none.
+ */
+function operationsOutsideStatementPlanner(
+  statement: ResolvedMigrationStatement,
+): StatementOperations {
+  if (statement.kind === 'rename') return plannedAt([]);
+  switch (statement.entity) {
+    case 'field':
+      return plannedAt([]);
+    case 'valueObjectField':
+    case 'model':
+      return PLANNED_WITH_DIFF;
+  }
+}
+
+/**
+ * Every statement of a plan in the order given, with the operations it accounts for: a planned
+ * statement's from `planned`, and a statement planned with the diff's from
+ * `operationIndexesPlannedWithDiff`, which finds them among the target's whole plan.
  */
 export function appliedStatementsInOrder(
   statements: readonly ResolvedMigrationStatement[],
-  renames: readonly AppliedMigrationStatement[],
+  planned: readonly PlannedStatement[],
+  operationIndexesPlannedWithDiff: (statement: ResolvedMigrationStatement) => readonly number[],
 ): readonly AppliedMigrationStatement[] {
-  return statements.map(
-    (statement) =>
-      renames.find((applied) => applied.statement === statement) ?? {
-        statement,
-        operationIndexes: [],
-      },
-  );
+  return statements.map((statement) => {
+    const operations =
+      planned.find((entry) => entry.statement === statement)?.operations ??
+      operationsOutsideStatementPlanner(statement);
+    return {
+      statement,
+      operationIndexes:
+        operations.kind === 'planned'
+          ? operations.operationIndexes
+          : operationIndexesPlannedWithDiff(statement),
+    };
+  });
 }

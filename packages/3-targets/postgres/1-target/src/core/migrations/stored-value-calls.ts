@@ -11,7 +11,7 @@ import {
   enumValueCoordinateJson,
   type KeepDataEdit,
   type OpFactoryCall,
-  type ResolvedEnumValueRenameStatement,
+  type ResolvedMigrationStatement,
 } from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { ifDefined } from '@internal/utils/defined';
@@ -156,7 +156,7 @@ export function keepRowsEdit(
 export function storedValueOperationIndexes(
   planCalls: readonly PostgresOpFactoryCall[],
   calls: ReadonlyMap<PostgresOpFactoryCall, StoredValueRewrite>,
-  statement: ResolvedEnumValueRenameStatement,
+  statement: ResolvedMigrationStatement,
 ): readonly number[] {
   const indexes: number[] = [];
   let position = 0;

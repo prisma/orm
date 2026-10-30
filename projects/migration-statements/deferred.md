@@ -199,12 +199,6 @@ Reproduction: emit a PSL contract with a `namespace public` block and a `namespa
 
 `db update --delete billing` against a database whose marker hash has no local snapshot fails with `CLI.CONSENT_UNUSED`: the planner has no origin contract, so it reports no removed namespace, and the namespace's tables stay. Nothing is lost, which is the right outcome, but the message does not say why. `--rename` in the same situation fails with `MIGRATION.STATEMENT_ORIGIN_UNKNOWN`, which names the hash and the snapshot directory. A namespace `--delete` that matches no question should say the same when the origin contract is unknown.
 
-## Enum value renames are statements the statement planner does not plan
-
-**Found:** slice 3b PR 2 system-design review (2026-10-22), S04.
-
-`StatementPlanner.plan` returns `ok([])` for an enum value rename (`packages/2-sql-family/9-family/src/core/migrations/statement-planning.ts`). The rewrite is planned again in `planEnumValueRewrites` (`enum-value-planning.ts`), ordered with the diff because on Postgres it must run between the old check's drop and the new check's creation, and `withEnumValueOperations` patches its operation indexes onto the applied statements afterwards. Nothing in the types says so. To resolve it, give the statement planner's result an outcome for "planned with the diff", which the target fills, instead of an empty operation list. Settle this before PR 4, whose JSON rewrites have the same ordering need.
-
 ## Stored value code is copied in both SQL targets, and the runners read the counted value from the check's parameters
 
 **Found:** slice 3b PR 2 system-design review (2026-10-22), S05.

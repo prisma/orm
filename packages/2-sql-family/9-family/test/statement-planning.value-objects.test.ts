@@ -15,7 +15,7 @@ const contract = contractOf({
 });
 
 describe('a value object field rename', () => {
-  it('plans no call among the renames', () => {
+  it('plans no call among the renames: its operations are planned with the diff', () => {
     expect(
       planned(
         planStatements({
@@ -33,7 +33,10 @@ describe('a value object field rename', () => {
           target: fakeTarget(['app.Place']),
         }),
       ),
-    ).toMatchObject({ calls: [], appliedStatements: [{ operationIndexes: [] }] });
+    ).toMatchObject({
+      calls: [],
+      plannedStatements: [{ operations: { kind: 'plannedWithDiff' } }],
+    });
   });
 });
 
@@ -60,10 +63,14 @@ describe('a value object member backfill and a variant convert', () => {
     expect(backfillOfDefaultedField([memberBackfill], contract, contract)).toBeUndefined();
   });
 
-  it('account for no operations yet', () => {
-    expect(appliedStatementsInOrder([memberBackfill, variantConvert], [])).toEqual([
-      { statement: memberBackfill, operationIndexes: [] },
-      { statement: variantConvert, operationIndexes: [] },
+  it('are planned with the diff, so the target places their operations', () => {
+    expect(
+      appliedStatementsInOrder([memberBackfill, variantConvert], [], (statement) =>
+        statement === memberBackfill ? [2] : [3],
+      ),
+    ).toEqual([
+      { statement: memberBackfill, operationIndexes: [2] },
+      { statement: variantConvert, operationIndexes: [3] },
     ]);
   });
 });
