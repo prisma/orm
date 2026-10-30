@@ -18,6 +18,7 @@ async function questionsOf(input: {
   readonly labels?: readonly string[];
   readonly keepDataAdvice?: string;
   readonly canConvert?: boolean;
+  readonly statements?: readonly { readonly verb: 'backfill'; readonly text: string }[];
   readonly preAnswers?: readonly { readonly verb: 'delete'; readonly text: string }[];
 }) {
   const asked: PlanQuestion[] = [];
@@ -34,7 +35,7 @@ async function questionsOf(input: {
     },
     askAccess: false,
     canConvert: input.canConvert ?? false,
-    statements: [],
+    statements: input.statements ?? [],
     preAnswers: input.preAnswers ?? [],
     consentAll: { delete: false, allow: false },
     origin: input.origin,
@@ -81,6 +82,54 @@ describe('a question about a value object field', () => {
       'Remove key would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the new required field "GeoPoint.latitude" still needs a value: add --backfill GeoPoint.latitude to write it in migration.ts.',
       'Remove key would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the existing objects get a temporary value in the new required field "GeoPoint.latitude".',
     ]);
+  });
+
+  it('leaves out the note under migration plan when the run already backfills the new field', async () => {
+    const {
+      asked: [question],
+    } = await questionsOf({
+      origin,
+      destination,
+      subject: lat,
+      canConvert: true,
+      statements: [{ verb: 'backfill', text: 'GeoPoint.latitude' }],
+    });
+
+    expect(question?.question).toBe(
+      'Remove key would lose the values of value object field "GeoPoint.lat".',
+    );
+  });
+
+  describe('when the value object gained several required fields', () => {
+    const gained = contractOf({
+      app: {
+        models: { Place: place },
+        valueObjects: { GeoPoint: ['latitude', 'longitude', 'lng'] },
+      },
+    });
+
+    async function questionText(
+      canConvert: boolean,
+      statements: readonly { readonly verb: 'backfill'; readonly text: string }[] = [],
+    ) {
+      const {
+        asked: [question],
+      } = await questionsOf({ origin, destination: gained, subject: lat, canConvert, statements });
+      return question?.question;
+    }
+
+    it('names every new required field', async () => {
+      expect([await questionText(true), await questionText(false)]).toEqual([
+        'Remove key would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the new required fields "GeoPoint.latitude" and "GeoPoint.longitude" still need a value: add --backfill GeoPoint.latitude --backfill GeoPoint.longitude to write them in migration.ts.',
+        'Remove key would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the existing objects get a temporary value in the new required fields "GeoPoint.latitude" and "GeoPoint.longitude".',
+      ]);
+    });
+
+    it('names under migration plan only the new required fields the run does not backfill', async () => {
+      expect(await questionText(true, [{ verb: 'backfill', text: 'GeoPoint.latitude' }])).toBe(
+        'Remove key would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the new required field "GeoPoint.longitude" still needs a value: add --backfill GeoPoint.longitude to write it in migration.ts.',
+      );
+    });
   });
 
   it('names the field through its value object, lists every operation, and offers the one new field as the rename', async () => {

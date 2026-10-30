@@ -400,10 +400,10 @@ function onlyNewMember(
  * The field a value object field can only have been renamed to: the one field of the destination
  * value object that the origin one does not have and no rename of the plan names.
  */
-function onlyNewValueObjectField(
+function newValueObjectFields(
   subject: ValueObjectFieldCoordinate,
   contracts: StatementContracts & { readonly destination: ContractWithDomain },
-): string | undefined {
+): readonly string[] {
   const field = renamedValueObjectField(subject, contracts) ?? subject;
   const originFields = valueObjectFields(contracts.origin, subject) ?? [];
   const renamedTo = new Set(
@@ -413,10 +413,35 @@ function onlyNewValueObjectField(
         : [],
     ),
   );
-  const added = (valueObjectFields(contracts.destination, field) ?? []).filter(
+  return (valueObjectFields(contracts.destination, field) ?? []).filter(
     (name) => !renamedTo.has(name) && !originFields.includes(name),
   );
+}
+
+function onlyNewValueObjectField(
+  subject: ValueObjectFieldCoordinate,
+  contracts: StatementContracts & { readonly destination: ContractWithDomain },
+): string | undefined {
+  const added = newValueObjectFields(subject, contracts);
   return added.length === 1 ? added[0] : undefined;
+}
+
+/** The value object fields the plan's backfill statements name, resolved; empty when they do not resolve. */
+function backfilledValueObjectFields(
+  contracts: StatementContracts & { readonly destination: ContractWithDomain },
+): readonly ValueObjectFieldCoordinate[] {
+  if (!contracts.statements.some((statement) => statement.verb === 'backfill')) return [];
+  const resolved = resolveStatements({
+    statements: contracts.statements,
+    origin: { kind: 'contract', contract: contracts.origin },
+    destination: contracts.destination,
+  });
+  if (!resolved.ok) return [];
+  return resolved.value.flatMap((statement) =>
+    statement.kind === 'backfill' && statement.entity === 'valueObjectField'
+      ? [statement.field]
+      : [],
+  );
 }
 
 function renameForm(
@@ -573,8 +598,8 @@ function changedVariant(
  * the planner's advice on keeping the data, when it gives any.
  */
 /**
- * What `--delete` of a value object field leaves in the one field the value object gained, when
- * that field is required: `migration plan` still needs a backfill statement for it, and `db update`
+ * What `--delete` of a value object field leaves in the required fields the value object gained:
+ * `migration plan` needs a backfill statement for each the run does not backfill, and `db update`
  * fills a temporary value.
  */
 function newRequiredFieldNote(
@@ -583,8 +608,6 @@ function newRequiredFieldNote(
   contracts: DataLossContracts,
 ): readonly string[] {
   if (subject.kind !== 'valueObjectField' || inDestination(subject, contracts)) return [];
-  const only = onlyNewValueObjectField(subject, contracts);
-  if (only === undefined) return [];
   const field = renamedValueObjectField(subject, contracts) ?? subject;
   const valueObject = valueObjectAt(contracts.destination.storage, {
     plane: 'storage',
@@ -592,14 +615,40 @@ function newRequiredFieldNote(
     entityKind: 'valueObject',
     entityName: field.valueObject,
   });
-  if (valueObject?.fields[only]?.nullable !== false) return [];
-  const added = `${text.slice(0, text.lastIndexOf('.'))}.${only}`;
+  const backfilled = contracts.canConvert ? backfilledValueObjectFields(contracts) : [];
+  const unfilled = newValueObjectFields(subject, contracts).filter(
+    (name) =>
+      valueObject?.fields[name]?.nullable === false &&
+      !backfilled.some(
+        (backfill) =>
+          backfill.namespaceId === field.namespaceId &&
+          backfill.valueObject === field.valueObject &&
+          backfill.field === name,
+      ),
+  );
+  if (unfilled.length === 0) return [];
+  const parent = text.slice(0, text.lastIndexOf('.'));
+  const added = unfilled.map((name) => `${parent}.${name}`);
+  const named = `${added.length === 1 ? 'field' : 'fields'} ${quotedList(added)}`;
   const deleted = statementFlag({ verb: 'delete', text });
+  if (!contracts.canConvert) {
+    return [
+      `With ${deleted}, the existing objects get a temporary value in the new required ${named}.`,
+    ];
+  }
+  const backfills = added.map((each) => statementFlag({ verb: 'backfill', text: each })).join(' ');
   return [
-    contracts.canConvert
-      ? `With ${deleted}, the new required field "${added}" still needs a value: add ${statementFlag({ verb: 'backfill', text: added })} to write it in migration.ts.`
-      : `With ${deleted}, the existing objects get a temporary value in the new required field "${added}".`,
+    added.length === 1
+      ? `With ${deleted}, the new required ${named} still needs a value: add ${backfills} to write it in migration.ts.`
+      : `With ${deleted}, the new required ${named} still need a value: add ${backfills} to write them in migration.ts.`,
   ];
+}
+
+function quotedList(items: readonly string[]): string {
+  const quoted = items.map((item) => `"${item}"`);
+  return quoted.length === 1
+    ? quoted.join('')
+    : `${quoted.slice(0, -1).join(', ')} and ${quoted.at(-1)}`;
 }
 
 export function dataLossQuestion(
