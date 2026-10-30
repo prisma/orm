@@ -27,6 +27,8 @@ import {
   sqlitePslConfigFixture,
 } from './journey-test-helpers';
 
+export type ContractVersion = 'base' | 'next' | 'unique';
+
 export type PolicyTarget = 'postgres' | 'sqlite' | 'mysql' | 'mongo';
 
 export interface PolicyProject {
@@ -56,6 +58,16 @@ model User {
   @@map("user")
 }
 `,
+  unique: `// use prisma-8
+
+model User {
+  id    Int     @id
+  email String  @unique
+  name  String?
+
+  @@map("user")
+}
+`,
 };
 
 const MONGO_CONTRACTS = {
@@ -73,6 +85,16 @@ model User {
 model User {
   id    ObjectId @id @map("_id")
   email String
+  name  String?
+
+  @@map("users")
+}
+`,
+  unique: `// use prisma-8
+
+model User {
+  id    ObjectId @id @map("_id")
+  email String   @unique
   name  String?
 
   @@map("users")
@@ -163,7 +185,7 @@ export function setupPolicyProject(
   return project;
 }
 
-export function writeContract(project: PolicyProject, version: 'base' | 'next'): void {
+export function writeContract(project: PolicyProject, version: ContractVersion): void {
   const contracts = project.target === 'mongo' ? MONGO_CONTRACTS : SQL_CONTRACTS;
   writeFileSync(join(project.ctx.testDir, 'contract.prisma'), contracts[version], 'utf-8');
 }
@@ -171,7 +193,7 @@ export function writeContract(project: PolicyProject, version: 'base' | 'next'):
 /** Emits `version` and plans a migration to it from the latest migration, returning the contract it ends at. */
 export async function planTo(
   project: PolicyProject,
-  version: 'base' | 'next',
+  version: ContractVersion,
   name: string,
 ): Promise<string> {
   const previous = getLatestMigrationDir(project.ctx);
