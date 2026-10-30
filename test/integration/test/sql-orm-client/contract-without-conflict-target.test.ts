@@ -24,7 +24,10 @@ function usersOnContractWithoutConflictTarget(runtime: PgIntegrationRuntime) {
   });
   return {
     contractCapability: 'insertOnConflictTarget' in sql,
-    runtimeCapability: context.contract.capabilities['sql']?.['insertOnConflictTarget'],
+    runtimeCapability: Object.hasOwn(
+      context.contract.capabilities['sql'] ?? {},
+      'insertOnConflictTarget',
+    ),
     users: new Collection({ runtime, context }, 'User', { namespaceId: 'public' }),
   };
 }
