@@ -195,7 +195,7 @@ describe('SQLite stored key operations', { timeout: timeouts.databaseOperation }
       expect((await runnerResult(op)).assertNotOk()).toMatchObject({
         code: 'MIGRATION.PRECHECK_FAILED',
         message:
-          'Operation renameStoredKey.place.history.$[*].lat failed during precheck: ensure no object at path "$[*]" in column "history" of "place" has both key "lat" and key "latitude"',
+          'Operation renameStoredKey.place.history.$[*].lat failed during precheck: ensure no object at path "$[*]" in column "history" of "place" has both key "lat" and key "latitude"; remove one of the two keys from those objects',
       });
       expect(await texts('history')).toEqual(before);
     });

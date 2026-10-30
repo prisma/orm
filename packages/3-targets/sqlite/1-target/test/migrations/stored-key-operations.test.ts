@@ -37,7 +37,7 @@ describe('renameStoredKey', () => {
       precheck: [
         {
           description:
-            'ensure no object at path "$[*]" in column "history" of "place" has both key "lat" and key "latitude"',
+            'ensure no object at path "$[*]" in column "history" of "place" has both key "lat" and key "latitude"; remove one of the two keys from those objects',
           sql: `SELECT NOT EXISTS (SELECT 1 FROM "place" WHERE (json_type("history") IN ('array', 'object') AND EXISTS (SELECT 1 FROM json_each("history") AS e0 WHERE ((json_type(("history" -> e0.fullkey)) = 'object' AND json_type(("history" -> e0.fullkey), '$."lat"') IS NOT NULL) AND (json_type(("history" -> e0.fullkey)) = 'object' AND json_type(("history" -> e0.fullkey), '$."latitude"') IS NOT NULL))))) AS result`,
         },
       ],
@@ -96,7 +96,7 @@ describe('renameStoredKey', () => {
     const op = new RenameStoredKeyCall('place', 'byCountry', '$.*.lat', 'latitude').toOp();
     expect([op.label, op.precheck[0]?.description]).toEqual([
       'Rename key "lat" to "latitude" at path "$.*" in column "byCountry" of "place"',
-      'ensure no object at path "$.*" in column "byCountry" of "place" has both key "lat" and key "latitude"',
+      'ensure no object at path "$.*" in column "byCountry" of "place" has both key "lat" and key "latitude"; remove one of the two keys from those objects',
     ]);
   });
 

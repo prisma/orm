@@ -48,7 +48,7 @@ export function renameStoredKey(
     target: { id: 'sqlite', details: buildTargetDetails('column', columnName, tableName) },
     precheck: [
       step(
-        `ensure no object ${place} has both key "${keyPath.key}" and key "${to}"`,
+        `ensure no object ${place} has both key "${keyPath.key}" and key "${to}"; remove one of the two keys from those objects`,
         noRowWhere(
           tableName,
           objectsMatch(

@@ -219,7 +219,7 @@ describe('Postgres stored key operations', { concurrent: false }, () => {
       expect((await runnerResult(op)).assertNotOk()).toMatchObject({
         code: 'MIGRATION.PRECHECK_FAILED',
         message:
-          'Operation renameStoredKey.place.history.$[*].lat failed during precheck: ensure no object at path "$[*]" in column "history" of "place" has both key "lat" and key "latitude"',
+          'Operation renameStoredKey.place.history.$[*].lat failed during precheck: ensure no object at path "$[*]" in column "history" of "place" has both key "lat" and key "latitude"; remove one of the two keys from those objects',
       });
       expect(await values('history')).toEqual([
         [{ lat: 1 }, { lat: 2, latitude: 9 }],
