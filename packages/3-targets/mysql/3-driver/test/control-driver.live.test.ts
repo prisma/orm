@@ -80,12 +80,12 @@ describe('MysqlControlDriver against a MySQL server', {
           };
           expect({
             text: (await driver.query('SELECT * FROM t')).rows,
-            prepared: (await driver.query('SELECT * FROM t WHERE i = ?', [42])).rows,
+            valued: (await driver.query('SELECT * FROM t WHERE i = ?', [42])).rows,
             runtimeText: await read(runtime.query({ sql: 'SELECT * FROM t' })),
-            runtimePrepared: await read(
+            runtimeValued: await read(
               runtime.query({ sql: 'SELECT * FROM t WHERE i = ?1', params: [42] }),
             ),
-          }).toEqual({ text: [row], prepared: [row], runtimeText: [row], runtimePrepared: [row] });
+          }).toEqual({ text: [row], valued: [row], runtimeText: [row], runtimeValued: [row] });
         } finally {
           await runtime.close();
         }
@@ -222,33 +222,57 @@ describe('MysqlControlDriver against a MySQL server', {
     });
   });
 
-  it('runs a statement with values as a prepared statement, and SQL with none as text', async (test) => {
+  it('runs concurrent calls one at a time in the order sent, so a statement with values sees the backslash mode a SET sent before it left', async (test) => {
     await withMysqlDatabase(test, async ({ url }) => {
       const driver = await mysqlDriver.create(url);
       try {
-        const executed = async () => {
-          const { rows } = await driver.query<{ Value: string }>(
-            "SHOW SESSION STATUS LIKE 'Com_stmt_execute'",
-          );
-          return Number(rows[0]?.Value);
-        };
-        const start = await executed();
-        const withValue = await driver.query('SELECT ? AS v', ["it's"]);
-        const afterValue = await executed();
-        await driver.query('SELECT 1 AS v');
-        const afterConstant = await executed();
-        expect({
-          withValue: withValue.rows,
-          prepared: afterValue - start,
-          constant: afterConstant - afterValue,
-        }).toEqual({ withValue: [{ v: "it's" }], prepared: 1, constant: 0 });
+        const [set, valued] = await Promise.allSettled([
+          driver.query("SET SESSION sql_mode = 'NO_BACKSLASH_ESCAPES'"),
+          driver.query('SELECT ? AS v', ["x' , CURRENT_USER() AS injected #"]),
+        ]);
+        expect({ set, valued }).toEqual({
+          set: { status: 'fulfilled', value: { rows: [] } },
+          valued: {
+            status: 'rejected',
+            reason: expect.objectContaining({ code: 'RUNTIME.SQL_MODE_UNSUPPORTED' }),
+          },
+        });
       } finally {
         await driver.close();
       }
     });
   });
 
-  it('starts its session with the session settings the stack passes, set with parameters, the target UTC time zone and an integer setting among them', async (test) => {
+  it('sends a statement with values in one round trip, preparing nothing, as one without', async (test) => {
+    await withMysqlDatabase(test, async ({ url }) => {
+      const driver = await mysqlDriver.create(url);
+      try {
+        const counts = async () => {
+          const { rows } = await driver.query<{ Variable_name: string; Value: string }>(
+            "SHOW SESSION STATUS WHERE Variable_name IN ('Com_select', 'Com_stmt_prepare', 'Com_stmt_execute')",
+          );
+          return Object.fromEntries(rows.map((row) => [row.Variable_name, Number(row.Value)]));
+        };
+        const start = await counts();
+        const withValue = await driver.query('SELECT ? AS v', ["it's"]);
+        await driver.query('SELECT 1 AS v');
+        const end = await counts();
+        expect({
+          withValue: withValue.rows,
+          sent: Object.fromEntries(
+            Object.entries(end).map(([name, count]) => [name, count - (start[name] ?? 0)]),
+          ),
+        }).toEqual({
+          withValue: [{ v: "it's" }],
+          sent: { Com_select: 2, Com_stmt_prepare: 0, Com_stmt_execute: 0 },
+        });
+      } finally {
+        await driver.close();
+      }
+    });
+  });
+
+  it('starts its session with the session settings the stack passes, the package writing each value, the target UTC time zone and an integer setting among them', async (test) => {
     await withMysqlDatabase(test, async ({ url }) => {
       const driver = await mysqlDriver.create(url, {
         sessionSettings: { time_zone: '+00:00', sql_select_limit: '7' },

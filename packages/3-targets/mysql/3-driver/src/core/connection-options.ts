@@ -52,7 +52,7 @@ function isParameterName(name: string): name is ParameterName {
 type UrlParameters = typeof urlParameters.infer;
 
 /**
- * Options the URL cannot change. Values travel only as prepared-statement parameters, so every option that would rewrite SQL on the client stays off, and `logParam` keeps values out of error messages. `permitRedirect` stays off, so a server cannot send the client, with its credentials, to another host, which `pg` never does. Each statement is prepared, run and closed (`prepareCacheLength: 0`). `typeCast` reads every column as text or bytes, so no column reaches a codec as a value the package parsed. `foundRows` makes an UPDATE count the rows it matched, as Postgres's row count does. The connection is utf8mb4: the driver reads each statement as utf8mb4 to find its placeholders, and MySQL must read it the same way.
+ * Options the URL cannot change. The package writes each value into its statement at a bare `?`; every option that would change where or how it writes one (named placeholders, an object written as `SET` entries, several statements in one) stays off, and `logParam` keeps values out of error messages. `permitRedirect` stays off, so a server cannot send the client, with its credentials, to another host, which `pg` never does. `typeCast` reads every column as text or bytes, so no column reaches a codec as a value the package parsed. `foundRows` makes an UPDATE count the rows it matched, as Postgres's row count does. The connection is utf8mb4: the driver reads each statement as utf8mb4 to find its placeholders, and MySQL must read it the same way.
  */
 const FIXED_OPTIONS: ConnectionConfig & { readonly permitRedirect: false } = {
   collation: 'UTF8MB4_UNICODE_CI',
@@ -62,7 +62,6 @@ const FIXED_OPTIONS: ConnectionConfig & { readonly permitRedirect: false } = {
   permitLocalInfile: false,
   logParam: false,
   permitRedirect: false,
-  prepareCacheLength: 0,
   foundRows: true,
   typeCast: readTextOrBytes,
 };
