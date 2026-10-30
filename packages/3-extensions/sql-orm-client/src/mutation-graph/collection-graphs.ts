@@ -49,13 +49,13 @@ import { Rows } from './rows';
 import { UnionAll } from './union-all';
 import { Update } from './update';
 
-/** Whether the caller reads the written rows or only their count. */
-export type WriteResult = 'rows' | 'count';
+/** What the call returns: the written rows, as `#rowsCall` does, or their count, as `#countCall` does. */
+export type CallReturns = 'rows' | 'count';
 
 export function updateAllGraph(
   collection: DescribeCollectionRowsOptions,
   set: Readonly<Record<string, unknown>>,
-  result: WriteResult = 'rows',
+  returns: CallReturns,
 ): Graph {
   const { context, state } = collection;
   const graph = new Graph();
@@ -66,7 +66,7 @@ export function updateAllGraph(
 
   requireIdentityColumnsForIncludes(collection);
   const update = updateAst(context.contract, state.tables, set, whereOf(collection));
-  if (readsBack(collection, result)) {
+  if (readsBack(collection, returns)) {
     const { namespaceId, tableName } = state.tables.root.storage;
     readBackIdentity(context.contract, namespaceId, tableName, collection.modelName, 'updateAll()');
     const found = graph.add(new Find(selectIdentityAst(collection, state)), { filter: [] });
@@ -81,12 +81,12 @@ export function updateAllGraph(
 
 export function deleteAllGraph(
   collection: DescribeCollectionRowsOptions,
-  result: WriteResult = 'rows',
+  returns: CallReturns,
 ): Graph {
   const { context, state } = collection;
   const graph = new Graph();
   const del = new Delete(deleteAst(context.contract, state.tables, whereOf(collection)));
-  if (state.includes.length === 0 && !readsBack(collection, result)) {
+  if (state.includes.length === 0 && !readsBack(collection, returns)) {
     graph.setResult(graph.add(del, { filter: [] }));
     return graph;
   }
@@ -155,7 +155,7 @@ export function createAllGraph(
   collection: DescribeCollectionRowsOptions,
   rows: readonly Record<string, unknown>[],
   conflict: InsertConflictSkip | undefined,
-  result: WriteResult = 'rows',
+  returns: CallReturns,
 ): Graph {
   const { context, state } = collection;
   const graph = new Graph();
@@ -165,7 +165,7 @@ export function createAllGraph(
   requireIdentityColumnsForIncludes(collection);
   const { contract } = context;
   const { root } = state.tables;
-  if (readsBack(collection, result)) {
+  if (readsBack(collection, returns)) {
     const method = rows.length === 1 ? 'create()' : 'createAll()';
     refuseSkipWithReadBack(collection, conflict, method);
     const { keys, generated } = writtenKeys({
@@ -337,8 +337,8 @@ function readBackAst(collection: DescribeCollectionRowsOptions): SelectAst {
 /**
  * Without `RETURNING`, a write that returns rows runs as the write, then a select of the rows by key, chosen from the contract before anything runs.
  */
-function readsBack(collection: DescribeCollectionRowsOptions, result: WriteResult): boolean {
-  return result === 'rows' && !hasContractCapability(collection.context.contract, 'returning');
+function readsBack(collection: DescribeCollectionRowsOptions, returns: CallReturns): boolean {
+  return returns === 'rows' && !hasContractCapability(collection.context.contract, 'returning');
 }
 
 /** A read of the rows a write changed, by the keys `keysFrom` found, with the new values of any key column the write set. */
@@ -419,7 +419,7 @@ function requireOnlyCollidingKey(
   throw ormError(
     'ORM.CAPABILITY_MISSING',
     `upsert() on model "${modelName}" requires contract capability "insertOnConflictTarget": without it the conflict clause applies to every unique key, and the create values can also collide on (${colliding.join(', ')}), which would update a row other than the one conflictOn names.`,
-    { meta: { capability: 'insertOnConflictTarget', action: 'upsert()', model: modelName } },
+    { meta: { capability: 'insertOnConflictTarget', action: 'upsert()' } },
   );
 }
 
@@ -435,7 +435,7 @@ function upsertConflictValues(
     ormError(
       'ORM.CAPABILITY_MISSING',
       `upsert() on model "${modelName}" ${problem}; without capability "returning" the row is read back by the create's values for the conflict columns.`,
-      { meta: { capability: 'returning', action: 'upsert()', model: modelName } },
+      { meta: { capability: 'returning', action: 'upsert()' } },
     );
   const updated = conflictColumns.filter((column) => Object.hasOwn(update, column));
   if (updated.length > 0) {

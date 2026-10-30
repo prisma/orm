@@ -39,7 +39,7 @@ export function writtenKeys(options: {
   }
   const refused = (problem: string) =>
     ormError('ORM.CAPABILITY_MISSING', `${method} on model "${modelName}" ${problem}`, {
-      meta: { capability: 'returning', action: method, model: modelName },
+      meta: { capability: 'returning', action: method },
     });
   if (
     others.length > 0 ||

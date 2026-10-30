@@ -24,7 +24,7 @@ export interface PreparedExecuteRequest extends SqlExecuteRequest {
 export interface SqlStatementStats {
   readonly affectedRows: number;
   /**
-   * The value the database numbered automatically (an auto-increment column, or SQLite's rowid) for the one row the statement changed, as decimal text. A driver sets it only when the statement changed exactly one row and the database reported a value; it names the inserted row only after a one-row insert. A middleware that answers the statement in place of the database may leave it out, or supplies it as a claim that a row with that value exists.
+   * A value the database numbers itself, such as an auto-increment column's, as decimal text. A driver reports it only when the statement changed one row and the database reported a value. It identifies that row only after a one-row insert; after any other statement its value means nothing. A middleware that answers the statement in place of the database may leave it out.
    */
   readonly insertId?: string;
 }

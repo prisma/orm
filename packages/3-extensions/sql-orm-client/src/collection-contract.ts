@@ -925,7 +925,7 @@ export function hasCompleteUniqueKey(
   );
 }
 
-/** Whether the database numbers the column itself, as an auto-increment column or SQLite's rowid alias. */
+/** Whether the contract gives the column an `autoincrement()` default, so the database numbers its value itself. */
 export function isAutoIncrementColumn(
   contract: Contract<SqlStorage>,
   namespaceId: string,

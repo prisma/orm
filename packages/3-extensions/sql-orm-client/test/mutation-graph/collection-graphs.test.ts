@@ -35,7 +35,7 @@ const targetWithIncludes = targetOf(users.include('posts').state);
 
 describe('updateAllGraph', () => {
   it('builds one Update as the result, returning nothing yet', () => {
-    const graph = updateAllGraph(target, { email: 'ada@example.com' });
+    const graph = updateAllGraph(target, { email: 'ada@example.com' }, 'rows');
 
     expect(printGraph(graph)).toBe(
       ["n1 Update users set email = 'ada@example.com' where name = 'Ada'", 'result: n1'].join('\n'),
@@ -44,7 +44,7 @@ describe('updateAllGraph', () => {
   });
 
   it('adds a Find that reads the written rows with their includes, as the result', () => {
-    const graph = updateAllGraph(targetWithIncludes, { email: 'ada@example.com' });
+    const graph = updateAllGraph(targetWithIncludes, { email: 'ada@example.com' }, 'rows');
 
     expect(printGraph(graph)).toBe(
       [
@@ -60,7 +60,7 @@ describe('updateAllGraph', () => {
   it('refuses includes on a table with no identity columns', () => {
     const noIdentity = targetOf({ ...users.include('posts').state, tables: tableWithNoIdentity });
 
-    expect(() => updateAllGraph(noIdentity, { email: 'ada@example.com' })).toThrow(
+    expect(() => updateAllGraph(noIdentity, { email: 'ada@example.com' }, 'rows')).toThrow(
       expect.objectContaining({
         code: 'ORM.ROW_IDENTITY_MISSING',
         message:
@@ -70,7 +70,7 @@ describe('updateAllGraph', () => {
   });
 
   it('builds a Find of the same rows as the result when nothing is set', () => {
-    const graph = updateAllGraph(target, {});
+    const graph = updateAllGraph(target, {}, 'rows');
 
     expect(printGraph(graph)).toBe(
       ["n1 Find users where name = 'Ada' order by id asc", 'result: n1'].join('\n'),
@@ -79,7 +79,7 @@ describe('updateAllGraph', () => {
   });
 
   it('gives that Find the includes of the caller', () => {
-    const graph = updateAllGraph(targetWithIncludes, {});
+    const graph = updateAllGraph(targetWithIncludes, {}, 'rows');
 
     expect(returnedAt(graph, 0)).toEqual(['id', 'name', 'posts']);
   });
@@ -87,14 +87,14 @@ describe('updateAllGraph', () => {
 
 describe('deleteAllGraph', () => {
   it('builds one Delete as the result, returning nothing yet', () => {
-    const graph = deleteAllGraph(target);
+    const graph = deleteAllGraph(target, 'rows');
 
     expect(printGraph(graph)).toBe(["n1 Delete users where name = 'Ada'", 'result: n1'].join('\n'));
     expect(returnedAt(graph, 0)).toEqual([]);
   });
 
   it('builds a Find with the includes as the result and then a Delete when there are includes', () => {
-    const graph = deleteAllGraph(targetWithIncludes);
+    const graph = deleteAllGraph(targetWithIncludes, 'rows');
 
     expect(printGraph(graph)).toBe(
       [
@@ -108,7 +108,7 @@ describe('deleteAllGraph', () => {
   });
 
   it('does not make that Find return identity columns', () => {
-    const graph = deleteAllGraph(targetOf(users.select('name').include('posts').state));
+    const graph = deleteAllGraph(targetOf(users.select('name').include('posts').state), 'rows');
 
     expect(returnedAt(graph, 0)).toEqual(['name', 'posts']);
   });

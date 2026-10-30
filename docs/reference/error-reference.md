@@ -1138,7 +1138,7 @@ A referenced relation name does not exist on the model, in `include()` (SQL and 
 
 ### ORM.ROW_IDENTITY_MISSING
 
-The operation needs a primary key or unique constraint the table does not have: `update()`/`delete()` targeting a single row, a `create()` or `update()` with nested relation mutations (which updates and reloads the row by that key), or keying the include read-back after a mutation. Payload: `model`, `table`.
+The operation needs a primary key or unique constraint the table does not have: `update()`/`delete()` targeting a single row, a `create()` or `update()` with nested relation mutations (which updates and reloads the row by that key), keying the include read-back after a mutation, or, on a contract without the `returning` capability, reading the written rows back by key after `create()`, `createAll()` or `updateAll()`. Payload: `model`, `table`.
 
 ### ORM.TABLE_UNKNOWN
 
