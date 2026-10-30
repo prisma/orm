@@ -73,6 +73,11 @@ describe('the DEFAULT clause the SQLite adapter writes in every DDL statement', 
       "DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
     ],
     [
+      'now() on a raw column, as the text sqlite/datetime stores, since Prisma does not read raw values',
+      col('c', 'DATETIME', { default: fn('now()'), codecRef: { codecId: 'sql/raw@1' } }),
+      "DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+    ],
+    [
       'autoincrement(), which the type writes',
       col('c', 'INTEGER', { default: fn('autoincrement()') }),
       '',

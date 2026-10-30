@@ -1,3 +1,4 @@
+import { sqlRawDataType } from '@internal/sql-contract/data-type';
 import {
   sqliteCharacter,
   sqliteCharacterVarying,
@@ -29,10 +30,11 @@ const NOW_EXPRESSION_BY_DATA_TYPE: ReadonlyMap<string, string> = new Map([
   [sqliteText.id, SQLITE_NOW_EXPRESSION],
   [sqliteCharacter.id, SQLITE_NOW_EXPRESSION],
   [sqliteCharacterVarying.id, SQLITE_NOW_EXPRESSION],
+  [sqlRawDataType.id, SQLITE_NOW_EXPRESSION],
 ]);
 
 /**
- * The expression a `now()` default is written as on a column of `dataTypeId`: the current date or time of day on `sqlite/date` and `sqlite/time`, the current instant on `sqlite/datetime`, on text and on a column of no known data type. `undefined` on a data type that holds no current date or time, such as `sqlite/duration` or `sqlite/integer`, as PostgreSQL refuses `now()` on an `interval` or an `integer` column.
+ * The expression a `now()` default is written as on a column of `dataTypeId`: the current date or time of day on `sqlite/date` and `sqlite/time`, the current instant on `sqlite/datetime`, on text, on a raw column, whose values Prisma does not read, and on a column of no known data type. `undefined` on a data type that holds no current date or time, such as `sqlite/duration` or `sqlite/integer`, as PostgreSQL refuses `now()` on an `interval` or an `integer` column.
  */
 export function sqliteNowExpressionFor(dataTypeId: string | undefined): string | undefined {
   return dataTypeId === undefined

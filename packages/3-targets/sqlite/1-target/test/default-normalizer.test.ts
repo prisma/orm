@@ -47,6 +47,7 @@ describe('sqliteResolveDefault', () => {
     ['sqlite/datetime', 'now()'],
     ['sqlite/date', "date('now')"],
     ['sqlite/time', "strftime('%H:%M:%f','now')"],
+    ['sql/raw', 'now()'],
   ])('names now() on %s as the expression its data type writes, %j', (dataTypeId, named) => {
     expect(
       sqliteResolveDefault(
@@ -146,7 +147,7 @@ describe('readSqliteDefault', () => {
 });
 
 describe('the expression a now() default is written as', () => {
-  it('is the current date on sqlite/date, the time of day on sqlite/time, and the instant on sqlite/datetime, on text and on a column of no known data type', () => {
+  it('is the current date on sqlite/date, the time of day on sqlite/time, and the instant on sqlite/datetime, on text, on a raw column and on a column of no known data type', () => {
     expect({
       date: sqliteNowExpressionFor('sqlite/date'),
       time: sqliteNowExpressionFor('sqlite/time'),
@@ -154,6 +155,7 @@ describe('the expression a now() default is written as', () => {
       text: sqliteNowExpressionFor('sqlite/text'),
       character: sqliteNowExpressionFor('sqlite/character'),
       characterVarying: sqliteNowExpressionFor('sqlite/character-varying'),
+      raw: sqliteNowExpressionFor('sql/raw'),
       unknown: sqliteNowExpressionFor(undefined),
     }).toEqual({
       date: "date('now')",
@@ -162,6 +164,7 @@ describe('the expression a now() default is written as', () => {
       text: "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
       character: "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
       characterVarying: "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+      raw: "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
       unknown: "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
     });
   });
