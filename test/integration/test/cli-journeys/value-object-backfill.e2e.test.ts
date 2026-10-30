@@ -243,11 +243,8 @@ withTempDir(({ createTempDir }) => {
         expect(update.exitCode, `B2.05: db update: ${JSON.stringify(engineError(update))}`).toBe(0);
         expect(
           parseJsonOutput<{ temporaryValues: readonly unknown[] }>(update).temporaryValues,
-          'B2.05: one temporary value per column',
-        ).toEqual([
-          { field: 'Address.country', value: '""' },
-          { field: 'Address.country', value: '""' },
-        ]);
+          'B2.05: one temporary value per field',
+        ).toEqual([{ field: 'Address.country', value: '""' }]);
         expect(await users(db.connectionString), 'B2.05: every object is filled').toEqual([
           {
             id: 1,

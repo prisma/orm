@@ -27,13 +27,18 @@ function statementText(
   }
 }
 
-/** The fields of `values` named as `destination` names them; a column no field stores is left out. */
+/** The fields of `values` named as `destination` names them, each field and value once however many columns it fills; a column no field stores is left out. */
 export function reportTemporaryValues(
   values: readonly MigrationTemporaryValue[],
   destination: ContractWithDomain,
 ): readonly TemporaryValueReport[] {
-  return values.flatMap(({ subject, value }) => {
+  const reports = values.flatMap(({ subject, value }) => {
     const field = statementText(subject, destination);
     return field === undefined ? [] : [{ field, value }];
   });
+  return reports.filter(
+    (report, index) =>
+      reports.findIndex(({ field, value }) => field === report.field && value === report.value) ===
+      index,
+  );
 }

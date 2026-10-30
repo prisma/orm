@@ -40,4 +40,19 @@ describe('reportTemporaryValues', () => {
       { field: 'GeoPoint.country', value: '""' },
     ]);
   });
+
+  it('reports a value object field once however many columns it fills', () => {
+    const country = {
+      kind: 'valueObjectField',
+      namespaceId: app,
+      valueObject: 'GeoPoint',
+      field: 'country',
+    } as const;
+    expect(
+      reportTemporaryValues(
+        [0, 1, 2].map((operationIndex) => ({ operationIndex, subject: country, value: '""' })),
+        destination,
+      ),
+    ).toEqual([{ field: 'GeoPoint.country', value: '""' }]);
+  });
 });
