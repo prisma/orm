@@ -31,6 +31,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { join } from 'pathe';
+import { appliedSummary } from '../../utils/applied-summary';
 import { withEditsAsWritten } from '../../utils/calls-as-written';
 import {
   type CliStructuredError,
@@ -344,7 +345,12 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     (sum, r) => sum + r.entry.migrationEdges.length,
     0,
   );
-  const summary = `Applied ${totalMigrationsApplied} migration(s) (${applied.value.totalOpsExecuted} operation(s)) across ${orderedAll.length} contract space(s)`;
+  const summary = appliedSummary({
+    migrations: totalMigrationsApplied,
+    planned: applied.value.totalOpsPlanned,
+    executed: applied.value.totalOpsExecuted,
+    spaces: orderedAll.length,
+  });
 
   return ok(
     buildSuccess({
