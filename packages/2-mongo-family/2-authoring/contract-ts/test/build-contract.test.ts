@@ -393,6 +393,23 @@ describe('buildMongoContractFromDefinition refusals', () => {
       [{ kind: 'indexScopeConflict', key: { kind: 'index', model: 'Bug', position: 0 } }],
     ],
     [
+      'only the scope conflict of a variant text index whose filter contradicts its discriminator value',
+      {
+        models: [
+          task,
+          {
+            ...bug,
+            fields: [scalar('severity'), scalar('notes')],
+            indexes: [
+              { fields: { severity: 'text' }, options: { partialFilterExpression: { type: 'x' } } },
+              { fields: { notes: 'text' } },
+            ],
+          },
+        ],
+      },
+      [{ kind: 'indexScopeConflict', key: { kind: 'index', model: 'Bug', position: 0 } }],
+    ],
+    [
       'an index its model writes twice',
       { models: [user([scalar('a')], { indexes: [{ fields: { a: 1 } }, { fields: { a: 1 } }] })] },
       [{ kind: 'indexDuplicate', key: { kind: 'index', model: 'User', position: 1 } }],

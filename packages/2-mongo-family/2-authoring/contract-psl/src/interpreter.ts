@@ -44,6 +44,7 @@ import {
   type ModelNode,
   mergeRedundantIndexes,
   type RelationNode,
+  type RemovedIndex,
   type ValueObjectNode,
 } from '@internal/mongo-contract-ts/contract-builder';
 import type {
@@ -984,20 +985,24 @@ function processEnumDeclarations(input: {
   return handles;
 }
 
-/** Whether PSL already reported the cause of a refusal, so the builder's refusal would repeat it. */
 function withoutMergedIndexSites(
   modelSites: ReadonlyMap<string, ModelSites>,
-  definition: ContractDefinition,
+  removedIndexes: readonly RemovedIndex[],
 ): ReadonlyMap<string, ModelSites> {
-  const kept = new Set(definition.models.flatMap((model) => model.indexes ?? []));
   return new Map(
-    [...modelSites].map(([modelName, sites]) => [
-      modelName,
-      { ...sites, indexes: sites.indexes.filter((site) => kept.has(site.index)) },
-    ]),
+    [...modelSites].map(([modelName, sites]) => {
+      const removed = new Set(
+        removedIndexes.filter(({ model }) => model === modelName).map(({ position }) => position),
+      );
+      return [
+        modelName,
+        { ...sites, indexes: sites.indexes.filter((_, position) => !removed.has(position)) },
+      ];
+    }),
   );
 }
 
+/** Whether PSL already reported the cause of a refusal, so the builder's refusal would repeat it. */
 function alreadyReported(
   refusal: BuildRefusal,
   dropped: ReadonlySet<string>,
@@ -1456,9 +1461,13 @@ export function interpretPslDocumentToMongoContract(
     writesCollectionValidators: true,
     warnings: undefined,
   };
-  const definition = mergeRedundantIndexes(written, codecLookup, input.dataTypes);
+  const { definition, removedIndexes } = mergeRedundantIndexes(
+    written,
+    codecLookup,
+    input.dataTypes,
+  );
   const sites: SchemaSites = {
-    models: withoutMergedIndexSites(modelSites, definition),
+    models: withoutMergedIndexSites(modelSites, removedIndexes),
     fields: fieldSites,
     enums: enumSites,
   };

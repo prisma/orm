@@ -303,12 +303,8 @@ export function refusalDiagnostic(
             `Variant "${model}" index conflicts with discriminator scope: ${refusal.reason}`,
           );
         case 'indexDuplicate':
-          return at(
-            site,
-            'PSL_INVALID_INDEX',
-            refusal.firstModel === model
-              ? `Model "${model}" declares this index twice. Remove one of them.`
-              : `Collection "${refusal.collection}" already has this index, declared on model "${refusal.firstModel}". Remove one of them from model "${model}" or "${refusal.firstModel}".`,
+          throw new InternalError(
+            `PSL merges identical indexes before the build, so index ${position} of "${model}" cannot duplicate one of model "${refusal.firstModel}" in collection "${refusal.collection}". This is a defect in the PSL interpreter.`,
           );
       }
       break;

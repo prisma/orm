@@ -1601,7 +1601,7 @@ function buildContractFromDsl<const Input extends DslContractInput>(
     lookups ??
     stackLookupsOf([input.family, input.target, ...Object.values(input.extensions ?? {})]);
   const built = buildMongoContractFromDefinition(
-    mergeRedundantIndexes(definition, codecLookup, dataTypes),
+    mergeRedundantIndexes(definition, codecLookup, dataTypes).definition,
     codecLookup,
     dataTypes,
   );

@@ -46,7 +46,7 @@ function definitionOf(models: readonly ModelNode[]): ContractDefinition {
 }
 
 function merged(models: readonly ModelNode[]): ContractDefinition {
-  return mergeRedundantIndexes(definitionOf(models), codecLookup, dataTypes);
+  return mergeRedundantIndexes(definitionOf(models), codecLookup, dataTypes).definition;
 }
 
 function indexesOf(models: readonly ModelNode[]): unknown {
@@ -278,22 +278,36 @@ describe('mergeRedundantIndexes', () => {
     ]);
   });
 
-  it('removes the merged index from the model that wrote it and keeps every other index node', () => {
+  it('removes the merged indexes from the models that wrote them and reports their positions', () => {
     const plain: IndexNode = { fields: { a: 1 } };
     const other: IndexNode = { fields: { b: 1 } };
     const unique: IndexNode = { fields: { a: 1 }, options: { unique: true } };
-    expect(
-      merged([inUsers('User', [plain, other]), inUsers('Admin', [unique])]).models.map(
-        (model) => model.indexes,
-      ),
-    ).toEqual([[other], [unique]]);
+    const result = mergeRedundantIndexes(
+      definitionOf([inUsers('User', [plain, other]), inUsers('Admin', [unique, other])]),
+      codecLookup,
+      dataTypes,
+    );
+
+    expect({
+      indexes: result.definition.models.map((model) => model.indexes),
+      removedIndexes: result.removedIndexes,
+    }).toEqual({
+      indexes: [[other], [unique]],
+      removedIndexes: [
+        { model: 'User', position: 0 },
+        { model: 'Admin', position: 1 },
+      ],
+    });
   });
 
   it('returns the definition it is given when no index merges', () => {
     const definition = definitionOf([
       inUsers('User', [{ fields: { a: 1 } }, { fields: { b: 1 } }]),
     ]);
-    expect(mergeRedundantIndexes(definition, codecLookup, dataTypes)).toBe(definition);
+    expect(mergeRedundantIndexes(definition, codecLookup, dataTypes)).toEqual({
+      definition,
+      removedIndexes: [],
+    });
   });
 
   it.each<[string, IndexNode]>([
