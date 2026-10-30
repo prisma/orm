@@ -58,7 +58,7 @@ The graph is a static, committed artifact. Several branch tips may coexist, roll
 
 | Code | Meaning in the navigation model | Next move |
 |---|---|---|
-| `MIGRATION.MARKER_NOT_IN_HISTORY` | Online; marker hash is not a node in the graph. The database was changed outside the migration system. | Decide which side is truth: `db sign` (accept DB as truth), `db update` (push contract to DB), `contract infer` (re-derive contract from DB), or `db verify` (inspect first). **Not** the same as `MIGRATION.MARKER_MISMATCH`, which `db migrate` (before any DDL) and `db migrate --show` raise as an error when the marker hash is not a graph node. |
+| `MIGRATION.MARKER_NOT_IN_HISTORY` | Online; marker hash is not a node in the graph. The database was changed outside the migration system. | Follow the finding's advice, which depends on the database's change policy. When the policy includes `reconcile`, decide which side is truth: `db sign` (accept DB as truth), `db update` (push contract to DB), `contract infer` (re-derive contract from DB), or `db verify` (inspect first). When it is `migrate` alone, `db sign` and `db update` are refused: author migrations that bring the database back onto the graph. When the policies cannot be read, have `meta.policies` corrected first. **Not** the same as `MIGRATION.MARKER_MISMATCH`, which `db migrate` (before any DDL) and `db migrate --show` raise as an error when the marker hash is not a graph node. |
 | `MIGRATION.MISSING_INVARIANTS` | Marker reached the destination structurally but lacks invariants the target ref declares. | `db migrate --to <name> --db $URL` to take a path that covers them. |
 | `CONTRACT.UNREADABLE` | `contract.json` couldn't be read. | `contract emit` to regenerate it. |
 

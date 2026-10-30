@@ -5,9 +5,12 @@
 import type { Contract, LedgerEntryRecord } from '@internal/contract/types';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type {
+  ChangeStrategy,
   ControlDriverInstance,
   ControlExtensionDescriptor,
   ControlFamilyInstance,
+  DatabasePolicies,
+  MigrationOperationPolicy,
   MigrationPlanOperation,
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
@@ -34,11 +37,13 @@ import { join } from 'pathe';
 import { type CliStructuredError, errorPathUnreachable } from '../../utils/cli-errors';
 import { errorMarkerMismatch, readLedgerQuietly } from '../../utils/marker-mismatch';
 import { migrateRunnerFailureError } from '../../utils/migrate-failure';
+import { declaredSettingsText } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
 import type {
   MigratePathDecision,
   MigrateResult,
   MigrateSuccess,
+  MigrateTarget,
   OnControlProgress,
   PerSpaceExecutionEntry,
 } from '../types';
@@ -46,6 +51,11 @@ import {
   type BuildAggregateInputs,
   buildContractSpaceAggregate,
 } from './contract-space-aggregate-loader';
+import {
+  checkRunPolicies,
+  type DatabasePoliciesToWrite,
+  databasePoliciesInForce,
+} from './database-policies';
 import { noInvariantPathError } from './no-invariant-path';
 import {
   buildPerSpaceBreakdown,
@@ -79,28 +89,10 @@ export interface ExecuteMigrateOptions<TFamilyId extends string, TTargetId exten
   readonly targetId: TTargetId;
   /** Content check for contract snapshots the aggregate loader resolves. */
   readonly verifySnapshotContent?: SnapshotContentVerifier;
-  /**
-   * Optional app-space ref override. When provided, the app space's
-   * graph-walk targets this hash instead of `space.headRef.hash`.
-   * Extensions are unaffected — they always walk to their own head.
-   */
-  readonly refHash?: string;
-  /**
-   * Required invariants attached to the user-supplied app-space ref.
-   * Threaded into the graph-walk's `required` calculation so the
-   * planner picks an invariant-bearing path and surfaces the
-   * required/satisfied set on the success envelope. When `refHash`
-   * is absent the file's `space.headRef.invariants` are used.
-   */
-  readonly refInvariants?: readonly string[];
-  /**
-   * Resolved name of the user-supplied app-space ref. Surfaces in
-   * `pathDecision.refName` and in `MIGRATION.NO_INVARIANT_PATH`
-   * error envelopes so diagnostics name what the user actually
-   * passed (`--ref prod`) instead of a synthetic placeholder.
-   * Ignored when `refHash` is absent.
-   */
-  readonly refName?: string;
+  /** See {@link MigrateOptions.target}. */
+  readonly target?: MigrateTarget;
+  /** See {@link MigrateOptions.permitPolicyChange}. */
+  readonly permitPolicyChange?: boolean;
   /** The command line the advice of a failure repeats. */
   readonly invocation: CliInvocation;
   readonly onProgress?: OnControlProgress;
@@ -143,11 +135,10 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     migrationsDir,
     extensions,
     targetId,
-    refHash,
-    refInvariants,
-    refName,
+    target,
     onProgress,
   } = options;
+  const ref = target?.kind === 'ref' ? target.ref : undefined;
 
   const loadInputs: BuildAggregateInputs<TFamilyId, TTargetId> = {
     targetId,
@@ -164,26 +155,54 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
   const aggregate = loaded.value;
 
   const markerRows = await familyInstance.readAllMarkers({ driver });
+  const appTargetHash =
+    target === undefined
+      ? requireHeadRef(aggregate.app).hash
+      : target.kind === 'ref'
+        ? target.ref.hash
+        : target.hash;
+  const inForce = databasePoliciesInForce(
+    markerRows,
+    aggregate.app.spaceId,
+    familyInstance.markerLocation,
+  );
 
-  // Plan every space via graph-walk. App space targets `refHash`
-  // when provided, otherwise its own head; extensions always walk
-  // to their own head ref.
+  // Plan every space via graph-walk. App space targets `ref` when
+  // provided, otherwise its own head; extensions always walk to their
+  // own head ref. Planning writes nothing; the policies are checked
+  // before anything runs.
   const planned = await planEverySpace({
     aggregate,
     markers: markerRows,
     appTarget: {
-      hash: refHash ?? requireHeadRef(aggregate.app).hash,
-      invariants: refHash === undefined ? undefined : refInvariants,
-      refName,
+      hash: appTargetHash,
+      invariants: ref?.invariants,
+      refName: ref?.name,
     },
     storageNameOf: (operation) => familyInstance.storageNameOf(operation),
     migrationsDir,
     invocation: options.invocation,
     readLedger: (spaceId) => familyInstance.readLedger({ driver, space: spaceId }),
+    change: inForce.change,
   });
   if (!planned.ok) {
     return notOk(planned.failure);
   }
+  // A marker outside the graph is reported before the policies: its advice already gives the
+  // recovery the change policy permits.
+  const checkedPolicies = checkRunPolicies({
+    command: 'db migrate',
+    appSpaceId: aggregate.app.spaceId,
+    inForce,
+    ref,
+    permitPolicyChange: options.permitPolicyChange ?? false,
+    targetHash: appTargetHash,
+    invocation: options.invocation,
+  });
+  if (!checkedPolicies.ok) {
+    return notOk(checkedPolicies.failure);
+  }
+  const policiesToWrite = checkedPolicies.value.toWrite;
   const allSpaces: ReadonlyArray<AggregateContractSpace> = [aggregate.app, ...aggregate.extensions];
   const perSpacePlans = new Map<string, PerSpacePlan>();
   // An empty-graph space already at its target, or a space with no marker
@@ -247,6 +266,17 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     const entry = perSpacePlans.get(spaceId);
     return entry !== undefined && planRequiresExecution(entry);
   });
+  const appPlanForPolicies =
+    policiesToWrite === undefined ? undefined : perSpacePlans.get(aggregate.app.spaceId);
+  if (!hasPendingWork && policiesToWrite !== undefined && appPlanForPolicies !== undefined) {
+    return runPolicyOnly({
+      ...options,
+      aggregate,
+      appPlan: appPlanForPolicies,
+      policiesToWrite,
+      inForce,
+    });
+  }
   if (!hasPendingWork) {
     const ordered = canonicalOrder
       .filter((spaceId) => perSpacePlans.has(spaceId) || plansKeptFromRunner.has(spaceId))
@@ -285,7 +315,9 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     familyInstance,
     migrations,
     frameworkComponents,
-    policy: { allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'] },
+    policy: MIGRATE_POLICY,
+    ...ifDefined('databasePolicies', policiesToWrite?.policies),
+    expectedDatabasePolicies: inForce,
     action: 'migrate',
     ...ifDefined('onProgress', onProgress),
   });
@@ -327,17 +359,71 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     (sum, r) => sum + r.entry.migrationEdges.length,
     0,
   );
-  const summary = `Applied ${totalMigrationsApplied} migration(s) (${applied.value.totalOpsExecuted} operation(s)) across ${orderedAll.length} contract space(s)`;
+  const applySummary = `Applied ${totalMigrationsApplied} migration(s) (${applied.value.totalOpsExecuted} operation(s)) across ${orderedAll.length} contract space(s)`;
+  const summary =
+    policiesToWrite === undefined
+      ? applySummary
+      : `${applySummary}; policies updated: ${declaredSettingsText(policiesToWrite.differences)}`;
 
-  return ok(
-    buildSuccess({
+  return ok({
+    ...buildSuccess({
       aggregate,
       orderedResolutions: orderedAll,
       perSpace: perSpaceAll,
       totalOpsExecuted: applied.value.totalOpsExecuted,
       summary,
     }),
-  );
+    ...ifDefined('databasePoliciesUpdated', policiesToWrite?.differences),
+  });
+}
+
+const MIGRATE_POLICY = {
+  allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'],
+} as const satisfies MigrationOperationPolicy;
+
+/**
+ * Nothing is pending, but the run has policies to record: the runner applies the application
+ * space's plan, which runs no migration, so that its marker update records them.
+ */
+async function runPolicyOnly<TFamilyId extends string, TTargetId extends string>(
+  args: ExecuteMigrateOptions<TFamilyId, TTargetId> & {
+    readonly aggregate: ContractSpaceAggregate;
+    readonly appPlan: PerSpacePlan;
+    readonly policiesToWrite: DatabasePoliciesToWrite;
+    readonly inForce: DatabasePolicies;
+  },
+): Promise<MigrateResult> {
+  const { aggregate, appPlan, policiesToWrite } = args;
+  const appSpaceId = aggregate.app.spaceId;
+  const perSpacePlans = new Map([[appSpaceId, appPlan]]);
+  const applied = await runMigration({
+    aggregate,
+    perSpacePlans,
+    applyOrder: [appSpaceId],
+    driver: args.driver,
+    familyInstance: args.familyInstance,
+    migrations: args.migrations,
+    frameworkComponents: args.frameworkComponents,
+    policy: MIGRATE_POLICY,
+    databasePolicies: policiesToWrite.policies,
+    expectedDatabasePolicies: args.inForce,
+    action: 'migrate',
+    ...ifDefined('onProgress', args.onProgress),
+  });
+  if (!applied.ok) {
+    const facts = runnerFailureFacts(applied.failure, collectOrdered([appSpaceId], perSpacePlans));
+    return notOk(migrateRunnerFailureError(applied.failure, facts, undefined, args.invocation));
+  }
+  return ok({
+    ...buildSuccess({
+      aggregate,
+      orderedResolutions: applied.value.orderedResolutions,
+      perSpace: applied.value.perSpace,
+      totalOpsExecuted: 0,
+      summary: `Policies updated: ${declaredSettingsText(policiesToWrite.differences)}`,
+    }),
+    databasePoliciesUpdated: policiesToWrite.differences,
+  });
 }
 
 /**
@@ -566,6 +652,8 @@ export async function planEverySpace(
     readonly migrationsDir: string;
     readonly invocation: CliInvocation;
     readonly readLedger: (spaceId: string) => Promise<readonly LedgerEntryRecord[]>;
+    /** The database's change policy in force, which decides the recoveries a mismatch gives. */
+    readonly change: readonly ChangeStrategy[];
   },
 ): Promise<Result<ReadonlyMap<string, PlannedSpaceOutcome>, CliStructuredError>> {
   const { aggregate } = args;
@@ -593,6 +681,8 @@ export async function planEverySpace(
         migrationsDir: args.migrationsDir,
         ledger: await readLedgerQuietly(() => args.readLedger(space.spaceId)),
         invocation: args.invocation,
+        change: args.change,
+        targetRefName: space.spaceId === aggregate.app.spaceId ? args.appTarget.refName : undefined,
       }),
     );
   }

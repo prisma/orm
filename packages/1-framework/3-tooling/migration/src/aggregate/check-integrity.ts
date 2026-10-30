@@ -65,6 +65,7 @@ export function computeIntegrityViolations(
         kind: 'refUnreadable',
         spaceId,
         refName: refProblem.refName,
+        path: refProblem.path,
         detail: refProblem.detail,
       });
     }
@@ -73,6 +74,7 @@ export function computeIntegrityViolations(
         kind: 'refUnreadable',
         spaceId,
         refName: headRefProblem.refName,
+        path: headRefProblem.path,
         detail: headRefProblem.detail,
       });
     }

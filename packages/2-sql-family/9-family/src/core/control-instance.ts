@@ -8,6 +8,7 @@ import type {
   ControlStack,
   CoreSchemaView,
   DiffSubjectGranularity,
+  MarkerDestination,
   MarkerHashes,
   MigrationPlanOperation,
   OperationPreview,
@@ -24,6 +25,8 @@ import type {
 } from '@internal/framework-components/control';
 import {
   APP_SPACE_ID,
+  compareMarkerDatabasePolicies,
+  type DatabasePolicies,
   SchemaTreeNode,
   sameMarkerHashes,
   VERIFY_CODE_HASH_MISMATCH,
@@ -283,11 +286,7 @@ export interface SqlControlFamilyInstance
   initMarker(options: {
     readonly driver: SqlControlDriverInstance<string>;
     readonly space: string;
-    readonly destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-    };
+    readonly destination: MarkerDestination;
   }): Promise<void>;
 
   /**
@@ -298,11 +297,7 @@ export interface SqlControlFamilyInstance
     readonly driver: SqlControlDriverInstance<string>;
     readonly space: string;
     readonly expectedFrom: string;
-    readonly destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-    };
+    readonly destination: MarkerDestination;
   }): Promise<boolean>;
 
   /**
@@ -591,16 +586,21 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     return contract;
   };
 
-  const signSpaceMarker = async (
-    controlAdapter: SqlControlAdapter<string>,
-    driver: SqlControlDriverInstance<string>,
-    { space, contract, expected }: SpaceToSign,
-  ): Promise<SpaceSignature> => {
+  const contractHashesOf = (contract: SpaceToSign['contract']): MarkerHashes => {
     const storageHash = contract.storage.storageHash;
     const profileHash =
       'profileHash' in contract && typeof contract.profileHash === 'string'
         ? contract.profileHash
         : storageHash;
+    return { storageHash, profileHash };
+  };
+
+  const signSpaceMarker = async (
+    controlAdapter: SqlControlAdapter<string>,
+    driver: SqlControlDriverInstance<string>,
+    { space, contract, expected }: SpaceToSign,
+  ): Promise<SpaceSignature> => {
+    const { storageHash, profileHash } = contractHashesOf(contract);
     const signed = { space, contract: { storageHash, profileHash } };
 
     const readHashes = async (): Promise<MarkerHashes | null> => {
@@ -611,7 +611,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     };
     const existing = await readHashes();
     if (!sameMarkerHashes(existing, expected)) {
-      return { ...signed, status: 'conflict', expected, found: existing };
+      return { ...signed, status: 'conflict', reason: 'storageHash', expected, found: existing };
     }
     if (existing === null) {
       await controlAdapter.insertMarker(driver, space, { storageHash, profileHash });
@@ -628,6 +628,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
       return {
         ...signed,
         status: 'conflict',
+        reason: 'storageHash',
         expected,
         found: await readHashes(),
       };
@@ -635,9 +636,29 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     return { ...signed, status: 'updated', previous: existing };
   };
 
+  const databasePoliciesConflict = async (
+    controlAdapter: SqlControlAdapter<string>,
+    driver: SqlControlDriverInstance<string>,
+    checked: DatabasePolicies,
+  ): Promise<SpaceSignature | undefined> => {
+    const comparison = compareMarkerDatabasePolicies(
+      await controlAdapter.readMarker(driver, APP_SPACE_ID),
+      checked,
+    );
+    if (comparison.kind === 'held') return undefined;
+    return {
+      space: APP_SPACE_ID,
+      status: 'conflict',
+      reason: 'databasePolicies',
+      checked,
+      comparison,
+    };
+  };
+
   const signSpaces = async (
     driver: SqlControlDriverInstance<string>,
     spaces: readonly SpaceToSign[],
+    expectedDatabasePolicies: DatabasePolicies | undefined,
   ): Promise<readonly SpaceSignature[]> => {
     const [first] = spaces;
     if (first === undefined) {
@@ -652,7 +673,15 @@ export function createSqlFamilyInstance<TTargetId extends string>(
         await driver.query(lowered.sql, lowered.params);
       }
     };
-    const writeMarkers = async () => {
+    const writeMarkers = async (): Promise<readonly SpaceSignature[]> => {
+      if (expectedDatabasePolicies !== undefined) {
+        const conflict = await databasePoliciesConflict(
+          controlAdapter,
+          driver,
+          expectedDatabasePolicies,
+        );
+        if (conflict !== undefined) return [conflict];
+      }
       const signatures: SpaceSignature[] = [];
       for (const space of spaces) {
         signatures.push(await signSpaceMarker(controlAdapter, driver, space));
@@ -869,8 +898,9 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     async signSpaces(options: {
       readonly driver: SqlControlDriverInstance<string>;
       readonly spaces: readonly SpaceToSign[];
+      readonly expectedDatabasePolicies?: DatabasePolicies;
     }): Promise<readonly SpaceSignature[]> {
-      return signSpaces(options.driver, options.spaces);
+      return signSpaces(options.driver, options.spaces, options.expectedDatabasePolicies);
     },
     async readMarker(options: {
       readonly driver: SqlControlDriverInstance<string>;
@@ -892,11 +922,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     async initMarker(options: {
       readonly driver: SqlControlDriverInstance<string>;
       readonly space: string;
-      readonly destination: {
-        readonly storageHash: string;
-        readonly profileHash: string;
-        readonly invariants?: readonly string[];
-      };
+      readonly destination: MarkerDestination;
     }): Promise<void> {
       return getControlAdapter().initMarker(options.driver, options.space, options.destination);
     },
@@ -904,11 +930,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
       readonly driver: SqlControlDriverInstance<string>;
       readonly space: string;
       readonly expectedFrom: string;
-      readonly destination: {
-        readonly storageHash: string;
-        readonly profileHash: string;
-        readonly invariants?: readonly string[];
-      };
+      readonly destination: MarkerDestination;
     }): Promise<boolean> {
       return getControlAdapter().updateMarker(
         options.driver,

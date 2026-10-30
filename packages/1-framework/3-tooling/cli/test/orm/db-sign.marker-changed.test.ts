@@ -83,10 +83,38 @@ describe('db sign when a marker changes while it runs', () => {
           },
         ],
         meta: {
+          reason: 'storageHash',
           space: 'app',
           expectedStorageHash: HASH_PREVIOUS,
           foundStorageHash: HASH_MOVED,
           destinationStorageHash: HASH_A,
+        },
+      },
+    ]);
+  });
+
+  it('says the marker was changed and changed back when it holds the hash read before', async () => {
+    const dir = await projectDir();
+    const previous = { storageHash: HASH_PREVIOUS, profileHash: 'profile' };
+    mocks.dbSign.mockResolvedValue(
+      ok({
+        spaces: [
+          { ...conflictSpace('app', HASH_A), expected: previous, found: previous },
+          signedSpace('pgvector', HASH_EXT),
+        ],
+      }),
+    );
+
+    const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+    expect(diagnosticsOf(run)).toMatchObject([
+      {
+        code: 'MIGRATION.MARKER_CAS_FAILURE',
+        why: 'Another process changed the marker and changed it back while db sign was writing it, so db sign did not sign the space.',
+        meta: {
+          reason: 'markerChanged',
+          expectedStorageHash: HASH_PREVIOUS,
+          foundStorageHash: HASH_PREVIOUS,
         },
       },
     ]);
@@ -176,5 +204,14 @@ describe('db sign when a marker changes while it runs', () => {
     const run = await harness(ormConfig()).run(['db', 'sign', '--help'], { cwd: dir });
 
     expect(`${run.stdout}${run.stderr}`).toContain('or its marker changed while db sign ran');
+  });
+
+  it('hands the control client the invocation, so a refusal repeats the --db the user gave', async () => {
+    const dir = await projectDir();
+    mocks.dbSign.mockResolvedValue(ok({ spaces: [signedSpace('app', HASH_A)] }));
+
+    await harness(ormConfig()).run(['db', 'sign', '--db', CONNECTION, '--json'], { cwd: dir });
+
+    expect(mocks.dbSign.mock.calls[0]?.[0].invocation).toMatchObject({ dbGiven: true });
   });
 });

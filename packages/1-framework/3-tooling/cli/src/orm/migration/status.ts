@@ -1,5 +1,12 @@
 import { ormConfigSection } from '@internal/config-loader';
-import type { LedgerEntryRecord } from '@internal/contract/types';
+import type { ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
+import { errorMarkerPoliciesCorrupt } from '@internal/errors/execution';
+import {
+  type DatabasePolicyDifference,
+  databasePoliciesOf,
+  databasePolicyDifferences,
+  databasePolicyValueText,
+} from '@internal/framework-components/control';
 import {
   type AggregateContractSpace,
   type ContractMarkerRecordLike,
@@ -25,6 +32,7 @@ import {
   loadContractRawSafely,
   refusePackageCorruptionOnAggregate,
 } from '../../control-api/operations/contract-space-aggregate-loader';
+import { databasePoliciesInForce } from '../../control-api/operations/database-policies';
 import { hasMigrationPath } from '../../control-api/operations/graph-queries';
 import {
   refuseMissingInvariantPath,
@@ -67,6 +75,7 @@ import { appRefsDirFor, contractPathFor, displayPath, migrationsDirFor } from '.
 import {
   contractUnreadableFinding,
   markerNotInHistoryFinding,
+  markerPoliciesUnreadableFinding,
   missingInvariantsFinding,
   type StatusFinding,
 } from './status-findings';
@@ -78,7 +87,7 @@ function shortDisplayHash(hash: string): string {
 }
 
 interface DatabaseState {
-  readonly markersBySpace: ReadonlyMap<string, ContractMarkerRecordLike>;
+  readonly markersBySpace: ReadonlyMap<string, ContractMarkerRecord>;
   readonly ledgersBySpace: ReadonlyMap<string, readonly LedgerEntryRecord[]>;
 }
 
@@ -208,6 +217,29 @@ function sectionBlock(section: SpaceSection): Block {
   return { kind: 'drawing', lines: [...heading, ...body] };
 }
 
+function policyDifferenceJson(difference: DatabasePolicyDifference) {
+  return difference.setting === 'change'
+    ? { ...difference, declared: [...difference.declared], inForce: [...difference.inForce] }
+    : difference;
+}
+
+/** Each policy setting the ref declares that differs from the one the database records. */
+function differencesBlock(differences: readonly DatabasePolicyDifference[]): Block {
+  return {
+    kind: 'drawing',
+    lines: [
+      [{ text: 'differences:', tone: 'heading' }],
+      ...differences.map(
+        ({ setting, declared, inForce }): Text => [
+          {
+            text: `  ${setting}: ref declares ${databasePolicyValueText(declared)}, database has ${databasePolicyValueText(inForce)}`,
+          },
+        ],
+      ),
+    ],
+  };
+}
+
 function statusPresentations(inputs: {
   readonly document: MigrationStatusResult;
   readonly sections: readonly SpaceSection[];
@@ -215,6 +247,7 @@ function statusPresentations(inputs: {
   readonly migrationsDir: string;
   readonly database: string | undefined;
   readonly ref: string | undefined;
+  readonly differences: readonly DatabasePolicyDifference[];
   readonly from: string | undefined;
   readonly space: string | undefined;
   readonly legend: string | undefined;
@@ -249,6 +282,7 @@ function statusPresentations(inputs: {
       },
       ...(legend === undefined ? [] : [{ kind: 'drawing' as const, lines: toneDrawing(legend) }]),
       ...inputs.sections.map(sectionBlock),
+      ...(inputs.differences.length === 0 ? [] : [differencesBlock(inputs.differences)]),
       inputs.headline,
     ],
     json: () => inputs.document,
@@ -319,7 +353,7 @@ export const migrationStatusCommand = defineOrmCommand({
     if (!loaded.ok) {
       return notOk(normalizeError(loaded.failure));
     }
-    const { aggregate, contractHash } = loaded.value;
+    const { aggregate, contractHash, markerLocation } = loaded.value;
 
     const contractConfig = {
       contract: ifDefined('output', contractPathFor(ctx.config)),
@@ -426,6 +460,7 @@ export const migrationStatusCommand = defineOrmCommand({
     let headlineTargetHash = activeRefHash ?? contractHash;
     let totalPending = 0;
 
+    let reportedUnreadablePolicies = false;
     for (const entry of scopedSpaces) {
       const space: AggregateContractSpace | undefined = aggregate.space(entry.space);
       if (space === undefined) {
@@ -454,7 +489,27 @@ export const migrationStatusCommand = defineOrmCommand({
 
       if (markerDiverged) {
         divergedMarker ??= { space: entry.space, markerHash: readMarker.storageHash };
-        findings.push(markerNotInHistoryFinding(entry.space));
+        const policiesInForce = databasePoliciesOf(
+          database.markersBySpace.get(aggregate.app.spaceId),
+        );
+        if (!policiesInForce.ok && !reportedUnreadablePolicies) {
+          reportedUnreadablePolicies = true;
+          findings.push(
+            markerPoliciesUnreadableFinding(
+              errorMarkerPoliciesCorrupt({
+                why: policiesInForce.failure.why,
+                space: aggregate.app.spaceId,
+                markerLocation,
+              }),
+            ),
+          );
+        }
+        findings.push(
+          markerNotInHistoryFinding(
+            entry.space,
+            policiesInForce.ok ? policiesInForce.value.change : undefined,
+          ),
+        );
       }
       if (
         origin !== undefined &&
@@ -534,6 +589,14 @@ export const migrationStatusCommand = defineOrmCommand({
       }
     }
 
+    const differences: readonly DatabasePolicyDifference[] | undefined =
+      connects && activeRefEntry?.policies !== undefined
+        ? databasePolicyDifferences(
+            activeRefEntry.policies,
+            databasePoliciesInForce(database.markersBySpace, aggregate.app.spaceId, markerLocation),
+          )
+        : undefined;
+
     const rendered = renderMigrationGraphSpaceTrees(renderInputs);
     const treesBySpace = new Map(
       renderInputs.map((input, index) => [input.spaceId, rendered[index] ?? '']),
@@ -549,7 +612,7 @@ export const migrationStatusCommand = defineOrmCommand({
     });
 
     const everySpaceEmpty = scopedSpaces.every((entry) => entry.migrations.length === 0);
-    const summary = everySpaceEmpty
+    const pathSummary = everySpaceEmpty
       ? 'No migrations found'
       : noPath !== undefined
         ? buildNoPathSummary(noPath)
@@ -560,6 +623,11 @@ export const migrationStatusCommand = defineOrmCommand({
             markerHash: divergedMarker?.markerHash,
           });
 
+    const summary =
+      differences !== undefined && differences.length > 0 && activeRefName !== undefined
+        ? `${pathSummary}; policies differ from ${activeRefName}`
+        : pathSummary;
+
     const diagnostics: readonly Diagnostic[] = findings.map((finding) => finding.diagnostic);
     const documentDiagnostics: StatusDiagnosticJson[] = findings.map((finding) => finding.document);
     const document: MigrationStatusResult = {
@@ -567,8 +635,13 @@ export const migrationStatusCommand = defineOrmCommand({
       spaces: statusSpaces,
       summary,
       diagnostics: documentDiagnostics,
+      ...ifDefined('policyDifferences', differences?.map(policyDifferenceJson)),
     };
-    const alarming = divergedMarker !== undefined || totalPending > 0 || noPath !== undefined;
+    const alarming =
+      divergedMarker !== undefined ||
+      totalPending > 0 ||
+      noPath !== undefined ||
+      (differences !== undefined && differences.length > 0);
 
     return ok(
       ctx.present(
@@ -583,6 +656,7 @@ export const migrationStatusCommand = defineOrmCommand({
               ? maskConnectionUrl(dbConnection)
               : undefined,
           ref: activeRefName,
+          differences: differences ?? [],
           from: args.flags.from,
           space: args.flags.space,
           legend: args.flags.legend

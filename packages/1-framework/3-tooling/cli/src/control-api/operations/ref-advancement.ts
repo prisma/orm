@@ -1,6 +1,6 @@
 import { writeContractSnapshot } from '@internal/migration-tools/contract-snapshot-store';
 import { errorInvalidRefName, MigrationToolsError } from '@internal/migration-tools/errors';
-import { validateRefName, writeRef } from '@internal/migration-tools/refs';
+import { advanceRef, validateRefName } from '@internal/migration-tools/refs';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { CliStructuredError } from '../../utils/cli-errors';
 import { createProjectSpecifierResolver } from '../../utils/project-import-root';
@@ -82,7 +82,7 @@ export async function executeRefAdvancement(
   hash: string,
   contractIR: ContractIR,
 ): Promise<{ name: string; hash: string }> {
-  // Validate the ref name before writing anything: writeRef validates it too,
+  // Validate the ref name before writing anything: advanceRef validates it too,
   // but only after the store write below, which would otherwise leave a
   // (harmless, but pointless) orphan store entry on an invalid name.
   if (!validateRefName(name)) {
@@ -92,7 +92,7 @@ export async function executeRefAdvancement(
     contractJson: contractIR.contract,
     contractDts: contractIR.contractDts,
   });
-  await writeRef(refsDir, name, { hash, invariants: [] });
+  await advanceRef(refsDir, name, hash);
   return { name, hash };
 }
 

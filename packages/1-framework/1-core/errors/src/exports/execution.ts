@@ -1,6 +1,7 @@
 export {
   errorHashMismatch,
   errorMarkerMissing,
+  errorMarkerPoliciesCorrupt,
   errorMarkerReadFailed,
   errorMarkerRequired,
   errorMarkerRowCorrupt,

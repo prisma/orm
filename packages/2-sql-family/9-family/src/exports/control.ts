@@ -38,6 +38,7 @@ export {
   partitionCallsByControlPolicy,
   partitionIssuesByControlPolicy,
 } from '../core/migrations/control-policy';
+export { checkDatabasePoliciesHeld } from '../core/migrations/database-policies-check';
 export type {
   StoredEnumValue,
   StoredValueCodec,

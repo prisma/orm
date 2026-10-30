@@ -1,6 +1,9 @@
 import { ormConfigSection } from '@internal/config-loader';
 import type { Contract } from '@internal/contract/types';
-import { createControlStack } from '@internal/framework-components/control';
+import {
+  createControlStack,
+  type DatabasePolicyDifference,
+} from '@internal/framework-components/control';
 import { contractHashAtMarker } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
@@ -20,6 +23,7 @@ import {
   loadContractSpaceAggregateForCli,
   refuseContractSpaceIntegrity,
 } from '../control-api/operations/contract-space-aggregate-loader';
+import { databasePoliciesInForce } from '../control-api/operations/database-policies';
 import { refuseUnknownInvariants } from '../control-api/operations/invariants';
 import { planEverySpace } from '../control-api/operations/migrate';
 import {
@@ -40,6 +44,7 @@ import { shellQuoted } from '../control-api/statements/statement-flag';
 import type {
   CreateControlClient,
   MigratePathDecision,
+  MigrateTarget,
   PerSpaceExecutionEntry,
 } from '../control-api/types';
 import { errorContractValidationFailed } from '../utils/cli-errors';
@@ -61,7 +66,7 @@ import { dataLine } from './data-lines';
 import { perSpaceBlocks } from './db/migration-blocks';
 import { prepareMigrationRun } from './db/prepare';
 import { defineOrmCommand } from './define-command';
-import { dbFlag } from './flags';
+import { dbFlag, permitPolicyChangeFlag } from './flags';
 import { baseDirFor, displayPath, migrationsDirFor } from './migration/paths';
 import { normalizeError } from './normalize-error';
 import { controlProgressReporter } from './progress';
@@ -91,6 +96,7 @@ interface MigrateDocument {
   readonly pathDecision?: MigratePathDecision;
   readonly timings: { readonly total: number };
   readonly advancedRef?: { readonly name: string; readonly hash: string } | null;
+  readonly databasePoliciesUpdated?: readonly DatabasePolicyDifference[];
 }
 
 function statusAction(invocation: CliInvocation): NextAction {
@@ -210,6 +216,13 @@ interface RequestedTarget {
 
 const EMITTED_CONTRACT_TARGET: RequestedTarget = { entry: undefined, refName: undefined };
 
+function migrateTargetOf({ entry, refName }: RequestedTarget): MigrateTarget | undefined {
+  if (entry === undefined) return undefined;
+  return refName === undefined
+    ? { kind: 'hash', hash: entry.hash }
+    : { kind: 'ref', ref: { name: refName, ...entry } };
+}
+
 /**
  * `--to` as a contract the app graph knows. A ref target keeps the invariants
  * the ref declares; a bare hash or `@empty` carries none. An omitted `--to`
@@ -272,6 +285,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           placeholder: 'name',
         }),
         show: flag.boolean({ brief: 'Preview the migration route without applying (read-only)' }),
+        permitPolicyChange: permitPolicyChangeFlag,
         from: flag.string({
           brief: `From-state for the --show preview (${ALL_CONTRACT_REF_FORMS})`,
           placeholder: 'contract',
@@ -293,6 +307,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           ...ifDefined('db', args.flags.db),
           ...ifDefined('to', args.flags.to),
           ...ifDefined('from', args.flags.from),
+          ...(args.flags.permitPolicyChange === true ? { permitPolicyChange: true } : {}),
         });
         if (!planned.ok) {
           return notOk(normalizeError(planned.failure));
@@ -414,6 +429,12 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           offlineTarget === undefined ? liveMarkerTarget(appMarker) : offlineTarget.value;
 
         const refEntry = target.entry;
+        const permitPolicyChange = args.flags.permitPolicyChange === true;
+        const inForce = databasePoliciesInForce(
+          markers,
+          aggregate.app.spaceId,
+          familyInstance.markerLocation,
+        );
         const planned = await planEverySpace({
           aggregate,
           markers,
@@ -426,6 +447,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           migrationsDir,
           invocation: cliInvocation(ctx, args.flags.db),
           readLedger: (spaceId) => client.readLedger(spaceId),
+          change: inForce.change,
         });
         if (!planned.ok) {
           return notOk(normalizeError(planned.failure));
@@ -502,12 +524,12 @@ export function createMigrateCommand(createClient: CreateControlClient) {
               ...(args.flags.advanceRef === undefined
                 ? []
                 : ['--advance-ref', shellQuoted(args.flags.advanceRef)]),
+              ...(permitPolicyChange ? ['--permit-policy-change'] : []),
             ],
           },
           onProgress: controlProgressReporter(ctx.report),
-          ...ifDefined('refHash', refEntry?.hash),
-          ...(refEntry?.invariants === undefined ? {} : { refInvariants: refEntry.invariants }),
-          ...ifDefined('refName', target.refName),
+          ...ifDefined('target', migrateTargetOf(target)),
+          ...(permitPolicyChange ? { permitPolicyChange } : {}),
         });
         if (!applied.ok) {
           return notOk(normalizeError(applied.failure));
@@ -540,6 +562,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           ...ifDefined('pathDecision', value.pathDecision),
           timings: { total: Date.now() - startedAt },
           advancedRef,
+          ...ifDefined('databasePoliciesUpdated', value.databasePoliciesUpdated),
         };
       } catch (error) {
         return notOk(

@@ -202,6 +202,7 @@ withTempDir(({ createTempDir }) => {
           severity: 'error',
           summary: 'Marker of space "app" changed while db sign ran',
           meta: {
+            reason: 'storageHash',
             space: 'app',
             expectedStorageHash: OLD_APP_HASH,
             foundStorageHash: MOVED_APP_HASH,

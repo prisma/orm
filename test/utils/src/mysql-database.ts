@@ -98,3 +98,16 @@ export async function withMysqlDatabase<T>(
     await admin.end();
   }
 }
+
+/** Runs `sql` on the MySQL database `url` names, on a connection of its own. */
+export async function queryMysqlDatabase(url: string, sql: string): Promise<void> {
+  const connection = await createConnection({
+    ...serverOptions(url),
+    database: decodeURIComponent(new URL(url).pathname.slice(1)),
+  });
+  try {
+    await connection.query(sql);
+  } finally {
+    await connection.end();
+  }
+}

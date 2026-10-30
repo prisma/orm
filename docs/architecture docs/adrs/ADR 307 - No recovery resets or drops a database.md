@@ -1,6 +1,6 @@
 # ADR 307 — No recovery resets or drops a database
 
-**Status:** Accepted
+**Status:** Accepted. Which of the two ways applies to a database is now recorded by the database itself, as its change policy; the off-graph error gives the one way it permits. See [ADR 314](ADR%20314%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md).
 **Date:** 2026-10-23
 
 ## Decision

@@ -103,6 +103,7 @@ function planned(args: {
     migrationsDir: '/work/app/migrations',
     invocation,
     readLedger: args.readLedger ?? (async () => []),
+    change: ['migrate', 'reconcile'],
   });
 }
 
@@ -202,6 +203,7 @@ describe('planEverySpace', () => {
       spaceId: 'app',
       markerHash: APP_DELETED,
       targetHash: APP_B,
+      change: ['migrate', 'reconcile'],
       missingMigrations: [],
     });
   });
@@ -230,6 +232,7 @@ describe('planEverySpace', () => {
       spaceId: 'app',
       markerHash: APP_DELETED,
       targetHash: APP_B,
+      change: ['migrate', 'reconcile'],
       lastGraphHash: APP_A,
       missingMigrations: [],
     });
@@ -248,6 +251,25 @@ describe('planEverySpace', () => {
       spaceId: 'app',
       markerHash: APP_DELETED,
       targetHash: APP_B,
+      change: ['migrate', 'reconcile'],
+    });
+  });
+
+  it('gives the recovery the change policy of the refused space permits', async () => {
+    const result = await planEverySpace({
+      aggregate: { targetId: 'postgres', app, extensions: [] },
+      markers: new Map([['app', markerAt(APP_DELETED)]]),
+      appTarget: { hash: APP_B, invariants: undefined, refName: undefined },
+      storageNameOf: (operation) => operation.id,
+      migrationsDir: '/work/app/migrations',
+      invocation,
+      readLedger: async () => [],
+      change: ['migrate'],
+    });
+
+    expect(result.ok ? undefined : result.failure.toEnvelope()).toMatchObject({
+      nextActions: [{ kind: 'user-choice' }],
+      meta: { change: ['migrate'] },
     });
   });
 });

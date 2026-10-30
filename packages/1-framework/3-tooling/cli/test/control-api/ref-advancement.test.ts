@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { readFile, rm } from 'node:fs/promises';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { errorInvalidRefName, MigrationToolsError } from '@internal/migration-tools/errors';
+import { readRef, writeRef } from '@internal/migration-tools/refs';
 import { notOk, ok } from '@internal/utils/result';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -101,6 +102,19 @@ describe('executeRefAdvancement', () => {
     expect(existsSync(join(contractSnapshotDir(migrationsDir, HASH_A), 'contract.d.ts'))).toBe(
       true,
     );
+  });
+
+  it('keeps the invariants and policies the ref declares', async () => {
+    const declared = {
+      hash: 'b'.repeat(64),
+      invariants: ['split-user-name'],
+      policies: { change: ['migrate'] as const },
+    };
+    await writeRef(refsDir, 'production', declared);
+
+    await executeRefAdvancement(refsDir, migrationsDir, 'production', HASH_A, sampleContractIR());
+
+    expect(await readRef(refsDir, 'production')).toEqual({ ...declared, hash: HASH_A });
   });
 
   it('is a write-if-absent no-op on the store when advancing to the same hash again', async () => {

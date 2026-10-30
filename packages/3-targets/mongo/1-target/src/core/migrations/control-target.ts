@@ -9,6 +9,7 @@ import type {
   MongoRunnerDependencies,
 } from '@internal/family-mongo/control-adapter';
 import {
+  APP_SPACE_ID,
   type MigrationRunner,
   type MigrationRunnerPerSpaceSuccessValue,
   type MigrationRunnerResult,
@@ -17,12 +18,17 @@ import {
 } from '@internal/framework-components/control';
 import type { MongoContract } from '@internal/mongo-contract';
 import { blindCast } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok } from '@internal/utils/result';
 import { mongoTargetDescriptorMeta } from '../descriptor-meta';
 import type { MongoTargetContract } from '../mongo-target-contract';
 import { MongoTargetContractSerializer } from '../mongo-target-contract-serializer';
 import { MongoMigrationPlanner } from './mongo-planner';
-import { MongoMigrationRunner, type MongoMigrationRunnerExecuteOptions } from './mongo-runner';
+import {
+  checkDatabasePolicies,
+  MongoMigrationRunner,
+  type MongoMigrationRunnerExecuteOptions,
+} from './mongo-runner';
 import { MongoTargetSchemaVerifier } from './mongo-target-schema-verifier';
 import { entityNamesDeclaredBy, scopeVerifyResultToSpace } from './scope-verify-result';
 
@@ -94,7 +100,19 @@ export const mongoTargetDescriptor: MongoControlTargetDescriptor<MongoTargetCont
         //
         // See `docs/architecture docs/subsystems/10. MongoDB Family.md` §
         // Contract spaces and ADR 212 — Contract spaces.
-        async execute({ driver, perSpaceOptions }): Promise<MigrationRunnerResult> {
+        async execute({
+          driver,
+          perSpaceOptions,
+          expectedDatabasePolicies,
+        }): Promise<MigrationRunnerResult> {
+          if (expectedDatabasePolicies !== undefined) {
+            cachedDeps ??= family.createRunnerDependencies({ driver });
+            const checked = await checkDatabasePolicies(
+              cachedDeps.markerOps,
+              expectedDatabasePolicies,
+            );
+            if (!checked.ok) return notOk(checked.failure);
+          }
           const contracts = perSpaceOptions.map((opts) =>
             blindCast<Contract, 'destinationContract validated at aggregate boundary'>(
               opts.destinationContract,
@@ -120,6 +138,9 @@ export const mongoTargetDescriptor: MongoControlTargetDescriptor<MongoTargetCont
               ...runnerOptions,
               scopeVerifyResult,
               databaseChangedBefore: changedDatabase,
+              ...(space === APP_SPACE_ID
+                ? ifDefined('checkedPolicies', expectedDatabasePolicies)
+                : {}),
             });
             if (!result.ok) {
               return notOk(withFailingSpace(result.failure, space));

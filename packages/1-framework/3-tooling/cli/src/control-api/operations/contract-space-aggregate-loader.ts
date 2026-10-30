@@ -15,6 +15,7 @@ import type {
 import { loadContractSpaceAggregate } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
+import { errorInvalidRefFile } from '@internal/migration-tools/errors';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
@@ -179,6 +180,11 @@ export function mapIntegrityViolations(
         violations: [contractUnreadable],
       },
     );
+  }
+
+  const refUnreadable = violations.find((v) => v.kind === 'refUnreadable');
+  if (refUnreadable && refUnreadable.kind === 'refUnreadable') {
+    return errorInvalidRefFile(refUnreadable.path, refUnreadable.detail);
   }
 
   // Any remaining recoverable structural violation refuses as an
@@ -388,6 +394,8 @@ export async function buildReadAggregate(
       readonly aggregate: ContractSpaceAggregate;
       readonly contractHash: string;
       readonly storageNameOf: (operation: MigrationPlanOperation) => string;
+      /** Where the family keeps its markers, which an unreadable marker's error names. */
+      readonly markerLocation: string;
     },
     CliStructuredError
   >
@@ -437,6 +445,7 @@ export async function buildReadAggregate(
       aggregate: loaded.value,
       contractHash,
       storageNameOf: (operation: MigrationPlanOperation) => familyInstance.storageNameOf(operation),
+      markerLocation: familyInstance.markerLocation,
     });
   } catch (error) {
     return notOk(

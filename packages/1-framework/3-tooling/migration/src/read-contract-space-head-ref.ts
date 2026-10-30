@@ -10,6 +10,15 @@ function hasErrnoCode(error: unknown, code: string): boolean {
   return error instanceof Error && (error as { code?: string }).code === code;
 }
 
+/** The file that holds the head ref of contract space `spaceId`. */
+export function contractSpaceHeadRefPath(projectMigrationsDir: string, spaceId: string): string {
+  assertValidSpaceId(spaceId);
+  return join(
+    spaceRefsDirectory(spaceMigrationDirectory(projectMigrationsDir, spaceId)),
+    'head.json',
+  );
+}
+
 /**
  * Read the head ref (`hash` + `invariants`) for a contract space from
  * `<projectMigrationsDir>/<spaceId>/refs/head.json`.
@@ -27,12 +36,7 @@ export async function readContractSpaceHeadRef(
   projectMigrationsDir: string,
   spaceId: string,
 ): Promise<ContractSpaceHeadRef | null> {
-  assertValidSpaceId(spaceId);
-
-  const filePath = join(
-    spaceRefsDirectory(spaceMigrationDirectory(projectMigrationsDir, spaceId)),
-    'head.json',
-  );
+  const filePath = contractSpaceHeadRefPath(projectMigrationsDir, spaceId);
 
   let raw: string;
   try {

@@ -7,7 +7,7 @@ import {
   type VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import { MigrationToolsError } from '@internal/migration-tools/errors';
-import { readRef, writeRef } from '@internal/migration-tools/refs';
+import { advanceRef, readRef } from '@internal/migration-tools/refs';
 import { spaceMigrationDirectory, spaceRefsDirectory } from '@internal/migration-tools/spaces';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk as notOkResult, ok as okResult, type Result } from '@internal/utils/result';
@@ -263,11 +263,14 @@ function markerConflictDiagnostic(
   rerun: string,
 ): Diagnostic {
   const { expected, found } = outcome;
+  const changedBack = expected !== null && found?.storageHash === expected.storageHash;
   return {
     code: 'MIGRATION.MARKER_CAS_FAILURE',
     severity: 'error',
     summary: `Marker of space "${outcome.space}" changed while db sign ran`,
-    why: `Another process, such as migrate, changed the marker from ${expected?.storageHash ?? 'no marker'} to ${found?.storageHash ?? 'no marker'} after db sign read it, so db sign did not sign the space.`,
+    why: changedBack
+      ? 'Another process changed the marker and changed it back while db sign was writing it, so db sign did not sign the space.'
+      : `Another process, such as migrate, changed the marker from ${expected?.storageHash ?? 'no marker'} to ${found?.storageHash ?? 'no marker'} after db sign read it, so db sign did not sign the space.`,
     nextActions: [
       {
         kind: 'run-command',
@@ -276,6 +279,7 @@ function markerConflictDiagnostic(
       },
     ],
     meta: {
+      reason: changedBack ? 'markerChanged' : 'storageHash',
       space: outcome.space,
       expectedStorageHash: expected?.storageHash ?? null,
       foundStorageHash: found?.storageHash ?? null,
@@ -384,7 +388,7 @@ async function advanceExtensionRef(args: {
 }): Promise<Result<void, CliStructuredError>> {
   const refsDir = spaceRefsDirectory(spaceMigrationDirectory(args.migrationsDir, args.space));
   try {
-    await writeRef(refsDir, args.name, { hash: args.hash, invariants: [] });
+    await advanceRef(refsDir, args.name, args.hash);
     return okResult(undefined);
   } catch (error) {
     if (MigrationToolsError.is(error)) {
@@ -601,6 +605,7 @@ export function createDbSignCommand(
         const signed = await client.dbSign({
           contract,
           migrationsDir,
+          invocation: cliInvocation(ctx, args.flags.db),
           connection: dbConnection,
           onProgress: controlProgressReporter(ctx.report),
         });

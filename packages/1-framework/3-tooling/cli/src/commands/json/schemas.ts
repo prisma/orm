@@ -1,3 +1,8 @@
+import {
+  ACCESS_WIDENING_LEVELS,
+  CHANGE_STRATEGIES,
+  DATA_LOSS_LEVELS,
+} from '@internal/framework-components/control';
 import { type } from 'arktype';
 
 export const migrationEntrySchema = type({
@@ -89,6 +94,13 @@ const markerNotInHistoryDiagnosticSchema = type({
   hints: 'string[]',
 });
 
+const markerPoliciesUnreadableDiagnosticSchema = type({
+  code: '"CONTRACT.MARKER_ROW_CORRUPT"',
+  severity: '"warn" | "info"',
+  message: 'string',
+  hints: 'string[]',
+});
+
 const missingInvariantsDiagnosticSchema = type({
   code: '"MIGRATION.MISSING_INVARIANTS"',
   severity: '"warn" | "info"',
@@ -99,6 +111,7 @@ const missingInvariantsDiagnosticSchema = type({
 
 export const statusDiagnosticSchema = contractUnreadableDiagnosticSchema
   .or(markerNotInHistoryDiagnosticSchema)
+  .or(markerPoliciesUnreadableDiagnosticSchema)
   .or(missingInvariantsDiagnosticSchema);
 
 export type StatusDiagnosticJson = typeof statusDiagnosticSchema.infer;
@@ -112,10 +125,27 @@ export const migrationStatusSpaceSchema = type({
 
 export type MigrationStatusSpace = typeof migrationStatusSpaceSchema.infer;
 
+const changeStrategies = type.enumerated(...CHANGE_STRATEGIES).array();
+const dataLossLevel = type.enumerated(...DATA_LOSS_LEVELS);
+const accessWideningLevel = type.enumerated(...ACCESS_WIDENING_LEVELS);
+
+const policyDifferenceSchema = type({
+  setting: '"change"',
+  declared: changeStrategies,
+  inForce: changeStrategies,
+})
+  .or({ setting: '"dataProtection.dataLoss"', declared: dataLossLevel, inForce: dataLossLevel })
+  .or({
+    setting: '"dataProtection.accessWidening"',
+    declared: accessWideningLevel,
+    inForce: accessWideningLevel,
+  });
+
 export const migrationStatusJsonResultSchema = successEnvelopeBaseSchema.and(
   type({
     spaces: migrationStatusSpaceSchema.array(),
     diagnostics: statusDiagnosticSchema.array(),
+    'policyDifferences?': policyDifferenceSchema.array(),
   }),
 );
 

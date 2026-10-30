@@ -17,6 +17,7 @@
     "@internal/contract": "workspace:8.0.0-rc.22",
     "@internal/contract-authoring": "workspace:8.0.0-rc.22",
     "@internal/emitter": "workspace:8.0.0-rc.22",
+    "@internal/errors": "workspace:8.0.0-rc.22",
     "@internal/framework-components": "workspace:8.0.0-rc.22",
     "@internal/ids": "workspace:8.0.0-rc.22",
     "@internal/migration-tools": "workspace:8.0.0-rc.22",

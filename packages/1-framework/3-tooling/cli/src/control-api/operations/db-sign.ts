@@ -1,10 +1,12 @@
 import type { Contract, ContractMarkerRecord } from '@internal/contract/types';
+import { errorMarkerPoliciesCorrupt } from '@internal/errors/execution';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type {
   ControlDriverInstance,
   ControlExtensionDescriptor,
   ControlFamilyInstance,
   MarkerHashes,
+  SpaceDatabasePoliciesConflict,
   SpaceSignature,
   SpaceToSign,
   VerifyDatabaseSchemaResult,
@@ -22,8 +24,11 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { CliStructuredError } from '../../utils/cli-errors';
+import { errorDatabasePoliciesMovedDuringSign } from '../../utils/policy-errors';
+import type { CliInvocation } from '../../utils/printed-command';
 import type { OnControlProgress } from '../types';
 import { buildContractSpaceAggregate } from './contract-space-aggregate-loader';
+import { checkRunPolicies, databasePoliciesInForce } from './database-policies';
 import { runIntrospection } from './db-verify';
 
 export interface ExecuteDbSignOptions<TFamilyId extends string, TTargetId extends string> {
@@ -36,6 +41,8 @@ export interface ExecuteDbSignOptions<TFamilyId extends string, TTargetId extend
   readonly extensions: ReadonlyArray<ControlExtensionDescriptor<TFamilyId, TTargetId>>;
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>;
   readonly verifySnapshotContent?: SnapshotContentVerifier;
+  /** The command line the advice of a refusal repeats. */
+  readonly invocation: CliInvocation;
   readonly onProgress?: OnControlProgress;
 }
 
@@ -59,7 +66,10 @@ export interface DbSignSpaceMissingInvariants {
 /**
  * What `db sign` did with one contract space: what the family's signing did to its marker ({@link SpaceSignature}), `failed` when the live schema does not satisfy the space's contract, or `missing-invariants` when its marker lacks invariants its head ref requires.
  */
-export type DbSignSpaceOutcome = SpaceSignature | DbSignSpaceFailure | DbSignSpaceMissingInvariants;
+export type DbSignSpaceOutcome =
+  | Exclude<SpaceSignature, SpaceDatabasePoliciesConflict>
+  | DbSignSpaceFailure
+  | DbSignSpaceMissingInvariants;
 
 export interface ExecuteDbSignSuccess {
   /** The app space first, then each extension space in declaration order. */
@@ -89,6 +99,7 @@ export async function executeDbSign<TFamilyId extends string, TTargetId extends 
     familyInstance,
     aggregate: loaded.value,
     frameworkComponents: options.frameworkComponents,
+    invocation: options.invocation,
     ...ifDefined('onProgress', options.onProgress),
   });
 }
@@ -98,6 +109,8 @@ export interface SignContractSpacesOptions<TFamilyId extends string, TTargetId e
   readonly familyInstance: ControlFamilyInstance<TFamilyId, unknown>;
   readonly aggregate: ContractSpaceAggregate;
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>;
+  /** The command line the advice of a refusal repeats. */
+  readonly invocation: CliInvocation;
   readonly onProgress?: OnControlProgress;
 }
 
@@ -132,6 +145,22 @@ export async function signContractSpaces<TFamilyId extends string, TTargetId ext
 ): Promise<ExecuteDbSignResult> {
   const { driver, familyInstance, aggregate, frameworkComponents, onProgress } = options;
   const markers = await familyInstance.readAllMarkers({ driver });
+  const appSpaceId = aggregate.app.spaceId;
+  const inForce = markers.has(appSpaceId)
+    ? databasePoliciesInForce(markers, appSpaceId, familyInstance.markerLocation)
+    : undefined;
+  if (inForce !== undefined) {
+    const permitted = checkRunPolicies({
+      command: 'db sign',
+      appSpaceId,
+      inForce,
+      ref: undefined,
+      permitPolicyChange: false,
+      targetHash: aggregate.app.contract().storage.storageHash,
+      invocation: options.invocation,
+    });
+    if (!permitted.ok) return notOk(permitted.failure);
+  }
 
   const schemaIntrospection = await runIntrospection({
     action: 'dbSign',
@@ -189,9 +218,46 @@ export async function signContractSpaces<TFamilyId extends string, TTargetId ext
     }));
 
   onProgress?.({ action: 'dbSign', kind: 'spanStart', spanId: 'sign', label: 'Signing database' });
-  const signatures = await familyInstance.signSpaces({ driver, spaces: toSign });
-  onProgress?.({ action: 'dbSign', kind: 'spanEnd', spanId: 'sign', outcome: 'ok' });
-  const signatureOf = new Map(signatures.map((signature) => [signature.space, signature]));
+  const signatures = await familyInstance.signSpaces({
+    driver,
+    spaces: toSign,
+    ...ifDefined('expectedDatabasePolicies', inForce),
+  });
+  const policiesConflict = signatures.find(
+    (signature): signature is SpaceDatabasePoliciesConflict =>
+      signature.status === 'conflict' && signature.reason === 'databasePolicies',
+  );
+  onProgress?.({
+    action: 'dbSign',
+    kind: 'spanEnd',
+    spanId: 'sign',
+    outcome: policiesConflict === undefined ? 'ok' : 'error',
+  });
+  if (policiesConflict !== undefined) {
+    const { comparison } = policiesConflict;
+    if (comparison.kind === 'unreadable') {
+      throw errorMarkerPoliciesCorrupt({
+        why: comparison.why,
+        space: appSpaceId,
+        markerLocation: familyInstance.markerLocation,
+      });
+    }
+    return notOk(
+      errorDatabasePoliciesMovedDuringSign({
+        spaceId: appSpaceId,
+        checked: policiesConflict.checked,
+        found: comparison.found,
+        invocation: options.invocation,
+      }),
+    );
+  }
+  const signatureOf = new Map(
+    signatures.flatMap((signature) =>
+      signature.status === 'conflict' && signature.reason === 'databasePolicies'
+        ? []
+        : [[signature.space, signature] as const],
+    ),
+  );
 
   return ok({
     spaces: allSpaces.map((space): DbSignSpaceOutcome => {

@@ -9,7 +9,9 @@ import type {
   ControlFamilyInstance,
   FailedTypeChange,
   MigrationOperationPolicy,
+  MigrationRunner,
   MigrationRunnerFailure,
+  MigrationRunnerPerSpaceOptions,
   MigrationSubject,
   RowsFailingCheck,
   RowsHoldingValue,
@@ -179,7 +181,9 @@ export function runnerFailureFacts(
   };
 }
 
-export interface RunMigrationInputs<TFamilyId extends string, TTargetId extends string> {
+export interface RunMigrationInputs<TFamilyId extends string, TTargetId extends string>
+  extends Pick<MigrationRunnerPerSpaceOptions, 'databasePolicies'>,
+    Pick<Parameters<MigrationRunner['execute']>[0], 'expectedDatabasePolicies'> {
   readonly aggregate: ContractSpaceAggregate;
   /**
    * Per-space plans, keyed by `spaceId`. Produced by either the full
@@ -263,6 +267,8 @@ export async function runMigration<TFamilyId extends string, TTargetId extends s
     migrations,
     frameworkComponents,
     policy,
+    databasePolicies,
+    expectedDatabasePolicies,
     action,
     onProgress,
   } = inputs;
@@ -284,6 +290,7 @@ export async function runMigration<TFamilyId extends string, TTargetId extends s
     driver,
     destinationContract: r.entry.destinationContract,
     policy,
+    ...(r.spaceId === aggregate.app.spaceId ? ifDefined('databasePolicies', databasePolicies) : {}),
     frameworkComponents,
     migrationEdges: r.entry.migrationEdges,
     // Per-space post-apply schema verification is non-strict: each
@@ -293,7 +300,11 @@ export async function runMigration<TFamilyId extends string, TTargetId extends s
     strictVerification: false,
   }));
 
-  const runnerResult = await runner.execute({ driver, perSpaceOptions });
+  const runnerResult = await runner.execute({
+    driver,
+    perSpaceOptions,
+    ...ifDefined('expectedDatabasePolicies', expectedDatabasePolicies),
+  });
 
   if (!runnerResult.ok) {
     onProgress?.({ action, kind: 'spanEnd', spanId: RUN_SPAN_ID, outcome: 'error' });

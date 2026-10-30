@@ -8,6 +8,7 @@ import type {
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
+import type { NamedRef } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
 import { errorStatementNeedsMigrationFile } from '../../utils/cli-errors';
 import type { CliInvocation } from '../../utils/printed-command';
@@ -42,6 +43,10 @@ export interface ExecuteDbUpdateOptions<TFamilyId extends string, TTargetId exte
   readonly acceptDataLoss?: boolean;
   /** Consents to every operation that would change who can read or write data, without asking. */
   readonly acceptAccessChanges?: boolean;
+  /** See {@link DbUpdateOptions.ref}. */
+  readonly ref?: NamedRef;
+  /** See {@link DbUpdateOptions.permitPolicyChange}. */
+  readonly permitPolicyChange?: boolean;
   readonly migrationsDir: string;
   readonly targetId: TTargetId;
   readonly extensions?: ReadonlyArray<ControlExtensionDescriptor<TFamilyId, TTargetId>>;
@@ -86,6 +91,8 @@ export async function executeDbUpdate<TFamilyId extends string, TTargetId extend
     answerQuestions: options.answerQuestions,
     acceptDataLoss: options.acceptDataLoss ?? false,
     acceptAccessChanges: options.acceptAccessChanges ?? false,
+    ...ifDefined('ref', options.ref),
+    permitPolicyChange: options.permitPolicyChange ?? false,
     ...ifDefined('verifySnapshotContent', options.verifySnapshotContent),
     ...ifDefined('onPlannerWarnings', options.onPlannerWarnings),
     ...ifDefined('onProgress', options.onProgress),

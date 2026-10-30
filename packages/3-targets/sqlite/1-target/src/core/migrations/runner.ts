@@ -12,6 +12,7 @@ import type {
   SqlMigrationRunnerSuccessValue,
 } from '@internal/family-sql/control';
 import {
+  checkDatabasePoliciesHeld,
   convertedColumnOf,
   fieldOfColumn,
   requiredColumnsOfMigration,
@@ -29,6 +30,7 @@ import type {
 } from '@internal/framework-components/control';
 import {
   APP_SPACE_ID,
+  type DatabasePolicies,
   failedPostcheckWhy,
   failedPrecheckWhy,
   schemaCheckWhy,
@@ -153,9 +155,16 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
     const incomingIsSubsetOfExisting = incomingInvariants.every((id) => existingInvariants.has(id));
     const isSelfEdgeNoOp = isSelfEdge && operationsExecuted === 0 && incomingIsSubsetOfExisting;
 
-    if (!isSelfEdgeNoOp) {
+    if (!isSelfEdgeNoOp || options.databasePolicies !== undefined) {
       const markerResult = await this.upsertMarker(driver, options, existingMarker, space);
       if (!markerResult.ok) return markerResult;
+    }
+    const recordsPoliciesOnly =
+      options.databasePolicies !== undefined &&
+      operationsExecuted === 0 &&
+      markerAtDestination &&
+      incomingIsSubsetOfExisting;
+    if (!isSelfEdgeNoOp && !recordsPoliciesOnly) {
       await this.recordLedgerEntries(driver, options, executedOperations);
     }
 
@@ -170,6 +179,7 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
     readonly perSpaceOptions: ReadonlyArray<
       SqlMigrationRunnerExecuteOptions<SqlitePlanTargetDetails>
     >;
+    readonly expectedDatabasePolicies?: DatabasePolicies;
   }): Promise<MigrationRunnerResult> {
     const driver = options.driver;
     const perSpaceOptions = options.perSpaceOptions;
@@ -188,7 +198,12 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
 
     let result: MigrationRunnerResult;
     try {
-      result = await this.executeInTransaction(driver, perSpaceOptions, fkWasEnabled);
+      result = await this.executeInTransaction(
+        driver,
+        perSpaceOptions,
+        fkWasEnabled,
+        options.expectedDatabasePolicies,
+      );
     } catch (error) {
       if (fkWasEnabled) await this.afterFailure(driver.query('PRAGMA foreign_keys = ON'));
       throw error;
@@ -204,11 +219,18 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
     driver: SqlControlDriverInstance<string>,
     perSpaceOptions: ReadonlyArray<SqlMigrationRunnerExecuteOptions<SqlitePlanTargetDetails>>,
     fkWasEnabled: boolean,
+    expectedDatabasePolicies: DatabasePolicies | undefined,
   ): Promise<MigrationRunnerResult> {
     await this.beginExclusiveTransaction(driver);
     let result: MigrationRunnerResult;
     try {
-      result = await this.executeSpaces(driver, perSpaceOptions, fkWasEnabled);
+      const policiesCheck =
+        expectedDatabasePolicies === undefined
+          ? okVoid()
+          : await checkDatabasePoliciesHeld(this.family, driver, expectedDatabasePolicies);
+      result = policiesCheck.ok
+        ? await this.executeSpaces(driver, perSpaceOptions, fkWasEnabled)
+        : policiesCheck;
     } catch (error) {
       await this.afterFailure(this.rollbackTransaction(driver));
       throw error;
@@ -831,6 +853,7 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
         options.destinationContract.profileHash ??
         options.plan.destination.storageHash,
       invariants: options.plan.providedInvariants ?? [],
+      ...ifDefined('databasePolicies', options.databasePolicies),
     };
     if (!existingMarker) {
       await this.family.initMarker({ driver, space, destination });
@@ -849,6 +872,7 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
         'Marker was modified by another process during migration execution.',
         {
           meta: {
+            reason: 'storageHash',
             space,
             expectedStorageHash: existingMarker.storageHash,
             foundStorageHash: found?.storageHash ?? null,

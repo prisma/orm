@@ -1,4 +1,5 @@
 import type { LedgerEntryRecord } from '@internal/contract/types';
+import type { ChangeStrategy } from '@internal/framework-components/control';
 import type { MigrationGraph } from '@internal/migration-tools/graph';
 import { isGraphNode } from '@internal/migration-tools/migration-graph';
 import { ifDefined } from '@internal/utils/defined';
@@ -28,6 +29,10 @@ export interface MarkerOutsideGraph {
   /** The space's ledger in apply order, or undefined when it could not be read. */
   readonly ledger: readonly LedgerEntryRecord[] | undefined;
   readonly invocation: CliInvocation;
+  /** The database's change policy in force, which decides the recoveries the advice may give. */
+  readonly change: readonly ChangeStrategy[];
+  /** The ref the command was given as its target, which the advice names in place of its hash. */
+  readonly targetRefName: string | undefined;
 }
 
 /** The ledger as `read` gives it, or undefined when the read fails: the error it explains must not fail with it. */
@@ -126,18 +131,19 @@ interface Advice {
   readonly nextActions: readonly NextAction[];
 }
 
-const MOVE_WITH_DB_UPDATE =
-  'Unless this database changes only through migrations, as production does, move it with db update; its data stays:';
+const MOVE_WITH_DB_UPDATE = 'Move it with db update; its data stays:';
 
-/** The `db update` arguments that name the target, or undefined when no `--to` names it. */
+/** The `db update` arguments that name the target as the command was given it, or undefined when `db update` cannot reach it. */
 function reconcileArgs(
   found: MarkerOutsideGraph,
   owner: SpaceOwner & { readonly kind: 'application' },
 ) {
-  if (found.graph.reverseChain.has(found.targetHash)) {
-    return ['--to', found.targetHash];
-  }
-  return found.targetHash === owner.emittedContractHash ? [] : undefined;
+  const reachable =
+    found.graph.reverseChain.has(found.targetHash) ||
+    found.targetHash === owner.emittedContractHash;
+  if (!reachable) return undefined;
+  if (found.targetRefName !== undefined) return ['--to', found.targetRefName];
+  return found.graph.reverseChain.has(found.targetHash) ? ['--to', found.targetHash] : [];
 }
 
 function applicationAdvice(
@@ -154,6 +160,10 @@ function applicationAdvice(
     const authorOne = `The database is already at the target, but no migration ends there: author a migration from ${from} to ${found.targetHash}, commit it, and deploy again.`;
     return { fix: authorOne, nextActions: [chooseAction(authorOne)] };
   }
+  if (!found.change.includes('reconcile')) {
+    const migrationsOnly = `This database's change policy permits only migrations. Author migrations that bring it back onto the graph: one from ${from} to its current contract, then one from there to ${found.targetHash}. Commit them and deploy again.`;
+    return { fix: migrationsOnly, nextActions: [chooseAction(migrationsOnly)] };
+  }
   const toTarget = reconcileArgs(found, owner);
   if (toTarget === undefined) {
     const migrationsOnly = `Plan a migration from ${from} to the database's current contract, then one to ${found.targetHash}, commit them, and deploy again.`;
@@ -161,14 +171,11 @@ function applicationAdvice(
   }
   const dryRun = cliCommand(found.invocation, 'db update', [...toTarget, '--dry-run']);
   const reconcile = cliCommand(found.invocation, 'db update', toTarget);
-  const otherwise = `Otherwise plan a migration from ${from} to its current contract, then one to ${found.targetHash}, and deploy again.`;
   return {
-    fix: [MOVE_WITH_DB_UPDATE, `  ${dryRun}`, `  ${reconcile}`, otherwise].join('\n'),
+    fix: [MOVE_WITH_DB_UPDATE, `  ${dryRun}`, `  ${reconcile}`].join('\n'),
     nextActions: [
-      chooseAction(MOVE_WITH_DB_UPDATE),
       runCommandAction('Preview the changes', dryRun),
       runCommandAction('Reconcile the database', reconcile),
-      chooseAction(otherwise),
     ],
   };
 }
@@ -215,6 +222,7 @@ export function errorMarkerMismatch(found: MarkerOutsideGraph): ActionableCliErr
         spaceId,
         markerHash,
         targetHash,
+        change: found.change,
         ...ifDefined('lastGraphHash', history?.lastGraphHash),
         ...(found.ledger === undefined
           ? {}

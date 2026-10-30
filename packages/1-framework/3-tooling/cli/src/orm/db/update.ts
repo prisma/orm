@@ -53,7 +53,7 @@ import type {
 } from '../../utils/formatters/migrations';
 import { type CliInvocation, cliCommand, cliInvocation } from '../../utils/printed-command';
 import { defineOrmCommand } from '../define-command';
-import { dbFlag } from '../flags';
+import { dbFlag, permitPolicyChangeFlag } from '../flags';
 import { baseDirFor, migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { promptPlanQuestions } from '../plan-question-prompt';
@@ -224,6 +224,7 @@ function updateDocument(inputs: {
         }),
     ...ifDefined('perSpace', value.perSpace),
     ...ifDefined('changedStorageEntities', value.changedStorageEntities),
+    ...ifDefined('databasePoliciesUpdated', value.databasePoliciesUpdated),
     appliedStatements: value.appliedStatements,
     temporaryValues: value.temporaryValues,
     ...(value.mode === 'plan'
@@ -283,6 +284,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           brief: 'Advance the named ref to the post-command contract hash',
           placeholder: 'name',
         }),
+        permitPolicyChange: permitPolicyChangeFlag,
       },
     },
     statements: dbUpdateStatementVerbs,
@@ -399,6 +401,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           ...(args.flags.advanceRef === undefined
             ? []
             : ['--advance-ref', shellQuoted(args.flags.advanceRef)]),
+          ...(args.flags.permitPolicyChange === true ? ['--permit-policy-change'] : []),
           ...statementArgs,
         ];
         const result = await client.dbUpdate({
@@ -406,6 +409,8 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           mode,
           migrationsDir,
           statements: [...renames, ...previewConsents],
+          ...ifDefined('ref', destination?.ref),
+          ...(args.flags.permitPolicyChange === true ? { permitPolicyChange: true } : {}),
           answerQuestions: promptPlanQuestions(ctx.prompt, ctx.statements),
           invocation: { ...cliInvocation(ctx, args.flags.db), rerunArgs, statementArgs },
           onPlannerWarnings: plannerWarnings.onPlannerWarnings,
