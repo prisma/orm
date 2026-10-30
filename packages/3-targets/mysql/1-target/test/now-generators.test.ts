@@ -12,7 +12,7 @@ import { mysqlCodecRegistry } from '../src/core/registry';
 type Generate = (params?: Readonly<Record<string, unknown>>) => unknown;
 
 const generate: Readonly<Record<string, Generate>> = {
-  [TIMESTAMP_NOW_GENERATOR_ID]: () => timestampNowRuntimeGenerator().generate(),
+  [TIMESTAMP_NOW_GENERATOR_ID]: (params) => timestampNowRuntimeGenerator().generate(params),
   ...Object.fromEntries(mysqlNowGenerators.map(({ id, generate }) => [id, generate])),
 };
 
@@ -66,6 +66,22 @@ describe('the MySQL "now" generator for each codec', () => {
       { kind: 'generator', id: 'instantStringNow', params: { precision: 3 } },
       { kind: 'generator', id: 'plainTimeNow', params: { precision: 0 } },
       { kind: 'generator', id: 'dateStringNow' },
+    ]);
+  });
+
+  it('hands a precision below 3 to timestampNow, and none at 3 or more, so a bare DateTime keeps its contract', () => {
+    expect([
+      nowBindingFor('mysql/datetime@1', { precision: 3 }),
+      nowBindingFor('mysql/datetime@1', { precision: 6 }),
+      nowBindingFor('mysql/timestamp-date@1', { precision: 0 }),
+      nowBindingFor('mysql/datetime@1'),
+      nowBindingFor('mysql/timestamp-date@1', { precision: 2 }),
+    ]).toEqual([
+      { kind: 'generator', id: 'timestampNow' },
+      { kind: 'generator', id: 'timestampNow' },
+      { kind: 'generator', id: 'timestampNow', params: { precision: 0 } },
+      { kind: 'generator', id: 'timestampNow', params: { precision: 0 } },
+      { kind: 'generator', id: 'timestampNow', params: { precision: 2 } },
     ]);
   });
 

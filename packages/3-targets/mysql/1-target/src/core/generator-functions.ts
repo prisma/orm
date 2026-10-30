@@ -46,13 +46,29 @@ export const mysqlNowGeneratorIds = {
   [MYSQL_TIME_TEMPORAL_CODEC_ID]: PLAIN_TIME_NOW_GENERATOR_ID,
 } as const;
 
-/** The generators that round down to the column's fraction digits, 0 for a bare type. `timestampNow` writes a `Date`, which the column rounds as it did before these types, so its contract keeps no precision. */
+/** The generators that round down to the column's fraction digits, 0 for a bare type. */
 const takesPrecision: ReadonlySet<string> = new Set([
   INSTANT_NOW_GENERATOR_ID,
   INSTANT_STRING_NOW_GENERATOR_ID,
   PLAIN_TIME_NOW_GENERATOR_ID,
   TIME_STRING_NOW_GENERATOR_ID,
 ]);
+
+/** The fraction digits a `Date` holds: `timestampNow` takes a precision only below them, so a column of 3 or more, such as a bare `DateTime`, keeps a contract with no generator params. */
+const DATE_FRACTION_DIGITS = 3;
+
+function nowParams(
+  generatorId: string,
+  typeParams: Readonly<Record<string, unknown>> | undefined,
+): { readonly precision: number } | undefined {
+  const written = typeParams?.['precision'];
+  const precision = typeof written === 'number' ? written : 0;
+  if (takesPrecision.has(generatorId)) return { precision };
+  if (generatorId === TIMESTAMP_NOW_GENERATOR_ID && precision < DATE_FRACTION_DIGITS) {
+    return { precision };
+  }
+  return undefined;
+}
 
 export const mysqlGeneratorFunctions = [
   ...sqlIntegerArgumentGeneratorFunctions({ integer: mysqlInt.id }),
@@ -62,11 +78,7 @@ export const mysqlGeneratorFunctions = [
       singleGeneratorBinding({
         codecIds: [codecId],
         generatorId,
-        paramsFromField: (column) => {
-          if (!takesPrecision.has(generatorId)) return undefined;
-          const precision = column.typeParams?.['precision'];
-          return { precision: typeof precision === 'number' ? precision : 0 };
-        },
+        paramsFromField: (column) => nowParams(generatorId, column.typeParams),
       }),
     ),
   },
