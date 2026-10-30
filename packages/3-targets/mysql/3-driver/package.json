@@ -1,7 +1,7 @@
 {
   "name": "@internal/driver-mysql",
   "private": true,
-  "version": "8.0.0-rc.21",
+  "version": "8.0.0-rc.22",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -15,20 +15,20 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/errors": "workspace:8.0.0-rc.21",
-    "@internal/framework-components": "workspace:8.0.0-rc.21",
-    "@internal/sql-contract": "workspace:8.0.0-rc.21",
-    "@internal/sql-errors": "workspace:8.0.0-rc.21",
-    "@internal/sql-relational-core": "workspace:8.0.0-rc.21",
-    "@internal/target-mysql": "workspace:8.0.0-rc.21",
-    "@internal/utils": "workspace:8.0.0-rc.21",
+    "@internal/errors": "workspace:8.0.0-rc.22",
+    "@internal/framework-components": "workspace:8.0.0-rc.22",
+    "@internal/sql-contract": "workspace:8.0.0-rc.22",
+    "@internal/sql-errors": "workspace:8.0.0-rc.22",
+    "@internal/sql-relational-core": "workspace:8.0.0-rc.22",
+    "@internal/target-mysql": "workspace:8.0.0-rc.22",
+    "@internal/utils": "workspace:8.0.0-rc.22",
     "arktype": "^2.2.2",
     "mariadb": "3.5.4"
   },
   "devDependencies": {
-    "@repo/test-utils": "workspace:8.0.0-rc.21",
-    "@repo/tsconfig": "workspace:8.0.0-rc.21",
-    "@repo/tsdown": "workspace:8.0.0-rc.21",
+    "@repo/test-utils": "workspace:8.0.0-rc.22",
+    "@repo/tsconfig": "workspace:8.0.0-rc.22",
+    "@repo/tsdown": "workspace:8.0.0-rc.22",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

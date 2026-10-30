@@ -1,6 +1,6 @@
 {
   "name": "e2e-tests",
-  "version": "8.0.0-rc.21",
+  "version": "8.0.0-rc.22",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,8 +14,8 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "devDependencies": {
-    "@repo/prisma-bin": "workspace:8.0.0-rc.21",
-    "@repo/tsconfig": "workspace:8.0.0-rc.21",
+    "@repo/prisma-bin": "workspace:8.0.0-rc.22",
+    "@repo/tsconfig": "workspace:8.0.0-rc.22",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "pg": "catalog:",
@@ -24,15 +24,15 @@
     "vitest": "catalog:"
   },
   "dependencies": {
-    "@prisma/orm-extension-arktype-json": "workspace:8.0.0-rc.21",
-    "@prisma/orm-extension-paradedb": "workspace:8.0.0-rc.21",
-    "@prisma/orm-extension-pgvector": "workspace:8.0.0-rc.21",
-    "@prisma/orm-extension-postgis": "workspace:8.0.0-rc.21",
-    "@prisma/orm-mongo": "workspace:8.0.0-rc.21",
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.21",
-    "@prisma/orm-postgres-contrib": "workspace:8.0.0-rc.21",
-    "@prisma/orm-sqlite": "workspace:8.0.0-rc.21",
-    "@repo/test-utils": "workspace:8.0.0-rc.21",
+    "@prisma/orm-extension-arktype-json": "workspace:8.0.0-rc.22",
+    "@prisma/orm-extension-paradedb": "workspace:8.0.0-rc.22",
+    "@prisma/orm-extension-pgvector": "workspace:8.0.0-rc.22",
+    "@prisma/orm-extension-postgis": "workspace:8.0.0-rc.22",
+    "@prisma/orm-mongo": "workspace:8.0.0-rc.22",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.22",
+    "@prisma/orm-postgres-contrib": "workspace:8.0.0-rc.22",
+    "@prisma/orm-sqlite": "workspace:8.0.0-rc.22",
+    "@repo/test-utils": "workspace:8.0.0-rc.22",
     "arktype": "catalog:"
   }
 }
