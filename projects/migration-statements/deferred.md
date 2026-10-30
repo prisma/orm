@@ -267,3 +267,21 @@ A field of a value object cannot declare a default in this release. So when a va
 **Found:** slice 3b PR 4 review, dispatch 29 (2026-10-30).
 
 A variant with no fields of its own has an empty `fields` object, which canonicalization would drop. So both `packages/2-sql-family/1-core/contract/src/canonicalization-hooks.ts` and `packages/2-mongo-family/1-foundation/mongo-contract/src/canonicalization-hooks.ts` keep the pattern `domain.namespaces.*.models.*.fields`. That path is in a framework type, `ContractModelBase.fields`, and the framework canonicalizer already keeps its siblings `relations` and `storage` itself (`DOMAIN_MODEL_RELATIONS_PATTERN` and `DOMAIN_MODEL_STORAGE_PATTERN` in `packages/1-framework/0-foundation/contract/src/canonicalization.ts`). Moving the pattern beside them would keep it once, but it changes the framework, which `.agents/rules/never-change-the-framework-domain.mdc` forbids without Will's approval. The second pattern, `models.*.storage.fields`, is family storage and stays in each family. Will to decide whether to move the first pattern into the framework canonicalizer.
+
+## On SQLite, a foreign key that cascades to a deleted row from a table other than the variant's own still fails the apply
+
+**Found:** slice 3b PR 4 review round 2, dispatch 30 (2026-10-30).
+
+The SQLite runner turns foreign keys off, so no declared cascade runs. The plan deletes the rows of a variant's own table before the base rows, as that table's cascade would. A table whose foreign key to the variant's table cascades (for example `bug_attachment` to `bug`), or another table whose foreign key to the base table cascades, is not handled: the apply fails at `PRAGMA foreign_key_check` with `MIGRATION.FOREIGN_KEY_VIOLATION`, naming the referencing tables, and the database is left as it was. A general fix belongs to the SQLite runner's foreign key handling, not to the statements.
+
+## The dictionary refusal could plan `.*` paths now
+
+**Found:** slice 3b PR 4 review round 2, dispatch 30 (2026-10-30).
+
+The refusals for a column that holds a value object through a dictionary say the planner cannot list the paths in such a column. Since the wildcard selects the member values of an object, a path such as `$.byCountry.*.lat` reaches every object in a dictionary on both targets. No SQL authoring surface writes a dictionary of value objects today, so the refusal stays. When one does, plan the dictionary with `.*` instead of copying the refusal and its reason forward.
+
+## A hand-written migration with only data rewrites is refused as a no-op self-edge
+
+**Found:** slice 3b PR 4 manual QA (F19), dispatch 30 (2026-10-30).
+
+`prisma migration new` from the current contract, with only a `renameStoredKey` in its `migration.ts`, is refused by `db migrate` with `MIGRATION.CONTRACT_SPACE_VIOLATION` (source equal to target with no data invariant). Every operation of the statements can be called by hand, but for a `Json` column there is no contract change to attach a data rewrite to. The user has to make an unrelated contract change to carry it.
