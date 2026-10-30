@@ -2,7 +2,9 @@ import {
   asNamespaceId,
   type Contract,
   type ContractEnum,
+  type ContractValueObjectField,
   type JsonValue,
+  valueObjectsWithCoordinates,
 } from '@internal/contract/types';
 import type { CodecLookupWithDescriptors, CodecRef } from '@internal/framework-components/codec';
 import { codecForRef, readContractValue } from '@internal/framework-components/codec';
@@ -13,12 +15,15 @@ import {
   type ResolvedMigrationStatement,
 } from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import { invariant } from '@internal/utils/assertions';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { structuredError } from '@internal/utils/structured-error';
 import { buildColumnCodecRef } from './contract-to-schema-ir';
+import { jsonPathText } from './json-path';
 import type { SchemaTables } from './schema-tables';
 import { isSqlModelStorage, tableControlPolicy } from './statement-planning';
 import type { SqlPlannerConflict } from './types';
+import { type UnlistedValueObjectPlace, valueObjectPlaces } from './value-object-field-planning';
 
 /** A stored value of an enum: the only values a rewrite compares and writes. */
 export type StoredEnumValue = string | number;
@@ -33,10 +38,12 @@ export interface StoredValueRewrite {
   readonly namespaceId: string;
   readonly table: string;
   readonly column: string;
-  /** The column's codec, which writes `from` and `to` as the database stores them. */
-  readonly codecRef: CodecRef;
+  /** The column's codec, which writes `from` and `to` as the database stores them; none for a member inside JSON, whose value is compared as a JSON value. */
+  readonly codecRef: CodecRef | undefined;
   /** Whether the column holds a list of the enum's values. */
   readonly many: boolean;
+  /** The member of a value object inside the column's JSON that holds the value, if any. */
+  readonly member: StoredValueMember | undefined;
   readonly from: StoredEnumValue;
   readonly to: StoredEnumValue | undefined;
   /** The rename statement the rewrite carries out, if any. */
@@ -56,13 +63,18 @@ export interface StoredValueReplacement {
   readonly to: StoredEnumValue;
 }
 
-interface EnumColumn {
-  readonly namespaceId: string;
-  readonly table: string;
-  readonly column: string;
-  readonly codecRef: StoredValueRewrite['codecRef'];
-  readonly many: boolean;
+/** A member of a value object, inside the JSON of a column, that the enum types. */
+export interface StoredValueMember {
+  /** The RFC 9535 path from the column's value to the member, ending at `[*]` for a list member. */
+  readonly path: string;
+  /** Whether the member takes JSON `null`, which a removal then writes. */
+  readonly nullable: boolean;
 }
+
+type EnumColumn = Pick<
+  StoredValueRewrite,
+  'namespaceId' | 'table' | 'column' | 'codecRef' | 'many' | 'member'
+>;
 
 function sameValue(left: JsonValue, right: JsonValue): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
@@ -113,11 +125,92 @@ function columnsTypedBy(
           column,
           codecRef: buildColumnCodecRef(stored, undefined),
           many: stored.many !== false && stored.many !== undefined,
+          member: undefined,
         });
       }
     }
   }
   return [...found.values()];
+}
+
+function isMany(many: ContractValueObjectField['many']): boolean {
+  return many !== undefined && many !== false;
+}
+
+/**
+ * The members of value objects, in the destination's columns, that the enum's storage value set
+ * types: each column and path where the destination stores the value object.
+ */
+function membersTypedBy(
+  contract: Contract<SqlStorage>,
+  placesOf: ReturnType<typeof valueObjectPlaces>,
+  namespaceId: string,
+  enumName: string,
+): Result<readonly EnumColumn[], UnlistedValueObjectPlace> {
+  const found: EnumColumn[] = [];
+  for (const { coordinate, valueObject } of valueObjectsWithCoordinates(contract.storage)) {
+    const typed = Object.entries(valueObject.fields).filter(
+      ([, field]) =>
+        field.valueSet !== undefined &&
+        field.valueSet.spaceId === undefined &&
+        field.valueSet.namespaceId === namespaceId &&
+        field.valueSet.entityName === enumName,
+    );
+    if (typed.length === 0) continue;
+    const places = placesOf(coordinate);
+    if (!places.ok) return places;
+    for (const [name, field] of typed) {
+      for (const { steps, ...place } of places.value) {
+        found.push({
+          ...place,
+          codecRef: undefined,
+          many: false,
+          member: {
+            path: jsonPathText([
+              ...steps,
+              { kind: 'member', name },
+              ...(isMany(field.many) ? [{ kind: 'wildcard' } as const] : []),
+            ]),
+            nullable: field.nullable,
+          },
+        });
+      }
+    }
+  }
+  return ok(found);
+}
+
+function unlistedRefusal(
+  contract: Contract<SqlStorage>,
+  enums: EnumComparison,
+  changes: readonly StoredChange[],
+  { column, reach }: UnlistedValueObjectPlace,
+): SqlPlannerConflict {
+  const where = `column "${column.column}" of "${column.table}"`;
+  const reason =
+    reach.kind === 'containsItself'
+      ? `${where} holds it inside value object "${reach.valueObject}", which contains itself, so the JSON can hold it at any depth`
+      : `${where} holds a ${reach.kind} of value objects`;
+  const why =
+    reach.kind === 'containsItself'
+      ? 'The plan rewrites an enum value inside JSON at every path from a column to its member, and a value object that contains itself has no last path.'
+      : 'The plan rewrites an enum value inside JSON only in a column that holds a value object or a list of them.';
+  const statement = changes.find((change) => change.statement !== undefined)?.statement;
+  if (statement === undefined) {
+    const [first] = changes;
+    invariant(first !== undefined, 'an enum with no changed value plans no rewrite to refuse');
+    return {
+      kind: 'unsupportedOperation',
+      summary: `Cannot remove enum value "${enumValueStatementText(enums.fromContract, first.enumValue)}": ${reason}`,
+      why: `${why} Rewrite the JSON of ${where} yourself, then plan again.`,
+    };
+  }
+  return {
+    kind: 'statementRefused',
+    summary: `Cannot rename enum value "${enumValueStatementText(enums.fromContract, statement.from)}" to "${enumValueStatementText(contract, statement.to)}": ${reason}`,
+    why: `${why} Leave out this statement, and rewrite the JSON of ${where} yourself in the migration.ts a plan without it writes.`,
+    refusedStatement: statement,
+  };
 }
 
 function isStoredEnumValue(value: JsonValue): value is StoredEnumValue {
@@ -325,6 +418,7 @@ export function planEnumValueRewrites(input: {
     if (statement.entity === 'namespace') renamedNamespaces.set(statement.from, statement.to);
     if (statement.entity === 'enumValue') valueRenames.push(statement);
   }
+  const placesOf = valueObjectPlaces(contract, input.tables);
   const rewrites: StoredValueRewrite[] = [];
   for (const [originNamespace, namespace] of Object.entries(fromContract.domain.namespaces)) {
     for (const [enumName, originEnum] of Object.entries(namespace.enum ?? {})) {
@@ -378,9 +472,15 @@ export function planEnumValueRewrites(input: {
           return notOk(mergingRefusal(statement, enums, from, to, merged.name));
         }
       }
-      const columns = columnsTypedBy(contract, namespaceId, enumName).filter((column) =>
-        input.tables.hasColumn(column.namespaceId, column.table, column.column),
-      );
+      if (checked.length === 0) continue;
+      const members = membersTypedBy(contract, placesOf, namespaceId, enumName);
+      if (!members.ok) return notOk(unlistedRefusal(contract, enums, checked, members.failure));
+      const columns = [
+        ...columnsTypedBy(contract, namespaceId, enumName).filter((column) =>
+          input.tables.hasColumn(column.namespaceId, column.table, column.column),
+        ),
+        ...members.value,
+      ];
       if (columns.length === 0) continue;
       const taken = [
         ...originEnum.members.map(({ value }) => value),

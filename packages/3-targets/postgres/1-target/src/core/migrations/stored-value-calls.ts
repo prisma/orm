@@ -30,7 +30,9 @@ export function postgresStoredValueCalls(
   return new Map(
     rewrites.map((rewrite): readonly [PostgresOpFactoryCall, StoredValueRewrite] => {
       const schemaName = emissionSchemaForNamespace(contract, rewrite.namespaceId);
-      const codec: StoredValueCodec = { codecRef: rewrite.codecRef, codecs };
+      const codec: StoredValueCodec | undefined =
+        rewrite.codecRef === undefined ? undefined : { codecRef: rewrite.codecRef, codecs };
+      const { member } = rewrite;
       const call =
         rewrite.to === undefined
           ? new RemoveStoredValueCall(
@@ -41,6 +43,8 @@ export function postgresStoredValueCalls(
               rewrite.many,
               codec,
               enumValueCoordinateJson(rewrite.enumValue),
+              member?.path,
+              member?.nullable === true ? true : undefined,
             )
           : new ReplaceStoredValueCall(
               schemaName,
@@ -50,6 +54,7 @@ export function postgresStoredValueCalls(
               rewrite.to,
               rewrite.many,
               codec,
+              member?.path,
             );
       return [call, rewrite];
     }),

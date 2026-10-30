@@ -40,9 +40,9 @@ export interface StoredKeyRewrite {
   readonly statement: ResolvedValueObjectFieldRenameStatement | undefined;
 }
 
-type ValueObjectRef = EntityCoordinate<'storage', 'valueObject'>;
+export type ValueObjectRef = EntityCoordinate<'storage', 'valueObject'>;
 
-interface StoredColumn {
+export interface StoredColumn {
   readonly namespaceId: string;
   readonly table: string;
   readonly column: string;
@@ -50,7 +50,7 @@ interface StoredColumn {
 }
 
 /** What a column holds of a value object: the paths to each of its objects, or why there is no list of them. */
-type Reach =
+export type Reach =
   | { readonly kind: 'paths'; readonly paths: readonly (readonly JsonPathStep[])[] }
   | { readonly kind: 'containsItself'; readonly valueObject: string }
   | { readonly kind: 'union' | 'dictionary' };
@@ -163,6 +163,50 @@ function storedColumns(
     }
   }
   return [...found.values()];
+}
+
+/** A place a value object is stored: a column, and the steps from its value to each object. */
+export interface ValueObjectPlace {
+  readonly namespaceId: string;
+  readonly table: string;
+  readonly column: string;
+  readonly steps: readonly JsonPathStep[];
+}
+
+/** A column that holds a value object where the plan cannot list its paths, and why. */
+export interface UnlistedValueObjectPlace {
+  readonly column: StoredColumn;
+  readonly reach: Exclude<Reach, { readonly kind: 'paths' }>;
+}
+
+/**
+ * Finds every place the destination stores a value object: each column of the working schema, in a
+ * managed table, whose field holds it, at every path to its objects, nested or in lists. The paths
+ * are written with the destination's names. A column whose paths cannot be listed, because it holds
+ * the value object through a value object that contains itself, a union or a dictionary, is the
+ * failure.
+ */
+export function valueObjectPlaces(
+  contract: Contract<SqlStorage>,
+  tables: SchemaTables,
+): (target: ValueObjectRef) => Result<readonly ValueObjectPlace[], UnlistedValueObjectPlace> {
+  const columns = storedColumns(contract, tables);
+  return (target) => {
+    const places: ValueObjectPlace[] = [];
+    for (const column of columns) {
+      const reach = reachOf(contract.storage, column.field, target);
+      if (reach.kind !== 'paths') return notOk({ column, reach });
+      for (const steps of reach.paths) {
+        places.push({
+          namespaceId: column.namespaceId,
+          table: column.table,
+          column: column.column,
+          steps,
+        });
+      }
+    }
+    return ok(places);
+  };
 }
 
 /** What changes for one field of a value object of the origin: its key `from` becomes `to`, or, with no `to`, is removed. */
@@ -294,28 +338,25 @@ export function planValueObjectFieldRewrites(input: {
   if (fromContract === null) return ok([]);
   const changes = fieldChanges(fromContract, contract, input.statements);
   if (changes.length === 0) return ok([]);
-  const columns = storedColumns(contract, input.tables);
+  const placesOf = valueObjectPlaces(contract, input.tables);
   const rewrites: { readonly rewrite: StoredKeyRewrite; readonly depth: number }[] = [];
   for (const change of changes) {
-    for (const column of columns) {
-      const reach = reachOf(contract.storage, column.field, change.target);
-      if (reach.kind !== 'paths') {
-        return notOk(reachRefusal(reach, column, change, { fromContract, contract }));
-      }
-      for (const steps of reach.paths) {
-        rewrites.push({
-          depth: steps.length,
-          rewrite: {
-            valueObjectField: change.valueObjectField,
-            namespaceId: column.namespaceId,
-            table: column.table,
-            column: column.column,
-            path: jsonPathText([...steps, { kind: 'member', name: change.from }]),
-            to: change.to,
-            statement: change.statement,
-          },
-        });
-      }
+    const places = placesOf(change.target);
+    if (!places.ok) {
+      const { reach, column } = places.failure;
+      return notOk(reachRefusal(reach, column, change, { fromContract, contract }));
+    }
+    for (const { steps, ...place } of places.value) {
+      rewrites.push({
+        depth: steps.length,
+        rewrite: {
+          valueObjectField: change.valueObjectField,
+          ...place,
+          path: jsonPathText([...steps, { kind: 'member', name: change.from }]),
+          to: change.to,
+          statement: change.statement,
+        },
+      });
     }
   }
   return ok(

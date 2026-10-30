@@ -24,7 +24,9 @@ export function sqliteStoredValueCalls(
 ): ReadonlyMap<StoredValueCall, StoredValueRewrite> {
   return new Map(
     rewrites.map((rewrite): readonly [StoredValueCall, StoredValueRewrite] => {
-      const codec = { codecRef: rewrite.codecRef, codecs };
+      const codec =
+        rewrite.codecRef === undefined ? undefined : { codecRef: rewrite.codecRef, codecs };
+      const { member } = rewrite;
       return [
         rewrite.to === undefined
           ? new RemoveStoredValueCall(
@@ -33,6 +35,8 @@ export function sqliteStoredValueCalls(
               rewrite.from,
               codec,
               enumValueCoordinateJson(rewrite.enumValue),
+              member?.path,
+              member?.nullable === true ? true : undefined,
             )
           : new ReplaceStoredValueCall(
               rewrite.table,
@@ -40,6 +44,7 @@ export function sqliteStoredValueCalls(
               rewrite.from,
               rewrite.to,
               codec,
+              member?.path,
             ),
         rewrite,
       ];

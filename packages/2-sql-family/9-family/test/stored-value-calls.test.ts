@@ -66,6 +66,7 @@ function rewrite(overrides: Partial<StoredValueRewrite>): StoredValueRewrite {
     column: 'status',
     codecRef: { codecId: 'pg/text@1' },
     many: false,
+    member: undefined,
     from: 'archived',
     to: undefined,
     statement: undefined,
