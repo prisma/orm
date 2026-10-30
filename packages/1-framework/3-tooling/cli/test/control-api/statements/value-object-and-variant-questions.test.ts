@@ -16,6 +16,7 @@ async function questionsOf(input: {
   readonly destination: ContractWithDomain;
   readonly subject: MigrationSubject;
   readonly labels?: readonly string[];
+  readonly keepDataAdvice?: string;
   readonly canConvert?: boolean;
   readonly preAnswers?: readonly { readonly verb: 'delete'; readonly text: string }[];
 }) {
@@ -27,6 +28,7 @@ async function questionsOf(input: {
         label,
         loss: 'drop',
         subject: input.subject,
+        ...(input.keepDataAdvice === undefined ? {} : { keepDataAdvice: input.keepDataAdvice }),
       })),
       accessChanges: [],
     },
@@ -184,5 +186,65 @@ describe('a question about a variant whose discriminator value changed', () => {
       asked: [question],
     } = await questionsOf({ origin: contract, destination: contract, subject: bug });
     expect(question?.verbs).toEqual(['delete']);
+  });
+});
+
+describe('a question about a removed variant', () => {
+  function tasks(variants: Readonly<Record<string, string>>) {
+    return contractOf({
+      app: {
+        models: {
+          Task: { fields: ['id', 'type'], discriminator: 'type', variants },
+          ...Object.fromEntries(Object.values(variants).map((model) => [model, { base: 'Task' }])),
+        },
+      },
+    });
+  }
+  const origin = tasks({ bug: 'Bug', epic: 'Epic' });
+  const destination = tasks({ epic: 'Epic' });
+  const bug = { kind: 'model', namespaceId: app, model: 'Bug' } as const;
+  const labels = [
+    'Drop column "severity" of "tasks"',
+    'Delete the rows of "tasks" that hold value "bug" in column "type"',
+  ];
+
+  it('asks one question about the model for its column drop and its row deletion', async () => {
+    const { asked } = await questionsOf({ origin, destination, subject: bug, labels });
+    expect(asked).toMatchObject([
+      {
+        subject: 'Bug',
+        question:
+          'Delete the rows of "tasks" that hold value "bug" in column "type" would lose the data of model "Bug".',
+        verbs: ['rename', 'delete'],
+      },
+    ]);
+  });
+
+  it('says what the target advises about rows other tables reference', async () => {
+    const {
+      asked: [question],
+    } = await questionsOf({
+      origin,
+      destination,
+      subject: bug,
+      labels: [labels[1] ?? ''],
+      keepDataAdvice: 'SQLite migrations run with foreign keys off.',
+    });
+    expect(question?.question).toContain('SQLite migrations run with foreign keys off.');
+  });
+
+  it('takes --delete Bug as the one answer for the variant', async () => {
+    expect(
+      await questionsOf({
+        origin,
+        destination,
+        subject: bug,
+        labels,
+        preAnswers: [{ verb: 'delete', text: 'Bug' }],
+      }),
+    ).toEqual({
+      asked: [],
+      consented: [{ verb: 'delete', subject: bug, text: 'Bug', operationIndex: 1, loss: 'drop' }],
+    });
   });
 });
