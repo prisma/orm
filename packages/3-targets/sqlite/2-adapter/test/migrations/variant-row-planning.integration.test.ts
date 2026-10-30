@@ -320,7 +320,7 @@ describe('SQLite planner, variant rows', { timeout: timeouts.databaseOperation }
     const result = await plan(from, to);
 
     await expect(apply(result, to)).rejects.toThrow(
-      'MIGRATION.FOREIGN_KEY_VIOLATION] Foreign key integrity check failed after migration: 1 violation(s).\n  why: PRAGMA foreign_key_check reported violations after the migration ran with foreign keys off: rows of the listed tables reference rows that a recreate-table or deleteRows operation removed, and no cascade ran. The failed apply changed nothing.',
+      'MIGRATION.FOREIGN_KEY_VIOLATION] Foreign key integrity check failed after migration: 1 violation(s).\n  why: PRAGMA foreign_key_check reported violations after the migration ran with foreign keys off: 1 row of "comments" references "tasks" rows that a recreate-table or deleteRows operation removed, and no cascade ran. Delete or change the referencing rows first. The failed apply changed nothing.',
     );
     expect(await tasks()).toEqual([
       { id: '1', type: 'bug' },

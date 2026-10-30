@@ -290,7 +290,7 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
       'MIGRATION.FOREIGN_KEY_VIOLATION',
       `Foreign key integrity check failed after migration: ${result.rows.length} violation(s).`,
       {
-        why: 'PRAGMA foreign_key_check reported violations after the migration ran with foreign keys off: rows of the listed tables reference rows that a recreate-table or deleteRows operation removed, and no cascade ran.',
+        why: `PRAGMA foreign_key_check reported violations after the migration ran with foreign keys off: ${violatedReferences(result.rows)} rows that a recreate-table or deleteRows operation removed, and no cascade ran. Delete or change the referencing rows first.`,
         meta: { violations: result.rows },
       },
     );
@@ -926,4 +926,22 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
   ): Promise<void> {
     await driver.query(statement.sql, statement.params);
   }
+}
+
+/** The rows `PRAGMA foreign_key_check` reports, as how many rows of each table reference rows of another. */
+function violatedReferences(rows: readonly Record<string, unknown>[]): string {
+  const counts = new Map<string, { table: string; parent: string; rows: number }>();
+  for (const row of rows) {
+    const table = String(row['table']);
+    const parent = String(row['parent']);
+    const key = JSON.stringify([table, parent]);
+    const counted = counts.get(key) ?? { table, parent, rows: 0 };
+    counts.set(key, { ...counted, rows: counted.rows + 1 });
+  }
+  return [...counts.values()]
+    .map(
+      ({ table, parent, rows: count }) =>
+        `${count} ${count === 1 ? 'row' : 'rows'} of "${table}" ${count === 1 ? 'references' : 'reference'} "${parent}"`,
+    )
+    .join(', ');
 }
