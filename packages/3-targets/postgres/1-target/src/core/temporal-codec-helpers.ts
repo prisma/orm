@@ -1,4 +1,13 @@
 import { refuseJsonValue } from '@internal/framework-components/codec';
+import { utcIsoTextOf } from '@internal/type-implementations/date';
+import type { TemporalImplementation } from '@internal/type-implementations/temporal';
+import {
+  type TemporalTag,
+  type TemporalValue,
+  temporalFromText,
+  temporalToText,
+  withoutUtcDesignator,
+} from '@internal/type-implementations/temporal-text';
 import type { Temporal } from 'temporal-spec';
 import {
   PG_DATE_TEMPORAL_CODEC_ID,
@@ -15,17 +24,17 @@ import {
   errorTemporalWrongType,
 } from './errors';
 import { isoYearText, postgresYearText } from './postgres-year-text';
-import { requireTemporal, type TemporalImplementation } from './require-temporal';
+import { requireTemporal } from './require-temporal';
 
 const POSTGRES_TEMPORAL_SENTINELS: ReadonlySet<string> = new Set(['infinity', '-infinity']);
 
 /** The Temporal types whose text PostgreSQL prints the same in every DateStyle, because it holds no date. Every other Temporal codec reads a date, so its text is refused unless PostgreSQL printed it under DateStyle ISO. */
-const TEMPORAL_TAGS_WITHOUT_A_DATE: ReadonlySet<string> = new Set(['Temporal.PlainTime']);
+const TEMPORAL_TAGS_WITHOUT_A_DATE: ReadonlySet<TemporalTag> = new Set(['Temporal.PlainTime']);
 
 interface TemporalCodecIdentity {
   readonly codecId: string;
   readonly stringType: string;
-  readonly temporalTag: string;
+  readonly temporalTag: TemporalTag;
 }
 
 function decodeTemporalText<T>(
@@ -45,58 +54,40 @@ function decodeTemporalText<T>(
       detail: `PostgreSQL's ${wire} is a sentinel with no position on the timeline, so no Temporal value denotes it`,
     });
   }
-  try {
-    return parse(temporal, isoYearText(wire));
-  } catch (cause) {
+  const read = temporalFromText(temporal, wire, (implementation, text) =>
+    parse(implementation, isoYearText(text)),
+  );
+  if (read.kind === 'unreadable') {
     throw errorTemporalUnrepresentable({
       ...identity,
       operation: 'decode',
       value: wire,
-      detail: cause instanceof Error ? cause.message : String(cause),
-      cause,
+      detail: read.detail,
+      cause: read.cause,
     });
   }
-}
-
-interface TemporalValue {
-  readonly calendarId?: string;
-  toString: () => string;
+  return read.value;
 }
 
 function encodeTemporalValue(
   identity: TemporalCodecIdentity,
   value: TemporalValue,
-  isoText: (value: TemporalValue) => string = (temporalValue) => temporalValue.toString(),
+  isoText?: (value: TemporalValue) => string,
 ): string {
-  const tag: unknown =
-    typeof value === 'object' && value !== null
-      ? Reflect.get(value, Symbol.toStringTag)
-      : undefined;
-  if (tag !== identity.temporalTag) {
-    throw errorTemporalWrongType(
-      identity.codecId,
-      identity.temporalTag,
-      identity.stringType,
-      describeEncodeInput(value, tag),
-    );
+  const encoded = temporalToText(value, identity.temporalTag, isoText);
+  switch (encoded.kind) {
+    case 'wrong-type':
+      throw errorTemporalWrongType(
+        identity.codecId,
+        identity.temporalTag,
+        identity.stringType,
+        encoded.received,
+      );
+    case 'non-iso-calendar':
+      throw errorTemporalNonIsoCalendar(identity.codecId, encoded.calendarId);
+    case 'text':
+      return postgresYearText(encoded.text);
   }
-  if (value.calendarId !== undefined && value.calendarId !== 'iso8601') {
-    throw errorTemporalNonIsoCalendar(identity.codecId, value.calendarId);
-  }
-  return postgresYearText(isoText(value));
-}
-
-function describeEncodeInput(value: unknown, tag: unknown): string {
-  if (typeof tag === 'string') {
-    return `a ${tag}`;
-  }
-  if (value instanceof Date) {
-    return 'a Date';
-  }
-  if (value === null) {
-    return 'null';
-  }
-  return `a ${typeof value}`;
 }
 
 /** Refuses `infinity` and `-infinity` in a stored value, which no Temporal value or `Date` holds, naming the text codec of the type that does. */
@@ -179,13 +170,13 @@ export const EARLIEST_POSTGRES_TIMESTAMP_MILLISECONDS = new Date(
 ).getTime();
 
 function utcIsoText(value: Date, codecId: string): string {
-  const milliseconds = value.getTime();
-  if (!Number.isFinite(milliseconds) || milliseconds < EARLIEST_POSTGRES_TIMESTAMP_MILLISECONDS) {
+  const text = utcIsoTextOf(value, EARLIEST_POSTGRES_TIMESTAMP_MILLISECONDS);
+  if (text === undefined) {
     throw new RangeError(
       `${codecId} writes a Date as UTC text and needs a valid Date on or after 4714-11-24 BC, the earliest timestamp PostgreSQL holds; got ${String(value)}`,
     );
   }
-  return value.toISOString();
+  return text;
 }
 
 export function utcTimestamptzText(value: Date, codecId: string): string {
@@ -195,9 +186,4 @@ export function utcTimestamptzText(value: Date, codecId: string): string {
 /** The UTC wall-clock time of `value` with no offset, as PostgreSQL reads a timestamp without a time zone. */
 export function utcTimestampText(value: Date, codecId: string): string {
   return postgresYearText(withoutUtcDesignator(utcIsoText(value, codecId)));
-}
-
-/** ISO text in UTC without its trailing `Z`. */
-function withoutUtcDesignator(isoText: string): string {
-  return isoText.endsWith('Z') ? isoText.slice(0, -1) : isoText;
 }

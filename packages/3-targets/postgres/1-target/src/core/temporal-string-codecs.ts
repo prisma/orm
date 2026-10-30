@@ -10,6 +10,7 @@ import {
   renderTsLiteral,
 } from '@internal/framework-components/codec';
 import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
+import { describeValue } from '@internal/type-implementations/temporal-text';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { PostgresCodecDescriptor } from './codec-descriptor';
 import type { PrecisionParams } from './codec-helpers';
@@ -77,12 +78,6 @@ pgDateStringColumn satisfies ColumnHelperForStrict<PgDateStringDescriptor>;
 function requireText(codecId: string, value: unknown): string {
   if (typeof value === 'string') return value;
   throw errorTimestampTextWrongType(codecId, describeValue(value));
-}
-
-function describeValue(value: unknown): string {
-  if (value === null) return 'null';
-  if (value instanceof Date) return 'a Date';
-  return `a ${typeof value}`;
 }
 
 export class PgTimestampStringCodec extends CodecImpl<

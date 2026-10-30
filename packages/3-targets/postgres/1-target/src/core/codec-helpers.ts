@@ -14,10 +14,10 @@ import {
   readJsonIntegerText,
   SAFE_INTEGER_BIGINT_RANGE,
 } from '@internal/framework-components/codec';
+import { ISO_DURATION } from '@internal/type-implementations/duration';
 import {
   BYTEA_TEXT,
   formatIsoDuration,
-  ISO_DURATION,
   intervalFieldsOf,
   MICROS_PER_SECOND,
   microsFromFraction,

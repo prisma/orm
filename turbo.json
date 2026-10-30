@@ -72,6 +72,10 @@
     "@prisma/orm-target-postgres#test": {
       "dependsOn": ["build", "^build"],
       "inputs": ["test/**", "dist/**", "vitest.config.ts"]
+    },
+    "@prisma/orm-target-sqlite#test": {
+      "dependsOn": ["build", "^build"],
+      "inputs": ["test/**", "dist/**", "vitest.config.ts"]
     }
   }
 }

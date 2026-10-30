@@ -7,16 +7,22 @@ import {
   sqliteBlob,
   sqliteCharacter,
   sqliteCharacterVarying,
+  sqliteDate,
   sqliteDatetime,
+  sqliteDuration,
   sqliteInteger,
   sqliteJson,
   sqliteReal,
   sqliteText,
+  sqliteTime,
 } from '../data-types';
 import { escapeLiteral } from '../sql-utils';
 
 const DATA_TYPE_FILL_VALUES: ReadonlyMap<string, string> = new Map([
   [sqliteDatetime.id, `'${escapeLiteral(encodeSqliteDatetime(new Date(0)))}'`],
+  [sqliteDate.id, "'1970-01-01'"],
+  [sqliteTime.id, "'00:00:00.000'"],
+  [sqliteDuration.id, "'PT0S'"],
   [sqliteJson.id, `'{}'`],
   [sqliteInteger.id, '0'],
   [sqliteReal.id, '0'],

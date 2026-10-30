@@ -21,7 +21,8 @@
     "@prisma/orm-target-sqlite": "workspace:8.0.0-rc.22",
     "@prisma/orm-toolchain": "workspace:8.0.0-rc.22",
     "pathe": "^2.0.3",
-    "tinyglobby": "catalog:"
+    "tinyglobby": "catalog:",
+    "temporal-spec": "1.0.1"
   },
   "devDependencies": {
     "@internal/sqlite": "workspace:8.0.0-rc.22",
@@ -31,6 +32,7 @@
     "typescript": "catalog:"
   },
   "peerDependencies": {
+    "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
@@ -157,6 +159,7 @@
     "./target/render-ops": "./dist/target__render-ops.mjs",
     "./target/runtime": "./dist/target__runtime.mjs",
     "./target/sql-utils": "./dist/target__sql-utils.mjs",
+    "./target/types": "./dist/target__types.mjs",
     "./utils": "./dist/utils.mjs",
     "./utils/abortable": "./dist/utils__abortable.mjs",
     "./utils/array-equal": "./dist/utils__array-equal.mjs",

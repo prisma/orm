@@ -1,11 +1,19 @@
-import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
+import {
+  collectScalarTypeConstructors,
+  instantiateAuthoringTypeCall,
+} from '@internal/framework-components/authoring';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { unquotedSqlBaseNameOfCodec } from '@internal/sql-contract/data-type';
 import { describe, expect, it } from 'vitest';
 import { sqliteAuthoringTypes } from '../src/core/authoring';
 import { createSqliteBuiltinCodecLookup } from '../src/core/codec-registry';
 import { sqliteDataTypes } from '../src/core/data-types';
-import { sqliteScalarTypeConstructors } from '../src/core/type-constructors';
+import {
+  sqliteConvenienceDateTimeTypes,
+  sqliteDateTimeTypeConstructors,
+  sqliteScalarAuthoringTypes,
+  sqliteScalarTypeConstructors,
+} from '../src/core/type-constructors';
 import sqliteTargetPack from '../src/exports/pack';
 
 describe('the type constructors the SQLite target contributes', () => {
@@ -43,7 +51,8 @@ describe('the type constructors the SQLite target contributes', () => {
   const allConstructors = {
     ...sqliteAuthoringTypes.sql,
     BigIntNumber: sqliteAuthoringTypes.BigIntNumber,
-    ...sqliteScalarTypeConstructors,
+    ...sqliteScalarAuthoringTypes,
+    ...sqliteDateTimeTypeConstructors,
   };
 
   const scalarNames = [
@@ -55,6 +64,17 @@ describe('the type constructors the SQLite target contributes', () => {
     ['DateTime', 'sqlite/datetime@1', 'text'],
     ['Json', 'sqlite/json@1', 'text'],
     ['Bytes', 'sqlite/blob@1', 'blob'],
+    ['DatetimeJsDate', 'sqlite/datetime@1', 'text'],
+    ['DatetimeTemporal', 'sqlite/datetime-temporal@1', 'text'],
+    ['DatetimeString', 'sqlite/datetime-string@1', 'text'],
+    ['DateString', 'sqlite/date-string@1', 'text'],
+    ['DateTemporal', 'sqlite/date-temporal@1', 'text'],
+    ['TimeString', 'sqlite/time-string@1', 'text'],
+    ['TimeTemporal', 'sqlite/time-temporal@1', 'text'],
+    ['DurationString', 'sqlite/duration-string@1', 'text'],
+    ['Date', 'sqlite/date-string@1', 'text'],
+    ['Time', 'sqlite/time-string@1', 'text'],
+    ['Duration', 'sqlite/duration-string@1', 'text'],
   ] as const;
 
   it('pins every base scalar to its codec', () => {
@@ -81,10 +101,60 @@ describe('the type constructors the SQLite target contributes', () => {
     );
   });
 
-  it.each([...Object.entries(allConstructors), ...Object.entries(sqliteAuthoringTypes.temporal)])(
-    'documents %s',
-    (_name, descriptor) => {
-      expect(descriptor).toHaveProperty('documentation', expect.stringMatching(/\S.+/));
-    },
-  );
+  it.each([
+    ...Object.entries(allConstructors),
+    ...Object.entries(sqliteConvenienceDateTimeTypes),
+    ...Object.entries(sqliteAuthoringTypes.temporal),
+  ])('documents %s', (_name, descriptor) => {
+    expect(descriptor).toHaveProperty('documentation', expect.stringMatching(/\S.+/));
+  });
+});
+
+describe('the convenience date and time types', () => {
+  it('give DateTime, Date, Time and Duration to type choices, not to explicit types', () => {
+    expect(
+      Object.fromEntries(
+        ['DateTime', 'Date', 'Time', 'Duration'].map((name) => [
+          name,
+          (sqliteScalarTypeConstructors as Record<string, { readonly kind?: string }>)[name]?.kind,
+        ]),
+      ),
+    ).toEqual({
+      DateTime: 'typeChoice',
+      Date: 'typeChoice',
+      Time: 'typeChoice',
+      Duration: 'typeChoice',
+    });
+  });
+
+  it.each([
+    ['DateTime', [], 'sqlite/datetime@1'],
+    ['DateTime', ['jsDate', 'text'], 'sqlite/datetime@1'],
+    ['DateTime', ['temporal'], 'sqlite/datetime-temporal@1'],
+    ['DateTime', ['string'], 'sqlite/datetime-string@1'],
+    ['Date', [], 'sqlite/date-string@1'],
+    ['Date', ['temporal'], 'sqlite/date-temporal@1'],
+    ['Time', [], 'sqlite/time-string@1'],
+    ['Time', ['temporal', 'text'], 'sqlite/time-temporal@1'],
+    ['Duration', [], 'sqlite/duration-string@1'],
+  ])('%s(%j) is the explicit type on %s', (name, args, codecId) => {
+    expect(instantiateAuthoringTypeCall(sqliteScalarTypeConstructors, name, args)).toEqual({
+      codecId,
+    });
+  });
+
+  it('keep a bare DateTime on sqlite/datetime@1, where the temporal type aliases stay', () => {
+    expect(instantiateAuthoringTypeCall(sqliteScalarTypeConstructors, 'DateTime', [])).toEqual(
+      sqliteAuthoringTypes.temporal.CreatedAt.output.type,
+    );
+  });
+
+  it.each([
+    ['DateTime', ['instant']],
+    ['Date', ['jsDate']],
+    ['Duration', ['temporal']],
+    ['Time', ['string', 'time']],
+  ])('refuse %s(%j), which no row lists', (name, args) => {
+    expect(() => instantiateAuthoringTypeCall(sqliteScalarTypeConstructors, name, args)).toThrow();
+  });
 });

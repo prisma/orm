@@ -3,7 +3,7 @@ import type { MigrationOperationPolicy } from '@internal/framework-components/co
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { ReferentialAction, StorageColumn } from '@internal/sql-contract/types';
 import { SqlStorage } from '@internal/sql-contract/types';
-import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { applicationDomainOf } from '@repo/test-utils';
 
 export const ALL_CLASSES: MigrationOperationPolicy = {
