@@ -74,7 +74,7 @@ async function withCountingProxy<T>(
   const sockets = new Set<Socket>();
   const proxy = createServer((client) => {
     opened += 1;
-    const upstream = connect(Number(target.port), target.hostname);
+    const upstream = connect(Number(target.port || 3306), target.hostname);
     for (const socket of [client, upstream]) {
       sockets.add(socket);
       socket.on('close', () => sockets.delete(socket));
@@ -1006,7 +1006,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
       refusing.hostname = '127.0.0.1';
       refusing.port = String(port);
       const proxy = createServer((client) => {
-        const upstream = connect(Number(server.port), server.hostname);
+        const upstream = connect(Number(server.port || 3306), server.hostname);
         client.pipe(upstream).pipe(client);
         client.on('error', () => upstream.destroy());
         upstream.on('error', () => client.destroy());
@@ -1045,7 +1045,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
       let opened = 0;
       const proxy = createServer((client) => {
         opened += 1;
-        const upstream = connect(Number(server.port), server.hostname);
+        const upstream = connect(Number(server.port || 3306), server.hostname);
         client.pipe(upstream).pipe(client);
         client.on('error', () => upstream.destroy());
         upstream.on('error', () => client.destroy());
