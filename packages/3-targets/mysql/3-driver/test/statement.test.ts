@@ -43,6 +43,22 @@ describe('statementFor', () => {
     },
   );
 
+  it('says the driver could not confirm utf8mb4, and gives a fix for a changed character set and for a server that does not report it', () => {
+    expect(() =>
+      statementFor(connectionReading({ charset: 'latin1', maxLength: 1 }), 'SELECT ?1', ['x']),
+    ).toThrow(
+      expect.objectContaining({
+        message: expect.stringMatching(
+          /^The driver could not confirm that MySQL reads this connection's statements as utf8mb4/,
+        ),
+        why: expect.not.stringContaining('so a statement on this connection changed it'),
+        fix: expect.stringMatching(
+          /SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci.*character_set_client back to the server's session_track_system_variables/s,
+        ),
+      }),
+    );
+  });
+
   it('refuses a statement with values when the package has recorded no character set', () => {
     expect(() =>
       statementFor({ info: { status: 0, collation: null } } as never, 'SELECT ?1', ['x']),
