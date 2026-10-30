@@ -17,6 +17,7 @@ import { reachesAny, referenceKey } from '@internal/sql-contract/check-expressio
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { invariant } from '@internal/utils/assertions';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import { handWrittenMigrationAdvice } from './hand-written-migration';
 import { type JsonPathStep, jsonPathText } from './json-path';
 import type { SchemaTables } from './schema-tables';
 import { isSqlModelStorage, tableControlPolicy } from './statement-planning';
@@ -277,13 +278,13 @@ function refused(
     return {
       kind: 'unsupportedOperation',
       summary: `Cannot remove value object field "${from}": ${reason}`,
-      why: `${why} Rewrite the JSON of ${columnText(column)} yourself, then plan again.`,
+      why: `${why} ${handWrittenMigrationAdvice(`the JSON of ${columnText(column)}`)}`,
     };
   }
   return {
     kind: 'statementRefused',
     summary: `Cannot rename value object field "${from}" to "${valueObjectFieldStatementText(contract, change.statement.to)}": ${reason}`,
-    why: `${why} Leave out this statement, and rewrite the JSON of ${columnText(column)} yourself in the migration.ts a plan without it writes.`,
+    why: `${why} ${handWrittenMigrationAdvice(`the JSON of ${columnText(column)}`)}`,
     refusedStatement: change.statement,
   };
 }

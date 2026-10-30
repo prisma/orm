@@ -370,7 +370,7 @@ describe('planEnumValueRewrites, members of value objects', () => {
       kind: 'unsupportedOperation',
       summary:
         'Cannot remove enum value "Status.ARCHIVED": column "meta" of "ticket" holds a union of value objects',
-      why: 'The plan rewrites an enum value inside JSON only in a column that holds a value object or a list of them. Rewrite the JSON of column "meta" of "ticket" yourself, then plan again.',
+      why: 'The plan rewrites an enum value inside JSON only in a column that holds a value object or a list of them. Write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the JSON of column "meta" of "ticket" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
     });
   });
 
@@ -390,7 +390,7 @@ describe('planEnumValueRewrites, members of value objects', () => {
       kind: 'statementRefused',
       summary:
         'Cannot rename enum value "Status.ARCHIVED" to "Status.RETIRED": column "meta" of "ticket" holds a union of value objects',
-      why: 'The plan rewrites an enum value inside JSON only in a column that holds a value object or a list of them. Leave out this statement, and rewrite the JSON of column "meta" of "ticket" yourself in the migration.ts a plan without it writes.',
+      why: 'The plan rewrites an enum value inside JSON only in a column that holds a value object or a list of them. Write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the JSON of column "meta" of "ticket" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
       refusedStatement: statement,
     });
   });

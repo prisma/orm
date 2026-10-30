@@ -19,6 +19,7 @@ import { invariant } from '@internal/utils/assertions';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { structuredError } from '@internal/utils/structured-error';
 import { buildColumnCodecRef } from './contract-to-schema-ir';
+import { handWrittenMigrationAdvice } from './hand-written-migration';
 import { jsonPathText } from './json-path';
 import type { SchemaTables } from './schema-tables';
 import { isSqlModelStorage, tableControlPolicy } from './statement-planning';
@@ -202,13 +203,13 @@ function unlistedRefusal(
     return {
       kind: 'unsupportedOperation',
       summary: `Cannot remove enum value "${enumValueStatementText(enums.fromContract, first.enumValue)}": ${reason}`,
-      why: `${why} Rewrite the JSON of ${where} yourself, then plan again.`,
+      why: `${why} ${handWrittenMigrationAdvice(`the JSON of ${where}`)}`,
     };
   }
   return {
     kind: 'statementRefused',
     summary: `Cannot rename enum value "${enumValueStatementText(enums.fromContract, statement.from)}" to "${enumValueStatementText(contract, statement.to)}": ${reason}`,
-    why: `${why} Leave out this statement, and rewrite the JSON of ${where} yourself in the migration.ts a plan without it writes.`,
+    why: `${why} ${handWrittenMigrationAdvice(`the JSON of ${where}`)}`,
     refusedStatement: statement,
   };
 }

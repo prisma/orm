@@ -307,7 +307,7 @@ describe('planValueObjectFieldRewrites', () => {
         kind: 'statementRefused',
         summary:
           'Cannot rename value object field "Label.text" to "Label.caption": column "items" of "menu" holds it inside value object "NavItem", which contains itself, so the JSON can hold it at any depth',
-        why: 'The plan rewrites a key at every path from a column to its value object, and a value object that contains itself has no last path. Leave out this statement, and rewrite the JSON of column "items" of "menu" yourself in the migration.ts a plan without it writes.',
+        why: 'The plan rewrites a key at every path from a column to its value object, and a value object that contains itself has no last path. Write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the JSON of column "items" of "menu" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
         refusedStatement: statement,
       });
     });
@@ -328,6 +328,7 @@ describe('planValueObjectFieldRewrites', () => {
         kind: 'unsupportedOperation',
         summary:
           'Cannot remove value object field "Label.icon": column "items" of "menu" holds it inside value object "NavItem", which contains itself, so the JSON can hold it at any depth',
+        why: `The plan rewrites a key at every path from a column to its value object, and a value object that contains itself has no last path. Write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the JSON of column "items" of "menu" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.`,
       });
       expect(conflict).not.toHaveProperty('refusedStatement');
     });
@@ -367,6 +368,7 @@ describe('planValueObjectFieldRewrites', () => {
         expect(conflict).toMatchObject({
           kind: 'statementRefused',
           summary: `Cannot rename value object field "GeoPoint.lat" to "GeoPoint.latitude": column "location" of "place" holds a ${shape} of value objects`,
+          why: 'The plan rewrites a key only in a column that holds a value object or a list of them. Write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the JSON of column "location" of "place" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
           refusedStatement: statement,
         });
       }

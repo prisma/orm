@@ -330,7 +330,7 @@ describe('planValueObjectFieldFills', () => {
       kind: 'unsupportedOperation',
       summary:
         'Cannot fill value object field "GeoPoint.country": column "location" of "place" holds a union of value objects',
-      why: 'The plan fills a key at every path from a column to its value object, and it cannot list the paths in such a column. Write the value into the JSON of column "location" of "place" yourself, then plan again.',
+      why: 'The plan fills a key at every path from a column to its value object, and it cannot list the paths in such a column. Write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the JSON of column "location" of "place" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
     });
   });
 });

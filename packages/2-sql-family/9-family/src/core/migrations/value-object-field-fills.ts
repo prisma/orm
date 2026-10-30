@@ -19,6 +19,7 @@ import { declaredJsonType } from '@internal/sql-contract/codec-json-type';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { isStructuredError } from '@internal/utils/structured-error';
+import { handWrittenMigrationAdvice } from './hand-written-migration';
 import { jsonPathText } from './json-path';
 import type { SchemaTables } from './schema-tables';
 import type { SqlPlannerConflict } from './types';
@@ -228,7 +229,7 @@ function unlisted(text: string, column: string, table: string, reason: string): 
   return {
     kind: 'unsupportedOperation',
     summary: `Cannot fill value object field "${text}": column "${column}" of "${table}" holds ${reason}`,
-    why: `The plan fills a key at every path from a column to its value object, and it cannot list the paths in such a column. Write the value into the JSON of column "${column}" of "${table}" yourself, then plan again.`,
+    why: `The plan fills a key at every path from a column to its value object, and it cannot list the paths in such a column. ${handWrittenMigrationAdvice(`the JSON of column "${column}" of "${table}"`)}`,
   };
 }
 
