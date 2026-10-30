@@ -115,12 +115,58 @@ async function withCountingProxy<T>(
 }
 
 /**
- * Waits, up to five seconds, for the connections through the proxy to close. After `fn` closes its driver, the only ones left are those the `mariadb` package opens in the background to send `KILL` for a connection destroyed mid-result. Cutting such a connection while its `KILL` runs rejects a promise the package never handles (`connection.js`, `destroy()`), which fails the run with `ER_SOCKET_UNEXPECTED_CLOSE`.
+ * Waits for the connections through the proxy to close, and fails if any is still open after five seconds. After `fn` closes its driver, the only ones left should be those the `mariadb` package opens in the background to send `KILL` for a connection destroyed mid-result.
  */
 async function connectionsClosed(clients: ReadonlySet<Socket>): Promise<void> {
   const deadline = Date.now() + 5000;
-  while (clients.size > 0 && Date.now() < deadline) {
+  while (clients.size > 0) {
+    if (Date.now() >= deadline) {
+      throw new Error(`${clients.size} connection(s) through the test proxy still open after 5 s`);
+    }
     await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
+/** Runs `fn` against a proxy that drops any connection on which the client sends `KILL`, as a network failure during the package's background `KILL` would. */
+async function withKillDroppingProxy<T>(
+  url: string,
+  fn: (proxyUrl: URL, kills: () => number) => Promise<T>,
+): Promise<T> {
+  const target = new URL(url);
+  let kills = 0;
+  const sockets = new Set<Socket>();
+  const proxy = createServer((client) => {
+    const upstream = connect(Number(target.port || 3306), target.hostname);
+    for (const socket of [client, upstream]) {
+      sockets.add(socket);
+      socket.on('error', () => undefined);
+      socket.on('close', () => {
+        sockets.delete(socket);
+        client.destroy();
+        upstream.destroy();
+      });
+    }
+    client.on('data', (chunk: Buffer) => {
+      if (chunk.includes(Buffer.from('KILL '))) {
+        kills += 1;
+        client.destroy();
+      } else {
+        upstream.write(chunk);
+      }
+    });
+    upstream.pipe(client);
+  });
+  await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+  const address = proxy.address();
+  if (address === null || typeof address === 'string') throw new Error('no port');
+  const proxyUrl = new URL(url);
+  proxyUrl.hostname = '127.0.0.1';
+  proxyUrl.port = String(address.port);
+  try {
+    return await fn(proxyUrl, () => kills);
+  } finally {
+    for (const socket of sockets) socket.destroy();
+    await new Promise((resolve) => proxy.close(resolve));
   }
 }
 
@@ -834,6 +880,33 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
         );
       }),
     );
+  });
+
+  it('raises no unhandled rejection when the KILL for a stream the caller stopped early fails', async (test) => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    try {
+      await withMysqlDatabase(test, ({ url }) =>
+        withKillDroppingProxy(url, async (proxyUrl, kills) => {
+          await withDriver(
+            proxyUrl.toString(),
+            async (driver) => {
+              for await (const _row of driver.query({ sql: slowRows })) break;
+              const deadline = Date.now() + 5000;
+              while (kills() === 0 && Date.now() < deadline) {
+                await new Promise((resolve) => setTimeout(resolve, 10));
+              }
+              await new Promise((resolve) => setTimeout(resolve, 200));
+            },
+            single,
+          );
+          expect({ kills: kills(), unhandled }).toEqual({ kills: 1, unhandled: [] });
+        }),
+      );
+    } finally {
+      process.off('unhandledRejection', record);
+    }
   });
 
   it('runs a statement awaited inside the loop over a query on the same transaction, because a query reads its whole result first, as Postgres does without a cursor', async (test) => {

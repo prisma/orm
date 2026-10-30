@@ -1,0 +1,13 @@
+diff --git a/lib/connection.js b/lib/connection.js
+index 06239cfb67abaa47f53e815b4855cfdc4c09ed70..077df53d32d2e807109c8ee9587a6dc9503f2ac3 100644
+--- a/lib/connection.js
++++ b/lib/connection.js
+@@ -768,7 +768,7 @@ class Connection extends EventEmitter {
+               self.status = Status.CLOSED;
+               self.clear();
+               new Promise(killCon.end.bind(killCon)).catch(() => {});
+-            });
++            }).catch(() => {});
+           })
+           .catch(() => {
+             //*************************************************
