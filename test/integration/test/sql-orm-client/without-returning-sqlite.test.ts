@@ -158,6 +158,22 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
     });
   });
 
+  it('createAll() returns the rows in the order it was given them, not in key order', async () => {
+    await withDatabase(async ({ db }) => {
+      expect(
+        await db.Tag.createAll([
+          { code: 'c', label: 'C' },
+          { code: 'b', label: 'B' },
+          { code: 'a', label: 'A' },
+        ]),
+      ).toEqual([
+        { code: 'c', label: 'C' },
+        { code: 'b', label: 'B' },
+        { code: 'a', label: 'A' },
+      ]);
+    });
+  });
+
   it('createAll() of one row reads back its generated id', async () => {
     await withDatabase(async ({ db }) => {
       expect(await db.User.createAll([ada])).toEqual([{ id: 1, ...ada }]);

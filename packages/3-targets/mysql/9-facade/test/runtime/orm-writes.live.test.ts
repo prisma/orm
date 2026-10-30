@@ -68,6 +68,21 @@ describe('MySQL writes through the ORM', { timeout: timeouts.databaseOperation }
     });
   });
 
+  it('createAll returns the rows in the order it was given them, not in key order', async (test) => {
+    await withSeededDatabase(test, exampleTablesDdl, async (url) => {
+      await using db = mysql({ contract, url, verifyMarker: false });
+      expect(
+        (
+          await db.orm.User.createAll([
+            { id: 12, email: 'c@example.com', role: 'USER' },
+            { id: 11, email: 'b@example.com', role: 'USER' },
+            { id: 10, email: 'a@example.com', role: 'USER' },
+          ])
+        ).map((user) => user.id),
+      ).toEqual([12, 11, 10]);
+    });
+  });
+
   it('creates a user with posts, passing the generated id to them', async (test) => {
     await withSeededDatabase(test, exampleTablesDdl, async (url) => {
       await using db = mysql({ contract, url, verifyMarker: false });
