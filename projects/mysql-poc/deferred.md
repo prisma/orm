@@ -61,4 +61,4 @@ When the capability is absent the ORM sends an upsert with no conflict columns, 
 
 ## `mariadb` 3.5.4 can raise an unhandled rejection after destroying a connection (slice 4, 2026-10-30)
 
-`Connection.destroy()` in `lib/connection.js` sends `KILL` on a background connection and chains `.finally()` with no `catch`. If that background connection drops, the rejection is unhandled in the application process, and the driver cannot catch it. Seen as a flaky test, fixed in the test. Report it to the `mariadb` package, and pin a version with the fix when one ships.
+`Connection.destroy()` in `lib/connection.js` sends `KILL` on a background connection and chains `.finally()` with no `catch`. If that background connection drops, the rejection is unhandled in the application process, and the driver cannot catch it. The MySQL driver now never calls `destroy()` while a statement is receiving: it cancels with `KILL QUERY` on another pooled connection instead, so users are not exposed. Report the bug to the `mariadb` package; the report text is in the slice 4 worktree's `wip/mariadb-kill-bug.md`.
