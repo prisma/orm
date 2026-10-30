@@ -92,6 +92,7 @@ function mismatch(
     ledger,
     invocation,
     change: DEFAULT_CHANGE,
+    targetRefName: undefined,
     ...overrides,
   }).toEnvelope();
 }
@@ -285,6 +286,43 @@ describe('errorMarkerMismatch', () => {
         kind: 'run-command',
         label: 'Reconcile the database',
         command: '{bin} db update --db <url>',
+      },
+    ]);
+  });
+
+  it('names the ref the command was given in the db update commands, not its hash', () => {
+    const envelope = mismatch([], { targetRefName: 'production' });
+
+    expect(
+      envelope.nextActions.flatMap((action) =>
+        action.command === undefined ? [] : [action.command],
+      ),
+    ).toEqual([
+      '{bin} db update --to production --dry-run --db <url>',
+      '{bin} db update --to production --db <url>',
+    ]);
+  });
+
+  it('names the ref even when it points at the emitted contract no migration ends at', () => {
+    const envelope = mismatch([], {
+      owner: { kind: 'application', emittedContractHash: HASH_EMITTED },
+      targetHash: HASH_EMITTED,
+      targetRefName: 'production',
+    });
+
+    expect(envelope.nextActions.map((action) => action.command)).toEqual([
+      '{bin} db update --to production --dry-run --db <url>',
+      '{bin} db update --to production --db <url>',
+    ]);
+  });
+
+  it('prints no db update for a ref db update cannot reach', () => {
+    const envelope = mismatch([], { targetHash: HASH_OTHER, targetRefName: 'production' });
+
+    expect(envelope.nextActions).toEqual([
+      {
+        kind: 'user-choice',
+        label: migrationsOnly('the nearest contract in the migration graph', HASH_OTHER),
       },
     ]);
   });

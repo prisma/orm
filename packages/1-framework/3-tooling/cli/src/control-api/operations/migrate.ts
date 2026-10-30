@@ -682,6 +682,7 @@ export async function planEverySpace(
         ledger: await readLedgerQuietly(() => args.readLedger(space.spaceId)),
         invocation: args.invocation,
         change: args.change,
+        targetRefName: space.spaceId === aggregate.app.spaceId ? args.appTarget.refName : undefined,
       }),
     );
   }

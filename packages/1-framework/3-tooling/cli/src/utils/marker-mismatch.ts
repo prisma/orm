@@ -31,6 +31,8 @@ export interface MarkerOutsideGraph {
   readonly invocation: CliInvocation;
   /** The database's change policy in force, which decides the recoveries the advice may give. */
   readonly change: readonly ChangeStrategy[];
+  /** The ref the command was given as its target, which the advice names in place of its hash. */
+  readonly targetRefName: string | undefined;
 }
 
 /** The ledger as `read` gives it, or undefined when the read fails: the error it explains must not fail with it. */
@@ -131,15 +133,17 @@ interface Advice {
 
 const MOVE_WITH_DB_UPDATE = 'Move it with db update; its data stays:';
 
-/** The `db update` arguments that name the target, or undefined when no `--to` names it. */
+/** The `db update` arguments that name the target as the command was given it, or undefined when `db update` cannot reach it. */
 function reconcileArgs(
   found: MarkerOutsideGraph,
   owner: SpaceOwner & { readonly kind: 'application' },
 ) {
-  if (found.graph.reverseChain.has(found.targetHash)) {
-    return ['--to', found.targetHash];
-  }
-  return found.targetHash === owner.emittedContractHash ? [] : undefined;
+  const reachable =
+    found.graph.reverseChain.has(found.targetHash) ||
+    found.targetHash === owner.emittedContractHash;
+  if (!reachable) return undefined;
+  if (found.targetRefName !== undefined) return ['--to', found.targetRefName];
+  return found.graph.reverseChain.has(found.targetHash) ? ['--to', found.targetHash] : [];
 }
 
 function applicationAdvice(

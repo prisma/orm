@@ -14,9 +14,11 @@ import { errorOf, MIGRATE_ONLY_DECLARED } from './utils/database-policies-journe
 import {
   getLatestMigrationDir,
   type JourneyContext,
+  parseJsonOutput,
   planMigrationAndSelfEmit,
   runContractEmit,
   runMigrate,
+  runMigrationStatus,
   setupJourney,
   swapContract,
 } from './utils/journey-test-helpers';
@@ -62,6 +64,7 @@ withTempDir(({ createTempDir }) => {
           const targetHash = migrationTo(ctx, getLatestMigrationDir(ctx)!);
 
           const drift = await runMigrate(ctx, ['--json']);
+          const status = await runMigrationStatus(ctx, ['--json']);
 
           const recovery = `This database's change policy permits only migrations. Author migrations that bring it back onto the graph: one from ${initialHash} to its current contract, then one from there to ${targetHash}. Commit them and deploy again.`;
           expect(errorOf(drift)).toEqual({
@@ -80,6 +83,16 @@ withTempDir(({ createTempDir }) => {
               lastGraphHash: initialHash,
               missingMigrations: [deleted],
             },
+          });
+          expect(parseJsonOutput(status)).toMatchObject({
+            diagnostics: [
+              {
+                code: 'MIGRATION.MARKER_NOT_IN_HISTORY',
+                hints: [
+                  "This database's change policy permits only migrations: author migrations that bring it back onto the migration graph, commit them, and deploy again",
+                ],
+              },
+            ],
           });
         });
       },
@@ -131,6 +144,10 @@ withTempDir(({ createTempDir }) => {
             cli: 'MIGRATION.MARKER_MISMATCH',
             controlApi: 'MIGRATION.MARKER_MISMATCH',
           });
+          expect(errorOf(throughCli)['nextActions']).toMatchObject([
+            { command: expect.stringMatching(/ db update --to production --dry-run($| )/) },
+            { command: expect.stringMatching(/ db update --to production($| )/) },
+          ]);
         });
       },
       timeouts.spinUpPpgDev,
