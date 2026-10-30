@@ -56,13 +56,13 @@ Hibernate makes the same split (`MariaDBDialect extends MySQLDialect`). TypeORM 
 
 **Today.** Every ORM write that returns rows asserts the `returning` capability (`assertReturningCapability`, `sql-orm-client/src/collection-contract.ts`). The write returns its identity columns through `RETURNING`; the ORM then reads the rows back through the read path, keyed by `identity IN (...)`, in the same transaction (`collection-dispatch.ts`, `#reloadMutationRowByIdentity` in `collection.ts`). `delete` already reads its snapshot before deleting. A mutation graph with more than one statement runs in a transaction (`mutation-graph/run-graph.ts`).
 
-**Decision.** On a target without `RETURNING` for a statement, the identity comes from somewhere else:
+**Decision.** On a target without `RETURNING` for a statement, the identity comes from somewhere else. As built in slice 4 (see `slices/mysql-writes/spec.md` for the full rules):
 
-- `create`: the key values the client generated, or the insert id the driver reports. A multi-row insert relies on MySQL assigning consecutive ids, which the project checks on a live server.
-- `update`: select and lock the matching keys first, update by those keys, then read back. This also covers an update that changes the key.
+- `create`: the key values the client supplies, or the `insertId` the driver reports for a one-row insert. A row-returning `createAll` whose rows get generated keys is refused, because MySQL reports one id per statement and the rest are consecutive only without concurrent bulk inserts.
+- `update`: select the matching keys, update, then read back by key. No row lock, as Postgres's `update()` takes none. `updateAll` and `deleteAll` write with the caller's filter, and use the selected keys only for what they return.
 - `delete`: unchanged.
 
-The `returning` capability splits by statement (insert, update, delete), because MariaDB has it for insert and delete only. `SqlStatementStats` gains the last insert id.
+Splitting `returning` by statement kind waits for MariaDB (slice 6). MySQL sessions run at READ COMMITTED, so a read-back sees rows other sessions committed, as on Postgres.
 
 **Why.** Will, 2026-10-22: consistent with the principles, because the user asked the ORM for the rows. The read-back machinery exists, so the change is limited to finding the identity.
 

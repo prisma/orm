@@ -86,3 +86,10 @@ Both gaps are fixed in this slice with Will's approval (decisions 1 and 2).
 - MariaDB, and splitting `returning` per statement kind (MariaDB has `RETURNING` on insert and delete only). Both are slice 6.
 - Variants with their own tables.
 - Row locking.
+
+## Changed while building
+
+- **`create` without `returning` is refused whenever a key column the client does not supply is not the auto-increment column**, with or without a database default: the row cannot be found either way.
+- **Two more refusals without `returning`:** a row-returning `createAll` with `onConflict: 'skip'`, because reading back by key would also return the existing row a skipped row collided with; and an upsert whose create values leave out a conflict column, because there is nothing to read the row back by.
+- **`updateAll` without `returning` on a table with no primary key or unique constraint** is refused with `ORM.ROW_IDENTITY_MISSING`.
+- **The SQLite tests run the fallbacks through the SQLite adapter without `returning` and `insertOnConflictTarget`**, at emit and at run time, because the runtime adds the adapter's capabilities to the contract. The SQLite adapter refuses `DO UPDATE` without conflict columns, so the upsert fallback itself is tested on live MySQL only.
