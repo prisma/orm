@@ -79,6 +79,7 @@ describe('the Prisma 7 type table', () => {
       Time: 'TimeString',
       JsonB: 'Jsonb',
       ByteA: 'Bytes',
+      Citext: 'citext.Citext',
     });
     expect(postgresTargetDescriptorMeta.authoring.renamedTypeConstructors).toBe(
       prisma7PostgresRenamedNativeTypes,
