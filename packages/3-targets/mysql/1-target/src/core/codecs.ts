@@ -178,10 +178,11 @@ export const mysqlIntDescriptor = new MysqlIntDescriptor();
 export class MysqlBigintCodec extends CodecImpl<
   typeof MYSQL_BIGINT_CODEC_ID,
   readonly ['equality', 'order', 'numeric'],
-  string,
+  string | bigint,
   bigint
 > {
-  async toWire(value: bigint, _ctx: CodecCallContext): Promise<string> {
+  /** The bigint itself: the driver writes it as bare digits, which MySQL reads as an exact integer even beside an expression, where it compares quoted text as a double. */
+  async toWire(value: bigint, _ctx: CodecCallContext): Promise<bigint> {
     if (typeof value !== 'bigint' || value < BIGINT_MIN || value > BIGINT_MAX) {
       return encodeFailed(
         MYSQL_BIGINT_CODEC_ID,
@@ -189,9 +190,10 @@ export class MysqlBigintCodec extends CodecImpl<
         value,
       );
     }
-    return value.toString();
+    return value;
   }
-  async fromWire(wire: string, _ctx: CodecCallContext): Promise<bigint> {
+  async fromWire(wire: string | bigint, _ctx: CodecCallContext): Promise<bigint> {
+    if (typeof wire === 'bigint') return wire;
     if (!DECIMAL_INTEGER.test(wire)) {
       return decodeFailed(MYSQL_BIGINT_CODEC_ID, 'the decimal text of an integer', wire);
     }
