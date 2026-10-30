@@ -19,17 +19,18 @@ function backslashEscapesOff(params: number): Error {
 }
 
 /**
- * The statement to hand to `connection`: `sql` with its placeholders written as `?` and the values in their order, for the package to write in. Refuses a statement with values while the server last reported `NO_BACKSLASH_ESCAPES` on, which only a raw `SET` can do. A statement without values still runs, so the mode can be turned off again; the driver's lexer still reads a backslash as an escape then, so at worst it refuses such a statement for a `?` it reads outside a string.
+ * The statement to hand to `connection`: `sql` with its placeholders written as `?` and the values in their order, for the package to write in. A statement without values comes back as written with no values, so the package sends it without searching it for placeholders. Refuses a statement with values while the server last reported `NO_BACKSLASH_ESCAPES` on, which only a raw `SET` can do. A statement without values still runs, so the mode can be turned off again; the driver's lexer still reads a backslash as an escape then, so at worst it refuses such a statement for a `?` it reads outside a string.
  */
 export function statementFor(
   connection: Pick<Connection, 'info'>,
   sql: string,
   params: readonly unknown[],
-): { readonly sql: string; readonly values: unknown[] } {
+): { readonly sql: string; readonly values: unknown[] | undefined } {
   const { info } = connection;
   assertDefined(info, 'the package gives every connection its info when it creates it');
   if (params.length > 0 && (info.status & NO_BACKSLASH_ESCAPES) !== 0) {
     throw backslashEscapesOff(params.length);
   }
-  return positionalParams(sql, params);
+  const statement = positionalParams(sql, params);
+  return params.length > 0 ? statement : { sql, values: undefined };
 }

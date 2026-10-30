@@ -172,8 +172,8 @@ describe('MySQL runtime driver and its pool', () => {
     await connectionHeld.release();
     expect(connection.query.mock.calls).toEqual([
       ['SET SESSION `time_zone` = ?, `sql_select_limit` = ?', ['+00:00', 5n]],
-      ['SELECT 1', []],
-      ['SELECT 2', []],
+      ['SELECT 1', undefined],
+      ['SELECT 2', undefined],
     ]);
   });
 
@@ -324,7 +324,7 @@ describe('MySQL runtime driver and its pool', () => {
       destroyed: 0,
       sent: [
         ['SELECT ?, ?, ?', [7, 'a', 7]],
-        ['START TRANSACTION', []],
+        ['START TRANSACTION', undefined],
         ['SELECT n FROM t WHERE n > ?', [0]],
       ],
     });
@@ -361,7 +361,7 @@ describe('MySQL runtime driver and its pool', () => {
       none: [{ n: 1 }, { n: 2 }, { n: 3 }],
       streamed: [
         ['SELECT n FROM t WHERE n > ?', [0]],
-        ['SELECT n FROM t', []],
+        ['SELECT n FROM t', undefined],
       ],
       released: 2,
     });
@@ -384,7 +384,7 @@ describe('MySQL runtime driver and its pool', () => {
       released: connection.release.mock.calls.length,
       destroyed: connection.destroy.mock.calls.length,
     }).toEqual({
-      sent: [["SET SESSION sql_mode = ''", []]],
+      sent: [["SET SESSION sql_mode = ''", undefined]],
       streamed: 0,
       released: 3,
       destroyed: 0,
