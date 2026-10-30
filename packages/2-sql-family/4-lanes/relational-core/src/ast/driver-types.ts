@@ -23,6 +23,8 @@ export interface PreparedExecuteRequest extends SqlExecuteRequest {
 
 export interface SqlStatementStats {
   readonly affectedRows: number;
+  /** The id the database generated for the first row the statement inserted. A driver whose database reports none leaves it out. */
+  readonly lastInsertId?: bigint;
 }
 
 export interface SqlExplainResult<Row = Record<string, unknown>> {

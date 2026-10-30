@@ -60,13 +60,15 @@ function startStream(
   }
 }
 
-function affectedRows(result: unknown): number {
-  return typeof result === 'object' &&
-    result !== null &&
-    'affectedRows' in result &&
-    typeof result.affectedRows === 'number'
-    ? result.affectedRows
-    : 0;
+/** What a statement's result reports: the rows it changed, and the id MySQL generated for the first row it inserted. MySQL reports 0 when it generated none. */
+function statementStats(result: unknown): SqlStatementStats {
+  if (typeof result !== 'object' || result === null) return { affectedRows: 0 };
+  const affectedRows =
+    'affectedRows' in result && typeof result.affectedRows === 'number' ? result.affectedRows : 0;
+  const insertId = 'insertId' in result ? result.insertId : undefined;
+  return typeof insertId === 'bigint' && insertId > 0n
+    ? { affectedRows, lastInsertId: insertId }
+    : { affectedRows };
 }
 
 /** What a statement reports back to whoever released its client: whether the client may be broken and must be destroyed. */
@@ -120,7 +122,7 @@ abstract class MysqlQueryable implements SqlQueryable {
   }
 
   async execute(request: SqlExecuteRequest): Promise<SqlStatementStats> {
-    return { affectedRows: affectedRows(await this.#runReleasing(request)) };
+    return statementStats(await this.#runReleasing(request));
   }
 
   async #runReleasing(request: SqlExecuteRequest): Promise<unknown> {

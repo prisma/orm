@@ -399,6 +399,18 @@ describe('MySQL runtime driver and its pool', () => {
     });
   });
 
+  it('reports the id MySQL generated for an insert, and leaves it out when MySQL reports none', async () => {
+    const driver = await connected();
+    connection.result = { affectedRows: 1, insertId: 7n };
+    const inserted = await driver.execute({ sql: 'INSERT INTO t (n) VALUES (?1)', params: [1] });
+    connection.result = { affectedRows: 2, insertId: 0n };
+    const updated = await driver.execute({ sql: 'UPDATE t SET n = ?1', params: [2] });
+    expect({ inserted, updated }).toEqual({
+      inserted: { affectedRows: 1, lastInsertId: 7n },
+      updated: { affectedRows: 2 },
+    });
+  });
+
   it('destroys a pooled connection whose stream the caller stops early while the rest of the result is still arriving', async () => {
     const driver = await connected(streaming);
     for await (const _row of driver.query(valued)) break;

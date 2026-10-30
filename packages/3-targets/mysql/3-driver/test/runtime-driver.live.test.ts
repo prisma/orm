@@ -142,6 +142,23 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     );
   });
 
+  it('reports the id MySQL generated for the first row an insert added, and none for an update', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(url, async (driver) => {
+        await driver.execute({ sql: 'CREATE TABLE t (id INT AUTO_INCREMENT PRIMARY KEY, n INT)' });
+        expect({
+          one: await driver.execute({ sql: 'INSERT INTO t (n) VALUES (?1)', params: [1] }),
+          two: await driver.execute({ sql: 'INSERT INTO t (n) VALUES (?1), (?2)', params: [2, 3] }),
+          updated: await driver.execute({ sql: 'UPDATE t SET n = ?1', params: [4] }),
+        }).toEqual({
+          one: { affectedRows: 1, lastInsertId: 1n },
+          two: { affectedRows: 2, lastInsertId: 2n },
+          updated: { affectedRows: 3 },
+        });
+      }),
+    );
+  });
+
   it('fills only the placeholders outside quoted text, so a value cannot leave its literal', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
       withDriver(url, async (driver) => {
