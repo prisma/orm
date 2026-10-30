@@ -27,7 +27,7 @@ describe('@updatedAt on Postgres', () => {
   ] as const;
 
   it.each(mappings)('resolves now() for the codec %s maps to', (_type, mapping) => {
-    const codecId = getAuthoringTypeConstructor(authoringContributions, [mapping.constructorName])
+    const codecId = getAuthoringTypeConstructor(authoringContributions, mapping.constructorPath)
       ?.output.codecId;
     expect(codecId).toBeDefined();
     expect(

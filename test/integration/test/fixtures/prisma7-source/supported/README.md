@@ -1,11 +1,11 @@
 # Prisma 7 supported fixture
 
-`schema.prisma` is `../reference/schema.prisma` with every construct the interpreter reports as an error removed, and nothing else changed. It is the input for the zero-findings end-to-end proof: apply `migration.sql` to a dev database, then `contract emit`, `db sign`, `db verify` must succeed with no findings.
+`schema.prisma` is `../reference/schema.prisma` with every construct the interpreter reports as an error without extension packs removed, and nothing else changed. It is the input for the zero-findings end-to-end proof: apply `migration.sql` to a dev database, then `contract emit`, `db sign`, `db verify` must succeed with no findings.
 
 ## Removed relative to `../reference/`
 
 - `view UserSummary`
-- `NativeTypes.citext String @db.Citext`
+- `NativeTypes.citext String @db.Citext`, which reads only with the citext pack composed and needs `CREATE EXTENSION citext`; `../citext/` covers it
 
 The reference schema has no `relationMode`, so nothing else needed removing. `previewFeatures = ["multiSchema", "views"]` is kept on purpose: the interpreter ignores preview features other than `multiSchema`.
 

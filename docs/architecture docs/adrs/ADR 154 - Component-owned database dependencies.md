@@ -2,7 +2,7 @@
 
 ## Status
 
-**Superseded by [ADR 212 — Contract spaces](./ADR%20212%20-%20Contract%20spaces.md)** (TML-2397). The `databaseDependencies` mechanism described below was removed from the framework — schema-contributing extensions now use the per-space planner / runner / verifier described in ADR 211, and codec-driven per-field schema work is described in [ADR 213 — Codec lifecycle hooks](./ADR%20213%20-%20Codec%20lifecycle%20hooks.md). A Postgres extension, the first example below, is now a contract entity ([ADR 311](ADR%20311%20-%20A%20Postgres%20extension%20is%20a%20contract%20entity%2C%20and%20db%20sign%20refuses%20a%20space%20with%20unmet%20invariants.md)). The body of this ADR is preserved unchanged for historical context; the "Supersession" section at the bottom captures what changed.
+**Superseded by [ADR 212 — Contract spaces](./ADR%20212%20-%20Contract%20spaces.md)** (TML-2397). The `databaseDependencies` mechanism described below was removed from the framework — schema-contributing extensions now use the per-space planner / runner / verifier described in ADR 211, and codec-driven per-field schema work is described in [ADR 213 — Codec lifecycle hooks](./ADR%20213%20-%20Codec%20lifecycle%20hooks.md). A Postgres extension, the first example below, is now a contract entity ([ADR 312](ADR%20312%20-%20A%20Postgres%20extension%20is%20a%20contract%20entity%2C%20and%20db%20sign%20refuses%20a%20space%20with%20unmet%20invariants.md)). The body of this ADR is preserved unchanged for historical context; the "Supersession" section at the bottom captures what changed.
 
 ## Context
 

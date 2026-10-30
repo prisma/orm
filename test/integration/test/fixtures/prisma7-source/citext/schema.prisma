@@ -1,0 +1,35 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Account {
+  id       Int       @id
+  email    String    @unique @db.Citext
+  nickname String?   @db.Citext
+  region   String    @db.Citext
+  aliases  String[]  @db.Citext
+  posts    Post[]
+  reviews  Review[]
+
+  @@index([region])
+}
+
+model Post {
+  id          Int     @id
+  authorEmail String  @db.Citext
+  author      Account @relation(fields: [authorEmail], references: [email])
+}
+
+model Review {
+  id          Int     @id
+  authorEmail String  @db.Citext
+  author      Account @relation(fields: [authorEmail], references: [email]) @ignore
+}
+
+model CitextDefaults {
+  id      Int      @id
+  literal String   @default("usd") @db.Citext
+  expr    String   @default(dbgenerated("'a'::citext")) @db.Citext
+  none    String   @default(dbgenerated()) @db.Citext
+  list    String[] @default(["a", "B"]) @db.Citext
+}

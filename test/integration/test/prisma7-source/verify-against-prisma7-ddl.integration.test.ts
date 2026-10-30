@@ -9,6 +9,9 @@
  * verified through the same family verify path `db verify` runs.
  */
 import { timestampTemporalColumn } from '@internal/adapter-postgres/column-types';
+import { citext } from '@internal/extension-citext/column-types';
+import citextControl from '@internal/extension-citext/control';
+import citextPack from '@internal/extension-citext/pack';
 import { describe, expect, it } from 'vitest';
 import {
   autoincrement,
@@ -35,7 +38,7 @@ describe('db verify against the DDL Prisma 7 generates', () => {
   async function applySql(statements: readonly string[]): Promise<void> {
     await withClient(getConnectionString(), async (client) => {
       await client.query(
-        'DROP TABLE IF EXISTS "Post", "User", "LegacyThing", "Tag", "Timestamps", "NativeTypes"',
+        'DROP TABLE IF EXISTS "Post", "User", "LegacyThing", "Tag", "Timestamps", "NativeTypes", "Citext"',
       );
       for (const statement of statements) {
         await client.query(statement);
@@ -165,6 +168,38 @@ describe('db verify against the DDL Prisma 7 generates', () => {
       });
 
       const strict = await runSchemaVerify(getConnectionString(), contract, { strict: true });
+      expect(strict).toMatchObject({ ok: true, schema: { issues: [] } });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'a citext column verifies against the Prisma 7 DDL with zero findings, the citext pack composed',
+    async () => {
+      // The column statement is the "citext" column of reference/migration.sql.
+      await applySql([
+        'CREATE EXTENSION IF NOT EXISTS citext',
+        `CREATE TABLE "Citext" (
+            "id" INTEGER NOT NULL,
+            "citext" CITEXT NOT NULL,
+            CONSTRAINT "Citext_pkey" PRIMARY KEY ("id")
+          )`,
+      ]);
+      const contract = defineContract(
+        { extensions: { citext: citextPack } },
+        ({ field, model }) => ({
+          models: {
+            Citext: model('Citext', {
+              fields: { id: field.column(int4Column).id(), citext: field.column(citext()) },
+            }).sql({ table: 'Citext' }),
+          },
+        }),
+      );
+
+      const strict = await runSchemaVerify(getConnectionString(), contract, {
+        strict: true,
+        extensions: [citextControl],
+      });
       expect(strict).toMatchObject({ ok: true, schema: { issues: [] } });
     },
     timeouts.spinUpPpgDev,

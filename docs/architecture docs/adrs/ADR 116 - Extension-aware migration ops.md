@@ -8,7 +8,7 @@ Prisma Next supports target extensions like pgvector and PostGIS. Schema evoluti
 
 For v1, database-side prerequisites required by components (for example enabling `CREATE EXTENSION …`) are modeled as **component-owned database dependencies** declared on framework component descriptors and verified via pure schema-IR hooks. This avoids hardcoding ecosystem knowledge in targets and avoids inferring prerequisites from `contract.extensions`.
 
-See [ADR 154 — Component-owned database dependencies](ADR%20154%20-%20Component-owned%20database%20dependencies.md). Both mechanisms are gone: a Postgres extension is now a contract entity that the planner creates and the verifier checks ([ADR 311](ADR%20311%20-%20A%20Postgres%20extension%20is%20a%20contract%20entity%2C%20and%20db%20sign%20refuses%20a%20space%20with%20unmet%20invariants.md)).
+See [ADR 154 — Component-owned database dependencies](ADR%20154%20-%20Component-owned%20database%20dependencies.md). Both mechanisms are gone: a Postgres extension is now a contract entity that the planner creates and the verifier checks ([ADR 312](ADR%20312%20-%20A%20Postgres%20extension%20is%20a%20contract%20entity%2C%20and%20db%20sign%20refuses%20a%20space%20with%20unmet%20invariants.md)).
 
 ## Problem
 

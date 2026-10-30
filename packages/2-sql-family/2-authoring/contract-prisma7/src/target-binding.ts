@@ -1,7 +1,7 @@
 import type { JsonValue } from '@internal/contract/types';
 import type { TargetPackRef } from '@internal/framework-components/components';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
-import type { Prisma7TypeMap } from './native-types';
+import type { Prisma7ExtensionPack, Prisma7TypeMap } from './native-types';
 
 export interface Prisma7ColumnType {
   readonly codecId: string;
@@ -30,20 +30,13 @@ export interface Prisma7FinerThanColumn {
   readonly stored: string;
 }
 
-/** An extension pack, and the import a config writes to compose it: `import <importName> from '<importPath>'`. */
-export interface Prisma7ExtensionPack {
-  readonly id: string;
-  readonly importName: string;
-  readonly importPath: string;
-}
-
 /** How the target reads the datasource `extensions` list. */
 export interface Prisma7DatabaseExtensions {
   /** The generator preview feature without which Prisma 7 refuses the list. */
   readonly previewFeature: string;
   /** The entity kind the target registers for a database extension. */
   readonly entityKind: string;
-  /** The extensions an extension pack declares, by name, with that pack. */
+  /** The extensions an extension pack declares, by name, with that pack; a datasource `extensions` entry and a `@db.*` type the extension provides are both read through it. */
   readonly packs: Readonly<Record<string, Prisma7ExtensionPack>>;
 }
 

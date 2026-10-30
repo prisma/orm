@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import citext from '@internal/extension-citext/control';
 import paradedb from '@internal/extension-paradedb/control';
 import pgvector from '@internal/extension-pgvector/control';
 import postgis from '@internal/extension-postgis/control';
@@ -7,11 +8,12 @@ import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-bindin
 import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 
-const descriptors = new Map([pgvector, postgis, paradedb].map((pack) => [pack.id, pack]));
+const descriptors = new Map([pgvector, postgis, paradedb, citext].map((pack) => [pack.id, pack]));
 const internalPackages = new Map([
   ['@internal/extension-pgvector', pgvector.id],
   ['@internal/extension-postgis', postgis.id],
   ['@internal/extension-paradedb', paradedb.id],
+  ['@internal/extension-citext', citext.id],
 ]);
 const publicPackagesDir = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -49,7 +51,7 @@ describe('the Prisma 7 binding’s extension packs', () => {
     });
 
     it(`names the published package that ships the pack declaring ${extension}`, () => {
-      const [packageName, entry] = pack.importPath.split(/\/(?=[^/]+$)/);
+      const [, packageName, entry] = /^(@[^/]+\/[^/]+)\/(.+)$/.exec(pack.importPath) ?? [];
       const published = publishedPackage(packageName ?? '');
       expect(published.name).toBe(packageName);
       expect(Object.keys(published.exports)).toContain(`./${entry}`);

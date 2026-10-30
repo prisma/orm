@@ -24,6 +24,7 @@
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
     "@prisma/orm-postgres": "workspace:8.0.0-rc.21",
+    "@prisma/orm-postgres-contrib": "workspace:8.0.0-rc.21",
     "dotenv": "^17.4.2",
     "pg": "catalog:"
   },

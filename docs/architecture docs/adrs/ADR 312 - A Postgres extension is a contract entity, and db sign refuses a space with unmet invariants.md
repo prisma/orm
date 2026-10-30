@@ -1,4 +1,4 @@
-# ADR 311 — A Postgres extension is a contract entity, and db sign refuses a space with unmet invariants
+# ADR 312 — A Postgres extension is a contract entity, and db sign refuses a space with unmet invariants
 
 **Status:** Accepted
 **Date:** 2026-10-29

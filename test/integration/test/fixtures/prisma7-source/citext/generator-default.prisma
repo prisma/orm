@@ -1,0 +1,8 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Token {
+  id    Int    @id
+  value String @default(uuid()) @db.Citext
+}

@@ -1,3 +1,4 @@
+import citext from '@internal/extension-citext/control';
 import pgvector from '@internal/extension-pgvector/control';
 import postgis from '@internal/extension-postgis/control';
 import { describe, expect, it } from 'vitest';
@@ -10,6 +11,7 @@ import {
 
 const stack = composePostgresStack([pgvector]);
 const postgisStack = composePostgresStack([postgis]);
+const citextStack = composePostgresStack([citext]);
 
 describe('a printed contract with an extension-contributed column type', () => {
   it('writes the extension type and reads back as the same contract', async () => {
@@ -97,6 +99,30 @@ model Document {
 
     expect(text).toContain('@default([1, 2, 3])');
     const printed = await readPsl(text, { stack, sourceSettings });
+    expect(serializedWithoutCapabilities(printed)).toEqual(serializedWithoutCapabilities(authored));
+    expect(printed.storage.storageHash).toBe(authored.storage.storageHash);
+  });
+
+  it('writes citext.Citext for a citext column, with its default, and reads back as the same contract', async () => {
+    const authored = await readPsl(
+      `// use prisma-8
+model User {
+  id    Int           @id
+  email citext.Citext @default("Ada@Example.com")
+}
+`,
+      { stack: citextStack },
+    );
+    const [namespace] = Object.values(authored.storage.namespaces);
+    expect(namespace?.entries.table?.['User']?.columns['email']).toMatchObject({
+      dataType: 'citext/citext',
+      codecId: 'pg/citext@1',
+    });
+
+    const { text, sourceSettings } = printContract(authored, citextStack);
+
+    expect(text).toContain('email citext.Citext() @default("Ada@Example.com")');
+    const printed = await readPsl(text, { stack: citextStack, sourceSettings });
     expect(serializedWithoutCapabilities(printed)).toEqual(serializedWithoutCapabilities(authored));
     expect(printed.storage.storageHash).toBe(authored.storage.storageHash);
   });

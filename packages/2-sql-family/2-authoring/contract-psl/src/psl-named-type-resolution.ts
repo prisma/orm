@@ -76,13 +76,15 @@ export interface ResolveNamedTypeDeclarationsInput {
   readonly dataTypes: DataTypeSupport;
   readonly diagnostics: PslDiagnosticCollector;
   readonly authoringTypes: AuthoringTypeNamespace | undefined;
+  readonly renamedTypeConstructors: Readonly<Record<string, string>> | undefined;
 }
 
 function describeUnsupportedSqlAliasAttribute(
   attribute: ResolvedAttribute<FieldAttributeAst>,
+  renamedTypeConstructors: Readonly<Record<string, string>> | undefined,
 ): string | undefined {
   return attribute.name.startsWith('db.')
-    ? formatDbAttributeMigrationMessage(attribute)
+    ? formatDbAttributeMigrationMessage(attribute, renamedTypeConstructors)
     : undefined;
 }
 
@@ -183,7 +185,8 @@ function resolveDeclaredTypeAliases(
     sources: input.sources,
     diagnostics: input.diagnostics,
     authoringTypes: input.authoringTypes,
-    describeUnsupportedAttribute: describeUnsupportedSqlAliasAttribute,
+    describeUnsupportedAttribute: (attribute) =>
+      describeUnsupportedSqlAliasAttribute(attribute, input.renamedTypeConstructors),
   });
   const resolved = new Map<NamedTypeSymbol, ResolvedTypeAlias>();
   for (const alias of aliases.values()) {

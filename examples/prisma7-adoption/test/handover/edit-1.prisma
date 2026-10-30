@@ -1,10 +1,12 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma7"
+  provider        = "prisma-client"
+  output          = "../generated/prisma7"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [citext]
 }
 
 enum Role {
@@ -14,7 +16,7 @@ enum Role {
 
 model User {
   id        Int      @id @default(autoincrement())
-  email     String   @unique
+  email     String   @unique @db.Citext
   name      String?
   bio       String?
   role      Role     @default(USER)

@@ -141,7 +141,8 @@ export type ShellName =
   | '@prisma/orm-extension-paradedb'
   | '@prisma/orm-extension-supabase'
   | '@prisma/orm-extension-arktype-json'
-  | '@prisma/orm-extension-middleware-cache';
+  | '@prisma/orm-extension-middleware-cache'
+  | '@prisma/orm-postgres-contrib';
 
 /**
  * Surfaces every facade republishes regardless of family.
@@ -837,6 +838,23 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
       // every Postgres extension pack states the same install requirement, and
       // a pack that quietly did not would read as a pack that works without
       // Postgres.
+      peerShells: ['@prisma/orm-target-postgres'],
+    },
+  ],
+  [
+    '@prisma/orm-postgres-contrib',
+    {
+      dir: 'packages/9-public/@prisma/orm-postgres-contrib',
+      kind: 'extension',
+      // One entrypoint group per trusted PostgreSQL contrib module (ADR 312).
+      packages: [
+        {
+          dir: 'packages/3-extensions/citext',
+          name: '@internal/extension-citext',
+          entry: 'citext',
+          subpaths: ['codec-types', 'column-types', 'control', 'pack', 'runtime'],
+        },
+      ],
       peerShells: ['@prisma/orm-target-postgres'],
     },
   ],

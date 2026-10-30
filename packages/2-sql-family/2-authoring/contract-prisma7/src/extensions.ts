@@ -16,6 +16,7 @@ import {
   StringLiteralExprAst,
 } from '@internal/psl-parser/syntax';
 import { prisma7Diagnostic } from './diagnostics';
+import type { Prisma7ExtensionPack } from './native-types';
 import type { Prisma7DatabaseExtensions } from './target-binding';
 
 export interface Prisma7SchemaBlock {
@@ -46,6 +47,11 @@ export interface ReadDatasourceExtensionsInput {
   readonly declaringPack: (extensionName: string) => DeclaringPack | undefined;
   readonly defaultNamespaceId: string;
   readonly diagnostics: ContractSourceDiagnostic[];
+}
+
+/** The config edit that composes `pack`. */
+export function composePackAdvice(pack: Prisma7ExtensionPack): string {
+  return `Add the pack to extensions in prisma.config.ts: import ${pack.importName} from '${pack.importPath}', then extensions: [${pack.importName}].`;
 }
 
 const PRISMA7_EXTENSION_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -154,7 +160,7 @@ export function readDatasourceExtensions(
       diagnostics.push(
         prisma7Diagnostic(
           'PSL.PRISMA7_EXTENSION_PACK_MISSING',
-          `Extension "${name}" is declared by the "${pack.id}" extension pack, which is not available. Add the pack to extensions in prisma.config.ts: import ${pack.importName} from '${pack.importPath}', then extensions: [${pack.importName}].`,
+          `Extension "${name}" is declared by the "${pack.id}" extension pack, which is not available. ${composePackAdvice(pack)}`,
           sourceId,
           span,
         ),

@@ -11,7 +11,7 @@
     "deploy": "bun run scripts/deploy.ts",
     "emit": "prisma contract emit",
     "emit:check": "pnpm emit && git diff --exit-code src/prisma/contract.json src/prisma/contract.d.ts",
-    "migrate": "prisma migrate",
+    "migrate": "prisma db migrate",
     "start": "bun run src/server.ts",
     "start:node": "tsx src/server-node.ts",
     "test": "vitest run",

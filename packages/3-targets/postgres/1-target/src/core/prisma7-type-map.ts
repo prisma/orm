@@ -34,9 +34,9 @@ import {
 import { postgresCodecDescriptorRegistry } from './registry';
 import { postgresScalarAndNativeTypeConstructors } from './type-constructors';
 
-/** A Prisma 8 constructor call: its name and the values of its arguments. */
+/** A Prisma 8 constructor call: its path and the values of its arguments. */
 export interface ConstructorCall {
-  readonly constructorName: string;
+  readonly constructorPath: readonly string[];
   readonly args: readonly unknown[];
 }
 
@@ -118,7 +118,7 @@ function mappingOf({ dataType, params }: Prisma7ColumnType): ConstructorCall {
       `No constructor marked inferred writes ${dataType} with these parameters.`,
     );
   }
-  return { constructorName: markedConstructor.path.join('.'), args };
+  return { constructorPath: markedConstructor.path, args };
 }
 
 function mappingsOf(
@@ -127,8 +127,28 @@ function mappingsOf(
   return Object.fromEntries(Object.entries(types).map(([name, type]) => [name, mappingOf(type)]));
 }
 
+/**
+ * The `@db.*` types of a PostgreSQL extension, with the extension that provides each. The binding names the pack that declares the extension; the target does not depend on it, and the reader uses the constructor only when the config composes the pack.
+ */
+const prisma7PostgresExtensionNativeTypes = {
+  Citext: { constructorPath: ['citext', 'Citext'], args: [], extension: 'citext' },
+} as const;
+
 /** {@link prisma7PostgresTypes} as the Prisma 7 reader takes it: each type's constructor call. */
 export const prisma7PostgresTypeMap = {
   scalars: mappingsOf(prisma7PostgresTypes.scalars),
   nativeTypes: mappingsOf(prisma7PostgresTypes.nativeTypes),
+  extensionNativeTypes: prisma7PostgresExtensionNativeTypes,
 };
+
+/** The Prisma 7 `@db.*` names whose Prisma 8 constructor has another name, such as `Text` to `String`. */
+export const prisma7PostgresRenamedNativeTypes: Readonly<Record<string, string>> =
+  Object.fromEntries(
+    Object.entries({
+      ...prisma7PostgresTypeMap.nativeTypes,
+      ...prisma7PostgresTypeMap.extensionNativeTypes,
+    }).flatMap(([name, { constructorPath }]) => {
+      const constructorName = constructorPath.join('.');
+      return constructorName === name ? [] : [[name, constructorName]];
+    }),
+  );

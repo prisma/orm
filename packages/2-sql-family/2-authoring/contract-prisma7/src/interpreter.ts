@@ -97,12 +97,17 @@ import {
   unmappedFieldInPrimaryKey,
 } from './diagnostics';
 import {
+  composePackAdvice,
   type DatasourceExtension,
   type DeclaringPack,
   readDatasourceExtensions,
 } from './extensions';
 import { type IndexAttribute, indexNode, parseIndexAttribute } from './indexes';
-import { prisma7NativeTypeMapping, prisma7ScalarMapping } from './native-types';
+import {
+  type Prisma7ExtensionPack,
+  prisma7NativeTypeMapping,
+  prisma7ScalarMapping,
+} from './native-types';
 import {
   lowerRelations,
   parseRelationAttribute,
@@ -1154,7 +1159,15 @@ type Prisma7FieldType =
     };
 
 function nativeTypeMessage(label: string, nativeType: string): string {
-  return `${label}: native type "@db.${nativeType}" has no Prisma 8 codec yet, and Prisma 8 cannot read this schema until it supports the column type. @ignore on the field or @@ignore on the model does not help: Prisma 8 keeps the columns of ignored fields and models in the contract. Changing the field's type to one Prisma 8 supports changes the column type on Prisma 7's next migration.`;
+  return `${label}: native type "@db.${nativeType}" is not one the target knows, and Prisma 7 refuses it too. Correct the spelling.`;
+}
+
+function extensionPackMissingMessage(
+  label: string,
+  nativeType: string,
+  pack: Prisma7ExtensionPack,
+): string {
+  return `${label}: native type "@db.${nativeType}" is a column type of the "${pack.id}" extension pack, which is not available. ${composePackAdvice(pack)}`;
 }
 
 interface ReadFieldArgs {
@@ -1386,8 +1399,24 @@ function readField(args: ReadFieldArgs): void {
     const native =
       nativeType === undefined
         ? undefined
-        : prisma7NativeTypeMapping(binding.typeMap, nativeType.name);
-    if (nativeType !== undefined && native === undefined) {
+        : prisma7NativeTypeMapping(
+            binding.typeMap,
+            binding.extensions.packs,
+            nativeType.name,
+            args.composedExtensions,
+          );
+    if (nativeType !== undefined && native?.kind === 'packNotComposed') {
+      diagnostics.push(
+        prisma7Diagnostic(
+          'PSL.PRISMA7_EXTENSION_PACK_MISSING',
+          extensionPackMissingMessage(label, nativeType.name, native.pack),
+          sourceId,
+          nativeType.attribute.span,
+        ),
+      );
+      return;
+    }
+    if (nativeType !== undefined && native?.kind === 'unknown') {
       diagnostics.push(
         prisma7Diagnostic(
           'PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED',
@@ -1398,14 +1427,14 @@ function readField(args: ReadFieldArgs): void {
       );
       return;
     }
-    const mapping = native ?? scalar;
+    const mapping = native?.kind === 'mapped' ? native.mapping : scalar;
     fieldType =
       nativeType === undefined || nativeType.attribute.args.length === 0
-        ? { kind: 'values', path: [mapping.constructorName], values: mapping.args }
+        ? { kind: 'values', path: mapping.constructorPath, values: mapping.args }
         : {
             kind: 'written',
             call: {
-              path: [mapping.constructorName],
+              path: mapping.constructorPath,
               args: nativeType.attribute.args,
               span: nativeType.attribute.span,
             },

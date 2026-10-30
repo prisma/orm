@@ -1,8 +1,8 @@
 /**
  * The routes that moved to Prisma 8: the same rows Prisma 7 wrote, read and
  * written through `db.orm.public.<Model>`, with the tags reached through the
- * `_PostToTag` junction Prisma 7 created, and `updatedAt` set by Prisma 8's own
- * generator on update.
+ * `_PostToTag` junction Prisma 7 created, `updatedAt` set by Prisma 8's own
+ * generator on update, and a `@db.Citext` email matched without regard to case.
  */
 import { db, prisma } from './db';
 
@@ -26,6 +26,9 @@ if (alice === undefined || ormTag === null) {
   console.error('Run `pnpm seed` first.');
   process.exit(1);
 }
+
+const byShoutedEmail = await db.orm.public.User.where({ email: 'ALICE@EXAMPLE.COM' }).first();
+console.log(`ALICE@EXAMPLE.COM finds ${byShoutedEmail?.email ?? 'nobody'} through Prisma 8`);
 
 const created = await db.orm.public.Post.include('tags').create({
   title: `Written through Prisma 8 at ${new Date().toISOString()}`,

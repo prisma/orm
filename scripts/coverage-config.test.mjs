@@ -323,10 +323,11 @@ describe('coverage config', () => {
     assert.match(testJob, /^ {4}name: Test$/m);
     assert.match(
       testJob,
-      /^ {4}needs: \[build, changes, test-packages, test-examples, coverage, test-integration\]$/m,
+      /^ {4}needs: \[build, changes, test-packages, test-examples, test-telemetry-backend, coverage, test-integration\]$/m,
     );
     assert.match(testJob, /needs\.test-packages\.result != 'success'/);
     assert.match(testJob, /needs\.test-examples\.result != 'success'/);
+    assert.match(testJob, /needs\.test-telemetry-backend\.result != 'success'/);
     assert.match(testJob, /needs\.coverage\.result != 'success'/);
     assert.match(testJob, /run: exit 1/);
 

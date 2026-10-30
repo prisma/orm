@@ -362,7 +362,7 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
             ).result;
             expect(replayed).toMatchObject({
               ok: true,
-              migrationsApplied: 5,
+              migrationsApplied: 6,
               markerHash: keyHash,
             });
             expect(await constraintNames(freshUrl)).toEqual(

@@ -280,7 +280,7 @@
               "email": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/text@1",
+                  "codecId": "pg/citext@1",
                   "kind": "scalar"
                 }
               },
@@ -502,8 +502,8 @@
                   }
                 },
                 "email": {
-                  "codecId": "pg/text@1",
-                  "dataType": "pg/text",
+                  "codecId": "pg/citext@1",
+                  "dataType": "citext/citext",
                   "nullable": false
                 },
                 "id": {
@@ -654,7 +654,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "97963644c7d9359d5e31879ed1c6bfdc39b666d0fd1d0f152525b055d3c574c3"
+    "storageHash": "504f70472e4d50e1f0c634058f6e4ef9966d34c019e7778b58c0f35d2091b1cb"
   },
   "execution": {
     "executionHash": "9a5883a46a0f8f232598bc988951650620bebba27bb6d25c01513cb5e3fd94b9",
@@ -725,7 +725,24 @@
       "scalarList": true
     }
   },
-  "extensions": {},
+  "extensions": {
+    "citext": {
+      "familyId": "sql",
+      "id": "citext",
+      "kind": "extension",
+      "targetId": "postgres",
+      "types": {
+        "codecTypes": {
+          "import": {
+            "alias": "CitextTypes",
+            "named": "CodecTypes",
+            "package": "@internal/extension-citext/codec-types"
+          }
+        }
+      },
+      "version": "0.0.1"
+    }
+  },
   "meta": {},
   "_generated": {
     "warning": "⚠️  GENERATED FILE - DO NOT EDIT",

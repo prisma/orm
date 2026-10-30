@@ -43,6 +43,6 @@ The `NativeTypes.citext` column needs the `citext` extension. Run `CREATE EXTENS
 This directory records what Prisma 7 does. It is not the input for the zero-findings end-to-end proof (`contract emit`, `db sign`, `db verify`), because the interpreter reports two constructs in this schema as errors:
 
 - `view UserSummary` (`PSL.PRISMA7_VIEW_UNSUPPORTED`)
-- `@db.Citext` on `NativeTypes` (`PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED`)
+- `@db.Citext` on `NativeTypes` without the citext pack composed (`PSL.PRISMA7_EXTENSION_PACK_MISSING`); `../citext/` reads citext columns with the pack composed
 
 Use `../supported/` for the end-to-end proof. It is this schema with those two constructs removed and nothing else changed.

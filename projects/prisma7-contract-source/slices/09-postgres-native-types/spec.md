@@ -6,7 +6,7 @@ A Prisma 7 schema whose columns use `@db.Bit`, `@db.VarBit`, `@db.Xml`, `@db.Oid
 
 Today the reader refuses all five with `PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED`, so a Prisma 7 project with one such column cannot adopt Prisma 8.
 
-`@db.Citext` was in this slice and is moved out (Will, 2026-10-29). QA showed that an existing Prisma 7 database using citext could not adopt Prisma 8 with the citext pack: `db sign` cannot check that the extension exists, so it cannot record the pack's migration. Citext follows the Postgres extensions slice, which lets a contract declare an extension. Decisions 3 to 5 below are kept for that later PR.
+`@db.Citext` was in this slice and moved out (Will, 2026-10-29). QA showed that an existing Prisma 7 database using citext could not adopt Prisma 8 with a citext pack that installed the extension in a hand-written migration recording an invariant: `db sign` cannot check that such a migration ran, so it cannot record it. Decisions 3 to 5 are delivered in a later PR, on top of the Postgres extensions slice (`../10-postgres-extensions/spec.md`), which lets a contract declare an extension. The citext pack's contract declares `extension citext {}`, its one migration creates the extension from the empty contract and records no invariant, and the Prisma 7 reader reads `@db.Citext` through the same extension-to-pack entry that reads `extensions = [citext]`. So a database Prisma 7 built is adopted with `contract emit` and `db sign`, and no `migration plan`.
 
 ## Decisions (settled with Will, 2026-10-27)
 
@@ -16,13 +16,13 @@ Today the reader refuses all five with `PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED`, so
    - `pg/oid`: an unsigned 32-bit integer, a JSON number from 0 to 4294967295. It casts from `pg/int2`, `pg/int4` and `pg/int8`, refusing a value out of range. The codec gives a `number`. Prisma 7 declares it on an `Int` field.
    - `pg/money`: stored as digit text with exactly two fraction digits, the `numeric(…,2)` spelling (`"12.50"`, `"-1234.56"`). Its range is PostgreSQL's: −92233720368547758.08 to +92233720368547758.07. It casts from the integer types and `pg/numeric`, refusing a value with more than two fraction digits rather than rounding it. The codec gives a decimal string, as `pg/numeric@1` does; Prisma 7 declares it on a `Decimal` field.
 2. **`money` is read correctly, not as Prisma 7 reads it.** PostgreSQL prints `money` by the session's `lc_monetary`. Prisma 7.10.0's pg adapter reads it with `money.slice(1)`, which turns `-$7.25` into `$7.25` and keeps thousands separators. The Postgres target declares `lc_monetary=C` as a session setting beside `DateStyle=ISO`, so every driver connection prints `$1,234.56` and `-$1,234.56`. The codec's `fromWire` reads that text exactly and refuses any other form with a structured error naming the setting, as the date codecs refuse a non-ISO `DateStyle`. `toWire` sends digit text. PostgreSQL reads `money` input by `lc_monetary` too, so the adapter sends each `money` parameter as `numeric` and casts it, `$1::numeric::money`, which reads no separators. The conversion still scales by the locale's number of fraction digits, so writes, like reads, need `lc_monetary=C` under a locale whose number is not two. The setting also changes how `money` prints in the application's own raw SQL; the docs say so.
-3. **(Later PR.) `citext` is a trusted contrib module, so it is an extension pack**, `packages/3-extensions/citext` (`@internal/extension-citext`), with a contract space whose one baseline migration runs `CREATE EXTENSION IF NOT EXISTS citext`, as pgvector's does. Its data type is `citext/citext` (catalog text `citext`), its codec `pg/citext@1` gives a `string`, and its PSL type constructor is `citext.Citext`, marked inferred. It casts from `pg/text`. The codec declares the traits a text codec declares: equality, ordering and text matching, all case-insensitive in PostgreSQL.
-4. **(Later PR.) Packaging by tier of Postgres extension:**
+3. **(Later PR, delivered.) `citext` is a trusted contrib module, so it is an extension pack**, `packages/3-extensions/citext` (`@internal/extension-citext`). Its contract declares `extension citext {}` in `public`, as pgvector's declares `vector`, and its one migration, planned from the empty contract, creates the extension; its head ref lists no invariants. Its data type is `citext/citext` (catalog text `citext`), its codec `pg/citext@1` gives a `string`, and its PSL type constructor is `citext.Citext`, marked inferred. It casts from `pg/text`. The codec declares the traits a text codec declares: equality, ordering and text matching, all case-insensitive in PostgreSQL.
+4. **(Later PR, delivered.) Packaging by tier of Postgres extension:**
    - every third-party extension has its own published package (pgvector, postgis and paradedb already do; nothing moves);
    - the 20 contrib modules PostgreSQL marks trusted share one published package, `@prisma/orm-postgres-contrib`, one entrypoint group per module (`/citext/...`);
    - the other 30 contrib modules will share one more package, created when the first of them needs a pack.
-   An ADR records this rule and why `orm-postgres-contrib` does not carry the `orm-extension-` prefix of the six existing packs.
-5. **(Later PR.) The Prisma 7 reader maps `@db.Citext` to `citext.Citext` only when the citext pack is composed.** Without it, the reader refuses the field with a diagnostic that names the edit: add `citext` from `@prisma/orm-postgres-contrib/citext/control` to `extensions` in `prisma.config.ts`. The reader does not read the datasource `extensions` list (TML-3460 owns that).
+   ADR 313 records this rule and why `orm-postgres-contrib` does not carry the `orm-extension-` prefix of the six existing packs.
+5. **(Later PR, delivered.) The Prisma 7 reader maps `@db.Citext` to `citext.Citext` only when the citext pack is composed.** Without it, the reader refuses the field with `PSL.PRISMA7_EXTENSION_PACK_MISSING`, naming the edit: add `citext` from `@prisma/orm-postgres-contrib/citext/control` to `extensions` in `prisma.config.ts`. The Postgres binding's extension-to-pack map has a `citext` entry, and the type map says `@db.Citext` is provided by the extension `citext`, so the native type and a datasource `extensions = [citext]` entry are read through one entry and refused with one diagnostic.
 
 ## Requirements
 
@@ -30,11 +30,11 @@ Today the reader refuses all five with `PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED`, so
 - `db verify` against the database Prisma 7's own SQL built, with a column of each type, reports nothing (extend the reference SQL recorded from Prisma 7.10.0 and the verify test that runs it).
 - Prisma 8 PSL and the TypeScript builder can declare each type; `contract infer` prints each column with its inferred constructor; the printer round-trips each.
 - The codec conformance test kit covers each new codec against a real database, including `money` values that are negative and at least 1,000, and both ends of `oid`'s range.
-- `docs/reference/scalar-types.md`, the error reference entry for `PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED`, and the Postgres facade README's table list only what is still refused (of these six, only `@db.Citext`).
+- `docs/reference/scalar-types.md`, the error reference entry for `PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED`, and the Postgres facade README's table list no refusal for any of the six; `PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED` is left only for a misspelled `@db.*` type.
 
 ## Non-goals
 
-- Reading the Prisma 7 datasource `extensions` list, or planning `CREATE EXTENSION` from a contract (TML-3460).
+- Reading the Prisma 7 datasource `extensions` list and planning `CREATE EXTENSION` from a contract. The Postgres extensions slice delivered both, and citext builds on them.
 - Moving pgvector, postgis or paradedb.
 - Packs for any other contrib module.
 

@@ -793,7 +793,7 @@ A listed extension has an argument the contract cannot describe: `version:`, bec
 
 ### PSL.PRISMA7_EXTENSION_PACK_MISSING
 
-A listed extension is declared by an extension pack the config does not compose: `vector` by pgvector, `postgis` by PostGIS, `pg_search` by ParadeDB. Add the pack to `extensions` in `prisma.config.ts`; the message names the import, such as `import pgvector from '@prisma/orm-extension-pgvector/control'`. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+A listed extension, or a `@db.*` type whose column type an extension provides, belongs to an extension pack the config does not compose: `vector` by pgvector, `postgis` by PostGIS, `pg_search` by ParadeDB, and `citext` and `@db.Citext` by the citext pack. Add the pack to `extensions` in `prisma.config.ts`; the message names the import, such as `import pgvector from '@prisma/orm-extension-pgvector/control'` or `import citext from '@prisma/orm-postgres-contrib/citext/control'`. Nothing changes in the Prisma 7 schema. For a `@db.*` type, `@ignore` and `@@ignore` do not help, because Prisma 8 keeps the columns of ignored fields and models in the contract. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_EXTENSION_SCHEMA_MISMATCH
 
@@ -821,7 +821,7 @@ A model in the same schema as an implicit many-to-many junction has the junction
 
 ### PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED
 
-A `@db.*` type with no Prisma 8 codec yet (`Citext`, or an unknown spelling). Prisma 8 cannot read the schema until it supports the column type. `@ignore` and `@@ignore` do not help, because Prisma 8 keeps the columns of ignored fields and models in the contract. Changing the field's type to one Prisma 8 supports changes the column type on Prisma 7's next migration. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+A `@db.*` spelling the target does not know, on an ignored field or model too. Prisma 7 refuses it too. Correct the spelling. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_PROVIDER_MISMATCH
 
