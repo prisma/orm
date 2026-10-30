@@ -233,6 +233,16 @@ describe('fillStoredKey', () => {
       );
     });
 
+    it('refuses a field that does not name the key the path ends at', () => {
+      expect(() => new FillStoredKeyCall('app', 'place', 'point', '$.city', 'NZ', field)).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.ARGUMENT_INVALID',
+          message:
+            'fillStoredKey({ schema: "app", table: "place", column: "point" }): field "GeoPoint.country" does not name key "city", the key path "$.city" ends at',
+        }),
+      );
+    });
+
     it('takes a value the field takes, or a placeholder, and renders the field', () => {
       expect([
         new FillStoredKeyCall('app', 'place', 'point', '$.country', 'NZ', field).renderTypeScript(),

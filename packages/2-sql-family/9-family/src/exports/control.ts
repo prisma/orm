@@ -58,6 +58,7 @@ export { fieldOfColumn } from '../core/migrations/field-of-column';
 export {
   type FillValueCheck,
   type FillValueTypes,
+  fillKeyProblem,
   fillValueProblem,
   type StoredKeyFillField,
   scalarTypeNamesOf,

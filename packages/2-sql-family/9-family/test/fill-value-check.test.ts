@@ -4,6 +4,7 @@ import { structuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import {
   type FillValueTypes,
+  fillKeyProblem,
   fillValueProblem,
   scalarTypeNamesOf,
 } from '../src/core/migrations/fill-value-check';
@@ -114,6 +115,18 @@ describe('fillValueProblem', () => {
       'field "Address.nope" is not a value object field of the end contract',
     );
     expect(fillValueProblem(12, { text: 'Address.country', check: undefined })).toBeUndefined();
+  });
+});
+
+describe('fillKeyProblem', () => {
+  it('refuses a field that does not name the key the path ends at', () => {
+    const field = { text: 'Address.country', check: undefined };
+
+    expect(fillKeyProblem({ key: 'city', path: '$.city' }, field)).toBe(
+      'field "Address.country" does not name key "city", the key path "$.city" ends at',
+    );
+    expect(fillKeyProblem({ key: 'country', path: '$[*].country' }, field)).toBeUndefined();
+    expect(fillKeyProblem({ key: 'city', path: '$.city' }, undefined)).toBeUndefined();
   });
 });
 

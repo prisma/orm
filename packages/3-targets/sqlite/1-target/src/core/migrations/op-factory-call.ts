@@ -16,6 +16,7 @@ import {
   checkSqlExpressionText,
   createSqlTextSources,
   encodeStoredValue,
+  fillKeyProblem,
   fillValueProblem,
   isUnfilledSlot,
   type JsonKeyPath,
@@ -1646,6 +1647,8 @@ export class FillStoredKeyCall extends SqliteOpFactoryCallNode {
     this.tableName = tableName;
     this.columnName = columnName;
     this.path = requireKeyPath(path, this.factoryName, location);
+    const keyProblem = fillKeyProblem({ key: this.path.key, path: this.path.path.text }, field);
+    if (keyProblem !== undefined) refusedArgument(this.factoryName, location, 'field', keyProblem);
     this.field = field;
     this.value =
       value instanceof UnfilledValue

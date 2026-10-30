@@ -177,6 +177,18 @@ class FieldValueCheck {
   }
 }
 
+/** Why `field` cannot be the field a `fillStoredKey` call fills at `keyPath`: its last name must be the key the path ends at. */
+export function fillKeyProblem(
+  keyPath: { readonly key: string; readonly path: string },
+  field: StoredKeyFillField | undefined,
+): string | undefined {
+  if (field === undefined) return undefined;
+  const fieldName = field.text.slice(field.text.lastIndexOf('.') + 1);
+  return fieldName === keyPath.key
+    ? undefined
+    : `field ${json(field.text)} does not name key ${json(keyPath.key)}, the key path ${json(keyPath.path)} ends at`;
+}
+
 /**
  * Why `value` cannot fill the field, or `undefined` when the field has no check or takes the value:
  * an enum value must be one of its value set's values, a list must hold values of its element's
