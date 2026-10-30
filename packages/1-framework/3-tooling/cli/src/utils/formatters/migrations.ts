@@ -2,6 +2,7 @@ import type {
   MigrationPlannerConflict,
   MigrationSubjectJson,
   OperationPreview,
+  PolicyDifference,
 } from '@internal/framework-components/control';
 import type { ChangedStorageEntity } from '../../control-api/operations/changed-storage-entities';
 import type { AppliedStatementReport } from '../../control-api/statements/report-applied-statements';
@@ -97,6 +98,8 @@ export interface MigrationCommandResult {
     readonly storageHash: string;
     readonly profileHash?: string;
   };
+  /** The settings the run recorded as the database's policies, with the values they replaced. */
+  readonly policiesUpdated?: readonly PolicyDifference[];
   /**
    * Per-space execution breakdown in canonical schedule order
    * (extensions alphabetically, then app). Surfaces per-space markers

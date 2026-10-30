@@ -15,6 +15,7 @@ import type {
   MigrationPlanOperation,
   MigrationPlanSubjects,
   OperationPreview,
+  PolicyDifference,
   ResolvedMigrationStatement,
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
@@ -588,6 +589,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     changedStorageEntities: signedWithoutOperations
       ? changedStorageEntities(fromContract, contract)
       : undefined,
+    policiesUpdated: policiesToWrite?.differences,
   });
 }
 
@@ -851,9 +853,11 @@ function wrapApplyResult(args: {
   readonly databaseStorageHash: string | undefined;
   /** Set when `db update` signed the database with a changed contract and ran no operation. */
   readonly changedStorageEntities: readonly ChangedStorageEntity[] | undefined;
+  readonly policiesUpdated: readonly PolicyDifference[] | undefined;
 }): DbInitResult | DbUpdateResult {
   const success: DbInitSuccess | DbUpdateSuccess = {
     mode: 'apply',
+    ...ifDefined('policiesUpdated', args.policiesUpdated),
     ...ifDefined('databaseStorageHash', args.databaseStorageHash),
     ...ifDefined('changedStorageEntities', args.changedStorageEntities),
     ...ifDefined('appliedStatements', args.appliedStatements),

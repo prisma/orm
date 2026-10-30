@@ -219,9 +219,21 @@ describe('executeDbUpdate, database policies', () => {
       executeSpy: execute,
     });
 
-    expect(result.ok ? result.value.summary : result.failure).toBe(
-      'Applied 1 operation(s) across 1 space(s), signature updated; policies updated: dataLoss: data-loss-permitted',
-    );
+    expect(
+      result.ok
+        ? { summary: result.value.summary, policiesUpdated: result.value.policiesUpdated }
+        : result.failure,
+    ).toEqual({
+      summary:
+        'Applied 1 operation(s) across 1 space(s), signature updated; policies updated: dataLoss: data-loss-permitted',
+      policiesUpdated: [
+        {
+          setting: 'dataLoss',
+          declared: 'data-loss-permitted',
+          inForce: 'data-loss-with-consent',
+        },
+      ],
+    });
     expect(execute.mock.calls[0]?.[0].perSpaceOptions[0].databasePolicies).toEqual({
       change: ['migrate', 'reconcile'],
       dataProtection: {
@@ -237,8 +249,9 @@ describe('executeDbUpdate, database policies', () => {
         perSpaceResults: [{ space: 'app', value: { operationsPlanned: 1, operationsExecuted: 1 } }],
       }),
     );
-    await update({ mode: 'apply', markers: new Map(), executeSpy: execute });
+    const result = await update({ mode: 'apply', markers: new Map(), executeSpy: execute });
 
     expect(execute.mock.calls[0]?.[0].perSpaceOptions[0]).not.toHaveProperty('databasePolicies');
+    expect(result.ok ? result.value : result.failure).not.toHaveProperty('policiesUpdated');
   });
 });

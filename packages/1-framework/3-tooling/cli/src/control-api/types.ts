@@ -512,6 +512,8 @@ export interface DbUpdateSuccess
   /** The storage entities that changed, when the run signed the database with a changed contract and ran no operation. */
   readonly changedStorageEntities?: readonly ChangedStorageEntity[];
   readonly summary: string;
+  /** The settings the run recorded as the database's policies, with the values they replaced. Present only when it recorded some. */
+  readonly policiesUpdated?: readonly PolicyDifference[];
 }
 
 /**
