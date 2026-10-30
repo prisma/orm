@@ -463,3 +463,51 @@ Unchanged from round 4.
 | R7 | The runner compares the checked policies under its lock (MongoDB: before the first space, and at the guarded write) | PASS | PASS | `checkDatabasePolicies` before the first space; `updateMarker` guarded by `policiesHoldExpr`; adapter tests against a real MongoDB; the probe above. |
 
 Totals: 30 PASS of 30 edge cases and done conditions.
+
+## Round 6
+
+Reviews `df769006c2...HEAD` at `f9d12b2dc7`. Persona: principal engineer. A short final check.
+
+### Verdicts
+
+| Item | Verdict | Evidence |
+|---|---|---|
+| F18 / A28 — the MongoDB guard accepted extra keys | Fixed in `f9d12b2dc7` | `missingOrObjectOf` requires the keys of `meta.policies` and of `dataProtection` to be a subset of the framework's new `DATABASE_POLICIES_KEYS` and `DATA_PROTECTION_KEYS`. Both lists are tied to `DatabasePolicies` by `satisfies`. The settings check iterates `DATA_PROTECTION_KEYS`. The rerun probe now refuses the swap for both extra-key cases, and for `{ extra: 1 }` and `{ dataProtection: {}, extra: null }`. Adapter test table extended. |
+| F19 / A29 — changed-and-restored reported with equal hashes | Fixed in `f9d12b2dc7` | `markerSwapFailure` returns `markerChanged` when the hash (and, if guarded, the policies) hold again. The runner returns `reason: 'markerChanged'` with a `why` that says the marker was changed and changed back. `db sign`'s diagnostic detects the same case and uses that reason and wording. Unit tests in the family, runner and `db-sign.marker-changed.test.ts`. The error reference lists it as the third cause. |
+| F20 — stale `checkedPolicies` comment | Fixed in `f9d12b2dc7` | The comment now says the marker is written only while its policies read as these. |
+| A30 — three names for one value | Fixed in `f9d12b2dc7` | `checkedPolicies` from the CLI to the adapter's `updateMarker`. The family's local `guardedBy` only marks that extension spaces get no guard. |
+
+### Probe rerun
+
+I reran the probe in `wip/probe/filter-probe.test.ts` against the new guard (results in `wip/review6-probe-results.txt`), with five extra cases, then deleted `wip/probe`. All 12 round-5 cases agree, and so do the extra-key and full-defaults cases. Two new cases disagree; see F21.
+
+### Findings
+
+#### F21 — The framework parser reads an empty array as policies; the MongoDB guard does not, so every write fails as "changed and changed back"
+
+Paths: packages/1-framework/1-core/framework-components/src/control/database-policies.ts 70–79 (`PartialDatabasePoliciesSchema`); packages/3-targets/mongo/2-adapter/src/core/migrations/mongo-control-adapter.ts (`missingOrObjectOf`).
+
+Probe results:
+- `meta.policies: []`: `databasePoliciesOf` returns the defaults, but the guard refuses the swap.
+- `meta.policies: { dataProtection: [] }`: same result.
+
+arktype's object schema accepts an empty array because it has no own keys. The guard requires BSON type `object`.
+
+Effect on MongoDB: the first check passes. The application marker's write then fails every time. `markerSwapFailure` finds the hash and policies "held" and reports `markerChanged`, telling the user to run the command again, which fails the same way. Only a hand-edited marker can be in this state, because the framework never writes arrays. Still, the advice loops and the real cause (a malformed marker) is never named.
+
+Suggestion: make the parser reject arrays at both levels, for example by narrowing with `type('object').narrow(v => !Array.isArray(v))` or arktype's equivalent. The value is then unreadable everywhere: the first check raises `MARKER_ROW_CORRUPT` with advice that keeps the marker, and parser and guard agree. Add `[]` and `{ dataProtection: [] }` to the framework's invalid-marker cases and to the adapter's "does not swap" table.
+
+### Verification
+
+All pass, with output under `wip/`:
+
+- **Framework:** `wip/review6-fw.txt` (20).
+- **CLI `db sign`:** `wip/review6-cli.txt` (24).
+- **MongoDB family:** `wip/review6-mongofamily.txt` (34).
+- **MongoDB runner:** `wip/review6-mongo-runner.txt` (34).
+- **MongoDB adapter:** `wip/review6-mongo-adapter.txt` (15).
+- **MongoDB policy integration file:** `wip/review6-e2e.txt` (26).
+- **`pnpm check:error-reference`.**
+- **`pnpm typecheck`** in the five touched packages.
+
+The acceptance rows are unchanged: 30 of 30 PASS. F21 affects only a hand-edited marker; it does not change any listed edge case.
