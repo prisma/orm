@@ -34,8 +34,14 @@ const EXPECTED: Readonly<Record<string, readonly SqlTypeText[]>> = {
   'sql/raw': [],
 };
 
-/** The two types stored as `sqlite/text`, which declare no texts of their own. */
-const STORED_AS_TEXT: readonly string[] = ['sqlite/datetime', 'sqlite/json'];
+/** The types stored as `sqlite/text`, which declare no texts of their own. */
+const STORED_AS_TEXT: readonly string[] = [
+  'sqlite/datetime',
+  'sqlite/date',
+  'sqlite/time',
+  'sqlite/duration',
+  'sqlite/json',
+];
 
 const registered: readonly DataType[] = sqliteTargetDescriptorMeta.dataTypes;
 const withTexts = registered.filter((type) => !STORED_AS_TEXT.includes(type.id));

@@ -8,20 +8,30 @@ import type {
   ReportedBody,
   ReportedLiteralDefault,
 } from '@internal/family-sql/control';
-import { SQLITE_DATETIME_TEXT_FORMAT } from './datetime-text';
+import { SQLITE_DATETIME_TEXT_FORMAT, SQLITE_TIME_TEXT_FORMAT } from './datetime-text';
 
 const NULL_PATTERN = /^NULL$/i;
 const INTEGER_PATTERN = /^[+-]?\d+$/;
 const REAL_PATTERN = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 const STRING_LITERAL_PATTERN = /^'((?:[^']|'')*)'$/;
 const STRFTIME_NOW_PATTERN = /^strftime\s*\(\s*(['"])([^'"]*)\1\s*,\s*(['"])now\3\s*\)$/i;
+const DATE_NOW_PATTERN = /^date\s*\(\s*(['"])now\1\s*\)$/i;
+const NOW_FORMATS: ReadonlySet<string | undefined> = new Set([
+  SQLITE_DATETIME_TEXT_FORMAT,
+  SQLITE_TIME_TEXT_FORMAT,
+]);
 
 function isCurrentTimestamp(expression: string): boolean {
   const lower = expression.toLowerCase();
-  if (lower === 'current_timestamp' || lower === "datetime('now')" || lower === 'datetime("now")') {
+  if (
+    lower === 'current_timestamp' ||
+    lower === "datetime('now')" ||
+    lower === 'datetime("now")' ||
+    DATE_NOW_PATTERN.test(expression)
+  ) {
     return true;
   }
-  return expression.match(STRFTIME_NOW_PATTERN)?.[2] === SQLITE_DATETIME_TEXT_FORMAT;
+  return NOW_FORMATS.has(expression.match(STRFTIME_NOW_PATTERN)?.[2]);
 }
 
 /**
@@ -84,7 +94,7 @@ export type SqliteReportedDefault =
   | { readonly kind: 'literal'; readonly literal: ReportedLiteralDefault };
 
 /**
- * Reads a column's reported default. `CURRENT_TIMESTAMP`, `datetime('now')` and the expression a `now()` default is written as are `now()`. A quoted string, a numeral or a blob literal (`X'6869'`, read as its bytes) is a literal; any other expression is a function default, kept as reported.
+ * Reads a column's reported default. `CURRENT_TIMESTAMP`, `datetime('now')`, `date('now')` and the expressions a `now()` default is written as, for an instant and for a time of day, are `now()`. A quoted string, a numeral or a blob literal (`X'6869'`, read as its bytes) is a literal; any other expression is a function default, kept as reported.
  */
 export function readSqliteDefault(rawDefault: string, declaredType: string): SqliteReportedDefault {
   let trimmed = rawDefault.trim();

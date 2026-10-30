@@ -22,10 +22,13 @@ describe('the authoring entries this target contributes', () => {
   it('keys every entry by the data type it reads', () => {
     expect(Object.keys(entries).sort()).toEqual([
       'sqlite/blob',
+      'sqlite/date',
       'sqlite/datetime',
+      'sqlite/duration',
       'sqlite/json',
       'sqlite/real',
       'sqlite/text',
+      'sqlite/time',
     ]);
   });
   it('names every type its classifier returns', () => {

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { SQLITE_NOW_EXPRESSION } from '../src/core/datetime-text';
+import {
+  SQLITE_DATE_NOW_EXPRESSION,
+  SQLITE_NOW_EXPRESSION,
+  SQLITE_TIME_NOW_EXPRESSION,
+  sqliteNowExpressionFor,
+} from '../src/core/datetime-text';
 import { readSqliteDefault, sqliteResolveDefault } from '../src/core/default-normalizer';
 
 const literal = (body: string | number) => ({
@@ -18,6 +23,8 @@ describe('sqliteResolveDefault', () => {
     ["datetime('now')"],
     ['(CURRENT_TIMESTAMP)'],
     ["strftime('%Y-%m-%dT%H:%M:%fZ','now')"],
+    ["date('now')"],
+    ["strftime('%H:%M:%f','now')"],
   ])('names the authored expression %j now(), as introspection does', (expression) => {
     expect(
       sqliteResolveDefault({ kind: 'function', expression }, { typeText: 'text', many: false }),
@@ -80,6 +87,11 @@ describe('readSqliteDefault', () => {
     ["  strftime (  '%Y-%m-%dT%H:%M:%fZ' ,\n 'now'  )  "],
     ['strftime("%Y-%m-%dT%H:%M:%fZ","now")'],
     ['CURRENT_TIMESTAMP'],
+    [SQLITE_DATE_NOW_EXPRESSION],
+    ["(date('now'))"],
+    ['DATE("now")'],
+    [SQLITE_TIME_NOW_EXPRESSION],
+    ["(strftime('%H:%M:%f', 'now'))"],
   ])('reads %j as now()', (raw) => {
     expect(readSqliteDefault(raw, 'TEXT')).toEqual({ kind: 'function', expression: 'now()' });
   });
@@ -107,5 +119,30 @@ describe('readSqliteDefault', () => {
 
   it('reads NULL as SQL NULL', () => {
     expect(readSqliteDefault('NULL', 'TEXT')).toEqual({ kind: 'null' });
+  });
+});
+
+describe('the expression a now() default is written as', () => {
+  it('is the current date on sqlite/date, the time of day on sqlite/time and the instant elsewhere', () => {
+    expect({
+      date: sqliteNowExpressionFor('sqlite/date'),
+      time: sqliteNowExpressionFor('sqlite/time'),
+      datetime: sqliteNowExpressionFor('sqlite/datetime'),
+      text: sqliteNowExpressionFor('sqlite/text'),
+      unknown: sqliteNowExpressionFor(undefined),
+    }).toEqual({
+      date: "date('now')",
+      time: "strftime('%H:%M:%f','now')",
+      datetime: "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+      text: "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+      unknown: "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+    });
+  });
+
+  it.each(['sqlite/date', 'sqlite/time'])('on %s, is read back as now()', (dataType) => {
+    expect(readSqliteDefault(`(${sqliteNowExpressionFor(dataType)})`, 'TEXT')).toEqual({
+      kind: 'function',
+      expression: 'now()',
+    });
   });
 });

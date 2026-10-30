@@ -10,11 +10,23 @@ function resolve(name: string, codecId: string, args: Record<string, unknown> = 
 }
 
 describe('the SQLite generator functions', () => {
-  it('resolve now() on DateTime to timestampNow', () => {
-    expect(resolve('now', 'sqlite/datetime@1')).toEqual({
+  it.each([
+    ['sqlite/datetime@1', 'timestampNow'],
+    ['sqlite/datetime-temporal@1', 'instantNow'],
+    ['sqlite/datetime-string@1', 'timestamptzStringNow'],
+    ['sqlite/date-string@1', 'dateStringNow'],
+    ['sqlite/date-temporal@1', 'plainDateNow'],
+    ['sqlite/time-string@1', 'timeStringNow'],
+    ['sqlite/time-temporal@1', 'plainTimeNow'],
+  ])('resolve now() on %s to %s, with no params', (codecId, id) => {
+    expect(resolve('now', codecId)).toEqual({
       ok: true,
-      generator: { kind: 'generator', id: 'timestampNow' },
+      generator: { kind: 'generator', id },
     });
+  });
+
+  it('bind no now() to a duration, which holds no moment', () => {
+    expect(registry.functionsFor('sqlite/duration-string@1').map((fn) => fn.name)).toEqual([]);
   });
 
   it('resolve uuid() on String', () => {
