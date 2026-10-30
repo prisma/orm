@@ -52,37 +52,21 @@
                           "bsonType": "string"
                         },
                         "zip": {
-                          "bsonType": [
-                            "null",
-                            "string"
-                          ]
+                          "bsonType": ["null", "string"]
                         }
                       },
-                      "required": [
-                        "city",
-                        "country",
-                        "street"
-                      ]
+                      "required": ["city", "country", "street"]
                     }
                   ]
                 },
                 "availableFrom": {
-                  "bsonType": [
-                    "null",
-                    "string"
-                  ]
+                  "bsonType": ["null", "string"]
                 },
                 "bio": {
-                  "bsonType": [
-                    "null",
-                    "string"
-                  ]
+                  "bsonType": ["null", "string"]
                 },
                 "birthday": {
-                  "bsonType": [
-                    "null",
-                    "date"
-                  ]
+                  "bsonType": ["null", "date"]
                 },
                 "email": {
                   "bsonType": "string"
@@ -92,19 +76,10 @@
                 },
                 "role": {
                   "bsonType": "string",
-                  "enum": [
-                    "admin",
-                    "author",
-                    "reader"
-                  ]
+                  "enum": ["admin", "author", "reader"]
                 }
               },
-              "required": [
-                "_id",
-                "email",
-                "name",
-                "role"
-              ]
+              "required": ["_id", "email", "name", "role"]
             }
           },
           "validationLevel": "strict",
@@ -169,37 +144,21 @@
                             "bsonType": "string"
                           },
                           "zip": {
-                            "bsonType": [
-                              "null",
-                              "string"
-                            ]
+                            "bsonType": ["null", "string"]
                           }
                         },
-                        "required": [
-                          "city",
-                          "country",
-                          "street"
-                        ]
+                        "required": ["city", "country", "street"]
                       }
                     ]
                   },
                   "availableFrom": {
-                    "bsonType": [
-                      "null",
-                      "string"
-                    ]
+                    "bsonType": ["null", "string"]
                   },
                   "bio": {
-                    "bsonType": [
-                      "null",
-                      "string"
-                    ]
+                    "bsonType": ["null", "string"]
                   },
                   "birthday": {
-                    "bsonType": [
-                      "null",
-                      "date"
-                    ]
+                    "bsonType": ["null", "date"]
                   },
                   "email": {
                     "bsonType": "string"
@@ -209,19 +168,10 @@
                   },
                   "role": {
                     "bsonType": "string",
-                    "enum": [
-                      "admin",
-                      "author",
-                      "reader"
-                    ]
+                    "enum": ["admin", "author", "reader"]
                   }
                 },
-                "required": [
-                  "_id",
-                  "email",
-                  "name",
-                  "role"
-                ]
+                "required": ["_id", "email", "name", "role"]
               }
             }
           ]
