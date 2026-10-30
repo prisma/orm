@@ -24,7 +24,8 @@
     "@internal/mongo-contract": "workspace:8.0.0-rc.22",
     "@internal/mongo-value": "workspace:8.0.0-rc.22",
     "@internal/utils": "workspace:8.0.0-rc.22",
-    "pathe": "^2.0.3"
+    "pathe": "^2.0.3",
+    "temporal-spec": "1.0.1"
   },
   "devDependencies": {
     "@repo/test-utils": "workspace:8.0.0-rc.22",

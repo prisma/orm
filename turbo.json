@@ -76,6 +76,10 @@
     "@prisma/orm-target-sqlite#test": {
       "dependsOn": ["build", "^build"],
       "inputs": ["test/**", "dist/**", "vitest.config.ts"]
+    },
+    "@prisma/orm-target-mongo#test": {
+      "dependsOn": ["build", "^build"],
+      "inputs": ["test/**", "dist/**", "vitest.config.ts"]
     }
   }
 }

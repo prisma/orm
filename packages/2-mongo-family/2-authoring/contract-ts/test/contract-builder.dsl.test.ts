@@ -423,7 +423,7 @@ describe('mongo contract builder', () => {
       fields: {
         _id: field.scalar(type.ObjectId()),
         email: field.scalar(type.String()),
-        createdAt: field.scalar(type.Date()),
+        createdAt: field.scalar(type.DateTime()),
         location: field.scalar(type.String()),
       },
       indexes: [
@@ -559,7 +559,7 @@ describe('mongo contract builder', () => {
       collection: 'tasks',
       base: TaskBase,
       fields: {
-        expiresAt: field.scalar(type.Date()),
+        expiresAt: field.scalar(type.DateTime()),
       },
       indexes: [index({ expiresAt: 1 }, { expireAfterSeconds: 3600 })],
     });

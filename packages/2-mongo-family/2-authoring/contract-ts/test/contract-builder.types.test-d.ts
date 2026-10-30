@@ -196,7 +196,7 @@ test('model authoring accepts typed Mongo collection options', () => {
     collection: 'events',
     fields: {
       _id: field.scalar(type.ObjectId()),
-      createdAt: field.scalar(type.Date()),
+      createdAt: field.scalar(type.DateTime()),
     },
     collectionOptions: {
       capped: true,

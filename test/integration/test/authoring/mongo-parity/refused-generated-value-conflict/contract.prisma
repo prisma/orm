@@ -2,14 +2,14 @@
 
 model User {
   id     ObjectId @id @map("_id")
-  seenAt Date     @onCreate(now())
+  seenAt DateTime     @onCreate(now())
 
   @@map("people")
 }
 
 model Admin {
   id     ObjectId @id @map("_id")
-  seenAt Date     @onUpdate(now())
+  seenAt DateTime     @onUpdate(now())
 
   @@map("people")
 }

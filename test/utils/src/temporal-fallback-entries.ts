@@ -17,6 +17,8 @@ export interface TemporalFallbackTarget {
     readonly dir: string;
     readonly minimumEntries: number;
   };
+  /** The fewest application entries the exports maps yield, so a broken exports map fails. */
+  readonly minimumApplicationEntries: number;
   /** Application entries the exports maps must yield, as `<package> <subpath>`. */
   readonly expectedApplicationEntries: readonly string[];
   /** Every entry that loads `temporal-polyfill`, as `<package> <subpath>`. */
@@ -151,7 +153,7 @@ export function describeTemporalFallbackEntries(target: TemporalFallbackTarget):
 
   describe(`which published ${target.name} entries load temporal-polyfill`, () => {
     it('the exports maps yield application entries to check', () => {
-      expect(applicationEntries.length).toBeGreaterThan(100);
+      expect(applicationEntries.length).toBeGreaterThan(target.minimumApplicationEntries);
       expect(applicationEntries.map(nameOf)).toEqual(
         expect.arrayContaining([...target.expectedApplicationEntries]),
       );

@@ -57,6 +57,7 @@ import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
 import { assertDefined } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import type { Temporal } from 'temporal-spec';
 import { createTypeHelpersFromNamespace } from './authoring-helper-runtime';
 import { buildMongoContractFromDefinition } from './build-contract';
 import {
@@ -176,6 +177,41 @@ type MongoCodecTypes = {
     readonly input: BsonInputValue;
     readonly output: BsonValue;
     readonly traits: never;
+  };
+  readonly 'mongo/date-instant@1': {
+    readonly input: Temporal.Instant;
+    readonly output: Temporal.Instant;
+    readonly traits: 'equality' | 'order';
+  };
+  readonly 'mongo/date-instant-string@1': {
+    readonly input: string;
+    readonly output: string;
+    readonly traits: 'equality' | 'order';
+  };
+  readonly 'mongo/date-string@1': {
+    readonly input: string;
+    readonly output: string;
+    readonly traits: 'equality' | 'order';
+  };
+  readonly 'mongo/date-temporal@1': {
+    readonly input: Temporal.PlainDate;
+    readonly output: Temporal.PlainDate;
+    readonly traits: 'equality' | 'order';
+  };
+  readonly 'mongo/time-string@1': {
+    readonly input: string;
+    readonly output: string;
+    readonly traits: 'equality' | 'order';
+  };
+  readonly 'mongo/time-temporal@1': {
+    readonly input: Temporal.PlainTime;
+    readonly output: Temporal.PlainTime;
+    readonly traits: 'equality' | 'order';
+  };
+  readonly 'mongo/duration-string@1': {
+    readonly input: string;
+    readonly output: string;
+    readonly traits: 'equality';
   };
 };
 

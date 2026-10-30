@@ -19,9 +19,9 @@ const contract = defineContract({}, ({ field, model, gen, type }) => ({
       collection: 'posts',
       fields: {
         _id: field.scalar(type.ObjectId()),
-        createdAt: field.scalar(type.Date()).onCreate(gen.now()),
-        updatedAt: field.scalar(type.Date()).onCreate(gen.now()).onUpdate(gen.now()),
-        touchedAt: field.scalar(type.Date()).onUpdate(gen.now()),
+        createdAt: field.scalar(type.DateTime()).onCreate(gen.now()),
+        updatedAt: field.scalar(type.DateTime()).onCreate(gen.now()).onUpdate(gen.now()),
+        touchedAt: field.scalar(type.DateTime()).onUpdate(gen.now()),
       },
     }),
   },

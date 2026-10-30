@@ -14,8 +14,8 @@ export const contract = defineContract({}, ({ field, model: m, gen, type }) => (
         ratio: field.scalar(type.Double()),
         count: field.scalar(type.Int32()),
         active: field.scalar(type.Bool()),
-        createdAt: field.scalar(type.Date()).onCreate(gen.now()),
-        updatedAt: field.scalar(type.Date())
+        createdAt: field.scalar(type.DateTime()).onCreate(gen.now()),
+        updatedAt: field.scalar(type.DateTime())
           .onCreate(gen.now())
           .onUpdate(gen.now()),
         big: field.scalar(type.Int64()),

@@ -12,6 +12,7 @@ describeTemporalFallbackEntries({
     dir: resolve(REPO_ROOT, 'packages/3-targets/sqlite/1-target'),
     minimumEntries: 15,
   },
+  minimumApplicationEntries: 100,
   expectedApplicationEntries: [
     '@prisma/orm-target-sqlite ./target/runtime',
     '@prisma/orm-target-sqlite ./target/codecs',

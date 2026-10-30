@@ -5,7 +5,7 @@ model User {
   email     String   @unique
   tenantId  String
   name      String
-  expiresAt Date
+  expiresAt DateTime
   status    String
   metadata  Json
   title     String

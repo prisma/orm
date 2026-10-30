@@ -14,7 +14,7 @@ PSL-to-Mongo contract interpreter for Prisma 8. Transforms Prisma Schema Languag
 
 ```prisma
 types {
-  Stamp = Date @onCreate(now()) @onUpdate(now())
+  Stamp = DateTime @onCreate(now()) @onUpdate(now())
 }
 
 model Post {

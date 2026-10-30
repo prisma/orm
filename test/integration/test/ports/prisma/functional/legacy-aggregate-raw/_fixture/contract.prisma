@@ -15,8 +15,8 @@ model User {
 
 model Post {
   id        ObjectId @id @map("_id")
-  createdAt Date
-  updatedAt Date
+  createdAt DateTime
+  updatedAt DateTime
   published Bool
   title     String
   content   String?

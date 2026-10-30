@@ -40,9 +40,9 @@ describe('Mongo TS generated fields', () => {
         collection: 'posts',
         fields: {
           _id: field.scalar(type.ObjectId()),
-          updatedAt: field.scalar(type.Date()).onCreate(gen.now()).onUpdate(gen.now()),
-          createdAt: field.scalar(type.Date()).onCreate(gen.now()),
-          touchedAt: field.scalar(type.Date()).onUpdate(gen.now()),
+          updatedAt: field.scalar(type.DateTime()).onCreate(gen.now()).onUpdate(gen.now()),
+          createdAt: field.scalar(type.DateTime()).onCreate(gen.now()),
+          touchedAt: field.scalar(type.DateTime()).onUpdate(gen.now()),
         },
       }),
     },
@@ -55,7 +55,10 @@ describe('Mongo TS generated fields', () => {
           collection: 'posts',
           fields: {
             id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
-            createdAt: field.scalar(type.Date()).onCreate(gen.now()).mongo({ field: 'created_at' }),
+            createdAt: field
+              .scalar(type.DateTime())
+              .onCreate(gen.now())
+              .mongo({ field: 'created_at' }),
           },
         }),
       },
@@ -119,7 +122,7 @@ describe('Mongo TS generated fields', () => {
             collection: 'posts',
             fields: {
               _id: field.scalar(type.ObjectId()),
-              createdAt: field.scalar(type.Date()).onCreate(gen.now()),
+              createdAt: field.scalar(type.DateTime()).onCreate(gen.now()),
             },
           }),
         },
@@ -156,7 +159,7 @@ describe('Mongo TS generated field misuse', () => {
           collection: 'posts',
           fields: {
             _id: field.scalar(type.ObjectId()),
-            createdAt: field.scalar(type.Date()).onCreate(gen.now()).optional(),
+            createdAt: field.scalar(type.DateTime()).onCreate(gen.now()).optional(),
           },
         }),
       },
@@ -184,7 +187,7 @@ describe('Mongo TS generated field misuse', () => {
             collection: 'posts',
             fields: {
               _id: field.scalar(type.ObjectId()),
-              createdAt: untyped(field.scalar(type.Date()).onCreate(gen.now())).many(),
+              createdAt: untyped(field.scalar(type.DateTime()).onCreate(gen.now())).many(),
             },
           }),
         },
@@ -211,7 +214,7 @@ describe('Mongo TS generated field misuse', () => {
             Owner,
             Address: model('Address', {
               owner: Owner,
-              fields: { createdAt: field.scalar(type.Date()).onCreate(gen.now()) },
+              fields: { createdAt: field.scalar(type.DateTime()).onCreate(gen.now()) },
             }),
           },
         };
@@ -229,7 +232,7 @@ describe('Mongo TS generated field misuse', () => {
       defineContract(scaffold, ({ field, model, valueObject, gen, type }) => ({
         valueObjects: {
           Audit: valueObject('Audit', {
-            fields: { createdAt: field.scalar(type.Date()).onCreate(gen.now()) },
+            fields: { createdAt: field.scalar(type.DateTime()).onCreate(gen.now()) },
           }),
         },
         models: {
@@ -260,7 +263,7 @@ describe('Mongo TS generated fields on polymorphic models', () => {
         fields: {
           _id: field.scalar(type.ObjectId()),
           kind: field.scalar(type.String()),
-          createdAt: field.scalar(type.Date()).onCreate(gen.now()),
+          createdAt: field.scalar(type.DateTime()).onCreate(gen.now()),
         },
         discriminator: { field: 'kind', variants: { Click: { value: 'click' } } },
       });
@@ -271,7 +274,7 @@ describe('Mongo TS generated fields on polymorphic models', () => {
           clickFields === 'withGenerated'
             ? {
                 url: field.scalar(type.String()),
-                clickedAt: field.scalar(type.Date()).onCreate(gen.now()),
+                clickedAt: field.scalar(type.DateTime()).onCreate(gen.now()),
               }
             : { url: field.scalar(type.String()) },
       });
@@ -310,7 +313,7 @@ describe('Mongo TS generated fields on models sharing a collection', () => {
           collection: 'entries',
           fields: {
             _id: field.scalar(type.ObjectId()),
-            stamp: field.scalar(type.Date()).onCreate(gen.now()),
+            stamp: field.scalar(type.DateTime()).onCreate(gen.now()),
           },
         }),
         Page: model('Page', {
@@ -319,8 +322,8 @@ describe('Mongo TS generated fields on models sharing a collection', () => {
             _id: field.scalar(type.ObjectId()),
             stamp:
               pageStamp === 'createdAt'
-                ? field.scalar(type.Date()).onCreate(gen.now())
-                : field.scalar(type.Date()).onCreate(gen.now()).onUpdate(gen.now()),
+                ? field.scalar(type.DateTime()).onCreate(gen.now())
+                : field.scalar(type.DateTime()).onCreate(gen.now()).onUpdate(gen.now()),
           },
         }),
       },
@@ -354,7 +357,7 @@ describe('Mongo TS generated fields on models sharing a collection', () => {
             fields: {
               _id: field.scalar(type.ObjectId()),
               createdAt: field
-                .scalar(type.Date())
+                .scalar(type.DateTime())
                 .onCreate(gen.now())
                 .mongo({ field: 'created_at' }),
             },
@@ -364,7 +367,7 @@ describe('Mongo TS generated fields on models sharing a collection', () => {
             fields: {
               _id: field.scalar(type.ObjectId()),
               created: field
-                .scalar(type.Date())
+                .scalar(type.DateTime())
                 .onCreate(gen.now())
                 .onUpdate(gen.now())
                 .mongo({ field: 'created_at' }),

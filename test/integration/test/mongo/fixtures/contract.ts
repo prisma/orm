@@ -91,7 +91,7 @@ const Comment = model('Comment', {
   fields: {
     _id: field.scalar(type.ObjectId()),
     text: field.scalar(type.String()),
-    createdAt: field.scalar(type.Date()),
+    createdAt: field.scalar(type.DateTime()),
   },
 });
 

@@ -221,12 +221,11 @@ describe('providePslCompletionItems', () => {
         controlMutationDefaults,
       });
       const scalars = items.filter((item) => item.kind === CompletionItemKind.Class);
-      const current = ['Int32', 'Double', 'Bool', 'Date'];
+      const current = ['Int32', 'Double', 'Bool'];
       const deprecated = [
         ['Int', 'Int32'],
         ['Float', 'Double'],
         ['Boolean', 'Bool'],
-        ['DateTime', 'Date'],
       ] as const;
 
       expect(

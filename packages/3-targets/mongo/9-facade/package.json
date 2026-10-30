@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
-    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "typecheck": "tsc --project tsconfig.json --noEmit && tsc --project tsconfig.no-temporal-global.json --noEmit",
     "lint": "biome check . --error-on-warnings",
     "lint:fix": "biome check --write .",
     "lint:fix:unsafe": "biome check --write --unsafe .",
@@ -35,7 +35,8 @@
     "@internal/utils": "workspace:8.0.0-rc.22",
     "mongodb-connection-string-url": "catalog:",
     "pathe": "^2.0.3",
-    "tinyglobby": "catalog:"
+    "tinyglobby": "catalog:",
+    "temporal-spec": "1.0.1"
   },
   "devDependencies": {
     "mongodb": "catalog:",
@@ -48,10 +49,12 @@
     "mongodb-memory-server": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "temporal-polyfill": "^1.0.4"
   },
   "peerDependencies": {
     "mongodb": "^7.0.0",
+    "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {

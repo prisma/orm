@@ -9,7 +9,7 @@ model Task {
 }
 
 model Bug {
-  seenAt Date @onCreate(now())
+  seenAt DateTime @onCreate(now())
 
   @@base(Task, "bug")
 }

@@ -7,7 +7,7 @@ export const TEMPORAL_REWRITES: Readonly<Record<string, string>> = {
   createdAt: 'field.scalar(type.temporal.CreatedAt())',
   updatedAt: 'field.scalar(type.temporal.UpdatedAt())',
   timestamp:
-    'field.scalar(type.Date()), with .onCreate(gen.now()) and .onUpdate(gen.now()) for the phases the preset set',
+    'field.scalar(type.DateTime()), with .onCreate(gen.now()) and .onUpdate(gen.now()) for the phases the preset set',
 };
 
 /** Each removed scalar field helper and the type constructor its field is now written with. */
@@ -17,7 +17,7 @@ export const REMOVED_SCALAR_HELPERS: Readonly<Record<string, string>> = {
   double: 'Double',
   int32: 'Int32',
   bool: 'Bool',
-  date: 'Date',
+  date: 'DateTime',
   int64: 'Int64',
   int64Number: 'Int64Number',
   decimal128: 'Decimal128',

@@ -15,7 +15,7 @@ const contract = defineContract({}, ({ field, model, gen, type }) => ({
       fields: {
         _id: field.scalar(type.ObjectId()),
         title: field.scalar(type.String()),
-        createdAt: field.scalar(type.Date()).onCreate(gen.now()),
+        createdAt: field.scalar(type.DateTime()).onCreate(gen.now()),
       },
     }),
   },

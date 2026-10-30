@@ -36,7 +36,7 @@ type OrderLineItem {
 
 type StatusEntry {
   status    String
-  timestamp Date
+  timestamp DateTime
 }
 
 type InvoiceLineItem {
@@ -113,7 +113,7 @@ model Invoice {
   subtotal Double
   tax      Double
   total    Double
-  issuedAt Date
+  issuedAt DateTime
   order    Order             @relation(fields: [orderId], references: [id])
   @@map("invoices")
   @@index([orderId])
@@ -125,7 +125,7 @@ model Event {
   userId    String
   sessionId String
   type      String
-  timestamp Date
+  timestamp DateTime
   @@map("events")
   @@discriminator(type)
   @@index([userId, sort(timestamp, Desc)])

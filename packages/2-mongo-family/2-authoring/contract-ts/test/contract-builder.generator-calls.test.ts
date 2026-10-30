@@ -64,7 +64,7 @@ describe('Mongo .onCreate and .onUpdate', () => {
   it('resolve now() on a date field for each phase, as temporal.updatedAt() does', () => {
     expect(
       contractWith(({ field, gen, type }) => ({
-        updatedAt: field.scalar(type.Date()).onCreate(gen.now()).onUpdate(gen.now()),
+        updatedAt: field.scalar(type.DateTime()).onCreate(gen.now()).onUpdate(gen.now()),
       })).execution?.mutations.defaults,
     ).toEqual([
       {
@@ -96,7 +96,7 @@ describe('Mongo .onCreate and .onUpdate', () => {
 
   it('refuse a phase set twice', () => {
     const { field, gen, type } = helpersOf();
-    expect(() => field.scalar(type.Date()).onUpdate(gen.now()).onUpdate(gen.now())).toThrow(
+    expect(() => field.scalar(type.DateTime()).onUpdate(gen.now()).onUpdate(gen.now())).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.DEFAULT_INVALID',
         message:

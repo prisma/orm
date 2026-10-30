@@ -3,9 +3,9 @@
 model Post {
   id        ObjectId             @id @map("_id")
   title     String
-  createdAt Date                 @onCreate(now())
-  updatedAt Date                 @onCreate(now()) @onUpdate(now()) @map("updated_at")
-  touchedAt Date                 @onUpdate(now())
+  createdAt DateTime                 @onCreate(now())
+  updatedAt DateTime                 @onCreate(now()) @onUpdate(now()) @map("updated_at")
+  touchedAt DateTime                 @onUpdate(now())
 
   @@map("posts")
 }
@@ -18,7 +18,7 @@ model Counter {
   factor    Double
   hits      Int32
   label     String?
-  updatedAt Date                 @onCreate(now()) @onUpdate(now())
+  updatedAt DateTime                 @onCreate(now()) @onUpdate(now())
 
   @@map("counters")
 }
@@ -26,7 +26,7 @@ model Counter {
 model Event {
   id        ObjectId             @id @map("_id")
   kind      String
-  createdAt Date                 @onCreate(now())
+  createdAt DateTime                 @onCreate(now())
 
   @@discriminator(kind)
   @@map("events")

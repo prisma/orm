@@ -11,26 +11,31 @@
   "scripts": {
     "build": "tsdown",
     "lint": "biome check . --error-on-warnings",
-    "clean": "rm -rf dist src-gen"
+    "clean": "rm -rf dist src-gen",
+    "test": "vitest run"
   },
   "dependencies": {
     "@prisma/orm-family-mongo": "workspace:8.0.0-rc.22",
     "@prisma/orm-framework": "workspace:8.0.0-rc.22",
     "@prisma/orm-toolchain": "workspace:8.0.0-rc.22",
     "arktype": "catalog:",
-    "bson": "catalog:"
+    "bson": "catalog:",
+    "temporal-spec": "1.0.1"
   },
   "devDependencies": {
     "@internal/adapter-mongo": "workspace:8.0.0-rc.22",
     "@internal/driver-mongo": "workspace:8.0.0-rc.22",
     "@internal/target-mongo": "workspace:8.0.0-rc.22",
+    "@repo/test-utils": "workspace:8.0.0-rc.22",
     "@repo/tsconfig": "workspace:8.0.0-rc.22",
     "@repo/tsdown": "workspace:8.0.0-rc.22",
     "tsdown": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
     "mongodb": "^7.0.0",
+    "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {

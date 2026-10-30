@@ -308,7 +308,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
       model Post {
         id        ObjectId @id @map("_id")
         title     String
-        createdAt Date
+        createdAt DateTime
         @@index([createdAt])
       }
     `);
@@ -393,7 +393,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
       model Events {
         id        ObjectId @id @map("_id")
         status    String
-        createdAt Date
+        createdAt DateTime
         @@index([status, sort(createdAt, Desc)])
       }
     `);

@@ -22,7 +22,8 @@
     "@prisma/orm-toolchain": "workspace:8.0.0-rc.22",
     "mongodb-connection-string-url": "catalog:",
     "pathe": "^2.0.3",
-    "tinyglobby": "catalog:"
+    "tinyglobby": "catalog:",
+    "temporal-spec": "1.0.1"
   },
   "devDependencies": {
     "@internal/mongo": "workspace:8.0.0-rc.22",
@@ -33,6 +34,7 @@
   },
   "peerDependencies": {
     "mongodb": "^7.0.0",
+    "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {

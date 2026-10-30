@@ -18,7 +18,8 @@
     "@prisma/orm-toolchain": "workspace:8.0.0-rc.22",
     "arktype": "catalog:",
     "mongodb": "catalog:",
-    "pathe": "^2.0.3"
+    "pathe": "^2.0.3",
+    "temporal-spec": "1.0.1"
   },
   "devDependencies": {
     "@internal/family-mongo": "workspace:8.0.0-rc.22",
