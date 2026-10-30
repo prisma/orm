@@ -302,18 +302,67 @@ describe('sql family signSpaces', () => {
         status: 'conflict',
         reason: 'databasePolicies',
         space: APP_SPACE_ID,
-        contract: appHashes,
         checked: DEFAULT_DATABASE_POLICIES,
-        comparison: {
-          kind: 'moved',
-          found: { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] },
-          differences: [
-            { setting: 'change', declared: ['migrate', 'reconcile'], inForce: ['migrate'] },
-          ],
-        },
+        comparison: { kind: 'moved', found: { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] } },
       },
     ]);
     expect(store.markers()).toEqual({ [APP_SPACE_ID]: moved });
+  });
+
+  it('signs an extension space without the application space when the policies still hold', async () => {
+    const store = createMarkerStore({
+      [APP_SPACE_ID]: {
+        storageHash: 'old-app',
+        profileHash: 'old-app-profile',
+        meta: { policies: { change: ['migrate'] } },
+      },
+    });
+
+    const signatures = await store.instance.signSpaces({
+      driver,
+      spaces: [{ space: EXT_SPACE_ID, contract: extContract, expected: null }],
+      expectedDatabasePolicies: { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] },
+    });
+
+    expect(signatures).toEqual([
+      {
+        status: 'created',
+        space: EXT_SPACE_ID,
+        contract: { storageHash: EXT_HASH, profileHash: 'ext-profile' },
+      },
+    ]);
+  });
+
+  it('signs no extension space without the application space when the policies moved', async () => {
+    const store = createMarkerStore({
+      [APP_SPACE_ID]: {
+        storageHash: 'old-app',
+        profileHash: 'old-app-profile',
+        meta: { policies: { change: ['migrate'] } },
+      },
+    });
+
+    const signatures = await store.instance.signSpaces({
+      driver,
+      spaces: [{ space: EXT_SPACE_ID, contract: extContract, expected: null }],
+      expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+    });
+
+    expect({ signatures, ext: store.markers()[EXT_SPACE_ID] }).toEqual({
+      signatures: [
+        {
+          status: 'conflict',
+          reason: 'databasePolicies',
+          space: APP_SPACE_ID,
+          checked: DEFAULT_DATABASE_POLICIES,
+          comparison: {
+            kind: 'moved',
+            found: { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] },
+          },
+        },
+      ],
+      ext: undefined,
+    });
   });
 
   it('reports a marker written after a verification that found none as a conflict', async () => {

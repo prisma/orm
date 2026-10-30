@@ -1,7 +1,8 @@
 export type {
+  CheckedMarkerPolicies,
   MarkerOperations,
   MongoControlAdapter,
   MongoControlAdapterDescriptor,
   MongoRunnerDependencies,
-  StoredPoliciesValue,
+  RawStoredPolicies,
 } from '../core/control-adapter';

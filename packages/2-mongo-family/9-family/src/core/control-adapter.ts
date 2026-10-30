@@ -3,6 +3,7 @@ import type {
   ControlAdapterDescriptor,
   ControlAdapterInstance,
   ControlDriverInstance,
+  DatabasePolicies,
   MarkerDestination,
 } from '@internal/framework-components/control';
 import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
@@ -16,8 +17,17 @@ import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
  * The raw value of a marker's `meta.policies` as it was read: `value` is `undefined` when the marker
  * had no policies. A compare-and-swap given it matches only while the marker still stores exactly that.
  */
-export interface StoredPoliciesValue {
+export interface RawStoredPolicies {
   readonly value: unknown;
+}
+
+/**
+ * The policies a run checked, and the raw `meta.policies` of the application space's marker that held
+ * them. Its marker is written only while it still stores that raw value.
+ */
+export interface CheckedMarkerPolicies {
+  readonly checked: DatabasePolicies;
+  readonly raw: RawStoredPolicies;
 }
 
 /**
@@ -27,13 +37,15 @@ export interface StoredPoliciesValue {
  * mechanism.
  */
 export interface MarkerOperations {
+  /** Where the database keeps the contract markers, as messages name it to the user. */
+  readonly markerLocation: string;
   readMarker(space: string): Promise<ContractMarkerRecord | null>;
   initMarker(space: string, destination: MarkerDestination): Promise<void>;
   updateMarker(
     space: string,
     expectedFrom: string,
     destination: MarkerDestination,
-    storedPolicies?: StoredPoliciesValue,
+    rawPolicies?: RawStoredPolicies,
   ): Promise<boolean>;
   writeLedgerEntry(
     space: string,
@@ -110,7 +122,7 @@ export interface MongoControlAdapter<TTarget extends string = string>
 
   /**
    * Atomically updates the marker document for `space` (CAS on
-   * `expectedFrom`, and on `storedPolicies` when given). Returns `true`
+   * `expectedFrom`, and on `rawPolicies` when given). Returns `true`
    * when the CAS succeeded, `false` when another process changed the
    * marker first.
    */
@@ -119,7 +131,7 @@ export interface MongoControlAdapter<TTarget extends string = string>
     space: string,
     expectedFrom: string,
     destination: MarkerDestination,
-    storedPolicies?: StoredPoliciesValue,
+    rawPolicies?: RawStoredPolicies,
   ): Promise<boolean>;
 
   /**

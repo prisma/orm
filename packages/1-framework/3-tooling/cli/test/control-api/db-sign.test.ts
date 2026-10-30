@@ -3,6 +3,7 @@ import type {
   ControlDriverInstance,
   ControlFamilyInstance,
   SpaceSignature,
+  SpaceSigned,
   SpaceToSign,
 } from '@internal/framework-components/control';
 import { DEFAULT_DATABASE_POLICIES } from '@internal/framework-components/control';
@@ -116,7 +117,7 @@ const driver = blindCast<ControlDriverInstance<string, string>, 'never queried'>
 
 const INVOCATION = { cwd: '/work/app', configPath: 'config/prisma.config.ts', dbGiven: true };
 
-function signedEverySpace(spaces: readonly SpaceToSign[]): SpaceSignature[] {
+function signedEverySpace(spaces: readonly SpaceToSign[]): SpaceSigned[] {
   return spaces.map(({ space: spaceId, contract }) => ({
     status: 'created',
     space: spaceId,
@@ -151,23 +152,13 @@ describe('signContractSpaces', () => {
   });
 
   it('fails as a concurrent change naming the moved settings when the policies changed after it checked them', async () => {
-    const family = familySigning((spaces) => [
+    const family = familySigning(() => [
       {
         status: 'conflict',
         reason: 'databasePolicies',
         space: 'app',
-        contract: signedEverySpace(spaces).find(({ space }) => space === 'app')?.contract ?? {
-          storageHash: '',
-          profileHash: '',
-        },
         checked: DEFAULT_DATABASE_POLICIES,
-        comparison: {
-          kind: 'moved',
-          found: { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] },
-          differences: [
-            { setting: 'change', declared: ['migrate', 'reconcile'], inForce: ['migrate'] },
-          ],
-        },
+        comparison: { kind: 'moved', found: { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] } },
       },
     ]);
 

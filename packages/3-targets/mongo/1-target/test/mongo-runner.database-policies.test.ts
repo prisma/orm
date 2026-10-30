@@ -83,6 +83,7 @@ class MarkerStore {
   constructor(public marker: ContractMarkerRecord | null = null) {}
 
   readonly ops: MarkerOperations = {
+    markerLocation: '_prisma_migrations',
     readMarker: async () => this.marker,
     initMarker: async (_space, destination) => {
       this.marker = {
@@ -96,11 +97,11 @@ class MarkerStore {
         invariants: [...(destination.invariants ?? [])],
       };
     },
-    updateMarker: async (_space, expectedFrom, destination, storedPolicies) => {
+    updateMarker: async (_space, expectedFrom, destination, rawPolicies) => {
       if (this.marker?.storageHash !== expectedFrom) return false;
       if (
-        storedPolicies !== undefined &&
-        JSON.stringify(this.marker.meta['policies']) !== JSON.stringify(storedPolicies.value)
+        rawPolicies !== undefined &&
+        JSON.stringify(this.marker.meta['policies']) !== JSON.stringify(rawPolicies.value)
       ) {
         return false;
       }
@@ -361,7 +362,56 @@ describe('MongoMigrationRunner database policies', () => {
     });
   });
 
-  it('reports policies it cannot read as a corrupt marker row, keeping the row', async () => {
+  it('reports policies that become unreadable after the check as a corrupt marker, not a moved storage hash', async () => {
+    const store = new MarkerStore(markerAt('start', {}));
+
+    await expect(
+      runSpaces(
+        makeDependencies(store, undefined, async () => {
+          if (store.marker !== null)
+            store.marker = { ...store.marker, meta: { policies: 'strict' } };
+        }),
+        [
+          {
+            space: 'app',
+            plan: makePlan([createCollection('items')], 'start'),
+            migrationEdges: [edge('start', DEST, '002_items')],
+          },
+        ],
+        DEFAULT_DATABASE_POLICIES,
+      ),
+    ).rejects.toMatchObject({ code: 'CONTRACT.MARKER_ROW_CORRUPT' });
+    expect(store.marker?.storageHash).toBe('start');
+  });
+
+  it('writes the marker when its policies are stored again in another form that reads the same', async () => {
+    const store = new MarkerStore(markerAt('start', {}));
+
+    const result = await runSpaces(
+      makeDependencies(store, undefined, async () => {
+        if (store.marker !== null) {
+          store.marker = { ...store.marker, meta: { policies: DEFAULT_DATABASE_POLICIES } };
+        }
+      }),
+      [
+        {
+          space: 'app',
+          plan: makePlan([createCollection('items')], 'start'),
+          migrationEdges: [edge('start', DEST, '002_items')],
+          databasePolicies: RECONCILE_ONLY,
+        },
+      ],
+      DEFAULT_DATABASE_POLICIES,
+    );
+
+    result.assertOk();
+    expect({ storageHash: store.marker?.storageHash, meta: store.marker?.meta }).toEqual({
+      storageHash: DEST,
+      meta: { policies: RECONCILE_ONLY },
+    });
+  });
+
+  it('reports policies it cannot read as a corrupt marker, keeping the marker', async () => {
     const store = new MarkerStore(markerAt('start', { policies: 'strict' }));
 
     await expect(
@@ -376,7 +426,7 @@ describe('MongoMigrationRunner database policies', () => {
         {
           kind: 'user-choice',
           label:
-            'Ask whoever owns this database to correct meta.policies in the marker row; do not delete the row.',
+            'Ask whoever owns this database to correct meta.policies in the marker; do not delete the marker.',
         },
       ],
     });

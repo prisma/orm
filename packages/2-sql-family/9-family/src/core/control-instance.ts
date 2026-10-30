@@ -639,7 +639,6 @@ export function createSqlFamilyInstance<TTargetId extends string>(
   const databasePoliciesConflict = async (
     controlAdapter: SqlControlAdapter<string>,
     driver: SqlControlDriverInstance<string>,
-    spaces: readonly SpaceToSign[],
     checked: DatabasePolicies,
   ): Promise<SpaceSignature | undefined> => {
     const comparison = compareMarkerDatabasePolicies(
@@ -647,15 +646,8 @@ export function createSqlFamilyInstance<TTargetId extends string>(
       checked,
     );
     if (comparison.kind === 'held') return undefined;
-    const app = spaces.find(({ space }) => space === APP_SPACE_ID);
-    if (app === undefined) {
-      throw new InternalError(
-        'signSpaces was given database policies without the application space',
-      );
-    }
     return {
       space: APP_SPACE_ID,
-      contract: contractHashesOf(app.contract),
       status: 'conflict',
       reason: 'databasePolicies',
       checked,
@@ -686,7 +678,6 @@ export function createSqlFamilyInstance<TTargetId extends string>(
         const conflict = await databasePoliciesConflict(
           controlAdapter,
           driver,
-          spaces,
           expectedDatabasePolicies,
         );
         if (conflict !== undefined) return [conflict];

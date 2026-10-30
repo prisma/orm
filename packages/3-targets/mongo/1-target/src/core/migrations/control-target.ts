@@ -5,6 +5,7 @@ import type {
 } from '@internal/family-mongo/control';
 import { contractToMongoSchemaIR } from '@internal/family-mongo/control';
 import type {
+  CheckedMarkerPolicies,
   MongoControlAdapter,
   MongoRunnerDependencies,
 } from '@internal/family-mongo/control-adapter';
@@ -25,7 +26,6 @@ import type { MongoTargetContract } from '../mongo-target-contract';
 import { MongoTargetContractSerializer } from '../mongo-target-contract-serializer';
 import { MongoMigrationPlanner } from './mongo-planner';
 import {
-  type CheckedDatabasePolicies,
   checkDatabasePolicies,
   MongoMigrationRunner,
   type MongoMigrationRunnerExecuteOptions,
@@ -106,13 +106,12 @@ export const mongoTargetDescriptor: MongoControlTargetDescriptor<MongoTargetCont
           perSpaceOptions,
           expectedDatabasePolicies,
         }): Promise<MigrationRunnerResult> {
-          let checkedPolicies: CheckedDatabasePolicies | undefined;
+          let checkedPolicies: CheckedMarkerPolicies | undefined;
           if (expectedDatabasePolicies !== undefined) {
             cachedDeps ??= family.createRunnerDependencies({ driver });
             const checked = await checkDatabasePolicies(
               cachedDeps.markerOps,
               expectedDatabasePolicies,
-              family.markerLocation,
             );
             if (!checked.ok) return notOk(checked.failure);
             checkedPolicies = checked.value;

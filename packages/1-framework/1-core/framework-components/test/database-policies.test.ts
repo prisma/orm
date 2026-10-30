@@ -8,6 +8,7 @@ import {
   databasePoliciesMovedFailure,
   databasePoliciesOf,
   databasePolicyDifferences,
+  movedDatabasePoliciesWhy,
   PartialDatabasePoliciesSchema,
   storedDatabasePolicies,
   withDeclaredDatabasePolicies,
@@ -145,29 +146,13 @@ describe('compareMarkerDatabasePolicies', () => {
     });
   });
 
-  it('reports the settings another run moved, from the value checked to the value found', () => {
+  it('reports the policies another run recorded as moved, with the policies found', () => {
     expect(
       compareMarkerDatabasePolicies(
         markerWithMeta({ policies: MIGRATE_ONLY }),
         DEFAULT_DATABASE_POLICIES,
       ),
-    ).toEqual({
-      kind: 'moved',
-      found: MIGRATE_ONLY,
-      differences: [
-        { setting: 'change', declared: ['migrate', 'reconcile'], inForce: ['migrate'] },
-        {
-          setting: 'dataProtection.dataLoss',
-          declared: 'data-loss-with-consent',
-          inForce: 'data-loss-forbidden',
-        },
-        {
-          setting: 'dataProtection.accessWidening',
-          declared: 'access-widening-with-consent',
-          inForce: 'access-widening-forbidden',
-        },
-      ],
-    });
+    ).toEqual({ kind: 'moved', found: MIGRATE_ONLY });
   });
 
   it('reports a marker whose policies cannot be read as unreadable, not moved', () => {
@@ -179,13 +164,9 @@ describe('compareMarkerDatabasePolicies', () => {
 
 describe('databasePoliciesMovedFailure', () => {
   it('names each moved setting and carries the policies, not the hashes', () => {
-    const moved = compareMarkerDatabasePolicies(
-      markerWithMeta({ policies: { change: ['reconcile'] } }),
-      DEFAULT_DATABASE_POLICIES,
-    );
-    if (moved.kind !== 'moved') throw new Error('expected moved policies');
+    const found: DatabasePolicies = { ...DEFAULT_DATABASE_POLICIES, change: ['reconcile'] };
 
-    const failure = databasePoliciesMovedFailure(DEFAULT_DATABASE_POLICIES, moved);
+    const failure = databasePoliciesMovedFailure(DEFAULT_DATABASE_POLICIES, found);
 
     expect({ code: failure.code, why: failure.why, meta: failure.meta }).toEqual({
       code: 'MIGRATION.MARKER_CAS_FAILURE',
@@ -194,9 +175,17 @@ describe('databasePoliciesMovedFailure', () => {
         reason: 'databasePolicies',
         space: 'app',
         checkedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
-        foundDatabasePolicies: { ...DEFAULT_DATABASE_POLICIES, change: ['reconcile'] },
+        foundDatabasePolicies: found,
       },
     });
+  });
+});
+
+describe('movedDatabasePoliciesWhy', () => {
+  it('names every setting that moved, from the value checked to the value found', () => {
+    expect(movedDatabasePoliciesWhy('db sign', DEFAULT_DATABASE_POLICIES, MIGRATE_ONLY)).toBe(
+      "The database's policies changed after db sign checked them: change moved from migrate, reconcile to migrate; dataProtection.dataLoss moved from data-loss-with-consent to data-loss-forbidden; dataProtection.accessWidening moved from access-widening-with-consent to access-widening-forbidden.",
+    );
   });
 });
 

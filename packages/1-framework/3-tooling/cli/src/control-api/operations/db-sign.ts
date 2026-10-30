@@ -246,7 +246,7 @@ export async function signContractSpaces<TFamilyId extends string, TTargetId ext
       errorDatabasePoliciesMovedDuringSign({
         spaceId: appSpaceId,
         checked: policiesConflict.checked,
-        moved: comparison,
+        found: comparison.found,
         invocation: options.invocation,
       }),
     );

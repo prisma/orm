@@ -282,18 +282,18 @@ describe('executeMigrate, database policies', () => {
     });
   });
 
-  it('reports a marker whose policies are not valid as a corrupt marker row of the application space', async () => {
+  it('reports a marker whose policies are not valid as a corrupt marker of the application space', async () => {
     await expect(
       migrate({ markers: new Map([['app', markerAt(APP_HEAD, { policies: 'strict' })]]) }),
     ).rejects.toMatchObject({
       code: 'CONTRACT.MARKER_ROW_CORRUPT',
       why: expect.stringContaining("The marker's meta.policies is not a valid policy declaration"),
-      fix: 'Ask whoever owns this database to correct meta.policies in the marker row; do not delete the row. The prisma_contract.marker row for space "app" also records the database\'s contract and invariants.',
+      fix: 'Ask whoever owns this database to correct meta.policies in the marker; do not delete the marker. The marker for space "app" in prisma_contract.marker also records the database\'s contract and invariants.',
       nextActions: [
         {
           kind: 'user-choice',
           label:
-            'Ask whoever owns this database to correct meta.policies in the marker row; do not delete the row.',
+            'Ask whoever owns this database to correct meta.policies in the marker; do not delete the marker.',
         },
       ],
       meta: { space: 'app' },

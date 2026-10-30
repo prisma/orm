@@ -3,7 +3,6 @@ import {
   type DatabasePolicies,
   type DatabasePolicyDifference,
   databasePolicyValueText,
-  type MarkerDatabasePoliciesComparison,
   movedDatabasePoliciesWhy,
 } from '@internal/framework-components/control';
 import { ActionableCliError } from './cli-errors';
@@ -90,7 +89,7 @@ export function errorChangePolicyForbids(args: {
 export function errorDatabasePoliciesMovedDuringSign(args: {
   readonly spaceId: string;
   readonly checked: DatabasePolicies;
-  readonly moved: Extract<MarkerDatabasePoliciesComparison, { readonly kind: 'moved' }>;
+  readonly found: DatabasePolicies;
   readonly invocation: CliInvocation;
 }): ActionableCliError {
   const rerun = cliCommand(args.invocation, 'db sign', args.invocation.rerunArgs ?? []);
@@ -98,14 +97,14 @@ export function errorDatabasePoliciesMovedDuringSign(args: {
     'MIGRATION.MARKER_CAS_FAILURE',
     "The database's policies changed while db sign ran",
     {
-      why: `${movedDatabasePoliciesWhy('db sign', args.moved.differences)} db sign did not sign the application space.`,
+      why: `${movedDatabasePoliciesWhy('db sign', args.checked, args.found)} db sign did not sign the application space.`,
       fix: `Sign again, which checks the policies anew: ${rerun}`,
       nextActions: [runCommandAction('Sign again', rerun)],
       meta: {
         reason: 'databasePolicies',
         space: args.spaceId,
         checkedDatabasePolicies: args.checked,
-        foundDatabasePolicies: args.moved.found,
+        foundDatabasePolicies: args.found,
       },
     },
   );

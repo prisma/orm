@@ -1,5 +1,4 @@
 import type { Contract, ContractMarkerRecord } from '@internal/contract/types';
-import { errorMarkerPoliciesCorrupt } from '@internal/errors/execution';
 import type {
   MigrationOperationPolicy,
   SqlControlFamilyInstance,
@@ -13,6 +12,7 @@ import type {
   SqlMigrationRunnerSuccessValue,
 } from '@internal/family-sql/control';
 import {
+  checkDatabasePoliciesHeld,
   convertedColumnOf,
   type RequiredColumn,
   requiredColumnOf,
@@ -27,15 +27,12 @@ import {
 import type {
   BlockingObject,
   FailedTypeChange,
-  MigrationRunnerFailure,
   MigrationRunnerResult,
   RowsHoldingValue,
 } from '@internal/framework-components/control';
 import {
   APP_SPACE_ID,
-  compareMarkerDatabasePolicies,
   type DatabasePolicies,
-  databasePoliciesMovedFailure,
   failedPostcheckWhy,
   failedPrecheckWhy,
   schemaCheckWhy,
@@ -313,7 +310,11 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
   ): Promise<MigrationRunnerResult> {
     if (expectedDatabasePolicies !== undefined) {
       await this.acquireLock(driver);
-      const policiesCheck = await this.checkDatabasePolicies(driver, expectedDatabasePolicies);
+      const policiesCheck = await checkDatabasePoliciesHeld(
+        this.family,
+        driver,
+        expectedDatabasePolicies,
+      );
       if (!policiesCheck.ok) return policiesCheck;
     }
     const perSpaceResults: Array<{
@@ -329,25 +330,6 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
       perSpaceResults.push({ space, value: result.value });
     }
     return ok({ perSpaceResults });
-  }
-
-  /** Compares the policies the caller checked with the application space's marker, under the lock. */
-  private async checkDatabasePolicies(
-    driver: SqlControlDriverInstance<string>,
-    checked: DatabasePolicies,
-  ): Promise<Result<void, MigrationRunnerFailure>> {
-    const marker = await this.family.readMarker({ driver, space: APP_SPACE_ID });
-    const comparison = compareMarkerDatabasePolicies(marker, checked);
-    if (comparison.kind === 'unreadable') {
-      throw errorMarkerPoliciesCorrupt({
-        why: comparison.why,
-        space: APP_SPACE_ID,
-        markerLocation: this.family.markerLocation,
-      });
-    }
-    return comparison.kind === 'moved'
-      ? notOk(databasePoliciesMovedFailure(checked, comparison))
-      : okVoid();
   }
 
   private async applyPlan(

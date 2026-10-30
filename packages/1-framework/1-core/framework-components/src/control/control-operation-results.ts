@@ -162,7 +162,6 @@ export interface SpaceDatabasePoliciesConflict {
   readonly status: 'conflict';
   readonly reason: 'databasePolicies';
   readonly space: string;
-  readonly contract: MarkerHashes;
   readonly checked: DatabasePolicies;
   readonly comparison: Exclude<MarkerDatabasePoliciesComparison, { readonly kind: 'held' }>;
 }

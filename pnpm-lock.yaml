@@ -3025,6 +3025,9 @@ importers:
       '@internal/emitter':
         specifier: workspace:8.0.0-rc.22
         version: link:../../1-framework/3-tooling/emitter
+      '@internal/errors':
+        specifier: workspace:8.0.0-rc.22
+        version: link:../../1-framework/1-core/errors
       '@internal/framework-components':
         specifier: workspace:8.0.0-rc.22
         version: link:../../1-framework/1-core/framework-components

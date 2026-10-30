@@ -1,6 +1,6 @@
 import type { ContractMarkerRecord } from '@internal/contract/types';
-import { errorMarkerPoliciesCorrupt } from '@internal/errors/execution';
 import {
+  checkDatabasePoliciesHeld,
   type MigrationOperationPolicy,
   runnerFailure,
   runnerSuccess,
@@ -14,10 +14,7 @@ import {
   type SqlMigrationRunnerSuccessValue,
 } from '@internal/family-sql/control';
 import {
-  APP_SPACE_ID,
-  compareMarkerDatabasePolicies,
   type DatabasePolicies,
-  databasePoliciesMovedFailure,
   failedPostcheckWhy,
   failedPrecheckWhy,
   type MigrationRunnerFailure,
@@ -113,32 +110,17 @@ class MysqlMigrationRunner implements SqlMigrationRunner<MysqlPlanTargetDetails>
       driver,
       async () => {
         if (expectedDatabasePolicies !== undefined) {
-          const policiesCheck = await this.#checkDatabasePolicies(driver, expectedDatabasePolicies);
+          const policiesCheck = await checkDatabasePoliciesHeld(
+            this.family,
+            driver,
+            expectedDatabasePolicies,
+          );
           if (!policiesCheck.ok) return notOk(withDatabaseUnchanged(policiesCheck.failure, true));
         }
         return this.#applySpaces(driver, perSpaceOptions);
       },
       (result) => result.ok,
     );
-  }
-
-  /** Compares the policies the caller checked with the application space's marker, under the marker lock and before any space. */
-  async #checkDatabasePolicies(
-    driver: Driver,
-    checked: DatabasePolicies,
-  ): Promise<Result<void, MigrationRunnerFailure>> {
-    const marker = await this.family.readMarker({ driver, space: APP_SPACE_ID });
-    const comparison = compareMarkerDatabasePolicies(marker, checked);
-    if (comparison.kind === 'unreadable') {
-      throw errorMarkerPoliciesCorrupt({
-        why: comparison.why,
-        space: APP_SPACE_ID,
-        markerLocation: this.family.markerLocation,
-      });
-    }
-    return comparison.kind === 'moved'
-      ? notOk(databasePoliciesMovedFailure(checked, comparison))
-      : okVoid();
   }
 
   async executeOnConnection(options: Options): Promise<SqlMigrationRunnerResult> {

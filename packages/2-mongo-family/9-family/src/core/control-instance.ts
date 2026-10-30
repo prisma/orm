@@ -17,8 +17,6 @@ import type {
 } from '@internal/framework-components/control';
 import {
   APP_SPACE_ID,
-  compareMarkerDatabasePolicies,
-  DATABASE_POLICIES_META_KEY,
   type DatabasePolicies,
   sameMarkerHashes,
   VERIFY_CODE_HASH_MISMATCH,
@@ -34,13 +32,14 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
 import type {
+  CheckedMarkerPolicies,
   MongoControlAdapter,
   MongoControlAdapterDescriptor,
   MongoRunnerDependencies,
-  StoredPoliciesValue,
 } from './control-adapter';
 import type { MongoControlExtensionDescriptor } from './control-types';
 import { MongoContractSerializer } from './ir/mongo-contract-serializer';
+import { checkMarkerPolicies, type MarkerPoliciesCheck } from './marker-policies';
 import { mongoOperationsToPreview } from './operation-preview';
 import { mongoStorageNameOf } from './operation-storage-name';
 import { mongoSchemaToView } from './schema-to-view';
@@ -219,32 +218,22 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
   }
 
   function databasePoliciesConflict(
-    contract: SpaceToSign['contract'],
     checked: DatabasePolicies,
-    marker: ContractMarkerRecord | null,
-  ): SpaceSignature | undefined {
-    const comparison = compareMarkerDatabasePolicies(marker, checked);
-    if (comparison.kind === 'held') return undefined;
+    check: Exclude<MarkerPoliciesCheck, { readonly kind: 'held' }>,
+  ): SpaceSignature {
     return {
       space: APP_SPACE_ID,
-      contract: contractHashesOf(contract),
       status: 'conflict',
       reason: 'databasePolicies',
       checked,
-      comparison,
+      comparison: check,
     };
-  }
-
-  /** The policies a run checked and the application marker's `meta.policies` it found holding them. */
-  interface CheckedPolicies {
-    readonly checked: DatabasePolicies;
-    readonly stored: StoredPoliciesValue;
   }
 
   async function signSpaceMarker(
     driver: ControlDriverInstance<'mongo', 'mongo'>,
     { space, contract, expected }: SpaceToSign,
-    policies: CheckedPolicies | undefined,
+    policies: CheckedMarkerPolicies | undefined,
   ): Promise<SpaceSignature> {
     const { storageHash, profileHash } = contractHashesOf(contract);
     const signed = { space, contract: { storageHash, profileHash } };
@@ -263,50 +252,45 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
     if (existing.storageHash === storageHash && existing.profileHash === profileHash) {
       return { ...signed, status: 'unchanged' };
     }
-    const guardsPolicies = space === APP_SPACE_ID ? policies : undefined;
-    const updated = await controlAdapter.updateMarker(
-      driver,
-      space,
-      existing.storageHash,
-      { storageHash, profileHash },
-      guardsPolicies?.stored,
-    );
-    if (!updated) {
+    let guard = space === APP_SPACE_ID ? policies : undefined;
+    for (;;) {
+      const updated = await controlAdapter.updateMarker(
+        driver,
+        space,
+        existing.storageHash,
+        { storageHash, profileHash },
+        guard?.raw,
+      );
+      if (updated) return { ...signed, status: 'updated', previous: existing };
       const found = await controlAdapter.readMarker(driver, space);
       const foundHashes =
         found === null ? null : { storageHash: found.storageHash, profileHash: found.profileHash };
-      const policiesConflict =
-        guardsPolicies !== undefined && sameMarkerHashes(foundHashes, expected)
-          ? databasePoliciesConflict(contract, guardsPolicies.checked, found)
-          : undefined;
-      return (
-        policiesConflict ?? {
+      if (guard === undefined || !sameMarkerHashes(foundHashes, expected)) {
+        return {
           ...signed,
           status: 'conflict',
           reason: 'storageHash',
           expected,
           found: foundHashes,
-        }
-      );
+        };
+      }
+      const check = checkMarkerPolicies(found, guard.checked);
+      if (check.kind !== 'held') return databasePoliciesConflict(guard.checked, check);
+      guard = check.policies;
     }
-    return { ...signed, status: 'updated', previous: existing };
   }
 
   async function checkSignPolicies(
     driver: ControlDriverInstance<'mongo', 'mongo'>,
-    spaces: readonly SpaceToSign[],
     checked: DatabasePolicies,
-  ): Promise<{ readonly conflict: SpaceSignature } | CheckedPolicies> {
-    const app = spaces.find(({ space }) => space === APP_SPACE_ID);
-    if (app === undefined) {
-      throw new InternalError(
-        'signSpaces was given database policies without the application space',
-      );
-    }
-    const marker = await getControlAdapter().readMarker(driver, APP_SPACE_ID);
-    const conflict = databasePoliciesConflict(app.contract, checked, marker);
-    if (conflict !== undefined) return { conflict };
-    return { checked, stored: { value: marker?.meta[DATABASE_POLICIES_META_KEY] } };
+  ): Promise<{ readonly conflict: SpaceSignature } | CheckedMarkerPolicies> {
+    const check = checkMarkerPolicies(
+      await getControlAdapter().readMarker(driver, APP_SPACE_ID),
+      checked,
+    );
+    return check.kind === 'held'
+      ? check.policies
+      : { conflict: databasePoliciesConflict(checked, check) };
   }
 
   return {
@@ -412,13 +396,9 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
 
     async signSpaces(options): Promise<readonly SpaceSignature[]> {
       const mongoDriver = asMongoDriver(options.driver);
-      let policies: CheckedPolicies | undefined;
+      let policies: CheckedMarkerPolicies | undefined;
       if (options.expectedDatabasePolicies !== undefined) {
-        const checked = await checkSignPolicies(
-          mongoDriver,
-          options.spaces,
-          options.expectedDatabasePolicies,
-        );
+        const checked = await checkSignPolicies(mongoDriver, options.expectedDatabasePolicies);
         if ('conflict' in checked) return [checked.conflict];
         policies = checked;
       }

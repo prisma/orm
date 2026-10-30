@@ -295,7 +295,7 @@ describe('PostgresMigrationRunner database policies', { concurrent: false }, () 
     }).toEqual({ started: [], invariants: [], policies: MIGRATE_ONLY });
   });
 
-  it('reports policies it cannot read under the lock as a corrupt marker row, keeping the row', {
+  it('reports policies it cannot read under the lock as a corrupt marker, keeping the marker', {
     timeout: testTimeout,
   }, async () => {
     await applyContract();
@@ -314,7 +314,7 @@ describe('PostgresMigrationRunner database policies', { concurrent: false }, () 
         {
           kind: 'user-choice',
           label:
-            'Ask whoever owns this database to correct meta.policies in the marker row; do not delete the row.',
+            'Ask whoever owns this database to correct meta.policies in the marker; do not delete the marker.',
         },
       ],
     });

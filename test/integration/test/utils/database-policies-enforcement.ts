@@ -91,6 +91,28 @@ export function definePolicyEnforcementJourneys(
   );
 
   it(
+    'reports the schema failure of an application space it cannot sign, on a database with a marker',
+    async (test) => {
+      await withProject(test, async (project) => {
+        const base = await planTo(project, 'base', 'initial');
+        const migrated = await runMigrate(project.ctx);
+        expect(migrated.exitCode, `db migrate: ${migrated.stdout}\n${migrated.stderr}`).toBe(0);
+        writeContract(project, 'next');
+        expect((await runContractEmit(project.ctx)).exitCode).toBe(0);
+
+        const sign = await runDbSign(project.ctx, ['--json']);
+
+        expect(parseJsonOutput(sign), `db sign: ${sign.stdout}\n${sign.stderr}`).toMatchObject({
+          ok: false,
+          spaces: [{ space: 'app', status: 'failed' }],
+        });
+        expect((await appMarker(project))?.storageHash).toBe(base);
+      });
+    },
+    timeout,
+  );
+
+  it(
     'signs a database with no marker',
     async (test) => {
       await withProject(test, async (project) => {

@@ -3,7 +3,7 @@ import { withMarkerReadErrorHandling } from '@internal/errors/execution';
 import type {
   MongoControlAdapter,
   MongoRunnerDependencies,
-  StoredPoliciesValue,
+  RawStoredPolicies,
 } from '@internal/family-mongo/control-adapter';
 import {
   APP_SPACE_ID,
@@ -199,7 +199,7 @@ export class MongoControlAdapterImpl implements MongoControlAdapter<'mongo'> {
     space: string,
     expectedFrom: string,
     destination: MarkerDestination,
-    storedPolicies?: StoredPoliciesValue,
+    rawPolicies?: RawStoredPolicies,
   ): Promise<boolean> {
     const { invariants, databasePolicies } = destination;
     const fields: Record<string, MongoAggExpr> = {
@@ -222,10 +222,10 @@ export class MongoControlAdapterImpl implements MongoControlAdapter<'mongo'> {
       .match((f) => f.space.eq(space))
       .match((f) => f.storageHash.eq(expectedFrom));
     const guarded =
-      storedPolicies === undefined
+      rawPolicies === undefined
         ? atExpectedHash
         : atExpectedHash.match((f) =>
-            storedPolicies.value === undefined
+            rawPolicies.value === undefined
               ? f.rawPath(POLICIES_PATH).exists(false)
               : f
                   .rawPath(POLICIES_PATH)
@@ -233,7 +233,7 @@ export class MongoControlAdapterImpl implements MongoControlAdapter<'mongo'> {
                     blindCast<
                       MongoValue,
                       'read back from the marker document, so it is a BSON value'
-                    >(storedPolicies.value),
+                    >(rawPolicies.value),
                   ),
           );
     const docs = await this.#execute(
@@ -341,10 +341,11 @@ export class MongoControlAdapterImpl implements MongoControlAdapter<'mongo'> {
       driver: controlDriver,
       executeDdl: (command) => this.executeDdl(controlDriver, command),
       markerOps: {
+        markerLocation: this.markerLocation,
         readMarker: (space) => this.readMarker(controlDriver, space),
         initMarker: (space, destination) => this.initMarker(controlDriver, space, destination),
-        updateMarker: (space, expectedFrom, destination, storedPolicies) =>
-          this.updateMarker(controlDriver, space, expectedFrom, destination, storedPolicies),
+        updateMarker: (space, expectedFrom, destination, rawPolicies) =>
+          this.updateMarker(controlDriver, space, expectedFrom, destination, rawPolicies),
         writeLedgerEntry: (space, entry) => this.writeLedgerEntry(controlDriver, space, entry),
       },
       introspectSchema: () => this.introspectSchema(controlDriver),

@@ -177,12 +177,7 @@ export function databasePolicyDifferences(
 /** How the policies a marker records compare with those a caller checked. */
 export type MarkerDatabasePoliciesComparison =
   | { readonly kind: 'held' }
-  | {
-      readonly kind: 'moved';
-      readonly found: DatabasePolicies;
-      /** Each setting that moved: `declared` is the value the caller checked, `inForce` the value the marker records now. */
-      readonly differences: readonly DatabasePolicyDifference[];
-    }
+  | { readonly kind: 'moved'; readonly found: DatabasePolicies }
   | { readonly kind: 'unreadable'; readonly why: string };
 
 /**
@@ -195,10 +190,9 @@ export function compareMarkerDatabasePolicies(
 ): MarkerDatabasePoliciesComparison {
   const inForce = databasePoliciesOf(marker);
   if (!inForce.ok) return { kind: 'unreadable', why: inForce.failure.why };
-  const differences = databasePolicyDifferences(checked, inForce.value);
-  return differences.length === 0
+  return databasePolicyDifferences(checked, inForce.value).length === 0
     ? { kind: 'held' }
-    : { kind: 'moved', found: inForce.value, differences };
+    : { kind: 'moved', found: inForce.value };
 }
 
 /** A policy setting's value as messages print it: change strategies comma-separated. */
@@ -206,15 +200,16 @@ export function databasePolicyValueText(value: DatabasePolicyDifference['declare
   return typeof value === 'string' ? value : value.join(', ');
 }
 
-/** Why the policies `actor` checked no longer hold: each setting that moved, from the value checked to the value now. */
+/** Why the policies `actor` checked no longer hold: each setting that moved, from the value checked to the value found. */
 export function movedDatabasePoliciesWhy(
   actor: string,
-  differences: readonly DatabasePolicyDifference[],
+  checked: DatabasePolicies,
+  found: DatabasePolicies,
 ): string {
-  const moved = differences
+  const moved = databasePolicyDifferences(checked, found)
     .map(
-      ({ setting, declared, inForce }) =>
-        `${setting} moved from ${databasePolicyValueText(declared)} to ${databasePolicyValueText(inForce)}`,
+      ({ setting, declared: checkedValue, inForce: foundValue }) =>
+        `${setting} moved from ${databasePolicyValueText(checkedValue)} to ${databasePolicyValueText(foundValue)}`,
     )
     .join('; ');
   return `The database's policies changed after ${actor} checked them: ${moved}.`;
@@ -226,18 +221,18 @@ export function movedDatabasePoliciesWhy(
  */
 export function databasePoliciesMovedFailure(
   checked: DatabasePolicies,
-  moved: Extract<MarkerDatabasePoliciesComparison, { readonly kind: 'moved' }>,
+  found: DatabasePolicies,
 ): MigrationRunnerFailure & { readonly code: 'MIGRATION.MARKER_CAS_FAILURE' } {
   return migrationRunnerFailure(
     'MIGRATION.MARKER_CAS_FAILURE',
     "The database's policies changed during the run",
     {
-      why: `${movedDatabasePoliciesWhy('this run', moved.differences)} Run the command again to check them anew.`,
+      why: `${movedDatabasePoliciesWhy('this run', checked, found)} Run the command again to check them anew.`,
       meta: {
         reason: 'databasePolicies',
         space: APP_SPACE_ID,
         checkedDatabasePolicies: checked,
-        foundDatabasePolicies: moved.found,
+        foundDatabasePolicies: found,
       },
     },
   );
