@@ -4,7 +4,7 @@
  * second run.
  */
 import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
-import { RenameStoredKeyCall } from '@internal/target-sqlite/op-factory-call';
+import { RemoveStoredKeyCall, RenameStoredKeyCall } from '@internal/target-sqlite/op-factory-call';
 import type { SqlitePlanTargetDetails } from '@internal/target-sqlite/planner-target-details';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -195,5 +195,40 @@ describe('SQLite stored key operations', { timeout: timeouts.databaseOperation }
       });
       expect(await texts('history')).toEqual(before);
     });
+  });
+
+  describe('removeStoredKey', () => {
+    it.each([
+      ['an object column', 'point', '$.lat', [1], [{ lng: 2 }, { lng: 3 }, null, undefined, 'str']],
+      [
+        'a list of objects',
+        'history',
+        '$[*].lat',
+        [1, 2],
+        [[{}, { x: 1 }], [null, {}], [], undefined, null],
+      ],
+      [
+        'an object nested in an object',
+        'wrapped',
+        '$.point.lat',
+        [1],
+        [{ point: {} }, { point: null }, {}, undefined, { point: { lng: 1 } }],
+      ],
+      [
+        'a list inside an object inside a list',
+        'trips',
+        '$[*].stops[*].lat',
+        [1],
+        [[{ stops: [{}, null] }], [{ stops: [] }, null], [{ stops: null }], undefined, []],
+      ],
+    ] as const)(
+      'removes the key in %s, and writes only the rows that hold it',
+      async (_, column, path, written, expected) => {
+        const op = await new RemoveStoredKeyCall('place', column, path).toOp();
+
+        expect(await runTwice(op, column)).toEqual(written);
+        expect(await values(column)).toEqual(expected);
+      },
+    );
   });
 });

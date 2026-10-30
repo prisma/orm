@@ -129,7 +129,7 @@ import {
 import { dropSchema, renameSchema, setTableSchema } from './operations/schemas';
 import type { ForeignKeySpec } from './operations/shared';
 import { step, targetDetails } from './operations/shared';
-import { keyPlace, renameStoredKey } from './operations/stored-keys';
+import { keyPlace, removeStoredKey, renameStoredKey } from './operations/stored-keys';
 import { removeStoredValue, replaceStoredValue, storedValueText } from './operations/stored-values';
 import { dropTable, renameTable } from './operations/tables';
 import { buildAddNotNullColumnWithTemporaryDefaultOperation } from './planner-recipes';
@@ -2567,6 +2567,47 @@ export class RenameStoredKeyCall extends PostgresOpFactoryCallNode {
   }
 }
 
+/** Removes the key at the end of a JSON path, from every object of a column the path reaches. */
+export class RemoveStoredKeyCall extends PostgresOpFactoryCallNode {
+  readonly factoryName = 'removeStoredKey' as const;
+  readonly operationClass = 'destructive' as const;
+  readonly schemaName: string;
+  readonly tableName: string;
+  readonly columnName: string;
+  readonly path: JsonKeyPath;
+  readonly label: string;
+
+  constructor(schemaName: string, tableName: string, columnName: string, path: string) {
+    super();
+    this.schemaName = schemaName;
+    this.tableName = tableName;
+    this.columnName = columnName;
+    this.path = requireKeyPath(
+      path,
+      this.factoryName,
+      columnCallLocation(schemaName, tableName, columnName),
+    );
+    this.label = `Remove key "${this.path.key}" ${keyPlace(this.path, tableName, columnName)}`;
+    this.freeze();
+  }
+
+  toOp(): Op {
+    return removeStoredKey(this.schemaName, this.tableName, this.columnName, this.path);
+  }
+
+  renderTypeScript(): string {
+    const opts = [
+      ...columnCallLocation(this.schemaName, this.tableName, this.columnName),
+      `path: ${jsonToTsSource(this.path.path.text)}`,
+    ];
+    return `this.removeStoredKey({ ${opts.join(', ')} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+}
+
 // ============================================================================
 // Data transform
 // ============================================================================
@@ -2889,6 +2930,7 @@ export type PostgresOpFactoryCall =
   | ReplaceStoredValueCall
   | RemoveStoredValueCall
   | RenameStoredKeyCall
+  | RemoveStoredKeyCall
   | CreatePostgresRlsPolicyCall
   | DropPostgresRlsPolicyCall
   | EnableRowLevelSecurityCall

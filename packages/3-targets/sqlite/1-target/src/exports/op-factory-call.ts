@@ -8,6 +8,7 @@ export {
   DropTableCall,
   RawSqlCall,
   RecreateTableCall,
+  RemoveStoredKeyCall,
   RemoveStoredValueCall,
   RenameColumnCall,
   RenameStoredKeyCall,

@@ -4,7 +4,10 @@
  * second run.
  */
 import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
-import { RenameStoredKeyCall } from '@internal/target-postgres/op-factory-call';
+import {
+  RemoveStoredKeyCall,
+  RenameStoredKeyCall,
+} from '@internal/target-postgres/op-factory-call';
 import type { PostgresPlanTargetDetails } from '@internal/target-postgres/planner-target-details';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -222,5 +225,41 @@ describe('Postgres stored key operations', { concurrent: false }, () => {
         ...original('history').slice(1),
       ]);
     });
+  });
+
+  describe('removeStoredKey', () => {
+    it.each([
+      ['an object column', 'point', '$.lat', [1], [{ lng: 2 }, { lng: 3 }, null, null, 'str']],
+      [
+        'a list of objects',
+        'history',
+        '$[*].lat',
+        [1, 2],
+        [[{}, { x: 1 }], [null, {}], [], null, null],
+      ],
+      [
+        'an object nested in an object',
+        'wrapped',
+        '$.point.lat',
+        [1],
+        [{ point: {} }, { point: null }, {}, null, { point: { lng: 1 } }],
+      ],
+      [
+        'a list inside an object inside a list',
+        'trips',
+        '$[*].stops[*].lat',
+        [1],
+        [[{ stops: [{}, null] }], [{ stops: [] }, null], [{ stops: null }], null, []],
+      ],
+    ] as const)(
+      'removes the key in %s, and writes only the rows that hold it',
+      { timeout: testTimeout },
+      async (_, column, path, written, expected) => {
+        const op = await new RemoveStoredKeyCall('app', 'place', column, path).toOp();
+
+        expect(await runTwice(op)).toEqual(written);
+        expect(await values(column)).toEqual(expected);
+      },
+    );
   });
 });

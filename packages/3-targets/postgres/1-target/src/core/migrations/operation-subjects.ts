@@ -24,6 +24,7 @@ import {
   DropPostgresRlsPolicyCall,
   DropTableCall,
   RawSqlCall,
+  RemoveStoredKeyCall,
   RemoveStoredValueCall,
 } from './op-factory-call';
 
@@ -80,7 +81,11 @@ function knownTarget(locator: Locator, call: OpFactoryCall): SubjectStorage | un
   if (call instanceof DropTableCall) {
     return target(locator, call.schemaName, call.tableName, undefined);
   }
-  if (call instanceof DropColumnCall || call instanceof AlterColumnTypeCall) {
+  if (
+    call instanceof DropColumnCall ||
+    call instanceof AlterColumnTypeCall ||
+    call instanceof RemoveStoredKeyCall
+  ) {
     return target(locator, call.schemaName, call.tableName, call.columnName);
   }
   if (call instanceof RemoveStoredValueCall) {

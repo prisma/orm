@@ -10,7 +10,9 @@ import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import {
+  RemoveStoredKeyCall,
   RemoveStoredValueCall,
+  RenameStoredKeyCall,
   ReplaceStoredValueCall,
 } from '../../src/core/migrations/op-factory-call';
 import { sqliteCallSubjects } from '../../src/core/migrations/operation-subjects';
@@ -176,6 +178,32 @@ describe('stored value operations', () => {
         },
         loss: 'drop',
         label: 'Remove value "x" from column "email" of "User"',
+      },
+    ]);
+  });
+});
+
+describe('stored key operations', () => {
+  it('name the column a removed key is lost from, and lose nothing when a key is renamed', () => {
+    expect(
+      subjectsOf(
+        [
+          new RenameStoredKeyCall('User', 'email', '$.lat', 'latitude'),
+          new RemoveStoredKeyCall('User', 'email', '$[*].lat'),
+        ],
+        [],
+      ),
+    ).toEqual([
+      {
+        operationIndex: 1,
+        subject: {
+          kind: 'field',
+          namespaceId: asNamespaceId(UNBOUND_NAMESPACE_ID),
+          model: 'User',
+          field: 'email',
+        },
+        loss: 'drop',
+        label: 'Remove key "lat" at path "$[*]" in column "email" of "User"',
       },
     ]);
   });

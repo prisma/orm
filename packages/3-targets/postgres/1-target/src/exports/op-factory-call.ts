@@ -29,6 +29,7 @@ export {
   DropTableCall,
   EnableRowLevelSecurityCall,
   RawSqlCall,
+  RemoveStoredKeyCall,
   RemoveStoredValueCall,
   RenameColumnCall,
   RenameConstraintCall,

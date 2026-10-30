@@ -1,6 +1,9 @@
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
-import { RenameStoredKeyCall } from '../../src/core/migrations/op-factory-call';
+import {
+  RemoveStoredKeyCall,
+  RenameStoredKeyCall,
+} from '../../src/core/migrations/op-factory-call';
 
 const REFUSED_PATHS = [
   '$..lat',
@@ -101,5 +104,44 @@ describe('renameStoredKey', () => {
       [],
       'widening',
     ]);
+  });
+});
+
+describe('removeStoredKey', () => {
+  it('removes the key only from the rows whose objects hold it', () => {
+    const op = new RemoveStoredKeyCall('app', 'place', 'point', '$.lat').toOp();
+    const holdsKey = `jsonb_path_exists("point", 'strict $ ? (@.type() == "object" && exists(@.keyvalue() ? (@.key == "lat")))')`;
+
+    expect(op).toMatchObject({
+      id: 'removeStoredKey.place.point.$.lat',
+      label: 'Remove key "lat" at path "$" in column "point" of "place"',
+      operationClass: 'destructive',
+      precheck: [],
+      execute: [
+        {
+          sql: `UPDATE "app"."place" SET "point" = CASE WHEN jsonb_typeof("point") = 'object' THEN "point" - 'lat' ELSE "point" END WHERE ${holdsKey}`,
+        },
+      ],
+      postcheck: [
+        { sql: `SELECT NOT EXISTS (SELECT 1 FROM "app"."place" WHERE ${holdsKey}) AS result` },
+      ],
+    });
+  });
+
+  it.each([...REFUSED_PATHS, '$', '$[*]'])('refuses the path %j when it is built', (path) => {
+    expect(() => new RemoveStoredKeyCall('app', 'place', 'point', path)).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message: expect.stringContaining(
+          'removeStoredKey({ schema: "app", table: "place", column: "point" }): path ',
+        ),
+      }),
+    );
+  });
+
+  it('renders the facade call', () => {
+    expect(new RemoveStoredKeyCall('app', 'place', 'point', '$.lat').renderTypeScript()).toBe(
+      'this.removeStoredKey({ schema: "app", table: "place", column: "point", path: "$.lat" })',
+    );
   });
 });

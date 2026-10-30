@@ -67,3 +67,40 @@ export function renameStoredKey(
     ],
   };
 }
+
+export function removeStoredKey(
+  schemaName: string,
+  tableName: string,
+  columnName: string,
+  keyPath: JsonKeyPath,
+): Op {
+  const column = quoteIdentifier(columnName);
+  const key = keyLiteral(keyPath.key);
+  const removed = jsonRewrite(
+    column,
+    keyPath.objects,
+    (object) =>
+      `CASE WHEN jsonb_typeof(${object}) = 'object' THEN ${object} - ${key} ELSE ${object} END`,
+  );
+  const holdsKey = where(columnName, keyPath, hasMemberFilter(keyPath.key));
+  const place = keyPlace(keyPath, tableName, columnName);
+  return {
+    id: `removeStoredKey.${tableName}.${columnName}.${keyPath.path.text}`,
+    label: `Remove key "${keyPath.key}" ${place}`,
+    operationClass: 'destructive',
+    target: targetDetails('column', columnName, schemaName, tableName),
+    precheck: [],
+    execute: [
+      step(
+        `remove key "${keyPath.key}" ${place}`,
+        `UPDATE ${qualifyTableName(schemaName, tableName)} SET ${column} = ${removed} WHERE ${holdsKey}`,
+      ),
+    ],
+    postcheck: [
+      step(
+        `verify no object ${place} has key "${keyPath.key}"`,
+        noRowWhere(schemaName, tableName, holdsKey),
+      ),
+    ],
+  };
+}

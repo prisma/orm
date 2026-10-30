@@ -60,6 +60,7 @@ import {
   DropSchemaCall,
   DropTableCall,
   EnableRowLevelSecurityCall,
+  RemoveStoredKeyCall,
   RemoveStoredValueCall,
   RenameConstraintCall,
   RenameIndexCall,
@@ -363,6 +364,25 @@ export abstract class PostgresMigration<
         options.column,
         options.path,
         options.to,
+      ).toOp(),
+    );
+  }
+
+  /**
+   * Emit an `UPDATE` operation that removes the key at the end of `path` from every object of `column` the path reaches. `path` is written as for `renameStoredKey`. Only rows that hold the key are written. The operation is destructive.
+   */
+  protected removeStoredKey(options: {
+    readonly schema?: string;
+    readonly table: string;
+    readonly column: string;
+    readonly path: string;
+  }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
+    return Promise.resolve(
+      new RemoveStoredKeyCall(
+        options.schema ?? UNBOUND_NAMESPACE_ID,
+        options.table,
+        options.column,
+        options.path,
       ).toOp(),
     );
   }

@@ -35,6 +35,7 @@ import {
   DropIndexCall,
   DropTableCall,
   RecreateTableCall,
+  RemoveStoredKeyCall,
   RemoveStoredValueCall,
   type RenameColumnCall,
   RenameStoredKeyCall,
@@ -337,6 +338,19 @@ export abstract class SqliteMigration<
   }): Promise<Op> {
     return Promise.resolve(
       new RenameStoredKeyCall(options.table, options.column, options.path, options.to).toOp(),
+    );
+  }
+
+  /**
+   * Emit an `UPDATE` operation that removes the key at the end of `path` from every object of `column` the path reaches. `path` is written as for `renameStoredKey`. Only rows that hold the key are written. The operation is destructive.
+   */
+  protected removeStoredKey(options: {
+    readonly table: string;
+    readonly column: string;
+    readonly path: string;
+  }): Promise<Op> {
+    return Promise.resolve(
+      new RemoveStoredKeyCall(options.table, options.column, options.path).toOp(),
     );
   }
 

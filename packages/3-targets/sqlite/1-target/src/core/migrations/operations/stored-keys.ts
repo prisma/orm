@@ -70,3 +70,31 @@ export function renameStoredKey(
     ],
   };
 }
+
+export function removeStoredKey(tableName: string, columnName: string, keyPath: JsonKeyPath): Op {
+  const column = quoteIdentifier(columnName);
+  const removed = jsonRewrite(
+    column,
+    keyPath.objects,
+    (object) =>
+      `CASE WHEN ${hasMember(object, keyPath.key)} THEN json_remove(${object}, ${memberPath(keyPath.key)}) ELSE ${object} END`,
+  );
+  const holdsKey = objectsMatch(columnName, keyPath, (object) => hasMember(object, keyPath.key));
+  const place = keyPlace(keyPath, tableName, columnName);
+  return {
+    id: `removeStoredKey.${tableName}.${columnName}.${keyPath.path.text}`,
+    label: `Remove key "${keyPath.key}" ${place}`,
+    operationClass: 'destructive',
+    target: { id: 'sqlite', details: buildTargetDetails('column', columnName, tableName) },
+    precheck: [],
+    execute: [
+      step(
+        `remove key "${keyPath.key}" ${place}`,
+        `UPDATE ${quoteIdentifier(tableName)} SET ${column} = ${removed} WHERE ${holdsKey}`,
+      ),
+    ],
+    postcheck: [
+      step(`verify no object ${place} has key "${keyPath.key}"`, noRowWhere(tableName, holdsKey)),
+    ],
+  };
+}

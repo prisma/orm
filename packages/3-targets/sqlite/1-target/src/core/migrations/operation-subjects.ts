@@ -15,6 +15,7 @@ import {
   DropTableCall,
   RawSqlCall,
   RecreateTableCall,
+  RemoveStoredKeyCall,
   RemoveStoredValueCall,
 } from './op-factory-call';
 
@@ -90,6 +91,7 @@ export function sqliteCallSubjects(
         !(call instanceof DropTableCall) &&
         !(call instanceof RawSqlCall) &&
         !(call instanceof RemoveStoredValueCall) &&
+        !(call instanceof RemoveStoredKeyCall) &&
         !fieldEvents.has(call),
     ),
   );
@@ -117,6 +119,15 @@ export function sqliteCallSubjects(
         operationCount,
         label,
         dataLoss: alreadyLost ? [] : [lost(columnTarget(call.tableName, call.columnName))],
+        accessChanges: [],
+        temporaryValues: [],
+      };
+    }
+    if (call instanceof RemoveStoredKeyCall) {
+      return {
+        operationCount,
+        label,
+        dataLoss: [lost(columnTarget(call.tableName, call.columnName))],
         accessChanges: [],
         temporaryValues: [],
       };

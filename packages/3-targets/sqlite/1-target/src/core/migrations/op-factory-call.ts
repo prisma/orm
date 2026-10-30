@@ -60,7 +60,7 @@ import { quoteIdentifier, SQLITE_QUOTING } from '../sql-utils';
 import { addColumn, dropColumnExecuteSql, renameColumn } from './operations/columns';
 import type { SqliteColumnSpec, SqliteIndexSpec, SqliteTableSpec } from './operations/shared';
 import { INLINE_AUTOINCREMENT_PRIMARY_KEY, step } from './operations/shared';
-import { keyPlace, renameStoredKey } from './operations/stored-keys';
+import { keyPlace, removeStoredKey, renameStoredKey } from './operations/stored-keys';
 import { removeStoredValue, replaceStoredValue, storedValueText } from './operations/stored-values';
 import {
   type ColumnShape,
@@ -1339,6 +1339,41 @@ export class RenameStoredKeyCall extends SqliteOpFactoryCallNode {
   }
 }
 
+/** Removes the key at the end of a JSON path, from every object of a column the path reaches. */
+export class RemoveStoredKeyCall extends SqliteOpFactoryCallNode {
+  readonly factoryName = 'removeStoredKey' as const;
+  readonly operationClass = 'destructive' as const;
+  readonly tableName: string;
+  readonly columnName: string;
+  readonly path: JsonKeyPath;
+  readonly label: string;
+
+  constructor(tableName: string, columnName: string, path: string) {
+    super();
+    this.tableName = tableName;
+    this.columnName = columnName;
+    this.path = requireKeyPath(path, this.factoryName, columnCallLocation(tableName, columnName));
+    this.label = `Remove key "${this.path.key}" ${keyPlace(this.path, tableName, columnName)}`;
+    this.freeze();
+  }
+
+  toOp(): Op {
+    return removeStoredKey(this.tableName, this.columnName, this.path);
+  }
+
+  renderTypeScript(): string {
+    const opts = [
+      ...columnCallLocation(this.tableName, this.columnName),
+      `path: ${jsonToTsSource(this.path.path.text)}`,
+    ];
+    return `this.removeStoredKey({ ${opts.join(', ')} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+}
+
 // ============================================================================
 // Data transform
 // ============================================================================
@@ -1453,6 +1488,7 @@ export type SqliteOpFactoryCall =
   | ReplaceStoredValueCall
   | RemoveStoredValueCall
   | RenameStoredKeyCall
+  | RemoveStoredKeyCall
   | DataTransformCall
   | RawSqlCall;
 
