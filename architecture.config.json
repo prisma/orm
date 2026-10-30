@@ -307,6 +307,12 @@
       "plane": "runtime"
     },
     {
+      "glob": "packages/3-targets/0-shared/type-implementations/**",
+      "domain": "targets",
+      "layer": "shared",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/postgres/1-target/src/core/*.ts",
       "domain": "extensions",
       "layer": "targets",

@@ -1,0 +1,57 @@
+{
+  "name": "@internal/type-implementations",
+  "private": true,
+  "version": "8.0.0-rc.21",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "description": "Database-agnostic value logic that more than one Prisma 8 target's codecs, data types and now() generators use",
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run",
+    "typecheck": "tsc --project tsconfig.json --noEmit && tsc --project tsconfig.no-temporal-global.json --noEmit",
+    "lint": "biome check . --error-on-warnings",
+    "lint:fix": "biome check --write .",
+    "lint:fix:unsafe": "biome check --write --unsafe .",
+    "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
+  },
+  "dependencies": {
+    "temporal-spec": "1.0.1"
+  },
+  "devDependencies": {
+    "@repo/tsconfig": "workspace:8.0.0-rc.21",
+    "@repo/tsdown": "workspace:8.0.0-rc.21",
+    "temporal-polyfill": "^1.0.4",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.9"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "exports": {
+    "./date": "./dist/date.mjs",
+    "./duration": "./dist/duration.mjs",
+    "./now": "./dist/now.mjs",
+    "./temporal": "./dist/temporal.mjs",
+    "./temporal-text": "./dist/temporal-text.mjs",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/orm.git",
+    "directory": "packages/3-targets/0-shared/type-implementations"
+  }
+}
