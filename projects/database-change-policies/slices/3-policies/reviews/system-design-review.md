@@ -247,3 +247,84 @@ Suggestion: drop `DatabasePoliciesSchema` from the public exports (keep it in th
 ### Routed to the code review (round 2)
 
 - `markerHoldsDatabasePolicies` treats an unreadable `meta.policies` as "policies changed". A marker corrupted after the check therefore fails under the lock as `MIGRATION.MARKER_CAS_FAILURE` with the advice to run again, instead of `CONTRACT.MARKER_ROW_CORRUPT`.
+
+## Round 3
+
+Re-reviewed at `a85fdf669b`, after the round 2 fixes and a merge of `main`. New code read: the run-wide `expectedDatabasePolicies` on `MigrationRunner.execute` and `signSpaces`, `compareMarkerDatabasePolicies` and `databasePoliciesMovedFailure` in the framework module, `errorMarkerPoliciesCorrupt` in `@internal/errors`, each runner's `checkDatabasePolicies`, `MigrateTarget`, `MarkerInsert`, MongoDB's `StoredPoliciesValue`, and the `reason` field on `MIGRATION.MARKER_CAS_FAILURE` and on `SpaceMarkerConflict`.
+
+### Verdicts on the second round
+
+| ID | Verdict | Evidence |
+|---|---|---|
+| A06 (ADR part) | Fixed | ADR 314 line 48: "The framework owns that key: it exports the key, the stored form, the parser and the comparison, and the targets write the value it gives them without interpreting it." |
+| A08 (leftover) | Fixed | `RunMigrationInputs` takes `databasePolicies` and `expectedDatabasePolicies` through `Pick` of the framework types (`cli/src/control-api/operations/run-migration.ts` lines 185-186). |
+| A14 | Fixed | `expectedDatabasePolicies` is a parameter of the whole run on `MigrationRunner.execute` (`framework-components/src/control/control-migration-types.ts` lines 822-827) and on `signSpaces` (`control-instances.ts` lines 66-72), and is gone from the per-space options and `SpaceToSign`. Every runner compares it with the application space's marker before the first space: Postgres `executeSpaces` (`postgres/1-target/src/core/migrations/runner.ts` lines 314-317), SQLite (lines 225-233), MySQL inside `withMarkerLock` (lines 113-118), MongoDB in `control-target.ts` lines 107-116. Both SQL and MongoDB `signSpaces` compare before writing any marker. Each target has a test with an extension space scheduled first that asserts no operation started. |
+| A15 | Fixed | `MigrateOptions.target` is one discriminated `MigrateTarget` (`cli/src/control-api/types.ts` lines 655-670). |
+| A16 | Fixed in substance | The wrapper is now `StoredPoliciesValue { value: unknown }` with a doc comment saying it is the raw stored value for the compare-and-swap (`2-mongo-family/9-family/src/core/control-adapter.ts` lines 15-22). Keeping the wrapper is justified: an absent argument means "do not compare policies", while `{ value: undefined }` means "compare, expecting none". The parameter is now `storedPolicies`. The names around it are A20. |
+| A17 | Fixed | `DatabasePolicySetting` is gone; `DatabasePoliciesSchema` is no longer exported (`framework-components/src/exports/control.ts` lines 146-168); `InsertedMarker` is now `MarkerInsert = Pick<MarkerDestination, …>` (`marker-destination.ts` line 13). |
+
+### Subsystem fit and the framework boundary
+
+The framework module `framework-components/src/control/database-policies.ts` holds the value lists, the types, the meta key, the parser, the overlay, the comparison, the stored form and the structured runner failure (`databasePoliciesMovedFailure`). It also exports two text helpers, `databasePolicyValueText` and `movedDatabasePoliciesWhy`. They write the failure's `why`, which the runners need, and the CLI reuses them so `db sign` and the runners word a moved policy the same way. That matches the spec's "Framework domain" rule. No family or target vocabulary was added to `packages/1-framework`, except the word "row" in the new error's advice (A23). Dependency direction holds: targets import `errorMarkerPoliciesCorrupt` from `@internal/errors`, which they already depended on, and adapters already threw `errorMarkerRowCorrupt` from `readMarker`, so a runner throwing the same code is not a new pattern.
+
+### New findings
+
+#### A18 — A moved-policies comparison reuses `DatabasePolicyDifference`, whose field names then mean something else (medium-low)
+
+Location: `packages/1-framework/1-core/framework-components/src/control/database-policies.ts` lines 177-202 (`MarkerDatabasePoliciesComparison`, `compareMarkerDatabasePolicies`) and 209-221 (`movedDatabasePoliciesWhy`); `control-operation-results.ts` lines 159-168 (`SpaceDatabasePoliciesConflict.comparison`).
+
+Issue: `DatabasePolicyDifference` has `declared` (what a ref declares) and `inForce` (what the database has). `compareMarkerDatabasePolicies` calls `databasePolicyDifferences(checked, inForce)`, so in the `moved` arm `declared` holds the value the caller checked and `inForce` holds the newer value the marker records now. A doc comment on line 183 explains the switch. In the CLI, `inForce` means the value read at check time, so the same word names the older value in one place and the newer value in the other. The type is public through `SpaceDatabasePoliciesConflict`, so a consumer reading `comparison.differences[0].declared` sees "declared" for something no ref declared. The `moved` arm also carries `found`, and the conflict carries `checked`, so `differences` is derivable from data already present.
+
+Suggestion: drop `differences` from the `moved` arm. Let `movedDatabasePoliciesWhy(actor, checked, found)` compute the settings that moved and print them as "from … to …". If a list is still wanted, give it its own shape, `{ setting, checked, found }`, rather than reusing the ref-versus-database type.
+
+#### A19 — ADR 314 and the Migration System doc describe the runner's re-check as "under its lock, as it compares the hash" (low)
+
+Location: `docs/architecture docs/adrs/ADR 314 - Databases record a change policy and a data protection policy.md` line 29; `docs/architecture docs/subsystems/7. Migration System.md` line 374; slice `spec.md` line 209.
+
+Issue: The code now compares the policies once, before the first space, and that order is the property that keeps extension spaces from applying under a policy that moved. The hash comparison, by contrast, is the compare-and-swap at the end. MongoDB has no lock: it compares before the first space and again in the application marker's compare-and-swap. The error reference entry for `MIGRATION.MARKER_CAS_FAILURE` already says this correctly. The ADR and the subsystem doc say neither "before the first space" nor how MongoDB differs.
+
+Suggestion: in both documents, replace the sentence with: "Before it applies the first space, the runner compares the policies the check used with the application space's marker, under its lock where the target has one; MongoDB, which has none, also writes the application marker only while it still stores them. A concurrent policy change fails the run instead of being overridden." Update spec line 209 the same way.
+
+#### A20 — Three names for the same MongoDB record, and one of them clashes with a different CLI type (low)
+
+Location: `packages/3-targets/mongo/1-target/src/core/migrations/mongo-runner.ts` lines 239-242 (`CheckedDatabasePolicies { checked; stored }`); `packages/2-mongo-family/9-family/src/core/control-instance.ts` lines 239-242 (`CheckedPolicies { checked; stored }`); `packages/1-framework/3-tooling/cli/src/control-api/operations/database-policies.ts` lines 47-51 (`CheckedDatabasePolicies { inForce; toWrite }`); `StoredPoliciesValue` beside the framework's `StoredDatabasePolicies`.
+
+Issue: The MongoDB runner and the MongoDB family define the same shape twice under two names. The runner's name is the same as a CLI type with a different shape and meaning. "Stored" also names two things: `StoredDatabasePolicies` is the typed form the framework writes, and `StoredPoliciesValue` is the raw value read back.
+
+Suggestion: define the MongoDB record once, in the MongoDB family next to `StoredPoliciesValue` and `MarkerOperations`, and use it in the runner and in `signSpaces`. Give it a name that does not collide with the CLI type and says it holds the checked policies plus the raw value for the compare-and-swap. Name the raw value by what it is, for example `RawStoredPolicies`.
+
+#### A21 — The same under-lock policy check is written in three SQL runners (low)
+
+Location: `packages/3-targets/postgres/1-target/src/core/migrations/runner.ts` lines 335-351; `packages/3-targets/sqlite/1-target/src/core/migrations/runner.ts` lines 260-277; `packages/3-targets/mysql/1-target/src/core/migrations/runner.ts` lines 126-142.
+
+Issue: The three `checkDatabasePolicies` bodies are the same: read the application marker through `this.family`, compare, throw `errorMarkerPoliciesCorrupt` when unreadable, return `databasePoliciesMovedFailure` when moved. Only the doc comment differs. Where to read the marker and how to report the result is SQL-family behaviour, not target behaviour; only when to call it (inside the lock or transaction) is the target's choice.
+
+Suggestion: put one function in the SQL family's migrations code, for example `checkDatabasePoliciesHeld(family, driver, checked)`, and call it from each runner at the point the target chooses.
+
+#### A22 — Some text still describes the policies as per space, or names the old functions (low)
+
+Location: `packages/1-framework/3-tooling/cli/src/utils/marker-mismatch.ts` line 32 ("The space's change policy in force"); `docs/reference/error-reference.md`, `MIGRATION.MARKER_MISMATCH` payload ("`change`, the space's change strategies in force"); slice `spec.md` line 66 (`policiesOf`, `DEFAULT_POLICIES`, `policyDifferences`, and "the CLI raises the error", although the runners raise it too now); `docs/glossary.md` "Change Policy" (lists the refusal of `db update` and `db sign`, but not of `db migrate` on a database whose policy is `reconcile` alone).
+
+Issue: ADR 314 says the policies are the database's. These places still say "the space's", use names that were renamed, or describe only half of the enforcement.
+
+Suggestion: say "the database's change policy" in the doc comment and the payload description; update spec line 66 to the current names and say that the CLI raises the error on the first read and the runners raise it on the re-check; add `db migrate` needing `migrate` to the glossary entry.
+
+#### A23 — The new framework error tells a MongoDB user to edit a "row" (low)
+
+Location: `packages/1-framework/1-core/errors/src/execution.ts` lines 97-118 (`errorMarkerPoliciesCorrupt`).
+
+Issue: The advice says "correct meta.policies in the marker row; do not delete the row" and "The <location> row for space …". On MongoDB the marker is a document. The code `CONTRACT.MARKER_ROW_CORRUPT` already uses "row", so the code name has a precedent, but the advice is new text in the framework.
+
+Suggestion: say "marker" instead of "marker row" and "the marker for space … in <location>". `markerLocation` already names the table or collection.
+
+#### A24 — Two targets do not test a policy value that becomes unreadable between the check and the lock (low)
+
+Location: `packages/3-targets/sqlite/2-adapter/test/migrations/runner.database-policies.test.ts`; `packages/3-targets/mysql/2-adapter/test/migrations/migrate.database-policies.live.test.ts`.
+
+Issue: Postgres (line 298) and MongoDB (line 364) test that an unreadable `meta.policies` read again by the runner fails as `CONTRACT.MARKER_ROW_CORRUPT` and keeps the row. SQLite and MySQL have no such test, although each has its own copy of the check (A21). If A21 is fixed, one SQL-family test covers all three.
+
+Suggestion: add the case to SQLite and MySQL, or to the shared SQL-family function once A21 lands.
+
+### Routed to the code review (round 3)
+
+- MongoDB's `updateMarker` failure path (`mongo-runner.ts` lines 460-482) compares policies only when the storage hash still matches, and acts only on `moved`. When the policies became unreadable after the check, it reports `MIGRATION.MARKER_CAS_FAILURE` with `reason: 'storageHash'`, while the expected and found storage hashes are equal. That is the round 2 routed item, now in this form.
