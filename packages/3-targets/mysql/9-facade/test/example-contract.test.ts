@@ -13,7 +13,9 @@ describe('the example contract on MySQL', () => {
     const contract = loadExampleContract();
     expect({ target: contract.target, capabilities: contract.capabilities }).toEqual({
       target: 'mysql',
-      capabilities: { sql: { enums: true, foreignKeys: true, limit: true, orderBy: true } },
+      capabilities: {
+        sql: { defaultInInsert: true, enums: true, foreignKeys: true, limit: true, orderBy: true },
+      },
     });
   });
 
