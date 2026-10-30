@@ -48,9 +48,14 @@ A duration is stored as written, because ISO 8601 gives a duration no single for
 
 SQLite gets no `storage: integer` for epoch milliseconds, the form the Prisma ORM query engine wrote: `DatetimeJsDate` already reads such rows, and no Prisma 7 schema reader for SQLite exists to need it.
 
+## Not decided here
+
+MySQL and MongoDB. Until their tables are recorded here, MySQL's `DateTime` and MongoDB's `Date`, which is a moment in time, are explicit types.
+
 ## Consequences
 
-- A user writes `DateTime` or `Date` on any target and gets a working field whose value needs nothing installed.
+- On every target whose tables are recorded here, a user writes `DateTime`, `Date`, `Time` or `Duration` and gets a working field whose value needs nothing installed.
+- Changing a field from one of these types to another changes the column's data type and its `now()` default, which the next migration writes, but it does not convert the values existing rows hold. On SQLite, where all of them are stored as text, a row written as a `DateTime` keeps its instant text in a column that is now a `Date`, and fails to read. Convert such rows with a data migration.
 - The contract, the migration planner and the runtime see only explicit types, as ADR 279 decided.
 - The code the targets' date and time codecs share lives in `@internal/type-implementations` ([ADR 311](ADR%20311%20-%20Code%20shared%20by%20several%20targets'%20type%20implementations%20lives%20in%20one%20package.md)).
 

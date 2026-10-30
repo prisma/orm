@@ -19,4 +19,6 @@ For each Yarn project that `detection` matches, add `"temporal-polyfill": "^1.0.
 
 A project that already depends on `temporal-polyfill` with a range inside `^1.0.4` needs no change.
 
-An existing SQLite schema needs no other change: `DateTime` with no arguments is the type `DateTime` was before, renamed `DatetimeJsDate`, and emits the same contract.
+An existing SQLite contract needs no other change: `DateTime` with no arguments is the type `DateTime` was before, renamed `DatetimeJsDate`, and emits the same contract.
+
+One case reads differently. `db verify` used to read a database default of `date('now')` or `CURRENT_DATE` as `now()`, so it matched a field written `@default(now())` of any type. It now reads it as the current date, which only a `Date @default(now())` field writes, and a `now()` on a `DateTime` or `String` field means the current instant. If `db verify` now reports such a column, write the field as `Date @default(now())` when it holds a calendar date, or as ``@default(sql`date('now')`)`` to keep its type. Do not run `db update` first: it would change the column's default to the current instant, and new rows would get the instant instead of the date.

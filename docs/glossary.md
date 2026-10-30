@@ -219,7 +219,7 @@ A type, in PSL or the TypeScript builder (`type.DateTime(...)`), named for what 
 
 ### Explicit type
 
-A type, in PSL or the TypeScript builder, that fixes one codec, so it fixes both the column type and the value the application reads. It is named after what stores it, with a suffix for the kind of value: the database's column type where the database has one (`TimestamptzTemporal`, `TimestamptzJsDate`), else the target's data type (SQLite's `DateString`, stored as text). The suffix is left off only when the column type has one codec and its bare name is not a convenience name, as PostgreSQL's `Timetz`. See ADR 257, ADR 279 and ADR 312.
+A type, in PSL or the TypeScript builder, that fixes one codec, so it fixes both the column type and the value the application reads. It is named after the database (ADR 257). An explicit type that a convenience type chooses is named after what stores it, with a suffix for the kind of value: the database's column type where the database has one (`TimestamptzTemporal`, `TimestamptzJsDate`), else the target's data type (SQLite's `DateString`, stored as text). It leaves the suffix off only when its column type has one codec and its bare name is not a convenience name, as PostgreSQL's `Timetz`. See ADR 279 and ADR 312.
 
 ### Marker
 
