@@ -43,7 +43,7 @@ export const contract = defineContract({}, ({ field, model, type }) => ({
 
 ## `mongo-fields-take-a-type`
 
-Commit your work first. From the project root, run:
+Commit your work first. The script reads your code with the TypeScript compiler, so the project needs `typescript` installed. From the project root, run:
 
 ```sh
 node scripts/rewrite-mongo-field-types.ts
