@@ -62,3 +62,7 @@ When the capability is absent the ORM sends an upsert with no conflict columns, 
 ## `mariadb` 3.5.4 can raise an unhandled rejection after destroying a connection (slice 4, 2026-10-30)
 
 `Connection.destroy()` in `lib/connection.js` sends `KILL` on a background connection and chains `.finally()` with no `catch`. If that background connection drops, the rejection is unhandled in the application process, and the driver cannot catch it. The MySQL driver now never calls `destroy()` while a statement is receiving: it cancels with `KILL QUERY` on another pooled connection instead, so users are not exposed. Report the bug to the `mariadb` package; the report text is in the slice 4 worktree's `wip/mariadb-kill-bug.md`.
+
+## A statement sent after release runs on Postgres (slice 4 system-design review, D20)
+
+The MySQL driver refuses a statement sent on a held connection after `release()`, or still waiting for it then, with `DRIVER.NOT_CONNECTED`. The Postgres driver runs it on the client after it went back to the pool, possibly inside another caller's session. MySQL does not force the difference; it fixes a defect both drivers share. Linear TML-2333 ("invalidate wrappers on teardown") covers the same fix at the runtime layer; give the Postgres driver the same rule there.
