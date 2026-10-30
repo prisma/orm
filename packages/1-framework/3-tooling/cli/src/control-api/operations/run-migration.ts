@@ -7,6 +7,7 @@ import type { TargetBoundComponentDescriptor } from '@internal/framework-compone
 import type {
   ControlDriverInstance,
   ControlFamilyInstance,
+  DatabasePolicies,
   FailedTypeChange,
   MigrationOperationPolicy,
   MigrationRunnerFailure,
@@ -206,6 +207,8 @@ export interface RunMigrationInputs<TFamilyId extends string, TTargetId extends 
   >;
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>;
   readonly policy: MigrationOperationPolicy;
+  /** When set, the application space's marker update records these as the database's policies. */
+  readonly databasePolicies?: DatabasePolicies;
   readonly action: RunAction;
   readonly onProgress?: OnControlProgress;
 }
@@ -263,6 +266,7 @@ export async function runMigration<TFamilyId extends string, TTargetId extends s
     migrations,
     frameworkComponents,
     policy,
+    databasePolicies,
     action,
     onProgress,
   } = inputs;
@@ -284,6 +288,10 @@ export async function runMigration<TFamilyId extends string, TTargetId extends s
     driver,
     destinationContract: r.entry.destinationContract,
     policy,
+    ...ifDefined(
+      'databasePolicies',
+      r.spaceId === aggregate.app.spaceId ? databasePolicies : undefined,
+    ),
     frameworkComponents,
     migrationEdges: r.entry.migrationEdges,
     // Per-space post-apply schema verification is non-strict: each
