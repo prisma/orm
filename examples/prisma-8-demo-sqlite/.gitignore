@@ -3,3 +3,4 @@
 *.db-shm
 node_modules/
 dist/
+.tmp-output/

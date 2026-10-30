@@ -11,6 +11,7 @@
     "db:init": "prisma db init",
     "seed": "tsx scripts/seed.ts",
     "start": "tsx src/main.ts",
+    "test": "vitest run",
     "typecheck": "tsc --project tsconfig.json --noEmit",
     "lint": "biome check . --error-on-warnings"
   },
@@ -25,7 +26,8 @@
     "@repo/tsconfig": "workspace:8.0.0-rc.21",
     "@types/node": "catalog:",
     "tsx": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "version": "8.0.0-rc.21"
 }

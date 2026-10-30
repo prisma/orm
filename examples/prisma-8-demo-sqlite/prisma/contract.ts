@@ -39,6 +39,20 @@ export const contract = defineContract({}, ({ field, model, type, gen }) => {
     },
   });
 
+  // The convenience date and time types: `DateTime` reads a JavaScript `Date`,
+  // `Date` and `Time` read the ISO 8601 text SQLite stores. None needs a global
+  // `Temporal`; `type.Date({ as: 'temporal' })` would read `Temporal.PlainDate`.
+  const Event = model('Event', {
+    fields: {
+      id: field.column(type.sql.Char(36)).id().onCreate(gen.uuid()),
+      title: field.column(textColumn),
+      startsAt: field.column(type.DateTime()),
+      day: field.column(type.Date()),
+      opensAt: field.column(type.Time()),
+      bookedOn: field.column(type.Date()).default(now()),
+    },
+  });
+
   const PostTag = model('PostTag', {
     fields: {
       postId: field.column(type.sql.Char(36)),
@@ -78,6 +92,9 @@ export const contract = defineContract({}, ({ field, model, type, gen }) => {
         }),
       }).sql({
         table: 'tag',
+      }),
+      Event: Event.sql({
+        table: 'event',
       }),
       PostTag: PostTag.sql(({ cols, constraints }) => ({
         table: 'post_tag',
