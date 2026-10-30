@@ -3,7 +3,7 @@
  *
  * `Site.location` holds a `GeoPoint`, `Site.history` a list of them, and `Site.place` a `Place`, whose `point` is a `GeoPoint`. A `GeoPoint` has `lat`, `lng` and an optional `status` typed by the enum `Status`. Each column has a check on its shape.
  *
- * - O1: `GeoPoint.lat` is renamed to `latitude`. Without a statement the change is refused, offering `--rename GeoPoint.lat:GeoPoint.latitude`; with it, the key is renamed in the column, in every element of the list and in the nested object.
+ * - O1: `GeoPoint.lat` is renamed to `latitude`. Without a statement the change is refused, offering `--rename GeoPoint.lat:GeoPoint.latitude`: `db update` asks about `lat`, and `migration plan` refuses the new required field at once, offering the rename before `--backfill`; with it, the key is renamed in the column, in every element of the list and in the nested object.
  * - O2: `GeoPoint.lng` is removed. Without a statement the change is refused, offering `--delete GeoPoint.lng`; with it, the key is removed everywhere.
  * - O3: `Status.ARCHIVED` is renamed to `RETIRED`, which stores `retired`, and `Status.DRAFT` is removed. Without statements the change is refused; with `--rename Status.ARCHIVED:Status.RETIRED` and `--delete Status.DRAFT`, `archived` becomes `retired` and `draft` becomes `null`, at every path.
  *
@@ -214,16 +214,23 @@ withTempDir(({ createTempDir }) => {
         const before = await seededThen(ctx, via, db.connectionString, LAT_RENAMED, 'O1');
 
         const asked = await refusal(ctx, via, 'O1.04');
-        expect(asked, 'O1.04: one question, the rename offered').toContain(
-          '\\"GeoPoint.lat\\" needs a statement',
-        );
+        if (via === 'db update') {
+          expect(asked, 'O1.04: one question, the rename offered').toContain(
+            '\\"GeoPoint.lat\\" needs a statement',
+          );
+          expect(asked, 'O1.04: what --delete leaves in the new field').toContain(
+            'the existing objects get a temporary value in the new required field \\"GeoPoint.latitude\\"',
+          );
+        } else {
+          expect(asked, 'O1.04: the new required field refused at once').toContain(
+            'Value object field \\"GeoPoint.latitude\\" is required',
+          );
+          expect(asked, 'O1.04: --delete still needs --backfill').toContain(
+            'With --delete GeoPoint.lat, the new field still needs --backfill GeoPoint.latitude.',
+          );
+        }
         expect(asked, 'O1.04: the rename offered').toContain(
           '--rename GeoPoint.lat:GeoPoint.latitude',
-        );
-        expect(asked, 'O1.04: what --delete leaves in the new field').toContain(
-          via === 'db update'
-            ? 'the existing objects get a temporary value in the new required field \\"GeoPoint.latitude\\"'
-            : 'the new required field \\"GeoPoint.latitude\\" still needs a value: add --backfill GeoPoint.latitude',
         );
         await apply(ctx, via, ['--rename', 'GeoPoint.lat:GeoPoint.latitude'], 'O1.05');
 
