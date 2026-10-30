@@ -4,11 +4,13 @@
  * `--permit-policy-change`, recorded by a policy-only run, and reported by `migration status`.
  */
 
+import { writeRef } from '@internal/migration-tools/refs';
 import stripAnsi from 'strip-ansi';
 import { expect, it } from 'vitest';
 import type { WithPolicyProject } from './database-policies-enforcement';
 import {
   appMarker,
+  appRefsDir,
   errorOf,
   insertDuplicateUsers,
   ledgerLength,
@@ -245,6 +247,39 @@ export function definePolicyMigrateJourneys(withProject: WithPolicyProject, time
           meta: (await appMarker(project))?.meta,
           ledger: await ledgerLength(project),
         }).toEqual({ meta: { policies: MIGRATE_ONLY_RECORDED }, ledger: ledgerBefore });
+      });
+    },
+    timeout,
+  );
+
+  it(
+    'applies a ref without policies to a database with none, and records none',
+    async (test) => {
+      await withProject(test, async (project) => {
+        await planTo(project, 'base', 'initial');
+        const migrated = await runMigrate(project.ctx);
+        expect(migrated.exitCode, `db migrate: ${migrated.stdout}\n${migrated.stderr}`).toBe(0);
+        const next = await planTo(project, 'next', 'add-name');
+        await writeRef(appRefsDir(project), 'production', { hash: next, invariants: [] });
+
+        const applied = await runMigrate(project.ctx, ['--to', 'production', '--json']);
+
+        expect(applied.exitCode, `db migrate: ${applied.stdout}\n${applied.stderr}`).toBe(0);
+        const document = parseJsonOutput<MigrateJson>(applied);
+        expect({
+          migrationsApplied: document.migrationsApplied,
+          markerHash: document.markerHash,
+          databasePoliciesUpdated: document.databasePoliciesUpdated,
+        }).toStrictEqual({
+          migrationsApplied: 1,
+          markerHash: next,
+          databasePoliciesUpdated: undefined,
+        });
+        const marker = await appMarker(project);
+        expect({ storageHash: marker?.storageHash, meta: marker?.meta }).toStrictEqual({
+          storageHash: next,
+          meta: {},
+        });
       });
     },
     timeout,
