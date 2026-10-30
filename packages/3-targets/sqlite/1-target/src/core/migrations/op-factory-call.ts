@@ -15,6 +15,7 @@ import {
   checkSqlExpressionText,
   createSqlTextSources,
   encodeStoredValue,
+  fillValueProblem,
   isUnfilledSlot,
   type JsonKeyPath,
   type JsonPath,
@@ -24,6 +25,7 @@ import {
   type SqlMigrationPlanOperation,
   type SqlSlot,
   type SqlTextSources,
+  type StoredKeyFillCodec,
   type StoredValueCodec,
   slotSource,
   sqlOfSlot,
@@ -1182,7 +1184,7 @@ function requireValuePath(
   return parsed;
 }
 
-function codecRefSource(codec: StoredValueCodec | undefined): readonly string[] {
+function codecRefSource(codec: Pick<StoredValueCodec, 'codecRef'> | undefined): readonly string[] {
   return codec === undefined ? [] : [`codecRef: ${jsonToTsSource(codec.codecRef)}`];
 }
 
@@ -1540,6 +1542,18 @@ function requireJsonValue(
     : value;
 }
 
+function requireFillValue(
+  value: JsonValue,
+  keyPath: JsonKeyPath,
+  codec: StoredKeyFillCodec | undefined,
+  factory: string,
+  location: readonly string[],
+): JsonValue {
+  const json = requireJsonValue(value, factory, location);
+  const problem = fillValueProblem(json, keyPath.path, codec);
+  return problem === undefined ? json : refusedArgument(factory, location, 'value', problem);
+}
+
 /**
  * Sets the key at the end of a JSON path to a value, in every object of a column the path reaches that lacks it or holds JSON `null` there. An unfilled value is a placeholder the user fills in `migration.ts`; until then the call lowers to no operation.
  */
@@ -1550,6 +1564,8 @@ export class FillStoredKeyCall extends SqliteOpFactoryCallNode {
   readonly columnName: string;
   readonly path: JsonKeyPath;
   readonly value: JsonValue | UnfilledValue;
+  /** The codec of the field the key holds, whose data type must accept `value`. */
+  readonly codec: StoredKeyFillCodec | undefined;
   readonly label: string;
 
   constructor(
@@ -1557,14 +1573,18 @@ export class FillStoredKeyCall extends SqliteOpFactoryCallNode {
     columnName: string,
     path: string,
     value: JsonValue | UnfilledValue,
+    codec?: StoredKeyFillCodec,
   ) {
     super();
     const location = columnCallLocation(tableName, columnName);
     this.tableName = tableName;
     this.columnName = columnName;
     this.path = requireKeyPath(path, this.factoryName, location);
+    this.codec = codec;
     this.value =
-      value instanceof UnfilledValue ? value : requireJsonValue(value, this.factoryName, location);
+      value instanceof UnfilledValue
+        ? value
+        : requireFillValue(value, this.path, codec, this.factoryName, location);
     this.label = `Fill key "${this.path.key}" ${keyPlace(this.path, tableName, columnName)}`;
     this.freeze();
   }
@@ -1585,6 +1605,7 @@ export class FillStoredKeyCall extends SqliteOpFactoryCallNode {
       ...columnCallLocation(this.tableName, this.columnName),
       `path: ${jsonToTsSource(this.path.path.text)}`,
       `value: ${value}`,
+      ...codecRefSource(this.codec),
     ];
     return `this.fillStoredKey({ ${opts.join(', ')} })`;
   }

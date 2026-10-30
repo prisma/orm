@@ -7,6 +7,7 @@ import {
   RemoveStoredKeyCall,
   RenameStoredKeyCall,
 } from '../../src/core/migrations/op-factory-call';
+import { postgresTypeLookups } from '../postgres-type-lookups';
 
 const REFUSED_PATHS = [
   '$..lat',
@@ -198,6 +199,37 @@ describe('fillStoredKey', () => {
     ).toBe(
       'this.fillStoredKey({ schema: "app", table: "place", column: "point", path: "$.country", value: { code: "NZ", parts: [1, null] } })',
     );
+  });
+
+  describe('with the codec of the field it fills', () => {
+    const codec = { codecRef: { codecId: 'pg/text@1' }, types: postgresTypeLookups };
+
+    it("refuses a value the field's data type does not accept, naming the path and the value", () => {
+      expect(() => new FillStoredKeyCall('app', 'place', 'point', '$.country', 12, codec)).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.ARGUMENT_INVALID',
+          message:
+            'fillStoredKey({ schema: "app", table: "place", column: "point" }): value 12 at path "$.country" is not one the data type of codec "pg/text@1" accepts',
+        }),
+      );
+    });
+
+    it('takes a value the data type accepts, or a placeholder, and renders the codec', () => {
+      expect([
+        new FillStoredKeyCall('app', 'place', 'point', '$.country', 'NZ', codec).renderTypeScript(),
+        new FillStoredKeyCall(
+          'app',
+          'place',
+          'point',
+          '$.country',
+          new UnfilledValue('GeoPoint.country:value'),
+          codec,
+        ).renderTypeScript(),
+      ]).toEqual([
+        'this.fillStoredKey({ schema: "app", table: "place", column: "point", path: "$.country", value: "NZ", codecRef: { codecId: "pg/text@1" } })',
+        'this.fillStoredKey({ schema: "app", table: "place", column: "point", path: "$.country", value: placeholder("GeoPoint.country:value"), codecRef: { codecId: "pg/text@1" } })',
+      ]);
+    });
   });
 
   it('takes an unfilled value, which its migration.ts writes as a placeholder and its operation refuses', async () => {

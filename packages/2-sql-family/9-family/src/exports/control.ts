@@ -22,6 +22,11 @@ export type {
 } from '../core/control-target-descriptor';
 export type { SqlDefaultFunctionName } from '../core/default-functions';
 export { sqlDefaultFunctions } from '../core/default-functions';
+export {
+  acceptedByDataType,
+  fillValueProblem,
+  type StoredKeyFillCodec,
+} from '../core/migrations/accepted-by-data-type';
 export type {
   ContractToSchemaIROptions,
   DefaultResolver,

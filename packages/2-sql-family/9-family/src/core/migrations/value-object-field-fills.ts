@@ -7,7 +7,7 @@ import {
   valueObjectAt,
   valueObjectsWithCoordinates,
 } from '@internal/contract/types';
-import { dataTypeParams, type TypeLookups } from '@internal/framework-components/codec';
+import type { CodecRef, TypeLookups } from '@internal/framework-components/codec';
 import {
   type MigrationOperationPolicy,
   type ResolvedMigrationStatement,
@@ -18,7 +18,8 @@ import {
 import { declaredJsonType } from '@internal/sql-contract/codec-json-type';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { notOk, ok, type Result } from '@internal/utils/result';
-import { isStructuredError } from '@internal/utils/structured-error';
+import { acceptedByDataType } from './accepted-by-data-type';
+import { buildColumnCodecRef } from './contract-to-schema-ir';
 import { handWrittenMigrationAdvice } from './hand-written-migration';
 import { jsonPathText } from './json-path';
 import type { SchemaTables } from './schema-tables';
@@ -44,6 +45,8 @@ export interface StoredKeyFill {
   readonly path: string;
   /** The value the user writes for a backfill statement, or a temporary value. */
   readonly value: JsonValue | UnfilledValue;
+  /** The codec of a field that holds one scalar, whose data type must accept the value. */
+  readonly codecRef: CodecRef | undefined;
   /** The backfill statement the fill carries out, if any. */
   readonly statement: ResolvedValueObjectFieldBackfillStatement | undefined;
 }
@@ -73,23 +76,12 @@ const TEMPORARY_JSON_VALUES: Readonly<Record<string, JsonValue>> = {
   array: [],
 };
 
-function acceptedByDataType(
-  json: JsonValue,
-  codecId: string,
-  typeParams: unknown,
-  types: TypeLookups,
-): boolean {
-  const descriptor = types.codecLookup.descriptorFor(codecId);
-  const dataType =
-    descriptor === undefined ? undefined : types.dataTypeLookup.get(descriptor.dataType);
-  if (dataType === undefined) return false;
-  try {
-    dataType.fromContract(json, dataTypeParams(dataType, typeParams));
-    return true;
-  } catch (error) {
-    if (isStructuredError(error)) return false;
-    throw error;
+function codecRefOf(field: ContractValueObjectField): CodecRef | undefined {
+  const { type } = field;
+  if (type.kind !== 'scalar' || (field.many !== undefined && field.many !== false)) {
+    return undefined;
   }
+  return buildColumnCodecRef(type, undefined);
 }
 
 /**
@@ -103,13 +95,13 @@ function temporaryValueOf(
   types: TypeLookups,
 ): JsonValue | undefined {
   if (field.many !== undefined && field.many !== false) return [];
-  const { type } = field;
-  if (type.kind !== 'scalar' || field.valueSet !== undefined) return undefined;
-  const descriptor = types.codecLookup.descriptorFor(type.codecId);
+  const codecRef = codecRefOf(field);
+  if (codecRef === undefined || field.valueSet !== undefined) return undefined;
+  const descriptor = types.codecLookup.descriptorFor(codecRef.codecId);
   const jsonType = descriptor === undefined ? undefined : declaredJsonType(descriptor);
   const empty = jsonType === undefined ? undefined : TEMPORARY_JSON_VALUES[jsonType];
   if (empty === undefined) return undefined;
-  return acceptedByDataType(empty, type.codecId, type.typeParams, types) ? empty : undefined;
+  return acceptedByDataType(empty, codecRef, types) ? empty : undefined;
 }
 
 interface RequiredField {
@@ -302,6 +294,7 @@ export function planValueObjectFieldFills(input: {
           { kind: 'member', name: required.valueObjectField.field },
         ]),
         value,
+        codecRef: codecRefOf(required.field),
         statement: required.statement,
       });
     }

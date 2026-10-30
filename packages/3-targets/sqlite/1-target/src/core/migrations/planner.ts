@@ -251,7 +251,7 @@ export class SqliteMigrationPlanner
       unnamed: unnamedFieldFillOf(options.policy),
     });
     if (!fieldFills.ok) return plannerFailure([fieldFills.failure]);
-    const storedKeyFillCalls = sqliteStoredKeyFillCalls(fieldFills.value);
+    const storedKeyFillCalls = sqliteStoredKeyFillCalls(fieldFills.value, types);
     const rewrites = planEnumValueRewrites({
       statements: options.statements,
       fromContract: options.fromContract,

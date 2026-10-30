@@ -3,7 +3,7 @@
  *
  * The SQLite twin of `value-object-backfill.e2e.test.ts`. `User.address` holds an `Address` and `User.previous` a list of them, each in a JSON text column. Adding `country String` to `Address`:
  *
- * - B1: `migration plan` without a statement is refused, naming `--backfill Address.country`. With it, the plan writes one `fillStoredKey` per column and path whose value is `placeholder("Address.country:value")`, and `ops.json` stays empty. Writing the value and running `node migration.ts` writes `ops.json`; `db migrate` fills every object, and a further plan is empty.
+ * - B1: `migration plan` without a statement is refused, naming `--backfill Address.country`. With it, the plan writes one `fillStoredKey` per column and path whose value is `placeholder("Address.country:value")`, and `ops.json` stays empty. A value the field's data type refuses, such as `12`, fails `node migration.ts` with `CONTRACT.ARGUMENT_INVALID` before `ops.json` is written. Writing a string and running `node migration.ts` writes `ops.json`; `db migrate` fills every object, and a further plan is empty.
  * - B2: `db update` fills the field with a temporary value, `""`, and prints it with the `--backfill` statement that chooses the value. Adding `seen DateTime` next is refused, since `""` is no date, naming `migration plan --backfill Address.seen`.
  *
  * Each reads the rows back and ends with `db verify --schema-only` clean and a further plan empty.
@@ -140,7 +140,7 @@ withTempDir(({ createTempDir }) => {
         const written = readFileSync(join(dir, 'migration.ts'), 'utf-8');
         const fills = [
           ...written.matchAll(
-            /this\.fillStoredKey\(\{\s*table: 'user',\s*column: '(\w+)',\s*path: '([^']+)',\s*value: placeholder\('Address\.country:value'\),\s*\}\)/g,
+            /this\.fillStoredKey\(\{\s*table: 'user',\s*column: '(\w+)',\s*path: '([^']+)',\s*value: placeholder\('Address\.country:value'\),\s*codecRef: \{ codecId: 'sqlite\/text@1' \},\s*\}\)/g,
           ),
         ].map(([, column, path]) => `${column} ${path}`);
         expect(fills, 'B1.05: a placeholder fill per column and path').toEqual([
@@ -150,6 +150,28 @@ withTempDir(({ createTempDir }) => {
         expect(JSON.parse(readFileSync(join(dir, 'ops.json'), 'utf-8')), 'B1.05: no ops').toEqual(
           [],
         );
+
+        writeFileSync(
+          join(dir, 'migration.ts'),
+          written.replaceAll("placeholder('Address.country:value')", '12'),
+        );
+        const refusedValue = await selfEmitMigration(ctx, [
+          '--dir',
+          dir,
+          '--config',
+          ctx.configPath,
+        ]);
+        expect(refusedValue.exitCode, 'B1.06: a number is refused for a String field').not.toBe(0);
+        expect(
+          `${refusedValue.stdout}${refusedValue.stderr}`,
+          'B1.06: names the path and the value',
+        ).toContain(
+          'value 12 at path "$.country" is not one the data type of codec "sqlite/text@1" accepts',
+        );
+        expect(
+          JSON.parse(readFileSync(join(dir, 'ops.json'), 'utf-8')),
+          'B1.06: still no ops',
+        ).toEqual([]);
 
         const filled = written.replaceAll("placeholder('Address.country:value')", "'NO'");
         expect(filled, 'B1.06: no placeholder left').not.toContain('placeholder(');

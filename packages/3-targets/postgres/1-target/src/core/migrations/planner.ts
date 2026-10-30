@@ -402,7 +402,11 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     if (!fieldFills.ok) {
       return plannerFailure([fieldFills.failure]);
     }
-    const storedKeyFillCalls = postgresStoredKeyFillCalls(fieldFills.value, options.contract);
+    const storedKeyFillCalls = postgresStoredKeyFillCalls(
+      fieldFills.value,
+      options.contract,
+      types,
+    );
     const rewrites = planEnumValueRewrites({
       statements: options.statements,
       fromContract: options.fromContract,

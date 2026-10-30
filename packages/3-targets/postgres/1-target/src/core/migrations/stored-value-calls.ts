@@ -8,7 +8,7 @@ import type {
   StoredValueRewrite,
   VariantRowRewrite,
 } from '@internal/family-sql/control';
-import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import type { CodecLookupWithDescriptors, TypeLookups } from '@internal/framework-components/codec';
 import { enumValueCoordinateJson } from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import {
@@ -90,6 +90,7 @@ export function postgresStoredKeyCalls(
 export function postgresStoredKeyFillCalls(
   fills: readonly StoredKeyFill[],
   contract: Contract<SqlStorage>,
+  types: TypeLookups,
 ): ReadonlyMap<FillStoredKeyCall, StoredKeyFill> {
   return new Map(
     fills.map((fill) => [
@@ -99,6 +100,7 @@ export function postgresStoredKeyFillCalls(
         fill.column,
         fill.path,
         fill.value,
+        fill.codecRef === undefined ? undefined : { codecRef: fill.codecRef, types },
       ),
       fill,
     ]),

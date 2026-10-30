@@ -128,7 +128,7 @@ const backfill: ResolvedMigrationStatement = {
 };
 
 const FILL_CALL =
-  /this\.fillStoredKey\(\{ schema: "([^"]*)", table: "([^"]*)", column: "([^"]*)", path: "([^"]*)", value: placeholder\("GeoPoint\.country:value"\) \}\)/g;
+  /this\.fillStoredKey\(\{ schema: "([^"]*)", table: "([^"]*)", column: "([^"]*)", path: "([^"]*)", value: placeholder\("GeoPoint\.country:value"\), codecRef: \{ codecId: "pg\/text@1" \} \}\)/g;
 
 describe('Postgres planner, value object field fills', { concurrent: false }, () => {
   let database: Awaited<ReturnType<typeof createTestDatabase>>;

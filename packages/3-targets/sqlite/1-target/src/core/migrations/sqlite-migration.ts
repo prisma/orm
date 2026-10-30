@@ -6,6 +6,7 @@ import {
   resolveTableRenameAgainst,
   type SqlMigrationPlanOperation,
   type SqlSlot,
+  type StoredKeyFillCodec,
   type StoredValueCodec,
   sqlTypeLookupsOf,
   type TableRenameRequest,
@@ -119,6 +120,16 @@ export abstract class SqliteMigration<
       ...(stack.adapter === undefined ? [] : [stack.adapter]),
       ...stack.extensions,
     ];
+  }
+
+  /** The codec of a field a key fill fills, with the stack's codecs and data types; a codec needs a stack. */
+  private storedKeyFillCodec(
+    operation: string,
+    codecRef: CodecRef | undefined,
+  ): StoredKeyFillCodec | undefined {
+    if (codecRef === undefined) return undefined;
+    this.controlAdapterFor(operation);
+    return { codecRef, types: sqlTypeLookupsOf(this.frameworkComponents()) };
   }
 
   /** The codec `codecRef` names, built from the stack's codecs; a codec needs a stack. */
@@ -373,9 +384,17 @@ export abstract class SqliteMigration<
     readonly column: string;
     readonly path: string;
     readonly value: JsonValue;
+    /** The codec of the field the key holds: the value is refused, before any operation is written, unless its data type accepts it. */
+    readonly codecRef?: CodecRef;
   }): Promise<Op> {
     return Promise.resolve(
-      new FillStoredKeyCall(options.table, options.column, options.path, options.value).toOp(),
+      new FillStoredKeyCall(
+        options.table,
+        options.column,
+        options.path,
+        options.value,
+        this.storedKeyFillCodec('fillStoredKey', options.codecRef),
+      ).toOp(),
     );
   }
 
