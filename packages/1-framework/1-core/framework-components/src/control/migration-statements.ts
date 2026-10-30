@@ -526,12 +526,15 @@ function describeDataStatement(
   statement: Exclude<ResolvedMigrationStatement, ResolvedRenameStatement>,
   contract: ContractWithDomain,
 ): string {
-  switch (statement.entity) {
-    case 'field':
-      return `${statement.kind} field "${fieldStatementText(contract, statement.field)}"`;
-    case 'valueObjectField':
-      return `${statement.kind} value object field "${valueObjectFieldStatementText(contract, statement.field)}"`;
-    case 'model':
-      return `${statement.kind} variant "${modelStatementText(contract, statement.model)}"`;
+  if (statement.entity === 'field') {
+    return `${statement.kind} field "${fieldStatementText(contract, statement.field)}"`;
   }
+  if (statement.entity === 'valueObjectField') {
+    return `${statement.kind} value object field "${valueObjectFieldStatementText(contract, statement.field)}"`;
+  }
+  if (statement.kind === 'convert') {
+    return `convert variant "${modelStatementText(contract, statement.model)}"`;
+  }
+  const unknown: never = statement;
+  return unknown;
 }
