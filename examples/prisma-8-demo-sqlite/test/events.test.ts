@@ -38,43 +38,55 @@ describe('events with DateTime, Date and Time fields', () => {
 
   it('filters by a date and orders by a time of day', async () => {
     await ormClientCreateEvent({
+      title: 'Talk',
+      startsAt: new Date('2024-03-10T16:00:00.000Z'),
+      day: '2024-03-10',
+      opensAt: '09:30',
+    });
+    await ormClientCreateEvent({
       title: 'Breakfast',
-      startsAt: new Date('2024-02-29T07:00:00.000Z'),
-      day: '2024-02-29',
+      startsAt: new Date('2024-03-10T07:00:00.000Z'),
+      day: '2024-03-10',
       opensAt: '07:00:00.5',
     });
     await ormClientCreateEvent({
       title: 'Next day',
-      startsAt: new Date('2024-03-01T09:00:00.000Z'),
-      day: '2024-03-01',
+      startsAt: new Date('2024-03-11T09:00:00.000Z'),
+      day: '2024-03-11',
       opensAt: '08:00',
     });
-    expect(await ormClientGetEventsOn('2024-02-29')).toEqual([
+    expect(await ormClientGetEventsOn('2024-03-10')).toEqual([
       {
         title: 'Breakfast',
-        startsAt: new Date('2024-02-29T07:00:00.000Z'),
-        day: '2024-02-29',
+        startsAt: new Date('2024-03-10T07:00:00.000Z'),
+        day: '2024-03-10',
         opensAt: '07:00:00.500',
       },
       {
-        title: 'Launch',
-        startsAt: new Date('2024-02-29T16:00:00.000Z'),
-        day: '2024-02-29',
+        title: 'Talk',
+        startsAt: new Date('2024-03-10T16:00:00.000Z'),
+        day: '2024-03-10',
         opensAt: '09:30:00.000',
       },
     ]);
   });
 
-  it('stores each value as ISO 8601 text', () => {
+  it('stores each value as ISO 8601 text', async () => {
+    await ormClientCreateEvent({
+      title: 'Stored',
+      startsAt: new Date('2024-04-01T16:00:00.000Z'),
+      day: '2024-04-01',
+      opensAt: '09:30',
+    });
     const database = new DatabaseSync(project.databasePath);
     try {
       expect(
         database
-          .prepare(`SELECT "startsAt", "day", "opensAt" FROM "event" WHERE "title" = 'Launch'`)
+          .prepare(`SELECT "startsAt", "day", "opensAt" FROM "event" WHERE "title" = 'Stored'`)
           .get(),
       ).toEqual({
-        startsAt: '2024-02-29T16:00:00.000Z',
-        day: '2024-02-29',
+        startsAt: '2024-04-01T16:00:00.000Z',
+        day: '2024-04-01',
         opensAt: '09:30:00.000',
       });
     } finally {
