@@ -266,10 +266,7 @@ withTempDir(({ createTempDir }) => {
       'emits a bare DateTime exactly as it emitted before the convenience types',
       async () => {
         const ctx = setupSqliteJourney(createTempDir);
-        const fixtures = join(
-          import.meta.dirname,
-          '../convenience-date-time-types/fixtures/sqlite-bare-datetime',
-        );
+        const fixtures = join(import.meta.dirname, 'fixtures/sqlite-bare-datetime');
         await emitContract(ctx, readFileSync(join(fixtures, 'contract.prisma'), 'utf-8'));
         expect(readFileSync(join(ctx.testDir, 'contract.json'), 'utf-8')).toBe(
           readFileSync(join(fixtures, 'emitted-before-convenience-types/contract.json'), 'utf-8'),
