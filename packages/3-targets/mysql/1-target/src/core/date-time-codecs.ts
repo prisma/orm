@@ -1,5 +1,5 @@
 /**
- * The codecs of MySQL's date and time types other than `mysql/datetime@1`. Every instant is read and written in UTC, which every session runs in. A string codec reads the ISO 8601 text of its value with no trailing zeros in the fraction, as PostgreSQL's do; a `Temporal` codec reads `Temporal.Instant`, `Temporal.PlainDate` or `Temporal.PlainTime`. A value MySQL does not hold, such as a date before the year 1000 or a `time` past 23:59:59.999999, is refused. ADR 315.
+ * The codecs of MySQL's date and time types other than `mysql/datetime@1`. Every instant is read and written in UTC, which every session runs in. A string codec reads the ISO 8601 text of its value with no trailing zeros in the fraction, as PostgreSQL's do; a `Temporal` codec reads `Temporal.Instant`, `Temporal.PlainDate` or `Temporal.PlainTime`. A write of a value MySQL does not hold, such as a date before the year 1000 or a `time` past 23:59:59.999999, is refused. A read takes what MySQL returns in any year; only the `time` codecs refuse a row, one that is no time of day. ADR 315.
  */
 
 import type { JsonValue } from '@internal/contract/types';
@@ -8,6 +8,7 @@ import {
   CodecImpl,
   type CodecInstanceContext,
   type DataTypeValue,
+  dateTimeStoredText,
   refuseJsonValue,
   renderTsLiteral,
 } from '@internal/framework-components/codec';
@@ -60,6 +61,16 @@ const instantIn =
   (codecId: string, stored: StoredText): StoredText =>
   (text) =>
     utcDateTimeOfInstantText(codecId, text, stored);
+
+/** Reads the text MySQL returns for a row in any year: a column's range is refused on write only. */
+const anyYear =
+  (ownerId: string, shape: 'dateTime' | 'date'): StoredText =>
+  (text) =>
+    dateTimeStoredText(text, { shape, ownerId });
+
+const datetimeRow = anyYear(mysqlDatetime.id, 'dateTime');
+const timestampRow = anyYear(mysqlTimestamp.id, 'dateTime');
+const dateRow = anyYear(mysqlDate.id, 'date');
 
 const DATETIME_TEMPORAL: TemporalCodecIdentity = {
   codecId: MYSQL_DATETIME_TEMPORAL_CODEC_ID,
@@ -141,7 +152,7 @@ export class MysqlDatetimeTemporalCodec extends CodecImpl<
     return mysqlWireText(this.stored(value));
   }
   async fromWire(wire: string, _ctx: CodecCallContext): Promise<Temporal.Instant> {
-    return instantOf(DATETIME_TEMPORAL, storedTextFromWire(this.id, wire, mysqlDatetimeText));
+    return instantOf(DATETIME_TEMPORAL, storedTextFromWire(this.id, wire, datetimeRow));
   }
   fromDataTypeValue(value: DataTypeValue<string>): Temporal.Instant {
     return instantOf(DATETIME_TEMPORAL, value.value);
@@ -182,7 +193,7 @@ export class MysqlTimestampTemporalCodec extends CodecImpl<
     return mysqlWireText(this.stored(value));
   }
   async fromWire(wire: string, _ctx: CodecCallContext): Promise<Temporal.Instant> {
-    return instantOf(TIMESTAMP_TEMPORAL, storedTextFromWire(this.id, wire, mysqlTimestampText));
+    return instantOf(TIMESTAMP_TEMPORAL, storedTextFromWire(this.id, wire, timestampRow));
   }
   fromDataTypeValue(value: DataTypeValue<string>): Temporal.Instant {
     return instantOf(TIMESTAMP_TEMPORAL, value.value);
@@ -228,7 +239,7 @@ export class MysqlDatetimeStringCodec extends CodecImpl<
     return mysqlWireText(storedTextForWrite(this.id, value, instantIn(this.id, mysqlDatetimeText)));
   }
   async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
-    return `${storedTextFromWire(this.id, wire, mysqlDatetimeText)}Z`;
+    return `${storedTextFromWire(this.id, wire, datetimeRow)}Z`;
   }
   fromDataTypeValue(value: DataTypeValue<string>): string {
     return `${value.value}Z`;
@@ -271,7 +282,7 @@ export class MysqlTimestampStringCodec extends CodecImpl<
     );
   }
   async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
-    return `${storedTextFromWire(this.id, wire, mysqlTimestampText)}Z`;
+    return `${storedTextFromWire(this.id, wire, timestampRow)}Z`;
   }
   fromDataTypeValue(value: DataTypeValue<string>): string {
     return `${value.value}Z`;
@@ -312,7 +323,7 @@ export class MysqlDateStringCodec extends CodecImpl<
     return storedTextForWrite(this.id, value, mysqlDateText);
   }
   async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
-    return storedTextFromWire(this.id, wire, mysqlDateText);
+    return storedTextFromWire(this.id, wire, dateRow);
   }
   fromDataTypeValue(value: DataTypeValue<string>): string {
     return value.value;
@@ -351,7 +362,7 @@ export class MysqlDateTemporalCodec extends CodecImpl<
     return storedTextOfTemporal(DATE_TEMPORAL, value, mysqlDateText);
   }
   async fromWire(wire: string, _ctx: CodecCallContext): Promise<Temporal.PlainDate> {
-    return this.plainDateOf(storedTextFromWire(this.id, wire, mysqlDateText));
+    return this.plainDateOf(storedTextFromWire(this.id, wire, dateRow));
   }
   fromDataTypeValue(value: DataTypeValue<string>): Temporal.PlainDate {
     return this.plainDateOf(value.value);

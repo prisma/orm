@@ -48,6 +48,55 @@ describe('the MySQL date and time codecs', () => {
     );
   });
 
+  describe('read what MySQL returns in any year, and refuse years outside the column only on write', () => {
+    it.each([
+      [
+        'DatetimeJsDate',
+        mysqlDatetimeDescriptor.factory({ precision: 3 })(instance),
+        '0999-12-31 23:00:00',
+        '0999-12-31T23:00:00.000Z',
+      ],
+      [
+        'DatetimeString',
+        mysqlDatetimeStringDescriptor.factory({ precision: 6 })(instance),
+        '0999-12-31 23:00:00',
+        '0999-12-31T23:00:00Z',
+      ],
+      [
+        'DatetimeTemporal',
+        mysqlDatetimeTemporalDescriptor.factory({ precision: 6 })(instance),
+        '0999-12-31 23:00:00',
+        '0999-12-31T23:00:00Z',
+      ],
+      [
+        'TimestampJsDate',
+        mysqlTimestampDateDescriptor.factory({ precision: 3 })(instance),
+        '1969-12-31 23:00:00',
+        '1969-12-31T23:00:00.000Z',
+      ],
+      [
+        'TimestampString',
+        mysqlTimestampStringDescriptor.factory({ precision: 6 })(instance),
+        '1969-12-31 23:00:00',
+        '1969-12-31T23:00:00Z',
+      ],
+      [
+        'TimestampTemporal',
+        mysqlTimestampTemporalDescriptor.factory({ precision: 6 })(instance),
+        '1969-12-31 23:00:00',
+        '1969-12-31T23:00:00Z',
+      ],
+      ['DateString', mysqlDateStringDescriptor.factory()(instance), '0999-12-31', '0999-12-31'],
+      ['DateTemporal', mysqlDateTemporalDescriptor.factory()(instance), '0999-12-31', '0999-12-31'],
+    ] as const)(
+      '%s reads a row from a year outside the column',
+      async (_name, codec, wire, read) => {
+        const value: unknown = await codec.fromWire(wire, ctx);
+        expect(value instanceof Date ? value.toISOString() : String(value)).toBe(read);
+      },
+    );
+  });
+
   describe('TimestampJsDate', () => {
     const codec = mysqlTimestampDateDescriptor.factory({ precision: 3 })(instance);
 
