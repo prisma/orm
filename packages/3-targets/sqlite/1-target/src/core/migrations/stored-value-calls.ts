@@ -1,11 +1,17 @@
 import type {
   RowsHoldingValueMark,
+  StoredKeyRewrite,
   StoredValueCallClasses,
   StoredValueRewrite,
 } from '@internal/family-sql/control';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { enumValueCoordinateJson } from '@internal/framework-components/control';
-import { RemoveStoredValueCall, ReplaceStoredValueCall } from './op-factory-call';
+import {
+  RemoveStoredKeyCall,
+  RemoveStoredValueCall,
+  RenameStoredKeyCall,
+  ReplaceStoredValueCall,
+} from './op-factory-call';
 
 type StoredValueCall = ReplaceStoredValueCall | RemoveStoredValueCall;
 
@@ -36,6 +42,20 @@ export function sqliteStoredValueCalls(
         rewrite,
       ];
     }),
+  );
+}
+
+/** The calls that carry out a plan's key rewrites of value object fields, each with the rewrite it carries out. */
+export function sqliteStoredKeyCalls(
+  rewrites: readonly StoredKeyRewrite[],
+): ReadonlyMap<RenameStoredKeyCall | RemoveStoredKeyCall, StoredKeyRewrite> {
+  return new Map(
+    rewrites.map((rewrite) => [
+      rewrite.to === undefined
+        ? new RemoveStoredKeyCall(rewrite.table, rewrite.column, rewrite.path)
+        : new RenameStoredKeyCall(rewrite.table, rewrite.column, rewrite.path, rewrite.to),
+      rewrite,
+    ]),
   );
 }
 

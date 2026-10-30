@@ -1,6 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import type {
   RowsHoldingValueMark,
+  StoredKeyRewrite,
   StoredValueCallClasses,
   StoredValueCodec,
   StoredValueRewrite,
@@ -10,7 +11,9 @@ import { enumValueCoordinateJson } from '@internal/framework-components/control'
 import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   type PostgresOpFactoryCall,
+  RemoveStoredKeyCall,
   RemoveStoredValueCall,
+  RenameStoredKeyCall,
   ReplaceStoredValueCall,
 } from './op-factory-call';
 import type { CallMigrationStrategy } from './planner-strategies';
@@ -45,6 +48,29 @@ export function postgresStoredValueCalls(
               rewrite.to,
               rewrite.many,
               codec,
+            );
+      return [call, rewrite];
+    }),
+  );
+}
+
+/** The calls that carry out a plan's key rewrites of value object fields, each with the rewrite it carries out. */
+export function postgresStoredKeyCalls(
+  rewrites: readonly StoredKeyRewrite[],
+  contract: Contract<SqlStorage>,
+): ReadonlyMap<PostgresOpFactoryCall, StoredKeyRewrite> {
+  return new Map(
+    rewrites.map((rewrite): readonly [PostgresOpFactoryCall, StoredKeyRewrite] => {
+      const schemaName = emissionSchemaForNamespace(contract, rewrite.namespaceId);
+      const call =
+        rewrite.to === undefined
+          ? new RemoveStoredKeyCall(schemaName, rewrite.table, rewrite.column, rewrite.path)
+          : new RenameStoredKeyCall(
+              schemaName,
+              rewrite.table,
+              rewrite.column,
+              rewrite.path,
+              rewrite.to,
             );
       return [call, rewrite];
     }),

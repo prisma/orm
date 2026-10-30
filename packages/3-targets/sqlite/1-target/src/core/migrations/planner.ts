@@ -6,6 +6,8 @@ import type {
   SqlMigrationPlannerPlanOptions,
   SqlPlannerConflict,
   SqlPlannerFailureResult,
+  StoredKeyRewrite,
+  StoredValueRewrite,
 } from '@internal/family-sql/control';
 import {
   appliedStatementsInOrder,
@@ -18,6 +20,7 @@ import {
   planFieldEventCalls,
   plannerFailure,
   planStatements,
+  planValueObjectFieldRewrites,
   sqlTypeLookupsOf,
   storedValueOperationIndexes,
   storedValueSubjects,
@@ -32,6 +35,7 @@ import type {
   MigrationPlanner,
   MigrationScaffoldContext,
   MigrationTemporaryValue,
+  OpFactoryCall,
   PlanOrigin,
   ResolvedMigrationStatement,
   SchemaDiffIssue,
@@ -62,7 +66,11 @@ import {
 import { sqlitePlannerStrategies } from './planner-strategies';
 import type { SqlitePlanTargetDetails } from './planner-target-details';
 import { sqliteSchemaTables } from './schema-tables';
-import { sqliteStoredValueCallClasses, sqliteStoredValueCalls } from './stored-value-calls';
+import {
+  sqliteStoredKeyCalls,
+  sqliteStoredValueCallClasses,
+  sqliteStoredValueCalls,
+} from './stored-value-calls';
 import {
   renameTableByHandStatements,
   renderRenameTableCall,
@@ -217,18 +225,28 @@ export class SqliteMigrationPlanner
     }
     const codecHooks = extractCodecControlHooks(options.frameworkComponents);
     const { codecLookup } = sqlTypeLookupsOf(options.frameworkComponents);
+    const tables = sqliteSchemaTables(statements.value.schema);
+    const keyRewrites = planValueObjectFieldRewrites({
+      statements: options.statements,
+      fromContract: options.fromContract,
+      contract: options.contract,
+      tables,
+    });
+    if (!keyRewrites.ok) return plannerFailure([keyRewrites.failure]);
+    const storedKeyCalls = sqliteStoredKeyCalls(keyRewrites.value);
     const rewrites = planEnumValueRewrites({
       statements: options.statements,
       fromContract: options.fromContract,
       contract: options.contract,
-      tables: sqliteSchemaTables(statements.value.schema),
+      tables,
       codecs: codecLookup,
     });
     if (!rewrites.ok) return plannerFailure([rewrites.failure]);
     const storedValueCalls = sqliteStoredValueCalls(rewrites.value, codecLookup);
-    const disallowedStoredValueCalls = [...storedValueCalls.keys()].filter(
-      (call) => !options.policy.allowedOperationClasses.includes(call.operationClass),
-    );
+    const disallowedStoredValueCalls = [
+      ...storedKeyCalls.keys(),
+      ...storedValueCalls.keys(),
+    ].filter((call) => !options.policy.allowedOperationClasses.includes(call.operationClass));
     if (disallowedStoredValueCalls.length > 0) {
       return plannerFailure(
         disallowedStoredValueCalls.map((call) =>
@@ -281,6 +299,7 @@ export class SqliteMigrationPlanner
       ...statements.value.calls,
       ...replacedIndexes.calls,
       ...result.value.calls,
+      ...storedKeyCalls.keys(),
       ...storedValueCalls.keys(),
       ...fieldEventOps,
     ];
@@ -308,13 +327,22 @@ export class SqliteMigrationPlanner
       appliedStatements: appliedStatementsInOrder(
         options.statements,
         statements.value.plannedStatements,
-        (statement) => storedValueOperationIndexes(calls, storedValueCalls, statement),
+        (statement) =>
+          storedValueOperationIndexes(
+            calls,
+            new Map<OpFactoryCall, StoredValueRewrite | StoredKeyRewrite>([
+              ...storedKeyCalls,
+              ...storedValueCalls,
+            ]),
+            statement,
+          ),
       ),
       ...subjectsOfCalls(
         sqliteCallSubjects(
           calls,
           new Map(fieldEventCalls.map((fieldEvent) => [fieldEvent.call, fieldEvent])),
           storedValueSubjects(storedValueCalls, sqliteStoredValueCallClasses),
+          new Map([...storedKeyCalls].map(([call, rewrite]) => [call, rewrite.valueObjectField])),
         ),
         {
           fromContract: options.fromContract,

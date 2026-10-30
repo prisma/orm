@@ -115,6 +115,29 @@ describe('subjectsOfCalls', () => {
     ]);
   });
 
+  it('names the value object field a key removal is about', () => {
+    const valueObjectField = { namespaceId: app, valueObject: 'GeoPoint', field: 'lng' };
+    expect(
+      subjectsOfCalls(
+        [
+          {
+            ...unchanged,
+            label: 'Remove key',
+            dataLoss: [{ ...column('user', 'full_name'), valueObjectField, loss: 'drop' }],
+          },
+        ],
+        { fromContract: origin, contract: origin, byHand, origins: NO_RENAMED_ORIGINS },
+      ).dataLoss,
+    ).toEqual([
+      {
+        operationIndex: 0,
+        subject: { kind: 'valueObjectField', ...valueObjectField },
+        loss: 'drop',
+        label: 'Remove key',
+      },
+    ]);
+  });
+
   it('counts every operation of a call with companions before the next call', () => {
     expect(
       subjectsOfCalls(

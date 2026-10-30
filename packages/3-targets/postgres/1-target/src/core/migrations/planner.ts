@@ -5,6 +5,8 @@ import type {
   SqlMigrationPlannerPlanOptions,
   SqlPlannerConflict,
   SqlPlannerFailureResult,
+  StoredKeyRewrite,
+  StoredValueRewrite,
   SuppressionRecord,
 } from '@internal/family-sql/control';
 import {
@@ -21,6 +23,7 @@ import {
   planFieldEventCalls,
   plannerFailure,
   planStatements,
+  planValueObjectFieldRewrites,
   sqlTypeLookupsOf,
   storedValueOperationIndexes,
   storedValueSubjects,
@@ -39,6 +42,7 @@ import type {
   MigrationPlanWithAuthoringSurface,
   MigrationScaffoldContext,
   MigrationTemporaryValue,
+  OpFactoryCall,
   PlanOrigin,
   ResolvedMigrationStatement,
   SchemaDiffIssue,
@@ -108,6 +112,7 @@ import {
 } from './resolve-ddl-schema';
 import { postgresSchemaTables } from './schema-tables';
 import {
+  postgresStoredKeyCalls,
   postgresStoredValueCallClasses,
   postgresStoredValueCalls,
   storedValueCallsStrategy,
@@ -368,11 +373,22 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
 
     const codecHooks = extractCodecControlHooks(options.frameworkComponents);
     const types = sqlTypeLookupsOf(options.frameworkComponents);
+    const tables = postgresSchemaTables(schema, options.contract);
+    const keyRewrites = planValueObjectFieldRewrites({
+      statements: options.statements,
+      fromContract: options.fromContract,
+      contract: options.contract,
+      tables,
+    });
+    if (!keyRewrites.ok) {
+      return plannerFailure([keyRewrites.failure]);
+    }
+    const storedKeyCalls = postgresStoredKeyCalls(keyRewrites.value, options.contract);
     const rewrites = planEnumValueRewrites({
       statements: options.statements,
       fromContract: options.fromContract,
       contract: options.contract,
-      tables: postgresSchemaTables(schema, options.contract),
+      tables,
       codecs: types.codecLookup,
     });
     if (!rewrites.ok) {
@@ -475,7 +491,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
         dropRemovedSchemasStrategy(
           removedSchemas.filter((schemaName) => !keptSchema(options, schemaName)),
         ),
-        storedValueCallsStrategy([...storedValueCalls.keys()]),
+        storedValueCallsStrategy([...storedKeyCalls.keys(), ...storedValueCalls.keys()]),
       ],
     });
 
@@ -578,13 +594,24 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       appliedStatements: appliedStatementsInOrder(
         options.statements,
         statements.value.plannedStatements,
-        (statement) => storedValueOperationIndexes(calls, storedValueCalls, statement),
+        (statement) =>
+          storedValueOperationIndexes(
+            calls,
+            new Map<OpFactoryCall, StoredValueRewrite | StoredKeyRewrite>([
+              ...storedKeyCalls,
+              ...storedValueCalls,
+            ]),
+            statement,
+          ),
       ),
       ...subjectsOfCalls(
         postgresCallSubjects(calls, {
           contract: options.fromContract ?? options.contract,
           fieldEvents: new Map(fieldEventCalls.map((fieldEvent) => [fieldEvent.call, fieldEvent])),
           storedValues: storedValueSubjects(storedValueCalls, postgresStoredValueCallClasses),
+          storedKeys: new Map(
+            [...storedKeyCalls].map(([call, rewrite]) => [call, rewrite.valueObjectField]),
+          ),
         }),
         {
           fromContract: options.fromContract,

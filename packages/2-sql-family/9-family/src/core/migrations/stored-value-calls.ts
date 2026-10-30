@@ -82,7 +82,7 @@ function operationCount(call: OpFactoryCall): number {
 /** The positions, among the plan's operations, of the operations that carry out `statement`. */
 export function storedValueOperationIndexes(
   planCalls: readonly OpFactoryCall[],
-  calls: ReadonlyMap<OpFactoryCall, StoredValueRewrite>,
+  calls: ReadonlyMap<OpFactoryCall, { readonly statement: ResolvedMigrationStatement | undefined }>,
   statement: ResolvedMigrationStatement,
 ): readonly number[] {
   const indexes: number[] = [];

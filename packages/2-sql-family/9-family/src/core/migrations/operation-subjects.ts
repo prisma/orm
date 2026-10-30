@@ -9,6 +9,7 @@ import type {
   MigrationSubject,
   MigrationTemporaryValue,
   ModelCoordinate,
+  ValueObjectFieldCoordinate,
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { SqlModelStorage } from '@internal/sql-contract/types';
@@ -36,6 +37,8 @@ export interface SubjectStorage {
     | undefined;
   /** The enum value the operation is about, when it rewrites one stored value of an enum. */
   readonly enumValue?: EnumValueCoordinate;
+  /** The value object field the operation is about, when it rewrites one key of a value object. */
+  readonly valueObjectField?: ValueObjectFieldCoordinate;
 }
 
 /** What a codec hook's call is about: the column of the field event it was returned for. */
@@ -132,6 +135,9 @@ function modelsStoring(
 
 function subjectOf(target: SubjectStorage, context: SubjectContext): MigrationSubject {
   if (target.enumValue !== undefined) return { kind: 'enumValue', ...target.enumValue };
+  if (target.valueObjectField !== undefined) {
+    return { kind: 'valueObjectField', ...target.valueObjectField };
+  }
   const storage: MigrationSubject = { kind: 'storage', name: target.storageName };
   const { fromContract } = context;
   if (target.table === undefined || fromContract === null) return storage;

@@ -7,7 +7,11 @@ import {
   storageNameOfOperation,
   unknownCallNames,
 } from '@internal/family-sql/control';
-import type { MigrationDataLossKind, OpFactoryCall } from '@internal/framework-components/control';
+import type {
+  MigrationDataLossKind,
+  OpFactoryCall,
+  ValueObjectFieldCoordinate,
+} from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ifDefined } from '@internal/utils/defined';
 import {
@@ -81,6 +85,7 @@ export function sqliteCallSubjects(
   calls: readonly OpFactoryCall[],
   fieldEvents: ReadonlyMap<OpFactoryCall, FieldEventCall>,
   storedValues: ReadonlyMap<OpFactoryCall, StoredValueSubject> = new Map(),
+  storedKeys: ReadonlyMap<OpFactoryCall, ValueObjectFieldCoordinate> = new Map(),
 ): readonly CallSubjects[] {
   const lostColumns = new Set<string>();
   const unknownNames = unknownCallNames(
@@ -138,7 +143,12 @@ export function sqliteCallSubjects(
       return {
         operationCount,
         label,
-        dataLoss: [lost(columnTarget(call.tableName, call.columnName))],
+        dataLoss: [
+          {
+            ...lost(columnTarget(call.tableName, call.columnName)),
+            ...ifDefined('valueObjectField', storedKeys.get(call)),
+          },
+        ],
         accessChanges: [],
         temporaryValues: [],
       };

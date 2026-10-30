@@ -8,7 +8,11 @@ import {
   storageNameOfOperation,
   unknownCallNames,
 } from '@internal/family-sql/control';
-import type { MigrationDataLossKind, OpFactoryCall } from '@internal/framework-components/control';
+import type {
+  MigrationDataLossKind,
+  OpFactoryCall,
+  ValueObjectFieldCoordinate,
+} from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { parseWireName } from '@internal/sql-schema-ir/naming';
@@ -36,6 +40,8 @@ interface Locator {
   readonly fieldEvents: ReadonlyMap<OpFactoryCall, FieldEventCall>;
   /** The stored value removals the planner made for enum values, each with its enum value. */
   readonly storedValues?: ReadonlyMap<OpFactoryCall, StoredValueSubject>;
+  /** The key removals the planner made for value object fields, each with its value object field. */
+  readonly storedKeys?: ReadonlyMap<OpFactoryCall, ValueObjectFieldCoordinate>;
 }
 
 /**
@@ -82,12 +88,14 @@ function knownTarget(locator: Locator, call: OpFactoryCall): SubjectStorage | un
   if (call instanceof DropTableCall || call instanceof DeleteRowsCall) {
     return target(locator, call.schemaName, call.tableName, undefined);
   }
-  if (
-    call instanceof DropColumnCall ||
-    call instanceof AlterColumnTypeCall ||
-    call instanceof RemoveStoredKeyCall
-  ) {
+  if (call instanceof DropColumnCall || call instanceof AlterColumnTypeCall) {
     return target(locator, call.schemaName, call.tableName, call.columnName);
+  }
+  if (call instanceof RemoveStoredKeyCall) {
+    return {
+      ...target(locator, call.schemaName, call.tableName, call.columnName),
+      ...ifDefined('valueObjectField', locator.storedKeys?.get(call)),
+    };
   }
   if (call instanceof RemoveStoredValueCall) {
     const enumValue = locator.storedValues?.get(call)?.enumValue;
