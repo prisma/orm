@@ -54,7 +54,7 @@ import type {
   SqlUniqueIRInput,
 } from '@internal/sql-schema-ir/types';
 import { RelationalSchemaNodeKind, SqlSchemaIR, SqlTableIR } from '@internal/sql-schema-ir/types';
-import { SQLITE_NOW_EXPRESSION, type SqliteCodecRegistry } from '@internal/target-sqlite/codecs';
+import { type SqliteCodecRegistry, sqliteNowExpressionFor } from '@internal/target-sqlite/codecs';
 import {
   buildControlTableBootstrapQueries,
   buildSignMarkerBootstrapQueries,
@@ -862,7 +862,11 @@ async function sqliteRenderDdlColumnDefault(
 ): Promise<string> {
   if (def.kind === 'function') {
     if (def.expression.text === 'autoincrement()') return '';
-    if (def.expression.text === 'now()') return `DEFAULT (${SQLITE_NOW_EXPRESSION})`;
+    if (def.expression.text === 'now()') {
+      const dataType =
+        codecRef === undefined ? undefined : codecLookup.descriptorFor(codecRef.codecId)?.dataType;
+      return `DEFAULT (${sqliteNowExpressionFor(dataType)})`;
+    }
     if (checkSqlDefaultText(def.expression.text) !== undefined) {
       throw structuredError(
         'CONTRACT.DEFAULT_INVALID',

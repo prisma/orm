@@ -45,6 +45,29 @@ describe('the DEFAULT clause the SQLite adapter writes in every DDL statement', 
       "DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
     ],
     [
+      'now() on a date, as the text sqlite/date stores',
+      col('c', 'TEXT', { default: fn('now()'), codecRef: { codecId: 'sqlite/date-string@1' } }),
+      "DEFAULT (date('now'))",
+    ],
+    [
+      'now() on a Temporal date, as the text sqlite/date stores',
+      col('c', 'TEXT', { default: fn('now()'), codecRef: { codecId: 'sqlite/date-temporal@1' } }),
+      "DEFAULT (date('now'))",
+    ],
+    [
+      'now() on a time of day, as the text sqlite/time stores',
+      col('c', 'TEXT', { default: fn('now()'), codecRef: { codecId: 'sqlite/time-string@1' } }),
+      "DEFAULT (strftime('%H:%M:%f','now'))",
+    ],
+    [
+      'now() on an instant read as text, as the text sqlite/datetime stores',
+      col('c', 'TEXT', {
+        default: fn('now()'),
+        codecRef: { codecId: 'sqlite/datetime-string@1' },
+      }),
+      "DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+    ],
+    [
       'autoincrement(), which the type writes',
       col('c', 'INTEGER', { default: fn('autoincrement()') }),
       '',
