@@ -30,6 +30,10 @@ describe('the supabase-one-binding-input detection', () => {
       'a url that is null on one branch',
       'supabase({ contract, url: ready ? env.url : null, jwtSecret })',
     ],
+    [
+      'a url that is null on the first branch',
+      'postgres({ contract, url: ready ? null : env.url })',
+    ],
   ])('finds %s', (_name, content) => {
     expect(detects(content)).toBe(true);
   });

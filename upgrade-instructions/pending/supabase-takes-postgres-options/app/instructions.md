@@ -8,7 +8,7 @@ changes:
       matches:
         - '(?<![\w$.])supabase(?:<[^>]*>)?\(\s*[{A-Za-z_$]'
         - 'The pg option takes a pg\.Pool'
-        - '(?<![\w$.])(?:pg|url|binding)\s*:\s*(?:null\b|[^,}\n]*(?:\?\?|\|\||:)\s*null\b)'
+        - '(?<![\w$.])(?:pg|url|binding)\s*:\s*(?:null\b|[^,}\n]*(?:\?|\|\||:)\s*null\b)'
 ---
 
 # `supabase()` takes one database input, checked when it is called
@@ -27,7 +27,7 @@ If `url` comes from an environment variable, make sure it is set. An empty `url`
 
 Code or tests that match a `pg` refusal on `SUPABASE.CONFIG_INVALID` keep working for a `pg.Client`. Update a match on the old message "The pg option takes a pg.Pool" to "Supabase takes a pg.Pool or a url, not a pg.Client". A `pg` value that is neither a pool nor a client now fails with `RUNTIME.BINDING_INVALID`.
 
-`null` as `pg`, `url` or `binding` now fails with `RUNTIME.BINDING_INVALID` on `postgres()` and on `supabase()`, even when another input is given beside it: `{ url: null, pg: pool }` fails on `url`. Code such as `pg: config.pool ?? null`, `url: value || null` or `url: ready ? value : null` should leave the option out instead:
+`null` as `pg`, `url` or `binding` now fails with `RUNTIME.BINDING_INVALID` on `postgres()` and on `supabase()`, even when another input is given beside it: `{ url: null, pg: pool }` fails on `url`. Code such as `pg: config.pool ?? null`, `url: value || null`, `url: ready ? value : null` or `url: ready ? null : value` should leave the option out instead:
 
 ```ts
 // Before
