@@ -144,6 +144,30 @@ describe('buildSqlitePlanDiff derives the expected default like verify does', ()
     },
   );
 
+  it('sees no change for a now() default on a Date field against a live column whose default is CURRENT_DATE, which writes the same text', () => {
+    const diff = buildSqlitePlanDiff({
+      contract: contractWithDefault(
+        { kind: 'function', expression: 'now()' },
+        dateTimeColumns.Date,
+      ),
+      actualSchema: liveSchema('CURRENT_DATE'),
+      frameworkComponents: sqliteTestComponents,
+    });
+    expect(diff.issues).toEqual([]);
+  });
+
+  it('sees a now() default on a Time field against a live column whose default is CURRENT_TIME, which writes no fraction of a second, as a change', () => {
+    const diff = buildSqlitePlanDiff({
+      contract: contractWithDefault(
+        { kind: 'function', expression: 'now()' },
+        dateTimeColumns.Time,
+      ),
+      actualSchema: liveSchema('CURRENT_TIME'),
+      frameworkComponents: sqliteTestComponents,
+    });
+    expect(diff.issues).not.toEqual([]);
+  });
+
   it('has db verify report a now() default on a Date field against a live column that writes the current instant', () => {
     const verdict = diffSqliteSchema({
       contract: contractWithDefault(

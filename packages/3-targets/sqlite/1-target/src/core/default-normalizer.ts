@@ -34,7 +34,9 @@ function currentValueNamed(expression: string): string | undefined {
   if (lower === 'current_timestamp' || lower === "datetime('now')" || lower === 'datetime("now")') {
     return INSTANT_NOW;
   }
-  if (DATE_NOW_PATTERN.test(expression)) return SQLITE_DATE_NOW_EXPRESSION;
+  if (lower === 'current_date' || DATE_NOW_PATTERN.test(expression)) {
+    return SQLITE_DATE_NOW_EXPRESSION;
+  }
   switch (expression.match(STRFTIME_NOW_PATTERN)?.[2]) {
     case SQLITE_DATETIME_TEXT_FORMAT:
       return INSTANT_NOW;
@@ -105,7 +107,7 @@ export type SqliteReportedDefault =
   | { readonly kind: 'literal'; readonly literal: ReportedLiteralDefault };
 
 /**
- * Reads a column's reported default. `CURRENT_TIMESTAMP`, `datetime('now')` and the expression a `now()` default is written as for an instant are `now()`; `date('now')` and the expression for the current time of day keep their own names, so a default that writes a date is never read as one that writes an instant. A quoted string, a numeral or a blob literal (`X'6869'`, read as its bytes) is a literal; any other expression is a function default, kept as reported.
+ * Reads a column's reported default. `CURRENT_TIMESTAMP`, `datetime('now')` and the expression a `now()` default is written as for an instant are `now()`; `date('now')` and `CURRENT_DATE`, which writes the same text, are read as `date('now')`, and the expression for the current time of day keeps its own name, so a default that writes a date is never read as one that writes an instant. `CURRENT_TIME` writes no fraction of a second, which is not the text `sqlite/time` stores, so it is kept as reported. A quoted string, a numeral or a blob literal (`X'6869'`, read as its bytes) is a literal; any other expression is a function default, kept as reported.
  */
 export function readSqliteDefault(rawDefault: string, declaredType: string): SqliteReportedDefault {
   let trimmed = rawDefault.trim();

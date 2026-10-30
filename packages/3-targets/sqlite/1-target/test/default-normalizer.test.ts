@@ -35,6 +35,7 @@ describe('sqliteResolveDefault', () => {
   it.each([
     ["date('now')", "date('now')"],
     ['DATE("now")', "date('now')"],
+    ['CURRENT_DATE', "date('now')"],
     ["strftime('%H:%M:%f', 'now')", "strftime('%H:%M:%f','now')"],
   ])('names the authored expression %j %j, as introspection does', (expression, named) => {
     expect(sqliteResolveDefault({ kind: 'function', expression }, textColumn)).toEqual({
@@ -113,6 +114,8 @@ describe('readSqliteDefault', () => {
   it.each([
     [SQLITE_DATE_NOW_EXPRESSION, SQLITE_DATE_NOW_EXPRESSION],
     ["(date('now'))", SQLITE_DATE_NOW_EXPRESSION],
+    ['CURRENT_DATE', SQLITE_DATE_NOW_EXPRESSION],
+    ['current_date', SQLITE_DATE_NOW_EXPRESSION],
     ['DATE("now")', SQLITE_DATE_NOW_EXPRESSION],
     [SQLITE_TIME_NOW_EXPRESSION, SQLITE_TIME_NOW_EXPRESSION],
     ["(strftime('%H:%M:%f', 'now'))", SQLITE_TIME_NOW_EXPRESSION],
@@ -135,7 +138,6 @@ describe('readSqliteDefault', () => {
     ["strftime('%Y-%m-%d','now')"],
     ["strftime('%Y-%m-%dT%H:%M:%fZ','now','+1 day')"],
     ['random()'],
-    ['CURRENT_DATE'],
     ['CURRENT_TIME'],
   ])('keeps %j as a function default', (raw) => {
     expect(readSqliteDefault(raw, 'TEXT')).toEqual({ kind: 'function', expression: raw });
@@ -185,4 +187,15 @@ describe('the expression a now() default is written as', () => {
       );
     },
   );
+});
+
+describe('CURRENT_TIME', () => {
+  it('is not read as now() on sqlite/time, since it writes no fraction of a second and sqlite/time stores one', () => {
+    expect(readSqliteDefault('CURRENT_TIME', 'TEXT')).not.toEqual(
+      sqliteResolveDefault(
+        { kind: 'function', expression: 'now()' },
+        { typeText: 'text', dataTypeId: 'sqlite/time', many: false },
+      ),
+    );
+  });
 });
