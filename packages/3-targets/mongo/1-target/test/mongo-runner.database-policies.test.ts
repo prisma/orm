@@ -1,4 +1,5 @@
 import type { ContractMarkerRecord } from '@internal/contract/types';
+import type { MongoControlFamilyInstance } from '@internal/family-mongo/control';
 import type {
   MarkerOperations,
   MongoRunnerDependencies,
@@ -21,6 +22,7 @@ import type {
 import { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { ifDefined } from '@internal/utils/defined';
 import { describe, expect, it } from 'vitest';
+import { mongoTargetDescriptor } from '../src/core/migrations/control-target';
 import { createCollection } from '../src/core/migrations/migration-factories';
 import { serializeMongoOps } from '../src/core/migrations/mongo-ops-serializer';
 import { MongoMigrationRunner } from '../src/core/migrations/mongo-runner';
@@ -94,8 +96,14 @@ class MarkerStore {
         invariants: [...(destination.invariants ?? [])],
       };
     },
-    updateMarker: async (_space, expectedFrom, destination) => {
+    updateMarker: async (_space, expectedFrom, destination, storedPolicies) => {
       if (this.marker?.storageHash !== expectedFrom) return false;
+      if (
+        storedPolicies !== undefined &&
+        JSON.stringify(this.marker.meta['policies']) !== JSON.stringify(storedPolicies.value)
+      ) {
+        return false;
+      }
       this.marker = {
         ...this.marker,
         storageHash: destination.storageHash,
@@ -112,16 +120,53 @@ class MarkerStore {
   };
 }
 
-function makeRunner(store: MarkerStore, inspection = new StubInspectionExecutor()) {
-  const deps: MongoRunnerDependencies = {
+function makeDependencies(
+  store: MarkerStore,
+  inspection = new StubInspectionExecutor(),
+  executeDdl: MongoRunnerDependencies['executeDdl'] = async () => {},
+): MongoRunnerDependencies {
+  return {
     inspectionExecutor: inspection,
     adapter: {} as MongoAdapter,
     driver: {} as MongoDriver,
-    executeDdl: async () => {},
+    executeDdl,
     markerOps: store.ops,
     introspectSchema: async () => new MongoSchemaIR([]),
   };
-  return new MongoMigrationRunner(deps);
+}
+
+function makeRunner(store: MarkerStore, inspection = new StubInspectionExecutor()) {
+  return new MongoMigrationRunner(makeDependencies(store, inspection));
+}
+
+/** Runs `spaces` through the target's runner, which checks the policies once for the whole run. */
+function runSpaces(
+  dependencies: MongoRunnerDependencies,
+  spaces: ReadonlyArray<{
+    readonly space: string;
+    readonly plan: MigrationPlan;
+    readonly migrationEdges: readonly AggregateMigrationEdgeRef[];
+    readonly databasePolicies?: DatabasePolicies;
+  }>,
+  expectedDatabasePolicies: DatabasePolicies,
+) {
+  const family = {
+    createRunnerDependencies: () => dependencies,
+    markerLocation: '_prisma_migrations',
+  } as unknown as MongoControlFamilyInstance;
+  return mongoTargetDescriptor.migrations.createRunner(family).execute({
+    driver: {} as never,
+    perSpaceOptions: spaces.map((space) => ({
+      ...space,
+      driver: {} as never,
+      destinationContract: makeContract(),
+      policy: ALL_POLICY,
+      frameworkComponents: [],
+      strictVerification: false,
+      executionChecks: { prechecks: false, postchecks: false, idempotencyChecks: false },
+    })),
+    expectedDatabasePolicies,
+  });
 }
 
 function makeContract(): MongoContract {
@@ -247,23 +292,93 @@ describe('MongoMigrationRunner database policies', () => {
     });
   });
 
-  it('fails as a concurrent change, before any operation, when the policies moved after the caller checked them', async () => {
+  it('fails as a concurrent change, before the first space runs an operation, when the policies moved after the caller checked them', async () => {
     const store = new MarkerStore(markerAt('start', { policies: MIGRATE_ONLY }));
+    const commands: unknown[] = [];
 
-    const result = await makeRunner(store).execute({
-      plan: makePlan([createCollection('items')], 'start'),
-      migrationEdges: [edge('start', DEST, '002_items')],
-      destinationContract: makeContract(),
-      policy: ALL_POLICY,
-      frameworkComponents: [],
-      databasePolicies: RECONCILE_ONLY,
-      expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
-    });
+    const result = await runSpaces(
+      makeDependencies(store, undefined, async (command) => {
+        commands.push(command);
+      }),
+      [
+        {
+          space: 'audit',
+          plan: { ...makePlan([createCollection('audit_log')], null), spaceId: 'audit' },
+          migrationEdges: [edge(EMPTY_CONTRACT_HASH, DEST, '001_audit')],
+        },
+        {
+          space: 'app',
+          plan: makePlan([createCollection('items')], 'start'),
+          migrationEdges: [edge('start', DEST, '002_items')],
+          databasePolicies: RECONCILE_ONLY,
+        },
+      ],
+      DEFAULT_DATABASE_POLICIES,
+    );
 
     expect(result.assertNotOk()).toMatchObject({
       code: 'MIGRATION.MARKER_CAS_FAILURE',
-      meta: { databaseUnchanged: true },
+      meta: {
+        reason: 'databasePolicies',
+        databaseUnchanged: true,
+        checkedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+        foundDatabasePolicies: MIGRATE_ONLY,
+      },
     });
-    expect(store.marker?.storageHash).toBe('start');
+    expect({ commands, storageHash: store.marker?.storageHash }).toEqual({
+      commands: [],
+      storageHash: 'start',
+    });
+  });
+
+  it('leaves the application marker when its policies move after the check, swapping only while it stores the checked ones', async () => {
+    const store = new MarkerStore(markerAt('start', {}));
+
+    const result = await runSpaces(
+      makeDependencies(store, undefined, async () => {
+        if (store.marker !== null) {
+          store.marker = { ...store.marker, meta: { policies: MIGRATE_ONLY } };
+        }
+      }),
+      [
+        {
+          space: 'app',
+          plan: makePlan([createCollection('items')], 'start'),
+          migrationEdges: [edge('start', DEST, '002_items')],
+          databasePolicies: RECONCILE_ONLY,
+        },
+      ],
+      DEFAULT_DATABASE_POLICIES,
+    );
+
+    expect(result.assertNotOk()).toMatchObject({
+      code: 'MIGRATION.MARKER_CAS_FAILURE',
+      meta: { reason: 'databasePolicies', foundDatabasePolicies: MIGRATE_ONLY },
+    });
+    expect({ storageHash: store.marker?.storageHash, meta: store.marker?.meta }).toEqual({
+      storageHash: 'start',
+      meta: { policies: MIGRATE_ONLY },
+    });
+  });
+
+  it('reports policies it cannot read as a corrupt marker row, keeping the row', async () => {
+    const store = new MarkerStore(markerAt('start', { policies: 'strict' }));
+
+    await expect(
+      runSpaces(
+        makeDependencies(store),
+        [{ space: 'app', plan: makePlan([], 'start'), migrationEdges: [] }],
+        DEFAULT_DATABASE_POLICIES,
+      ),
+    ).rejects.toMatchObject({
+      code: 'CONTRACT.MARKER_ROW_CORRUPT',
+      nextActions: [
+        {
+          kind: 'user-choice',
+          label:
+            'Ask whoever owns this database to correct meta.policies in the marker row; do not delete the row.',
+        },
+      ],
+    });
   });
 });

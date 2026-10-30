@@ -13,12 +13,11 @@ import type {
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 
 /**
- * The policies a marker recorded when it was read, as stored: `recorded` is the raw value of
- * `meta.policies`, or `undefined` when the marker had none. A compare-and-swap given it matches
- * only while the marker still records exactly that.
+ * The raw value of a marker's `meta.policies` as it was read: `value` is `undefined` when the marker
+ * had no policies. A compare-and-swap given it matches only while the marker still stores exactly that.
  */
-export interface RecordedPolicies {
-  readonly recorded: unknown;
+export interface StoredPoliciesValue {
+  readonly value: unknown;
 }
 
 /**
@@ -34,7 +33,7 @@ export interface MarkerOperations {
     space: string,
     expectedFrom: string,
     destination: MarkerDestination,
-    unchangedPolicies?: RecordedPolicies,
+    storedPolicies?: StoredPoliciesValue,
   ): Promise<boolean>;
   writeLedgerEntry(
     space: string,
@@ -111,7 +110,7 @@ export interface MongoControlAdapter<TTarget extends string = string>
 
   /**
    * Atomically updates the marker document for `space` (CAS on
-   * `expectedFrom`, and on `unchangedPolicies` when given). Returns `true`
+   * `expectedFrom`, and on `storedPolicies` when given). Returns `true`
    * when the CAS succeeded, `false` when another process changed the
    * marker first.
    */
@@ -120,7 +119,7 @@ export interface MongoControlAdapter<TTarget extends string = string>
     space: string,
     expectedFrom: string,
     destination: MarkerDestination,
-    unchangedPolicies?: RecordedPolicies,
+    storedPolicies?: StoredPoliciesValue,
   ): Promise<boolean>;
 
   /**

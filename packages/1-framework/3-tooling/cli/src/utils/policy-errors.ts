@@ -1,15 +1,14 @@
-import type {
-  ChangeStrategy,
-  DatabasePolicyDifference,
+import {
+  type ChangeStrategy,
+  type DatabasePolicies,
+  type DatabasePolicyDifference,
+  databasePolicyValueText,
+  type MarkerDatabasePoliciesComparison,
+  movedDatabasePoliciesWhy,
 } from '@internal/framework-components/control';
 import { ActionableCliError } from './cli-errors';
 import { chooseAction, runCommandAction } from './next-actions';
 import { type CliInvocation, cliCommand } from './printed-command';
-
-/** A policy setting's value as messages print it: change strategies comma-separated. */
-export function databasePolicyValueText(value: DatabasePolicyDifference['declared']): string {
-  return typeof value === 'string' ? value : value.join(', ');
-}
 
 /** `change: migrate; dataProtection.dataLoss: data-loss-forbidden`: the declared side of each difference. */
 export function declaredSettingsText(differences: readonly DatabasePolicyDifference[]): string {
@@ -84,5 +83,30 @@ export function errorChangePolicyForbids(args: {
     'MIGRATION.CHANGE_POLICY_FORBIDS',
     "This database's change policy permits only migrations",
     { why, fix: recovery, nextActions: [chooseAction(recovery)], meta },
+  );
+}
+
+/** `MIGRATION.MARKER_CAS_FAILURE` for `db sign`: the database's policies changed after it checked them, so it did not sign the application space. */
+export function errorDatabasePoliciesMovedDuringSign(args: {
+  readonly spaceId: string;
+  readonly checked: DatabasePolicies;
+  readonly moved: Extract<MarkerDatabasePoliciesComparison, { readonly kind: 'moved' }>;
+  readonly invocation: CliInvocation;
+}): ActionableCliError {
+  const rerun = cliCommand(args.invocation, 'db sign', args.invocation.rerunArgs ?? []);
+  return new ActionableCliError(
+    'MIGRATION.MARKER_CAS_FAILURE',
+    "The database's policies changed while db sign ran",
+    {
+      why: `${movedDatabasePoliciesWhy('db sign', args.moved.differences)} db sign did not sign the application space.`,
+      fix: `Sign again, which checks the policies anew: ${rerun}`,
+      nextActions: [runCommandAction('Sign again', rerun)],
+      meta: {
+        reason: 'databasePolicies',
+        space: args.spaceId,
+        checkedDatabasePolicies: args.checked,
+        foundDatabasePolicies: args.moved.found,
+      },
+    },
   );
 }

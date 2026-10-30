@@ -3,5 +3,5 @@ export type {
   MongoControlAdapter,
   MongoControlAdapterDescriptor,
   MongoRunnerDependencies,
-  RecordedPolicies,
+  StoredPoliciesValue,
 } from '../core/control-adapter';

@@ -1,4 +1,5 @@
 import type { ContractMarkerRecord } from '@internal/contract/types';
+import { errorMarkerPoliciesCorrupt } from '@internal/errors/execution';
 import {
   type MigrationOperationPolicy,
   runnerFailure,
@@ -13,11 +14,14 @@ import {
   type SqlMigrationRunnerSuccessValue,
 } from '@internal/family-sql/control';
 import {
+  APP_SPACE_ID,
+  compareMarkerDatabasePolicies,
+  type DatabasePolicies,
+  databasePoliciesMovedFailure,
   failedPostcheckWhy,
   failedPrecheckWhy,
   type MigrationRunnerFailure,
   type MigrationRunnerResult,
-  markerHoldsDatabasePolicies,
   migrationRunnerFailure,
   schemaCheckWhy,
   withDatabaseUnchanged,
@@ -101,14 +105,40 @@ class MysqlMigrationRunner implements SqlMigrationRunner<MysqlPlanTargetDetails>
   async execute(options: {
     readonly driver: Driver;
     readonly perSpaceOptions: ReadonlyArray<Options>;
+    readonly expectedDatabasePolicies?: DatabasePolicies;
   }): Promise<MigrationRunnerResult> {
-    const { driver, perSpaceOptions } = options;
+    const { driver, perSpaceOptions, expectedDatabasePolicies } = options;
     if (perSpaceOptions.length === 0) return ok({ perSpaceResults: [] });
     return withMarkerLock(
       driver,
-      () => this.#applySpaces(driver, perSpaceOptions),
+      async () => {
+        if (expectedDatabasePolicies !== undefined) {
+          const policiesCheck = await this.#checkDatabasePolicies(driver, expectedDatabasePolicies);
+          if (!policiesCheck.ok) return notOk(withDatabaseUnchanged(policiesCheck.failure, true));
+        }
+        return this.#applySpaces(driver, perSpaceOptions);
+      },
       (result) => result.ok,
     );
+  }
+
+  /** Compares the policies the caller checked with the application space's marker, under the marker lock and before any space. */
+  async #checkDatabasePolicies(
+    driver: Driver,
+    checked: DatabasePolicies,
+  ): Promise<Result<void, MigrationRunnerFailure>> {
+    const marker = await this.family.readMarker({ driver, space: APP_SPACE_ID });
+    const comparison = compareMarkerDatabasePolicies(marker, checked);
+    if (comparison.kind === 'unreadable') {
+      throw errorMarkerPoliciesCorrupt({
+        why: comparison.why,
+        space: APP_SPACE_ID,
+        markerLocation: this.family.markerLocation,
+      });
+    }
+    return comparison.kind === 'moved'
+      ? notOk(databasePoliciesMovedFailure(checked, comparison))
+      : okVoid();
   }
 
   async executeOnConnection(options: Options): Promise<SqlMigrationRunnerResult> {
@@ -174,25 +204,6 @@ class MysqlMigrationRunner implements SqlMigrationRunner<MysqlPlanTargetDetails>
     const existingMarker = await this.family.readMarker({ driver, space });
     const originCheck = this.#checkOrigin(existingMarker, options.plan.origin ?? null);
     if (!originCheck.ok) return originCheck;
-
-    if (
-      options.expectedDatabasePolicies !== undefined &&
-      !markerHoldsDatabasePolicies(existingMarker, options.expectedDatabasePolicies)
-    ) {
-      return runnerFailure(
-        'MIGRATION.MARKER_CAS_FAILURE',
-        'Marker was modified by another process during migration execution.',
-        {
-          why: "The database's policies changed after this run checked them. Run the command again to check them anew.",
-          meta: {
-            space,
-            expectedStorageHash: options.plan.origin?.storageHash ?? null,
-            foundStorageHash: existingMarker?.storageHash ?? null,
-            destinationStorageHash: options.plan.destination.storageHash,
-          },
-        },
-      );
-    }
 
     const isSelfEdge = options.plan.origin?.storageHash === options.plan.destination.storageHash;
     const atDestination =

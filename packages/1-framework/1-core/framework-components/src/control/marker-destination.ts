@@ -10,5 +10,4 @@ export interface MarkerDestination {
   readonly databasePolicies?: DatabasePolicies;
 }
 
-/** What a first marker write records when it takes no policies: `db sign`'s insert. */
-export type InsertedMarker = Pick<MarkerDestination, 'storageHash' | 'profileHash' | 'invariants'>;
+export type MarkerInsert = Pick<MarkerDestination, 'storageHash' | 'profileHash' | 'invariants'>;

@@ -1,12 +1,13 @@
 import type { ContractMarkerRecord } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import {
+  compareMarkerDatabasePolicies,
   DATABASE_POLICIES_META_KEY,
   type DatabasePolicies,
   DEFAULT_DATABASE_POLICIES,
+  databasePoliciesMovedFailure,
   databasePoliciesOf,
   databasePolicyDifferences,
-  markerHoldsDatabasePolicies,
   PartialDatabasePoliciesSchema,
   storedDatabasePolicies,
   withDeclaredDatabasePolicies,
@@ -137,19 +138,65 @@ describe('withDeclaredDatabasePolicies', () => {
   });
 });
 
-describe('markerHoldsDatabasePolicies', () => {
-  it('holds the defaults when the marker records nothing, and not after another run recorded others', () => {
-    expect({
-      empty: markerHoldsDatabasePolicies(markerWithMeta({}), DEFAULT_DATABASE_POLICIES),
-      changed: markerHoldsDatabasePolicies(
+describe('compareMarkerDatabasePolicies', () => {
+  it('holds the defaults when the marker records nothing', () => {
+    expect(compareMarkerDatabasePolicies(markerWithMeta({}), DEFAULT_DATABASE_POLICIES)).toEqual({
+      kind: 'held',
+    });
+  });
+
+  it('reports the settings another run moved, from the value checked to the value found', () => {
+    expect(
+      compareMarkerDatabasePolicies(
         markerWithMeta({ policies: MIGRATE_ONLY }),
         DEFAULT_DATABASE_POLICIES,
       ),
-      corrupt: markerHoldsDatabasePolicies(
-        markerWithMeta({ policies: 'x' }),
-        DEFAULT_DATABASE_POLICIES,
-      ),
-    }).toEqual({ empty: true, changed: false, corrupt: false });
+    ).toEqual({
+      kind: 'moved',
+      found: MIGRATE_ONLY,
+      differences: [
+        { setting: 'change', declared: ['migrate', 'reconcile'], inForce: ['migrate'] },
+        {
+          setting: 'dataProtection.dataLoss',
+          declared: 'data-loss-with-consent',
+          inForce: 'data-loss-forbidden',
+        },
+        {
+          setting: 'dataProtection.accessWidening',
+          declared: 'access-widening-with-consent',
+          inForce: 'access-widening-forbidden',
+        },
+      ],
+    });
+  });
+
+  it('reports a marker whose policies cannot be read as unreadable, not moved', () => {
+    expect(
+      compareMarkerDatabasePolicies(markerWithMeta({ policies: 'x' }), DEFAULT_DATABASE_POLICIES),
+    ).toMatchObject({ kind: 'unreadable', why: expect.stringContaining('meta.policies') });
+  });
+});
+
+describe('databasePoliciesMovedFailure', () => {
+  it('names each moved setting and carries the policies, not the hashes', () => {
+    const moved = compareMarkerDatabasePolicies(
+      markerWithMeta({ policies: { change: ['reconcile'] } }),
+      DEFAULT_DATABASE_POLICIES,
+    );
+    if (moved.kind !== 'moved') throw new Error('expected moved policies');
+
+    const failure = databasePoliciesMovedFailure(DEFAULT_DATABASE_POLICIES, moved);
+
+    expect({ code: failure.code, why: failure.why, meta: failure.meta }).toEqual({
+      code: 'MIGRATION.MARKER_CAS_FAILURE',
+      why: "The database's policies changed after this run checked them: change moved from migrate, reconcile to reconcile. Run the command again to check them anew.",
+      meta: {
+        reason: 'databasePolicies',
+        space: 'app',
+        checkedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+        foundDatabasePolicies: { ...DEFAULT_DATABASE_POLICIES, change: ['reconcile'] },
+      },
+    });
   });
 });
 

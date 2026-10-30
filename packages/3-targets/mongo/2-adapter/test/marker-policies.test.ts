@@ -105,21 +105,21 @@ describe('database policies in the marker', { timeout: timeouts.databaseOperatio
       profileHash: 'p',
       databasePolicies: MIGRATE_ONLY,
     });
-    const recorded = (await controlAdapter.readMarker(driver, 'app'))?.meta['policies'];
+    const stored = (await controlAdapter.readMarker(driver, 'app'))?.meta['policies'];
 
     const whenNoneRecorded = await controlAdapter.updateMarker(
       driver,
       'app',
       'a1',
       { storageHash: 'a2', profileHash: 'p' },
-      { recorded: undefined },
+      { value: undefined },
     );
     const whenUnchanged = await controlAdapter.updateMarker(
       driver,
       'app',
       'a1',
       { storageHash: 'a2', profileHash: 'p' },
-      { recorded },
+      { value: stored },
     );
 
     expect({ whenNoneRecorded, whenUnchanged }).toEqual({

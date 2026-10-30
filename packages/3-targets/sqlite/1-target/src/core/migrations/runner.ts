@@ -1,4 +1,5 @@
 import type { Contract, ContractMarkerRecord } from '@internal/contract/types';
+import { errorMarkerPoliciesCorrupt } from '@internal/errors/execution';
 import type {
   MigrationOperationPolicy,
   SqlControlFamilyInstance,
@@ -24,14 +25,17 @@ import {
 } from '@internal/family-sql/control';
 import type {
   FailedConversion,
+  MigrationRunnerFailure,
   MigrationRunnerResult,
   RowsHoldingValue,
 } from '@internal/framework-components/control';
 import {
   APP_SPACE_ID,
+  compareMarkerDatabasePolicies,
+  type DatabasePolicies,
+  databasePoliciesMovedFailure,
   failedPostcheckWhy,
   failedPrecheckWhy,
-  markerHoldsDatabasePolicies,
   schemaCheckWhy,
   withDatabaseUnchanged,
   withFailingSpace,
@@ -108,25 +112,6 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
     if (!ensureResult.ok) return ensureResult;
     const existingMarker = await this.family.readMarker({ driver, space });
 
-    if (
-      options.expectedDatabasePolicies !== undefined &&
-      !markerHoldsDatabasePolicies(existingMarker, options.expectedDatabasePolicies)
-    ) {
-      return runnerFailure(
-        'MIGRATION.MARKER_CAS_FAILURE',
-        'Marker was modified by another process during migration execution.',
-        {
-          why: "The database's policies changed after this run checked them. Run the command again to check them anew.",
-          meta: {
-            space,
-            expectedStorageHash: options.plan.origin?.storageHash ?? null,
-            foundStorageHash: existingMarker?.storageHash ?? null,
-            destinationStorageHash: options.plan.destination.storageHash,
-          },
-        },
-      );
-    }
-
     const markerCheck = this.ensureMarkerCompatibility(existingMarker, options.plan);
     if (!markerCheck.ok) return markerCheck;
 
@@ -197,6 +182,7 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
     readonly perSpaceOptions: ReadonlyArray<
       SqlMigrationRunnerExecuteOptions<SqlitePlanTargetDetails>
     >;
+    readonly expectedDatabasePolicies?: DatabasePolicies;
   }): Promise<MigrationRunnerResult> {
     const driver = options.driver;
     const perSpaceOptions = options.perSpaceOptions;
@@ -215,7 +201,12 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
 
     let result: MigrationRunnerResult;
     try {
-      result = await this.executeInTransaction(driver, perSpaceOptions, fkWasEnabled);
+      result = await this.executeInTransaction(
+        driver,
+        perSpaceOptions,
+        fkWasEnabled,
+        options.expectedDatabasePolicies,
+      );
     } catch (error) {
       if (fkWasEnabled) await this.afterFailure(driver.query('PRAGMA foreign_keys = ON'));
       throw error;
@@ -231,11 +222,18 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
     driver: SqlControlDriverInstance<string>,
     perSpaceOptions: ReadonlyArray<SqlMigrationRunnerExecuteOptions<SqlitePlanTargetDetails>>,
     fkWasEnabled: boolean,
+    expectedDatabasePolicies: DatabasePolicies | undefined,
   ): Promise<MigrationRunnerResult> {
     await this.beginExclusiveTransaction(driver);
     let result: MigrationRunnerResult;
     try {
-      result = await this.executeSpaces(driver, perSpaceOptions, fkWasEnabled);
+      const policiesCheck =
+        expectedDatabasePolicies === undefined
+          ? okVoid()
+          : await this.checkDatabasePolicies(driver, expectedDatabasePolicies);
+      result = policiesCheck.ok
+        ? await this.executeSpaces(driver, perSpaceOptions, fkWasEnabled)
+        : policiesCheck;
     } catch (error) {
       await this.afterFailure(this.rollbackTransaction(driver));
       throw error;
@@ -257,6 +255,25 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
   // fails, for example on a closed database, must not replace it.
   private async afterFailure(cleanup: Promise<unknown>): Promise<void> {
     await cleanup.catch(() => undefined);
+  }
+
+  /** Compares the policies the caller checked with the application space's marker, inside the run's transaction. */
+  private async checkDatabasePolicies(
+    driver: SqlControlDriverInstance<string>,
+    checked: DatabasePolicies,
+  ): Promise<Result<void, MigrationRunnerFailure>> {
+    const marker = await this.family.readMarker({ driver, space: APP_SPACE_ID });
+    const comparison = compareMarkerDatabasePolicies(marker, checked);
+    if (comparison.kind === 'unreadable') {
+      throw errorMarkerPoliciesCorrupt({
+        why: comparison.why,
+        space: APP_SPACE_ID,
+        markerLocation: this.family.markerLocation,
+      });
+    }
+    return comparison.kind === 'moved'
+      ? notOk(databasePoliciesMovedFailure(checked, comparison))
+      : okVoid();
   }
 
   private async executeSpaces(

@@ -217,6 +217,7 @@ describe('sql family signSpaces', () => {
       },
       {
         status: 'conflict',
+        reason: 'storageHash',
         space: EXT_SPACE_ID,
         contract: { storageHash: EXT_HASH, profileHash: 'ext-profile' },
         expected: { storageHash: 'old-ext', profileHash: 'old-ext-profile' },
@@ -261,6 +262,7 @@ describe('sql family signSpaces', () => {
       },
       {
         status: 'conflict',
+        reason: 'storageHash',
         space: APP_SPACE_ID,
         contract: appHashes,
         expected: { storageHash: 'old-app', profileHash: 'old-app-profile' },
@@ -274,7 +276,7 @@ describe('sql family signSpaces', () => {
     });
   });
 
-  it('leaves a marker whose policies changed after the check as it was, as a conflict', async () => {
+  it('signs nothing when the policies changed after the check, and reports them on the application space', async () => {
     const moved = {
       storageHash: 'old-app',
       profileHash: 'old-app-profile',
@@ -285,22 +287,30 @@ describe('sql family signSpaces', () => {
     const signatures = await store.instance.signSpaces({
       driver,
       spaces: [
+        { space: EXT_SPACE_ID, contract: extContract, expected: null },
         {
           space: APP_SPACE_ID,
           contract: appContract,
           expected: { storageHash: 'old-app', profileHash: 'old-app-profile' },
-          expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
         },
       ],
+      expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
     });
 
     expect(signatures).toEqual([
       {
         status: 'conflict',
+        reason: 'databasePolicies',
         space: APP_SPACE_ID,
         contract: appHashes,
-        expected: { storageHash: 'old-app', profileHash: 'old-app-profile' },
-        found: { storageHash: 'old-app', profileHash: 'old-app-profile' },
+        checked: DEFAULT_DATABASE_POLICIES,
+        comparison: {
+          kind: 'moved',
+          found: { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] },
+          differences: [
+            { setting: 'change', declared: ['migrate', 'reconcile'], inForce: ['migrate'] },
+          ],
+        },
       },
     ]);
     expect(store.markers()).toEqual({ [APP_SPACE_ID]: moved });
@@ -319,6 +329,7 @@ describe('sql family signSpaces', () => {
     expect(signatures).toEqual([
       {
         status: 'conflict',
+        reason: 'storageHash',
         space: APP_SPACE_ID,
         contract: appHashes,
         expected: null,

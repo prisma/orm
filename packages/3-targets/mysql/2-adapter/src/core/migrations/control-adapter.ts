@@ -5,8 +5,8 @@ import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { codecForRef, type DataType } from '@internal/framework-components/codec';
 import {
   APP_SPACE_ID,
-  type InsertedMarker,
   type MarkerDestination,
+  type MarkerInsert,
 } from '@internal/framework-components/control';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import {
@@ -145,7 +145,7 @@ export class MysqlControlAdapter implements SqlControlAdapter<'mysql'> {
     });
   }
 
-  async insertMarker(driver: Driver, space: string, destination: InsertedMarker): Promise<void> {
+  async insertMarker(driver: Driver, space: string, destination: MarkerInsert): Promise<void> {
     await insertMarkerRow(driver, space, destination);
   }
 

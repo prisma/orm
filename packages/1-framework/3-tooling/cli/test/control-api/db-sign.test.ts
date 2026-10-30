@@ -74,6 +74,7 @@ function familySigning(
 ) {
   const calls: string[] = [];
   const signed: SpaceToSign[][] = [];
+  const checkedPolicies: unknown[] = [];
   const familyInstance = blindCast<
     ControlFamilyInstance<string, unknown>,
     'the family methods db sign calls'
@@ -94,13 +95,21 @@ function familySigning(
       schema: { issues: [] },
       timings: { total: 0 },
     }),
-    signSpaces: async ({ spaces }: { readonly spaces: readonly SpaceToSign[] }) => {
+    markerLocation: 'prisma_contract.marker',
+    signSpaces: async ({
+      spaces,
+      expectedDatabasePolicies,
+    }: {
+      readonly spaces: readonly SpaceToSign[];
+      readonly expectedDatabasePolicies?: unknown;
+    }) => {
       calls.push('signSpaces');
       signed.push([...spaces]);
+      checkedPolicies.push(expectedDatabasePolicies);
       return signatures(spaces);
     },
   });
-  return { familyInstance, calls, signed };
+  return { familyInstance, calls, signed, checkedPolicies };
 }
 
 const driver = blindCast<ControlDriverInstance<string, string>, 'never queried'>({});
@@ -128,6 +137,7 @@ describe('signContractSpaces', () => {
     });
 
     expect(family.calls).toEqual(['readAllMarkers', 'introspect', 'signSpaces']);
+    expect(family.checkedPolicies).toEqual([DEFAULT_DATABASE_POLICIES]);
     expect(family.signed).toEqual([
       [
         { space: 'pgvector', contract: extContract, expected: null },
@@ -135,10 +145,57 @@ describe('signContractSpaces', () => {
           space: 'app',
           contract: appContract,
           expected: { storageHash: 'old-app', profileHash: 'old-app-profile' },
-          expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
         },
       ],
     ]);
+  });
+
+  it('fails as a concurrent change naming the moved settings when the policies changed after it checked them', async () => {
+    const family = familySigning((spaces) => [
+      {
+        status: 'conflict',
+        reason: 'databasePolicies',
+        space: 'app',
+        contract: signedEverySpace(spaces).find(({ space }) => space === 'app')?.contract ?? {
+          storageHash: '',
+          profileHash: '',
+        },
+        checked: DEFAULT_DATABASE_POLICIES,
+        comparison: {
+          kind: 'moved',
+          found: { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] },
+          differences: [
+            { setting: 'change', declared: ['migrate', 'reconcile'], inForce: ['migrate'] },
+          ],
+        },
+      },
+    ]);
+
+    const result = await signContractSpaces({
+      driver,
+      familyInstance: family.familyInstance,
+      aggregate,
+      frameworkComponents: [],
+      invocation: INVOCATION,
+    });
+
+    const failure = result.assertNotOk();
+    expect({
+      code: failure.code,
+      why: failure.why,
+      fix: failure.fix,
+      meta: failure.meta,
+    }).toEqual({
+      code: 'MIGRATION.MARKER_CAS_FAILURE',
+      why: "The database's policies changed after db sign checked them: change moved from migrate, reconcile to migrate. db sign did not sign the application space.",
+      fix: 'Sign again, which checks the policies anew: {bin} db sign --config config/prisma.config.ts --db <url>',
+      meta: {
+        reason: 'databasePolicies',
+        space: 'app',
+        checkedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+        foundDatabasePolicies: { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] },
+      },
+    });
   });
 
   it('reports a space whose marker changed while it ran, beside the spaces it signed', async () => {
@@ -147,6 +204,7 @@ describe('signContractSpaces', () => {
         signature.space === 'app'
           ? {
               status: 'conflict',
+              reason: 'storageHash',
               space: 'app',
               contract: signature.contract,
               expected: { storageHash: 'old-app', profileHash: 'old-app-profile' },
@@ -168,6 +226,7 @@ describe('signContractSpaces', () => {
       {
         space: 'app',
         status: 'conflict',
+        reason: 'storageHash',
         contract: {
           storageHash: appContract.storage.storageHash,
           profileHash: appContract.profileHash,
@@ -377,7 +436,6 @@ describe('signContractSpaces with invariants the head ref requires', () => {
           space: 'app',
           contract: appContract,
           expected: { storageHash: 'old-app', profileHash: 'old-app-profile' },
-          expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
         },
       ],
     ]);

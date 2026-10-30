@@ -17,8 +17,9 @@ import type {
 } from '@internal/framework-components/control';
 import {
   APP_SPACE_ID,
+  compareMarkerDatabasePolicies,
   DATABASE_POLICIES_META_KEY,
-  markerHoldsDatabasePolicies,
+  type DatabasePolicies,
   sameMarkerHashes,
   VERIFY_CODE_HASH_MISMATCH,
   VERIFY_CODE_MARKER_MISSING,
@@ -36,6 +37,7 @@ import type {
   MongoControlAdapter,
   MongoControlAdapterDescriptor,
   MongoRunnerDependencies,
+  StoredPoliciesValue,
 } from './control-adapter';
 import type { MongoControlExtensionDescriptor } from './control-types';
 import { MongoContractSerializer } from './ir/mongo-contract-serializer';
@@ -212,29 +214,47 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
     return driver;
   }
 
+  function contractHashesOf(contract: SpaceToSign['contract']): MarkerHashes {
+    return { storageHash: contract.storage.storageHash, profileHash: contract.profileHash };
+  }
+
+  function databasePoliciesConflict(
+    contract: SpaceToSign['contract'],
+    checked: DatabasePolicies,
+    marker: ContractMarkerRecord | null,
+  ): SpaceSignature | undefined {
+    const comparison = compareMarkerDatabasePolicies(marker, checked);
+    if (comparison.kind === 'held') return undefined;
+    return {
+      space: APP_SPACE_ID,
+      contract: contractHashesOf(contract),
+      status: 'conflict',
+      reason: 'databasePolicies',
+      checked,
+      comparison,
+    };
+  }
+
+  /** The policies a run checked and the application marker's `meta.policies` it found holding them. */
+  interface CheckedPolicies {
+    readonly checked: DatabasePolicies;
+    readonly stored: StoredPoliciesValue;
+  }
+
   async function signSpaceMarker(
     driver: ControlDriverInstance<'mongo', 'mongo'>,
-    { space, contract, expected, expectedDatabasePolicies }: SpaceToSign,
+    { space, contract, expected }: SpaceToSign,
+    policies: CheckedPolicies | undefined,
   ): Promise<SpaceSignature> {
-    const storageHash = contract.storage.storageHash;
-    const profileHash = contract.profileHash;
+    const { storageHash, profileHash } = contractHashesOf(contract);
     const signed = { space, contract: { storageHash, profileHash } };
     const controlAdapter = getControlAdapter();
 
-    const readHashes = async (): Promise<MarkerHashes | null> => {
-      const marker = await controlAdapter.readMarker(driver, space);
-      return marker === null
-        ? null
-        : { storageHash: marker.storageHash, profileHash: marker.profileHash };
-    };
     const marker = await controlAdapter.readMarker(driver, space);
     const existing: MarkerHashes | null =
       marker === null ? null : { storageHash: marker.storageHash, profileHash: marker.profileHash };
-    const policiesMoved =
-      expectedDatabasePolicies !== undefined &&
-      !markerHoldsDatabasePolicies(marker, expectedDatabasePolicies);
-    if (!sameMarkerHashes(existing, expected) || policiesMoved) {
-      return { ...signed, status: 'conflict', expected, found: existing };
+    if (!sameMarkerHashes(existing, expected)) {
+      return { ...signed, status: 'conflict', reason: 'storageHash', expected, found: existing };
     }
     if (existing === null) {
       await controlAdapter.initMarker(driver, space, { storageHash, profileHash });
@@ -243,24 +263,50 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
     if (existing.storageHash === storageHash && existing.profileHash === profileHash) {
       return { ...signed, status: 'unchanged' };
     }
+    const guardsPolicies = space === APP_SPACE_ID ? policies : undefined;
     const updated = await controlAdapter.updateMarker(
       driver,
       space,
       existing.storageHash,
       { storageHash, profileHash },
-      expectedDatabasePolicies === undefined
-        ? undefined
-        : { recorded: marker?.meta[DATABASE_POLICIES_META_KEY] },
+      guardsPolicies?.stored,
     );
     if (!updated) {
-      return {
-        ...signed,
-        status: 'conflict',
-        expected,
-        found: await readHashes(),
-      };
+      const found = await controlAdapter.readMarker(driver, space);
+      const foundHashes =
+        found === null ? null : { storageHash: found.storageHash, profileHash: found.profileHash };
+      const policiesConflict =
+        guardsPolicies !== undefined && sameMarkerHashes(foundHashes, expected)
+          ? databasePoliciesConflict(contract, guardsPolicies.checked, found)
+          : undefined;
+      return (
+        policiesConflict ?? {
+          ...signed,
+          status: 'conflict',
+          reason: 'storageHash',
+          expected,
+          found: foundHashes,
+        }
+      );
     }
     return { ...signed, status: 'updated', previous: existing };
+  }
+
+  async function checkSignPolicies(
+    driver: ControlDriverInstance<'mongo', 'mongo'>,
+    spaces: readonly SpaceToSign[],
+    checked: DatabasePolicies,
+  ): Promise<{ readonly conflict: SpaceSignature } | CheckedPolicies> {
+    const app = spaces.find(({ space }) => space === APP_SPACE_ID);
+    if (app === undefined) {
+      throw new InternalError(
+        'signSpaces was given database policies without the application space',
+      );
+    }
+    const marker = await getControlAdapter().readMarker(driver, APP_SPACE_ID);
+    const conflict = databasePoliciesConflict(app.contract, checked, marker);
+    if (conflict !== undefined) return { conflict };
+    return { checked, stored: { value: marker?.meta[DATABASE_POLICIES_META_KEY] } };
   }
 
   return {
@@ -366,9 +412,19 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
 
     async signSpaces(options): Promise<readonly SpaceSignature[]> {
       const mongoDriver = asMongoDriver(options.driver);
+      let policies: CheckedPolicies | undefined;
+      if (options.expectedDatabasePolicies !== undefined) {
+        const checked = await checkSignPolicies(
+          mongoDriver,
+          options.spaces,
+          options.expectedDatabasePolicies,
+        );
+        if ('conflict' in checked) return [checked.conflict];
+        policies = checked;
+      }
       const signatures: SpaceSignature[] = [];
       for (const space of options.spaces) {
-        signatures.push(await signSpaceMarker(mongoDriver, space));
+        signatures.push(await signSpaceMarker(mongoDriver, space, policies));
       }
       return signatures;
     },

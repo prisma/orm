@@ -46,7 +46,6 @@ interface Run {
   readonly plan: MigrationPlan;
   readonly migrationEdges: readonly AggregateMigrationEdgeRef[];
   readonly databasePolicies?: DatabasePolicies;
-  readonly expectedDatabasePolicies?: DatabasePolicies;
 }
 
 async function withDriver<T>(
@@ -61,25 +60,33 @@ async function withDriver<T>(
   }
 }
 
+function executeRuns(
+  family: SqlControlFamilyInstance,
+  driver: MysqlControlDriver,
+  runs: readonly Run[],
+  expectedDatabasePolicies?: DatabasePolicies,
+): Promise<MigrationRunnerResult> {
+  return mysql.migrations.createRunner(family).execute({
+    driver,
+    perSpaceOptions: runs.map((run) => ({
+      space: run.plan.spaceId ?? 'app',
+      driver,
+      destinationContract: contract,
+      policy: EVERY_CLASS,
+      frameworkComponents,
+      strictVerification: false,
+      ...run,
+    })),
+    ...ifDefined('expectedDatabasePolicies', expectedDatabasePolicies),
+  });
+}
+
 function execute(
   family: SqlControlFamilyInstance,
   driver: MysqlControlDriver,
   run: Run,
 ): Promise<MigrationRunnerResult> {
-  return mysql.migrations.createRunner(family).execute({
-    driver,
-    perSpaceOptions: [
-      {
-        space: 'app',
-        driver,
-        destinationContract: contract,
-        policy: EVERY_CLASS,
-        frameworkComponents,
-        strictVerification: false,
-        ...run,
-      },
-    ],
-  });
+  return executeRuns(family, driver, [run]);
 }
 
 async function applyContract(
@@ -246,22 +253,63 @@ describe('MySQL database policies', { timeout: timeouts.databaseOperation }, () 
     );
   });
 
-  it('fails as a concurrent change when the policies moved after the caller checked them', async (test) => {
+  it('fails as a concurrent change, before any extension DDL, when the policies moved after the caller checked them', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
       withDriver(url, async (driver, family) => {
         await applyContract(family, driver, MIGRATE_ONLY);
-
-        const result = await execute(family, driver, {
-          plan: selfEdgePlan({ providedInvariants: ['inv-a'] }),
-          migrationEdges: [],
-          databasePolicies: RECONCILE_ONLY,
-          expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+        const extension = createMigrationPlan<MysqlPlanTargetDetails>({
+          targetId: 'mysql',
+          spaceId: 'extension',
+          origin: null,
+          destination,
+          operations: [
+            {
+              id: 'table.extension_table',
+              label: 'Create the extension table',
+              operationClass: 'additive',
+              target: { id: 'mysql', details: { objectType: 'table', name: 'extension_table' } },
+              precheck: [],
+              execute: [{ description: 'create', sql: 'CREATE TABLE `extension_table` (id int)' }],
+              postcheck: [],
+            },
+          ],
+          providedInvariants: [],
         });
 
+        const result = await executeRuns(
+          family,
+          driver,
+          [
+            { plan: extension, migrationEdges: [] },
+            {
+              plan: selfEdgePlan({ providedInvariants: ['inv-a'] }),
+              migrationEdges: [],
+              databasePolicies: RECONCILE_ONLY,
+            },
+          ],
+          DEFAULT_DATABASE_POLICIES,
+        );
+
+        const extensionTables = await driver.query(
+          "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'extension_table'",
+        );
         expect({
-          code: result.ok ? undefined : result.failure.code,
+          failure: result.assertNotOk(),
+          extensionTables: extensionTables.rows,
           policies: await recordedPolicies(family, driver),
-        }).toEqual({ code: 'MIGRATION.MARKER_CAS_FAILURE', policies: MIGRATE_ONLY });
+        }).toMatchObject({
+          failure: {
+            code: 'MIGRATION.MARKER_CAS_FAILURE',
+            meta: {
+              reason: 'databasePolicies',
+              databaseUnchanged: true,
+              checkedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+              foundDatabasePolicies: MIGRATE_ONLY,
+            },
+          },
+          extensionTables: [],
+          policies: MIGRATE_ONLY,
+        });
       }),
     );
   });

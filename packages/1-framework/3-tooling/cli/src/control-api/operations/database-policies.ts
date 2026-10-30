@@ -1,5 +1,5 @@
 import type { ContractMarkerRecord } from '@internal/contract/types';
-import { errorMarkerRowCorrupt } from '@internal/errors/execution';
+import { errorMarkerPoliciesCorrupt } from '@internal/errors/execution';
 import {
   type ChangeStrategy,
   type DatabasePolicies,
@@ -29,7 +29,11 @@ export function databasePoliciesInForce(
 ): DatabasePolicies {
   const inForce = databasePoliciesOf(markers.get(appSpaceId));
   if (!inForce.ok) {
-    throw errorMarkerRowCorrupt({ why: inForce.failure.why, space: appSpaceId, markerLocation });
+    throw errorMarkerPoliciesCorrupt({
+      why: inForce.failure.why,
+      space: appSpaceId,
+      markerLocation,
+    });
   }
   return inForce.value;
 }

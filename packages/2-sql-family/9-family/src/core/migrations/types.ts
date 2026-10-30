@@ -5,6 +5,7 @@ import type {
   ContractSpace,
   ControlAdapterDescriptor,
   ControlExtensionDescriptor,
+  DatabasePolicies,
   MigrationOperationPolicy,
   MigrationPlan,
   MigrationPlannerConflict,
@@ -377,7 +378,7 @@ export interface SqlMigrationRunnerExecuteCallbacks<TTargetDetails> {
 }
 
 export interface SqlMigrationRunnerExecuteOptions<TTargetDetails>
-  extends Pick<MigrationRunnerPerSpaceOptions, 'databasePolicies' | 'expectedDatabasePolicies'> {
+  extends Pick<MigrationRunnerPerSpaceOptions, 'databasePolicies'> {
   readonly plan: SqlMigrationPlan<TTargetDetails>;
   readonly driver: SqlControlDriverInstance<string>;
   /**
@@ -461,6 +462,7 @@ export interface SqlMigrationRunner<TTargetDetails> {
   execute(options: {
     readonly driver: SqlControlDriverInstance<string>;
     readonly perSpaceOptions: ReadonlyArray<SqlMigrationRunnerExecuteOptions<TTargetDetails>>;
+    readonly expectedDatabasePolicies?: DatabasePolicies;
   }): Promise<MigrationRunnerResult>;
 
   /**

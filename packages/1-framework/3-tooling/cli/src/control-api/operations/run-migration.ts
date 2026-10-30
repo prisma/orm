@@ -7,9 +7,9 @@ import type { TargetBoundComponentDescriptor } from '@internal/framework-compone
 import type {
   ControlDriverInstance,
   ControlFamilyInstance,
-  DatabasePolicies,
   FailedTypeChange,
   MigrationOperationPolicy,
+  MigrationRunner,
   MigrationRunnerFailure,
   MigrationRunnerPerSpaceOptions,
   MigrationSubject,
@@ -181,7 +181,9 @@ export function runnerFailureFacts(
   };
 }
 
-export interface RunMigrationInputs<TFamilyId extends string, TTargetId extends string> {
+export interface RunMigrationInputs<TFamilyId extends string, TTargetId extends string>
+  extends Pick<MigrationRunnerPerSpaceOptions, 'databasePolicies'>,
+    Pick<Parameters<MigrationRunner['execute']>[0], 'expectedDatabasePolicies'> {
   readonly aggregate: ContractSpaceAggregate;
   /**
    * Per-space plans, keyed by `spaceId`. Produced by either the full
@@ -208,10 +210,6 @@ export interface RunMigrationInputs<TFamilyId extends string, TTargetId extends 
   >;
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>;
   readonly policy: MigrationOperationPolicy;
-  /** When set, the application space's marker update records these as the database's policies. */
-  readonly databasePolicies?: DatabasePolicies;
-  /** The database's policies as the caller checked them; the runner fails the run as a concurrent change when the marker no longer records them. */
-  readonly expectedDatabasePolicies?: DatabasePolicies;
   readonly action: RunAction;
   readonly onProgress?: OnControlProgress;
 }
@@ -274,13 +272,6 @@ export async function runMigration<TFamilyId extends string, TTargetId extends s
     action,
     onProgress,
   } = inputs;
-  const appSpacePolicies: Pick<
-    MigrationRunnerPerSpaceOptions,
-    'databasePolicies' | 'expectedDatabasePolicies'
-  > = {
-    ...ifDefined('databasePolicies', databasePolicies),
-    ...ifDefined('expectedDatabasePolicies', expectedDatabasePolicies),
-  };
 
   const orderedResolutions = collectOrdered(applyOrder, perSpacePlans);
 
@@ -299,7 +290,7 @@ export async function runMigration<TFamilyId extends string, TTargetId extends s
     driver,
     destinationContract: r.entry.destinationContract,
     policy,
-    ...(r.spaceId === aggregate.app.spaceId ? appSpacePolicies : {}),
+    ...(r.spaceId === aggregate.app.spaceId ? ifDefined('databasePolicies', databasePolicies) : {}),
     frameworkComponents,
     migrationEdges: r.entry.migrationEdges,
     // Per-space post-apply schema verification is non-strict: each
@@ -309,7 +300,11 @@ export async function runMigration<TFamilyId extends string, TTargetId extends s
     strictVerification: false,
   }));
 
-  const runnerResult = await runner.execute({ driver, perSpaceOptions });
+  const runnerResult = await runner.execute({
+    driver,
+    perSpaceOptions,
+    ...ifDefined('expectedDatabasePolicies', expectedDatabasePolicies),
+  });
 
   if (!runnerResult.ok) {
     onProgress?.({ action, kind: 'spanEnd', spanId: RUN_SPAN_ID, outcome: 'error' });

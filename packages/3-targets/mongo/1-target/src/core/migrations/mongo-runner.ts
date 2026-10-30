@@ -1,14 +1,19 @@
 import type { ContractMarkerRecord } from '@internal/contract/types';
+import { errorMarkerPoliciesCorrupt } from '@internal/errors/execution';
 import { fieldRewriteOf } from '@internal/family-mongo/control';
 import type {
   MarkerOperations,
   MongoRunnerDependencies,
+  StoredPoliciesValue,
 } from '@internal/family-mongo/control-adapter';
 import { verifyMongoSchema } from '@internal/family-mongo/schema-verify';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import {
   APP_SPACE_ID,
+  compareMarkerDatabasePolicies,
   DATABASE_POLICIES_META_KEY,
+  type DatabasePolicies,
+  databasePoliciesMovedFailure,
   expectAbsent,
   expectPresent,
   type FailedCheck,
@@ -22,7 +27,6 @@ import {
   type MigrationRunnerFailureMeta,
   type MigrationRunnerPerSpaceOptions,
   type MigrationRunnerPerSpaceSuccessValue,
-  markerHoldsDatabasePolicies,
   migrationRunnerFailure,
   type OperationContext,
   schemaCheckWhy,
@@ -93,7 +97,7 @@ function failedCheckOf(
 }
 
 export interface MongoMigrationRunnerExecuteOptions
-  extends Pick<MigrationRunnerPerSpaceOptions, 'databasePolicies' | 'expectedDatabasePolicies'> {
+  extends Pick<MigrationRunnerPerSpaceOptions, 'databasePolicies'> {
   readonly plan: MigrationPlan;
   readonly destinationContract: MongoContract;
   readonly policy: MigrationOperationPolicy;
@@ -120,6 +124,8 @@ export interface MongoMigrationRunnerExecuteOptions
   readonly migrationEdges: readonly AggregateMigrationEdgeRef[];
   /** Whether an earlier space of the same apply already changed the database. */
   readonly databaseChangedBefore?: boolean;
+  /** The policies the run checked, and the marker's `meta.policies` it found holding them; the marker update swaps only while the marker still stores that value. */
+  readonly checkedPolicies?: CheckedDatabasePolicies;
 }
 
 /** A failure of the Mongo runner: one of the codes it returns. */
@@ -230,6 +236,32 @@ function bypassValidationRefusal(
   );
 }
 
+export interface CheckedDatabasePolicies {
+  readonly checked: DatabasePolicies;
+  readonly stored: StoredPoliciesValue;
+}
+
+/**
+ * Compares the policies a caller checked with the application space's marker, before the run's
+ * first operation, and gives the marker's stored `meta.policies` for the compare-and-swap that
+ * writes it.
+ */
+export async function checkDatabasePolicies(
+  markerOps: MarkerOperations,
+  checked: DatabasePolicies,
+  markerLocation: string,
+): Promise<Result<CheckedDatabasePolicies, MongoMigrationRunnerFailure>> {
+  const marker = await markerOps.readMarker(APP_SPACE_ID);
+  const comparison = compareMarkerDatabasePolicies(marker, checked);
+  if (comparison.kind === 'unreadable') {
+    throw errorMarkerPoliciesCorrupt({ why: comparison.why, space: APP_SPACE_ID, markerLocation });
+  }
+  if (comparison.kind === 'moved') {
+    return notOk(withDatabaseUnchanged(databasePoliciesMovedFailure(checked, comparison), true));
+  }
+  return ok({ checked, stored: { value: marker?.meta[DATABASE_POLICIES_META_KEY] } });
+}
+
 export class MongoMigrationRunner {
   constructor(private readonly deps: MongoRunnerDependencies) {}
 
@@ -272,24 +304,6 @@ export class MongoMigrationRunner {
 
     const markerCheck = this.ensureMarkerCompatibility(existingMarker, options.plan);
     if (markerCheck) return markerCheck;
-    if (
-      options.expectedDatabasePolicies !== undefined &&
-      !markerHoldsDatabasePolicies(existingMarker, options.expectedDatabasePolicies)
-    ) {
-      return runnerFailure(
-        'MIGRATION.MARKER_CAS_FAILURE',
-        'Marker was modified by another process during migration execution.',
-        {
-          why: "The database's policies changed after this run checked them. Run the command again to check them anew.",
-          meta: {
-            space,
-            expectedStorageHash: options.plan.origin?.storageHash ?? null,
-            foundStorageHash: existingMarker?.storageHash ?? null,
-            destinationStorageHash: options.plan.destination.storageHash,
-          },
-        },
-      );
-    }
 
     const checks = options.executionChecks;
     const runPrechecks = checks?.prechecks !== false;
@@ -442,12 +456,18 @@ export class MongoMigrationRunner {
             invariants: incomingInvariants,
             ...ifDefined('databasePolicies', options.databasePolicies),
           },
-          options.expectedDatabasePolicies === undefined
-            ? undefined
-            : { recorded: existingMarker.meta[DATABASE_POLICIES_META_KEY] },
+          options.checkedPolicies?.stored,
         );
         if (!updated) {
           const found = await markerOps.readMarker(space);
+          const policies = options.checkedPolicies;
+          const comparison =
+            policies !== undefined && found?.storageHash === existingMarker.storageHash
+              ? compareMarkerDatabasePolicies(found, policies.checked)
+              : undefined;
+          if (comparison?.kind === 'moved' && policies !== undefined) {
+            return notOk(databasePoliciesMovedFailure(policies.checked, comparison));
+          }
           return runnerFailure(
             'MIGRATION.MARKER_CAS_FAILURE',
             'Marker was modified by another process during migration execution.',

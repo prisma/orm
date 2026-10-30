@@ -771,12 +771,6 @@ export interface MigrationRunnerPerSpaceOptions<
   readonly policy: MigrationOperationPolicy;
   /** When set, the marker update at the end of the run records these as the database's policies. */
   readonly databasePolicies?: DatabasePolicies;
-  /**
-   * The database's policies as the caller saw them when it checked the run. The runner compares
-   * them with the marker it reads under its lock, and fails the run as a concurrent change when
-   * they differ.
-   */
-  readonly expectedDatabasePolicies?: DatabasePolicies;
   readonly executionChecks?: MigrationRunnerExecutionChecks;
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>;
   /**
@@ -825,6 +819,12 @@ export interface MigrationRunner<
   execute(options: {
     readonly driver: ControlDriverInstance<TFamilyId, TTargetId>;
     readonly perSpaceOptions: ReadonlyArray<MigrationRunnerPerSpaceOptions<TFamilyId, TTargetId>>;
+    /**
+     * The database's policies as the caller saw them when it checked the run. Once it holds its
+     * lock, and before it applies the first space, the runner compares them with the application
+     * space's marker and fails the run as a concurrent change when they differ.
+     */
+    readonly expectedDatabasePolicies?: DatabasePolicies;
   }): Promise<MigrationRunnerResult>;
 }
 

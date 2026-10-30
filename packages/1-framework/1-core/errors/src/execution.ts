@@ -95,6 +95,29 @@ export function errorMarkerRowCorrupt(options: {
 }
 
 /**
+ * The application space's marker row records policies that cannot be read. Deleting the row would
+ * drop the policies and the invariants it records, so the advice keeps it.
+ */
+export function errorMarkerPoliciesCorrupt(options: {
+  readonly why: string;
+  readonly space: string;
+  readonly markerLocation: string;
+}): CliStructuredError {
+  const advice =
+    'Ask whoever owns this database to correct meta.policies in the marker row; do not delete the row.';
+  return new CliStructuredError(
+    'CONTRACT.MARKER_ROW_CORRUPT',
+    'Marker row is corrupt or incompatible',
+    {
+      why: options.why,
+      fix: `${advice} The ${options.markerLocation} row for space "${options.space}" also records the database's contract and invariants.`,
+      nextActions: [{ kind: 'user-choice', label: advice }],
+      meta: { space: options.space },
+    },
+  );
+}
+
+/**
  * Driver-level failure while reading the contract marker table.
  */
 export function errorMarkerReadFailed(options: {

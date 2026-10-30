@@ -2,8 +2,8 @@ import type { ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract
 import type {
   ControlAdapterInstance,
   ControlStack,
-  InsertedMarker,
   MarkerDestination,
+  MarkerInsert,
 } from '@internal/framework-components/control';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import type {
@@ -105,7 +105,7 @@ export interface SqlControlAdapter<TTarget extends string = string>
   insertMarker(
     driver: SqlControlDriverInstance<TTarget>,
     space: string,
-    destination: InsertedMarker,
+    destination: MarkerInsert,
   ): Promise<void>;
 
   /**

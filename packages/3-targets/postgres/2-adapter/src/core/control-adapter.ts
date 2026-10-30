@@ -30,8 +30,8 @@ import {
 import {
   APP_SPACE_ID,
   DATABASE_POLICIES_META_KEY,
-  type InsertedMarker,
   type MarkerDestination,
+  type MarkerInsert,
   type SchemaNodeRef,
   storedDatabasePolicies,
 } from '@internal/framework-components/control';
@@ -461,7 +461,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   async insertMarker(
     driver: SqlControlDriverInstance<'postgres'>,
     space: string,
-    destination: InsertedMarker,
+    destination: MarkerInsert,
   ): Promise<void> {
     await execute(
       (query) => this.lower(query, { contract: undefined }),

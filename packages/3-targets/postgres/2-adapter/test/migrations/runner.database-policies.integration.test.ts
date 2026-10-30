@@ -70,8 +70,11 @@ describe('PostgresMigrationRunner database policies', { concurrent: false }, () 
       readonly plan: ReturnType<typeof createMigrationPlan<PostgresPlanTargetDetails>>;
       readonly migrationEdges: readonly AggregateMigrationEdgeRef[];
       readonly databasePolicies?: DatabasePolicies;
-      readonly expectedDatabasePolicies?: DatabasePolicies;
     }>,
+    options: {
+      readonly expectedDatabasePolicies?: DatabasePolicies;
+      readonly onOperationStart?: (operation: { readonly id: string }) => void;
+    } = {},
   ): Promise<MigrationRunnerResult> {
     return postgresTargetDescriptor.createRunner(familyInstance).execute({
       driver,
@@ -81,8 +84,15 @@ describe('PostgresMigrationRunner database policies', { concurrent: false }, () 
         destinationContract: contract,
         policy: INIT_ADDITIVE_POLICY,
         frameworkComponents,
+        ...ifDefined(
+          'callbacks',
+          options.onOperationStart === undefined
+            ? undefined
+            : { onOperationStart: options.onOperationStart },
+        ),
         ...entry,
       })),
+      ...ifDefined('expectedDatabasePolicies', options.expectedDatabasePolicies),
     });
   }
 
@@ -233,28 +243,80 @@ describe('PostgresMigrationRunner database policies', { concurrent: false }, () 
     });
   });
 
-  it('fails as a concurrent change when the policies moved after the caller checked them', {
+  it('fails as a concurrent change, before the first space runs an operation, when the policies moved after the caller checked them', {
     timeout: testTimeout,
   }, async () => {
     await applyContract(MIGRATE_ONLY);
+    const extension = createLedgerTestPlan<PostgresPlanTargetDetails>({
+      destinationHash: contract.storage.storageHash,
+      migrationEdges: [],
+      operations: [
+        {
+          id: 'table.extension_table',
+          label: 'Create the extension table',
+          operationClass: 'additive',
+          target: {
+            id: 'postgres',
+            details: { schema: 'public', objectType: 'table', name: 'extension_table' },
+          },
+          precheck: [],
+          execute: [{ description: 'create', sql: 'CREATE TABLE extension_table (id int)' }],
+          postcheck: [],
+        },
+      ],
+    });
+    const started: string[] = [];
 
-    const result = await run([
+    const result = await run(
+      [
+        { plan: extension, migrationEdges: synthEdges(extension) },
+        { plan: selfEdgePlan(['inv-a']), migrationEdges: [], databasePolicies: RECONCILE_ONLY },
+      ],
       {
-        plan: selfEdgePlan(['inv-a']),
-        migrationEdges: [],
-        databasePolicies: RECONCILE_ONLY,
         expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+        onOperationStart: (operation) => started.push(operation.id),
       },
-    ]);
+    );
 
     expect(result.assertNotOk()).toMatchObject({
       code: 'MIGRATION.MARKER_CAS_FAILURE',
-      why: "The database's policies changed after this run checked them. Run the command again to check them anew. The failed apply changed nothing.",
+      why: "The database's policies changed after this run checked them: change moved from migrate, reconcile to migrate; dataProtection.dataLoss moved from data-loss-with-consent to data-loss-forbidden; dataProtection.accessWidening moved from access-widening-with-consent to access-widening-forbidden. Run the command again to check them anew. The failed apply changed nothing.",
+      meta: {
+        reason: 'databasePolicies',
+        checkedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+        foundDatabasePolicies: MIGRATE_ONLY,
+      },
     });
     const marker = await familyInstance.readMarker({ driver, space: APP_SPACE_ID });
-    expect({ invariants: marker?.invariants, policies: marker?.meta['policies'] }).toEqual({
-      invariants: [],
-      policies: MIGRATE_ONLY,
+    expect({
+      started,
+      invariants: marker?.invariants,
+      policies: marker?.meta['policies'],
+    }).toEqual({ started: [], invariants: [], policies: MIGRATE_ONLY });
+  });
+
+  it('reports policies it cannot read under the lock as a corrupt marker row, keeping the row', {
+    timeout: testTimeout,
+  }, async () => {
+    await applyContract();
+    await driver.query(
+      `UPDATE prisma_contract.marker SET meta = '{"policies": "strict"}'::jsonb WHERE space = $1`,
+      [APP_SPACE_ID],
+    );
+
+    await expect(
+      run([{ plan: selfEdgePlan(), migrationEdges: [] }], {
+        expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+      }),
+    ).rejects.toMatchObject({
+      code: 'CONTRACT.MARKER_ROW_CORRUPT',
+      nextActions: [
+        {
+          kind: 'user-choice',
+          label:
+            'Ask whoever owns this database to correct meta.policies in the marker row; do not delete the row.',
+        },
+      ],
     });
   });
 });

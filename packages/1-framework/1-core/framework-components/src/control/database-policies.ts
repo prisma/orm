@@ -6,6 +6,8 @@
 import type { ContractMarkerRecord } from '@internal/contract/types';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { type } from 'arktype';
+import { type MigrationRunnerFailure, migrationRunnerFailure } from './control-migration-types';
+import { APP_SPACE_ID } from './control-spaces';
 
 export const CHANGE_STRATEGIES = ['migrate', 'reconcile'] as const;
 export const DATA_LOSS_LEVELS = [
@@ -123,12 +125,7 @@ export function databasePoliciesOf(
   return ok(withDeclaredDatabasePolicies(DEFAULT_DATABASE_POLICIES, declared));
 }
 
-/** A setting of the policies, named by its key path in a ref's `policies`. */
-export type DatabasePolicySetting =
-  | 'change'
-  | 'dataProtection.dataLoss'
-  | 'dataProtection.accessWidening';
-
+/** A setting whose value differs between two sets of policies, named by its key path in a ref's `policies`. */
 export type DatabasePolicyDifference =
   | {
       readonly setting: 'change';
@@ -177,17 +174,73 @@ export function databasePolicyDifferences(
   return differences;
 }
 
+/** How the policies a marker records compare with those a caller checked. */
+export type MarkerDatabasePoliciesComparison =
+  | { readonly kind: 'held' }
+  | {
+      readonly kind: 'moved';
+      readonly found: DatabasePolicies;
+      /** Each setting that moved: `declared` is the value the caller checked, `inForce` the value the marker records now. */
+      readonly differences: readonly DatabasePolicyDifference[];
+    }
+  | { readonly kind: 'unreadable'; readonly why: string };
+
 /**
- * Whether `marker` records the policies `expected`, as a runner checks under its lock that the
- * policies a caller checked are still those in force. A marker whose policies cannot be read
- * does not hold them.
+ * Compares the policies `marker` records with `checked`, as a runner checks under its lock that the
+ * policies a caller checked are still those in force.
  */
-export function markerHoldsDatabasePolicies(
+export function compareMarkerDatabasePolicies(
   marker: ContractMarkerRecord | null | undefined,
-  expected: DatabasePolicies,
-): boolean {
+  checked: DatabasePolicies,
+): MarkerDatabasePoliciesComparison {
   const inForce = databasePoliciesOf(marker);
-  return inForce.ok && databasePolicyDifferences(expected, inForce.value).length === 0;
+  if (!inForce.ok) return { kind: 'unreadable', why: inForce.failure.why };
+  const differences = databasePolicyDifferences(checked, inForce.value);
+  return differences.length === 0
+    ? { kind: 'held' }
+    : { kind: 'moved', found: inForce.value, differences };
+}
+
+/** A policy setting's value as messages print it: change strategies comma-separated. */
+export function databasePolicyValueText(value: DatabasePolicyDifference['declared']): string {
+  return typeof value === 'string' ? value : value.join(', ');
+}
+
+/** Why the policies `actor` checked no longer hold: each setting that moved, from the value checked to the value now. */
+export function movedDatabasePoliciesWhy(
+  actor: string,
+  differences: readonly DatabasePolicyDifference[],
+): string {
+  const moved = differences
+    .map(
+      ({ setting, declared, inForce }) =>
+        `${setting} moved from ${databasePolicyValueText(declared)} to ${databasePolicyValueText(inForce)}`,
+    )
+    .join('; ');
+  return `The database's policies changed after ${actor} checked them: ${moved}.`;
+}
+
+/**
+ * `MIGRATION.MARKER_CAS_FAILURE` for a run whose checked policies moved before it changed anything:
+ * the meta carries the policies checked and found, not the marker's hashes.
+ */
+export function databasePoliciesMovedFailure(
+  checked: DatabasePolicies,
+  moved: Extract<MarkerDatabasePoliciesComparison, { readonly kind: 'moved' }>,
+): MigrationRunnerFailure & { readonly code: 'MIGRATION.MARKER_CAS_FAILURE' } {
+  return migrationRunnerFailure(
+    'MIGRATION.MARKER_CAS_FAILURE',
+    "The database's policies changed during the run",
+    {
+      why: `${movedDatabasePoliciesWhy('this run', moved.differences)} Run the command again to check them anew.`,
+      meta: {
+        reason: 'databasePolicies',
+        space: APP_SPACE_ID,
+        checkedDatabasePolicies: checked,
+        foundDatabasePolicies: moved.found,
+      },
+    },
+  );
 }
 
 /** The policies as a marker stores them under {@link DATABASE_POLICIES_META_KEY}: plain JSON. */

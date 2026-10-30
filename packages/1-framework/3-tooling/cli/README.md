@@ -819,11 +819,12 @@ interface ControlFamilyInstance {
       contract: Contract;
       expected: { storageHash: string; profileHash: string } | null;
     }[];
+    expectedDatabasePolicies?: DatabasePolicies;
   }): Promise<readonly SpaceSignature[]>;
 }
 ```
 
-`signSpaces` writes the marker of each space it is given with its contract's hashes, if the marker still holds `expected`, and returns one `SpaceSignature` per space: `{ status, space, contract }`, where `status` is `created`, `updated` (with `previous`, the hashes the marker held) or `unchanged`, or `{ status: 'conflict', space, contract, expected, found }` for a space whose marker no longer holds `expected` when it is read or when it is written. It does not verify; the command verifies every space first, and gives the spaces in the order `migrate` applies them, extension spaces first. The SQL family implements it through `SqlControlAdapter.withTransaction` and `SqlControlAdapter.lockMarker`, which takes the one lock the migration runner holds while it reads and writes markers, whatever the space. The Mongo family writes each marker on its own.
+`signSpaces` writes the marker of each space it is given with its contract's hashes, if the marker still holds `expected`, and returns one `SpaceSignature` per space: `{ status, space, contract }`, where `status` is `created`, `updated` (with `previous`, the hashes the marker held) or `unchanged`, or `{ status: 'conflict', reason: 'storageHash', space, contract, expected, found }` for a space whose marker no longer holds `expected` when it is read or when it is written. Given `expectedDatabasePolicies`, the policies the command checked, it compares them with the application space's marker before it writes any marker; when they no longer hold it signs nothing further and returns `{ status: 'conflict', reason: 'databasePolicies', space, contract, checked, comparison }` for the application space, and `db sign` then fails with `MIGRATION.MARKER_CAS_FAILURE`, naming each setting that moved. It does not verify; the command verifies every space first, and gives the spaces in the order `migrate` applies them, extension spaces first. The SQL family implements it through `SqlControlAdapter.withTransaction` and `SqlControlAdapter.lockMarker`, which takes the one lock the migration runner holds while it reads and writes markers, whatever the space. The Mongo family writes each marker on its own.
 
 ### `prisma db init`
 

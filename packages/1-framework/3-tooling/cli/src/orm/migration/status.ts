@@ -3,6 +3,7 @@ import type { ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract
 import {
   type DatabasePolicyDifference,
   databasePolicyDifferences,
+  databasePolicyValueText,
 } from '@internal/framework-components/control';
 import {
   type AggregateContractSpace,
@@ -64,7 +65,6 @@ import { createToneMigrationListStyler } from '../../utils/formatters/migration-
 import type { MigrationListEntry } from '../../utils/formatters/migration-list-types';
 import { toneDrawing } from '../../utils/formatters/tone-markup';
 import type { GlyphMode } from '../../utils/glyph-mode';
-import { databasePolicyValueText } from '../../utils/policy-errors';
 import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';

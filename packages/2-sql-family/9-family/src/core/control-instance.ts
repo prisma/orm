@@ -25,7 +25,8 @@ import type {
 } from '@internal/framework-components/control';
 import {
   APP_SPACE_ID,
-  markerHoldsDatabasePolicies,
+  compareMarkerDatabasePolicies,
+  type DatabasePolicies,
   SchemaTreeNode,
   sameMarkerHashes,
   VERIFY_CODE_HASH_MISMATCH,
@@ -585,16 +586,21 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     return contract;
   };
 
-  const signSpaceMarker = async (
-    controlAdapter: SqlControlAdapter<string>,
-    driver: SqlControlDriverInstance<string>,
-    { space, contract, expected, expectedDatabasePolicies }: SpaceToSign,
-  ): Promise<SpaceSignature> => {
+  const contractHashesOf = (contract: SpaceToSign['contract']): MarkerHashes => {
     const storageHash = contract.storage.storageHash;
     const profileHash =
       'profileHash' in contract && typeof contract.profileHash === 'string'
         ? contract.profileHash
         : storageHash;
+    return { storageHash, profileHash };
+  };
+
+  const signSpaceMarker = async (
+    controlAdapter: SqlControlAdapter<string>,
+    driver: SqlControlDriverInstance<string>,
+    { space, contract, expected }: SpaceToSign,
+  ): Promise<SpaceSignature> => {
+    const { storageHash, profileHash } = contractHashesOf(contract);
     const signed = { space, contract: { storageHash, profileHash } };
 
     const readHashes = async (): Promise<MarkerHashes | null> => {
@@ -603,14 +609,9 @@ export function createSqlFamilyInstance<TTargetId extends string>(
         ? null
         : { storageHash: marker.storageHash, profileHash: marker.profileHash };
     };
-    const marker = await controlAdapter.readMarker(driver, space);
-    const existing: MarkerHashes | null =
-      marker === null ? null : { storageHash: marker.storageHash, profileHash: marker.profileHash };
-    const policiesMoved =
-      expectedDatabasePolicies !== undefined &&
-      !markerHoldsDatabasePolicies(marker, expectedDatabasePolicies);
-    if (!sameMarkerHashes(existing, expected) || policiesMoved) {
-      return { ...signed, status: 'conflict', expected, found: existing };
+    const existing = await readHashes();
+    if (!sameMarkerHashes(existing, expected)) {
+      return { ...signed, status: 'conflict', reason: 'storageHash', expected, found: existing };
     }
     if (existing === null) {
       await controlAdapter.insertMarker(driver, space, { storageHash, profileHash });
@@ -627,6 +628,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
       return {
         ...signed,
         status: 'conflict',
+        reason: 'storageHash',
         expected,
         found: await readHashes(),
       };
@@ -634,9 +636,37 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     return { ...signed, status: 'updated', previous: existing };
   };
 
+  const databasePoliciesConflict = async (
+    controlAdapter: SqlControlAdapter<string>,
+    driver: SqlControlDriverInstance<string>,
+    spaces: readonly SpaceToSign[],
+    checked: DatabasePolicies,
+  ): Promise<SpaceSignature | undefined> => {
+    const comparison = compareMarkerDatabasePolicies(
+      await controlAdapter.readMarker(driver, APP_SPACE_ID),
+      checked,
+    );
+    if (comparison.kind === 'held') return undefined;
+    const app = spaces.find(({ space }) => space === APP_SPACE_ID);
+    if (app === undefined) {
+      throw new InternalError(
+        'signSpaces was given database policies without the application space',
+      );
+    }
+    return {
+      space: APP_SPACE_ID,
+      contract: contractHashesOf(app.contract),
+      status: 'conflict',
+      reason: 'databasePolicies',
+      checked,
+      comparison,
+    };
+  };
+
   const signSpaces = async (
     driver: SqlControlDriverInstance<string>,
     spaces: readonly SpaceToSign[],
+    expectedDatabasePolicies: DatabasePolicies | undefined,
   ): Promise<readonly SpaceSignature[]> => {
     const [first] = spaces;
     if (first === undefined) {
@@ -651,7 +681,16 @@ export function createSqlFamilyInstance<TTargetId extends string>(
         await driver.query(lowered.sql, lowered.params);
       }
     };
-    const writeMarkers = async () => {
+    const writeMarkers = async (): Promise<readonly SpaceSignature[]> => {
+      if (expectedDatabasePolicies !== undefined) {
+        const conflict = await databasePoliciesConflict(
+          controlAdapter,
+          driver,
+          spaces,
+          expectedDatabasePolicies,
+        );
+        if (conflict !== undefined) return [conflict];
+      }
       const signatures: SpaceSignature[] = [];
       for (const space of spaces) {
         signatures.push(await signSpaceMarker(controlAdapter, driver, space));
@@ -868,8 +907,9 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     async signSpaces(options: {
       readonly driver: SqlControlDriverInstance<string>;
       readonly spaces: readonly SpaceToSign[];
+      readonly expectedDatabasePolicies?: DatabasePolicies;
     }): Promise<readonly SpaceSignature[]> {
-      return signSpaces(options.driver, options.spaces);
+      return signSpaces(options.driver, options.spaces, options.expectedDatabasePolicies);
     },
     async readMarker(options: {
       readonly driver: SqlControlDriverInstance<string>;

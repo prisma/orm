@@ -60,8 +60,11 @@ describe('SqliteMigrationRunner database policies', { timeout: timeouts.database
       readonly plan: ReturnType<typeof createMigrationPlan<SqlitePlanTargetDetails>>;
       readonly migrationEdges: readonly AggregateMigrationEdgeRef[];
       readonly databasePolicies?: DatabasePolicies;
-      readonly expectedDatabasePolicies?: DatabasePolicies;
     }>,
+    options: {
+      readonly expectedDatabasePolicies?: DatabasePolicies;
+      readonly onOperationStart?: (operation: { readonly id: string }) => void;
+    } = {},
   ): Promise<MigrationRunnerResult> {
     return sqliteTargetDescriptor.createRunner(familyInstance).execute({
       driver,
@@ -72,8 +75,15 @@ describe('SqliteMigrationRunner database policies', { timeout: timeouts.database
         policy: INIT_ADDITIVE_POLICY,
         frameworkComponents,
         strictVerification: false,
+        ...ifDefined(
+          'callbacks',
+          options.onOperationStart === undefined
+            ? undefined
+            : { onOperationStart: options.onOperationStart },
+        ),
         ...entry,
       })),
+      ...ifDefined('expectedDatabasePolicies', options.expectedDatabasePolicies),
     });
   }
 
@@ -213,26 +223,50 @@ describe('SqliteMigrationRunner database policies', { timeout: timeouts.database
     });
   });
 
-  it('fails as a concurrent change when the policies moved after the caller checked them', async () => {
+  it('fails as a concurrent change, before the first space runs an operation, when the policies moved after the caller checked them', async () => {
     await applyContract(MIGRATE_ONLY);
+    const extension = createLedgerTestPlan({
+      destinationHash: contract.storage.storageHash,
+      migrationEdges: [],
+      operations: [
+        {
+          id: 'table.extension_table',
+          label: 'Create the extension table',
+          operationClass: 'additive',
+          target: { id: 'sqlite', details: { objectType: 'table', name: 'extension_table' } },
+          precheck: [],
+          execute: [{ description: 'create', sql: 'CREATE TABLE extension_table (id integer)' }],
+          postcheck: [],
+        },
+      ],
+    });
+    const started: string[] = [];
 
-    const result = await run([
+    const result = await run(
+      [
+        { plan: extension, migrationEdges: synthEdges(extension) },
+        { plan: selfEdgePlan(['inv-a']), migrationEdges: [], databasePolicies: RECONCILE_ONLY },
+      ],
       {
-        plan: selfEdgePlan(['inv-a']),
-        migrationEdges: [],
-        databasePolicies: RECONCILE_ONLY,
         expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+        onOperationStart: (operation) => started.push(operation.id),
       },
-    ]);
+    );
 
     expect(result.assertNotOk()).toMatchObject({
       code: 'MIGRATION.MARKER_CAS_FAILURE',
-      why: "The database's policies changed after this run checked them. Run the command again to check them anew. The failed apply changed nothing.",
+      why: "The database's policies changed after this run checked them: change moved from migrate, reconcile to migrate; dataProtection.dataLoss moved from data-loss-with-consent to data-loss-forbidden; dataProtection.accessWidening moved from access-widening-with-consent to access-widening-forbidden. Run the command again to check them anew. The failed apply changed nothing.",
+      meta: {
+        reason: 'databasePolicies',
+        checkedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+        foundDatabasePolicies: MIGRATE_ONLY,
+      },
     });
     const marker = await familyInstance.readMarker({ driver, space: APP_SPACE_ID });
-    expect({ invariants: marker?.invariants, policies: marker?.meta['policies'] }).toEqual({
-      invariants: [],
-      policies: MIGRATE_ONLY,
-    });
+    expect({
+      started,
+      invariants: marker?.invariants,
+      policies: marker?.meta['policies'],
+    }).toEqual({ started: [], invariants: [], policies: MIGRATE_ONLY });
   });
 });
