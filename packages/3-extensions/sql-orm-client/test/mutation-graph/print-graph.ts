@@ -9,12 +9,15 @@ import type {
 import { Delete } from '../../src/mutation-graph/delete';
 import type { Edge, NodeId } from '../../src/mutation-graph/edge';
 import { Find } from '../../src/mutation-graph/find';
+import { FindByKeys } from '../../src/mutation-graph/find-by-keys';
 import type { Graph } from '../../src/mutation-graph/graph';
 import { Insert } from '../../src/mutation-graph/insert';
 import { InsertChunked } from '../../src/mutation-graph/insert-chunked';
+import { InsertReportingKeys } from '../../src/mutation-graph/insert-reporting-keys';
 import type { Node } from '../../src/mutation-graph/node';
 import { Rows } from '../../src/mutation-graph/rows';
 import { Update } from '../../src/mutation-graph/update';
+import { Values } from '../../src/mutation-graph/values';
 import { printExpression } from './print-expression';
 
 type NodeNames = ReadonlyMap<NodeId, string>;
@@ -86,7 +89,32 @@ function printInsert(ast: InsertAst): string {
   return `Insert ${ast.table.name}${rows} on conflict${columns} ${action}`;
 }
 
+function printFindByKeys(node: FindByKeys): string {
+  const keys = node.keyColumns.map((column) => column.alias).join(', ');
+  const overrides = Object.entries(node.overrides).map(
+    ([column, value]) => `${column} = ${JSON.stringify(value)}`,
+  );
+  const changed = overrides.length === 0 ? '' : ` with ${overrides.join(', ')}`;
+  const missing = node.missing === undefined ? '' : ', every row';
+  return `${printFind(node.ast).replace('Find', 'FindByKeys')} by (${keys})${changed}${missing}`;
+}
+
+function printInsertReportingKeys(node: InsertReportingKeys): string {
+  const statements = node.asts.map(printInsert).join('; ');
+  const generated = node.generated === undefined ? '' : `, generated ${node.generated.column}`;
+  return `InsertReportingKeys ${statements} keys ${JSON.stringify(node.keys)}${generated}`;
+}
+
 function printNode(node: Node): string {
+  if (node instanceof FindByKeys) {
+    return printFindByKeys(node);
+  }
+  if (node instanceof InsertReportingKeys) {
+    return printInsertReportingKeys(node);
+  }
+  if (node instanceof Values) {
+    return `Values ${JSON.stringify(node.rows)}`;
+  }
   if (node instanceof Find) {
     return printFind(node.ast);
   }

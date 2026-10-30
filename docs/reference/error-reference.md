@@ -1054,7 +1054,7 @@ A method argument on the ORM client, or on the `sql()` / Mongo query-builder DSL
 
 ### ORM.CAPABILITY_MISSING
 
-The requested operation requires a contract capability the contract does not declare: the `returning` capability needed for mutations that read back the affected row (payload `capability`, `action`); or, on the `sql()` builder or an ORM collection, the flag a gated method or option needs, such as `postgres.distinctOn` for `distinctOn()`, `sql.forUpdate`, `sql.forShare`, `postgres.forNoKeyUpdate` or `postgres.forKeyShare` for the four row-locking methods (`forUpdate()`, `forNoKeyUpdate()`, `forShare()`, `forKeyShare()`), and `sql.lockOf`, `sql.lockNowait` or `sql.lockSkipLocked` for their `of`, `nowait` and `skipLocked` options; the ORM's four row-locking methods also need `sql.lockOf`, because the ORM has no `of` option and always renders `OF` the model's table (payload `method`, `capability`). Raised by the ORM client and the `sql()` builder.
+The requested operation requires a contract capability the contract does not declare: the `returning` capability for an MTI variant `createAll()`, or, without it, a write whose rows cannot be read back by key: a `create()` whose key column has a database default other than auto-increment, a `createAll()` of several rows whose keys the database generates, a `createAll()` with `onConflict: 'skip'`, or an `upsert()` whose update sets a conflict column or whose create leaves one out (payload `capability`, `action`); `insertOnConflictTarget` for `upsert()` when the create values can collide on another unique key, and for `onConflict: 'skip'` with `conflictOn`; or, on the `sql()` builder or an ORM collection, the flag a gated method or option needs, such as `postgres.distinctOn` for `distinctOn()`, `sql.forUpdate`, `sql.forShare`, `postgres.forNoKeyUpdate` or `postgres.forKeyShare` for the four row-locking methods (`forUpdate()`, `forNoKeyUpdate()`, `forShare()`, `forKeyShare()`), and `sql.lockOf`, `sql.lockNowait` or `sql.lockSkipLocked` for their `of`, `nowait` and `skipLocked` options; the ORM's four row-locking methods also need `sql.lockOf`, because the ORM has no `of` option and always renders `OF` the model's table (payload `method`, `capability`). Raised by the ORM client and the `sql()` builder.
 
 ### ORM.COLUMN_UNKNOWN
 
@@ -1092,6 +1092,10 @@ An `include()` usage is structurally invalid: the refinement callback returned s
 
 The include is well-formed but not supported in this position: scalar aggregations or `combine()` on a to-one relation (SQL), or including an embed relation / compound reference (Mongo; only reference relations can be included). Payload: `relation`, `kind`, `model`.
 
+### ORM.INSERT_ID_MISSING
+
+On a contract without the `returning` capability, an insert whose key the database generates reported no `insertId`, so the ORM cannot read the inserted row back. The driver reports the value for a one-row insert; a middleware that answers the insert's statement with an `intercept.onExecute` result of its own must report it too. The call fails inside its transaction, so the insert rolls back. Raised by `create()`, `createAll()` of one row, and nested creates. Payload: `model`, `column`, `affectedRows`.
+
 ### ORM.INTERCEPTED_RESULT_INVALID
 
 An `intercept.onActivity` handler answered an `orm-call` activity with a value of the wrong shape for its terminal method: not an array for `all()`, `createAll()`, `updateAll()`, `deleteAll()` or `groupBy().aggregate()`; not an object for `create()`, `upsert()`, `firstOrThrow()` or `aggregate()`; neither an object nor `null` for `first()`, `update()` or `delete()`; or not a number for `createAndCount()`, `updateAndCount()` or `deleteAndCount()`. The SQL ORM ends the call `failed` and returns nothing. Payload: `method`.
@@ -1110,7 +1114,7 @@ The Mongo ORM client was asked to operate on a model name that is not in the con
 
 ### ORM.MUTATION_ROW_MISSING
 
-A mutation that expected the database to return a row got none: `create()`/`upsert()` read-back, MTI base or variant INSERT, or a nested create. The Prisma-classic analogue of P2025. Payload: `operation`, `model`, `tableName`, `phase`.
+A mutation that expected the database to return a row got none: `create()`/`upsert()` read-back, MTI base or variant INSERT, or a nested create. On a contract without the `returning` capability, also raised inside the transaction, which then rolls back, when the `SELECT` that reads a created or upserted row back by key finds none, for example because an upsert collided on a unique index the contract does not list (`phase: 'read-back'`). The Prisma-classic analogue of P2025. Payload: `operation`, `model`, `tableName`, `phase`.
 
 ### ORM.OPERATION_UNSUPPORTED
 

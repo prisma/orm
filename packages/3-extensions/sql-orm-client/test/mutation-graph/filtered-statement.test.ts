@@ -87,7 +87,7 @@ describe.each([
     const node = make();
     const run = recordingRun([], 3);
 
-    expect(await node.execute({ filter: null }, run)).toBe(3);
+    expect(await node.execute({ filter: null }, run)).toEqual({ affectedRows: 3 });
     expect(run.executed).toEqual([node.ast]);
     expect(run.queried).toEqual([]);
   });

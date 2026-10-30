@@ -305,9 +305,27 @@ const added = await db.User.createAndCount(rows, {
 
 `createAll` yields only the rows the database inserted; `createAndCount` returns its count. A collision on a constraint other than the one `conflictOn` names is not skipped — it surfaces as a unique violation.
 
-The option needs the contract capability `insertOnConflictSkip`, and `insertOnConflictWithoutTarget` as well when `conflictOn` is omitted. A contract emitted before the adapters reported these keys is refused with `ORM.CAPABILITY_MISSING`; re-emit it. MTI variant collections refuse the option with `ORM.OPERATION_UNSUPPORTED`. `create()` does not take it.
+The option needs the contract capability `insertOnConflictSkip`, and also `insertOnConflictTarget` when `conflictOn` is given or `insertOnConflictWithoutTarget` when it is omitted. A contract emitted before the adapters reported these keys is refused with `ORM.CAPABILITY_MISSING`; re-emit it. Without `returning`, `createAll` refuses the option, because it reads the inserted rows back by key and would also find the existing row a skipped one collided with; `createAndCount` takes it. MTI variant collections refuse the option with `ORM.OPERATION_UNSUPPORTED`. `create()` does not take it.
 
 The optional `configure` callback may still be passed in second position when there are no options.
+
+## Writes without `RETURNING`
+
+The ORM chooses how to run each write from the contract's capabilities, before anything runs. When the contract reports `returning`, a write that returns rows is one statement with `RETURNING`. When it does not, as on MySQL, the write runs without `RETURNING` inside a transaction, and the ORM reads the rows back by their key with a `SELECT`:
+
+```ts
+const user = await db.User.create({ email: 'a@example.com', role: 'USER' });
+// INSERT INTO `User` (`email`, `role`) VALUES (?, ?)
+// SELECT … FROM `User` WHERE `User`.`id` IN (?)
+```
+
+- **`create`, `createAll`, nested creates:** the key is the values the client writes, from the call or a client-side default. A key column the client leaves out must be the auto-increment column: its value is the `insertId` the driver reports for a one-row insert, decoded with the column's codec. `create` is refused with `ORM.CAPABILITY_MISSING` when a key column the client leaves out has another database default, such as a UUID function, because the database does not report that value. `createAll` of several rows whose keys the database generates is refused the same way, because the database reports a generated value only for a one-row insert; `createAndCount` takes them. When the driver reports no `insertId` where one is needed, for example because a middleware answered the insert, the call fails with `ORM.INSERT_ID_MISSING` and the transaction rolls back.
+- **`update`:** finds the row's key, updates it, and reads it back by the key, or by the new key when the update sets a key column.
+- **`updateAll`:** selects the keys of the rows the filter matches, updates with the caller's filter, and reads the rows back by the selected keys. It takes no row lock, so a row another transaction changed between the two statements may be returned as it now is.
+- **`delete`, `deleteAll`:** select the rows, then delete with the same filter, and return the selected rows.
+- **`upsert`:** without `insertOnConflictTarget`, the database's conflict clause fires on any unique key. The ORM then allows `upsert` only when the contract shows the named columns are the only unique key the create values can collide on: every other primary key or unique constraint contains an auto-increment column the create values leave out. Otherwise it refuses with `ORM.CAPABILITY_MISSING`. It sends no conflict columns and reads the row back by the create's values for the conflict columns, so it also refuses an upsert whose update sets a conflict column or whose create leaves one out. When the read-back finds no row, for example because the insert collided on a unique index the contract does not list, the call fails with `ORM.MUTATION_ROW_MISSING` and the transaction rolls back.
+
+The count variants (`createAndCount`, `updateAndCount`, `deleteAndCount`) send one statement either way. MTI variant collections still need `returning` to create rows.
 
 ## Prepared row descriptions
 

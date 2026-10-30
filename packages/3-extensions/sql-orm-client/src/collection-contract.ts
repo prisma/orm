@@ -925,6 +925,18 @@ export function hasCompleteUniqueKey(
   );
 }
 
+/** Whether the database numbers the column itself, as an auto-increment column or SQLite's rowid alias. */
+export function isAutoIncrementColumn(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  tableName: string,
+  column: string,
+): boolean {
+  const columnDefault = storageTableForContract(contract, namespaceId, tableName).columns[column]
+    ?.default;
+  return columnDefault?.kind === 'function' && columnDefault.expression === 'autoincrement()';
+}
+
 export function assertReturningCapability(contract: Contract<SqlStorage>, action: string): void {
   if (hasContractCapability(contract, 'returning')) {
     return;
@@ -941,9 +953,11 @@ export function assertInsertConflictSkipCapability(
   targeted: boolean,
 ): void {
   requireCapability(contract, action, 'insertOnConflictSkip');
-  if (!targeted) {
-    requireCapability(contract, action, 'insertOnConflictWithoutTarget');
-  }
+  requireCapability(
+    contract,
+    action,
+    targeted ? 'insertOnConflictTarget' : 'insertOnConflictWithoutTarget',
+  );
 }
 
 function requireCapability(
