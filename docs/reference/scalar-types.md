@@ -62,7 +62,7 @@ A field the ORM fills, such as `temporal.CreatedAt` or `DateTime @onCreate(now()
 
 A contract written in Prisma 8 PSL and one built with the TypeScript builder get the same collection validator, derived from the contract. A contract read from a Prisma 6 schema (`prisma6Schema`) gets no validator, so there the codecs' checks on read and write are the only ones.
 
-The PSL names `Int`, `Float`, `Boolean` and `DateTime` are deprecated aliases of `Int32`, `Double`, `Bool` and `Date`; they report `PSL_DEPRECATED_SCALAR_NAME` as a warning and will be removed.
+The PSL names `Int`, `Float` and `Boolean` are deprecated aliases of `Int32`, `Double` and `Bool`; they report `PSL_DEPRECATED_SCALAR_NAME` as a warning and will be removed.
 
 One limitation to know about:
 
@@ -257,7 +257,7 @@ The PSL name on each target for a concept, and the Prisma 6/7 name a migrating s
 | decimal | `Decimal` | `Decimal`, `Numeric(p?, s?)` | `Decimal` (stored as text) | — | `Decimal128` |
 | boolean | `Boolean` | `Boolean` | — | — | `Bool` |
 | timestamp | `DateTime` | `DateTime` (a `TimestamptzJsDate(3)`) | `DateTime` (a `DatetimeJsDate`) | `DateTime` (a `DatetimeJsDate(3)`) | `DateTime` (a `DateJsDate`) |
-| calendar date | `DateTime @db.Date` | `Date` (a `DateString`) | `Date` (a `DateString`) | `Date` (a `DateString`) | `Date` (a `DateString`) |
+| calendar date | `DateTime @db.Date` (on MongoDB an instant; see below) | `Date` (a `DateString`) | `Date` (a `DateString`) | `Date` (a `DateString`) | `Date` (a `DateString`) |
 | time of day | `DateTime @db.Time` | `Time` (a `TimeString`) | `Time` (a `TimeString`) | `Time` (a `TimeString(6)`) | `Time` (a `TimeString`) |
 | duration | — | `Duration` (an `IntervalString`) | `Duration` (a `DurationString`) | `Duration` (a `DurationString`) | `Duration` (a `DurationString`) |
 | text | `String` | `String` | `String` | `String` | `String` |

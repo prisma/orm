@@ -889,7 +889,7 @@ An attribute or block argument is not written in a form its specification accept
 
 ### PSL_DEPRECATED_SCALAR_NAME
 
-A warning, not an error: a Mongo schema types a field with a deprecated scalar name, `Int`, `Float`, `Boolean` or `DateTime`: `Scalar type "<old>" is deprecated and will be removed; use "<new>".` Reported at the type through the contract source's `reportWarning`; `prisma contract emit` prints it and still writes the contract, which is the same as the new name gives, and the language server shows it with warning severity. Rename the type to `Int32`, `Double`, `Bool` or `Date`.
+A warning, not an error: a Mongo schema types a field with a deprecated scalar name, `Int`, `Float` or `Boolean`: `Scalar type "<old>" is deprecated and will be removed; use "<new>".` Reported at the type through the contract source's `reportWarning`; `prisma contract emit` prints it and still writes the contract, which is the same as the new name gives, and the language server shows it with warning severity. Rename the type to `Int32`, `Double` or `Bool`.
 
 ### PSL_UNRESOLVED_REFERENCE
 
