@@ -37,7 +37,7 @@
     "@repo/prisma-bin": "workspace:8.0.0-rc.22",
     "@repo/test-utils": "workspace:8.0.0-rc.22",
     "@repo/tsconfig": "workspace:8.0.0-rc.22",
-    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
