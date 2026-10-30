@@ -265,6 +265,29 @@ describe('planValueObjectFieldFills', () => {
       ]);
     });
 
+    it('fills a list of enum values and a list of value objects with an empty list', () => {
+      const result = plan({
+        from: { GeoPoint: GEO, Label: GEO },
+        to: {
+          GeoPoint: {
+            ...GEO,
+            colors: fieldWith({
+              valueSet: { ...valueObjectRef('Color', 'app'), entityKind: 'valueSet' },
+              many: { elementNullable: false },
+            }),
+            labels: { valueObject: 'Label', many: true },
+          },
+          Label: GEO,
+        },
+        unnamed: 'temporaryValue',
+      });
+
+      expect(fills(result).map(({ path, value }) => ({ path, value }))).toEqual([
+        { path: '$.colors', value: [] },
+        { path: '$.labels', value: [] },
+      ]);
+    });
+
     it.each([
       ['holds a value object', { valueObject: 'Label' }],
       [

@@ -92,18 +92,18 @@ function acceptedByDataType(
 }
 
 /**
- * The temporary value of a field, as JSON: an empty list for a list, and for a scalar the empty
+ * The temporary value of a field, as JSON: an empty list for any list, and for a scalar the empty
  * value of the JSON type its codec declares, when the codec's data type takes it. A field that
- * holds a value object or an enum value has none, since no one value stands for every object or
+ * holds one value object or one enum value has none, since no one value stands for every object or
  * member; nor does a scalar whose data type refuses the empty value, as a date refuses `""`.
  */
 function temporaryValueOf(
   field: ContractValueObjectField,
   types: TypeLookups,
 ): JsonValue | undefined {
+  if (field.many !== undefined && field.many !== false) return [];
   const { type } = field;
   if (type.kind !== 'scalar' || field.valueSet !== undefined) return undefined;
-  if (field.many !== undefined && field.many !== false) return [];
   const descriptor = types.codecLookup.descriptorFor(type.codecId);
   const jsonType = descriptor === undefined ? undefined : declaredJsonType(descriptor);
   const empty = jsonType === undefined ? undefined : TEMPORARY_JSON_VALUES[jsonType];
