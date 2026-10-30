@@ -505,9 +505,12 @@ export function createMigrateCommand(createClient: CreateControlClient) {
             ],
           },
           onProgress: controlProgressReporter(ctx.report),
-          ...ifDefined('refHash', refEntry?.hash),
-          ...(refEntry?.invariants === undefined ? {} : { refInvariants: refEntry.invariants }),
-          ...ifDefined('refName', target.refName),
+          ...ifDefined(
+            'ref',
+            refEntry === undefined
+              ? undefined
+              : { ...refEntry, ...ifDefined('name', target.refName) },
+          ),
         });
         if (!applied.ok) {
           return notOk(normalizeError(applied.failure));

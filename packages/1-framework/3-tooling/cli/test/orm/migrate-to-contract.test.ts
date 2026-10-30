@@ -288,9 +288,7 @@ describe('migrate --to reserved references and refs', () => {
     expect(run.exitCode).toBe(0);
     const migrateOptions = mocks.migrate.mock.calls[0]?.[0];
     expect(migrateOptions).toMatchObject({ contract: emitted });
-    expect(migrateOptions).not.toHaveProperty('refHash');
-    expect(migrateOptions).not.toHaveProperty('refInvariants');
-    expect(migrateOptions).not.toHaveProperty('refName');
+    expect(migrateOptions).not.toHaveProperty('ref');
   });
 
   it('resolves @db to the live marker so there is nothing to run', async () => {
@@ -313,14 +311,13 @@ describe('migrate --to reserved references and refs', () => {
     expect(run.exitCode).toBe(0);
     expect(mocks.migrate).toHaveBeenCalledWith(
       expect.objectContaining({
-        refHash: C1,
-        refInvariants: [],
+        ref: { hash: C1, invariants: [] },
         contract: expect.objectContaining({
           storage: expect.objectContaining({ storageHash: C1 }),
         }),
       }),
     );
-    expect(mocks.migrate.mock.calls[0]?.[0]).not.toHaveProperty('refName');
+    expect(mocks.migrate.mock.calls[0]?.[0]?.ref).not.toHaveProperty('name');
     expect(run.presented?.data).toMatchObject({
       ok: true,
       migrationsApplied: 0,
@@ -341,7 +338,9 @@ describe('migrate --to reserved references and refs', () => {
     });
 
     expect(run.exitCode).toBe(0);
-    expect(mocks.migrate).toHaveBeenCalledWith(expect.objectContaining({ refHash: EMPTY }));
+    expect(mocks.migrate).toHaveBeenCalledWith(
+      expect.objectContaining({ ref: { hash: EMPTY, invariants: [] } }),
+    );
   });
 
   it('passes the resolved ref name for a ref target', async () => {
@@ -354,7 +353,7 @@ describe('migrate --to reserved references and refs', () => {
 
     expect(run.exitCode).toBe(0);
     expect(mocks.migrate).toHaveBeenCalledWith(
-      expect.objectContaining({ refHash: C1, refName: 'prod' }),
+      expect.objectContaining({ ref: { name: 'prod', hash: C1, invariants: [] } }),
     );
   });
 

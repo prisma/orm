@@ -41,6 +41,7 @@ import type {
   MigrateSuccess,
   OnControlProgress,
   PerSpaceExecutionEntry,
+  TargetRef,
 } from '../types';
 import {
   type BuildAggregateInputs,
@@ -79,28 +80,10 @@ export interface ExecuteMigrateOptions<TFamilyId extends string, TTargetId exten
   readonly targetId: TTargetId;
   /** Content check for contract snapshots the aggregate loader resolves. */
   readonly verifySnapshotContent?: SnapshotContentVerifier;
-  /**
-   * Optional app-space ref override. When provided, the app space's
-   * graph-walk targets this hash instead of `space.headRef.hash`.
-   * Extensions are unaffected — they always walk to their own head.
-   */
-  readonly refHash?: string;
-  /**
-   * Required invariants attached to the user-supplied app-space ref.
-   * Threaded into the graph-walk's `required` calculation so the
-   * planner picks an invariant-bearing path and surfaces the
-   * required/satisfied set on the success envelope. When `refHash`
-   * is absent the file's `space.headRef.invariants` are used.
-   */
-  readonly refInvariants?: readonly string[];
-  /**
-   * Resolved name of the user-supplied app-space ref. Surfaces in
-   * `pathDecision.refName` and in `MIGRATION.NO_INVARIANT_PATH`
-   * error envelopes so diagnostics name what the user actually
-   * passed (`--ref prod`) instead of a synthetic placeholder.
-   * Ignored when `refHash` is absent.
-   */
-  readonly refName?: string;
+  /** The application space's target; see {@link MigrateOptions.ref}. */
+  readonly ref?: TargetRef;
+  /** See {@link MigrateOptions.permitPolicyChange}. */
+  readonly permitPolicyChange?: boolean;
   /** The command line the advice of a failure repeats. */
   readonly invocation: CliInvocation;
   readonly onProgress?: OnControlProgress;
@@ -143,9 +126,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     migrationsDir,
     extensions,
     targetId,
-    refHash,
-    refInvariants,
-    refName,
+    ref,
     onProgress,
   } = options;
 
@@ -165,16 +146,16 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
 
   const markerRows = await familyInstance.readAllMarkers({ driver });
 
-  // Plan every space via graph-walk. App space targets `refHash`
-  // when provided, otherwise its own head; extensions always walk
-  // to their own head ref.
+  // Plan every space via graph-walk. App space targets `ref` when
+  // provided, otherwise its own head; extensions always walk to their
+  // own head ref.
   const planned = await planEverySpace({
     aggregate,
     markers: markerRows,
     appTarget: {
-      hash: refHash ?? requireHeadRef(aggregate.app).hash,
-      invariants: refHash === undefined ? undefined : refInvariants,
-      refName,
+      hash: ref?.hash ?? requireHeadRef(aggregate.app).hash,
+      invariants: ref?.invariants,
+      refName: ref?.name,
     },
     storageNameOf: (operation) => familyInstance.storageNameOf(operation),
     migrationsDir,

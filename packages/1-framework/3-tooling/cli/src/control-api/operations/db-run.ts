@@ -83,6 +83,7 @@ import type {
   OnControlProgress,
   PerSpaceExecutionEntry,
   PlannerWarningsListener,
+  TargetRef,
 } from '../types';
 import {
   type ChangedStorageEntity,
@@ -164,6 +165,8 @@ export type ExecuteRunOptions<
         readonly answerQuestions: AnswerPlanQuestions;
         readonly acceptDataLoss: boolean;
         readonly acceptAccessChanges: boolean;
+        readonly ref?: TargetRef;
+        readonly permitPolicyChange: boolean;
       }
   );
 

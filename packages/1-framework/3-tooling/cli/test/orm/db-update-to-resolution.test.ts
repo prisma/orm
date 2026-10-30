@@ -4,6 +4,7 @@ import { writeContractSnapshot } from '@internal/migration-tools/contract-snapsh
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { formatMigrationDirName, writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
+import { writeRef } from '@internal/migration-tools/refs';
 import { ok } from '@internal/utils/result';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -300,5 +301,35 @@ describe('db update --to bundle resolution', () => {
       summary: 'Plan ready',
       timings: { total: expect.any(Number) },
     });
+  });
+
+  it('hands the client the whole ref --to names, and no ref for a migration name', async () => {
+    const { cwd, dirNext } = await setupFixture();
+    const policies = { change: ['migrate'] } as const;
+    await writeRef(join(cwd, 'migrations', 'app', 'refs'), 'production', {
+      hash: HASH_B,
+      invariants: [],
+      policies,
+    });
+    mocks.dbUpdate.mockResolvedValue(
+      ok({
+        ok: true,
+        mode: 'plan',
+        plan: { operations: [], preview: undefined },
+        destination: { storageHash: HASH_B },
+        appliedStatements: [],
+        dataLoss: [],
+        accessChanges: [],
+        summary: 'Plan ready',
+      }),
+    );
+
+    await harness(cwd).run(['db', 'update', '--to', 'production', '--dry-run', '--json'], { cwd });
+    await harness(cwd).run(['db', 'update', '--to', dirNext, '--dry-run', '--json'], { cwd });
+
+    expect(mocks.dbUpdate.mock.calls.map(([options]) => options.ref)).toEqual([
+      { name: 'production', hash: HASH_B, invariants: [], policies },
+      undefined,
+    ]);
   });
 });

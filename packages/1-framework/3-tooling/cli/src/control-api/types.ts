@@ -32,6 +32,7 @@ import type {
 } from '@internal/framework-components/control';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
 import type { AggregateMigrationEdgeRef } from '@internal/migration-tools/aggregate';
+import type { RefEntry } from '@internal/migration-tools/refs';
 import type { Result } from '@internal/utils/result';
 import type { CliStructuredError } from '../utils/cli-errors';
 import type { CliInvocation } from '../utils/printed-command';
@@ -241,6 +242,14 @@ export interface DbUpdateOptions extends PlannerWarningsListener {
   readonly acceptDataLoss?: boolean;
   /** Consents to every operation that would change who can read or write data, without asking. */
   readonly acceptAccessChanges?: boolean;
+  /**
+   * The application space's target, when `--to` named one: its hash, the invariants a path must
+   * provide and, for a ref, its name and the policies it declares. Without it the application space
+   * walks to the emitted contract. Extension spaces always walk to their own head.
+   */
+  readonly ref?: TargetRef;
+  /** Consents to writing the ref's declared policies into the database when they differ from those in force. */
+  readonly permitPolicyChange?: boolean;
   /**
    * On-disk migrations directory. Always required — every `db update`
    * routes through the per-space flow, which reads on-disk
@@ -624,6 +633,12 @@ export type EmitResult = Result<EmitSuccess, EmitFailure>;
 // ============================================================================
 
 /**
+ * A target `--to` named: a ref carries its `name`, and the policies it declares; a contract hash or
+ * the database's own contract carries neither.
+ */
+export type TargetRef = { readonly name?: string } & RefEntry;
+
+/**
  * Options for the aggregate-walking `migrate` operation.
  *
  * The control-api operation is responsible for: loading the
@@ -642,24 +657,13 @@ export interface MigrateOptions {
   /** Migrations root directory (`migrations/` under the project). */
   readonly migrationsDir: string;
   /**
-   * Optional app-space ref override. When provided, the app space's
-   * graph-walk targets this hash instead of `contract.storage.storageHash`.
-   * Extension spaces always walk to their own `headRef.hash`.
+   * The application space's target, when `--to` named one: its hash, the invariants a path must
+   * provide and, for a ref, its name and the policies it declares. Without it the application space
+   * walks to the emitted contract. Extension spaces always walk to their own head.
    */
-  readonly refHash?: string;
-  /**
-   * Required invariants on the user-supplied app-space ref. Threaded
-   * into the graph-walk's `required` calculation so the planner picks
-   * an invariant-bearing path. Ignored when `refHash` is absent.
-   */
-  readonly refInvariants?: readonly string[];
-  /**
-   * Resolved name of the user-supplied app-space ref (the literal the
-   * user passed to `--ref`). Decorates `pathDecision.refName` and any
-   * `MIGRATION.NO_INVARIANT_PATH` envelope raised during graph-walk.
-   * Ignored when `refHash` is absent.
-   */
-  readonly refName?: string;
+  readonly ref?: TargetRef;
+  /** Consents to writing the ref's declared policies into the database when they differ from those in force. */
+  readonly permitPolicyChange?: boolean;
   /**
    * Database connection. If provided, migrate will connect before executing.
    * If omitted, the client must already be connected.
@@ -979,9 +983,8 @@ export interface ControlClient {
    *
    * @param options.contract - The target contract to migrate to
    * @param options.migrationsDir - Root migrations directory (`migrations/` under the project)
-   * @param options.refHash - Optional app-space ref override hash
-   * @param options.refInvariants - Required invariants on the user-supplied ref
-   * @param options.refName - Resolved name of the user-supplied app-space ref
+   * @param options.ref - The application space's target, when `--to` named one
+   * @param options.permitPolicyChange - Consents to writing the ref's declared policies
    * @returns Result pattern: Ok with migration details, NotOk with failure details
    * @throws If not connected, target doesn't support migrations, or infrastructure failure
    */

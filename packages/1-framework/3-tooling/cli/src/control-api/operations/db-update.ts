@@ -13,7 +13,12 @@ import { errorStatementNeedsMigrationFile } from '../../utils/cli-errors';
 import type { CliInvocation } from '../../utils/printed-command';
 import type { AnswerPlanQuestions } from '../statements/plan-questions';
 import type { StatementText } from '../statements/statement-text';
-import type { DbUpdateResult, OnControlProgress, PlannerWarningsListener } from '../types';
+import type {
+  DbUpdateResult,
+  OnControlProgress,
+  PlannerWarningsListener,
+  TargetRef,
+} from '../types';
 import { executeRun } from './db-run';
 import { DB_UPDATE_POLICY } from './db-update-policy';
 
@@ -42,6 +47,10 @@ export interface ExecuteDbUpdateOptions<TFamilyId extends string, TTargetId exte
   readonly acceptDataLoss?: boolean;
   /** Consents to every operation that would change who can read or write data, without asking. */
   readonly acceptAccessChanges?: boolean;
+  /** See {@link DbUpdateOptions.ref}. */
+  readonly ref?: TargetRef;
+  /** See {@link DbUpdateOptions.permitPolicyChange}. */
+  readonly permitPolicyChange?: boolean;
   readonly migrationsDir: string;
   readonly targetId: TTargetId;
   readonly extensions?: ReadonlyArray<ControlExtensionDescriptor<TFamilyId, TTargetId>>;
@@ -86,6 +95,8 @@ export async function executeDbUpdate<TFamilyId extends string, TTargetId extend
     answerQuestions: options.answerQuestions,
     acceptDataLoss: options.acceptDataLoss ?? false,
     acceptAccessChanges: options.acceptAccessChanges ?? false,
+    ...ifDefined('ref', options.ref),
+    permitPolicyChange: options.permitPolicyChange ?? false,
     ...ifDefined('verifySnapshotContent', options.verifySnapshotContent),
     ...ifDefined('onPlannerWarnings', options.onPlannerWarnings),
     ...ifDefined('onProgress', options.onProgress),

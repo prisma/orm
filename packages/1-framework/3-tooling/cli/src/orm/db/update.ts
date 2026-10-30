@@ -406,6 +406,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           mode,
           migrationsDir,
           statements: [...renames, ...previewConsents],
+          ...ifDefined('ref', destination?.ref),
           answerQuestions: promptPlanQuestions(ctx.prompt, ctx.statements),
           invocation: { ...cliInvocation(ctx, args.flags.db), rerunArgs, statementArgs },
           onPlannerWarnings: plannerWarnings.onPlannerWarnings,
