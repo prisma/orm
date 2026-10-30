@@ -6,9 +6,11 @@ import {
   type ContractField,
   type ContractFieldType,
   type ContractModelBase,
+  type ContractValueObject,
   type ContractWithDomain,
   type StorageBase,
   valueObjectAt,
+  valueObjectsWithCoordinates,
 } from '@internal/contract/types';
 import type { CliStructuredError } from '@internal/errors/control';
 import {
@@ -19,6 +21,8 @@ import {
   modelDisplayName,
   modelStatementText,
   type ResolvedMigrationStatement,
+  type ValueObjectFieldCoordinate,
+  valueObjectFieldStatementText,
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ifDefined } from '@internal/utils/defined';
@@ -38,6 +42,7 @@ import {
 } from './parse-rename';
 import { statementFlag } from './statement-flag';
 import { ENTITY_WORDS, type StatementText } from './statement-text';
+import { variantValue } from './variants';
 
 /**
  * The origin contract statements resolve against, or where the command looked
@@ -107,7 +112,14 @@ interface EnumValueReading {
   readonly members: readonly string[];
 }
 
-type SideReading = ModelReading | FieldReading | EnumValueReading;
+interface ValueObjectFieldReading {
+  readonly entity: 'valueObjectField';
+  readonly coordinate: ValueObjectFieldCoordinate;
+  /** The fields of the value object on the side the reading is of. */
+  readonly fields: readonly string[];
+}
+
+type SideReading = ModelReading | FieldReading | EnumValueReading | ValueObjectFieldReading;
 
 interface FoundEnum {
   readonly namespaceId: string;
@@ -118,12 +130,23 @@ type EnumLookup =
   | ({ readonly kind: 'found' } & FoundEnum)
   | ({ readonly kind: 'missing' | 'refused' } & Refusal);
 
+interface FoundValueObject {
+  readonly namespaceId: string;
+  readonly valueObject: ContractValueObject;
+}
+
+type ValueObjectLookup =
+  | ({ readonly kind: 'found' } & FoundValueObject)
+  | ({ readonly kind: 'missing' | 'refused' } & Refusal);
+
 interface ResolutionState {
   readonly origin: NamedContract;
   readonly destination: NamedContract;
   readonly originOfRenamedModel: Map<string, ModelCoordinate>;
   /** The origin field of each renamed field, keyed by the field as the destination names it. */
   readonly originOfRenamedField: Map<string, FieldCoordinate>;
+  /** The origin field of each renamed value object field, keyed by the field as the destination names it. */
+  readonly originOfRenamedValueObjectField: Map<string, ValueObjectFieldCoordinate>;
   /** The origin id of each renamed namespace, keyed by its destination id. */
   readonly originOfRenamedNamespace: Map<string, string>;
   readonly renamedFrom: Set<string>;
@@ -134,6 +157,7 @@ interface ResolutionState {
 
 const NAMESPACE_RENAMES = 'namespace';
 const ENUM_VALUE_RENAMES = 'enumValue';
+const VALUE_OBJECT_FIELD_RENAMES = 'valueObjectField';
 const MODEL_RENAMES = 'model';
 const FIELD_RENAMES = 'field';
 const LISTED_LIMIT = 20;
@@ -168,6 +192,10 @@ function enumText(contract: NamedContract, namespaceId: string, name: string): s
 
 function qualifiedEnumValue(coordinate: EnumValueCoordinate): string {
   return `${displayName(coordinate.namespaceId, coordinate.enum)}.${coordinate.member}`;
+}
+
+function qualifiedValueObjectField(coordinate: ValueObjectFieldCoordinate): string {
+  return `${displayName(coordinate.namespaceId, coordinate.valueObject)}.${coordinate.field}`;
 }
 
 function listed(names: readonly string[]): string {
@@ -395,6 +423,68 @@ function declaresEnums(contract: NamedContract): boolean {
   );
 }
 
+function lookupValueObject(
+  contract: NamedContract,
+  namespaceId: string | undefined,
+  name: string,
+): ValueObjectLookup {
+  const storage = contract.contract.storage;
+  const declaring = Object.keys(storage.namespaces).flatMap((id) => {
+    if (namespaceId !== undefined && id !== namespaceId) return [];
+    const valueObject = valueObjectAt(storage, {
+      plane: 'storage',
+      namespaceId: id,
+      entityKind: 'valueObject',
+      entityName: name,
+    });
+    return valueObject === undefined ? [] : [{ namespaceId: id, valueObject }];
+  });
+  const [only] = declaring;
+  if (only !== undefined && declaring.length === 1) return { kind: 'found', ...only };
+  if (declaring.length > 1) {
+    const candidates = declaring.map(({ namespaceId: id }) => `${id}.${name}`).sort();
+    return {
+      kind: 'refused',
+      reason: `"${name}" is a value object in more than one namespace of the ${contract.name} contract (${listed(candidates)})`,
+      fix: `Name the value object with its namespace, for example ${candidates[0]}.`,
+    };
+  }
+  const within = namespaceId === undefined ? '' : ` in namespace "${namespaceId}"`;
+  return {
+    kind: 'missing',
+    ...missing(`the ${contract.name} contract has no value object "${name}"${within}`),
+  };
+}
+
+function readValueObjectField(
+  state: ResolutionState,
+  side: Side,
+  namespaceId: string | undefined,
+  name: string,
+  field: string,
+): Result<ValueObjectFieldReading, Refusal> {
+  const contract = side === 'old' ? state.origin : state.destination;
+  const renamedFrom =
+    side === 'old' && namespaceId !== undefined
+      ? state.originOfRenamedNamespace.get(namespaceId)
+      : undefined;
+  const lookup = lookupValueObject(contract, renamedFrom ?? namespaceId, name);
+  if (lookup.kind !== 'found') return notOk(lookup);
+  const fields = Object.keys(lookup.valueObject.fields);
+  if (!fields.includes(field)) {
+    return notOk(
+      missing(
+        `the ${contract.name} value object "${enumText(contract, lookup.namespaceId, name)}" has no field "${field}" (fields: ${listed(fields)})`,
+      ),
+    );
+  }
+  return ok({
+    entity: 'valueObjectField',
+    coordinate: { namespaceId: asNamespaceId(lookup.namespaceId), valueObject: name, field },
+    fields,
+  });
+}
+
 function readingText(reading: SideReading): string {
   switch (reading.entity) {
     case 'model':
@@ -403,6 +493,8 @@ function readingText(reading: SideReading): string {
       return `model "${reading.coordinate.model}" field "${reading.coordinate.field}"`;
     case 'enumValue':
       return `enum "${reading.coordinate.enum}" value "${reading.coordinate.member}"`;
+    case 'valueObjectField':
+      return `value object "${reading.coordinate.valueObject}" field "${reading.coordinate.field}"`;
   }
 }
 
@@ -414,6 +506,8 @@ function qualifiedReading(reading: SideReading): string {
       return qualifiedField(reading.coordinate);
     case 'enumValue':
       return qualifiedEnumValue(reading.coordinate);
+    case 'valueObjectField':
+      return qualifiedValueObjectField(reading.coordinate);
   }
 }
 
@@ -426,28 +520,38 @@ function readingContainer(reading: SideReading): string {
       return `model "${reading.coordinate.model}"`;
     case 'enumValue':
       return `enum "${reading.coordinate.enum}"`;
+    case 'valueObjectField':
+      return `value object "${reading.coordinate.valueObject}"`;
   }
 }
 
+function joinedAs(texts: readonly string[]): string {
+  return texts.length === 2
+    ? `both as ${texts[0]} and as ${texts[1]}`
+    : `as ${texts.slice(0, -1).join(', as ')} and as ${texts.at(-1)}`;
+}
+
 /**
- * An enum value reading beside the model and field readings of the same name: the one that
- * resolves, or a refusal naming each reading when more than one does.
+ * The enum value and value object field readings beside the model or field reading of the same
+ * name: the one that resolves, `primary`'s failure when none does, or a refusal naming each
+ * reading when more than one does.
  */
-function withEnumValueReading(
+function oneReading(
   text: string,
-  other: Result<SideReading, Refusal>,
-  enumValue: Result<EnumValueReading, Refusal>,
+  primary: Result<SideReading, Refusal>,
+  others: readonly Result<SideReading, Refusal>[],
 ): Result<SideReading, Refusal> {
-  if (!enumValue.ok) return other;
-  if (!other.ok) return enumValue;
-  const readings = [other.value, enumValue.value];
+  const readings = [primary, ...others].flatMap((reading) => (reading.ok ? [reading.value] : []));
+  const [only] = readings;
+  if (only === undefined) return primary;
+  if (readings.length === 1) return ok(only);
   const nameable = readings.filter((reading) => qualifiedReading(reading) !== text);
   const unnameable = readings.find((reading) => qualifiedReading(reading) === text);
   const written = nameable.map(
     (reading) => `${qualifiedReading(reading)} for the ${ENTITY_WORDS[reading.entity]}`,
   );
   return notOk({
-    reason: `"${text}" resolves both as ${readingText(other.value)} and as ${readingText(enumValue.value)}`,
+    reason: `"${text}" resolves ${joinedAs(readings.map(readingText))}`,
     fix:
       unnameable === undefined
         ? `Name it with its namespace: ${written.join(', ')}.`
@@ -577,9 +681,12 @@ function readSide(
     }
     const asField = qualified.ok || !dotted.ok ? qualified : dotted;
     const asEnumValue = readEnumValue(state, side, first, second, third);
-    if (asField.ok || asEnumValue.ok || !declaresEnums(contract)) {
-      return withEnumValueReading(segments.join('.'), asField, asEnumValue);
+    const asValueObjectField = readValueObjectField(state, side, first, second, third);
+    if (asField.ok || asEnumValue.ok || asValueObjectField.ok) {
+      return oneReading(segments.join('.'), asField, [asEnumValue, asValueObjectField]);
     }
+    if (containerNames(contract).valueObjects.has(second)) return asValueObjectField;
+    if (!declaresEnums(contract)) return asField;
     return notOk({
       ...missing(
         `"${segments.join('.')}" resolves neither as namespace.Model.field (${asField.failure.reason}) nor as namespace.Enum.value (${asEnumValue.failure.reason})`,
@@ -591,17 +698,23 @@ function readSide(
   const asModel = readModel(state, side, first, second);
   const asField = readField(state, side, undefined, first, second);
   const asEnumValue = readEnumValue(state, side, undefined, first, second);
+  const asValueObjectField = readValueObjectField(state, side, undefined, first, second);
   if (asModel.ok && asField.ok) {
     return notOk({
       reason: `"${first}.${second}" resolves both as namespace "${first}" model "${second}" and as model "${first}" field "${second}"`,
       fix: 'Write the field as namespace.Model.field if you mean the field.',
     });
   }
-  if (asModel.ok || asField.ok) {
-    return withEnumValueReading(`${first}.${second}`, asModel.ok ? asModel : asField, asEnumValue);
+  if (asModel.ok || asField.ok || asEnumValue.ok || asValueObjectField.ok) {
+    return oneReading(`${first}.${second}`, asModel.ok ? asModel : asField, [
+      asEnumValue,
+      asValueObjectField,
+    ]);
   }
-  if (asEnumValue.ok) return asEnumValue;
   const names = containerNames(contract);
+  if (names.valueObjects.has(first) && !names.namespaces.has(first) && !names.models.has(first)) {
+    return asValueObjectField;
+  }
   if (names.enums.has(first) && !names.namespaces.has(first) && !names.models.has(first)) {
     return asEnumValue;
   }
@@ -626,17 +739,23 @@ function readSide(
   });
 }
 
-/** The names a side's first segment can be: a namespace, a model, or an enum of the contract. */
+/** The names a side's first segment can be: a namespace, a model, an enum or a value object of the contract. */
 function containerNames(contract: NamedContract): {
   readonly namespaces: ReadonlySet<string>;
   readonly models: ReadonlySet<string>;
   readonly enums: ReadonlySet<string>;
+  readonly valueObjects: ReadonlySet<string>;
 } {
   const namespaces = Object.entries(contract.contract.domain.namespaces);
   return {
     namespaces: new Set(namespaces.flatMap(([id]) => (id === UNBOUND_NAMESPACE_ID ? [] : [id]))),
     models: new Set(namespaces.flatMap(([, namespace]) => Object.keys(namespace.models))),
     enums: new Set(namespaces.flatMap(([, namespace]) => Object.keys(enumsOf(namespace)))),
+    valueObjects: new Set(
+      valueObjectsWithCoordinates(contract.contract.storage).map(
+        ({ coordinate }) => coordinate.entityName,
+      ),
+    ),
   };
 }
 
@@ -938,13 +1057,118 @@ function resolveEnumValueRename(
   return ok({ kind: 'rename', entity: 'enumValue', from: from.coordinate, to: to.coordinate });
 }
 
+function resolveValueObjectFieldRename(
+  state: ResolutionState,
+  statement: ParsedRename,
+  from: ValueObjectFieldReading,
+  to: ValueObjectFieldReading,
+): Result<ResolvedMigrationStatement, CliStructuredError> {
+  const oldValueObject = enumText(
+    state.origin,
+    from.coordinate.namespaceId,
+    from.coordinate.valueObject,
+  );
+  const newValueObject = enumText(
+    state.destination,
+    to.coordinate.namespaceId,
+    to.coordinate.valueObject,
+  );
+  const toNamespaceInOrigin =
+    state.originOfRenamedNamespace.get(to.coordinate.namespaceId) ?? to.coordinate.namespaceId;
+  if (
+    from.coordinate.namespaceId !== toNamespaceInOrigin ||
+    from.coordinate.valueObject !== to.coordinate.valueObject
+  ) {
+    return notOk(
+      errorStatementInvalid(
+        statement,
+        `The old name is a field of value object "${oldValueObject}" and the new name a field of value object "${newValueObject}"; a field cannot move between value objects.`,
+        `Rename a field within one value object: --${statement.verb} ${statement.from.join('.')}:${statement.from.slice(0, -1).join('.')}.<new name>.`,
+      ),
+    );
+  }
+  const oldField = from.coordinate.field;
+  const newField = to.coordinate.field;
+  const fromKey = `${VALUE_OBJECT_FIELD_RENAMES}:${qualifiedValueObjectField(from.coordinate)}`;
+  const toKey = `${VALUE_OBJECT_FIELD_RENAMES}:${qualifiedValueObjectField(to.coordinate)}`;
+  if (state.renamedFrom.has(fromKey)) {
+    return notOk(
+      errorStatementInvalid(
+        statement,
+        `An earlier statement already renames "${qualifiedValueObjectField(from.coordinate)}".`,
+        REPEATED_NAME_FIX,
+      ),
+    );
+  }
+  if (state.renamedTo.has(toKey)) {
+    return notOk(
+      errorStatementInvalid(
+        statement,
+        `An earlier statement already renames a field to "${qualifiedValueObjectField(to.coordinate)}".`,
+        REPEATED_NAME_FIX,
+      ),
+    );
+  }
+  if (oldField === newField) {
+    return notOk(
+      errorStatementInvalid(
+        statement,
+        `The statement renames value object field "${qualifiedValueObjectField(from.coordinate)}" to itself.`,
+        `Leave out --${statement.verb} ${statement.text}.`,
+      ),
+    );
+  }
+  const newInOrigin = from.fields.includes(newField);
+  const oldInDestination = to.fields.includes(oldField);
+  if (newInOrigin && oldInDestination) {
+    return notOk(
+      swapRefusal(
+        statement,
+        'valueObjectField',
+        `${newValueObject}.${oldField}`,
+        `${newValueObject}.${newField}`,
+      ),
+    );
+  }
+  if (newInOrigin) {
+    return notOk(
+      errorStatementUnresolved(
+        statement,
+        `The field "${newField}" already exists in the origin value object "${oldValueObject}", so it cannot be the new name of a field.`,
+        CHECK_NAMES_FIX,
+      ),
+    );
+  }
+  if (oldInDestination) {
+    return notOk(
+      errorStatementUnresolved(
+        statement,
+        `The field "${oldField}" still exists in the destination value object "${newValueObject}", so it was not renamed.`,
+        CHECK_NAMES_FIX,
+      ),
+    );
+  }
+  state.renamedFrom.add(fromKey);
+  state.renamedTo.add(toKey);
+  state.originOfRenamedValueObjectField.set(
+    qualifiedValueObjectField(to.coordinate),
+    from.coordinate,
+  );
+  return ok({
+    kind: 'rename',
+    entity: 'valueObjectField',
+    from: from.coordinate,
+    to: to.coordinate,
+  });
+}
+
 /**
  * Two names that trade places: each is an old name and a new name, which one plan cannot do.
  * Statements resolve against contracts, so the swap takes three plans through a temporary name.
  */
 function swapRefusal(
   statement: ParsedRename,
-  entity: 'model' | 'field' | 'enumValue',
+  entity: 'model' | 'field' | 'enumValue' | 'valueObjectField',
   first: string,
   second: string,
 ): CliStructuredError {
@@ -1190,13 +1414,18 @@ function resolveStatement(
   const from = readSide(state, 'old', statement.from);
   if (!from.ok) return notOk(oldSideRefusal(state, statement, later, from.failure));
   const to = readSide(state, 'new', statement.to);
-  if (!to.ok && from.value.entity === 'enumValue' && statement.to.length === 1) {
-    const enumPart = statement.from.slice(0, -1).join('.');
+  if (
+    !to.ok &&
+    (from.value.entity === 'enumValue' || from.value.entity === 'valueObjectField') &&
+    statement.to.length === 1
+  ) {
+    const container = statement.from.slice(0, -1).join('.');
+    const word = from.value.entity === 'enumValue' ? 'enum' : 'value object';
     return notOk(
       errorStatementUnresolved(
         statement,
         sentence(to.failure.reason),
-        `Write the new name with its enum: --${statement.verb} ${statement.from.join('.')}:${enumPart}.${statement.to[0]}.`,
+        `Write the new name with its ${word}: --${statement.verb} ${statement.from.join('.')}:${container}.${statement.to[0]}.`,
       ),
     );
   }
@@ -1209,6 +1438,18 @@ function resolveStatement(
   }
   if (from.value.entity === 'enumValue' && to.value.entity === 'enumValue') {
     return resolveEnumValueRename(state, statement, from.value, to.value);
+  }
+  if (from.value.entity === 'valueObjectField' && to.value.entity === 'valueObjectField') {
+    return resolveValueObjectFieldRename(state, statement, from.value, to.value);
+  }
+  if (from.value.entity === 'valueObjectField' || to.value.entity === 'valueObjectField') {
+    return notOk(
+      errorStatementInvalid(
+        statement,
+        'The statement names a value object field on one side and something else on the other.',
+        'Rename a value object field to another field of the same value object, as ValueObject.field:ValueObject.<new name>.',
+      ),
+    );
   }
   if (from.value.entity === 'enumValue' || to.value.entity === 'enumValue') {
     return notOk(
@@ -1255,27 +1496,202 @@ function sameType(origin: ContractField, destination: ContractField): boolean {
 }
 
 /**
+ * A convert of a variant: the model must be a variant in both contracts, followed through a rename,
+ * and its discriminator value must have changed.
+ */
+function resolveVariantConvert(
+  state: ResolutionState,
+  statement: ParsedFieldStatement,
+  variant: FoundModel,
+): Result<ResolvedMigrationStatement, CliStructuredError> {
+  const flag = statementFlag(statement);
+  const refuse = (reason: string) =>
+    notOk(unresolved(statement, { reason, fix: `Leave out ${flag}.` }));
+  const shown = modelStatementText(state.destination.contract, variant.coordinate);
+  const key = `convert:${qualifiedModel(variant.coordinate)}`;
+  if (state.fieldStatements.has(key)) {
+    return notOk(
+      errorStatementInvalid(
+        statement,
+        `An earlier statement already converts "${shown}".`,
+        'Give each variant at most one --convert statement.',
+      ),
+    );
+  }
+  const counterpart = originCounterpart(state, variant.coordinate);
+  const from =
+    counterpart === undefined
+      ? undefined
+      : variantValue(state.origin.contract, counterpart.coordinate);
+  const to = variantValue(state.destination.contract, variant.coordinate);
+  if (from === undefined || to === undefined) {
+    return refuse(
+      `the model "${shown}" is not a variant in both contracts; a --convert statement names a field, or a variant whose discriminator value changed`,
+    );
+  }
+  if (from === to) {
+    return refuse(
+      `the variant "${shown}" has the discriminator value "${to}" in the origin and destination contracts, so it has no values to convert`,
+    );
+  }
+  state.fieldStatements.add(key);
+  return ok({ kind: 'convert', entity: 'model', model: variant.coordinate });
+}
+
+/** A convert with one name, which names a variant as the destination contract names it. */
+function resolveOneNameConvert(
+  state: ResolutionState,
+  statement: ParsedFieldStatement,
+  name: string,
+): Result<ResolvedMigrationStatement, CliStructuredError> {
+  const lookup = lookupModel(state.destination, undefined, name);
+  if (lookup.kind === 'found') return resolveVariantConvert(state, statement, lookup);
+  return notOk(
+    unresolved(statement, {
+      reason: lookup.reason,
+      fix:
+        lookup.kind === 'missing'
+          ? 'A --convert statement with one name names a variant as the destination contract names it, Variant or namespace.Variant. Names match exactly, including case.'
+          : lookup.fix,
+    }),
+  );
+}
+
+/**
+ * The variant a two-name convert reads as, `namespace.Variant`, when the destination has that
+ * model: `undefined` leaves the statement to the field reading, and a refusal names both readings
+ * when the field reading resolves too.
+ */
+function readNamespaceVariant(
+  state: ResolutionState,
+  statement: ParsedFieldStatement,
+  first: string,
+  second: string,
+): Result<FoundModel, CliStructuredError> | undefined {
+  const asVariant = lookupModel(state.destination, first, second);
+  if (asVariant.kind !== 'found') return undefined;
+  const asFieldModel = lookupModel(state.destination, undefined, first);
+  if (asFieldModel.kind !== 'found' || !hasField(asFieldModel.model, second)) return ok(asVariant);
+  const field = qualifiedField({ ...asFieldModel.coordinate, field: second });
+  return notOk(
+    unresolved(statement, {
+      reason: `"${statement.text}" reads both as variant "${qualifiedModel(asVariant.coordinate)}" and as field "${field}"`,
+      fix: `Write the field as namespace.Model.field if you mean the field: --convert ${field}.`,
+    }),
+  );
+}
+
+/**
+ * A backfill of a value object's field: the field must be required in the destination value object,
+ * and absent or optional in the origin one, under its origin name when a rename gave it a new one.
+ */
+function resolveValueObjectFieldBackfill(
+  state: ResolutionState,
+  statement: ParsedFieldStatement,
+  namespaceId: string | undefined,
+  name: string,
+  field: string,
+): Result<ResolvedMigrationStatement, CliStructuredError> {
+  const flag = statementFlag(statement);
+  const leaveOut = `Leave out ${flag}.`;
+  const refuse = (reason: string, fix: string = leaveOut) =>
+    notOk(unresolved(statement, { reason, fix }));
+  const destination = lookupValueObject(state.destination, namespaceId, name);
+  if (destination.kind !== 'found') return refuse(destination.reason, destination.fix);
+  const coordinate: ValueObjectFieldCoordinate = {
+    namespaceId: asNamespaceId(destination.namespaceId),
+    valueObject: name,
+    field,
+  };
+  const shown = valueObjectFieldStatementText(state.destination.contract, coordinate);
+  const destinationFields = destination.valueObject.fields;
+  const destinationField = Object.hasOwn(destinationFields, field)
+    ? destinationFields[field]
+    : undefined;
+  if (destinationField === undefined) {
+    return refuse(
+      `the destination value object "${enumText(state.destination, destination.namespaceId, name)}" has no field "${field}" (fields: ${listed(Object.keys(destinationFields))})`,
+      'A --backfill statement names the field as the destination contract names it. Names match exactly, including case.',
+    );
+  }
+  const key = `backfill:${qualifiedValueObjectField(coordinate)}`;
+  if (state.fieldStatements.has(key)) {
+    return notOk(
+      errorStatementInvalid(
+        statement,
+        `An earlier statement already backfills "${shown}".`,
+        'Give each field at most one --backfill statement.',
+      ),
+    );
+  }
+  if (destinationField.nullable) {
+    return refuse(
+      `the field "${shown}" is optional in the destination contract, so no existing value needs it`,
+      `${leaveOut} A --backfill statement fills a required field.`,
+    );
+  }
+  const originNamespace =
+    state.originOfRenamedNamespace.get(destination.namespaceId) ?? destination.namespaceId;
+  const origin = valueObjectAt(state.origin.contract.storage, {
+    plane: 'storage',
+    namespaceId: originNamespace,
+    entityKind: 'valueObject',
+    entityName: name,
+  });
+  if (origin === undefined) {
+    return refuse(
+      `the origin contract has no value object "${enumText(state.origin, originNamespace, name)}", so no existing value lacks the field`,
+    );
+  }
+  const originName =
+    state.originOfRenamedValueObjectField.get(qualifiedValueObjectField(coordinate))?.field ??
+    field;
+  const originField = Object.hasOwn(origin.fields, originName)
+    ? origin.fields[originName]
+    : undefined;
+  if (originField !== undefined && !originField.nullable) {
+    return refuse(
+      `the field "${shown}" is already required in the origin contract, so every existing value has it`,
+    );
+  }
+  state.fieldStatements.add(key);
+  return ok({ kind: 'backfill', entity: 'valueObjectField', field: coordinate });
+}
+
+/**
  * A convert or backfill statement names a field as the destination contract names it. A convert
  * needs the field in the origin contract, under its origin name when a rename gave it a new one,
- * with another type. A backfill needs the field required in the destination contract and, on a
- * model the origin has, either new or optional there.
+ * with another type; a convert with one name, or a two-name convert that reads as
+ * `namespace.Variant`, names a variant instead. A backfill needs the field required in the
+ * destination contract and, on a model the origin has, either new or optional there; a backfill
+ * whose first name is a value object names a field of the value object.
  */
 function resolveFieldStatement(
   state: ResolutionState,
   statement: ParsedFieldStatement,
 ): Result<ResolvedMigrationStatement, CliStructuredError> {
   const { verb } = statement;
-  const [namespaceId, modelName, field] =
-    statement.field.length === 3 ? statement.field : [undefined, ...statement.field];
+  const names = statement.field;
+  if (names.length === 1) return resolveOneNameConvert(state, statement, names[0]);
+  if (verb === 'convert' && names.length === 2) {
+    const variant = readNamespaceVariant(state, statement, names[0], names[1]);
+    if (variant !== undefined) {
+      return variant.ok ? resolveVariantConvert(state, statement, variant.value) : variant;
+    }
+  }
+  const [namespaceId, modelName, field] = names.length === 3 ? names : [undefined, ...names];
   const flag = statementFlag(statement);
   const leaveOut = `Leave out ${flag}.`;
   const refuse = (reason: string, fix: string = leaveOut) =>
     notOk(unresolved(statement, { reason, fix }));
   const destination = lookupModel(state.destination, namespaceId, modelName);
   if (destination.kind !== 'found') {
+    if (destination.valueObject !== undefined && verb === 'backfill') {
+      return resolveValueObjectFieldBackfill(state, statement, namespaceId, modelName, field);
+    }
     if (destination.valueObject !== undefined) {
       return refuse(
-        `"${destination.valueObject}" is a value object; a --${verb} statement names a field of a model`,
+        `"${destination.valueObject}" is a value object; a --${verb} statement names a field of a model or a variant`,
       );
     }
     return refuse(
@@ -1427,6 +1843,7 @@ export function resolveStatements(
     destination: { name: 'destination', contract: input.destination },
     originOfRenamedModel: new Map(),
     originOfRenamedField: new Map(),
+    originOfRenamedValueObjectField: new Map(),
     originOfRenamedNamespace: new Map(),
     renamedFrom: new Set(),
     renamedTo: new Set(),

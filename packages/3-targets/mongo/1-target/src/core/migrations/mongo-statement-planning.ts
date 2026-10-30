@@ -382,9 +382,19 @@ export function planStatements(input: {
                 LEAVE_OUT,
               ),
             }
-          : statement.entity === 'model'
-            ? planModelStatement(statement, label, schema, input)
-            : planFieldStatement(statement, label, renamedCollections, schema, input);
+          : statement.entity === 'valueObjectField'
+            ? {
+                kind: 'refused',
+                conflict: refused(
+                  statement,
+                  label,
+                  'MongoDB does not rename value object fields in this release',
+                  LEAVE_OUT,
+                ),
+              }
+            : statement.entity === 'model'
+              ? planModelStatement(statement, label, schema, input)
+              : planFieldStatement(statement, label, renamedCollections, schema, input);
     if (outcome.kind === 'refused') {
       conflicts.push(outcome.conflict);
       callOfStatement.push(undefined);

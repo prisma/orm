@@ -294,10 +294,13 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
         .flatMap(({ verb, text }) => (isStatementVerb(verb) ? [{ verb, text }] : []));
       const contradicted = renamedAndDeleted(given);
       if (contradicted !== undefined) return notOk(normalizeError(contradicted));
-      const needsMigrationFile = (['convert', 'backfill'] as const).flatMap((verb) =>
-        ctx.statements.take(verb),
+      const fieldStatements = (['convert', 'backfill'] as const).flatMap((verb) =>
+        ctx.statements.take(verb).map(({ text }) => ({ verb, text })),
       );
-      if (needsMigrationFile.length > 0) {
+      const cannotBeVariantConverts = fieldStatements.filter(
+        ({ verb, text }) => verb === 'backfill' || text.split('.').length === 3,
+      );
+      if (cannotBeVariantConverts.length > 0) {
         const databaseStorageHash = await databaseContractIfReachable({
           config: ctx.config,
           cwd: ctx.cwd,
@@ -309,15 +312,17 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           normalizeError(
             errorStatementNeedsMigrationFile(
               given,
+              cannotBeVariantConverts,
               cliInvocation(ctx, args.flags.db),
               databaseStorageHash,
             ),
           ),
         );
       }
-      const renames = ctx.statements
-        .take('rename')
-        .map(({ text }) => ({ verb: 'rename' as const, text }));
+      const planned = [
+        ...ctx.statements.take('rename').map(({ text }) => ({ verb: 'rename' as const, text })),
+        ...fieldStatements,
+      ];
       // A dry run asks nothing, so it takes the delete and allow values and the control API
       // checks each against the subjects an apply would ask about.
       const previewConsents = args.flags.dryRun
@@ -352,7 +357,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
             commandName: args.flags.dryRun ? 'db update --dry-run' : 'db update',
             to: args.flags.to,
             advanceRef: args.flags.advanceRef,
-            statements: [...renames, ...previewConsents, ...unansweredConsents(ctx.statements)],
+            statements: [...planned, ...previewConsents, ...unansweredConsents(ctx.statements)],
             canRunOffline: false,
           }),
       });
@@ -390,7 +395,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
 
         const plannerWarnings = plannerWarningsCollector(ctx.report);
         const statementArgs = [
-          ...renames,
+          ...planned,
           ...previewConsents,
           ...unansweredConsents(ctx.statements),
         ].map(statementFlag);
@@ -405,7 +410,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           contract: contractJson,
           mode,
           migrationsDir,
-          statements: [...renames, ...previewConsents],
+          statements: [...planned, ...previewConsents],
           answerQuestions: promptPlanQuestions(ctx.prompt, ctx.statements),
           invocation: { ...cliInvocation(ctx, args.flags.db), rerunArgs, statementArgs },
           onPlannerWarnings: plannerWarnings.onPlannerWarnings,
@@ -495,7 +500,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
             to: args.flags.to,
             dryRun: args.flags.dryRun,
             advanceRef: args.flags.advanceRef,
-            statements: [...renames, ...previewConsents],
+            statements: [...planned, ...previewConsents],
           }),
         ),
       );

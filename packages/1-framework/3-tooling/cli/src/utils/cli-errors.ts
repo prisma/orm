@@ -671,18 +671,19 @@ export function errorConvertAndDelete(field: string): ActionableCliError {
 const MIGRATION_PLAN_VERBS: readonly string[] = ['rename', 'delete', 'convert', 'backfill'];
 
 /**
- * `--convert` or `--backfill` statements were given to `db update`, which applies its plan
- * directly and so has no migration file whose slot the user could fill. `statements` are every
- * statement the user gave, in the order given: the `migration plan` command the error suggests
- * carries each one that command accepts, and starts from `databaseStorageHash`, the contract the
- * database is at, when it is known. Its commands repeat the `--config` of `invocation`.
+ * `refused`, `--convert` or `--backfill` statements that ask for code the user writes, were given
+ * to `db update`, which applies its plan directly and so has no migration file whose slot the user
+ * could fill. `statements` are every statement the user gave, in the order given: the `migration
+ * plan` command the error suggests carries each one that command accepts, and starts from
+ * `databaseStorageHash`, the contract the database is at, when it is known. Its commands repeat the
+ * `--config` of `invocation`.
  */
 export function errorStatementNeedsMigrationFile(
   statements: readonly StatementText[],
+  refused: readonly StatementText[],
   invocation: CliInvocation | undefined,
   databaseStorageHash?: string,
 ): ActionableCliError {
-  const refused = statements.filter(({ verb }) => verb === 'convert' || verb === 'backfill');
   const written = refused.map(({ verb, text }) => `"--${verb} ${text}"`);
   const listed =
     written.length === 1 ? written[0] : `${written.slice(0, -1).join(', ')} and ${written.at(-1)}`;

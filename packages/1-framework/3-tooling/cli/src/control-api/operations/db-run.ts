@@ -44,7 +44,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { join } from 'pathe';
-import { CliStructuredError } from '../../utils/cli-errors';
+import { CliStructuredError, errorStatementNeedsMigrationFile } from '../../utils/cli-errors';
 import { dbInitPlanningFailedError, dbInitRunnerFailureError } from '../../utils/db-init-failure';
 import { dbUpdateRunnerFailureError } from '../../utils/db-update-failure';
 import {
@@ -255,6 +255,18 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
   };
   const consentTexts = statementTexts.filter((statement) => !isPlannedStatement(statement));
   const firstResolved = resolveRenames(statementTexts);
+  const needsMigrationFile = statementsNeedingMigrationFile(statementTexts, firstResolved);
+  if (needsMigrationFile.length > 0) {
+    const markerHash = markerRows.get(aggregate.app.spaceId)?.storageHash;
+    throw errorStatementNeedsMigrationFile(
+      statementTexts,
+      needsMigrationFile,
+      options.invocation,
+      aggregate.app.packages.some(({ metadata }) => metadata.to === markerHash)
+        ? markerHash
+        : undefined,
+    );
+  }
 
   // 2a. Orphan-marker pre-flight: refuse to *apply* when a marker row
   // exists for a space that is not declared in the aggregate. Plan mode
@@ -851,4 +863,24 @@ function recordedDatabaseContract(
 ): string | undefined {
   const hash = markerRows.get(aggregate.app.spaceId)?.storageHash;
   return hash !== undefined && aggregate.app.graph().nodes.has(hash) ? hash : undefined;
+}
+
+/**
+ * The convert and backfill statements of `texts` that ask for code the user writes in a migration
+ * file: every one but a variant convert, which rewrites a stored value the contracts already give.
+ * `resolved` are the planned statements of `texts`, resolved in the order given.
+ */
+function statementsNeedingMigrationFile(
+  texts: readonly StatementText[],
+  resolved: readonly ResolvedMigrationStatement[],
+): readonly StatementText[] {
+  const planned = texts.filter(isPlannedStatement);
+  return planned.filter((_, index) => {
+    const statement = resolved[index];
+    return (
+      statement !== undefined &&
+      statement.kind !== 'rename' &&
+      !(statement.kind === 'convert' && statement.entity === 'model')
+    );
+  });
 }

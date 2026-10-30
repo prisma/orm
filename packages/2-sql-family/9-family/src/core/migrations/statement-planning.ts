@@ -464,6 +464,7 @@ class StatementPlanner<TCall extends CallWithCompanions> {
       case 'field':
         return this.#planField(statement);
       case 'enumValue':
+      case 'valueObjectField':
         return ok([]);
     }
   }
@@ -911,7 +912,7 @@ export function fieldStatementColumns(
 ): FieldStatementColumns {
   const columnsOf = (kind: 'convert' | 'backfill'): readonly StatementColumn[] =>
     statements.flatMap((statement) => {
-      if (statement.kind !== kind) return [];
+      if (statement.kind !== kind || statement.entity !== 'field') return [];
       const table = modelTable(contract, statement.field);
       const column = fieldColumn(contract, statement.field);
       return table === undefined || column === undefined
@@ -940,7 +941,9 @@ export function backfillOfDefaultedField(
   contract: Contract<SqlStorage>,
 ): SqlPlannerConflict | undefined {
   for (const statement of statements) {
-    if (statement.kind !== 'backfill' || fromContract === null) continue;
+    if (statement.kind !== 'backfill' || statement.entity !== 'field' || fromContract === null) {
+      continue;
+    }
     const originModel = sqlModelStorage(fromContract, statement.field);
     if (originModel === undefined || Object.hasOwn(originModel.fields, statement.field.field)) {
       continue;

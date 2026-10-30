@@ -67,6 +67,80 @@ describe('MongoMigrationPlanner, statements it refuses', () => {
     ]);
   });
 
+  it('refuses renaming a value object field', () => {
+    expect(
+      refusal(
+        plan({
+          from: profiles,
+          to: profiles,
+          schema: profilesSchema,
+          statements: [
+            {
+              kind: 'rename',
+              entity: 'valueObjectField',
+              from: { namespaceId: asNamespaceId('app'), valueObject: 'GeoPoint', field: 'lat' },
+              to: { namespaceId: asNamespaceId('app'), valueObject: 'GeoPoint', field: 'latitude' },
+            },
+          ],
+        }),
+      ),
+    ).toEqual([
+      {
+        kind: 'statementRefused',
+        summary:
+          'Cannot rename value object field "GeoPoint.lat" to "GeoPoint.latitude": MongoDB does not rename value object fields in this release',
+        why: 'Leave out this statement.',
+      },
+    ]);
+  });
+
+  it('refuses backfilling a value object field and converting a variant, one refusal each', () => {
+    const app = asNamespaceId('app');
+    expect([
+      refusal(
+        plan({
+          from: profiles,
+          to: profiles,
+          schema: profilesSchema,
+          statements: [
+            {
+              kind: 'backfill',
+              entity: 'valueObjectField',
+              field: { namespaceId: app, valueObject: 'GeoPoint', field: 'country' },
+            },
+          ],
+        }),
+      ),
+      refusal(
+        plan({
+          from: profiles,
+          to: profiles,
+          schema: profilesSchema,
+          statements: [
+            { kind: 'convert', entity: 'model', model: { namespaceId: app, model: 'Bug' } },
+          ],
+        }),
+      ),
+    ]).toEqual([
+      [
+        {
+          kind: 'statementRefused',
+          summary:
+            'MongoDB does not apply backfill statements in this release, so nothing was planned: backfill value object field "GeoPoint.country"',
+          why: 'MongoDB cannot carry out backfill statements in this release. Leave out the statement.',
+        },
+      ],
+      [
+        {
+          kind: 'statementRefused',
+          summary:
+            'MongoDB does not apply convert statements in this release, so nothing was planned: convert model "Bug"',
+          why: 'MongoDB cannot carry out convert statements in this release. Leave out the statement.',
+        },
+      ],
+    ]);
+  });
+
   it('refuses renaming _id', () => {
     const to = contract(
       'to',

@@ -14,6 +14,9 @@ interface ModelSpec {
   readonly fields?: readonly string[];
   readonly relations?: readonly string[];
   readonly base?: string;
+  /** The discriminator field of a base model, and each variant by its discriminator value. */
+  readonly discriminator?: string;
+  readonly variants?: Readonly<Record<string, string>>;
   /** The field's codec or the value object of its namespace it holds, and whether it is optional, for a field `fields` lists; text and required otherwise. */
   readonly fieldTypes?: Readonly<
     Record<
@@ -25,6 +28,7 @@ interface ModelSpec {
 
 interface NamespaceSpec {
   readonly models?: Record<string, ModelSpec>;
+  /** Each value object's field names; a name ending in `?` is an optional field. */
   readonly valueObjects?: Record<string, readonly string[]>;
   /** Each enum's member names; a member stores its name in lower case. */
   readonly enums?: Record<string, readonly string[]>;
@@ -75,7 +79,18 @@ function modelOf(namespaceId: string, spec: ModelSpec): ContractModelBase {
     fields: fieldsOf(namespaceId, spec.fields ?? [], spec.fieldTypes),
     relations: Object.fromEntries((spec.relations ?? []).map((name) => [name, relation])),
     storage: {},
-    ...(spec.base !== undefined ? { base: crossRef(spec.base) } : {}),
+    ...(spec.base !== undefined ? { base: crossRef(spec.base, namespaceId) } : {}),
+    ...(spec.discriminator !== undefined ? { discriminator: { field: spec.discriminator } } : {}),
+    ...(spec.variants !== undefined
+      ? {
+          variants: Object.fromEntries(
+            Object.entries(spec.variants).map(([value, model]) => [
+              value,
+              crossRef(model, namespaceId),
+            ]),
+          ),
+        }
+      : {}),
   };
 }
 
@@ -83,8 +98,8 @@ function valueObjectOf(fields: readonly string[]): ContractValueObject {
   return {
     fields: Object.fromEntries(
       fields.map((name) => [
-        name,
-        { nullable: false, type: { kind: 'scalar', codecId: 'test/text@1' } },
+        name.replace(/\?$/, ''),
+        { nullable: name.endsWith('?'), type: { kind: 'scalar', codecId: 'test/text@1' } },
       ]),
     ),
   };

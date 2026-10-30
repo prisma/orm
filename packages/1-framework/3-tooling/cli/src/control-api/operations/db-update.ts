@@ -9,7 +9,6 @@ import type {
 } from '@internal/framework-components/control';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import { ifDefined } from '@internal/utils/defined';
-import { errorStatementNeedsMigrationFile } from '../../utils/cli-errors';
 import type { CliInvocation } from '../../utils/printed-command';
 import type { AnswerPlanQuestions } from '../statements/plan-questions';
 import type { StatementText } from '../statements/statement-text';
@@ -48,9 +47,10 @@ export interface ExecuteDbUpdateOptions<TFamilyId extends string, TTargetId exte
   /** Content check for contract snapshots the aggregate loader resolves. */
   readonly verifySnapshotContent?: SnapshotContentVerifier;
   /**
-   * The statements as the user wrote them, in the order given. A `rename` is planned; a `delete`
-   * or `allow` answers the question about the subject it names. A `convert` or `backfill` fails
-   * with `MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE`: `db update` has no migration file to fill.
+   * The statements as the user wrote them, in the order given. A `rename` and a convert of a
+   * variant are planned; a `delete` or `allow` answers the question about the subject it names.
+   * Any other `convert` or `backfill` fails, once resolved, with
+   * `MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE`: `db update` has no migration file to fill.
    */
   readonly statements?: readonly StatementText[];
   /** Asks the questions no statement answered; see {@link AnswerPlanQuestions}. */
@@ -64,10 +64,6 @@ export interface ExecuteDbUpdateOptions<TFamilyId extends string, TTargetId exte
 export async function executeDbUpdate<TFamilyId extends string, TTargetId extends string>(
   options: ExecuteDbUpdateOptions<TFamilyId, TTargetId>,
 ): Promise<DbUpdateResult> {
-  const statements = options.statements ?? [];
-  if (statements.some(({ verb }) => verb === 'convert' || verb === 'backfill')) {
-    throw errorStatementNeedsMigrationFile(statements, undefined);
-  }
   return (await executeRun<TFamilyId, TTargetId>({
     driver: options.driver,
     adapter: options.adapter,

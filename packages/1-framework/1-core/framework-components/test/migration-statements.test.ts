@@ -13,6 +13,7 @@ import {
   modelDisplayName,
   modelStatementText,
   type ResolvedMigrationStatement,
+  valueObjectFieldStatementText,
 } from '../src/control/migration-statements';
 import { UNBOUND_NAMESPACE_ID } from '../src/ir/namespace';
 
@@ -396,5 +397,147 @@ describe('enum value coordinates in JSON', () => {
     expect(enumValueCoordinateJson(named)).toEqual(named);
     expect(enumValueCoordinateFromJson(enumValueCoordinateJson(unbound))).toEqual(unbound);
     expect(enumValueCoordinateFromJson(named)).toEqual(named);
+  });
+});
+
+describe('a value object field rename', () => {
+  const statement: ResolvedMigrationStatement = {
+    kind: 'rename',
+    entity: 'valueObjectField',
+    from: { namespaceId: app, valueObject: 'GeoPoint', field: 'lat' },
+    to: { namespaceId: app, valueObject: 'GeoPoint', field: 'latitude' },
+  };
+
+  it('is described through its value object, with the namespace only when the contract has several', () => {
+    expect([
+      describeMigrationStatement(statement, contractWith({ app: [] }), contractWith({ app: [] })),
+      describeMigrationStatement(
+        statement,
+        contractWith({ app: [], billing: [] }),
+        contractWith({ app: [], billing: [] }),
+      ),
+    ]).toEqual([
+      'rename value object field "GeoPoint.lat" to "GeoPoint.latitude"',
+      'rename value object field "app.GeoPoint.lat" to "app.GeoPoint.latitude"',
+    ]);
+  });
+
+  it('is written to JSON with a coordinate on each side, without the unbound namespace', () => {
+    const unbound = asNamespaceId(UNBOUND_NAMESPACE_ID);
+    expect([
+      migrationStatementJson(statement),
+      migrationStatementJson({
+        kind: 'rename',
+        entity: 'valueObjectField',
+        from: { namespaceId: unbound, valueObject: 'GeoPoint', field: 'lat' },
+        to: { namespaceId: unbound, valueObject: 'GeoPoint', field: 'latitude' },
+      }),
+    ]).toEqual([
+      {
+        kind: 'rename',
+        entity: 'valueObjectField',
+        from: { namespaceId: 'app', valueObject: 'GeoPoint', field: 'lat' },
+        to: { namespaceId: 'app', valueObject: 'GeoPoint', field: 'latitude' },
+      },
+      {
+        kind: 'rename',
+        entity: 'valueObjectField',
+        from: { valueObject: 'GeoPoint', field: 'lat' },
+        to: { valueObject: 'GeoPoint', field: 'latitude' },
+      },
+    ]);
+  });
+
+  it('is a rename statement', () => {
+    expect(isRenameStatement(statement)).toBe(true);
+  });
+});
+
+describe('a value object member backfill', () => {
+  const statement: ResolvedMigrationStatement = {
+    kind: 'backfill',
+    entity: 'valueObjectField',
+    field: { namespaceId: app, valueObject: 'GeoPoint', field: 'country' },
+  };
+
+  it('is described and written to JSON through its value object', () => {
+    const contract = contractWith({ app: [] });
+    expect([
+      describeMigrationStatement(statement, contract, contract),
+      migrationStatementJson(statement),
+      isRenameStatement(statement),
+    ]).toEqual([
+      'backfill value object field "GeoPoint.country"',
+      {
+        kind: 'backfill',
+        entity: 'valueObjectField',
+        field: { namespaceId: 'app', valueObject: 'GeoPoint', field: 'country' },
+      },
+      false,
+    ]);
+  });
+});
+
+describe('a variant convert', () => {
+  const statement: ResolvedMigrationStatement = {
+    kind: 'convert',
+    entity: 'model',
+    model: { namespaceId: app, model: 'Bug' },
+  };
+
+  it('is described and written to JSON through its model', () => {
+    expect([
+      describeMigrationStatement(
+        statement,
+        contractWith({ app: ['Bug'] }),
+        contractWith({ app: ['Bug'] }),
+      ),
+      describeMigrationStatement(
+        statement,
+        contractWith({ app: ['Bug'], billing: [] }),
+        contractWith({ app: ['Bug'], billing: [] }),
+      ),
+      migrationStatementJson(statement),
+      migrationStatementJson({
+        ...statement,
+        model: { namespaceId: asNamespaceId(UNBOUND_NAMESPACE_ID), model: 'Bug' },
+      }),
+      isRenameStatement(statement),
+    ]).toEqual([
+      'convert model "Bug"',
+      'convert model "app.Bug"',
+      { kind: 'convert', entity: 'model', model: { namespaceId: 'app', model: 'Bug' } },
+      { kind: 'convert', entity: 'model', model: { model: 'Bug' } },
+      false,
+    ]);
+  });
+});
+
+describe('a value object field subject', () => {
+  const subject = {
+    kind: 'valueObjectField',
+    namespaceId: app,
+    valueObject: 'GeoPoint',
+    field: 'lat',
+  } as const;
+
+  it('has a key of its own and a JSON coordinate', () => {
+    expect(migrationSubjectKey(subject)).not.toBe(
+      migrationSubjectKey({ kind: 'field', namespaceId: app, model: 'GeoPoint', field: 'lat' }),
+    );
+    expect([
+      migrationSubjectJson(subject),
+      migrationSubjectJson({ ...subject, namespaceId: asNamespaceId(UNBOUND_NAMESPACE_ID) }),
+    ]).toEqual([
+      { kind: 'valueObjectField', namespaceId: 'app', valueObject: 'GeoPoint', field: 'lat' },
+      { kind: 'valueObjectField', valueObject: 'GeoPoint', field: 'lat' },
+    ]);
+  });
+
+  it('is named through its value object in statements', () => {
+    expect([
+      valueObjectFieldStatementText(contractWith({ app: [] }), subject),
+      valueObjectFieldStatementText(contractWith({ app: [], billing: [] }), subject),
+    ]).toEqual(['GeoPoint.lat', 'app.GeoPoint.lat']);
   });
 });

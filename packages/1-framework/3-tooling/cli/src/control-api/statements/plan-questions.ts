@@ -1,4 +1,4 @@
-import type { ContractWithDomain } from '@internal/contract/types';
+import { type ContractWithDomain, valueObjectAt } from '@internal/contract/types';
 import type { CliStructuredError } from '@internal/errors/control';
 import {
   type EnumValueCoordinate,
@@ -13,6 +13,8 @@ import {
   migrationSubjectKey,
   modelStatementText,
   type ResolvedMigrationStatement,
+  type ValueObjectFieldCoordinate,
+  valueObjectFieldStatementText,
 } from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -28,6 +30,7 @@ import type { ConsentVerb } from './parse-consent';
 import { resolveStatements } from './resolve-statements';
 import { statementFlag } from './statement-flag';
 import { ENTITY_WORDS, type StatementText } from './statement-text';
+import { variantValueChanged } from './variants';
 
 /** A verb a plan question accepts. */
 export type PlanQuestionVerb = 'rename' | 'convert' | ConsentVerb;
@@ -204,6 +207,41 @@ function renamedEnumValue(
   return undefined;
 }
 
+/** The fields of a value object in a contract's storage; `undefined` when the contract has no such value object. */
+function valueObjectFields(
+  contract: ContractWithDomain,
+  field: ValueObjectFieldCoordinate,
+): readonly string[] | undefined {
+  const valueObject = valueObjectAt(contract.storage, {
+    plane: 'storage',
+    namespaceId: field.namespaceId,
+    entityKind: 'valueObject',
+    entityName: field.valueObject,
+  });
+  return valueObject === undefined ? undefined : Object.keys(valueObject.fields);
+}
+
+/** A value object field under the namespace a namespace rename of `contracts` gives its value object, when the destination has the value object there. */
+function renamedValueObjectField(
+  field: ValueObjectFieldCoordinate,
+  contracts: StatementContracts,
+): ValueObjectFieldCoordinate | undefined {
+  for (const statement of resolvedRenames(contracts)) {
+    if (
+      statement.kind === 'rename' &&
+      statement.entity === 'namespace' &&
+      statement.from === field.namespaceId
+    ) {
+      const renamed = { ...field, namespaceId: statement.to };
+      return contracts.destination === undefined ||
+        valueObjectFields(contracts.destination, renamed) === undefined
+        ? undefined
+        : renamed;
+    }
+  }
+  return undefined;
+}
+
 /**
  * The subject as a statement names it: `Model` or `Model.field`, with the namespace when its
  * contract has several, or the storage name when no model stores what the operation is about. A
@@ -231,6 +269,12 @@ export function subjectText(subject: MigrationSubject, contracts: StatementContr
       return renamed === undefined || contracts.destination === undefined
         ? enumValueStatementText(contracts.origin, subject)
         : enumValueStatementText(contracts.destination, renamed);
+    }
+    case 'valueObjectField': {
+      const renamed = renamedValueObjectField(subject, contracts);
+      return renamed === undefined || contracts.destination === undefined
+        ? valueObjectFieldStatementText(contracts.origin, subject)
+        : valueObjectFieldStatementText(contracts.destination, renamed);
     }
     case 'storage':
       return subject.name;
@@ -269,6 +313,8 @@ function lossText(
         : `would lose the values of field "${text}"`;
     case 'enumValue':
       return `would lose enum value "${text}" from the data that holds it`;
+    case 'valueObjectField':
+      return `would lose the values of value object field "${text}"`;
     case 'storage':
       return originKnown
         ? `would lose the data in "${text}", which no model of the origin contract stores`
@@ -290,6 +336,15 @@ export const ORIGIN_SNAPSHOT_RECOVERY = [
 function sameCoordinate(statement: ResolvedMigrationStatement, subject: MigrationSubject): boolean {
   if (statement.kind !== 'rename' || statement.entity === 'namespace' || subject.kind === 'storage')
     return false;
+  if (statement.entity === 'valueObjectField' || subject.kind === 'valueObjectField') {
+    return (
+      statement.entity === 'valueObjectField' &&
+      subject.kind === 'valueObjectField' &&
+      statement.from.namespaceId === subject.namespaceId &&
+      statement.from.valueObject === subject.valueObject &&
+      statement.from.field === subject.field
+    );
+  }
   if (statement.entity === 'enumValue' || subject.kind === 'enumValue') {
     return (
       statement.entity === 'enumValue' &&
@@ -341,17 +396,43 @@ function onlyNewMember(
   return added.length === 1 ? added[0]?.name : undefined;
 }
 
+/**
+ * The field a value object field can only have been renamed to: the one field of the destination
+ * value object that the origin one does not have and no rename of the plan names.
+ */
+function onlyNewValueObjectField(
+  subject: ValueObjectFieldCoordinate,
+  contracts: StatementContracts & { readonly destination: ContractWithDomain },
+): string | undefined {
+  const field = renamedValueObjectField(subject, contracts) ?? subject;
+  const originFields = valueObjectFields(contracts.origin, subject) ?? [];
+  const renamedTo = new Set(
+    resolvedRenames(contracts).flatMap((statement) =>
+      statement.kind === 'rename' && statement.entity === 'valueObjectField'
+        ? [statement.to.field]
+        : [],
+    ),
+  );
+  const added = (valueObjectFields(contracts.destination, field) ?? []).filter(
+    (name) => !renamedTo.has(name) && !originFields.includes(name),
+  );
+  return added.length === 1 ? added[0] : undefined;
+}
+
 function renameForm(
   subject: MigrationSubject,
   text: string,
   contracts: StatementContracts & { readonly destination: ContractWithDomain },
 ): string {
-  if (subject.kind === 'field' || subject.kind === 'enumValue') {
-    const parent = text.slice(0, text.lastIndexOf('.'));
-    const only = subject.kind === 'enumValue' ? onlyNewMember(subject, contracts) : undefined;
-    return `${text}:${parent}.${only ?? '<new name>'}`;
-  }
-  return `${text}:<new name>`;
+  if (subject.kind === 'model' || subject.kind === 'storage') return `${text}:<new name>`;
+  const parent = text.slice(0, text.lastIndexOf('.'));
+  const only =
+    subject.kind === 'enumValue'
+      ? onlyNewMember(subject, contracts)
+      : subject.kind === 'valueObjectField'
+        ? onlyNewValueObjectField(subject, contracts)
+        : undefined;
+  return `${text}:${parent}.${only ?? '<new name>'}`;
 }
 
 /** The labels of the operations a question is about, as one phrase. */
@@ -379,6 +460,10 @@ function inDestination(
     const destinationEnum =
       contracts.destination.domain.namespaces[value.namespaceId]?.enum?.[value.enum];
     return destinationEnum?.members.some(({ name }) => name === subject.member) === true;
+  }
+  if (subject.kind === 'valueObjectField') {
+    const field = renamedValueObjectField(subject, contracts) ?? subject;
+    return valueObjectFields(contracts.destination, field)?.includes(subject.field) === true;
   }
   const model = renamedModel(subject, contracts) ?? subject;
   const destinationModel =
@@ -447,9 +532,26 @@ function missingFieldModel(
 }
 
 /**
+ * The variant a model subject is in the destination, under the name a rename of the plan gives it,
+ * when it is a variant in both contracts whose discriminator value changed: a convert rewrites its
+ * stored value instead of deleting its rows.
+ */
+function changedVariant(
+  subject: MigrationSubject,
+  contracts: StatementContracts & { readonly destination: ContractWithDomain },
+): ModelCoordinate | undefined {
+  if (subject.kind !== 'model') return undefined;
+  const model = renamedModel(subject, contracts) ?? subject;
+  return variantValueChanged(contracts.origin, subject, contracts.destination, model)
+    ? model
+    : undefined;
+}
+
+/**
  * The question for one operation that would lose data. A field whose type changes may be converted
  * where the command writes a migration to fill in; the convert names the field as the destination
- * names it. A model or field the destination no longer has, and no rename of the plan renamed, may
+ * names it. A variant whose discriminator value changed may be converted by any command, since
+ * the convert needs no code the user writes. A model or field the destination no longer has, and no rename of the plan renamed, may
  * be renamed instead of deleted; a rename is resolved against the two contracts after the plan's
  * other renames, and its old name must be the subject. Anything else, and data no model stores,
  * can only be deleted. A field whose model the destination names differently can be renamed only
@@ -503,6 +605,25 @@ export function dataLossQuestion(
         if (verb !== 'convert') return deleteNames(text);
         if (text !== convert) {
           return `convert names the field as the destination contract names it: ${statementFlag({ verb: 'convert', text: convert })}.`;
+        }
+        const resolved = resolvesWith({ verb: 'convert', text }, contracts);
+        return resolved.ok ? undefined : resolved.failure;
+      },
+    };
+  }
+  const variant = changedVariant(loss.subject, contracts);
+  if (variant !== undefined) {
+    const convert = modelStatementText(contracts.destination, variant);
+    return {
+      question,
+      ...ifDefined('keepDataWays', keepData?.ways),
+      subject,
+      verbs: ['convert', 'delete'],
+      forms: { convert },
+      validate: (verb, text) => {
+        if (verb !== 'convert') return deleteNames(text);
+        if (text !== convert) {
+          return `convert names the variant as the destination contract names it: ${statementFlag({ verb: 'convert', text: convert })}.`;
         }
         const resolved = resolvesWith({ verb: 'convert', text }, contracts);
         return resolved.ok ? undefined : resolved.failure;
@@ -824,7 +945,7 @@ export async function askPlanQuestions<TPlan extends PlannedQuestions, TFailure>
                 sameSubject(loss).flatMap((entry) =>
                   entry.keepDataEdit === undefined ? [] : [entry.keepDataEdit],
                 ),
-                loss.subject.kind === 'enumValue'
+                loss.subject.kind === 'enumValue' || loss.subject.kind === 'valueObjectField'
                   ? sameSubject(loss).map(({ label }) => label)
                   : [loss.label],
               ),
