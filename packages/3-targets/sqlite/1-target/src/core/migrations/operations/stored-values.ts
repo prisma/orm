@@ -106,10 +106,15 @@ function cascadeStep(
   cascade: CascadingForeignKey,
 ) {
   const referenced = cascade.columns
-    .map(
-      (column, index) =>
-        `${quoteIdentifier(tableName)}.${quoteIdentifier(cascade.references[index] ?? column)} = ${quoteIdentifier(cascade.table)}.${quoteIdentifier(column)}`,
-    )
+    .map((column, index) => {
+      const reference = cascade.references[index];
+      if (reference === undefined) {
+        throw new InternalError(
+          `Cascade of table "${cascade.table}" has no reference for column "${column}"`,
+        );
+      }
+      return `${quoteIdentifier(tableName)}.${quoteIdentifier(reference)} = ${quoteIdentifier(cascade.table)}.${quoteIdentifier(column)}`;
+    })
     .join(' AND ');
   return step(
     `delete the rows of "${cascade.table}" whose row of "${tableName}" holds value ${storedValueText(value)} in column "${columnName}", as their foreign key's cascade would`,

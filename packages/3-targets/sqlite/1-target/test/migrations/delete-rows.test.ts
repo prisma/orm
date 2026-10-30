@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createSqliteBuiltinCodecLookup } from '../../src/core/codec-registry';
 import { DeleteRowsCall } from '../../src/core/migrations/op-factory-call';
+import { deleteRows } from '../../src/core/migrations/operations/stored-values';
 
 describe('deleteRows', () => {
   it('deletes the rows that hold the value, and checks afterwards that none does', async () => {
@@ -43,6 +44,14 @@ describe('deleteRows', () => {
       'this.deleteRows({ table: "issue", column: "rank", value: "7", codecRef: { codecId: "sqlite/integer@1" } })',
       [],
     ]);
+  });
+
+  it('fails, rather than join on another column, when a cascade lacks a reference', () => {
+    expect(() =>
+      deleteRows('issue', 'kind', 'Bug', [
+        { table: 'bug', columns: ['id', 'x'], references: ['id'] },
+      ]),
+    ).toThrow('Cascade of table "bug" has no reference for column "x"');
   });
 
   it('refuses a cascade whose columns and references differ in number', () => {
