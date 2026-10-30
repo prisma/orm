@@ -32,6 +32,9 @@ PostgreSQL has the convenience types `DateTime`, `Date`, `Time` and `Duration` (
 - **MongoDB `Date`** is a calendar date stored as a BSON date at midnight UTC, the form MongoDB's Java and C# drivers write for a date without a time and Prisma 6's `@db.Date` stored. Its codecs refuse a BSON date that is not at midnight UTC. `Time` and `Duration` are BSON strings.
 - **MongoDB's `Date` changes concept at once,** as PostgreSQL's renames did. The upgrade instructions rewrite today's `Date` to `DateTime`. A missed rewrite fails on the first read of a value with a time of day, naming the field.
 - **MongoDB's TypeScript builder takes its helpers from the contributed type constructors,** like the SQL builder (ADR 241, ADR 275), before MongoDB gets its convenience types. Today its helpers are hard-coded in the family package and name the target's codec ids. That slice has its own design.
+- **The SQL family's `DefaultResolverColumn` carries `dataTypeId`.** SQLite stores every date and time type as text, so the column's type text cannot tell a `Date`'s `now()` (`date('now')`) from a `DateTime`'s. The value is already computed where the resolver is called.
+- **`@internal/type-implementations` is published inside `@prisma/orm-framework`** (ADR 314), so a process holds one copy and one fallback `Temporal`. Its place in the layering is unchanged.
+- **No slice changes `packages/1-framework`.** Code that MongoDB's builder shares with the SQL builder goes in a package placed by the layering docs, not in the framework.
 - **`as: temporal` rows** read `Temporal.Instant`, `Temporal.PlainDate` and `Temporal.PlainTime`, as on PostgreSQL. No default needs a global `Temporal`.
 - **`Duration`** is an ISO 8601 string with `as: string` only on SQLite, MySQL and MongoDB, none of which has an interval type.
 
