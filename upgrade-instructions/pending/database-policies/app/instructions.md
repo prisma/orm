@@ -2,7 +2,7 @@
 changes:
   - id: migrate-options-ref
     summary: |
-      The control client's `migrate` options (`MigrateOptions`, from `@prisma/orm-toolchain/cli/control-api`) no longer take `refHash`, `refInvariants` and `refName`. When the target is a ref, pass it whole as `ref`, with its name: `ref: { name, ...entry }` (`NamedRef`, from `@prisma/orm-toolchain/migration-tools/refs`); the application space walks to its hash by a path that provides its invariants, and its declared policies are checked. When the target is a contract hash, pass `targetHash` instead. `dbUpdate` takes the same `ref` for the ref `--to` named: its hash must be the storage hash of the `contract` you pass, or the call fails as an internal error. `dbSign` takes a required `invocation`, like `migrate`.
+      The control client's `migrate` options (`MigrateOptions`, from `@prisma/orm-toolchain/cli/control-api`) no longer take `refHash`, `refInvariants` and `refName`. Pass the target as `target` (`MigrateTarget`). For a ref, pass it whole with its name: `target: { kind: 'ref', ref: { name, ...entry } }` (`NamedRef`, from `@prisma/orm-toolchain/migration-tools/refs`); the application space walks to its hash by a path that provides its invariants, and its declared policies are checked. For a contract hash, pass `target: { kind: 'hash', hash }`. `dbUpdate` takes the same `ref` for the ref `--to` named: its hash must be the storage hash of the `contract` you pass, or the call fails as an internal error. `dbSign` takes a required `invocation`, like `migrate`.
     detection:
       glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs}"
       matches:
@@ -38,8 +38,8 @@ await client.migrate({
   contract,
   migrationsDir,
   invocation,
-  ref: { name: 'production', ...entry },
-  // or, for a contract hash rather than a ref: targetHash: hash,
+  target: { kind: 'ref', ref: { name: 'production', ...entry } },
+  // or, for a contract hash rather than a ref: target: { kind: 'hash', hash },
   // Only when the deploy should write the ref's declared policies into the database:
   permitPolicyChange: true,
 });

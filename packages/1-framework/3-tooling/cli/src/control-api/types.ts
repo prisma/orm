@@ -647,6 +647,15 @@ export type EmitResult = Result<EmitSuccess, EmitFailure>;
  * just resolves the descriptor surface (config, refs, contract
  * envelope, app-space migration packages) and hands the inputs in.
  */
+/**
+ * What `migrate` moves the application space to: the ref `--to` named, which it walks to by a path
+ * that provides the ref's invariants, checking and, with consent, recording the policies it
+ * declares; or a contract `--to` named by its hash (`@db` and `@empty` resolve to one).
+ */
+export type MigrateTarget =
+  | { readonly kind: 'ref'; readonly ref: NamedRef }
+  | { readonly kind: 'hash'; readonly hash: string };
+
 export interface MigrateOptions {
   /** The command line the advice of a failure repeats: its directory, `--config` and whether `--db` was given. */
   readonly invocation: CliInvocation;
@@ -655,16 +664,10 @@ export interface MigrateOptions {
   /** Migrations root directory (`migrations/` under the project). */
   readonly migrationsDir: string;
   /**
-   * The ref `--to` named: the application space walks to its hash, by a path that provides its
-   * invariants, and the run checks and, with consent, records the policies it declares.
+   * What the application space walks to. Without it the application space walks to the emitted
+   * contract. Extension spaces always walk to their own head.
    */
-  readonly ref?: NamedRef;
-  /**
-   * The application space's target when `--to` named a contract rather than a ref: a hash, `@db`
-   * or `@empty`. Without it or `ref` the application space walks to the emitted contract. Extension
-   * spaces always walk to their own head.
-   */
-  readonly targetHash?: string;
+  readonly target?: MigrateTarget;
   /** Consents to writing the ref's declared policies into the database when they differ from those in force. */
   readonly permitPolicyChange?: boolean;
   /**

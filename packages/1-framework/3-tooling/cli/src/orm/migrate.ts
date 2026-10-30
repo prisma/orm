@@ -44,6 +44,7 @@ import { shellQuoted } from '../control-api/statements/statement-flag';
 import type {
   CreateControlClient,
   MigratePathDecision,
+  MigrateTarget,
   PerSpaceExecutionEntry,
 } from '../control-api/types';
 import { errorContractValidationFailed } from '../utils/cli-errors';
@@ -214,6 +215,13 @@ interface RequestedTarget {
 }
 
 const EMITTED_CONTRACT_TARGET: RequestedTarget = { entry: undefined, refName: undefined };
+
+function migrateTargetOf({ entry, refName }: RequestedTarget): MigrateTarget | undefined {
+  if (entry === undefined) return undefined;
+  return refName === undefined
+    ? { kind: 'hash', hash: entry.hash }
+    : { kind: 'ref', ref: { name: refName, ...entry } };
+}
 
 /**
  * `--to` as a contract the app graph knows. A ref target keeps the invariants
@@ -520,9 +528,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
             ],
           },
           onProgress: controlProgressReporter(ctx.report),
-          ...(target.refName === undefined || refEntry === undefined
-            ? ifDefined('targetHash', refEntry?.hash)
-            : { ref: { name: target.refName, ...refEntry } }),
+          ...ifDefined('target', migrateTargetOf(target)),
           ...(permitPolicyChange ? { permitPolicyChange } : {}),
         });
         if (!applied.ok) {

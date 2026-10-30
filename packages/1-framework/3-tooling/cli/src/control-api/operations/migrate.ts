@@ -30,7 +30,6 @@ import {
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import { isGraphNode } from '@internal/migration-tools/migration-graph';
-import type { NamedRef } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
@@ -44,6 +43,7 @@ import type {
   MigratePathDecision,
   MigrateResult,
   MigrateSuccess,
+  MigrateTarget,
   OnControlProgress,
   PerSpaceExecutionEntry,
 } from '../types';
@@ -89,10 +89,8 @@ export interface ExecuteMigrateOptions<TFamilyId extends string, TTargetId exten
   readonly targetId: TTargetId;
   /** Content check for contract snapshots the aggregate loader resolves. */
   readonly verifySnapshotContent?: SnapshotContentVerifier;
-  /** See {@link MigrateOptions.ref}. */
-  readonly ref?: NamedRef;
-  /** See {@link MigrateOptions.targetHash}. */
-  readonly targetHash?: string;
+  /** See {@link MigrateOptions.target}. */
+  readonly target?: MigrateTarget;
   /** See {@link MigrateOptions.permitPolicyChange}. */
   readonly permitPolicyChange?: boolean;
   /** The command line the advice of a failure repeats. */
@@ -137,9 +135,10 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     migrationsDir,
     extensions,
     targetId,
-    ref,
+    target,
     onProgress,
   } = options;
+  const ref = target?.kind === 'ref' ? target.ref : undefined;
 
   const loadInputs: BuildAggregateInputs<TFamilyId, TTargetId> = {
     targetId,
@@ -156,7 +155,12 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
   const aggregate = loaded.value;
 
   const markerRows = await familyInstance.readAllMarkers({ driver });
-  const appTargetHash = ref?.hash ?? options.targetHash ?? requireHeadRef(aggregate.app).hash;
+  const appTargetHash =
+    target === undefined
+      ? requireHeadRef(aggregate.app).hash
+      : target.kind === 'ref'
+        ? target.ref.hash
+        : target.hash;
   const inForce = databasePoliciesInForce(
     markerRows,
     aggregate.app.spaceId,

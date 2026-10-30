@@ -99,9 +99,11 @@ function fakeFamily(
 
 function recordingMigrations() {
   const runnerCalls: (readonly MigrationRunnerPerSpaceOptions<'sql', 'postgres'>[])[] = [];
+  const runnerCheckedPolicies: unknown[] = [];
   const runner: MigrationRunner<'sql', 'postgres'> = {
-    execute: async ({ perSpaceOptions }) => {
+    execute: async ({ perSpaceOptions, expectedDatabasePolicies }) => {
       runnerCalls.push(perSpaceOptions);
+      runnerCheckedPolicies.push(expectedDatabasePolicies);
       return ok({
         perSpaceResults: perSpaceOptions.map((option) => ({
           space: option.space,
@@ -117,7 +119,7 @@ function recordingMigrations() {
     TargetMigrationsCapability<'sql', 'postgres', ControlFamilyInstance<'sql', unknown>>,
     'executeMigrate only creates a runner'
   >({ createRunner: () => runner });
-  return { runnerCalls, migrations };
+  return { runnerCalls, runnerCheckedPolicies, migrations };
 }
 
 async function migrate(args: {
@@ -126,7 +128,7 @@ async function migrate(args: {
   readonly permitPolicyChange?: boolean;
 }) {
   const migrationsDir = await migrationsDirWithOneAppEdge();
-  const { runnerCalls, migrations } = recordingMigrations();
+  const { runnerCalls, runnerCheckedPolicies, migrations } = recordingMigrations();
   const result = await executeMigrate({
     driver: blindCast<
       ControlDriverInstance<'sql', 'postgres'>,
@@ -140,12 +142,12 @@ async function migrate(args: {
     migrationsDir,
     extensions: [],
     targetId: 'postgres',
-    ...(args.ref === undefined ? {} : { ref: args.ref }),
+    ...(args.ref === undefined ? {} : { target: { kind: 'ref', ref: args.ref } }),
     ...(args.permitPolicyChange === undefined
       ? {}
       : { permitPolicyChange: args.permitPolicyChange }),
   });
-  return { result, runnerCalls };
+  return { result, runnerCalls, runnerCheckedPolicies };
 }
 
 const PRODUCTION: NamedRef = {
@@ -173,17 +175,19 @@ describe('executeMigrate, database policies', () => {
   });
 
   it('with consent, applies the migrations and records the ref overlaid on the policies in force', async () => {
-    const { result, runnerCalls } = await migrate({
+    const { result, runnerCalls, runnerCheckedPolicies } = await migrate({
       markers: new Map(),
       ref: PRODUCTION,
       permitPolicyChange: true,
     });
 
-    expect(
-      runnerCalls.map((call) =>
-        call.map((o) => [o.space, o.databasePolicies, o.expectedDatabasePolicies]),
-      ),
-    ).toEqual([[['app', MIGRATE_ONLY_WRITTEN, DEFAULT_DATABASE_POLICIES]]]);
+    expect({
+      perSpace: runnerCalls.map((call) => call.map((o) => [o.space, o.databasePolicies])),
+      checked: runnerCheckedPolicies,
+    }).toEqual({
+      perSpace: [[['app', MIGRATE_ONLY_WRITTEN]]],
+      checked: [DEFAULT_DATABASE_POLICIES],
+    });
     expect(
       result.ok
         ? {
@@ -284,6 +288,14 @@ describe('executeMigrate, database policies', () => {
     ).rejects.toMatchObject({
       code: 'CONTRACT.MARKER_ROW_CORRUPT',
       why: expect.stringContaining("The marker's meta.policies is not a valid policy declaration"),
+      fix: 'Ask whoever owns this database to correct meta.policies in the marker row; do not delete the row. The prisma_contract.marker row for space "app" also records the database\'s contract and invariants.',
+      nextActions: [
+        {
+          kind: 'user-choice',
+          label:
+            'Ask whoever owns this database to correct meta.policies in the marker row; do not delete the row.',
+        },
+      ],
       meta: { space: 'app' },
     });
   });

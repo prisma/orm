@@ -313,7 +313,7 @@ describe('migrate --to reserved references and refs', () => {
     expect(run.exitCode).toBe(0);
     expect(mocks.migrate).toHaveBeenCalledWith(
       expect.objectContaining({
-        targetHash: C1,
+        target: { kind: 'hash', hash: C1 },
         contract: expect.objectContaining({
           storage: expect.objectContaining({ storageHash: C1 }),
         }),
@@ -340,7 +340,9 @@ describe('migrate --to reserved references and refs', () => {
     });
 
     expect(run.exitCode).toBe(0);
-    expect(mocks.migrate).toHaveBeenCalledWith(expect.objectContaining({ targetHash: EMPTY }));
+    expect(mocks.migrate).toHaveBeenCalledWith(
+      expect.objectContaining({ target: { kind: 'hash', hash: EMPTY } }),
+    );
   });
 
   it('passes the resolved ref name for a ref target', async () => {
@@ -353,7 +355,9 @@ describe('migrate --to reserved references and refs', () => {
 
     expect(run.exitCode).toBe(0);
     expect(mocks.migrate).toHaveBeenCalledWith(
-      expect.objectContaining({ ref: { name: 'prod', hash: C1, invariants: [] } }),
+      expect.objectContaining({
+        target: { kind: 'ref', ref: { name: 'prod', hash: C1, invariants: [] } },
+      }),
     );
   });
 

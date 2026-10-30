@@ -177,7 +177,10 @@ describe('db migrate --permit-policy-change', () => {
 
     expect(mocks.migrate).toHaveBeenCalledWith(
       expect.objectContaining({
-        ref: { name: 'production', hash: C2, invariants: [], policies: PRODUCTION_POLICIES },
+        target: {
+          kind: 'ref',
+          ref: { name: 'production', hash: C2, invariants: [], policies: PRODUCTION_POLICIES },
+        },
       }),
     );
     expect(mocks.migrate.mock.calls[0]?.[0]).not.toHaveProperty('permitPolicyChange');
@@ -207,7 +210,10 @@ describe('db migrate --permit-policy-change', () => {
     expect(run.exitCode).toBe(0);
     expect(mocks.migrate).toHaveBeenCalledWith(
       expect.objectContaining({
-        ref: { name: 'production', hash: C2, invariants: [], policies: PRODUCTION_POLICIES },
+        target: {
+          kind: 'ref',
+          ref: { name: 'production', hash: C2, invariants: [], policies: PRODUCTION_POLICIES },
+        },
         permitPolicyChange: true,
         invocation: expect.objectContaining({
           rerunArgs: ['--to', 'production', '--permit-policy-change'],

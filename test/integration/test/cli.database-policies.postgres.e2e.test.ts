@@ -120,7 +120,7 @@ withTempDir(({ createTempDir }) => {
               ),
               migrationsDir: join(ctx.testDir, 'migrations'),
               invocation: { cwd: ctx.testDir, configPath: undefined, dbGiven: false },
-              ref: { name: 'production', ...production },
+              target: { kind: 'ref', ref: { name: 'production', ...production } },
             })
             .finally(() => client.close());
 
