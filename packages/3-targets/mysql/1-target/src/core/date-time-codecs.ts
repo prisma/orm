@@ -14,7 +14,7 @@ import {
 import type { ProjectionExpr } from '@internal/sql-relational-core/ast';
 import { hasDigitsBelowAMillisecond } from '@internal/type-implementations/date';
 import type { Temporal } from 'temporal-spec';
-import { MysqlCodecDescriptor } from './codec-descriptor';
+import { identityJsonProjection, MysqlCodecDescriptor } from './codec-descriptor';
 import {
   MYSQL_DATE_STRING_CODEC_ID,
   MYSQL_DATE_TEMPORAL_CODEC_ID,
@@ -54,9 +54,6 @@ import {
 } from './date-time-values';
 
 type PrecisionParams = typeof mysqlDatetimeParams.infer;
-
-/** MySQL writes a date or time inside an include's JSON as the text a row holds, which each codec reads. */
-const rowTextJsonProjection = (expression: ProjectionExpr): ProjectionExpr => expression;
 
 /** The stored form of an instant written as ISO 8601 text with a UTC offset: its UTC date and time, in the form `stored` writes. */
 const instantIn =
@@ -122,7 +119,7 @@ export class MysqlTimestampDateDescriptor extends MysqlCodecDescriptor<Precision
   override readonly traits = ['equality', 'order'] as const;
   override readonly paramsSchema = mysqlDatetimeParams;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return rowTextJsonProjection(expression);
+    return identityJsonProjection(expression);
   }
   override factory(
     params: PrecisionParams,
@@ -163,7 +160,7 @@ export class MysqlDatetimeTemporalDescriptor extends MysqlCodecDescriptor<Precis
   override readonly traits = ['equality', 'order'] as const;
   override readonly paramsSchema = mysqlDatetimeParams;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return rowTextJsonProjection(expression);
+    return identityJsonProjection(expression);
   }
   override factory(
     params: PrecisionParams,
@@ -204,7 +201,7 @@ export class MysqlTimestampTemporalDescriptor extends MysqlCodecDescriptor<Preci
   override readonly traits = ['equality', 'order'] as const;
   override readonly paramsSchema = mysqlDatetimeParams;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return rowTextJsonProjection(expression);
+    return identityJsonProjection(expression);
   }
   override factory(
     params: PrecisionParams,
@@ -250,7 +247,7 @@ export class MysqlDatetimeStringDescriptor extends MysqlCodecDescriptor<Precisio
     return renderInstantTextLiteral(value);
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return rowTextJsonProjection(expression);
+    return identityJsonProjection(expression);
   }
   override factory(
     params: PrecisionParams,
@@ -293,7 +290,7 @@ export class MysqlTimestampStringDescriptor extends MysqlCodecDescriptor<Precisi
     return renderInstantTextLiteral(value);
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return rowTextJsonProjection(expression);
+    return identityJsonProjection(expression);
   }
   override factory(
     params: PrecisionParams,
@@ -334,7 +331,7 @@ export class MysqlDateStringDescriptor extends MysqlCodecDescriptor<void> {
     return renderTsLiteral(value);
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return rowTextJsonProjection(expression);
+    return identityJsonProjection(expression);
   }
   override factory(): (ctx: CodecInstanceContext) => MysqlDateStringCodec {
     return () => new MysqlDateStringCodec(this, mysqlDate);
@@ -375,7 +372,7 @@ export class MysqlDateTemporalDescriptor extends MysqlCodecDescriptor<void> {
   override readonly traits = ['equality', 'order'] as const;
   override readonly paramsSchema = undefined;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return rowTextJsonProjection(expression);
+    return identityJsonProjection(expression);
   }
   override factory(): (ctx: CodecInstanceContext) => MysqlDateTemporalCodec {
     return () => new MysqlDateTemporalCodec(this, mysqlDate);
@@ -414,7 +411,7 @@ export class MysqlTimeStringDescriptor extends MysqlCodecDescriptor<PrecisionPar
     return renderTsLiteral(value);
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return rowTextJsonProjection(expression);
+    return identityJsonProjection(expression);
   }
   override factory(params: PrecisionParams): (ctx: CodecInstanceContext) => MysqlTimeStringCodec {
     return () => new MysqlTimeStringCodec(this, mysqlTime, params);
@@ -455,7 +452,7 @@ export class MysqlTimeTemporalDescriptor extends MysqlCodecDescriptor<PrecisionP
   override readonly traits = ['equality', 'order'] as const;
   override readonly paramsSchema = mysqlDatetimeParams;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return rowTextJsonProjection(expression);
+    return identityJsonProjection(expression);
   }
   override factory(params: PrecisionParams): (ctx: CodecInstanceContext) => MysqlTimeTemporalCodec {
     return () => new MysqlTimeTemporalCodec(this, mysqlTime, params);
@@ -494,7 +491,7 @@ export class MysqlDurationStringDescriptor extends MysqlCodecDescriptor<void> {
     return renderTsLiteral(value);
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return rowTextJsonProjection(expression);
+    return identityJsonProjection(expression);
   }
   override factory(): (ctx: CodecInstanceContext) => MysqlDurationStringCodec {
     return () => new MysqlDurationStringCodec(this, mysqlDuration);

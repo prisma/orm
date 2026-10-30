@@ -24,7 +24,7 @@ import {
   sqlVarcharDescriptor,
 } from '@internal/sql-relational-core/ast';
 import { hasDigitsBelowAMillisecond } from '@internal/type-implementations/date';
-import { MysqlCodecDescriptor, mysqlCodec } from './codec-descriptor';
+import { identityJsonProjection, MysqlCodecDescriptor, mysqlCodec } from './codec-descriptor';
 import {
   MYSQL_BIGINT_CODEC_ID,
   MYSQL_DATETIME_CODEC_ID,
@@ -62,9 +62,6 @@ import { mysqlError, mysqlQueryNotYetSupported } from './errors';
 const DECIMAL_INTEGER = /^-?\d+$/;
 const BIGINT_MIN = -(2n ** 63n);
 const BIGINT_MAX = 2n ** 63n - 1n;
-
-/** Projects a column whose JSON form, a number or a string, is what its `fromWire` reads. */
-const identityJsonProjection = (expression: ProjectionExpr): ProjectionExpr => expression;
 
 /** Projects a bigint as its decimal text: a JSON number past 2^53 would lose digits when JavaScript parses the include. */
 const textJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
