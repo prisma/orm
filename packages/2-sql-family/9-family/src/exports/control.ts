@@ -99,6 +99,7 @@ export {
 } from '../core/migrations/resolve-table-rename';
 export type { MarkedRemoval, RowsHoldingValueMark } from '../core/migrations/rows-holding-value';
 export {
+  removalsOfMigration,
   rowsHoldingValueFailure,
   rowsHoldingValueMeta,
   rowsHoldingValueOf,

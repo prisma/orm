@@ -8,6 +8,7 @@ import type {
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { type } from 'arktype';
+import { marksOfMigration } from './required-column';
 import type { SqlMigrationPlanOperationStep } from './types';
 
 const RowsHoldingValueMeta = type({
@@ -91,39 +92,80 @@ export function rowsHoldingValueSummary(
   return `${counted} ${rows === 1 ? 'holds' : 'hold'} ${JSON.stringify(storedValue)} in column "${column}", which takes no NULL, so the value cannot be removed.`;
 }
 
-/** A step of a plan whose removal check carries a {@link RowsHoldingValueMark}. */
+/** A removal check of a plan's operation, with the {@link RowsHoldingValueMark} it carries. */
 export interface MarkedRemoval<TOperation> {
   readonly operation: TOperation;
   readonly operationIndex: number;
+  readonly check: SqlMigrationPlanOperationStep;
   readonly mark: RowsHoldingValueMark;
 }
 
+/** The marked removal checks of the migration of the operation at `operationIndex`, in plan order. */
+export function removalsOfMigration<
+  TOperation extends {
+    readonly precheck: readonly SqlMigrationPlanOperationStep[];
+    readonly execute: readonly SqlMigrationPlanOperationStep[];
+    readonly postcheck: readonly SqlMigrationPlanOperationStep[];
+  },
+>(
+  operations: readonly TOperation[],
+  edges: readonly { readonly operationCount: number }[],
+  operationIndex: number,
+): readonly MarkedRemoval<TOperation>[] {
+  return marksOfMigration(operations, edges, operationIndex, rowsHoldingValueOf).map(
+    ({ operation, operationIndex: index, step, mark }) => ({
+      operation,
+      operationIndex: index,
+      check: step,
+      mark,
+    }),
+  );
+}
+
 /**
- * A runner failure's summary and report for the rows that hold the stored value a failed removal
- * check guards: `count` counts them, and `keepDataEdit` gives the edit that keeps them, when the
- * target can say it. Undefined when the count fails.
+ * A runner failure's summary and reports for the rows that hold stored values removals cannot take
+ * out of required columns. The failed removal is counted first, and the summary names it; undefined
+ * when that count fails. Then each other removal of `others` whose check `checkFails` says fails is
+ * counted, until a count fails, such as for a column an earlier operation adds, so that the advice
+ * can name every column that still holds a removed value.
  */
 export async function rowsHoldingValueFailure<TOperation>(input: {
   readonly failed: MarkedRemoval<TOperation>;
+  readonly others: readonly MarkedRemoval<TOperation>[];
+  readonly checkFails: (removal: MarkedRemoval<TOperation>) => Promise<boolean>;
   readonly count: (removal: MarkedRemoval<TOperation>) => Promise<number>;
   readonly keepDataEdit: (removal: MarkedRemoval<TOperation>) => KeepDataEdit | undefined;
-}): Promise<{ readonly summary: string; readonly report: RowsHoldingValue } | undefined> {
+}): Promise<
+  { readonly summary: string; readonly reports: readonly RowsHoldingValue[] } | undefined
+> {
   const { failed } = input;
-  const { mark } = failed;
+  const report = (removal: MarkedRemoval<TOperation>, rows: number): RowsHoldingValue => ({
+    enumValue: removal.mark.enumValue,
+    value: removal.mark.storedValue,
+    rows,
+    operationIndex: removal.operationIndex,
+    ...ifDefined('keepDataEdit', input.keepDataEdit(removal)),
+  });
   let rows: number;
   try {
     rows = await input.count(failed);
   } catch {
     return undefined;
   }
+  const reports = [report(failed, rows)];
+  for (const other of input.others) {
+    if (other.operationIndex === failed.operationIndex) continue;
+    let otherRows: number;
+    try {
+      otherRows = (await input.checkFails(other)) ? await input.count(other) : 0;
+    } catch {
+      break;
+    }
+    if (otherRows > 0) reports.push(report(other, otherRows));
+  }
+  const { mark } = failed;
   return {
     summary: rowsHoldingValueSummary(mark.table, mark.column, mark.storedValue, rows),
-    report: {
-      enumValue: mark.enumValue,
-      value: mark.storedValue,
-      rows,
-      operationIndex: failed.operationIndex,
-      ...ifDefined('keepDataEdit', input.keepDataEdit(failed)),
-    },
+    reports,
   };
 }

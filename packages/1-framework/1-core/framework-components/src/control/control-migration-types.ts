@@ -420,8 +420,11 @@ export interface MigrationRunnerFailureMeta {
    * step fail: first the field of the failed step, then the others of the same migration.
    */
   readonly rowsWithoutValue?: readonly RowsWithoutValue[];
-  /** The data that still holds a stored enum value whose removal its storage cannot take, when that made a check fail. */
-  readonly rowsHoldingValue?: RowsHoldingValue;
+  /**
+   * The data that still holds stored enum values whose removal its storage cannot take, when that
+   * made a check fail: first the data of the failed check, then the others of the same migration.
+   */
+  readonly rowsHoldingValue?: readonly RowsHoldingValue[];
   /** The existing rows that a check the failed operation adds refuses, when that made the operation fail. */
   readonly rowsFailingCheck?: RowsFailingCheck;
   /** The objects in the database that kept the failed operation from running, such as a view on a table to drop. */

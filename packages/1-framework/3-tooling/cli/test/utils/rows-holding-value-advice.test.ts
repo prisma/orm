@@ -49,7 +49,7 @@ describe('the advice when a removed enum value is still held by rows of a requir
     const error = dbUpdateRunnerFailureError(
       failure,
       {
-        rowsHoldingValue,
+        rowsHoldingValue: [rowsHoldingValue],
         failedPrecheck: {
           operationId: 'removeStoredValue.task.status.archived',
           description:
@@ -69,7 +69,7 @@ describe('the advice when a removed enum value is still held by rows of a requir
   it('on db update with no migration at the database contract, says to change the rows in the database instead', () => {
     const error = dbUpdateRunnerFailureError(
       failure,
-      { rowsHoldingValue },
+      { rowsHoldingValue: [rowsHoldingValue] },
       { databaseStorageHash: undefined, invocation: WITH_STATEMENTS },
     );
 
@@ -82,7 +82,7 @@ describe('the advice when a removed enum value is still held by rows of a requir
     const error = migrateRunnerFailureError(
       failure,
       {
-        rowsHoldingValue,
+        rowsHoldingValue: [rowsHoldingValue],
         failedPrecheck: {
           operationId: 'removeStoredValue.task.status.archived',
           description:
@@ -105,12 +105,80 @@ describe('the advice when a removed enum value is still held by rows of a requir
     const { keepDataEdit: _edit, ...withoutEdit } = rowsHoldingValue;
     const error = migrateRunnerFailureError(
       failure,
-      { rowsHoldingValue: withoutEdit },
+      { rowsHoldingValue: [withoutEdit] },
       { directory: '/work/app/migrations/app/20260101T0000_retire', from: FROM },
       PROJECT,
     );
 
     expect(labels(error)).toHaveLength(1);
     expect(JSON.stringify(error.nextActions)).not.toMatch(/rows|removeStoredValue/);
+  });
+
+  describe('when several required columns hold removed values', () => {
+    const projectEdit = {
+      remove: 'this.removeStoredValue({ table: "project", column: "status", value: "archived" })',
+      replaceWith:
+        'this.replaceStoredValue({ table: "project", column: "status", from: "archived", to: "<stored value>" })',
+    };
+    const several = [
+      rowsHoldingValue,
+      { ...rowsHoldingValue, rows: 3, keepDataEdit: projectEdit },
+      {
+        enumValue: 'Prio.Low',
+        enumName: 'Prio',
+        value: 1,
+        rows: 1,
+        keepDataEdit: {
+          remove: 'this.removeStoredValue({ table: "task", column: "prio", value: 1 })',
+          replaceWith:
+            'this.replaceStoredValue({ table: "task", column: "prio", from: 1, to: "<stored value>" })',
+        },
+      },
+    ];
+
+    it('on db update, renames each value once and keeps every column by hand in one plan', () => {
+      const error = dbUpdateRunnerFailureError(
+        failure,
+        { rowsHoldingValue: several },
+        {
+          databaseStorageHash: FROM,
+          invocation: {
+            ...PROJECT,
+            statementArgs: ['--delete Status.ARCHIVED', '--delete Prio.Low'],
+          },
+        },
+      );
+
+      expect(labels(error)).toEqual([
+        'To keep that data under a new enum value, add a member to each of enums "Status", "Prio" in the contract source, run `{bin} contract emit`, then run `{bin} db update --rename \'Status.ARCHIVED:Status.<new member>\' --rename \'Prio.Low:Prio.<new member>\'`',
+        'To keep that data by hand, plan the change with `{bin} migration plan --from sha256:0123 --delete Status.ARCHIVED --delete Prio.Low`, replace this.removeStoredValue({ table: "task", column: "status", value: "archived" }) with this.replaceStoredValue({ table: "task", column: "status", from: "archived", to: "<stored value>" }), replace this.removeStoredValue({ table: "project", column: "status", value: "archived" }) with this.replaceStoredValue({ table: "project", column: "status", from: "archived", to: "<stored value>" }), and replace this.removeStoredValue({ table: "task", column: "prio", value: 1 }) with this.replaceStoredValue({ table: "task", column: "prio", from: 1, to: "<stored value>" }) in the migration.ts it writes, where "<stored value>" is a stored value the enum keeps, run `node <migration directory>/migration.ts` for the directory it writes, and apply it with `{bin} db migrate`',
+      ]);
+    });
+
+    it('on db update with no migration at the database contract, names each stored value to change', () => {
+      const error = dbUpdateRunnerFailureError(
+        failure,
+        { rowsHoldingValue: several },
+        { databaseStorageHash: undefined, invocation: PROJECT },
+      );
+
+      expect(labels(error)[1]).toBe(
+        'To keep that data under another stored value, change each of the stored values "archived", 1 to one its enum keeps in the database yourself, then re-run `{bin} db update --delete Status.ARCHIVED --delete Prio.Low`',
+      );
+    });
+
+    it('on db migrate, plans again with a rename of each value and lists every edit by hand', () => {
+      const error = migrateRunnerFailureError(
+        failure,
+        { rowsHoldingValue: several },
+        { directory: '/work/app/migrations/app/20260101T0000_retire', from: FROM },
+        PROJECT,
+      );
+
+      expect(labels(error)).toEqual([
+        'To keep that data under a new enum value, add a member to each of enums "Status", "Prio" in the contract source, run `{bin} contract emit`, delete `migrations/app/20260101T0000_retire` (copy any code you wrote in its migration.ts first), plan it again with `{bin} migration plan --from sha256:0123 --name retire --rename \'Status.ARCHIVED:Status.<new member>\' --rename \'Prio.Low:Prio.<new member>\'`, adding any other statements you planned it with except any `--delete Status.ARCHIVED` or `--delete Prio.Low`, put any code you copied into the migration.ts it writes, run `node <migration directory>/migration.ts` for the directory it writes, and apply it with `{bin} db migrate`',
+        'To keep that data by hand, replace this.removeStoredValue({ table: "task", column: "status", value: "archived" }) with this.replaceStoredValue({ table: "task", column: "status", from: "archived", to: "<stored value>" }), replace this.removeStoredValue({ table: "project", column: "status", value: "archived" }) with this.replaceStoredValue({ table: "project", column: "status", from: "archived", to: "<stored value>" }), and replace this.removeStoredValue({ table: "task", column: "prio", value: 1 }) with this.replaceStoredValue({ table: "task", column: "prio", from: 1, to: "<stored value>" }) in `migrations/app/20260101T0000_retire/migration.ts`, where "<stored value>" is a stored value the enum keeps, run `node migrations/app/20260101T0000_retire/migration.ts`, and re-run `{bin} db migrate`',
+      ]);
+    });
   });
 });

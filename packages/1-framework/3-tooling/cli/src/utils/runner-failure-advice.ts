@@ -1,6 +1,5 @@
 import type {
   BlockingObject,
-  KeepDataEdit,
   MigrationRunnerFailure,
 } from '@internal/framework-components/control';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
@@ -123,82 +122,122 @@ export function dbUpdateRowsWithoutValueAdvice(
   return [...planned, editFileAction('Make the field optional in the contract source')];
 }
 
-function renameToNewMember(report: RowsHoldingValueReport): string {
-  return statementFlag({
-    verb: 'rename',
-    text: `${report.enumValue}:${report.enumName}.<new member>`,
-  });
+function distinct(values: readonly string[]): readonly string[] {
+  return [...new Set(values)];
 }
 
-function newMember(report: RowsHoldingValueReport, invocation: CliInvocation): string {
-  return `To keep that data under a new enum value, add a member to enum "${report.enumName}" in the contract source, run ${quoted(cliCommand(invocation, 'contract emit'))}`;
+/** The first report of each enum value, in the order the reports name them. */
+function onePerEnumValue(
+  reports: readonly RowsHoldingValueReport[],
+): readonly RowsHoldingValueReport[] {
+  return reports.filter(
+    (report, index) =>
+      reports.findIndex(({ enumValue }) => enumValue === report.enumValue) === index,
+  );
 }
 
-/** The edit the target gives that keeps the data, as the advice writes it. */
-function swapCalls(edit: KeepDataEdit): string {
-  return `replace ${edit.remove} with ${edit.replaceWith}`;
+function renameFlags(reports: readonly RowsHoldingValueReport[]): readonly string[] {
+  return onePerEnumValue(reports).map(({ enumValue, enumName }) =>
+    statementFlag({ verb: 'rename', text: `${enumValue}:${enumName}.<new member>` }),
+  );
+}
+
+function deleteFlags(reports: readonly RowsHoldingValueReport[]): readonly string[] {
+  return onePerEnumValue(reports).map(({ enumValue }) =>
+    statementFlag({ verb: 'delete', text: enumValue }),
+  );
+}
+
+function newMember(reports: readonly RowsHoldingValueReport[], invocation: CliInvocation): string {
+  const enumNames = distinct(reports.map(({ enumName }) => `"${enumName}"`));
+  const enums =
+    enumNames.length === 1 ? `enum ${enumNames[0]}` : `each of enums ${enumNames.join(', ')}`;
+  return `To keep that data under a new enum value, add a member to ${enums} in the contract source, run ${quoted(cliCommand(invocation, 'contract emit'))}`;
+}
+
+/** The edits the target gives that keep the data, as the advice writes them; undefined when it gives none. */
+function swapCalls(reports: readonly RowsHoldingValueReport[]): string | undefined {
+  const swaps = reports.flatMap(({ keepDataEdit }) =>
+    keepDataEdit === undefined
+      ? []
+      : [`replace ${keepDataEdit.remove} with ${keepDataEdit.replaceWith}`],
+  );
+  if (swaps.length <= 1) return swaps[0];
+  return `${swaps.slice(0, -1).join(', ')}, and ${swaps.at(-1)}`;
 }
 
 const KEPT_VALUE = 'where "<stored value>" is a stored value the enum keeps';
 
-/** The run's statements, without the delete of `enumValue` that failed. */
-function otherStatements(invocation: CliInvocation, enumValue: string): readonly string[] {
-  const failed = statementFlag({ verb: 'delete', text: enumValue });
-  return (invocation.statementArgs ?? []).filter((flag) => flag !== failed);
+/** The run's statements, without the deletes of the enum values that failed. */
+function otherStatements(
+  invocation: CliInvocation,
+  reports: readonly RowsHoldingValueReport[],
+): readonly string[] {
+  const failed = deleteFlags(reports);
+  return (invocation.statementArgs ?? []).filter((flag) => !failed.includes(flag));
 }
 
-/** The way out when a required column's data holds a stored value `db update` removes. */
+function storedValuesText(reports: readonly RowsHoldingValueReport[]): string {
+  const values = distinct(reports.map(({ value }) => JSON.stringify(value)));
+  return values.length === 1
+    ? `the stored value ${values[0]} to one the enum keeps`
+    : `each of the stored values ${values.join(', ')} to one its enum keeps`;
+}
+
+/** The way out when the data of required columns holds stored values `db update` removes. */
 export function dbUpdateRowsHoldingValueAdvice(
-  report: RowsHoldingValueReport,
+  reports: readonly RowsHoldingValueReport[],
   databaseStorageHash: string | undefined,
   invocation: CliInvocation,
 ): RunnerAdvice {
-  const others = otherStatements(invocation, report.enumValue);
-  const deleteFlag = statementFlag({ verb: 'delete', text: report.enumValue });
+  const others = otherStatements(invocation, reports);
+  const deletes = deleteFlags(reports);
   const rename = chooseAction(
-    `${newMember(report, invocation)}, then run ${quoted(cliCommand(invocation, 'db update', [...others, renameToNewMember(report)]))}`,
+    `${newMember(reports, invocation)}, then run ${quoted(cliCommand(invocation, 'db update', [...others, ...renameFlags(reports)]))}`,
   );
   if (databaseStorageHash === undefined) {
     return [
       rename,
       chooseAction(
-        `To keep that data under another stored value, change the stored value ${JSON.stringify(report.value)} to one the enum keeps in the database yourself, then re-run ${quoted(cliCommand(invocation, 'db update', [...others, deleteFlag]))}`,
+        `To keep that data under another stored value, change ${storedValuesText(reports)} in the database yourself, then re-run ${quoted(cliCommand(invocation, 'db update', [...others, ...deletes]))}`,
       ),
     ];
   }
-  const { keepDataEdit } = report;
-  if (keepDataEdit === undefined) return [rename];
-  const plan = printedPlanCommand(invocation, databaseStorageHash, [...others, deleteFlag]);
+  const swaps = swapCalls(reports);
+  if (swaps === undefined) return [rename];
+  const plan = printedPlanCommand(invocation, databaseStorageHash, [...others, ...deletes]);
   return [
     rename,
     chooseAction(
-      `To keep that data by hand, plan the change with ${quoted(plan)}, ${swapCalls(keepDataEdit)} in the migration.ts it writes, ${KEPT_VALUE}, ${runWrittenFile(invocation)}`,
+      `To keep that data by hand, plan the change with ${quoted(plan)}, ${swaps} in the migration.ts it writes, ${KEPT_VALUE}, ${runWrittenFile(invocation)}`,
     ),
   ];
 }
 
 function migrateRowsHoldingValueAdvice(
-  report: RowsHoldingValueReport,
+  reports: readonly RowsHoldingValueReport[],
   failedMigration: FailedMigrationText | undefined,
   invocation: CliInvocation,
 ): RunnerAdvice {
   const { file, run } = failedMigrationFile(failedMigration);
-  const { keepDataEdit } = report;
+  const swaps = swapCalls(reports);
   const byHand =
-    keepDataEdit === undefined
+    swaps === undefined
       ? []
       : [
           editFileAction(
-            `To keep that data by hand, ${swapCalls(keepDataEdit)} in ${file}, ${KEPT_VALUE}, ${run}, and re-run ${dbMigrateCommand(invocation)}`,
+            `To keep that data by hand, ${swaps} in ${file}, ${KEPT_VALUE}, ${run}, and re-run ${dbMigrateCommand(invocation)}`,
           ),
         ];
   if (failedMigration === undefined) return byHand;
   return [
     replan(
-      `${newMember(report, invocation)}, delete`,
-      [renameToNewMember(report)],
+      `${newMember(reports, invocation)}, delete`,
+      renameFlags(reports),
       failedMigration,
-      `\`${statementFlag({ verb: 'delete', text: report.enumValue })}\``,
+      deleteFlags(reports)
+        .map((flag) => `\`${flag}\``)
+        .join(' or '),
       `put any code you copied into the migration.ts it writes, ${runWrittenFile(invocation)}`,
     ),
     ...byHand,

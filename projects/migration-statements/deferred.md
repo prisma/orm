@@ -199,12 +199,6 @@ Reproduction: emit a PSL contract with a `namespace public` block and a `namespa
 
 `db update --delete billing` against a database whose marker hash has no local snapshot fails with `CLI.CONSENT_UNUSED`: the planner has no origin contract, so it reports no removed namespace, and the namespace's tables stay. Nothing is lost, which is the right outcome, but the message does not say why. `--rename` in the same situation fails with `MIGRATION.STATEMENT_ORIGIN_UNKNOWN`, which names the hash and the snapshot directory. A namespace `--delete` that matches no question should say the same when the origin contract is unknown.
 
-## `rowsHoldingValue` reports one column where its sibling reports a list
-
-**Found:** slice 3b PR 2 system-design review (2026-10-22), S06.
-
-`MigrationRunnerFailureMeta.rowsHoldingValue` is one fact for the failing column, while `rowsWithoutValue` lists the failing field first and then every other field of the same migration that lacks values. An enum can type required columns in several tables, so a user who changes the data in one table re-runs and fails on the next. To resolve it, make it a list with a field per entry, counted for each marked removal of the same migration, as `rowsWithoutValueFailure` does.
-
 ## `StoredValueRewrite.namespaceId` reads as the enum's namespace
 
 **Found:** slice 3b PR 2 system-design review (2026-10-22), S07.

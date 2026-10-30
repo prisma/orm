@@ -15,6 +15,7 @@ import {
   convertedColumnOf,
   keepRowsEdit,
   type RequiredColumn,
+  removalsOfMigration,
   requiredColumnOf,
   requiredColumnsOfMigration,
   rowsHoldingValueFailure,
@@ -446,12 +447,12 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
         };
         const holding =
           phase === 'precheck'
-            ? await this.rowsHoldingValue(driver, step, operation, plan.operationIndex)
+            ? await this.rowsHoldingValue(driver, step, operation, plan)
             : undefined;
         if (holding !== undefined) {
           return runnerFailure(code, holding.summary, {
             why: failed,
-            meta: { failedCheck, rowsHoldingValue: holding.report },
+            meta: { failedCheck, rowsHoldingValue: holding.reports },
           });
         }
         return runnerFailure(code, rowsWithoutValue?.summary ?? failed, {
@@ -475,28 +476,42 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
 
   /**
    * Counts the rows that hold the stored value a removal check guards, as `rowsHoldingValueMeta`
-   * marks the check. A count that fails leaves the failure without it.
+   * marks the check, then those of every other removal of its migration whose check fails. A count
+   * of the failed check that fails leaves the failure without it.
    */
   private rowsHoldingValue(
     driver: SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>['driver'],
     step: SqlMigrationPlanOperationStep,
     operation: SqlMigrationPlanOperation<PostgresPlanTargetDetails>,
-    operationIndex: number,
+    plan: PlanPosition,
   ): ReturnType<typeof rowsHoldingValueFailure> {
     const mark = rowsHoldingValueOf(step);
-    const schema = operation.target.details?.schema;
-    if (mark === undefined || schema === undefined) return Promise.resolve(undefined);
+    if (mark === undefined) return Promise.resolve(undefined);
+    const schemaOf = (marked: SqlMigrationPlanOperation<PostgresPlanTargetDetails>) => {
+      const schema = marked.target.details?.schema;
+      if (schema === undefined) {
+        throw new InternalError('A stored value removal names the schema of its table');
+      }
+      return schema;
+    };
     return rowsHoldingValueFailure({
-      failed: { operation, operationIndex, mark },
-      count: async ({ mark: counted }) => {
+      failed: { operation, operationIndex: plan.operationIndex, check: step, mark },
+      others: removalsOfMigration(plan.operations, plan.edges, plan.operationIndex),
+      checkFails: async ({ check }) =>
+        !this.stepResultIsTrue((await driver.query(check.sql, check.params ?? [])).rows),
+      count: async ({ operation: counted, mark: { table, column, storedValue } }) => {
         const rows = await driver.query<{ rows: number }>(
-          `SELECT COUNT(*)::int AS rows FROM ${qualifyTableName(schema, counted.table)} WHERE ${quoteIdentifier(counted.column)} = $1`,
-          [counted.storedValue],
+          `SELECT COUNT(*)::int AS rows FROM ${qualifyTableName(schemaOf(counted), table)} WHERE ${quoteIdentifier(column)} = $1`,
+          [storedValue],
         );
         return rows.rows[0]?.rows ?? 0;
       },
-      keepDataEdit: ({ mark: kept }) =>
-        keepRowsEdit(postgresMarkedRemoval(schema, kept), kept, postgresStoredValueCallClasses),
+      keepDataEdit: ({ operation: kept, mark: keptMark }) =>
+        keepRowsEdit(
+          postgresMarkedRemoval(schemaOf(kept), keptMark),
+          keptMark,
+          postgresStoredValueCallClasses,
+        ),
     });
   }
 

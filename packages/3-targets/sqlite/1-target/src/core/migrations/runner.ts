@@ -15,6 +15,7 @@ import {
   convertedColumnOf,
   fieldOfColumn,
   keepRowsEdit,
+  removalsOfMigration,
   requiredColumnsOfMigration,
   rowsHoldingValueFailure,
   rowsHoldingValueOf,
@@ -335,7 +336,12 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
             operation.precheck,
             operation,
             'precheck',
-            { contract: options.destinationContract, operationIndex: ops.indexOf(operation) },
+            {
+              contract: options.destinationContract,
+              operationIndex: ops.indexOf(operation),
+              operations: ops,
+              edges: options.migrationEdges,
+            },
           );
           if (!precheckResult.ok) {
             return precheckResult;
@@ -358,7 +364,12 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
             operation.postcheck,
             operation,
             'postcheck',
-            { contract: options.destinationContract, operationIndex: ops.indexOf(operation) },
+            {
+              contract: options.destinationContract,
+              operationIndex: ops.indexOf(operation),
+              operations: ops,
+              edges: options.migrationEdges,
+            },
           );
           if (!postcheckResult.ok) {
             return postcheckResult;
@@ -390,7 +401,7 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
     steps: readonly SqlMigrationPlanOperationStep[],
     operation: SqlMigrationPlanOperation<SqlitePlanTargetDetails>,
     phase: 'precheck' | 'postcheck',
-    plan?: { readonly contract: Contract<SqlStorage>; readonly operationIndex: number },
+    plan?: PlanPosition,
   ): Promise<Result<void, SqlMigrationRunnerFailure>> {
     for (const step of steps) {
       const result = await driver.query(step.sql, step.params ?? []);
@@ -407,12 +418,12 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
         };
         const holding =
           phase === 'precheck' && plan !== undefined
-            ? await this.rowsHoldingValue(driver, step, operation, plan.operationIndex)
+            ? await this.rowsHoldingValue(driver, step, operation, plan)
             : undefined;
         if (holding !== undefined) {
           return runnerFailure(code, holding.summary, {
             why: `Operation ${operation.id} failed during ${phase}: ${step.description}`,
-            meta: { failedCheck, rowsHoldingValue: holding.report },
+            meta: { failedCheck, rowsHoldingValue: holding.reports },
           });
         }
         const unconverted =
@@ -458,18 +469,22 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
 
   /**
    * Counts the rows that hold the stored value a removal check guards, as `rowsHoldingValueMeta`
-   * marks the check. A count that fails leaves the failure without it.
+   * marks the check, then those of every other removal of its migration whose check fails. A count
+   * of the failed check that fails leaves the failure without it.
    */
   private rowsHoldingValue(
     driver: SqlMigrationRunnerExecuteOptions<SqlitePlanTargetDetails>['driver'],
     step: SqlMigrationPlanOperationStep,
     operation: SqlMigrationPlanOperation<SqlitePlanTargetDetails>,
-    operationIndex: number,
+    plan: PlanPosition,
   ): ReturnType<typeof rowsHoldingValueFailure> {
     const mark = rowsHoldingValueOf(step);
     if (mark === undefined) return Promise.resolve(undefined);
     return rowsHoldingValueFailure({
-      failed: { operation, operationIndex, mark },
+      failed: { operation, operationIndex: plan.operationIndex, check: step, mark },
+      others: removalsOfMigration(plan.operations, plan.edges, plan.operationIndex),
+      checkFails: async ({ check }) =>
+        !this.stepResultIsTrue((await driver.query(check.sql, check.params ?? [])).rows),
       count: async ({ mark: counted }) => {
         const rows = await driver.query<{ rows: number }>(
           `SELECT COUNT(*) AS rows FROM ${quoteIdentifier(counted.table)} WHERE ${quoteIdentifier(counted.column)} = ?`,

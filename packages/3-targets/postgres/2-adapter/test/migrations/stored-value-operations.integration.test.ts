@@ -270,7 +270,7 @@ describe('Postgres stored value operations', { concurrent: false }, () => {
     const uncounted = (await runnerResult(op, failingCount)).assertNotOk();
 
     expect({
-      counted: { message: counted.message, rows: counted.meta.rowsHoldingValue?.rows },
+      counted: { message: counted.message, rows: counted.meta.rowsHoldingValue?.[0]?.rows },
       uncounted: {
         code: uncounted.code,
         message: uncounted.message,
