@@ -67,6 +67,22 @@ describe('a question about a value object field', () => {
     field: 'lat',
   } as const;
 
+  it('says what --delete leaves in the one new required field, as each command fills it', async () => {
+    const asked = await Promise.all(
+      [true, false].map(async (canConvert) => {
+        const {
+          asked: [question],
+        } = await questionsOf({ origin, destination, subject: lat, canConvert });
+        return question?.question;
+      }),
+    );
+
+    expect(asked).toEqual([
+      'Remove key would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the new required field "GeoPoint.latitude" gets a placeholder value in migration.ts, to fill before you run it, as --backfill GeoPoint.latitude writes.',
+      'Remove key would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the existing objects get a temporary value in the new required field "GeoPoint.latitude".',
+    ]);
+  });
+
   it('names the field through its value object, lists every operation, and offers the one new field as the rename', async () => {
     const {
       asked: [question],
@@ -80,7 +96,7 @@ describe('a question about a value object field', () => {
     expect(question).toMatchObject({
       subject: 'GeoPoint.lat',
       question:
-        'Remove key "lat" from "place"."location" and remove key "lat" from "trip"."stops" would lose the values of value object field "GeoPoint.lat".',
+        'Remove key "lat" from "place"."location" and remove key "lat" from "trip"."stops" would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the existing objects get a temporary value in the new required field "GeoPoint.latitude".',
       verbs: ['rename', 'delete'],
       forms: { rename: 'GeoPoint.lat:GeoPoint.latitude' },
     });

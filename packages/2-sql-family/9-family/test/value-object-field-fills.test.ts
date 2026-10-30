@@ -223,7 +223,7 @@ describe('planValueObjectFieldFills', () => {
     expect(refusal(plan({ from: { GeoPoint: GEO }, to: { GeoPoint: GEO_WITH_COUNTRY } }))).toEqual({
       kind: 'nullabilityConflict',
       summary:
-        'Value object field "GeoPoint.country" is required, and existing objects at path "$" in column "location" of "place" may have no value for it',
+        'Value object field "GeoPoint.country" is required, and existing objects may have no value for it, at:\n- path "$" in column "location" of "place"',
       why: 'Add --backfill GeoPoint.country to write the value the plan fills them with.',
       location: {
         namespaceId: 'app',
@@ -235,13 +235,26 @@ describe('planValueObjectFieldFills', () => {
     });
   });
 
-  it('offers the rename of a field the destination lacks before the backfill, as the new field may be it renamed', () => {
+  it('fills a placeholder when the value object lost a field, so the question about that field is asked first', () => {
     expect(
-      refusal(plan({ from: { GeoPoint: GEO }, to: { GeoPoint: { country: 'scalar' } } })),
-    ).toMatchObject({
-      kind: 'nullabilityConflict',
-      why: 'If it is a field renamed, add --rename GeoPoint.lat:GeoPoint.country. Otherwise add --backfill GeoPoint.country to write the value the plan fills them with.',
-    });
+      fills(plan({ from: { GeoPoint: GEO }, to: { GeoPoint: { country: 'scalar' } } })).map(
+        ({ path, value }) => ({ path, value }),
+      ),
+    ).toEqual([{ path: '$.country', value: new UnfilledValue('GeoPoint.country:value') }]);
+  });
+
+  it('names every column and path in the refusal', () => {
+    expect(
+      refusal(
+        plan({
+          from: { GeoPoint: GEO },
+          to: { GeoPoint: GEO_WITH_COUNTRY },
+          columns: [place, history],
+        }),
+      ).summary,
+    ).toBe(
+      'Value object field "GeoPoint.country" is required, and existing objects may have no value for it, at:\n- path "$" in column "location" of "place"\n- path "$[*]" in column "history" of "place"',
+    );
   });
 
   describe('with temporary values', () => {

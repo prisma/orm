@@ -564,6 +564,36 @@ function changedVariant(
  * after a statement renames the model, so the question says to pass one. The question ends with
  * the planner's advice on keeping the data, when it gives any.
  */
+/**
+ * What `--delete` of a value object field leaves in the one field the value object gained, when
+ * that field is required: `migration plan` writes a placeholder for its value, as a backfill does,
+ * and `db update` fills a temporary value.
+ */
+function newRequiredFieldNote(
+  subject: MigrationSubject,
+  text: string,
+  contracts: DataLossContracts,
+): readonly string[] {
+  if (subject.kind !== 'valueObjectField' || inDestination(subject, contracts)) return [];
+  const only = onlyNewValueObjectField(subject, contracts);
+  if (only === undefined) return [];
+  const field = renamedValueObjectField(subject, contracts) ?? subject;
+  const valueObject = valueObjectAt(contracts.destination.storage, {
+    plane: 'storage',
+    namespaceId: field.namespaceId,
+    entityKind: 'valueObject',
+    entityName: field.valueObject,
+  });
+  if (valueObject?.fields[only]?.nullable !== false) return [];
+  const added = `${text.slice(0, text.lastIndexOf('.'))}.${only}`;
+  const deleted = statementFlag({ verb: 'delete', text });
+  return [
+    contracts.canConvert
+      ? `With ${deleted}, the new required field "${added}" gets a placeholder value in migration.ts, to fill before you run it, as ${statementFlag({ verb: 'backfill', text: added })} writes.`
+      : `With ${deleted}, the existing objects get a temporary value in the new required field "${added}".`,
+  ];
+}
+
 export function dataLossQuestion(
   loss: PlannedDataLoss,
   contracts: DataLossContracts,
@@ -587,6 +617,7 @@ export function dataLossQuestion(
     ...(loss.keepDataAdvice === undefined ? [] : [loss.keepDataAdvice]),
     ...(keepData?.lead === undefined ? [] : [keepData.lead]),
     ...(keepData?.ways ?? []),
+    ...newRequiredFieldNote(loss.subject, subject, contracts),
   ].join(' ');
   if (loss.loss === 'typeChange' && loss.subject.kind === 'field') {
     if (!contracts.canConvert) {

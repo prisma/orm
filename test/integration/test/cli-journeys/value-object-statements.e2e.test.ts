@@ -213,8 +213,17 @@ withTempDir(({ createTempDir }) => {
         const ctx = journey(db, createTempDir);
         const before = await seededThen(ctx, via, db.connectionString, LAT_RENAMED, 'O1');
 
-        expect(await refusal(ctx, via, 'O1.04'), 'O1.04: the rename offered').toContain(
+        const asked = await refusal(ctx, via, 'O1.04');
+        expect(asked, 'O1.04: one question, the rename offered').toContain(
+          '\\"GeoPoint.lat\\" needs a statement',
+        );
+        expect(asked, 'O1.04: the rename offered').toContain(
           '--rename GeoPoint.lat:GeoPoint.latitude',
+        );
+        expect(asked, 'O1.04: what --delete leaves in the new field').toContain(
+          via === 'db update'
+            ? 'the existing objects get a temporary value in the new required field \\"GeoPoint.latitude\\"'
+            : 'the new required field \\"GeoPoint.latitude\\" gets a placeholder value in migration.ts',
         );
         await apply(ctx, via, ['--rename', 'GeoPoint.lat:GeoPoint.latitude'], 'O1.05');
 

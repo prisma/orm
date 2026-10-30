@@ -179,33 +179,20 @@ function requiredFields(
   return fields;
 }
 
-function backfillAdvice(
-  contract: Contract<SqlStorage>,
-  required: RequiredField,
-  text: string,
-): string {
-  const backfill = `--backfill ${text} to write the value the plan fills them with.`;
-  if (required.removedFields.length === 0) return `Add ${backfill}`;
-  const renames = required.removedFields.map(
-    (field) =>
-      `--rename ${valueObjectFieldStatementText(contract, { ...required.valueObjectField, field })}:${text}`,
-  );
-  return `If it is a field renamed, add ${renames.join(' or ')}. Otherwise add ${backfill}`;
-}
-
 function placeText(place: ValueObjectPlace): string {
-  return `at path ${JSON.stringify(jsonPathText(place.steps))} in column "${place.column}" of "${place.table}"`;
+  return `path ${JSON.stringify(jsonPathText(place.steps))} in column "${place.column}" of "${place.table}"`;
 }
 
 function needsValue(
   required: RequiredField,
-  place: ValueObjectPlace,
+  places: readonly [ValueObjectPlace, ...ValueObjectPlace[]],
   text: string,
   why: string,
 ): SqlPlannerConflict {
+  const [place] = places;
   return {
     kind: 'nullabilityConflict',
-    summary: `Value object field "${text}" is required, and existing objects ${placeText(place)} may have no value for it`,
+    summary: `Value object field "${text}" is required, and existing objects may have no value for it, at:\n${places.map((each) => `- ${placeText(each)}`).join('\n')}`,
     why,
     location: {
       namespaceId: place.namespaceId,
@@ -236,7 +223,10 @@ const REACH_REASONS = {
  * is filled when the destination makes it required and the origin lacks it or makes it optional. A
  * backfill statement fills it with a value the user writes in `migration.ts`. Without one,
  * `unnamed` decides: `refuse` names the statement, and `temporaryValue` fills a scalar field whose
- * codec has a temporary value its data type takes, and refuses any other.
+ * codec has a temporary value its data type takes, and refuses any other. Under `refuse`, a field of
+ * a value object that also lost a field no statement renames is filled with a placeholder instead,
+ * so that the plan asks about the lost field first, as `temporaryValue` does: a rename answers it
+ * and plans again without the fill, and a delete leaves the placeholder for the user to fill.
  * Each fill acts on every column of the working
  * schema whose field holds the value object, at every path to its objects, nested or in lists, as
  * the destination names them. A column that holds the value object where its paths cannot be listed
@@ -263,22 +253,24 @@ export function planValueObjectFieldFills(input: {
       const { column, reach } = places.failure;
       return notOk(unlisted(text, column.column, column.table, REACH_REASONS[reach.kind]));
     }
-    const [first] = places.value;
+    const [first, ...rest] = places.value;
     if (first === undefined) continue;
     const value =
       required.statement !== undefined
         ? new UnfilledValue(`${text}:value`)
         : input.unnamed === 'temporaryValue'
           ? temporaryValueOf(required.field, input.types)
-          : undefined;
+          : required.removedFields.length > 0
+            ? new UnfilledValue(`${text}:value`)
+            : undefined;
     if (value === undefined) {
       return notOk(
         needsValue(
           required,
-          first,
+          [first, ...rest],
           text,
           input.unnamed === 'refuse'
-            ? backfillAdvice(contract, required, text)
+            ? `Add --backfill ${text} to write the value the plan fills them with.`
             : `db update cannot choose a value for a field that holds a value object or an enum value, or whose codec has no temporary value. Plan a migration with prisma migration plan --backfill ${text} instead, and write the value in its migration.ts.`,
         ),
       );
