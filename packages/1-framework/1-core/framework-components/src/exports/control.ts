@@ -152,7 +152,6 @@ export {
   DATA_LOSS_LEVELS,
   DATABASE_POLICIES_META_KEY,
   type DatabasePolicies,
-  type DatabasePoliciesUnreadable,
   type DatabasePolicyDifference,
   type DataLossLevel,
   DEFAULT_DATABASE_POLICIES,
@@ -164,7 +163,6 @@ export {
   type MarkerDatabasePoliciesComparison,
   movedDatabasePoliciesWhy,
   PartialDatabasePoliciesSchema,
-  type StoredDatabasePolicies,
   storedDatabasePolicies,
   withDeclaredDatabasePolicies,
 } from '../control/database-policies';
