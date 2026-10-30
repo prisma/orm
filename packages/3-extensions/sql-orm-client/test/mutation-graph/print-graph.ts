@@ -8,6 +8,7 @@ import type {
 } from '@internal/sql-relational-core/ast';
 import { Delete } from '../../src/mutation-graph/delete';
 import type { Edge, NodeId } from '../../src/mutation-graph/edge';
+import { FilterData } from '../../src/mutation-graph/filter-data';
 import { Find } from '../../src/mutation-graph/find';
 import { FindByKeys } from '../../src/mutation-graph/find-by-keys';
 import type { Graph } from '../../src/mutation-graph/graph';
@@ -17,7 +18,6 @@ import { InsertReportingKeys } from '../../src/mutation-graph/insert-reporting-k
 import type { Node } from '../../src/mutation-graph/node';
 import { Rows } from '../../src/mutation-graph/rows';
 import { Update } from '../../src/mutation-graph/update';
-import { Values } from '../../src/mutation-graph/values';
 import { printExpression } from './print-expression';
 
 type NodeNames = ReadonlyMap<NodeId, string>;
@@ -90,13 +90,9 @@ function printInsert(ast: InsertAst): string {
 }
 
 function printFindByKeys(node: FindByKeys): string {
-  const keys = node.keyColumns.map((column) => column.alias).join(', ');
-  const overrides = Object.entries(node.overrides).map(
-    ([column, value]) => `${column} = ${JSON.stringify(value)}`,
-  );
-  const changed = overrides.length === 0 ? '' : ` with ${overrides.join(', ')}`;
-  const missing = node.missing === undefined ? '' : ', every row';
-  return `${printFind(node.ast).replace('Find', 'FindByKeys')} by (${keys})${changed}${missing}`;
+  const keys = node.keyColumns.map(([, target]) => target.alias).join(', ');
+  const find = printFind(node.ast).replace('Find', 'FindByKeys');
+  return `${find} by (${keys}) for ${node.missing.operation}`;
 }
 
 function printInsertReportingKeys(node: InsertReportingKeys): string {
@@ -111,9 +107,6 @@ function printNode(node: Node): string {
   }
   if (node instanceof InsertReportingKeys) {
     return printInsertReportingKeys(node);
-  }
-  if (node instanceof Values) {
-    return `Values ${JSON.stringify(node.rows)}`;
   }
   if (node instanceof Find) {
     return printFind(node.ast);
@@ -136,7 +129,11 @@ function printEdge(names: NodeNames, edge: Edge<unknown>): string {
     return `Rows ${names.get(edge.from)}`;
   }
   const pairs = edge.columns.map(([source, target]) => `${source.alias}->${target.alias}`);
-  return `${edge.constructor.name} ${names.get(edge.from)} (${pairs.join(', ')})`;
+  const changed =
+    edge instanceof FilterData && Object.keys(edge.changed).length > 0
+      ? ` with ${JSON.stringify(edge.changed)}`
+      : '';
+  return `${edge.constructor.name} ${names.get(edge.from)} (${pairs.join(', ')})${changed}`;
 }
 
 function printInputs(names: NodeNames, inputs: readonly Edge<unknown>[]): string {

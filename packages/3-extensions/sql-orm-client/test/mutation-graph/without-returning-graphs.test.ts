@@ -70,7 +70,7 @@ describe('write graphs on a contract without capability "returning"', () => {
     expect(printGraph(createAllGraph(target, [ada], undefined, 'rows'))).toBe(
       [
         'n1 InsertReportingKeys Insert users keys [{"id":1}]',
-        'n2 FindByKeys users by (id), every row <- Rows n1',
+        'n2 FindByKeys users by (id) for create <- Rows n1',
         'result: n2',
       ].join('\n'),
     );
@@ -152,7 +152,7 @@ describe('write graphs on a contract without capability "returning"', () => {
       [
         "n1 Find users where name = 'Ada' limit 1",
         "n2 Update users set id = 5, name = 'Ada L.' <- FilterData n1 (id->id)",
-        'n3 FindByKeys users by (id) with id = 5 <- Rows n1',
+        'n3 Find users <- FilterData n1 (id->id) with {"id":5}',
         'result: n3',
       ].join('\n'),
     );
@@ -163,7 +163,7 @@ describe('write graphs on a contract without capability "returning"', () => {
       [
         "n1 Find users where name = 'Ada'",
         "n2 Update users set name = 'Pioneer' where name = 'Ada'",
-        'n3 FindByKeys users by (id) <- Rows n1',
+        'n3 Find users <- FilterData n1 (id->id)',
         'result: n3',
       ].join('\n'),
     );
@@ -199,10 +199,9 @@ describe('write graphs on a contract without capability "returning"', () => {
       printGraph(upsertGraph(counters, { label: 'a', slug: 'a' }, { label: 'b' }, ['slug'])),
     ).toBe(
       [
-        'n1 Insert counters on conflict do update',
-        'n2 Values [{"slug":"a"}]',
-        'n3 FindByKeys counters by (slug), every row <- Rows n2',
-        'result: n3',
+        'n1 InsertReportingKeys Insert counters on conflict do update keys [{"slug":"a"}]',
+        'n2 FindByKeys counters by (slug) for upsert <- Rows n1',
+        'result: n2',
       ].join('\n'),
     );
   });

@@ -35,7 +35,7 @@ describe('MySQL writes through the ORM', { timeout: timeouts.databaseOperation }
       });
       expect(statements).toEqual([
         'INSERT INTO `User` (`email`, `role`) VALUES (?1, ?2)',
-        'SELECT `User`.`email` AS `email`, `User`.`id` AS `id`, `User`.`role` AS `role` FROM `User` WHERE `User`.`id` IN (?1)',
+        'SELECT `User`.`email` AS `email`, `User`.`id` AS `id`, `User`.`role` AS `role`, `User`.`id` AS `__written_key_id` FROM `User` WHERE `User`.`id` = ?1',
       ]);
     });
   });

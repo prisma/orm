@@ -48,7 +48,6 @@ import { PayloadData } from './payload-data';
 import { Rows } from './rows';
 import { UnionAll } from './union-all';
 import { Update } from './update';
-import { Values } from './values';
 
 /** Whether the caller reads the written rows or only their count. */
 export type WriteResult = 'rows' | 'count';
@@ -72,9 +71,7 @@ export function updateAllGraph(
     readBackIdentity(context.contract, namespaceId, tableName, collection.modelName, 'updateAll()');
     const found = graph.add(new Find(selectIdentityAst(collection, state)), { filter: [] });
     graph.add(new Update(update), { filter: [] });
-    graph.setResult(
-      addReadBack(graph, collection, found, keyOverrides(collection, set), undefined),
-    );
+    graph.setResult(addReadBack(graph, collection, found, keyOverrides(collection, set)));
     return graph;
   }
   const updated = graph.add(new Update(update), { filter: [] });
@@ -126,7 +123,7 @@ export function updateFirstGraph(
   const update = updateAst(context.contract, state.tables, set, undefined);
   if (readsBack(collection, 'rows')) {
     graph.add(new Update(update), { filter: [sameRow(find, collection)] });
-    graph.setResult(addReadBack(graph, collection, find, keyOverrides(collection, set), undefined));
+    graph.setResult(addReadBack(graph, collection, find, keyOverrides(collection, set)));
     return graph;
   }
   const updated = graph.add(new Update(update), { filter: [sameRow(find, collection)] });
@@ -189,13 +186,10 @@ export function createAllGraph(
       {},
     );
     graph.setResult(
-      addReadBack(
-        graph,
-        collection,
-        inserted,
-        {},
-        { operation: method, modelName: collection.modelName },
-      ),
+      addFindOfWrittenRows(graph, collection, inserted, identityProjection(collection), {
+        operation: rows.length === 1 ? 'create' : 'createAll',
+        modelName: collection.modelName,
+      }),
     );
     return graph;
   }
@@ -301,21 +295,17 @@ export function upsertGraph(
   const upsert = upsertAst(contract, root, create, targeted ? conflictColumns : [], updateSet);
   if (readsBack(collection, 'rows')) {
     const conflictValues = upsertConflictValues(collection, create, update, conflictColumns);
-    graph.add(new Insert(upsert), { payload: [] });
-    const values = graph.add(new Values([conflictValues]), {});
-    const keyColumns = projectTableColumns(contract, root, conflictColumns);
+    const upserted = graph.add(
+      new InsertReportingKeys([upsert], [conflictValues], undefined, collection.modelName),
+      {},
+    );
     graph.setResult(
-      graph.add(
-        new FindByKeys(
-          readBackAst(collection),
-          keyColumns,
-          {},
-          {
-            operation: 'upsert()',
-            modelName: collection.modelName,
-          },
-        ),
-        { keys: new Rows(values, sameColumns(keyColumns)) },
+      addFindOfWrittenRows(
+        graph,
+        collection,
+        upserted,
+        projectTableColumns(contract, root, conflictColumns),
+        { operation: 'upsert', modelName: collection.modelName },
       ),
     );
     return graph;
@@ -352,16 +342,28 @@ function readsBack(collection: DescribeCollectionRowsOptions, result: WriteResul
   return result === 'rows' && !hasContractCapability(collection.context.contract, 'returning');
 }
 
+/** A read of the rows a write changed, by the keys `keysFrom` found, with the new values of any key column the write set. */
 function addReadBack(
   graph: Graph,
   collection: DescribeCollectionRowsOptions,
   keysFrom: NodeId,
-  overrides: Readonly<StorageRow>,
-  missing: MissingRow | undefined,
+  changed: Readonly<StorageRow>,
 ): NodeId {
-  const keyColumns = identityProjection(collection);
-  return graph.add(new FindByKeys(readBackAst(collection), keyColumns, overrides, missing), {
-    keys: new Rows(keysFrom, sameColumns(keyColumns)),
+  return graph.add(new Find(readBackAst(collection)), {
+    filter: [new FilterData(keysFrom, sameColumns(identityProjection(collection)), changed)],
+  });
+}
+
+function addFindOfWrittenRows(
+  graph: Graph,
+  collection: DescribeCollectionRowsOptions,
+  inserted: NodeId,
+  keyColumns: readonly ProjectionItem[],
+  missing: MissingRow,
+): NodeId {
+  const pairs = sameColumns(keyColumns);
+  return graph.add(new FindByKeys(readBackAst(collection), pairs, missing), {
+    keys: new Rows(inserted, pairs),
   });
 }
 
