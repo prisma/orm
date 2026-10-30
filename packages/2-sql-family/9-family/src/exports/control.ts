@@ -214,6 +214,7 @@ export {
   planValueObjectMemberFills,
   type StoredKeyFill,
   type UnnamedMemberFill,
+  unnamedMemberFillOf,
 } from '../core/migrations/value-object-member-fills';
 export {
   planVariantRowRewrites,

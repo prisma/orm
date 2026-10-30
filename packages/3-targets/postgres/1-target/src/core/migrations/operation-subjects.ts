@@ -6,6 +6,7 @@ import {
   type StoredValueSubject,
   type SubjectStorage,
   storageNameOfOperation,
+  UnfilledValue,
   unknownCallNames,
 } from '@internal/family-sql/control';
 import type {
@@ -29,6 +30,7 @@ import {
   DropColumnCall,
   DropPostgresRlsPolicyCall,
   DropTableCall,
+  FillStoredKeyCall,
   RawSqlCall,
   RemoveStoredKeyCall,
   RemoveStoredValueCall,
@@ -41,7 +43,7 @@ interface Locator {
   readonly fieldEvents: ReadonlyMap<OpFactoryCall, FieldEventCall>;
   /** The stored value removals the planner made for enum values, each with its enum value. */
   readonly storedValues?: ReadonlyMap<OpFactoryCall, StoredValueSubject>;
-  /** The key removals the planner made for value object fields, each with its value object field. */
+  /** The key removals and fills the planner made for value object fields, each with its value object field. */
   readonly storedKeys?: ReadonlyMap<OpFactoryCall, ValueObjectFieldCoordinate>;
   /** The row deletions the planner made for variants, each with its variant as the origin names it. */
   readonly variantRows?: ReadonlyMap<OpFactoryCall, ModelCoordinate>;
@@ -162,6 +164,29 @@ function accessChangesOf(
   return [];
 }
 
+/** The temporary values a call writes: a new required column's, or a planner-written fill's of a value object field. */
+function temporaryValuesOf(locator: Locator, call: OpFactoryCall): CallSubjects['temporaryValues'] {
+  if (call instanceof AddColumnWithTemporaryDefaultCall) {
+    return [{ table: call.tableName, column: call.columnName, value: call.temporaryDefault }];
+  }
+  const valueObjectField = locator.storedKeys?.get(call);
+  if (
+    !(call instanceof FillStoredKeyCall) ||
+    call.value instanceof UnfilledValue ||
+    valueObjectField === undefined
+  ) {
+    return [];
+  }
+  return [
+    {
+      table: call.tableName,
+      column: call.columnName,
+      value: JSON.stringify(call.value),
+      valueObjectField,
+    },
+  ];
+}
+
 function operationCountOf(call: OpFactoryCall): number {
   return 'companions' in call && Array.isArray(call.companions) ? 1 + call.companions.length : 1;
 }
@@ -197,10 +222,7 @@ export function postgresCallSubjects(
             ? [{ storageName: unknownName, table: undefined, loss }]
             : [],
       accessChanges: accessChangesOf(locator, call, replaced),
-      temporaryValues:
-        call instanceof AddColumnWithTemporaryDefaultCall
-          ? [{ table: call.tableName, column: call.columnName, value: call.temporaryDefault }]
-          : [],
+      temporaryValues: temporaryValuesOf(locator, call),
     };
   });
 }

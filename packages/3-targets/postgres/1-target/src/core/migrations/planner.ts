@@ -5,6 +5,7 @@ import type {
   SqlMigrationPlannerPlanOptions,
   SqlPlannerConflict,
   SqlPlannerFailureResult,
+  StoredKeyFill,
   StoredKeyRewrite,
   StoredValueRewrite,
   SuppressionRecord,
@@ -25,12 +26,14 @@ import {
   plannerFailure,
   planStatements,
   planValueObjectFieldRewrites,
+  planValueObjectMemberFills,
   planVariantRowRewrites,
   sqlTypeLookupsOf,
   storedValueOperationIndexes,
   storedValueSubjects,
   subjectsOfCalls,
   type TargetRefusal,
+  unnamedMemberFillOf,
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
@@ -115,6 +118,7 @@ import {
 import { postgresSchemaTables } from './schema-tables';
 import {
   postgresStoredKeyCalls,
+  postgresStoredKeyFillCalls,
   postgresStoredValueCallClasses,
   postgresStoredValueCalls,
   postgresVariantRowCalls,
@@ -387,6 +391,18 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       return plannerFailure([keyRewrites.failure]);
     }
     const storedKeyCalls = postgresStoredKeyCalls(keyRewrites.value, options.contract);
+    const memberFills = planValueObjectMemberFills({
+      statements: options.statements,
+      fromContract: options.fromContract,
+      contract: options.contract,
+      tables,
+      codecs: types.codecLookup,
+      unnamed: unnamedMemberFillOf(options.policy),
+    });
+    if (!memberFills.ok) {
+      return plannerFailure([memberFills.failure]);
+    }
+    const storedKeyFillCalls = postgresStoredKeyFillCalls(memberFills.value, options.contract);
     const rewrites = planEnumValueRewrites({
       statements: options.statements,
       fromContract: options.fromContract,
@@ -510,6 +526,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
         ),
         storedValueCallsStrategy([
           ...storedKeyCalls.keys(),
+          ...storedKeyFillCalls.keys(),
           ...storedValueCalls.keys(),
           ...variantRowCalls.keys(),
         ]),
@@ -618,11 +635,10 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
         (statement) =>
           storedValueOperationIndexes(
             calls,
-            new Map<OpFactoryCall, StoredValueRewrite | StoredKeyRewrite | VariantRowRewrite>([
-              ...storedKeyCalls,
-              ...storedValueCalls,
-              ...variantRowCalls,
-            ]),
+            new Map<
+              OpFactoryCall,
+              StoredValueRewrite | StoredKeyRewrite | StoredKeyFill | VariantRowRewrite
+            >([...storedKeyCalls, ...storedKeyFillCalls, ...storedValueCalls, ...variantRowCalls]),
             statement,
           ),
       ),
@@ -632,7 +648,10 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
           fieldEvents: new Map(fieldEventCalls.map((fieldEvent) => [fieldEvent.call, fieldEvent])),
           storedValues: storedValueSubjects(storedValueCalls, postgresStoredValueCallClasses),
           storedKeys: new Map(
-            [...storedKeyCalls].map(([call, rewrite]) => [call, rewrite.valueObjectField]),
+            [...storedKeyCalls, ...storedKeyFillCalls].map(([call, change]) => [
+              call,
+              change.valueObjectField,
+            ]),
           ),
           variantRows: new Map(
             [...variantRowCalls].map(([call, rewrite]) => [call, rewrite.model]),

@@ -94,11 +94,15 @@ export interface CallSubjects {
   readonly temporaryValues: readonly TemporaryColumnValue[];
 }
 
-/** A new required column of `table` in the destination, and the temporary value its existing rows get. */
+/**
+ * A new required column of `table` in the destination, and the temporary value its existing rows
+ * get; or, with `valueObjectField`, the column whose objects get a temporary value for that field.
+ */
 export interface TemporaryColumnValue {
   readonly table: string;
   readonly column: string;
   readonly value: string;
+  readonly valueObjectField?: ValueObjectFieldCoordinate;
 }
 
 interface SubjectContext {
@@ -211,13 +215,16 @@ export function subjectsOfCalls(
   const temporaryValues: MigrationTemporaryValue[] = [];
   let operationIndex = 0;
   for (const call of calls) {
-    for (const { table, column, value } of call.temporaryValues) {
+    for (const { table, column, value, valueObjectField } of call.temporaryValues) {
       temporaryValues.push({
         operationIndex,
-        subject: fieldOfColumn(context.contract, table, column) ?? {
-          kind: 'storage',
-          name: `${table}.${column}`,
-        },
+        subject:
+          valueObjectField !== undefined
+            ? { kind: 'valueObjectField', ...valueObjectField }
+            : (fieldOfColumn(context.contract, table, column) ?? {
+                kind: 'storage',
+                name: `${table}.${column}`,
+              }),
         value,
       });
     }

@@ -1,6 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import type {
   RowsHoldingValueMark,
+  StoredKeyFill,
   StoredKeyRewrite,
   StoredValueCallClasses,
   StoredValueCodec,
@@ -12,6 +13,7 @@ import { enumValueCoordinateJson } from '@internal/framework-components/control'
 import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   DeleteRowsCall,
+  FillStoredKeyCall,
   type PostgresOpFactoryCall,
   RemoveStoredKeyCall,
   RemoveStoredValueCall,
@@ -81,6 +83,25 @@ export function postgresStoredKeyCalls(
             );
       return [call, rewrite];
     }),
+  );
+}
+
+/** The calls that carry out a plan's fills of value object fields, each with the fill it carries out. */
+export function postgresStoredKeyFillCalls(
+  fills: readonly StoredKeyFill[],
+  contract: Contract<SqlStorage>,
+): ReadonlyMap<FillStoredKeyCall, StoredKeyFill> {
+  return new Map(
+    fills.map((fill) => [
+      new FillStoredKeyCall(
+        emissionSchemaForNamespace(contract, fill.namespaceId),
+        fill.table,
+        fill.column,
+        fill.path,
+        fill.value,
+      ),
+      fill,
+    ]),
   );
 }
 

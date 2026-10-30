@@ -151,6 +151,37 @@ describe('subjectsOfCalls', () => {
     ]);
   });
 
+  it('names the value object field a temporary value fills', () => {
+    const valueObjectField = { namespaceId: app, valueObject: 'GeoPoint', field: 'country' };
+    expect(
+      subjectsOfCalls(
+        [
+          unchanged,
+          {
+            ...unchanged,
+            label: 'Fill key',
+            temporaryValues: [
+              { table: 'user', column: 'full_name', value: '""', valueObjectField },
+            ],
+          },
+        ],
+        {
+          fromContract: origin,
+          contract: origin,
+          byHand,
+          removedVariants: [],
+          origins: NO_RENAMED_ORIGINS,
+        },
+      ).temporaryValues,
+    ).toEqual([
+      {
+        operationIndex: 1,
+        subject: { kind: 'valueObjectField', ...valueObjectField },
+        value: '""',
+      },
+    ]);
+  });
+
   describe('a removed variant', () => {
     const tasks = contractOf({
       Task: { table: 'tasks', fields: { id: 'id', type: 'type' } },

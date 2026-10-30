@@ -9,6 +9,7 @@ import {
 } from '@internal/contract/types';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import {
+  type MigrationOperationPolicy,
   type ResolvedMigrationStatement,
   type ResolvedValueObjectFieldBackfillStatement,
   type ValueObjectFieldCoordinate,
@@ -51,6 +52,15 @@ export interface StoredKeyFill {
  * when its codec has one.
  */
 export type UnnamedMemberFill = 'refuse' | 'temporaryValue';
+
+/**
+ * A policy that allows `data` operations plans a migration whose `migration.ts` the user can fill,
+ * so it refuses; any other, as `db update` runs, fills a temporary value, as it does for a new
+ * required column.
+ */
+export function unnamedMemberFillOf(policy: MigrationOperationPolicy): UnnamedMemberFill {
+  return policy.allowedOperationClasses.includes('data') ? 'refuse' : 'temporaryValue';
+}
 
 const TEMPORARY_JSON_VALUES: Readonly<Record<string, JsonValue>> = {
   string: '',
