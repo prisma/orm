@@ -442,6 +442,7 @@ describe('MongoMigrationRunner', () => {
       expect(result.failure).toMatchObject({
         code: 'MIGRATION.MARKER_CAS_FAILURE',
         meta: {
+          reason: 'storageHash',
           space: 'app',
           expectedStorageHash: 'origin',
           foundStorageHash: 'tampered-by-other-process',

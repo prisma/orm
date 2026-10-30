@@ -401,6 +401,7 @@ class MysqlMigrationRunner implements SqlMigrationRunner<MysqlPlanTargetDetails>
             'Marker was modified by another process during migration execution.',
             {
               meta: {
+                reason: 'storageHash',
                 space: plan.spaceId,
                 expectedStorageHash: existingMarker.storageHash,
                 foundStorageHash: found?.storageHash ?? null,

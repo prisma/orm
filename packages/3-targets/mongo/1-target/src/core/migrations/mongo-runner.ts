@@ -473,6 +473,7 @@ export class MongoMigrationRunner {
             'Marker was modified by another process during migration execution.',
             {
               meta: {
+                reason: 'storageHash',
                 space,
                 expectedStorageHash: existingMarker.storageHash,
                 foundStorageHash: found?.storageHash ?? null,

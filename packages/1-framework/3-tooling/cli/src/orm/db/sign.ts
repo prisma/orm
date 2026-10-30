@@ -276,6 +276,7 @@ function markerConflictDiagnostic(
       },
     ],
     meta: {
+      reason: 'storageHash',
       space: outcome.space,
       expectedStorageHash: expected?.storageHash ?? null,
       foundStorageHash: found?.storageHash ?? null,
