@@ -1,10 +1,10 @@
 /**
- * Journey: a MySQL schema written with the convenience date and time types `DateTime`, `Date`, `Time` and `Duration`, with every `as:` and `storage:` choice, emits each field as the explicit type it chooses, migrates, and `db verify` finds no difference, the `now()` defaults included. The ORM cannot write to MySQL yet, so each row is written through the raw SQL lane, with every value a parameter its column's codec encodes, and read back through the ORM. The database fills `@default(now())` for an instant, a date and a time of day. Changing a `DateTime @default(now())` field to `Date` is a change `db verify` reports and the planner names. A bare `DateTime` emits the contract `DatetimeJsDate(3)` emits, as `DateTime` did before the convenience types. Skipped when `MYSQL_URL` is not set.
+ * Journey: a MySQL schema written with the convenience date and time types `DateTime`, `Date`, `Time` and `Duration`, with every `as:` and `storage:` choice, emits each field as the explicit type it chooses, migrates, and `db verify` finds no difference, the `now()` defaults and an index on a `Duration` included. The ORM cannot write to MySQL yet, so each row is written through the raw SQL lane, with every value a parameter its column's codec encodes, and read back through the ORM, at the top level and through an include. A value with more fraction digits than its column holds is written rounded down. The database fills `@default(now())` for an instant, a date and a time of day, each within the time of the write. Changing a `DateTime @default(now())` field to `Date` is a change `db verify` reports and the planner names. A bare `DateTime` emits the contract `DatetimeJsDate(3)` emits, as `DateTime` did before the convenience types. Skipped when `MYSQL_URL` is not set.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import mysql from '@internal/mysql/runtime';
 import { contractFromJson } from '@internal/mysql/static';
-import { param } from '@internal/sql-relational-core/expression';
+import { ParamRef } from '@internal/sql-relational-core/ast';
 import { withMysqlDatabase } from '@repo/test-utils/mysql-database';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
@@ -25,8 +25,17 @@ import {
 
 const SCHEMA = `// use prisma-8
 
+model Calendar {
+  id     Int     @id
+  events Event[]
+
+  @@map("calendar")
+}
+
 model Event {
   id        Int                                     @id
+  calendarId Int
+  calendar  Calendar                                @relation(fields: [calendarId], references: [id])
   at        DateTime
   exactAt   DateTime(as: temporal)
   textAt    DateTime(as: string)
@@ -38,6 +47,8 @@ model Event {
   opensAt   Time
   opensAtT  Time(as: temporal, precision: 3)
   lasts     Duration
+  clipped   Time(precision: 0)
+  lastStamp DateTime(storage: timestamp, precision: 0)
   createdAt temporal.CreatedAt
   dbAt      DateTime                                @default(now())
   dbStamp   DateTime(as: string, storage: timestamp) @default(now())
@@ -47,6 +58,7 @@ model Event {
   fixedTime Time                                    @default(time\`09:30\`)
   fixedSpan Duration                                @default(duration\`PT1H30M\`)
 
+  @@index([lasts])
   @@map("event")
 }
 `;
@@ -68,15 +80,69 @@ const COLUMN_TYPES = {
   opensAt: ['mysql/time-string@1', { precision: 6 }],
   opensAtT: ['mysql/time-temporal@1', { precision: 3 }],
   lasts: ['mysql/duration-string@1', { length: 191 }],
+  clipped: ['mysql/time-string@1', { precision: 0 }],
+  lastStamp: ['mysql/timestamp-date@1', { precision: 0 }],
   createdAt: ['mysql/datetime@1', { precision: 3 }],
-};
+} satisfies Readonly<
+  Record<string, readonly [string, Readonly<Record<string, number>> | undefined]>
+>;
+
+/** A parameter its column's codec encodes with the column's type parameters, as the ORM writes it: a codec writes a value rounded down to its column's precision, 0 when none is given. */
+function columnParam(column: keyof typeof COLUMN_TYPES, value: unknown): ParamRef {
+  const [codecId, typeParams] = COLUMN_TYPES[column];
+  return ParamRef.of(value, {
+    codec: { codecId, ...(typeParams === undefined ? {} : { typeParams }) },
+  });
+}
 
 /** Emitting reads no database, so the bare-DateTime check runs without MySQL. */
 const UNCONNECTED_URL = 'mysql://root@127.0.0.1:1/unused';
 
-const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$/;
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-const ISO_TIME = /^\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?$/;
+/** The fields of every new date and time type, read through an include as well as at the top level. */
+const DATE_TIME_FIELDS = [
+  'at',
+  'exactAt',
+  'textAt',
+  'stamp',
+  'stampT',
+  'stampText',
+  'day',
+  'dayT',
+  'opensAt',
+  'opensAtT',
+  'lasts',
+  'clipped',
+  'lastStamp',
+] as const;
+
+/** A value read from MySQL as text that compares by value, since a Temporal value has no fields `toEqual` compares. */
+function comparable(value: unknown): string {
+  return value instanceof Date ? value.toISOString() : String(value);
+}
+
+function comparableFields(row: Readonly<Record<string, unknown>> | null | undefined) {
+  return Object.fromEntries(DATE_TIME_FIELDS.map((name) => [name, comparable(row?.[name])]));
+}
+
+/** Whether `clock`, a UTC time of day, is the time of an instant from `earliest` to `latest`, on either of their UTC dates. */
+/** The ORM reads a contract loaded at run time without its relation names, so the include is typed here. */
+interface CalendarsWithEvents {
+  select(field: 'id'): {
+    include(
+      relation: 'events',
+      refine: (events: { select(...fields: readonly string[]): unknown }) => unknown,
+    ): { first(where: { id: number }): Promise<Readonly<Record<string, unknown>> | null> };
+  };
+}
+
+function isClockBetween(clock: unknown, earliest: number, latest: number): boolean {
+  if (typeof clock !== 'string') return false;
+  const dates = new Set([earliest, latest].map((ms) => new Date(ms).toISOString().slice(0, 10)));
+  return [...dates].some((date) => {
+    const instant = Date.parse(`${date}T${clock}Z`);
+    return instant >= earliest && instant <= latest;
+  });
+}
 
 function setup(createTempDir: () => string, url: string): JourneyContext {
   const testDir = createTempDir();
@@ -142,21 +208,27 @@ withTempDir(({ createTempDir }) => {
           try {
             const before = Date.now() - 1000;
             await db.execute(
+              db.raw.sql`INSERT INTO calendar (id) VALUES (${1})`.affectedCount().build(),
+            );
+            await db.execute(
               db.raw
-                .sql`INSERT INTO event (id, at, exactAt, textAt, stamp, stampT, stampText, day, dayT, opensAt, opensAtT, lasts, createdAt) VALUES (
+                .sql`INSERT INTO event (id, calendarId, at, exactAt, textAt, stamp, stampT, stampText, day, dayT, opensAt, opensAtT, lasts, clipped, lastStamp, createdAt) VALUES (
                 ${1},
-                ${param(new Date('2024-02-29T10:00:00.123Z'), { codecId: 'mysql/datetime@1' })},
-                ${param(Temporal.Instant.from('2024-02-29T15:30:00.123456+05:30'), { codecId: 'mysql/datetime-temporal@1' })},
-                ${param('2024-02-29T10:00:00.5Z', { codecId: 'mysql/datetime-string@1' })},
-                ${param(new Date('2024-02-29T10:00:00.250Z'), { codecId: 'mysql/timestamp-date@1' })},
-                ${param(Temporal.Instant.from('2024-02-29T10:00:00.75Z'), { codecId: 'mysql/timestamp-temporal@1' })},
-                ${param('2024-02-29T11:00:00+01:00', { codecId: 'mysql/timestamp-string@1' })},
-                ${param('2024-02-29', { codecId: 'mysql/date-string@1' })},
-                ${param(Temporal.PlainDate.from('2024-03-01'), { codecId: 'mysql/date-temporal@1' })},
-                ${param('09:30', { codecId: 'mysql/time-string@1' })},
-                ${param(Temporal.PlainTime.from('17:45:00.25'), { codecId: 'mysql/time-temporal@1' })},
-                ${param('P1DT12H', { codecId: 'mysql/duration-string@1' })},
-                ${param(new Date(before), { codecId: 'mysql/datetime@1' })}
+                ${1},
+                ${columnParam('at', new Date('2024-02-29T10:00:00.123Z'))},
+                ${columnParam('exactAt', Temporal.Instant.from('2024-02-29T15:30:00.123456+05:30'))},
+                ${columnParam('textAt', '2024-02-29T10:00:00.5Z')},
+                ${columnParam('stamp', new Date('2024-02-29T10:00:00.250Z'))},
+                ${columnParam('stampT', Temporal.Instant.from('2024-02-29T10:00:00.75Z'))},
+                ${columnParam('stampText', '2024-02-29T11:00:00+01:00')},
+                ${columnParam('day', '2024-02-29')},
+                ${columnParam('dayT', Temporal.PlainDate.from('2024-03-01'))},
+                ${columnParam('opensAt', '09:30')},
+                ${columnParam('opensAtT', Temporal.PlainTime.from('17:45:00.25'))},
+                ${columnParam('lasts', 'P1DT12H')},
+                ${columnParam('clipped', '23:59:59.6')},
+                ${columnParam('lastStamp', new Date('2038-01-19T03:14:07.500Z'))},
+                ${columnParam('createdAt', new Date(before))}
               )`
                 .affectedCount()
                 .build(),
@@ -165,17 +237,7 @@ withTempDir(({ createTempDir }) => {
             if (events === undefined) return expect.unreachable('the contract has an Event model');
             const read = await events
               .select(
-                'at',
-                'exactAt',
-                'textAt',
-                'stamp',
-                'stampT',
-                'stampText',
-                'day',
-                'dayT',
-                'opensAt',
-                'opensAtT',
-                'lasts',
+                ...DATE_TIME_FIELDS,
                 'dbAt',
                 'dbStamp',
                 'dbDay',
@@ -198,10 +260,12 @@ withTempDir(({ createTempDir }) => {
               opensAt: '09:30:00',
               opensAtT: expect.any(Temporal.PlainTime),
               lasts: 'P1DT12H',
+              clipped: '23:59:59',
+              lastStamp: new Date('2038-01-19T03:14:07.000Z'),
               dbAt: expect.any(Date),
-              dbStamp: expect.stringMatching(ISO_INSTANT),
-              dbDay: expect.stringMatching(ISO_DATE),
-              dbClock: expect.stringMatching(ISO_TIME),
+              dbStamp: expect.any(String),
+              dbDay: expect.any(String),
+              dbClock: expect.any(String),
               fixedDay: '2024-02-29',
               fixedTime: '09:30:00',
               fixedSpan: 'PT1H30M',
@@ -217,10 +281,30 @@ withTempDir(({ createTempDir }) => {
               dayT: '2024-03-01',
               opensAtT: '17:45:00.25',
             });
+            const after = Date.now() + 1000;
             const dbAtValue = read?.['dbAt'];
             const dbAt = dbAtValue instanceof Date ? dbAtValue.getTime() : Number.NaN;
-            expect(dbAt).toBeGreaterThanOrEqual(before);
-            expect(dbAt).toBeLessThanOrEqual(Date.now() + 1000);
+            const dbStamp = Date.parse(String(read?.['dbStamp']));
+            const utcDays = [before, after].map((ms) => new Date(ms).toISOString().slice(0, 10));
+            expect({
+              dbAt: dbAt >= before && dbAt <= after,
+              dbStamp: dbStamp >= before && dbStamp <= after,
+              dbDay: utcDays.includes(String(read?.['dbDay'])),
+              dbClock: isClockBetween(read?.['dbClock'], before, after),
+            }).toEqual({ dbAt: true, dbStamp: true, dbDay: true, dbClock: true });
+
+            const calendars = db.orm['Calendar'];
+            if (calendars === undefined) {
+              return expect.unreachable('the contract has a Calendar model');
+            }
+            const viaInclude = await (calendars as unknown as CalendarsWithEvents)
+              .select('id')
+              .include('events', (included) => included.select(...DATE_TIME_FIELDS))
+              .first({ id: 1 });
+            const included: unknown = viaInclude?.['events'];
+            expect(Array.isArray(included) ? included.map(comparableFields) : included).toEqual([
+              comparableFields(read),
+            ]);
           } finally {
             await db.close();
           }
