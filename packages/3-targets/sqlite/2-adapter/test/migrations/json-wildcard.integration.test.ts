@@ -144,6 +144,9 @@ describe('SQLite JSON wildcard', { timeout: timeouts.databaseOperation }, () => 
         [{ latitude: 5 }],
       ],
     });
+    expect((await texts('byCountry'))[0], 'the dictionary keeps its order').toBe(
+      '{"nz":{"lng":2,"latitude":1},"au":{"latitude":2}}',
+    );
   });
 
   it('removes a key in every member value of an object', async () => {
