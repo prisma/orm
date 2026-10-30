@@ -210,7 +210,7 @@ describe('providePslCompletionItems', () => {
     async () => {
       const { mongoScalarAuthoringTypes } = await importFromPackageRoot<{
         readonly mongoScalarAuthoringTypes: AuthoringTypeNamespace;
-      }>('../../../3-targets/mongo/2-adapter/src/exports/control.ts');
+      }>('../../../3-targets/mongo/1-target/src/core/authoring.ts');
       const { items } = completeWithSource({
         markedSource: 'model Post { value | }',
         pslBlockDescriptors: {},

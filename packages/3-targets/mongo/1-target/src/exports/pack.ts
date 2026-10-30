@@ -20,6 +20,7 @@ const mongoTargetPack: {
   readonly generatorFunctions: typeof mongoTargetDescriptorMeta.generatorFunctions;
   readonly __codecTypes?: CodecTypes;
   readonly __parameterizedOutputTypes?: ParameterizedOutputTypesForTypeParams;
+  readonly __dataTypeArguments?: (typeof mongoTargetDescriptorMeta)['__dataTypeArguments'];
 } = mongoTargetDescriptorMeta;
 
 export default mongoTargetPack;

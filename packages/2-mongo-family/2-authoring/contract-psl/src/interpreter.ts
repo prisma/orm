@@ -912,13 +912,24 @@ function resolveNonRelationField(
   }
 
   if (call === undefined) scalarNames.warnDeprecated(field, descriptor);
-  return {
-    field: {
-      type: scalarTypeOfConstructor(descriptor, call),
-      nullable: field.optional,
-      many: field.list ? { elementNullable: field.elementOptional } : false,
-    },
-  };
+  const type = scalarTypeOfConstructor({
+    descriptor,
+    call,
+    codecLookup,
+    diagnostics: context.diagnostics,
+    source,
+    entityLabel,
+    dataTypes: context.dataTypes,
+  });
+  return type === undefined
+    ? undefined
+    : {
+        field: {
+          type,
+          nullable: field.optional,
+          many: field.list ? { elementNullable: field.elementOptional } : false,
+        },
+      };
 }
 
 function processEnumDeclarations(input: {

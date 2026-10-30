@@ -77,6 +77,7 @@ describe('mongo scalar types derived from the unified namespace', () => {
       Binary: { codecId: 'mongo/binary@1' },
       Json: { codecId: 'mongo/json@1' },
       Bson: { codecId: 'mongo/bson@1' },
+      Vector: { codecId: 'mongo/vector@1' },
       Int: { codecId: 'mongo/int32@1' },
       Float: { codecId: 'mongo/double@1' },
       Boolean: { codecId: 'mongo/bool@1' },
@@ -102,7 +103,24 @@ describe('mongo scalar types derived from the unified namespace', () => {
       'Json',
       'ObjectId',
       'String',
+      'Vector',
     ]);
+  });
+
+  it('resolves Vector, with and without a length', () => {
+    const result = emit(`model doc {
+  id        ObjectId @id @map("_id")
+  embedding Vector(3)
+  plain     Vector
+}
+`);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.domain.namespaces['__unbound__']?.models['doc']?.fields).toMatchObject({
+      embedding: { type: { kind: 'scalar', codecId: 'mongo/vector@1', typeParams: { length: 3 } } },
+      plain: { type: { kind: 'scalar', codecId: 'mongo/vector@1' } },
+    });
   });
 
   it('resolves ObjectId fields (incl. the one stored as _id) through the derived map', () => {

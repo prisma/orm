@@ -38,4 +38,7 @@ const mongoTargetDescriptorMetaBase = {
 export const mongoTargetDescriptorMeta: typeof mongoTargetDescriptorMetaBase & {
   readonly __codecTypes?: CodecTypes;
   readonly __parameterizedOutputTypes?: ParameterizedOutputTypesForTypeParams;
+  readonly __dataTypeArguments?: {
+    readonly 'mongo/int32': { readonly argument: number; readonly parameter: number };
+  };
 } = mongoTargetDescriptorMetaBase;
