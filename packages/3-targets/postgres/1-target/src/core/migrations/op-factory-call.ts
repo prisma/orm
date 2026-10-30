@@ -27,6 +27,10 @@ import {
   createSqlTextSources,
   encodeStoredValue,
   isUnfilledSlot,
+  type JsonKeyPath,
+  type JsonPath,
+  keyPathOf,
+  parseJsonPath,
   type SqlMigrationPlanOperation,
   type SqlSlot,
   type SqlTextSources,
@@ -125,6 +129,7 @@ import {
 import { dropSchema, renameSchema, setTableSchema } from './operations/schemas';
 import type { ForeignKeySpec } from './operations/shared';
 import { step, targetDetails } from './operations/shared';
+import { keyPlace, renameStoredKey } from './operations/stored-keys';
 import { removeStoredValue, replaceStoredValue, storedValueText } from './operations/stored-values';
 import { dropTable, renameTable } from './operations/tables';
 import { buildAddNotNullColumnWithTemporaryDefaultOperation } from './planner-recipes';
@@ -2478,6 +2483,91 @@ export class RemoveStoredValueCall extends PostgresOpFactoryCallNode {
 }
 
 // ============================================================================
+// Stored keys
+// ============================================================================
+
+function refusedArgument(
+  factory: string,
+  location: readonly string[],
+  argument: string,
+  why: string,
+): never {
+  throw postgresError(
+    'CONTRACT.ARGUMENT_INVALID',
+    `${factory}({ ${location.join(', ')} }): ${why}`,
+    {
+      meta: { what: `${factory} ${argument}` },
+    },
+  );
+}
+
+function requirePath(text: string, factory: string, location: readonly string[]): JsonPath {
+  const parsed = parseJsonPath(text);
+  return parsed.ok ? parsed.value : refusedArgument(factory, location, 'path', parsed.failure);
+}
+
+function requireKeyPath(text: string, factory: string, location: readonly string[]): JsonKeyPath {
+  return (
+    keyPathOf(requirePath(text, factory, location)) ??
+    refusedArgument(
+      factory,
+      location,
+      'path',
+      `path ${JSON.stringify(text)} does not end at a member name, the key the operation acts on`,
+    )
+  );
+}
+
+/** Renames the key at the end of a JSON path, in every object of a column the path reaches. */
+export class RenameStoredKeyCall extends PostgresOpFactoryCallNode {
+  readonly factoryName = 'renameStoredKey' as const;
+  readonly operationClass = 'widening' as const;
+  readonly schemaName: string;
+  readonly tableName: string;
+  readonly columnName: string;
+  readonly path: JsonKeyPath;
+  readonly to: string;
+  readonly label: string;
+
+  constructor(schemaName: string, tableName: string, columnName: string, path: string, to: string) {
+    super();
+    const location = columnCallLocation(schemaName, tableName, columnName);
+    this.schemaName = schemaName;
+    this.tableName = tableName;
+    this.columnName = columnName;
+    this.path = requireKeyPath(path, this.factoryName, location);
+    if (typeof to !== 'string' || to === this.path.key) {
+      refusedArgument(
+        this.factoryName,
+        location,
+        'to',
+        `to must be a key other than ${JSON.stringify(this.path.key)}; got ${JSON.stringify(to)}`,
+      );
+    }
+    this.to = to;
+    this.label = `Rename key "${this.path.key}" to "${to}" ${keyPlace(this.path, tableName, columnName)}`;
+    this.freeze();
+  }
+
+  toOp(): Op {
+    return renameStoredKey(this.schemaName, this.tableName, this.columnName, this.path, this.to);
+  }
+
+  renderTypeScript(): string {
+    const opts = [
+      ...columnCallLocation(this.schemaName, this.tableName, this.columnName),
+      `path: ${jsonToTsSource(this.path.path.text)}`,
+      `to: ${jsonToTsSource(this.to)}`,
+    ];
+    return `this.renameStoredKey({ ${opts.join(', ')} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+}
+
+// ============================================================================
 // Data transform
 // ============================================================================
 
@@ -2798,6 +2888,7 @@ export type PostgresOpFactoryCall =
   | AddNativeEnumValueCall
   | ReplaceStoredValueCall
   | RemoveStoredValueCall
+  | RenameStoredKeyCall
   | CreatePostgresRlsPolicyCall
   | DropPostgresRlsPolicyCall
   | EnableRowLevelSecurityCall

@@ -10,6 +10,7 @@ export {
   RecreateTableCall,
   RemoveStoredValueCall,
   RenameColumnCall,
+  RenameStoredKeyCall,
   RenameTableCall,
   ReplaceStoredValueCall,
   type SqliteOpFactoryCall,

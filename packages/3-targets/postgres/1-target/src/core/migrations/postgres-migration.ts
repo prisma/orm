@@ -65,6 +65,7 @@ import {
   RenameIndexCall,
   RenamePostgresRlsPolicyCall,
   RenameSchemaCall,
+  RenameStoredKeyCall,
   ReplaceStoredValueCall,
   SetDefaultCall,
   SetExtensionSchemaCall,
@@ -343,6 +344,27 @@ export abstract class PostgresMigration<
       this.storedValueCodec('removeStoredValue', options.codecRef),
       options.enumValue,
     ).toOp();
+  }
+
+  /**
+   * Emit an `UPDATE` operation that renames the key at the end of `path` to `to`, in every object of `column` the path reaches. `path` is an RFC 9535 JSONPath of member names (`.lat`, `['lat']`) and list wildcards (`[*]`) from the column's value, `$`, and ends at the key: `'$[*].lat'` renames `lat` in each object of a list. Only rows that hold the key are written. Its check fails, and nothing changes, while an object holds both keys.
+   */
+  protected renameStoredKey(options: {
+    readonly schema?: string;
+    readonly table: string;
+    readonly column: string;
+    readonly path: string;
+    readonly to: string;
+  }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
+    return Promise.resolve(
+      new RenameStoredKeyCall(
+        options.schema ?? UNBOUND_NAMESPACE_ID,
+        options.table,
+        options.column,
+        options.path,
+        options.to,
+      ).toOp(),
+    );
   }
 
   /**

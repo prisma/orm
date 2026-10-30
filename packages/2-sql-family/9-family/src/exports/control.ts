@@ -54,6 +54,8 @@ export {
   planFieldEventOperations,
 } from '../core/migrations/field-event-planner';
 export { fieldOfColumn } from '../core/migrations/field-of-column';
+export type { JsonKeyPath, JsonPath, JsonPathStep } from '../core/migrations/json-path';
+export { jsonPathText, keyPathOf, parseJsonPath } from '../core/migrations/json-path';
 export { storageNameOfOperation } from '../core/migrations/operation-storage-name';
 export type {
   CallSubjects,

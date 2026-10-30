@@ -16,7 +16,11 @@ import {
   createSqlTextSources,
   encodeStoredValue,
   isUnfilledSlot,
+  type JsonKeyPath,
+  type JsonPath,
+  keyPathOf,
   type MigrationOperationClass,
+  parseJsonPath,
   type SqlMigrationPlanOperation,
   type SqlSlot,
   type SqlTextSources,
@@ -56,6 +60,7 @@ import { quoteIdentifier, SQLITE_QUOTING } from '../sql-utils';
 import { addColumn, dropColumnExecuteSql, renameColumn } from './operations/columns';
 import type { SqliteColumnSpec, SqliteIndexSpec, SqliteTableSpec } from './operations/shared';
 import { INLINE_AUTOINCREMENT_PRIMARY_KEY, step } from './operations/shared';
+import { keyPlace, renameStoredKey } from './operations/stored-keys';
 import { removeStoredValue, replaceStoredValue, storedValueText } from './operations/stored-values';
 import {
   type ColumnShape,
@@ -1252,6 +1257,89 @@ export class RemoveStoredValueCall extends SqliteOpFactoryCallNode {
 }
 
 // ============================================================================
+// Stored keys
+// ============================================================================
+
+function columnCallLocation(tableName: string, columnName: string): readonly string[] {
+  return [`table: ${jsonToTsSource(tableName)}`, `column: ${jsonToTsSource(columnName)}`];
+}
+
+function refusedArgument(
+  factory: string,
+  location: readonly string[],
+  argument: string,
+  why: string,
+): never {
+  throw sqliteError('CONTRACT.ARGUMENT_INVALID', `${factory}({ ${location.join(', ')} }): ${why}`, {
+    meta: { what: `${factory} ${argument}` },
+  });
+}
+
+function requirePath(text: string, factory: string, location: readonly string[]): JsonPath {
+  const parsed = parseJsonPath(text);
+  return parsed.ok ? parsed.value : refusedArgument(factory, location, 'path', parsed.failure);
+}
+
+function requireKeyPath(text: string, factory: string, location: readonly string[]): JsonKeyPath {
+  return (
+    keyPathOf(requirePath(text, factory, location)) ??
+    refusedArgument(
+      factory,
+      location,
+      'path',
+      `path ${JSON.stringify(text)} does not end at a member name, the key the operation acts on`,
+    )
+  );
+}
+
+/** Renames the key at the end of a JSON path, in every object of a column the path reaches. */
+export class RenameStoredKeyCall extends SqliteOpFactoryCallNode {
+  readonly factoryName = 'renameStoredKey' as const;
+  readonly operationClass = 'widening' as const;
+  readonly tableName: string;
+  readonly columnName: string;
+  readonly path: JsonKeyPath;
+  readonly to: string;
+  readonly label: string;
+
+  constructor(tableName: string, columnName: string, path: string, to: string) {
+    super();
+    const location = columnCallLocation(tableName, columnName);
+    this.tableName = tableName;
+    this.columnName = columnName;
+    this.path = requireKeyPath(path, this.factoryName, location);
+    if (typeof to !== 'string' || to === this.path.key) {
+      refusedArgument(
+        this.factoryName,
+        location,
+        'to',
+        `to must be a key other than ${JSON.stringify(this.path.key)}; got ${JSON.stringify(to)}`,
+      );
+    }
+    this.to = to;
+    this.label = `Rename key "${this.path.key}" to "${to}" ${keyPlace(this.path, tableName, columnName)}`;
+    this.freeze();
+  }
+
+  toOp(): Op {
+    return renameStoredKey(this.tableName, this.columnName, this.path, this.to);
+  }
+
+  renderTypeScript(): string {
+    const opts = [
+      ...columnCallLocation(this.tableName, this.columnName),
+      `path: ${jsonToTsSource(this.path.path.text)}`,
+      `to: ${jsonToTsSource(this.to)}`,
+    ];
+    return `this.renameStoredKey({ ${opts.join(', ')} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+}
+
+// ============================================================================
 // Data transform
 // ============================================================================
 
@@ -1364,6 +1452,7 @@ export type SqliteOpFactoryCall =
   | DropIndexCall
   | ReplaceStoredValueCall
   | RemoveStoredValueCall
+  | RenameStoredKeyCall
   | DataTransformCall
   | RawSqlCall;
 
