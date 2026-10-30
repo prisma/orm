@@ -92,6 +92,7 @@ Will, 2026-09-30: the emulator controls (start, stop, list, reset) are now urgen
 
 - Maturity is set per package, not for Prisma 8 as a whole (Will). The ORM core, the framework, has its own maturity level: release candidate today. Each database target package has its own level: PostgreSQL is release candidate, MongoDB is early access, and so on. A package's public API is its public exports. Apps and extension authors use the same exports, so one rule covers both. Reason: each database can launch on its own date, and the community can be asked to help build the remaining targets. That invitation need not be documented now, but the public pages must set the expectation.
 - Designing the policy and documenting it publicly is a task in this plan, with the existing definitions updated to match (Will). Stream 6, row 4. Questions such as version numbers are settled in that design, not now.
+- ORM writes do not get plans (Will). TML-3684, which would let `db.toSql` show the SQL of an ORM `create`, `update` or `delete`, is cancelled. Reason: no user asked for it, `db.sql` already gives plans for writes, and tests can run a write in a transaction instead. Reopen if a user asks.
 
 ## Changes of 2026-10-23
 
