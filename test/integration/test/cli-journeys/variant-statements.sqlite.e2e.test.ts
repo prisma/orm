@@ -3,7 +3,7 @@
  *
  * `Task` is stored in table `task` and discriminated by `type`. `Bug` is a variant stored in `task`, with its own column `severity`; `Epic` is a variant stored in `task` with its own column `scope`.
  *
- * V1 changes the discriminator value of `Bug` from `bug` to `defect` under `db update`: refused, offering `--convert Bug` first and `--delete Bug` second, then `--convert Bug` rewrites the rows. V2 does the same with `migration plan --convert Bug`, and the `migration.ts` written reproduces itself. V3 removes `Bug`: one question about the model `Bug`, answered by `--delete Bug`, which deletes its rows and drops its column.
+ * V1 changes the discriminator value of `Bug` from `bug` to `defect` under `db update`: refused, offering `--convert Bug` first and `--delete Bug` second, then `--convert Bug` rewrites the rows. V2 does the same with `migration plan --convert Bug`, and the `migration.ts` written reproduces itself. V3 removes `Bug`: one question about the model `Bug`, answered by `--delete Bug`, which deletes its rows and drops its column. V4 removes a variant with no fields of its own, so no column: the question about it is answered by `--delete Bug`, which deletes its rows.
  *
  * Every journey ends with `db verify --schema-only` clean and a further plan empty.
  */
@@ -58,6 +58,7 @@ model Epic {
 const FROM_PSL = contractWith('bug');
 const CHANGED_PSL = contractWith('defect');
 const REMOVED_PSL = contractWith(undefined);
+const WITHOUT_FIELDS_PSL = FROM_PSL.replace('  severity String?\n', '');
 
 type SqliteJourney = JourneyContext & { readonly dbPath: string };
 
@@ -246,6 +247,33 @@ withTempDir(({ createTempDir }) => {
         expect(tasks(ctx.dbPath)).toEqual([{ id: 2, type: 'epic' }]);
         expect(columns(ctx.dbPath)).toEqual(['id', 'scope', 'type']);
         await expectSettled(ctx, 'V3.06');
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
+
+  describe('V4 (SQLite): remove a variant with no columns of its own, with db update', () => {
+    it(
+      'asks one question about the model Bug, and --delete Bug deletes its rows',
+      async () => {
+        const ctx = setupSqliteJourney(createTempDir);
+        await emit(ctx, WITHOUT_FIELDS_PSL, 'V4.01');
+        expect((await runDbUpdate(ctx, ['--json'])).exitCode, 'V4.02: create').toBe(0);
+        withDatabase(ctx.dbPath, (db) => {
+          db.exec(`INSERT INTO "task" (id, type) VALUES (1, 'bug'), (2, 'epic')`);
+        });
+        await emit(ctx, REMOVED_PSL, 'V4.03');
+
+        const refused = await runDbUpdate(ctx, ['--no-interactive', '--json']);
+        expect(engineError(refused)?.code, 'V4.04: nobody to answer').toBe('CLI.CONSENT_REQUIRED');
+        expect(nextActionText(refused), 'V4.04: one flag for the model').toContain('--delete Bug');
+
+        const update = await runDbUpdate(ctx, ['--delete', 'Bug', '--no-interactive', '--json']);
+        expect(update.exitCode, `V4.05: db update: ${JSON.stringify(engineError(update))}`).toBe(0);
+
+        expect(tasks(ctx.dbPath)).toEqual([{ id: 2, type: 'epic' }]);
+        expect(columns(ctx.dbPath)).toEqual(['id', 'scope', 'type']);
+        await expectSettled(ctx, 'V4.06');
       },
       timeouts.spinUpPpgDev,
     );

@@ -1251,5 +1251,32 @@ model Feature {
       expect(Object.values(result.value.roots)).not.toContainEqual(crossRef('Feature', 'public'));
       expect(result.value.roots).toHaveProperty('tasks', crossRef('Task', 'public'));
     });
+
+    it('gives a variant with no fields of its own an empty fields object in storage', () => {
+      const result = interpretPostgresSchema(
+        `model Task {
+  id   Int    @id
+  type String
+
+  @@discriminator(type)
+  @@map("tasks")
+}
+
+model Epic {
+  @@base(Task, "epic")
+}`,
+        { controlMutationDefaults: builtinControlMutationDefaults },
+      );
+
+      if (!result.ok) throw new Error(JSON.stringify(result.failure));
+      expect(modelsOf(result.value)['Epic']?.storage).toEqual({
+        table: 'tasks',
+        namespaceId: 'public',
+        fields: {},
+      });
+      expect(() =>
+        validateSqlContractFully(JSON.parse(JSON.stringify(result.value))),
+      ).not.toThrow();
+    });
   });
 });
