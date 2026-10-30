@@ -661,6 +661,23 @@ function readField(
     : readNewField(state, namespaceId, modelName, field);
 }
 
+/** A value object field named as `Model.field.valueObjectField`, which a statement names through its value object instead. */
+function valueObjectFieldThroughModel(
+  contract: NamedContract,
+  modelName: string,
+  fieldName: string,
+  valueObjectField: string,
+): Refusal | undefined {
+  const lookup = lookupModel(contract, undefined, modelName);
+  if (lookup.kind !== 'found' || !hasField(lookup.model, fieldName)) return undefined;
+  const type = lookup.model.fields[fieldName]?.type;
+  if (type?.kind !== 'valueObject') return undefined;
+  return {
+    reason: `"${modelName}.${fieldName}" holds value object "${type.entityName}", and a statement names a value object field through its value object, not through a model field`,
+    fix: `Name the field as ${type.entityName}.${valueObjectField}.`,
+  };
+}
+
 function readSide(
   state: ResolutionState,
   side: Side,
@@ -684,6 +701,8 @@ function readSide(
     if (asField.ok || asEnumValue.ok || asValueObjectField.ok) {
       return oneReading(segments.join('.'), asField, [asEnumValue, asValueObjectField]);
     }
+    const throughModel = valueObjectFieldThroughModel(contract, first, second, third);
+    if (throughModel !== undefined) return notOk(throughModel);
     if (containerNames(contract).valueObjects.has(second)) return asValueObjectField;
     if (!declaresEnums(contract)) return asField;
     return notOk({

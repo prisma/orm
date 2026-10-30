@@ -53,6 +53,15 @@ describe('resolveStatements, value object field renames', () => {
     ]).toEqual([expected, expected]);
   });
 
+  it('refuses a value object field named through a model field, naming it through its value object', () => {
+    const failure = expectFailure(
+      resolve([rename('Place.location.lat:Place.location.latitude')]),
+      UNRESOLVED,
+      '"Place.location" holds value object "GeoPoint", and a statement names a value object field through its value object, not through a model field',
+    );
+    expect(failure.fix).toContain('Name the field as GeoPoint.lat.');
+  });
+
   it('refuses a field the destination value object still has', () => {
     expectFailure(
       resolve([rename('GeoPoint.lng:GeoPoint.latitude')]),
