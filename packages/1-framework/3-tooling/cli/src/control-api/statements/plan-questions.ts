@@ -30,7 +30,7 @@ import type { ConsentVerb } from './parse-consent';
 import { resolveStatements } from './resolve-statements';
 import { statementFlag } from './statement-flag';
 import { ENTITY_WORDS, type StatementText } from './statement-text';
-import { variantValueChanged } from './variants';
+import { newVariantsOfBase, variantValueChanged } from './variants';
 
 /** A verb a plan question accepts. */
 export type PlanQuestionVerb = 'rename' | 'convert' | ConsentVerb;
@@ -424,7 +424,15 @@ function renameForm(
   text: string,
   contracts: StatementContracts & { readonly destination: ContractWithDomain },
 ): string {
-  if (subject.kind === 'model' || subject.kind === 'storage') return `${text}:<new name>`;
+  if (subject.kind === 'storage') return `${text}:<new name>`;
+  if (subject.kind === 'model') {
+    const renamedTo = resolvedRenames(contracts).flatMap((statement) =>
+      statement.kind === 'rename' && statement.entity === 'model' ? [statement.to] : [],
+    );
+    const added = newVariantsOfBase(contracts.origin, contracts.destination, subject, renamedTo);
+    const [only] = added;
+    return `${text}:${only !== undefined && added.length === 1 ? modelStatementText(contracts.destination, only) : '<new name>'}`;
+  }
   const parent = text.slice(0, text.lastIndexOf('.'));
   const only =
     subject.kind === 'enumValue'

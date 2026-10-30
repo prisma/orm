@@ -1,4 +1,8 @@
-import type { ContractModelBase, ContractWithDomain } from '@internal/contract/types';
+import {
+  asNamespaceId,
+  type ContractModelBase,
+  type ContractWithDomain,
+} from '@internal/contract/types';
 import type { ModelCoordinate } from '@internal/framework-components/control';
 
 function modelOf(
@@ -38,4 +42,32 @@ export function variantValueChanged(
   const from = variantValue(origin, originModel);
   const to = variantValue(destination, destinationModel);
   return from !== undefined && to !== undefined && from !== to;
+}
+
+/**
+ * The variants a base model has in the destination and not in the origin, other than `renamedTo`:
+ * the models a removed variant of that base can have been renamed to.
+ */
+export function newVariantsOfBase(
+  origin: ContractWithDomain,
+  destination: ContractWithDomain,
+  variant: ModelCoordinate,
+  renamedTo: readonly ModelCoordinate[],
+): readonly ModelCoordinate[] {
+  const base = modelOf(origin, variant)?.base;
+  if (base === undefined) return [];
+  const baseCoordinate = { namespaceId: base.namespace, model: base.model };
+  const models = (contract: ContractWithDomain) =>
+    Object.values(modelOf(contract, baseCoordinate)?.variants ?? {}).map((each) => ({
+      namespaceId: each.namespace,
+      model: each.model,
+    }));
+  const before = models(origin);
+  const same =
+    (left: { readonly namespaceId: string; readonly model: string }) =>
+    (right: { readonly namespaceId: string; readonly model: string }) =>
+      left.namespaceId === right.namespaceId && left.model === right.model;
+  return models(destination)
+    .filter((each) => !before.some(same(each)) && !renamedTo.some(same(each)))
+    .map((each) => ({ ...each, namespaceId: asNamespaceId(each.namespaceId) }));
 }

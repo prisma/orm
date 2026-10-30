@@ -236,6 +236,18 @@ describe('a question about a removed variant', () => {
     ]);
   });
 
+  it('offers the one new variant of the same base as the rename', async () => {
+    const {
+      asked: [question],
+    } = await questionsOf({
+      origin,
+      destination: tasks({ epic: 'Epic', issue: 'Issue' }),
+      subject: bug,
+      labels,
+    });
+    expect(question?.forms).toEqual({ rename: 'Bug:Issue' });
+  });
+
   it('says what the target advises about rows other tables reference', async () => {
     const {
       asked: [question],
