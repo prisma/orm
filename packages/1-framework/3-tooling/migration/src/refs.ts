@@ -39,6 +39,8 @@ export const HEAD_REF_NAME = 'head';
  */
 export interface RefLoadProblem {
   readonly refName: string;
+  /** The ref file that could not be read. */
+  readonly path: string;
   readonly detail: string;
 }
 
@@ -72,8 +74,7 @@ const RefEntrySchema = type({
   return true;
 });
 
-/** The file that holds ref `name` in `refsDir`. */
-export function refFilePath(refsDir: string, name: string): string {
+function refFilePath(refsDir: string, name: string): string {
   return join(refsDir, `${name}.json`);
 }
 
@@ -232,13 +233,17 @@ export async function readRefsTolerant(refsDir: string): Promise<TolerantRefsRes
     try {
       parsed = JSON.parse(raw);
     } catch (e) {
-      problems.push({ refName: name, detail: e instanceof Error ? e.message : String(e) });
+      problems.push({
+        refName: name,
+        path: filePath,
+        detail: e instanceof Error ? e.message : String(e),
+      });
       continue;
     }
 
     const result = RefEntrySchema(parsed);
     if (result instanceof type.errors) {
-      problems.push({ refName: name, detail: result.summary });
+      problems.push({ refName: name, path: filePath, detail: result.summary });
       continue;
     }
 

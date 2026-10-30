@@ -49,6 +49,7 @@ describe('mapIntegrityViolations', () => {
           kind: 'refUnreadable',
           spaceId: 'app',
           refName: 'production',
+          path: 'migrations/app/refs/production.json',
           detail: 'policies.change[0] must be "migrate" or "reconcile" (was "migrat")',
         },
       ],
