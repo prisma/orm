@@ -15,6 +15,9 @@ import type {
 import { loadContractSpaceAggregate } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
+import { errorInvalidRefFile } from '@internal/migration-tools/errors';
+import { refFilePath } from '@internal/migration-tools/refs';
+import { spaceMigrationDirectory, spaceRefsDirectory } from '@internal/migration-tools/spaces';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
@@ -179,6 +182,14 @@ export function mapIntegrityViolations(
         violations: [contractUnreadable],
       },
     );
+  }
+
+  const refUnreadable = violations.find((v) => v.kind === 'refUnreadable');
+  if (refUnreadable && refUnreadable.kind === 'refUnreadable') {
+    const refsDir = spaceRefsDirectory(
+      spaceMigrationDirectory(migrationsDir, refUnreadable.spaceId),
+    );
+    return errorInvalidRefFile(refFilePath(refsDir, refUnreadable.refName), refUnreadable.detail);
   }
 
   // Any remaining recoverable structural violation refuses as an

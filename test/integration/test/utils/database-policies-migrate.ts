@@ -4,7 +4,9 @@
  * `--permit-policy-change`, recorded by a policy-only run, and reported by `migration status`.
  */
 
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { writeRef } from '@internal/migration-tools/refs';
+import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { expect, it } from 'vitest';
 import type { WithPolicyProject } from './database-policies-enforcement';
@@ -279,6 +281,35 @@ export function definePolicyMigrateJourneys(withProject: WithPolicyProject, time
         expect({ storageHash: marker?.storageHash, meta: marker?.meta }).toStrictEqual({
           storageHash: next,
           meta: {},
+        });
+      });
+    },
+    timeout,
+  );
+
+  it(
+    'refuses a ref file whose policies are invalid as an invalid ref file, naming the file and the field',
+    async (test) => {
+      await withProject(test, async (project) => {
+        const base = await planTo(project, 'base', 'initial');
+        const refPath = join(appRefsDir(project), 'production.json');
+        mkdirSync(appRefsDir(project), { recursive: true });
+        writeFileSync(
+          refPath,
+          JSON.stringify({ hash: base, invariants: [], policies: { change: ['migrat'] } }),
+        );
+
+        const refused = await runMigrate(project.ctx, [
+          '--to',
+          'production',
+          '--permit-policy-change',
+          '--json',
+        ]);
+
+        expect(errorOf(refused)).toMatchObject({
+          code: 'MIGRATION.INVALID_REF_FILE',
+          why: expect.stringContaining('policies.change[0] must be "migrate" or "reconcile"'),
+          meta: { path: expect.stringMatching(/migrations\/app\/refs\/production\.json$/) },
         });
       });
     },

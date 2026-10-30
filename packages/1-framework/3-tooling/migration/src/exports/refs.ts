@@ -5,6 +5,7 @@ export {
   HEAD_REF_NAME,
   readRef,
   readRefs,
+  refFilePath,
   refsByContractHash,
   resolveRef,
   resolveRefsByContractHash,

@@ -72,7 +72,8 @@ const RefEntrySchema = type({
   return true;
 });
 
-function refFilePath(refsDir: string, name: string): string {
+/** The file that holds ref `name` in `refsDir`. */
+export function refFilePath(refsDir: string, name: string): string {
   return join(refsDir, `${name}.json`);
 }
 
