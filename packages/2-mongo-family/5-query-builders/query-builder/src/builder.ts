@@ -60,7 +60,6 @@ import {
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { createFieldAccessor, type Expression, type FieldAccessor } from './field-accessor';
-import type { FieldCodecs } from './field-codecs';
 import {
   createLookupFrom,
   extractLookupResult,
@@ -91,19 +90,6 @@ interface PipelineChainState {
   readonly stages: ReadonlyArray<MongoPipelineStage>;
   readonly storageHash: string;
   readonly modelName?: string;
-  /** The model's fields, while the chain's documents are still the model's, so a match value is encoded through its field's codec. */
-  readonly fieldCodecs?: FieldCodecs;
-}
-
-/** Whether a stage passes the documents through as they are, so the model's fields still name theirs. */
-function keepsDocuments(stage: MongoPipelineStage): boolean {
-  return (
-    stage instanceof MongoMatchStage ||
-    stage instanceof MongoSortStage ||
-    stage instanceof MongoLimitStage ||
-    stage instanceof MongoSkipStage ||
-    stage instanceof MongoSampleStage
-  );
 }
 
 /**
@@ -166,11 +152,9 @@ export class PipelineChain<
     NewL extends LeadingMatch = 'past-leading',
     NewN extends NestedDocShape = Record<string, never>,
   >(stage: MongoPipelineStage): PipelineChain<TContract, NewShape, NewU, NewF, NewL, NewN> {
-    const { fieldCodecs, ...state } = this.#state;
     return new PipelineChain<TContract, NewShape, NewU, NewF, NewL, NewN>(this.#contract, {
-      ...state,
+      ...this.#state,
       stages: [...this.#state.stages, stage],
-      ...ifDefined('fieldCodecs', keepsDocuments(stage) ? fieldCodecs : undefined),
     });
   }
 
@@ -202,9 +186,7 @@ export class PipelineChain<
     filterOrFn: MongoFilterExpr | ((fields: FieldAccessor<Shape, N>) => MongoFilterExpr),
   ): PipelineChain<TContract, Shape, L extends 'leading' ? U : 'update-cleared', F, L, N> {
     const filter =
-      typeof filterOrFn === 'function'
-        ? filterOrFn(createFieldAccessor<Shape, N>(this.#state.fieldCodecs))
-        : filterOrFn;
+      typeof filterOrFn === 'function' ? filterOrFn(createFieldAccessor<Shape, N>()) : filterOrFn;
     return this.#withStage<Shape, L extends 'leading' ? U : 'update-cleared', F, L, N>(
       new MongoMatchStage(filter),
     );

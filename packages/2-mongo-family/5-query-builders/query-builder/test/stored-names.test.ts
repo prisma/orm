@@ -3,7 +3,6 @@ import {
   MongoMatchStage,
   MongoProjectStage,
 } from '@internal/mongo-query-ast/execution';
-import { MongoParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
 import { mongoQuery } from '../src/query';
 import { contextOf } from './fixtures/test-context';
@@ -46,16 +45,7 @@ describe('stored names', () => {
       .build();
     expect({ pipeline: plan.command.pipeline, resultShape: plan.resultShape }).toEqual({
       pipeline: [
-        new MongoMatchStage(
-          MongoFieldFilter.eq(
-            'display_name',
-            new MongoParamRef('Ada', {
-              codecId: 'mongo/string@1',
-              name: 'display_name',
-              collection: 'accounts',
-            }),
-          ),
-        ),
+        new MongoMatchStage(MongoFieldFilter.eq('display_name', 'Ada')),
         new MongoProjectStage({ display_name: 1 }),
       ],
       resultShape: {

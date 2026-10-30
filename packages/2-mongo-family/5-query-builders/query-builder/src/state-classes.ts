@@ -35,12 +35,10 @@ import {
   UpdateOneCommand,
 } from '@internal/mongo-query-ast/execution';
 import type { MongoValue } from '@internal/mongo-value';
-import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { PipelineChain } from './builder';
 import { contractError } from './contract-errors';
 import { createFieldAccessor, type FieldAccessor } from './field-accessor';
-import { type FieldCodecs, modelFieldCodecs } from './field-codecs';
 import { ormError } from './orm-errors';
 import type { ModelNestedShape, NestedDocShape } from './resolve-path';
 import type { ModelToDocShape, ResolveRow } from './types';
@@ -115,20 +113,16 @@ export class CollectionHandle<
 > {
   readonly #ctx: BindingContext<TContract>;
   readonly #modelName: ModelName;
-  readonly #fieldCodecs: FieldCodecs | undefined;
 
   constructor(ctx: BindingContext<TContract>, modelName: ModelName) {
-    const fieldCodecs = fieldCodecsOf(ctx, modelName);
     super(ctx.contract, {
       collection: ctx.collection,
       stages: [],
       storageHash: ctx.storageHash,
       modelName: modelName as string,
-      ...ifDefined('fieldCodecs', fieldCodecs),
     });
     this.#ctx = ctx;
     this.#modelName = modelName;
-    this.#fieldCodecs = fieldCodecs;
   }
 
   /**
@@ -173,7 +167,7 @@ export class CollectionHandle<
             createFieldAccessor<
               ModelToDocShape<TContract, ModelName>,
               ModelNestedShape<TContract, ModelName>
-            >(this.#fieldCodecs),
+            >(),
           )
         : filterOrFn;
     return new FilteredCollection<TContract, ModelName>(this.#ctx, this.#modelName, [resolved]);
@@ -291,7 +285,7 @@ export class CollectionHandle<
     const accessor = createFieldAccessor<
       ModelToDocShape<TContract, ModelName>,
       ModelNestedShape<TContract, ModelName>
-    >(this.#fieldCodecs);
+    >();
     const filter = filterFn(accessor);
     const update = resolveUpdaterCallback<
       ModelToDocShape<TContract, ModelName>,
@@ -344,7 +338,6 @@ export class FilteredCollection<
   readonly #ctx: BindingContext<TContract>;
   readonly #modelName: ModelName;
   readonly #filters: ReadonlyArray<MongoFilterExpr>;
-  readonly #fieldCodecs: FieldCodecs | undefined;
 
   constructor(
     ctx: BindingContext<TContract>,
@@ -359,18 +352,15 @@ export class FilteredCollection<
       throw new InternalError('FilteredCollection: unreachable empty-filters branch');
     }
     const leading = filters.length === 1 ? first : foldAnd(filters);
-    const fieldCodecs = fieldCodecsOf(ctx, modelName);
     super(ctx.contract, {
       collection: ctx.collection,
       stages: [new MongoMatchStage(leading)],
       storageHash: ctx.storageHash,
       modelName: modelName as string,
-      ...ifDefined('fieldCodecs', fieldCodecs),
     });
     this.#ctx = ctx;
     this.#modelName = modelName;
     this.#filters = filters;
-    this.#fieldCodecs = fieldCodecs;
   }
 
   get _modelName(): ModelName {
@@ -418,7 +408,7 @@ export class FilteredCollection<
             createFieldAccessor<
               ModelToDocShape<TContract, ModelName>,
               ModelNestedShape<TContract, ModelName>
-            >(this.#fieldCodecs),
+            >(),
           )
         : filterOrFn;
     return new FilteredCollection<TContract, ModelName>(this.#ctx, this.#modelName, [
@@ -634,12 +624,6 @@ export function asMongoContract(
 /**
  * Bound execution context shared across the three state classes.
  */
-function fieldCodecsOf<
-  TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
->(ctx: BindingContext<TContract>, modelName: string): FieldCodecs | undefined {
-  return modelFieldCodecs(ctx.contract, modelName, ctx.collection);
-}
-
 export interface BindingContext<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
 > {
