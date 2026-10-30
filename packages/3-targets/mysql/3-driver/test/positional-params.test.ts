@@ -71,6 +71,19 @@ describe('positionalParams', () => {
     }).toEqual({ sent: Buffer.from([1, 255]), isBuffer: true, sameMemory: true, kept: true });
   });
 
+  it('refuses text with a lone UTF-16 surrogate, which the package writes as ? or U+FFFD by the length of the text, and sends a surrogate pair as it is', () => {
+    for (const value of ['a\uD800b', `a\uDC00${'x'.repeat(200)}`, '\uD83D']) {
+      expect(() => positionalParams('SELECT ?1', [value])).toThrow(
+        expect.objectContaining({
+          code: 'RUNTIME.ENCODE_FAILED',
+          message: expect.stringContaining('surrogate'),
+          meta: { target: 'mysql', paramIndex: 0, received: 'string' },
+        }),
+      );
+    }
+    expect(positionalParams('SELECT ?1', ['😀']).values).toEqual(['😀']);
+  });
+
   it('refuses a Date, which the package would encode in the local time zone', () => {
     expect(() => positionalParams('SELECT ?1, ?2', ['a', new Date(0)])).toThrow(
       expect.objectContaining({

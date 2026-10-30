@@ -364,7 +364,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     );
   });
 
-  it('round-trips the ends of the signed 64-bit range and bytes, writes a whole number past it as its digits, and refuses a bigint past it or a Date without crashing', async (test) => {
+  it('round-trips the ends of the signed 64-bit range and bytes, writes a whole number past it as its digits, and refuses a bigint past it, a Date or text with a lone surrogate without crashing', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
       withDriver(url, async (driver) => {
         await driver.execute({ sql: 'CREATE TABLE t (b BIGINT, v VARBINARY(4), d DOUBLE)' });
@@ -372,7 +372,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
           sql: 'INSERT INTO t VALUES (?1, ?2, ?3), (?4, NULL, ?5)',
           params: [-(2n ** 63n), new Uint8Array([0, 1, 255]), 1e19, 2n ** 63n - 1n, 1e20],
         });
-        for (const value of [-(2n ** 63n) - 1n, 2n ** 64n, new Date(0)]) {
+        for (const value of [-(2n ** 63n) - 1n, 2n ** 64n, new Date(0), 'a\uD800b']) {
           await expect(
             driver.execute({ sql: 'INSERT INTO t (b) VALUES (?1)', params: [value] }),
           ).rejects.toMatchObject({ code: 'RUNTIME.ENCODE_FAILED' });
