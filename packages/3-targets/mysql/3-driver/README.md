@@ -47,6 +47,10 @@ The driver never writes a value into SQL. The `mariadb` package does: it writes 
 
    A statement without values is sent as written, so these shapes do not affect it.
 
+The ORM's writes also need these:
+
+- **The contract must list every unique index of a table the ORM upserts into.** MySQL has no way to limit `ON DUPLICATE KEY UPDATE` to the columns `conflictOn` names, so it fires on any unique key. When the insert collides on an index the contract does not list and no row has the `conflictOn` values, the read-back finds no row, the call fails with `ORM.MUTATION_ROW_MISSING` and the transaction rolls back. When a row with those values also exists, MySQL can update the row the unlisted index matched, and the call returns the `conflictOn` row unchanged, with no error. `db verify --strict` reports unique indexes the contract does not list.
+
 The driver does not check the database at startup or deploy time for these requirements.
 
 ## Exports

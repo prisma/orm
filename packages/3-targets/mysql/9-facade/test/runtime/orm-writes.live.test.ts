@@ -226,7 +226,7 @@ describe('MySQL writes through the ORM', { timeout: timeouts.databaseOperation }
     });
   });
 
-  it('an upsert that collides on a unique index the contract does not list fails and rolls back', async (test) => {
+  it('an upsert that collides on a unique index the contract does not list, while no row has the conflict values, fails and rolls back', async (test) => {
     const seeded = [
       ...exampleTablesDdl,
       "INSERT INTO `User` (`id`, `email`, `role`) VALUES (1, 'a@example.com', 'USER')",
@@ -245,6 +245,38 @@ describe('MySQL writes through the ORM', { timeout: timeouts.databaseOperation }
         message: 'upsert() for model "User" did not find the row it wrote',
       });
       expect(await db.orm.User.all()).toEqual([{ id: 1, email: 'a@example.com', role: 'USER' }]);
+    });
+  });
+
+  it('known gap: an upsert that collides on an unlisted unique index while a row has the conflict values updates the other row and succeeds', async (test) => {
+    const seeded = [
+      `CREATE TABLE \`User\` (
+        \`id\` int NOT NULL AUTO_INCREMENT,
+        \`handle\` varchar(20) NOT NULL DEFAULT 'h',
+        \`email\` varchar(191) NOT NULL,
+        \`role\` enum('USER','ADMIN') NOT NULL,
+        PRIMARY KEY (\`id\`),
+        UNIQUE KEY \`User_handle_key\` (\`handle\`),
+        UNIQUE KEY \`User_email_key\` (\`email\`)
+      )`,
+      "INSERT INTO `User` (`id`, `handle`, `email`, `role`) VALUES (1, 'h', 'a@example.com', 'USER'), (2, 'other', 'b@example.com', 'USER')",
+    ];
+    await withSeededDatabase(test, seeded, async (url) => {
+      await using db = mysql({ contract, url, verifyMarker: false });
+      expect({
+        returned: await db.orm.User.upsert({
+          create: { email: 'b@example.com', role: 'USER' },
+          update: { role: 'ADMIN' },
+          conflictOn: { email: 'b@example.com' },
+        }),
+        stored: await db.orm.User.orderBy((user) => user.id.asc()).all(),
+      }).toEqual({
+        returned: { id: 2, email: 'b@example.com', role: 'USER' },
+        stored: [
+          { id: 1, email: 'a@example.com', role: 'ADMIN' },
+          { id: 2, email: 'b@example.com', role: 'USER' },
+        ],
+      });
     });
   });
 
