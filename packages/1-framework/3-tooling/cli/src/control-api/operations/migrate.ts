@@ -8,6 +8,7 @@ import type {
   ControlDriverInstance,
   ControlExtensionDescriptor,
   ControlFamilyInstance,
+  MigrationOperationPolicy,
   MigrationPlanOperation,
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
@@ -47,6 +48,12 @@ import {
   type BuildAggregateInputs,
   buildContractSpaceAggregate,
 } from './contract-space-aggregate-loader';
+import {
+  checkRunPolicies,
+  type PoliciesToWrite,
+  policiesInForce,
+  writtenSettingsText,
+} from './database-policies';
 import { noInvariantPathError } from './no-invariant-path';
 import {
   buildPerSpaceBreakdown,
@@ -145,6 +152,25 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
   const aggregate = loaded.value;
 
   const markerRows = await familyInstance.readAllMarkers({ driver });
+  const appTargetHash = ref?.hash ?? requireHeadRef(aggregate.app).hash;
+  const inForce = policiesInForce(
+    markerRows,
+    [aggregate.app, ...aggregate.extensions].map(({ spaceId }) => spaceId),
+    familyInstance.markerLocation,
+  );
+  const checkedPolicies = checkRunPolicies({
+    command: 'db migrate',
+    appSpaceId: aggregate.app.spaceId,
+    inForce,
+    ref,
+    permitPolicyChange: options.permitPolicyChange ?? false,
+    targetHash: appTargetHash,
+    invocation: options.invocation,
+  });
+  if (!checkedPolicies.ok) {
+    return notOk(checkedPolicies.failure);
+  }
+  const policiesToWrite = checkedPolicies.value;
 
   // Plan every space via graph-walk. App space targets `ref` when
   // provided, otherwise its own head; extensions always walk to their
@@ -153,7 +179,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     aggregate,
     markers: markerRows,
     appTarget: {
-      hash: ref?.hash ?? requireHeadRef(aggregate.app).hash,
+      hash: appTargetHash,
       invariants: ref?.invariants,
       refName: ref?.name,
     },
@@ -228,6 +254,16 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     const entry = perSpacePlans.get(spaceId);
     return entry !== undefined && planRequiresExecution(entry);
   });
+  const appPlanForPolicies =
+    policiesToWrite === undefined ? undefined : perSpacePlans.get(aggregate.app.spaceId);
+  if (!hasPendingWork && policiesToWrite !== undefined && appPlanForPolicies !== undefined) {
+    return runPolicyOnly({
+      ...options,
+      aggregate,
+      appPlan: { ...appPlanForPolicies, migrationEdges: [] },
+      policiesToWrite,
+    });
+  }
   if (!hasPendingWork) {
     const ordered = canonicalOrder
       .filter((spaceId) => perSpacePlans.has(spaceId) || plansKeptFromRunner.has(spaceId))
@@ -266,7 +302,8 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     familyInstance,
     migrations,
     frameworkComponents,
-    policy: { allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'] },
+    policy: MIGRATE_POLICY,
+    ...ifDefined('databasePolicies', policiesToWrite?.policies),
     action: 'migrate',
     ...ifDefined('onProgress', onProgress),
   });
@@ -308,17 +345,69 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     (sum, r) => sum + r.entry.migrationEdges.length,
     0,
   );
-  const summary = `Applied ${totalMigrationsApplied} migration(s) (${applied.value.totalOpsExecuted} operation(s)) across ${orderedAll.length} contract space(s)`;
+  const applySummary = `Applied ${totalMigrationsApplied} migration(s) (${applied.value.totalOpsExecuted} operation(s)) across ${orderedAll.length} contract space(s)`;
+  const summary =
+    policiesToWrite === undefined
+      ? applySummary
+      : `${applySummary}; policies updated: ${writtenSettingsText(policiesToWrite.differences)}`;
 
-  return ok(
-    buildSuccess({
+  return ok({
+    ...buildSuccess({
       aggregate,
       orderedResolutions: orderedAll,
       perSpace: perSpaceAll,
       totalOpsExecuted: applied.value.totalOpsExecuted,
       summary,
     }),
-  );
+    ...ifDefined('policiesUpdated', policiesToWrite?.differences),
+  });
+}
+
+const MIGRATE_POLICY = {
+  allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'],
+} as const satisfies MigrationOperationPolicy;
+
+/**
+ * Nothing is pending, but the run has policies to record: the runner applies the application
+ * space's plan, which runs no migration, so that its marker update records them.
+ */
+async function runPolicyOnly<TFamilyId extends string, TTargetId extends string>(
+  args: ExecuteMigrateOptions<TFamilyId, TTargetId> & {
+    readonly aggregate: ContractSpaceAggregate;
+    readonly appPlan: PerSpacePlan;
+    readonly policiesToWrite: PoliciesToWrite;
+  },
+): Promise<MigrateResult> {
+  const { aggregate, appPlan, policiesToWrite } = args;
+  const appSpaceId = aggregate.app.spaceId;
+  const perSpacePlans = new Map([[appSpaceId, appPlan]]);
+  const applied = await runMigration({
+    aggregate,
+    perSpacePlans,
+    applyOrder: [appSpaceId],
+    driver: args.driver,
+    familyInstance: args.familyInstance,
+    migrations: args.migrations,
+    frameworkComponents: args.frameworkComponents,
+    policy: MIGRATE_POLICY,
+    databasePolicies: policiesToWrite.policies,
+    action: 'migrate',
+    ...ifDefined('onProgress', args.onProgress),
+  });
+  if (!applied.ok) {
+    const facts = runnerFailureFacts(applied.failure, collectOrdered([appSpaceId], perSpacePlans));
+    return notOk(migrateRunnerFailureError(applied.failure, facts, undefined, args.invocation));
+  }
+  return ok({
+    ...buildSuccess({
+      aggregate,
+      orderedResolutions: applied.value.orderedResolutions,
+      perSpace: applied.value.perSpace,
+      totalOpsExecuted: 0,
+      summary: `Policies updated: ${writtenSettingsText(policiesToWrite.differences)}`,
+    }),
+    policiesUpdated: policiesToWrite.differences,
+  });
 }
 
 /**

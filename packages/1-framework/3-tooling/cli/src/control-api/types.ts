@@ -26,6 +26,7 @@ import type {
   MigrationPlanOperation,
   MigrationPlanSubjects,
   OperationPreview,
+  PolicyDifference,
   RowsFailingCheck,
   VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
@@ -768,6 +769,8 @@ export interface MigrateSuccess {
    * "Already up to date" early return when the app has no plan.
    */
   readonly pathDecision?: MigratePathDecision;
+  /** The settings the run recorded as the database's policies, with the values they replaced. Present only when it recorded some. */
+  readonly policiesUpdated?: readonly PolicyDifference[];
 }
 
 /** The result of `db migrate`: a failure is the structured error the command reports. */
