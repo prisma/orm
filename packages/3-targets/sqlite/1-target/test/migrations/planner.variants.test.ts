@@ -266,7 +266,7 @@ describe('SQLite planner, variants', () => {
         subject: { kind: 'model', ...bug },
         loss: 'drop',
         keepDataAdvice:
-          'SQLite migrations run with foreign keys off, so deleting these rows does not delete the rows of other tables that reference them: the apply then fails at PRAGMA foreign_key_check. Delete or change those rows first.',
+          'SQLite migrations run with foreign keys off, so deleting these rows does not delete the rows of "features" that reference them: the apply then fails at PRAGMA foreign_key_check. Delete or change those rows first.',
       }),
     ]);
   });
@@ -279,6 +279,13 @@ describe('SQLite planner, variants', () => {
     const deleteFeature =
       'this.deleteRows({ table: "tasks", column: "type", value: "feature", codecRef: { codecId: "sqlite/text@1" }, cascade: [{ table: "features", columns: ["id"], references: ["id"] }] })';
     expect(renderedCalls(result).at(-1)).toBe(deleteFeature);
+    expect(result.dataLoss.at(-1)).toEqual({
+      operationIndex: renderedCalls(result).length - 1,
+      subject: { kind: 'model', ...feature },
+      loss: 'drop',
+      label:
+        'Delete the rows of "tasks" that hold value "feature" in column "type", and the rows of "features" that reference them',
+    });
     const operations = await Promise.all(result.plan.operations);
     expect(operations.at(-1)?.execute.map(({ sql }) => sql)).toEqual([
       'DELETE FROM "features" WHERE EXISTS (SELECT 1 FROM "tasks" WHERE "tasks"."type" = ?1 AND "tasks"."id" = "features"."id")',

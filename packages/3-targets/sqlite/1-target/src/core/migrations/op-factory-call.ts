@@ -73,6 +73,7 @@ import {
 import {
   type CascadingForeignKey,
   deleteRows,
+  deleteRowsLabel,
   removeStoredValue,
   removeStoredValueAtPath,
   replaceStoredValue,
@@ -352,7 +353,7 @@ export class DropTableCall extends SqliteOpFactoryCallNode {
   constructor(tableName: string) {
     super();
     this.tableName = tableName;
-    this.label = `Drop table ${tableName}`;
+    this.label = `Drop table "${tableName}"`;
     this.freeze();
   }
 
@@ -369,7 +370,7 @@ export class DropTableCall extends SqliteOpFactoryCallNode {
     const absent = await lowerer.lowerToExecuteRequest(checks.tableAbsent());
     return {
       id: `dropTable.${this.tableName}`,
-      label: `Drop table ${this.tableName}`,
+      label: `Drop table "${this.tableName}"`,
       summary: `Drops table ${this.tableName} which is not in the contract`,
       operationClass: 'destructive',
       target: { id: 'sqlite', details: buildTargetDetails('table', this.tableName) },
@@ -898,7 +899,7 @@ export class DropColumnCall extends SqliteOpFactoryCallNode {
     super();
     this.tableName = tableName;
     this.columnName = columnName;
-    this.label = `Drop column ${columnName} on ${tableName}`;
+    this.label = `Drop column "${columnName}" from "${tableName}"`;
     this.freeze();
   }
 
@@ -921,7 +922,7 @@ export class DropColumnCall extends SqliteOpFactoryCallNode {
     const absent = await lowerer.lowerToExecuteRequest(checks.columnAbsent());
     return {
       id: `dropColumn.${this.tableName}.${this.columnName}`,
-      label: `Drop column ${this.columnName} on ${this.tableName}`,
+      label: `Drop column "${this.columnName}" from "${this.tableName}"`,
       summary: `Drops column ${this.columnName} on ${this.tableName} which is not in the contract`,
       operationClass: 'destructive',
       target: {
@@ -1394,7 +1395,7 @@ export class DeleteRowsCall extends SqliteOpFactoryCallNode {
     this.cascade = cascade.map((foreignKey) =>
       requireCascade(foreignKey, this.factoryName, columnCallLocation(tableName, columnName)),
     );
-    this.label = `Delete the rows of "${tableName}" that hold value ${storedValueText(value)} in column "${columnName}"`;
+    this.label = deleteRowsLabel(tableName, columnName, value, this.cascade);
     this.freeze();
   }
 

@@ -80,8 +80,10 @@ function temporaryValuesOf(call: RecreateTableCall): CallSubjects['temporaryValu
   );
 }
 
-const REFERENCED_ROWS_ADVICE =
-  'SQLite migrations run with foreign keys off, so deleting these rows does not delete the rows of other tables that reference them: the apply then fails at PRAGMA foreign_key_check. Delete or change those rows first.';
+/** What to do about the rows of `tables` that reference deleted rows, which the SQLite runner does not delete. */
+function referencedRowsAdvice(tables: readonly string[]): string {
+  return `SQLite migrations run with foreign keys off, so deleting these rows does not delete the rows of ${tables.map((table) => `"${table}"`).join(', ')} that reference them: the apply then fails at PRAGMA foreign_key_check. Delete or change those rows first.`;
+}
 
 /**
  * What each call of a SQLite plan loses. A recreate that leaves a column out loses its values
@@ -93,6 +95,7 @@ export function sqliteCallSubjects(
   storedValues: ReadonlyMap<OpFactoryCall, StoredValueSubject> = new Map(),
   storedKeys: ReadonlyMap<OpFactoryCall, ValueObjectFieldCoordinate> = new Map(),
   variantRows: ReadonlyMap<OpFactoryCall, ModelCoordinate> = new Map(),
+  referencingTables: (table: string) => readonly string[] = () => [],
 ): readonly CallSubjects[] {
   const lostColumns = new Set<string>();
   const unknownNames = unknownCallNames(
@@ -138,6 +141,8 @@ export function sqliteCallSubjects(
       };
     }
     if (call instanceof DeleteRowsCall) {
+      const cascaded = new Set(call.cascade.map(({ table }) => table));
+      const referencing = referencingTables(call.tableName).filter((table) => !cascaded.has(table));
       return {
         operationCount,
         label,
@@ -145,7 +150,10 @@ export function sqliteCallSubjects(
           {
             ...lost(tableTarget(call.tableName)),
             ...ifDefined('model', variantRows.get(call)),
-            keepDataAdvice: REFERENCED_ROWS_ADVICE,
+            ...ifDefined(
+              'keepDataAdvice',
+              referencing.length === 0 ? undefined : referencedRowsAdvice(referencing),
+            ),
           },
         ],
         accessChanges: [],

@@ -334,6 +334,7 @@ export class SqliteMigrationPlanner
           storedRewrites.value.storedValues,
           storedRewrites.value.storedKeys,
           storedRewrites.value.variantRows,
+          (table) => tablesReferencing(options.contract, table),
         ),
         {
           fromContract: options.fromContract,
@@ -500,4 +501,15 @@ function retainUnownedExtras(
       })
     );
   });
+}
+
+/** The tables of `contract` with a foreign key to `table`. */
+function tablesReferencing(
+  contract: SqlMigrationPlannerPlanOptions['contract'],
+  table: string,
+): readonly string[] {
+  const tables = contract.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries.table ?? {};
+  return Object.entries(tables).flatMap(([name, candidate]) =>
+    candidate.foreignKeys.some(({ target }) => target.tableName === table) ? [name] : [],
+  );
 }

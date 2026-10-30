@@ -77,11 +77,19 @@ function destructiveCall(factoryName: string): OpFactoryCall {
   };
 }
 
-function subjectsOf(calls: readonly OpFactoryCall[], fieldEvents: readonly FieldEventCall[]) {
+function subjectsOf(
+  calls: readonly OpFactoryCall[],
+  fieldEvents: readonly FieldEventCall[],
+  referencingTables: (table: string) => readonly string[] = () => [],
+) {
   return subjectsOfCalls(
     sqliteCallSubjects(
       calls,
       new Map(fieldEvents.map((fieldEvent) => [fieldEvent.call, fieldEvent])),
+      new Map(),
+      new Map(),
+      new Map(),
+      referencingTables,
     ),
     {
       fromContract: contract,
@@ -212,15 +220,39 @@ describe('stored key operations', () => {
 });
 
 describe('deleteRows', () => {
-  it('names the model whose rows it deletes, and says that rows referencing them fail the apply', () => {
-    expect(subjectsOf([new DeleteRowsCall('User', 'email', 'x')], [])).toEqual([
+  it('names the model whose rows it deletes, and says that rows of a table referencing them fail the apply', () => {
+    expect(
+      subjectsOf([new DeleteRowsCall('User', 'email', 'x')], [], (table) =>
+        table === 'User' ? ['Post'] : [],
+      ),
+    ).toEqual([
       {
         operationIndex: 0,
         subject: { kind: 'model', namespaceId: asNamespaceId(UNBOUND_NAMESPACE_ID), model: 'User' },
         loss: 'drop',
         label: 'Delete the rows of "User" that hold value "x" in column "email"',
         keepDataAdvice:
-          'SQLite migrations run with foreign keys off, so deleting these rows does not delete the rows of other tables that reference them: the apply then fails at PRAGMA foreign_key_check. Delete or change those rows first.',
+          'SQLite migrations run with foreign keys off, so deleting these rows does not delete the rows of "Post" that reference them: the apply then fails at PRAGMA foreign_key_check. Delete or change those rows first.',
+      },
+    ]);
+  });
+
+  it('gives no advice when no table references the rows, or only tables it deletes from first', () => {
+    const cascading = new DeleteRowsCall('User', 'kind', 'x', undefined, [
+      { table: 'Admin', columns: ['id'], references: ['id'] },
+    ]);
+    expect(
+      subjectsOf([new DeleteRowsCall('Post', 'email', 'x'), cascading], [], (table) =>
+        table === 'User' ? ['Admin'] : [],
+      ),
+    ).toEqual([
+      expect.not.objectContaining({ keepDataAdvice: expect.anything() }),
+      {
+        operationIndex: 1,
+        subject: { kind: 'model', namespaceId: asNamespaceId(UNBOUND_NAMESPACE_ID), model: 'User' },
+        loss: 'drop',
+        label:
+          'Delete the rows of "User" that hold value "x" in column "kind", and the rows of "Admin" that reference them',
       },
     ]);
   });

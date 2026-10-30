@@ -122,7 +122,7 @@ describe('Postgres planner, value object field fills', () => {
       {
         kind: 'nullabilityConflict',
         summary:
-          'Value object field "GeoPoint.country" is required, and existing objects at path "$" in column "location" of "place" may have no value for it',
+          'Value object field "GeoPoint.country" is required, and existing objects may have no value for it, at:\n- path "$" in column "location" of "place"',
         why: 'Add --backfill GeoPoint.country to write the value the plan fills them with.',
         location: {
           namespaceId: 'public',

@@ -123,6 +123,19 @@ function cascadeStep(
   );
 }
 
+/** The label of a `deleteRows` operation, which names each `cascade` table whose rows it deletes too. */
+export function deleteRowsLabel(
+  tableName: string,
+  columnName: string,
+  value: string | number,
+  cascade: readonly CascadingForeignKey[],
+): string {
+  const rows = `Delete the rows of "${tableName}" that hold value ${storedValueText(value)} in column "${columnName}"`;
+  if (cascade.length === 0) return rows;
+  const tables = cascade.map(({ table }) => `"${table}"`).join(', ');
+  return `${rows}, and the rows of ${tables} that reference them`;
+}
+
 /** Deletes the rows that hold `value`, after the rows of each `cascade` table that reference them: the runner turns foreign keys off, so no declared cascade runs. */
 export function deleteRows(
   tableName: string,
@@ -132,7 +145,7 @@ export function deleteRows(
 ): Op {
   return {
     id: `deleteRows.${tableName}.${columnName}.${idText(value)}`,
-    label: `Delete the rows of "${tableName}" that hold value ${storedValueText(value)} in column "${columnName}"`,
+    label: deleteRowsLabel(tableName, columnName, value, cascade),
     operationClass: 'destructive',
     target: { id: 'sqlite', details: buildTargetDetails('column', columnName, tableName) },
     precheck: [],

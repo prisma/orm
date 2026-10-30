@@ -289,7 +289,7 @@ describe('SQLite planner, enum values inside value objects', {
     );
 
     expect(failed).toContain(
-      '[MIGRATION.PRECHECK_FAILED] 1 row of "ticket" holds "done" at path "$.status" in column "meta", a member that takes no null, so the value cannot be removed.',
+      '[MIGRATION.PRECHECK_FAILED] Rows hold values that the migration removes where no null is allowed, so the values cannot be removed:\n- 1 row of "ticket" holds "done" at path "$.status" in column "meta"\n- 1 row of "ticket" holds "done" at path "$[*].meta.status" in column "visits"',
     );
     expect(failed).toContain('"member": "DONE"');
     expect(failed).toContain(

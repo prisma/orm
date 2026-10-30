@@ -84,7 +84,7 @@ export async function dropColumn(
   const absent = await lowerer.lowerToExecuteRequest(checks.columnAbsent());
   return {
     id: `dropColumn.${tableName}.${columnName}`,
-    label: `Drop column ${columnName} on ${tableName}`,
+    label: `Drop column "${columnName}" from "${tableName}"`,
     summary: `Drops column ${columnName} on ${tableName} which is not in the contract`,
     operationClass: 'destructive',
     target: { id: 'sqlite', details: buildTargetDetails('column', columnName, tableName) },
