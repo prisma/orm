@@ -13,6 +13,18 @@ import {
   mysqlSqlVarcharDescriptor,
   mysqlTextDescriptor,
 } from '../core/codecs';
+import {
+  mysqlDateStringDescriptor,
+  mysqlDateTemporalDescriptor,
+  mysqlDatetimeStringDescriptor,
+  mysqlDatetimeTemporalDescriptor,
+  mysqlDurationStringDescriptor,
+  mysqlTimeStringDescriptor,
+  mysqlTimestampDescriptor,
+  mysqlTimestampStringDescriptor,
+  mysqlTimestampTemporalDescriptor,
+  mysqlTimeTemporalDescriptor,
+} from '../core/date-time-codecs';
 
 const codecDescriptorMap = {
   char: mysqlSqlCharDescriptor,
@@ -22,6 +34,16 @@ const codecDescriptorMap = {
   int: mysqlIntDescriptor,
   bigint: mysqlBigintDescriptor,
   datetime: mysqlDatetimeDescriptor,
+  'datetime-temporal': mysqlDatetimeTemporalDescriptor,
+  'datetime-string': mysqlDatetimeStringDescriptor,
+  timestamp: mysqlTimestampDescriptor,
+  'timestamp-temporal': mysqlTimestampTemporalDescriptor,
+  'timestamp-string': mysqlTimestampStringDescriptor,
+  'date-string': mysqlDateStringDescriptor,
+  'date-temporal': mysqlDateTemporalDescriptor,
+  'time-string': mysqlTimeStringDescriptor,
+  'time-temporal': mysqlTimeTemporalDescriptor,
+  'duration-string': mysqlDurationStringDescriptor,
   enum: mysqlEnumDescriptor,
 } as const;
 

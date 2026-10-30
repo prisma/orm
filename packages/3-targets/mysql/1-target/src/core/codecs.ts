@@ -36,12 +36,26 @@ import {
   mysqlChar,
   mysqlDatetime,
   mysqlDatetimeParams,
+  mysqlDatetimeText,
   mysqlEnum,
   mysqlEnumParams,
   mysqlInt,
   mysqlText,
   mysqlVarchar,
 } from './data-types';
+import {
+  mysqlDateStringDescriptor,
+  mysqlDateTemporalDescriptor,
+  mysqlDatetimeStringDescriptor,
+  mysqlDatetimeTemporalDescriptor,
+  mysqlDurationStringDescriptor,
+  mysqlTimeStringDescriptor,
+  mysqlTimestampDescriptor,
+  mysqlTimestampStringDescriptor,
+  mysqlTimestampTemporalDescriptor,
+  mysqlTimeTemporalDescriptor,
+} from './date-time-codecs';
+import { dateOfWireText, wireTextOfDate } from './date-time-values';
 import { mysqlError, mysqlQueryNotYetSupported } from './errors';
 
 const DECIMAL_INTEGER = /^-?\d+$/;
@@ -225,26 +239,16 @@ export class MysqlBigintDescriptor extends MysqlCodecDescriptor<void> {
 
 export const mysqlBigintDescriptor = new MysqlBigintDescriptor();
 
-const WIRE_DATETIME = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2}(?:\.\d+)?)$/;
-
 /**
  * Reads the text MySQL sends for a `datetime` as the instant it names in UTC: the codec writes every value in UTC, so the column holds no time zone of its own.
  */
 export function decodeMysqlDatetime(wire: string): Date {
-  const match = WIRE_DATETIME.exec(wire);
-  const date = match === null ? undefined : new Date(`${match[1]}T${match[2]}Z`);
-  if (date === undefined || Number.isNaN(date.getTime())) {
-    return decodeFailed(MYSQL_DATETIME_CODEC_ID, 'a date and time as MySQL prints it', wire);
-  }
-  return date;
+  return dateOfWireText(MYSQL_DATETIME_CODEC_ID, wire);
 }
 
-/** The text MySQL reads for an instant in UTC, with millisecond digits. */
+/** The text MySQL reads for an instant in UTC, with millisecond digits. A `Date` outside the years a `datetime` holds is refused. */
 export function encodeMysqlDatetime(value: Date): string {
-  if (Number.isNaN(value.getTime())) {
-    return encodeFailed(MYSQL_DATETIME_CODEC_ID, 'a valid Date', value);
-  }
-  return value.toISOString().replace('T', ' ').replace('Z', '');
+  return wireTextOfDate(MYSQL_DATETIME_CODEC_ID, value, mysqlDatetimeText);
 }
 
 /** A MySQL `datetime` as a JavaScript `Date`, read and written in UTC. */
@@ -342,5 +346,15 @@ export const codecDescriptors = [
   mysqlIntDescriptor,
   mysqlBigintDescriptor,
   mysqlDatetimeDescriptor,
+  mysqlDatetimeTemporalDescriptor,
+  mysqlDatetimeStringDescriptor,
+  mysqlTimestampDescriptor,
+  mysqlTimestampTemporalDescriptor,
+  mysqlTimestampStringDescriptor,
+  mysqlDateStringDescriptor,
+  mysqlDateTemporalDescriptor,
+  mysqlTimeStringDescriptor,
+  mysqlTimeTemporalDescriptor,
+  mysqlDurationStringDescriptor,
   mysqlEnumDescriptor,
 ] as const;

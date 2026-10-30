@@ -43,6 +43,11 @@ describe('readMysqlDefault', () => {
       'DEFAULT_GENERATED',
       { kind: 'function', expression: "concat(_utf8mb4\\'a\\')" },
     ],
+    ['now(3)', 'DEFAULT_GENERATED', { kind: 'function', expression: 'now()' }],
+    ['curdate()', 'DEFAULT_GENERATED', { kind: 'function', expression: 'CURRENT_DATE' }],
+    ['CURRENT_DATE', 'DEFAULT_GENERATED', { kind: 'function', expression: 'CURRENT_DATE' }],
+    ['curtime(6)', 'DEFAULT_GENERATED', { kind: 'function', expression: 'CURRENT_TIME' }],
+    ['curtime()', 'DEFAULT_GENERATED', { kind: 'function', expression: 'CURRENT_TIME' }],
     ['hello', '', { kind: 'literal', literal: { kind: 'value', body: 'hello' } }],
     ['42', '', { kind: 'literal', literal: { kind: 'value', body: '42' } }],
   ])('reads COLUMN_DEFAULT %j with EXTRA %j', (columnDefault, extra, expected) => {
@@ -58,6 +63,34 @@ describe('mysqlResolveDefault', () => {
       kind: 'function',
       expression: 'now()',
     });
+  });
+
+  it.each([
+    ['mysql/datetime', 'now()'],
+    ['mysql/timestamp', 'now()'],
+    ['mysql/text', 'now()'],
+    ['mysql/date', 'CURRENT_DATE'],
+    ['mysql/time', 'CURRENT_TIME'],
+  ])(
+    'names a now() default on %s as the expression MySQL reads back, %s',
+    (dataTypeId, expression) => {
+      expect(
+        mysqlResolveDefault(
+          { kind: 'function', expression: 'now()' },
+          { typeText: 'x', dataTypeId, many: false },
+        ),
+      ).toEqual({ kind: 'function', expression });
+    },
+  );
+
+  it('names CURRENT_DATE and CURRENT_TIME as the database reports them, so a Date default differs from a DateTime one', () => {
+    expect([
+      mysqlResolveDefault({ kind: 'function', expression: 'curdate()' }, column),
+      mysqlResolveDefault({ kind: 'function', expression: 'CURRENT_TIME(6)' }, column),
+    ]).toEqual([
+      { kind: 'function', expression: 'CURRENT_DATE' },
+      { kind: 'function', expression: 'CURRENT_TIME' },
+    ]);
   });
 
   it('leaves every other default as it is', () => {

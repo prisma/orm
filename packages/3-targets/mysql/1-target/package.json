@@ -8,7 +8,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest run --passWithNoTests",
-    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "typecheck": "tsc --project tsconfig.json --noEmit && tsc --project tsconfig.no-temporal-global.json --noEmit",
     "lint": "biome check . --error-on-warnings",
     "lint:fix": "biome check --write .",
     "lint:fix:unsafe": "biome check --write --unsafe .",
@@ -26,19 +26,23 @@
     "@internal/sql-runtime": "workspace:8.0.0-rc.21",
     "@internal/sql-schema-ir": "workspace:8.0.0-rc.21",
     "@internal/ts-render": "workspace:8.0.0-rc.21",
+    "@internal/type-implementations": "workspace:8.0.0-rc.21",
     "@internal/utils": "workspace:8.0.0-rc.21",
     "@standard-schema/spec": "1.1.0",
-    "arktype": "^2.2.2"
+    "arktype": "^2.2.2",
+    "temporal-spec": "1.0.1"
   },
   "devDependencies": {
     "@repo/test-utils": "workspace:8.0.0-rc.21",
     "@repo/tsconfig": "workspace:8.0.0-rc.21",
     "@repo/tsdown": "workspace:8.0.0-rc.21",
+    "temporal-polyfill": "^1.0.4",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
+    "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
@@ -67,6 +71,7 @@
     "./pack": "./dist/pack.mjs",
     "./runtime": "./dist/runtime.mjs",
     "./sql-utils": "./dist/sql-utils.mjs",
+    "./types": "./dist/types.mjs",
     "./package.json": "./package.json"
   },
   "engines": {

@@ -1309,6 +1309,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/3-targets/mysql/1-target/src/exports/types.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/mysql/1-target/src/contract-free/**",
       "domain": "extensions",
       "layer": "targets",
