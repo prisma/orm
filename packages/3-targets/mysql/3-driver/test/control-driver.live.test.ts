@@ -29,6 +29,12 @@ async function connectWhileServerDefaultIncludes(
   }
 }
 
+async function collectRows<Row>(rows: AsyncIterable<Row>): Promise<Row[]> {
+  const out: Row[] = [];
+  for await (const row of rows) out.push(row);
+  return out;
+}
+
 describe('MysqlControlDriver against a MySQL server', {
   timeout: timeouts.databaseOperation,
 }, () => {
@@ -221,6 +227,46 @@ describe('MysqlControlDriver against a MySQL server', {
       }
     });
   });
+
+  it.for<[string, string]>([
+    ['the combination mode ANSI', 'ANSI'],
+    [
+      'the parts of ANSI listed one by one',
+      'REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY',
+    ],
+  ])(
+    'clears ANSI_QUOTES on the control and the runtime driver when the server default is %s',
+    async ([_name, sqlMode], test) => {
+      await withMysqlDatabase(test, async ({ url }) => {
+        const admin = await mysqlDriver.create(url);
+        const { rows } = await admin.query<{ mode: string }>('SELECT @@GLOBAL.sql_mode AS mode');
+        const original = rows[0]?.mode ?? '';
+        const runtime = mysqlRuntimeDriver.create();
+        let control: MysqlControlDriver | undefined;
+        try {
+          await admin.query(`SET GLOBAL sql_mode = '${sqlMode}'`);
+          control = await mysqlDriver.create(url);
+          await runtime.connect({ kind: 'url', url });
+          const modeQuery = 'SELECT @@SESSION.sql_mode AS mode';
+          const [runtimeRow] = await collectRows(
+            runtime.query<{ mode: string }>({ sql: modeQuery }),
+          );
+          const controlRow = (await control.query<{ mode: string }>(modeQuery)).rows[0];
+          const quotes = (mode: string | undefined) =>
+            (mode ?? '').split(',').filter((entry) => entry === 'ANSI_QUOTES' || entry === 'ANSI');
+          expect({ control: quotes(controlRow?.mode), runtime: quotes(runtimeRow?.mode) }).toEqual({
+            control: [],
+            runtime: [],
+          });
+        } finally {
+          await admin.query(`SET GLOBAL sql_mode = '${original}'`);
+          await admin.close();
+          await control?.close();
+          await runtime.close();
+        }
+      });
+    },
+  );
 
   it('clears ANSI_QUOTES, so a double-quoted string is read as the driver scans it', async (test) => {
     await withMysqlDatabase(test, async ({ url }) => {
