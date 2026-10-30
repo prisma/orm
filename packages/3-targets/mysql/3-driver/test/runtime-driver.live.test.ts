@@ -72,8 +72,11 @@ async function withCountingProxy<T>(
   let opened = 0;
   const commands: Record<string, number> = {};
   const sockets = new Set<Socket>();
+  const clients = new Set<Socket>();
   const proxy = createServer((client) => {
     opened += 1;
+    clients.add(client);
+    client.on('close', () => clients.delete(client));
     const upstream = connect(Number(target.port || 3306), target.hostname);
     for (const socket of [client, upstream]) {
       sockets.add(socket);
@@ -105,8 +108,19 @@ async function withCountingProxy<T>(
   try {
     return await fn(proxyUrl, { opened: () => opened, commands: () => ({ ...commands }) });
   } finally {
+    await connectionsClosed(clients);
     for (const socket of sockets) socket.destroy();
     await new Promise((resolve) => proxy.close(resolve));
+  }
+}
+
+/**
+ * Waits, up to five seconds, for the connections through the proxy to close. After `fn` closes its driver, the only ones left are those the `mariadb` package opens in the background to send `KILL` for a connection destroyed mid-result. Cutting such a connection while its `KILL` runs rejects a promise the package never handles (`connection.js`, `destroy()`), which fails the run with `ER_SOCKET_UNEXPECTED_CLOSE`.
+ */
+async function connectionsClosed(clients: ReadonlySet<Socket>): Promise<void> {
+  const deadline = Date.now() + 5000;
+  while (clients.size > 0 && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
 
