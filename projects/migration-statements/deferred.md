@@ -249,3 +249,15 @@ The resolver refuses a statement that names a value object as a whole. The plann
 **Found:** slice 3b PR 4, dispatch 24 (2026-10-30).
 
 A field of a value object that changes type, such as `String` to `Int`, plans no rewrite. On Postgres the new shape check rejects every row whose JSON still holds the old type, so the apply fails at the check; on SQLite the rows keep the old type silently. A `--convert GeoPoint.lat` would need a placeholder for the conversion at every path, as `--convert Model.field` writes one for a column.
+
+## Question for Will: the variant lookup stays in each family
+
+**Found:** slice 3b PR 4, dispatch 28 (2026-10-30).
+
+The 3b spec's implementation notes ask to move MongoDB's variant lookup (`variantFilter` and `discriminatorValueChange` in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-statement-planning.ts`) into the framework, so SQL and MongoDB share it. PR 4 does not do this, because the repo rule `.agents/rules/never-change-the-framework-domain.mdc` forbids adding to the framework domain. SQL has its own lookup in `packages/2-sql-family/9-family/src/core/migrations/variant-planning.ts`: `originVariants`, `variantValue`, `baseOf`, `discriminatorColumn` and `destinationOf` find each variant, its discriminator value and where it went, and `planVariantRowRewrites` turns them into rewrites and deletions. The two read the same domain types twice. Will to decide whether the lookup should stay in each family, move to a shared package outside the framework domain, or justify an exception to the rule.
+
+## A value object field has no default, so `--backfill` has none to respect
+
+**Found:** slice 3b PR 4, dispatch 28 (2026-10-30).
+
+A field of a value object cannot declare a default in this release. So when a value object field becomes required, the planner has no default to fill existing objects with: `migration plan` needs `--backfill`, and `db update` uses a temporary value. A column field with a default is filled from its default instead. When value object fields can carry defaults, the fill should take the default first, as a column does, and `--backfill` should then be refused for a defaulted field, as it is for a column (`backfillOfDefaultedField`).
