@@ -44,7 +44,8 @@ Each emits the same `contract.json`.
 - **The code that builds the typed helpers is the MongoDB family's own,** in `packages/2-mongo-family/2-authoring/contract-ts`, written for MongoDB's field type `{ kind: 'scalar', codecId, typeParams? }`. It uses the framework's existing authoring types and functions (`@internal/framework-components/authoring`, `@internal/contract-authoring`) and changes neither. The framework does not hold helpers two families share only for reuse (`.agents/rules/never-change-the-framework-domain.mdc`).
 - **Removed:** `field.objectId()`, `field.string()`, `field.double()`, `field.int32()`, `field.bool()`, `field.date()`, `field.int64()`, `field.int64Number()`, `field.decimal128()`, `field.binary()`, `field.json()`, `field.bson()`, `field.vector()` and `field.scalar(codecId)`. No deprecated aliases: an upgrade instruction rewrites them with a script.
 - **Stays:** `field.valueObject(name)`, `field.namedType(enum)`, `.optional()`, `.many()`, `.onCreate()`, `.onUpdate()`, `.mongo({ field })`.
-- **`mongo/vector@1` gets a type constructor,** `Vector`, with the params `field.vector()` took.
+- **`mongo/vector@1` gets a type constructor,** `Vector(length?)`, with the params `field.vector()` took, in PSL and TypeScript. MongoDB PSL now reads a type call's arguments, which it dropped before, so `Vector(3)` keeps its length.
+- **Deprecated PSL names stay PSL-only:** `Int`, `Float`, `Boolean` and `DateTime` get no `type.*` helper.
 - **A field with no type params** emits no `typeParams`, as today, so contracts and hashes do not change.
 - **The facade's contract builder** passes the packs that carry the constructors, so `type.*` sees them.
 

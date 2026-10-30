@@ -43,10 +43,12 @@ export const contract = defineContract({}, ({ field, model, type }) => ({
 
 ## `mongo-fields-take-a-type`
 
-Commit your work first. From the project root, run:
+Commit your work first. The script reads your code with the TypeScript compiler, so the project needs `typescript` installed; a JavaScript project adds it as a dev dependency for the run. From the project root, run:
 
 ```sh
 node scripts/rewrite-mongo-field-types.ts
 ```
 
 Pass files or directories to limit it. Fix by hand each line the script reports, then type-check the project.
+
+MongoDB PSL is unchanged for an existing schema. It gains `Vector` and `Vector(length)` for `mongo/vector@1`, which had no PSL name before, and it now reads the arguments of a type call, so `Vector(3)` keeps its length.
