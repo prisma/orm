@@ -7,6 +7,7 @@ import {
 import type {
   ArrayField,
   BooleanField,
+  BsonDateField,
   DateField,
   DocField,
   LiteralValue,
@@ -214,7 +215,7 @@ export const fn = {
     return numericUnaryExpr('$millisecond', a);
   },
   dateToString(args: {
-    date: TypedAggExpr<DateField>;
+    date: TypedAggExpr<BsonDateField>;
     format?: TypedAggExpr<StringField>;
     timezone?: TypedAggExpr<StringField>;
     onNull?: TypedAggExpr<DocField>;
@@ -231,8 +232,8 @@ export const fn = {
     return namedArgsExpr('$dateFromString', args, DATE);
   },
   dateDiff(args: {
-    startDate: TypedAggExpr<DateField>;
-    endDate: TypedAggExpr<DateField>;
+    startDate: TypedAggExpr<BsonDateField>;
+    endDate: TypedAggExpr<BsonDateField>;
     unit: TypedAggExpr<StringField>;
     timezone?: TypedAggExpr<StringField>;
     startOfWeek?: TypedAggExpr<StringField>;
@@ -240,7 +241,7 @@ export const fn = {
     return namedArgsExpr('$dateDiff', args, NUMERIC);
   },
   dateAdd(args: {
-    startDate: TypedAggExpr<DateField>;
+    startDate: TypedAggExpr<BsonDateField>;
     unit: TypedAggExpr<StringField>;
     amount: TypedAggExpr<NumericField>;
     timezone?: TypedAggExpr<StringField>;
@@ -248,7 +249,7 @@ export const fn = {
     return namedArgsExpr('$dateAdd', args, DATE);
   },
   dateSubtract(args: {
-    startDate: TypedAggExpr<DateField>;
+    startDate: TypedAggExpr<BsonDateField>;
     unit: TypedAggExpr<StringField>;
     amount: TypedAggExpr<NumericField>;
     timezone?: TypedAggExpr<StringField>;
@@ -256,7 +257,7 @@ export const fn = {
     return namedArgsExpr('$dateSubtract', args, DATE);
   },
   dateTrunc(args: {
-    date: TypedAggExpr<DateField>;
+    date: TypedAggExpr<BsonDateField>;
     unit: TypedAggExpr<StringField>;
     binSize?: TypedAggExpr<NumericField>;
     timezone?: TypedAggExpr<StringField>;

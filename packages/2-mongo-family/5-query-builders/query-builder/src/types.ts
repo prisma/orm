@@ -21,6 +21,16 @@ export type StringField = { readonly codecId: 'mongo/string@1'; readonly nullabl
 export type ArrayField = { readonly codecId: 'mongo/array@1'; readonly nullable: false };
 export type BooleanField = { readonly codecId: 'mongo/bool@1'; readonly nullable: false };
 export type DateField = { readonly codecId: 'mongo/date@1'; readonly nullable: false };
+/** A field of any codec stored as a BSON date: an instant or a calendar date, in any representation. MongoDB's date operators take it. */
+export type BsonDateField = {
+  readonly codecId:
+    | 'mongo/date@1'
+    | 'mongo/date-instant@1'
+    | 'mongo/date-instant-string@1'
+    | 'mongo/date-string@1'
+    | 'mongo/date-temporal@1';
+  readonly nullable: false;
+};
 export type NullableDocField = { readonly codecId: string; readonly nullable: true };
 
 export type LiteralValue<F extends DocField> = F extends StringField
