@@ -159,6 +159,7 @@ export function definePolicyMigrateJourneys(withProject: WithPolicyProject, time
         await planTo(project, 'next', 'add-name');
         const unique = await planTo(project, 'unique', 'unique-email');
         await writePolicyRef(project, 'production', unique, MIGRATE_ONLY_DECLARED);
+        const ledgerBefore = await ledgerLength(project);
 
         const failed = await runMigrate(project.ctx, [
           '--to',
@@ -167,7 +168,13 @@ export function definePolicyMigrateJourneys(withProject: WithPolicyProject, time
           '--json',
         ]);
 
-        errorOf(failed);
+        const failure = errorOf(failed);
+        expect(failure).toMatchObject(
+          project.target === 'mongo'
+            ? { code: 'CLI.UNEXPECTED', why: expect.stringContaining('E11000 duplicate key') }
+            : { code: 'MIGRATION.EXECUTION_FAILED', meta: { failingSpace: 'app' } },
+        );
+        expect(await ledgerLength(project)).toBe(ledgerBefore);
         const marker = await appMarker(project);
         expect({ storageHash: marker?.storageHash, meta: marker?.meta }).toEqual({
           storageHash: base,
