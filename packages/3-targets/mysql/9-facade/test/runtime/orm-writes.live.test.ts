@@ -226,6 +226,33 @@ describe('MySQL writes through the ORM', { timeout: timeouts.databaseOperation }
     });
   });
 
+  it('reads back, at READ COMMITTED, a value another session committed after the transaction first read', async (test) => {
+    await withSeededDatabase(test, exampleDatabase, async (url, other) => {
+      const otherSessionSetsAdmin: SqlMiddleware = {
+        name: 'concurrent-writer',
+        intercept: {
+          async onExecute(plan) {
+            if (plan.sql.startsWith('UPDATE')) {
+              await other.query("UPDATE `User` SET `role` = 'ADMIN' WHERE `id` = 3");
+            }
+            return undefined;
+          },
+        },
+      };
+      await using db = mysql({
+        contract,
+        url,
+        verifyMarker: false,
+        middleware: [otherSessionSetsAdmin],
+      });
+      expect(await db.orm.User.where({ id: 3 }).update({ role: 'ADMIN' })).toEqual({
+        id: 3,
+        email: 'c@example.com',
+        role: 'ADMIN',
+      });
+    });
+  });
+
   it('an upsert that collides on a unique index the contract does not list, while no row has the conflict values, fails and rolls back', async (test) => {
     const seeded = [
       ...exampleTablesDdl,
