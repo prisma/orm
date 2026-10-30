@@ -6,7 +6,7 @@ changes:
     detection:
       glob: "**/*.prisma"
       matches:
-        - '(?<![\s\S])(?=[\s\S]*\bObjectId\b)(?![\s\S]*\bdatasource\b[\s\S]*\bprovider\s*=\s*"mongodb"[\s\S]*\bprisma6\b)[\s\S]*@@index\('
+        - '(?<![\s\S])(?=[\s\S]*@db\.ObjectId\b)[\s\S]*(?:@unique\b|@@(?:unique|index|fulltext)\()'
 ---
 
 # The Prisma 6 reader keeps MongoDB indexes as Prisma 6 wrote them
