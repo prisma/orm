@@ -168,3 +168,53 @@ describe('canonicalization of literal column defaults', () => {
     expect(columnDefault(result, 'arr')).toEqual({ kind: 'literal', value: [] });
   });
 });
+
+describe('canonicalization of model storage', () => {
+  it('keeps the empty fields and storage fields of a variant with no fields of its own', () => {
+    const contract: Contract = blindCast({
+      targetFamily: 'sql',
+      target: 'sqlite',
+      profileHash: 'test-profile',
+      roots: {},
+      domain: {
+        namespaces: {
+          app: {
+            models: {
+              Epic: {
+                fields: {},
+                relations: {},
+                base: { namespace: 'app', model: 'Task' },
+                storage: { table: 'task', namespaceId: 'app', fields: {} },
+              },
+            },
+          },
+        },
+      },
+      storage: { namespaces: {} },
+      extensions: {},
+      capabilities: {},
+      meta: {},
+    });
+
+    const result = canonicalizeContractToObject(contract, {
+      serializeContract: (c) =>
+        blindCast<JsonObject, 'test contract literal is already plain JSON data'>(c),
+      shouldPreserveEmpty: sqlContractCanonicalizationHooks.shouldPreserveEmpty,
+    });
+
+    expect(result['domain']).toEqual({
+      namespaces: {
+        app: {
+          models: {
+            Epic: {
+              fields: {},
+              relations: {},
+              base: { namespace: 'app', model: 'Task' },
+              storage: { table: 'task', namespaceId: 'app', fields: {} },
+            },
+          },
+        },
+      },
+    });
+  });
+});

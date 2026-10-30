@@ -1,7 +1,7 @@
 import { readdir } from 'node:fs/promises';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { BIN_GROUPS } from '../../src/orm/cli';
-import { errorUnfilledPlaceholder } from '../../src/utils/cli-errors';
+import { errorMigrationPlanningFailed, errorUnfilledPlaceholder } from '../../src/utils/cli-errors';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
 import {
   ADDITIVE_OP,
@@ -475,6 +475,35 @@ describe('migration plan --convert and --backfill', () => {
       text: `Existing rows get '' in field "User.email". To choose the value, plan again with --backfill User.email.`,
     });
   });
+
+  it.each([
+    ['an error', new Error('codec lookup failed'), 'CLI.UNEXPECTED'],
+    [
+      'a planning refusal',
+      errorMigrationPlanningFailed({
+        conflicts: [
+          {
+            kind: 'nullabilityConflict',
+            summary: 'Value object field "GeoPoint.country" is required',
+          },
+        ],
+      }),
+      'MIGRATION.PLANNING_FAILED',
+    ],
+  ])(
+    'fails on %s an operation rejects with beside a placeholder, and writes nothing',
+    async (_, rejection, code) => {
+      const project = await typeChangeProject();
+      const run = await harness(project, {
+        operations: [ADDITIVE_OP],
+        throwOnOperations: errorUnfilledPlaceholder('backfill'),
+        alsoThrowOnOperations: rejection,
+      }).run(['migration', 'plan', '--json'], { cwd: project.dir });
+
+      expect(envelopeOf(run)).toMatchObject({ ok: false, error: { code } });
+      expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
+    },
+  );
 
   it('reports a delete that answers a type change as accepting the lossy type change', async () => {
     const project = await typeChangeProject();

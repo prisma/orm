@@ -1,3 +1,7 @@
+import { canonicalizeContractToObject } from '@internal/contract/hashing';
+import type { Contract } from '@internal/contract/types';
+import { blindCast } from '@internal/utils/casts';
+import type { JsonObject } from '@internal/utils/json';
 import { describe, expect, it } from 'vitest';
 import { mongoContractCanonicalizationHooks } from '../src/canonicalization-hooks';
 
@@ -99,5 +103,35 @@ describe('mongoContractCanonicalizationHooks.shouldPreserveEmpty', () => {
 
   it('does not preserve unrelated empty defaults', () => {
     expect(shouldPreserveEmpty(['storage', 'namespaces', 'app', 'somethingElse'])).toBe(false);
+  });
+});
+
+describe('canonicalization of model storage', () => {
+  it('keeps the empty fields and storage fields of a variant with no fields of its own', () => {
+    const epic = {
+      fields: {},
+      relations: {},
+      base: { namespace: 'app', model: 'Task' },
+      storage: { collection: 'tasks', fields: {} },
+    };
+    const contract: Contract = blindCast({
+      targetFamily: 'mongo',
+      target: 'mongo',
+      profileHash: 'test-profile',
+      roots: {},
+      domain: { namespaces: { app: { models: { Epic: epic } } } },
+      storage: { namespaces: {} },
+      extensions: {},
+      capabilities: {},
+      meta: {},
+    });
+
+    const result = canonicalizeContractToObject(contract, {
+      serializeContract: (c) =>
+        blindCast<JsonObject, 'test contract literal is already plain JSON data'>(c),
+      shouldPreserveEmpty,
+    });
+
+    expect(result['domain']).toEqual({ namespaces: { app: { models: { Epic: epic } } } });
   });
 });

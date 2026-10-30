@@ -29,10 +29,17 @@ import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { RefResolutionError } from '@internal/migration-tools/ref-resolution';
 import { ifDefined } from '@internal/utils/defined';
 import type { Diagnostic, NextAction } from '@prisma/cli-engine/protocol';
+import { join } from 'pathe';
 import { statementFlag } from '../control-api/statements/statement-flag';
 import type { StatementText } from '../control-api/statements/statement-text';
-import { chooseAction, runCommandAction } from './next-actions';
-import { type CliInvocation, cliCommand, printedPlanCommand } from './printed-command';
+import { chooseAction, editFileAction, runCommandAction } from './next-actions';
+import {
+  type CliInvocation,
+  cliCommand,
+  printedPath,
+  printedPlanCommand,
+  selfEmitCommand,
+} from './printed-command';
 
 export {
   errorHashMismatch,
@@ -671,18 +678,30 @@ export function errorConvertAndDelete(field: string): ActionableCliError {
 const MIGRATION_PLAN_VERBS: readonly string[] = ['rename', 'delete', 'convert', 'backfill'];
 
 /**
- * `--convert` or `--backfill` statements were given to `db update`, which applies its plan
- * directly and so has no migration file whose slot the user could fill. `statements` are every
- * statement the user gave, in the order given: the `migration plan` command the error suggests
- * carries each one that command accepts, and starts from `databaseStorageHash`, the contract the
- * database is at, when it is known. Its commands repeat the `--config` of `invocation`.
+ * `refused`, `--convert` or `--backfill` statements that ask for code the user writes, were given
+ * to `db update`, which applies its plan directly and so has no migration file whose slot the user
+ * could fill. `statements` are every statement the user gave, in the order given: the `migration
+ * plan` command the error suggests carries each one that command accepts, and starts from
+ * `databaseStorageHash`, the contract the database is at, when it is known. Its commands repeat the
+ * `--config` of `invocation`.
  */
+function needsMigrationFileReason(refused: readonly StatementText[]): string {
+  const converts = refused.some(({ verb }) => verb === 'convert');
+  const backfills = refused.some(({ verb }) => verb === 'backfill');
+  if (converts && backfills) {
+    return '--convert of a field and --backfill ask for a migration file with a slot for the code that converts the values or the value that fills the field';
+  }
+  return converts
+    ? '--convert of a field asks for a migration file with a slot for the code that converts its values'
+    : '--backfill asks for a migration file with a slot for the value that fills the field';
+}
+
 export function errorStatementNeedsMigrationFile(
   statements: readonly StatementText[],
+  refused: readonly StatementText[],
   invocation: CliInvocation | undefined,
   databaseStorageHash?: string,
 ): ActionableCliError {
-  const refused = statements.filter(({ verb }) => verb === 'convert' || verb === 'backfill');
   const written = refused.map(({ verb, text }) => `"--${verb} ${text}"`);
   const listed =
     written.length === 1 ? written[0] : `${written.slice(0, -1).join(', ')} and ${written.at(-1)}`;
@@ -695,7 +714,7 @@ export function errorStatementNeedsMigrationFile(
     'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
     `db update cannot carry out ${listed}`,
     {
-      why: '--convert and --backfill ask for a migration file with a slot for the code that converts or fills in the values, and db update has no migration file to fill: it applies its plan directly.',
+      why: `${needsMigrationFileReason(refused)}, and db update has no migration file to fill: it applies its plan directly.`,
       fix: `Plan the change with ${plan}, fill in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with ${cliCommand(invocation, 'db migrate')}. Or leave out these statements: db update then asks before it loses any data.`,
       nextActions: [
         runCommandAction('Plan the change into a migration file to fill in', plan),
@@ -975,6 +994,31 @@ function planThenApply(meta: PathUnreachableMeta): PathUnreachableAdvice {
       ),
     ],
   };
+}
+
+/** `MIGRATION.UNFILLED_PLACEHOLDER` from `db migrate`: a migration to apply still has `placeholder(...)` calls, so its `ops.json` lacks their operations. */
+export function errorMigrationHasUnfilledPlaceholders(
+  directory: string,
+  invocation: CliInvocation,
+): ActionableCliError {
+  const migrationTs = join(directory, 'migration.ts');
+  const edit = `Replace each placeholder(...) call in ${printedPath(invocation, migrationTs)} with the value or query it stands for.`;
+  const emit = selfEmitCommand(invocation, migrationTs);
+  const migrate = cliCommand(invocation, 'db migrate');
+  return new ActionableCliError(
+    'MIGRATION.UNFILLED_PLACEHOLDER',
+    'Migration has unfilled placeholders',
+    {
+      why: `The migration in ${printedPath(invocation, directory)} still has placeholder(...) calls in its migration.ts, so its ops.json does not hold their operations. Applying it would move the database to its contract without them.`,
+      fix: `${edit} Then run ${emit} to write ops.json, and run ${migrate} again.`,
+      nextActions: [
+        editFileAction(edit),
+        runCommandAction('Write ops.json', emit),
+        runCommandAction('Apply the migration', migrate),
+      ],
+      meta: { directory },
+    },
+  );
 }
 
 /** `MIGRATION.PATH_UNREACHABLE`, advising to plan the missing edge and apply it unless `advice` says otherwise. */

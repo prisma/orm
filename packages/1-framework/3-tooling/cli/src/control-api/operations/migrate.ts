@@ -31,7 +31,13 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { join } from 'pathe';
-import { type CliStructuredError, errorPathUnreachable } from '../../utils/cli-errors';
+import { appliedSummary } from '../../utils/applied-summary';
+import { withEditsAsWritten } from '../../utils/calls-as-written';
+import {
+  type CliStructuredError,
+  errorMigrationHasUnfilledPlaceholders,
+  errorPathUnreachable,
+} from '../../utils/cli-errors';
 import { errorMarkerMismatch, readLedgerQuietly } from '../../utils/marker-mismatch';
 import { migrateRunnerFailureError } from '../../utils/migrate-failure';
 import type { CliInvocation } from '../../utils/printed-command';
@@ -53,6 +59,7 @@ import {
   runMigration,
   runnerFailureFacts,
 } from './run-migration';
+import { migrationWithUnfilledPlaceholders } from './unfilled-placeholders';
 
 /**
  * Inputs for the aggregate-walking `migrate` control-api
@@ -277,6 +284,15 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     );
   }
 
+  const unfilled = await migrationWithUnfilledPlaceholders(
+    perSpacePlans,
+    applyOrder,
+    migrationsDir,
+  );
+  if (unfilled !== undefined) {
+    return notOk(errorMigrationHasUnfilledPlaceholders(unfilled, options.invocation));
+  }
+
   const applied = await runMigration({
     aggregate,
     perSpacePlans,
@@ -291,7 +307,9 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
   });
 
   if (!applied.ok) {
-    const facts = runnerFailureFacts(applied.failure, collectOrdered(applyOrder, perSpacePlans));
+    const facts = await withEditsAsWritten(
+      runnerFailureFacts(applied.failure, collectOrdered(applyOrder, perSpacePlans)),
+    );
     return notOk(
       migrateRunnerFailureError(
         applied.failure,
@@ -327,7 +345,12 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     (sum, r) => sum + r.entry.migrationEdges.length,
     0,
   );
-  const summary = `Applied ${totalMigrationsApplied} migration(s) (${applied.value.totalOpsExecuted} operation(s)) across ${orderedAll.length} contract space(s)`;
+  const summary = appliedSummary({
+    migrations: totalMigrationsApplied,
+    planned: applied.value.totalOpsPlanned,
+    executed: applied.value.totalOpsExecuted,
+    spaces: orderedAll.length,
+  });
 
   return ok(
     buildSuccess({

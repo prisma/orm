@@ -72,10 +72,42 @@ function migrationRange(
   return { start: 0, end: operationCount };
 }
 
+/** A step of a plan's operation that carries a mark, with the mark it carries. */
+export interface MarkedStep<TOperation, TMark> {
+  readonly operation: TOperation;
+  readonly operationIndex: number;
+  readonly step: SqlMigrationPlanOperationStep;
+  readonly mark: TMark;
+}
+
 /**
- * The marks of the steps of `operations` that belong to the same migration as the operation at
- * `operationIndex`, in plan order: `edges` say how many operations each migration of the plan has.
+ * The steps of `operations` that belong to the same migration as the operation at `operationIndex`
+ * and carry a mark `markOf` reads, in plan order: `edges` say how many operations each migration of
+ * the plan has.
  */
+export function marksOfMigration<
+  TOperation extends {
+    readonly precheck: readonly SqlMigrationPlanOperationStep[];
+    readonly execute: readonly SqlMigrationPlanOperationStep[];
+    readonly postcheck: readonly SqlMigrationPlanOperationStep[];
+  },
+  TMark,
+>(
+  operations: readonly TOperation[],
+  edges: readonly { readonly operationCount: number }[],
+  operationIndex: number,
+  markOf: (step: SqlMigrationPlanOperationStep) => TMark | undefined,
+): readonly MarkedStep<TOperation, TMark>[] {
+  const { start, end } = migrationRange(edges, operationIndex, operations.length);
+  return operations.slice(start, end).flatMap((operation, offset) =>
+    [...operation.precheck, ...operation.execute, ...operation.postcheck].flatMap((step) => {
+      const mark = markOf(step);
+      return mark === undefined ? [] : [{ operation, operationIndex: start + offset, step, mark }];
+    }),
+  );
+}
+
+/** The marks of the steps that mark a column as becoming required, as {@link marksOfMigration} finds them. */
 export function requiredColumnsOfMigration<
   TOperation extends {
     readonly precheck: readonly SqlMigrationPlanOperationStep[];
@@ -87,13 +119,11 @@ export function requiredColumnsOfMigration<
   edges: readonly { readonly operationCount: number }[],
   operationIndex: number,
 ): readonly RequiredColumnMark<TOperation>[] {
-  const { start, end } = migrationRange(edges, operationIndex, operations.length);
-  return operations.slice(start, end).flatMap((operation, offset) =>
-    [...operation.precheck, ...operation.execute, ...operation.postcheck].flatMap((step) => {
-      const required = requiredColumnOf(step);
-      return required === undefined
-        ? []
-        : [{ operation, operationIndex: start + offset, required }];
+  return marksOfMigration(operations, edges, operationIndex, requiredColumnOf).map(
+    ({ operation, operationIndex: index, mark }) => ({
+      operation,
+      operationIndex: index,
+      required: mark,
     }),
   );
 }

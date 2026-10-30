@@ -30,6 +30,7 @@ import type { ImportSpecifierResolver } from '@internal/publish-surface/import-r
 import { castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import { type } from 'arktype';
 import { join, relative } from 'pathe';
 import {
   type CliErrorConflict,
@@ -120,6 +121,8 @@ export interface MigrationPlanOptions {
 
 type PlannerSuccess = {
   readonly plannedOps: readonly MigrationPlanOperation[];
+  /** The operations the result lists: those that resolved and each unfilled placeholder that names the operation it stands for. */
+  readonly listedOps: readonly OperationSummary[];
   readonly migrationTsContent: string;
   readonly hasPlaceholders: boolean;
   readonly appliedStatements: readonly AppliedStatementReport[];
@@ -206,35 +209,46 @@ async function runPlannerLeg(
 
   // The operation at each position of the plan, or `undefined` where it is an unfilled placeholder.
   let resolved: readonly (MigrationPlanOperation | undefined)[] = [];
+  // The operation each unfilled placeholder stands for, when its call names it.
+  let standingFor: readonly (OperationSummary | undefined)[] = [];
   let hasPlaceholders = false;
   try {
-    resolved = await Promise.all(plannerResult.plan.operations);
-    if (resolved.length === 0 && origin.kind === 'empty') {
-      return notOk(errorPlanProducedNoOperations(destination));
+    const settled = await Promise.allSettled(plannerResult.plan.operations);
+    for (const entry of settled) {
+      if (entry.status === 'fulfilled') continue;
+      const reason: unknown = entry.reason;
+      if (!CliStructuredError.is(reason)) throw reason;
+      if (reason.code !== 'MIGRATION.UNFILLED_PLACEHOLDER') throw reason;
+      hasPlaceholders = true;
     }
+    resolved = settled.map((entry) => (entry.status === 'fulfilled' ? entry.value : undefined));
+    standingFor = settled.map((entry) =>
+      entry.status === 'rejected' ? placeholderOperationOf(entry.reason) : undefined,
+    );
   } catch (e) {
+    // A planner whose `operations` accessor throws synchronously on an unfilled placeholder
+    // exposes no operations at all.
     if (CliStructuredError.is(e) && e.code === 'MIGRATION.UNFILLED_PLACEHOLDER') {
       hasPlaceholders = true;
-      // The operations that DID resolve still matter: the data-loss questions
-      // must see them, or a placeholder would smuggle a loss past them.
-      // Writers stay gated on hasPlaceholders. A planner whose `operations`
-      // accessor throws synchronously on an unfilled placeholder (rather than
-      // rejecting one op's promise) exposes no operations at all.
-      try {
-        const settled = await Promise.allSettled(plannerResult.plan.operations);
-        resolved = settled.map((entry) => (entry.status === 'fulfilled' ? entry.value : undefined));
-      } catch {
-        resolved = [];
-      }
+      resolved = [];
     } else {
       throw e;
     }
   }
+  if (!hasPlaceholders && resolved.length === 0 && origin.kind === 'empty') {
+    return notOk(errorPlanProducedNoOperations(destination));
+  }
 
   const plannedOps = resolved.filter((op): op is MigrationPlanOperation => op !== undefined);
-  const position = resolvedPositions(resolved);
+  const listed = resolved.map((op, index) =>
+    op === undefined
+      ? standingFor[index]
+      : { id: op.id, label: op.label, operationClass: op.operationClass },
+  );
+  const position = resolvedPositions(listed);
   return ok({
     plannedOps,
+    listedOps: listed.filter((op): op is OperationSummary => op !== undefined),
     migrationTsContent: plannerResult.plan.renderTypeScript(resolveImportSpecifier),
     hasPlaceholders,
     dataLoss: plannerResult.dataLoss.map(
@@ -269,7 +283,7 @@ async function runPlannerLeg(
  * resolved, which is what a result's `operations` lists: `undefined` for an unfilled placeholder.
  */
 function resolvedPositions(
-  resolved: readonly (MigrationPlanOperation | undefined)[],
+  resolved: readonly (OperationSummary | undefined)[],
 ): (planIndex: number) => number | undefined {
   const positions: (number | undefined)[] = [];
   let next = 0;
@@ -280,12 +294,24 @@ function resolvedPositions(
   return (planIndex) => positions[planIndex];
 }
 
-/**
- * The operations a result lists. For a leg with unfilled placeholders these are the operations
- * that resolved; the placeholders themselves are not operations yet.
- */
-function operationSummaries(ops: readonly MigrationPlanOperation[]) {
-  return ops.map((op) => ({ id: op.id, label: op.label, operationClass: op.operationClass }));
+type OperationSummary = Pick<MigrationPlanOperation, 'id' | 'label' | 'operationClass'>;
+
+const PlaceholderOperation = type({
+  code: "'MIGRATION.UNFILLED_PLACEHOLDER'",
+  meta: {
+    operation: {
+      id: 'string',
+      label: 'string',
+      operationClass: "'additive' | 'widening' | 'destructive' | 'data'",
+    },
+  },
+});
+
+/** The operation an unfilled placeholder's rejection says it stands for, when it says. */
+function placeholderOperationOf(reason: unknown): OperationSummary | undefined {
+  if (!CliStructuredError.is(reason)) return undefined;
+  const read = PlaceholderOperation({ code: reason.code, meta: reason.meta ?? {} });
+  return read instanceof type.errors ? undefined : read.meta.operation;
 }
 
 async function writePlannedMigrationPackage(
@@ -898,7 +924,7 @@ async function executeMigrationPlanCommandInner(
             to: toStorageHash,
             dir: baselineDir,
             baselineDir,
-            operations: operationSummaries(baselineLeg.value.plannedOps),
+            operations: baselineLeg.value.listedOps,
             emittedExtensionDirs,
             ...(warnings.length > 0 ? { warnings } : {}),
             pendingPlaceholders: true,
@@ -959,8 +985,8 @@ async function executeMigrationPlanCommandInner(
           to: toStorageHash,
           dir: deltaDir,
           baselineDir,
-          operations: operationSummaries(deltaLeg.plannedOps),
-          baselineOperations: operationSummaries(baselineLeg.value.plannedOps),
+          operations: deltaLeg.listedOps,
+          baselineOperations: baselineLeg.value.listedOps,
           emittedExtensionDirs,
           ...(warnings.length > 0 ? { warnings } : {}),
           pendingPlaceholders: true,
@@ -1090,7 +1116,7 @@ async function executeMigrationPlanCommandInner(
         from: fromHash,
         to: toStorageHash,
         dir,
-        operations: operationSummaries(deltaLeg.plannedOps),
+        operations: deltaLeg.listedOps,
         emittedExtensionDirs,
         ...(warnings.length > 0 ? { warnings } : {}),
         pendingPlaceholders: true,

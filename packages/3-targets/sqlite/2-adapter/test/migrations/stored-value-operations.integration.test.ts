@@ -5,6 +5,7 @@
  */
 import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
 import {
+  DeleteRowsCall,
   RemoveStoredValueCall,
   ReplaceStoredValueCall,
 } from '@internal/target-sqlite/op-factory-call';
@@ -106,6 +107,17 @@ describe('SQLite stored value operations', { timeout: timeouts.databaseOperation
       { id: 3, state: null },
       { id: 4, state: 'RETIRED' },
     ]);
+  });
+
+  it('deletes the rows that hold a value, and keeps the others', async () => {
+    await testDb.driver.query(
+      `INSERT INTO "task" (id, state, rank) VALUES (1, 'Bug', 1), (2, 'Feature', 2), (3, NULL, 3), (4, 'Bug', 4)`,
+    );
+
+    await runTwice(await new DeleteRowsCall('task', 'state', 'Bug').toOp());
+    await runTwice(await new DeleteRowsCall('task', 'rank', 3).toOp());
+
+    expect(await rows('state')).toEqual([{ id: 2, state: 'Feature' }]);
   });
 
   it('replaces and removes a numeric value', async () => {

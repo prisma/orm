@@ -25,6 +25,9 @@ describe('an enum value rename', () => {
           target: fakeTarget(['app.User']),
         }),
       ),
-    ).toMatchObject({ calls: [], appliedStatements: [{ operationIndexes: [] }] });
+    ).toMatchObject({
+      calls: [],
+      plannedStatements: [{ operations: { kind: 'plannedWithDiff' } }],
+    });
   });
 });

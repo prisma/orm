@@ -1,3 +1,4 @@
+import { asNamespaceId } from '@internal/contract/types';
 import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
 import {
@@ -106,13 +107,50 @@ describe('appliedStatementsInOrder', () => {
     expect(
       appliedStatementsInOrder(
         [convert, rename, backfill],
-        [{ statement: rename, operationIndexes: [0, 1] }],
+        [{ statement: rename, operations: { kind: 'planned', operationIndexes: [0, 1] } }],
+        (statement) => (statement === rename ? [] : [9]),
       ),
     ).toEqual([
       { statement: convert, operationIndexes: [] },
       { statement: rename, operationIndexes: [0, 1] },
       { statement: backfill, operationIndexes: [] },
     ]);
+  });
+
+  it('gives a statement planned with the diff the operations the target places for it', () => {
+    const rename = renameModel('Profile', 'User');
+    const enumValueRename = {
+      kind: 'rename',
+      entity: 'enumValue',
+      from: { namespaceId: asNamespaceId('app'), enum: 'Status', member: 'ARCHIVED' },
+      to: { namespaceId: asNamespaceId('app'), enum: 'Status', member: 'RETIRED' },
+    } as const;
+    expect(
+      appliedStatementsInOrder(
+        [enumValueRename, rename],
+        [
+          { statement: rename, operations: { kind: 'planned', operationIndexes: [0] } },
+          { statement: enumValueRename, operations: { kind: 'plannedWithDiff' } },
+        ],
+        (statement) => (statement === enumValueRename ? [4, 5] : []),
+      ),
+    ).toEqual([
+      { statement: enumValueRename, operationIndexes: [4, 5] },
+      { statement: rename, operationIndexes: [0] },
+    ]);
+  });
+});
+
+describe('appliedStatementsInOrder for a variant rename', () => {
+  it('adds the stored value rewrite the target places to the operations of a model rename', () => {
+    const rename = renameModel('Bug', 'Defect');
+    expect(
+      appliedStatementsInOrder(
+        [rename],
+        [{ statement: rename, operations: { kind: 'planned', operationIndexes: [0] } }],
+        () => [3],
+      ),
+    ).toEqual([{ statement: rename, operationIndexes: [0, 3] }]);
   });
 });
 
@@ -134,14 +172,14 @@ describe('planStatements', () => {
         { namespaceId: 'app', from: 'Post', to: 'Article' },
       ],
       columnRenames: [],
-      appliedStatements: [
+      plannedStatements: [
         {
           statement: renameModel('Profile', 'User'),
-          operationIndexes: [0, 1],
+          operations: { kind: 'planned', operationIndexes: [0, 1] },
         },
         {
           statement: renameModel('Post', 'Article'),
-          operationIndexes: [2, 3],
+          operations: { kind: 'planned', operationIndexes: [2, 3] },
         },
       ],
     });
@@ -158,7 +196,7 @@ describe('planStatements', () => {
     expect(planned(result)).toMatchObject({
       calls: [],
       tableRenames: [],
-      appliedStatements: [{ operationIndexes: [] }],
+      plannedStatements: [{ operations: { kind: 'planned', operationIndexes: [] } }],
     });
   });
 

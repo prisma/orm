@@ -175,20 +175,21 @@ describe('resolveStatements, convert statements', () => {
     expect([unknownModel.fix, unknownNamespace.fix]).toEqual([advice, advice]);
   });
 
-  it('refuses a value object without speaking of renames', () => {
+  it('refuses a convert of a value object field without speaking of renames', () => {
     const withValueObject = contractOf({
       app: { models: { User: { fields: ['id'] } }, valueObjects: { Address: ['city'] } },
     });
     const failure = expectFailure(
-      resolve([backfill('Address.city')], withValueObject, withValueObject),
+      resolve([convert('Address.city')], withValueObject, withValueObject),
       UNRESOLVED,
-      '"Address" is a value object; a --backfill statement names a field of a model',
+      '"Address" is a value object; a --convert statement names a field of a model or a variant',
     );
     expect(`${failure.why} ${failure.fix}`).not.toMatch(/rename/i);
   });
 
   it('refuses a model, a relation and a model the origin does not have', () => {
-    expectFailure(resolve([convert('User')]), INVALID, 'Model.field or namespace.Model.field');
+    expectFailure(resolve([backfill('User')]), INVALID, 'Model.field or namespace.Model.field');
+    expectFailure(resolve([convert('User')]), UNRESOLVED, 'is not a variant in both contracts');
     expectFailure(resolve([convert('User.posts')]), UNRESOLVED, '"User.posts" is a relation');
     expectFailure(
       resolve([convert('Post.title')]),
@@ -271,6 +272,7 @@ describe('the migration plan command the db update refusal prints', () => {
     const [command] = (
       errorStatementNeedsMigrationFile(
         [rename('User.age:User.years'), convert('User.years')],
+        [convert('User.years')],
         undefined,
       ).toEnvelope().nextActions ?? []
     ).flatMap((action) =>

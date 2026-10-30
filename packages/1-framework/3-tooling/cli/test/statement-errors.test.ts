@@ -85,6 +85,10 @@ describe('errorStatementNeedsMigrationFile', () => {
         { verb: 'delete', text: 'Legacy' },
         { verb: 'backfill', text: 'User.email' },
       ],
+      [
+        { verb: 'convert', text: 'User.years' },
+        { verb: 'backfill', text: 'User.email' },
+      ],
       undefined,
     ).toEnvelope();
 
@@ -102,21 +106,42 @@ describe('errorStatementNeedsMigrationFile', () => {
     });
   });
 
+  it('gives the reason of each statement it refuses, and only those', () => {
+    const why = (refused: readonly { verb: 'convert' | 'backfill'; text: string }[]) =>
+      errorStatementNeedsMigrationFile(refused, refused, undefined).toEnvelope().why;
+
+    expect([
+      why([{ verb: 'backfill', text: 'GeoPoint.seen' }]),
+      why([{ verb: 'convert', text: 'User.age' }]),
+    ]).toEqual([
+      '--backfill asks for a migration file with a slot for the value that fills the field, and db update has no migration file to fill: it applies its plan directly.',
+      '--convert of a field asks for a migration file with a slot for the code that converts its values, and db update has no migration file to fill: it applies its plan directly.',
+    ]);
+  });
+
   it('repeats the --config the CLI was given in each command it prints', () => {
-    const envelope = errorStatementNeedsMigrationFile([{ verb: 'convert', text: 'User.years' }], {
-      cwd: '/work',
-      configPath: 'app/prisma.config.ts',
-      dbGiven: false,
-    }).toEnvelope();
+    const envelope = errorStatementNeedsMigrationFile(
+      [{ verb: 'convert', text: 'User.years' }],
+      [{ verb: 'convert', text: 'User.years' }],
+      {
+        cwd: '/work',
+        configPath: 'app/prisma.config.ts',
+        dbGiven: false,
+      },
+    ).toEnvelope();
 
     expect({
       fix: envelope.fix,
       commands: commandOf(
-        errorStatementNeedsMigrationFile([{ verb: 'convert', text: 'User.years' }], {
-          cwd: '/work',
-          configPath: 'app/prisma.config.ts',
-          dbGiven: false,
-        }),
+        errorStatementNeedsMigrationFile(
+          [{ verb: 'convert', text: 'User.years' }],
+          [{ verb: 'convert', text: 'User.years' }],
+          {
+            cwd: '/work',
+            configPath: 'app/prisma.config.ts',
+            dbGiven: false,
+          },
+        ),
       ),
     }).toEqual({
       fix: 'Plan the change with {bin} migration plan --convert User.years --config app/prisma.config.ts, fill in the migration.ts it writes, run that migration.ts with the `node` command `migration plan` prints, and apply it with {bin} db migrate --config app/prisma.config.ts. Or leave out these statements: db update then asks before it loses any data.',
@@ -130,6 +155,7 @@ describe('errorStatementNeedsMigrationFile', () => {
         { verb: 'rename', text: "Old's:New" },
         { verb: 'backfill', text: 'User.$(x)' },
       ],
+      [{ verb: 'backfill', text: 'User.$(x)' }],
       undefined,
     );
 

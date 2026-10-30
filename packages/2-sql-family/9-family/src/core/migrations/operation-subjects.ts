@@ -9,6 +9,7 @@ import type {
   MigrationSubject,
   MigrationTemporaryValue,
   ModelCoordinate,
+  ValueObjectFieldCoordinate,
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { SqlModelStorage } from '@internal/sql-contract/types';
@@ -36,6 +37,10 @@ export interface SubjectStorage {
     | undefined;
   /** The enum value the operation is about, when it rewrites one stored value of an enum. */
   readonly enumValue?: EnumValueCoordinate;
+  /** The value object field the operation is about, when it rewrites one key of a value object. */
+  readonly valueObjectField?: ValueObjectFieldCoordinate;
+  /** The variant the operation is about, when it deletes the rows of one variant. */
+  readonly model?: ModelCoordinate;
 }
 
 /** What a codec hook's call is about: the column of the field event it was returned for. */
@@ -80,6 +85,8 @@ export interface CallSubjects {
   readonly dataLoss: readonly (SubjectStorage & {
     readonly loss: MigrationDataLossKind;
     readonly keepDataEdit?: KeepDataEdit;
+    /** What the user should know to keep the data, which the question repeats. */
+    readonly keepDataAdvice?: string;
   })[];
   /** What the call's operation changes access to, and whether it widens it. */
   readonly accessChanges: readonly (SubjectStorage & { readonly widens: boolean })[];
@@ -87,11 +94,15 @@ export interface CallSubjects {
   readonly temporaryValues: readonly TemporaryColumnValue[];
 }
 
-/** A new required column of `table` in the destination, and the temporary value its existing rows get. */
+/**
+ * A new required column of `table` in the destination, and the temporary value its existing rows
+ * get; or, with `valueObjectField`, the column whose objects get a temporary value for that field.
+ */
 export interface TemporaryColumnValue {
   readonly table: string;
   readonly column: string;
   readonly value: string;
+  readonly valueObjectField?: ValueObjectFieldCoordinate;
 }
 
 interface SubjectContext {
@@ -100,6 +111,8 @@ interface SubjectContext {
   /** Where the plan's statements put the origin's tables and columns. */
   readonly origins: WorkingSchemaOrigins;
   readonly byHand: TableRenameByHand;
+  /** The variants of the origin the destination no longer has and no rename names: their columns are asked about as the variant. */
+  readonly removedVariants: readonly ModelCoordinate[];
 }
 
 interface StoringModel {
@@ -130,8 +143,18 @@ function modelsStoring(
   );
 }
 
+function isRemovedVariant(model: ModelCoordinate, context: SubjectContext): boolean {
+  return context.removedVariants.some(
+    (variant) => variant.namespaceId === model.namespaceId && variant.model === model.model,
+  );
+}
+
 function subjectOf(target: SubjectStorage, context: SubjectContext): MigrationSubject {
   if (target.enumValue !== undefined) return { kind: 'enumValue', ...target.enumValue };
+  if (target.valueObjectField !== undefined) {
+    return { kind: 'valueObjectField', ...target.valueObjectField };
+  }
+  if (target.model !== undefined) return { kind: 'model', ...target.model };
   const storage: MigrationSubject = { kind: 'storage', name: target.storageName };
   const { fromContract } = context;
   if (target.table === undefined || fromContract === null) return storage;
@@ -147,7 +170,10 @@ function subjectOf(target: SubjectStorage, context: SubjectContext): MigrationSu
   const column = context.origins.originColumn(origin, target.table.column);
   for (const model of [...models].sort((a, b) => Number(b.isRoot) - Number(a.isRoot))) {
     const field = Object.entries(model.fields).find(([, stored]) => stored.column === column)?.[0];
-    if (field !== undefined) return { kind: 'field', ...model.coordinate, field };
+    if (field === undefined) continue;
+    return isRemovedVariant(model.coordinate, context)
+      ? { kind: 'model', ...model.coordinate }
+      : { kind: 'field', ...model.coordinate, field };
   }
   return storage;
 }
@@ -189,13 +215,16 @@ export function subjectsOfCalls(
   const temporaryValues: MigrationTemporaryValue[] = [];
   let operationIndex = 0;
   for (const call of calls) {
-    for (const { table, column, value } of call.temporaryValues) {
+    for (const { table, column, value, valueObjectField } of call.temporaryValues) {
       temporaryValues.push({
         operationIndex,
-        subject: fieldOfColumn(context.contract, table, column) ?? {
-          kind: 'storage',
-          name: `${table}.${column}`,
-        },
+        subject:
+          valueObjectField !== undefined
+            ? { kind: 'valueObjectField', ...valueObjectField }
+            : (fieldOfColumn(context.contract, table, column) ?? {
+                kind: 'storage',
+                name: `${table}.${column}`,
+              }),
         value,
       });
     }
@@ -206,7 +235,10 @@ export function subjectsOfCalls(
         subject,
         loss: target.loss,
         label: call.label,
-        ...ifDefined('keepDataAdvice', keepTableAdvice(target, subject, context)),
+        ...ifDefined(
+          'keepDataAdvice',
+          target.keepDataAdvice ?? keepTableAdvice(target, subject, context),
+        ),
         ...ifDefined('keepDataEdit', target.keepDataEdit),
       });
     }

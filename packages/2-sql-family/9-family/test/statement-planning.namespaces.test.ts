@@ -35,7 +35,7 @@ describe('a namespace rename', () => {
 
     expect(planned(result)).toMatchObject({
       calls: ['rename-namespace billing -> finance'],
-      appliedStatements: [{ statement, operationIndexes: [0] }],
+      plannedStatements: [{ statement, operations: { kind: 'planned', operationIndexes: [0] } }],
     });
     expect(target.tables().hasTable('finance', 'Invoice')).toBe(true);
   });

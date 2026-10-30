@@ -19,19 +19,19 @@ Without the statements, both commands refuse and print them, as they do today fo
 
 ## What changes for users
 
-| Change in the schema | Today | After this slice |
-| --- | --- | --- |
-| Model moved to another namespace | Refused, even with `--rename` | `--rename public.Invoice:billing.Invoice` moves the table (`SET SCHEMA`), creating the schema first when the database lacks it |
-| Namespace renamed | Old schema and its tables kept silently; new ones created empty | Asked. `--rename billing:finance` renames the schema, before any other statement. `public` and a schema another contract space declares are refused |
-| Namespace removed | Its tables kept silently | Asked, one question per model, and the first question says `--delete billing` answers them all. `--delete billing` drops its tables and the schema. A table no contract declares is its own question, by its storage name |
-| Enum value renamed (stored value changes) | Postgres: the new CHECK fails at apply on rows with the old value. SQLite: planning fails with "no operations" | Asked. `--rename Status.A:Status.B` updates the rows |
-| Enum value removed | Same as above | Asked, with `--rename` offered first. `--delete Status.A` sets it to NULL where the field is optional and removes it from lists. Where a required column holds it in rows, the apply stops, counts the rows and says how to keep them |
-| Enum value renamed, stored value unchanged (`@map`) | Nothing planned | Same. A `--rename` is accepted and reported with no operations |
-| Field inside a value object renamed | Nothing planned; old keys stay in the JSON | Asked. `--rename Address.street:Address.line1` rewrites the key in every column that holds an `Address` |
-| Field inside a value object removed | Nothing planned; old keys stay | Asked. `--delete Address.street` removes the key |
-| Variant's discriminator value changed | Nothing planned; its rows stop being that variant | Asked. `--convert Bug` updates the rows to the new value |
-| Variant removed | Its own columns or table are dropped; its base rows stay, claimed by no model | Asked as one model. `--delete Bug` deletes its rows, then drops its columns or table |
-| `--allow` question | "would widen who can read and write its rows" | "would widen who can read and write its data". `accessWidening` becomes `accessChanges` |
+| Change in the schema | Today | After this slice | Proven by |
+| --- | --- | --- | --- |
+| Model moved to another namespace | Refused, even with `--rename` | `--rename public.Invoice:billing.Invoice` moves the table (`SET SCHEMA`), creating the schema first when the database lacks it | `move-statements-migration.e2e.test.ts` M1, M2 |
+| Namespace renamed | Old schema and its tables kept silently; new ones created empty | Asked. `--rename billing:finance` renames the schema, before any other statement. `public` and a schema another contract space declares are refused | `namespace-statements.e2e.test.ts` N1 |
+| Namespace removed | Its tables kept silently | Asked, one question per model, and the first question says `--delete billing` answers them all. `--delete billing` drops its tables and the schema. A table no contract declares is its own question, by its storage name | `namespace-statements.e2e.test.ts` N2, N3 |
+| Enum value renamed (stored value changes) | Postgres: the new CHECK fails at apply on rows with the old value. SQLite: planning fails with "no operations" | Asked. `--rename Status.A:Status.B` updates the rows | `enum-value-statements.e2e.test.ts` E1; `enum-value-statements.sqlite.e2e.test.ts` S1 |
+| Enum value removed | Same as above | Asked, with `--rename` offered first. `--delete Status.A` sets it to NULL where the field is optional and removes it from lists. Where a required column holds it in rows, the apply stops, counts the rows and says how to keep them | `enum-value-statements.e2e.test.ts` E2, E4, E5; `enum-value-statements.sqlite.e2e.test.ts` S2, S3 |
+| Enum value renamed, stored value unchanged (`@map`) | Nothing planned | Same. A `--rename` is accepted and reported with no operations | `enum-value-statements.e2e.test.ts` E3 |
+| Field inside a value object renamed | Nothing planned; old keys stay in the JSON | Asked. `--rename Address.street:Address.line1` rewrites the key in every column that holds an `Address` | `value-object-statements.e2e.test.ts` O1, O3; `value-object-statements.sqlite.e2e.test.ts` O1, O3 |
+| Field inside a value object removed | Nothing planned; old keys stay | Asked. `--delete Address.street` removes the key | `value-object-statements.e2e.test.ts` O2, O3; `value-object-statements.sqlite.e2e.test.ts` O2, O3 |
+| Variant's discriminator value changed | Nothing planned; its rows stop being that variant | Asked. `--convert Bug` updates the rows to the new value | `variant-statements.e2e.test.ts` P1 to P3; `variant-statements.sqlite.e2e.test.ts` V1 to V3 |
+| Variant removed | Its own columns or table are dropped; its base rows stay, claimed by no model | Asked as one model. `--delete Bug` deletes its rows, then drops its columns or table | `variant-statements.e2e.test.ts` P4 to P6; `variant-statements.sqlite.e2e.test.ts` V4 to V6 |
+| `--allow` question | "would widen who can read and write its rows" | "would widen who can read and write its data". `accessWidening` becomes `accessChanges` | `delete-statements-migration.e2e.test.ts` S4 |
 
 Namespace items are Postgres only: SQLite has no namespaces. Everything else works on both targets.
 
@@ -99,12 +99,12 @@ Every operation the planner writes is also something a user could write in `migr
 
 ## Pull requests
 
-| PR | Contents | Needs |
-| --- | --- | --- |
-| 1 | Namespaces: move, rename, delete, and a removed namespace becomes a question. The access question wording and rename | — |
-| 2 | Enum values: rename and delete in scalar and list columns, on Postgres and SQLite | 1 merged |
-| 3 | Value objects move to the storage plane and discriminator columns name a value set, both with derived checks on Postgres (decision 1), with ADR 309. First step: confirm a Postgres check can enforce every value object shape SQL authoring produces, nesting and lists included; raise any shape it cannot. A plan whose hash changed but has no operations is written and applied, not refused. Contracts re-emitted, with an upgrade fragment. No statements yet | 2 merged |
-| 4 | Value object field rename and delete, including enum values inside JSON. A value of a new required value object member for the rows that lack it (`--backfill`), since PR 3's Postgres check refuses those rows. Variant convert and delete | 3 merged |
+| PR | Contents | Needs | Status |
+| --- | --- | --- | --- |
+| 1 | Namespaces: move, rename, delete, and a removed namespace becomes a question. The access question wording and rename | — | Merged |
+| 2 | Enum values: rename and delete in scalar and list columns, on Postgres and SQLite | 1 merged | Merged |
+| 3 | Value objects move to the storage plane and discriminator columns name a value set, both with derived checks on Postgres (decision 1), with ADR 309. First step: confirm a Postgres check can enforce every value object shape SQL authoring produces, nesting and lists included; raise any shape it cannot. A plan whose hash changed but has no operations is written and applied, not refused. Contracts re-emitted, with an upgrade fragment. No statements yet | 2 merged | Merged (#30869) |
+| 4 | Value object field rename and delete, including enum values inside JSON. A value of a new required value object member for the rows that lack it (`--backfill`), since PR 3's Postgres check refuses those rows. Variant convert and delete | 3 merged | Done: the journeys named in [What changes for users](#what-changes-for-users) pass on Postgres and SQLite, through `migration plan` and `db update`, each ending with an empty plan; also `value-object-backfill.e2e.test.ts` and `value-object-backfill.sqlite.e2e.test.ts` for `--backfill` and the temporary value |
 
 PR 3 is separate because it changes the contract shape and every contract with value objects or variants, and needs its own review, as slice 4p's first PR did. Slice 4b reuses PR 4's value object statement support for MongoDB.
 

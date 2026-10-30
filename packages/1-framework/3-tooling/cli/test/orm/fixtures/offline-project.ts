@@ -242,6 +242,8 @@ export interface FakePlannerScript {
   readonly throwOnOperationsFromPlan?: number;
   /** Where in the operations the placeholder that `throwOnOperations` rejects sits; last by default. */
   readonly placeholderAt?: number;
+  /** Another operation, after the one `throwOnOperations` rejects, rejects with this. */
+  readonly alsoThrowOnOperations?: unknown;
   /** Makes the plan's `operations` accessor throw this synchronously. */
   readonly operationsAccessorThrows?: unknown;
   /** The new required fields every `plan` call reports it gives a temporary value. */
@@ -326,7 +328,12 @@ function fakePlanner(script: FakePlannerScript): Record<string, unknown> {
                 const placeholder = Promise.reject(throwOnOperations);
                 placeholder.catch(() => undefined);
                 const at = script.placeholderAt ?? resolved.length;
-                return [...resolved.slice(0, at), placeholder, ...resolved.slice(at)];
+                const others =
+                  script.alsoThrowOnOperations === undefined
+                    ? []
+                    : [Promise.reject(script.alsoThrowOnOperations)];
+                for (const other of others) other.catch(() => undefined);
+                return [...resolved.slice(0, at), placeholder, ...others, ...resolved.slice(at)];
               },
               renderTypeScript: () => '// planned migration\n',
             },

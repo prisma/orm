@@ -115,7 +115,7 @@ function failureReports(
   const operationIndex =
     failedTypeChange?.operationIndex ??
     rowsWithoutValue?.[0]?.operationIndex ??
-    rowsHoldingValue?.operationIndex ??
+    rowsHoldingValue?.[0]?.operationIndex ??
     rowsFailingCheck?.operationIndex;
   const edge =
     operationIndex !== undefined
@@ -140,9 +140,9 @@ function failureReports(
     ),
     ...ifDefined(
       'rowsHoldingValue',
-      rowsHoldingValue === undefined
-        ? undefined
-        : rowsHoldingValueReport(rowsHoldingValue, resolution.entry.destinationContract),
+      rowsHoldingValue?.map((fact) =>
+        rowsHoldingValueReport(fact, resolution.entry.destinationContract),
+      ),
     ),
     ...ifDefined('rowsFailingCheck', rowsFailingCheckReport(rowsFailingCheck)),
     ...ifDefined(

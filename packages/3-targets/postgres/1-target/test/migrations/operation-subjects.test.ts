@@ -9,9 +9,12 @@ import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import {
+  DeleteRowsCall,
   DropSchemaCall,
+  RemoveStoredKeyCall,
   RemoveStoredValueCall,
   RenameSchemaCall,
+  RenameStoredKeyCall,
   ReplaceStoredValueCall,
   SetTableSchemaCall,
 } from '../../src/core/migrations/op-factory-call';
@@ -86,6 +89,7 @@ function subjectsOf(calls: readonly OpFactoryCall[], fieldEvents: readonly Field
       fromContract: contract,
       contract,
       byHand: postgresTableRenameByHand(contract),
+      removedVariants: [],
       origins: NO_RENAMED_ORIGINS,
     },
   ).dataLoss;
@@ -194,6 +198,45 @@ describe('stored value operations', () => {
         },
         loss: 'drop',
         label: 'Remove value "x" from column "email" of "User"',
+      },
+    ]);
+  });
+});
+
+describe('stored key operations', () => {
+  it('name the column a removed key is lost from, and lose nothing when a key is renamed', () => {
+    expect(
+      subjectsOf(
+        [
+          new RenameStoredKeyCall('public', 'User', 'email', '$.lat', 'latitude'),
+          new RemoveStoredKeyCall('public', 'User', 'email', '$[*].lat'),
+        ],
+        [],
+      ),
+    ).toEqual([
+      {
+        operationIndex: 1,
+        subject: {
+          kind: 'field',
+          namespaceId: asNamespaceId('__unbound__'),
+          model: 'User',
+          field: 'email',
+        },
+        loss: 'drop',
+        label: 'Remove key "lat" at path "$[*]" in column "email" of "User"',
+      },
+    ]);
+  });
+});
+
+describe('deleteRows', () => {
+  it('names the model whose rows it deletes', () => {
+    expect(subjectsOf([new DeleteRowsCall('public', 'User', 'email', 'x')], [])).toEqual([
+      {
+        operationIndex: 0,
+        subject: { kind: 'model', namespaceId: asNamespaceId('__unbound__'), model: 'User' },
+        loss: 'drop',
+        label: 'Delete the rows of "User" that hold value "x" in column "email"',
       },
     ]);
   });

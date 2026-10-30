@@ -22,6 +22,7 @@ export type {
 } from '../core/control-target-descriptor';
 export type { SqlDefaultFunctionName } from '../core/default-functions';
 export { sqlDefaultFunctions } from '../core/default-functions';
+export { acceptedByDataType } from '../core/migrations/accepted-by-data-type';
 export type {
   ContractToSchemaIROptions,
   DefaultResolver,
@@ -44,11 +45,7 @@ export type {
   StoredValueReplacement,
   StoredValueRewrite,
 } from '../core/migrations/enum-value-planning';
-export {
-  encodeStoredValue,
-  planEnumValueRewrites,
-  withEnumValueOperations,
-} from '../core/migrations/enum-value-planning';
+export { encodeStoredValue, planEnumValueRewrites } from '../core/migrations/enum-value-planning';
 export type {
   FieldEventCall,
   PlanFieldEventOperationsOptions,
@@ -58,6 +55,16 @@ export {
   planFieldEventOperations,
 } from '../core/migrations/field-event-planner';
 export { fieldOfColumn } from '../core/migrations/field-of-column';
+export {
+  type FillValueCheck,
+  type FillValueTypes,
+  fillKeyProblem,
+  fillValueProblem,
+  type StoredKeyFillField,
+  scalarTypeNamesOf,
+} from '../core/migrations/fill-value-check';
+export type { JsonKeyPath, JsonPath, JsonPathStep } from '../core/migrations/json-path';
+export { jsonPathText, keyPathOf, parseJsonPath } from '../core/migrations/json-path';
 export { storageNameOfOperation } from '../core/migrations/operation-storage-name';
 export type {
   CallSubjects,
@@ -101,11 +108,12 @@ export {
   resolveTableRenameAgainst,
   unmatchedTableRename,
 } from '../core/migrations/resolve-table-rename';
-export type { RowsHoldingValueMark } from '../core/migrations/rows-holding-value';
+export type { MarkedRemoval, RowsHoldingValueMark } from '../core/migrations/rows-holding-value';
 export {
+  removalsOfMigration,
+  rowsHoldingValueFailure,
   rowsHoldingValueMeta,
   rowsHoldingValueOf,
-  rowsHoldingValueSummary,
 } from '../core/migrations/rows-holding-value';
 export type {
   SqlSchemaDiffFn,
@@ -132,9 +140,11 @@ export type {
   NamespaceRename,
   NamespaceStatementTarget,
   NoTable,
+  PlannedStatement,
   PlannedStatements,
   SingleOperationCall,
   StatementColumn,
+  StatementOperations,
   StatementOwnership,
   StatementPlanningTarget,
   TableMove,
@@ -152,6 +162,21 @@ export {
   otherSpaceDeclaring,
   planStatements,
 } from '../core/migrations/statement-planning';
+export {
+  type PlannedStoredRewrites,
+  planStoredRewrites,
+  type StoredRewrite,
+  type StoredRewriteCalls,
+} from '../core/migrations/stored-rewrites';
+export type {
+  StoredValueCallClasses,
+  StoredValueSubject,
+} from '../core/migrations/stored-value-calls';
+export {
+  keepRowsEdit,
+  storedValueOperationIndexes,
+  storedValueSubjects,
+} from '../core/migrations/stored-value-calls';
 export type { TableNameCaseGuardTable } from '../core/migrations/table-name-case-guard';
 export {
   detectTableNameCaseChanges,
@@ -195,6 +220,21 @@ export {
   convertedColumnOf,
   unconvertedFieldOf,
 } from '../core/migrations/unconverted-field';
+export { UnfilledValue } from '../core/migrations/unfilled-value';
+export {
+  planValueObjectFieldFills,
+  type StoredKeyFill,
+  type UnnamedFieldFill,
+  unnamedFieldFillOf,
+} from '../core/migrations/value-object-field-fills';
+export {
+  planValueObjectFieldRewrites,
+  type StoredKeyRewrite,
+} from '../core/migrations/value-object-field-planning';
+export {
+  planVariantRowRewrites,
+  type VariantRowRewrite,
+} from '../core/migrations/variant-planning';
 export type {
   ContractColumn,
   ContractColumns,

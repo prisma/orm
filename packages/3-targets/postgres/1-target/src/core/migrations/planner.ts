@@ -17,14 +17,13 @@ import {
   otherSpaceDeclaring,
   partitionCallsByControlPolicy,
   partitionIssuesByControlPolicy,
-  planEnumValueRewrites,
   planFieldEventCalls,
   plannerFailure,
   planStatements,
+  planStoredRewrites,
   sqlTypeLookupsOf,
   subjectsOfCalls,
   type TargetRefusal,
-  withEnumValueOperations,
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
@@ -77,7 +76,7 @@ import {
   issueSchemaName,
   planIssues,
 } from './issue-planner';
-import type { PostgresOpFactoryCall } from './op-factory-call';
+import type { PostgresOpFactoryCall, RemoveStoredValueCall } from './op-factory-call';
 import {
   AlterColumnTypeCall,
   CreatePostgresRlsPolicyCall,
@@ -107,10 +106,12 @@ import {
 } from './resolve-ddl-schema';
 import { postgresSchemaTables } from './schema-tables';
 import {
+  postgresStoredKeyCalls,
+  postgresStoredKeyFillCalls,
+  postgresStoredValueCallClasses,
   postgresStoredValueCalls,
+  postgresVariantRowCalls,
   storedValueCallsStrategy,
-  storedValueOperationIndexes,
-  storedValueSubjects,
 } from './stored-value-calls';
 import {
   postgresColumnRenameCall,
@@ -368,21 +369,26 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
 
     const codecHooks = extractCodecControlHooks(options.frameworkComponents);
     const types = sqlTypeLookupsOf(options.frameworkComponents);
-    const rewrites = planEnumValueRewrites({
+    const storedRewrites = planStoredRewrites<PostgresOpFactoryCall, RemoveStoredValueCall>({
       statements: options.statements,
       fromContract: options.fromContract,
       contract: options.contract,
       tables: postgresSchemaTables(schema, options.contract),
-      codecs: types.codecLookup,
+      types,
+      policy: options.policy,
+      calls: {
+        storedKeyCalls: (rewrites) => postgresStoredKeyCalls(rewrites, options.contract),
+        storedKeyFillCalls: (fills) => postgresStoredKeyFillCalls(fills, options.contract),
+        storedValueCalls: (rewrites) =>
+          postgresStoredValueCalls(rewrites, options.contract, types.codecLookup),
+        variantRowCalls: (rewrites) =>
+          postgresVariantRowCalls(rewrites, options.contract, types.codecLookup),
+        storedValueClasses: postgresStoredValueCallClasses,
+      },
     });
-    if (!rewrites.ok) {
-      return plannerFailure([rewrites.failure]);
+    if (!storedRewrites.ok) {
+      return plannerFailure([storedRewrites.failure]);
     }
-    const storedValueCalls = postgresStoredValueCalls(
-      rewrites.value,
-      options.contract,
-      types.codecLookup,
-    );
     // Strategies get two views of the start state. `schema` is one namespace node, for probes by bare table name in the planned namespace (shared-temp-default safety, FK/unique probes); a flat merge of every namespace would collide same-named tables. `startTree` and `endTree` are the whole trees, for decisions that cross tables and namespaces, such as the foreign keys that depend on a primary key.
     const relationalSchema = relationalNamespaceNode(schema, schemaName);
 
@@ -475,7 +481,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
         dropRemovedSchemasStrategy(
           removedSchemas.filter((schemaName) => !keptSchema(options, schemaName)),
         ),
-        storedValueCallsStrategy([...storedValueCalls.keys()]),
+        storedValueCallsStrategy(storedRewrites.value.calls),
       ],
     });
 
@@ -575,21 +581,25 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
         options.snapshotsImportPath,
         this.#lowerer,
       ),
-      appliedStatements: withEnumValueOperations(
-        appliedStatementsInOrder(options.statements, statements.value.appliedStatements),
-        (statement) => storedValueOperationIndexes(calls, storedValueCalls, statement),
+      appliedStatements: appliedStatementsInOrder(
+        options.statements,
+        statements.value.plannedStatements,
+        (statement) => storedRewrites.value.operationIndexes(calls, statement),
       ),
       ...subjectsOfCalls(
         postgresCallSubjects(calls, {
           contract: options.fromContract ?? options.contract,
           fieldEvents: new Map(fieldEventCalls.map((fieldEvent) => [fieldEvent.call, fieldEvent])),
-          storedValues: storedValueSubjects(storedValueCalls),
+          storedValues: storedRewrites.value.storedValues,
+          storedKeys: storedRewrites.value.storedKeys,
+          variantRows: storedRewrites.value.variantRows,
         }),
         {
           fromContract: options.fromContract,
           contract: options.contract,
           origins: statements.value.origins,
           byHand: postgresTableRenameByHand(options.contract),
+          removedVariants: storedRewrites.value.removedVariants,
         },
       ),
       namespaces: {

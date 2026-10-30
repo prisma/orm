@@ -10,7 +10,10 @@ import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import {
+  DeleteRowsCall,
+  RemoveStoredKeyCall,
   RemoveStoredValueCall,
+  RenameStoredKeyCall,
   ReplaceStoredValueCall,
 } from '../../src/core/migrations/op-factory-call';
 import { sqliteCallSubjects } from '../../src/core/migrations/operation-subjects';
@@ -74,16 +77,25 @@ function destructiveCall(factoryName: string): OpFactoryCall {
   };
 }
 
-function subjectsOf(calls: readonly OpFactoryCall[], fieldEvents: readonly FieldEventCall[]) {
+function subjectsOf(
+  calls: readonly OpFactoryCall[],
+  fieldEvents: readonly FieldEventCall[],
+  referencingTables: (table: string) => readonly string[] = () => [],
+) {
   return subjectsOfCalls(
     sqliteCallSubjects(
       calls,
       new Map(fieldEvents.map((fieldEvent) => [fieldEvent.call, fieldEvent])),
+      new Map(),
+      new Map(),
+      new Map(),
+      referencingTables,
     ),
     {
       fromContract: contract,
       contract,
       byHand: sqliteTableRenameByHand,
+      removedVariants: [],
       origins: NO_RENAMED_ORIGINS,
     },
   ).dataLoss;
@@ -176,6 +188,71 @@ describe('stored value operations', () => {
         },
         loss: 'drop',
         label: 'Remove value "x" from column "email" of "User"',
+      },
+    ]);
+  });
+});
+
+describe('stored key operations', () => {
+  it('name the column a removed key is lost from, and lose nothing when a key is renamed', () => {
+    expect(
+      subjectsOf(
+        [
+          new RenameStoredKeyCall('User', 'email', '$.lat', 'latitude'),
+          new RemoveStoredKeyCall('User', 'email', '$[*].lat'),
+        ],
+        [],
+      ),
+    ).toEqual([
+      {
+        operationIndex: 1,
+        subject: {
+          kind: 'field',
+          namespaceId: asNamespaceId(UNBOUND_NAMESPACE_ID),
+          model: 'User',
+          field: 'email',
+        },
+        loss: 'drop',
+        label: 'Remove key "lat" at path "$[*]" in column "email" of "User"',
+      },
+    ]);
+  });
+});
+
+describe('deleteRows', () => {
+  it('names the model whose rows it deletes, and says that rows of a table referencing them fail the apply', () => {
+    expect(
+      subjectsOf([new DeleteRowsCall('User', 'email', 'x')], [], (table) =>
+        table === 'User' ? ['Post'] : [],
+      ),
+    ).toEqual([
+      {
+        operationIndex: 0,
+        subject: { kind: 'model', namespaceId: asNamespaceId(UNBOUND_NAMESPACE_ID), model: 'User' },
+        loss: 'drop',
+        label: 'Delete the rows of "User" that hold value "x" in column "email"',
+        keepDataAdvice:
+          'SQLite migrations run with foreign keys off, so deleting these rows does not delete the rows of "Post" that reference them: the apply then fails at PRAGMA foreign_key_check. Delete or change those rows first.',
+      },
+    ]);
+  });
+
+  it('gives no advice when no table references the rows, or only tables it deletes from first', () => {
+    const cascading = new DeleteRowsCall('User', 'kind', 'x', undefined, [
+      { table: 'Admin', columns: ['id'], references: ['id'] },
+    ]);
+    expect(
+      subjectsOf([new DeleteRowsCall('Post', 'email', 'x'), cascading], [], (table) =>
+        table === 'User' ? ['Admin'] : [],
+      ),
+    ).toEqual([
+      expect.not.objectContaining({ keepDataAdvice: expect.anything() }),
+      {
+        operationIndex: 1,
+        subject: { kind: 'model', namespaceId: asNamespaceId(UNBOUND_NAMESPACE_ID), model: 'User' },
+        loss: 'drop',
+        label:
+          'Delete the rows of "User" that hold value "x" in column "kind", and the rows of "Admin" that reference them',
       },
     ]);
   });

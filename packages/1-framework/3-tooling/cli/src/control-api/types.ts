@@ -531,8 +531,8 @@ export interface RunnerFailureFacts {
   readonly rowsWithoutValue?: readonly RowsWithoutValueReport[];
   /** The check that failed before its operation ran. */
   readonly failedPrecheck?: FailedPrecheckReport;
-  /** The data that still holds a stored enum value whose removal its storage cannot take. */
-  readonly rowsHoldingValue?: RowsHoldingValueReport;
+  /** The data that still holds stored enum values whose removal its storage cannot take; the failed one first. */
+  readonly rowsHoldingValue?: readonly RowsHoldingValueReport[];
   /** The existing rows that a check the failed operation adds refuses. */
   readonly rowsFailingCheck?: RowsFailingCheckReport;
   /** The written migration of the failed operation, when the runner named the operation, or the last one applied when the schema check after apply failed. */

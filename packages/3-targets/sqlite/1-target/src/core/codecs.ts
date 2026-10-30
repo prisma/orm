@@ -444,6 +444,7 @@ export class SqliteTextDescriptor extends SqliteCodecDescriptor<void> {
   }
   override readonly dataType = sqliteText.id;
   override readonly codecId = SQLITE_TEXT_CODEC_ID;
+  readonly jsonType = 'string' as const;
   override readonly traits = ['equality', 'order', 'textual'] as const;
   override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
@@ -488,6 +489,7 @@ export class SqliteIntegerDescriptor extends SqliteCodecDescriptor<void> {
   }
   override readonly dataType = sqliteInteger.id;
   override readonly codecId = SQLITE_INTEGER_CODEC_ID;
+  readonly jsonType = 'number' as const;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
@@ -532,6 +534,7 @@ export class SqliteRealDescriptor extends SqliteCodecDescriptor<void> {
   }
   override readonly dataType = sqliteReal.id;
   override readonly codecId = SQLITE_REAL_CODEC_ID;
+  readonly jsonType = 'number' as const;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
@@ -589,6 +592,7 @@ export class SqliteBlobDescriptor extends SqliteCodecDescriptor<void> {
   }
   override readonly dataType = sqliteBlob.id;
   override readonly codecId = SQLITE_BLOB_CODEC_ID;
+  readonly jsonType = 'object' as const;
   override readonly traits = ['equality'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqliteBlobCodec {
@@ -660,6 +664,7 @@ export class SqliteDatetimeDescriptor extends SqliteCodecDescriptor<void> {
   }
   override readonly dataType = sqliteDatetime.id;
   override readonly codecId = SQLITE_DATETIME_CODEC_ID;
+  readonly jsonType = 'string' as const;
   override readonly traits = ['equality', 'order'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqliteDatetimeCodec {
@@ -709,6 +714,7 @@ export class SqliteJsonDescriptor extends SqliteCodecDescriptor<void> {
   }
   override readonly dataType = sqliteJson.id;
   override readonly codecId = SQLITE_JSON_CODEC_ID;
+  readonly jsonType = 'any' as const;
   override readonly traits = ['equality'] as const;
   override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
@@ -776,6 +782,7 @@ export class SqliteBigintDescriptor extends SqliteCodecDescriptor<void> {
   }
   override readonly dataType = sqliteInteger.id;
   override readonly codecId = SQLITE_BIGINT_CODEC_ID;
+  readonly jsonType = 'number' as const;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
@@ -842,6 +849,7 @@ export class SqliteBigintNumberDescriptor extends SqliteCodecDescriptor<void> {
   }
   override readonly dataType = sqliteInteger.id;
   override readonly codecId = SQLITE_BIGINT_NUMBER_CODEC_ID;
+  readonly jsonType = 'number' as const;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
