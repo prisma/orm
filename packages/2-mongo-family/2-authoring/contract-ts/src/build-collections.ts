@@ -271,21 +271,13 @@ export function buildCollections(input: {
     const storageOptions = model.collectionOptions
       ? toStorageCollectionOptions(model.collectionOptions)
       : undefined;
-    const controlPatch = model.controlPolicy !== undefined ? { control: model.controlPolicy } : {};
 
-    intermediate[collection] =
-      storageIndexes.length > 0
-        ? {
-            ...existingCollection,
-            indexes: [...existingIndexes, ...storageIndexes],
-            ...(storageOptions ? { options: storageOptions } : {}),
-            ...controlPatch,
-          }
-        : storageOptions
-          ? { ...existingCollection, options: storageOptions, ...controlPatch }
-          : Object.keys(controlPatch).length > 0
-            ? { ...existingCollection, ...controlPatch }
-            : existingCollection;
+    intermediate[collection] = {
+      ...existingCollection,
+      ...(storageIndexes.length > 0 ? { indexes: [...existingIndexes, ...storageIndexes] } : {}),
+      ...ifDefined('options', storageOptions),
+      ...ifDefined('control', model.controlPolicy),
+    };
   }
 
   return intermediate;

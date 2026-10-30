@@ -1580,10 +1580,15 @@ function buildIndexes(
   return indexes;
 }
 
+function sortOf(direction: IndexDirection | undefined): string {
+  if (direction === undefined) {
+    return '';
+  }
+  return `(sort: ${direction === 1 ? 'Asc' : 'Desc'})`;
+}
+
 function indexLabel(build: ModelBuild, attribute: IndexAttribute): string {
   const model = build.located.symbol.name;
-  const sortOf = (direction: IndexDirection | undefined) =>
-    direction === undefined ? '' : `(sort: ${direction === 1 ? 'Asc' : 'Desc'})`;
   if (build.uniqueFields.includes(attribute)) {
     const [field] = attribute.fields;
     return `@unique${sortOf(field?.direction)} on field "${model}.${field?.name ?? ''}"`;

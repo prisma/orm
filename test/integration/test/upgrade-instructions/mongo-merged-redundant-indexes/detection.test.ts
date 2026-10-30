@@ -7,6 +7,11 @@ const APP_GUIDE =
 const EXTENSION_GUIDE =
   'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.21-to-8.0.0-rc.22/instructions.md';
 
+const extensionMatches = (content: string) =>
+  detectionPatterns(EXTENSION_GUIDE, 'mongo-build-refusal-index-duplicate-removed').some(
+    (pattern) => pattern.test(content),
+  );
+
 const matches = (content: string) =>
   detectionPatterns(APP_GUIDE, 'mongo-merged-redundant-indexes').some((pattern) =>
     pattern.test(content),
@@ -64,6 +69,17 @@ describe('the app mongo-merged-redundant-indexes detection', () => {
         `${mongoBuilderImport}indexes: [index({ email: 1 }, { unique: true, sparse: true }), index({ email: 1 })]`,
       ),
     ]).toEqual([false, false, false, false]);
+  });
+});
+
+describe('the extension mongo-build-refusal-index-duplicate-removed detection', () => {
+  it('matches code that names the indexDuplicate kind, and not other refusal kinds', () => {
+    expect([
+      extensionMatches("switch (refusal.kind) {\n  case 'indexDuplicate':\n    return;\n}"),
+      extensionMatches("if (refusal.kind === 'indexDuplicate') return refusal.firstModel;"),
+      extensionMatches("switch (refusal.kind) {\n  case 'indexShape':\n    return;\n}"),
+      extensionMatches('const indexDuplicates = new Set<string>();'),
+    ]).toEqual([true, true, false, false]);
   });
 });
 
