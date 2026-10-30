@@ -46,3 +46,7 @@ The MySQL facade's client (about 440 lines) and the MySQL SQL renderer are copie
 ## MySQL environment check at startup or deploy time (Will, 2026-10-30)
 
 The MySQL driver relies on mariadb's value substitution. That substitution is safe only when the session's `sql_mode` excludes `NO_BACKSLASH_ESCAPES` and `ANSI_QUOTES`, and when raw SQL avoids shapes mariadb's placeholder search misreads (see `slices/mysql-driver-protocol/spec.md`). Will's ideal: the driver offers a check at startup that the database is configured as the driver requires, and better still a deploy-time check. Not required for the proof of concept.
+
+## `onConflict: 'skip'` on MySQL (slice 4, 2026-10-30)
+
+MySQL has no form that skips only duplicate-key rows and counts correctly: `INSERT IGNORE` also turns foreign-key, `NOT NULL` and truncation errors into silent skips, and a no-op `ON DUPLICATE KEY UPDATE` counts a skipped duplicate as written while the driver sets `foundRows`. The ORM refuses the option on MySQL. MariaDB's `INSERT IGNORE … RETURNING` may change this in its slice.
