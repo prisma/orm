@@ -72,11 +72,6 @@ overrides:
   minimatch@9.0.5: 9.0.7
   rollup: 4.59.0
 
-patchedDependencies:
-  mariadb@3.5.4:
-    hash: 18a71bce6b37fc24f8f2f8227650dfeb278a7fe3de5a53597974926d7ce726c3
-    path: patches/mariadb@3.5.4.patch
-
 importers:
 
   .:
@@ -4178,7 +4173,7 @@ importers:
         version: 2.2.7
       mariadb:
         specifier: 3.5.4
-        version: 3.5.4(patch_hash=18a71bce6b37fc24f8f2f8227650dfeb278a7fe3de5a53597974926d7ce726c3)
+        version: 3.5.4
     devDependencies:
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.22
@@ -5753,7 +5748,7 @@ importers:
         version: 2.2.7
       mariadb:
         specifier: 3.5.4
-        version: 3.5.4(patch_hash=18a71bce6b37fc24f8f2f8227650dfeb278a7fe3de5a53597974926d7ce726c3)
+        version: 3.5.4
     devDependencies:
       '@internal/adapter-mysql':
         specifier: workspace:8.0.0-rc.22
@@ -6561,7 +6556,7 @@ importers:
         version: 8.20.4
       mariadb:
         specifier: 3.5.4
-        version: 3.5.4(patch_hash=18a71bce6b37fc24f8f2f8227650dfeb278a7fe3de5a53597974926d7ce726c3)
+        version: 3.5.4
       pg:
         specifier: 'catalog:'
         version: 8.22.0
@@ -16609,7 +16604,7 @@ snapshots:
     dependencies:
       semver: 7.8.5
 
-  mariadb@3.5.4(patch_hash=18a71bce6b37fc24f8f2f8227650dfeb278a7fe3de5a53597974926d7ce726c3):
+  mariadb@3.5.4:
     dependencies:
       '@types/geojson': 7946.0.16
       '@types/node': 26.1.2
