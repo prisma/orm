@@ -35,3 +35,5 @@ const outcome = await runSqliteCodecProjection(connection, conformanceCase);
 The harness, case types, and runner are the public API — the `dist`/`src` this package ships. The built-in SQLite codec catalogue is not part of that surface: it lives in this package's own `test/` directory (excluded from the published tarball by `files`), where it exercises the same harness an extension author consumes, rather than being general-purpose vocabulary.
 
 A SQLite codec descriptor carries no native type, so `storageType` states the column's declared SQLite type directly.
+
+Values are compared with `isDeepStrictEqual`. A value that is not deep-equal to its copy, or is deep-equal to every value of its kind as every `Temporal` value is, needs the case's `valueEquality` (the row against the case's value) and `projectionEquality` (the projection against the row).
