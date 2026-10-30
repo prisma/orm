@@ -263,4 +263,36 @@ describe('a driver failure and a transaction activityEnded hook that throws', ()
       details: { commitError },
     });
   });
+
+  it('invalidates the transaction context immediately when the callback throws while rollback is pending', async () => {
+    let unblockRollback: () => void = () => {};
+    const rollbackHeldUntil = new Promise<void>((resolve) => {
+      unblockRollback = resolve;
+    });
+
+    const { runtime } = createSetup({ failures: { rollbackHeldUntil } });
+
+    let statementPromise: Promise<unknown> | undefined;
+
+    const run = withTransaction(runtime, async (tx) => {
+      const callbackError = new Error('callback write failed');
+      statementPromise = (async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return tx.execute(rawPlan('insert into t (id) values (2)'));
+      })();
+
+      // Catch statementPromise immediately to avoid unhandled rejection in node event loop
+      statementPromise.catch(() => {});
+
+      throw callbackError;
+    });
+
+    // Unblock the held rollback so withTransaction can complete
+    setTimeout(unblockRollback, 50);
+
+    await expect(run).rejects.toThrow('callback write failed');
+    await expect(statementPromise).rejects.toMatchObject({
+      code: 'RUNTIME.TRANSACTION_CLOSED',
+    });
+  });
 });
