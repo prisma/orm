@@ -13,6 +13,7 @@ import {
   MongoReplaceRootStage,
 } from '@internal/mongo-query-ast/execution';
 import type { MongoValue } from '@internal/mongo-value';
+import { encodedFilterValue, encodedFilterValues, type FieldCodecs } from './field-codecs';
 import type { NestedDocShape, ObjectField, ResolvePath, ValidPaths } from './resolve-path';
 import type { DocField, DocShape, TypedAggExpr } from './types';
 import type { TypedUpdateOp } from './update-ops';
@@ -223,7 +224,10 @@ export function expr(predicate: TypedAggExpr<DocField>): MongoFilterExpr {
   return MongoExprFilter.of(predicate.node);
 }
 
-function buildExpression<F extends DocField>(path: string): Expression<F> {
+function buildExpression<F extends DocField>(path: string, codecs?: FieldCodecs): Expression<F> {
+  const value = (filterValue: MongoValue) => encodedFilterValue(codecs, path, filterValue);
+  const values = (filterValues: ReadonlyArray<MongoValue>) =>
+    encodedFilterValues(codecs, path, filterValues);
   // The runtime object carries the full operator surface unconditionally;
   // `ObjectExpression` is a strict subset of `LeafExpression`, so a single
   // implementation satisfies both type-level shapes. Compile-time gating
@@ -233,14 +237,16 @@ function buildExpression<F extends DocField>(path: string): Expression<F> {
     _path: path,
     node: MongoAggFieldRef.of(path),
 
-    eq: (value: MongoValue) => MongoFieldFilter.eq(path, value),
-    ne: (value: MongoValue) => MongoFieldFilter.neq(path, value),
-    gt: (value: MongoValue) => MongoFieldFilter.gt(path, value),
-    gte: (value: MongoValue) => MongoFieldFilter.gte(path, value),
-    lt: (value: MongoValue) => MongoFieldFilter.lt(path, value),
-    lte: (value: MongoValue) => MongoFieldFilter.lte(path, value),
-    in: (values: ReadonlyArray<MongoValue>) => MongoFieldFilter.in(path, values),
-    nin: (values: ReadonlyArray<MongoValue>) => MongoFieldFilter.nin(path, values),
+    eq: (filterValue: MongoValue) => MongoFieldFilter.eq(path, value(filterValue)),
+    ne: (filterValue: MongoValue) => MongoFieldFilter.neq(path, value(filterValue)),
+    gt: (filterValue: MongoValue) => MongoFieldFilter.gt(path, value(filterValue)),
+    gte: (filterValue: MongoValue) => MongoFieldFilter.gte(path, value(filterValue)),
+    lt: (filterValue: MongoValue) => MongoFieldFilter.lt(path, value(filterValue)),
+    lte: (filterValue: MongoValue) => MongoFieldFilter.lte(path, value(filterValue)),
+    in: (filterValues: ReadonlyArray<MongoValue>) =>
+      MongoFieldFilter.in(path, values(filterValues)),
+    nin: (filterValues: ReadonlyArray<MongoValue>) =>
+      MongoFieldFilter.nin(path, values(filterValues)),
     exists: (flag?: boolean) =>
       flag === false ? MongoExistsExpr.notExists(path) : MongoExistsExpr.exists(path),
     type: (bsonType: MongoValue) => MongoFieldFilter.of(path, '$type', bsonType),
@@ -269,6 +275,8 @@ function buildExpression<F extends DocField>(path: string): Expression<F> {
  * Construct a unified `FieldAccessor<S, N>` proxy. Property access creates
  * an `Expression` using the property name as the field path; callable
  * form accepts a dot-path string validated against `N` at compile time.
+ * With `codecs`, a filter value on a model field is encoded through the
+ * field's codec, as an ORM filter value is.
  *
  * The proxy target is a function so the resulting object is both callable
  * and indexable. Symbol-keyed accesses (e.g. `Symbol.toPrimitive`) return
@@ -278,12 +286,10 @@ function buildExpression<F extends DocField>(path: string): Expression<F> {
 export function createFieldAccessor<
   S extends DocShape,
   N extends NestedDocShape = Record<string, never>,
->(): FieldAccessor<S, N> {
+>(codecs?: FieldCodecs): FieldAccessor<S, N> {
   const stageInstance = buildStageEmitters();
-  const callable = ((path: string) => buildExpression<DocField>(path)) as unknown as FieldAccessor<
-    S,
-    N
-  >;
+  const callable = ((path: string) =>
+    buildExpression<DocField>(path, codecs)) as unknown as FieldAccessor<S, N>;
   return new Proxy(callable, {
     get(target, prop, receiver) {
       if (typeof prop === 'symbol') {
@@ -293,9 +299,9 @@ export function createFieldAccessor<
         return stageInstance;
       }
       if (prop === 'rawPath') {
-        return (path: string) => buildExpression<DocField>(path);
+        return (path: string) => buildExpression<DocField>(path, codecs);
       }
-      return buildExpression(prop);
+      return buildExpression(prop, codecs);
     },
   });
 }
