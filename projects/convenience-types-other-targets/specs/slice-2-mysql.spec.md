@@ -45,7 +45,7 @@ Decisions (copying PostgreSQL, where an omitted precision holds microseconds):
 ## Tests
 
 - Unit tests per codec, tag, generator, data type and type choice; type-level test for the helpers; the facade's no-`Temporal`-global typecheck; the published-entry test through `@repo/test-utils/temporal-fallback-entries`.
-- Live tests against MySQL 8.4 (`MYSQL_URL`): migrate, `db verify` clean, write and read every row, `now()` read-back, a change from `DateTime` to `Date` planned.
+- Live tests against MySQL 8.4 (`MYSQL_URL`): migrate, `db verify` clean, write and read every row, `now()` read-back, a change from `DateTime` to `Date` reported by `db verify` and refused by `migration plan`, since MySQL's planner does not change a column's type yet.
 - `examples/prisma-8-demo-mysql` gains `DateTime`, `Date` and `Time` fields, written and read in its CI test, through whatever write path MySQL has today.
 
 ## Docs (orchestrator)
