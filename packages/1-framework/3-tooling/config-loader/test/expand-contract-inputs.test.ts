@@ -115,6 +115,18 @@ describe('expandContractInputs', () => {
 
     expect(await expandContractInputs([uncPath])).toEqual([uncPath]);
   });
+
+  it('expands Windows backslash glob patterns correctly', async () => {
+    const dir = await createFixtureDir();
+    await mkdir(join(dir, 'sub'), { recursive: true });
+    const file1 = join(dir, 'a.prisma');
+    const file2 = join(dir, 'sub', 'b.prisma');
+    await writeFile(file1, 'model A {}\n', 'utf-8');
+    await writeFile(file2, 'model B {}\n', 'utf-8');
+
+    const windowsPattern = `${dir.replace(/\//g, '\\')}\\**\\*.prisma`;
+    expect(await expandContractInputs([windowsPattern])).toEqual([file1, file2]);
+  });
 });
 
 describe('globContractInputMatching', () => {
@@ -125,6 +137,48 @@ describe('globContractInputMatching', () => {
         '/app/prisma/contract.prisma',
       ),
     ).toBe('/app/prisma/**/*.prisma');
+  });
+
+  it('matches when paths or patterns contain Windows backslashes', () => {
+    expect(
+      globContractInputMatching(
+        ['C:\\app\\prisma\\schema.prisma', 'C:\\app\\prisma\\**\\*.prisma'],
+        'C:\\app\\prisma\\contract.prisma',
+      ),
+    ).toBe('C:\\app\\prisma\\**\\*.prisma');
+
+    expect(
+      globContractInputMatching(
+        ['C:/app/prisma/schema.prisma', 'C:/app/prisma/**/*.prisma'],
+        'C:\\app\\prisma\\contract.prisma',
+      ),
+    ).toBe('C:/app/prisma/**/*.prisma');
+  });
+
+  it('matches regardless of Windows drive letter casing', () => {
+    expect(
+      globContractInputMatching(['C:/app/prisma/**/*.prisma'], 'c:\\app\\prisma\\contract.prisma'),
+    ).toBe('C:/app/prisma/**/*.prisma');
+
+    expect(
+      globContractInputMatching(['c:/app/prisma/**/*.prisma'], 'C:\\app\\prisma\\contract.prisma'),
+    ).toBe('c:/app/prisma/**/*.prisma');
+  });
+
+  it('matches regardless of Windows drive letter casing', () => {
+    expect(
+      globContractInputMatching(
+        ['C:/app/prisma/**/*.prisma'],
+        'c:\\app\\prisma\\contract.prisma',
+      ),
+    ).toBe('C:/app/prisma/**/*.prisma');
+
+    expect(
+      globContractInputMatching(
+        ['c:/app/prisma/**/*.prisma'],
+        'C:\\app\\prisma\\contract.prisma',
+      ),
+    ).toBe('c:/app/prisma/**/*.prisma');
   });
 
   it('returns nothing for a path no glob input matches', () => {

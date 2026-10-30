@@ -11,6 +11,11 @@ function resolveLiteral(entry: string): string {
   return isUncLike(entry) ? entry : resolve(entry);
 }
 
+function toGlobPattern(entry: string): string {
+  const normalized = entry.replace(/\\/g, '/');
+  return normalized.replace(/^[a-z]:(?=\/)/i, (drive) => drive.toUpperCase());
+}
+
 /**
  * Expands a finalized contract source input list into its member file set:
  * absolute, deduped by canonical path, sorted. `patterns` must already be
@@ -35,7 +40,12 @@ export async function expandContractInputs(
   const literals: string[] = [];
   const globPatterns: string[] = [];
   for (const pattern of patterns) {
-    (isDynamicPattern(pattern) ? globPatterns : literals).push(pattern);
+    const globPattern = toGlobPattern(pattern);
+    if (isDynamicPattern(globPattern)) {
+      globPatterns.push(globPattern);
+    } else {
+      literals.push(pattern);
+    }
   }
   const globMatches =
     globPatterns.length === 0
@@ -53,5 +63,9 @@ export function globContractInputMatching(
   patterns: readonly string[],
   path: string,
 ): string | undefined {
-  return patterns.find((pattern) => isDynamicPattern(pattern) && matchesGlob(path, pattern));
+  const normalizedPath = toGlobPattern(path);
+  return patterns.find((pattern) => {
+    const globPattern = toGlobPattern(pattern);
+    return isDynamicPattern(globPattern) && matchesGlob(normalizedPath, globPattern);
+  });
 }
