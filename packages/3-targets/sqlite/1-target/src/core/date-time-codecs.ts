@@ -1,5 +1,5 @@
 /**
- * The codecs of SQLite's date and time types other than `sqlite/datetime@1`. Every one stores text in the form its data type stores, so the column sorts and compares by the text: an instant as `toISOString()` writes it, a date as `2024-02-29`, a time of day with three fraction digits, and a duration as written. ADR 312.
+ * The codecs of SQLite's date and time types other than `sqlite/datetime@1`. Every one stores text in the form its data type stores, so the column sorts and compares by the text: an instant as `toISOString()` writes it, a date as `2024-02-29`, a time of day with three fraction digits, and a duration as written. ADR 315.
  */
 
 import type { JsonValue } from '@internal/contract/types';

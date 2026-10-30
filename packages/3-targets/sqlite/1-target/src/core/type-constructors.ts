@@ -64,7 +64,7 @@ export const sqliteScalarAuthoringTypes = {
 } as const satisfies AuthoringTypeNamespace;
 
 /**
- * The explicit date and time types. SQLite has no date or time column type, so each is stored as text, in one form for each value, and its name says what the text holds and what the application reads. ADR 312.
+ * The explicit date and time types. SQLite has no date or time column type, so each is stored as text, in one form for each value, and its name says what the text holds and what the application reads. ADR 315.
  */
 export const sqliteDateTimeTypeConstructors = {
   DatetimeJsDate: {
@@ -126,7 +126,7 @@ const textStorage = {
 } as const;
 
 /**
- * The convenience date and time types. Each is a type choice: its `as` argument chooses the explicit type it becomes. Every SQLite date and time type is stored as text, so `storage` is text only. ADR 279, ADR 312.
+ * The convenience date and time types. Each is a type choice: its `as` argument chooses the explicit type it becomes. Every SQLite date and time type is stored as text, so `storage` is text only. ADR 279, ADR 315.
  */
 export const sqliteConvenienceDateTimeTypes = {
   DateTime: {

@@ -1,4 +1,4 @@
-# ADR 312 — Each target declares the convenience date and time types over its own explicit types
+# ADR 315 — Each target declares the convenience date and time types over its own explicit types
 
 **Status:** Accepted
 **Builds on:** [ADR 279 — Convenience types choose an explicit type from their arguments](ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md), [ADR 257 — Scalar types are named after the target on every surface](ADR%20257%20-%20Scalar%20types%20are%20named%20after%20the%20target%20on%20every%20surface.md), [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md)
@@ -57,7 +57,7 @@ MySQL and MongoDB. Until their tables are recorded here, MySQL's `DateTime` and 
 - On every target whose tables are recorded here, a user writes `DateTime`, `Date`, `Time` or `Duration` and gets a working field whose value needs nothing installed.
 - Changing a field from one of these types to another changes the column's data type and its `now()` default, which the next migration writes, but it does not convert the values existing rows hold. On SQLite, where all of them are stored as text, a row written as a `DateTime` keeps its instant text in a column that is now a `Date`, and fails to read. Convert such rows with a data migration.
 - The contract, the migration planner and the runtime see only explicit types, as ADR 279 decided.
-- The code the targets' date and time codecs share lives in `@internal/type-implementations` ([ADR 311](ADR%20311%20-%20Code%20shared%20by%20several%20targets'%20type%20implementations%20lives%20in%20one%20package.md)).
+- The code the targets' date and time codecs share lives in `@internal/type-implementations` ([ADR 314](ADR%20314%20-%20Code%20shared%20by%20several%20targets'%20type%20implementations%20lives%20in%20one%20package.md)).
 
 ## Alternatives considered
 

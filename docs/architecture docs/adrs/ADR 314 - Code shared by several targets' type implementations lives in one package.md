@@ -1,4 +1,4 @@
-# ADR 311 — Code shared by several targets' type implementations lives in one package
+# ADR 314 — Code shared by several targets' type implementations lives in one package
 
 **Status:** Accepted
 **Amends:** [ADR 278 — Each database's packages live in one folder](ADR%20278%20-%20Each%20database's%20packages%20live%20in%20one%20folder.md), [ADR 242 — Public npm surface](ADR%20242%20-%20Public%20npm%20surface%20-%20single%20@prisma%20scope%20with%20consolidated%20publish%20packages.md)
@@ -36,7 +36,7 @@ Today it holds the date and time logic: finding `Temporal` (`./temporal`), the `
 
 ## Why
 
-The convenience date and time types (ADR 279, ADR 312) put the same value logic in every target: PostgreSQL, SQLite, MySQL and MongoDB each find `Temporal`, produce `now()` as a `Temporal.Instant` or an ISO date string, and check that a `Temporal` value is the kind its column holds. Copying it into each target makes four copies that drift apart when one is fixed.
+The convenience date and time types (ADR 279, ADR 315) put the same value logic in every target: PostgreSQL, SQLite, MySQL and MongoDB each find `Temporal`, produce `now()` as a `Temporal.Instant` or an ISO date string, and check that a `Temporal` value is the kind its column holds. Copying it into each target makes four copies that drift apart when one is fixed.
 
 The framework is not the place for it. The framework holds the affordances every target fills in: interfaces, base classes and service contracts. Code that is shared only because several targets need it would grow the core and blur that boundary. Nor is it family code, because both families' targets use it.
 

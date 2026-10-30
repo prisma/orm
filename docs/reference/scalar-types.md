@@ -152,7 +152,7 @@ PostgreSQL prints a `money` value in the connection's `lc_monetary` locale, with
 
 These are the current names; the Postgres and SQLite rename project will update this table. Write a TypeScript field as `field.column(type.X())` with the type of the PSL name, such as `field.column(type.DateTime())`, or `field.column(...)` with a column type from `adapter/column-types`. `sql.String(n)` and `sql.Char(n)` exist on every SQL target; SQLite accepts their length and does not enforce it.
 
-SQLite has the convenience date and time types too ([ADR 312](../architecture%20docs/adrs/ADR%20312%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md)). SQLite has no date or time column types, so every one is stored as `text`, `storage` takes only `text`, and none takes a precision. The defaults need no `Temporal`. A bare `DateTime` is `DatetimeJsDate`, the type `DateTime` named before, so its contract is unchanged.
+SQLite has the convenience date and time types too ([ADR 315](../architecture%20docs/adrs/ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md)). SQLite has no date or time column types, so every one is stored as `text`, `storage` takes only `text`, and none takes a precision. The defaults need no `Temporal`. A bare `DateTime` is `DatetimeJsDate`, the type `DateTime` named before, so its contract is unchanged.
 
 | Convenience type | `as` | Becomes | Stored text |
 | --- | --- | --- | --- |
