@@ -225,7 +225,15 @@ A type, in PSL or the TypeScript builder, that fixes one codec, so it fixes both
 
 ### Marker
 
-A small record stored in the database that tracks which contract the database is currently migrated to. Before running queries or migrations, Prisma 8 checks that the marker matches the contract the application is carrying. This catches situations where the database and application have drifted out of sync — for example, if a migration was run but the application wasn't redeployed.
+A small record stored in the database that tracks which contract the database is currently migrated to. Before running queries or migrations, Prisma 8 checks that the marker matches the contract the application is carrying. This catches situations where the database and application have drifted out of sync — for example, if a migration was run but the application wasn't redeployed. The marker also records the database's [change policy](#change-policy) and [data protection policy](#data-protection-policy) under `meta.policies`.
+
+### Change Policy
+
+The strategies a database may be changed by, recorded in its [marker](#marker): `migrate` (walk the migration graph with `db migrate`) and `reconcile` (plan and apply the difference to a contract with `db update`, or sign the database with `db sign`). A database that changes only through reviewed migrations, such as production, records `["migrate"]`; a database that records nothing permits both. `db update` and `db sign` refuse a database whose change policy lacks `reconcile`, with `MIGRATION.CHANGE_POLICY_FORBIDS`. A [ref](#ref-contract-ref) declares the change policy its database should have; see [data protection policy](#data-protection-policy) for how declared and recorded policies are kept in agreement. Unrelated to [control policy](architecture%20docs/adrs/ADR%20224%20-%20Control%20Policy%20—%20framework-locked%20vocabulary%20and%20family-owned%20dispatch.md), which says whether Prisma 8 may write a given database object. See [ADR 309](architecture%20docs/adrs/ADR%20309%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md).
+
+### Data Protection Policy
+
+Whether a change to a database may lose data or widen who can read or write rows, recorded in its [marker](#marker) as two settings: `dataLoss` (`data-loss-forbidden`, `data-loss-with-consent`, `data-loss-permitted`) and `accessWidening` (`access-widening-forbidden`, `access-widening-with-consent`, `access-widening-permitted`). `with-consent` is the default and is today's behaviour: `db update` asks before a loss, and a migration carries the consent given when it was planned. A [ref](#ref-contract-ref) declares the policies its database should have; `db migrate --to <ref>` and `db update --to <ref>` fail with `MIGRATION.POLICY_MISMATCH` when they differ from the database's, and write the ref's policies into the marker only when given `--permit-policy-change`. See [ADR 309](architecture%20docs/adrs/ADR%20309%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md).
 
 ### Namespace
 
@@ -259,7 +267,7 @@ A unit of intent that takes the database from one **contract** to another. On di
 
 ### Migrate (verb)
 
-The act of advancing a *live database instance* along the migration graph. The canonical command is `prisma db migrate [--to <contract>]`: walks from the database marker's current contract to the named target contract, executing each migration on the live database. `migrate` is forward-only — it never reverses, never rewinds, never resets.
+The act of advancing a *live database instance* along the migration graph. The canonical command is `prisma db migrate [--to <contract>]`: walks from the database marker's current contract to the named target contract, executing each migration on the live database. When the target is a [ref](#ref-contract-ref) that declares policies, `migrate` also brings the database to that ref's [change policy](#change-policy) and [data protection policy](#data-protection-policy), with the consent of `--permit-policy-change`. `migrate` is forward-only — it never reverses, never rewinds, never resets.
 
 ### Migration Graph
 
@@ -267,7 +275,7 @@ The directed graph of contracts (nodes) connected by migrations (edges). Built b
 
 ### Ref (Contract Ref)
 
-A named pointer at a contract, stored as `migrations/<space>/refs/<name>.json` (`{hash, invariants}`); the contract it names resolves through the shared content-addressed store at `migrations/snapshots/<hex>/contract.json` by that hash. Refs are environment-named (`production`, `staging`) and describe *where CD will `migrate --to` next* in that environment. The default `db` ref records dev-database checkpoint state for offline planning; it is written by `db init`, `db update`, and `db sign`. Managed via `prisma migration ref set|list|delete`. See [ADR 218 — Refs with paired contract snapshots](architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md) (paired-snapshot part superseded — see its Status note) and [ADR 240 — Contract snapshots live in a content-addressed store](architecture%20docs/adrs/ADR%20240%20-%20Contract%20snapshots%20live%20in%20a%20content-addressed%20store.md).
+A named pointer at a contract, stored as `migrations/<space>/refs/<name>.json` (`{hash, invariants}`, plus an optional `policies` declaring the [change policy](#change-policy) and [data protection policy](#data-protection-policy) its database should have); the contract it names resolves through the shared content-addressed store at `migrations/snapshots/<hex>/contract.json` by that hash. Refs are environment-named (`production`, `staging`) and describe *where CD will `migrate --to` next* in that environment. The default `db` ref records dev-database checkpoint state for offline planning; it is written by `db init`, `db update`, and `db sign`. Managed via `prisma migration ref set|list|delete`. See [ADR 218 — Refs with paired contract snapshots](architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md) (paired-snapshot part superseded — see its Status note) and [ADR 240 — Contract snapshots live in a content-addressed store](architecture%20docs/adrs/ADR%20240%20-%20Contract%20snapshots%20live%20in%20a%20content-addressed%20store.md).
 
 A ref is a specific kind of [contract reference](#contract-reference) — the named, file-backed, persistent kind.
 

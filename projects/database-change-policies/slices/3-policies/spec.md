@@ -148,8 +148,8 @@ One line per field; the terminal wraps. Every code is registered in `docs/refere
 
 ### Documents
 
-- **ADR 308 — Databases record a change policy and a data protection policy.** States the two policies and their levels, the ref-declares / marker-records split, the agreement rule with explicit consent, the defaults, and that the ledger is untouched. Supersedes ADR 287's "`db update` is for development only" (ADR 307 already notes the wording; 308 is where the replacement rule lives). Lists the alternatives from `design.md`.
-- ADR 021 and ADR 218: a status-line note pointing at ADR 308 for `meta.policies` and the ref's `policies` field. Accepted ADRs are not edited beyond that.
+- **ADR 309 — Databases record a change policy and a data protection policy.** States the two policies and their levels, the ref-declares / marker-records split, the agreement rule with explicit consent, the defaults, and that the ledger is untouched. Supersedes ADR 287's "`db update` is for development only" (ADR 307 already notes the wording; 309 is where the replacement rule lives). Lists the alternatives from `design.md`.
+- ADR 021 and ADR 218: a status-line note pointing at ADR 309 for `meta.policies` and the ref's `policies` field. Accepted ADRs are not edited beyond that.
 - `docs/glossary.md`: entries for change policy, data protection policy, their values, and a sentence distinguishing them from control policy; the `migrate` entry widens to "bring the database to a ref, applying its declared policies with consent".
 - `skills/prisma-8/`: `references/migrations.md` documents the ref field, the marker, `--permit-policy-change` and both errors, and replaces the "Unless this database changes only through migrations" guidance with "read the error; it names the one recovery the policy permits"; `references/debug.md` lists both codes; `SKILL.md`'s rule gains "the database's change policy decides which".
 - `docs/reference/error-reference.md`: the two new codes and the changed `MARKER_MISMATCH` meta.
