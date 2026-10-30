@@ -145,6 +145,21 @@ PostgreSQL prints a date or timestamp in the connection's `DateStyle`. The Postg
 
 These are the current names; the Postgres and SQLite rename project will update this table. Write a TypeScript field as `field.column(type.X())` with the type of the PSL name, such as `field.column(type.DateTime())`, or `field.column(...)` with a column type from `adapter/column-types`. `sql.String(n)` and `sql.Char(n)` exist on every SQL target; SQLite accepts their length and does not enforce it.
 
+SQLite has the convenience date and time types too ([ADR 312](../architecture%20docs/adrs/ADR%20312%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md)). SQLite has no date or time column types, so every one is stored as `text`, `storage` takes only `text`, and none takes a precision. The defaults need no `Temporal`. A bare `DateTime` is `DatetimeJsDate`, the type `DateTime` named before, so its contract is unchanged.
+
+| Convenience type | `as` | Becomes | Stored text |
+| --- | --- | --- | --- |
+| `DateTime(as?, storage?)` | `jsDate` (default) | `DatetimeJsDate` | `2024-01-01T00:00:00.000Z`, the instant in UTC with three fraction digits |
+| | `temporal` | `DatetimeTemporal` | |
+| | `string` | `DatetimeString` | |
+| `Date(as?, storage?)` | `string` (default) | `DateString` | `2024-02-29`, a year from 0000 to 9999 |
+| | `temporal` | `DateTemporal` | |
+| `Time(as?, storage?)` | `string` (default) | `TimeString` | `09:30:00.000`, always three fraction digits |
+| | `temporal` | `TimeTemporal` | |
+| `Duration(as?, storage?)` | `string` (default) | `DurationString` | an ISO 8601 duration, as written: `PT1H30M` |
+
+A write stores the stored text: a value in another ISO 8601 form is converted, an instant's offset to UTC, and a digit below a millisecond is refused rather than rounded. `@default(now())` on a `Date` or `Time` column is `date('now')` or `strftime('%H:%M:%f','now')`, and `@onCreate(now())` and `@onUpdate(now())` write the current UTC value in each type's form. `temporal.CreatedAt` and `temporal.UpdatedAt` are `DateTime`. The `Temporal` types need a global `Temporal` in the application, as on PostgreSQL; the SQLite target's control entry sets the fallback for the commands. `DurationString` compares only for equality, because its text does not sort in duration order.
+
 | PSL name | TS helper | Codec id | Storage type | Application type |
 | --- | --- | --- | --- | --- |
 | `String` | — | `sqlite/text@1` | `text` | `string` |
@@ -153,13 +168,20 @@ These are the current names; the Postgres and SQLite rename project will update 
 | `BigIntNumber` | — | `sqlite/bigintnumber@1` | `integer` | `number` (safe-integer range) |
 | `Float` | — | `sqlite/real@1` | `real` | `number` |
 | `Decimal` | — | `sqlite/text@1` | `text` | `string` |
-| `DateTime` | — | `sqlite/datetime@1` | `text` | `Date` |
+| `DatetimeJsDate` | — | `sqlite/datetime@1` | `text` | `Date` |
+| `DatetimeTemporal` | — | `sqlite/datetime-temporal@1` | `text` | `Temporal.Instant` |
+| `DatetimeString` | — | `sqlite/datetime-string@1` | `text` | `string`, the stored text |
+| `DateString` | — | `sqlite/date-string@1` | `text` | `string` (ISO 8601) |
+| `DateTemporal` | — | `sqlite/date-temporal@1` | `text` | `Temporal.PlainDate` |
+| `TimeString` | — | `sqlite/time-string@1` | `text` | `string` (ISO 8601) |
+| `TimeTemporal` | — | `sqlite/time-temporal@1` | `text` | `Temporal.PlainTime` |
+| `DurationString` | — | `sqlite/duration-string@1` | `text` | `string`, an ISO 8601 duration |
 | `Json` | — | `sqlite/json@1` | `text` | `JsonValue` |
 | `Bytes` | — | `sqlite/blob@1` | `blob` | `Uint8Array` |
 | `sql.String(n)` | `field.column(type.sql.String(n))` | `sql/varchar@1` | `character varying` | `string` |
 | `sql.Char(n)` | `field.column(type.sql.Char(n))` | `sql/char@1` | `character` | `string` |
 
-A `DateTime` default is written with the `datetime` tag, as in `@default(datetime`2024-01-01T00:00:00Z`)`, and a `Json` default with the `json` tag. A `DateTime` column has the data type `sqlite/datetime` and a `Json` column `sqlite/json`, both stored as `text`. A `DateTime` default is stored as the instant in UTC with three fraction digits, the text every row holds, however it was written; [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states the form and the text it takes.
+A `DateTime` default is written with the `datetime` tag, as in `@default(datetime`2024-01-01T00:00:00Z`)`, a `Date`, `Time` or `Duration` default with the `date`, `time` or `duration` tag, and a `Json` default with the `json` tag. A `DateTime` column has the data type `sqlite/datetime`, a `Date` column `sqlite/date`, a `Time` column `sqlite/time`, a `Duration` column `sqlite/duration` and a `Json` column `sqlite/json`, all stored as `text`. A `DateTime` default is stored as the instant in UTC with three fraction digits, the text every row holds, however it was written; [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states the form and the text it takes.
 
 ## Across targets
 
@@ -173,7 +195,10 @@ The PSL name on each target for a concept, and the Prisma 6/7 name a migrating s
 | double | `Float` | `Float` | `Float` | `Double` |
 | decimal | `Decimal` | `Decimal`, `Numeric(p?, s?)` | `Decimal` (stored as text) | `Decimal128` |
 | boolean | `Boolean` | `Boolean` | — | `Bool` |
-| timestamp | `DateTime` | `DateTime` (a `TimestamptzJsDate(3)`) | `DateTime` | `Date` |
+| timestamp | `DateTime` | `DateTime` (a `TimestamptzJsDate(3)`) | `DateTime` (a `DatetimeJsDate`) | `Date` |
+| calendar date | `DateTime @db.Date` | `Date` (a `DateString`) | `Date` (a `DateString`) | — |
+| time of day | `DateTime @db.Time` | `Time` (a `TimeString`) | `Time` (a `TimeString`) | — |
+| duration | — | `Duration` (an `IntervalString`) | `Duration` (a `DurationString`) | — |
 | text | `String` | `String` | `String` | `String` |
 | bytes | `Bytes` | `Bytes` | `Bytes` | `Binary` |
 | JSON | `Json` | `Json`, `Jsonb` | `Json` | `Json` |
