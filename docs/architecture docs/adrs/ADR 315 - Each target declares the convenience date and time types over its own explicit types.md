@@ -76,9 +76,26 @@ MySQL has `datetime`, `timestamp`, `date` and `time` columns, so its explicit ty
 - **Changing a field's type.** MySQL's migration planner does not change a column's type yet. Changing a field between these types makes `db verify` report the difference, and `migration plan` refuses it.
 - `temporal.CreatedAt` and `temporal.UpdatedAt` are `DateTime` on MySQL too.
 
-## Not decided here
+## MongoDB
 
-MongoDB. Until its tables are recorded here, MongoDB's `Date`, which is a moment in time, is an explicit type.
+BSON has one date type, an instant in milliseconds. So an instant and a calendar date are both BSON dates, and a time of day and a duration are strings.
+
+| Convenience type | `as` | `storage` | Explicit type | Codec | Stored as |
+| --- | --- | --- | --- | --- | --- |
+| `DateTime` | `jsDate` (default) | `date` | `DateJsDate` | `mongo/date@1` | a BSON date |
+| | `temporal` | `date` | `DateInstant` | `mongo/date-instant@1` | a BSON date |
+| | `string` | `date` | `DateInstantString` | `mongo/date-instant-string@1` | a BSON date |
+| `Date` | `string` (default) | `date` | `DateString` | `mongo/date-string@1` | a BSON date at midnight UTC |
+| | `temporal` | `date` | `DateTemporal` | `mongo/date-temporal@1` | a BSON date at midnight UTC |
+| `Time` | `string` (default) | `string` | `TimeString` | `mongo/time-string@1` | a BSON string, `09:30:00.000` |
+| | `temporal` | `string` | `TimeTemporal` | `mongo/time-temporal@1` | a BSON string |
+| `Duration` | `string` (default) | `string` | `DurationString` | `mongo/duration-string@1` | a BSON string, as written |
+
+- **A calendar date is a BSON date at midnight UTC.** MongoDB's Java driver (`LocalDateCodec`) and C# driver (`DateOnlySerializer`) store a date without a time this way, and so did Prisma 6's `DateTime @db.Date`, so data they wrote reads as it is, and MongoDB's date operators and range queries work on it. The calendar codecs refuse to read a BSON date that is not at midnight UTC, naming the field, rather than drop its time.
+- **The explicit types are named after the stored type.** The BSON date types are `Date…`, after `mongo/date@1`: `DateJsDate`, `DateInstant` and `DateInstantString` read an instant, and `DateString` and `DateTemporal` a calendar date. `DateInstant` names its Temporal type because `mongo/date` has two Temporal codecs. `Time` and `Duration` are stored as strings, so their types are named after the data types `mongo/time` and `mongo/duration`, as on SQLite.
+- **`Date` changed concept.** Before, MongoDB's `Date` was `mongo/date@1`, an instant, the concept other targets call `DateTime`. It is now the calendar date, and `DateTime`, which was a deprecated name for it, is the convenience type whose default is that same codec, renamed `DateJsDate`. A schema written before emits the same contract once `Date` is rewritten to `DateTime`; the upgrade instructions do this with a script. A schema that misses the rewrite still compiles, and fails on the first read of a value with a time of day. It has no deprecated alias, because one name cannot mean both.
+- **The instant and the time hold milliseconds,** what a BSON date and a JavaScript `Date` hold. A time of day is stored with three fraction digits, so strings compare in time order. A write refuses digits below a millisecond rather than round them.
+- MongoDB has no database defaults, so `now()` is only `@onCreate(now())` and `@onUpdate(now())`, which the ORM fills. `temporal.CreatedAt` and `temporal.UpdatedAt` are `DateTime`.
 
 ## Consequences
 

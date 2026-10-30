@@ -24,13 +24,29 @@ changes:
 
 ## `mongo-date-is-a-calendar-date`
 
-Commit your work first. From the project root, run:
+```prisma
+// Before: an instant
+model Order {
+  id     ObjectId @id @map("_id")
+  paidAt Date
+}
+
+// After: the same instant, the same contract
+model Order {
+  id     ObjectId @id @map("_id")
+  paidAt DateTime
+}
+```
+
+MongoDB now has the convenience date and time types PostgreSQL, SQLite and MySQL have. `Date` is the calendar date, so a field that holds an instant must be written `DateTime`. Commit your work first, then from the project root run:
 
 ```sh
 node scripts/rewrite-mongo-date-types.ts
 ```
 
-Pass files or directories to limit it.
+It rewrites `Date` to `DateTime` in MongoDB schemas, including in `types {}` aliases, and `type.Date()` to `type.DateTime()` in MongoDB TypeScript contracts. Pass files or directories to limit it. Fix by hand each line it reports, then run `prisma contract emit`: the contract must not change.
+
+A field you miss still compiles, but reading a document whose value has a time of day fails with an error that names the field and says the value is not at midnight UTC. A field that really holds a calendar date can stay `Date`, if every stored value is at midnight UTC; it then reads `"2024-02-29"` instead of a `Date`. A Prisma 6 schema read with `prisma6Schema` is not rewritten: its `DateTime` stays an instant, and `DateTime @db.Date` now reads as a calendar date string.
 
 ## `temporal-polyfill-is-a-peer-dependency-of-mongo`
 

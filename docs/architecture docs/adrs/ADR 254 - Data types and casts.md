@@ -178,7 +178,9 @@ authoring: {
 | `datetime`, `timestamp`, `date`, `time` | the MySQL type of the same name | the MySQL target |
 | `duration` | `mysql/duration` | the MySQL target |
 | `json` | `mongo/json` | the MongoDB target |
-| `date` | `mongo/date`; the body is ISO 8601 with a UTC offset, stored as the text `Date.toISOString()` writes | the MongoDB target |
+| `date` | `mongo/date`; the body is ISO 8601 with a UTC offset, stored as the text `Date.toISOString()` writes, or a calendar date such as `` date`2024-02-29` ``, which is its midnight in UTC | the MongoDB target |
+| `time` | `mongo/time`; a time of day, stored with three fraction digits | the MongoDB target |
+| `duration` | `mongo/duration`; an ISO 8601 duration, stored as written | the MongoDB target |
 | `binary` | `mongo/binary`; the body is base64, as MongoDB prints bytes, `` binary`aGVsbG8=` `` | the MongoDB target |
 
 **Plainly**, for the three pieces of syntax the interpreter reads without a tag: a quoted string, `true` or `false`, and a number. Each target says which of its types they are. A number is the one plain kind that yields several types, so the target's number entry carries a **classifier** in place of `parse`: it picks the type from the digits and returns a value of that type. Beside it, `types` lists every type the classifier can return, which is how assembly knows those types can be written.
@@ -355,6 +357,9 @@ Each date and time type has a tag named after it, listed under "How PSL writes a
 | `mysql/date` | `2024-01-01` | `1000-01-01` | `9999-12-31` |
 | `mysql/time` | a time of day: `12:34:56` | `00:00:00` | `23:59:59.999999` |
 | `mysql/duration` | an ISO 8601 duration, as written: `PT1H30M` | | |
+| `mongo/date` | the instant in UTC with three fraction digits: `2024-01-01T00:00:00.000Z`; a calendar date is its midnight | | |
+| `mongo/time` | a time of day with three fraction digits, a BSON string: `12:34:56.000` | `00:00:00.000` | `23:59:59.999` |
+| `mongo/duration` | an ISO 8601 duration, as written, a BSON string: `PT1H30M` | | |
 
 - Seconds are always written. On the Postgres and MySQL types a fraction of a second has no trailing zeros and at most six digits, because those types hold microseconds. A MySQL literal with more fraction digits than its column's precision is refused, because MySQL would round it. MySQL's `time` also holds negative times and hours past 23, which are no time of day, so `mysql/time` refuses them. On `sqlite/datetime` and `sqlite/time` the fraction always has three digits, because that is what `toISOString()` and SQLite's `strftime('%f')` write, and SQLite compares the text byte by byte. `sqlite/date` holds years 0000 to 9999, the years SQLite's `date()` reads and whose text sorts in date order.
 - `sqlite/datetime` reads text without an offset as UTC, as SQLite's own date functions do, so reading a value never depends on the machine's time zone.
