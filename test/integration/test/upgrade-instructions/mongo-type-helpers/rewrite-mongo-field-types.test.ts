@@ -2,7 +2,8 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { mongoTargetDescriptor } from '@internal/target-mongo/control';
+import type { SerializeContract } from '@internal/contract/hashing';
+import { type MongoTargetContract, mongoTargetDescriptor } from '@internal/target-mongo/control';
 import { dirname, join } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
 import { contract as aliased } from './fixtures/after/aliased';
@@ -83,6 +84,9 @@ describe.each(Object.entries(SCRIPT_PATHS))(
   },
 );
 
+const serializeContract: SerializeContract = (built) =>
+  mongoTargetDescriptor.contractSerializer.serializeContract(built as MongoTargetContract);
+
 describe('the rewritten contracts', () => {
   it.each([
     ['contract.contract.json', contract],
@@ -91,10 +95,8 @@ describe('the rewritten contracts', () => {
     ['renamed.contract.json', renamed],
     ['comments.contract.json', comments],
   ])('emit %s, the contract the removed helpers emitted', (emitted, built) => {
-    expect(
-      mongoTargetDescriptor.contractSerializer.serializeContract(
-        built as Parameters<typeof mongoTargetDescriptor.contractSerializer.serializeContract>[0],
-      ),
-    ).toEqual(JSON.parse(readFileSync(join(fixturesDir, 'emitted', emitted), 'utf8')));
+    expect(serializeContract(built)).toEqual(
+      JSON.parse(readFileSync(join(fixturesDir, 'emitted', emitted), 'utf8')),
+    );
   });
 });
