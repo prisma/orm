@@ -79,6 +79,8 @@ Both gaps are fixed in this slice with Will's approval (decisions 1 and 2).
 4. **The `updateAll` read-then-write takes no row lock**, as Postgres's `update()` selects then updates without one. The non-goal "no row locking on MySQL" stands; the project spec's decision 5 is reworded to match.
 5. **`onConflict: 'skip'` stays refused on MySQL.** `INSERT IGNORE` hides foreign-key and `NOT NULL` errors, and the no-op `ON DUPLICATE KEY UPDATE` miscounts. Recorded in `deferred.md`.
 
+6. **MySQL transactions run at READ COMMITTED (Will, 2026-10-30).** The MySQL target sets `transaction_isolation = 'READ-COMMITTED'` as a session setting, as it sets the time zone, so a read-back inside the ORM's transaction sees rows other sessions committed, as on Postgres. Under MySQL's default REPEATABLE READ, an update that changed nothing read back the old value, and an upsert with `update: {}` in a user transaction found no row. Transaction isolation controls are on the roadmap and will replace this.
+
 ## Out of scope
 
 - MariaDB, and splitting `returning` per statement kind (MariaDB has `RETURNING` on insert and delete only). Both are slice 6.
