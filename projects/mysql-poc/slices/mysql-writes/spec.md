@@ -1,6 +1,6 @@
 # Slice 4 — MySQL ORM writes
 
-**Linear:** [TML-3696](https://linear.app/prisma-company/issue/TML-3696) · **Project:** [`../../spec.md`](../../spec.md) · **Status:** decided 2026-10-30
+**Linear:** [TML-3696](https://linear.app/prisma-company/issue/TML-3696) · **Project:** [`../../spec.md`](../../spec.md) · **Status:** decided 2026-10-30, after the design reviews in `reviews/`
 
 ## At a glance
 
@@ -68,12 +68,10 @@ Both gaps are fixed in this slice with Will's approval (decisions 1 and 2).
 
 ## Decisions (2026-10-30)
 
-1. **A write can tell the caller what the database generated (Will: extend the driver result, and generalise it; under design review).** Today the SQL family types a write's result as `{ affectedRows }` (`SqlStatementStats`). The ORM needs the keys the database generated for the rows it wrote, so it can read them back and pass a parent's key to nested children. The design must work for any SQL driver, including ones that talk to their database over HTTP, and must not name MySQL. Candidates:
-   - **(a) A named field**, `lastInsertId` on `SqlStatementStats`. Matches what `mariadb`, `mysql2` and SQLite expose, but it is one MySQL-shaped value: the first id only, no composite keys, no non-integer generated values.
-   - **(b) Generated keys as rows, requested by the plan.** A write's plan declares which generated columns it wants back (the model's key columns). The driver returns them as rows, however its database provides them: Postgres and SQLite through `RETURNING`, MySQL from the insert id, an HTTP driver from its response. JDBC's `getGeneratedKeys()` is this design. The Mongo family already works this way: a write command yields a result document whose shape the query language defines (`InsertOneResult.insertedId`, `packages/2-mongo-family/4-query/query-ast/src/result-types.ts`), and "transport layers satisfy these interfaces, they do not define them".
-   - **(c) The family defines a write result with a `generatedKeys` member** (rows of generated columns), returned by every driver's `execute`, empty where the database reports none.
-
-   The architect and principal-engineer reviews recommend one; Will decides.
+1. **A write reports the id the database generated for a one-row insert (Will, 2026-10-30).** `SqlStatementStats` in the SQL family gains an optional `insertId`: the generated value, as decimal text, set only when the statement inserted exactly one row. The MySQL driver fills it from the `mariadb` package's `insertId`; the SQLite driver fills it from `lastInsertRowid` only when `changes` is 1; Postgres leaves it out, because it has `RETURNING`. The ORM's insert node reads it only when it needs a key the caller did not supply, decodes it through the key column's codec, and fails inside the transaction, rolling the insert back, when it is absent. The framework does not change. Reviews (`reviews/write-result-architect.md`, `reviews/write-result-principal.md`) rejected the alternatives:
+   - **Generated keys as rows, or a family write result with a `generatedKeys` member:** a database without `RETURNING` reports at most one integer per statement, over the wire or over HTTP, so neither shape can be filled; the general concept, the rows a write returns, is already `RETURNING`.
+   - **A framework result type each family binds:** the value must be optional, so a middleware dropping it still type-checks, and ADR 271 rejected a generic parameter for client result types because middleware written once for every client could not name it.
+   - **A follow-up `SELECT LAST_INSERT_ID()`:** an extra round trip, and it names a MySQL function in shared code.
 2. **A new capability says whether a conflict clause applies only to the named columns (Will).** `sql.insertOnConflictTarget`: "an insert's conflict clause applies only to the unique columns it names". The Postgres and SQLite adapters report it; MySQL does not. Upsert, and `onConflict: 'skip'` with `conflictOn`, require it. Without it, the ORM allows upsert only when the contract shows the named columns are the only unique key the create values can collide on: every other primary key or unique constraint contains an auto-increment column the create values leave out. Otherwise it refuses with `ORM.CAPABILITY_MISSING`. The project's example passes: auto-increment `id`, unique `email`.
 3. **A row-returning `createAll` whose rows get generated ids is refused on MySQL.** MySQL reports only the first id of a multi-row insert, and the rest are consecutive only while no bulk insert runs on the table at the same time. `createAndCount` and single-row `create` work.
 4. **The `updateAll` read-then-write takes no row lock**, as Postgres's `update()` selects then updates without one. The non-goal "no row locking on MySQL" stands; the project spec's decision 5 is reworded to match.
