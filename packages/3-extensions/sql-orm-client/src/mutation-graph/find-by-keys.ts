@@ -19,7 +19,7 @@ import { StatementNode } from './statement-node';
 
 type Keyed = { keys: Rows };
 
-/** Keys per read-back statement. The `ORDER BY CASE` costs the database the number of keys times the number of rows, so the keys are read in chunks of this size, which also keeps each statement under the parameter limits of the databases. */
+/** Keys per read-back statement. The `ORDER BY CASE` costs the database the number of keys times the number of rows it returns, so the keys are read in chunks of this size. */
 const KEYS_PER_STATEMENT = 500;
 
 /**
