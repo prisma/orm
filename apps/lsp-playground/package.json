@@ -43,7 +43,7 @@
     "puppeteer-core": "^25.4.0",
     "tsx": "catalog:",
     "typescript": "catalog:",
-    "vite": "^6.3.5"
+    "vite": "^6.4.5"
   },
   "engines": {
     "node": ">=24"

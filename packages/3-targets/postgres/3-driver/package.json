@@ -25,9 +25,9 @@
     "@internal/utils": "workspace:8.0.0-rc.22",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
-    "arktype": "^2.2.2",
+    "arktype": "^2.2.9",
     "pg": "catalog:",
-    "pg-connection-string": "^2.14.0",
+    "pg-connection-string": "^2.14.1",
     "pg-cursor": "^2.21.0"
   },
   "devDependencies": {

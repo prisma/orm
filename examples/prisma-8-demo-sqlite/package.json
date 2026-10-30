@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@prisma/orm-sqlite": "workspace:8.0.0-rc.22",
-    "arktype": "^2.2.2",
+    "arktype": "^2.2.9",
     "dotenv": "^17.4.2"
   },
   "devDependencies": {
