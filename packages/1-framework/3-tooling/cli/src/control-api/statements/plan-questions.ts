@@ -435,6 +435,12 @@ function renameForm(
   return `${text}:${parent}.${only ?? '<new name>'}`;
 }
 
+const SUBJECTS_OF_SEVERAL_OPERATIONS: ReadonlySet<MigrationSubject['kind']> = new Set([
+  'model',
+  'enumValue',
+  'valueObjectField',
+]);
+
 /** The labels of the operations a question is about, as one phrase. */
 export function labelsText(labels: readonly string[]): string {
   const [first, ...rest] = [...new Set(labels)];
@@ -945,7 +951,7 @@ export async function askPlanQuestions<TPlan extends PlannedQuestions, TFailure>
                 sameSubject(loss).flatMap((entry) =>
                   entry.keepDataEdit === undefined ? [] : [entry.keepDataEdit],
                 ),
-                loss.subject.kind === 'enumValue' || loss.subject.kind === 'valueObjectField'
+                SUBJECTS_OF_SEVERAL_OPERATIONS.has(loss.subject.kind)
                   ? sameSubject(loss).map(({ label }) => label)
                   : [loss.label],
               ),

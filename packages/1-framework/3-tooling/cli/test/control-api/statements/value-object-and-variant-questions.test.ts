@@ -214,7 +214,7 @@ describe('a question about a removed variant', () => {
       {
         subject: 'Bug',
         question:
-          'Delete the rows of "tasks" that hold value "bug" in column "type" would lose the data of model "Bug".',
+          'Drop column "severity" of "tasks" and delete the rows of "tasks" that hold value "bug" in column "type" would lose the data of model "Bug".',
         verbs: ['rename', 'delete'],
       },
     ]);
