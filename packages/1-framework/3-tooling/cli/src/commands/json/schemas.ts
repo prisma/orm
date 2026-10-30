@@ -112,10 +112,23 @@ export const migrationStatusSpaceSchema = type({
 
 export type MigrationStatusSpace = typeof migrationStatusSpaceSchema.infer;
 
+const policyDifferenceSchema = type({
+  setting: '"change"',
+  declared: 'string[]',
+  inForce: 'string[]',
+}).or(
+  type({
+    setting: '"dataLoss" | "accessWidening"',
+    declared: 'string',
+    inForce: 'string',
+  }),
+);
+
 export const migrationStatusJsonResultSchema = successEnvelopeBaseSchema.and(
   type({
     spaces: migrationStatusSpaceSchema.array(),
     diagnostics: statusDiagnosticSchema.array(),
+    'policyDifferences?': policyDifferenceSchema.array(),
   }),
 );
 
