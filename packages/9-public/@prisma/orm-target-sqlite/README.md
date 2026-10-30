@@ -14,7 +14,7 @@ Applications receive it as an exact-pinned dependency of `@prisma/orm-sqlite`; a
 
 A bare namespace import (e.g. `@prisma/orm-target-sqlite/adapter`) aggregates that layer's full surface; deeper paths select individual modules.
 
-`temporal-polyfill` is a required peer dependency. The `/target/control` entry loads it as a fallback `Temporal` when the runtime has none. npm, pnpm and bun install it automatically; with Yarn, add `temporal-polyfill` to your dependencies.
+`temporal-polyfill` is a required peer dependency. Only the `/target/control` entry loads it, as a fallback `Temporal` when the runtime has none; no entry an application loads at run time does. npm, pnpm and bun install it automatically; with Yarn, add `temporal-polyfill` to your dependencies.
 
 ## Responsibilities
 
