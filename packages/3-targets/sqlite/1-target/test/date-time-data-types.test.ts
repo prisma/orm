@@ -102,7 +102,7 @@ describe('sqlite/time', () => {
 });
 
 describe('sqlite/duration', () => {
-  it.each(['PT1H30M', 'P1Y2M3DT4H5M6.5S', 'P1D', 'PT24H', 'P-1M'])(
+  it.each(['PT1H30M', 'P1Y2M3DT4H5M6.5S', 'P1D', 'PT24H', 'P-1M', '-P1D', 'P1W', 'P2W3D'])(
     'stores %s as written',
     (text) => {
       expect(sqliteDurationText(text)).toBe(text);
@@ -111,7 +111,7 @@ describe('sqlite/duration', () => {
 
   it.each([
     ['an empty duration', 'P'],
-    ['weeks, which the pattern does not read', 'P2W'],
+    ['a sign both before P and on a component', '-P-1D'],
     ['PostgreSQL’s interval text', '1 hour'],
   ])('refuses %s', (_name, text) => {
     expect(() => sqliteDurationText(text)).toThrow(
@@ -120,6 +120,16 @@ describe('sqlite/duration', () => {
         message: `sqlite/duration cannot read "${text}". Write an ISO 8601 duration, as in "PT1H30M".`,
       }),
     );
+  });
+
+  it.each([
+    { days: -1 },
+    { weeks: 2 },
+    { hours: -1, minutes: -30 },
+    { seconds: 1, milliseconds: 500 },
+  ])('stores what Temporal.Duration writes for %o as written', (fields) => {
+    const text = Temporal.Duration.from(fields).toString();
+    expect(sqliteDurationText(text)).toBe(text);
   });
 
   it('keeps two spellings of one length of time apart', () => {

@@ -26,7 +26,7 @@ import {
 } from '@internal/framework-components/codec';
 import { canonicalizeJson } from '@internal/framework-components/utils';
 import { sqlDataType, sqlRawDataType } from '@internal/sql-contract/data-type';
-import { ISO_DURATION } from '@internal/type-implementations/duration';
+import { ISO_DURATION_AS_WRITTEN } from '@internal/type-implementations/duration';
 import { structuredError } from '@internal/utils/structured-error';
 import { type as arktype } from 'arktype';
 
@@ -198,12 +198,12 @@ export function sqliteDatetimeTextAtMilliseconds(text: string): string {
 
 /** The value of `sqlite/duration`: an ISO 8601 duration, stored as written. Throws `CONTRACT.CAST_REFUSED` for other text. */
 export function sqliteDurationText(text: string): string {
-  if (ISO_DURATION.test(text)) return text;
+  if (ISO_DURATION_AS_WRITTEN.test(text)) return text;
   throw structuredError(
     'CONTRACT.CAST_REFUSED',
     `sqlite/duration cannot read "${text}". Write an ISO 8601 duration, as in "PT1H30M".`,
     {
-      why: 'sqlite/duration holds an ISO 8601 duration: P, then years, months and days, then T and hours, minutes and seconds.',
+      why: 'sqlite/duration holds an ISO 8601 duration as Temporal.Duration writes it: an optional sign, P, then years, months, weeks and days, then T and hours, minutes and seconds. A sign on each component instead is read too.',
       fix: 'Write the duration in ISO 8601, as in "P1Y2M3DT4H5M6.5S".',
     },
   );
