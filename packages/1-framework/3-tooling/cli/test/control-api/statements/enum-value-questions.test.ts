@@ -69,7 +69,7 @@ describe('a question about an enum value', () => {
     expect(question?.validate('rename', 'Status.ARCHIVED:Status.RETIRED')).toBeUndefined();
   });
 
-  it('asks once about a value that several columns lose, and names every column', async () => {
+  it('asks once about a value that several columns and paths inside JSON lose, and names every operation', async () => {
     const asked: PlanQuestion[] = [];
     await askPlanQuestions({
       plan: {
@@ -83,6 +83,13 @@ describe('a question about an enum value', () => {
           {
             operationIndex: 1,
             label: 'Remove value "archived" from column "tags" of "note"',
+            loss: 'drop',
+            subject: archived,
+          },
+          {
+            operationIndex: 2,
+            label:
+              'Remove value "archived" at path "$[*].meta.status" in column "visits" of "ticket"',
             loss: 'drop',
             subject: archived,
           },
@@ -108,7 +115,7 @@ describe('a question about an enum value', () => {
       {
         subject: 'Status.ARCHIVED',
         question:
-          'Remove value "archived" from column "status" of "task" and remove value "archived" from column "tags" of "note" would lose enum value "Status.ARCHIVED" from the data that holds it.',
+          'Remove value "archived" from column "status" of "task", remove value "archived" from column "tags" of "note" and remove value "archived" at path "$[*].meta.status" in column "visits" of "ticket" would lose enum value "Status.ARCHIVED" from the data that holds it.',
       },
     ]);
   });
