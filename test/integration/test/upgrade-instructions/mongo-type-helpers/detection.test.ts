@@ -24,6 +24,23 @@ describe.each(Object.entries(GUIDES))('the %s mongo-fields-take-a-type detection
     ]).toEqual([true, true, true, true]);
   });
 
+  it('matches a removed helper called on field under another name', () => {
+    expect([
+      matches(
+        "import { defineContract, field as f } from '@prisma/orm-mongo/contract-builder';\nf.objectId();",
+      ),
+      matches(
+        `${builderImport}defineContract({}, ({ field: fl }) => fl.scalar('mongo/string@1'));`,
+      ),
+    ]).toEqual([true, true]);
+  });
+
+  it('does not match a stored name written with .mongo({ field })', () => {
+    expect(matches(`${builderImport}field.scalar(type.ObjectId()).mongo({ field: '_id' });`)).toBe(
+      false,
+    );
+  });
+
   it('does not match a rewritten source, a non-MongoDB source, or another helper', () => {
     expect([
       matches(`${builderImport}const id = field.scalar(type.ObjectId());`),

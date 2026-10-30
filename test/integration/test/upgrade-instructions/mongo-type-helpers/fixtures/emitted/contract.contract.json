@@ -1,0 +1,482 @@
+{
+  "target": "mongo",
+  "targetFamily": "mongo",
+  "roots": {
+    "everything": {
+      "namespace": "__unbound__",
+      "model": "Everything"
+    },
+    "tagged": {
+      "namespace": "__unbound__",
+      "model": "Tagged"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {
+          "Everything": {
+            "fields": {
+              "_id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "title": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "ratio": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/double@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "count": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/int32@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "active": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/bool@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "createdAt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/date@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "updatedAt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/date@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "big": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/int64@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "safe": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/int64Number@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "price": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/decimal128@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "bytes": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/binary@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "meta": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/json@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "raw": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/bson@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "embedding": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/vector@1",
+                  "typeParams": {
+                    "length": 3
+                  }
+                },
+                "nullable": false,
+                "many": false
+              },
+              "plain": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/vector@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "tags": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false,
+                "many": {
+                  "elementNullable": false
+                }
+              },
+              "sized": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/vector@1",
+                  "typeParams": {
+                    "length": 2
+                  }
+                },
+                "nullable": false,
+                "many": false
+              },
+              "address": {
+                "type": {
+                  "kind": "valueObject",
+                  "plane": "storage",
+                  "namespaceId": "__unbound__",
+                  "entityKind": "valueObject",
+                  "entityName": "Address"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "everything",
+              "fields": {
+                "_id": {
+                  "field": "_id"
+                },
+                "title": {
+                  "field": "title"
+                },
+                "ratio": {
+                  "field": "ratio"
+                },
+                "count": {
+                  "field": "count"
+                },
+                "active": {
+                  "field": "active"
+                },
+                "createdAt": {
+                  "field": "createdAt"
+                },
+                "updatedAt": {
+                  "field": "updatedAt"
+                },
+                "big": {
+                  "field": "big"
+                },
+                "safe": {
+                  "field": "safe"
+                },
+                "price": {
+                  "field": "price"
+                },
+                "bytes": {
+                  "field": "bytes"
+                },
+                "meta": {
+                  "field": "meta"
+                },
+                "raw": {
+                  "field": "raw"
+                },
+                "embedding": {
+                  "field": "embedding"
+                },
+                "plain": {
+                  "field": "plain"
+                },
+                "tags": {
+                  "field": "tags"
+                },
+                "sized": {
+                  "field": "sized"
+                },
+                "address": {
+                  "field": "address"
+                }
+              }
+            }
+          },
+          "Tagged": {
+            "fields": {
+              "_id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "label": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "tagged",
+              "fields": {
+                "_id": {
+                  "field": "_id"
+                },
+                "label": {
+                  "field": "label"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "capabilities": {},
+  "extensions": {},
+  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "meta": {},
+  "execution": {
+    "executionHash": "b23ffbb5210a7666d3626898defcf5df73d24f6278ae310af444f17b4a8dc85f",
+    "mutations": {
+      "defaults": [
+        {
+          "ref": {
+            "namespace": "__unbound__",
+            "entry": "everything",
+            "field": "createdAt"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "timestampNow"
+          }
+        },
+        {
+          "ref": {
+            "namespace": "__unbound__",
+            "entry": "everything",
+            "field": "updatedAt"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "timestampNow"
+          },
+          "onUpdate": {
+            "kind": "generator",
+            "id": "timestampNow"
+          }
+        }
+      ]
+    }
+  },
+  "storage": {
+    "storageHash": "71ac96d5e4645182864c7e9851e5c3e15c329abe54c0f93138e1030991de8607",
+    "namespaces": {
+      "__unbound__": {
+        "id": "__unbound__",
+        "kind": "mongo-database",
+        "entries": {
+          "collection": {
+            "everything": {
+              "kind": "mongo-collection",
+              "validator": {
+                "kind": "mongo-validator",
+                "jsonSchema": {
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "title": {
+                      "bsonType": "string"
+                    },
+                    "ratio": {
+                      "bsonType": "double"
+                    },
+                    "count": {
+                      "bsonType": "int"
+                    },
+                    "active": {
+                      "bsonType": "bool"
+                    },
+                    "createdAt": {
+                      "bsonType": "date"
+                    },
+                    "updatedAt": {
+                      "bsonType": "date"
+                    },
+                    "big": {
+                      "bsonType": "long"
+                    },
+                    "safe": {
+                      "bsonType": "long"
+                    },
+                    "price": {
+                      "bsonType": "decimal"
+                    },
+                    "bytes": {
+                      "bsonType": "binData"
+                    },
+                    "meta": {
+                      "bsonType": [
+                        "object",
+                        "array",
+                        "string",
+                        "double",
+                        "int",
+                        "long",
+                        "bool",
+                        "null"
+                      ]
+                    },
+                    "raw": {},
+                    "embedding": {
+                      "bsonType": "array"
+                    },
+                    "plain": {
+                      "bsonType": "array"
+                    },
+                    "tags": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "string"
+                      }
+                    },
+                    "sized": {
+                      "bsonType": "array"
+                    },
+                    "address": {
+                      "bsonType": "object",
+                      "properties": {
+                        "street": {
+                          "bsonType": "string"
+                        },
+                        "zip": {
+                          "bsonType": [
+                            "null",
+                            "string"
+                          ]
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "street"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "_id",
+                    "active",
+                    "address",
+                    "big",
+                    "bytes",
+                    "count",
+                    "createdAt",
+                    "embedding",
+                    "meta",
+                    "plain",
+                    "price",
+                    "ratio",
+                    "raw",
+                    "safe",
+                    "sized",
+                    "tags",
+                    "title",
+                    "updatedAt"
+                  ]
+                },
+                "validationLevel": "strict",
+                "validationAction": "error"
+              }
+            },
+            "tagged": {
+              "kind": "mongo-collection",
+              "validator": {
+                "kind": "mongo-validator",
+                "jsonSchema": {
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "label": {
+                      "bsonType": "string"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "_id",
+                    "label"
+                  ]
+                },
+                "validationLevel": "strict",
+                "validationAction": "error"
+              }
+            }
+          },
+          "valueObject": {
+            "Address": {
+              "fields": {
+                "street": {
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "mongo/string@1"
+                  },
+                  "nullable": false,
+                  "many": false
+                },
+                "zip": {
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "mongo/string@1"
+                  },
+                  "nullable": true,
+                  "many": false
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

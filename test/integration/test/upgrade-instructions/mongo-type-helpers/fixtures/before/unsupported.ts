@@ -7,7 +7,7 @@ export const contract = defineContract({}, ({ field, model }) => ({
       fields: {
         _id: field.objectId(),
         location: field.scalar('geo/point@1'),
-        sized: field.vector({ typeParams: { length: dimensions() } }),
+        sized: field.vector({ typeParams: { length: dimensions(), other: 1 } }),
       },
     }),
   },

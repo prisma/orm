@@ -7,6 +7,7 @@ changes:
       glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs,jsx}"
       matches:
         - '(?<![\s\S])(?=[\s\S]*@prisma/orm-(?:mongo|family-mongo/contract-ts)/contract-builder[\x27"])[\s\S]*(?<![\w$])field\s*\.\s*(?:(?:objectId|string|double|int32|bool|date|int64|int64Number|decimal128|binary|json|bson|vector)\s*\(|scalar\s*\(\s*[\x27"])'
+        - '(?<![\s\S])(?=[\s\S]*@prisma/orm-(?:mongo|family-mongo/contract-ts)/contract-builder[\x27"])(?=[\s\S]*\bfield\s*(?:as\s+|:\s*)[A-Za-z_$][\w$]*)[\s\S]*\.\s*(?:(?:objectId|string|double|int32|bool|date|int64|int64Number|decimal128|binary|json|bson|vector)\s*\(|scalar\s*\(\s*[\x27"])'
     script: scripts/rewrite-mongo-field-types.ts
 ---
 

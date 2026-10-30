@@ -2,10 +2,13 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { defineContract, field, model, valueObject } from '@internal/mongo/contract-builder';
+import { mongoTargetDescriptor } from '@internal/target-mongo/control';
 import { dirname, join } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
+import { contract as aliased } from './fixtures/after/aliased';
+import { contract as comments } from './fixtures/after/comments';
 import { contract, fromHelpers } from './fixtures/after/contract';
+import { contract as renamed } from './fixtures/after/renamed';
 
 const SCRIPT_PATHS = {
   app: 'upgrade-instructions/pending/mongo-type-helpers/app/scripts/rewrite-mongo-field-types.ts',
@@ -53,12 +56,15 @@ describe.each(Object.entries(SCRIPT_PATHS))(
         status: 0,
         stderr: '',
         stdout: [
+          'aliased.ts: rewrote 3 field helper calls.',
           'binds-type.ts: already binds the name "type", which the rewrite needs for the MongoDB type helpers; left unchanged. Rename the other binding and run the script again.',
+          'comments.ts: rewrote 2 field helper calls.',
           'contract.ts: rewrote 23 field helper calls.',
+          'renamed.ts: rewrote 4 field helper calls.',
           'unsupported.ts: rewrote 1 field helper call.',
-          "unsupported.ts: line 9: field.scalar('geo/point@1'),: not rewritten; write it as field.scalar(type.X(...)).",
-          'unsupported.ts: line 10: field.vector({ typeParams: { length: dimensions() } }),: not rewritten; write it as field.scalar(type.X(...)).',
-          'Changed 2 files.',
+          `unsupported.ts: line 9: field.scalar('geo/point@1'): not rewritten, as codec "geo/point@1" has no type constructor here; write it as field.scalar(type.X(...)).`,
+          'unsupported.ts: line 10: field.vector({ typeParams: { length: dimensions(), other: 1 } }): not rewritten, as its arguments are not { typeParams: { length } }; write it as field.scalar(type.X(...)).',
+          'Changed 5 files.',
           '',
         ].join('\n'),
       });
@@ -68,7 +74,7 @@ describe.each(Object.entries(SCRIPT_PATHS))(
     it('leaves the files it rewrote unchanged on a second run', () => {
       const dir = copyBefore();
       run(script, dir);
-      const second = run(script, dir, ['contract.ts']);
+      const second = run(script, dir, ['contract.ts', 'aliased.ts', 'renamed.ts', 'comments.ts']);
       expect({ stdout: second.stdout, files: filesOf(dir) }).toEqual({
         stdout: 'Changed 0 files.\n',
         files: filesOf(join(fixturesDir, 'after')),
@@ -77,63 +83,18 @@ describe.each(Object.entries(SCRIPT_PATHS))(
   },
 );
 
-describe('the rewritten contract', () => {
-  const scalar = (codecId: string) => field.scalar({ kind: 'scalar', codecId });
-
-  it('is the contract the removed helpers built', () => {
-    const Address = valueObject('Address', {
-      fields: { street: scalar('mongo/string@1'), zip: scalar('mongo/string@1').optional() },
-    });
-    const expected = defineContract({}, ({ gen }) => ({
-      models: {
-        Everything: model('Everything', {
-          collection: 'everything',
-          fields: {
-            _id: scalar('mongo/objectId@1'),
-            title: scalar('mongo/string@1'),
-            ratio: scalar('mongo/double@1'),
-            count: scalar('mongo/int32@1'),
-            active: scalar('mongo/bool@1'),
-            createdAt: scalar('mongo/date@1').onCreate(gen.now()),
-            updatedAt: scalar('mongo/date@1').onCreate(gen.now()).onUpdate(gen.now()),
-            big: scalar('mongo/int64@1'),
-            safe: scalar('mongo/int64Number@1'),
-            price: scalar('mongo/decimal128@1'),
-            bytes: scalar('mongo/binary@1'),
-            meta: scalar('mongo/json@1'),
-            raw: scalar('mongo/bson@1'),
-            embedding: field.scalar({
-              kind: 'scalar',
-              codecId: 'mongo/vector@1',
-              typeParams: { length: 3 },
-            }),
-            plain: scalar('mongo/vector@1'),
-            tags: scalar('mongo/string@1').many(),
-            sized: field.scalar({
-              kind: 'scalar',
-              codecId: 'mongo/vector@1',
-              typeParams: { length: 2 },
-            }),
-            address: field.valueObject(Address),
-          },
-        }),
-        Tagged: model('Tagged', {
-          collection: 'tagged',
-          fields: { _id: scalar('mongo/objectId@1'), label: scalar('mongo/string@1') },
-        }),
-      },
-      valueObjects: { Address },
-    }));
-    const note = defineContract({}, () => ({
-      models: {
-        Note: model('Note', {
-          collection: 'notes',
-          fields: { _id: scalar('mongo/objectId@1'), body: scalar('mongo/string@1') },
-        }),
-      },
-    }));
-    expect(JSON.parse(JSON.stringify({ contract, fromHelpers }))).toEqual(
-      JSON.parse(JSON.stringify({ contract: expected, fromHelpers: note })),
-    );
+describe('the rewritten contracts', () => {
+  it.each([
+    ['contract.contract.json', contract],
+    ['contract.fromHelpers.json', fromHelpers],
+    ['aliased.contract.json', aliased],
+    ['renamed.contract.json', renamed],
+    ['comments.contract.json', comments],
+  ])('emit %s, the contract the removed helpers emitted', (emitted, built) => {
+    expect(
+      mongoTargetDescriptor.contractSerializer.serializeContract(
+        built as Parameters<typeof mongoTargetDescriptor.contractSerializer.serializeContract>[0],
+      ),
+    ).toEqual(JSON.parse(readFileSync(join(fixturesDir, 'emitted', emitted), 'utf8')));
   });
 });

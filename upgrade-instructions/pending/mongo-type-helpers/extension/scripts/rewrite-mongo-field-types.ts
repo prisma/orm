@@ -1,22 +1,23 @@
 #!/usr/bin/env node
 /**
- * Rewrites the removed MongoDB field helpers of TypeScript contracts to `field.scalar(type.X())`: `field.objectId()` becomes `field.scalar(type.ObjectId())`, `field.scalar('mongo/string@1')` becomes `field.scalar(type.String())`, and `field.vector({ typeParams: { length: 3 } })` becomes `field.scalar(type.Vector(3))`. A call on a helpers object, such as `helpers.field.int32()`, becomes `helpers.field.scalar(helpers.type.Int32())`. Where a rewritten call reads `type` by itself, the script adds `type` to the `defineContract` callback parameter, or the declaration, that destructures `field` around the call, and otherwise to the import of `field` from `@prisma/orm-mongo/contract-builder`.
+ * Rewrites the removed MongoDB field helpers of TypeScript contracts to `field.scalar(type.X())`: `field.objectId()` becomes `field.scalar(type.ObjectId())`, `field.scalar('mongo/string@1')` becomes `field.scalar(type.String())`, and `field.vector({ typeParams: { length: 3 } })` becomes `field.scalar(type.Vector(3))`. A call on a helpers object, such as `helpers.field.int32()`, becomes `helpers.field.scalar(helpers.type.Int32())`. It finds `field` under any name the file gives it: `import { field as f }` from a MongoDB contract builder entry, or `({ field: f })` in a destructuring. Where a rewritten call reads `type` by itself, the script adds `type` to the destructuring or the import that gives the call its `field`.
  *
  * Usage: node rewrite-mongo-field-types.ts [file or directory ...]
  *
- * The paths default to the working directory. In a directory the script reads every TypeScript and JavaScript file outside `node_modules`, `.git`, `dist` and `build`. It rewrites only files that import from a MongoDB contract builder entry, and the contract each builds does not change. It prints one line per file it changes, and one line per thing it leaves for a person: a call it cannot carry over (a codec id with no type constructor, or a vector length that is not a literal or a name), a file that already binds the name `type`, which it leaves unchanged, and a file that reads `type` where nothing gives it.
+ * The paths default to the working directory. In a directory the script reads every TypeScript and JavaScript file outside `node_modules`, `.git`, `dist` and `build`. It rewrites only files that import from a MongoDB contract builder entry, and only code: comments and strings stay as they are. The contract each file builds does not change. It reads the files with the project's `typescript` package. It prints one line per file it changes, and one line per thing it leaves for a person: a call it cannot carry over, such as a codec id with no type constructor, a file that already binds the name `type` some other way, which it leaves unchanged, and a file whose `type` no import can give.
  */
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join, relative } from 'node:path';
+import type * as TypeScript from 'typescript';
 
 const SKIPPED_DIRECTORIES = new Set(['node_modules', '.git', 'dist', 'build']);
 const SOURCE_FILE = /\.(?:[cm]?ts|tsx|[cm]?js|jsx)$/;
-const BUILDER_MODULE = String.raw`(?:@prisma\/orm-mongo|@prisma\/orm-family-mongo\/contract-ts|@internal\/mongo|@internal\/mongo-contract-ts)\/contract-builder`;
-const BUILDER_IMPORT = new RegExp(String.raw`from\s*['"]${BUILDER_MODULE}['"]`);
-const TYPE_EXPORTING_IMPORT =
-  /import\s*\{([^{}]*)\}\s*from\s*(['"])(@prisma\/orm-mongo|@internal\/mongo)\/contract-builder\2/g;
+const BUILDER_MODULE =
+  /^(?:@prisma\/orm-mongo|@prisma\/orm-family-mongo\/contract-ts|@internal\/mongo|@internal\/mongo-contract-ts)\/contract-builder$/;
+const TYPE_EXPORTING_MODULE = /^(?:@prisma\/orm-mongo|@internal\/mongo)\/contract-builder$/;
 
-const CONSTRUCTOR_OF_HELPER: Readonly<Record<string, string>> = {
+const TYPE_OF_HELPER: Readonly<Record<string, string>> = {
   objectId: 'ObjectId',
   string: 'String',
   double: 'Double',
@@ -32,88 +33,23 @@ const CONSTRUCTOR_OF_HELPER: Readonly<Record<string, string>> = {
   vector: 'Vector',
 };
 
-const CONSTRUCTOR_OF_CODEC: Readonly<Record<string, string>> = Object.fromEntries(
-  Object.entries(CONSTRUCTOR_OF_HELPER).map(([helper, typeName]) => [
-    `mongo/${helper}@1`,
-    typeName,
-  ]),
+const TYPE_OF_CODEC: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(TYPE_OF_HELPER).map(([helper, typeName]) => [`mongo/${helper}@1`, typeName]),
 );
 
-const RECEIVER = String.raw`(?<![\w$.])((?:[A-Za-z_$][\w$]*\.)?)field\s*\.\s*`;
-const HELPER_NAMES = Object.keys(CONSTRUCTOR_OF_HELPER).join('|');
-const LENGTH = String.raw`\{\s*typeParams\s*:\s*\{\s*length(?:\s*:\s*([\w$.]+))?\s*,?\s*\}\s*,?\s*\}`;
-const PLAIN_HELPER = new RegExp(String.raw`${RECEIVER}(${HELPER_NAMES})\(\s*\)`, 'g');
-const VECTOR_WITH_LENGTH = new RegExp(String.raw`${RECEIVER}vector\(\s*${LENGTH}\s*\)`, 'g');
-const SCALAR_OF_CODEC = new RegExp(
-  String.raw`${RECEIVER}scalar\(\s*(['"])([^'"]+)\2\s*(?:,\s*${LENGTH}\s*)?\)`,
-  'g',
-);
-const LEFT_HELPER = new RegExp(String.raw`${RECEIVER}(${HELPER_NAMES})\(`, 'g');
-const LEFT_SCALAR = new RegExp(String.raw`${RECEIVER}scalar\(\s*['"]`, 'g');
-const DESTRUCTURED_FIELD = /\(\s*\{([^{}()]*)\}(\s*(?::[^()=]*)?\)\s*=>)/g;
-const DESTRUCTURED_FIELD_DECLARATION = /\b(const|let)\s*\{([^{}()]*)\}(\s*=)/g;
-const OTHER_TYPE_BINDING =
-  /\bimport\s*\{[^{}]*(?:^|[\s,{])type\s*(?=[,}])[^{}]*\}\s*from\s*['"](?!(?:@prisma\/orm-mongo|@internal\/mongo)\/contract-builder['"])|\b(?:const|let|var|function|class)\s+type\b/m;
-
-interface FileResult {
-  readonly text: string;
-  readonly rewritten: number;
-  readonly readsBareType: boolean;
-  readonly typeUnbound: boolean;
-  readonly left: readonly string[];
-}
-
-interface BoundType {
-  readonly text: string;
-  readonly unbound: boolean;
-}
-
-function lineOf(text: string, index: number): number {
-  return text.slice(0, index).split('\n').length;
-}
-
-function typeCall(receiver: string, typeName: string, length: string | undefined): string {
-  return `${receiver}field.scalar(${receiver}type.${typeName}(${length ?? ''}))`;
-}
-
-function hasMember(members: string, name: string): boolean {
-  return members.split(',').some((member) => member.trim().split(/\s*[:=]/)[0] === name);
-}
-
-function hasShorthandMember(members: string, name: string): boolean {
-  return members.split(',').some((member) => member.trim().split(/\s*=/)[0] === name);
-}
-
-function withMember(members: string, name: string): string {
-  const trimmedEnd = members.replace(/\s*,?\s*$/, '');
-  const trailing = members.slice(trimmedEnd.length).replace(',', '');
-  return `${trimmedEnd}, ${name}${trailing}`;
-}
-
-const OPENING = '([{';
-const CLOSING = ')]}';
-
-/** The index of the first bracket from `start` on that closes one opened before `start`: the end of the block holding `start`. */
-function blockEnd(text: string, start: number): number {
-  let depth = 0;
-  for (let index = start; index < text.length; index += 1) {
-    const character = text.charAt(index);
-    if (OPENING.includes(character)) depth += 1;
-    if (CLOSING.includes(character)) depth -= 1;
-    if (depth < 0) return index;
+function loadTypeScript(): typeof TypeScript {
+  for (const from of [join(process.cwd(), 'package.json'), import.meta.url]) {
+    try {
+      return createRequire(from)('typescript');
+    } catch {}
   }
-  return text.length;
+  console.error(
+    'The script reads files with the "typescript" package, which this project does not have. Install it, for example with "pnpm add -D typescript", and run the script again.',
+  );
+  process.exit(1);
 }
 
-/** Where an arrow function's body ends, from the index just after its `=>`: after the bracket that closes a bracketed body, or at the end of the block holding an expression body. */
-function arrowBodyEnd(text: string, start: number): number {
-  const bodyStart = start + (text.slice(start).match(/^\s*/)?.[0].length ?? 0);
-  return OPENING.includes(text.charAt(bodyStart))
-    ? blockEnd(text, bodyStart + 1) + 1
-    : blockEnd(text, bodyStart);
-}
-
-const BARE_TYPE_READ = /(?<![\w$.])type\s*\./g;
+const ts = loadTypeScript();
 
 interface Edit {
   readonly start: number;
@@ -121,101 +57,262 @@ interface Edit {
   readonly text: string;
 }
 
-function bindType(text: string): BoundType {
-  const reads = [...text.matchAll(BARE_TYPE_READ)].map((match) => match.index);
-  const scopes: { readonly start: number; readonly end: number }[] = [];
-  const edits: Edit[] = [];
-  const bind = (
-    match: RegExpExecArray | RegExpMatchArray,
-    members: string,
-    scopeEnd: number,
-    write: (members: string) => string,
-  ) => {
-    const start = match.index ?? 0;
-    const end = start + match[0].length;
-    if (!hasShorthandMember(members, 'field')) return;
-    scopes.push({ start: end, end: scopeEnd });
-    if (hasMember(members, 'type')) return;
-    if (!reads.some((read) => read >= end && read < scopeEnd)) return;
-    edits.push({ start, end, text: write(withMember(members, 'type')) });
-  };
-  for (const match of text.matchAll(DESTRUCTURED_FIELD)) {
-    const [, members = '', rest = ''] = match;
-    const end = (match.index ?? 0) + match[0].length;
-    bind(match, members, arrowBodyEnd(text, end), (bound) => `({${bound}}${rest}`);
-  }
-  for (const match of text.matchAll(DESTRUCTURED_FIELD_DECLARATION)) {
-    const [, keyword = '', members = '', rest = ''] = match;
-    const end = (match.index ?? 0) + match[0].length;
-    bind(match, members, blockEnd(text, end), (bound) => `${keyword} {${bound}}${rest}`);
-  }
-  const unscoped = reads.some(
-    (read) => !scopes.some(({ start, end }) => read >= start && read < end),
-  );
-  let imported = false;
-  if (unscoped) {
-    for (const match of text.matchAll(TYPE_EXPORTING_IMPORT)) {
-      const [, members = '', quote = '', module = ''] = match;
-      if (hasMember(members, 'type')) imported = true;
-      if (!hasShorthandMember(members, 'field') || hasMember(members, 'type')) continue;
-      imported = true;
-      const start = match.index ?? 0;
-      edits.push({
-        start,
-        end: start + match[0].length,
-        text: `import {${withMember(members, 'type')}} from ${quote}${module}/contract-builder${quote}`,
-      });
-    }
-  }
-  return {
-    text: edits
-      .sort((a, b) => b.start - a.start)
-      .reduce(
-        (result, edit) => result.slice(0, edit.start) + edit.text + result.slice(edit.end),
-        text,
-      ),
-    unbound: unscoped && !imported,
-  };
+/** Where a call's `field` comes from, and what reads its `type`. */
+interface Receiver {
+  /** The `type` the rewritten call reads, such as `type` or `helpers.type`. */
+  readonly typeText: string;
+  /** Adds the `type` binding this receiver needs, once; undefined when the receiver needs none. */
+  readonly bind: (() => void) | undefined;
 }
 
-function rewrite(text: string): FileResult {
-  let rewritten = 0;
-  let readsBareType = false;
-  const count = (receiver: string) => {
-    rewritten += 1;
-    if (receiver === '') readsBareType = true;
-  };
-  let next = text.replace(VECTOR_WITH_LENGTH, (_whole, receiver: string, length?: string) => {
-    count(receiver);
-    return typeCall(receiver, 'Vector', length ?? 'length');
-  });
-  next = next.replace(PLAIN_HELPER, (_whole, receiver: string, helper: string) => {
-    count(receiver);
-    return typeCall(receiver, CONSTRUCTOR_OF_HELPER[helper] ?? helper, undefined);
-  });
-  next = next.replace(
-    SCALAR_OF_CODEC,
-    (whole, receiver: string, _quote: string, codecId: string, length?: string) => {
-      const typeName = CONSTRUCTOR_OF_CODEC[codecId];
-      if (typeName === undefined) return whole;
-      if (length !== undefined && typeName !== 'Vector') return whole;
-      count(receiver);
-      return typeCall(receiver, typeName, length);
-    },
+/** A receiver, and the code its binding of `field` reaches: the function a parameter belongs to, the block a declaration is in, or the file for an import. */
+interface ScopedReceiver {
+  readonly receiver: Receiver;
+  readonly scope: TypeScript.Node;
+}
+
+interface FileResult {
+  readonly text: string;
+  readonly rewritten: number;
+  readonly reports: readonly string[];
+  readonly typeConflict: boolean;
+}
+
+function isBuilderImport(node: TypeScript.Node): node is TypeScript.ImportDeclaration {
+  return (
+    ts.isImportDeclaration(node) &&
+    ts.isStringLiteral(node.moduleSpecifier) &&
+    BUILDER_MODULE.test(node.moduleSpecifier.text)
   );
-  let typeUnbound = false;
-  if (readsBareType) {
-    const bound = bindType(next);
-    next = bound.text;
-    typeUnbound = bound.unbound;
-  }
-  const left = [...next.matchAll(LEFT_HELPER), ...next.matchAll(LEFT_SCALAR)]
-    .sort((a, b) => a.index - b.index)
-    .map(
-      (match) =>
-        `line ${lineOf(next, match.index)}: ${next.slice(match.index, next.indexOf('\n', match.index)).trim()}`,
+}
+
+function propertyNameOf(element: TypeScript.BindingElement | TypeScript.ImportSpecifier) {
+  const name = element.propertyName ?? element.name;
+  return ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : undefined;
+}
+
+function rewrite(file: TypeScript.SourceFile): FileResult {
+  const text = file.text;
+  const edits: Edit[] = [];
+  const reports: string[] = [];
+  const receivers = new Map<string, ScopedReceiver[]>();
+  let bindsOtherType = false;
+  let addsType = false;
+  let rewritten = 0;
+  const lineOf = (node: TypeScript.Node) =>
+    file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1;
+  const report = (node: TypeScript.Node, why: string) => {
+    const call = node.getText(file).replace(/\s+/g, ' ');
+    reports.push(
+      `line ${lineOf(node)}: ${call.length > 100 ? `${call.slice(0, 97)}...` : call}: ${why}`,
     );
-  return { text: next, rewritten, readsBareType, typeUnbound, left };
+  };
+  const addReceiver = (name: string, receiver: Receiver, scope: TypeScript.Node) => {
+    receivers.set(name, [...(receivers.get(name) ?? []), { receiver, scope }]);
+  };
+
+  function scopeOf(pattern: TypeScript.ObjectBindingPattern): TypeScript.Node {
+    if (ts.isParameter(pattern.parent)) return pattern.parent.parent;
+    let node: TypeScript.Node = pattern.parent;
+    while (!ts.isBlock(node) && !ts.isSourceFile(node) && node.parent !== undefined) {
+      node = node.parent;
+    }
+    return node;
+  }
+
+  function bindingReceiver(pattern: TypeScript.ObjectBindingPattern): Receiver {
+    const existing = pattern.elements.find((element) => propertyNameOf(element) === 'type');
+    if (existing !== undefined && ts.isIdentifier(existing.name)) {
+      return { typeText: existing.name.text, bind: undefined };
+    }
+    let bound = false;
+    return {
+      typeText: 'type',
+      bind: () => {
+        if (bound) return;
+        bound = true;
+        addsType = true;
+        const last = pattern.elements[pattern.elements.length - 1];
+        if (last === undefined) return;
+        edits.push({ start: last.end, end: last.end, text: ', type' });
+      },
+    };
+  }
+
+  function importReceiver(declaration: TypeScript.ImportDeclaration): Receiver {
+    const bindings = declaration.importClause?.namedBindings;
+    const module = ts.isStringLiteral(declaration.moduleSpecifier)
+      ? declaration.moduleSpecifier.text
+      : '';
+    const elements = bindings !== undefined && ts.isNamedImports(bindings) ? bindings.elements : [];
+    const existing = elements.find((element) => propertyNameOf(element) === 'type');
+    if (existing !== undefined) return { typeText: existing.name.text, bind: undefined };
+    let bound = false;
+    return {
+      typeText: 'type',
+      bind: () => {
+        if (bound) return;
+        bound = true;
+        addsType = true;
+        const last = elements[elements.length - 1];
+        if (!TYPE_EXPORTING_MODULE.test(module) || last === undefined) {
+          reports.push(
+            `line ${lineOf(declaration)}: ${module} does not export type; import type from @prisma/orm-mongo/contract-builder.`,
+          );
+          return;
+        }
+        edits.push({ start: last.end, end: last.end, text: ', type' });
+      },
+    };
+  }
+
+  function collect(node: TypeScript.Node): void {
+    if (isBuilderImport(node)) {
+      const bindings = node.importClause?.namedBindings;
+      if (bindings !== undefined && ts.isNamedImports(bindings)) {
+        for (const element of bindings.elements) {
+          if (propertyNameOf(element) === 'field') {
+            addReceiver(element.name.text, importReceiver(node), file);
+          }
+        }
+      }
+    }
+    if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent)) {
+      if (propertyNameOf(node) === 'field' && ts.isIdentifier(node.name)) {
+        addReceiver(node.name.text, bindingReceiver(node.parent), scopeOf(node.parent));
+      }
+    }
+    if (
+      (ts.isVariableDeclaration(node) ||
+        ts.isParameter(node) ||
+        ts.isFunctionDeclaration(node) ||
+        ts.isClassDeclaration(node)) &&
+      node.name !== undefined &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === 'type'
+    ) {
+      bindsOtherType = true;
+    }
+    ts.forEachChild(node, collect);
+  }
+
+  for (const statement of file.statements) {
+    if (!ts.isImportDeclaration(statement) || isBuilderImport(statement)) continue;
+    const clause = statement.importClause;
+    const bindings = clause?.namedBindings;
+    const importsType =
+      clause?.isTypeOnly !== true &&
+      (clause?.name?.text === 'type' ||
+        (bindings !== undefined &&
+          (ts.isNamespaceImport(bindings)
+            ? bindings.name.text === 'type'
+            : bindings.elements.some(
+                (element) => !element.isTypeOnly && element.name.text === 'type',
+              ))));
+    if (importsType) bindsOtherType = true;
+  }
+
+  /** The receiver of `expression`, a `field` the file binds, or `<object>.field`. */
+  function receiverOf(expression: TypeScript.Expression): Receiver | undefined {
+    if (ts.isIdentifier(expression)) {
+      const position = expression.getStart(file);
+      const reaching = (receivers.get(expression.text) ?? []).filter(
+        ({ scope }) => scope.getStart(file) <= position && position < scope.end,
+      );
+      const innermost = reaching.sort(
+        (a, b) => a.scope.end - a.scope.getStart(file) - (b.scope.end - b.scope.getStart(file)),
+      )[0];
+      return innermost?.receiver;
+    }
+    if (
+      ts.isPropertyAccessExpression(expression) &&
+      expression.name.text === 'field' &&
+      ts.isIdentifier(expression.expression)
+    ) {
+      return { typeText: `${expression.expression.text}.type`, bind: undefined };
+    }
+    return undefined;
+  }
+
+  /** The length a `{ typeParams: { length } }` object gives, as written, or undefined when it holds anything else. */
+  function lengthOf(argument: TypeScript.Expression): string | undefined {
+    if (!ts.isObjectLiteralExpression(argument) || argument.properties.length !== 1)
+      return undefined;
+    const [typeParams] = argument.properties;
+    if (
+      typeParams === undefined ||
+      !ts.isPropertyAssignment(typeParams) ||
+      typeParams.name.getText(file) !== 'typeParams' ||
+      !ts.isObjectLiteralExpression(typeParams.initializer) ||
+      typeParams.initializer.properties.length !== 1
+    ) {
+      return undefined;
+    }
+    const [length] = typeParams.initializer.properties;
+    if (length === undefined || length.name?.getText(file) !== 'length') return undefined;
+    if (ts.isShorthandPropertyAssignment(length)) return 'length';
+    return ts.isPropertyAssignment(length) ? length.initializer.getText(file) : undefined;
+  }
+
+  /** The type call a removed-helper call becomes, or the reason it cannot be rewritten. */
+  function typeCallOf(
+    helper: string,
+    args: readonly TypeScript.Expression[],
+  ): { readonly typeName: string; readonly argument: string } | string {
+    if (helper === 'scalar') {
+      const [codec, options] = args;
+      if (codec === undefined || !ts.isStringLiteralLike(codec)) return 'keep';
+      const typeName = TYPE_OF_CODEC[codec.text];
+      if (typeName === undefined) return `codec "${codec.text}" has no type constructor here`;
+      if (args.length === 1) return { typeName, argument: '' };
+      const length = typeName === 'Vector' && options !== undefined ? lengthOf(options) : undefined;
+      if (args.length === 2 && length !== undefined) return { typeName, argument: length };
+      return 'its options are not { typeParams: { length } }';
+    }
+    const typeName = TYPE_OF_HELPER[helper];
+    if (typeName === undefined) return 'keep';
+    if (args.length === 0) return { typeName, argument: '' };
+    const [options] = args;
+    const length = helper === 'vector' && options !== undefined ? lengthOf(options) : undefined;
+    if (args.length === 1 && length !== undefined) return { typeName, argument: length };
+    return 'its arguments are not { typeParams: { length } }';
+  }
+
+  function visit(node: TypeScript.Node): void {
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+      const callee = node.expression;
+      const receiver = receiverOf(callee.expression);
+      const helper = callee.name.text;
+      if (receiver !== undefined) {
+        const typeCall = typeCallOf(helper, node.arguments);
+        if (typeof typeCall === 'string') {
+          if (typeCall !== 'keep')
+            report(node, `not rewritten, as ${typeCall}; write it as field.scalar(type.X(...)).`);
+        } else {
+          receiver.bind?.();
+          rewritten += 1;
+          edits.push({
+            start: node.getStart(file),
+            end: node.end,
+            text: `${callee.expression.getText(file)}.scalar(${receiver.typeText}.${typeCall.typeName}(${typeCall.argument}))`,
+          });
+          for (const argument of node.arguments) ts.forEachChild(argument, visit);
+          return;
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  collect(file);
+  visit(file);
+  const next = edits
+    .sort((a, b) => b.start - a.start)
+    .reduce(
+      (result, edit) => result.slice(0, edit.start) + edit.text + result.slice(edit.end),
+      text,
+    );
+  return { text: next, rewritten, reports, typeConflict: addsType && bindsOtherType };
 }
 
 function sourceFilesIn(directory: string): readonly string[] {
@@ -227,19 +324,31 @@ function sourceFilesIn(directory: string): readonly string[] {
   });
 }
 
-function filesOf(paths: readonly string[]): readonly string[] {
-  return paths.flatMap((path) => (statSync(path).isDirectory() ? sourceFilesIn(path) : [path]));
+function scriptKindOf(file: string): TypeScript.ScriptKind {
+  if (file.endsWith('.tsx')) return ts.ScriptKind.TSX;
+  if (file.endsWith('.jsx')) return ts.ScriptKind.JSX;
+  return /\.[cm]?js$/.test(file) ? ts.ScriptKind.JS : ts.ScriptKind.TS;
 }
 
 function main(args: readonly string[]): void {
   const root = process.cwd();
   let changed = 0;
-  for (const file of filesOf(args.length === 0 ? ['.'] : args)) {
+  const paths = args.length === 0 ? ['.'] : args;
+  for (const file of paths.flatMap((path) =>
+    statSync(path).isDirectory() ? sourceFilesIn(path) : [path],
+  )) {
     const name = relative(root, file) || file;
     const text = readFileSync(file, 'utf8');
-    if (!BUILDER_IMPORT.test(text)) continue;
-    const result = rewrite(text);
-    if (result.readsBareType && OTHER_TYPE_BINDING.test(text)) {
+    const source = ts.createSourceFile(
+      file,
+      text,
+      ts.ScriptTarget.Latest,
+      true,
+      scriptKindOf(file),
+    );
+    if (!source.statements.some(isBuilderImport)) continue;
+    const result = rewrite(source);
+    if (result.typeConflict) {
       console.log(
         `${name}: already binds the name "type", which the rewrite needs for the MongoDB type helpers; left unchanged. Rename the other binding and run the script again.`,
       );
@@ -252,14 +361,7 @@ function main(args: readonly string[]): void {
         `${name}: rewrote ${result.rewritten} field helper call${result.rewritten === 1 ? '' : 's'}.`,
       );
     }
-    if (result.typeUnbound) {
-      console.log(
-        `${name}: reads type outside a defineContract callback, and no import gives it; import type from @prisma/orm-mongo/contract-builder.`,
-      );
-    }
-    for (const left of result.left) {
-      console.log(`${name}: ${left}: not rewritten; write it as field.scalar(type.X(...)).`);
-    }
+    for (const line of result.reports) console.log(`${name}: ${line}`);
   }
   console.log(`Changed ${changed} file${changed === 1 ? '' : 's'}.`);
 }
