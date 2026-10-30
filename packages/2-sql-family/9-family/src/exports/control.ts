@@ -211,6 +211,11 @@ export {
   type StoredKeyRewrite,
 } from '../core/migrations/value-object-field-planning';
 export {
+  planValueObjectMemberFills,
+  type StoredKeyFill,
+  type UnnamedMemberFill,
+} from '../core/migrations/value-object-member-fills';
+export {
   planVariantRowRewrites,
   type VariantRowRewrite,
 } from '../core/migrations/variant-planning';
