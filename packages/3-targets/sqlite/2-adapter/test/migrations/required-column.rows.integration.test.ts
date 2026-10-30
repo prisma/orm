@@ -6,8 +6,8 @@ import {
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage } from '@internal/sql-contract/types';
-import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
 import { createSqliteMigrationPlanner } from '@internal/target-sqlite/planner';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { applicationDomainOf, timeouts } from '@repo/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import {

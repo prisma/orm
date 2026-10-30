@@ -16,9 +16,9 @@ import {
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { buildBoundContract, enumType, member } from '@internal/sql-contract-ts/contract-builder';
 import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
-import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
 import { sqliteDataTypes } from '@internal/target-sqlite/data-types';
 import sqlitePack from '@internal/target-sqlite/pack';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { textColumn } from '../../src/exports/column-types';

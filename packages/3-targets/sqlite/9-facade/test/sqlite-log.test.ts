@@ -3,7 +3,7 @@ import { coreHash } from '@internal/contract/types';
 import { SqlStorage } from '@internal/sql-contract/types';
 import { RawQueryAst } from '@internal/sql-relational-core/ast';
 import { planFromAst } from '@internal/sql-relational-core/plan';
-import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { createContract } from '@repo/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import sqlite from '../src/runtime/sqlite';

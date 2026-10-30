@@ -12,8 +12,8 @@ import { writeContractSnapshot } from '@internal/migration-tools/contract-snapsh
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { materialiseMigrationPackage, readMigrationPackage } from '@internal/migration-tools/io';
 import { SqlStorage } from '@internal/sql-contract/types';
-import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
 import type { SqlitePlanTargetDetails } from '@internal/target-sqlite/planner-target-details';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { applicationDomainOf, timeouts } from '@repo/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import {

@@ -29,6 +29,7 @@ const IMPORT_SPECIFIER = /(?:\bfrom|\bimport)\s*\(?\s*["']([^"']+)["']/g;
 const FALLBACK_STATE_DEFINITION = 'function setFallbackTemporal(';
 const CONTROL_PLANE_SEGMENTS = new Set(['control', 'config', 'migration']);
 const PUBLISHED_PACKAGES = ['@prisma/orm-target-postgres', '@prisma/orm-postgres'] as const;
+const FRAMEWORK_DIST_DIR = join(PUBLIC_PACKAGES_DIR, '@prisma/orm-framework/dist');
 
 interface Entry {
   readonly packageDir: string;
@@ -205,8 +206,10 @@ describe('the module that holds the fallback Temporal', () => {
     }).toEqual({ target: [], typeImplementations: [expect.any(String)] });
   });
 
-  it('is built once across the entries of the published Postgres packages', () => {
-    expect(filesThatDefineTheFallback(ALL_ENTRIES.map(({ entry }) => entry))).toHaveLength(1);
+  it('is built once across the entries of the published Postgres packages, in @prisma/orm-framework, which the SQLite packages load too', () => {
+    const files = filesThatDefineTheFallback(ALL_ENTRIES.map(({ entry }) => entry));
+
+    expect(files).toEqual([expect.stringContaining(FRAMEWORK_DIST_DIR)]);
   });
 });
 

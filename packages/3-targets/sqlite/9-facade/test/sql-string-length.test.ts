@@ -6,8 +6,9 @@ import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema, contractSourceContextFromControlStack } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
-import sqlite, { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import sqlite from '@internal/target-sqlite/control';
 import sqlitePackRef from '@internal/target-sqlite/pack';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { defineContract } from '../src/exports/contract-builder';
 

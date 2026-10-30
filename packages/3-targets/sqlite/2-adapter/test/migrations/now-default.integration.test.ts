@@ -6,7 +6,7 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageColumnInput } from '@internal/sql-contract/types';
 import { SQLITE_DATETIME_CODEC_ID } from '@internal/target-sqlite/codec-ids';
 import { sqliteCodecRegistry } from '@internal/target-sqlite/codecs';
-import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { applicationDomainOf, timeouts } from '@repo/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import {

@@ -9,7 +9,7 @@ import type { ContractSpace, MigrationPackage } from '@internal/framework-compon
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import { SqlStorage } from '@internal/sql-contract/types';
-import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { TEST_BASELINE_INVARIANT_ID, TEST_BOX_TABLE, TEST_SPACE_ID } from './constants';
 
 const TARGET = 'sqlite' as const;

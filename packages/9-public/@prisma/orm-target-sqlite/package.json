@@ -11,7 +11,8 @@
   "scripts": {
     "build": "tsdown",
     "lint": "biome check . --error-on-warnings",
-    "clean": "rm -rf dist src-gen"
+    "clean": "rm -rf dist src-gen",
+    "test": "vitest run"
   },
   "dependencies": {
     "@prisma/orm-family-sql": "workspace:8.0.0-rc.21",
@@ -29,7 +30,8 @@
     "@repo/tsconfig": "workspace:8.0.0-rc.21",
     "@repo/tsdown": "workspace:8.0.0-rc.21",
     "tsdown": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
     "temporal-polyfill": "^1.0.4",
@@ -73,6 +75,7 @@
     "./target/render-ops": "./dist/target__render-ops.mjs",
     "./target/runtime": "./dist/target__runtime.mjs",
     "./target/sql-utils": "./dist/target__sql-utils.mjs",
+    "./target/types": "./dist/target__types.mjs",
     "./package.json": "./package.json"
   },
   "repository": {

@@ -78,6 +78,7 @@
     "./render-ops": "./dist/render-ops.mjs",
     "./runtime": "./dist/runtime.mjs",
     "./sql-utils": "./dist/sql-utils.mjs",
+    "./types": "./dist/types.mjs",
     "./package.json": "./package.json"
   },
   "engines": {

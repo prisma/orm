@@ -159,6 +159,7 @@
     "./target/render-ops": "./dist/target__render-ops.mjs",
     "./target/runtime": "./dist/target__runtime.mjs",
     "./target/sql-utils": "./dist/target__sql-utils.mjs",
+    "./target/types": "./dist/target__types.mjs",
     "./utils": "./dist/utils.mjs",
     "./utils/abortable": "./dist/utils__abortable.mjs",
     "./utils/array-equal": "./dist/utils__array-equal.mjs",

@@ -23,8 +23,9 @@ import { defineContract as defineSqliteContract } from '@internal/sqlite/contrac
 import postgresControl from '@internal/target-postgres/control';
 import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
-import sqliteControl, { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import sqliteControl from '@internal/target-sqlite/control';
 import sqlitePack from '@internal/target-sqlite/pack';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { describe, expect, it } from 'vitest';
 
 const postgresStack = createControlStack({
