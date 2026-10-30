@@ -2,6 +2,7 @@
  * Journey: a MySQL schema written with the convenience date and time types `DateTime`, `Date`, `Time` and `Duration`, with every `as:` and `storage:` choice, emits each field as the explicit type it chooses, migrates, and `db verify` finds no difference, the `now()` defaults and an index on a `Duration` included. The ORM cannot write to MySQL yet, so each row is written through the raw SQL lane, with every value a parameter its column's codec encodes, and read back through the ORM, at the top level and through an include. A value with more fraction digits than its column holds is written rounded down. The database fills `@default(now())` for an instant, a date and a time of day, each within the time of the write. Changing a `DateTime @default(now())` field to `Date` is a change `db verify` reports and the planner names. A bare `DateTime` emits the contract `DatetimeJsDate(3)` emits, as `DateTime` did before the convenience types. Skipped when `MYSQL_URL` is not set.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
+import type { JsonValue } from '@internal/contract/types';
 import mysql from '@internal/mysql/runtime';
 import { contractFromJson } from '@internal/mysql/static';
 import { ParamRef } from '@internal/sql-relational-core/ast';
@@ -49,6 +50,8 @@ model Event {
   lasts     Duration
   clipped   Time(precision: 0)
   lastStamp DateTime(storage: timestamp, precision: 0)
+  bareClock TimeString
+  bareStamp TimestampString
   createdAt temporal.CreatedAt
   dbAt      DateTime                                @default(now())
   dbStamp   DateTime(as: string, storage: timestamp) @default(now())
@@ -82,14 +85,24 @@ const COLUMN_TYPES = {
   lasts: ['mysql/duration-string@1', { length: 191 }],
   clipped: ['mysql/time-string@1', { precision: 0 }],
   lastStamp: ['mysql/timestamp-date@1', { precision: 0 }],
+  bareClock: ['mysql/time-string@1', { precision: 0 }],
+  bareStamp: ['mysql/timestamp-string@1', { precision: 0 }],
   createdAt: ['mysql/datetime@1', { precision: 3 }],
 } satisfies Readonly<
   Record<string, readonly [string, Readonly<Record<string, number>> | undefined]>
 >;
 
-/** A parameter its column's codec encodes with the column's type parameters, as the ORM writes it, so a value is written rounded down to its column's precision. */
-function columnParam(column: keyof typeof COLUMN_TYPES, value: unknown): ParamRef {
-  const [codecId, typeParams] = COLUMN_TYPES[column];
+type EmittedColumns = Readonly<Record<string, { codecId: string; typeParams?: JsonValue }>>;
+
+function emittedColumns(contractJson: string): EmittedColumns {
+  return JSON.parse(contractJson).storage.namespaces.__unbound__.entries.table.event.columns;
+}
+
+/** A parameter with the codec reference the emitted contract gives its column, as the ORM writes it, so a value is written rounded down to its column's precision. */
+function columnParam(columns: EmittedColumns, column: string, value: unknown): ParamRef {
+  const ref = columns[column];
+  if (ref === undefined) throw new Error(`the contract has no event column ${column}`);
+  const { codecId, typeParams } = ref;
   return ParamRef.of(value, {
     codec: { codecId, ...(typeParams === undefined ? {} : { typeParams }) },
   });
@@ -113,6 +126,8 @@ const DATE_TIME_FIELDS = [
   'lasts',
   'clipped',
   'lastStamp',
+  'bareClock',
+  'bareStamp',
 ] as const;
 
 /** A value read from MySQL as text that compares by value, since a Temporal value has no fields `toEqual` compares. */
@@ -165,8 +180,7 @@ async function emitContract(ctx: JourneyContext, psl: string): Promise<string> {
 }
 
 function emittedTypes(contractJson: string): Record<string, unknown> {
-  const columns = JSON.parse(contractJson).storage.namespaces.__unbound__.entries.table.event
-    .columns as Record<string, { codecId: string; typeParams?: unknown }>;
+  const columns = emittedColumns(contractJson);
   return Object.fromEntries(
     Object.keys(COLUMN_TYPES).map((name) => [
       name,
@@ -191,7 +205,9 @@ withTempDir(({ createTempDir }) => {
       async (test) => {
         await withMysqlDatabase(test, async ({ url }) => {
           const ctx = setup(createTempDir, url);
-          expect(emittedTypes(await emitContract(ctx, SCHEMA))).toEqual(COLUMN_TYPES);
+          const emitted = await emitContract(ctx, SCHEMA);
+          expect(emittedTypes(emitted)).toEqual(COLUMN_TYPES);
+          const columns = emittedColumns(emitted);
 
           const plan = await planMigrationAndSelfEmit(ctx, ['--name', 'initial']);
           expect(plan.exitCode, `migration plan\n${output(plan)}`).toBe(0);
@@ -212,23 +228,25 @@ withTempDir(({ createTempDir }) => {
             );
             await db.execute(
               db.raw
-                .sql`INSERT INTO event (id, calendarId, at, exactAt, textAt, stamp, stampT, stampText, day, dayT, opensAt, opensAtT, lasts, clipped, lastStamp, createdAt) VALUES (
+                .sql`INSERT INTO event (id, calendarId, at, exactAt, textAt, stamp, stampT, stampText, day, dayT, opensAt, opensAtT, lasts, clipped, lastStamp, bareClock, bareStamp, createdAt) VALUES (
                 ${1},
                 ${1},
-                ${columnParam('at', new Date('2024-02-29T10:00:00.123Z'))},
-                ${columnParam('exactAt', Temporal.Instant.from('2024-02-29T15:30:00.123456+05:30'))},
-                ${columnParam('textAt', '2024-02-29T10:00:00.5Z')},
-                ${columnParam('stamp', new Date('2024-02-29T10:00:00.250Z'))},
-                ${columnParam('stampT', Temporal.Instant.from('2024-02-29T10:00:00.75Z'))},
-                ${columnParam('stampText', '2024-02-29T11:00:00+01:00')},
-                ${columnParam('day', '2024-02-29')},
-                ${columnParam('dayT', Temporal.PlainDate.from('2024-03-01'))},
-                ${columnParam('opensAt', '09:30')},
-                ${columnParam('opensAtT', Temporal.PlainTime.from('17:45:00.25'))},
-                ${columnParam('lasts', 'P1DT12H')},
-                ${columnParam('clipped', '23:59:59.6')},
-                ${columnParam('lastStamp', new Date('2038-01-19T03:14:07.500Z'))},
-                ${columnParam('createdAt', new Date(before))}
+                ${columnParam(columns, 'at', new Date('2024-02-29T10:00:00.123Z'))},
+                ${columnParam(columns, 'exactAt', Temporal.Instant.from('2024-02-29T15:30:00.123456+05:30'))},
+                ${columnParam(columns, 'textAt', '2024-02-29T10:00:00.5Z')},
+                ${columnParam(columns, 'stamp', new Date('2024-02-29T10:00:00.250Z'))},
+                ${columnParam(columns, 'stampT', Temporal.Instant.from('2024-02-29T10:00:00.75Z'))},
+                ${columnParam(columns, 'stampText', '2024-02-29T11:00:00+01:00')},
+                ${columnParam(columns, 'day', '2024-02-29')},
+                ${columnParam(columns, 'dayT', Temporal.PlainDate.from('2024-03-01'))},
+                ${columnParam(columns, 'opensAt', '09:30')},
+                ${columnParam(columns, 'opensAtT', Temporal.PlainTime.from('17:45:00.25'))},
+                ${columnParam(columns, 'lasts', 'P1DT12H')},
+                ${columnParam(columns, 'clipped', '23:59:59.6')},
+                ${columnParam(columns, 'lastStamp', new Date('2038-01-19T03:14:07.500Z'))},
+                ${columnParam(columns, 'bareClock', '23:59:59.6')},
+                ${columnParam(columns, 'bareStamp', '2038-01-19T03:14:07.5Z')},
+                ${columnParam(columns, 'createdAt', new Date(before))}
               )`
                 .affectedCount()
                 .build(),
@@ -262,6 +280,8 @@ withTempDir(({ createTempDir }) => {
               lasts: 'P1DT12H',
               clipped: '23:59:59',
               lastStamp: new Date('2038-01-19T03:14:07.000Z'),
+              bareClock: '23:59:59',
+              bareStamp: '2038-01-19T03:14:07Z',
               dbAt: expect.any(Date),
               dbStamp: expect.any(String),
               dbDay: expect.any(String),

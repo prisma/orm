@@ -120,6 +120,25 @@ describe('a MySQL convenience date and time type', () => {
     });
   });
 
+  it.each([
+    ['DatetimeJsDate', 'mysql/datetime@1'],
+    ['DatetimeString', 'mysql/datetime-string@1'],
+    ['TimestampTemporal', 'mysql/timestamp-temporal@1'],
+    ['TimeString', 'mysql/time-string@1'],
+  ])(
+    '%s written without a precision stores a column of precision 0, as written with 0',
+    (explicit, codecId) => {
+      const result = emit(model(`at ${explicit}`));
+      expect(result.ok && result.value.storage.namespaces['__unbound__']).toMatchObject({
+        entries: {
+          table: { event: { columns: { at: { codecId, typeParams: { precision: 0 } } } } },
+        },
+      });
+      const zero = emit(model(`at ${explicit}(0)`));
+      expect(result.ok && result.value.storage).toEqual(zero.ok && zero.value.storage);
+    },
+  );
+
   it('chooses the generator now() writes for the type it becomes, with its precision', () => {
     expect(
       emitted(
