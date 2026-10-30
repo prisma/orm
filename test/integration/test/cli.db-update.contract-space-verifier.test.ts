@@ -1,4 +1,6 @@
+import { rmSync } from 'node:fs';
 import { timeouts, withClient, withDevDatabase } from '@repo/test-utils';
+import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { runOnEngine, setupTestDirectoryFromFixtures, withTempDir } from './utils/cli-test-helpers';
 import { runDbUpdateAllowFailure, setupDbUpdateFixture } from './utils/db-update-test-helpers';
@@ -85,6 +87,9 @@ withTempDir(({ createTempDir }) => {
 
           const emit = await runOnEngine(testSetup, ['contract', 'emit']);
           expect(emit.exitCode).toBe(0);
+          rmSync(join(testSetup.testDir, 'migrations', 'test-contract-space'), {
+            recursive: true,
+          });
 
           const run = await runDbUpdateAllowFailure(testSetup, ['--config', configPath, '--json']);
           expect(run.exitCode).not.toBe(0);

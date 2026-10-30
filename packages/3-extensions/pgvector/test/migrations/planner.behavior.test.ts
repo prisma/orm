@@ -86,6 +86,7 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
 
   it('returns empty plan when schema already satisfies contract (superset)', () => {
     const schema = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         public: new PostgresNamespaceSchemaNode({
           schemaName: 'public',
@@ -131,6 +132,7 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
 
   it('plans additive operations for subset schema (missing column/index/fk)', async () => {
     const schema = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         public: new PostgresNamespaceSchemaNode({
           schemaName: 'public',
@@ -183,6 +185,7 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
 
   it('fails with conflicts when schema has incompatible column types', () => {
     const schema = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         public: new PostgresNamespaceSchemaNode({
           schemaName: 'public',
@@ -774,6 +777,7 @@ async function planUserTableOperations(
     },
   });
   const schema = new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',

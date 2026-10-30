@@ -42,6 +42,7 @@ The repo keeps a single canonical home for each kind of agent surface, with pres
 
 ## Golden Rules
 
+- **Never change the framework domain** (`packages/1-framework`). If a design needs to, stop and tell the operator: `.agents/rules/never-change-the-framework-domain.mdc`.
 - **Node.js version**: Use the shell's Node — do not run `nvm`/`fnm` or any version switcher. Source of truth is the root `package.json` `engines.node`. If the shell's `node -v` doesn't satisfy that, report that the shell is misconfigured (e.g. user should set their default Node in their version manager, or use Volta) — don't try to switch it yourself.
 - Use `pnpm`, not `npm`. Never use `npx`.
 - Build with `pnpm build` (delegates to Turbo). After changing exported types in a workspace package consumed elsewhere, run that package's `pnpm build` to refresh `dist/*.d.mts` before validating downstream TypeScript.

@@ -56,6 +56,7 @@ import { DEFAULT_NAMESPACE_ID } from '../namespace-ids';
 import { PostgresRlsPolicy } from '../postgres-rls-policy';
 import { postgresNodeStorageCoordinate } from '../schema-ir/node-storage-coordinate';
 import { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
+import { PostgresExtensionSchemaNode } from '../schema-ir/postgres-extension-schema-node';
 import { PostgresPolicySchemaNode } from '../schema-ir/postgres-policy-schema-node';
 import { PostgresTableSchemaNode } from '../schema-ir/postgres-table-schema-node';
 import { PostgresSchemaNodeKind, type SqlSchemaDiffNode } from '../schema-ir/schema-node-kinds';
@@ -286,6 +287,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       actualSchema: schema,
       frameworkComponents: options.frameworkComponents,
       originSchemas: originSchemaNames(options.fromContract),
+      originExtensions: originExtensionNames(options.fromContract),
     });
     const droppedTables = rawIssues.filter(
       (issue) =>
@@ -938,6 +940,14 @@ function originSchemaNames(fromContract: Contract<SqlStorage> | null): readonly 
     .map(([namespaceId]) => resolveDdlSchemaForNamespaceStorage(fromContract.storage, namespaceId));
 }
 
+/** The extensions the origin contract declares, in any namespace; none without an origin contract. */
+function originExtensionNames(fromContract: Contract<SqlStorage> | null): readonly string[] {
+  if (fromContract === null) return [];
+  return Object.values(fromContract.storage.namespaces).flatMap((namespace) =>
+    Object.keys(namespace.entries['extension'] ?? {}),
+  );
+}
+
 /**
  * The namespaces the destination declares and the origin does not, other than `public` and those a
  * statement renames a namespace to: the new names a rename of a removed namespace may give it.
@@ -1144,7 +1154,9 @@ function retainUnownedExtras(
     if (node === undefined) return true;
     const coordinate = postgresNodeStorageCoordinate(node);
     if (coordinate === undefined) return true;
-    const ddlSchemaName = issueSchemaName(issue);
+    const ddlSchemaName = PostgresExtensionSchemaNode.is(node)
+      ? node.schemaName
+      : issueSchemaName(issue);
     if (ddlSchemaName === undefined) return true;
     return !ownership.declaresEntity({ namespaceId: namespaceIdOf(ddlSchemaName), ...coordinate });
   });

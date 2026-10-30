@@ -1,0 +1,60 @@
+[
+  {
+    "id": "schema.public",
+    "label": "Create schema \"public\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres"
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "Create schema \"public\"",
+        "sql": "CREATE SCHEMA IF NOT EXISTS \"public\"",
+        "params": []
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "extension.citext",
+    "label": "Create extension \"citext\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "dependency",
+        "name": "citext"
+      }
+    },
+    "precheck": [
+      {
+        "description": "verify extension \"citext\" is not installed",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_extension\" WHERE \"extname\" = $1) AS \"result\"",
+        "params": ["citext"],
+        "expectation": {
+          "expects": "absent",
+          "object": "extension \"citext\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create extension \"citext\"",
+        "sql": "CREATE EXTENSION IF NOT EXISTS \"citext\" WITH SCHEMA \"public\""
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "confirm extension \"citext\" is installed",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_extension\" WHERE \"extname\" = $1) AS \"result\"",
+        "params": ["citext"],
+        "expectation": {
+          "expects": "present",
+          "object": "extension \"citext\""
+        }
+      }
+    ]
+  }
+]

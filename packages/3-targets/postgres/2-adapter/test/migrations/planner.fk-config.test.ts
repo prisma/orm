@@ -94,6 +94,7 @@ function createFkTestContract(fkConfig: {
 }
 
 const emptySchema = new PostgresDatabaseSchemaNode({
+  extensions: undefined,
   namespaces: {
     public: new PostgresNamespaceSchemaNode({
       schemaName: 'public',

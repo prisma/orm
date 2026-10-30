@@ -600,7 +600,7 @@ describe('mongo contract builder', () => {
     });
   });
 
-  it('rejects duplicate indexes across models sharing the same collection', () => {
+  it('merges a plain index into the unique index another model in the collection declares on the same field', () => {
     const TaskBase = model('TaskBase', {
       collection: 'tasks',
       fields: {
@@ -608,7 +608,7 @@ describe('mongo contract builder', () => {
         type: field.string(),
         title: field.string(),
       },
-      indexes: [index({ title: 1 }, { unique: true })],
+      indexes: [index({ title: 1 })],
     });
 
     const TaskAlt = model('TaskAlt', {
@@ -620,22 +620,19 @@ describe('mongo contract builder', () => {
       indexes: [index({ title: 1 }, { unique: true })],
     });
 
-    expect(() =>
-      defineContract({
-        family: mongoFamilyPack,
-        target: mongoTargetPack,
-        models: { TaskBase, TaskAlt },
-      }),
-    ).toThrow(
-      'Collection "tasks" defines duplicate index {"fields":{"title":1},"options":{"unique":true}}. First declared on model "TaskBase" and duplicated on model "TaskAlt".',
-    );
-    expect(() =>
-      defineContract({
-        family: mongoFamilyPack,
-        target: mongoTargetPack,
-        models: { TaskBase, TaskAlt },
-      }),
-    ).toThrow(expect.objectContaining({ code: 'CONTRACT.NAME_DUPLICATE' }));
+    const contract = defineContract({
+      family: mongoFamilyPack,
+      target: mongoTargetPack,
+      models: { TaskBase, TaskAlt },
+    });
+
+    expect(
+      JSON.parse(
+        JSON.stringify(
+          contract.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries['collection']?.['tasks'],
+        ),
+      )['indexes'],
+    ).toEqual([{ kind: 'mongo-index', keys: [{ field: 'title', direction: 1 }], unique: true }]);
   });
 
   it('rejects indexes on models without collections', () => {

@@ -384,12 +384,9 @@ export function interpretPrisma6Documents(
 
   const modelNodes: ModelNode[] = [];
   const sites: Prisma6Sites = { fields: new Map(), indexes: new Map(), enums: enumSites };
-  const indexesByCollection = new Map<string, Set<string>>();
   for (const [modelName, build] of builds) {
     const { sourceId } = build.located;
-    const collectionIndexes = indexesByCollection.get(build.collection) ?? new Set<string>();
-    indexesByCollection.set(build.collection, collectionIndexes);
-    const indexes = buildIndexes(build, collectionIndexes, diagnostics);
+    const indexes = buildIndexes(build, diagnostics);
     sites.indexes.set(modelName, indexes);
     for (const fieldName of Object.keys(build.fields)) {
       const symbol = build.located.symbol.fields[fieldName];
@@ -1490,12 +1487,9 @@ function readRelationFields(
   }
 }
 
-/**
- * A model's indexes as the builder takes them, with where each is written. An index that its collection already holds, such as `@unique` and `@@unique` on one field, is left out: the database holds one index for both.
- */
+/** A model's indexes as the builder takes them, with where each is written. */
 function buildIndexes(
   build: ModelBuild,
-  collectionIndexes: Set<string>,
   diagnostics: Diagnostics,
 ): (IndexSite & { readonly index: IndexNode })[] {
   const { symbol, sourceId } = build.located;
@@ -1541,15 +1535,6 @@ function buildIndexes(
       ),
       ...(attribute.kind === 'unique' ? { options: { unique: true } } : {}),
     };
-    const signature = JSON.stringify([
-      attribute.fields.map((field) => [
-        build.storedNames.get(field.name),
-        field.direction ?? (text ? 'text' : 1),
-      ]),
-      attribute.kind === 'unique',
-    ]);
-    if (collectionIndexes.has(signature)) continue;
-    collectionIndexes.add(signature);
     indexes.push({ index, sourceId, span: attribute.span });
   }
   return indexes;

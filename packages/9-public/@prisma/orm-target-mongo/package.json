@@ -44,6 +44,7 @@
     "./adapter/runtime": "./dist/adapter__runtime.mjs",
     "./driver": "./dist/driver.mjs",
     "./driver/control": "./dist/driver__control.mjs",
+    "./driver/runtime": "./dist/driver__runtime.mjs",
     "./target": "./dist/target.mjs",
     "./target/codec-ids": "./dist/target__codec-ids.mjs",
     "./target/codec-types": "./dist/target__codec-types.mjs",

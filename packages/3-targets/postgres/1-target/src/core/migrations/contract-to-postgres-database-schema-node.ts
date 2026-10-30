@@ -19,6 +19,7 @@ import type { PostgresRlsPolicy } from '../postgres-rls-policy';
 import type { PostgresContract } from '../postgres-schema';
 import { isPostgresSchema } from '../postgres-schema';
 import { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
+import { PostgresExtensionSchemaNode } from '../schema-ir/postgres-extension-schema-node';
 import { PostgresNamespaceSchemaNode } from '../schema-ir/postgres-namespace-schema-node';
 import { PostgresNativeEnumSchemaNode } from '../schema-ir/postgres-native-enum-schema-node';
 import { PostgresPolicySchemaNode } from '../schema-ir/postgres-policy-schema-node';
@@ -103,6 +104,7 @@ export function contractToPostgresDatabaseSchemaNode(
     return new PostgresDatabaseSchemaNode({
       namespaces: {},
       roles: [],
+      extensions: [],
       existingSchemas: [],
       pgVersion: '',
     });
@@ -110,6 +112,7 @@ export function contractToPostgresDatabaseSchemaNode(
 
   const namespaces: Record<string, PostgresNamespaceSchemaNode> = {};
   const roles: PostgresRoleSchemaNode[] = [];
+  const extensions: PostgresExtensionSchemaNode[] = [];
   const ownedSchemas: string[] = [];
 
   for (const ns of Object.values(contract.storage.namespaces)) {
@@ -121,6 +124,15 @@ export function contractToPostgresDatabaseSchemaNode(
     for (const role of Object.values(ns.role)) {
       roles.push(new PostgresRoleSchemaNode({ name: role.name, namespaceId: role.namespaceId }));
     }
+    for (const extension of Object.values(ns.extension)) {
+      extensions.push(
+        new PostgresExtensionSchemaNode({
+          name: extension.name,
+          schemaName: resolveDdlSchemaForNamespaceStorage(contract.storage, ns.id),
+          control: extension.control,
+        }),
+      );
+    }
 
     // The unbound slot resolves its DDL schema to 'public', so it
     // materializes a schema node exactly when it has non-role content — a
@@ -131,7 +143,8 @@ export function contractToPostgresDatabaseSchemaNode(
     // namespace's node keyed by the same resolved schema name).
     if (ns.id === UNBOUND_NAMESPACE_ID) {
       const hasNonRoleContent = Object.entries(ns.entries).some(
-        ([entriesKey, slot]) => entriesKey !== 'role' && Object.keys(slot).length > 0,
+        ([entriesKey, slot]) =>
+          entriesKey !== 'role' && entriesKey !== 'extension' && Object.keys(slot).length > 0,
       );
       if (!hasNonRoleContent) continue;
     }
@@ -303,6 +316,7 @@ export function contractToPostgresDatabaseSchemaNode(
   return new PostgresDatabaseSchemaNode({
     namespaces,
     roles,
+    extensions,
     existingSchemas: ownedSchemas,
     pgVersion: '',
   });

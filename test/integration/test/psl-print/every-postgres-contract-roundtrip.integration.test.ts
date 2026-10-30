@@ -4,6 +4,8 @@ import { canonicalizeContractToObject } from '@internal/contract/hashing';
 import type { Contract } from '@internal/contract/types';
 import arktypeJsonControl from '@internal/extension-arktype-json/control';
 import arktypeJsonPack from '@internal/extension-arktype-json/pack';
+import citextControl from '@internal/extension-citext/control';
+import citextPack from '@internal/extension-citext/pack';
 import paradedbControl from '@internal/extension-paradedb/control';
 import paradedbPack from '@internal/extension-paradedb/pack';
 import pgvectorControl from '@internal/extension-pgvector/control';
@@ -38,6 +40,7 @@ const [slugidDefaultsPack] = slugidExtensions;
 
 const extensionPacks: ReadonlyMap<string, ExtensionPack> = new Map<string, ExtensionPack>([
   ['arktype-json', { control: arktypeJsonControl, packRef: arktypeJsonPack }],
+  ['citext', { control: citextControl, packRef: citextPack }],
   ['paradedb', { control: paradedbControl, packRef: paradedbPack }],
   ['pgvector', { control: pgvectorControl, packRef: pgvectorPack }],
   ['postgis', { control: postgisControl, packRef: postgisPack }],
@@ -220,6 +223,13 @@ const expectedRefusals: ReadonlyMap<string, ExpectedRefusal> = new Map<string, E
     },
   ],
   [
+    'test/integration/test/fixtures/prisma7-source/citext/expected-contract.json',
+    {
+      reason: 'that no relation of model "Review" travels',
+      meta: { namespaceId: 'public', table: 'Review', columns: ['authorEmail'] },
+    },
+  ],
+  [
     'packages/2-sql-family/2-authoring/contract-prisma7/test/fixtures/unsupported-type/expected-contract.json',
     {
       reason: 'that no relation of model "Host" travels',
@@ -387,8 +397,9 @@ describe('every Postgres contract in the repo prints as PSL that reads back as t
     expect(contracts.length).toBeGreaterThan(200);
   });
 
-  it('skips only the contract spaces of pgvector and PostGIS, which register database types', () => {
+  it('skips only the contract spaces of citext, pgvector and PostGIS, which register database types', () => {
     expect(registeringDatabaseTypes).toEqual([
+      'packages/3-extensions/citext/src/contract.json',
       'packages/3-extensions/pgvector/src/contract.json',
       'packages/3-extensions/postgis/src/contract.json',
     ]);

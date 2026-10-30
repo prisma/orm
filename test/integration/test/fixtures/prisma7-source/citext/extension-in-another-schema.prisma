@@ -1,0 +1,19 @@
+datasource db {
+  provider   = "postgresql"
+  schemas    = ["public", "extensions"]
+  extensions = [citext(schema: "extensions")]
+}
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+model Account {
+  id    Int      @id
+  email String   @unique @db.Citext
+  tags  String[] @db.Citext
+
+  @@schema("public")
+}

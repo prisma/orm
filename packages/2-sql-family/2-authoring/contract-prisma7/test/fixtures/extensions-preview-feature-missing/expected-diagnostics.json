@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA7_EXTENSIONS_PREVIEW_FEATURE_MISSING",
+    "file": "schema.prisma",
+    "line": 3,
+    "message": "The datasource lists extensions, which Prisma 7 reads only with the \"postgresqlExtensions\" preview feature, so Prisma 7 refuses this schema too. Add \"postgresqlExtensions\" to previewFeatures in the generator block."
+  }
+]

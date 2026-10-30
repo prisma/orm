@@ -1,0 +1,24 @@
+[
+  {
+    "id": "audit.create-audit_event",
+    "label": "Create table \"audit_event\"",
+    "operationClass": "additive",
+    "invariantId": "audit:create-audit_event-v1",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "audit_event"
+      }
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "Create table \"audit_event\"",
+        "sql": "CREATE TABLE IF NOT EXISTS public.\"audit_event\" (\n        \"id\" text NOT NULL PRIMARY KEY,\n        \"actor\" text NOT NULL,\n        \"action\" text NOT NULL\n      )"
+      }
+    ],
+    "postcheck": []
+  }
+]

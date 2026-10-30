@@ -1,0 +1,10 @@
+// use prisma-8
+
+extension pg_trgm {}
+
+model User {
+  id    Int    @id
+  email String
+
+  @@map("user")
+}

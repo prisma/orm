@@ -75,6 +75,7 @@ function contractWithEmbeddingDefault(value: number[]): Contract<SqlStorage> {
 }
 
 const liveSchema = new PostgresDatabaseSchemaNode({
+  extensions: undefined,
   namespaces: {
     public: new PostgresNamespaceSchemaNode({
       schemaName: 'public',

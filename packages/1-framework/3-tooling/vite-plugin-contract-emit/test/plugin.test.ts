@@ -50,6 +50,7 @@ const successfulEmitResult = {
   storageHash: 'abc123',
   profileHash: 'def456',
   files: { json: '/out/contract.json', dts: '/out/contract.d.ts' },
+  pinnedFiles: [],
 } satisfies Awaited<ReturnType<typeof executeContractEmit>>;
 
 type LoadedConfig = PrismaNextConfig;
@@ -413,6 +414,28 @@ describe('prismaVitePlugin', () => {
 
       expect(mockServer.moduleGraph.onFileChange).toHaveBeenCalledWith('/out/contract.json');
       expect(mockServer.moduleGraph.onFileChange).toHaveBeenCalledWith('/out/contract.d.ts');
+    });
+
+    it('logs each file the emit wrote under migrations/', async () => {
+      mockedExecuteContractEmit.mockResolvedValue({
+        ...successfulEmitResult,
+        pinnedFiles: [{ spaceId: 'pgvector', path: '/project/migrations/pgvector/refs/head.json' }],
+      });
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const plugin = prismaVitePlugin('prisma.config.ts', { logLevel: 'info' });
+      const mockServer = createMockServer();
+
+      const configResolved = plugin.configResolved as unknown as (config: { root: string }) => void;
+      configResolved({ root: '/project' });
+      const configureServer = plugin.configureServer as unknown as (
+        server: ReturnType<typeof createMockServer>,
+      ) => Promise<void>;
+      await configureServer(mockServer);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        '[prisma-vite-plugin-contract-emit] Wrote /project/migrations/pgvector/refs/head.json for extension pack space pgvector',
+      );
+      consoleLogSpy.mockRestore();
     });
 
     it('loads config for watch resolution and for the initial emit', async () => {

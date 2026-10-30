@@ -1,0 +1,44 @@
+[
+  {
+    "id": "column.public.telemetry_event.exitCode",
+    "label": "Add column \"exitCode\" to \"telemetry_event\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "exitCode",
+        "table": "telemetry_event"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"exitCode\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "telemetry_event",
+          "exitCode"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"exitCode\"",
+        "sql": "ALTER TABLE \"public\".\"telemetry_event\" ADD COLUMN \"exitCode\" int4"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"exitCode\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "telemetry_event",
+          "exitCode"
+        ]
+      }
+    ]
+  }
+]

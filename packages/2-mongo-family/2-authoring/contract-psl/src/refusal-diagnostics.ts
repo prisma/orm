@@ -275,8 +275,7 @@ export function refusalDiagnostic(
     }
     case 'indexFieldUnknown':
     case 'indexShape':
-    case 'indexScopeConflict':
-    case 'indexDuplicate': {
+    case 'indexScopeConflict': {
       const { model, position } = refusal.key;
       const site = modelSitesOf(sites, model).indexes[position];
       if (site === undefined)
@@ -301,14 +300,6 @@ export function refusalDiagnostic(
             site,
             'PSL_INVALID_INDEX',
             `Variant "${model}" index conflicts with discriminator scope: ${refusal.reason}`,
-          );
-        case 'indexDuplicate':
-          return at(
-            site,
-            'PSL_INVALID_INDEX',
-            refusal.firstModel === model
-              ? `Model "${model}" declares this index twice. Remove one of them.`
-              : `Collection "${refusal.collection}" already has this index, declared on model "${refusal.firstModel}". Remove one of them from model "${model}" or "${refusal.firstModel}".`,
           );
       }
       break;

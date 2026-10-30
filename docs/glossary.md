@@ -33,7 +33,9 @@ Configured via the `contract:` property in `prisma.config.ts`.
 
 ### Extension
 
-An installable package that adds features to Prisma 8 — new data types, database-specific operations, or custom behavior. For example, the pgvector extension adds vector search support. Extensions integrate across the full stack: they can extend the contract language, contribute types and capabilities, and provide runtime behavior.
+A component, installed from an npm package, that adds features to Prisma 8 — new data types, database-specific operations, or custom behavior. For example, the pgvector extension adds vector search support. Extensions integrate across the full stack: they can extend the contract language, contribute types and capabilities, and provide runtime behavior.
+
+Most packages hold one extension; `@prisma/orm-postgres-contrib` holds one for each trusted PostgreSQL contrib module it supports, under its own entrypoints. The citext extension's contract declares the `citext` database extension, so the planner creates it and `db sign` checks a database has it.
 
 Configured via the `extensions` array in `prisma.config.ts`; emitted into the contract under the top-level `extensions` key. Concept-level type names (`ExtensionPackRef`, `ControlExtensionDescriptor`) keep the "pack" vocabulary.
 

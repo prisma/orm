@@ -1,3 +1,4 @@
+import { MONGO_INDEX_OPTION_KEYS, type MongoIndexOptionKey } from '@internal/mongo-contract';
 import type {
   MongoDmlCheck,
   MongoDmlOperation,
@@ -30,7 +31,6 @@ import {
 } from '@internal/mongo-query-ast/execution';
 import { createFieldAccessor } from '@internal/mongo-query-builder';
 import { collection } from '@internal/mongo-query-builder/contract-free';
-import { MONGO_INDEX_OPTION_KEYS, type MongoIndexOptionKey } from '@internal/mongo-schema-ir';
 import type { Document, MongoValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';

@@ -2,6 +2,8 @@ import {
   createExecutionStack,
   type RuntimeAdapterDescriptor,
   type RuntimeAdapterInstance,
+  type RuntimeDriverDescriptor,
+  type RuntimeDriverInstance,
   type RuntimeExtensionDescriptor,
   type RuntimeExtensionInstance,
   type RuntimeTargetDescriptor,
@@ -18,7 +20,7 @@ import {
 import type { MongoCodec } from '@internal/mongo-codec';
 import { type MongoCodecRegistry, newMongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoContract } from '@internal/mongo-contract';
-import type { MongoAdapter } from '@internal/mongo-lowering';
+import type { MongoAdapter, MongoDriver } from '@internal/mongo-lowering';
 import type { MongoExecutionContext } from '@internal/mongo-query-ast/execution';
 
 /**
@@ -63,7 +65,7 @@ export interface MongoRuntimeExtensionDescriptor<TTargetId extends string = 'mon
 }
 
 /**
- * The Mongo execution stack: target + adapter + extension packs. Mirrors `SqlExecutionStack`. Constructed via `createMongoExecutionStack`.
+ * The Mongo execution stack: target + adapter + extension packs. Mirrors `SqlExecutionStack`. Constructed via `createMongoExecutionStack`; given a driver, it returns a {@link MongoExecutionStackWithDriver}.
  */
 export interface MongoExecutionStack<TTargetId extends string = 'mongo'> {
   readonly target: MongoRuntimeTargetDescriptor<TTargetId>;
@@ -71,17 +73,53 @@ export interface MongoExecutionStack<TTargetId extends string = 'mongo'> {
   readonly extensions: readonly MongoRuntimeExtensionDescriptor<TTargetId>[];
 }
 
-export function createMongoExecutionStack<TTargetId extends string = 'mongo'>(options: {
+/**
+ * The binding type is erased to `unknown` here, as in `SqlRuntimeDriverInstance`. A target client such as `mongo()` resolves the concrete binding before it calls `driver.connect(binding)`.
+ */
+export type MongoRuntimeDriverInstance<TTargetId extends string = 'mongo'> = RuntimeDriverInstance<
+  'mongo',
+  TTargetId
+> &
+  MongoDriver<unknown>;
+
+export type MongoExecutionStackWithDriver<TTargetId extends string = 'mongo'> =
+  MongoExecutionStack<TTargetId> & {
+    readonly driver: RuntimeDriverDescriptor<
+      'mongo',
+      TTargetId,
+      unknown,
+      MongoRuntimeDriverInstance<TTargetId>
+    >;
+  };
+
+interface MongoExecutionStackOptions<TTargetId extends string> {
   readonly target: MongoRuntimeTargetDescriptor<TTargetId>;
   readonly adapter: MongoRuntimeAdapterDescriptor<TTargetId>;
   readonly extensions?: readonly MongoRuntimeExtensionDescriptor<TTargetId>[] | undefined;
-}): MongoExecutionStack<TTargetId> {
-  const { target, adapter, extensions } = createExecutionStack({
+}
+
+export function createMongoExecutionStack<TTargetId extends string = 'mongo'>(
+  options: MongoExecutionStackOptions<TTargetId> & {
+    readonly driver: MongoExecutionStackWithDriver<TTargetId>['driver'];
+  },
+): MongoExecutionStackWithDriver<TTargetId>;
+export function createMongoExecutionStack<TTargetId extends string = 'mongo'>(
+  options: MongoExecutionStackOptions<TTargetId>,
+): MongoExecutionStack<TTargetId>;
+export function createMongoExecutionStack<TTargetId extends string = 'mongo'>(
+  options: MongoExecutionStackOptions<TTargetId> & {
+    readonly driver?: MongoExecutionStackWithDriver<TTargetId>['driver'];
+  },
+): MongoExecutionStack<TTargetId> | MongoExecutionStackWithDriver<TTargetId> {
+  const { target, adapter, driver, extensions } = createExecutionStack({
     target: options.target,
     adapter: options.adapter,
+    driver: options.driver,
     extensions: options.extensions,
   });
-  return { target, adapter, extensions };
+  return driver === undefined
+    ? { target, adapter, extensions }
+    : { target, adapter, driver, extensions };
 }
 
 export function createMongoExecutionContext<

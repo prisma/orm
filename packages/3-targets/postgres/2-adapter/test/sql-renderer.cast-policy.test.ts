@@ -9,6 +9,7 @@ import { sqlDataType } from '@internal/sql-contract/data-type';
 import {
   BinaryExpr,
   ColumnRef,
+  InsertAst,
   ParamRef,
   PreparedParamRef,
   type ProjectionExpr,
@@ -112,6 +113,7 @@ const baseContract = new SqlContractSerializer().deserializeContract({
               columns: {
                 id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
                 tag: { codecId: 'app/test-foo@1', dataType: 'app/test-foo', nullable: false },
+                price: { codecId: 'pg/money@1', dataType: 'pg/money', nullable: false },
                 score: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
                 geo: { codecId: 'app/geography@1', dataType: 'app/geography', nullable: false },
                 profile: { codecId: 'arktype/json@1', dataType: 'pg/jsonb', nullable: false },
@@ -405,6 +407,45 @@ describe('renderLoweredSql cast policy', () => {
     expect(lowered.sql).toBe(
       'SELECT "user"."id" AS "id" FROM "user" WHERE "user"."profile" = $1::jsonb',
     );
+  });
+
+  describe('money parameters are read as numeric, so lc_monetary separators never apply', () => {
+    const render = (ast: SelectAst | InsertAst) =>
+      renderLoweredSql(
+        ast,
+        baseContract,
+        postgresCodecDescriptorRegistry,
+        dataTypes,
+        postgresAdapterCapabilities,
+      ).sql;
+
+    it('casts an inserted money value through numeric', () => {
+      const ast = InsertAst.into(TableSource.named('user')).withRows([
+        { price: ParamRef.of('1234.50', { name: 'price', codec: { codecId: 'pg/money@1' } }) },
+      ]);
+
+      expect(render(ast)).toBe('INSERT INTO "user" ("price") VALUES ($1::numeric::money)');
+    });
+
+    it('casts a money filter value and a money list through numeric', () => {
+      const scalar = selectWithParam('price', 'pg/money@1', '12.50');
+      const list = SelectAst.from(TableSource.named('user'))
+        .withProjection([ProjectionItem.of('id', ColumnRef.of('user', 'id'))])
+        .withWhere(
+          BinaryExpr.eq(
+            ColumnRef.of('user', 'price'),
+            ParamRef.of(['12.50', '13.00'], {
+              name: 'prices',
+              codec: { codecId: 'pg/money@1', many: true },
+            }),
+          ),
+        );
+
+      expect([render(scalar), render(list)]).toEqual([
+        'SELECT "user"."id" AS "id" FROM "user" WHERE "user"."price" = $1::numeric::money',
+        'SELECT "user"."id" AS "id" FROM "user" WHERE "user"."price" = $1::numeric[]::money[]',
+      ]);
+    });
   });
 
   it('throws clearly when the validated target registry has no descriptor for the codec id', () => {

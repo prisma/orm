@@ -832,6 +832,8 @@ export interface ContractEmitResult {
     /** Path to the emitted contract.d.ts file */
     readonly dts: string;
   };
+  /** Each file or directory written under the migrations directory for a composed extension pack's space, with that space's id. Empty when nothing there changed or the contract went to an output path of its own. */
+  readonly pinnedFiles: readonly { readonly spaceId: string; readonly path: string }[];
   /**
    * Warning surfaced by `validateContractDeps` after a successful publication.
    * Callers (CLI, Vite plugin) decide how to render this; the operation does

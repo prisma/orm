@@ -6,7 +6,7 @@ import type {
 } from '@internal/family-mongo/control-adapter';
 import { APP_SPACE_ID, type ControlDriverInstance } from '@internal/framework-components/control';
 import { ledgerOriginFromStored } from '@internal/migration-tools/ledger-origin';
-import type { MongoAdapter, MongoDriver } from '@internal/mongo-lowering';
+import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
 import type { AnyMongoDdlCommand } from '@internal/mongo-query-ast/control';
 import {
   type AnyMongoCommand,
@@ -74,7 +74,7 @@ export class MongoControlAdapterImpl implements MongoControlAdapter<'mongo'> {
     return rows;
   }
 
-  async executeDdl(driver: MongoDriver, command: AnyMongoDdlCommand): Promise<void> {
+  async executeDdl(driver: MongoQueryable, command: AnyMongoDdlCommand): Promise<void> {
     const wire = await this.#adapter.lower({ command }, {});
     await driver.run(wire);
   }

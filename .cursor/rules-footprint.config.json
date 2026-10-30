@@ -2,9 +2,9 @@
   "$schema": "../rules-footprint.config.schema.json",
   "thresholds": {
     "alwaysApplyLines": 605,
-    "alwaysApplyBytes": 33000,
+    "alwaysApplyBytes": 33500,
     "agentsLines": 200,
-    "agentsBytes": 11600,
+    "agentsBytes": 11800,
     "totalRulesLines": 5050,
     "totalRulesBytes": 216000
   }

@@ -28,7 +28,7 @@ import {
 } from '@internal/framework-components/control';
 import type { AggregateMigrationEdgeRef } from '@internal/migration-tools/aggregate';
 import type { MongoContract } from '@internal/mongo-contract';
-import type { MongoAdapter, MongoDriver } from '@internal/mongo-lowering';
+import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
 import type {
   AnyMongoMigrationOperation,
   MongoDmlCheck,
@@ -477,7 +477,7 @@ export class MongoMigrationRunner {
   private async executeDmlOperation(
     op: MongoDmlOperation,
     adapter: MongoAdapter,
-    driver: MongoDriver,
+    driver: MongoQueryable,
     filterEvaluator: FilterEvaluator,
     runIdempotency: boolean,
     runPrechecks: boolean,
@@ -551,7 +551,7 @@ export class MongoMigrationRunner {
   private async evaluateDmlChecks(
     checks: readonly MongoDmlCheck[],
     adapter: MongoAdapter,
-    driver: MongoDriver,
+    driver: MongoQueryable,
     filterEvaluator: FilterEvaluator,
   ): Promise<boolean> {
     for (const check of checks) {

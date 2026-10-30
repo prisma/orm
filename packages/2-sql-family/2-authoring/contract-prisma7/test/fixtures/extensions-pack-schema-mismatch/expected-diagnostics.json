@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA7_EXTENSION_SCHEMA_MISMATCH",
+    "file": "schema.prisma",
+    "line": 4,
+    "message": "Extension \"vector\": the \"pgvector\" extension pack declares it in schema \"public\", so Prisma 8 expects it there, but this entry puts it in schema \"extensions\". Moving it is a database change the pack does not make: move it with ALTER EXTENSION \"vector\" SET SCHEMA \"public\", then remove schema: \"extensions\"."
+  }
+]

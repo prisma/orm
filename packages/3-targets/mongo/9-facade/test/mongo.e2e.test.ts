@@ -1,14 +1,25 @@
 import { timeouts } from '@repo/test-utils';
+import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Contract } from '../../../../2-mongo-family/1-foundation/mongo-contract/test/fixtures/orm-contract';
 import contractJson from '../../../../2-mongo-family/1-foundation/mongo-contract/test/fixtures/orm-contract.json' with {
   type: 'json',
 };
+import { defineContract, field, model } from '../src/exports/contract-builder';
 import mongo from '../src/runtime/mongo';
 import { contractFromJson } from '../src/static/contract-from-json';
 
 const contract = contractFromJson<Contract>(contractJson);
+
+const accountsContract = defineContract({
+  models: {
+    Account: model('Account', {
+      collection: 'accounts',
+      fields: { _id: field.objectId(), email: field.string() },
+    }),
+  },
+});
 
 // End-to-end smoke test for the lazy mongo() facade. Exercises the full
 // orm → executor → runtime → driver chain against a real (in-memory) replica
@@ -90,6 +101,53 @@ describe('mongo() facade — e2e (replica set)', {
     timeouts.spinUpMongoMemoryServer,
   );
 
+  const runtimeClosed = { code: 'DRIVER.NOT_CONNECTED', message: 'Runtime is closed' };
+
+  it(
+    'a runtime the caller holds stops working after close(), for a URL binding',
+    async () => {
+      const db = mongo({
+        contract: accountsContract,
+        uri: replSet.getUri(),
+        dbName: 'facade_held_url',
+      });
+      const runtime = await db.runtime();
+      await db.close();
+
+      await expect(
+        runtime.query(db.query.from('accounts').build()).toArray(),
+      ).rejects.toMatchObject(runtimeClosed);
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'a runtime the caller holds stops working after close(), for a mongoClient binding, and the client stays open',
+    async () => {
+      const client = new MongoClient(replSet.getUri());
+      await client.connect();
+      try {
+        const db = mongo({
+          contract: accountsContract,
+          mongoClient: client,
+          dbName: 'facade_held_client',
+        });
+        const runtime = await db.runtime();
+        await db.close();
+
+        await expect(
+          runtime.query(db.query.from('accounts').build()).toArray(),
+        ).rejects.toMatchObject(runtimeClosed);
+        expect(await client.db('facade_held_client').collection('accounts').countDocuments()).toBe(
+          0,
+        );
+      } finally {
+        await client.close();
+      }
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
   it(
     'connect() is callable explicitly and drives the same lazy runtime',
     async () => {
@@ -106,7 +164,25 @@ describe('mongo() facade — e2e (replica set)', {
   );
 
   it(
-    'connect() rejects when called twice',
+    'connect() after a query resolves with the runtime the query used',
+    async () => {
+      const db = mongo({
+        contract,
+        uri: replSet.getUri(),
+        dbName: 'facade_after_query',
+      });
+      try {
+        await db.orm.users.all();
+        await expect(db.connect()).resolves.toBe(await db.runtime());
+      } finally {
+        await db.close();
+      }
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'connect() with options rejects when the client is connected',
     async () => {
       const db = mongo({
         contract,
@@ -116,7 +192,7 @@ describe('mongo() facade — e2e (replica set)', {
       try {
         await db.connect();
         await expect(db.connect({ uri: replSet.getUri(), dbName: 'facade_twice' })).rejects.toThrow(
-          'Mongo client already connected',
+          'Mongo client is already bound',
         );
       } finally {
         await db.close();

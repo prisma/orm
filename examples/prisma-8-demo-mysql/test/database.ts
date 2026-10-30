@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { createConnection } from 'mysql2/promise';
+import mysqlControlDriver from '@prisma/orm-mysql/driver/control';
 
 export interface TestDatabase {
   readonly url: string;
@@ -23,11 +23,12 @@ export async function createTestDatabase(serverUrl: string): Promise<TestDatabas
   };
 }
 
+/** Runs one statement through the MySQL control driver, which reads `serverUrl` as the CLI does, TLS settings included. */
 async function runOnServer(serverUrl: string, statement: string): Promise<void> {
-  const connection = await createConnection(serverUrl);
+  const driver = await mysqlControlDriver.create(serverUrl);
   try {
-    await connection.query(statement);
+    await driver.query(statement);
   } finally {
-    await connection.end();
+    await driver.close();
   }
 }

@@ -20,6 +20,7 @@
     "@prisma/orm-framework": "workspace:8.0.0-rc.21",
     "@prisma/orm-target-mysql": "workspace:8.0.0-rc.21",
     "@prisma/orm-toolchain": "workspace:8.0.0-rc.21",
+    "arktype": "catalog:",
     "pathe": "^2.0.3"
   },
   "devDependencies": {

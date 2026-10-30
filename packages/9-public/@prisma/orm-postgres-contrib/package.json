@@ -1,0 +1,54 @@
+{
+  "name": "@prisma/orm-postgres-contrib",
+  "version": "8.0.0-rc.21",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "description": "Packs for the trusted PostgreSQL contrib modules, such as citext, for Prisma 8",
+  "keywords": [
+    "prisma-orm-extension"
+  ],
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "lint": "biome check . --error-on-warnings",
+    "clean": "rm -rf dist src-gen"
+  },
+  "dependencies": {
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.21",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.21",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.21"
+  },
+  "devDependencies": {
+    "@internal/extension-citext": "workspace:8.0.0-rc.21",
+    "@repo/tsconfig": "workspace:8.0.0-rc.21",
+    "@repo/tsdown": "workspace:8.0.0-rc.21",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.21",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  },
+  "peerDependencies": {
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.21",
+    "typescript": ">=5.9"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "exports": {
+    "./citext/codec-types": "./dist/citext__codec-types.mjs",
+    "./citext/column-types": "./dist/citext__column-types.mjs",
+    "./citext/control": "./dist/citext__control.mjs",
+    "./citext/pack": "./dist/citext__pack.mjs",
+    "./citext/runtime": "./dist/citext__runtime.mjs",
+    "./package.json": "./package.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/orm.git",
+    "directory": "packages/9-public/@prisma/orm-postgres-contrib"
+  }
+}

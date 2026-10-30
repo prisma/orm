@@ -6,6 +6,7 @@ export type {
 } from '@internal/framework-components/runtime';
 export { RelationKeys } from '@internal/framework-components/runtime';
 export { buildMongoStorage } from '../build-mongo-storage';
+export { canonicalize } from '../canonicalize';
 export type { CollectionControlPolicies } from '../collection-control-policies';
 export {
   collectionControlPoliciesOf,
@@ -66,6 +67,8 @@ export type { FieldValueSets } from '../derive-json-schema';
 export { documentIdRefusalReason } from '../document-id-refusal';
 export type { FieldBsonTypeRefusal } from '../field-bson-type-refusal';
 export { fieldBsonTypeRefusalOf } from '../field-bson-type-refusal';
+export type { MongoIndexLookupInput, MongoIndexOptionKey } from '../index-lookup-key';
+export { indexLookupKey, MONGO_INDEX_OPTION_KEYS } from '../index-lookup-key';
 export { buildMongoNamespace } from '../ir/build-mongo-namespace';
 export type { MongoChangeStreamPreAndPostImagesOptionsInput } from '../ir/mongo-change-stream-pre-and-post-images-options';
 export { MongoChangeStreamPreAndPostImagesOptions } from '../ir/mongo-change-stream-pre-and-post-images-options';

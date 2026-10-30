@@ -32,6 +32,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { PG_ENUM_CODEC_ID } from '../codec-ids';
 import { postgresError } from '../errors';
 import { DEFAULT_NAMESPACE_ID } from '../namespace-ids';
+import type { PostgresExtension } from '../postgres-extension';
 import type { PostgresNativeEnum } from '../postgres-native-enum';
 import type { PostgresRlsPolicy } from '../postgres-rls-policy';
 import {
@@ -804,6 +805,16 @@ export function refuseNativeEnumControl(namespaceId: string, nativeEnum: Postgre
   );
 }
 
+export function refuseExtensionControl(namespaceId: string, extension: PostgresExtension): void {
+  if (extension.control === undefined) return;
+  throw unsupported(
+    `extension "${extension.name}" in namespace "${namespaceId}" carries its own control policy "${extension.control}", which cannot be written in Prisma 8 PSL.`,
+    'An `extension` block has no control attribute.',
+    'Drop the policy from the extension, or keep authoring this contract in its current source.',
+    { namespaceId, name: extension.name, control: extension.control },
+  );
+}
+
 // Namespaces, meta and roots
 
 /**
@@ -998,15 +1009,16 @@ export function refuseRoleOutsideUnbound(namespaceId: string, name: string): voi
   );
 }
 
-const FILED_UNDER: Readonly<Record<'rls' | 'role', string>> = {
+const FILED_UNDER: Readonly<Record<'rls' | 'role' | 'extension', string>> = {
   rls: 'The PSL source files the row-level security setting written as `@@rls` under the name of the table.',
   role: 'The PSL source files a role under the name its block is written with.',
+  extension: 'The PSL source files an extension under the name its block is written with.',
 };
 
-/** Refuses a row-level security setting or role filed under a key the PSL source would not use. */
+/** Refuses a row-level security setting, role or extension filed under a key the PSL source would not use. */
 export function refuseEntryFiledUnderAnotherName(input: {
   readonly namespaceId: string;
-  readonly kind: 'rls' | 'role';
+  readonly kind: 'rls' | 'role' | 'extension';
   readonly name: string;
   readonly readsBackAs: string;
 }): void {
@@ -1079,6 +1091,7 @@ const PRINTED_ENTRY_KINDS: ReadonlySet<string> = new Set([
   'rls',
   'policy',
   'role',
+  'extension',
 ]);
 
 export function refuseUnprintedEntryKinds(
@@ -1091,7 +1104,7 @@ export function refuseUnprintedEntryKinds(
     if (names.length === 0) continue;
     throw unsupported(
       `namespace "${namespaceId}" declares ${names.length} "${kind}" ${names.length === 1 ? 'entity' : 'entities'} (${names.join(', ')}), which the Postgres printer cannot write.`,
-      'The printer writes tables, value sets, value objects, native enums, row-level security settings, policies and roles, and no other entity kind.',
+      'The printer writes tables, value sets, value objects, native enums, row-level security settings, policies, roles and extensions, and no other entity kind.',
       KEEP_SOURCE,
       { namespaceId, kind, names },
     );

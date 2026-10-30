@@ -89,6 +89,7 @@ Extensions already shipping:
 - **[`@prisma/orm-extension-paradedb`](https://www.npmjs.com/package/@prisma/orm-extension-paradedb)**: BM25 full-text search indexes (experimental).
 - **[`@prisma/orm-extension-supabase`](https://www.npmjs.com/package/@prisma/orm-extension-supabase)**: Supabase auth and storage tables, role-bound clients (experimental).
 - **[`@prisma/orm-extension-arktype-json`](https://www.npmjs.com/package/@prisma/orm-extension-arktype-json)**: JSON columns validated by an arktype schema.
+- **[`@prisma/orm-postgres-contrib`](https://www.npmjs.com/package/@prisma/orm-postgres-contrib)**: packs for the trusted PostgreSQL contrib modules, starting with `citext` case-insensitive text.
 - **[`@cipherstash/prisma-next`](https://pris.ly/cipherstash-p-blog)**: searchable encryption and data-level access control.
 
 See [Using extensions](https://www.prisma.io/docs/orm/extensions/using-extensions) for how to install and register one. Want to ship your own? The **[call for extension authors](https://pris.ly/pn-extension-authors)** walks through the SPI, the layers your extension can hook into, and how the team features new extensions.

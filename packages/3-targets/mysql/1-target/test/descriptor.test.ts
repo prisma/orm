@@ -7,6 +7,7 @@ import { MysqlCreateTable } from '../src/core/ddl/nodes';
 import { mysqlTargetDescriptorMeta } from '../src/core/descriptor-meta';
 import mysqlControlTarget from '../src/core/migrations/control-target';
 import { escapeLiteral, quoteIdentifier, quoteLiteral } from '../src/core/sql-utils';
+import mysqlRuntimeTarget from '../src/exports/runtime';
 
 describe('the MySQL target descriptor', () => {
   it('reports no namespaces and the unbound default namespace', () => {
@@ -21,6 +22,12 @@ describe('the MySQL target descriptor', () => {
       supportsNamespaces: false,
       displayName: 'MySQL',
     });
+  });
+
+  it('declares, on the control and runtime target, that every session runs in UTC, which its datetime codec reads, as Postgres declares DateStyle', () => {
+    expect([mysqlTargetDescriptorMeta.sessionSettings, mysqlRuntimeTarget.sessionSettings]).toEqual(
+      [{ time_zone: '+00:00' }, { time_zone: '+00:00' }],
+    );
   });
 
   it('maps String to varchar(191) and DateTime to datetime(3)', () => {

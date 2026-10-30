@@ -53,6 +53,9 @@ describe('adopting Prisma 8 beside Prisma 7', () => {
           const prisma8Read = await tsx('src/main.ts');
           expect(prisma8Read).toContain('Alice (ADMIN) via Prisma 8');
           expect(prisma8Read).toContain('- Adopting Prisma 8 next to Prisma 7 [orm, typescript]');
+          expect(prisma8Read).toContain(
+            'ALICE@EXAMPLE.COM finds alice@example.com through Prisma 8',
+          );
           expect(prisma8Read).toMatch(/Created post \d+ through Prisma 8, tagged orm/);
           const advanced = /updatedAt advanced: (\S+) -> (\S+)/.exec(prisma8Read);
           expect(advanced, prisma8Read).not.toBeNull();

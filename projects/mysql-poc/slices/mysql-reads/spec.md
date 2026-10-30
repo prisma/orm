@@ -26,7 +26,7 @@ Each call lowers to one MySQL statement. Related rows come back in the order the
 - **Lowering in the MySQL adapter.** A renderer for every AST node the ORM and SQL builder emit for reads, modelled on SQLite's: backtick quoting, `?` placeholders, `LIMIT`/`OFFSET` (a large `LIMIT` when only `OFFSET` is given), `<=>` for IS NOT DISTINCT FROM, NULLS FIRST/LAST emulated with an `x IS NULL` sort key, casts with MySQL type names, `JSON_OBJECT` for to-one includes. FULL JOIN, function sources, lock clauses and anything else MySQL can't express are refused with `RUNTIME.AST_UNSUPPORTED`, through capabilities where the ORM checks them.
 - **To-many includes keep their order with `GROUP_CONCAT`.** `JSON_ARRAYAGG` has no `ORDER BY`, and MySQL ignores a derived table's `ORDER BY` when the outer query aggregates. The adapter renders a to-many include as `CAST(CONCAT('[', GROUP_CONCAT(<json object> ORDER BY … SEPARATOR ','), ']') AS JSON)`, and `COALESCE(…, JSON_ARRAY())` when there are no rows (never the string `'[]'`, which would turn nested includes into strings). The driver raises the session's `group_concat_max_len` on every connection, so an overflow fails the JSON cast, never truncating silently. If a live test shows MySQL breaks this order, stop and report: the fallback needs a shared change.
 - **JSON projection per codec.** Each codec's `projectJson` writes what the driver would hand over for a row: `int`, `varchar`, `text` and `enum` pass through; `bigint` and `datetime` render as text (`CAST(x AS CHAR)`), so precision and the fraction digits match the row form.
-- **Runtime driver.** A mysql2 pool and the text-protocol `query()`, reusing 2a's server-text `typeCast` and session setup (backslash escaping off, UTC, multiple statements off, and now `group_concat_max_len`), run once per connection. Rows stream through the connection; transactions use one connection; `close()` waits for streams in flight, as the Postgres driver does.
+- **Runtime driver.** (As first planned; replaced, see "Changed during the slice".) A mysql2 pool and the text-protocol `query()`, reusing 2a's server-text `typeCast` and session setup (backslash escaping off, UTC, multiple statements off, and now `group_concat_max_len`), run once per connection. Rows stream through the connection; transactions use one connection; `close()` waits for streams in flight, as the Postgres driver does.
 - **Marker read for the runtime.** The runtime's marker check reads the marker through the same control tables 2b writes.
 
 ## Coherence rationale
@@ -58,20 +58,15 @@ One reviewer reads this as "MySQL can read": a runtime plane and a renderer, wit
 
 The At a glance calls return the expected rows against MySQL 8.4 in live tests, including a nested include and an ordered to-many include; golden tests cover every rendered node kind; and build, typecheck, lint, `lint:deps` and the changed packages' tests pass.
 
-**Added 2026-10-23, after the reviews:** the runtime driver runs statements as server-side prepared statements with a bounded cache (design notes section 8), replacing client-side escaping.
+**Added 2026-10-23, after the reviews:** the runtime driver runs statements as server-side prepared statements, with the prepared-statement cache off (design notes section 8), replacing client-side escaping.
 
 ## Changed during the slice
 
-The reviews changed four parts of the chosen design above. Design notes sections 7 and 8 give the reasons.
+The reviews changed three parts of the chosen design above. Design notes sections 7 and 8 give the reasons.
 
-- **Placeholders are numbered.** The renderer writes `?N`, N being the parameter's place in the runtime's list, not `?`.
+- **Placeholders are numbered.** The renderer writes `?N`, N being the parameter's place in the runtime's list, as the Postgres and SQLite renderers do. The driver rewrites each `?N` to `?` and sends the values in placeholder order.
 - **The length limit is in the statement.** A statement that uses `GROUP_CONCAT` carries a `SET_VAR(group_concat_max_len = …)` optimizer hint; the driver no longer sets it for the session.
-- **Values travel apart from the SQL.** The runtime driver runs every statement as a server-side prepared statement, with a bounded cache, not the text protocol. Integer parameters are written `CAST(?N AS SIGNED)`, except as `LIMIT` or `OFFSET` operands.
-- **Raw SQL never leaves a setting on a shared connection.** A pooled connection that ran raw SQL is closed, not returned to the pool.
+- **The drivers use the `mariadb` package, and values travel apart from the SQL.** Both drivers run on `mariadb`, as Prisma 7 does. Every statement with values runs as a server-side prepared statement; one without values runs over the text protocol, as `pg` runs it. No statement is reused. The renderer writes no parameter casts, as the Postgres renderer writes none for integers; the bigint codec sends decimal text, as Postgres's does.
+- **The driver copies the Postgres driver (second review, 2026-10-28).** A query reads its whole result unless `stream: true` is set; the target declares the UTC time zone as a session setting; connection failures are `SqlConnectionError` and constraint violations take Postgres's SQLSTATEs; pool and TLS settings are named as on Postgres.
 
-The slice also made four shared changes, each with an upgrade note in `upgrade-instructions/pending/mysql-orm-reads/`:
-
-1. Every SQL driver request carries `containsRawSql`, computed by the runtime from the query's AST.
-2. An ORM `having` comparand is a bound parameter on every target, so a fractional or out-of-range comparand against an integer aggregate now fails.
-3. Codec descriptors can declare `integerRepresentation`, which the `having` comparand's type and runtime check both read.
-4. `fns.and` and `fns.or` accept only `true` and `false` as raw operands.
+The slice makes no change outside the MySQL packages. Changes to shared packages tried during review (a raw-SQL flag on driver requests, a codec field for integer handling, `having` comparands as parameters, and stricter `fns.and`/`fns.or` operands) were reverted.

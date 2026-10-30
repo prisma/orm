@@ -72,6 +72,12 @@ describe('resolveImportSpecifier', () => {
       ).toBe('@prisma/orm-extension-pgvector/codec-types');
     });
 
+    it('resolves a contrib module pack to its entrypoint group in the contrib package', () => {
+      expect(resolveImportSpecifier('@internal/extension-citext/codec-types', postgresFacade)).toBe(
+        '@prisma/orm-postgres-contrib/citext/codec-types',
+      );
+    });
+
     it('refuses a surface the facade does not republish', () => {
       expect(() => resolveImportSpecifier('@internal/cli/migration-cli', postgresFacade)).toThrow(
         ImportRootError,
@@ -243,6 +249,7 @@ describe('directDependencyShells', () => {
       '@prisma/orm-extension-postgis',
       '@prisma/orm-extension-supabase',
       '@prisma/orm-postgres',
+      '@prisma/orm-postgres-contrib',
     ]);
   });
 

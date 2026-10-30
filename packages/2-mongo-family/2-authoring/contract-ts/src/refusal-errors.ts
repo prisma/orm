@@ -347,20 +347,6 @@ export function refusalError(refusal: BuildRefusal): StructuredError {
           },
         },
       );
-    case 'indexDuplicate':
-      return contractError(
-        'CONTRACT.NAME_DUPLICATE',
-        `Collection "${refusal.collection}" defines duplicate index ${refusal.signature}. First declared on model "${refusal.firstModel}" and duplicated on model "${refusal.key.model}".`,
-        {
-          meta: {
-            kind: 'index',
-            name: refusal.signature,
-            collection: refusal.collection,
-            first: refusal.firstModel,
-            second: refusal.key.model,
-          },
-        },
-      );
     case 'generatedOnValueObject':
       return defaultError(
         refusal.key,

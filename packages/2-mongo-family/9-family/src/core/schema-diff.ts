@@ -1,11 +1,12 @@
 import type { ControlPolicy } from '@internal/contract/types';
 import type { SchemaDiffIssue, VerifierOutcome } from '@internal/framework-components/control';
-import type {
-  MongoSchemaCollection,
-  MongoSchemaIndex,
-  MongoSchemaIR,
+import { canonicalize, indexLookupKey } from '@internal/mongo-contract';
+import {
+  deepEqual,
+  type MongoSchemaCollection,
+  type MongoSchemaIndex,
+  type MongoSchemaIR,
 } from '@internal/mongo-schema-ir';
-import { canonicalize, deepEqual, indexLookupKey } from '@internal/mongo-schema-ir';
 import { ifDefined } from '@internal/utils/defined';
 import { verifierDisposition } from './schema-verify/verifier-disposition';
 

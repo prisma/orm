@@ -1,5 +1,6 @@
 import type { EntityCoordinate } from '@internal/contract/types';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
+import { PostgresExtensionSchemaNode } from './postgres-extension-schema-node';
 import { PostgresNativeEnumSchemaNode } from './postgres-native-enum-schema-node';
 import { PostgresTableSchemaNode } from './postgres-table-schema-node';
 import { postgresNodeEntityKind } from './schema-node-kinds';
@@ -21,6 +22,10 @@ export function postgresNodeStorageCoordinate(
   if (PostgresNativeEnumSchemaNode.is(node)) {
     const entityKind = postgresNodeEntityKind(node.nodeKind);
     return entityKind === undefined ? undefined : { entityKind, entityName: node.typeName };
+  }
+  if (PostgresExtensionSchemaNode.is(node)) {
+    const entityKind = postgresNodeEntityKind(node.nodeKind);
+    return entityKind === undefined ? undefined : { entityKind, entityName: node.name };
   }
   return undefined;
 }

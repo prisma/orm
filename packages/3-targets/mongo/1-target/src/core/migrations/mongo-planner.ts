@@ -21,7 +21,12 @@ import {
   type ResolvedMigrationStatement,
   type ResolvedRenameStatement,
 } from '@internal/framework-components/control';
-import { type MongoContract, validatorRootShapesOf } from '@internal/mongo-contract';
+import {
+  canonicalize,
+  indexLookupKey,
+  type MongoContract,
+  validatorRootShapesOf,
+} from '@internal/mongo-contract';
 import type {
   MongoSchemaCollection,
   MongoSchemaCollectionOptions,
@@ -29,7 +34,7 @@ import type {
   MongoSchemaIR,
   MongoSchemaValidator,
 } from '@internal/mongo-schema-ir';
-import { canonicalize, deepEqual, indexLookupKey } from '@internal/mongo-schema-ir';
+import { deepEqual } from '@internal/mongo-schema-ir';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import {

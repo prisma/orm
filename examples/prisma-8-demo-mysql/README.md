@@ -47,12 +47,20 @@ The repository's `docker-compose.yaml` starts a server on port 3307; create the
 that database, never MySQL's own `mysql` system database, or the CLI creates
 the example's tables inside it.
 
+The URL sets `allowPublicKeyRetrieval=true` because the local server has no
+TLS: MySQL 8.4 signs `root` in with `caching_sha2_password`, which then needs
+the server's public key to send the password. Without it, connecting fails
+once the server no longer has the account cached, such as after a restart.
+Against a server reached over a network, use TLS (`sslmode=verify-full`, or
+`ssl=true`) instead, since fetching the key without TLS lets a machine in between read the
+password.
+
 ```bash
 docker compose up -d mysql
 docker compose exec mysql mysql -uroot -proot -e 'CREATE DATABASE prisma_demo'
 pnpm install
 pnpm emit                                   # generates src/prisma/contract.json + contract.d.ts
-export MYSQL_URL=mysql://root:root@127.0.0.1:3307/prisma_demo
+export MYSQL_URL='mysql://root:root@127.0.0.1:3307/prisma_demo?allowPublicKeyRetrieval=true'
 pnpm db:migrate                             # applies migrations/ to the database
 pnpm db:verify                              # checks the database matches the contract
 pnpm db:sign                                # records the contract the database now satisfies

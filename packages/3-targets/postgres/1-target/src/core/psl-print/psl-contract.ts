@@ -44,6 +44,7 @@ import {
   buildNativeEnumBlocksForNamespace,
   type NativeEnumEmission,
 } from './enum-blocks';
+import { buildExtensionBlocks } from './extension-blocks';
 import { buildModelAttributes, derivedChecks } from './model-attributes';
 import {
   refuseContractMeta,
@@ -248,8 +249,8 @@ function buildModel(
 }
 
 /**
- * The namespace block of one storage namespace: its models, value objects, enum blocks, roles and
- * policies. `undefined` when the namespace holds none of them.
+ * The namespace block of one storage namespace: its models, value objects, extensions, enum blocks,
+ * roles and policies. `undefined` when the namespace holds none of them.
  */
 function buildNamespace(
   all: ContractModels,
@@ -306,6 +307,7 @@ function buildNamespace(
     if (modelNameForTable(tableName) === undefined) refuseRlsWithoutModel(namespaceId, tableName);
   }
   const blocks: readonly PslExtensionBlock[] = [
+    ...buildExtensionBlocks(namespaceId, namespace.entries['extension']),
     ...enums.blocks,
     ...buildRoleBlocks(namespaceId, namespace.entries['role']),
     ...buildPolicyBlocks({

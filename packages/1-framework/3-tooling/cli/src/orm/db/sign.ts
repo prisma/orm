@@ -1,7 +1,11 @@
 import type { PrismaNextConfig } from '@internal/config/config-types';
 import { ormConfigSection } from '@internal/config-loader';
 import type { Contract } from '@internal/contract/types';
-import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
+import {
+  APP_SPACE_ID,
+  createControlStack,
+  type VerifyDatabaseSchemaResult,
+} from '@internal/framework-components/control';
 import { MigrationToolsError } from '@internal/migration-tools/errors';
 import { readRef, writeRef } from '@internal/migration-tools/refs';
 import { spaceMigrationDirectory, spaceRefsDirectory } from '@internal/migration-tools/spaces';
@@ -161,6 +165,19 @@ function spaceNode(outcome: DbSignSpaceOutcome): TreeNode {
         status: 'error',
         children: issueNodes(outcome.schema.schema.issues, 'error'),
       };
+    case 'missing-invariants':
+      return {
+        label: `${outcome.space}: not signed, its marker does not record invariants its head ref requires${outcome.schema === undefined ? '' : ', and the schema does not satisfy its contract'}`,
+        status: 'error',
+        children: [
+          ...outcome.missingInvariants.map(
+            (id): TreeNode => ({ label: `missing invariant: ${id}`, status: 'error' }),
+          ),
+          ...(outcome.schema === undefined
+            ? []
+            : issueNodes(outcome.schema.schema.issues, 'error')),
+        ],
+      };
     case 'conflict':
       return {
         label: `${outcome.space}: not signed, its marker changed after the schema was verified`,
@@ -180,21 +197,36 @@ function spaceNode(outcome: DbSignSpaceOutcome): TreeNode {
 }
 
 function isSigned(outcome: DbSignSpaceOutcome): boolean {
-  return outcome.status !== 'failed' && outcome.status !== 'conflict';
+  return (
+    outcome.status === 'created' || outcome.status === 'updated' || outcome.status === 'unchanged'
+  );
 }
 
 function quotedList(spaces: readonly DbSignSpaceOutcome[]): string {
   return spaces.map((outcome) => `"${outcome.space}"`).join(', ');
 }
 
+function failsVerification(outcome: DbSignSpaceOutcome): boolean {
+  return (
+    outcome.status === 'failed' ||
+    (outcome.status === 'missing-invariants' && outcome.schema !== undefined)
+  );
+}
+
 function signSummary(spaces: readonly DbSignSpaceOutcome[]): string {
-  const failed = spaces.filter((outcome) => outcome.status === 'failed');
+  const failed = spaces.filter(failsVerification);
   const conflicts = spaces.filter((outcome) => outcome.status === 'conflict');
-  if (failed.length === 0 && conflicts.length === 0) {
+  const refused = spaces.filter((outcome) => outcome.status === 'missing-invariants');
+  if (failed.length === 0 && conflicts.length === 0 && refused.length === 0) {
     return 'Database signed';
   }
   const signed = spaces.filter(isSigned);
   const problems = [
+    ...(refused.length === 0
+      ? []
+      : [
+          `${refused.length === 1 ? 'space' : 'spaces'} ${quotedList(refused)} ${refused.length === 1 ? 'requires invariants its marker does' : 'require invariants their markers do'} not record`,
+        ]),
     ...(failed.length === 0
       ? []
       : [
@@ -249,6 +281,31 @@ function markerConflictDiagnostic(
       foundStorageHash: found?.storageHash ?? null,
       destinationStorageHash: outcome.contract.storageHash,
     },
+  };
+}
+
+function missingInvariantsDiagnostic(
+  outcome: Extract<DbSignSpaceOutcome, { readonly status: 'missing-invariants' }>,
+  migrate: string,
+): Diagnostic {
+  const missing = outcome.missingInvariants.map((id) => `"${id}"`).join(', ');
+  const required =
+    outcome.missingInvariants.length === 1
+      ? `the invariant ${missing}, which the database marker does not record`
+      : `the invariants ${missing}, which the database marker does not record`;
+  return {
+    code: 'MIGRATION.SIGN_INVARIANTS_MISSING',
+    severity: 'error',
+    summary: `Space "${outcome.space}" requires invariants its marker does not record`,
+    why: `The head ref of space "${outcome.space}" requires ${required}. An invariant records that a migration ran, and db sign never runs migrations, so it did not sign this space.`,
+    nextActions: [
+      {
+        kind: 'run-command',
+        label: 'Run the migrations that provide the invariants, then sign again',
+        command: migrate,
+      },
+    ],
+    meta: { space: outcome.space, missingInvariants: outcome.missingInvariants },
   };
 }
 
@@ -401,7 +458,9 @@ export function createDbSignCommand(
         'contract reference, no emitted contract, unreachable database), or it\n' +
         'signed the database but could not write every ref,\n' +
         '4 = schema verification failed for a space,\n' +
-        'or its marker changed while db sign ran; its signature was not written.',
+        'or its marker changed while db sign ran; its signature was not written.\n' +
+        'Also 4 when a space requires invariants its marker does not record;\n' +
+        'its signature is not written, and db migrate provides them.',
       examples: [
         'db sign',
         'db sign --db $DATABASE_URL',
@@ -432,7 +491,7 @@ export function createDbSignCommand(
     },
     needs: { config: ormConfigSection },
     exitCodes: {
-      4: 'schema verification failed for a space, or its marker changed while db sign ran; its signature was not written',
+      4: 'schema verification failed for a space, its marker changed while db sign ran, or it requires invariants its marker does not record; its signature was not written',
     },
     handler: async (args, ctx) => {
       const positionalContract = args.positionals.contract;
@@ -573,6 +632,34 @@ export function createDbSignCommand(
             }
           }
         }
+        const migrate = cliCommand(cliInvocation(ctx, args.flags.db), 'db migrate');
+        const verdictDiagnostic = (space: string, schema: VerifyDatabaseSchemaResult) =>
+          schemaVerdictDiagnostic({
+            result: schema,
+            space,
+            nextActions: schemaDriftNextActions({
+              verb: 'sign',
+              contractRef,
+              issues: schema.schema.issues,
+            }),
+          });
+        const diagnostics: Diagnostic[] = spaces.flatMap((outcome) => {
+          switch (outcome.status) {
+            case 'failed':
+              return [verdictDiagnostic(outcome.space, outcome.schema)];
+            case 'conflict':
+              return [markerConflictDiagnostic(outcome, rerun)];
+            case 'missing-invariants':
+              return [
+                missingInvariantsDiagnostic(outcome, migrate),
+                ...(outcome.schema === undefined
+                  ? []
+                  : [verdictDiagnostic(outcome.space, outcome.schema)]),
+              ];
+            default:
+              return [];
+          }
+        });
         if (unwritten.length > 0) {
           return notOk(
             normalizeError(
@@ -584,6 +671,11 @@ export function createDbSignCommand(
                 conflictSpaces: spaces
                   .filter((outcome) => outcome.status === 'conflict')
                   .map((outcome) => outcome.space),
+                refusedSpaces: spaces.flatMap((outcome) =>
+                  outcome.status === 'missing-invariants'
+                    ? [{ space: outcome.space, missingInvariants: outcome.missingInvariants }]
+                    : [],
+                ),
                 unwrittenRefs: unwritten.map(({ space, name, hash, reason }) => ({
                   space,
                   name,
@@ -592,6 +684,8 @@ export function createDbSignCommand(
                 })),
                 advancedRefs: advanced.map(({ space, name, hash }) => ({ space, name, hash })),
                 rerunCommand: rerun,
+                migrateCommand: migrate,
+                diagnostics,
                 cause: unwritten[0]?.cause,
               }),
             ),
@@ -605,26 +699,6 @@ export function createDbSignCommand(
           spaces,
           advancedRefs: advanced.map(({ space, name, hash }) => ({ space, name, hash })),
         };
-        const diagnostics: Diagnostic[] = spaces.flatMap((outcome) => {
-          switch (outcome.status) {
-            case 'failed':
-              return [
-                schemaVerdictDiagnostic({
-                  result: outcome.schema,
-                  space: outcome.space,
-                  nextActions: schemaDriftNextActions({
-                    verb: 'sign',
-                    contractRef,
-                    issues: outcome.schema.schema.issues,
-                  }),
-                }),
-              ];
-            case 'conflict':
-              return [markerConflictDiagnostic(outcome, rerun)];
-            default:
-              return [];
-          }
-        });
         return ok(
           ctx.present(
             {

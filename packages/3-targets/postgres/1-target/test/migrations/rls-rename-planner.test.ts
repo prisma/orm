@@ -103,6 +103,7 @@ function buildContract(
 
 function actualSchema(policies: readonly PostgresRlsPolicy[]): PostgresDatabaseSchemaNode {
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',

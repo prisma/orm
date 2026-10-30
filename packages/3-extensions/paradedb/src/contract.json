@@ -15,13 +15,19 @@
     "namespaces": {
       "public": {
         "entries": {
+          "extension": {
+            "pg_search": {
+              "kind": "extension",
+              "name": "pg_search"
+            }
+          },
           "table": {}
         },
         "id": "public",
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "0c0734babd6eeb868fee1f281ca96963022475611560e9f170f465daa35f8599"
+    "storageHash": "9a6627d7f3d6e984216f77015b8f2086254d154cc1dfe614d6ead32ec7c8b5a8"
   },
   "capabilities": {
     "postgres": {

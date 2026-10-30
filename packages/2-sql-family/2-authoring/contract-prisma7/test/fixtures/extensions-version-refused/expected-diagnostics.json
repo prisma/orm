@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA7_EXTENSION_ARGUMENT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 3,
+    "message": "Extension \"pg_trgm\": the version argument is not supported, because the contract does not record an extension's version. Remove version: \"1.6\"; Prisma 7's next migration is then empty."
+  }
+]

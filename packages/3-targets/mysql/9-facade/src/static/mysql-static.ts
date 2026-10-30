@@ -59,7 +59,7 @@ export function buildMysqlStaticContext<TContract extends Contract<SqlStorage>>(
 
 /**
  * The query surfaces of a MySQL client without a driver: `sql`, `raw`, `enums` and `toSql`. Use
- * it where loading the mysql2 driver is not wanted.
+ * it where loading the MySQL driver is not wanted.
  *
  * @example
  * ```ts

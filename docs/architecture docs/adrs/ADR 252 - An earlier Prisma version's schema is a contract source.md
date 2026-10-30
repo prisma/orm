@@ -6,6 +6,8 @@ Status: **Accepted**
 
 Prisma 8 reads the schema file of an earlier Prisma version directly as a contract source. A project that still runs Prisma 7 points Prisma 8 at the `schema.prisma` it already has, and `prisma contract emit` produces the contract from it. The file is not converted, and nothing is inferred from the database.
 
+**What such a source is for.** It interprets the earlier version's schema as the Prisma 8 contract of the database that version built from it. So `prisma db sign` accepts that database as it is, with zero findings and without changing it. That is the source's whole purpose, and every rule below serves it. Nothing between the source and the emitted contract may change what the source describes. That includes the family's contract builder (ADR 306). A builder step that tidies a contract for another source, such as merging a redundant index or deriving an index for a foreign key, must leave this source's description alone, even when the database holds something redundant or pointless.
+
 Prisma 8 describes a database with a contract, and every command reads that contract. Prisma 7 describes a database with `schema.prisma`, and its migrations keep that file current. A project moving from Prisma 7 to Prisma 8 runs both for a while: Prisma 7 still owns the database and its migrations, and Prisma 8 adopts the database as it is. During that time the Prisma 7 schema is the only description of the database that stays correct, so it is the one Prisma 8 reads.
 
 ## The decision in a config file
@@ -58,7 +60,7 @@ There is no third outcome. Each construct in the schema is either lowered to a c
 
 Two rules follow, and they are what separate this reader from a compatibility layer:
 
-- **Prisma 8's own checks are not loosened to admit a construct.** Where Prisma 8's schema language cannot express a shape, for example a column type with no Prisma 8 codec such as `@db.Money`, the reader reports an error rather than relaxing the parser or interpreter that refuses it.
+- **Prisma 8's own checks are not loosened to admit a construct.** Where Prisma 8's schema language cannot express a shape, for example a column type with no Prisma 8 codec such as `@db.Citext`, the reader reports an error rather than relaxing the parser or interpreter that refuses it.
 - **A construct Prisma 8 cannot express is a reason to build the feature.** Each refusal records a gap in Prisma 8's own authoring surface, to be designed on its own terms. It is not a defect of the reader.
 
 The set of refusals is therefore a standing list of Prisma 8 features to build, each with a real user behind it.
@@ -112,7 +114,7 @@ flowchart LR
 
 **Rules of the language live in the family authoring package.** `@internal/sql-contract-prisma7` holds everything that is true of the Prisma 7 language for the SQL family: blocks and attributes, relation pairing, junction tables, defaults, and the diagnostics. It knows nothing about a particular database and depends on no Prisma 7 package.
 
-**Facts about the database come from the target through one binding.** `Prisma7TargetBinding` is the complete list of what a target must answer: the target pack and namespace factory, the datasource providers it accepts, the type map of what the earlier version creates for each scalar and native-type attribute, the native enum entity kind, the index types, the identifier byte limit, the junction relation field names, the "now" generator for each column codec, how a literal default is read for a column whose codec does not take the written value, and the SQL expression of a default whose value the column's type holds but its codec cannot hold exactly. The Postgres target exports one instance.
+**Facts about the database come from the target through one binding.** `Prisma7TargetBinding` is the complete list of what a target must answer: the target pack and namespace factory, the datasource providers it accepts, the type map of what the earlier version creates for each scalar and native-type attribute, with the extension that provides a native type such as `Citext`, the native enum entity kind, the extension entity kind and, for each extension a pack declares, that pack's id and published import path, which both a datasource `extensions` entry and a native type the extension provides are read through, the index types, the identifier byte limit, the junction relation field names, the "now" generator for each column codec, how a literal default is read for a column whose codec does not take the written value, and the SQL expression of a default whose value the column's type holds but its codec cannot hold exactly. The Postgres target exports one instance.
 
 **The facade publishes one function** that wires the two together:
 
@@ -161,7 +163,7 @@ For as long as the Prisma version it reads is supported. The repository's [READM
 
 **A behaviour flag, or letting each tool detect the version.** A flag such as `viewBodyAsModelFields` has no meaning on its own: it exists only because the Prisma 7 grammar reads `view` bodies that way, and no Prisma 8 source would set it. Naming the grammar says why, and absorbs any further Prisma 7 grammar difference without a second flag. The framework vocabulary rule forbids names of Prisma versions before 8, but the parser is the authority on its own grammar, so the rule records that exception for the grammar names. Detecting the version from the file, for example from a missing `// use prisma-8` line, would make every tool repeat a guess that can be wrong. A parse function on the source, instead of options, is more than the problem needs, and the config loader cannot check a function. The source declares its grammar instead.
 
-**Build the missing Prisma 8 features as part of the reader.** Views and column types with no Prisma 8 codec, such as `Unsupported("tsvector")` or `@db.Money`, are each their own piece of work with their own design. Bundling them into the reader would tie a transition tool to features it does not need. `Unsupported("...")` is now read, as a raw column with no field, because ADR 273 gave Prisma 8 a data type for such columns.
+**Build the missing Prisma 8 features as part of the reader.** Views and column types with no Prisma 8 codec, such as `Unsupported("tsvector")`, or `@db.Money` before it gained one, are each their own piece of work with their own design. Bundling them into the reader would tie a transition tool to features it does not need. `Unsupported("...")` is now read, as a raw column with no field, because ADR 273 gave Prisma 8 a data type for such columns.
 
 ## Amendment (October 9, 2026) — the earlier version's migration ledger is not described
 

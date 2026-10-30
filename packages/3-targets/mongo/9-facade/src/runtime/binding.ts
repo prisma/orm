@@ -1,15 +1,8 @@
+import type { MongoBinding } from '@internal/driver-mongo/runtime';
 import { InternalError } from '@internal/utils/internal-error';
 import type { MongoClient as MongoDriverClient } from 'mongodb';
 import { ConnectionString } from 'mongodb-connection-string-url';
 import { mongoError } from './mongo-errors';
-
-export type MongoBinding =
-  | { readonly kind: 'url'; readonly url: string; readonly dbName: string }
-  | {
-      readonly kind: 'mongoClient';
-      readonly client: MongoDriverClient;
-      readonly dbName: string;
-    };
 
 export type MongoBindingInput =
   | {

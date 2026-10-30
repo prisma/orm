@@ -1,5 +1,6 @@
 import { type MysqlPlaceholderToken, tokenizeMysqlSql } from '@internal/target-mysql/sql-utils';
 import { structuredError } from '@internal/utils/structured-error';
+import { bindValue } from './parameter-values';
 
 function placeholderMismatch(placeholders: readonly string[], values: number): Error {
   return structuredError(
@@ -28,34 +29,6 @@ export function valueIndexes(
     indexes.every((index) => index >= 0 && index < values) && new Set(indexes).size === values;
   if (!valid) throw placeholderMismatch(texts, values);
   return indexes;
-}
-
-function unsupportedValue(message: string, meta: Record<string, unknown>): Error {
-  return structuredError('RUNTIME.AST_INVALID', message, { meta: { target: 'mysql', ...meta } });
-}
-
-/** The value mysql2 sends for a parameter: a safe integer as a BigInt, which MySQL reads as an integer where it needs one, as in `LIMIT`, where mysql2 would send a number as a double; bytes as a Buffer. */
-function bindValue(value: unknown, index: number): unknown {
-  if (value === null || value === undefined) return null;
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value)) {
-      throw unsupportedValue(`MySQL has no parameter value for ${value}`, { index });
-    }
-    return Number.isSafeInteger(value) ? BigInt(value) : value;
-  }
-  if (value instanceof Uint8Array) return Buffer.from(value);
-  if (
-    typeof value === 'string' ||
-    typeof value === 'bigint' ||
-    typeof value === 'boolean' ||
-    value instanceof Date
-  ) {
-    return value;
-  }
-  throw unsupportedValue(
-    'A MySQL parameter must be text, a number, a bigint, a boolean, a Date, bytes or null',
-    { index, valueType: Array.isArray(value) ? 'array' : typeof value },
-  );
 }
 
 /**

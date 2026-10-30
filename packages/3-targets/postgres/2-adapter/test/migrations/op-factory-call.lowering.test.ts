@@ -121,7 +121,7 @@ describe('renderOps', () => {
       new CreateIndexCall('public', 'user', 'user_email_idx', { columns: ['email'] }),
       new DropIndexCall('public', 'user', 'stale_idx'),
       new RawSqlCall(liftedOp),
-      new CreateExtensionCall('citext'),
+      new CreateExtensionCall('public', 'citext'),
       new CreateSchemaCall('app'),
     ];
 
@@ -210,7 +210,11 @@ describe('renderOps', () => {
         details: schemaObject('index', 'stale_idx', 'user'),
       },
       { id: 'custom.op.1', operationClass: 'additive', details: undefined },
-      { id: 'extension.citext', operationClass: 'additive', details: undefined },
+      {
+        id: 'extension.citext',
+        operationClass: 'additive',
+        details: schemaObject('dependency', 'citext'),
+      },
       { id: 'schema.app', operationClass: 'additive', details: undefined },
     ];
 

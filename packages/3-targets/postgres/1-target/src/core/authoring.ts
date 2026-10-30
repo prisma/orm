@@ -41,6 +41,7 @@ import type {
   LoweredPackEntity,
   ResolvedEntityHandleRef,
   ResolvedPslModelRefs,
+  SqlNameUniqueAcrossNamespacesOutput,
   SqlPslEntityPlacementOutput,
 } from '@internal/sql-contract/entity-handle-lowering-hook';
 import { generatedIdColumnAliases } from '@internal/sql-contract/generated-id-column-aliases';
@@ -66,11 +67,13 @@ import {
 } from './full-text-index-definition';
 import { type FullTextFieldsInput, weightGroupsOf } from './full-text-weight-groups';
 import { postgresCodecTraitsOf } from './postgres-codec-traits';
+import { PostgresExtension } from './postgres-extension';
 import { PostgresNativeEnum } from './postgres-native-enum';
 import { PostgresRlsEnablement, type PostgresRlsEnablementInput } from './postgres-rls-enablement';
 import { PostgresRlsPolicy, type RlsPolicyOperation } from './postgres-rls-policy';
 import { PostgresRole } from './postgres-role';
 import {
+  PostgresExtensionSchema,
   PostgresNativeEnumSchema,
   PostgresRlsEnablementSchema,
   PostgresRlsPolicySchema,
@@ -229,6 +232,10 @@ export interface RlsPolicyExtensionBlock extends ParsedPslExtensionBlock<PolicyB
 }
 
 export function roleSpec() {
+  return structBlock({ parameters: {} });
+}
+
+export function extensionSpec() {
   return structBlock({ parameters: {} });
 }
 
@@ -477,6 +484,13 @@ function lowerRoleFromBlock(
   return new PostgresRole({ name: block.name, namespaceId: UNBOUND_NAMESPACE_ID });
 }
 
+const extensionEntityTypeOutput = {
+  factory: (block: ParsedPslExtensionBlock): PostgresExtension =>
+    new PostgresExtension({ name: block.name }),
+  nameUniqueAcrossNamespaces: true,
+} as const satisfies AuthoringEntityTypeFactoryOutput<ParsedPslExtensionBlock, PostgresExtension> &
+  SqlNameUniqueAcrossNamespacesOutput;
+
 export const postgresAuthoringEntityTypes = {
   role: {
     kind: 'entity',
@@ -506,6 +520,12 @@ export const postgresAuthoringEntityTypes = {
     discriminator: 'native_enum',
     validatorSchema: PostgresNativeEnumSchema,
     output: nativeEnumEntityTypeOutput,
+  },
+  extension: {
+    kind: 'entity',
+    discriminator: 'extension',
+    validatorSchema: PostgresExtensionSchema,
+    output: extensionEntityTypeOutput,
   },
 } as const satisfies AuthoringEntityTypeNamespace;
 
@@ -613,6 +633,15 @@ export const postgresAuthoringPslBlockDescriptors = {
     discriminator: 'role',
     name: { required: true },
     spec: roleSpec,
+  } satisfies PslBlockSpecDescriptor,
+  extension: {
+    kind: 'pslBlock',
+    keyword: 'extension',
+    documentation:
+      'Declares a PostgreSQL extension the database must have installed, in the schema of the enclosing namespace.',
+    discriminator: 'extension',
+    name: { required: true },
+    spec: extensionSpec,
   } satisfies PslBlockSpecDescriptor,
 } as const satisfies AuthoringPslBlockDescriptorNamespace;
 
@@ -822,6 +851,12 @@ interface RlsRoleHandleShape {
   readonly name: string;
 }
 
+interface ExtensionHandleShape {
+  readonly entityKind: 'extension';
+  readonly name: string;
+  readonly namespace?: string;
+}
+
 interface RlsPolicyHandleShape {
   readonly entityKind: 'policy';
   readonly operation: RlsPolicyOperation;
@@ -887,6 +922,7 @@ export function postgresLowerEntityHandles(
     { coordinate: RlsTargetCoordinate; entity: PostgresRlsEnablement }
   >();
   const roles = new Map<string, PostgresRole>();
+  const extensionNamespaces = new Map<string, string>();
   const policies: {
     readonly handle: RlsPolicyHandleShape;
     readonly refs: Readonly<Record<string, ResolvedEntityHandleRef>>;
@@ -939,6 +975,31 @@ export function postgresLowerEntityHandles(
           'policy handles are constructed only by the postgres contract-builder policy*() constructors, which enforce this shape'
         >(handle);
         policies.push({ handle: policyHandle, refs });
+        break;
+      }
+      case 'extension': {
+        const extensionHandle = blindCast<
+          ExtensionHandleShape,
+          'extension handles are constructed only by the postgres contract-builder extension() constructor, which enforces this shape'
+        >(handle);
+        const namespaceId = extensionHandle.namespace ?? input.defaultNamespaceId;
+        const declaredIn = extensionNamespaces.get(extensionHandle.name);
+        if (declaredIn === namespaceId) {
+          throw postgresError(
+            'CONTRACT.NAME_DUPLICATE',
+            `defineContract: extension "${extensionHandle.name}" is declared more than once.`,
+            { meta: { kind: 'extension', name: extensionHandle.name, namespaceId } },
+          );
+        }
+        if (declaredIn !== undefined) {
+          const namespaces = [declaredIn, namespaceId].sort();
+          throw postgresError(
+            'CONTRACT.NAME_DUPLICATE',
+            `defineContract: extension "${extensionHandle.name}" is declared in namespaces ${namespaces.map((id) => `"${id}"`).join(' and ')}; declare it in one namespace only.`,
+            { meta: { kind: 'extension', name: extensionHandle.name, namespaces } },
+          );
+        }
+        extensionNamespaces.set(extensionHandle.name, namespaceId);
         break;
       }
       default:
@@ -1008,6 +1069,14 @@ export function postgresLowerEntityHandles(
   }
   for (const [name, entity] of roles) {
     rows.push({ namespaceId: UNBOUND_NAMESPACE_ID, entityKind: 'role', key: name, entity });
+  }
+  for (const [name, namespaceId] of extensionNamespaces) {
+    rows.push({
+      namespaceId,
+      entityKind: 'extension',
+      key: name,
+      entity: new PostgresExtension({ name }),
+    });
   }
   return rows;
 }

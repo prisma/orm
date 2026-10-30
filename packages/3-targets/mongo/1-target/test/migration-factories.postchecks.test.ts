@@ -1,3 +1,4 @@
+import { MONGO_INDEX_OPTION_KEYS } from '@internal/mongo-contract';
 import type { MongoFilterExpr } from '@internal/mongo-query-ast/control';
 import {
   keysToKeySpec,
@@ -6,7 +7,6 @@ import {
   MongoFieldFilter,
   MongoNotExpr,
 } from '@internal/mongo-query-ast/control';
-import { MONGO_INDEX_OPTION_KEYS } from '@internal/mongo-schema-ir';
 import { describe, expect, it } from 'vitest';
 import { collMod, createIndex } from '../src/core/migrations/migration-factories';
 

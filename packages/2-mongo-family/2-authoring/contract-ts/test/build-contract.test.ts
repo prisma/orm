@@ -376,21 +376,6 @@ describe('buildMongoContractFromDefinition refusals', () => {
       [{ kind: 'indexScopeConflict', key: { kind: 'index', model: 'Bug', position: 0 } }],
     ],
     [
-      'a duplicate index in one collection',
-      {
-        models: [
-          user([scalar('a')], { indexes: [{ fields: { a: 1 } }] }),
-          {
-            modelName: 'Admin',
-            collection: 'users',
-            fields: [scalar('a')],
-            indexes: [{ fields: { a: 1 } }],
-          },
-        ],
-      },
-      [{ kind: 'indexDuplicate', key: { kind: 'index', model: 'Admin', position: 0 } }],
-    ],
-    [
       'a generated value on a value object field',
       {
         models: [],

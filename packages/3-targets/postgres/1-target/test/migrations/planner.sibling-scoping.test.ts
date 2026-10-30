@@ -73,6 +73,7 @@ function buildContract(): Contract<SqlStorage> {
 
 function buildLiveSchema(): PostgresDatabaseSchemaNode {
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',
@@ -178,6 +179,7 @@ function buildContractWithSecondNamespace(): Contract<SqlStorage> {
  */
 function buildLiveSchemaWithCrossNamespaceOrphan(): PostgresDatabaseSchemaNode {
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',
@@ -331,6 +333,7 @@ describe('Postgres planner ownership consultation', () => {
     // space's own drift and must still be dropped — the oracle's positive
     // answer on the owning table must not suppress it.
     const liveWithDriftColumn = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         public: new PostgresNamespaceSchemaNode({
           schemaName: 'public',

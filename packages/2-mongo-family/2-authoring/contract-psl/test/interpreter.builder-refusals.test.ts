@@ -52,52 +52,6 @@ model Bug {
     ]);
   });
 
-  it('refuses an index that another model on the same collection already declares', () => {
-    const schema = `model User {
-  id    ObjectId @id @map("_id")
-  email String
-  @@index([email])
-  @@map("users")
-}
-
-model Admin {
-  id    ObjectId @id @map("_id")
-  email String
-  @@index([email])
-  @@map("users")
-}
-`;
-    const [diagnostic] = diagnosticsOf(schema);
-
-    expect({
-      count: diagnosticsOf(schema).length,
-      code: diagnostic?.code,
-      message: diagnostic?.message,
-      at: diagnostic?.span?.start.line,
-    }).toEqual({
-      count: 1,
-      code: 'PSL_INVALID_INDEX',
-      message:
-        'Collection "users" already has this index, declared on model "User". Remove one of them from model "Admin" or "User".',
-      at: 11,
-    });
-  });
-
-  it('refuses an index its model declares twice', () => {
-    const schema = `model User {
-  id    ObjectId @id @map("_id")
-  email String   @unique
-  @@unique([email])
-}
-`;
-    expect(diagnosticsOf(schema).map(({ code, message }) => ({ code, message }))).toEqual([
-      {
-        code: 'PSL_INVALID_INDEX',
-        message: 'Model "User" declares this index twice. Remove one of them.',
-      },
-    ]);
-  });
-
   it('reports the warnings of a schema it refuses', () => {
     const warnings: ContractSourceDiagnostic[] = [];
     const result = interpretMongoContract(

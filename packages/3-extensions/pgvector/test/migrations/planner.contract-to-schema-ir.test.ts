@@ -173,6 +173,7 @@ function contractToSchemaIR(
     ]),
   );
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',

@@ -1,5 +1,5 @@
+import { indexLookupKey } from '@internal/mongo-contract';
 import {
-  indexLookupKey,
   MongoSchemaCollection,
   MongoSchemaCollectionOptions,
   MongoSchemaIndex,

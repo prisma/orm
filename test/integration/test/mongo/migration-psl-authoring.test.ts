@@ -257,6 +257,24 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
     expect(emailIdx!['unique']).toBe(true);
   });
 
+  it('PSL with @unique and @@index on one field creates one unique index', async () => {
+    const contract = pslToContract(`
+      model User {
+        id    ObjectId @id @map("_id")
+        email String   @unique
+        @@index([email])
+      }
+    `);
+
+    await planAndApply(replSetUri, null, contract);
+
+    const indexes = await db.collection('User').listIndexes().toArray();
+    expect(indexes.map(({ key, unique }) => ({ key, unique }))).toEqual([
+      { key: { _id: 1 }, unique: undefined },
+      { key: { email: 1 }, unique: true },
+    ]);
+  });
+
   it('PSL with model fields produces $jsonSchema validator on MongoDB', async () => {
     const contract = pslToContract(`
       model User {

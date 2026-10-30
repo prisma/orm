@@ -1,4 +1,4 @@
-import type { MongoDriver } from '@internal/mongo-lowering';
+import type { MongoQueryable } from '@internal/mongo-lowering';
 import type {
   AggregateWireCommand,
   AnyMongoDdlWireCommand,
@@ -43,7 +43,7 @@ function unreachableKind(value: never): string {
 }
 /* v8 ignore stop */
 
-export class MongoDriverImpl implements MongoDriver {
+export class MongoDriverImpl implements MongoQueryable {
   protected readonly db: Db;
   protected readonly client: MongoClient | undefined;
 
@@ -54,7 +54,12 @@ export class MongoDriverImpl implements MongoDriver {
 
   static async fromConnection(uri: string, dbName: string): Promise<MongoDriverImpl> {
     const client = new MongoClient(uri, { driverInfo: DRIVER_INFO });
-    await client.connect();
+    try {
+      await client.connect();
+    } catch (error) {
+      await client.close();
+      throw error;
+    }
     return new MongoDriverImpl(client.db(dbName), client);
   }
 
@@ -305,8 +310,4 @@ export class MongoDriverImpl implements MongoDriver {
       ...(changeStreamPreAndPostImages !== undefined ? { changeStreamPreAndPostImages } : {}),
     });
   }
-}
-
-export async function createMongoDriver(uri: string, dbName: string): Promise<MongoDriver> {
-  return MongoDriverImpl.fromConnection(uri, dbName);
 }

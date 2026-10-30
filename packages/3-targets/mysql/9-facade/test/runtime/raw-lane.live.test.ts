@@ -9,12 +9,12 @@ import { exampleDatabase, withSeededDatabase } from './live-database';
 const contract = contractFromJson<Contract>(contractJson);
 
 describe('MySQL raw SQL with integer values', { timeout: timeouts.databaseOperation }, () => {
-  it('compares, combines and builds JSON from integer values as integers, not text', async (test) => {
+  it('compares and builds JSON from int values as integers, and adds bigint values, sent as decimal text, as integers once one is cast, as on Postgres', async (test) => {
     await withSeededDatabase(test, exampleDatabase, async (url) => {
       await using db = mysql({ contract, url, verifyMarker: false });
       const [row] = await db.query(
         db.raw
-          .sql`SELECT ${10} < ${9} AS lt, GREATEST(${10}, ${9}) AS greatest, CAST(JSON_ARRAY(${5}) AS CHAR) AS arr, ${9007199254740993n} + ${1n} AS sum`
+          .sql`SELECT ${10} < ${9} AS lt, GREATEST(${10}, ${9}) AS greatest, CAST(JSON_ARRAY(${5}) AS CHAR) AS arr, CAST(${9007199254740993n} AS SIGNED) + ${1n} AS sum`
           .returnsRow({
             lt: 'mysql/int@1',
             greatest: 'mysql/int@1',
@@ -68,6 +68,28 @@ describe('MySQL raw SQL with integer values', { timeout: timeouts.databaseOperat
         offset: [{ id: 2 }, { id: 3 }],
         pair: [{ id: 2 }, { id: 3 }],
       });
+    });
+  });
+
+  it('runs a query awaited inside the loop over a large result in a transaction, because a query reads its whole result first, as on Postgres', async (test) => {
+    await withSeededDatabase(test, exampleDatabase, async (url) => {
+      await using db = mysql({ contract, url, verifyMarker: false });
+      const seen = await db.transaction(async (tx) => {
+        let total = 0;
+        for await (const row of tx.query(
+          tx.raw
+            .sql`WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE n < ${500}) SELECT n, REPEAT('x', 4000) AS pad FROM s`
+            .returnsRow({ n: 'mysql/int@1', pad: 'mysql/text@1' })
+            .build(),
+        )) {
+          const [echo] = await tx.query(
+            tx.raw.sql`SELECT ${row.n} AS m`.returnsRow({ m: 'mysql/int@1' }).build(),
+          );
+          total += echo?.m ?? 0;
+        }
+        return total;
+      });
+      expect(seen).toBe((500 * 501) / 2);
     });
   });
 });

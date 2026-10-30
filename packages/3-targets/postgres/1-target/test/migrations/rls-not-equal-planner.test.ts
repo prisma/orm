@@ -97,6 +97,7 @@ function actualSchema(
   options?: { readonly nullableTenantId?: boolean },
 ): PostgresDatabaseSchemaNode {
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',

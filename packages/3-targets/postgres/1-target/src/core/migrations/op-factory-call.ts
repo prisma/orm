@@ -112,7 +112,7 @@ import {
   renameConstraintLabel,
 } from './operations/constraints';
 import type { DataTransformColumn } from './operations/data-transform';
-import { createExtension } from './operations/dependencies';
+import { createExtension, dropExtension, setExtensionSchema } from './operations/dependencies';
 import { type CreateIndexExtras, createIndex, dropIndex, renameIndex } from './operations/indexes';
 import { createNativeEnumType, dropNativeEnumType } from './operations/native-enum-types';
 import {
@@ -1848,22 +1848,93 @@ export class RawSqlCall extends PostgresOpFactoryCallNode {
 export class CreateExtensionCall extends PostgresOpFactoryCallNode {
   readonly factoryName = 'createExtension' as const;
   readonly operationClass = 'additive' as const;
+  readonly schemaName: string;
   readonly extensionName: string;
   readonly label: string;
 
-  constructor(extensionName: string) {
+  constructor(schemaName: string, extensionName: string) {
     super();
+    this.schemaName = schemaName;
     this.extensionName = extensionName;
     this.label = `Create extension "${extensionName}"`;
     this.freeze();
   }
 
-  toOp(): Op {
-    return createExtension(this.extensionName);
+  async toOp(lowerer?: ExecuteRequestLowerer): Promise<Op> {
+    return createExtension(
+      { schema: this.schemaName, extension: this.extensionName },
+      requireLowerer(lowerer, 'CreateExtensionCall', `extension "${this.extensionName}"`),
+    );
   }
 
   renderTypeScript(): string {
-    return `createExtension(${jsonToTsSource(this.extensionName)})`;
+    return `this.createExtension({ schema: ${jsonToTsSource(this.schemaName)}, extension: ${jsonToTsSource(this.extensionName)} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+}
+
+export class DropExtensionCall extends PostgresOpFactoryCallNode {
+  readonly factoryName = 'dropExtension' as const;
+  readonly operationClass = 'destructive' as const;
+  readonly schemaName: string;
+  readonly extensionName: string;
+  readonly label: string;
+
+  constructor(schemaName: string, extensionName: string) {
+    super();
+    this.schemaName = schemaName;
+    this.extensionName = extensionName;
+    this.label = `Drop extension "${extensionName}"`;
+    this.freeze();
+  }
+
+  async toOp(lowerer?: ExecuteRequestLowerer): Promise<Op> {
+    return dropExtension(
+      { schema: this.schemaName, extension: this.extensionName },
+      requireLowerer(lowerer, 'DropExtensionCall', `extension "${this.extensionName}"`),
+    );
+  }
+
+  renderTypeScript(): string {
+    return `this.dropExtension({ schema: ${jsonToTsSource(this.schemaName)}, extension: ${jsonToTsSource(this.extensionName)} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+}
+
+export class SetExtensionSchemaCall extends PostgresOpFactoryCallNode {
+  readonly factoryName = 'setExtensionSchema' as const;
+  readonly operationClass = 'widening' as const;
+  readonly extensionName: string;
+  readonly toSchemaName: string;
+  readonly label: string;
+
+  constructor(extensionName: string, toSchemaName: string) {
+    super();
+    this.extensionName = extensionName;
+    this.toSchemaName = toSchemaName;
+    this.label = `Move extension "${extensionName}" to schema "${toSchemaName}"`;
+    this.freeze();
+  }
+
+  async toOp(lowerer?: ExecuteRequestLowerer): Promise<Op> {
+    return setExtensionSchema(
+      { extension: this.extensionName, schema: this.toSchemaName },
+      requireLowerer(lowerer, 'SetExtensionSchemaCall', `extension "${this.extensionName}"`),
+    );
+  }
+
+  renderTypeScript(): string {
+    return `this.setExtensionSchema({ extension: ${jsonToTsSource(this.extensionName)}, schema: ${jsonToTsSource(this.toSchemaName)} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [];
   }
 }
 
@@ -2716,6 +2787,8 @@ export type PostgresOpFactoryCall =
   | DropConstraintCall
   | RawSqlCall
   | CreateExtensionCall
+  | DropExtensionCall
+  | SetExtensionSchemaCall
   | CreateSchemaCall
   | SetTableSchemaCall
   | RenameSchemaCall

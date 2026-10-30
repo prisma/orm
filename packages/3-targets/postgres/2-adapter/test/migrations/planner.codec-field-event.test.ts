@@ -23,6 +23,7 @@ import { createTestPostgresControlAdapter } from '../helpers/test-control-adapte
 import { postgresComponents } from './fixtures/postgres-components';
 
 const emptySchema = new PostgresDatabaseSchemaNode({
+  extensions: undefined,
   namespaces: {
     public: new PostgresNamespaceSchemaNode({
       schemaName: 'public',

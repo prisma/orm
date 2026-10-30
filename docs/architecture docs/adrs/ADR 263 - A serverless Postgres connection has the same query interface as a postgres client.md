@@ -1,6 +1,6 @@
 # ADR 263 — A serverless Postgres connection has the same query interface as a `postgres()` client
 
-**Status:** Implemented
+**Status:** Implemented. Amended by [ADR 311](ADR%20311%20-%20connect%28%29%20on%20a%20client%20is%20safe%20to%20call%20again.md): `connect()` on a client may be called again; see the table in "`connect` on a client and on a serverless client".
 **Domain:** Adapters / Targets, Runtime
 
 ## At a glance

@@ -16,6 +16,7 @@ import { postgresGeneratorDescriptors, postgresGeneratorFunctions } from './gene
 import { postgresIndexTypes } from './index-types';
 import { DEFAULT_NAMESPACE_ID } from './namespace-ids';
 import { postgresCreateNamespace } from './postgres-schema';
+import { prisma7PostgresRenamedNativeTypes } from './prisma7-type-map';
 import { postgresScalarAndNativeTypeConstructors } from './type-constructors';
 
 const postgresTargetDescriptorMetaBase = {
@@ -28,6 +29,7 @@ const postgresTargetDescriptorMetaBase = {
     type: { ...postgresScalarAndNativeTypeConstructors, ...postgresAuthoringTypes },
     dataTypes: postgresDataTypeEntries(),
     textDataTypes: postgresTextDataTypes,
+    renamedTypeConstructors: prisma7PostgresRenamedNativeTypes,
     entityTypes: postgresAuthoringEntityTypes,
     pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
     modelAttributes: postgresAuthoringModelAttributes,

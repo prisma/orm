@@ -102,6 +102,7 @@ function ordersTable(): PostgresTableSchemaNode {
 
 function actualTree(entries: readonly { typeName: string; values: readonly string[] }[]) {
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',

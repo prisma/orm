@@ -140,7 +140,10 @@ describe('upgrading a project whose Prisma 7 schema uses @ignore, after the hand
           hashes,
         );
         expect(await v8('db', 'sign')).toMatchObject({
-          spaces: [{ status: 'updated', contract: { storageHash: hashes.upgraded } }],
+          spaces: [
+            { space: 'app', status: 'updated', contract: { storageHash: hashes.upgraded } },
+            { space: 'citext', status: 'unchanged' },
+          ],
         });
         expect(await v8('db', 'migrate')).toMatchObject({ ok: true, migrationsApplied: 0 });
       }),

@@ -30,6 +30,7 @@
     "@prisma/orm-extension-postgis": "workspace:8.0.0-rc.21",
     "@prisma/orm-mongo": "workspace:8.0.0-rc.21",
     "@prisma/orm-postgres": "workspace:8.0.0-rc.21",
+    "@prisma/orm-postgres-contrib": "workspace:8.0.0-rc.21",
     "@prisma/orm-sqlite": "workspace:8.0.0-rc.21",
     "@repo/test-utils": "workspace:8.0.0-rc.21",
     "arktype": "catalog:"

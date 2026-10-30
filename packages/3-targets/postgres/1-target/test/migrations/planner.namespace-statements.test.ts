@@ -151,6 +151,7 @@ describe('Postgres planner, a namespace statement', () => {
   it('renames into a name the database lacks although the read schema lists it with no tables', async () => {
     const schema = postgresContractToSchema(inBilling, postgresTypeComponents);
     const withPlaceholder = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         ...schema.namespaces,
         finance: new PostgresNamespaceSchemaNode({ schemaName: 'finance', tables: {} }),

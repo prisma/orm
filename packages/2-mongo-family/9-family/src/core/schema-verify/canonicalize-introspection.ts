@@ -14,6 +14,7 @@
  * so either authoring style verifies.
  */
 
+import { canonicalize } from '@internal/mongo-contract';
 import type {
   MongoSchemaCollection,
   MongoSchemaCollectionOptions,
@@ -207,15 +208,12 @@ function findExpectedIndexCounterpart(
   liveIndex: MongoSchemaIndex,
   expectedIndexes: ReadonlyArray<MongoSchemaIndex>,
 ): MongoSchemaIndex | undefined {
-  const projectedLiveKeys = sortTextKeys(projectTextIndexKeys(liveIndex));
-  const liveKeySig = projectedLiveKeys.map((k) => `${k.field}:${k.direction}`).join(',');
-  for (const expected of expectedIndexes) {
-    const expectedKeySig = sortTextKeys(expected.keys)
-      .map((k) => `${k.field}:${k.direction}`)
-      .join(',');
-    if (expectedKeySig === liveKeySig) return expected;
-  }
-  return undefined;
+  const liveKeys = keyPatternOf(projectTextIndexKeys(liveIndex));
+  return expectedIndexes.find((expected) => keyPatternOf(expected.keys) === liveKeys);
+}
+
+function keyPatternOf(keys: ReturnType<typeof projectTextIndexKeys>): string {
+  return canonicalize(sortTextKeys(keys).map((k) => [k.field, k.direction]));
 }
 
 /**

@@ -282,6 +282,24 @@ const parityCases: readonly ParityCase[] = [
     expected: { dataType: 'pg/inet', codecId: 'pg/inet@1', typeParams: {} },
   },
   {
+    title: 'Xml — bare',
+    bare: 'Xml',
+    alias: 'Xml',
+    expected: { dataType: 'pg/xml', codecId: 'pg/xml@1', typeParams: {} },
+  },
+  {
+    title: 'Oid — bare',
+    bare: 'Oid',
+    alias: 'Oid',
+    expected: { dataType: 'pg/oid', codecId: 'pg/oid@1', typeParams: {} },
+  },
+  {
+    title: 'Money — bare',
+    bare: 'Money',
+    alias: 'Money',
+    expected: { dataType: 'pg/money', codecId: 'pg/money@1', typeParams: {} },
+  },
+  {
     title: 'SmallInt — bare',
     bare: 'SmallInt',
     alias: 'SmallInt',

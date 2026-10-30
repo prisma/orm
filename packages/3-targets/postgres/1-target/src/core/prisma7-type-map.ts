@@ -4,6 +4,7 @@ import { createDataTypeLookup, type DataTypeId } from '@internal/framework-compo
 import type { SqlTypeParams } from '@internal/sql-contract/data-type';
 import { InternalError } from '@internal/utils/internal-error';
 import {
+  pgBit,
   pgBool,
   pgBytea,
   pgChar,
@@ -16,22 +17,26 @@ import {
   pgInt8,
   pgJson,
   pgJsonb,
+  pgMoney,
   pgNumeric,
+  pgOid,
   pgText,
   pgTime,
   pgTimestamp,
   pgTimestamptz,
   pgTimetz,
   pgUuid,
+  pgVarbit,
   pgVarchar,
+  pgXml,
   postgresDataTypes,
 } from './data-types';
 import { postgresCodecDescriptorRegistry } from './registry';
 import { postgresScalarAndNativeTypeConstructors } from './type-constructors';
 
-/** A Prisma 8 constructor call: its name and the values of its arguments. */
+/** A Prisma 8 constructor call: its path and the values of its arguments. */
 export interface ConstructorCall {
-  readonly constructorName: string;
+  readonly constructorPath: readonly string[];
   readonly args: readonly unknown[];
 }
 
@@ -47,7 +52,7 @@ const of = (type: { readonly id: DataTypeId }, params: SqlTypeParams = {}): Pris
 });
 
 /**
- * What Prisma 7.10.0 creates in Postgres for each Prisma 7 scalar and `@db.*` native type, as a data type and its parameters. Derived from the SQL recorded in `test/integration/test/fixtures/prisma7-source/reference/migration.sql`. A `@db.*` attribute's own arguments replace the parameters; without any, the column gets these, so `@db.Char` is the `character(1)` Postgres stores for Prisma 7's `CHAR`.
+ * What Prisma 7.10.0 creates in Postgres for each Prisma 7 scalar and `@db.*` native type, as a data type and its parameters. Derived from the SQL recorded in `test/integration/test/fixtures/prisma7-source/reference/migration.sql`. A `@db.*` attribute's own arguments replace the parameters; without any, the column gets these, so `@db.Char` is the `character(1)` Postgres stores for Prisma 7's `CHAR`, and `@db.Bit` the `bit(1)` it stores for `BIT`.
  */
 export const prisma7PostgresTypes = {
   scalars: {
@@ -82,6 +87,11 @@ export const prisma7PostgresTypes = {
     Json: of(pgJson),
     JsonB: of(pgJsonb),
     ByteA: of(pgBytea),
+    Bit: of(pgBit, { length: 1 }),
+    VarBit: of(pgVarbit),
+    Xml: of(pgXml),
+    Oid: of(pgOid),
+    Money: of(pgMoney),
   },
 } as const;
 
@@ -108,7 +118,7 @@ function mappingOf({ dataType, params }: Prisma7ColumnType): ConstructorCall {
       `No constructor marked inferred writes ${dataType} with these parameters.`,
     );
   }
-  return { constructorName: markedConstructor.path.join('.'), args };
+  return { constructorPath: markedConstructor.path, args };
 }
 
 function mappingsOf(
@@ -117,8 +127,28 @@ function mappingsOf(
   return Object.fromEntries(Object.entries(types).map(([name, type]) => [name, mappingOf(type)]));
 }
 
+/**
+ * The `@db.*` types of a PostgreSQL extension, with the extension that provides each. The binding names the pack that declares the extension; the target does not depend on it, and the reader uses the constructor only when the config composes the pack.
+ */
+const prisma7PostgresExtensionNativeTypes = {
+  Citext: { constructorPath: ['citext', 'Citext'], args: [], extension: 'citext' },
+} as const;
+
 /** {@link prisma7PostgresTypes} as the Prisma 7 reader takes it: each type's constructor call. */
 export const prisma7PostgresTypeMap = {
   scalars: mappingsOf(prisma7PostgresTypes.scalars),
   nativeTypes: mappingsOf(prisma7PostgresTypes.nativeTypes),
+  extensionNativeTypes: prisma7PostgresExtensionNativeTypes,
 };
+
+/** The Prisma 7 `@db.*` names whose Prisma 8 constructor has another name, such as `Text` to `String`. */
+export const prisma7PostgresRenamedNativeTypes: Readonly<Record<string, string>> =
+  Object.fromEntries(
+    Object.entries({
+      ...prisma7PostgresTypeMap.nativeTypes,
+      ...prisma7PostgresTypeMap.extensionNativeTypes,
+    }).flatMap(([name, { constructorPath }]) => {
+      const constructorName = constructorPath.join('.');
+      return constructorName === name ? [] : [[name, constructorName]];
+    }),
+  );

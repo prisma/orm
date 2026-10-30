@@ -7,7 +7,7 @@ import { createBoundDriverFromBinding } from '../src/postgres-driver';
 import { createPgPool } from '../src/session-settings';
 import { queryRows } from './sql-queryable-test-utils';
 
-const SESSION_SETTINGS = { DateStyle: 'ISO' } as const;
+const SESSION_SETTINGS = { DateStyle: 'ISO', lc_monetary: 'C' } as const;
 
 const URL_OPTIONS = 'options=-c%20search_path%3Dreports%20-c%20DateStyle%3DGerman';
 
@@ -32,7 +32,7 @@ describe('the startup options of a connection', () => {
     await driver.close().catch(() => undefined);
 
     expect((await recorder.next())['options']).toBe(
-      '-c search_path=reports -c DateStyle=German -c DateStyle=ISO',
+      '-c search_path=reports -c DateStyle=German -c DateStyle=ISO -c lc_monetary=C',
     );
   });
 
@@ -42,7 +42,7 @@ describe('the startup options of a connection', () => {
     await queryRows(driver, 'select 1').catch(() => undefined);
     await driver.close().catch(() => undefined);
 
-    expect((await recorder.next())['options']).toBe('-c DateStyle=ISO');
+    expect((await recorder.next())['options']).toBe('-c DateStyle=ISO -c lc_monetary=C');
   });
 
   it('set the session settings on a control connection Prisma opens', async () => {
@@ -50,7 +50,7 @@ describe('the startup options of a connection', () => {
       .create(recorder.url, { sessionSettings: SESSION_SETTINGS })
       .catch(() => undefined);
 
-    expect((await recorder.next())['options']).toBe('-c DateStyle=ISO');
+    expect((await recorder.next())['options']).toBe('-c DateStyle=ISO -c lc_monetary=C');
   });
 
   it('are left as they are on a client the application supplies', async () => {
@@ -74,7 +74,9 @@ describe('the startup options of a connection', () => {
     vi.stubEnv('PGOPTIONS', '-c search_path=later');
     try {
       await pool.connect().catch(() => undefined);
-      expect((await recorder.next())['options']).toBe('-c search_path=later -c DateStyle=ISO');
+      expect((await recorder.next())['options']).toBe(
+        '-c search_path=later -c DateStyle=ISO -c lc_monetary=C',
+      );
     } finally {
       vi.unstubAllEnvs();
       await pool.end().catch(() => undefined);

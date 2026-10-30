@@ -12,7 +12,9 @@ describe('DDL E2E Tests', { timeout: 30000 }, () => {
   it('creates tables on db initialization', async () => {
     await withTestRuntime<Contract>(contractJsonPath, async ({ sql }) => {
       expect(sql).toMatchInlineSnapshot(`
-        "CREATE EXTENSION IF NOT EXISTS vector;
+        "CREATE SCHEMA IF NOT EXISTS "public";
+
+        CREATE EXTENSION IF NOT EXISTS "vector" WITH SCHEMA "public";
 
         CREATE TABLE "public"."comment" (
           "content" text NOT NULL,

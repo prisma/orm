@@ -1,5 +1,5 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
-import { createMongoDriver } from '@internal/driver-mongo';
+import mongoRuntimeDriver from '@internal/driver-mongo/runtime';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import type { MongoContract } from '@internal/mongo-contract';
 import {
@@ -51,9 +51,11 @@ export async function withMongod<T>(fn: (ctx: MongodContext) => Promise<T>): Pro
     const stack = createMongoExecutionStack({
       target: mongoRuntimeTarget,
       adapter: mongoRuntimeAdapter,
+      driver: mongoRuntimeDriver,
     });
     const context = createMongoExecutionContext({ contract: fixtureContract, stack });
-    const driver = await createMongoDriver(connectionUri, dbName);
+    const driver = stack.driver.create();
+    await driver.connect({ kind: 'url', url: connectionUri, dbName });
     runtime = createMongoRuntime({ context, adapter: stack.adapter.create(stack), driver });
 
     const ctx: MongodContext = {
@@ -117,9 +119,11 @@ export function describeWithMongoDB(name: string, fn: (ctx: MongodContext) => vo
       const stack = createMongoExecutionStack({
         target: mongoRuntimeTarget,
         adapter: mongoRuntimeAdapter,
+        driver: mongoRuntimeDriver,
       });
       context = createMongoExecutionContext({ contract: fixtureContract, stack });
-      const driver = await createMongoDriver(replSet.getUri(), dbName);
+      const driver = stack.driver.create();
+      await driver.connect({ kind: 'url', url: replSet.getUri(), dbName });
       runtime = createMongoRuntime({ context, adapter: stack.adapter.create(stack), driver });
     }, timeouts.spinUpMongoMemoryServer);
 

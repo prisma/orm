@@ -37,21 +37,34 @@ import baselineMetadata from '../../migrations/20260601T0000_install_pg_search_e
 import baselineOps from '../../migrations/20260601T0000_install_pg_search_extension/ops.json' with {
   type: 'json',
 };
+import installMetadata from '../../migrations/20261029T1342_create_pg_search_extension/migration.json' with {
+  type: 'json',
+};
+import installOps from '../../migrations/20261029T1342_create_pg_search_extension/ops.json' with {
+  type: 'json',
+};
+import upgradeMetadata from '../../migrations/20261029T1342_declare_pg_search_extension/migration.json' with {
+  type: 'json',
+};
+import upgradeOps from '../../migrations/20261029T1342_declare_pg_search_extension/ops.json' with {
+  type: 'json',
+};
 import headRef from '../../migrations/refs/head.json' with { type: 'json' };
 import contractJson from '../contract.json' with { type: 'json' };
-import { PARADEDB_SPACE_ID } from '../core/constants';
+import {
+  PARADEDB_BASELINE_MIGRATION_NAME,
+  PARADEDB_INSTALL_MIGRATION_NAME,
+  PARADEDB_SPACE_ID,
+  PARADEDB_UPGRADE_MIGRATION_NAME,
+} from '../core/constants';
 import { paradedbPackMeta, paradedbQueryOperations } from '../core/descriptor-meta';
-
-const BASELINE_DIR_NAME = '20260601T0000_install_pg_search_extension';
 
 const paradedbContractSpace = contractSpaceFromJson<Contract<SqlStorage>>({
   contractJson,
   migrations: [
-    {
-      dirName: BASELINE_DIR_NAME,
-      metadata: baselineMetadata,
-      ops: baselineOps,
-    },
+    { dirName: PARADEDB_BASELINE_MIGRATION_NAME, metadata: baselineMetadata, ops: baselineOps },
+    { dirName: PARADEDB_UPGRADE_MIGRATION_NAME, metadata: upgradeMetadata, ops: upgradeOps },
+    { dirName: PARADEDB_INSTALL_MIGRATION_NAME, metadata: installMetadata, ops: installOps },
   ],
   headRef,
 });

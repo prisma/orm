@@ -46,6 +46,7 @@ export function makeContract(
 
 export function emptyRoot(): PostgresDatabaseSchemaNode {
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {},
     roles: [],
     existingSchemas: ['public'],
@@ -65,6 +66,7 @@ export function rootOf(
   tables: Record<string, PostgresTableSchemaNode>,
 ): PostgresDatabaseSchemaNode {
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',

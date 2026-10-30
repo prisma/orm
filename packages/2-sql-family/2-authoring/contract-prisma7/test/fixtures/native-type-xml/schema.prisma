@@ -1,0 +1,9 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model NativeType {
+  id       Int     @id
+  value    String  @db.Xml
+  optional String? @db.Xml
+}

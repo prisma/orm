@@ -383,19 +383,21 @@ withTempDir(({ createTempDir }) => {
     );
 
     it(
-      'auto-baseline with extension pack seeds extension space separately from app bundles (pgvector)',
+      'auto-baseline with extension pack keeps the extension space emit pinned apart from app bundles (pgvector)',
       async () => {
         await withDevDatabase(async ({ connectionString }) => {
           const ctx = setupExtensionJourney(connectionString, createTempDir);
           expect((await runContractEmit(ctx)).exitCode).toBe(0);
+          expect(existsSync(join(ctx.testDir, 'migrations', 'pgvector', 'refs', 'head.json'))).toBe(
+            true,
+          );
 
           const plan = await runMigrationPlan(ctx, ['--name', 'initial', '--json']);
           expect(plan.exitCode).toBe(0);
           const planJson = parseJsonOutput<PlanJsonResult & { emittedExtensionDirs?: unknown[] }>(
             plan,
           );
-          expect(planJson.emittedExtensionDirs?.length).toBeGreaterThan(0);
-          expect(existsSync(join(ctx.testDir, 'migrations', 'pgvector'))).toBe(true);
+          expect(planJson.emittedExtensionDirs).toEqual([]);
           expect(listAppMigrationBundleDirs(ctx)).toHaveLength(1);
         });
       },

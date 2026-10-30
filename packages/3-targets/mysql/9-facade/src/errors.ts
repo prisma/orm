@@ -2,6 +2,7 @@ import type { StructuredError, StructuredErrorOptions } from '@internal/utils/st
 import { structuredError } from '@internal/utils/structured-error';
 
 export type MysqlClientErrorCode =
+  | 'RUNTIME.ARGUMENT_INVALID'
   | 'RUNTIME.BINDING_MISSING'
   | 'DRIVER.NOT_CONNECTED'
   | 'DRIVER.ALREADY_CONNECTED';

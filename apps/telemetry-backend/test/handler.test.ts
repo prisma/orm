@@ -113,7 +113,7 @@ describe('telemetry POST /events', () => {
     expect(row.agent).toBe('claude-code');
     expect(row.extensions).toEqual(['pgvector', 'paradedb']);
     expect(row.exitCode).toBe(4);
-    expect(row.ingestedAt).toBeInstanceOf(Date);
+    expect(Object.prototype.toString.call(row.ingestedAt)).toBe('[object Temporal.Instant]');
     expect(row).not.toHaveProperty('crashStackHash');
     expect(row).not.toHaveProperty('gpuVendor');
     expect(row).not.toHaveProperty('experimentalCapabilities');

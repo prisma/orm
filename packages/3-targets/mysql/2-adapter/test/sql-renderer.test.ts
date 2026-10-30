@@ -73,7 +73,7 @@ describe('MySQL lowering of a select', () => {
     ).toEqual([{ kind: 'bind', name: 'email' }]);
   });
 
-  it('casts an integer param to SIGNED, except in LIMIT and OFFSET, so MySQL reads it as an integer where no column gives it a type', () => {
+  it('writes an integer param as a bare placeholder, which the driver sends as a BIGINT', () => {
     const big = ColumnRef.of('t', 'big');
     const bigParam = (value: bigint) =>
       ParamRef.of(value, { codec: { codecId: 'mysql/bigint@1' } });
@@ -94,10 +94,10 @@ describe('MySQL lowering of a select', () => {
         ),
       ),
     ]).toEqual([
-      'SELECT `user`.`id` AS `id` FROM `user` WHERE `t`.`big` = CAST(?1 AS SIGNED)',
-      'SELECT `user`.`id` AS `id` FROM `user` WHERE `t`.`big` IN (CAST(?1 AS SIGNED))',
-      'SELECT `user`.`id` AS `id` FROM `user` WHERE `t`.`big` = CAST(?1 AS SIGNED)',
-      'SELECT `user`.`id` AS `id` FROM `user` WHERE CAST(?1 AS SIGNED) < CAST(?2 AS SIGNED)',
+      'SELECT `user`.`id` AS `id` FROM `user` WHERE `t`.`big` = ?1',
+      'SELECT `user`.`id` AS `id` FROM `user` WHERE `t`.`big` IN (?1)',
+      'SELECT `user`.`id` AS `id` FROM `user` WHERE `t`.`big` = ?1',
+      'SELECT `user`.`id` AS `id` FROM `user` WHERE ?1 < ?2',
       'SELECT `user`.`id` AS `id` FROM `user` LIMIT ?1 OFFSET ?2',
       'SELECT `user`.`id` AS `id` FROM `user` WHERE `user`.`email` = ?1',
     ]);
@@ -399,34 +399,18 @@ describe('MySQL placeholder check', () => {
     );
   });
 
-  it('writes a raw integer value as a bare placeholder where it is the operand of LIMIT or OFFSET, and casts it elsewhere', () => {
+  it('writes a raw integer value as a bare placeholder wherever it appears', () => {
     const int = (value: number) => ParamRef.of(value, { codec: { codecId: 'mysql/int@1' } });
     const raw = (...parts: (string | ReturnType<typeof int>)[]) =>
       sqlOf(RawQueryAst.affectedCount(parts));
     expect([
-      raw('SELECT id FROM t LIMIT ', int(2)),
       raw('SELECT id FROM t LIMIT ', int(2), ' OFFSET ', int(1)),
-      raw('SELECT id FROM t limit ', int(1), ', ', int(2)),
-      raw('SELECT id FROM t LIMIT /* page */ ', int(2), ' -- x\n OFFSET\n', int(1)),
-      raw('SELECT id FROM t LIMIT 5, ', int(2)),
-      raw('SELECT id FROM t LIMIT ', int(1), ', /* count */ ', int(2)),
-      raw('SELECT ', int(10), ' < ', int(9), ' FROM t WHERE x_limit = ', int(3)),
-      raw('SELECT * FROM (SELECT id FROM t LIMIT ', int(2), ') AS d'),
-      raw("SELECT 'LIMIT' = ", int(1), ', `limit` = ', int(2), ' FROM t'),
-      raw('SELECT id /* LIMIT */ , ', int(1), ' FROM t -- OFFSET\n WHERE id = ', int(2)),
-      raw('SELECT id FROM t LIMIT 5.0, ', int(2)),
+      raw('SELECT ', int(10), ' < ', int(9), ' FROM t'),
+      raw("SELECT 'why?' = ", int(1), ' FROM t'),
     ]).toEqual([
-      'SELECT id FROM t LIMIT ?1',
       'SELECT id FROM t LIMIT ?1 OFFSET ?2',
-      'SELECT id FROM t limit ?1, ?2',
-      'SELECT id FROM t LIMIT /* page */ ?1 -- x\n OFFSET\n?2',
-      'SELECT id FROM t LIMIT 5, ?1',
-      'SELECT id FROM t LIMIT ?1, /* count */ ?2',
-      'SELECT CAST(?1 AS SIGNED) < CAST(?2 AS SIGNED) FROM t WHERE x_limit = CAST(?3 AS SIGNED)',
-      'SELECT * FROM (SELECT id FROM t LIMIT ?1) AS d',
-      "SELECT 'LIMIT' = CAST(?1 AS SIGNED), `limit` = CAST(?2 AS SIGNED) FROM t",
-      'SELECT id /* LIMIT */ , CAST(?1 AS SIGNED) FROM t -- OFFSET\n WHERE id = CAST(?2 AS SIGNED)',
-      'SELECT id FROM t LIMIT 5.0, CAST(?1 AS SIGNED)',
+      'SELECT ?1 < ?2 FROM t',
+      "SELECT 'why?' = ?1 FROM t",
     ]);
   });
 

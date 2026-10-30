@@ -149,6 +149,13 @@ export default function postgres<
   let backgroundConnectError: unknown;
   let closePromise: Promise<void> | undefined;
 
+  const closedError = () =>
+    postgresError('DRIVER.NOT_CONNECTED', 'Postgres client is closed', {
+      why: 'close() was called on this client.',
+      fix: 'Create a new postgres(...) client.',
+      meta: { extension: 'postgres' },
+    });
+
   const connectDriver = async (resolvedBinding: PostgresBinding): Promise<void> => {
     if (driverConnected) return;
     if (!runtimeDriver) throw new InternalError('Postgres runtime driver missing');
@@ -172,11 +179,7 @@ export default function postgres<
 
   const getRuntime = (): Runtime => {
     if (closePromise !== undefined) {
-      throw postgresError('DRIVER.NOT_CONNECTED', 'Postgres client is closed', {
-        why: 'close() was called on this client.',
-        fix: 'Create a new postgres(...) client.',
-        meta: { extension: 'postgres' },
-      });
+      throw closedError();
     }
 
     if (backgroundConnectError !== undefined) {
@@ -245,18 +248,21 @@ export default function postgres<
 
     async connect(bindingInput) {
       if (closePromise !== undefined) {
-        throw postgresError('DRIVER.NOT_CONNECTED', 'Postgres client is closed', {
-          why: 'close() was called on this client.',
-          fix: 'Create a new postgres(...) client.',
-          meta: { extension: 'postgres' },
-        });
+        throw closedError();
       }
 
       if (driverConnected || connectPromise) {
-        throw postgresError('DRIVER.ALREADY_CONNECTED', 'Postgres client already connected', {
-          fix: 'Call connect() at most once per client.',
-          meta: { extension: 'postgres' },
-        });
+        if (bindingInput !== undefined) {
+          throw postgresError('DRIVER.ALREADY_CONNECTED', 'Postgres client is already bound', {
+            why: 'connect() was given options after the client was bound to a database.',
+            fix: 'Call connect() without options, or create a new client for another database.',
+            meta: { extension: 'postgres' },
+          });
+        }
+        const runtime = getRuntime();
+        await connectPromise;
+        if (closePromise !== undefined) throw closedError();
+        return runtime;
       }
 
       if (bindingInput !== undefined) {
@@ -277,6 +283,7 @@ export default function postgres<
       }
 
       await connectDriver(binding);
+      if (closePromise !== undefined) throw closedError();
       return runtime;
     },
 

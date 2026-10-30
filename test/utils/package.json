@@ -25,7 +25,7 @@
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "mysql2": "3.15.3"
+    "mariadb": "3.5.4"
   },
   "exports": {
     ".": {

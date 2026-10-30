@@ -45,10 +45,9 @@
     "dist",
     "src"
   ],
-  "types": "./dist/index.d.mts",
   "exports": {
-    ".": "./dist/index.mjs",
     "./control": "./dist/control.mjs",
+    "./runtime": "./dist/runtime.mjs",
     "./package.json": "./package.json"
   },
   "engines": {

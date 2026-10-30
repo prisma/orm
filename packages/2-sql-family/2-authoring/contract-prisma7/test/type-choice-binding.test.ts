@@ -20,7 +20,7 @@ const bindingWithDateTime = (args: readonly unknown[]) => ({
     ...prisma7PostgresBinding.typeMap,
     scalars: {
       ...prisma7PostgresBinding.typeMap.scalars,
-      DateTime: { constructorName: 'DateTime', args },
+      DateTime: { constructorPath: ['DateTime'], args },
     },
   },
 });

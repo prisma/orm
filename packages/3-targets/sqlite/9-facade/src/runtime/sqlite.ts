@@ -251,6 +251,11 @@ export default function sqlite<
   let closed = false;
   let ownedDispose: (() => Promise<void>) | undefined;
 
+  const closedError = () =>
+    sqliteError('DRIVER.NOT_CONNECTED', 'SQLite client is closed', {
+      meta: { extension: 'sqlite' },
+    });
+
   const connectDriver = async (resolvedBinding: SqliteBinding): Promise<void> => {
     if (driverConnected) return;
     if (!runtimeDriver) throw new InternalError('SQLite runtime driver missing');
@@ -270,9 +275,7 @@ export default function sqlite<
 
   const getRuntime = (): Runtime => {
     if (closed) {
-      throw sqliteError('DRIVER.NOT_CONNECTED', 'SQLite client is closed', {
-        meta: { extension: 'sqlite' },
-      });
+      throw closedError();
     }
 
     if (backgroundConnectError !== undefined) {
@@ -345,15 +348,21 @@ export default function sqlite<
     },
     async connect(bindingInput) {
       if (closed) {
-        throw sqliteError('DRIVER.NOT_CONNECTED', 'SQLite client is closed', {
-          meta: { extension: 'sqlite' },
-        });
+        throw closedError();
       }
 
       if (driverConnected || connectPromise) {
-        throw sqliteError('DRIVER.ALREADY_CONNECTED', 'SQLite client already connected', {
-          meta: { extension: 'sqlite' },
-        });
+        if (bindingInput !== undefined) {
+          throw sqliteError('DRIVER.ALREADY_CONNECTED', 'SQLite client is already bound', {
+            why: 'connect() was given options after the client was bound to a database.',
+            fix: 'Call connect() without options, or create a new client for another database.',
+            meta: { extension: 'sqlite' },
+          });
+        }
+        const runtime = getRuntime();
+        await connectPromise;
+        if (closed) throw closedError();
+        return runtime;
       }
 
       backgroundConnectError = undefined;
@@ -376,6 +385,7 @@ export default function sqlite<
       }
 
       await connectDriver(binding);
+      if (closed) throw closedError();
       return runtime;
     },
     runtime() {

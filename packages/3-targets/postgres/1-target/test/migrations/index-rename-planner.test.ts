@@ -92,6 +92,7 @@ type LiveIndex = LooseIndexInput;
 
 function actualSchema(indexes: readonly LiveIndex[]): PostgresDatabaseSchemaNode {
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',

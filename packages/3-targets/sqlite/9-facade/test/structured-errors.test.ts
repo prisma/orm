@@ -70,7 +70,7 @@ describe('sqlite facade structured errors', () => {
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({
       code: 'DRIVER.ALREADY_CONNECTED',
-      message: 'SQLite client already connected',
+      message: 'SQLite client is already bound',
       meta: { extension: 'sqlite' },
     });
 

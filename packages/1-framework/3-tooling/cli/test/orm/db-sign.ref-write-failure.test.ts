@@ -2,6 +2,7 @@ import { chmod, mkdir } from 'node:fs/promises';
 import { writeRef } from '@internal/migration-tools/refs';
 import { ok } from '@internal/utils/result';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { DbSignSpaceOutcome } from '../../src/control-api/operations/db-sign';
 import {
   cleanupProjectDirs,
   conflictSpace,
@@ -12,6 +13,7 @@ import {
   harness,
   mocks,
   ormConfig,
+  PROFILE_HASH,
   projectDir,
   refHashOf,
   refsDirOf,
@@ -147,5 +149,73 @@ describe('db sign when a ref cannot be written after the markers are written', (
         advancedRefs: [],
       },
     });
+  });
+
+  it('keeps a refused space, its missing invariants and its finding', async () => {
+    const refused: DbSignSpaceOutcome = {
+      space: 'pgvector',
+      status: 'missing-invariants',
+      contract: { storageHash: HASH_EXT, profileHash: PROFILE_HASH },
+      missingInvariants: ['pgvector:install-vector-v1'],
+    };
+    mocks.dbSign.mockResolvedValue(ok({ spaces: [signedSpace('app', HASH_A), refused] }));
+    const dir = await projectDir();
+
+    const run = await withReadOnlyAppRefs(dir, () =>
+      harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir }),
+    );
+
+    expect(run.exitCode).toBe(2);
+    expect(settledError(run)).toMatchObject({
+      why: expect.stringMatching(
+        /^The database was signed: the marker of space "app" holds its contract\. Space "pgvector" was not signed, because its marker does not record invariants its head ref requires\. These refs were not written: ref "db" of space "app" \(.*EACCES.*\)\.$/,
+      ),
+      nextActions: [
+        {
+          kind: 'run-command',
+          label: 'Sign again to write the refs that were not written',
+          command: 'prisma-test db sign',
+        },
+        {
+          kind: 'run-command',
+          label: 'Run the migrations that provide the missing invariants, then sign again',
+          command: 'prisma-test db migrate',
+        },
+      ],
+      meta: {
+        signedSpaces: ['app'],
+        failedSpaces: [],
+        conflictSpaces: [],
+        refusedSpaces: [{ space: 'pgvector', missingInvariants: ['pgvector:install-vector-v1'] }],
+      },
+    });
+    expect(
+      Reflect.get(Object(envelopeOf(run)), 'diagnostics').map(
+        (diagnostic: { readonly code: string }) => diagnostic.code,
+      ),
+    ).toEqual(['MIGRATION.SIGN_INVARIANTS_MISSING']);
+  });
+
+  it('keeps the finding of each space it did not sign', async () => {
+    mocks.dbSign.mockResolvedValue(
+      ok({
+        spaces: [
+          signedSpace('app', HASH_A),
+          failedSpace('pgvector', HASH_EXT),
+          conflictSpace('audit', HASH_EXT),
+        ],
+      }),
+    );
+    const dir = await projectDir();
+
+    const run = await withReadOnlyAppRefs(dir, () =>
+      harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir }),
+    );
+
+    expect(
+      Reflect.get(Object(envelopeOf(run)), 'diagnostics').map(
+        (diagnostic: { readonly code: string }) => diagnostic.code,
+      ),
+    ).toEqual(['CONTRACT.SCHEMA_VERIFICATION_FAILED', 'MIGRATION.MARKER_CAS_FAILURE']);
   });
 });
