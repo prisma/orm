@@ -174,4 +174,16 @@ describe('Canceller', () => {
       },
     );
   });
+
+  it('keeps its idle connection open when the idle timeout is 0, as the pool keeps its own', async () => {
+    vi.useFakeTimers();
+    const canceller = new Canceller(url, 0);
+    await canceller.cancel(1);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect({
+      ended: opened(0).end.mock.calls.length,
+      next: await canceller.cancel(1),
+      opened: state.opened.length,
+    }).toEqual({ ended: 0, next: 'sent', opened: 1 });
+  });
 });

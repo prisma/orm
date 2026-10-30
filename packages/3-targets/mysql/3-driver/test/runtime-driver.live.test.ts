@@ -1208,6 +1208,63 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     },
   );
 
+  it('refuses at once every later statement in a transaction whose stream cancel could not be confirmed, and closes the connection on release', {
+    timeout: 20_000,
+  }, async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withKillDelayingProxy(url, async (proxyUrl) => {
+        await withDriver(
+          proxyUrl.toString(),
+          async (driver) => {
+            const connection = await driver.acquireConnection();
+            const transaction = await connection.beginTransaction();
+            const rows = transaction
+              .query<{ cid: string }>({
+                sql: manyRows.replace('SELECT a.n', 'SELECT CONNECTION_ID() AS cid, a.n'),
+              })
+              [Symbol.asyncIterator]();
+            const first = await rows.next();
+            const stopped = first.done ? undefined : first.value.cid;
+            await rows.return?.();
+            const started = Date.now();
+            const next = await collect(
+              transaction.query({ sql: 'SELECT CONNECTION_ID() AS cid, SLEEP(5) AS slept' }),
+            ).then(
+              () => undefined,
+              (error: unknown) => error,
+            );
+            const refusedIn = Date.now() - started;
+            const rollback = await transaction.rollback().then(
+              () => undefined,
+              (error: unknown) => error,
+            );
+            await connection.release();
+            const [pooled] = await collect(
+              driver.query<{ cid: string }>({ sql: 'SELECT CONNECTION_ID() AS cid' }),
+            );
+            const refusal = {
+              code: 'DRIVER.NOT_CONNECTED',
+              message:
+                'A cancel on this MySQL connection could not be confirmed, so the connection can no longer be used',
+            };
+            expect({
+              next,
+              rollback,
+              quick: refusedIn < 500,
+              closed: pooled?.cid !== stopped,
+            }).toEqual({
+              next: expect.objectContaining(refusal),
+              rollback: expect.objectContaining(refusal),
+              quick: true,
+              closed: true,
+            });
+          },
+          { stream: true, poolOptions: { max: 2 } },
+        );
+      }),
+    );
+  });
+
   it('runs the next statement on a thread that received a late KILL QUERY while idle', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
       withDriver(url, async (driver) => {

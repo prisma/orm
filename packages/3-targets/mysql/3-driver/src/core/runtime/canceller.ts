@@ -19,7 +19,7 @@ function timeout(millis: number): { readonly expired: Promise<'expired'>; clear(
 export type CancelOutcome = 'sent' | 'unsent' | 'unconfirmed';
 
 /**
- * Cancels statements with `KILL QUERY`, which MySQL takes only from another connection. It keeps one connection of its own, outside the pool, so a cancel neither waits for a pooled connection nor normally opens one; it opens it on first need, and ends it once it has been idle for the pool's idle timeout, as the pool ends its own. Opening it and each `KILL QUERY` are bounded by two seconds. The connection is never destroyed: the package's `destroy()` sends a `KILL` of its own whose failure it does not handle (`mariadb` 3.5.4). A connection that stops answering is set aside and ended with `end()` once its statement settles.
+ * Cancels statements with `KILL QUERY`, which MySQL takes only from another connection. It keeps one connection of its own, outside the pool, so a cancel neither waits for a pooled connection nor normally opens one; it opens it on first need, and ends it once it has been idle for the pool's idle timeout, as the pool ends its own; with a timeout of 0 it keeps it open, as the pool keeps its own. Opening it and each `KILL QUERY` are bounded by two seconds. The connection is never destroyed: the package's `destroy()` sends a `KILL` of its own whose failure it does not handle (`mariadb` 3.5.4). A connection that stops answering is set aside and ended with `end()` once its statement settles.
  */
 export class Canceller {
   readonly #url: string;
@@ -79,7 +79,7 @@ export class Canceller {
   }
 
   #idleLater(opening: Promise<Connection | undefined>, connection: Connection): void {
-    if (this.#pending > 0 || this.#connection !== opening) return;
+    if (this.#idleTimeoutMillis === 0 || this.#pending > 0 || this.#connection !== opening) return;
     clearTimeout(this.#idleTimer);
     this.#idleTimer = setTimeout(() => {
       if (this.#pending > 0 || this.#connection !== opening) return;

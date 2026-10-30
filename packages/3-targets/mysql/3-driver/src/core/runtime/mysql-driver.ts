@@ -114,6 +114,17 @@ async function dropRest(rows: Readable & { close?: () => void }): Promise<void> 
   }
 }
 
+function cancelNotConfirmed() {
+  return errorRuntime(
+    'DRIVER.NOT_CONNECTED',
+    'A cancel on this MySQL connection could not be confirmed, so the connection can no longer be used',
+    {
+      why: 'The driver cancelled a stream the caller stopped early, and MySQL did not answer the KILL QUERY in time. It may still arrive and would interrupt whatever statement the connection runs then.',
+      fix: 'Release the connection, which closes it; MySQL rolls back an open transaction on it. Acquire another connection and run the work again.',
+    },
+  );
+}
+
 function connectionReleased() {
   return errorRuntime('DRIVER.NOT_CONNECTED', 'MySQL connection was released', {
     fix: 'Send statements on a connection only until you release it, and await each one before release().',
@@ -313,16 +324,23 @@ abstract class MysqlHeldQueryable extends MysqlQueryable {
 
   /** Takes the client's lock, or fails once the connection is handed back, whether the statement was sent after that or was still waiting for the lock. A lock taken after that is given straight back. */
   protected override async lockClient(client: PoolConnection): Promise<() => void> {
-    if (this.held.handedBack.done) throw connectionReleased();
+    this.#refuseIfUnusable();
     const locking = acquireClientQueryLock(client);
     try {
       const releaseLock = await Promise.race([locking, this.held.handedBack.signal]);
-      if (!this.held.handedBack.done) return releaseLock;
+      if (!this.held.handedBack.done && !this.held.cancelUnconfirmed) return releaseLock;
       releaseLock();
     } catch {
       void locking.then((releaseLock) => releaseLock());
     }
+    this.#refuseIfUnusable();
     throw connectionReleased();
+  }
+
+  /** Refuses a statement on a connection that was handed back, or whose cancel went out without an answer: a late `KILL QUERY` would interrupt it. */
+  #refuseIfUnusable(): void {
+    if (this.held.handedBack.done) throw connectionReleased();
+    if (this.held.cancelUnconfirmed) throw cancelNotConfirmed();
   }
 
   protected override runStatement<T>(work: () => Promise<T>): Promise<T> {
@@ -344,7 +362,7 @@ abstract class MysqlHeldQueryable extends MysqlQueryable {
   }
 
   protected async acquireClient(): Promise<PoolConnection> {
-    if (this.held.handedBack.done) throw connectionReleased();
+    this.#refuseIfUnusable();
     return this.client;
   }
 
