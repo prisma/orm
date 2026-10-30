@@ -1,7 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import type { ExtractAggregateTypes, SqlStorage } from '@internal/sql-contract/types';
 import type { Collection } from './collection';
-import type { CollectionRowOf, HasRow, RowType } from './collection-types';
+import type { CollectionRowOf, HasRow, HasTypeState, RowType } from './collection-types';
 import type {
   CollectionContext,
   CollectionTypeState,
@@ -129,22 +129,30 @@ export type IncludeRefinementValue<
           ParentModelName,
           RelName,
           CollectionRowOf<HasRow<V>>,
+          RefinedResult extends
+            | HasTypeState<{ readonly hasWhere: true }>
+            | HasTypeState<{ readonly hasPaging: true }>
+            ? true
+            : false,
           NsId
         >
     : IncludeRelationValue<TContract, ParentModelName, RelName, DefaultIncludedRow, NsId>;
 
 /**
  * A refined to-one include is nullable whatever the relation's `nullable` flag
- * says: the refinement's filter can exclude the related row.
+ * says when the refinement's filter or paging can exclude the related row;
+ * otherwise it follows the flag like a plain include.
  */
 type RefinedIncludeRelationValue<
   TContract extends Contract<SqlStorage>,
   ParentModelName extends string,
   RelName extends string,
   IncludedRow,
+  CanExcludeRow extends boolean,
   NsId extends string = never,
-> =
-  RelationCardinality<TContract, ParentModelName, RelName, NsId> extends '1:1' | 'N:1'
+> = CanExcludeRow extends false
+  ? IncludeRelationValue<TContract, ParentModelName, RelName, IncludedRow, NsId>
+  : RelationCardinality<TContract, ParentModelName, RelName, NsId> extends '1:1' | 'N:1'
     ? IncludedRow | null
     : IncludedRow[];
 
