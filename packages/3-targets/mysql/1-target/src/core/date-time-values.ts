@@ -1,5 +1,5 @@
 import { dateTimeStoredText } from '@internal/framework-components/codec';
-import { isValidDate } from '@internal/type-implementations/date';
+import { hasDigitsBelow, isValidDate } from '@internal/type-implementations/date';
 import type { TemporalImplementation } from '@internal/type-implementations/temporal';
 import {
   describeValue,
@@ -103,10 +103,6 @@ export function temporalFromStoredText<T>(
   return read.value;
 }
 
-function hasDigitsBelowAMicrosecond(text: string): boolean {
-  return /[1-9]/.test(/\.(\d+)/.exec(text)?.[1]?.slice(6) ?? '');
-}
-
 /** The stored form of a Temporal value, as `stored` writes its ISO text. A value of another kind, in a calendar other than ISO 8601, or with digits below a microsecond, which MySQL does not hold, is refused. */
 export function storedTextOfTemporal(
   identity: TemporalCodecIdentity,
@@ -125,7 +121,7 @@ export function storedTextOfTemporal(
     case 'non-iso-calendar':
       throw errorTemporalNonIsoCalendar(identity.codecId, encoded.calendarId);
     case 'text':
-      if (hasDigitsBelowAMicrosecond(encoded.text)) {
+      if (hasDigitsBelow(encoded.text, 6)) {
         throw errorDateTimeUnwritable({
           codecId: identity.codecId,
           received: `the ${identity.temporalTag} ${encoded.text}`,

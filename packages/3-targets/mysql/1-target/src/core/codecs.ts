@@ -23,6 +23,7 @@ import {
   sqlRawDescriptor,
   sqlVarcharDescriptor,
 } from '@internal/sql-relational-core/ast';
+import { hasDigitsBelowAMillisecond } from '@internal/type-implementations/date';
 import { MysqlCodecDescriptor, mysqlCodec } from './codec-descriptor';
 import {
   MYSQL_BIGINT_CODEC_ID,
@@ -265,7 +266,7 @@ export class MysqlDatetimeCodec extends CodecImpl<
     return decodeMysqlDatetime(wire);
   }
   fromDataTypeValue(value: DataTypeValue<string>): Date {
-    if (/[1-9]/.test(/\.(\d+)/.exec(value.value)?.[1]?.slice(3) ?? '')) {
+    if (hasDigitsBelowAMillisecond(value.value)) {
       return refuseJsonValue(
         this.id,
         `a datetime with no digits below a millisecond, which a Date drops: ${JSON.stringify(value.value)} has them`,

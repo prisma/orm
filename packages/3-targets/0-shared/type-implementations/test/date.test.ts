@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasDigitsBelowAMillisecond, isValidDate, utcIsoTextOf } from '../src/date';
+import { hasDigitsBelow, hasDigitsBelowAMillisecond, isValidDate, utcIsoTextOf } from '../src/date';
 
 const EARLIEST = new Date('-004713-11-24T00:00:00Z').getTime();
 
@@ -26,6 +26,21 @@ describe('hasDigitsBelowAMillisecond', () => {
     ['09:30:00.1', false],
   ])('%s is %s', (text, finer) => {
     expect(hasDigitsBelowAMillisecond(text)).toBe(finer);
+  });
+});
+
+describe('hasDigitsBelow', () => {
+  it.each([
+    ['2024-01-01T00:00:00Z', 0, false],
+    ['2024-01-01T00:00:00.5Z', 0, true],
+    ['2024-01-01T00:00:00.000Z', 0, false],
+    ['23:59:59.6', 0, true],
+    ['23:59:59.120', 2, false],
+    ['23:59:59.123', 2, true],
+    ['2024-01-01T00:00:00.123456', 6, false],
+    ['2024-01-01T00:00:00.1234567', 6, true],
+  ])('%s with %i fraction digits is %s', (text, fractionDigits, finer) => {
+    expect(hasDigitsBelow(text, fractionDigits)).toBe(finer);
   });
 });
 
