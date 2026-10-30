@@ -40,6 +40,17 @@ describe('MySQL writes through the ORM', { timeout: timeouts.databaseOperation }
     });
   });
 
+  it('creates a row with an explicit id of 0, as Postgres stores it', async (test) => {
+    await withSeededDatabase(test, exampleTablesDdl, async (url) => {
+      await using db = mysql({ contract, url, verifyMarker: false });
+      expect(await db.orm.User.create({ id: 0, email: 'zero@example.com', role: 'USER' })).toEqual({
+        id: 0,
+        email: 'zero@example.com',
+        role: 'USER',
+      });
+    });
+  });
+
   it('creates rows with and without generated ids, and refuses to return several generated ids', async (test) => {
     await withSeededDatabase(test, exampleTablesDdl, async (url) => {
       await using db = mysql({ contract, url, verifyMarker: false });

@@ -177,6 +177,29 @@ describe('MysqlControlDriver against a MySQL server', {
     });
   });
 
+  it('stores an explicit 0 in an auto-increment column, on the control and the runtime driver, keeping the server default modes once', async (test) => {
+    await withMysqlDatabase(test, async ({ url }) => {
+      const control = await connectWhileServerDefaultIncludes(url, 'NO_AUTO_VALUE_ON_ZERO');
+      const runtime = mysqlRuntimeDriver.create();
+      await runtime.connect({ kind: 'url', url });
+      try {
+        await control.query('CREATE TABLE t (id INT AUTO_INCREMENT PRIMARY KEY, n INT)');
+        await control.query('INSERT INTO t (id, n) VALUES (0, 1)');
+        await runtime.execute({ sql: 'DELETE FROM t' });
+        await runtime.execute({ sql: 'INSERT INTO t (id, n) VALUES (0, 2)' });
+        const modes = async (rows: Promise<{ rows: { mode: string }[] }>) =>
+          (await rows).rows[0]?.mode.split(',').filter((mode) => mode === 'NO_AUTO_VALUE_ON_ZERO');
+        expect({
+          stored: (await control.query('SELECT id, n FROM t')).rows,
+          control: await modes(control.query('SELECT @@SESSION.sql_mode AS mode')),
+        }).toEqual({ stored: [{ id: '0', n: '2' }], control: ['NO_AUTO_VALUE_ON_ZERO'] });
+      } finally {
+        await runtime.close();
+        await control.close();
+      }
+    });
+  });
+
   it('escapes parameters correctly when the server default sets NO_BACKSLASH_ESCAPES', async (test) => {
     await withMysqlDatabase(test, async ({ url }) => {
       const driver = await connectWhileServerDefaultIncludes(url, 'NO_BACKSLASH_ESCAPES');
