@@ -144,17 +144,11 @@ describe('executeMigrate with no path to the target', () => {
       summary: 'The database is at a contract that is not in the migration graph',
       why: `The database's marker names ${DELETED}, which no migration in migrations/app starts or ends at. After ${APP_HEAD}, the last graph contract it reached, it applied 20261013T0910_request_description, which is no longer on disk.`,
       fix: [
-        'Unless this database changes only through migrations, as production does, move it with db update; its data stays:',
+        'Move it with db update; its data stays:',
         `  {bin} db update --to ${APP_HEAD} --dry-run --db <url>`,
         `  {bin} db update --to ${APP_HEAD} --db <url>`,
-        `Otherwise plan a migration from ${APP_HEAD} to its current contract, then one to ${APP_HEAD}, and deploy again.`,
       ].join('\n'),
       nextActions: [
-        {
-          kind: 'user-choice',
-          label:
-            'Unless this database changes only through migrations, as production does, move it with db update; its data stays:',
-        },
         {
           kind: 'run-command',
           label: 'Preview the changes',
@@ -165,15 +159,12 @@ describe('executeMigrate with no path to the target', () => {
           label: 'Reconcile the database',
           command: `{bin} db update --to ${APP_HEAD} --db <url>`,
         },
-        {
-          kind: 'user-choice',
-          label: `Otherwise plan a migration from ${APP_HEAD} to its current contract, then one to ${APP_HEAD}, and deploy again.`,
-        },
       ],
       meta: {
         spaceId: 'app',
         markerHash: DELETED,
         targetHash: APP_HEAD,
+        change: ['migrate', 'reconcile'],
         lastGraphHash: APP_HEAD,
         missingMigrations: ['20261013T0910_request_description'],
       },
@@ -184,9 +175,7 @@ describe('executeMigrate with no path to the target', () => {
     const projectDir = createTestProjectDir('migrate-no-path');
     projectDirs.push(projectDir);
     await mkdir(join(projectDir, 'migrations', 'app'), { recursive: true });
-    const choice =
-      'Unless this database changes only through migrations, as production does, move it with db update; its data stays:';
-    const otherwise = `Otherwise plan a migration from the empty contract to its current contract, then one to ${APP_HEAD}, and deploy again.`;
+    const choice = 'Move it with db update; its data stays:';
 
     const result = await migrate({
       projectDir,
@@ -200,14 +189,10 @@ describe('executeMigrate with no path to the target', () => {
       severity: 'error',
       summary: 'The database is at a contract that is not in the migration graph',
       why: `The database's marker names ${DELETED}, which no migration in migrations/app starts or ends at. A migration it applied was planned again or deleted, or \`db update\` moved it to a contract no migration ends at.`,
-      fix: [
-        choice,
-        '  {bin} db update --dry-run --db <url>',
-        '  {bin} db update --db <url>',
-        otherwise,
-      ].join('\n'),
+      fix: [choice, '  {bin} db update --dry-run --db <url>', '  {bin} db update --db <url>'].join(
+        '\n',
+      ),
       nextActions: [
-        { kind: 'user-choice', label: choice },
         {
           kind: 'run-command',
           label: 'Preview the changes',
@@ -218,9 +203,14 @@ describe('executeMigrate with no path to the target', () => {
           label: 'Reconcile the database',
           command: '{bin} db update --db <url>',
         },
-        { kind: 'user-choice', label: otherwise },
       ],
-      meta: { spaceId: 'app', markerHash: DELETED, targetHash: APP_HEAD, missingMigrations: [] },
+      meta: {
+        spaceId: 'app',
+        markerHash: DELETED,
+        targetHash: APP_HEAD,
+        change: ['migrate', 'reconcile'],
+        missingMigrations: [],
+      },
     });
   });
 

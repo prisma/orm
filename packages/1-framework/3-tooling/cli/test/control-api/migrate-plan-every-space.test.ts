@@ -1,5 +1,8 @@
 import type { Contract, LedgerEntryRecord } from '@internal/contract/types';
-import type { MigrationPlanOperation } from '@internal/framework-components/control';
+import {
+  DEFAULT_POLICIES,
+  type MigrationPlanOperation,
+} from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { createAggregateContractSpace } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
@@ -103,6 +106,7 @@ function planned(args: {
     migrationsDir: '/work/app/migrations',
     invocation,
     readLedger: args.readLedger ?? (async () => []),
+    policiesInForce: new Map(),
   });
 }
 
@@ -202,6 +206,7 @@ describe('planEverySpace', () => {
       spaceId: 'app',
       markerHash: APP_DELETED,
       targetHash: APP_B,
+      change: ['migrate', 'reconcile'],
       missingMigrations: [],
     });
   });
@@ -230,6 +235,7 @@ describe('planEverySpace', () => {
       spaceId: 'app',
       markerHash: APP_DELETED,
       targetHash: APP_B,
+      change: ['migrate', 'reconcile'],
       lastGraphHash: APP_A,
       missingMigrations: [],
     });
@@ -248,6 +254,25 @@ describe('planEverySpace', () => {
       spaceId: 'app',
       markerHash: APP_DELETED,
       targetHash: APP_B,
+      change: ['migrate', 'reconcile'],
+    });
+  });
+
+  it('gives the recovery the change policy of the refused space permits', async () => {
+    const result = await planEverySpace({
+      aggregate: { targetId: 'postgres', app, extensions: [] },
+      markers: new Map([['app', markerAt(APP_DELETED)]]),
+      appTarget: { hash: APP_B, invariants: undefined, refName: undefined },
+      storageNameOf: (operation) => operation.id,
+      migrationsDir: '/work/app/migrations',
+      invocation,
+      readLedger: async () => [],
+      policiesInForce: new Map([['app', { ...DEFAULT_POLICIES, change: ['migrate'] }]]),
+    });
+
+    expect(result.ok ? undefined : result.failure.toEnvelope()).toMatchObject({
+      nextActions: [{ kind: 'user-choice' }],
+      meta: { change: ['migrate'] },
     });
   });
 });

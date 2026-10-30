@@ -388,6 +388,8 @@ export async function buildReadAggregate(
       readonly aggregate: ContractSpaceAggregate;
       readonly contractHash: string;
       readonly storageNameOf: (operation: MigrationPlanOperation) => string;
+      /** Where the family keeps its markers, which an unreadable marker's error names. */
+      readonly markerLocation: string;
     },
     CliStructuredError
   >
@@ -437,6 +439,7 @@ export async function buildReadAggregate(
       aggregate: loaded.value,
       contractHash,
       storageNameOf: (operation: MigrationPlanOperation) => familyInstance.storageNameOf(operation),
+      markerLocation: familyInstance.markerLocation,
     });
   } catch (error) {
     return notOk(

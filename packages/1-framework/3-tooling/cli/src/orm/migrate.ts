@@ -422,14 +422,15 @@ export function createMigrateCommand(createClient: CreateControlClient) {
             ? undefined
             : { ...refEntry, ...ifDefined('name', target.refName) };
         const permitPolicyChange = args.flags.permitPolicyChange === true;
+        const inForce = policiesInForce(
+          markers,
+          [aggregate.app, ...aggregate.extensions].map(({ spaceId }) => spaceId),
+          familyInstance.markerLocation,
+        );
         const checkedPolicies = checkRunPolicies({
           command: 'db migrate',
           appSpaceId: aggregate.app.spaceId,
-          inForce: policiesInForce(
-            markers,
-            [aggregate.app, ...aggregate.extensions].map(({ spaceId }) => spaceId),
-            familyInstance.markerLocation,
-          ),
+          inForce,
           ref,
           permitPolicyChange,
           targetHash: refEntry?.hash ?? appContract.storage.storageHash,
@@ -450,6 +451,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           migrationsDir,
           invocation: cliInvocation(ctx, args.flags.db),
           readLedger: (spaceId) => client.readLedger(spaceId),
+          policiesInForce: inForce,
         });
         if (!planned.ok) {
           return notOk(normalizeError(planned.failure));

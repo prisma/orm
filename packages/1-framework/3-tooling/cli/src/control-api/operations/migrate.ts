@@ -8,10 +8,12 @@ import type {
   ControlDriverInstance,
   ControlExtensionDescriptor,
   ControlFamilyInstance,
+  DatabasePolicies,
   MigrationOperationPolicy,
   MigrationPlanOperation,
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
+import { DEFAULT_POLICIES } from '@internal/framework-components/control';
 import {
   type AggregateContractSpace,
   type AggregateMigrationEdgeRef,
@@ -187,6 +189,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     migrationsDir,
     invocation: options.invocation,
     readLedger: (spaceId) => familyInstance.readLedger({ driver, space: spaceId }),
+    policiesInForce: inForce,
   });
   if (!planned.ok) {
     return notOk(planned.failure);
@@ -636,6 +639,8 @@ export async function planEverySpace(
     readonly migrationsDir: string;
     readonly invocation: CliInvocation;
     readonly readLedger: (spaceId: string) => Promise<readonly LedgerEntryRecord[]>;
+    /** Each space's policies in force; its change policy decides the recoveries a mismatch gives. */
+    readonly policiesInForce: ReadonlyMap<string, DatabasePolicies>;
   },
 ): Promise<Result<ReadonlyMap<string, PlannedSpaceOutcome>, CliStructuredError>> {
   const { aggregate } = args;
@@ -663,6 +668,7 @@ export async function planEverySpace(
         migrationsDir: args.migrationsDir,
         ledger: await readLedgerQuietly(() => args.readLedger(space.spaceId)),
         invocation: args.invocation,
+        change: (args.policiesInForce.get(space.spaceId) ?? DEFAULT_POLICIES).change,
       }),
     );
   }

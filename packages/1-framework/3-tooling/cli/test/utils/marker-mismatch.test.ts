@@ -44,14 +44,15 @@ const AFTER_LAST = `After ${HASH_A}, the last graph contract it reached,`;
 const MOVED_BY_DB_UPDATE = '`db update` or `db init` moved it outside the migration graph.';
 const CAUSE_UNKNOWN =
   'A migration it applied was planned again or deleted, or `db update` moved it to a contract no migration ends at.';
-const MOVE_WITH_DB_UPDATE =
-  'Unless this database changes only through migrations, as production does, move it with db update; its data stays:';
+const MOVE_WITH_DB_UPDATE = 'Move it with db update; its data stays:';
 const DRY_RUN = `{bin} db update --to ${HASH_B} --dry-run --db <url>`;
 const RECONCILE = `{bin} db update --to ${HASH_B} --db <url>`;
 
-function otherwise(from: string, to = HASH_B): string {
-  return `Otherwise plan a migration from ${from} to its current contract, then one to ${to}, and deploy again.`;
+function migrationsOnlyPolicy(from: string, to = HASH_B): string {
+  return `This database's change policy permits only migrations. Author migrations that bring it back onto the graph: one from ${from} to its current contract, then one from there to ${to}. Commit them and deploy again.`;
 }
+
+const DEFAULT_CHANGE = ['migrate', 'reconcile'] as const;
 
 function migrationsOnly(from: string, to: string): string {
   return `Plan a migration from ${from} to the database's current contract, then one to ${to}, commit them, and deploy again.`;
@@ -68,12 +69,10 @@ function expectedEnvelope(args: {
     severity: 'error',
     summary: SUMMARY,
     why: `${OPENING} ${args.why}`,
-    fix: [MOVE_WITH_DB_UPDATE, `  ${DRY_RUN}`, `  ${RECONCILE}`, otherwise(args.from)].join('\n'),
+    fix: [MOVE_WITH_DB_UPDATE, `  ${DRY_RUN}`, `  ${RECONCILE}`].join('\n'),
     nextActions: [
-      { kind: 'user-choice', label: MOVE_WITH_DB_UPDATE },
       { kind: 'run-command', label: 'Preview the changes', command: DRY_RUN },
       { kind: 'run-command', label: 'Reconcile the database', command: RECONCILE },
-      { kind: 'user-choice', label: otherwise(args.from) },
     ],
     meta: args.meta,
   };
@@ -92,11 +91,17 @@ function mismatch(
     migrationsDir: '/work/app/migrations',
     ledger,
     invocation,
+    change: DEFAULT_CHANGE,
     ...overrides,
   }).toEnvelope();
 }
 
-const META = { spaceId: 'app', markerHash: HASH_DELETED, targetHash: HASH_B };
+const META = {
+  spaceId: 'app',
+  markerHash: HASH_DELETED,
+  targetHash: HASH_B,
+  change: DEFAULT_CHANGE,
+};
 
 describe('errorMarkerMismatch', () => {
   it('names the last graph contract and the migration no longer on disk', () => {
@@ -271,7 +276,6 @@ describe('errorMarkerMismatch', () => {
     });
 
     expect(envelope.nextActions).toEqual([
-      { kind: 'user-choice', label: MOVE_WITH_DB_UPDATE },
       {
         kind: 'run-command',
         label: 'Preview the changes',
@@ -281,10 +285,6 @@ describe('errorMarkerMismatch', () => {
         kind: 'run-command',
         label: 'Reconcile the database',
         command: '{bin} db update --db <url>',
-      },
-      {
-        kind: 'user-choice',
-        label: otherwise('the nearest contract in the migration graph', HASH_EMITTED),
       },
     ]);
   });
@@ -315,13 +315,37 @@ describe('errorMarkerMismatch', () => {
     });
   });
 
-  it('starts the authored migrations from the empty contract when the space has no migrations', () => {
-    const envelope = mismatch([], { graph: buildGraph([]) });
+  it('gives only the authored migrations when the change policy permits only migrations', () => {
+    const ledger = [
+      applied('20261001T0000_initial', null, HASH_A),
+      applied('20261013T0910_request_description', HASH_A, HASH_DELETED),
+    ];
 
-    expect(envelope.nextActions.at(-1)).toEqual({
-      kind: 'user-choice',
-      label: otherwise('the empty contract'),
+    expect(mismatch(ledger, { change: ['migrate'] })).toEqual({
+      ...expectedEnvelope({
+        why: `${AFTER_LAST} it applied 20261013T0910_request_description, which is no longer on disk.`,
+        from: HASH_A,
+        meta: {
+          ...META,
+          change: ['migrate'],
+          lastGraphHash: HASH_A,
+          missingMigrations: ['20261013T0910_request_description'],
+        },
+      }),
+      fix: migrationsOnlyPolicy(HASH_A),
+      nextActions: [{ kind: 'user-choice', label: migrationsOnlyPolicy(HASH_A) }],
     });
+  });
+
+  it('starts the migrations-only recovery from the nearest graph contract when the ledger names none', () => {
+    const envelope = mismatch(undefined, { change: ['migrate'] });
+
+    expect(envelope.nextActions).toEqual([
+      {
+        kind: 'user-choice',
+        label: migrationsOnlyPolicy('the nearest contract in the migration graph'),
+      },
+    ]);
   });
 
   it('sends an extension space to the extension package, not to db update or authored migrations', () => {
@@ -351,6 +375,7 @@ describe('errorMarkerMismatch', () => {
         spaceId: 'pgvector',
         markerHash: HASH_DELETED,
         targetHash: HASH_B,
+        change: DEFAULT_CHANGE,
         lastGraphHash: HASH_A,
         missingMigrations: ['20260102T0000_ext_newer'],
       },

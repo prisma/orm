@@ -27,6 +27,7 @@ import { createControlClient } from '../client';
 import type { CreateControlClient } from '../types';
 import { errorFromCaught } from './caught-errors';
 import { buildReadAggregate } from './contract-space-aggregate-loader';
+import { policiesInForce } from './database-policies';
 import { planEverySpace, planSpaces, type SpacePathOutcome } from './migrate';
 import {
   liveMarkerUse,
@@ -130,7 +131,7 @@ export async function executeMigrateShowPlan(
   if (!loaded.ok) {
     return notOk(loaded.failure);
   }
-  const { aggregate, contractHash, storageNameOf } = loaded.value;
+  const { aggregate, contractHash, storageNameOf, markerLocation } = loaded.value;
   const appGraph = aggregate.app.graph();
 
   // Resolve the --to target (defaults to the on-disk contract, same as migrate).
@@ -224,6 +225,11 @@ export async function executeMigrateShowPlan(
         migrationsDir,
         invocation: options.invocation,
         readLedger: (spaceId) => client.readLedger(spaceId),
+        policiesInForce: policiesInForce(
+          allMarkers,
+          allSpaces.map(({ spaceId }) => spaceId),
+          markerLocation,
+        ),
       });
       if (!checked.ok) {
         return notOk(checked.failure);
