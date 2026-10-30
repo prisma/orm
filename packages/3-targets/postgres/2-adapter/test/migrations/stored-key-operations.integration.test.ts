@@ -5,6 +5,7 @@
  */
 import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
 import {
+  FillStoredKeyCall,
   RemoveStoredKeyCall,
   RenameStoredKeyCall,
 } from '@internal/target-postgres/op-factory-call';
@@ -261,5 +262,85 @@ describe('Postgres stored key operations', { concurrent: false }, () => {
         expect(await values(column)).toEqual(expected);
       },
     );
+  });
+
+  describe('fillStoredKey', () => {
+    const NZ = { code: 'NZ' };
+
+    it.each([
+      [
+        'an object column',
+        'point',
+        '$.country',
+        [1, 2],
+        [{ lat: 1, lng: 2, country: NZ }, { lng: 3, country: NZ }, null, null, 'str'],
+      ],
+      [
+        'a list of objects',
+        'history',
+        '$[*].country',
+        [1, 2],
+        [
+          [
+            { lat: 1, country: NZ },
+            { lat: 2, x: 1, country: NZ },
+          ],
+          [null, { lat: 3, country: NZ }],
+          [],
+          null,
+          null,
+        ],
+      ],
+      [
+        'an object nested in an object',
+        'wrapped',
+        '$.point.country',
+        [1, 5],
+        [
+          { point: { lat: 1, country: NZ } },
+          { point: null },
+          {},
+          null,
+          { point: { lng: 1, country: NZ } },
+        ],
+      ],
+      [
+        'a list inside an object inside a list',
+        'trips',
+        '$[*].stops[*].country',
+        [1],
+        [
+          [{ stops: [{ lat: 1, country: NZ }, null] }],
+          [{ stops: [] }, null],
+          [{ stops: null }],
+          null,
+          [],
+        ],
+      ],
+    ] as const)(
+      'fills the key in %s, and writes only the rows with an object that lacks it',
+      { timeout: testTimeout },
+      async (_, column, path, written, expected) => {
+        const op = await new FillStoredKeyCall('app', 'place', column, path, NZ).toOp();
+
+        expect(await runTwice(op)).toEqual(written);
+        expect(await values(column)).toEqual(expected);
+      },
+    );
+
+    it('keeps the value of an object that has the key', { timeout: testTimeout }, async () => {
+      await driver.query(
+        `update app.place set point = '{"lng": 3, "country": {"code": "AU"}}' where id = 2`,
+      );
+
+      await operationsExecuted(
+        await new FillStoredKeyCall('app', 'place', 'point', '$.country', NZ).toOp(),
+      );
+
+      expect((await values('point')).slice(0, 2)).toEqual([
+        { lat: 1, lng: 2, country: NZ },
+        { lng: 3, country: { code: 'AU' } },
+      ]);
+    });
   });
 });

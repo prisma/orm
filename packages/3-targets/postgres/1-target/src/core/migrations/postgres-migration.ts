@@ -1,4 +1,4 @@
-import type { Contract } from '@internal/contract/types';
+import type { Contract, JsonValue } from '@internal/contract/types';
 import { errorMigrationOperationOptionRemoved } from '@internal/errors/migration';
 import {
   type ColumnRenameRequest,
@@ -60,6 +60,7 @@ import {
   DropSchemaCall,
   DropTableCall,
   EnableRowLevelSecurityCall,
+  FillStoredKeyCall,
   RemoveStoredKeyCall,
   RemoveStoredValueCall,
   RenameConstraintCall,
@@ -383,6 +384,27 @@ export abstract class PostgresMigration<
         options.table,
         options.column,
         options.path,
+      ).toOp(),
+    );
+  }
+
+  /**
+   * Emit an `UPDATE` operation that sets the key at the end of `path` to `value`, in every object of `column` the path reaches that lacks the key. `path` is written as for `renameStoredKey`; `value` is a JSON value, passed as a parameter. Only rows with an object that lacks the key are written.
+   */
+  protected fillStoredKey(options: {
+    readonly schema?: string;
+    readonly table: string;
+    readonly column: string;
+    readonly path: string;
+    readonly value: JsonValue;
+  }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
+    return Promise.resolve(
+      new FillStoredKeyCall(
+        options.schema ?? UNBOUND_NAMESPACE_ID,
+        options.table,
+        options.column,
+        options.path,
+        options.value,
       ).toOp(),
     );
   }

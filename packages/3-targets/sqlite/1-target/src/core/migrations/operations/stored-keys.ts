@@ -98,3 +98,44 @@ export function removeStoredKey(tableName: string, columnName: string, keyPath: 
     ],
   };
 }
+
+/** `value` is the JSON text of the value the key takes, passed as a parameter. */
+export function fillStoredKey(
+  tableName: string,
+  columnName: string,
+  keyPath: JsonKeyPath,
+  value: string,
+): Op {
+  const column = quoteIdentifier(columnName);
+  const member = memberPath(keyPath.key);
+  const lacks = (object: string) =>
+    `(json_type(${object}) = 'object' AND json_type(${object}, ${member}) IS NULL)`;
+  const filled = jsonRewrite(
+    column,
+    keyPath.objects,
+    (object) =>
+      `CASE WHEN ${lacks(object)} THEN json_insert(${object}, ${member}, json(?1)) ELSE ${object} END`,
+  );
+  const lacksKey = objectsMatch(columnName, keyPath, lacks);
+  const place = keyPlace(keyPath, tableName, columnName);
+  return {
+    id: `fillStoredKey.${tableName}.${columnName}.${keyPath.path.text}`,
+    label: `Fill key "${keyPath.key}" ${place}`,
+    operationClass: 'widening',
+    target: { id: 'sqlite', details: buildTargetDetails('column', columnName, tableName) },
+    precheck: [],
+    execute: [
+      step(
+        `fill key "${keyPath.key}" ${place} in every object that lacks it`,
+        `UPDATE ${quoteIdentifier(tableName)} SET ${column} = ${filled} WHERE ${lacksKey}`,
+        [value],
+      ),
+    ],
+    postcheck: [
+      step(
+        `verify every object ${place} has key "${keyPath.key}"`,
+        noRowWhere(tableName, lacksKey),
+      ),
+    ],
+  };
+}

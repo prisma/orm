@@ -204,6 +204,7 @@ function classifyCall(call: PostgresOpFactoryCall): CallCategory {
     case 'removeStoredValue':
     case 'renameStoredKey':
     case 'removeStoredKey':
+    case 'fillStoredKey':
     case 'alterColumnType':
     case 'setNotNull':
     case 'dropNotNull':

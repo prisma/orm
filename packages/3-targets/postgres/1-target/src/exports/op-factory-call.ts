@@ -28,6 +28,7 @@ export {
   DropSchemaCall,
   DropTableCall,
   EnableRowLevelSecurityCall,
+  FillStoredKeyCall,
   RawSqlCall,
   RemoveStoredKeyCall,
   RemoveStoredValueCall,

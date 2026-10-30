@@ -104,3 +104,43 @@ export function removeStoredKey(
     ],
   };
 }
+
+/** `value` is the JSON text of the value the key takes, passed as a parameter. */
+export function fillStoredKey(
+  schemaName: string,
+  tableName: string,
+  columnName: string,
+  keyPath: JsonKeyPath,
+  value: string,
+): Op {
+  const column = quoteIdentifier(columnName);
+  const key = keyLiteral(keyPath.key);
+  const filled = jsonRewrite(
+    column,
+    keyPath.objects,
+    (object) =>
+      `CASE WHEN jsonb_typeof(${object}) = 'object' AND NOT ${object} ? ${key} THEN ${object} || jsonb_build_object(${key}, $1::jsonb) ELSE ${object} END`,
+  );
+  const lacksKey = where(columnName, keyPath, `!(${hasMemberFilter(keyPath.key)})`);
+  const place = keyPlace(keyPath, tableName, columnName);
+  return {
+    id: `fillStoredKey.${tableName}.${columnName}.${keyPath.path.text}`,
+    label: `Fill key "${keyPath.key}" ${place}`,
+    operationClass: 'widening',
+    target: targetDetails('column', columnName, schemaName, tableName),
+    precheck: [],
+    execute: [
+      step(
+        `fill key "${keyPath.key}" ${place} in every object that lacks it`,
+        `UPDATE ${qualifyTableName(schemaName, tableName)} SET ${column} = ${filled} WHERE ${lacksKey}`,
+        [value],
+      ),
+    ],
+    postcheck: [
+      step(
+        `verify every object ${place} has key "${keyPath.key}"`,
+        noRowWhere(schemaName, tableName, lacksKey),
+      ),
+    ],
+  };
+}

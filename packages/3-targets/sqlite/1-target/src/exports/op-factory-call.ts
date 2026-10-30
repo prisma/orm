@@ -6,6 +6,7 @@ export {
   DropColumnCall,
   DropIndexCall,
   DropTableCall,
+  FillStoredKeyCall,
   RawSqlCall,
   RecreateTableCall,
   RemoveStoredKeyCall,

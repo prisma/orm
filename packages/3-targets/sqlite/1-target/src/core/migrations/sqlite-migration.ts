@@ -1,4 +1,4 @@
-import type { ColumnDefault, Contract } from '@internal/contract/types';
+import type { ColumnDefault, Contract, JsonValue } from '@internal/contract/types';
 import {
   type ColumnRenameRequest,
   type MigrationOperationClass,
@@ -34,6 +34,7 @@ import {
   DropColumnCall,
   DropIndexCall,
   DropTableCall,
+  FillStoredKeyCall,
   RecreateTableCall,
   RemoveStoredKeyCall,
   RemoveStoredValueCall,
@@ -351,6 +352,20 @@ export abstract class SqliteMigration<
   }): Promise<Op> {
     return Promise.resolve(
       new RemoveStoredKeyCall(options.table, options.column, options.path).toOp(),
+    );
+  }
+
+  /**
+   * Emit an `UPDATE` operation that sets the key at the end of `path` to `value`, in every object of `column` the path reaches that lacks the key. `path` is written as for `renameStoredKey`; `value` is a JSON value, passed as a parameter. Only rows with an object that lacks the key are written.
+   */
+  protected fillStoredKey(options: {
+    readonly table: string;
+    readonly column: string;
+    readonly path: string;
+    readonly value: JsonValue;
+  }): Promise<Op> {
+    return Promise.resolve(
+      new FillStoredKeyCall(options.table, options.column, options.path, options.value).toOp(),
     );
   }
 

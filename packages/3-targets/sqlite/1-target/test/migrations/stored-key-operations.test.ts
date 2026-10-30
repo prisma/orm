@@ -1,5 +1,7 @@
+import type { JsonValue } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import {
+  FillStoredKeyCall,
   RemoveStoredKeyCall,
   RenameStoredKeyCall,
 } from '../../src/core/migrations/op-factory-call';
@@ -131,6 +133,56 @@ describe('removeStoredKey', () => {
   it('renders the facade call', () => {
     expect(new RemoveStoredKeyCall('place', 'point', '$.lat').renderTypeScript()).toBe(
       'this.removeStoredKey({ table: "place", column: "point", path: "$.lat" })',
+    );
+  });
+});
+
+describe('fillStoredKey', () => {
+  it('fills the key only in the rows with an object that lacks it, passing the value as JSON text', () => {
+    const lacks = `(json_type("point") = 'object' AND json_type("point", '$."country"') IS NULL)`;
+
+    expect(
+      new FillStoredKeyCall('place', 'point', '$.country', { code: 'NZ' }).toOp(),
+    ).toMatchObject({
+      id: 'fillStoredKey.place.point.$.country',
+      label: 'Fill key "country" at path "$" in column "point" of "place"',
+      operationClass: 'widening',
+      precheck: [],
+      execute: [
+        {
+          sql: `UPDATE "place" SET "point" = CASE WHEN ${lacks} THEN json_insert("point", '$."country"', json(?1)) ELSE "point" END WHERE ${lacks}`,
+          params: ['{"code":"NZ"}'],
+        },
+      ],
+      postcheck: [{ sql: `SELECT NOT EXISTS (SELECT 1 FROM "place" WHERE ${lacks}) AS result` }],
+    });
+  });
+
+  it('refuses a path that does not end at a key, and a value that is not JSON', () => {
+    const missing: unknown = undefined;
+
+    expect(() => new FillStoredKeyCall('place', 'point', '$[*]', 1)).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.ARGUMENT_INVALID' }),
+    );
+    expect(
+      () => new FillStoredKeyCall('place', 'point', '$.country', missing as JsonValue),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message:
+          'fillStoredKey({ table: "place", column: "point" }): value must be a JSON value; got undefined',
+      }),
+    );
+  });
+
+  it('renders the facade call with the value as a literal', () => {
+    expect(
+      new FillStoredKeyCall('place', 'point', '$.country', {
+        code: 'NZ',
+        parts: [1, null],
+      }).renderTypeScript(),
+    ).toBe(
+      'this.fillStoredKey({ table: "place", column: "point", path: "$.country", value: { code: "NZ", parts: [1, null] } })',
     );
   });
 });

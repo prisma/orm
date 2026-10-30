@@ -4,7 +4,11 @@
  * second run.
  */
 import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
-import { RemoveStoredKeyCall, RenameStoredKeyCall } from '@internal/target-sqlite/op-factory-call';
+import {
+  FillStoredKeyCall,
+  RemoveStoredKeyCall,
+  RenameStoredKeyCall,
+} from '@internal/target-sqlite/op-factory-call';
 import type { SqlitePlanTargetDetails } from '@internal/target-sqlite/planner-target-details';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -230,5 +234,84 @@ describe('SQLite stored key operations', { timeout: timeouts.databaseOperation }
         expect(await values(column)).toEqual(expected);
       },
     );
+  });
+
+  describe('fillStoredKey', () => {
+    const NZ = { code: 'NZ' };
+
+    it.each([
+      [
+        'an object column',
+        'point',
+        '$.country',
+        [1, 2],
+        [{ lat: 1, lng: 2, country: NZ }, { lng: 3, country: NZ }, null, undefined, 'str'],
+      ],
+      [
+        'a list of objects',
+        'history',
+        '$[*].country',
+        [1, 2],
+        [
+          [
+            { lat: 1, country: NZ },
+            { lat: 2, x: 1, country: NZ },
+          ],
+          [null, { lat: 3, country: NZ }],
+          [],
+          undefined,
+          null,
+        ],
+      ],
+      [
+        'an object nested in an object',
+        'wrapped',
+        '$.point.country',
+        [1, 5],
+        [
+          { point: { lat: 1, country: NZ } },
+          { point: null },
+          {},
+          undefined,
+          { point: { lng: 1, country: NZ } },
+        ],
+      ],
+      [
+        'a list inside an object inside a list',
+        'trips',
+        '$[*].stops[*].country',
+        [1],
+        [
+          [{ stops: [{ lat: 1, country: NZ }, null] }],
+          [{ stops: [] }, null],
+          [{ stops: null }],
+          undefined,
+          [],
+        ],
+      ],
+    ] as const)(
+      'fills the key in %s, and writes only the rows with an object that lacks it',
+      async (_, column, path, written, expected) => {
+        const op = await new FillStoredKeyCall('place', column, path, NZ).toOp();
+
+        expect(await runTwice(op, column)).toEqual(written);
+        expect(await values(column)).toEqual(expected);
+      },
+    );
+
+    it('keeps the value of an object that has the key', async () => {
+      await testDb.driver.query(
+        `UPDATE "place" SET point = '{"lng": 3, "country": {"code": "AU"}}' WHERE id = 2`,
+      );
+
+      await operationsExecuted(
+        await new FillStoredKeyCall('place', 'point', '$.country', NZ).toOp(),
+      );
+
+      expect((await values('point')).slice(0, 2)).toEqual([
+        { lat: 1, lng: 2, country: NZ },
+        { lng: 3, country: { code: 'AU' } },
+      ]);
+    });
   });
 });

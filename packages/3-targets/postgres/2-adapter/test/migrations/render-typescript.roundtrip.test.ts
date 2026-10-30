@@ -36,6 +36,7 @@ import {
   DropSchemaCall,
   DropTableCall,
   EnableRowLevelSecurityCall,
+  FillStoredKeyCall,
   RawSqlCall,
   RemoveStoredKeyCall,
   RemoveStoredValueCall,
@@ -221,6 +222,10 @@ describe('TypeScriptRenderablePostgresMigration round-trip', () => {
       new RemoveStoredValueCall('public', 'user', 'code', 3, false),
       new RenameStoredKeyCall('public', 'user', 'profile', "$['a b'][*].lat", 'latitude'),
       new RemoveStoredKeyCall(UNBOUND_NAMESPACE_ID, 'audit', 'details', '$.trace'),
+      new FillStoredKeyCall('public', 'user', 'profile', '$.country', {
+        code: "it's",
+        n: [1, null],
+      }),
       new ReplaceStoredValueCall('public', 'user', 'rank', '7', '8', false, {
         codecRef: { codecId: 'pg/int8@1' },
         codecs: createPostgresBuiltinCodecLookup(),

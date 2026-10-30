@@ -20,6 +20,7 @@
  * `PostgresOpFactoryCall` union.
  */
 
+import type { JsonValue } from '@internal/contract/types';
 import { unfilledPlaceholderOperation } from '@internal/errors/migration';
 import {
   checkSqlDefaultText,
@@ -129,7 +130,12 @@ import {
 import { dropSchema, renameSchema, setTableSchema } from './operations/schemas';
 import type { ForeignKeySpec } from './operations/shared';
 import { step, targetDetails } from './operations/shared';
-import { keyPlace, removeStoredKey, renameStoredKey } from './operations/stored-keys';
+import {
+  fillStoredKey,
+  keyPlace,
+  removeStoredKey,
+  renameStoredKey,
+} from './operations/stored-keys';
 import { removeStoredValue, replaceStoredValue, storedValueText } from './operations/stored-values';
 import { dropTable, renameTable } from './operations/tables';
 import { buildAddNotNullColumnWithTemporaryDefaultOperation } from './planner-recipes';
@@ -2608,6 +2614,70 @@ export class RemoveStoredKeyCall extends PostgresOpFactoryCallNode {
   }
 }
 
+function requireJsonValue(
+  value: JsonValue,
+  factory: string,
+  location: readonly string[],
+): JsonValue {
+  const text: string | undefined = JSON.stringify(value);
+  return text === undefined
+    ? refusedArgument(factory, location, 'value', 'value must be a JSON value; got undefined')
+    : value;
+}
+
+/** Sets the key at the end of a JSON path to a value, in every object of a column the path reaches that lacks it. */
+export class FillStoredKeyCall extends PostgresOpFactoryCallNode {
+  readonly factoryName = 'fillStoredKey' as const;
+  readonly operationClass = 'widening' as const;
+  readonly schemaName: string;
+  readonly tableName: string;
+  readonly columnName: string;
+  readonly path: JsonKeyPath;
+  readonly value: JsonValue;
+  readonly label: string;
+
+  constructor(
+    schemaName: string,
+    tableName: string,
+    columnName: string,
+    path: string,
+    value: JsonValue,
+  ) {
+    super();
+    const location = columnCallLocation(schemaName, tableName, columnName);
+    this.schemaName = schemaName;
+    this.tableName = tableName;
+    this.columnName = columnName;
+    this.path = requireKeyPath(path, this.factoryName, location);
+    this.value = requireJsonValue(value, this.factoryName, location);
+    this.label = `Fill key "${this.path.key}" ${keyPlace(this.path, tableName, columnName)}`;
+    this.freeze();
+  }
+
+  toOp(): Op {
+    return fillStoredKey(
+      this.schemaName,
+      this.tableName,
+      this.columnName,
+      this.path,
+      JSON.stringify(this.value),
+    );
+  }
+
+  renderTypeScript(): string {
+    const opts = [
+      ...columnCallLocation(this.schemaName, this.tableName, this.columnName),
+      `path: ${jsonToTsSource(this.path.path.text)}`,
+      `value: ${jsonToTsSource(this.value)}`,
+    ];
+    return `this.fillStoredKey({ ${opts.join(', ')} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+}
+
 // ============================================================================
 // Data transform
 // ============================================================================
@@ -2931,6 +3001,7 @@ export type PostgresOpFactoryCall =
   | RemoveStoredValueCall
   | RenameStoredKeyCall
   | RemoveStoredKeyCall
+  | FillStoredKeyCall
   | CreatePostgresRlsPolicyCall
   | DropPostgresRlsPolicyCall
   | EnableRowLevelSecurityCall

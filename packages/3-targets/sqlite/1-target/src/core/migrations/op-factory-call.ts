@@ -9,7 +9,7 @@
  * strategies, mirroring the Postgres `ColumnSpec` pattern.
  */
 
-import type { ColumnDefault } from '@internal/contract/types';
+import type { ColumnDefault, JsonValue } from '@internal/contract/types';
 import { unfilledPlaceholderOperation } from '@internal/errors/migration';
 import {
   checkSqlExpressionText,
@@ -60,7 +60,12 @@ import { quoteIdentifier, SQLITE_QUOTING } from '../sql-utils';
 import { addColumn, dropColumnExecuteSql, renameColumn } from './operations/columns';
 import type { SqliteColumnSpec, SqliteIndexSpec, SqliteTableSpec } from './operations/shared';
 import { INLINE_AUTOINCREMENT_PRIMARY_KEY, step } from './operations/shared';
-import { keyPlace, removeStoredKey, renameStoredKey } from './operations/stored-keys';
+import {
+  fillStoredKey,
+  keyPlace,
+  removeStoredKey,
+  renameStoredKey,
+} from './operations/stored-keys';
 import { removeStoredValue, replaceStoredValue, storedValueText } from './operations/stored-values';
 import {
   type ColumnShape,
@@ -1374,6 +1379,56 @@ export class RemoveStoredKeyCall extends SqliteOpFactoryCallNode {
   }
 }
 
+function requireJsonValue(
+  value: JsonValue,
+  factory: string,
+  location: readonly string[],
+): JsonValue {
+  const text: string | undefined = JSON.stringify(value);
+  return text === undefined
+    ? refusedArgument(factory, location, 'value', 'value must be a JSON value; got undefined')
+    : value;
+}
+
+/** Sets the key at the end of a JSON path to a value, in every object of a column the path reaches that lacks it. */
+export class FillStoredKeyCall extends SqliteOpFactoryCallNode {
+  readonly factoryName = 'fillStoredKey' as const;
+  readonly operationClass = 'widening' as const;
+  readonly tableName: string;
+  readonly columnName: string;
+  readonly path: JsonKeyPath;
+  readonly value: JsonValue;
+  readonly label: string;
+
+  constructor(tableName: string, columnName: string, path: string, value: JsonValue) {
+    super();
+    const location = columnCallLocation(tableName, columnName);
+    this.tableName = tableName;
+    this.columnName = columnName;
+    this.path = requireKeyPath(path, this.factoryName, location);
+    this.value = requireJsonValue(value, this.factoryName, location);
+    this.label = `Fill key "${this.path.key}" ${keyPlace(this.path, tableName, columnName)}`;
+    this.freeze();
+  }
+
+  toOp(): Op {
+    return fillStoredKey(this.tableName, this.columnName, this.path, JSON.stringify(this.value));
+  }
+
+  renderTypeScript(): string {
+    const opts = [
+      ...columnCallLocation(this.tableName, this.columnName),
+      `path: ${jsonToTsSource(this.path.path.text)}`,
+      `value: ${jsonToTsSource(this.value)}`,
+    ];
+    return `this.fillStoredKey({ ${opts.join(', ')} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+}
+
 // ============================================================================
 // Data transform
 // ============================================================================
@@ -1489,6 +1544,7 @@ export type SqliteOpFactoryCall =
   | RemoveStoredValueCall
   | RenameStoredKeyCall
   | RemoveStoredKeyCall
+  | FillStoredKeyCall
   | DataTransformCall
   | RawSqlCall;
 
