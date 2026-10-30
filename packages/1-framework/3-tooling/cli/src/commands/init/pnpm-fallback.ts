@@ -22,3 +22,8 @@ export function isRecognisedPnpmResolutionError(output: string): boolean {
     FALLBACK_PNPM_ERROR_CODES.has(code),
   );
 }
+
+export function isPnpmIgnoredBuildsError(stderr: string): boolean {
+  if (!stderr) return false;
+  return stderr.includes('ERR_PNPM_IGNORED_BUILDS');
+}
