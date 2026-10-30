@@ -5,6 +5,7 @@
 
 import { readFileSync, rmSync } from 'node:fs';
 import { writeRef } from '@internal/migration-tools/refs';
+import { createPostgresControlClient } from '@internal/postgres/control';
 import { timeouts, withDevDatabase } from '@repo/test-utils';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
@@ -79,6 +80,56 @@ withTempDir(({ createTempDir }) => {
               lastGraphHash: initialHash,
               missingMigrations: [deleted],
             },
+          });
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'reports a marker outside the graph before a mismatching ref, through db migrate and the control API alike',
+      async () => {
+        await withDevDatabase(async ({ connectionString }) => {
+          const ctx = setupJourney({ connectionString, createTempDir });
+          expect((await runContractEmit(ctx)).exitCode).toBe(0);
+          expect((await planMigrationAndSelfEmit(ctx, ['--name', 'initial'])).exitCode).toBe(0);
+          expect((await runMigrate(ctx, ['--advance-ref', 'db'])).exitCode).toBe(0);
+          swapContract(ctx, 'contract-additive');
+          expect((await runContractEmit(ctx)).exitCode).toBe(0);
+          expect((await planMigrationAndSelfEmit(ctx, ['--name', 'add-name'])).exitCode).toBe(0);
+          const deleted = getLatestMigrationDir(ctx)!;
+          expect((await runMigrate(ctx)).exitCode).toBe(0);
+          rmSync(join(ctx.testDir, 'migrations', 'app', deleted), { recursive: true, force: true });
+          swapContract(ctx, 'contract-phone');
+          expect((await runContractEmit(ctx)).exitCode).toBe(0);
+          expect((await planMigrationAndSelfEmit(ctx, ['--name', 'add-phone'])).exitCode).toBe(0);
+          const targetHash = migrationTo(ctx, getLatestMigrationDir(ctx)!);
+          const production = {
+            hash: targetHash,
+            invariants: [],
+            policies: MIGRATE_ONLY_DECLARED,
+          };
+          await writeRef(join(ctx.testDir, 'migrations', 'app', 'refs'), 'production', production);
+
+          const throughCli = await runMigrate(ctx, ['--to', 'production', '--json']);
+          const client = createPostgresControlClient({ connection: connectionString });
+          const throughControlApi = await client
+            .migrate({
+              contract: JSON.parse(
+                readFileSync(join(ctx.testDir, 'output', 'contract.json'), 'utf-8'),
+              ),
+              migrationsDir: join(ctx.testDir, 'migrations'),
+              invocation: { cwd: ctx.testDir, configPath: undefined, dbGiven: false },
+              ref: { name: 'production', ...production },
+            })
+            .finally(() => client.close());
+
+          expect({
+            cli: errorOf(throughCli)['code'],
+            controlApi: throughControlApi.ok ? undefined : throughControlApi.failure.code,
+          }).toEqual({
+            cli: 'MIGRATION.MARKER_MISMATCH',
+            controlApi: 'MIGRATION.MARKER_MISMATCH',
           });
         });
       },

@@ -224,20 +224,7 @@ export async function executeMigrateShowPlan(
       if (liveTarget) {
         targetHash = contractHashAtMarker(appMarker);
       }
-      // The preview refuses a run the database's policies would refuse, with the same envelope.
       const inForce = databasePoliciesInForce(allMarkers, aggregate.app.spaceId, markerLocation);
-      const permitted = checkRunPolicies({
-        command: 'db migrate',
-        appSpaceId: aggregate.app.spaceId,
-        inForce,
-        ref: namedRef,
-        permitPolicyChange: options.permitPolicyChange ?? false,
-        targetHash,
-        invocation: options.invocation,
-      });
-      if (!permitted.ok) {
-        return notOk(permitted.failure);
-      }
       // Whichever end of the preview the database supplies, its markers are checked against their
       // graphs exactly as db migrate checks them.
       const checked = await planEverySpace({
@@ -250,6 +237,19 @@ export async function executeMigrateShowPlan(
       });
       if (!checked.ok) {
         return notOk(checked.failure);
+      }
+      // The preview refuses a run the database's policies would refuse, with the same envelope.
+      const permitted = checkRunPolicies({
+        command: 'db migrate',
+        appSpaceId: aggregate.app.spaceId,
+        inForce,
+        ref: namedRef,
+        permitPolicyChange: options.permitPolicyChange ?? false,
+        targetHash,
+        invocation: options.invocation,
+      });
+      if (!permitted.ok) {
+        return notOk(permitted.failure);
       }
       if (liveOrigin) {
         outcomes = checked.value;

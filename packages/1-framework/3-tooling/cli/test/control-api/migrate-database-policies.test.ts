@@ -287,4 +287,14 @@ describe('executeMigrate, database policies', () => {
       meta: { space: 'app' },
     });
   });
+
+  it('reports a marker outside the migration graph before it compares the policies', async () => {
+    const { result, runnerCalls } = await migrate({
+      markers: new Map([['app', markerAt('d'.repeat(64))]]),
+      ref: PRODUCTION,
+    });
+
+    expect(result.ok ? undefined : result.failure.code).toBe('MIGRATION.MARKER_MISMATCH');
+    expect(runnerCalls).toEqual([]);
+  });
 });

@@ -162,23 +162,11 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     aggregate.app.spaceId,
     familyInstance.markerLocation,
   );
-  const checkedPolicies = checkRunPolicies({
-    command: 'db migrate',
-    appSpaceId: aggregate.app.spaceId,
-    inForce,
-    ref,
-    permitPolicyChange: options.permitPolicyChange ?? false,
-    targetHash: appTargetHash,
-    invocation: options.invocation,
-  });
-  if (!checkedPolicies.ok) {
-    return notOk(checkedPolicies.failure);
-  }
-  const policiesToWrite = checkedPolicies.value.toWrite;
 
   // Plan every space via graph-walk. App space targets `ref` when
   // provided, otherwise its own head; extensions always walk to their
-  // own head ref.
+  // own head ref. Planning writes nothing; the policies are checked
+  // before anything runs.
   const planned = await planEverySpace({
     aggregate,
     markers: markerRows,
@@ -196,6 +184,21 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
   if (!planned.ok) {
     return notOk(planned.failure);
   }
+  // A marker outside the graph is reported before the policies: its advice already gives the
+  // recovery the change policy permits.
+  const checkedPolicies = checkRunPolicies({
+    command: 'db migrate',
+    appSpaceId: aggregate.app.spaceId,
+    inForce,
+    ref,
+    permitPolicyChange: options.permitPolicyChange ?? false,
+    targetHash: appTargetHash,
+    invocation: options.invocation,
+  });
+  if (!checkedPolicies.ok) {
+    return notOk(checkedPolicies.failure);
+  }
+  const policiesToWrite = checkedPolicies.value.toWrite;
   const allSpaces: ReadonlyArray<AggregateContractSpace> = [aggregate.app, ...aggregate.extensions];
   const perSpacePlans = new Map<string, PerSpacePlan>();
   // An empty-graph space already at its target, or a space with no marker
