@@ -305,7 +305,7 @@ const added = await db.User.createAndCount(rows, {
 
 `createAll` yields only the rows the database inserted; `createAndCount` returns its count. A collision on a constraint other than the one `conflictOn` names is not skipped — it surfaces as a unique violation.
 
-The option needs the contract capability `insertOnConflictSkip`, and also `insertOnConflictTarget` when `conflictOn` is given or `insertOnConflictWithoutTarget` when it is omitted. A contract emitted before the adapters reported these keys is refused with `ORM.CAPABILITY_MISSING`; re-emit it. Without `returning`, `createAll` refuses the option, because it reads the inserted rows back by key and would also find the existing row a skipped one collided with; `createAndCount` takes it. MTI variant collections refuse the option with `ORM.OPERATION_UNSUPPORTED`. `create()` does not take it.
+The option needs the contract capability `insertOnConflictSkip`, and also `insertOnConflictTarget` when `conflictOn` is given or `insertOnConflictWithoutTarget` when it is omitted. The runtime adds the adapter's capabilities to the contract, so a contract emitted before the adapter reported a key still has it when the call runs. Without `returning`, `createAll` refuses the option, because it reads the inserted rows back by key and would also find the existing row a skipped one collided with; `createAndCount` takes it. MTI variant collections refuse the option with `ORM.OPERATION_UNSUPPORTED`. `create()` does not take it.
 
 The optional `configure` callback may still be passed in second position when there are no options.
 
