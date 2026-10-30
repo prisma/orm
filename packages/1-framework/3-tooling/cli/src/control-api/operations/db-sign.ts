@@ -24,6 +24,7 @@ import { notOk, ok, type Result } from '@internal/utils/result';
 import { CliStructuredError } from '../../utils/cli-errors';
 import type { OnControlProgress } from '../types';
 import { buildContractSpaceAggregate } from './contract-space-aggregate-loader';
+import { checkRunPolicies, policiesInForce } from './database-policies';
 import { runIntrospection } from './db-verify';
 
 export interface ExecuteDbSignOptions<TFamilyId extends string, TTargetId extends string> {
@@ -132,6 +133,19 @@ export async function signContractSpaces<TFamilyId extends string, TTargetId ext
 ): Promise<ExecuteDbSignResult> {
   const { driver, familyInstance, aggregate, frameworkComponents, onProgress } = options;
   const markers = await familyInstance.readAllMarkers({ driver });
+  const signedSpaceIds = [aggregate.app, ...aggregate.extensions]
+    .map(({ spaceId }) => spaceId)
+    .filter((spaceId) => markers.has(spaceId));
+  const permitted = checkRunPolicies({
+    command: 'db sign',
+    appSpaceId: aggregate.app.spaceId,
+    inForce: policiesInForce(markers, signedSpaceIds, familyInstance.markerLocation),
+    ref: undefined,
+    permitPolicyChange: false,
+    targetHash: aggregate.app.contract().storage.storageHash,
+    invocation: undefined,
+  });
+  if (!permitted.ok) return notOk(permitted.failure);
 
   const schemaIntrospection = await runIntrospection({
     action: 'dbSign',

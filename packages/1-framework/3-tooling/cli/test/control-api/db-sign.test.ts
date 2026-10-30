@@ -49,7 +49,11 @@ const aggregate = createContractSpaceAggregate({
   checkIntegrity: () => [],
 });
 
-function marker(storageHash: string, invariants: readonly string[] = []): ContractMarkerRecord {
+function marker(
+  storageHash: string,
+  invariants: readonly string[] = [],
+  meta: Record<string, unknown> = {},
+): ContractMarkerRecord {
   return {
     storageHash,
     profileHash: `${storageHash}-profile`,
@@ -57,7 +61,7 @@ function marker(storageHash: string, invariants: readonly string[] = []): Contra
     canonicalVersion: null,
     updatedAt: new Date(0),
     appTag: null,
-    meta: {},
+    meta,
     invariants: [...invariants],
   };
 }
@@ -194,6 +198,42 @@ describe('signContractSpaces', () => {
         profileHash: extContract.profileHash,
       },
     });
+  });
+
+  it('refuses a database whose change policy permits only migrations, before it signs', async () => {
+    const family = familySigning(
+      signedEverySpace,
+      () => true,
+      new Map([['app', marker('old-app', [], { policies: { change: ['migrate'] } })]]),
+    );
+
+    const result = await signContractSpaces({
+      driver,
+      familyInstance: family.familyInstance,
+      aggregate,
+      frameworkComponents: [],
+    });
+
+    expect(result.ok ? undefined : result.failure.toEnvelope()).toMatchObject({
+      code: 'MIGRATION.CHANGE_POLICY_FORBIDS',
+      why: 'The marker records change: migrate, so db sign may not move it.',
+      meta: { spaceId: 'app', command: 'db sign', change: ['migrate'] },
+    });
+    expect(family.calls).toEqual(['readAllMarkers']);
+  });
+
+  it('signs a database with no marker, whatever policies a later run declares', async () => {
+    const family = familySigning(signedEverySpace, () => true, new Map());
+
+    const result = await signContractSpaces({
+      driver,
+      familyInstance: family.familyInstance,
+      aggregate,
+      frameworkComponents: [],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(family.calls).toEqual(['readAllMarkers', 'introspect', 'signSpaces']);
   });
 });
 
