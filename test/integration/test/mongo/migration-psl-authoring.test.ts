@@ -86,7 +86,7 @@ function pslToContract(schema: string): MongoContract {
     ['String', 'mongo/string@1'],
     ['Int32', 'mongo/int32@1'],
     ['Bool', 'mongo/bool@1'],
-    ['Date', 'mongo/date@1'],
+    ['DateTime', 'mongo/date@1'],
     ['ObjectId', 'mongo/objectId@1'],
     ['Double', 'mongo/double@1'],
   ]);

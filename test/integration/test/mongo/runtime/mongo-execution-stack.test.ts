@@ -28,6 +28,13 @@ const STANDARD_CODEC_IDS = [
   'mongo/binary@1',
   'mongo/json@1',
   'mongo/bson@1',
+  'mongo/date-instant@1',
+  'mongo/date-instant-string@1',
+  'mongo/date-string@1',
+  'mongo/date-temporal@1',
+  'mongo/time-string@1',
+  'mongo/time-temporal@1',
+  'mongo/duration-string@1',
 ];
 
 describe('createMongoExecutionStack', () => {
