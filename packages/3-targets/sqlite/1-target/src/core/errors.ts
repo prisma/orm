@@ -1,4 +1,5 @@
 import { CliStructuredError } from '@internal/errors/control';
+import { ifDefined } from '@internal/utils/defined';
 import type { StructuredError, StructuredErrorOptions } from '@internal/utils/structured-error';
 import { structuredError } from '@internal/utils/structured-error';
 
@@ -132,7 +133,7 @@ export function errorDateTimeUnreadable(options: {
       why: "SQLite stores dates and times as text and checks none of it, so a row written outside Prisma can hold text that is not a value of the column's type.",
       fix: 'Rewrite the row in the form the column stores, or read the column with a type that holds its text, such as String.',
       meta: { codecId, value: value.slice(0, 100) },
-      ...(options.cause === undefined ? {} : { cause: options.cause }),
+      ...ifDefined('cause', options.cause),
     },
   );
 }
@@ -152,7 +153,7 @@ export function errorDateTimeUnwritable(options: {
       why: 'SQLite stores dates and times as text in one form for each value, so the column sorts and compares by the text. A value that form cannot hold is refused rather than changed.',
       fix: 'Write a value the column holds, as the message shows.',
       meta: { codecId, received: received.slice(0, 100) },
-      ...(options.cause === undefined ? {} : { cause: options.cause }),
+      ...ifDefined('cause', options.cause),
     },
   );
 }
