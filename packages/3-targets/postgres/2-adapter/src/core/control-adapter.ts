@@ -30,6 +30,7 @@ import {
 import {
   APP_SPACE_ID,
   DATABASE_POLICIES_META_KEY,
+  type InsertedMarker,
   type MarkerDestination,
   type SchemaNodeRef,
   storedDatabasePolicies,
@@ -460,11 +461,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   async insertMarker(
     driver: SqlControlDriverInstance<'postgres'>,
     space: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-    },
+    destination: InsertedMarker,
   ): Promise<void> {
     await execute(
       (query) => this.lower(query, { contract: undefined }),

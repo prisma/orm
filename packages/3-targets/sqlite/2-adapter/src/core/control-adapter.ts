@@ -25,6 +25,7 @@ import {
   APP_SPACE_ID,
   DATABASE_POLICIES_META_KEY,
   type DatabasePolicies,
+  type InsertedMarker,
   type MarkerDestination,
   type SchemaNodeRef,
   storedDatabasePolicies,
@@ -363,11 +364,7 @@ export class SqliteControlAdapter implements SqlControlAdapter<'sqlite'> {
   async insertMarker(
     driver: SqlControlDriverInstance<'sqlite'>,
     space: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-    },
+    destination: InsertedMarker,
   ): Promise<void> {
     await execute(
       (query) => this.lower(query, { contract: undefined }),

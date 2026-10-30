@@ -164,7 +164,7 @@ export {
   storedDatabasePolicies,
   withDeclaredDatabasePolicies,
 } from '../control/database-policies';
-export type { MarkerDestination } from '../control/marker-destination';
+export type { InsertedMarker, MarkerDestination } from '../control/marker-destination';
 export type {
   AppliedMigrationStatement,
   EnumValueCoordinate,

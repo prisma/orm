@@ -1,4 +1,8 @@
-import { createControlStack, hasSchemaView } from '@internal/framework-components/control';
+import {
+  createControlStack,
+  DEFAULT_DATABASE_POLICIES,
+  hasSchemaView,
+} from '@internal/framework-components/control';
 import {
   MongoSchemaCollection,
   MongoSchemaCollectionOptions,
@@ -251,6 +255,67 @@ describe('createMongoFamilyInstance', () => {
       },
     ]);
     expect(writes).toEqual([]);
+  });
+
+  it('signSpaces() leaves a marker whose policies changed after the check as it was, and swaps only while they hold', async () => {
+    const recorded = { change: ['migrate'] };
+    const updates: unknown[][] = [];
+    const adapter = {
+      readMarker: async () => ({
+        storageHash: 'old',
+        profileHash: 'old-profile',
+        meta: { policies: recorded },
+      }),
+      initMarker: async () => {},
+      updateMarker: async (...args: unknown[]) => {
+        updates.push(args.slice(1));
+        return true;
+      },
+    } as unknown as MongoControlAdapter<'mongo'>;
+    const instance = createMongoFamilyInstance(
+      createControlStack({
+        family: mongoFamilyDescriptor,
+        target: stubMongoTargetDescriptor,
+        adapter: stubAdapterDescriptor(adapter),
+      }),
+    );
+    const contract = instance.deserializeContract(mongoContractJson({}));
+    const driver = { targetId: 'mongo' } as Parameters<typeof instance.signSpaces>[0]['driver'];
+    const expected = { storageHash: 'old', profileHash: 'old-profile' };
+
+    const [moved] = await instance.signSpaces({
+      driver,
+      spaces: [
+        { space: 'app', contract, expected, expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES },
+      ],
+    });
+    const [held] = await instance.signSpaces({
+      driver,
+      spaces: [
+        {
+          space: 'app',
+          contract,
+          expected,
+          expectedDatabasePolicies: {
+            ...DEFAULT_DATABASE_POLICIES,
+            change: ['migrate'],
+          },
+        },
+      ],
+    });
+
+    expect({ moved: moved?.status, held: held?.status, updates }).toEqual({
+      moved: 'conflict',
+      held: 'updated',
+      updates: [
+        [
+          'app',
+          'old',
+          { storageHash: contract.storage.storageHash, profileHash: contract.profileHash },
+          { recorded },
+        ],
+      ],
+    });
   });
 
   it('createRunnerDependencies() returns the dependencies the adapter builds for the driver', () => {

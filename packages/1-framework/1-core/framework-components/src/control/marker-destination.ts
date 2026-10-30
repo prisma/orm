@@ -9,3 +9,6 @@ export interface MarkerDestination {
   /** Recorded in `meta.policies` when supplied; the rest of `meta` is left as stored. */
   readonly databasePolicies?: DatabasePolicies;
 }
+
+/** What a first marker write records when it takes no policies: `db sign`'s insert. */
+export type InsertedMarker = Pick<MarkerDestination, 'storageHash' | 'profileHash' | 'invariants'>;
