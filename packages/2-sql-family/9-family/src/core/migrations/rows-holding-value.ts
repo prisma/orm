@@ -19,6 +19,7 @@ const RowsHoldingValueMeta = type({
     table: 'string',
     column: 'string',
     storedValue: 'string | number',
+    'path?': 'string',
   },
 });
 
@@ -34,6 +35,8 @@ export interface RowsHoldingValueMark {
   readonly column: string;
   /** The value as the database stores it, which the runner counts. */
   readonly storedValue: string | number;
+  /** The JSON path inside the column at which the value is removed, for a member of JSON. */
+  readonly path?: string;
 }
 
 /**
@@ -52,7 +55,7 @@ export function rowsHoldingValueOf(
 ): RowsHoldingValueMark | undefined {
   const meta = RowsHoldingValueMeta(step.meta ?? {});
   if (meta instanceof type.errors) return undefined;
-  const { enumValue, value, codecRef, table, column, storedValue } = meta.rowsHoldingValue;
+  const { enumValue, value, codecRef, table, column, storedValue, path } = meta.rowsHoldingValue;
   return {
     enumValue: {
       ...(enumValue.namespaceId === undefined
@@ -66,6 +69,7 @@ export function rowsHoldingValueOf(
     table,
     column,
     storedValue,
+    ...ifDefined('path', path),
   };
 }
 
@@ -81,15 +85,19 @@ function codecRefOf(codecRef: { codecId: string; typeParams?: unknown }): CodecR
       };
 }
 
-/** What a runner failure says of the rows that hold a stored value a column cannot lose: the value as the database stores it. */
+/** What a runner failure says of the rows that hold a stored value a column, or a member at a path inside it, cannot lose: the value as the database stores it. */
 export function rowsHoldingValueSummary(
   table: string,
   column: string,
   storedValue: unknown,
   rows: number,
+  path?: string,
 ): string {
   const counted = `${rows} ${rows === 1 ? 'row' : 'rows'} of "${table}"`;
-  return `${counted} ${rows === 1 ? 'holds' : 'hold'} ${JSON.stringify(storedValue)} in column "${column}", which takes no NULL, so the value cannot be removed.`;
+  const holds = `${counted} ${rows === 1 ? 'holds' : 'hold'} ${JSON.stringify(storedValue)}`;
+  return path === undefined
+    ? `${holds} in column "${column}", which takes no NULL, so the value cannot be removed.`
+    : `${holds} at path ${JSON.stringify(path)} in column "${column}", a member that takes no null, so the value cannot be removed.`;
 }
 
 /** A removal check of a plan's operation, with the {@link RowsHoldingValueMark} it carries. */
@@ -165,7 +173,7 @@ export async function rowsHoldingValueFailure<TOperation>(input: {
   }
   const { mark } = failed;
   return {
-    summary: rowsHoldingValueSummary(mark.table, mark.column, mark.storedValue, rows),
+    summary: rowsHoldingValueSummary(mark.table, mark.column, mark.storedValue, rows, mark.path),
     reports,
   };
 }

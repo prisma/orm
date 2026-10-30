@@ -69,7 +69,9 @@ import {
 import {
   deleteRows,
   removeStoredValue,
+  removeStoredValueAtPath,
   replaceStoredValue,
+  replaceStoredValueAtPath,
   storedValueText,
 } from './operations/stored-values';
 import {
@@ -1119,15 +1121,64 @@ function replaceStoredValueSource(
   from: string,
   to: string,
   codec: StoredValueCodec | undefined,
+  path: JsonPath | undefined,
 ): string {
   const opts = [
     `table: ${jsonToTsSource(tableName)}`,
     `column: ${jsonToTsSource(columnName)}`,
+    ...pathSource(path),
     `from: ${from}`,
     `to: ${to}`,
     ...codecRefSource(codec),
   ];
   return `this.replaceStoredValue({ ${opts.join(', ')} })`;
+}
+
+function pathSource(path: JsonPath | undefined): readonly string[] {
+  return path === undefined ? [] : [`path: ${jsonToTsSource(path.text)}`];
+}
+
+function storedValuePlace(
+  path: JsonPath | undefined,
+  tableName: string,
+  columnName: string,
+): string {
+  return path === undefined
+    ? `in column "${columnName}" of "${tableName}"`
+    : `at path ${JSON.stringify(path.text)} in column "${columnName}" of "${tableName}"`;
+}
+
+/**
+ * The path a stored value call acts at inside JSON: it ends at a member name or at a list
+ * wildcard, and the value is compared as a JSON value, so it takes no codec.
+ */
+function requireValuePath(
+  path: string | undefined,
+  codec: StoredValueCodec | undefined,
+  factory: string,
+  tableName: string,
+  columnName: string,
+): JsonPath | undefined {
+  if (path === undefined) return undefined;
+  const location = columnCallLocation(tableName, columnName);
+  const parsed = requirePath(path, factory, location);
+  if (parsed.steps.length === 0) {
+    refusedArgument(
+      factory,
+      location,
+      'path',
+      `path ${JSON.stringify(path)} does not end at a member name or a list wildcard [*]`,
+    );
+  }
+  if (codec !== undefined) {
+    refusedArgument(
+      factory,
+      location,
+      'path',
+      'path takes no codecRef: a value inside JSON is compared as a JSON value',
+    );
+  }
+  return parsed;
 }
 
 function codecRefSource(codec: StoredValueCodec | undefined): readonly string[] {
@@ -1152,7 +1203,7 @@ function requireStoredValue(
   );
 }
 
-/** Changes one stored value of a column to another, in every row that holds it. */
+/** Changes one stored value of a column to another, in every row that holds it, or at a path inside the JSON of the column. */
 export class ReplaceStoredValueCall extends SqliteOpFactoryCallNode {
   readonly factoryName = 'replaceStoredValue' as const;
   readonly operationClass = 'widening' as const;
@@ -1162,6 +1213,8 @@ export class ReplaceStoredValueCall extends SqliteOpFactoryCallNode {
   readonly to: string | number;
   /** The column's codec, which writes `from` and `to` as the database stores them. */
   readonly codec: StoredValueCodec | undefined;
+  /** The path inside the column's JSON at which the value is replaced, compared as a JSON value. */
+  readonly path: JsonPath | undefined;
   readonly label: string;
 
   constructor(
@@ -1170,6 +1223,7 @@ export class ReplaceStoredValueCall extends SqliteOpFactoryCallNode {
     from: string | number,
     to: string | number,
     codec?: StoredValueCodec,
+    path?: string,
   ) {
     super();
     this.codec = codec;
@@ -1177,11 +1231,21 @@ export class ReplaceStoredValueCall extends SqliteOpFactoryCallNode {
     this.columnName = columnName;
     this.from = requireStoredValue(from, this.factoryName, tableName, columnName, 'from');
     this.to = requireStoredValue(to, this.factoryName, tableName, columnName, 'to');
-    this.label = `Replace value ${storedValueText(from)} with ${storedValueText(to)} in column "${columnName}" of "${tableName}"`;
+    this.path = requireValuePath(path, codec, this.factoryName, tableName, columnName);
+    this.label = `Replace value ${storedValueText(from)} with ${storedValueText(to)} ${storedValuePlace(this.path, tableName, columnName)}`;
     this.freeze();
   }
 
   async toOp(): Promise<Op> {
+    if (this.path !== undefined) {
+      return replaceStoredValueAtPath(
+        this.tableName,
+        this.columnName,
+        this.from,
+        this.to,
+        this.path,
+      );
+    }
     return replaceStoredValue(
       this.tableName,
       this.columnName,
@@ -1197,6 +1261,7 @@ export class ReplaceStoredValueCall extends SqliteOpFactoryCallNode {
       jsonToTsSource(this.from),
       jsonToTsSource(this.to),
       this.codec,
+      this.path,
     );
   }
 
@@ -1205,7 +1270,7 @@ export class ReplaceStoredValueCall extends SqliteOpFactoryCallNode {
   }
 }
 
-/** Removes one stored value of a column by setting it to NULL in every row that holds it. */
+/** Removes one stored value of a column by setting it to NULL in every row that holds it, or removes it at a path inside the JSON of the column. */
 export class RemoveStoredValueCall extends SqliteOpFactoryCallNode {
   readonly factoryName = 'removeStoredValue' as const;
   readonly operationClass = 'destructive' as const;
@@ -1216,6 +1281,10 @@ export class RemoveStoredValueCall extends SqliteOpFactoryCallNode {
   readonly codec: StoredValueCodec | undefined;
   /** The enum value whose stored value is removed, which the check that fails while rows of a required column hold it names. */
   readonly enumValue: EnumValueCoordinateJson | undefined;
+  /** The path inside the column's JSON at which the value is removed, compared as a JSON value. */
+  readonly path: JsonPath | undefined;
+  /** Whether the member at `path` takes JSON `null`; when it does not, the check fails while a row holds the value. */
+  readonly nullable: boolean;
   readonly label: string;
 
   constructor(
@@ -1224,6 +1293,8 @@ export class RemoveStoredValueCall extends SqliteOpFactoryCallNode {
     value: string | number,
     codec?: StoredValueCodec,
     enumValue?: EnumValueCoordinateJson,
+    path?: string,
+    nullable?: boolean,
   ) {
     super();
     this.codec = codec;
@@ -1231,22 +1302,44 @@ export class RemoveStoredValueCall extends SqliteOpFactoryCallNode {
     this.tableName = tableName;
     this.columnName = columnName;
     this.value = requireStoredValue(value, this.factoryName, tableName, columnName, 'value');
-    this.label = `Remove value ${storedValueText(value)} from column "${columnName}" of "${tableName}"`;
+    this.path = requireValuePath(path, codec, this.factoryName, tableName, columnName);
+    if (nullable !== undefined && this.path === undefined) {
+      refusedArgument(
+        this.factoryName,
+        columnCallLocation(tableName, columnName),
+        'nullable',
+        'nullable needs a path: a column says itself whether it takes NULL',
+      );
+    }
+    this.nullable = nullable === true;
+    this.label = `Remove value ${storedValueText(value)} ${this.path === undefined ? `from column "${columnName}" of "${tableName}"` : storedValuePlace(this.path, tableName, columnName)}`;
     this.freeze();
   }
 
   async toOp(): Promise<Op> {
-    return removeStoredValue(
-      this.tableName,
-      this.columnName,
-      await encodeStoredValue(this.value, this.codec),
+    const mark =
       this.enumValue === undefined
         ? undefined
         : {
             enumValue: this.enumValue,
             value: this.value,
             ...(this.codec === undefined ? {} : { codecRef: this.codec.codecRef }),
-          },
+          };
+    if (this.path !== undefined) {
+      return removeStoredValueAtPath(
+        this.tableName,
+        this.columnName,
+        this.value,
+        this.path,
+        this.nullable,
+        mark,
+      );
+    }
+    return removeStoredValue(
+      this.tableName,
+      this.columnName,
+      await encodeStoredValue(this.value, this.codec),
+      mark,
     );
   }
 
@@ -1254,7 +1347,9 @@ export class RemoveStoredValueCall extends SqliteOpFactoryCallNode {
     const opts = [
       `table: ${jsonToTsSource(this.tableName)}`,
       `column: ${jsonToTsSource(this.columnName)}`,
+      ...pathSource(this.path),
       `value: ${jsonToTsSource(this.value)}`,
+      ...(this.nullable ? ['nullable: true'] : []),
       ...codecRefSource(this.codec),
       ...(this.enumValue === undefined ? [] : [`enumValue: ${jsonToTsSource(this.enumValue)}`]),
     ];

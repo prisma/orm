@@ -312,6 +312,8 @@ export abstract class PostgresMigration<
     readonly many?: boolean;
     /** The column's codec: the values are then written as the contract stores them, and the codec writes them as the database does. */
     readonly codecRef?: CodecRef;
+    /** A JSON path inside the column, written as for `renameStoredKey`, that ends at a member name or at `[*]` for the elements of a list: the value there is replaced, compared as a JSON value. It takes neither `many` nor `codecRef`. */
+    readonly path?: string;
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
     return new ReplaceStoredValueCall(
       options.schema ?? UNBOUND_NAMESPACE_ID,
@@ -321,6 +323,7 @@ export abstract class PostgresMigration<
       options.to,
       options.many === true,
       this.storedValueCodec('replaceStoredValue', options.codecRef),
+      options.path,
     ).toOp();
   }
 
@@ -337,6 +340,10 @@ export abstract class PostgresMigration<
     readonly codecRef?: CodecRef;
     /** The enum value the stored value belongs to: the check that fails while rows of a required column hold the value then names it. */
     readonly enumValue?: EnumValueCoordinateJson;
+    /** A JSON path inside the column, as for `replaceStoredValue`: the value is taken out of a list when the path ends at `[*]`, else the member is set to JSON `null`. */
+    readonly path?: string;
+    /** Whether the member at `path` takes JSON `null`. When it does not, the check fails while a row holds the value. */
+    readonly nullable?: boolean;
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
     return new RemoveStoredValueCall(
       options.schema ?? UNBOUND_NAMESPACE_ID,
@@ -346,6 +353,8 @@ export abstract class PostgresMigration<
       options.many === true,
       this.storedValueCodec('removeStoredValue', options.codecRef),
       options.enumValue,
+      options.path,
+      options.nullable,
     ).toOp();
   }
 

@@ -139,7 +139,9 @@ import {
 import {
   deleteRows,
   removeStoredValue,
+  removeStoredValueAtPath,
   replaceStoredValue,
+  replaceStoredValueAtPath,
   storedValueText,
 } from './operations/stored-values';
 import { dropTable, renameTable } from './operations/tables';
@@ -2325,15 +2327,62 @@ function replaceStoredValueSource(
   to: string,
   many: boolean,
   codec: StoredValueCodec | undefined,
+  path: JsonPath | undefined,
 ): string {
   const opts = [
     ...location,
+    ...pathSource(path),
     `from: ${from}`,
     `to: ${to}`,
     ...(many ? ['many: true'] : []),
     ...codecRefSource(codec),
   ];
   return `this.replaceStoredValue({ ${opts.join(', ')} })`;
+}
+
+function pathSource(path: JsonPath | undefined): readonly string[] {
+  return path === undefined ? [] : [`path: ${jsonToTsSource(path.text)}`];
+}
+
+function storedValuePlace(
+  path: JsonPath | undefined,
+  tableName: string,
+  columnName: string,
+): string {
+  return path === undefined
+    ? `in column "${columnName}" of "${tableName}"`
+    : `at path ${JSON.stringify(path.text)} in column "${columnName}" of "${tableName}"`;
+}
+
+/**
+ * The path a stored value call acts at inside JSON: it ends at a member name or at a list
+ * wildcard, and the value is compared as a JSON value, so it takes no codec and no list column.
+ */
+function requireValuePath(
+  path: string | undefined,
+  options: { readonly many: boolean; readonly codec: StoredValueCodec | undefined },
+  factory: string,
+  location: readonly string[],
+): JsonPath | undefined {
+  if (path === undefined) return undefined;
+  const parsed = requirePath(path, factory, location);
+  if (parsed.steps.length === 0) {
+    refusedArgument(
+      factory,
+      location,
+      'path',
+      `path ${JSON.stringify(path)} does not end at a member name or a list wildcard [*]`,
+    );
+  }
+  if (options.many || options.codec !== undefined) {
+    refusedArgument(
+      factory,
+      location,
+      'path',
+      'path takes neither many nor codecRef: a value inside JSON is compared as a JSON value',
+    );
+  }
+  return parsed;
 }
 
 function codecRefSource(codec: StoredValueCodec | undefined): readonly string[] {
@@ -2357,7 +2406,7 @@ function requireStoredValue(
   );
 }
 
-/** Changes one stored value of a column to another, in every row, or in every list of a list column. */
+/** Changes one stored value of a column to another, in every row, or in every list of a list column, or at a path inside the JSON of the column. */
 export class ReplaceStoredValueCall extends PostgresOpFactoryCallNode {
   readonly factoryName = 'replaceStoredValue' as const;
   readonly operationClass = 'widening' as const;
@@ -2369,6 +2418,8 @@ export class ReplaceStoredValueCall extends PostgresOpFactoryCallNode {
   readonly many: boolean;
   /** The column's codec, which writes `from` and `to` as the database stores them. */
   readonly codec: StoredValueCodec | undefined;
+  /** The path inside the column's JSON at which the value is replaced, compared as a JSON value. */
+  readonly path: JsonPath | undefined;
   readonly label: string;
 
   constructor(
@@ -2379,6 +2430,7 @@ export class ReplaceStoredValueCall extends PostgresOpFactoryCallNode {
     to: string | number,
     many: boolean,
     codec?: StoredValueCodec,
+    path?: string,
   ) {
     super();
     const location = columnCallLocation(schemaName, tableName, columnName);
@@ -2389,11 +2441,22 @@ export class ReplaceStoredValueCall extends PostgresOpFactoryCallNode {
     this.from = requireStoredValue(from, this.factoryName, location, 'from');
     this.to = requireStoredValue(to, this.factoryName, location, 'to');
     this.many = many;
-    this.label = `Replace value ${storedValueText(from)} with ${storedValueText(to)} in column "${columnName}" of "${tableName}"`;
+    this.path = requireValuePath(path, { many, codec }, this.factoryName, location);
+    this.label = `Replace value ${storedValueText(from)} with ${storedValueText(to)} ${storedValuePlace(this.path, tableName, columnName)}`;
     this.freeze();
   }
 
   async toOp(): Promise<Op> {
+    if (this.path !== undefined) {
+      return replaceStoredValueAtPath(
+        this.schemaName,
+        this.tableName,
+        this.columnName,
+        this.from,
+        this.to,
+        this.path,
+      );
+    }
     return replaceStoredValue(
       this.schemaName,
       this.tableName,
@@ -2411,6 +2474,7 @@ export class ReplaceStoredValueCall extends PostgresOpFactoryCallNode {
       jsonToTsSource(this.to),
       this.many,
       this.codec,
+      this.path,
     );
   }
 
@@ -2419,7 +2483,7 @@ export class ReplaceStoredValueCall extends PostgresOpFactoryCallNode {
   }
 }
 
-/** Removes one stored value of a column: sets it to NULL, or takes it out of every list of a list column. */
+/** Removes one stored value of a column: sets it to NULL, or takes it out of every list of a list column, or removes it at a path inside the JSON of the column. */
 export class RemoveStoredValueCall extends PostgresOpFactoryCallNode {
   readonly factoryName = 'removeStoredValue' as const;
   readonly operationClass = 'destructive' as const;
@@ -2432,6 +2496,10 @@ export class RemoveStoredValueCall extends PostgresOpFactoryCallNode {
   readonly codec: StoredValueCodec | undefined;
   /** The enum value whose stored value is removed, which the check that fails while rows of a required column hold it names. */
   readonly enumValue: EnumValueCoordinateJson | undefined;
+  /** The path inside the column's JSON at which the value is removed, compared as a JSON value. */
+  readonly path: JsonPath | undefined;
+  /** Whether the member at `path` takes JSON `null`; when it does not, the check fails while a row holds the value. */
+  readonly nullable: boolean;
   readonly label: string;
 
   constructor(
@@ -2442,46 +2510,69 @@ export class RemoveStoredValueCall extends PostgresOpFactoryCallNode {
     many: boolean,
     codec?: StoredValueCodec,
     enumValue?: EnumValueCoordinateJson,
+    path?: string,
+    nullable?: boolean,
   ) {
     super();
+    const location = columnCallLocation(schemaName, tableName, columnName);
     this.codec = codec;
     this.enumValue = enumValue;
     this.schemaName = schemaName;
     this.tableName = tableName;
     this.columnName = columnName;
-    this.value = requireStoredValue(
-      value,
-      this.factoryName,
-      columnCallLocation(schemaName, tableName, columnName),
-      'value',
-    );
+    this.value = requireStoredValue(value, this.factoryName, location, 'value');
     this.many = many;
-    this.label = `Remove value ${storedValueText(value)} from column "${columnName}" of "${tableName}"`;
+    this.path = requireValuePath(path, { many, codec }, this.factoryName, location);
+    if (nullable !== undefined && this.path === undefined) {
+      refusedArgument(
+        this.factoryName,
+        location,
+        'nullable',
+        'nullable needs a path: a column says itself whether it takes NULL',
+      );
+    }
+    this.nullable = nullable === true;
+    this.label = `Remove value ${storedValueText(value)} ${this.path === undefined ? `from column "${columnName}" of "${tableName}"` : storedValuePlace(this.path, tableName, columnName)}`;
     this.freeze();
   }
 
   async toOp(): Promise<Op> {
-    return removeStoredValue(
-      this.schemaName,
-      this.tableName,
-      this.columnName,
-      await encodeStoredValue(this.value, this.codec),
-      this.many,
+    const mark =
       this.enumValue === undefined
         ? undefined
         : {
             enumValue: this.enumValue,
             value: this.value,
             ...(this.codec === undefined ? {} : { codecRef: this.codec.codecRef }),
-          },
+          };
+    if (this.path !== undefined) {
+      return removeStoredValueAtPath(
+        this.schemaName,
+        this.tableName,
+        this.columnName,
+        this.value,
+        this.path,
+        this.nullable,
+        mark,
+      );
+    }
+    return removeStoredValue(
+      this.schemaName,
+      this.tableName,
+      this.columnName,
+      await encodeStoredValue(this.value, this.codec),
+      this.many,
+      mark,
     );
   }
 
   renderTypeScript(): string {
     const opts = [
       ...columnCallLocation(this.schemaName, this.tableName, this.columnName),
+      ...pathSource(this.path),
       `value: ${jsonToTsSource(this.value)}`,
       ...(this.many ? ['many: true'] : []),
+      ...(this.nullable ? ['nullable: true'] : []),
       ...codecRefSource(this.codec),
       ...(this.enumValue === undefined ? [] : [`enumValue: ${jsonToTsSource(this.enumValue)}`]),
     ];

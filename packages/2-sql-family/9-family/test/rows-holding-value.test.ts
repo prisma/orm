@@ -42,6 +42,14 @@ describe('rows that hold a removed stored value', () => {
         meta: rowsHoldingValueMeta(numbered),
       }),
     ).toEqual(numbered);
+    const inJson = { ...numbered, column: 'details', path: '$.rank' };
+    expect(
+      rowsHoldingValueOf({
+        description: 'check',
+        sql: 'SELECT 1',
+        meta: rowsHoldingValueMeta(inJson),
+      }),
+    ).toEqual(inJson);
     expect(rowsHoldingValueOf({ description: 'check', sql: 'SELECT 1' })).toBeUndefined();
   });
 
@@ -51,6 +59,9 @@ describe('rows that hold a removed stored value', () => {
     );
     expect(rowsHoldingValueSummary('task', 'rank', 3, 2)).toBe(
       '2 rows of "task" hold 3 in column "rank", which takes no NULL, so the value cannot be removed.',
+    );
+    expect(rowsHoldingValueSummary('task', 'details', 'archived', 1, '$.status')).toBe(
+      '1 row of "task" holds "archived" at path "$.status" in column "details", a member that takes no null, so the value cannot be removed.',
     );
   });
 });

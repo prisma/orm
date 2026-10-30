@@ -43,7 +43,14 @@ export function sqliteStoredValueCalls(
 export const sqliteStoredValueCallClasses: StoredValueCallClasses<RemoveStoredValueCall> = {
   isRemoval: (call): call is RemoveStoredValueCall => call instanceof RemoveStoredValueCall,
   replacementOf: (removal, { from, to }) =>
-    new ReplaceStoredValueCall(removal.tableName, removal.columnName, from, to, removal.codec),
+    new ReplaceStoredValueCall(
+      removal.tableName,
+      removal.columnName,
+      from,
+      to,
+      removal.codec,
+      removal.path?.text,
+    ),
 };
 
 const RENDER_ONLY_CODECS: Pick<CodecLookupWithDescriptors, 'descriptorFor'> = {
@@ -56,5 +63,12 @@ export function sqliteMarkedRemoval(mark: RowsHoldingValueMark): RemoveStoredVal
     mark.codecRef === undefined
       ? undefined
       : { codecRef: mark.codecRef, codecs: RENDER_ONLY_CODECS };
-  return new RemoveStoredValueCall(mark.table, mark.column, mark.value, codec, mark.enumValue);
+  return new RemoveStoredValueCall(
+    mark.table,
+    mark.column,
+    mark.value,
+    codec,
+    mark.enumValue,
+    mark.path,
+  );
 }

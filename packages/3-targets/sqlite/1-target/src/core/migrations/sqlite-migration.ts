@@ -298,6 +298,8 @@ export abstract class SqliteMigration<
     readonly to: string | number;
     /** The column's codec: it writes `from` and `to` as the database stores them. */
     readonly codecRef?: CodecRef;
+    /** A JSON path inside the column, written as for `renameStoredKey`, that ends at a member name or at `[*]` for the elements of a list: the value there is replaced, compared as a JSON value. It takes no `codecRef`. */
+    readonly path?: string;
   }): Promise<Op> {
     return new ReplaceStoredValueCall(
       options.table,
@@ -305,6 +307,7 @@ export abstract class SqliteMigration<
       options.from,
       options.to,
       this.storedValueCodec('replaceStoredValue', options.codecRef),
+      options.path,
     ).toOp();
   }
 
@@ -319,6 +322,10 @@ export abstract class SqliteMigration<
     readonly codecRef?: CodecRef;
     /** The enum value the stored value belongs to: the check that fails while rows of a required column hold the value then names it. */
     readonly enumValue?: EnumValueCoordinateJson;
+    /** A JSON path inside the column, as for `replaceStoredValue`: the value is taken out of a list when the path ends at `[*]`, else the member is set to JSON `null`. */
+    readonly path?: string;
+    /** Whether the member at `path` takes JSON `null`. When it does not, the check fails while a row holds the value. */
+    readonly nullable?: boolean;
   }): Promise<Op> {
     return new RemoveStoredValueCall(
       options.table,
@@ -326,6 +333,8 @@ export abstract class SqliteMigration<
       options.value,
       this.storedValueCodec('removeStoredValue', options.codecRef),
       options.enumValue,
+      options.path,
+      options.nullable,
     ).toOp();
   }
 

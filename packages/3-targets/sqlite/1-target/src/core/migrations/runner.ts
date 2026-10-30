@@ -47,6 +47,7 @@ import { notOk, ok, okVoid } from '@internal/utils/result';
 import { sqliteError } from '../errors';
 import { quoteIdentifier } from '../sql-utils';
 import { verifySqliteDatabaseSchema } from './diff-database-schema';
+import { holdingStoredValue } from './operations/stored-values';
 import { affinityStorageClasses, conversionCopyOf, rebuiltTableName } from './operations/tables';
 import type { SqlitePlanTargetDetails } from './planner-target-details';
 import { sqliteMarkedRemoval, sqliteStoredValueCallClasses } from './stored-value-calls';
@@ -486,9 +487,10 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
       checkFails: async ({ check }) =>
         !this.stepResultIsTrue((await driver.query(check.sql, check.params ?? [])).rows),
       count: async ({ mark: counted }) => {
+        const holding = holdingStoredValue(counted.column, counted.storedValue, counted.path);
         const rows = await driver.query<{ rows: number }>(
-          `SELECT COUNT(*) AS rows FROM ${quoteIdentifier(counted.table)} WHERE ${quoteIdentifier(counted.column)} = ?`,
-          [counted.storedValue],
+          `SELECT COUNT(*) AS rows FROM ${quoteIdentifier(counted.table)} WHERE ${holding.condition}`,
+          holding.params,
         );
         return Number(rows.rows[0]?.rows ?? 0);
       },

@@ -70,6 +70,7 @@ export const postgresStoredValueCallClasses: StoredValueCallClasses<RemoveStored
       to,
       removal.many,
       removal.codec,
+      removal.path?.text,
     ),
 };
 
@@ -94,5 +95,6 @@ export function postgresMarkedRemoval(
     false,
     codec,
     mark.enumValue,
+    mark.path,
   );
 }

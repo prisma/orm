@@ -54,6 +54,7 @@ import {
   dependentsSummary,
 } from './dependent-objects';
 import { MARKER_LOCK_KEY, MARKER_LOCK_SQL } from './marker-lock';
+import { holdingStoredValue } from './operations/stored-values';
 import { qualifyTableName } from './planner-sql-checks';
 import type { PostgresPlanTargetDetails } from './planner-target-details';
 import { CHECK_VIOLATION, rowsFailingCheckOf } from './rows-failing-check';
@@ -499,10 +500,11 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
       others: removalsOfMigration(plan.operations, plan.edges, plan.operationIndex),
       checkFails: async ({ check }) =>
         !this.stepResultIsTrue((await driver.query(check.sql, check.params ?? [])).rows),
-      count: async ({ operation: counted, mark: { table, column, storedValue } }) => {
+      count: async ({ operation: counted, mark: { table, column, storedValue, path } }) => {
+        const holding = holdingStoredValue(column, storedValue, path);
         const rows = await driver.query<{ rows: number }>(
-          `SELECT COUNT(*)::int AS rows FROM ${qualifyTableName(schemaOf(counted), table)} WHERE ${quoteIdentifier(column)} = $1`,
-          [storedValue],
+          `SELECT COUNT(*)::int AS rows FROM ${qualifyTableName(schemaOf(counted), table)} WHERE ${holding.condition}`,
+          holding.params,
         );
         return rows.rows[0]?.rows ?? 0;
       },
