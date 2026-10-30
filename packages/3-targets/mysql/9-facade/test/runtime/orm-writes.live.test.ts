@@ -1,6 +1,7 @@
 import type { SqlMiddleware } from '@internal/sql-runtime';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+import { defineContract } from '../../src/exports/contract-builder';
 import mysql from '../../src/runtime/mysql';
 import { contractFromJson } from '../../src/static/contract-from-json';
 import { exampleTablesDdl } from '../example-contract';
@@ -35,7 +36,7 @@ describe('MySQL writes through the ORM', { timeout: timeouts.databaseOperation }
       });
       expect(statements).toEqual([
         'INSERT INTO `User` (`email`, `role`) VALUES (?1, ?2)',
-        'SELECT `User`.`email` AS `email`, `User`.`id` AS `id`, `User`.`role` AS `role`, `User`.`id` AS `__written_key_id` FROM `User` WHERE `User`.`id` = ?1',
+        'SELECT `User`.`email` AS `email`, `User`.`id` AS `id`, `User`.`role` AS `role` FROM `User` WHERE `User`.`id` = ?1',
       ]);
     });
   });
@@ -91,6 +92,46 @@ describe('MySQL writes through the ORM', { timeout: timeouts.databaseOperation }
           ])
         ).map((user) => user.id),
       ).toEqual([12, 11, 10]);
+    });
+  });
+
+  it('createAll returns rows keyed by a DATETIME(3) with milliseconds in the order it was given them', async (test) => {
+    const ticks = defineContract({}, ({ field, model, type }) => ({
+      models: {
+        Tick: model('Tick', {
+          fields: { at: field.column(type.DateTime()).id(), label: field.column(type.String()) },
+        }),
+      },
+    }));
+    const seeded = [
+      'CREATE TABLE `Tick` (`at` datetime(3) NOT NULL, `label` varchar(191) NOT NULL, PRIMARY KEY (`at`))',
+    ];
+    await withSeededDatabase(test, seeded, async (url) => {
+      await using db = mysql({ contract: ticks, url, verifyMarker: false });
+      const later = new Date('2024-01-02T03:04:05.678Z');
+      const earlier = new Date('2024-01-02T03:04:05.123Z');
+      expect(
+        await db.orm.Tick.createAll([
+          { at: later, label: 'later' },
+          { at: earlier, label: 'earlier' },
+        ]),
+      ).toEqual([
+        { at: later, label: 'later' },
+        { at: earlier, label: 'earlier' },
+      ]);
+    });
+  });
+
+  it('an upsert whose conflict value differs from the stored row only in letter case returns that row', async (test) => {
+    await withSeededDatabase(test, exampleDatabase, async (url) => {
+      await using db = mysql({ contract, url, verifyMarker: false });
+      expect(
+        await db.orm.User.upsert({
+          create: { email: 'B@Example.com', role: 'USER' },
+          update: { role: 'USER' },
+          conflictOn: { email: 'B@Example.com' },
+        }),
+      ).toEqual({ id: 1, email: 'b@example.com', role: 'USER' });
     });
   });
 

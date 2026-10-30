@@ -127,7 +127,7 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
       expect(statements).toEqual([
         'BEGIN',
         'INSERT INTO "users" ("email", "name") VALUES (?1, ?2)',
-        'SELECT "users"."email" AS "email", "users"."id" AS "id", "users"."name" AS "name", "users"."id" AS "__written_key_id" FROM "users" WHERE "users"."id" = ?1',
+        'SELECT "users"."email" AS "email", "users"."id" AS "id", "users"."name" AS "name" FROM "users" WHERE "users"."id" = ?1',
       ]);
     });
   });

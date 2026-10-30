@@ -92,7 +92,7 @@ function printInsert(ast: InsertAst): string {
 function printFindByKeys(node: FindByKeys): string {
   const keys = node.keyColumns.map(([, target]) => target.alias).join(', ');
   const find = printFind(node.ast).replace('Find', 'FindByKeys');
-  return `${find} by (${keys}) for ${node.missing.operation}`;
+  return `${find} by (${keys}) for ${node.owner.operation}`;
 }
 
 function printInsertReportingKeys(node: InsertReportingKeys): string {
