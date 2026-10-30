@@ -301,6 +301,7 @@
   },
   "capabilities": {
     "sql": {
+      "defaultInInsert": true,
       "enums": true,
       "foreignKeys": true,
       "limit": true,
