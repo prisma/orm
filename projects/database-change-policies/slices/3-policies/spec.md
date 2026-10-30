@@ -178,8 +178,8 @@ The ref field, the marker field, the comparison and the enforcement are one feat
 | `db update --dry-run` on a migrations-only database | `CHANGE_POLICY_FORBIDS`, nothing planned |
 | `db sign` on a database with no marker | Proceeds (adoption) |
 | `db sign` on a migrations-only database | `CHANGE_POLICY_FORBIDS` with `command: db sign` |
-| Extension space marker with `change: [migrate]` | `db update` refuses on that space too |
-| Marker `meta.policies` is not a valid object | `CONTRACT.MARKER_READ_FAILED` |
+| Extension space marker carries `meta.policies` | Ignored: the application space's marker holds the database's policies, and they govern every space |
+| Marker `meta.policies` is not a valid object | `CONTRACT.MARKER_ROW_CORRUPT`, advising the database's owner to correct it; never deleting the row or `db sign` |
 | `migration ref set production <hash>` on a ref with policies and invariants | Both kept |
 | `db update` advancing the `db` ref that carries policies | Kept |
 | MySQL `db migrate` twice | `meta.policies` survives the second run's upsert |
@@ -195,7 +195,7 @@ The ref field, the marker field, the comparison and the enforcement are one feat
 
 ## Decisions after the first review
 
-The architect and code reviews (in `reviews/`, not committed) found the following; each is decided here and fixed in the slice.
+The architect and code reviews (in `reviews/`) found the following; each is decided here and fixed in the slice.
 
 | Finding | Decision |
 |---|---|
@@ -219,3 +219,7 @@ The architect and code reviews (in `reviews/`, not committed) found the followin
 | ADR 307 and the Migration System doc did not mention policies | ADR 307 gains a status note; the subsystem doc describes the ref field, the marker field and the checks. |
 
 Deferred: MongoDB reports a failed schema command as `CLI.UNEXPECTED` rather than `MIGRATION.EXECUTION_FAILED` ([TML-3779](https://linear.app/prisma-company/issue/TML-3779)); it predates this slice. The marker-destination shape declared in many places predates the slice; the slice adds the field through one framework type where the runners receive it, and the remaining copies are a separate refactor.
+
+## Framework domain
+
+The repository rule against adding concepts to the framework domain (`.agents/rules/never-change-the-framework-domain.mdc`) landed while this slice was in flight. Will Madden exempted database policies on 2026-10-30: they are a new framework concept. The framework keeps the types, the value lists, the meta key, the parser, the comparison and the overlay. Code that only writes error text moves to the CLI, unless a runner needs it to build its own structured error.
