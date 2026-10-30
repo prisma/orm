@@ -134,7 +134,7 @@ describe('MongoMigrationPlanner, statements it refuses', () => {
         {
           kind: 'statementRefused',
           summary:
-            'MongoDB does not apply convert statements in this release, so nothing was planned: convert model "Bug"',
+            'MongoDB does not apply convert statements in this release, so nothing was planned: convert variant "Bug"',
           why: 'MongoDB cannot carry out convert statements in this release. Leave out the statement.',
         },
       ],

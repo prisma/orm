@@ -485,7 +485,7 @@ describe('a variant convert', () => {
     model: { namespaceId: app, model: 'Bug' },
   };
 
-  it('is described and written to JSON through its model', () => {
+  it('is described as a variant and written to JSON through its model', () => {
     expect([
       describeMigrationStatement(
         statement,
@@ -504,8 +504,8 @@ describe('a variant convert', () => {
       }),
       isRenameStatement(statement),
     ]).toEqual([
-      'convert model "Bug"',
-      'convert model "app.Bug"',
+      'convert variant "Bug"',
+      'convert variant "app.Bug"',
       { kind: 'convert', entity: 'model', model: { namespaceId: 'app', model: 'Bug' } },
       { kind: 'convert', entity: 'model', model: { model: 'Bug' } },
       false,

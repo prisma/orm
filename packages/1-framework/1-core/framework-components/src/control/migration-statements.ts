@@ -532,6 +532,6 @@ function describeDataStatement(
     case 'valueObjectField':
       return `${statement.kind} value object field "${valueObjectFieldStatementText(contract, statement.field)}"`;
     case 'model':
-      return `${statement.kind} model "${modelStatementText(contract, statement.model)}"`;
+      return `${statement.kind} variant "${modelStatementText(contract, statement.model)}"`;
   }
 }
