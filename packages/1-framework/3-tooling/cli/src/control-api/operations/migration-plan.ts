@@ -125,6 +125,8 @@ type PlannerSuccess = {
   readonly listedOps: readonly OperationSummary[];
   readonly migrationTsContent: string;
   readonly hasPlaceholders: boolean;
+  /** The refusal an operation of the plan waits with until the plan's questions are answered. */
+  readonly refusal: CliStructuredError | undefined;
   readonly appliedStatements: readonly AppliedStatementReport[];
   /** The operations that would lose data, positioned in the plan's operations. */
   readonly dataLoss: readonly PlannedDataLoss[];
@@ -207,36 +209,43 @@ async function runPlannerLeg(
     return notOk(refused(plannerResult.conflicts));
   }
 
-  // The operation at each position of the plan, or `undefined` where it is an unfilled placeholder.
+  // The operation at each position of the plan, or `undefined` where it is an unfilled placeholder or a refusal.
   let resolved: readonly (MigrationPlanOperation | undefined)[] = [];
   // The operation each unfilled placeholder stands for, when its call names it.
   let standingFor: readonly (OperationSummary | undefined)[] = [];
   let hasPlaceholders = false;
+  let refusal: CliStructuredError | undefined;
   try {
-    resolved = await Promise.all(plannerResult.plan.operations);
-    if (resolved.length === 0 && origin.kind === 'empty') {
-      return notOk(errorPlanProducedNoOperations(destination));
+    const settled = await Promise.allSettled(plannerResult.plan.operations);
+    for (const entry of settled) {
+      if (entry.status === 'fulfilled') continue;
+      const reason: unknown = entry.reason;
+      if (!CliStructuredError.is(reason)) throw reason;
+      if (reason.code === 'MIGRATION.UNFILLED_PLACEHOLDER') hasPlaceholders = true;
+      else if (reason.code === 'MIGRATION.PLANNING_FAILED') refusal ??= reason;
+      else throw reason;
     }
+    resolved = settled.map((entry) => (entry.status === 'fulfilled' ? entry.value : undefined));
+    standingFor = settled.map((entry) =>
+      entry.status === 'rejected' ? placeholderOperationOf(entry.reason) : undefined,
+    );
   } catch (e) {
+    // A planner whose `operations` accessor throws synchronously on an unfilled placeholder
+    // exposes no operations at all.
     if (CliStructuredError.is(e) && e.code === 'MIGRATION.UNFILLED_PLACEHOLDER') {
       hasPlaceholders = true;
-      // The operations that DID resolve still matter: the data-loss questions
-      // must see them, or a placeholder would smuggle a loss past them.
-      // Writers stay gated on hasPlaceholders. A planner whose `operations`
-      // accessor throws synchronously on an unfilled placeholder (rather than
-      // rejecting one op's promise) exposes no operations at all.
-      try {
-        const settled = await Promise.allSettled(plannerResult.plan.operations);
-        resolved = settled.map((entry) => (entry.status === 'fulfilled' ? entry.value : undefined));
-        standingFor = settled.map((entry) =>
-          entry.status === 'rejected' ? placeholderOperationOf(entry.reason) : undefined,
-        );
-      } catch {
-        resolved = [];
-      }
+      resolved = [];
     } else {
       throw e;
     }
+  }
+  if (
+    !hasPlaceholders &&
+    refusal === undefined &&
+    resolved.length === 0 &&
+    origin.kind === 'empty'
+  ) {
+    return notOk(errorPlanProducedNoOperations(destination));
   }
 
   const plannedOps = resolved.filter((op): op is MigrationPlanOperation => op !== undefined);
@@ -251,6 +260,7 @@ async function runPlannerLeg(
     listedOps: listed.filter((op): op is OperationSummary => op !== undefined),
     migrationTsContent: plannerResult.plan.renderTypeScript(resolveImportSpecifier),
     hasPlaceholders,
+    refusal,
     dataLoss: plannerResult.dataLoss.map(
       ({ operationIndex, subject, loss, label, keepDataAdvice, keepDataEdit }) => ({
         operationIndex: position(operationIndex),
@@ -389,6 +399,8 @@ async function answerPlannedDataLoss(input: {
   });
   if (!answered.ok) return answered;
   const { delta } = answered.value.plan;
+  const refusal = input.baseline?.refusal ?? delta?.refusal;
+  if (refusal !== undefined) return notOk(refusal);
   const deletes = answered.value.consented.map((consented) =>
     reportConsentStatement(
       consented,

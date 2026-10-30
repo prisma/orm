@@ -1,7 +1,7 @@
 import { readdir } from 'node:fs/promises';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { BIN_GROUPS } from '../../src/orm/cli';
-import { errorUnfilledPlaceholder } from '../../src/utils/cli-errors';
+import { errorMigrationPlanningFailed, errorUnfilledPlaceholder } from '../../src/utils/cli-errors';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
 import {
   ADDITIVE_OP,
@@ -473,6 +473,55 @@ describe('migration plan --convert and --backfill', () => {
       kind: 'summary',
       status: 'warn',
       text: `Existing rows get '' in field "User.email". To choose the value, plan again with --backfill User.email.`,
+    });
+  });
+
+  describe('a plan whose operation waits to refuse until its questions are answered', () => {
+    const refusal = errorMigrationPlanningFailed({
+      conflicts: [
+        {
+          kind: 'nullabilityConflict',
+          summary: 'Value object field "GeoPoint.country" is required',
+          why: 'Add --backfill GeoPoint.country to write the value the plan fills them with.',
+        },
+      ],
+    });
+
+    it('asks its questions first', async () => {
+      const project = await typeChangeProject();
+      const run = await harness(project, {
+        dataLoss: [ageChange],
+        operations: [ADDITIVE_OP],
+        throwOnOperations: refusal,
+      }).run(['migration', 'plan', '--json'], { cwd: project.dir });
+
+      expect(run.exitCode).toBe(2);
+      expect(JSON.stringify(envelopeOf(run))).toContain('--delete User.age');
+      expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
+    });
+
+    it('refuses after a delete answers them, and writes nothing', async () => {
+      const project = await typeChangeProject();
+      const run = await harness(project, {
+        dataLoss: [ageChange],
+        operations: [ADDITIVE_OP],
+        throwOnOperations: refusal,
+      }).run(['migration', 'plan', '--delete', 'User.age', '--json'], { cwd: project.dir });
+
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'MIGRATION.PLANNING_FAILED',
+          why: 'Value object field "GeoPoint.country" is required',
+          nextActions: [
+            {
+              kind: 'user-choice',
+              label: 'Add --backfill GeoPoint.country to write the value the plan fills them with.',
+            },
+          ],
+        },
+      });
+      expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
     });
   });
 

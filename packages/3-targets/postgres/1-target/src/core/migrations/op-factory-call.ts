@@ -21,7 +21,7 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import { CliStructuredError } from '@internal/errors/control';
+import { CliStructuredError, errorMigrationPlanningFailed } from '@internal/errors/control';
 import { errorUnfilledPlaceholder, unfilledPlaceholderOperation } from '@internal/errors/migration';
 import {
   checkSqlDefaultText,
@@ -35,6 +35,7 @@ import {
   keyPathOf,
   parseJsonPath,
   type SqlMigrationPlanOperation,
+  type SqlPlannerConflict,
   type SqlSlot,
   type SqlTextSources,
   type StoredKeyFillField,
@@ -2794,6 +2795,20 @@ function requireFillValue(
 }
 
 /**
+ * The operation of a fill no statement asked for: a promise that rejects with the plan's refusal, so that the plan's questions are asked before it refuses.
+ */
+function refusedFillOperation(refusal: SqlPlannerConflict): Promise<never> {
+  const { location, ...conflict } = refusal;
+  const operation = Promise.reject(
+    errorMigrationPlanningFailed({
+      conflicts: [{ ...conflict, ...ifDefined('location', location && { ...location }) }],
+    }),
+  );
+  operation.catch(() => undefined);
+  return operation;
+}
+
+/**
  * The operation of a fill whose value is an unfilled placeholder: a promise that rejects with
  * `MIGRATION.UNFILLED_PLACEHOLDER`, whose meta names the operation it stands for, so that a plan can
  * list it before the user fills the value.
@@ -2857,6 +2872,9 @@ export class FillStoredKeyCall extends PostgresOpFactoryCallNode {
   }
 
   toOp(): Op | Promise<Op> {
+    if (this.value instanceof UnfilledValue && this.value.refusal !== undefined) {
+      return refusedFillOperation(this.value.refusal);
+    }
     if (this.value instanceof UnfilledValue) {
       return unfilledFillOperation(
         this.value.slot,

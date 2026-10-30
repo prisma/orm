@@ -78,7 +78,7 @@ describe('a question about a value object field', () => {
     );
 
     expect(asked).toEqual([
-      'Remove key would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the new required field "GeoPoint.latitude" gets a placeholder value in migration.ts, to fill before you run it, as --backfill GeoPoint.latitude writes.',
+      'Remove key would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the new required field "GeoPoint.latitude" still needs a value: add --backfill GeoPoint.latitude to write it in migration.ts.',
       'Remove key would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the existing objects get a temporary value in the new required field "GeoPoint.latitude".',
     ]);
   });

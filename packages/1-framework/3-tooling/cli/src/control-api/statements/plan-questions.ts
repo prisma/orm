@@ -574,8 +574,8 @@ function changedVariant(
  */
 /**
  * What `--delete` of a value object field leaves in the one field the value object gained, when
- * that field is required: `migration plan` writes a placeholder for its value, as a backfill does,
- * and `db update` fills a temporary value.
+ * that field is required: `migration plan` still needs a backfill statement for it, and `db update`
+ * fills a temporary value.
  */
 function newRequiredFieldNote(
   subject: MigrationSubject,
@@ -597,7 +597,7 @@ function newRequiredFieldNote(
   const deleted = statementFlag({ verb: 'delete', text });
   return [
     contracts.canConvert
-      ? `With ${deleted}, the new required field "${added}" gets a placeholder value in migration.ts, to fill before you run it, as ${statementFlag({ verb: 'backfill', text: added })} writes.`
+      ? `With ${deleted}, the new required field "${added}" still needs a value: add ${statementFlag({ verb: 'backfill', text: added })} to write it in migration.ts.`
       : `With ${deleted}, the existing objects get a temporary value in the new required field "${added}".`,
   ];
 }

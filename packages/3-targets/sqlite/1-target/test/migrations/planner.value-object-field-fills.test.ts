@@ -140,6 +140,31 @@ describe('SQLite planner, value object field fills', () => {
     ]);
   });
 
+  it('plans a new required field without --backfill when the value object lost a field, and its fill rejects with the refusal, so the question about the lost field is asked first', async () => {
+    const result = succeeded(
+      plan(
+        placeContract({ GeoPoint: GEO }, [location], 'from'),
+        placeContract({ GeoPoint: { country: 'scalar' } }, [location], 'to'),
+        [],
+        MIGRATION_PLAN,
+      ),
+    );
+
+    const settled = await Promise.allSettled(result.plan.operations);
+    expect(
+      settled.flatMap((entry) => (entry.status === 'rejected' ? [entry.reason] : [])),
+    ).toMatchObject([
+      {
+        code: 'MIGRATION.PLANNING_FAILED',
+        why: 'Value object field "GeoPoint.country" is required, and existing objects may have no value for it, at:\n- path "$" in column "location" of "place"',
+        fix: 'If it is a field renamed, add --rename GeoPoint.lat:GeoPoint.country. Otherwise add --backfill GeoPoint.country to write the value the plan fills them with.',
+      },
+    ]);
+    expect(result.dataLoss.map(({ subject }) => subject)).toEqual([
+      { kind: 'valueObjectField', ...country, field: 'lat' },
+    ]);
+  });
+
   describe('db update', () => {
     it('fills a scalar field with a temporary value, and reports it as the value object field', async () => {
       const result = succeeded(

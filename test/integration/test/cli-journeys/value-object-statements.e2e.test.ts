@@ -223,7 +223,7 @@ withTempDir(({ createTempDir }) => {
         expect(asked, 'O1.04: what --delete leaves in the new field').toContain(
           via === 'db update'
             ? 'the existing objects get a temporary value in the new required field \\"GeoPoint.latitude\\"'
-            : 'the new required field \\"GeoPoint.latitude\\" gets a placeholder value in migration.ts',
+            : 'the new required field \\"GeoPoint.latitude\\" still needs a value: add --backfill GeoPoint.latitude',
         );
         await apply(ctx, via, ['--rename', 'GeoPoint.lat:GeoPoint.latitude'], 'O1.05');
 

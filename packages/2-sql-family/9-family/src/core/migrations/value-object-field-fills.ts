@@ -185,6 +185,20 @@ function requiredFields(
   return fields;
 }
 
+function backfillAdvice(
+  contract: Contract<SqlStorage>,
+  required: RequiredField,
+  text: string,
+): string {
+  const backfill = `--backfill ${text} to write the value the plan fills them with.`;
+  if (required.removedFields.length === 0) return `Add ${backfill}`;
+  const renames = required.removedFields.map(
+    (field) =>
+      `--rename ${valueObjectFieldStatementText(contract, { ...required.valueObjectField, field })}:${text}`,
+  );
+  return `If it is a field renamed, add ${renames.join(' or ')}. Otherwise add ${backfill}`;
+}
+
 function placeText(place: ValueObjectPlace): string {
   return `path ${JSON.stringify(jsonPathText(place.steps))} in column "${place.column}" of "${place.table}"`;
 }
@@ -224,16 +238,33 @@ const REACH_REASONS = {
   dictionary: 'a dictionary of value objects',
 } as const;
 
+function fillAt(
+  required: RequiredField,
+  place: ValueObjectPlace,
+  text: string,
+  value: JsonValue | UnfilledValue,
+): StoredKeyFill {
+  return {
+    valueObjectField: required.valueObjectField,
+    namespaceId: place.namespaceId,
+    table: place.table,
+    column: place.column,
+    path: jsonPathText([...place.steps, { kind: 'member', name: required.valueObjectField.field }]),
+    value,
+    field: text,
+    statement: required.statement,
+  };
+}
+
 /**
  * The fills of value object fields a plan makes. A field of a value object that both contracts have
  * is filled when the destination makes it required and the origin lacks it or makes it optional. A
  * backfill statement fills it with a value the user writes in `migration.ts`. Without one,
  * `unnamed` decides: `refuse` names the statement, and `temporaryValue` fills a scalar field whose
- * codec has a temporary value its data type takes, and refuses any other. Under `refuse`, a field of
- * a value object that also lost a field no statement renames is filled with a placeholder instead,
- * so that the plan asks about the lost field first, as `temporaryValue` does: a rename answers it
- * and plans again without the fill, and a delete leaves the placeholder for the user to fill.
- * Each fill acts on every column of the working
+ * codec has a temporary value its data type takes, and refuses any other. Under `refuse`, when the
+ * value object also lost a field no statement renames, the refusal offers that rename first, and it
+ * waits in the fill's value so that the plan asks about the lost field first: a rename answers it and
+ * plans again without the fill, and a delete leaves the refusal. Each fill acts on every column of the working
  * schema whose field holds the value object, at every path to its objects, nested or in lists, as
  * the destination names them. A column that holds the value object where its paths cannot be listed
  * is refused. With no origin contract, nothing is known to have changed.
@@ -278,34 +309,25 @@ export function planValueObjectFieldFills(input: {
     const value =
       temporary !== undefined
         ? temporary.value
-        : required.statement !== undefined || required.removedFields.length > 0
+        : required.statement !== undefined
           ? new UnfilledValue(`${text}:value`)
           : undefined;
     if (value === undefined) {
-      return notOk(
-        needsValue(
-          required,
-          [first, ...rest],
-          text,
-          `Add --backfill ${text} to write the value the plan fills them with.`,
+      const refusal = needsValue(
+        required,
+        [first, ...rest],
+        text,
+        backfillAdvice(contract, required, text),
+      );
+      if (required.removedFields.length === 0) return notOk(refusal);
+      fills.push(
+        ...places.value.map((place) =>
+          fillAt(required, place, text, new UnfilledValue(`${text}:value`, refusal)),
         ),
       );
+      continue;
     }
-    for (const place of places.value) {
-      fills.push({
-        valueObjectField: required.valueObjectField,
-        namespaceId: place.namespaceId,
-        table: place.table,
-        column: place.column,
-        path: jsonPathText([
-          ...place.steps,
-          { kind: 'member', name: required.valueObjectField.field },
-        ]),
-        value,
-        field: text,
-        statement: required.statement,
-      });
-    }
+    fills.push(...places.value.map((place) => fillAt(required, place, text, value)));
   }
   return ok(fills);
 }
