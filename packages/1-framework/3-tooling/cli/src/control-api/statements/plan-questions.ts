@@ -619,14 +619,23 @@ export function dataLossQuestion(
           edits,
           (contracts.keptSubjects ?? []).filter((other) => other !== subject),
         );
-  const question = [
-    `${labelsText(labels)} ${lossText(loss.subject, subject, contracts.originKnown, loss.loss)}.`,
+  const lost = lossText(loss.subject, subject, contracts.originKnown, loss.loss);
+  const operations = [...new Set(labels)];
+  const advice = [
     ...(missingModel === undefined ? [] : [modelRenameAdvice(missingModel, contracts)]),
     ...(loss.keepDataAdvice === undefined ? [] : [loss.keepDataAdvice]),
     ...(keepData?.lead === undefined ? [] : [keepData.lead]),
     ...(keepData?.ways ?? []),
     ...newRequiredFieldNote(loss.subject, subject, contracts),
-  ].join(' ');
+  ];
+  const question =
+    operations.length > 1
+      ? [
+          `These operations ${lost}:`,
+          ...operations.map((label) => `- ${label}`),
+          ...(advice.length === 0 ? [] : [advice.join(' ')]),
+        ].join('\n')
+      : [`${labelsText(operations)} ${lost}.`, ...advice].join(' ');
   if (loss.loss === 'typeChange' && loss.subject.kind === 'field') {
     if (!contracts.canConvert) {
       return {

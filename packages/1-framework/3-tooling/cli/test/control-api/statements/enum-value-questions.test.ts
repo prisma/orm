@@ -115,7 +115,7 @@ describe('a question about an enum value', () => {
       {
         subject: 'Status.ARCHIVED',
         question:
-          'Remove value "archived" from column "status" of "task", remove value "archived" from column "tags" of "note" and remove value "archived" at path "$[*].meta.status" in column "visits" of "ticket" would lose enum value "Status.ARCHIVED" from the data that holds it.',
+          'These operations would lose enum value "Status.ARCHIVED" from the data that holds it:\n- Remove value "archived" from column "status" of "task"\n- Remove value "archived" from column "tags" of "note"\n- Remove value "archived" at path "$[*].meta.status" in column "visits" of "ticket"',
       },
     ]);
   });

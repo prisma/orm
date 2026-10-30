@@ -96,7 +96,7 @@ describe('a question about a value object field', () => {
     expect(question).toMatchObject({
       subject: 'GeoPoint.lat',
       question:
-        'Remove key "lat" from "place"."location" and remove key "lat" from "trip"."stops" would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the existing objects get a temporary value in the new required field "GeoPoint.latitude".',
+        'These operations would lose the values of value object field "GeoPoint.lat":\n- Remove key "lat" from "place"."location"\n- Remove key "lat" from "trip"."stops"\nWith --delete GeoPoint.lat, the existing objects get a temporary value in the new required field "GeoPoint.latitude".',
       verbs: ['rename', 'delete'],
       forms: { rename: 'GeoPoint.lat:GeoPoint.latitude' },
     });
@@ -125,7 +125,7 @@ describe('a question about a value object field', () => {
       {
         subject: 'GeoPoint.lng',
         question:
-          'Remove key "lng" at path "$" in column "location" of "place" and remove key "lng" at path "$[*]" in column "stops" of "trip" would lose the values of value object field "GeoPoint.lng".',
+          'These operations would lose the values of value object field "GeoPoint.lng":\n- Remove key "lng" at path "$" in column "location" of "place"\n- Remove key "lng" at path "$[*]" in column "stops" of "trip"',
         verbs: ['rename', 'delete'],
       },
     ]);
@@ -230,7 +230,7 @@ describe('a question about a removed variant', () => {
       {
         subject: 'Bug',
         question:
-          'Drop column "severity" of "tasks" and delete the rows of "tasks" that hold value "bug" in column "type" would lose the data of model "Bug".',
+          'These operations would lose the data of model "Bug":\n- Drop column "severity" of "tasks"\n- Delete the rows of "tasks" that hold value "bug" in column "type"',
         verbs: ['rename', 'delete'],
       },
     ]);

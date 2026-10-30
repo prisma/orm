@@ -605,8 +605,11 @@ withTempDir(({ createTempDir }) => {
 
         const asked = await runMigrationPlan(ctx, ['--from', origin, '--json']);
         expect(engineError(asked)?.code, 'E9.04: nobody to answer').toBe('CLI.CONSENT_REQUIRED');
-        expect(String(engineError(asked)?.why), 'E9.04: the question names every column').toBe(
-          'Remove value "archived" from column "state" of "note", remove value "archived" from column "status" of "task" and remove value "archived" from column "tags" of "task" would lose enum value "Status.ARCHIVED" from the data that holds it.',
+        expect(
+          String(engineError(asked)?.why),
+          'E9.04: the question lists every column, one per line',
+        ).toBe(
+          'These operations would lose enum value "Status.ARCHIVED" from the data that holds it:\n- Remove value "archived" from column "state" of "note"\n- Remove value "archived" from column "status" of "task"\n- Remove value "archived" from column "tags" of "task"',
         );
         const question = nextActionLabels(asked)[0] ?? '';
         expect(question, 'E9.04: the way that keeps the data comes first').toContain(

@@ -150,7 +150,10 @@ function ledByKeepDataWays(error: unknown, questions: readonly PlanQuestion[]): 
     severity: error.severity,
     ...ifDefined(
       'why',
-      ways.reduce((why, way) => why?.replaceAll(` ${way}`, ''), error.why),
+      ways.reduce(
+        (why, way) => why?.replaceAll(` ${way}`, '').replaceAll(`\n${way}`, ''),
+        error.why,
+      ),
     ),
     nextActions: [...ways.map(chooseAction), ...error.nextActions],
     diagnostics: error.diagnostics,
