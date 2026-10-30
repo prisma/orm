@@ -92,7 +92,39 @@ export function removeStoredValue(
   };
 }
 
-export function deleteRows(tableName: string, columnName: string, value: string | number): Op {
+/** A table whose foreign key to the table `deleteRows` deletes from has `onDelete: 'cascade'`: `columns` of its rows reference `references` of the deleted rows. */
+export interface CascadingForeignKey {
+  readonly table: string;
+  readonly columns: readonly string[];
+  readonly references: readonly string[];
+}
+
+function cascadeStep(
+  tableName: string,
+  columnName: string,
+  value: string | number,
+  cascade: CascadingForeignKey,
+) {
+  const referenced = cascade.columns
+    .map(
+      (column, index) =>
+        `${quoteIdentifier(tableName)}.${quoteIdentifier(cascade.references[index] ?? column)} = ${quoteIdentifier(cascade.table)}.${quoteIdentifier(column)}`,
+    )
+    .join(' AND ');
+  return step(
+    `delete the rows of "${cascade.table}" whose row of "${tableName}" holds value ${storedValueText(value)} in column "${columnName}", as their foreign key's cascade would`,
+    `DELETE FROM ${quoteIdentifier(cascade.table)} WHERE EXISTS (SELECT 1 FROM ${quoteIdentifier(tableName)} WHERE ${quoteIdentifier(tableName)}.${quoteIdentifier(columnName)} = ?1 AND ${referenced})`,
+    [value],
+  );
+}
+
+/** Deletes the rows that hold `value`, after the rows of each `cascade` table that reference them: the runner turns foreign keys off, so no declared cascade runs. */
+export function deleteRows(
+  tableName: string,
+  columnName: string,
+  value: string | number,
+  cascade: readonly CascadingForeignKey[],
+): Op {
   return {
     id: `deleteRows.${tableName}.${columnName}.${idText(value)}`,
     label: `Delete the rows of "${tableName}" that hold value ${storedValueText(value)} in column "${columnName}"`,
@@ -100,6 +132,7 @@ export function deleteRows(tableName: string, columnName: string, value: string 
     target: { id: 'sqlite', details: buildTargetDetails('column', columnName, tableName) },
     precheck: [],
     execute: [
+      ...cascade.map((foreignKey) => cascadeStep(tableName, columnName, value, foreignKey)),
       step(
         `delete the rows of "${tableName}" that hold value ${storedValueText(value)} in column "${columnName}"`,
         `DELETE FROM ${quoteIdentifier(tableName)} WHERE ${quoteIdentifier(columnName)} = ?1`,

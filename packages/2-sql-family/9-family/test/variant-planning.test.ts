@@ -18,8 +18,11 @@ import { planVariantRowRewrites } from '../src/core/migrations/variant-planning'
 const app = asNamespaceId('app');
 const text = { kind: 'scalar', codecId: 'test/text@1' } as const;
 
-/** `Task` in table `tasks`, discriminated by `type`, with one variant per entry of `variants`. */
-function tasks(variants: Readonly<Record<string, string>>): Contract<SqlStorage> {
+/** `Task` in table `tasks`, discriminated by `type`, with one variant per entry of `variants`; `Bug`, with `bugs`, in table `bugs` whose foreign key to `tasks` has that `onDelete`. */
+function tasks(
+  variants: Readonly<Record<string, string>>,
+  bugs?: { readonly onDelete: 'cascade' | 'restrict' },
+): Contract<SqlStorage> {
   const variantModels: Record<string, ContractModelBase> = Object.fromEntries(
     Object.values(variants).map((model) => [
       model,
@@ -27,10 +30,15 @@ function tasks(variants: Readonly<Record<string, string>>): Contract<SqlStorage>
         fields: {},
         relations: {},
         base: { namespace: app, model: 'Task' },
-        storage: { table: 'tasks', namespaceId: 'app', fields: {} },
+        storage: {
+          table: bugs !== undefined && model === 'Bug' ? 'bugs' : 'tasks',
+          namespaceId: 'app',
+          fields: {},
+        },
       },
     ]),
   );
+  const idColumn = { dataType: 'test/text', codecId: 'test/text@1', nullable: false };
   return {
     target: 'postgres',
     targetFamily: 'sql',
@@ -51,6 +59,23 @@ function tasks(variants: Readonly<Record<string, string>>): Contract<SqlStorage>
                 indexes: [],
                 foreignKeys: [],
               }),
+              ...(bugs === undefined
+                ? {}
+                : {
+                    bugs: new StorageTable({
+                      columns: { task_id: idColumn },
+                      uniques: [],
+                      indexes: [],
+                      foreignKeys: [
+                        {
+                          source: { namespaceId: 'app', tableName: 'bugs', columns: ['task_id'] },
+                          target: { namespaceId: 'app', tableName: 'tasks', columns: ['id'] },
+                          onDelete: bugs.onDelete,
+                          index: { primaryKey: true },
+                        },
+                      ],
+                    }),
+                  }),
             },
           },
         }),
@@ -160,6 +185,18 @@ describe('planVariantRowRewrites', () => {
   it('deletes the rows of a changed value with no statement', () => {
     expect(plan(tasks({ defect: 'Bug', epic: 'Epic' }))).toEqual([
       { model: bug, ...column, from: 'bug', to: undefined, removed: false, statement: undefined },
+    ]);
+  });
+
+  it("names the variant's own table when its foreign key to the base table cascades", () => {
+    expect(
+      [
+        tasks({ defect: 'Bug', epic: 'Epic' }, { onDelete: 'cascade' }),
+        tasks({ defect: 'Bug', epic: 'Epic' }, { onDelete: 'restrict' }),
+      ].map((contract) => plan(contract).map(({ variantTable }) => variantTable)),
+    ).toEqual([
+      [{ namespaceId: 'app', table: 'bugs', columns: ['task_id'], references: ['id'] }],
+      [undefined],
     ]);
   });
 

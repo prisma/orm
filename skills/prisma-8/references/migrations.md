@@ -563,7 +563,7 @@ The concept: the planner cannot tell whether a dropped model or field was meant 
 - On Postgres and SQLite, a variant whose discriminator value changes, or that the contract removes, is asked about as the model:
   - `--convert Bug` rewrites the old value to the new one in the base table's discriminator column (`this.replaceStoredValue(...)`). It works on `db update` too, and the question offers it first.
   - `--rename Bug:Defect` of a variant whose value also changed rewrites the value the same way.
-  - `--delete Bug` deletes the rows that hold the old value (`this.deleteRows(...)`), then drops a removed variant's own table or the columns only it used. On SQLite a deleted row that another table references fails the apply at `PRAGMA foreign_key_check`.
+  - `--delete Bug` deletes the rows that hold the old value (`this.deleteRows(...)`), then drops a removed variant's own table or the columns only it used. On SQLite a deleted row that another table references fails the apply at `PRAGMA foreign_key_check`, except the rows of the variant's own table, which the plan deletes first (`cascade` on `deleteRows`).
 - `--allow <Model>` (`db update` only) lets an operation that changes who can read or write the model's data run: one flag per operation, so on Postgres a policy drop and disabling row-level security on one model take `--allow User --allow User`.
 
 ```bash

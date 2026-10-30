@@ -36,8 +36,20 @@ export interface VariantRowRewrite {
   readonly to: string | undefined;
   /** Whether the destination contract has no such variant, so the plan also drops its columns or table. */
   readonly removed: boolean;
+  /** The variant's own table in the destination, whose foreign key to the base table deletes its rows with the base rows. */
+  readonly variantTable: VariantTable | undefined;
   /** The rename or convert statement the rewrite carries out, if any. */
   readonly statement: ResolvedModelRenameStatement | ResolvedVariantConvertStatement | undefined;
+}
+
+/** A variant's own table and the foreign key that ties each of its rows to a row of the base table, with `onDelete: 'cascade'`. */
+export interface VariantTable {
+  readonly namespaceId: string;
+  readonly table: string;
+  /** The columns of the variant's table the foreign key reads. */
+  readonly columns: readonly string[];
+  /** The columns of the base table those columns reference. */
+  readonly references: readonly string[];
 }
 
 interface BaseColumn {
@@ -97,6 +109,34 @@ function discriminatorColumn(
   const stored = contract.storage.namespaces[namespaceId]?.entries.table?.[table]?.columns[column];
   if (stored === undefined) return undefined;
   return { namespaceId, table, column, codecRef: buildColumnCodecRef(stored, undefined) };
+}
+
+/** The destination variant's own table, when it has one whose foreign key to the base table cascades. */
+function variantTableOf(
+  contract: Contract<SqlStorage>,
+  variant: ModelCoordinate,
+  base: BaseColumn,
+): VariantTable | undefined {
+  const model = modelAt(contract, variant);
+  if (model === undefined || !isSqlModelStorage(model.storage)) return undefined;
+  const { namespaceId, table } = model.storage;
+  if (namespaceId === base.namespaceId && table === base.table) return undefined;
+  const foreignKey = contract.storage.namespaces[namespaceId]?.entries.table?.[
+    table
+  ]?.foreignKeys.find(
+    ({ target, onDelete }) =>
+      onDelete === 'cascade' &&
+      target.namespaceId === base.namespaceId &&
+      target.tableName === base.table,
+  );
+  return foreignKey === undefined
+    ? undefined
+    : {
+        namespaceId,
+        table,
+        columns: foreignKey.source.columns,
+        references: foreignKey.target.columns,
+      };
 }
 
 function sameModel(left: ModelCoordinate, right: ModelCoordinate): boolean {
@@ -175,6 +215,7 @@ function rewriteOf(
     from,
     to: statement === undefined ? undefined : to,
     removed,
+    variantTable: variantTableOf(input.contract, destination.coordinate, column),
     statement,
   };
 }

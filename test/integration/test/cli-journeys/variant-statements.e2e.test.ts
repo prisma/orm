@@ -6,7 +6,8 @@
  * - P1: the discriminator value of `Bug` changes from `bug` to `defect`. Without a statement the change is refused, offering `--convert Bug` first and `--delete Bug` second; `--convert Bug` rewrites the rows.
  * - P2: `Bug` is renamed to `Defect`, whose value is `defect`: `--rename Bug:Defect` rewrites the rows.
  * - P3: the value changes and `--delete Bug` deletes the rows that held it.
- * - P4: `Bug` is removed from the own-table layout: `--delete Bug` deletes its base rows, the cascade deletes its table's rows, and its table is dropped.
+ * - P4: `Bug` is removed from the own-table layout: `--delete Bug` drops its table, then deletes its base rows.
+ * - P7: in the own-table layout the value of `Bug` changes: `--delete Bug` deletes its base rows, the cascade of its foreign key deletes the rows of its table, and its table is kept.
  * - P5: `Bug` is removed from the shared layout: `--delete Bug` deletes its rows and drops its column.
  * - P6: `Bug`, with no fields of its own, is removed: `--delete Bug` deletes its rows.
  *
@@ -72,6 +73,7 @@ const RENAMED = taskContract([{ ...BUG, name: 'Defect', value: 'defect' }, EPIC]
 const SHARED_REMOVED = taskContract([EPIC], false);
 const OWN_TABLES = taskContract([BUG, EPIC], true);
 const OWN_TABLES_REMOVED = taskContract([EPIC], true);
+const OWN_TABLES_CHANGED = taskContract([{ ...BUG, value: 'defect' }, EPIC], true);
 const WITHOUT_FIELDS = taskContract([{ name: 'Bug', value: 'bug' }, EPIC], false);
 
 const SEED_SHARED = `INSERT INTO "task" (id, type, severity) VALUES (1, 'bug', 'high'), (2, 'epic', NULL), (3, 'bug', NULL)`;
@@ -334,6 +336,47 @@ withTempDir(({ createTempDir }) => {
       timeouts.spinUpPpgDev,
     );
   });
+
+  describe.each(VIAS)(
+    'P7 (%s): delete the rows of a variant with its own table whose value changed',
+    (via) => {
+      const db = useDevDatabase();
+
+      it(
+        '--delete Bug deletes its base rows, the cascade deletes the rows of its table, and its table is kept',
+        async () => {
+          const ctx = journey(db, createTempDir);
+          await emit(ctx, OWN_TABLES, 'P7.01');
+          await apply(ctx, via, [], 'P7.02');
+          await sql(
+            db.connectionString,
+            `INSERT INTO "task" (id, type) VALUES (1, 'bug'), (2, 'epic'), (3, 'bug')`,
+          );
+          await sql(
+            db.connectionString,
+            `INSERT INTO "bug" (id, severity) VALUES (1, 'high'), (3, NULL)`,
+          );
+          await sql(db.connectionString, `INSERT INTO "epic" (id, scope) VALUES (2, 'all')`);
+          await emit(ctx, OWN_TABLES_CHANGED, 'P7.03');
+
+          await apply(ctx, via, ['--delete', 'Bug'], 'P7.04');
+          expect(await tasks(db.connectionString), 'P7.04: its base rows are deleted').toEqual([
+            { id: 2, type: 'epic' },
+          ]);
+          expect(
+            await rows(db.connectionString, 'SELECT id FROM "bug"'),
+            'P7.04: the cascade empties its table',
+          ).toEqual([]);
+          expect(
+            await rows(db.connectionString, 'SELECT id, scope FROM "epic"'),
+            'P7.04: the other variant keeps its rows',
+          ).toEqual([{ id: 2, scope: 'all' }]);
+          await expectSettled(ctx, via, 'P7.05');
+        },
+        timeouts.spinUpPpgDev,
+      );
+    },
+  );
 
   describe.each(VIAS)('P5 (%s): remove a variant stored in its base table', (via) => {
     const db = useDevDatabase();

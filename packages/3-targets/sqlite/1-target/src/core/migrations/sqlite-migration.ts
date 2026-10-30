@@ -46,6 +46,7 @@ import {
   ReplaceStoredValueCall,
 } from './op-factory-call';
 import type { SqliteColumnSpec, SqliteIndexSpec, SqliteTableSpec } from './operations/shared';
+import type { CascadingForeignKey } from './operations/stored-values';
 import type { RecreatePostcheck } from './operations/tables';
 import type { SqlitePlanTargetDetails } from './planner-target-details';
 import { sqliteSchemaTables } from './schema-tables';
@@ -399,7 +400,7 @@ export abstract class SqliteMigration<
   }
 
   /**
-   * Emit a `DELETE` operation that deletes the rows whose `column` holds the stored value `value`. The value is a stored value, as for `replaceStoredValue`, and is passed as a parameter. The migration runner checks foreign keys after the whole migration, so the apply fails if another table still references a deleted row. The operation is destructive.
+   * Emit a `DELETE` operation that deletes the rows whose `column` holds the stored value `value`. The value is a stored value, as for `replaceStoredValue`, and is passed as a parameter. The migration runner checks foreign keys after the whole migration, so the apply fails if another table still references a deleted row, unless `cascade` names it. The operation is destructive.
    */
   protected deleteRows(options: {
     readonly table: string;
@@ -407,12 +408,15 @@ export abstract class SqliteMigration<
     readonly value: string | number;
     /** The column's codec, as for `replaceStoredValue`. */
     readonly codecRef?: CodecRef;
+    /** The tables whose foreign key to `table` cascades: their rows that reference a deleted row are deleted first, as the cascade would, since the runner turns foreign keys off. */
+    readonly cascade?: readonly CascadingForeignKey[];
   }): Promise<Op> {
     return new DeleteRowsCall(
       options.table,
       options.column,
       options.value,
       this.storedValueCodec('deleteRows', options.codecRef),
+      options.cascade,
     ).toOp();
   }
 

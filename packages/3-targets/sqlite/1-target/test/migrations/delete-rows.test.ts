@@ -45,6 +45,21 @@ describe('deleteRows', () => {
     ]);
   });
 
+  it('refuses a cascade whose columns and references differ in number', () => {
+    expect(
+      () =>
+        new DeleteRowsCall('issue', 'kind', 'Bug', undefined, [
+          { table: 'bug', columns: ['id', 'x'], references: ['id'] },
+        ]),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message:
+          'deleteRows({ table: "issue", column: "kind" }): cascade of table "bug" must name as many columns as references, and at least one',
+      }),
+    );
+  });
+
   it('refuses a value that is neither a string nor a number', () => {
     expect(() => new DeleteRowsCall('issue', 'kind', null as unknown as string)).toThrow(
       expect.objectContaining({

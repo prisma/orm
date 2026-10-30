@@ -1,7 +1,8 @@
 /**
  * The SQLite planner rewrites or deletes the rows of variants whose discriminator value changes or
  * that are removed, after every other change. Migrations run with foreign keys off, so a deleted
- * row that another table references fails the apply at PRAGMA foreign_key_check.
+ * row that another table references fails the apply at PRAGMA foreign_key_check; the rows of a
+ * variant's own table are deleted with its base rows, as its foreign key's cascade would.
  */
 import type { Contract } from '@internal/contract/types';
 import { asNamespaceId, crossRef } from '@internal/contract/types';
@@ -267,6 +268,27 @@ describe('SQLite planner, variant rows', { timeout: timeouts.databaseOperation }
     expect(await tasks()).toEqual([
       { id: '2', type: 'epic' },
       { id: '3', type: 'feature' },
+    ]);
+  });
+
+  it("deletes the rows of a changed value of a variant with its own table, first in that table, as its foreign key's cascade would", async () => {
+    const to = tasksContract({ shared: { Bug: 'bug', Epic: 'epic' }, feature: 'story' });
+    await start();
+    await testDb.driver.query(`INSERT INTO "tasks" (id, type) VALUES ('5', 'feature')`);
+    await testDb.driver.query(`INSERT INTO "features" (id, priority) VALUES ('5', NULL)`);
+
+    await apply(await plan(origin, to), to);
+
+    expect([
+      await tasks(),
+      (await testDb.driver.query('SELECT id FROM "features" ORDER BY id')).rows,
+    ]).toEqual([
+      [
+        { id: '1', type: 'bug' },
+        { id: '2', type: 'epic' },
+        { id: '4', type: 'bug' },
+      ],
+      [],
     ]);
   });
 

@@ -271,6 +271,21 @@ describe('SQLite planner, variants', () => {
     ]);
   });
 
+  it("deletes the rows of a changed value of a variant with its own table, naming that table as its foreign key's cascade", async () => {
+    const result = plan(
+      origin,
+      tasksContract({ Bug: BUG, Feature: { ...FEATURE, value: 'story' } }, 'to'),
+    );
+    const deleteFeature =
+      'this.deleteRows({ table: "tasks", column: "type", value: "feature", codecRef: { codecId: "sqlite/text@1" }, cascade: [{ table: "features", columns: ["id"], references: ["id"] }] })';
+    expect(renderedCalls(result).at(-1)).toBe(deleteFeature);
+    const operations = await Promise.all(result.plan.operations);
+    expect(operations.at(-1)?.execute.map(({ sql }) => sql)).toEqual([
+      'DELETE FROM "features" WHERE EXISTS (SELECT 1 FROM "tasks" WHERE "tasks"."type" = ?1 AND "tasks"."id" = "features"."id")',
+      'DELETE FROM "tasks" WHERE "type" = ?1',
+    ]);
+  });
+
   it('drops the table of a removed variant with its own table and deletes its rows, one subject', () => {
     const result = plan(origin, tasksContract({ Bug: BUG }, 'to'));
     const calls = renderedCalls(result);

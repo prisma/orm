@@ -70,6 +70,7 @@ import {
   renameStoredKey,
 } from './operations/stored-keys';
 import {
+  type CascadingForeignKey,
   deleteRows,
   removeStoredValue,
   removeStoredValueAtPath,
@@ -1373,6 +1374,8 @@ export class DeleteRowsCall extends SqliteOpFactoryCallNode {
   readonly value: string | number;
   /** The column's codec, which writes `value` as the database stores it. */
   readonly codec: StoredValueCodec | undefined;
+  /** The tables whose rows reference the deleted rows through a foreign key that cascades, deleted first. */
+  readonly cascade: readonly CascadingForeignKey[];
   readonly label: string;
 
   constructor(
@@ -1380,12 +1383,16 @@ export class DeleteRowsCall extends SqliteOpFactoryCallNode {
     columnName: string,
     value: string | number,
     codec?: StoredValueCodec,
+    cascade: readonly CascadingForeignKey[] = [],
   ) {
     super();
     this.codec = codec;
     this.tableName = tableName;
     this.columnName = columnName;
     this.value = requireStoredValue(value, this.factoryName, tableName, columnName, 'value');
+    this.cascade = cascade.map((foreignKey) =>
+      requireCascade(foreignKey, this.factoryName, columnCallLocation(tableName, columnName)),
+    );
     this.label = `Delete the rows of "${tableName}" that hold value ${storedValueText(value)} in column "${columnName}"`;
     this.freeze();
   }
@@ -1395,6 +1402,7 @@ export class DeleteRowsCall extends SqliteOpFactoryCallNode {
       this.tableName,
       this.columnName,
       await encodeStoredValue(this.value, this.codec),
+      this.cascade,
     );
   }
 
@@ -1404,6 +1412,7 @@ export class DeleteRowsCall extends SqliteOpFactoryCallNode {
       `column: ${jsonToTsSource(this.columnName)}`,
       `value: ${jsonToTsSource(this.value)}`,
       ...codecRefSource(this.codec),
+      ...(this.cascade.length === 0 ? [] : [`cascade: ${jsonToTsSource(this.cascade)}`]),
     ];
     return `this.deleteRows({ ${opts.join(', ')} })`;
   }
@@ -1411,6 +1420,22 @@ export class DeleteRowsCall extends SqliteOpFactoryCallNode {
   override importRequirements(): readonly ImportRequirement[] {
     return [];
   }
+}
+
+function requireCascade(
+  foreignKey: CascadingForeignKey,
+  factory: string,
+  location: readonly string[],
+): CascadingForeignKey {
+  const { columns, references } = foreignKey;
+  return columns.length > 0 && columns.length === references.length
+    ? { table: foreignKey.table, columns: [...columns], references: [...references] }
+    : refusedArgument(
+        factory,
+        location,
+        'cascade',
+        `cascade of table ${JSON.stringify(foreignKey.table)} must name as many columns as references, and at least one`,
+      );
 }
 
 // ============================================================================

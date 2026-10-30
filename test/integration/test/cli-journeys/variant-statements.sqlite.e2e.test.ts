@@ -6,7 +6,8 @@
  * - V1: the discriminator value of `Bug` changes from `bug` to `defect`. Without a statement the change is refused, offering `--convert Bug` first and `--delete Bug` second; `--convert Bug` rewrites the rows. Through `migration plan`, `migration.ts` holds the `replaceStoredValue` call.
  * - V2: `Bug` is renamed to `Defect`, whose value is `defect`: `--rename Bug:Defect` rewrites the rows.
  * - V3: the value changes and `--delete Bug` deletes the rows that held it.
- * - V4: `Bug` is removed from the own-table layout: `--delete Bug` deletes its base rows, the cascade deletes its table's rows, and its table is dropped.
+ * - V4: `Bug` is removed from the own-table layout: `--delete Bug` drops its table, then deletes its base rows.
+ * - V7: in the own-table layout the value of `Bug` changes: `--delete Bug` deletes the rows of its table whose base rows hold the old value, as the cascade of its foreign key would on a database with foreign keys on, then its base rows; its table is kept.
  * - V5: `Bug` is removed from the shared layout: one question about the model `Bug`, and `--delete Bug` deletes its rows and drops its column.
  * - V6: `Bug`, with no fields of its own, is removed: `--delete Bug` deletes its rows.
  *
@@ -71,6 +72,7 @@ const RENAMED = taskContract([{ ...BUG, name: 'Defect', value: 'defect' }, EPIC]
 const SHARED_REMOVED = taskContract([EPIC], false);
 const OWN_TABLES = taskContract([BUG, EPIC], true);
 const OWN_TABLES_REMOVED = taskContract([EPIC], true);
+const OWN_TABLES_CHANGED = taskContract([{ ...BUG, value: 'defect' }, EPIC], true);
 const WITHOUT_FIELDS = taskContract([{ name: 'Bug', value: 'bug' }, EPIC], false);
 
 const SEED_SHARED = `INSERT INTO "task" (id, type, severity) VALUES (1, 'bug', 'high'), (2, 'epic', NULL), (3, 'bug', NULL)`;
@@ -326,6 +328,39 @@ withTempDir(({ createTempDir }) => {
       timeouts.spinUpPpgDev,
     );
   });
+
+  describe.each(VIAS)(
+    'V7 (SQLite, %s): delete the rows of a variant with its own table whose value changed',
+    (via) => {
+      it(
+        '--delete Bug deletes the rows of its table and its base rows, and keeps its table',
+        async () => {
+          const ctx = setupSqliteJourney(createTempDir);
+          await emit(ctx, OWN_TABLES, 'V7.01');
+          await apply(ctx, via, [], 'V7.02');
+          exec(
+            ctx.dbPath,
+            `INSERT INTO "task" (id, type) VALUES (1, 'bug'), (2, 'epic'), (3, 'bug')`,
+          );
+          exec(ctx.dbPath, `INSERT INTO "bug" (id, severity) VALUES (1, 'high'), (3, NULL)`);
+          exec(ctx.dbPath, `INSERT INTO "epic" (id, scope) VALUES (2, 'all')`);
+          await emit(ctx, OWN_TABLES_CHANGED, 'V7.03');
+
+          await apply(ctx, via, ['--delete', 'Bug'], 'V7.04');
+          expect(tasks(ctx.dbPath), 'V7.04: its base rows are deleted').toEqual([
+            { id: 2, type: 'epic' },
+          ]);
+          expect(rows(ctx.dbPath, 'SELECT id FROM "bug"'), 'V7.04: its table is empty').toEqual([]);
+          expect(
+            rows(ctx.dbPath, 'SELECT id, scope FROM "epic"'),
+            'V7.04: the other variant keeps its rows',
+          ).toEqual([{ id: 2, scope: 'all' }]);
+          await expectSettled(ctx, via, 'V7.05');
+        },
+        timeouts.spinUpPpgDev,
+      );
+    },
+  );
 
   describe.each(VIAS)('V5 (SQLite, %s): remove a variant stored in its base table', (via) => {
     it(

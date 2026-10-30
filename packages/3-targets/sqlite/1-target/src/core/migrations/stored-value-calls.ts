@@ -97,7 +97,21 @@ export function sqliteVariantRowCalls(
       const codec = { codecRef: rewrite.codecRef, codecs };
       return [
         rewrite.to === undefined
-          ? new DeleteRowsCall(rewrite.table, rewrite.column, rewrite.from, codec)
+          ? new DeleteRowsCall(
+              rewrite.table,
+              rewrite.column,
+              rewrite.from,
+              codec,
+              rewrite.variantTable === undefined
+                ? []
+                : [
+                    {
+                      table: rewrite.variantTable.table,
+                      columns: rewrite.variantTable.columns,
+                      references: rewrite.variantTable.references,
+                    },
+                  ],
+            )
           : new ReplaceStoredValueCall(
               rewrite.table,
               rewrite.column,

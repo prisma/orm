@@ -1656,7 +1656,7 @@ A required migration file is absent: either an on-disk package is missing `migra
 
 ### MIGRATION.FOREIGN_KEY_VIOLATION
 
-SQLite only: after applying migration plans with `PRAGMA foreign_keys` temporarily off (needed for recreate-table operations), the post-apply `PRAGMA foreign_key_check` reported broken references, and the whole transaction is rolled back. With foreign keys off, no `ON DELETE` action runs, so a `deleteRows` operation, such as the one that deletes the rows of a removed variant, fails the apply here when another table references a deleted row. Delete or change the referencing rows first. Payload: `violations` (rows from the pragma).
+SQLite only: after applying migration plans with `PRAGMA foreign_keys` temporarily off (needed for recreate-table operations), the post-apply `PRAGMA foreign_key_check` reported broken references, and the whole transaction is rolled back. With foreign keys off, no `ON DELETE` action runs, so a `deleteRows` operation, such as the one that deletes the rows of a removed variant, fails the apply here when another table references a deleted row; the one exception is the own table of a variant whose discriminator value changed, which the plan's `deleteRows` empties first, as its foreign key's cascade would. Delete or change the referencing rows first. Payload: `violations` (rows from the pragma).
 
 ### MIGRATION.HASH_MISMATCH
 
