@@ -1938,7 +1938,7 @@ A SQLite `recreateTable` call in `migration.ts` has a `temporaryValues` entry th
 
 ### MIGRATION.UNFILLED_PLACEHOLDER
 
-A scaffolded migration still contains a `placeholder(...)` call that the author never replaced with a real query; it throws when the migration is emitted or run. The `slot` names the exact location to edit (e.g. `"backfill-product-status:check.source"`). Payload: `slot`.
+A scaffolded migration still contains a `placeholder(...)` call that the author never replaced with a real query or value; it throws when the migration is emitted or run. The `slot` names the exact location to edit (e.g. `"backfill-product-status:check.source"`). `db migrate` raises it too, before it applies anything, when a migration to apply has no operations and its `migration.ts` still calls `placeholder(...)`: fill the placeholders, run that `migration.ts` with `node` to write `ops.json`, and run `db migrate` again. Payload: `slot` from `migration.ts`; `directory` from `db migrate`.
 
 ### MIGRATION.UNKNOWN_INVARIANT
 

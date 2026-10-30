@@ -29,10 +29,17 @@ import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { RefResolutionError } from '@internal/migration-tools/ref-resolution';
 import { ifDefined } from '@internal/utils/defined';
 import type { Diagnostic, NextAction } from '@prisma/cli-engine/protocol';
+import { join } from 'pathe';
 import { statementFlag } from '../control-api/statements/statement-flag';
 import type { StatementText } from '../control-api/statements/statement-text';
-import { chooseAction, runCommandAction } from './next-actions';
-import { type CliInvocation, cliCommand, printedPlanCommand } from './printed-command';
+import { chooseAction, editFileAction, runCommandAction } from './next-actions';
+import {
+  type CliInvocation,
+  cliCommand,
+  printedPath,
+  printedPlanCommand,
+  selfEmitCommand,
+} from './printed-command';
 
 export {
   errorHashMismatch,
@@ -976,6 +983,31 @@ function planThenApply(meta: PathUnreachableMeta): PathUnreachableAdvice {
       ),
     ],
   };
+}
+
+/** `MIGRATION.UNFILLED_PLACEHOLDER` from `db migrate`: a migration to apply still has `placeholder(...)` calls, so its `ops.json` lacks their operations. */
+export function errorMigrationHasUnfilledPlaceholders(
+  directory: string,
+  invocation: CliInvocation,
+): ActionableCliError {
+  const migrationTs = join(directory, 'migration.ts');
+  const edit = `Replace each placeholder(...) call in ${printedPath(invocation, migrationTs)} with the value or query it stands for.`;
+  const emit = selfEmitCommand(invocation, migrationTs);
+  const migrate = cliCommand(invocation, 'db migrate');
+  return new ActionableCliError(
+    'MIGRATION.UNFILLED_PLACEHOLDER',
+    'Migration has unfilled placeholders',
+    {
+      why: `The migration in ${printedPath(invocation, directory)} still has placeholder(...) calls in its migration.ts, so its ops.json does not hold their operations. Applying it would move the database to its contract without them.`,
+      fix: `${edit} Then run ${emit} to write ops.json, and run ${migrate} again.`,
+      nextActions: [
+        editFileAction(edit),
+        runCommandAction('Write ops.json', emit),
+        runCommandAction('Apply the migration', migrate),
+      ],
+      meta: { directory },
+    },
+  );
 }
 
 /** `MIGRATION.PATH_UNREACHABLE`, advising to plan the missing edge and apply it unless `advice` says otherwise. */

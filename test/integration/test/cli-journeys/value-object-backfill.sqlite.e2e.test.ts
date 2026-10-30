@@ -151,6 +151,20 @@ withTempDir(({ createTempDir }) => {
           [],
         );
 
+        const unfilled = await runMigrate(ctx, ['--json']);
+        expect(unfilled.exitCode, 'B1.05: db migrate refuses unfilled placeholders').not.toBe(0);
+        expect(engineError(unfilled), 'B1.05: names the migration and the command').toMatchObject({
+          code: 'MIGRATION.UNFILLED_PLACEHOLDER',
+          why: expect.stringContaining(`migrations/app/${latestMigrationDirName(ctx)}`),
+          nextActions: expect.arrayContaining([
+            expect.objectContaining({
+              command: expect.stringContaining(
+                `node migrations/app/${latestMigrationDirName(ctx)}/migration.ts`,
+              ),
+            }),
+          ]),
+        });
+
         writeFileSync(
           join(dir, 'migration.ts'),
           written.replaceAll("placeholder('Address.country:value')", '12'),

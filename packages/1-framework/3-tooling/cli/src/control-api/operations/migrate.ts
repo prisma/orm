@@ -31,7 +31,11 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { join } from 'pathe';
-import { type CliStructuredError, errorPathUnreachable } from '../../utils/cli-errors';
+import {
+  type CliStructuredError,
+  errorMigrationHasUnfilledPlaceholders,
+  errorPathUnreachable,
+} from '../../utils/cli-errors';
 import { errorMarkerMismatch, readLedgerQuietly } from '../../utils/marker-mismatch';
 import { migrateRunnerFailureError } from '../../utils/migrate-failure';
 import type { CliInvocation } from '../../utils/printed-command';
@@ -53,6 +57,7 @@ import {
   runMigration,
   runnerFailureFacts,
 } from './run-migration';
+import { migrationWithUnfilledPlaceholders } from './unfilled-placeholders';
 
 /**
  * Inputs for the aggregate-walking `migrate` control-api
@@ -275,6 +280,15 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
               : `Already up to date across ${totalSpaces} space(s)`,
       }),
     );
+  }
+
+  const unfilled = await migrationWithUnfilledPlaceholders(
+    perSpacePlans,
+    applyOrder,
+    migrationsDir,
+  );
+  if (unfilled !== undefined) {
+    return notOk(errorMigrationHasUnfilledPlaceholders(unfilled, options.invocation));
   }
 
   const applied = await runMigration({
