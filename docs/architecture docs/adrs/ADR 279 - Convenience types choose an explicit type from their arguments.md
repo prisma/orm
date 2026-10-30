@@ -190,7 +190,7 @@ The PostgreSQL target ships two type aliases (ADR 275), in the namespace `tempor
 
 ## Not decided here
 
-- **Other targets.** Decided by [ADR 312](ADR%20312%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md) (2026-10-30): a convenience name is the same concept on every target, not the same representation, and each target declares its tables over its own explicit types.
+- **Other targets.** [ADR 312](ADR%20312%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md) (2026-10-30) decides that a convenience name is the same concept on every target, not the same representation, and that each target declares its tables over its own explicit types. It records each target's tables as the target gets them, SQLite first. MySQL's `DateTime` and MongoDB's `Date`, which is a moment in time, still name explicit types until their own tables are recorded there.
 - **Other scalars,** for example an `Int` whose `storage:` picks `Int2`, `Int4` or `Int8`.
 
 ## Alternatives considered

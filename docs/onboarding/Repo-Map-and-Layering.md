@@ -22,6 +22,10 @@ The intent is that target migration code is **plainly control-plane** and should
 
 `dependency-cruiser.config.mjs` does not resolve overlapping globs: a file that matches two globs belongs to both module groups, and every rule for either group applies to it. A target that registered both `src/core/**` (shared) and `src/core/migrations/**` (migration) would put its migration files in the shared group too, and each import between two migration files would then count as shared → migration and fail. Register globs that do not overlap: `src/core/*.ts` matches only the files directly in `src/core/`.
 
+### Code several targets share
+
+`packages/3-targets/0-shared/` holds packages that several databases' packages share, beside the database folders. `@internal/type-implementations` there holds value logic that more than one target's codecs, data types and `now()` generators use and that depends on no database and no family ([ADR 311](../architecture%20docs/adrs/ADR%20311%20-%20Code%20shared%20by%20several%20targets'%20type%20implementations%20lives%20in%20one%20package.md)). Register such a package in the `targets` domain, so the adapters as well as the target packs can import it. The ordering check below skips `0-shared/`. Do not put such code in the framework, which holds only the affordances targets fill in. The top-level `packages/0-shared/` is a different folder, for repository tooling.
+
 ### When adding a new target package
 
 A database's packages live together in `packages/3-targets/<db>/`: `1-target`, `2-adapter`, `3-driver`, `4-codec-testkit` and `9-facade` ([ADR 278](../architecture%20docs/adrs/ADR%20278%20-%20Each%20database's%20packages%20live%20in%20one%20folder.md)). Register each of them:

@@ -25,6 +25,7 @@ model Event {
 2. **The defaults are the same kind of value on every target**, so none needs a global `Temporal`: `DateTime` reads a JavaScript `Date`, and `Date`, `Time` and `Duration` read ISO 8601 strings. `as: temporal` reads `Temporal.Instant`, `Temporal.PlainDate` and `Temporal.PlainTime`.
 3. **A target's `DateTime` with no arguments is the explicit type its `DateTime` named before**, so a schema written before the convenience types emits the same contract.
 4. **A target with no interval type stores `Duration` as ISO 8601 text** and offers only `as: string`.
+5. **An explicit type is named after what stores it, with a suffix for the value it reads.** Where the database has a column type for the concept, the name is that column type's, as on PostgreSQL. Where it has none, the name is the target's data type, which records what the stored value holds: SQLite's `sqlite/date` gives `DateString`. A type whose bare name would be a convenience name always takes the suffix, even when it is the only codec of its data type, so `sqlite/duration`'s one codec is `DurationString`, not `Duration`.
 
 ## SQLite
 
@@ -42,6 +43,8 @@ SQLite has no date or time column types. Every type below is stored as TEXT, so 
 | `Duration` | `string` (default) | `DurationString` | `sqlite/duration` | `PT1H30M` |
 
 The instant and the time of day always carry three fraction digits, which is what `toISOString()` and SQLite's `strftime('%f')` write, so SQLite compares the stored text in the order of the values. A write converts a value in another ISO form to the stored form and refuses digits below a millisecond rather than round them.
+
+A duration is stored as written, because ISO 8601 gives a duration no single form: `P1M` and `P30D` are different lengths, and `PT60M` and `PT1H` are one length written two ways. So a `DurationString` field compares its text, not its length: a filter on `PT60M` does not match a row written as `PT1H`, and the field cannot be ordered. On PostgreSQL the database compares interval values, so the same filter matches there. An application that filters durations on SQLite writes them in one form.
 
 SQLite gets no `storage: integer` for epoch milliseconds, the form the Prisma ORM query engine wrote: `DatetimeJsDate` already reads such rows, and no Prisma 7 schema reader for SQLite exists to need it.
 

@@ -219,7 +219,7 @@ A type, in PSL or the TypeScript builder (`type.DateTime(...)`), named for what 
 
 ### Explicit type
 
-A type, in PSL or the TypeScript builder, that fixes one codec, so it fixes both the column type and the value the application reads. It is named after the database, with a suffix for the kind of value when a column type has several codecs: `TimestamptzTemporal`, `TimestamptzJsDate`, `DateString`. See ADR 257 and ADR 279.
+A type, in PSL or the TypeScript builder, that fixes one codec, so it fixes both the column type and the value the application reads. It is named after what stores it, with a suffix for the kind of value: the database's column type where the database has one (`TimestamptzTemporal`, `TimestamptzJsDate`), else the target's data type (SQLite's `DateString`, stored as text). The suffix is left off only when the column type has one codec and its bare name is not a convenience name, as PostgreSQL's `Timetz`. See ADR 257, ADR 279 and ADR 312.
 
 ### Marker
 
@@ -234,6 +234,10 @@ A unique name that identifies an extension. Namespaces keep extensions from coll
 Where a database object's name comes from. An object is **wire-named** when Prisma 8 derives the name (see [wire name](#wire-name)), or **exact-named** when you supply the name and Prisma 8 adopts it verbatim — `map:` on an index, `@@map` on an RLS policy block. The two modes differ in how drift is detected: a wire name commits to the object's content, so comparing names is comparing content; an exact name says nothing about content, so the body is compared byte-for-byte against the database's own reprint.
 
 Naming mode is independent of [control policy](architecture%20docs/adrs/ADR%20224%20-%20Control%20Policy%20—%20framework-locked%20vocabulary%20and%20family-owned%20dispatch.md), which answers a different question: whether Prisma 8 may write to the object at all.
+
+### Type implementation
+
+The codecs, data types and `now()` generators that implement a target's types. Code that more than one target's type implementations share, and that depends on no database and no family, lives in `@internal/type-implementations`. See ADR 311.
 
 ### Type choice
 

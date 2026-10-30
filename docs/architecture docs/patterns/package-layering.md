@@ -5,7 +5,7 @@
 
 ## Intent
 
-A SQL-family package tries to import a type from a Mongo-family package. `pnpm lint:deps` refuses: SQL and Mongo are sibling family domains; neither knows about the other; the import would tangle two contexts that the architecture deliberately keeps separate. The fix is either to lift the shared type to the framework domain (where both families can consume it) or to redesign the coupling.
+A SQL-family package tries to import a type from a Mongo-family package. `pnpm lint:deps` refuses: SQL and Mongo are sibling family domains; neither knows about the other; the import would tangle two contexts that the architecture deliberately keeps separate. The fix is to lift the type to the framework domain if it is an affordance every family fills in, such as an interface or a base class, or else to redesign the coupling. Code that several targets share only so they can reuse it is not an affordance and does not go in the framework: it goes in `packages/3-targets/0-shared/` ([ADR 311](../adrs/ADR%20311%20-%20Code%20shared%20by%20several%20targets'%20type%20implementations%20lives%20in%20one%20package.md)).
 
 The pattern: every package lives at known coordinates in a three-axis grid — **Domain × Layer × Plane**. Imports flow downward and outward only, enforced mechanically by `pnpm lint:deps`. The grid encodes a dependency direction so cross-cutting concerns don't accumulate as ad-hoc imports.
 
@@ -42,7 +42,7 @@ packages/
 │   ├── 1-relational-core/, 3-tooling/, 4-lanes/, 5-runtime/, 9-family/, …
 ├── 2-mongo-family/     # Document family domain
 │   └── 1-core/, 3-tooling/, 4-query/, 6-transport/, 9-family/, …
-├── 3-targets/          # One folder per database (postgres, sqlite, mongo)
+├── 3-targets/          # One folder per database (postgres, sqlite, mongo), plus 0-shared/ for code several targets share
 │   └── postgres/1-target/, postgres/2-adapter/, postgres/3-driver/, postgres/4-codec-testkit/, postgres/9-facade/, …
 └── 3-extensions/       # Extension packs (pgvector, sql-orm-client, …)
 ```
@@ -85,5 +85,5 @@ The mapping is machine-readable in [`architecture.config.json`](../../../archite
 
 - **Cross-plane imports.** A migration-plane module that imports from a runtime-plane module is a structural defect; the planes communicate through artifacts, not code.
 - **Upward imports across layers.** Core importing from Tooling (or Tooling importing from Lanes) inverts the dependency direction; the SPI pattern exists to invert dependencies _without_ violating the layering.
-- **Cross-domain imports without going through the framework.** A SQL-family package importing from a Mongo-family package leaks family-specific concepts across domains; routes that need to share types should lift them to the framework domain or rethink the cross-domain coupling.
-- **A "utils" package that everyone imports.** Shared utilities that consumers from several layers depend on must live at a layer at-or-below every consumer. If there is no such layer, the utility either belongs at the framework Core layer or should be split per-consumer.
+- **Cross-domain imports without going through the framework.** A SQL-family package importing from a Mongo-family package leaks family-specific concepts across domains; routes that need to share an affordance should lift it to the framework domain or rethink the cross-domain coupling. Implementation code several targets reuse goes in `packages/3-targets/0-shared/`, not the framework.
+- **A "utils" package that everyone imports.** Shared utilities that consumers from several layers depend on must live at a layer at-or-below every consumer. Give it a scope that names what it is for, not "utils". Code several targets' type implementations share goes in `@internal/type-implementations` (ADR 311); other shared code gets a package of its own scope at the lowest domain and layer every consumer can import, and the framework Core layer takes only affordances.
