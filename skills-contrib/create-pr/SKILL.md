@@ -69,13 +69,11 @@ The PR description must follow a **decision-led, narrative** structure. A teamma
 
 #### Consult the PR template
 
-Read `.github/PULL_REQUEST_TEMPLATE.md` once before drafting. The template's required headers (today: `## Linked issue`, `## Summary`, `## Testing performed`, `## Skill update`, `## Checklist`, `## Notes for the reviewer`) must appear in the final body even when the skill's recommended structure below doesn't list them. Where the template and the skill overlap, use the template's richer header (e.g. `## Linked issue` — with a `Refs:` link and any prerequisite-PR / follow-up-PR context — replaces the bare close-line at the top).
+Read `.github/PULL_REQUEST_TEMPLATE.md` once before drafting. The template's required headers (today: `## Linked issue`, `## At a glance`, `## Summary`, `## Testing performed`, `## Skill update`, `## Checklist`, `## Notes for the reviewer`) must appear in the final body even when the skill's recommended structure below doesn't list them. Where the template and the skill overlap, use the template's richer header (e.g. `## Linked issue` — with a `Refs:` link and any prerequisite-PR / follow-up-PR context — replaces the bare close-line at the top).
 
 #### Required structure (in this order)
 
 1. **`## Linked issue`** — the template header, used instead of a bare close-line. The template asks for a GitHub issue here; a maintainer PR puts the Linear ticket in the same place: a single `Refs [$TICKET_ID](https://linear.app/...)` link, plus `Fixes #N` as well when a GitHub issue exists, plus links to any prerequisite or follow-up PRs and the Linear tickets they close. Keep it short — three lines max.
-
-   **`## Skill update`** — name the agent skill the change teaches. Reserve `n/a — internal only` for changes that are purely internal or a refactor with no user-visible delta; a user-facing change that teaches no existing skill still needs a sentence saying why no update is required. The template checklist asks you to confirm this section, so a body without it cannot tick that box truthfully.
 
 2. **`## At a glance`** — a copy-pasteable code sample from real code in the branch (not invented, not pseudocode) that demonstrates the change in user-observable terms. Below the code, one short sentence that grounds the "before" state if relevant.
 
@@ -108,6 +106,8 @@ Read `.github/PULL_REQUEST_TEMPLATE.md` once before drafting. The template's req
 7. **`## Compatibility / migration / risk`** — SPI / API / behavioral compatibility notes. For small PRs, fold this into `## Reviewer notes` instead of carrying it as its own section.
 
 8. **`## Verification`** (or `## Testing performed` per the template) — list the suites you ran on the final HEAD, one per line, with the count of cases / tasks where useful. Note any flakes that reproduced and were ruled pre-existing.
+
+   **`## Skill update`** — name the agent skill the change teaches. Reserve `n/a — internal only` for changes that are purely internal or a refactor with no user-visible delta; a user-facing change that teaches no existing skill still needs a sentence saying why no update is required. The template checklist asks you to confirm this section, so a body without it cannot tick that box truthfully.
 
 9. **`## Follow-ups`** — Linear tickets or doc notes for deferred work. Skip if there are none; don't pad.
 
