@@ -91,7 +91,7 @@ Will, 2026-09-30: the emulator controls (start, stop, list, reset) are now urgen
 ## Changes of 2026-10-30
 
 - Maturity is set per package, not for Prisma 8 as a whole (Will). The ORM core, the framework, has its own maturity level: release candidate today. Each database target package has its own level: PostgreSQL is release candidate, MongoDB is early access, and so on. A package's public API is its public exports. Apps and extension authors use the same exports, so one rule covers both. Reason: each database can launch on its own date, and the community can be asked to help build the remaining targets. That invitation need not be documented now, but the public pages must set the expectation.
-- The policy is documented publicly, and the existing definitions are updated to match, as part of this plan (Will). Stream 6, row 4.
+- Designing the policy and documenting it publicly is a task in this plan, with the existing definitions updated to match (Will). Stream 6, row 4. Questions such as version numbers are settled in that design, not now.
 
 ## Changes of 2026-10-23
 
