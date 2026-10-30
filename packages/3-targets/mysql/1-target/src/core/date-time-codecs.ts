@@ -48,6 +48,7 @@ import {
   storedTextForWrite,
   storedTextFromWire,
   storedTextOfTemporal,
+  storedWithinPrecision,
   type TemporalCodecIdentity,
   temporalFromStoredText,
   utcDateTimeOfInstantText,
@@ -110,14 +111,15 @@ export class MysqlTimestampDateCodec extends CodecImpl<
     return dateOfWireText(this.id, wire);
   }
   fromDataTypeValue(value: DataTypeValue<string>): Date {
-    if (hasDigitsBelowAMillisecond(value.value)) {
+    const stored = storedWithinPrecision(this.id, value.value, this.dataTypeParams);
+    if (hasDigitsBelowAMillisecond(stored)) {
       return refuseJsonValue(
         this.id,
         `a timestamp with no digits below a millisecond, which a Date drops: ${JSON.stringify(value.value)} has them`,
         value.value,
       );
     }
-    return new Date(`${value.value}Z`);
+    return new Date(`${stored}Z`);
   }
   toDataTypeValue(input: Date): DataTypeValue {
     return this.dataTypeValueOf(input.toISOString().replace('Z', ''));
@@ -155,7 +157,10 @@ export class MysqlDatetimeTemporalCodec extends CodecImpl<
     return instantOf(DATETIME_TEMPORAL, storedTextFromWire(this.id, wire, datetimeRow));
   }
   fromDataTypeValue(value: DataTypeValue<string>): Temporal.Instant {
-    return instantOf(DATETIME_TEMPORAL, value.value);
+    return instantOf(
+      DATETIME_TEMPORAL,
+      storedWithinPrecision(this.id, value.value, this.dataTypeParams),
+    );
   }
   toDataTypeValue(input: Temporal.Instant): DataTypeValue {
     return this.dataTypeValueOf(this.stored(input));
@@ -196,7 +201,10 @@ export class MysqlTimestampTemporalCodec extends CodecImpl<
     return instantOf(TIMESTAMP_TEMPORAL, storedTextFromWire(this.id, wire, timestampRow));
   }
   fromDataTypeValue(value: DataTypeValue<string>): Temporal.Instant {
-    return instantOf(TIMESTAMP_TEMPORAL, value.value);
+    return instantOf(
+      TIMESTAMP_TEMPORAL,
+      storedWithinPrecision(this.id, value.value, this.dataTypeParams),
+    );
   }
   toDataTypeValue(input: Temporal.Instant): DataTypeValue {
     return this.dataTypeValueOf(this.stored(input));
@@ -242,7 +250,7 @@ export class MysqlDatetimeStringCodec extends CodecImpl<
     return `${storedTextFromWire(this.id, wire, datetimeRow)}Z`;
   }
   fromDataTypeValue(value: DataTypeValue<string>): string {
-    return `${value.value}Z`;
+    return `${storedWithinPrecision(this.id, value.value, this.dataTypeParams)}Z`;
   }
   toDataTypeValue(input: string): DataTypeValue {
     return this.dataTypeValueOf(instantIn(this.id, mysqlDatetimeText)(input));
@@ -285,7 +293,7 @@ export class MysqlTimestampStringCodec extends CodecImpl<
     return `${storedTextFromWire(this.id, wire, timestampRow)}Z`;
   }
   fromDataTypeValue(value: DataTypeValue<string>): string {
-    return `${value.value}Z`;
+    return `${storedWithinPrecision(this.id, value.value, this.dataTypeParams)}Z`;
   }
   toDataTypeValue(input: string): DataTypeValue {
     return this.dataTypeValueOf(instantIn(this.id, mysqlTimestampText)(input));
@@ -406,7 +414,7 @@ export class MysqlTimeStringCodec extends CodecImpl<
     return storedTextFromWire(this.id, wire, mysqlTimeText);
   }
   fromDataTypeValue(value: DataTypeValue<string>): string {
-    return value.value;
+    return storedWithinPrecision(this.id, value.value, this.dataTypeParams);
   }
   toDataTypeValue(input: string): DataTypeValue {
     return this.storedDataTypeValueOf(input);
@@ -445,7 +453,7 @@ export class MysqlTimeTemporalCodec extends CodecImpl<
     return this.plainTimeOf(storedTextFromWire(this.id, wire, mysqlTimeText));
   }
   fromDataTypeValue(value: DataTypeValue<string>): Temporal.PlainTime {
-    return this.plainTimeOf(value.value);
+    return this.plainTimeOf(storedWithinPrecision(this.id, value.value, this.dataTypeParams));
   }
   toDataTypeValue(input: Temporal.PlainTime): DataTypeValue {
     return this.dataTypeValueOf(storedTextOfTemporal(TIME_TEMPORAL, input, mysqlTimeText));

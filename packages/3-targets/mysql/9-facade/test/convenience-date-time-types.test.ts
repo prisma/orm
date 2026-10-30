@@ -174,6 +174,15 @@ describe('a MySQL convenience date and time type', () => {
   });
 
   it.each([
+    ['DateTime(precision: 0) @default(datetime`2024-01-01T00:00:00.5`)'],
+    ['DatetimeJsDate @default(datetime`2024-01-01T00:00:00.5`)'],
+    ['Time(precision: 2) @default(time`23:59:59.125`)'],
+    ['Time(precision: 0) @default(time`23:59:59.6`)'],
+  ])('refuses %s, a default MySQL would round to the column', (written) => {
+    expect(failure(model(`at ${written}`))).toContain('holds without rounding');
+  });
+
+  it.each([
     ['Date(as: jsDate)', 'Argument \\"as\\" of Date is jsDate; write one of: string, temporal.'],
     [
       'DateTime(storage: timestamptz)',

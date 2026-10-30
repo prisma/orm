@@ -56,7 +56,7 @@ import {
   mysqlTimestampTemporalDescriptor,
   mysqlTimeTemporalDescriptor,
 } from './date-time-codecs';
-import { dateOfWireText, wireTextOfDate } from './date-time-values';
+import { dateOfWireText, storedWithinPrecision, wireTextOfDate } from './date-time-values';
 import { mysqlError, mysqlQueryNotYetSupported } from './errors';
 
 const DECIMAL_INTEGER = /^-?\d+$/;
@@ -263,14 +263,15 @@ export class MysqlDatetimeCodec extends CodecImpl<
     return decodeMysqlDatetime(wire);
   }
   fromDataTypeValue(value: DataTypeValue<string>): Date {
-    if (hasDigitsBelowAMillisecond(value.value)) {
+    const stored = storedWithinPrecision(this.id, value.value, this.dataTypeParams);
+    if (hasDigitsBelowAMillisecond(stored)) {
       return refuseJsonValue(
         this.id,
         `a datetime with no digits below a millisecond, which a Date drops: ${JSON.stringify(value.value)} has them`,
         value.value,
       );
     }
-    return new Date(`${value.value}Z`);
+    return new Date(`${stored}Z`);
   }
   toDataTypeValue(input: Date): DataTypeValue {
     return this.dataTypeValueOf(input.toISOString().replace('Z', ''));

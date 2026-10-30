@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { codecDescriptors, mysqlDatetimeDescriptor } from '../src/core/codecs';
-import { mysqlDatetime, mysqlTimestamp } from '../src/core/data-types';
+import { mysqlDatetime, mysqlTime, mysqlTimestamp } from '../src/core/data-types';
 import {
   mysqlDateStringDescriptor,
   mysqlDateTemporalDescriptor,
@@ -95,6 +95,59 @@ describe('the MySQL date and time codecs', () => {
         expect(value instanceof Date ? value.toISOString() : String(value)).toBe(read);
       },
     );
+  });
+
+  describe('refuse a stored value with more fraction digits than the column holds, which MySQL would round', () => {
+    it.each([
+      ['DatetimeJsDate', {}, mysqlDatetimeDescriptor, mysqlDatetime, '2024-01-01T00:00:00.5'],
+      [
+        'DatetimeString',
+        { precision: 0 },
+        mysqlDatetimeStringDescriptor,
+        mysqlDatetime,
+        '2024-01-01T00:00:00.5',
+      ],
+      [
+        'DatetimeTemporal',
+        { precision: 2 },
+        mysqlDatetimeTemporalDescriptor,
+        mysqlDatetime,
+        '2024-01-01T00:00:00.125',
+      ],
+      [
+        'TimestampJsDate',
+        {},
+        mysqlTimestampDateDescriptor,
+        mysqlTimestamp,
+        '2024-01-01T00:00:00.5',
+      ],
+      [
+        'TimestampString',
+        { precision: 1 },
+        mysqlTimestampStringDescriptor,
+        mysqlTimestamp,
+        '2024-01-01T00:00:00.25',
+      ],
+      [
+        'TimestampTemporal',
+        {},
+        mysqlTimestampTemporalDescriptor,
+        mysqlTimestamp,
+        '2024-01-01T00:00:00.5',
+      ],
+      ['TimeString', {}, mysqlTimeStringDescriptor, mysqlTime, '23:59:59.6'],
+      ['TimeTemporal', { precision: 3 }, mysqlTimeTemporalDescriptor, mysqlTime, '23:59:59.1234'],
+    ] as const)('%s with %j', (_name, params, descriptor, dataType, stored) => {
+      const codec = descriptor.factory(params)(instance);
+      expect(() => codec.fromDataTypeValue(dataType.valueFrom(stored, {}))).toThrow(
+        /holds without rounding/,
+      );
+    });
+
+    it('read a stored value the column holds', () => {
+      const codec = mysqlTimeStringDescriptor.factory({ precision: 1 })(instance);
+      expect(codec.fromDataTypeValue(mysqlTime.valueFrom('23:59:59.5', {}))).toBe('23:59:59.5');
+    });
   });
 
   describe('TimestampJsDate', () => {

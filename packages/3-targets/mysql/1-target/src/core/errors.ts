@@ -125,7 +125,7 @@ export function errorDateTimeUnwritable(options: {
     'RUNTIME.ENCODE_FAILED',
     `Codec '${codecId}' cannot write ${received}. ${detail}`,
     {
-      why: 'MySQL would refuse the value, or change it, so it is refused before it reaches the database.',
+      why: 'The codec refuses a value its column does not hold before it reaches MySQL.',
       fix: 'Write a value the column holds, as the message shows.',
       meta: { codecId, received: received.slice(0, 100) },
       ...ifDefined('cause', options.cause),

@@ -1,4 +1,8 @@
-import { dateTimeStoredText } from '@internal/framework-components/codec';
+import {
+  type DataTypeParams,
+  dateTimeStoredText,
+  refuseJsonValue,
+} from '@internal/framework-components/codec';
 import { hasDigitsBelow, isValidDate } from '@internal/type-implementations/date';
 import type { TemporalImplementation } from '@internal/type-implementations/temporal';
 import {
@@ -163,4 +167,25 @@ export function wireTextOfDate(codecId: string, value: Date, stored: StoredText)
     utcDateTimeOfInstantText(codecId, instant, stored),
   );
   return mysqlWireText(withoutUtcDesignator(text));
+}
+
+/** The fraction digits a column with `params` holds: its `precision`, or 0, which MySQL holds when none is written. */
+export function precisionOf(params: DataTypeParams): number {
+  const precision = params['precision'];
+  return typeof precision === 'number' ? precision : 0;
+}
+
+/** `stored`, a contract value of a column with `params`; a value with more fraction digits than the column holds, which MySQL would round, is refused. */
+export function storedWithinPrecision(
+  codecId: string,
+  stored: string,
+  params: DataTypeParams,
+): string {
+  const precision = precisionOf(params);
+  if (!hasDigitsBelow(stored, precision)) return stored;
+  return refuseJsonValue(
+    codecId,
+    `a value with at most ${precision} ${precision === 1 ? 'fraction digit' : 'fraction digits'} of a second, which precision ${precision} holds without rounding`,
+    stored,
+  );
 }
