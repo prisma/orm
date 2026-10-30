@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
+import { sqliteAdapterCapabilities } from '@internal/adapter-sqlite/adapter';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
@@ -46,7 +47,7 @@ const {
   returning: _returning,
   insertOnConflictTarget: _target,
   ...sqlCapabilities
-} = sqliteAdapter.capabilities.sql;
+} = sqliteAdapterCapabilities.sql;
 const adapterWithoutReturning = { ...sqliteAdapter, capabilities: { sql: sqlCapabilities } };
 
 async function withDatabase(
