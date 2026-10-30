@@ -63,7 +63,7 @@ describe('MySQL codecs project a column into JSON as the row form reads it', () 
     ['mysql/date-temporal@1', mysqlDateTemporalDescriptor, undefined],
     ['mysql/time-string@1', mysqlTimeStringDescriptor, { precision: 6 }],
     ['mysql/time-temporal@1', mysqlTimeTemporalDescriptor, { precision: 6 }],
-    ['mysql/duration-string@1', mysqlDurationStringDescriptor, undefined],
+    ['mysql/duration-string@1', mysqlDurationStringDescriptor, { length: 191 }],
   ] as const)(
     'passes %s through, whose JSON text the codec reads as the row form',
     (codecId, descriptor, typeParams) => {

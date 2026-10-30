@@ -65,7 +65,7 @@ function withPrecision<const CodecId extends string>(codecId: CodecId, documenta
 }
 
 /**
- * The explicit date and time types. Each is named after its MySQL column type, with a suffix for the value the application reads; `DurationString` is stored as text, since MySQL has no interval type. ADR 315.
+ * The explicit date and time types. Each is named after its MySQL column type, with a suffix for the value the application reads; `DurationString` is stored as `varchar`, since MySQL has no interval type. ADR 315.
  */
 export const mysqlDateTimeTypeConstructors = {
   DatetimeJsDate: {
@@ -124,9 +124,11 @@ export const mysqlDateTimeTypeConstructors = {
   DurationString: {
     kind: 'typeConstructor',
     inferred: true,
-    documentation:
-      'A length of time stored as MySQL text and represented as the ISO 8601 duration it was written as, such as PT1H30M.',
-    output: { codecId: MYSQL_DURATION_STRING_CODEC_ID },
+    documentation: `A length of time stored as MySQL varchar(${MYSQL_STRING_LENGTH}), so that it can be indexed, and represented as the ISO 8601 duration it was written as, such as PT1H30M.`,
+    output: {
+      codecId: MYSQL_DURATION_STRING_CODEC_ID,
+      typeParams: { length: MYSQL_STRING_LENGTH },
+    },
   },
 } as const satisfies AuthoringTypeNamespace;
 
@@ -232,13 +234,12 @@ export const mysqlConvenienceDateTimeTypes = {
   },
   Duration: {
     kind: 'typeChoice',
-    documentation:
-      'A length of time, stored as MySQL text, which has no interval type. `as` is what the application reads: string, an ISO 8601 duration such as "PT1H30M".',
+    documentation: `A length of time, stored as MySQL varchar(${MYSQL_STRING_LENGTH}), since MySQL has no interval type. \`as\` is what the application reads: string, an ISO 8601 duration such as "PT1H30M".`,
     args: [
       { kind: 'option', name: 'as', values: ['string'], default: 'string', optional: true },
-      { kind: 'option', name: 'storage', values: ['text'], default: 'text', optional: true },
+      { kind: 'option', name: 'storage', values: ['varchar'], default: 'varchar', optional: true },
     ],
-    choices: [{ when: { as: 'string', storage: 'text' }, type: 'DurationString' }],
+    choices: [{ when: { as: 'string', storage: 'varchar' }, type: 'DurationString' }],
   },
 } as const satisfies AuthoringTypeNamespace;
 

@@ -352,7 +352,7 @@ describe('the MySQL date and time codecs', () => {
   });
 
   describe('DurationString', () => {
-    const codec = mysqlDurationStringDescriptor.factory()(instance);
+    const codec = mysqlDurationStringDescriptor.factory({ length: 191 })(instance);
 
     it('reads and writes an ISO 8601 duration as written', async () => {
       expect(await codec.fromWire('PT1H30M', ctx)).toBe('PT1H30M');

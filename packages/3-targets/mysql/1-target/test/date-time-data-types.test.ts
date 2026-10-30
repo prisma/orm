@@ -11,11 +11,11 @@ import {
   mysqlDateText,
   mysqlDuration,
   mysqlDurationText,
-  mysqlText,
   mysqlTime,
   mysqlTimestamp,
   mysqlTimestampText,
   mysqlTimeText,
+  mysqlVarchar,
 } from '../src/core/data-types';
 
 const lookup = createDataTypeLookup(mysqlDataTypes);
@@ -55,8 +55,8 @@ describe('the MySQL date and time data types', () => {
     ]).toEqual([{}, {}]);
   });
 
-  it('stores a duration in a text column', () => {
-    expect(sqlStorageType(mysqlDuration, lookup)).toBe(mysqlText);
+  it('stores a duration in a varchar column, which MySQL can index', () => {
+    expect(sqlStorageType(mysqlDuration, lookup)).toBe(mysqlVarchar);
   });
 
   it('stores a timestamp as ISO text without an offset, in the years MySQL holds', () => {

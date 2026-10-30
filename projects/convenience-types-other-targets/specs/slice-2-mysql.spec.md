@@ -29,7 +29,7 @@ model Event {
 | | `string` | `timestamp` | `TimestampString`, precision 6 unless written | `mysql/timestamp` | ISO 8601 instant in UTC |
 | `Date` | `string` (default), `temporal` | `date` | `DateString`, `DateTemporal` | new `mysql/date` | `"2024-02-29"`, `Temporal.PlainDate` |
 | `Time` | `string` (default), `temporal` | `time` | `TimeString`, `TimeTemporal`, precision 6 unless written | new `mysql/time` | `"09:30:00"`, `Temporal.PlainTime` |
-| `Duration` | `string` | `text` | `DurationString` | new `mysql/duration`, stored as text | ISO 8601 duration as written |
+| `Duration` | `string` | `varchar` | `DurationString` | new `mysql/duration`, stored as `varchar(191)` so that it can be indexed | ISO 8601 duration as written |
 
 Decisions (copying PostgreSQL, where an omitted precision holds microseconds):
 - MySQL's `datetime`, `timestamp` and `time` default to zero fraction digits, so each `temporal` and `string` row gives `precision: 6` unless written, and each `jsDate` row `precision: 3`, as PostgreSQL's `DateTime` does. A bare `DateTime` stays `DatetimeJsDate(3)` = `datetime(3)`, today's type, so contracts do not change.

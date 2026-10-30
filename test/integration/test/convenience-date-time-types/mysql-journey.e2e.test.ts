@@ -67,7 +67,7 @@ const COLUMN_TYPES = {
   dayT: ['mysql/date-temporal@1', undefined],
   opensAt: ['mysql/time-string@1', { precision: 6 }],
   opensAtT: ['mysql/time-temporal@1', { precision: 3 }],
-  lasts: ['mysql/duration-string@1', undefined],
+  lasts: ['mysql/duration-string@1', { length: 191 }],
   createdAt: ['mysql/datetime@1', { precision: 3 }],
 };
 

@@ -30,7 +30,8 @@ describe('the MySQL convenience date and time types', () => {
     ['Date', ['temporal'], 'mysql/date-temporal@1', undefined],
     ['Time', [], 'mysql/time-string@1', { precision: 6 }],
     ['Time', ['temporal', 'time', 3], 'mysql/time-temporal@1', { precision: 3 }],
-    ['Duration', [], 'mysql/duration-string@1', undefined],
+    ['Duration', [], 'mysql/duration-string@1', { length: 191 }],
+    ['Duration', ['string', 'varchar'], 'mysql/duration-string@1', { length: 191 }],
   ])('%s(%j) is the explicit type on %s', (name, args, codecId, typeParams) => {
     expect(instantiateAuthoringTypeCall(types, name, args)).toEqual({
       codecId,
@@ -62,6 +63,7 @@ describe('the MySQL convenience date and time types', () => {
     ['DateTime', ['jsDate', 'date']],
     ['Date', ['jsDate']],
     ['Duration', ['temporal']],
+    ['Duration', ['string', 'text']],
     ['Time', ['string', 'timetz']],
   ])('refuse %s(%j), which no row lists', (name, args) => {
     expect(() => instantiateAuthoringTypeCall(types, name, args)).toThrow();

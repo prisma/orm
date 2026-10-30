@@ -98,7 +98,7 @@ const rows: readonly (readonly [
   ['Date(as: temporal)', 'DateTemporal', 'mysql/date-temporal@1', undefined],
   ['Time', 'TimeString(6)', 'mysql/time-string@1', { precision: 6 }],
   ['Time(as: temporal)', 'TimeTemporal(6)', 'mysql/time-temporal@1', { precision: 6 }],
-  ['Duration', 'DurationString', 'mysql/duration-string@1', undefined],
+  ['Duration', 'DurationString', 'mysql/duration-string@1', { length: 191 }],
   ['DateTime?', 'DatetimeJsDate(3)?', 'mysql/datetime@1', { precision: 3 }],
 ];
 
@@ -233,13 +233,13 @@ describe('a MySQL convenience date and time type in the TypeScript builder', () 
       exactAt: [columns?.['exactAt']?.codecId, columns?.['exactAt']?.typeParams],
       day: [columns?.['day']?.codecId, 'typeParams' in Object(columns?.['day'])],
       opensAt: [columns?.['opensAt']?.codecId, columns?.['opensAt']?.typeParams],
-      lasts: [columns?.['lasts']?.codecId, 'typeParams' in Object(columns?.['lasts'])],
+      lasts: [columns?.['lasts']?.codecId, columns?.['lasts']?.typeParams],
     }).toEqual({
       at: ['mysql/datetime@1', { precision: 3 }],
       exactAt: ['mysql/timestamp-temporal@1', { precision: 6 }],
       day: ['mysql/date-string@1', false],
       opensAt: ['mysql/time-temporal@1', { precision: 3 }],
-      lasts: ['mysql/duration-string@1', false],
+      lasts: ['mysql/duration-string@1', { length: 191 }],
     });
   });
 });

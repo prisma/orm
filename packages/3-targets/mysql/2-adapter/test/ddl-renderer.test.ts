@@ -135,7 +135,7 @@ describe('column defaults', () => {
 
   it.each([
     ['int', 'mysql/int@1', 'mysql/int'],
-    ['text', 'mysql/duration-string@1', 'mysql/duration'],
+    ['varchar(191)', 'mysql/duration-string@1', 'mysql/duration'],
   ])(
     'refuses now() on a %s column of %s, which holds no date or time',
     async (type, codecId, dataType) => {
@@ -159,7 +159,7 @@ describe('column defaults', () => {
       '2024-01-01T00:00:00.5',
       "DEFAULT '2024-01-01 00:00:00.500'",
     ],
-    ['text', 'mysql/duration-string@1', undefined, 'PT1H30M', "DEFAULT ('PT1H30M')"],
+    ['varchar(191)', 'mysql/duration-string@1', { length: 191 }, 'PT1H30M', "DEFAULT 'PT1H30M'"],
   ])(
     'writes a literal default on a %s column of %s through its codec',
     async (type, codecId, typeParams, value, clause) => {

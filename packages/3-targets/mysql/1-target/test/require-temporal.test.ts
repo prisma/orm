@@ -102,7 +102,7 @@ describe('the MySQL date and time types with no global Temporal and no fallback'
     const datetime = mysqlDatetimeDescriptor.factory({ precision: 3 })(ctx);
     const date = codecs.mysqlDateStringDescriptor.factory()(ctx);
     const time = codecs.mysqlTimeStringDescriptor.factory({ precision: 6 })(ctx);
-    const duration = codecs.mysqlDurationStringDescriptor.factory()(ctx);
+    const duration = codecs.mysqlDurationStringDescriptor.factory({ length: 191 })(ctx);
 
     expect({
       datetime: (await datetime.fromWire(await datetime.toWire(new Date(0), call), call)).getTime(),

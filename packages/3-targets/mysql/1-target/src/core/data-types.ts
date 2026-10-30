@@ -1,6 +1,6 @@
 /**
  * The data types this target owns: the MySQL integer, character, date and time types, a duration
- * stored as text, and a native `enum('A','B')` column type whose name is the text MySQL's catalog
+ * stored as varchar, and a native `enum('A','B')` column type whose name is the text MySQL's catalog
  * prints for it.
  *
  * ADR 254.
@@ -273,9 +273,9 @@ export const mysqlTime = sqlDataType('mysql/time', {
   casts: {},
 });
 
-/** A length of time, stored in a `text` column as the ISO 8601 duration it was written as, `PT1H30M`. MySQL has no interval type, and equal durations can be written differently, `P1D` and `PT24H`, so a duration keeps its spelling. ADR 315. */
+/** A length of time, stored in a `varchar` column as the ISO 8601 duration it was written as, `PT1H30M`, so that MySQL can index it. MySQL has no interval type, and equal durations can be written differently, `P1D` and `PT24H`, so a duration keeps its spelling. ADR 315. */
 export const mysqlDuration = sqlDataType('mysql/duration', {
-  storedAs: mysqlText.id,
+  storedAs: mysqlVarchar.id,
   read: readStored('mysql/duration', mysqlDurationText, 'an ISO 8601 duration, as in "PT1H30M"'),
   casts: {},
 });

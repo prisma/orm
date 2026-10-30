@@ -40,6 +40,7 @@ import {
   mysqlTimestamp,
   mysqlTimestampText,
   mysqlTimeText,
+  mysqlVarcharParams,
 } from './data-types';
 import {
   dateOfWireText,
@@ -494,7 +495,7 @@ export class MysqlTimeTemporalDescriptor extends MysqlCodecDescriptor<PrecisionP
 
 export const mysqlTimeTemporalDescriptor = new MysqlTimeTemporalDescriptor();
 
-/** A length of time read as the ISO 8601 duration it was written as, `PT1H30M`, stored in a `text` column. Its text does not sort in the order of the durations, so it offers no order. */
+/** A length of time read as the ISO 8601 duration it was written as, `PT1H30M`, stored in a `varchar` column. Its text does not sort in the order of the durations, so it offers no order. */
 export class MysqlDurationStringCodec extends CodecImpl<
   typeof MYSQL_DURATION_STRING_CODEC_ID,
   readonly ['equality'],
@@ -515,18 +516,23 @@ export class MysqlDurationStringCodec extends CodecImpl<
   }
 }
 
-export class MysqlDurationStringDescriptor extends MysqlCodecDescriptor<void> {
+/** The length of the `varchar` a duration is stored in. */
+type DurationParams = typeof mysqlVarcharParams.infer;
+
+export class MysqlDurationStringDescriptor extends MysqlCodecDescriptor<DurationParams> {
   override readonly dataType = mysqlDuration.id;
   override readonly codecId = MYSQL_DURATION_STRING_CODEC_ID;
   override readonly traits = ['equality'] as const;
-  override readonly paramsSchema = undefined;
+  override readonly paramsSchema = mysqlVarcharParams;
   override renderValueLiteral(value: JsonValue): string | undefined {
     return renderTsLiteral(value);
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return identityJsonProjection(expression);
   }
-  override factory(): (ctx: CodecInstanceContext) => MysqlDurationStringCodec {
+  override factory(
+    _params: DurationParams,
+  ): (ctx: CodecInstanceContext) => MysqlDurationStringCodec {
     return () => new MysqlDurationStringCodec(this, mysqlDuration);
   }
 }
