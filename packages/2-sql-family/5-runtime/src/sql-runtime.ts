@@ -1815,13 +1815,53 @@ export async function withTransaction<R>(
 
   let invalidated = false;
 
+  // Statements that passed the `invalidated` check but may not have reached the driver yet (middleware and encoding run in between). A statement sent on the transaction after the ROLLBACK reaches the database outside the transaction and is committed on its own, so the ROLLBACK waits for these first: they run inside the transaction and are rolled back with it.
+  const statementsInFlight = new Set<Promise<unknown>>();
+  function trackInFlight<T>(statement: Promise<T>): Promise<T> {
+    statementsInFlight.add(statement);
+    const settle = () => statementsInFlight.delete(statement);
+    statement.then(settle, settle);
+    return statement;
+  }
+  async function settleStatementsInFlight(): Promise<void> {
+    while (statementsInFlight.size > 0) {
+      await Promise.allSettled([...statementsInFlight]);
+    }
+  }
+
+  // The statement is sent by the first step of the stream, so only that step is tracked: a stream the caller stops reading must not hold the ROLLBACK. Everything else is the source's own iterator, so `for await` below closes it as before.
+  function trackFirstStep<Row>(source: AsyncIterable<Row>): AsyncIterable<Row> {
+    return {
+      [Symbol.asyncIterator](): AsyncIterator<Row> {
+        const rows = source[Symbol.asyncIterator]();
+        const close = rows.return?.bind(rows);
+        const raise = rows.throw?.bind(rows);
+        let first = true;
+        return {
+          next: (): Promise<IteratorResult<Row>> => {
+            if (!first) return rows.next();
+            first = false;
+            return trackInFlight(rows.next());
+          },
+          ...(close ? { return: close } : {}),
+          ...(raise ? { throw: raise } : {}),
+        };
+      },
+    };
+  }
+
   async function* guardedStream<Row>(
     open: () => AsyncIterable<Row>,
   ): AsyncGenerator<Row, void, unknown> {
     if (invalidated) {
       throw transactionClosedError();
     }
-    for await (const row of open()) {
+    for await (const row of trackFirstStep(open())) {
+      // Checked on both sides of the yield: before it, so a row that arrives after the transaction
+      // closed is not handed over; after it, so a closed transaction does not read another row.
+      if (invalidated) {
+        throw transactionClosedError();
+      }
       yield row;
       if (invalidated) {
         throw transactionClosedError();
@@ -1844,7 +1884,7 @@ export async function withTransaction<R>(
         options?: RuntimeExecuteOptions,
       ): Promise<SqlStatementStats> {
         if (invalidated) throw transactionClosedError();
-        return target.execute(plan, options);
+        return trackInFlight(target.execute(plan, options));
       },
       [preparedStatementQuery]<Params, Row>(
         ps: PreparedStatement<Params, Row>,
@@ -1861,7 +1901,7 @@ export async function withTransaction<R>(
         options?: RuntimeExecuteOptions,
       ): Promise<SqlStatementStats> {
         if (invalidated) throw transactionClosedError();
-        return runPreparedExecute(target, ps, params, options);
+        return trackInFlight(runPreparedExecute(target, ps, params, options));
       },
     };
   }
@@ -1872,7 +1912,7 @@ export async function withTransaction<R>(
         activity: StartActivity<K>,
       ): Promise<ActivityHandle<K>> {
         if (invalidated) throw transactionClosedError();
-        return guardedHandle(await startActivityOn(target, activity));
+        return guardedHandle(await trackInFlight(startActivityOn(target, activity)));
       },
       planContentHash(plan: HashablePlan): Promise<string> {
         return planContentHashOn(target, plan);
@@ -1920,6 +1960,9 @@ export async function withTransaction<R>(
     try {
       result = await fn(txContext);
     } catch (error) {
+      // Close the transaction before the ROLLBACK is awaited: a statement issued meanwhile (e.g. by another branch of a Promise.all whose first branch threw) would otherwise run after the ROLLBACK, outside the transaction.
+      invalidated = true;
+      await settleStatementsInFlight();
       try {
         await transaction.rollback();
       } catch (rollbackError) {
