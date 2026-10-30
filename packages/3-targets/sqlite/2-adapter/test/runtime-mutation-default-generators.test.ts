@@ -14,7 +14,7 @@ describe('the SQLite runtime mutation default generators', () => {
       { id: 'instantNow', stability: 'query' },
       { id: 'plainDateNow', stability: 'query' },
       { id: 'plainTimeNow', stability: 'query' },
-      { id: 'timestamptzStringNow', stability: 'query' },
+      { id: 'instantStringNow', stability: 'query' },
       { id: 'dateStringNow', stability: 'query' },
       { id: 'timeStringNow', stability: 'query' },
     ]);
@@ -23,7 +23,7 @@ describe('the SQLite runtime mutation default generators', () => {
   it('generate the text the string types store', () => {
     const generate = (id: string) => generators.find((entry) => entry.id === id)?.generate();
     expect({
-      instant: generate('timestamptzStringNow'),
+      instant: generate('instantStringNow'),
       date: generate('dateStringNow'),
       time: generate('timeStringNow'),
     }).toEqual({

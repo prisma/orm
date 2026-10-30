@@ -3,11 +3,11 @@ import { TIMESTAMP_NOW_GENERATOR_ID } from '@internal/framework-components/autho
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   instantNow,
+  instantStringNow,
   plainDateNow,
   plainTimeNow,
   sqliteNowGenerators,
   timeStringNow,
-  timestamptzStringNow,
 } from '../src/core/date-time-now-generators';
 import { sqliteGeneratorDescriptors, sqliteNowGeneratorIds } from '../src/core/generator-functions';
 import { sqliteCodecRegistry } from '../src/core/registry';
@@ -33,7 +33,7 @@ describe('the "now" generator for each codec', () => {
     expect(sqliteNowGeneratorIds).toEqual({
       'sqlite/datetime@1': 'timestampNow',
       'sqlite/datetime-temporal@1': 'instantNow',
-      'sqlite/datetime-string@1': 'timestamptzStringNow',
+      'sqlite/datetime-string@1': 'instantStringNow',
       'sqlite/date-string@1': 'dateStringNow',
       'sqlite/date-temporal@1': 'plainDateNow',
       'sqlite/time-string@1': 'timeStringNow',
@@ -74,7 +74,7 @@ describe('the "now" values', () => {
     vi.setSystemTime(new Date('2024-02-29T23:59:59.999Z'));
     expect({
       instant: instantNow().toString(),
-      instantString: timestamptzStringNow(),
+      instantString: instantStringNow(),
       date: plainDateNow().toString(),
       time: plainTimeNow().toString(),
       timeString: timeStringNow(),
@@ -90,7 +90,7 @@ describe('the "now" values', () => {
   it('write three fraction digits when the clock is on a whole second', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2024-01-01T09:30:00.000Z'));
-    expect({ instantString: timestamptzStringNow(), timeString: timeStringNow() }).toEqual({
+    expect({ instantString: instantStringNow(), timeString: timeStringNow() }).toEqual({
       instantString: '2024-01-01T09:30:00.000Z',
       timeString: '09:30:00.000',
     });

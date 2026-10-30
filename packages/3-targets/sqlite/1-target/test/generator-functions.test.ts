@@ -13,7 +13,7 @@ describe('the SQLite generator functions', () => {
   it.each([
     ['sqlite/datetime@1', 'timestampNow'],
     ['sqlite/datetime-temporal@1', 'instantNow'],
-    ['sqlite/datetime-string@1', 'timestamptzStringNow'],
+    ['sqlite/datetime-string@1', 'instantStringNow'],
     ['sqlite/date-string@1', 'dateStringNow'],
     ['sqlite/date-temporal@1', 'plainDateNow'],
     ['sqlite/time-string@1', 'timeStringNow'],

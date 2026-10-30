@@ -8,8 +8,6 @@ import {
   PLAIN_DATE_TIME_NOW_GENERATOR_ID,
   PLAIN_TIME_NOW_GENERATOR_ID,
   TIME_STRING_NOW_GENERATOR_ID,
-  TIMESTAMP_STRING_NOW_GENERATOR_ID,
-  TIMESTAMPTZ_STRING_NOW_GENERATOR_ID,
 } from '@internal/type-implementations/now';
 import {
   PG_DATE_STRING_CODEC_ID,
@@ -25,7 +23,11 @@ import {
   PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
   PG_TIMETZ_CODEC_ID,
 } from './codec-ids';
-import { TIMETZ_NOW_GENERATOR_ID } from './date-time-now-generators';
+import {
+  TIMESTAMP_STRING_NOW_GENERATOR_ID,
+  TIMESTAMPTZ_STRING_NOW_GENERATOR_ID,
+  TIMETZ_NOW_GENERATOR_ID,
+} from './date-time-now-generators';
 
 /** The "now" generator for each codec that has one. The `now` generator function binds it. */
 export const postgresNowGeneratorIds = {

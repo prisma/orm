@@ -9,12 +9,12 @@ import {
   PLAIN_DATE_TIME_NOW_GENERATOR_ID,
   PLAIN_TIME_NOW_GENERATOR_ID,
   TIME_STRING_NOW_GENERATOR_ID,
-  TIMESTAMP_STRING_NOW_GENERATOR_ID,
-  TIMESTAMPTZ_STRING_NOW_GENERATOR_ID,
 } from '@internal/type-implementations/now';
 import type { Temporal } from 'temporal-spec';
 import { requireTemporal } from './require-temporal';
 
+export const TIMESTAMP_STRING_NOW_GENERATOR_ID = 'timestampStringNow' as const;
+export const TIMESTAMPTZ_STRING_NOW_GENERATOR_ID = 'timestamptzStringNow' as const;
 export const TIMETZ_NOW_GENERATOR_ID = 'timetzNow' as const;
 
 const UTC_OFFSET = 'Z';
@@ -50,15 +50,15 @@ export function plainTimeNow(params?: GeneratorParams): Temporal.PlainTime {
 }
 
 export function timestampStringNow(params?: GeneratorParams): string {
-  return nowValues.timestampStringNow(precisionOf(params));
+  return nowValues.dateTimeStringNow(precisionOf(params), 'trimmed');
 }
 
 export function timestamptzStringNow(params?: GeneratorParams): string {
-  return nowValues.timestamptzStringNow(precisionOf(params));
+  return nowValues.instantStringNow(precisionOf(params), 'trimmed');
 }
 
 export function timeStringNow(params?: GeneratorParams): string {
-  return nowValues.timeStringNow(precisionOf(params));
+  return nowValues.timeStringNow(precisionOf(params), 'trimmed');
 }
 
 export function timetzNow(params?: GeneratorParams): string {

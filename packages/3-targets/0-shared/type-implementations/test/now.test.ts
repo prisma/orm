@@ -3,9 +3,12 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import {
   DATE_STRING_NOW_GENERATOR_ID,
   dateStringNow,
+  dateTimeStringNow,
   fractionDigitsOf,
   INSTANT_NOW_GENERATOR_ID,
+  INSTANT_STRING_NOW_GENERATOR_ID,
   instantNow,
+  instantStringNow,
   PLAIN_DATE_NOW_GENERATOR_ID,
   PLAIN_DATE_TIME_NOW_GENERATOR_ID,
   PLAIN_TIME_NOW_GENERATOR_ID,
@@ -13,11 +16,7 @@ import {
   plainDateTimeNow,
   plainTimeNow,
   TIME_STRING_NOW_GENERATOR_ID,
-  TIMESTAMP_STRING_NOW_GENERATOR_ID,
-  TIMESTAMPTZ_STRING_NOW_GENERATOR_ID,
   timeStringNow,
-  timestampStringNow,
-  timestamptzStringNow,
 } from '../src/now';
 
 afterEach(() => {
@@ -26,14 +25,13 @@ afterEach(() => {
 });
 
 describe('the generator ids', () => {
-  it('are the ids contracts store', () => {
+  it('are the ids contracts store, each naming the value and no database type', () => {
     expect([
       INSTANT_NOW_GENERATOR_ID,
       PLAIN_DATE_TIME_NOW_GENERATOR_ID,
       PLAIN_DATE_NOW_GENERATOR_ID,
       PLAIN_TIME_NOW_GENERATOR_ID,
-      TIMESTAMP_STRING_NOW_GENERATOR_ID,
-      TIMESTAMPTZ_STRING_NOW_GENERATOR_ID,
+      INSTANT_STRING_NOW_GENERATOR_ID,
       DATE_STRING_NOW_GENERATOR_ID,
       TIME_STRING_NOW_GENERATOR_ID,
     ]).toEqual([
@@ -41,8 +39,7 @@ describe('the generator ids', () => {
       'plainDateTimeNow',
       'plainDateNow',
       'plainTimeNow',
-      'timestampStringNow',
-      'timestamptzStringNow',
+      'instantStringNow',
       'dateStringNow',
       'timeStringNow',
     ]);
@@ -62,18 +59,28 @@ describe('fractionDigitsOf', () => {
 });
 
 describe('the text "now" values', () => {
-  it('write the current UTC time, with no trailing zeros in the fraction', () => {
-    vi.useFakeTimers({ now: new Date('2024-01-02T03:04:05.678Z') });
+  it('write the current UTC time, with no trailing zeros in a trimmed fraction', () => {
+    vi.useFakeTimers({ now: new Date('2024-01-02T03:04:05.670Z') });
     expect([
-      timestampStringNow(6),
-      timestamptzStringNow(6),
+      dateTimeStringNow(6, 'trimmed'),
+      instantStringNow(6, 'trimmed'),
       dateStringNow(),
-      timeStringNow(6),
+      timeStringNow(6, 'trimmed'),
+    ]).toEqual(['2024-01-02T03:04:05.67', '2024-01-02T03:04:05.67Z', '2024-01-02', '03:04:05.67']);
+  });
+
+  it('write every fraction digit they are given in a fixed fraction', () => {
+    vi.useFakeTimers({ now: new Date('2024-01-02T03:04:00.000Z') });
+    expect([
+      dateTimeStringNow(3, 'fixed'),
+      instantStringNow(3, 'fixed'),
+      timeStringNow(3, 'fixed'),
+      instantStringNow(0, 'fixed'),
     ]).toEqual([
-      '2024-01-02T03:04:05.678',
-      '2024-01-02T03:04:05.678Z',
-      '2024-01-02',
-      '03:04:05.678',
+      '2024-01-02T03:04:00.000',
+      '2024-01-02T03:04:00.000Z',
+      '03:04:00.000',
+      '2024-01-02T03:04:00Z',
     ]);
   });
 
@@ -86,9 +93,9 @@ describe('the text "now" values', () => {
   ])('round down to %s fraction digits', (fractionDigits, text) => {
     vi.useFakeTimers({ now: new Date('2024-01-02T23:59:59.999Z') });
     expect([
-      timestampStringNow(fractionDigits),
-      timestamptzStringNow(fractionDigits),
-      timeStringNow(fractionDigits),
+      dateTimeStringNow(fractionDigits, 'trimmed'),
+      instantStringNow(fractionDigits, 'trimmed'),
+      timeStringNow(fractionDigits, 'trimmed'),
     ]).toEqual([text, `${text}Z`, text.slice(11)]);
   });
 
@@ -96,9 +103,9 @@ describe('the text "now" values', () => {
     ['2024-01-02T03:04:05.670Z', '2024-01-02T03:04:05.67'],
     ['2024-01-02T03:04:05.600Z', '2024-01-02T03:04:05.6'],
     ['2024-01-02T03:04:00.000Z', '2024-01-02T03:04:00'],
-  ])('remove the trailing zeros of the fraction of %s', (now, text) => {
+  ])('remove the trailing zeros of a trimmed fraction of %s', (now, text) => {
     vi.useFakeTimers({ now: new Date(now) });
-    expect(timestampStringNow(6)).toBe(text);
+    expect(dateTimeStringNow(6, 'trimmed')).toBe(text);
   });
 });
 
