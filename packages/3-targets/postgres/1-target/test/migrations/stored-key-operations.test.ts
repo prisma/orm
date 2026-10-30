@@ -8,6 +8,7 @@ import {
   RenameStoredKeyCall,
 } from '../../src/core/migrations/op-factory-call';
 import { postgresTypeLookups } from '../postgres-type-lookups';
+import { placeContract } from './value-object-planner-fixtures';
 
 const REFUSED_PATHS = [
   '$..lat',
@@ -201,33 +202,43 @@ describe('fillStoredKey', () => {
     );
   });
 
-  describe('with the codec of the field it fills', () => {
-    const codec = { codecRef: { codecId: 'pg/text@1' }, types: postgresTypeLookups };
+  describe('with the value object field it fills', () => {
+    const field = {
+      text: 'GeoPoint.country',
+      check: {
+        contract: placeContract(
+          { GeoPoint: { lat: 'scalar', country: 'scalar' } },
+          [{ field: 'point', valueObject: 'GeoPoint' }],
+          'fill-check',
+        ),
+        types: { ...postgresTypeLookups, scalarTypeName: () => 'String' },
+      },
+    };
 
-    it("refuses a value the field's data type does not accept, naming the path and the value", () => {
-      expect(() => new FillStoredKeyCall('app', 'place', 'point', '$.country', 12, codec)).toThrow(
+    it('refuses a value the field does not take, naming the field and its type', () => {
+      expect(() => new FillStoredKeyCall('app', 'place', 'point', '$.country', 12, field)).toThrow(
         expect.objectContaining({
           code: 'CONTRACT.ARGUMENT_INVALID',
           message:
-            'fillStoredKey({ schema: "app", table: "place", column: "point" }): value 12 at path "$.country" is not one the data type of codec "pg/text@1" accepts',
+            'fillStoredKey({ schema: "app", table: "place", column: "point" }): value 12 for field "GeoPoint.country" is not a String',
         }),
       );
     });
 
-    it('takes a value the data type accepts, or a placeholder, and renders the codec', () => {
+    it('takes a value the field takes, or a placeholder, and renders the field', () => {
       expect([
-        new FillStoredKeyCall('app', 'place', 'point', '$.country', 'NZ', codec).renderTypeScript(),
+        new FillStoredKeyCall('app', 'place', 'point', '$.country', 'NZ', field).renderTypeScript(),
         new FillStoredKeyCall(
           'app',
           'place',
           'point',
           '$.country',
           new UnfilledValue('GeoPoint.country:value'),
-          codec,
+          field,
         ).renderTypeScript(),
       ]).toEqual([
-        'this.fillStoredKey({ schema: "app", table: "place", column: "point", path: "$.country", value: "NZ", codecRef: { codecId: "pg/text@1" } })',
-        'this.fillStoredKey({ schema: "app", table: "place", column: "point", path: "$.country", value: placeholder("GeoPoint.country:value"), codecRef: { codecId: "pg/text@1" } })',
+        'this.fillStoredKey({ schema: "app", table: "place", column: "point", path: "$.country", value: "NZ", field: "GeoPoint.country" })',
+        'this.fillStoredKey({ schema: "app", table: "place", column: "point", path: "$.country", value: placeholder("GeoPoint.country:value"), field: "GeoPoint.country" })',
       ]);
     });
   });

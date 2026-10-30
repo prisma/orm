@@ -378,7 +378,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       policy: options.policy,
       calls: {
         storedKeyCalls: (rewrites) => postgresStoredKeyCalls(rewrites, options.contract),
-        storedKeyFillCalls: (fills) => postgresStoredKeyFillCalls(fills, options.contract, types),
+        storedKeyFillCalls: (fills) => postgresStoredKeyFillCalls(fills, options.contract),
         storedValueCalls: (rewrites) =>
           postgresStoredValueCalls(rewrites, options.contract, types.codecLookup),
         variantRowCalls: (rewrites) =>

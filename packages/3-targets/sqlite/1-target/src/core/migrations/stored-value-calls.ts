@@ -6,7 +6,7 @@ import type {
   StoredValueRewrite,
   VariantRowRewrite,
 } from '@internal/family-sql/control';
-import type { CodecLookupWithDescriptors, TypeLookups } from '@internal/framework-components/codec';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { enumValueCoordinateJson } from '@internal/framework-components/control';
 import {
   DeleteRowsCall,
@@ -71,17 +71,13 @@ export function sqliteStoredKeyCalls(
 /** The calls that carry out a plan's fills of value object fields, each with the fill it carries out. */
 export function sqliteStoredKeyFillCalls(
   fills: readonly StoredKeyFill[],
-  types: TypeLookups,
 ): ReadonlyMap<FillStoredKeyCall, StoredKeyFill> {
   return new Map(
     fills.map((fill) => [
-      new FillStoredKeyCall(
-        fill.table,
-        fill.column,
-        fill.path,
-        fill.value,
-        fill.codecRef === undefined ? undefined : { codecRef: fill.codecRef, types },
-      ),
+      new FillStoredKeyCall(fill.table, fill.column, fill.path, fill.value, {
+        text: fill.field,
+        check: undefined,
+      }),
       fill,
     ]),
   );

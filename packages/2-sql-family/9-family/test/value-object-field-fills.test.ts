@@ -129,7 +129,7 @@ describe('planValueObjectFieldFills', () => {
         column: 'location',
         path: '$.country',
         value: new UnfilledValue('GeoPoint.country:value'),
-        codecRef: { codecId: 'test/text@1' },
+        field: 'GeoPoint.country',
         statement,
       },
     ]);
@@ -283,12 +283,10 @@ describe('planValueObjectFieldFills', () => {
         unnamed: 'temporaryValue',
       });
 
-      expect(fills(result).map(({ path, value, codecRef }) => ({ path, value, codecRef }))).toEqual(
-        [
-          { path: '$.colors', value: [], codecRef: undefined },
-          { path: '$.labels', value: [], codecRef: undefined },
-        ],
-      );
+      expect(fills(result).map(({ path, value, field }) => ({ path, value, field }))).toEqual([
+        { path: '$.colors', value: [], field: 'GeoPoint.colors' },
+        { path: '$.labels', value: [], field: 'GeoPoint.labels' },
+      ]);
     });
 
     it.each([

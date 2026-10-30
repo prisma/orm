@@ -130,7 +130,7 @@ const backfill: ResolvedMigrationStatement = {
 };
 
 const FILL_CALL =
-  /this\.fillStoredKey\(\{ table: "([^"]*)", column: "([^"]*)", path: "([^"]*)", value: placeholder\("GeoPoint\.country:value"\), codecRef: \{ codecId: "sqlite\/text@1" \} \}\)/g;
+  /this\.fillStoredKey\(\{ table: "([^"]*)", column: "([^"]*)", path: "([^"]*)", value: placeholder\("GeoPoint\.country:value"\), field: "GeoPoint\.country" \}\)/g;
 
 describe('SQLite planner, value object field fills', {
   timeout: timeouts.databaseOperation,

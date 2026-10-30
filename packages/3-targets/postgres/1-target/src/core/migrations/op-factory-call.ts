@@ -36,7 +36,7 @@ import {
   type SqlMigrationPlanOperation,
   type SqlSlot,
   type SqlTextSources,
-  type StoredKeyFillCodec,
+  type StoredKeyFillField,
   type StoredValueCodec,
   slotSource,
   sqlOfSlot,
@@ -2783,13 +2783,12 @@ function requireJsonValue(
 
 function requireFillValue(
   value: JsonValue,
-  keyPath: JsonKeyPath,
-  codec: StoredKeyFillCodec | undefined,
+  field: StoredKeyFillField | undefined,
   factory: string,
   location: readonly string[],
 ): JsonValue {
   const json = requireJsonValue(value, factory, location);
-  const problem = fillValueProblem(json, keyPath.path, codec);
+  const problem = fillValueProblem(json, field);
   return problem === undefined ? json : refusedArgument(factory, location, 'value', problem);
 }
 
@@ -2804,8 +2803,8 @@ export class FillStoredKeyCall extends PostgresOpFactoryCallNode {
   readonly columnName: string;
   readonly path: JsonKeyPath;
   readonly value: JsonValue | UnfilledValue;
-  /** The codec of the field the key holds, whose data type must accept `value`. */
-  readonly codec: StoredKeyFillCodec | undefined;
+  /** The value object field the key holds, which must take `value`. */
+  readonly field: StoredKeyFillField | undefined;
   readonly label: string;
 
   constructor(
@@ -2814,7 +2813,7 @@ export class FillStoredKeyCall extends PostgresOpFactoryCallNode {
     columnName: string,
     path: string,
     value: JsonValue | UnfilledValue,
-    codec?: StoredKeyFillCodec,
+    field?: StoredKeyFillField,
   ) {
     super();
     const location = columnCallLocation(schemaName, tableName, columnName);
@@ -2822,11 +2821,11 @@ export class FillStoredKeyCall extends PostgresOpFactoryCallNode {
     this.tableName = tableName;
     this.columnName = columnName;
     this.path = requireKeyPath(path, this.factoryName, location);
-    this.codec = codec;
+    this.field = field;
     this.value =
       value instanceof UnfilledValue
         ? value
-        : requireFillValue(value, this.path, codec, this.factoryName, location);
+        : requireFillValue(value, field, this.factoryName, location);
     this.label = `Fill key "${this.path.key}" ${keyPlace(this.path, tableName, columnName)}`;
     this.freeze();
   }
@@ -2853,7 +2852,7 @@ export class FillStoredKeyCall extends PostgresOpFactoryCallNode {
       ...columnCallLocation(this.schemaName, this.tableName, this.columnName),
       `path: ${jsonToTsSource(this.path.path.text)}`,
       `value: ${value}`,
-      ...codecRefSource(this.codec),
+      ...(this.field === undefined ? [] : [`field: ${jsonToTsSource(this.field.text)}`]),
     ];
     return `this.fillStoredKey({ ${opts.join(', ')} })`;
   }

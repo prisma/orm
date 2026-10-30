@@ -38,7 +38,7 @@ const address = { field: 'address', valueObject: 'Address' };
 const ADDRESS = { point: { valueObject: 'GeoPoint' } } as const;
 
 function placeholderFill(column: string, path: string): string {
-  return `this.fillStoredKey({ schema: "public", table: "place", column: "${column}", path: "${path}", value: placeholder("GeoPoint.country:value"), codecRef: { codecId: "pg/text@1" } })`;
+  return `this.fillStoredKey({ schema: "public", table: "place", column: "${column}", path: "${path}", value: placeholder("GeoPoint.country:value"), field: "GeoPoint.country" })`;
 }
 
 describe('Postgres planner, value object field fills', () => {
@@ -147,8 +147,8 @@ describe('Postgres planner, value object field fills', () => {
       );
 
       expect(renderedCalls(result)).toEqual([
-        'this.fillStoredKey({ schema: "public", table: "place", column: "location", path: "$.country", value: "", codecRef: { codecId: "pg/text@1" } })',
-        'this.fillStoredKey({ schema: "public", table: "place", column: "stops", path: "$[*].country", value: "", codecRef: { codecId: "pg/text@1" } })',
+        'this.fillStoredKey({ schema: "public", table: "place", column: "location", path: "$.country", value: "", field: "GeoPoint.country" })',
+        'this.fillStoredKey({ schema: "public", table: "place", column: "stops", path: "$[*].country", value: "", field: "GeoPoint.country" })',
       ]);
       const ops = await Promise.all(result.plan.operations);
       const fills = ops.flatMap((op, index) => (op.id.startsWith('fillStoredKey') ? [index] : []));

@@ -5,7 +5,7 @@ import type {
   ControlPolicy,
 } from '@internal/contract/types';
 import { asNamespaceId, profileHash, type StorageHashBase } from '@internal/contract/types';
-import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
+import { SqlStorage, StorageTable, StorageValueSet } from '@internal/sql-contract/types';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
 import type { SchemaTables } from '../src/core/migrations/schema-tables';
 
@@ -64,6 +64,7 @@ export function contractWith(options: {
   readonly valueObjects: Readonly<Record<string, Readonly<Record<string, ValueObjectFieldSpec>>>>;
   readonly columns: readonly ColumnSpec[];
   readonly namespace?: string;
+  readonly valueSets?: Readonly<Record<string, readonly string[]>>;
 }): Contract<SqlStorage> {
   const namespaceId = options.namespace ?? 'app';
   const tables = [...new Set(options.columns.map(({ table }) => table))];
@@ -77,6 +78,12 @@ export function contractWith(options: {
         [namespaceId]: createTestSqlNamespace({
           id: namespaceId,
           entries: {
+            valueSet: Object.fromEntries(
+              Object.entries(options.valueSets ?? {}).map(([name, values]) => [
+                name,
+                new StorageValueSet({ kind: 'valueSet', values }),
+              ]),
+            ),
             valueObject: Object.fromEntries(
               Object.entries(options.valueObjects).map(([name, fields]) => [
                 name,

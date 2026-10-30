@@ -236,7 +236,7 @@ export class SqliteMigrationPlanner
       policy: options.policy,
       calls: {
         storedKeyCalls: sqliteStoredKeyCalls,
-        storedKeyFillCalls: (fills) => sqliteStoredKeyFillCalls(fills, types),
+        storedKeyFillCalls: (fills) => sqliteStoredKeyFillCalls(fills),
         storedValueCalls: (rewrites) => sqliteStoredValueCalls(rewrites, codecLookup),
         variantRowCalls: (rewrites) => sqliteVariantRowCalls(rewrites, codecLookup),
         storedValueClasses: sqliteStoredValueCallClasses,

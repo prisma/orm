@@ -45,8 +45,8 @@ export interface StoredKeyFill {
   readonly path: string;
   /** The value the user writes for a backfill statement, or a temporary value. */
   readonly value: JsonValue | UnfilledValue;
-  /** The codec of a field that holds one scalar, whose data type must accept the value. */
-  readonly codecRef: CodecRef | undefined;
+  /** The value object field as a statement names it, such as `Address.country`. */
+  readonly field: string;
   /** The backfill statement the fill carries out, if any. */
   readonly statement: ResolvedValueObjectFieldBackfillStatement | undefined;
 }
@@ -294,7 +294,7 @@ export function planValueObjectFieldFills(input: {
           { kind: 'member', name: required.valueObjectField.field },
         ]),
         value,
-        codecRef: codecRefOf(required.field),
+        field: text,
         statement: required.statement,
       });
     }

@@ -5,8 +5,9 @@ import {
   resolveColumnRenameAgainst,
   resolveTableRenameAgainst,
   type SqlMigrationPlanOperation,
-  type StoredKeyFillCodec,
+  type StoredKeyFillField,
   type StoredValueCodec,
+  scalarTypeNamesOf,
   sqlTypeLookupsOf,
   type TableRenameRequest,
   unmatchedColumnRename,
@@ -168,14 +169,24 @@ export abstract class PostgresMigration<
     ];
   }
 
-  /** The codec of a field a key fill fills, with the stack's codecs and data types; a codec needs a stack. */
-  private storedKeyFillCodec(
+  /** The value object field a key fill fills, checked against the end contract with the stack's codecs, data types and type names; a check needs a stack. */
+  private storedKeyFillField(
     operation: string,
-    codecRef: CodecRef | undefined,
-  ): StoredKeyFillCodec | undefined {
-    if (codecRef === undefined) return undefined;
+    text: string | undefined,
+  ): StoredKeyFillField | undefined {
+    if (text === undefined) return undefined;
     this.controlAdapterFor(operation);
-    return { codecRef, types: sqlTypeLookupsOf(this.frameworkComponents()) };
+    const typeNamespace = this.stack?.authoringContributions.type ?? {};
+    return {
+      text,
+      check: {
+        contract: this.endContract,
+        types: {
+          ...sqlTypeLookupsOf(this.frameworkComponents()),
+          scalarTypeName: scalarTypeNamesOf(typeNamespace),
+        },
+      },
+    };
   }
 
   /** The codec `codecRef` names, built from the stack's codecs; a codec needs a stack. */
@@ -418,8 +429,8 @@ export abstract class PostgresMigration<
     readonly column: string;
     readonly path: string;
     readonly value: JsonValue;
-    /** The codec of the field the key holds: the value is refused, before any operation is written, unless its data type accepts it. */
-    readonly codecRef?: CodecRef;
+    /** The value object field the key holds, as a statement names it, such as `Address.country`: the value is refused, before any operation is written, unless the field takes it. */
+    readonly field?: string;
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
     return Promise.resolve(
       new FillStoredKeyCall(
@@ -428,7 +439,7 @@ export abstract class PostgresMigration<
         options.column,
         options.path,
         options.value,
-        this.storedKeyFillCodec('fillStoredKey', options.codecRef),
+        this.storedKeyFillField('fillStoredKey', options.field),
       ).toOp(),
     );
   }

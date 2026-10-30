@@ -140,7 +140,7 @@ withTempDir(({ createTempDir }) => {
         const written = readFileSync(join(dir, 'migration.ts'), 'utf-8');
         const fills = [
           ...written.matchAll(
-            /this\.fillStoredKey\(\{\s*table: 'user',\s*column: '(\w+)',\s*path: '([^']+)',\s*value: placeholder\('Address\.country:value'\),\s*codecRef: \{ codecId: 'sqlite\/text@1' \},\s*\}\)/g,
+            /this\.fillStoredKey\(\{\s*table: 'user',\s*column: '(\w+)',\s*path: '([^']+)',\s*value: placeholder\('Address\.country:value'\),\s*field: 'Address\.country',\s*\}\)/g,
           ),
         ].map(([, column, path]) => `${column} ${path}`);
         expect(fills, 'B1.05: a placeholder fill per column and path').toEqual([
@@ -177,11 +177,11 @@ withTempDir(({ createTempDir }) => {
         ]);
         expect(refusedValue.exitCode, 'B1.06: a number is refused for a String field').not.toBe(0);
         expect(
-          `${refusedValue.stdout}${refusedValue.stderr}`,
-          'B1.06: names the path and the value',
-        ).toContain(
-          'value 12 at path "$.country" is not one the data type of codec "sqlite/text@1" accepts',
-        );
+          `${refusedValue.stdout}${refusedValue.stderr}`.split(
+            'value 12 for field "Address.country" is not a String',
+          ).length,
+          'B1.06: names the field and its type, once',
+        ).toBe(2);
         expect(
           JSON.parse(readFileSync(join(dir, 'ops.json'), 'utf-8')),
           'B1.06: still no ops',

@@ -43,7 +43,7 @@ const address = { field: 'address', valueObject: 'Address' };
 const ADDRESS = { point: { valueObject: 'GeoPoint' } } as const;
 
 function placeholderFill(column: string, path: string): string {
-  return `this.fillStoredKey({ table: "place", column: "${column}", path: "${path}", value: placeholder("GeoPoint.country:value"), codecRef: { codecId: "sqlite/text@1" } })`;
+  return `this.fillStoredKey({ table: "place", column: "${column}", path: "${path}", value: placeholder("GeoPoint.country:value"), field: "GeoPoint.country" })`;
 }
 
 describe('SQLite planner, value object field fills', () => {
@@ -152,8 +152,8 @@ describe('SQLite planner, value object field fills', () => {
       );
 
       expect(renderedCalls(result)).toEqual([
-        'this.fillStoredKey({ table: "place", column: "location", path: "$.country", value: "", codecRef: { codecId: "sqlite/text@1" } })',
-        'this.fillStoredKey({ table: "place", column: "stops", path: "$[*].country", value: "", codecRef: { codecId: "sqlite/text@1" } })',
+        'this.fillStoredKey({ table: "place", column: "location", path: "$.country", value: "", field: "GeoPoint.country" })',
+        'this.fillStoredKey({ table: "place", column: "stops", path: "$[*].country", value: "", field: "GeoPoint.country" })',
       ]);
       const ops = await Promise.all(result.plan.operations);
       const fills = ops.flatMap((op, index) => (op.id.startsWith('fillStoredKey') ? [index] : []));
