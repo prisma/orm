@@ -1,0 +1,47 @@
+// use prisma-8
+
+// Real emitted fixture for the ORM's writes without RETURNING. It is emitted against a SQLite
+// adapter that reports neither `returning` nor `insertOnConflictTarget` (see prisma.config.ts),
+// as the MySQL adapter does, so every write reads its rows back by key.
+
+model User {
+  id    Int    @id @default(autoincrement())
+  email String @unique
+  name  String
+
+  posts Post[]
+
+  @@map("users")
+}
+
+model Post {
+  id       Int    @id @default(autoincrement())
+  title    String
+  authorId Int    @map("author_id")
+
+  author User @relation(fields: [authorId], references: [id])
+
+  @@map("posts")
+}
+
+model Account {
+  id     Int    @id @default(autoincrement())
+  email  String @unique
+  handle String @unique
+
+  @@map("accounts")
+}
+
+model Tag {
+  code  String @id
+  label String
+
+  @@map("tags")
+}
+
+model Token {
+  id    String @id @default(sql`(lower(hex(randomblob(16))))`)
+  label String
+
+  @@map("tokens")
+}
