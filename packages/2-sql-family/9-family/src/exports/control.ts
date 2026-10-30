@@ -158,6 +158,12 @@ export {
   otherSpaceDeclaring,
   planStatements,
 } from '../core/migrations/statement-planning';
+export {
+  type PlannedStoredRewrites,
+  planStoredRewrites,
+  type StoredRewrite,
+  type StoredRewriteCalls,
+} from '../core/migrations/stored-rewrites';
 export type {
   StoredValueCallClasses,
   StoredValueSubject,
