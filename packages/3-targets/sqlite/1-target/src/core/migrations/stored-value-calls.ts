@@ -3,10 +3,12 @@ import type {
   StoredKeyRewrite,
   StoredValueCallClasses,
   StoredValueRewrite,
+  VariantRowRewrite,
 } from '@internal/family-sql/control';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { enumValueCoordinateJson } from '@internal/framework-components/control';
 import {
+  DeleteRowsCall,
   RemoveStoredKeyCall,
   RemoveStoredValueCall,
   RenameStoredKeyCall,
@@ -56,6 +58,30 @@ export function sqliteStoredKeyCalls(
         : new RenameStoredKeyCall(rewrite.table, rewrite.column, rewrite.path, rewrite.to),
       rewrite,
     ]),
+  );
+}
+
+/** The calls that carry out a plan's row rewrites of variants, each with the rewrite it carries out. */
+export function sqliteVariantRowCalls(
+  rewrites: readonly VariantRowRewrite[],
+  codecs: Pick<CodecLookupWithDescriptors, 'descriptorFor'>,
+): ReadonlyMap<DeleteRowsCall | ReplaceStoredValueCall, VariantRowRewrite> {
+  return new Map(
+    rewrites.map((rewrite) => {
+      const codec = { codecRef: rewrite.codecRef, codecs };
+      return [
+        rewrite.to === undefined
+          ? new DeleteRowsCall(rewrite.table, rewrite.column, rewrite.from, codec)
+          : new ReplaceStoredValueCall(
+              rewrite.table,
+              rewrite.column,
+              rewrite.from,
+              rewrite.to,
+              codec,
+            ),
+        rewrite,
+      ];
+    }),
   );
 }
 

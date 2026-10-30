@@ -9,6 +9,7 @@ import {
 } from '@internal/family-sql/control';
 import type {
   MigrationDataLossKind,
+  ModelCoordinate,
   OpFactoryCall,
   ValueObjectFieldCoordinate,
 } from '@internal/framework-components/control';
@@ -77,6 +78,9 @@ function temporaryValuesOf(call: RecreateTableCall): CallSubjects['temporaryValu
   );
 }
 
+const REFERENCED_ROWS_ADVICE =
+  'SQLite migrations run with foreign keys off, so deleting these rows does not delete the rows of other tables that reference them: the apply then fails at PRAGMA foreign_key_check. Delete or change those rows first.';
+
 /**
  * What each call of a SQLite plan loses. A recreate that leaves a column out loses its values
  * itself, so a later drop of that column is not listed again.
@@ -86,6 +90,7 @@ export function sqliteCallSubjects(
   fieldEvents: ReadonlyMap<OpFactoryCall, FieldEventCall>,
   storedValues: ReadonlyMap<OpFactoryCall, StoredValueSubject> = new Map(),
   storedKeys: ReadonlyMap<OpFactoryCall, ValueObjectFieldCoordinate> = new Map(),
+  variantRows: ReadonlyMap<OpFactoryCall, ModelCoordinate> = new Map(),
 ): readonly CallSubjects[] {
   const lostColumns = new Set<string>();
   const unknownNames = unknownCallNames(
@@ -134,7 +139,13 @@ export function sqliteCallSubjects(
       return {
         operationCount,
         label,
-        dataLoss: [lost(tableTarget(call.tableName))],
+        dataLoss: [
+          {
+            ...lost(tableTarget(call.tableName)),
+            ...ifDefined('model', variantRows.get(call)),
+            keepDataAdvice: REFERENCED_ROWS_ADVICE,
+          },
+        ],
         accessChanges: [],
         temporaryValues: [],
       };

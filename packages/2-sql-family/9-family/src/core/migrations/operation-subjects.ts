@@ -85,6 +85,8 @@ export interface CallSubjects {
   readonly dataLoss: readonly (SubjectStorage & {
     readonly loss: MigrationDataLossKind;
     readonly keepDataEdit?: KeepDataEdit;
+    /** What the user should know to keep the data, which the question repeats. */
+    readonly keepDataAdvice?: string;
   })[];
   /** What the call's operation changes access to, and whether it widens it. */
   readonly accessChanges: readonly (SubjectStorage & { readonly widens: boolean })[];
@@ -226,7 +228,10 @@ export function subjectsOfCalls(
         subject,
         loss: target.loss,
         label: call.label,
-        ...ifDefined('keepDataAdvice', keepTableAdvice(target, subject, context)),
+        ...ifDefined(
+          'keepDataAdvice',
+          target.keepDataAdvice ?? keepTableAdvice(target, subject, context),
+        ),
         ...ifDefined('keepDataEdit', target.keepDataEdit),
       });
     }

@@ -183,6 +183,42 @@ describe('subjectsOfCalls', () => {
       ]);
     });
 
+    it('passes on the advice a target gives for a row deletion', () => {
+      expect(
+        subjectsOfCalls(
+          [
+            {
+              ...unchanged,
+              label: 'Delete rows',
+              dataLoss: [
+                {
+                  ...table('tasks'),
+                  model: bug,
+                  loss: 'drop',
+                  keepDataAdvice: 'Mind the references.',
+                },
+              ],
+            },
+          ],
+          {
+            fromContract: tasks,
+            contract: tasks,
+            byHand,
+            removedVariants: [],
+            origins: NO_RENAMED_ORIGINS,
+          },
+        ).dataLoss,
+      ).toEqual([
+        {
+          operationIndex: 0,
+          subject: { kind: 'model', ...bug },
+          loss: 'drop',
+          label: 'Delete rows',
+          keepDataAdvice: 'Mind the references.',
+        },
+      ]);
+    });
+
     it('names the field of a dropped column of a variant the destination keeps', () => {
       expect(
         subjectsOfCalls([losing(column('tasks', 'severity'))], {

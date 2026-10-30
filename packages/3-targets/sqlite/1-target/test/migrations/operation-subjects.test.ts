@@ -87,6 +87,7 @@ function subjectsOf(calls: readonly OpFactoryCall[], fieldEvents: readonly Field
       fromContract: contract,
       contract,
       byHand: sqliteTableRenameByHand,
+      removedVariants: [],
       origins: NO_RENAMED_ORIGINS,
     },
   ).dataLoss;
@@ -211,13 +212,15 @@ describe('stored key operations', () => {
 });
 
 describe('deleteRows', () => {
-  it('names the model whose rows it deletes', () => {
+  it('names the model whose rows it deletes, and says that rows referencing them fail the apply', () => {
     expect(subjectsOf([new DeleteRowsCall('User', 'email', 'x')], [])).toEqual([
       {
         operationIndex: 0,
         subject: { kind: 'model', namespaceId: asNamespaceId(UNBOUND_NAMESPACE_ID), model: 'User' },
         loss: 'drop',
         label: 'Delete the rows of "User" that hold value "x" in column "email"',
+        keepDataAdvice:
+          'SQLite migrations run with foreign keys off, so deleting these rows does not delete the rows of other tables that reference them: the apply then fails at PRAGMA foreign_key_check. Delete or change those rows first.',
       },
     ]);
   });
