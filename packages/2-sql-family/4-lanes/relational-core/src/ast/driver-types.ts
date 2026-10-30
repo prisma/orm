@@ -23,6 +23,10 @@ export interface PreparedExecuteRequest extends SqlExecuteRequest {
 
 export interface SqlStatementStats {
   readonly affectedRows: number;
+  /**
+   * A value the database numbers itself, such as an auto-increment column's, as decimal text. A driver reports it only when the statement changed one row and the database reported a value. It identifies that row only after a one-row insert; after any other statement its value means nothing. A middleware that answers the statement in place of the database may leave it out.
+   */
+  readonly insertId?: string;
 }
 
 export interface SqlExplainResult<Row = Record<string, unknown>> {

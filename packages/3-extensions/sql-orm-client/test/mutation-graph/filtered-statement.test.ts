@@ -42,12 +42,26 @@ describe.each([
     expect(run.queried).toEqual([node.ast]);
   });
 
-  it('adds the conditions of one edge to its where, or between the rows of the edge', async () => {
+  it('adds the conditions of one edge to its where, as an IN list when each compares one column with a value', async () => {
     const run = recordingRun();
 
     await make().execute({ filter: [[idIs(7), idIs(8)]] }, run);
 
-    expect(run.queried.map(whereOf)).toEqual(["(name = 'Ada' and (id = 7 or id = 8))"]);
+    expect(run.queried.map(whereOf)).toEqual(["(name = 'Ada' and id in (7, 8))"]);
+  });
+
+  it('keeps an OR between conditions on different columns or with no value parameter', async () => {
+    const run = recordingRun();
+    const emailIs = BinaryExpr.eq(ColumnRef.of('users', 'email'), ParamRef.of('a'));
+    const idIsName = BinaryExpr.eq(ColumnRef.of('users', 'id'), ColumnRef.of('users', 'name'));
+
+    await make().execute({ filter: [[idIs(7), emailIs]] }, run);
+    await make().execute({ filter: [[idIs(7), idIsName]] }, run);
+
+    expect(run.queried.map(whereOf)).toEqual([
+      "(name = 'Ada' and (id = 7 or email = 'a'))",
+      "(name = 'Ada' and (id = 7 or id = name))",
+    ]);
   });
 
   it('puts and between the edges', async () => {
@@ -55,7 +69,7 @@ describe.each([
 
     await make().execute({ filter: [[idIs(7)], [idIs(8), idIs(9)]] }, run);
 
-    expect(run.queried.map(whereOf)).toEqual(["(name = 'Ada' and id = 7 and (id = 8 or id = 9))"]);
+    expect(run.queried.map(whereOf)).toEqual(["(name = 'Ada' and id = 7 and id in (8, 9))"]);
   });
 
   it('returns no rows and runs nothing when an edge has no source row', async () => {
@@ -87,7 +101,7 @@ describe.each([
     const node = make();
     const run = recordingRun([], 3);
 
-    expect(await node.execute({ filter: null }, run)).toBe(3);
+    expect(await node.execute({ filter: null }, run)).toEqual({ affectedRows: 3 });
     expect(run.executed).toEqual([node.ast]);
     expect(run.queried).toEqual([]);
   });

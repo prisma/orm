@@ -4,12 +4,7 @@ A minimal demo showing how to use `@prisma/orm-mysql`, the one package a MySQL
 application installs. It has a PSL contract with two models, a relation and an
 enum, and a committed migration written by `prisma migration plan`.
 
-MySQL support is early, and this example grows with it. Today it shows the
-control plane and reads: the contract emits, the committed migration applies to
-an empty MySQL database, `db verify` and `db sign` pass, planning again from the
-unchanged contract writes nothing, and the ORM and the SQL builder read the
-seeded rows, includes among them. Writes and MariaDB will be added here as each
-lands, and each is done only when this example runs it in CI.
+MySQL support is early, and this example grows with it. Today it shows the control plane, reads and writes: the contract emits, the committed migration applies to an empty MySQL database, `db verify` and `db sign` pass, planning again from the unchanged contract writes nothing, the ORM writes the seed rows, and the ORM and the SQL builder read them, includes among them. MariaDB will be added here when it lands, and is done only when this example runs it in CI.
 
 ## Reading
 
@@ -36,8 +31,23 @@ await db.orm.Post.include('author').all();
 await db.query(db.sql.User.select('id', 'email').where((f, fns) => fns.eq(f.role, 'ADMIN')).build());
 ```
 
-The ORM cannot write to MySQL yet, so `src/seed.ts` inserts the demo rows
-through the raw SQL lane, `db.raw.sql`.
+## Writing
+
+`src/seed.ts` writes the demo rows with `createAndCount`, and `src/orm-client/user-writes.ts` holds the other writes. Each returns what it returns on Postgres:
+
+```ts
+const user = await db.orm.User.create({ email: 'a@example.com', role: 'USER' });
+await db.orm.User.where({ id: user.id }).update({ role: 'ADMIN' });
+await db.orm.User.upsert({
+  create: { email: 'a@example.com', role: 'USER' },
+  update: { role: 'ADMIN' },
+  conflictOn: { email: 'a@example.com' },
+});
+await db.orm.User.where({ id: user.id }).delete();
+const n = await db.orm.User.where({ role: 'USER' }).updateAndCount({ role: 'ADMIN' });
+```
+
+MySQL has no `RETURNING`, so a write that returns rows runs inside a transaction and reads them back with a `SELECT` by key; `create` reads the id MySQL generated. A `createAll` that returns several rows whose ids MySQL generates is refused; `createAndCount` writes them. See [Writes without `RETURNING`](../../packages/3-extensions/sql-orm-client/README.md#writes-without-returning).
 
 ## Setup
 

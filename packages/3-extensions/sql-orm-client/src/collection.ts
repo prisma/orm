@@ -1991,7 +1991,6 @@ export class CollectionBase<
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<unknown> {
     assertLockCompatible(this.state, 'mutation');
-    assertReturningCapability(this.contract, 'create()');
     const annotations = this.#collectAnnotationsFromMeta(configure, 'write', 'create');
     return runOrmCall(
       this.ctx.runtime,
@@ -2153,14 +2152,13 @@ export class CollectionBase<
       return () => new AsyncIterableResult(generator());
     }
 
-    assertReturningCapability(this.contract, 'createAll()');
-
     const rows = blindCast<
       readonly Record<string, unknown>[],
       'resolved create inputs are model-field records for storage mapping'
     >(data);
     const mtiContext = this.#resolveMtiCreateContext();
     if (mtiContext) {
+      assertReturningCapability(this.contract, 'createAll()');
       const variantTable = requireVariantTable(this.state.tables, mtiContext.variant.value);
       const graph = createAllVariantGraph(
         this.#descriptionWithoutIncludes(),
@@ -2176,6 +2174,7 @@ export class CollectionBase<
       this.#descriptionOptions(),
       this.#createValues(rows),
       conflictSkip,
+      'rows',
     );
     return (queryable) => queryGraph(graph, this.#on(queryable), this.#descriptionOptions());
   }
@@ -2442,6 +2441,7 @@ export class CollectionBase<
       this.#descriptionWithoutIncludes(),
       this.#createValues(rows),
       conflictSkip,
+      'count',
     );
     return this.#countCall(call, graph);
   }
@@ -2512,7 +2512,6 @@ export class CollectionBase<
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<unknown> {
     assertLockCompatible(this.state, 'mutation');
-    assertReturningCapability(this.contract, 'upsert()');
     this.#assertNotMtiVariant('upsert()');
     const annotations = this.#collectAnnotationsFromMeta(configure, 'write', 'upsert');
 
@@ -2620,7 +2619,6 @@ export class CollectionBase<
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<unknown> {
     assertLockCompatible(this.state, 'mutation');
-    assertReturningCapability(this.contract, 'update()');
     const annotations = this.#collectAnnotationsFromMeta(configure, 'write', 'update');
     return runOrmCall(
       this.ctx.runtime,
@@ -2723,8 +2721,7 @@ export class CollectionBase<
     assertBulkWriteIgnoresNothing(this.state, this.modelName, 'updateAll');
     assertLockCompatible(this.state, 'mutation');
     const annotations = this.#collectAnnotationsFromMeta(configure, 'write', 'updateAll');
-    assertReturningCapability(this.contract, 'updateAll()');
-    const graph = updateAllGraph(this.#descriptionOptions(), this.#updateValues(data));
+    const graph = updateAllGraph(this.#descriptionOptions(), this.#updateValues(data), 'rows');
     return this.#rowsCall('updateAll', annotations, graph);
   }
 
@@ -2774,7 +2771,7 @@ export class CollectionBase<
     const graph =
       Object.keys(values).length === 0
         ? new Graph()
-        : updateAllGraph(this.#descriptionWithoutIncludes(), values);
+        : updateAllGraph(this.#descriptionWithoutIncludes(), values, 'count');
     const annotations = this.#collectAnnotationsFromMeta(configure, 'write', 'updateAndCount');
     return this.#countCall(this.#writeCall('updateAndCount', annotations, ormResults.count), graph);
   }
@@ -2799,7 +2796,6 @@ export class CollectionBase<
   ): Promise<CollectionRowOf<Self & HasRow<CollectionRowOf<this>>> | null>;
   async delete(configure?: (meta: MetaBuilder<'write'>) => void): Promise<unknown> {
     assertLockCompatible(this.state, 'mutation');
-    assertReturningCapability(this.contract, 'delete()');
     const annotations = this.#collectAnnotationsFromMeta(configure, 'write', 'delete');
     const graph = deleteFirstGraph(this.#descriptionOptions());
     return this.#firstRowCall('delete', annotations, graph);
@@ -2836,8 +2832,7 @@ export class CollectionBase<
     assertBulkWriteIgnoresNothing(this.state, this.modelName, 'deleteAll');
     assertLockCompatible(this.state, 'mutation');
     const annotations = this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAll');
-    assertReturningCapability(this.contract, 'deleteAll()');
-    const graph = deleteAllGraph(this.#descriptionOptions());
+    const graph = deleteAllGraph(this.#descriptionOptions(), 'rows');
     return this.#rowsCall('deleteAll', annotations, graph);
   }
 
@@ -2861,7 +2856,7 @@ export class CollectionBase<
     assertBulkWriteIgnoresNothing(this.state, this.modelName, 'deleteAndCount');
     assertLockCompatible(this.state, 'mutation');
     const annotations = this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAndCount');
-    const graph = deleteAllGraph(this.#descriptionWithoutIncludes());
+    const graph = deleteAllGraph(this.#descriptionWithoutIncludes(), 'count');
     return this.#countCall(this.#writeCall('deleteAndCount', annotations, ormResults.count), graph);
   }
 

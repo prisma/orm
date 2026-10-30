@@ -53,7 +53,7 @@ function catalogDriver(tables: readonly string[], rows: readonly Record<string, 
 describe('MysqlControlAdapter', () => {
   it('reports the capabilities of MySQL 8.4', () => {
     expect(mysqlAdapterCapabilities).toEqual({
-      sql: { orderBy: true, limit: true, foreignKeys: true, enums: true },
+      sql: { orderBy: true, limit: true, foreignKeys: true, enums: true, defaultInInsert: true },
     });
   });
 

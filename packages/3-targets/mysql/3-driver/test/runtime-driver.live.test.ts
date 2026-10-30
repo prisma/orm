@@ -35,6 +35,10 @@ async function drain(rows: AsyncIterator<unknown>): Promise<void> {
   while (!(await rows.next()).done) {}
 }
 
+/** A quarter of a million rows with no pause between them, which take a moment to read to the end. */
+const manyRows =
+  "WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE n < 500) SELECT a.n, b.n AS m, REPEAT('x', 100) AS pad FROM s a, s b";
+
 const tenSlowRows =
   'WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE n < 10) SELECT n, SLEEP(0.05) AS z FROM s';
 
@@ -72,8 +76,11 @@ async function withCountingProxy<T>(
   let opened = 0;
   const commands: Record<string, number> = {};
   const sockets = new Set<Socket>();
+  const clients = new Set<Socket>();
   const proxy = createServer((client) => {
     opened += 1;
+    clients.add(client);
+    client.on('close', () => clients.delete(client));
     const upstream = connect(Number(target.port || 3306), target.hostname);
     for (const socket of [client, upstream]) {
       sockets.add(socket);
@@ -104,6 +111,159 @@ async function withCountingProxy<T>(
   proxyUrl.port = String(address.port);
   try {
     return await fn(proxyUrl, { opened: () => opened, commands: () => ({ ...commands }) });
+  } finally {
+    await connectionsClosed(clients);
+    for (const socket of sockets) socket.destroy();
+    await new Promise((resolve) => proxy.close(resolve));
+  }
+}
+
+/**
+ * Waits for the connections through the proxy to close, and fails if any is still open after five seconds. After `fn` closes its driver, the only ones left should be those the `mariadb` package opens in the background to send `KILL` for a connection destroyed mid-result.
+ */
+async function connectionsClosed(clients: ReadonlySet<Socket>): Promise<void> {
+  const deadline = Date.now() + 5000;
+  while (clients.size > 0) {
+    if (Date.now() >= deadline) {
+      throw new Error(`${clients.size} connection(s) through the test proxy still open after 5 s`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
+/** Runs `fn` against a proxy that passes the first `allowed` connections to the server and closes every later one at once, as a server that accepts no more connections would. */
+async function withProxyAcceptingOnly<T>(
+  allowed: number,
+  url: string,
+  fn: (proxyUrl: URL, refused: () => number) => Promise<T>,
+): Promise<T> {
+  const target = new URL(url);
+  let accepted = 0;
+  let refused = 0;
+  const sockets = new Set<Socket>();
+  const proxy = createServer((client) => {
+    if (accepted >= allowed) {
+      refused += 1;
+      client.destroy();
+      return;
+    }
+    accepted += 1;
+    const upstream = connect(Number(target.port || 3306), target.hostname);
+    for (const socket of [client, upstream]) {
+      sockets.add(socket);
+      socket.on('error', () => undefined);
+      socket.on('close', () => sockets.delete(socket));
+    }
+    client.pipe(upstream).pipe(client);
+  });
+  await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+  const address = proxy.address();
+  if (address === null || typeof address === 'string') throw new Error('no port');
+  const proxyUrl = new URL(url);
+  proxyUrl.hostname = '127.0.0.1';
+  proxyUrl.port = String(address.port);
+  try {
+    return await fn(proxyUrl, () => refused);
+  } finally {
+    for (const socket of sockets) socket.destroy();
+    await new Promise((resolve) => proxy.close(resolve));
+  }
+}
+
+/** Runs `fn` against a proxy that delivers every byte a connection sends after its first `KILL QUERY` four seconds late, in order, as a slow network would, even after the client closes it. */
+async function withKillDelayingProxy<T>(
+  url: string,
+  fn: (proxyUrl: URL) => Promise<T>,
+): Promise<T> {
+  const target = new URL(url);
+  const sockets = new Set<Socket>();
+  const timers = new Set<NodeJS.Timeout>();
+  const proxy = createServer((client) => {
+    const upstream = connect(Number(target.port || 3306), target.hostname);
+    for (const socket of [client, upstream]) {
+      sockets.add(socket);
+      socket.on('error', () => undefined);
+      socket.on('close', () => sockets.delete(socket));
+    }
+    let delayed = false;
+    let chain = Promise.resolve();
+    client.on('data', (chunk: Buffer) => {
+      if (chunk.includes(Buffer.from('KILL QUERY'))) delayed = true;
+      if (!delayed) {
+        upstream.write(chunk);
+        return;
+      }
+      chain = chain.then(
+        () =>
+          new Promise<void>((resolve) => {
+            const timer = setTimeout(() => {
+              timers.delete(timer);
+              if (!upstream.destroyed) upstream.write(chunk);
+              resolve();
+            }, 4000);
+            timers.add(timer);
+          }),
+      );
+    });
+    client.on('close', () => {
+      void chain.then(() => upstream.end());
+    });
+    upstream.on('data', (chunk: Buffer) => {
+      if (!client.destroyed) client.write(chunk);
+    });
+  });
+  await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+  const address = proxy.address();
+  if (address === null || typeof address === 'string') throw new Error('no port');
+  const proxyUrl = new URL(url);
+  proxyUrl.hostname = '127.0.0.1';
+  proxyUrl.port = String(address.port);
+  try {
+    return await fn(proxyUrl);
+  } finally {
+    for (const timer of timers) clearTimeout(timer);
+    for (const socket of sockets) socket.destroy();
+    await new Promise((resolve) => proxy.close(resolve));
+  }
+}
+
+/** Runs `fn` against a proxy that drops any connection on which the client sends `KILL`, as a network failure during the package's background `KILL` would. */
+async function withKillDroppingProxy<T>(
+  url: string,
+  fn: (proxyUrl: URL, kills: () => number) => Promise<T>,
+): Promise<T> {
+  const target = new URL(url);
+  let kills = 0;
+  const sockets = new Set<Socket>();
+  const proxy = createServer((client) => {
+    const upstream = connect(Number(target.port || 3306), target.hostname);
+    for (const socket of [client, upstream]) {
+      sockets.add(socket);
+      socket.on('error', () => undefined);
+      socket.on('close', () => {
+        sockets.delete(socket);
+        client.destroy();
+        upstream.destroy();
+      });
+    }
+    client.on('data', (chunk: Buffer) => {
+      if (chunk.includes(Buffer.from('KILL '))) {
+        kills += 1;
+        client.destroy();
+      } else {
+        upstream.write(chunk);
+      }
+    });
+    upstream.pipe(client);
+  });
+  await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+  const address = proxy.address();
+  if (address === null || typeof address === 'string') throw new Error('no port');
+  const proxyUrl = new URL(url);
+  proxyUrl.hostname = '127.0.0.1';
+  proxyUrl.port = String(address.port);
+  try {
+    return await fn(proxyUrl, () => kills);
   } finally {
     for (const socket of sockets) socket.destroy();
     await new Promise((resolve) => proxy.close(resolve));
@@ -138,6 +298,23 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
             }),
           ),
         ).toEqual([{ i: '42', d: '2024-01-02 03:04:05.678', j: '[1, "a"]', p: "it's" }]);
+      }),
+    );
+  });
+
+  it('reports the id MySQL generated for the one row an insert added, and none for a multi-row insert or an update', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(url, async (driver) => {
+        await driver.execute({ sql: 'CREATE TABLE t (id INT AUTO_INCREMENT PRIMARY KEY, n INT)' });
+        expect({
+          one: await driver.execute({ sql: 'INSERT INTO t (n) VALUES (?1)', params: [1] }),
+          two: await driver.execute({ sql: 'INSERT INTO t (n) VALUES (?1), (?2)', params: [2, 3] }),
+          updated: await driver.execute({ sql: 'UPDATE t SET n = ?1 WHERE id = 1', params: [4] }),
+        }).toEqual({
+          one: { affectedRows: 1, insertId: '1' },
+          two: { affectedRows: 2 },
+          updated: { affectedRows: 1 },
+        });
       }),
     );
   });
@@ -784,25 +961,355 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     );
   });
 
-  it('destroys a pooled connection whose stream the caller stops early while a large rest of the result is still to come', async (test) => {
+  it('cancels the statement of a pooled stream the caller stops early while rows are still arriving, in a pool of one, and returns its connection to the pool; a later cancel opens no connection', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
       withCountingProxy(url, async (proxyUrl, { opened }) => {
         await withDriver(
           proxyUrl.toString(),
           async (driver) => {
-            const first = await connectionId(driver);
+            const stopEarly = async () => {
+              const started = Date.now();
+              let streamed: string | undefined;
+              for await (const row of driver.query<{ cid: string }>({ sql: slowRows })) {
+                streamed = row.cid;
+                break;
+              }
+              return { streamed, stoppedIn: Date.now() - started };
+            };
+            const first = await stopEarly();
             const before = opened();
-            for await (const _row of driver.query({ sql: slowRows })) break;
-            const next = await connectionId(driver);
-            expect({ opened: opened() - before > 0, replaced: next !== first }).toEqual({
-              opened: true,
-              replaced: true,
+            const second = await stopEarly();
+            const [process] = await collect(
+              driver.query<{ id: string; command: string; info: string | null }>({
+                sql: 'SELECT CONNECTION_ID() AS id, COMMAND AS command, INFO AS info FROM information_schema.PROCESSLIST WHERE ID = ?1',
+                params: [second.streamed],
+              }),
+            );
+            expect({
+              opened: opened() - before,
+              stoppedQuickly: first.stoppedIn < 3000 && second.stoppedIn < 3000,
+              sameConnection: first.streamed === second.streamed,
+              process,
+            }).toEqual({
+              opened: 0,
+              stoppedQuickly: true,
+              sameConnection: true,
+              process: { id: second.streamed, command: 'Query', info: expect.any(String) },
             });
           },
           single,
         );
       }),
     );
+  });
+
+  it('cancels three streams stopped early together in a pool of three without waiting for a pooled connection', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(
+        url,
+        async (driver) => {
+          const started = Date.now();
+          await Promise.all(
+            [1, 2, 3].map(async () => {
+              for await (const _row of driver.query({ sql: slowRows })) break;
+            }),
+          );
+          expect(Date.now() - started).toBeLessThan(4000);
+          expect(await collect(driver.query({ sql: 'SELECT 1 AS one' }))).toEqual([{ one: '1' }]);
+        },
+        { stream: true, poolOptions: { max: 3 } },
+      ),
+    );
+  });
+
+  it('closes quickly while a cancel is under way', async (test) => {
+    await withMysqlDatabase(test, async ({ url }) => {
+      const driver = mysqlRuntimeDriver.create(single);
+      await driver.connect({ kind: 'url', url });
+      const rows = driver.query({ sql: slowRows })[Symbol.asyncIterator]();
+      await rows.next();
+      const started = Date.now();
+      await Promise.all([rows.return?.(), driver.close()]);
+      expect({ closedIn: Date.now() - started < 3000, state: driver.state }).toEqual({
+        closedIn: true,
+        state: 'closed',
+      });
+    });
+  });
+
+  it('reads the rest of a stream stopped early when the cancel connection cannot connect, and keeps the connection', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withProxyAcceptingOnly(1, url, async (proxyUrl, refused) => {
+        await withDriver(
+          proxyUrl.toString(),
+          async (driver) => {
+            const [before] = await collect(
+              driver.query<{ id: string }>({ sql: 'SELECT CONNECTION_ID() AS id' }),
+            );
+            for await (const _row of driver.query({ sql: manyRows })) break;
+            const [after] = await collect(
+              driver.query<{ id: string }>({ sql: 'SELECT CONNECTION_ID() AS id' }),
+            );
+            expect({ refused: refused() > 0, same: after?.id === before?.id }).toEqual({
+              refused: true,
+              same: true,
+            });
+          },
+          single,
+        );
+      }),
+    );
+  });
+
+  it('releases and closes quickly a held connection with an abandoned open stream when the cancel cannot run, in a pool of one', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withProxyAcceptingOnly(1, url, async (proxyUrl) => {
+        const driver = mysqlRuntimeDriver.create(single);
+        await driver.connect({ kind: 'url', url: proxyUrl.toString() });
+        const connection = await driver.acquireConnection();
+        const rows = connection.query({ sql: manyRows })[Symbol.asyncIterator]();
+        await rows.next();
+        const started = Date.now();
+        await connection.release();
+        await driver.close();
+        expect({ quick: Date.now() - started < 10000, state: driver.state }).toEqual({
+          quick: true,
+          state: 'closed',
+        });
+      }),
+    );
+  });
+
+  it('refuses a statement still waiting on a held connection when it is released, so it cannot run in the next caller session', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(
+        url,
+        async (driver) => {
+          await driver.execute({ sql: 'CREATE TABLE t (n INT)' });
+          const a = await driver.acquireConnection();
+          const rows = a.query({ sql: tenSlowRows })[Symbol.asyncIterator]();
+          await rows.next();
+          const waiting = a.execute({ sql: 'INSERT INTO t VALUES (?1)', params: [1] });
+          const refusedWaiting = waiting.then(
+            () => 'ran',
+            (error: unknown) => (error instanceof Error ? error.message : String(error)),
+          );
+          await a.release();
+          const b = await driver.acquireConnection();
+          const transaction = await b.beginTransaction();
+          await rows.return?.();
+          const sentAfter = await a.execute({ sql: 'INSERT INTO t VALUES (?1)', params: [2] }).then(
+            () => 'ran',
+            (error: unknown) => (error instanceof Error ? error.message : String(error)),
+          );
+          const seen = await collect(transaction.query({ sql: 'SELECT n FROM t' }));
+          await transaction.commit();
+          await b.release();
+          expect({
+            waiting: await refusedWaiting,
+            sentAfter,
+            seen,
+            stored: await collect(driver.query({ sql: 'SELECT n FROM t' })),
+          }).toEqual({
+            waiting: 'MySQL connection was released',
+            sentAfter: 'MySQL connection was released',
+            seen: [],
+            stored: [],
+          });
+        },
+        { stream: true, poolOptions: { max: 1 } },
+      ),
+    );
+  });
+
+  it('lets a statement that is not a stream finish when its held connection is released, as Postgres does', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(url, async (driver) => {
+        await driver.execute({ sql: 'CREATE TABLE t (n INT)' });
+        await driver.execute({ sql: 'INSERT INTO t VALUES (1)' });
+        const connection = await driver.acquireConnection();
+        const updating = connection.execute({ sql: 'UPDATE t SET n = n + 1 + SLEEP(0.5)' });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        await connection.release();
+        expect({
+          updated: await updating,
+          stored: await collect(driver.query({ sql: 'SELECT n FROM t' })),
+        }).toEqual({ updated: { affectedRows: 1 }, stored: [{ n: '2' }] });
+      }),
+    );
+  });
+
+  it('cancels a stream on a held connection the caller stops early instead of reading its rest, and keeps the session', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(
+        url,
+        async (driver) => {
+          const connection = await driver.acquireConnection();
+          await connection.execute({ sql: 'SET @kept = 7' });
+          const started = Date.now();
+          for await (const _row of connection.query({ sql: slowRows })) break;
+          const stoppedIn = Date.now() - started;
+          const [row] = await collect(connection.query({ sql: 'SELECT @kept AS kept' }));
+          await connection.release();
+          expect({ quick: stoppedIn < 3000, row }).toEqual({ quick: true, row: { kept: '7' } });
+        },
+        streaming,
+      ),
+    );
+  });
+
+  it.for<[string, boolean]>([
+    ['a pooled stream', false],
+    ['a released held connection', true],
+  ])(
+    'does not let a KILL QUERY that arrives after the cancel limit interrupt the next statement on the pool, after %s',
+    { timeout: 20_000 },
+    async ([, held], test) => {
+      await withMysqlDatabase(test, ({ url }) =>
+        withKillDelayingProxy(url, async (proxyUrl) => {
+          await withDriver(
+            proxyUrl.toString(),
+            async (driver) => {
+              let stopped: string | undefined;
+              if (held) {
+                const connection = await driver.acquireConnection();
+                const rows = connection
+                  .query<{ cid: string }>({
+                    sql: manyRows.replace('SELECT a.n', 'SELECT CONNECTION_ID() AS cid, a.n'),
+                  })
+                  [Symbol.asyncIterator]();
+                const first = await rows.next();
+                stopped = first.done ? undefined : first.value.cid;
+                await connection.release();
+              } else {
+                for await (const row of driver.query<{ cid: string }>({
+                  sql: manyRows.replace('SELECT a.n', 'SELECT CONNECTION_ID() AS cid, a.n'),
+                })) {
+                  stopped = row.cid;
+                  break;
+                }
+              }
+              const started = Date.now();
+              const [next] = await collect(
+                driver.query<{ cid: string; slept: string }>({
+                  sql: 'SELECT CONNECTION_ID() AS cid, SLEEP(5) AS slept',
+                }),
+              );
+              expect({
+                slept: next?.slept,
+                ranFully: Date.now() - started >= 4900,
+                newConnection: next?.cid !== stopped,
+              }).toEqual({ slept: '0', ranFully: true, newConnection: true });
+            },
+            single,
+          );
+        }),
+      );
+    },
+  );
+
+  it('refuses at once every later statement in a transaction whose stream cancel could not be confirmed, and closes the connection on release', {
+    timeout: 20_000,
+  }, async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withKillDelayingProxy(url, async (proxyUrl) => {
+        await withDriver(
+          proxyUrl.toString(),
+          async (driver) => {
+            const connection = await driver.acquireConnection();
+            const transaction = await connection.beginTransaction();
+            const rows = transaction
+              .query<{ cid: string }>({
+                sql: manyRows.replace('SELECT a.n', 'SELECT CONNECTION_ID() AS cid, a.n'),
+              })
+              [Symbol.asyncIterator]();
+            const first = await rows.next();
+            const stopped = first.done ? undefined : first.value.cid;
+            await rows.return?.();
+            const started = Date.now();
+            const next = await collect(
+              transaction.query({ sql: 'SELECT CONNECTION_ID() AS cid, SLEEP(5) AS slept' }),
+            ).then(
+              () => undefined,
+              (error: unknown) => error,
+            );
+            const refusedIn = Date.now() - started;
+            const rollback = await transaction.rollback().then(
+              () => undefined,
+              (error: unknown) => error,
+            );
+            await connection.release();
+            const [pooled] = await collect(
+              driver.query<{ cid: string }>({ sql: 'SELECT CONNECTION_ID() AS cid' }),
+            );
+            const refusal = {
+              code: 'DRIVER.NOT_CONNECTED',
+              message:
+                'A cancel on this MySQL connection could not be confirmed, so the connection can no longer be used',
+            };
+            expect({
+              next,
+              rollback,
+              quick: refusedIn < 500,
+              closed: pooled?.cid !== stopped,
+            }).toEqual({
+              next: expect.objectContaining(refusal),
+              rollback: expect.objectContaining(refusal),
+              quick: true,
+              closed: true,
+            });
+          },
+          { stream: true, poolOptions: { max: 2 } },
+        );
+      }),
+    );
+  });
+
+  it('runs the next statement on a thread that received a late KILL QUERY while idle', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(url, async (driver) => {
+        const admin = await mysqlControlDriver.create(url);
+        try {
+          const connection = await driver.acquireConnection();
+          const [own] = await collect(
+            connection.query<{ id: string }>({ sql: 'SELECT CONNECTION_ID() AS id' }),
+          );
+          await admin.query(`KILL QUERY ${Number(own?.id)}`);
+          const [next] = await collect(connection.query({ sql: 'SELECT 1 AS one' }));
+          await connection.release();
+          expect(next).toEqual({ one: '1' });
+        } finally {
+          await admin.close();
+        }
+      }),
+    );
+  });
+
+  it('raises no unhandled rejection when the KILL for a stream the caller stopped early fails', async (test) => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    try {
+      await withMysqlDatabase(test, ({ url }) =>
+        withKillDroppingProxy(url, async (proxyUrl, kills) => {
+          await withDriver(
+            proxyUrl.toString(),
+            async (driver) => {
+              for await (const _row of driver.query({ sql: manyRows })) break;
+              const deadline = Date.now() + 5000;
+              while (kills() === 0 && Date.now() < deadline) {
+                await new Promise((resolve) => setTimeout(resolve, 10));
+              }
+              await new Promise((resolve) => setTimeout(resolve, 200));
+            },
+            { stream: true, poolOptions: { max: 2 } },
+          );
+          expect({ kills: kills(), unhandled }).toEqual({ kills: 1, unhandled: [] });
+        }),
+      );
+    } finally {
+      process.off('unhandledRejection', record);
+    }
   });
 
   it('runs a statement awaited inside the loop over a query on the same transaction, because a query reads its whole result first, as Postgres does without a cursor', async (test) => {
@@ -889,24 +1396,57 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     );
   });
 
-  it('destroys a held connection released while a stream on it is still open, so the pool and close() go on', async (test) => {
-    await withMysqlDatabase(test, async ({ url }) => {
-      const driver = mysqlRuntimeDriver.create(single);
-      await driver.connect({ kind: 'url', url });
-      const connection = await driver.acquireConnection();
-      const transaction = await connection.beginTransaction();
-      const rows = transaction.query<{ cid: string }>({ sql: slowRows })[Symbol.asyncIterator]();
-      const first = await rows.next();
-      await connection.release();
-      const [after] = await collect(
-        driver.query<{ cid: string }>({ sql: 'SELECT CONNECTION_ID() AS cid' }),
-      );
-      await driver.close();
-      expect({
-        newConnection: after?.cid !== (first.done ? undefined : first.value.cid),
-        state: driver.state,
-      }).toEqual({ newConnection: true, state: 'closed' });
-    });
+  it('cancels the stream of a held connection released while it runs, lets its other statement finish, returns it to the pool, and the pool and close() go on', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withCountingProxy(url, async (proxyUrl, { opened }) => {
+        const driver = mysqlRuntimeDriver.create({ stream: true, poolOptions: { max: 2 } });
+        await driver.connect({ kind: 'url', url: proxyUrl.toString() });
+        const warm = await Promise.all([driver.acquireConnection(), driver.acquireConnection()]);
+        await Promise.all(warm.map((connection) => connection.release()));
+        for await (const _row of driver.query({ sql: slowRows })) break;
+        const before = opened();
+        const streamOn = await driver.acquireConnection();
+        const transaction = await streamOn.beginTransaction();
+        const rows = transaction.query<{ cid: string }>({ sql: slowRows })[Symbol.asyncIterator]();
+        const first = await rows.next();
+        const streamed = first.done ? undefined : first.value.cid;
+        const started = Date.now();
+        await streamOn.release();
+        const sleepOn = await driver.acquireConnection();
+        const [sleeper] = await collect(
+          sleepOn.query<{ id: string }>({ sql: 'SELECT CONNECTION_ID() AS id' }),
+        );
+        const sleeping = sleepOn.execute({ sql: 'DO SLEEP(1)' });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        await sleepOn.release();
+        const slept = await sleeping;
+        const releasedIn = Date.now() - started;
+        const held = await Promise.all([driver.acquireConnection(), driver.acquireConnection()]);
+        const ids = await Promise.all(
+          held.map(async (connection) => {
+            const [row] = await collect(
+              connection.query<{ id: string }>({ sql: 'SELECT CONNECTION_ID() AS id' }),
+            );
+            return row?.id;
+          }),
+        );
+        await Promise.all(held.map((connection) => connection.release()));
+        await driver.close();
+        expect({
+          releasedQuickly: releasedIn < 5000,
+          slept,
+          opened: opened() - before,
+          reused: [streamed, sleeper?.id].every((id) => ids.includes(id)),
+          state: driver.state,
+        }).toEqual({
+          releasedQuickly: true,
+          slept: { affectedRows: 0 },
+          opened: 0,
+          reused: true,
+          state: 'closed',
+        });
+      }),
+    );
   });
 
   it('fails a statement at once when MySQL refuses the sign-in or the account needs the server public key, and neither is transient, as on Postgres', async (test) => {

@@ -5,7 +5,6 @@ import { deserializeTestContract, getTestContext, getTestContract } from './help
 import {
   createReturningTagsCollection,
   createReturningUsersCollection,
-  createUsersCollectionWithoutReturning,
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
@@ -67,23 +66,6 @@ describe('integration/upsert', () => {
           address: null,
         });
         expect(await users.first({ id: 3 })).toBeNull();
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
-    'upsert() rejects when returning capability is disabled',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollectionWithoutReturning(runtime);
-
-        await expect(
-          users.upsert({
-            create: { id: 3, name: 'NoReturn', email: 'noreturn@example.com', invitedById: null },
-            update: { name: 'NoReturn Updated' },
-          }),
-        ).rejects.toThrow(/requires contract capability "returning"/);
       });
     },
     timeouts.spinUpPpgDev,

@@ -55,7 +55,7 @@ describe('Insert', () => {
     const insert = new Insert(insertInto('posts', [{ title: 'a' }, { title: 'b' }]));
     const run = recordingRun([], 2);
 
-    expect(await insert.execute({ payload: null }, run)).toBe(2);
+    expect(await insert.execute({ payload: null }, run)).toEqual({ affectedRows: 2 });
     expect(run.executed).toEqual([insert.ast]);
   });
 

@@ -12,7 +12,10 @@ import type {
   CaseExpr,
   CastExpr,
   ColumnRef,
+  DeleteAst,
   FunctionCallExpr,
+  InsertAst,
+  InsertValue,
   JoinAst,
   JoinOnExpr,
   JsonArrayAggExpr,
@@ -32,11 +35,12 @@ import type {
   SelectAst,
   SubqueryExpr,
   TableSource,
+  UpdateAst,
   WindowFuncExpr,
 } from '@internal/sql-relational-core/ast';
 import { collectOrderedParamRefs } from '@internal/sql-relational-core/ast';
 import type { MysqlCodecDescriptorRegistry } from '@internal/target-mysql/codec-descriptor';
-import { mysqlError, mysqlQueryNotYetSupported } from '@internal/target-mysql/errors';
+import { mysqlError } from '@internal/target-mysql/errors';
 import { escapeLiteral, quoteIdentifier } from '@internal/target-mysql/sql-utils';
 import { assertNever, InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
@@ -51,7 +55,12 @@ interface RenderContext {
   readonly placeholderNumbers: ReadonlyMap<AnyParamRef, number>;
   /** Set when the statement builds an array with `GROUP_CONCAT`, whose length limit the statement then raises itself. */
   readonly uses: { groupConcat: boolean };
+  /** While an insert is written: its table's alias, and the name a column of the table is qualified with instead, since MySQL's `INSERT` takes no table alias. */
+  readonly insertInto?: { readonly alias: string; readonly name: string };
 }
+
+/** The name an upsert gives the row it proposes, which its update reads as `new`.`column`; the ORM writes that row as `excluded`, as Postgres names it. */
+const PROPOSED_ROW = 'new';
 
 /**
  * Raises `group_concat_max_len` for this statement only, past any result a connection can send, so an ordered include does not depend on how the driver set up its session. MySQL takes `SET_VAR` only on the outermost `SELECT`.
@@ -116,12 +125,99 @@ function renderStatement(ast: AnyQueryAst, ctx: RenderContext): string {
     case 'raw-query':
       return renderParts(ast.parts, ctx);
     case 'insert':
+      return renderInsert(ast, ctx);
     case 'update':
+      return renderUpdate(ast, ctx);
     case 'delete':
-      throw mysqlQueryNotYetSupported('Writing rows');
+      return renderDelete(ast, ctx);
     default:
       throw new InternalError(`Unsupported AST node kind: ${nodeKind(ast)}`);
   }
+}
+
+function invalid(node: string, message: string): Error {
+  return mysqlError('RUNTIME.AST_INVALID', message, { meta: { node } });
+}
+
+/** MySQL has no `RETURNING`: the SQL family's ORM reads written rows back with a select when the contract does not report `returning`. */
+function refuseReturning(returning: ReadonlyArray<ProjectionItem> | undefined, what: string): void {
+  if (returning !== undefined && returning.length > 0) {
+    throw unsupported(
+      'returning',
+      `MySQL cannot return the rows ${what} writes; it has no RETURNING`,
+    );
+  }
+}
+
+function renderInsertValue(value: InsertValue | undefined, ctx: RenderContext): string {
+  if (value === undefined || value.kind === 'default-value') return 'DEFAULT';
+  return renderExpr(value, ctx);
+}
+
+/**
+ * An insert, with the bare table name: MySQL's `INSERT` takes no alias, so a column of the table is qualified by its name. A row without a value for a column gets `DEFAULT`. An upsert names its proposed row `new` and updates the existing row on any duplicate key. MySQL cannot limit `ON DUPLICATE KEY UPDATE` to named conflict columns, so the adapter does not report `insertOnConflictTarget` and an upsert that names them is refused. Skipping a conflicting row is refused: `INSERT IGNORE` also hides foreign-key and `NOT NULL` errors.
+ */
+function renderInsert(ast: InsertAst, ctx: RenderContext): string {
+  refuseReturning(ast.returning, 'an insert');
+  if (ast.rows.length === 0) throw invalid('insert', 'INSERT requires at least one row');
+  const table = qualifyTable(ast.table, ctx);
+  const insertCtx: RenderContext = {
+    ...ctx,
+    insertInto: { alias: ast.table.alias ?? ast.table.name, name: table },
+  };
+  const columns = [...new Set(ast.rows.flatMap((row) => Object.keys(row)))];
+  const values = ast.rows
+    .map(
+      (row) => `(${columns.map((column) => renderInsertValue(row[column], insertCtx)).join(', ')})`,
+    )
+    .join(', ');
+  const insert = `INSERT INTO ${table} (${columns.map(quoteIdentifier).join(', ')}) VALUES ${values}`;
+  const conflict = ast.onConflict;
+  if (conflict === undefined) return insert;
+  const action = conflict.action;
+  switch (action.kind) {
+    case 'do-nothing':
+      throw unsupported(
+        'insert-on-conflict-skip',
+        'MySQL cannot skip a conflicting row without also hiding other errors: INSERT IGNORE turns foreign-key and NOT NULL errors into warnings',
+      );
+    case 'do-update-set': {
+      if (conflict.columns.length > 0) {
+        throw unsupported(
+          'insert-on-conflict-target',
+          'MySQL cannot limit ON DUPLICATE KEY UPDATE to named conflict columns: it fires on any unique key',
+        );
+      }
+      const assignments = Object.entries(action.set);
+      if (assignments.length === 0) {
+        throw invalid('insert-on-conflict', 'An upsert requires at least one column to update');
+      }
+      const set = assignments
+        .map(([column, value]) => `${quoteIdentifier(column)} = ${renderExpr(value, insertCtx)}`)
+        .join(', ');
+      return `${insert} AS ${quoteIdentifier(PROPOSED_ROW)} ON DUPLICATE KEY UPDATE ${set}`;
+    }
+    default:
+      return assertNever(action, `Unsupported conflict action: ${nodeKind(action)}`);
+  }
+}
+
+function renderUpdate(ast: UpdateAst, ctx: RenderContext): string {
+  refuseReturning(ast.returning, 'an update');
+  const assignments = Object.entries(ast.set);
+  if (assignments.length === 0)
+    throw invalid('update', 'UPDATE requires at least one column to set');
+  const set = assignments
+    .map(([column, value]) => `${quoteIdentifier(column)} = ${renderExpr(value, ctx)}`)
+    .join(', ');
+  const where = ast.where ? ` WHERE ${renderExpr(ast.where, ctx)}` : '';
+  return `UPDATE ${renderTableSource(ast.table, ctx)} SET ${set}${where}`;
+}
+
+function renderDelete(ast: DeleteAst, ctx: RenderContext): string {
+  refuseReturning(ast.returning, 'a delete');
+  const where = ast.where ? ` WHERE ${renderExpr(ast.where, ctx)}` : '';
+  return `DELETE FROM ${renderTableSource(ast.table, ctx)}${where}`;
 }
 
 function renderLimitOffset(
@@ -222,7 +318,7 @@ function renderSource(source: AnyFromSource, ctx: RenderContext): string {
 function renderExpr(expr: AnyExpression, ctx: RenderContext): string {
   switch (expr.kind) {
     case 'column-ref':
-      return renderColumn(expr);
+      return renderColumn(expr, ctx);
     case 'identifier-ref':
       return quoteIdentifier(expr.name);
     case 'operation':
@@ -298,8 +394,14 @@ function renderParts(parts: RawExpr['parts'] | RawQueryAst['parts'], ctx: Render
   return parts.map((part) => (typeof part === 'string' ? part : renderExpr(part, ctx))).join('');
 }
 
-function renderColumn(ref: ColumnRef): string {
-  return `${quoteIdentifier(ref.table)}.${quoteIdentifier(ref.column)}`;
+function renderColumn(ref: ColumnRef, ctx: RenderContext): string {
+  const column = quoteIdentifier(ref.column);
+  const { insertInto } = ctx;
+  if (insertInto !== undefined) {
+    if (ref.table === 'excluded') return `${quoteIdentifier(PROPOSED_ROW)}.${column}`;
+    if (ref.table === insertInto.alias) return `${insertInto.name}.${column}`;
+  }
+  return `${quoteIdentifier(ref.table)}.${column}`;
 }
 
 /**
@@ -555,6 +657,6 @@ function renderJoin(join: JoinAst, ctx: RenderContext): string {
 
 function renderJoinOn(on: JoinOnExpr, ctx: RenderContext): string {
   return on.kind === 'eq-col-join-on'
-    ? `${renderColumn(on.left)} = ${renderColumn(on.right)}`
+    ? `${renderColumn(on.left, ctx)} = ${renderColumn(on.right, ctx)}`
     : renderExpr(on, ctx);
 }

@@ -53,12 +53,6 @@ export function createUsersCollection(runtime: PgIntegrationRuntime) {
   return new Collection({ runtime, context: getTestContext() }, 'User', { namespaceId: 'public' });
 }
 
-export function createUsersCollectionWithoutReturning(runtime: PgIntegrationRuntime) {
-  const contract = { ...getTestContract(), capabilities: {} } as TestContract;
-  const context = { ...getTestContext(), contract } as ExecutionContext<TestContract>;
-  return new Collection({ runtime, context }, 'User', { namespaceId: 'public' });
-}
-
 export function createReturningUsersCollectionWithout(
   runtime: PgIntegrationRuntime,
   capabilityKeys: readonly string[],

@@ -8,10 +8,10 @@
 | --- | --- | --- | --- | --- |
 | 1 | Every target in one folder per database; `2-sql` becomes `2-sql-family` | — | [TML-3693](https://linear.app/prisma-company/issue/TML-3693) | Merged, prisma/orm#30829 |
 | 2a | MySQL target: codecs, driver, contract emit, schema introspection | 1 | [TML-3694](https://linear.app/prisma-company/issue/TML-3694) | Merged, prisma/orm#30836 |
-| 2b | MySQL migrations, `db verify`, `db sign`; migration atomicity stated by the target | 2a | [TML-3704](https://linear.app/prisma-company/issue/TML-3704) | In review, prisma/orm#30841 |
-| 2c | `examples/prisma-8-demo-mysql` and the public `@prisma/orm-mysql` packages; the example migrates, verifies and signs | 2b | [TML-3723](https://linear.app/prisma-company/issue/TML-3723) | Spec: [`slices/mysql-example/`](./slices/mysql-example/spec.md) |
-| 3 | MySQL ORM reads with includes; the example reads | 2c | [TML-3695](https://linear.app/prisma-company/issue/TML-3695) | Not started |
-| 4 | ORM writes without `RETURNING`; MySQL create, update, delete, upsert; the example writes | 3 | [TML-3696](https://linear.app/prisma-company/issue/TML-3696) | Not started |
+| 2b | MySQL migrations, `db verify`, `db sign`; migration atomicity stated by the target | 2a | [TML-3704](https://linear.app/prisma-company/issue/TML-3704) | Merged, prisma/orm#30841 |
+| 2c | `examples/prisma-8-demo-mysql` and the public `@prisma/orm-mysql` packages; the example migrates, verifies and signs | 2b | [TML-3723](https://linear.app/prisma-company/issue/TML-3723) | Merged, prisma/orm#30856 |
+| 3 | MySQL ORM reads with includes; the example reads | 2c | [TML-3695](https://linear.app/prisma-company/issue/TML-3695) | Merged, prisma/orm#30863; drivers on `mariadb`, prisma/orm#30893 and prisma/orm#30918 |
+| 4 | ORM writes without `RETURNING`; MySQL create, update, delete, upsert; the example writes | 3 | [TML-3696](https://linear.app/prisma-company/issue/TML-3696) | In progress, spec: [`slices/mysql-writes/`](./slices/mysql-writes/spec.md) |
 | 6 | `mariadb` target extending MySQL; the example also runs against MariaDB | 4 | [TML-3697](https://linear.app/prisma-company/issue/TML-3697) | Not started |
 
 ```text
@@ -66,8 +66,8 @@
 ### 4 — ORM writes without `RETURNING`
 
 - Writes find the written rows' identity without `RETURNING` and read them back.
-- The `returning` capability splits by statement; the SQL driver reports the last insert id.
-- Upsert's conflict model admits a target that cannot name the conflict.
+- The SQL driver's write result reports `insertId` for a one-row write; the ORM reads rows back by identity when `returning` is off (ADR 164).
+- A new capability, `sql.insertOnConflictTarget`, says whether a conflict clause applies only to the columns it names. Splitting `returning` by statement kind moves to slice 6, where MariaDB needs it.
 
 **Hands to 6:** a complete MySQL target to subclass, and an example that reads and writes.
 
