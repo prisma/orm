@@ -2,22 +2,24 @@
 
 Status: **Accepted**
 
+**Amended 2026-10-30 (TML-3714):** the TypeScript builder's helper for a type is `type.<Name>()`, the PSL name, on every target, not `field.<token>()`. MongoDB's TypeScript builder used to hard-code one `field.<token>()` helper per type; it now builds `type.*` from the constructors the family, target and extension packs contribute, as the SQL builder does (ADR 241), and a field is `field.scalar(type.Int32())`. The MongoDB target, not its adapter, contributes those constructors.
+
 **Amended by [ADR 279](ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md) (2026-10-22):** where a stored type has several codecs, every one of them carries a suffix naming its kind of value, not only the second (`TimestamptzTemporal`, `TimestamptzJsDate`, `TimestamptzString`). The unsuffixed name of the concept, such as `DateTime`, `Date`, `Time` and `Duration` on PostgreSQL, belongs to a convenience type, a type choice that becomes one of the suffixed types. Those renames were made before the release candidate, so the old names were removed at once, with no deprecated alias for a release line; the upgrade instructions give each rewrite. A type named before this amendment with no suffix beside a suffixed one, such as MongoDB's `Int64` beside `Int64Number` below, keeps its name until it is renamed under the alias rule.
 
 ## Decision
 
-A scalar type's name says what the database stores, in the database's own vocabulary. Each type has one token, written exactly as its codec id writes it (`objectId` keeps its inner capital), and the three surfaces a user writes derive from it: the codec id is `<target>/<token>@<version>`, the PSL name is the token with its first letter uppercased, and the TypeScript builder helper is `field.<token>()`. Where a codec id already carries a name, the codec id is the source of the token, and no codec id is renamed to fit a surface name.
+A scalar type's name says what the database stores, in the database's own vocabulary. Each type has one token, written exactly as its codec id writes it (`objectId` keeps its inner capital), and the three surfaces a user writes derive from it: the codec id is `<target>/<token>@<version>`, the PSL name is the token with its first letter uppercased, and the TypeScript builder helper is `type.<Name>()` with the PSL name. Where a codec id already carries a name, the codec id is the source of the token, and no codec id is renamed to fit a surface name.
 
 Two types are named after an encoding rather than a single stored type: `Json`, the JSON-representable subset of the target's values, and, on MongoDB, `Bson`, any BSON value.
 
-When two types store the same thing but give the application different values, the second token adds the application type as a suffix. `mongo/int64Number@1` (`Int64Number`, `field.int64Number()`) stores a BSON `long` and reads it as a `number` in the safe-integer range, next to `mongo/int64@1`, which reads the same `long` as a `bigint`. PostgreSQL's `pg/int8number@1` and SQLite's `sqlite/bigintnumber@1` follow the same rule. The suffix names the application type because it is the only difference: the stored type is already in the first half of the token.
+When two types store the same thing but give the application different values, the second token adds the application type as a suffix. `mongo/int64Number@1` (`Int64Number`, `type.Int64Number()`) stores a BSON `long` and reads it as a `number` in the safe-integer range, next to `mongo/int64@1`, which reads the same `long` as a `bigint`. PostgreSQL's `pg/int8number@1` and SQLite's `sqlite/bigintnumber@1` follow the same rule. The suffix names the application type because it is the only difference: the stored type is already in the first half of the token.
 
 ## The decision in code
 
-The MongoDB adapter's PSL scalar map names each type after the BSON type it stores, and points it at a codec whose id carries the same token:
+The MongoDB target's scalar type constructors name each type after the BSON type it stores, and points it at a codec whose id carries the same token:
 
 ```ts
-// packages/3-targets/mongo/2-adapter/src/exports/control.ts
+// packages/3-targets/mongo/1-target/src/core/authoring.ts
 export const mongoScalarAuthoringTypes = {
   Int32: {
     kind: 'typeConstructor',
@@ -47,17 +49,17 @@ export const mongoScalarAuthoringTypes = {
 };
 ```
 
-`MONGO_INT32_CODEC_ID` is `mongo/int32@1`, so the PSL name `Int32`, the TypeScript helper `field.int32()` and the codec id all carry the token `int32`. The same holds for `bson`:
+`MONGO_INT32_CODEC_ID` is `mongo/int32@1`, so the PSL name `Int32`, the TypeScript helper `type.Int32()` and the codec id all carry the token `int32`. The same holds for `bson`:
 
 ```ts
-const contract = defineContract({}, ({ field, model }) => ({
+const contract = defineContract({}, ({ field, model, type }) => ({
   models: {
     Event: model('Event', {
       collection: 'events',
       fields: {
-        _id: field.objectId(),
-        payload: field.json(),
-        raw: field.bson(),
+        _id: field.scalar(type.ObjectId()),
+        payload: field.scalar(type.Json()),
+        raw: field.scalar(type.Bson()),
       },
     }),
   },
@@ -70,7 +72,7 @@ A name is the one piece of a type a user reads every time they write a schema, s
 
 The target owns its codecs, so it owns their names. A codec id already names the stored type (`mongo/int32@1`, `pg/int8@1`, `sqlite/blob@1`), which makes it the natural source of the token: the PSL name and the TypeScript helper follow the codec id, never the reverse. A codec id is recorded in every emitted `contract.json`, feeds the storage and execution hashes, and appears in signed database markers and migration snapshots, so renaming one would re-hash every contract that uses it. Surface names can change freely; codec ids do not.
 
-Symmetry across targets is symmetry of rule and grammar, not of spelling. Bare PascalCase scalar names, namespaced type aliases (`temporal.CreatedAt`; amended 2026-10-22, field presets such as `temporal.createdAt()` were removed by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md)), the shared attribute set and `field.<token>()` are the same everywhere; the tokens are each target's own. A reader moving between targets uses one table that maps concepts across targets, not a shared spelling that hides the differences.
+Symmetry across targets is symmetry of rule and grammar, not of spelling. Bare PascalCase scalar names, namespaced type aliases (`temporal.CreatedAt`; amended 2026-10-22, field presets such as `temporal.createdAt()` were removed by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md)), the shared attribute set and `type.<Name>()` are the same everywhere; the tokens are each target's own. A reader moving between targets uses one table that maps concepts across targets, not a shared spelling that hides the differences.
 
 ## `Json` and `Bson`
 
