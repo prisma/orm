@@ -1,7 +1,9 @@
 import { ormConfigSection } from '@internal/config-loader';
 import type { ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
+import { errorMarkerPoliciesCorrupt } from '@internal/errors/execution';
 import {
   type DatabasePolicyDifference,
+  databasePoliciesOf,
   databasePolicyDifferences,
   databasePolicyValueText,
 } from '@internal/framework-components/control';
@@ -73,6 +75,7 @@ import { appRefsDirFor, contractPathFor, displayPath, migrationsDirFor } from '.
 import {
   contractUnreadableFinding,
   markerNotInHistoryFinding,
+  markerPoliciesUnreadableFinding,
   missingInvariantsFinding,
   type StatusFinding,
 } from './status-findings';
@@ -457,6 +460,7 @@ export const migrationStatusCommand = defineOrmCommand({
     let headlineTargetHash = activeRefHash ?? contractHash;
     let totalPending = 0;
 
+    let reportedUnreadablePolicies = false;
     for (const entry of scopedSpaces) {
       const space: AggregateContractSpace | undefined = aggregate.space(entry.space);
       if (space === undefined) {
@@ -485,11 +489,25 @@ export const migrationStatusCommand = defineOrmCommand({
 
       if (markerDiverged) {
         divergedMarker ??= { space: entry.space, markerHash: readMarker.storageHash };
+        const policiesInForce = databasePoliciesOf(
+          database.markersBySpace.get(aggregate.app.spaceId),
+        );
+        if (!policiesInForce.ok && !reportedUnreadablePolicies) {
+          reportedUnreadablePolicies = true;
+          findings.push(
+            markerPoliciesUnreadableFinding(
+              errorMarkerPoliciesCorrupt({
+                why: policiesInForce.failure.why,
+                space: aggregate.app.spaceId,
+                markerLocation,
+              }),
+            ),
+          );
+        }
         findings.push(
           markerNotInHistoryFinding(
             entry.space,
-            databasePoliciesInForce(database.markersBySpace, aggregate.app.spaceId, markerLocation)
-              .change,
+            policiesInForce.ok ? policiesInForce.value.change : undefined,
           ),
         );
       }

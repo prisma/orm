@@ -94,6 +94,13 @@ const markerNotInHistoryDiagnosticSchema = type({
   hints: 'string[]',
 });
 
+const markerPoliciesUnreadableDiagnosticSchema = type({
+  code: '"CONTRACT.MARKER_ROW_CORRUPT"',
+  severity: '"warn" | "info"',
+  message: 'string',
+  hints: 'string[]',
+});
+
 const missingInvariantsDiagnosticSchema = type({
   code: '"MIGRATION.MISSING_INVARIANTS"',
   severity: '"warn" | "info"',
@@ -104,6 +111,7 @@ const missingInvariantsDiagnosticSchema = type({
 
 export const statusDiagnosticSchema = contractUnreadableDiagnosticSchema
   .or(markerNotInHistoryDiagnosticSchema)
+  .or(markerPoliciesUnreadableDiagnosticSchema)
   .or(missingInvariantsDiagnosticSchema);
 
 export type StatusDiagnosticJson = typeof statusDiagnosticSchema.infer;

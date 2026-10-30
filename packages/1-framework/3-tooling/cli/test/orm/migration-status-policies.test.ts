@@ -125,4 +125,36 @@ describe('migration status on a marker outside the migration graph', () => {
       },
     ]);
   });
+
+  it('reports policies it cannot read as a finding and recommends no command, still giving its report', async () => {
+    const run = await offGraphStatus({ change: 'nope' });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.presented?.diagnostics).toMatchObject([
+      {
+        code: 'CONTRACT.MARKER_ROW_CORRUPT',
+        severity: 'warn',
+        nextActions: [
+          {
+            kind: 'user-choice',
+            label:
+              'Ask whoever owns this database to correct meta.policies in the marker; do not delete the marker.',
+          },
+        ],
+      },
+      { code: 'MIGRATION.MARKER_NOT_IN_HISTORY', severity: 'warn', nextActions: [] },
+    ]);
+    expect(run.presented?.data).toMatchObject({
+      summary: `Database marker ${HASH_UNKNOWN.slice(0, 12)} is not in the on-disk migration graph`,
+      diagnostics: [
+        { code: 'CONTRACT.MARKER_ROW_CORRUPT' },
+        {
+          code: 'MIGRATION.MARKER_NOT_IN_HISTORY',
+          hints: [
+            "The database's change policy cannot be read, so the way back onto the graph cannot be chosen: have meta.policies corrected first",
+          ],
+        },
+      ],
+    });
+  });
 });
