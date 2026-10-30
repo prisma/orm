@@ -115,6 +115,8 @@ interface RequiredMember {
   readonly target: ValueObjectRef;
   readonly field: ContractValueObjectField;
   readonly statement: ResolvedValueObjectFieldBackfillStatement | undefined;
+  /** The fields of the origin value object that the destination lacks and no statement renames: the new field may be one of them renamed. */
+  readonly removedFields: readonly string[];
 }
 
 function sameField(left: ValueObjectFieldCoordinate, right: ValueObjectFieldCoordinate): boolean {
@@ -151,6 +153,14 @@ function requiredMembers(
       namespaceId: originNamespaces.get(coordinate.namespaceId) ?? coordinate.namespaceId,
     });
     if (origin === undefined) continue;
+    const renamedFields = new Set(
+      [...renamedFrom.values()]
+        .filter((from) => from.valueObject === coordinate.entityName)
+        .map((from) => from.field),
+    );
+    const removedFields = Object.keys(origin.fields).filter(
+      (name) => !Object.hasOwn(valueObject.fields, name) && !renamedFields.has(name),
+    );
     for (const [name, field] of Object.entries(valueObject.fields)) {
       if (field.nullable) continue;
       const valueObjectField = {
@@ -168,10 +178,25 @@ function requiredMembers(
         target: coordinate,
         field,
         statement: backfills.find((backfill) => sameField(backfill.field, valueObjectField)),
+        removedFields: originField === undefined ? removedFields : [],
       });
     }
   }
   return members;
+}
+
+function backfillAdvice(
+  contract: Contract<SqlStorage>,
+  member: RequiredMember,
+  text: string,
+): string {
+  const backfill = `--backfill ${text} to write the value the plan fills them with.`;
+  if (member.removedFields.length === 0) return `Add ${backfill}`;
+  const renames = member.removedFields.map(
+    (field) =>
+      `--rename ${valueObjectFieldStatementText(contract, { ...member.valueObjectField, field })}:${text}`,
+  );
+  return `If it is a field renamed, add ${renames.join(' or ')}. Otherwise add ${backfill}`;
 }
 
 function placeText(place: ValueObjectPlace): string {
@@ -259,7 +284,7 @@ export function planValueObjectMemberFills(input: {
           first,
           text,
           input.unnamed === 'refuse'
-            ? `Add --backfill ${text} to write the value the plan fills them with.`
+            ? backfillAdvice(contract, member, text)
             : `db update cannot choose a value for a field that holds a value object or an enum value, or whose codec has no temporary value. Plan a migration with prisma migration plan --backfill ${text} instead, and write the value in its migration.ts.`,
         ),
       );

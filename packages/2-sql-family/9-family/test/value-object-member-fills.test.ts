@@ -234,6 +234,15 @@ describe('planValueObjectMemberFills', () => {
     });
   });
 
+  it('offers the rename of a field the destination lacks before the backfill, as the new field may be it renamed', () => {
+    expect(
+      refusal(plan({ from: { GeoPoint: GEO }, to: { GeoPoint: { country: 'scalar' } } })),
+    ).toMatchObject({
+      kind: 'nullabilityConflict',
+      why: 'If it is a field renamed, add --rename GeoPoint.lat:GeoPoint.country. Otherwise add --backfill GeoPoint.country to write the value the plan fills them with.',
+    });
+  });
+
   describe('with temporary values', () => {
     it('fills a scalar field with the empty value of its JSON type, and a list with an empty list', () => {
       const result = plan({
