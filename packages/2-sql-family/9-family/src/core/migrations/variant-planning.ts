@@ -36,14 +36,14 @@ export interface VariantRowRewrite {
   readonly to: string | undefined;
   /** Whether the destination contract has no such variant, so the plan also drops its columns or table. */
   readonly removed: boolean;
-  /** The variant's own table in the destination, whose foreign key to the base table deletes its rows with the base rows. */
-  readonly variantTable: VariantTable | undefined;
+  /** The variant's own table in the destination when its foreign key to the base table cascades, so that deleting base rows deletes its rows too; undefined when the variant shares the base table or its foreign key does not cascade. */
+  readonly cascadingTable: CascadingTable | undefined;
   /** The rename or convert statement the rewrite carries out, if any. */
   readonly statement: ResolvedModelRenameStatement | ResolvedVariantConvertStatement | undefined;
 }
 
 /** A variant's own table and the foreign key that ties each of its rows to a row of the base table, with `onDelete: 'cascade'`. */
-export interface VariantTable {
+export interface CascadingTable {
   readonly namespaceId: string;
   readonly table: string;
   /** The columns of the variant's table the foreign key reads. */
@@ -112,11 +112,11 @@ function discriminatorColumn(
 }
 
 /** The destination variant's own table, when it has one whose foreign key to the base table cascades. */
-function variantTableOf(
+function cascadingTableOf(
   contract: Contract<SqlStorage>,
   variant: ModelCoordinate,
   base: BaseColumn,
-): VariantTable | undefined {
+): CascadingTable | undefined {
   const model = modelAt(contract, variant);
   if (model === undefined || !isSqlModelStorage(model.storage)) return undefined;
   const { namespaceId, table } = model.storage;
@@ -215,7 +215,7 @@ function rewriteOf(
     from,
     to: statement === undefined ? undefined : to,
     removed,
-    variantTable: variantTableOf(input.contract, destination.coordinate, column),
+    cascadingTable: cascadingTableOf(input.contract, destination.coordinate, column),
     statement,
   };
 }

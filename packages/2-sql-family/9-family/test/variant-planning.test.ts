@@ -193,7 +193,7 @@ describe('planVariantRowRewrites', () => {
       [
         tasks({ defect: 'Bug', epic: 'Epic' }, { onDelete: 'cascade' }),
         tasks({ defect: 'Bug', epic: 'Epic' }, { onDelete: 'restrict' }),
-      ].map((contract) => plan(contract).map(({ variantTable }) => variantTable)),
+      ].map((contract) => plan(contract).map(({ cascadingTable }) => cascadingTable)),
     ).toEqual([
       [{ namespaceId: 'app', table: 'bugs', columns: ['task_id'], references: ['id'] }],
       [undefined],

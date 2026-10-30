@@ -98,13 +98,13 @@ export function sqliteVariantRowCalls(
               rewrite.column,
               rewrite.from,
               codec,
-              rewrite.variantTable === undefined
+              rewrite.cascadingTable === undefined
                 ? []
                 : [
                     {
-                      table: rewrite.variantTable.table,
-                      columns: rewrite.variantTable.columns,
-                      references: rewrite.variantTable.references,
+                      table: rewrite.cascadingTable.table,
+                      columns: rewrite.cascadingTable.columns,
+                      references: rewrite.cascadingTable.references,
                     },
                   ],
             )
