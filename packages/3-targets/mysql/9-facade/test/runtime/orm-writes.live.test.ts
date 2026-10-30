@@ -135,6 +135,18 @@ describe('MySQL writes through the ORM', { timeout: timeouts.databaseOperation }
     });
   });
 
+  it('createAll reads back more rows than one statement takes, in the order it was given them', async (test) => {
+    await withSeededDatabase(test, exampleTablesDdl, async (url) => {
+      await using db = mysql({ contract, url, verifyMarker: false });
+      const users = Array.from({ length: 1200 }, (_, index) => ({
+        id: 1200 - index,
+        email: `user${1200 - index}@example.com`,
+        role: 'USER' as const,
+      }));
+      expect(await db.orm.User.createAll(users)).toEqual(users);
+    });
+  });
+
   it('creates a user with posts, passing the generated id to them', async (test) => {
     await withSeededDatabase(test, exampleTablesDdl, async (url) => {
       await using db = mysql({ contract, url, verifyMarker: false });

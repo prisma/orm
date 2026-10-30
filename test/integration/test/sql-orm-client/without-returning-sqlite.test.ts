@@ -177,6 +177,16 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
     });
   });
 
+  it('createAll() reads back more rows than one statement takes, in the order it was given them', async () => {
+    await withDatabase(async ({ db }) => {
+      const tags = Array.from({ length: 1200 }, (_, index) => {
+        const code = String(1200 - index).padStart(4, '0');
+        return { code, label: code };
+      });
+      expect(await db.Tag.createAll(tags)).toEqual(tags);
+    });
+  });
+
   it('createAll() of one row reads back its generated id', async () => {
     await withDatabase(async ({ db }) => {
       expect(await db.User.createAll([ada])).toEqual([{ id: 1, ...ada }]);

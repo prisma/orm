@@ -56,6 +56,28 @@ describe('FindByKeys', () => {
     });
   });
 
+  it('reads more keys than one statement takes in chunks of 500, each ordered by its own keys, joined in key order', async () => {
+    const keys = Array.from({ length: 1200 }, (_, index) => ({ id: 1200 - index }));
+    const queried: SelectAst[] = [];
+    const run = {
+      ...recordingRun(),
+      query(ast: SelectAst) {
+        queried.push(ast);
+        const offset = (queried.length - 1) * 500;
+        return recordingRun(keys.slice(offset, offset + 500)).query(ast);
+      },
+    };
+    const find = new FindByKeys(findUsers().ast, ids, create);
+
+    expect(await find.execute({ keys }, run)).toEqual(keys);
+    expect(
+      queried.map((ast) => {
+        const [order] = ast.orderBy ?? [];
+        return order?.expr.kind === 'case' ? order.expr.branches.length : 0;
+      }),
+    ).toEqual([500, 500, 200]);
+  });
+
   it('runs nothing when there is no key', async () => {
     const run = recordingRun([{ id: 1 }]);
 
