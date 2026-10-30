@@ -205,6 +205,10 @@ export {
   convertedColumnOf,
   unconvertedFieldOf,
 } from '../core/migrations/unconverted-field';
+export {
+  planValueObjectFieldRewrites,
+  type StoredKeyRewrite,
+} from '../core/migrations/value-object-field-planning';
 export type {
   ContractColumn,
   ContractColumns,

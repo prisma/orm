@@ -186,9 +186,9 @@ function memberJsonType(
 }
 
 /**
- * Whether `from` refers, through its own fields or nested ones, to a value object on the path being resolved. Each value object on the path refers to `from`, so this holds exactly when `from` is in a group of value objects that contain each other which the path has already entered.
+ * Whether `from` is one of `targets`, or refers to one through its own fields or nested ones. While resolving, `targets` holds the value objects on the path, each of which refers to `from`, so this holds exactly when `from` is in a group of value objects that contain each other which the path has already entered.
  */
-function reachesAny(
+export function reachesAny(
   storage: Pick<StorageBase, 'namespaces'>,
   from: EntityCoordinate<'storage', 'valueObject'>,
   targets: ReadonlySet<string>,
@@ -235,6 +235,7 @@ function valueSetValues(
   );
 }
 
-function referenceKey(reference: EntityCoordinate<'storage', 'valueObject'>): string {
+/** The key `reachesAny` knows a value object by. */
+export function referenceKey(reference: EntityCoordinate<'storage', 'valueObject'>): string {
   return JSON.stringify([reference.namespaceId, reference.entityName]);
 }
