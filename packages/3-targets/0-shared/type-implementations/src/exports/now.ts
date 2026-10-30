@@ -2,7 +2,6 @@ export {
   DATE_STRING_NOW_GENERATOR_ID,
   dateStringNow,
   dateTimeStringNow,
-  type FractionForm,
   fractionDigitsOf,
   type GeneratorParams,
   INSTANT_NOW_GENERATOR_ID,

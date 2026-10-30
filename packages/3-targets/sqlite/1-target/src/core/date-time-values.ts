@@ -1,6 +1,7 @@
 import { hasDigitsBelowAMillisecond } from '@internal/type-implementations/date';
 import type { TemporalImplementation } from '@internal/type-implementations/temporal';
 import {
+  describeValue,
   type TemporalTag,
   type TemporalValue,
   temporalFromText,
@@ -44,12 +45,6 @@ export function sqliteInstantMilliseconds(codecId: string, value: string | numbe
 
 function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
-}
-
-function describeValue(value: unknown): string {
-  if (value === null) return 'null';
-  if (value instanceof Date) return 'a Date';
-  return `a ${typeof value}`;
 }
 
 /** The text a write stores for `value`, in the form `stored` writes; a value `stored` refuses is refused as `RUNTIME.ENCODE_FAILED`. */

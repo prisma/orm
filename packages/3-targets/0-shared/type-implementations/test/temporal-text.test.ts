@@ -1,6 +1,7 @@
 import { Temporal as otherTemporal } from 'temporal-polyfill/implementation';
 import { describe, expect, it } from 'vitest';
 import {
+  describeValue,
   type TemporalValue,
   temporalFromText,
   temporalToText,
@@ -78,6 +79,17 @@ describe('temporalToText', () => {
       kind: 'non-iso-calendar',
       calendarId: 'gregory',
     });
+  });
+});
+
+describe('describeValue', () => {
+  it.each([
+    [null, 'null'],
+    [new Date(0), 'a Date'],
+    ['text', 'a string'],
+    [1, 'a number'],
+  ])('names %o as %s', (value, description) => {
+    expect(describeValue(value)).toBe(description);
   });
 });
 

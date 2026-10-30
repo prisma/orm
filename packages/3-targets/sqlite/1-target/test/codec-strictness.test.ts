@@ -171,6 +171,16 @@ describe('sqlite/datetime@1 text', () => {
     expect(toContractJson(codec, instant)).toBe('2026-01-02T03:04:05.678Z');
     expect(fromContractJson(codec, '2026-01-02T03:04:05.678Z')).toEqual(instant);
   });
+
+  it.each([
+    ['to write or filter by', () => codec.toWire(new Date(Number.NaN), {})],
+    ['to store in the contract', async () => toContractJson(codec, new Date(Number.NaN))],
+  ])('refuses an Invalid Date %s, naming the codec', async (_name, encode) => {
+    await expect(encode()).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
+      meta: { codecId: 'sqlite/datetime@1', received: 'an Invalid Date' },
+    });
+  });
 });
 
 describe('sqlite/real@1 contract values', () => {

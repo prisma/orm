@@ -48,6 +48,7 @@ import {
   sqlRawDescriptor,
   sqlVarcharDescriptor,
 } from '@internal/sql-relational-core/ast';
+import { isValidDate } from '@internal/type-implementations/date';
 import { blindCast } from '@internal/utils/casts';
 import { defineSqliteCodecs, SqliteCodecDescriptor, sqliteCodec } from './codec-descriptor';
 import {
@@ -80,7 +81,7 @@ import {
   sqliteTimeTemporalDescriptor,
 } from './date-time-codecs';
 import { sqliteInstantMilliseconds } from './date-time-values';
-import { sqliteError } from './errors';
+import { errorDateTimeUnwritable, sqliteError } from './errors';
 
 /**
  * Projects the expression unchanged, for codecs whose canonical JSON is what
@@ -621,8 +622,15 @@ export function decodeSqliteDatetime(value: string | number): Date {
   return new Date(sqliteInstantMilliseconds(SQLITE_DATETIME_CODEC_ID, value));
 }
 
-/** The text SQLite holds for an instant: what the codec writes for every row, and for a default. */
+/** The text SQLite holds for an instant: what the codec writes for every row, and for a default. An Invalid Date is refused, naming the codec. */
 export function encodeSqliteDatetime(value: Date): string {
+  if (!isValidDate(value)) {
+    throw errorDateTimeUnwritable({
+      codecId: SQLITE_DATETIME_CODEC_ID,
+      received: 'an Invalid Date',
+      detail: 'Pass a Date that holds an instant.',
+    });
+  }
   return value.toISOString();
 }
 
@@ -642,7 +650,7 @@ export class SqliteDatetimeCodec extends CodecImpl<
     return new Date(value.value);
   }
   toDataTypeValue(input: Date): DataTypeValue {
-    return this.dataTypeValueOf(input.toISOString());
+    return this.dataTypeValueOf(encodeSqliteDatetime(input));
   }
 }
 

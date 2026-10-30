@@ -61,15 +61,13 @@ export function temporalToText(
 }
 
 function describeEncodeInput(value: unknown, tag: unknown): string {
-  if (typeof tag === 'string') {
-    return `a ${tag}`;
-  }
-  if (value instanceof Date) {
-    return 'a Date';
-  }
-  if (value === null) {
-    return 'null';
-  }
+  return typeof tag === 'string' ? `a ${tag}` : describeValue(value);
+}
+
+/** A value of the wrong type, as an error message names it: `null`, `a Date`, or `a` and its `typeof`. */
+export function describeValue(value: unknown): string {
+  if (value === null) return 'null';
+  if (value instanceof Date) return 'a Date';
   return `a ${typeof value}`;
 }
 

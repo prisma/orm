@@ -1,7 +1,6 @@
 export {
-  type TemporalFromTextResult,
+  describeValue,
   type TemporalTag,
-  type TemporalToTextResult,
   type TemporalValue,
   temporalFromText,
   temporalToText,
