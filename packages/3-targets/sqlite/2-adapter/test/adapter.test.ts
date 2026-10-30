@@ -97,9 +97,12 @@ describe('SQLite adapter', () => {
 
   it('reports that an insert conflict clause applies only to the columns it names', () => {
     expect({
-      profile: adapter.profile.capabilities['sql']?.['insertOnConflictTarget'],
-      contract: sqliteAdapterDescriptorMeta.capabilities.sql.insertOnConflictTarget,
-    }).toEqual({ profile: true, contract: true });
+      profile: adapter.profile.capabilities['sql'],
+      contract: sqliteAdapterDescriptorMeta.capabilities.sql,
+    }).toMatchObject({
+      profile: { insertOnConflictTarget: true },
+      contract: { insertOnConflictTarget: true },
+    });
   });
 
   it.each([
