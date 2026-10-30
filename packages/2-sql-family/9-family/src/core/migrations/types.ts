@@ -5,7 +5,6 @@ import type {
   ContractSpace,
   ControlAdapterDescriptor,
   ControlExtensionDescriptor,
-  DatabasePolicies,
   MigrationOperationPolicy,
   MigrationPlan,
   MigrationPlannerConflict,
@@ -14,6 +13,7 @@ import type {
   MigrationPlanOperation,
   MigrationRunnerExecutionChecks,
   MigrationRunnerFailure,
+  MigrationRunnerPerSpaceOptions,
   MigrationRunnerPerSpaceSuccessValue,
   MigrationRunnerResult,
   OperationContext,
@@ -376,7 +376,8 @@ export interface SqlMigrationRunnerExecuteCallbacks<TTargetDetails> {
   onOperationComplete?(operation: SqlMigrationPlanOperation<TTargetDetails>): void;
 }
 
-export interface SqlMigrationRunnerExecuteOptions<TTargetDetails> {
+export interface SqlMigrationRunnerExecuteOptions<TTargetDetails>
+  extends Pick<MigrationRunnerPerSpaceOptions, 'databasePolicies' | 'expectedDatabasePolicies'> {
   readonly plan: SqlMigrationPlan<TTargetDetails>;
   readonly driver: SqlControlDriverInstance<string>;
   /**
@@ -397,8 +398,6 @@ export interface SqlMigrationRunnerExecuteOptions<TTargetDetails> {
    * The runner validates each operation against this policy before execution.
    */
   readonly policy: MigrationOperationPolicy;
-  /** When set, the marker update at the end of the run records these as the database's policies. */
-  readonly databasePolicies?: DatabasePolicies;
   readonly strictVerification?: boolean;
   readonly callbacks?: SqlMigrationRunnerExecuteCallbacks<TTargetDetails>;
   readonly context?: OperationContext;

@@ -2,7 +2,7 @@ import type { ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract
 import type {
   ControlAdapterInstance,
   ControlStack,
-  DatabasePolicies,
+  MarkerDestination,
 } from '@internal/framework-components/control';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import type {
@@ -120,12 +120,7 @@ export interface SqlControlAdapter<TTarget extends string = string>
   initMarker(
     driver: SqlControlDriverInstance<TTarget>,
     space: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-      readonly databasePolicies?: DatabasePolicies;
-    },
+    destination: MarkerDestination,
   ): Promise<void>;
 
   /**
@@ -139,12 +134,7 @@ export interface SqlControlAdapter<TTarget extends string = string>
     driver: SqlControlDriverInstance<TTarget>,
     space: string,
     expectedFrom: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-      readonly databasePolicies?: DatabasePolicies;
-    },
+    destination: MarkerDestination,
   ): Promise<boolean>;
 
   /**

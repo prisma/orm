@@ -4,11 +4,12 @@ import sql, {
   createMigrationPlan,
   type SqlControlFamilyInstance,
 } from '@internal/family-sql/control';
-import type {
-  DatabasePolicies,
-  MigrationOperationClass,
-  MigrationPlan,
-  MigrationRunnerResult,
+import {
+  type DatabasePolicies,
+  DEFAULT_DATABASE_POLICIES,
+  type MigrationOperationClass,
+  type MigrationPlan,
+  type MigrationRunnerResult,
 } from '@internal/framework-components/control';
 import {
   type AggregateMigrationEdgeRef,
@@ -45,6 +46,7 @@ interface Run {
   readonly plan: MigrationPlan;
   readonly migrationEdges: readonly AggregateMigrationEdgeRef[];
   readonly databasePolicies?: DatabasePolicies;
+  readonly expectedDatabasePolicies?: DatabasePolicies;
 }
 
 async function withDriver<T>(
@@ -206,6 +208,53 @@ describe('MySQL database policies', { timeout: timeouts.databaseOperation }, () 
           code: result.ok ? undefined : result.failure.code,
           policies: await recordedPolicies(family, driver),
         }).toEqual({ code: 'MIGRATION.EXECUTION_FAILED', policies: MIGRATE_ONLY });
+      }),
+    );
+  });
+
+  it('records the policies and writes no ledger entry for a db update that changes nothing', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(url, async (driver, family) => {
+        await applyContract(family, driver);
+        const ledgerBefore = await ledgerLength(family, driver);
+
+        const result = await execute(family, driver, {
+          plan: selfEdgePlan(),
+          migrationEdges: [
+            buildFabricatedMigrationEdge({
+              currentMarkerStorageHash: destination.storageHash,
+              destinationStorageHash: destination.storageHash,
+              operationCount: 0,
+            }),
+          ],
+          databasePolicies: MIGRATE_ONLY,
+        });
+
+        expect({
+          ok: result.ok,
+          policies: await recordedPolicies(family, driver),
+          ledger: await ledgerLength(family, driver),
+        }).toEqual({ ok: true, policies: MIGRATE_ONLY, ledger: ledgerBefore });
+      }),
+    );
+  });
+
+  it('fails as a concurrent change when the policies moved after the caller checked them', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(url, async (driver, family) => {
+        await applyContract(family, driver, MIGRATE_ONLY);
+
+        const result = await execute(family, driver, {
+          plan: selfEdgePlan({ providedInvariants: ['inv-a'] }),
+          migrationEdges: [],
+          databasePolicies: RECONCILE_ONLY,
+          expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+        });
+
+        expect({
+          code: result.ok ? undefined : result.failure.code,
+          policies: await recordedPolicies(family, driver),
+        }).toEqual({ code: 'MIGRATION.MARKER_CAS_FAILURE', policies: MIGRATE_ONLY });
       }),
     );
   });

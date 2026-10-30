@@ -3,10 +3,11 @@ import type {
   MarkerOperations,
   MongoRunnerDependencies,
 } from '@internal/family-mongo/control-adapter';
-import type {
-  DatabasePolicies,
-  MigrationOperationPolicy,
-  MigrationPlan,
+import {
+  type DatabasePolicies,
+  DEFAULT_DATABASE_POLICIES,
+  type MigrationOperationPolicy,
+  type MigrationPlan,
 } from '@internal/framework-components/control';
 import type { AggregateMigrationEdgeRef } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
@@ -227,5 +228,42 @@ describe('MongoMigrationRunner database policies', () => {
       storageHash: 'start',
       meta: { policies: MIGRATE_ONLY },
     });
+  });
+
+  it('records the policies and writes no ledger entry for a db update that changes nothing', async () => {
+    const store = new MarkerStore(markerAt(DEST, {}));
+
+    const result = await run(
+      makeRunner(store),
+      makePlan([], DEST),
+      [{ migrationHash: DEST, dirName: '', from: DEST, to: DEST, operationCount: 0 }],
+      MIGRATE_ONLY,
+    );
+
+    result.assertOk();
+    expect({ meta: store.marker?.meta, ledger: store.ledger }).toEqual({
+      meta: { policies: MIGRATE_ONLY },
+      ledger: [],
+    });
+  });
+
+  it('fails as a concurrent change, before any operation, when the policies moved after the caller checked them', async () => {
+    const store = new MarkerStore(markerAt('start', { policies: MIGRATE_ONLY }));
+
+    const result = await makeRunner(store).execute({
+      plan: makePlan([createCollection('items')], 'start'),
+      migrationEdges: [edge('start', DEST, '002_items')],
+      destinationContract: makeContract(),
+      policy: ALL_POLICY,
+      frameworkComponents: [],
+      databasePolicies: RECONCILE_ONLY,
+      expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+    });
+
+    expect(result.assertNotOk()).toMatchObject({
+      code: 'MIGRATION.MARKER_CAS_FAILURE',
+      meta: { databaseUnchanged: true },
+    });
+    expect(store.marker?.storageHash).toBe('start');
   });
 });

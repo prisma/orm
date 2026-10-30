@@ -8,7 +8,7 @@ import { verifyMongoSchema } from '@internal/family-mongo/schema-verify';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import {
   APP_SPACE_ID,
-  type DatabasePolicies,
+  DATABASE_POLICIES_META_KEY,
   expectAbsent,
   expectPresent,
   type FailedCheck,
@@ -20,7 +20,9 @@ import {
   type MigrationRunnerExecutionChecks,
   type MigrationRunnerFailure,
   type MigrationRunnerFailureMeta,
+  type MigrationRunnerPerSpaceOptions,
   type MigrationRunnerPerSpaceSuccessValue,
+  markerHoldsDatabasePolicies,
   migrationRunnerFailure,
   type OperationContext,
   schemaCheckWhy,
@@ -90,12 +92,11 @@ function failedCheckOf(
   };
 }
 
-export interface MongoMigrationRunnerExecuteOptions {
+export interface MongoMigrationRunnerExecuteOptions
+  extends Pick<MigrationRunnerPerSpaceOptions, 'databasePolicies' | 'expectedDatabasePolicies'> {
   readonly plan: MigrationPlan;
   readonly destinationContract: MongoContract;
   readonly policy: MigrationOperationPolicy;
-  /** When set, the marker update at the end of the run records these as the database's policies. */
-  readonly databasePolicies?: DatabasePolicies;
   readonly callbacks?: {
     onOperationStart?(op: MigrationPlanOperation): void;
     onOperationComplete?(op: MigrationPlanOperation): void;
@@ -271,6 +272,24 @@ export class MongoMigrationRunner {
 
     const markerCheck = this.ensureMarkerCompatibility(existingMarker, options.plan);
     if (markerCheck) return markerCheck;
+    if (
+      options.expectedDatabasePolicies !== undefined &&
+      !markerHoldsDatabasePolicies(existingMarker, options.expectedDatabasePolicies)
+    ) {
+      return runnerFailure(
+        'MIGRATION.MARKER_CAS_FAILURE',
+        'Marker was modified by another process during migration execution.',
+        {
+          why: "The database's policies changed after this run checked them. Run the command again to check them anew.",
+          meta: {
+            space,
+            expectedStorageHash: options.plan.origin?.storageHash ?? null,
+            foundStorageHash: existingMarker?.storageHash ?? null,
+            destinationStorageHash: options.plan.destination.storageHash,
+          },
+        },
+      );
+    }
 
     const checks = options.executionChecks;
     const runPrechecks = checks?.prechecks !== false;
@@ -387,12 +406,9 @@ export class MongoMigrationRunner {
     // Mongo too, gate this `isNoOp` on a self-edge check (or, conversely,
     // align the SQL runners to skip non-self-edge no-ops uniformly).
     const isNoOp =
-      operationsExecuted === 0 &&
-      markerAlreadyAtDestination &&
-      incomingIsSubsetOfExisting &&
-      options.databasePolicies === undefined;
+      operationsExecuted === 0 && markerAlreadyAtDestination && incomingIsSubsetOfExisting;
 
-    if (!isNoOp) {
+    if (!isNoOp || options.databasePolicies !== undefined) {
       const liveSchema = await this.deps.introspectSchema();
       // When an aggregate spans more than one space the live database holds
       // collections owned by sibling spaces; verify against the full schema,
@@ -417,12 +433,19 @@ export class MongoMigrationRunner {
       }
 
       if (existingMarker) {
-        const updated = await markerOps.updateMarker(space, existingMarker.storageHash, {
-          storageHash: destination.storageHash,
-          profileHash,
-          invariants: incomingInvariants,
-          ...ifDefined('databasePolicies', options.databasePolicies),
-        });
+        const updated = await markerOps.updateMarker(
+          space,
+          existingMarker.storageHash,
+          {
+            storageHash: destination.storageHash,
+            profileHash,
+            invariants: incomingInvariants,
+            ...ifDefined('databasePolicies', options.databasePolicies),
+          },
+          options.expectedDatabasePolicies === undefined
+            ? undefined
+            : { recorded: existingMarker.meta[DATABASE_POLICIES_META_KEY] },
+        );
         if (!updated) {
           const found = await markerOps.readMarker(space);
           return runnerFailure(
@@ -448,7 +471,7 @@ export class MongoMigrationRunner {
       }
       wrote();
 
-      await this.recordLedgerEntries(markerOps, space, options);
+      if (!isNoOp) await this.recordLedgerEntries(markerOps, space, options);
     }
 
     return ok({ operationsPlanned: operations.length, operationsExecuted });

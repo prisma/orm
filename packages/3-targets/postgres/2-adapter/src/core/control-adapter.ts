@@ -29,8 +29,10 @@ import {
 } from '@internal/framework-components/codec';
 import {
   APP_SPACE_ID,
-  type DatabasePolicies,
+  DATABASE_POLICIES_META_KEY,
+  type MarkerDestination,
   type SchemaNodeRef,
+  storedDatabasePolicies,
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ledgerOriginFromStored } from '@internal/migration-tools/ledger-origin';
@@ -132,6 +134,7 @@ import {
   ledgerReadShape,
   marker,
   mergeInvariants,
+  metaRecordingPolicies,
   NOW,
 } from './marker-ledger';
 import { reportedSqlType } from './reported-sql-type';
@@ -485,14 +488,9 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   async initMarker(
     driver: SqlControlDriverInstance<'postgres'>,
     space: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-      readonly databasePolicies?: DatabasePolicies;
-    },
+    destination: MarkerDestination,
   ): Promise<void> {
-    const meta = await this.metaWithPolicies(driver, space, destination.databasePolicies);
+    const policies = destination.databasePolicies;
     await execute(
       (query) => this.lower(query, { contract: undefined }),
       driver,
@@ -505,7 +503,10 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
           canonical_version: null,
           updated_at: NOW,
           app_tag: null,
-          meta: meta ?? {},
+          meta:
+            policies === undefined
+              ? {}
+              : { [DATABASE_POLICIES_META_KEY]: storedDatabasePolicies(policies) },
           invariants: destination.invariants ?? [],
         })
         .onConflict(marker.space)
@@ -516,7 +517,10 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
           canonical_version: excluded.canonical_version,
           updated_at: NOW,
           app_tag: excluded.app_tag,
-          ...ifDefined('meta', meta === undefined ? undefined : excluded.meta),
+          ...ifDefined(
+            'meta',
+            policies === undefined ? undefined : metaRecordingPolicies(policies),
+          ),
           invariants: excluded.invariants,
         }))
         .build(),
@@ -531,12 +535,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     driver: SqlControlDriverInstance<'postgres'>,
     space: string,
     expectedFrom: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-      readonly databasePolicies?: DatabasePolicies;
-    },
+    destination: MarkerDestination,
   ): Promise<boolean> {
     const currentInvariants =
       destination.invariants === undefined
@@ -546,7 +545,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       destination.invariants === undefined
         ? undefined
         : mergeInvariants(currentInvariants, destination.invariants);
-    const meta = await this.metaWithPolicies(driver, space, destination.databasePolicies);
+    const policies = destination.databasePolicies;
 
     const query = marker
       .update()
@@ -555,7 +554,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
         profile_hash: destination.profileHash,
         updated_at: NOW,
         ...ifDefined('invariants', mergedInvariants),
-        ...ifDefined('meta', meta),
+        ...ifDefined('meta', policies === undefined ? undefined : metaRecordingPolicies(policies)),
       })
       .where(marker.space.eq(space).and(marker.core_hash.eq(expectedFrom)))
       .returning(marker.space)
@@ -563,16 +562,6 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
 
     const rows = await execute((q) => this.lower(q, { contract: undefined }), driver, query);
     return rows.length > 0;
-  }
-
-  private async metaWithPolicies(
-    driver: SqlControlDriverInstance<'postgres'>,
-    space: string,
-    policies: DatabasePolicies | undefined,
-  ): Promise<Record<string, unknown> | undefined> {
-    if (policies === undefined) return undefined;
-    const current = await this.readMarker(driver, space);
-    return { ...(current?.meta ?? {}), policies };
   }
 
   async withTransaction<T>(

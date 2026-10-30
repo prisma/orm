@@ -2,6 +2,7 @@ import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
 import {
   APP_SPACE_ID,
   type DatabasePolicies,
+  DEFAULT_DATABASE_POLICIES,
   type MigrationRunnerResult,
 } from '@internal/framework-components/control';
 import type { AggregateMigrationEdgeRef } from '@internal/migration-tools/aggregate';
@@ -69,6 +70,7 @@ describe('PostgresMigrationRunner database policies', { concurrent: false }, () 
       readonly plan: ReturnType<typeof createMigrationPlan<PostgresPlanTargetDetails>>;
       readonly migrationEdges: readonly AggregateMigrationEdgeRef[];
       readonly databasePolicies?: DatabasePolicies;
+      readonly expectedDatabasePolicies?: DatabasePolicies;
     }>,
   ): Promise<MigrationRunnerResult> {
     return postgresTargetDescriptor.createRunner(familyInstance).execute({
@@ -205,5 +207,47 @@ describe('PostgresMigrationRunner database policies', { concurrent: false }, () 
       meta: { failingSpace: LEDGER_TEST_SPACE_ID },
     });
     expect(await recordedPolicies()).toEqual(MIGRATE_ONLY);
+  });
+  it('records the policies and writes no ledger entry for a db update that changes nothing', {
+    timeout: testTimeout,
+  }, async () => {
+    await applyContract();
+    const ledgerBefore = await ledgerLength();
+    const inSync = selfEdgePlan();
+
+    const result = await run([
+      { plan: inSync, migrationEdges: synthEdges(inSync), databasePolicies: MIGRATE_ONLY },
+    ]);
+
+    result.assertOk();
+    expect({ policies: await recordedPolicies(), ledger: await ledgerLength() }).toEqual({
+      policies: MIGRATE_ONLY,
+      ledger: ledgerBefore,
+    });
+  });
+
+  it('fails as a concurrent change when the policies moved after the caller checked them', {
+    timeout: testTimeout,
+  }, async () => {
+    await applyContract(MIGRATE_ONLY);
+
+    const result = await run([
+      {
+        plan: selfEdgePlan(['inv-a']),
+        migrationEdges: [],
+        databasePolicies: RECONCILE_ONLY,
+        expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+      },
+    ]);
+
+    expect(result.assertNotOk()).toMatchObject({
+      code: 'MIGRATION.MARKER_CAS_FAILURE',
+      why: "The database's policies changed after this run checked them. Run the command again to check them anew. The failed apply changed nothing.",
+    });
+    const marker = await familyInstance.readMarker({ driver, space: APP_SPACE_ID });
+    expect({ invariants: marker?.invariants, policies: marker?.meta['policies'] }).toEqual({
+      invariants: [],
+      policies: MIGRATE_ONLY,
+    });
   });
 });

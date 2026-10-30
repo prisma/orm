@@ -17,6 +17,7 @@ import {
   failedPrecheckWhy,
   type MigrationRunnerFailure,
   type MigrationRunnerResult,
+  markerHoldsDatabasePolicies,
   migrationRunnerFailure,
   schemaCheckWhy,
   withDatabaseUnchanged,
@@ -174,6 +175,25 @@ class MysqlMigrationRunner implements SqlMigrationRunner<MysqlPlanTargetDetails>
     const originCheck = this.#checkOrigin(existingMarker, options.plan.origin ?? null);
     if (!originCheck.ok) return originCheck;
 
+    if (
+      options.expectedDatabasePolicies !== undefined &&
+      !markerHoldsDatabasePolicies(existingMarker, options.expectedDatabasePolicies)
+    ) {
+      return runnerFailure(
+        'MIGRATION.MARKER_CAS_FAILURE',
+        'Marker was modified by another process during migration execution.',
+        {
+          why: "The database's policies changed after this run checked them. Run the command again to check them anew.",
+          meta: {
+            space,
+            expectedStorageHash: options.plan.origin?.storageHash ?? null,
+            foundStorageHash: existingMarker?.storageHash ?? null,
+            destinationStorageHash: options.plan.destination.storageHash,
+          },
+        },
+      );
+    }
+
     const isSelfEdge = options.plan.origin?.storageHash === options.plan.destination.storageHash;
     const atDestination =
       existingMarker !== null &&
@@ -205,14 +225,13 @@ class MysqlMigrationRunner implements SqlMigrationRunner<MysqlPlanTargetDetails>
     const isSelfEdgeNoOp =
       isSelfEdge &&
       applied.executedCount === 0 &&
-      options.plan.providedInvariants.every((id) => existingInvariants.has(id)) &&
-      options.databasePolicies === undefined;
-    if (!isSelfEdgeNoOp) {
+      options.plan.providedInvariants.every((id) => existingInvariants.has(id));
+    if (!isSelfEdgeNoOp || options.databasePolicies !== undefined) {
       const written = await this.#writeMarkerAndLedger(
         driver,
         options,
         existingMarker,
-        applied.executed,
+        isSelfEdgeNoOp ? undefined : applied.executed,
         progress,
       );
       if (!written.ok) return written;
@@ -333,7 +352,8 @@ class MysqlMigrationRunner implements SqlMigrationRunner<MysqlPlanTargetDetails>
     driver: Driver,
     options: Options,
     existingMarker: ContractMarkerRecord | null,
-    executed: readonly Op[],
+    /** The operations to record in the ledger, or `undefined` when the run applied none to record. */
+    executed: readonly Op[] | undefined,
     progress: SpaceProgress,
   ): Promise<Checked> {
     const { plan } = options;
@@ -374,7 +394,7 @@ class MysqlMigrationRunner implements SqlMigrationRunner<MysqlPlanTargetDetails>
           );
         }
       }
-      await this.#writeLedger(driver, options, executed);
+      if (executed !== undefined) await this.#writeLedger(driver, options, executed);
     } catch (error) {
       await driver.query('ROLLBACK').catch(() => undefined);
       throw error;

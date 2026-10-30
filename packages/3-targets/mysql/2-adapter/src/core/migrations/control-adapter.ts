@@ -3,7 +3,7 @@ import { parseMarkerRowSafely, withMarkerReadErrorHandling } from '@internal/err
 import { contractColumns, readColumnDefault } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { codecForRef, type DataType } from '@internal/framework-components/codec';
-import { APP_SPACE_ID } from '@internal/framework-components/control';
+import { APP_SPACE_ID, type MarkerDestination } from '@internal/framework-components/control';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import {
   type AnyQueryAst,
@@ -33,7 +33,6 @@ import {
   compareAndSwapMarkerRow,
   insertLedgerRow,
   insertMarkerRow,
-  type MarkerDestination,
   readLedgerEntries,
   upsertMarkerRow,
 } from './marker-ledger';

@@ -1,6 +1,9 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
-import { type DatabasePolicies, DEFAULT_POLICIES } from '@internal/framework-components/control';
+import {
+  type DatabasePolicies,
+  DEFAULT_DATABASE_POLICIES,
+} from '@internal/framework-components/control';
 import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
 import { describe, expect, it } from 'vitest';
 import { createTestSqliteControlAdapter } from './helpers/test-control-adapter';
@@ -239,11 +242,11 @@ describe('SqliteControlAdapter marker/ledger writes (end-to-end)', () => {
       await adapter.updateMarker(driver, 'app', 'core', {
         storageHash: 'next',
         profileHash: 'prof',
-        databasePolicies: DEFAULT_POLICIES,
+        databasePolicies: DEFAULT_DATABASE_POLICIES,
       });
 
       expect((await adapter.readMarker(driver, 'app'))!.meta).toEqual({
-        policies: DEFAULT_POLICIES,
+        policies: DEFAULT_DATABASE_POLICIES,
       });
     });
   });

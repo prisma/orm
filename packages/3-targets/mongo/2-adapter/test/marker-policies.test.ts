@@ -1,5 +1,8 @@
 import { MongoControlDriver } from '@internal/driver-mongo/control';
-import { type DatabasePolicies, DEFAULT_POLICIES } from '@internal/framework-components/control';
+import {
+  type DatabasePolicies,
+  DEFAULT_DATABASE_POLICIES,
+} from '@internal/framework-components/control';
 import { timeouts } from '@repo/test-utils';
 import { type Db, MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
@@ -87,12 +90,41 @@ describe('database policies in the marker', { timeout: timeouts.databaseOperatio
     const swapped = await controlAdapter.updateMarker(driver, 'app', 'a1', {
       storageHash: 'a2',
       profileHash: 'p',
-      databasePolicies: DEFAULT_POLICIES,
+      databasePolicies: DEFAULT_DATABASE_POLICIES,
     });
 
     expect({ swapped, meta: (await controlAdapter.readMarker(driver, 'app'))?.meta }).toEqual({
       swapped: true,
-      meta: { policies: DEFAULT_POLICIES, note: 'kept' },
+      meta: { policies: DEFAULT_DATABASE_POLICIES, note: 'kept' },
+    });
+  });
+
+  it('updateMarker given the recorded policies swaps only while the marker still records them', async () => {
+    await controlAdapter.initMarker(driver, 'app', {
+      storageHash: 'a1',
+      profileHash: 'p',
+      databasePolicies: MIGRATE_ONLY,
+    });
+    const recorded = (await controlAdapter.readMarker(driver, 'app'))?.meta['policies'];
+
+    const whenNoneRecorded = await controlAdapter.updateMarker(
+      driver,
+      'app',
+      'a1',
+      { storageHash: 'a2', profileHash: 'p' },
+      { recorded: undefined },
+    );
+    const whenUnchanged = await controlAdapter.updateMarker(
+      driver,
+      'app',
+      'a1',
+      { storageHash: 'a2', profileHash: 'p' },
+      { recorded },
+    );
+
+    expect({ whenNoneRecorded, whenUnchanged }).toEqual({
+      whenNoneRecorded: false,
+      whenUnchanged: true,
     });
   });
 });

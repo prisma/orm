@@ -1,5 +1,9 @@
 import type { LedgerEntryRecord } from '@internal/contract/types';
-import type { DatabasePolicies } from '@internal/framework-components/control';
+import {
+  DATABASE_POLICIES_META_KEY,
+  type MarkerDestination,
+  storedDatabasePolicies,
+} from '@internal/framework-components/control';
 import { ledgerOriginFromStored } from '@internal/migration-tools/ledger-origin';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import { decodeMysqlDatetime } from '@internal/target-mysql/codecs';
@@ -55,19 +59,12 @@ export async function readLedgerEntries(
   });
 }
 
-export interface MarkerDestination {
-  readonly storageHash: string;
-  readonly profileHash: string;
-  readonly invariants?: readonly string[];
-  readonly databasePolicies?: DatabasePolicies;
-}
-
 const MARKER_INSERT = `INSERT INTO ${quoteIdentifier(MARKER_TABLE_NAME)} (space, core_hash, profile_hash, contract_json, canonical_version, updated_at, app_tag, meta, invariants) VALUES (?, ?, ?, NULL, NULL, CURRENT_TIMESTAMP(3), NULL, ?, ?)`;
 
 function metaOnInsert(destination: MarkerDestination): Record<string, unknown> {
   return destination.databasePolicies === undefined
     ? {}
-    : { policies: destination.databasePolicies };
+    : { [DATABASE_POLICIES_META_KEY]: storedDatabasePolicies(destination.databasePolicies) };
 }
 
 function markerInsertParams(space: string, destination: MarkerDestination): readonly unknown[] {
@@ -98,7 +95,7 @@ export async function upsertMarkerRow(
   const metaUpdate =
     destination.databasePolicies === undefined
       ? ''
-      : `, meta = JSON_SET(${quoteIdentifier(MARKER_TABLE_NAME)}.meta, '$.policies', JSON_EXTRACT(incoming.meta, '$.policies'))`;
+      : `, meta = JSON_SET(${quoteIdentifier(MARKER_TABLE_NAME)}.meta, '$.${DATABASE_POLICIES_META_KEY}', JSON_EXTRACT(incoming.meta, '$.${DATABASE_POLICIES_META_KEY}'))`;
   await driver.query(
     `${MARKER_INSERT} AS incoming ON DUPLICATE KEY UPDATE core_hash = incoming.core_hash, profile_hash = incoming.profile_hash, contract_json = incoming.contract_json, canonical_version = incoming.canonical_version, updated_at = CURRENT_TIMESTAMP(3), app_tag = incoming.app_tag, invariants = incoming.invariants${metaUpdate}`,
     markerInsertParams(space, destination),
@@ -139,7 +136,10 @@ export async function compareAndSwapMarkerRow(
   const meta =
     destination.databasePolicies === undefined
       ? undefined
-      : { ...metaOf(row['meta']), policies: destination.databasePolicies };
+      : {
+          ...metaOf(row['meta']),
+          [DATABASE_POLICIES_META_KEY]: storedDatabasePolicies(destination.databasePolicies),
+        };
   await driver.query(
     `UPDATE ${quoteIdentifier(MARKER_TABLE_NAME)} SET core_hash = ?, profile_hash = ?, updated_at = CURRENT_TIMESTAMP(3)${invariants === undefined ? '' : ', invariants = ?'}${meta === undefined ? '' : ', meta = ?'} WHERE space = ? AND core_hash = ?`,
     [

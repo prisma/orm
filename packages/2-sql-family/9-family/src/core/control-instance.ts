@@ -7,8 +7,8 @@ import type {
   ControlFamilyInstance,
   ControlStack,
   CoreSchemaView,
-  DatabasePolicies,
   DiffSubjectGranularity,
+  MarkerDestination,
   MarkerHashes,
   MigrationPlanOperation,
   OperationPreview,
@@ -25,6 +25,7 @@ import type {
 } from '@internal/framework-components/control';
 import {
   APP_SPACE_ID,
+  markerHoldsDatabasePolicies,
   SchemaTreeNode,
   sameMarkerHashes,
   VERIFY_CODE_HASH_MISMATCH,
@@ -284,12 +285,7 @@ export interface SqlControlFamilyInstance
   initMarker(options: {
     readonly driver: SqlControlDriverInstance<string>;
     readonly space: string;
-    readonly destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-      readonly databasePolicies?: DatabasePolicies;
-    };
+    readonly destination: MarkerDestination;
   }): Promise<void>;
 
   /**
@@ -300,12 +296,7 @@ export interface SqlControlFamilyInstance
     readonly driver: SqlControlDriverInstance<string>;
     readonly space: string;
     readonly expectedFrom: string;
-    readonly destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-      readonly databasePolicies?: DatabasePolicies;
-    };
+    readonly destination: MarkerDestination;
   }): Promise<boolean>;
 
   /**
@@ -597,7 +588,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
   const signSpaceMarker = async (
     controlAdapter: SqlControlAdapter<string>,
     driver: SqlControlDriverInstance<string>,
-    { space, contract, expected }: SpaceToSign,
+    { space, contract, expected, expectedDatabasePolicies }: SpaceToSign,
   ): Promise<SpaceSignature> => {
     const storageHash = contract.storage.storageHash;
     const profileHash =
@@ -612,8 +603,13 @@ export function createSqlFamilyInstance<TTargetId extends string>(
         ? null
         : { storageHash: marker.storageHash, profileHash: marker.profileHash };
     };
-    const existing = await readHashes();
-    if (!sameMarkerHashes(existing, expected)) {
+    const marker = await controlAdapter.readMarker(driver, space);
+    const existing: MarkerHashes | null =
+      marker === null ? null : { storageHash: marker.storageHash, profileHash: marker.profileHash };
+    const policiesMoved =
+      expectedDatabasePolicies !== undefined &&
+      !markerHoldsDatabasePolicies(marker, expectedDatabasePolicies);
+    if (!sameMarkerHashes(existing, expected) || policiesMoved) {
       return { ...signed, status: 'conflict', expected, found: existing };
     }
     if (existing === null) {
@@ -895,12 +891,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     async initMarker(options: {
       readonly driver: SqlControlDriverInstance<string>;
       readonly space: string;
-      readonly destination: {
-        readonly storageHash: string;
-        readonly profileHash: string;
-        readonly invariants?: readonly string[];
-        readonly databasePolicies?: DatabasePolicies;
-      };
+      readonly destination: MarkerDestination;
     }): Promise<void> {
       return getControlAdapter().initMarker(options.driver, options.space, options.destination);
     },
@@ -908,12 +899,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
       readonly driver: SqlControlDriverInstance<string>;
       readonly space: string;
       readonly expectedFrom: string;
-      readonly destination: {
-        readonly storageHash: string;
-        readonly profileHash: string;
-        readonly invariants?: readonly string[];
-        readonly databasePolicies?: DatabasePolicies;
-      };
+      readonly destination: MarkerDestination;
     }): Promise<boolean> {
       return getControlAdapter().updateMarker(
         options.driver,

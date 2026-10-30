@@ -23,8 +23,11 @@ import {
 } from '@internal/framework-components/codec';
 import {
   APP_SPACE_ID,
+  DATABASE_POLICIES_META_KEY,
   type DatabasePolicies,
+  type MarkerDestination,
   type SchemaNodeRef,
+  storedDatabasePolicies,
 } from '@internal/framework-components/control';
 import { ledgerOriginFromStored } from '@internal/migration-tools/ledger-origin';
 import { REFERENTIAL_ACTION_SQL } from '@internal/sql-contract/referential-action-sql';
@@ -388,12 +391,7 @@ export class SqliteControlAdapter implements SqlControlAdapter<'sqlite'> {
   async initMarker(
     driver: SqlControlDriverInstance<'sqlite'>,
     space: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-      readonly databasePolicies?: DatabasePolicies;
-    },
+    destination: MarkerDestination,
   ): Promise<void> {
     const meta = await this.metaWithPolicies(driver, space, destination.databasePolicies);
     await execute(
@@ -434,12 +432,7 @@ export class SqliteControlAdapter implements SqlControlAdapter<'sqlite'> {
     driver: SqlControlDriverInstance<'sqlite'>,
     space: string,
     expectedFrom: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-      readonly databasePolicies?: DatabasePolicies;
-    },
+    destination: MarkerDestination,
   ): Promise<boolean> {
     const currentInvariants =
       destination.invariants === undefined
@@ -475,7 +468,10 @@ export class SqliteControlAdapter implements SqlControlAdapter<'sqlite'> {
   ): Promise<Record<string, unknown> | undefined> {
     if (policies === undefined) return undefined;
     const current = await this.readMarker(driver, space);
-    return { ...(current?.meta ?? {}), policies };
+    return {
+      ...(current?.meta ?? {}),
+      [DATABASE_POLICIES_META_KEY]: storedDatabasePolicies(policies),
+    };
   }
 
   async withTransaction<T>(

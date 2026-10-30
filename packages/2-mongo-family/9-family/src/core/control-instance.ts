@@ -17,6 +17,8 @@ import type {
 } from '@internal/framework-components/control';
 import {
   APP_SPACE_ID,
+  DATABASE_POLICIES_META_KEY,
+  markerHoldsDatabasePolicies,
   sameMarkerHashes,
   VERIFY_CODE_HASH_MISMATCH,
   VERIFY_CODE_MARKER_MISSING,
@@ -212,7 +214,7 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
 
   async function signSpaceMarker(
     driver: ControlDriverInstance<'mongo', 'mongo'>,
-    { space, contract, expected }: SpaceToSign,
+    { space, contract, expected, expectedDatabasePolicies }: SpaceToSign,
   ): Promise<SpaceSignature> {
     const storageHash = contract.storage.storageHash;
     const profileHash = contract.profileHash;
@@ -225,8 +227,13 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
         ? null
         : { storageHash: marker.storageHash, profileHash: marker.profileHash };
     };
-    const existing = await readHashes();
-    if (!sameMarkerHashes(existing, expected)) {
+    const marker = await controlAdapter.readMarker(driver, space);
+    const existing: MarkerHashes | null =
+      marker === null ? null : { storageHash: marker.storageHash, profileHash: marker.profileHash };
+    const policiesMoved =
+      expectedDatabasePolicies !== undefined &&
+      !markerHoldsDatabasePolicies(marker, expectedDatabasePolicies);
+    if (!sameMarkerHashes(existing, expected) || policiesMoved) {
       return { ...signed, status: 'conflict', expected, found: existing };
     }
     if (existing === null) {
@@ -236,10 +243,15 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
     if (existing.storageHash === storageHash && existing.profileHash === profileHash) {
       return { ...signed, status: 'unchanged' };
     }
-    const updated = await controlAdapter.updateMarker(driver, space, existing.storageHash, {
-      storageHash,
-      profileHash,
-    });
+    const updated = await controlAdapter.updateMarker(
+      driver,
+      space,
+      existing.storageHash,
+      { storageHash, profileHash },
+      expectedDatabasePolicies === undefined
+        ? undefined
+        : { recorded: marker?.meta[DATABASE_POLICIES_META_KEY] },
+    );
     if (!updated) {
       return {
         ...signed,

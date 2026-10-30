@@ -3,7 +3,7 @@ import type {
   ControlAdapterDescriptor,
   ControlAdapterInstance,
   ControlDriverInstance,
-  DatabasePolicies,
+  MarkerDestination,
 } from '@internal/framework-components/control';
 import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
 import type {
@@ -13,6 +13,15 @@ import type {
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 
 /**
+ * The policies a marker recorded when it was read, as stored: `recorded` is the raw value of
+ * `meta.policies`, or `undefined` when the marker had none. A compare-and-swap given it matches
+ * only while the marker still records exactly that.
+ */
+export interface RecordedPolicies {
+  readonly recorded: unknown;
+}
+
+/**
  * Marker / ledger operations the Mongo runner depends on. Every method
  * takes a `space` parameter so each loaded contract space addresses its
  * own marker row independently — see ADR 212 for the per-space
@@ -20,24 +29,12 @@ import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
  */
 export interface MarkerOperations {
   readMarker(space: string): Promise<ContractMarkerRecord | null>;
-  initMarker(
-    space: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-      readonly databasePolicies?: DatabasePolicies;
-    },
-  ): Promise<void>;
+  initMarker(space: string, destination: MarkerDestination): Promise<void>;
   updateMarker(
     space: string,
     expectedFrom: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-      readonly databasePolicies?: DatabasePolicies;
-    },
+    destination: MarkerDestination,
+    unchangedPolicies?: RecordedPolicies,
   ): Promise<boolean>;
   writeLedgerEntry(
     space: string,
@@ -109,29 +106,21 @@ export interface MongoControlAdapter<TTarget extends string = string>
   initMarker(
     driver: ControlDriverInstance<'mongo', TTarget>,
     space: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-      readonly databasePolicies?: DatabasePolicies;
-    },
+    destination: MarkerDestination,
   ): Promise<void>;
 
   /**
    * Atomically updates the marker document for `space` (CAS on
-   * `expectedFrom`). Returns `true` when the CAS succeeded, `false`
-   * when another process advanced the marker first.
+   * `expectedFrom`, and on `unchangedPolicies` when given). Returns `true`
+   * when the CAS succeeded, `false` when another process changed the
+   * marker first.
    */
   updateMarker(
     driver: ControlDriverInstance<'mongo', TTarget>,
     space: string,
     expectedFrom: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-      readonly databasePolicies?: DatabasePolicies;
-    },
+    destination: MarkerDestination,
+    unchangedPolicies?: RecordedPolicies,
   ): Promise<boolean>;
 
   /**

@@ -1,5 +1,8 @@
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
-import { type DatabasePolicies, DEFAULT_POLICIES } from '@internal/framework-components/control';
+import {
+  type DatabasePolicies,
+  DEFAULT_DATABASE_POLICIES,
+} from '@internal/framework-components/control';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -198,11 +201,31 @@ describe('PostgresControlAdapter marker/ledger writes (end-to-end)', { concurren
     await adapter.updateMarker(driver!, 'app', 'core', {
       storageHash: 'next',
       profileHash: 'prof',
-      databasePolicies: DEFAULT_POLICIES,
+      databasePolicies: DEFAULT_DATABASE_POLICIES,
     });
 
     expect((await adapter.readMarker(driver!, 'app'))!.meta).toEqual({
-      policies: DEFAULT_POLICIES,
+      policies: DEFAULT_DATABASE_POLICIES,
+    });
+  });
+
+  it('updateMarker sets meta.policies in the statement and keeps the other meta keys', {
+    timeout: testTimeout,
+  }, async () => {
+    await adapter.initMarker(driver!, 'app', { storageHash: 'core', profileHash: 'prof' });
+    await driver!.query(
+      `update prisma_contract.marker set meta = '{"note": "kept"}'::jsonb where space = 'app'`,
+    );
+
+    await adapter.updateMarker(driver!, 'app', 'core', {
+      storageHash: 'next',
+      profileHash: 'prof',
+      databasePolicies: MIGRATE_ONLY,
+    });
+
+    expect((await adapter.readMarker(driver!, 'app'))!.meta).toEqual({
+      note: 'kept',
+      policies: MIGRATE_ONLY,
     });
   });
 

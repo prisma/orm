@@ -1,5 +1,8 @@
 import mysqlDriver, { type MysqlControlDriver } from '@internal/driver-mysql/control';
-import { type DatabasePolicies, DEFAULT_POLICIES } from '@internal/framework-components/control';
+import {
+  type DatabasePolicies,
+  DEFAULT_DATABASE_POLICIES,
+} from '@internal/framework-components/control';
 import { acquireMarkerLock, releaseMarkerLock } from '@internal/target-mysql/marker-lock';
 import mysqlTarget from '@internal/target-mysql/runtime';
 import { ifDefined } from '@internal/utils/defined';
@@ -241,7 +244,7 @@ describe('MysqlControlAdapter against a MySQL server', {
           adapter.updateMarker(driver, 'app', 'sha256:a3', {
             storageHash: 'sha256:a4',
             profileHash: 'p',
-            databasePolicies: DEFAULT_POLICIES,
+            databasePolicies: DEFAULT_DATABASE_POLICIES,
           }),
         );
         await adapter.initMarker(driver, 'ext', {
@@ -252,7 +255,7 @@ describe('MysqlControlAdapter against a MySQL server', {
         await adapter.initMarker(driver, 'ext', {
           storageHash: 'sha256:e2',
           profileHash: 'p',
-          databasePolicies: DEFAULT_POLICIES,
+          databasePolicies: DEFAULT_DATABASE_POLICIES,
         });
 
         expect({
@@ -265,8 +268,8 @@ describe('MysqlControlAdapter against a MySQL server', {
           recorded: { policies: MIGRATE_ONLY },
           afterUpsert: { policies: MIGRATE_ONLY },
           afterSwap: { policies: MIGRATE_ONLY },
-          replaced: { policies: DEFAULT_POLICIES },
-          replacedByUpsert: { policies: DEFAULT_POLICIES },
+          replaced: { policies: DEFAULT_DATABASE_POLICIES },
+          replacedByUpsert: { policies: DEFAULT_DATABASE_POLICIES },
         });
       } finally {
         await driver.close();

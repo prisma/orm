@@ -3,11 +3,15 @@ import { withMarkerReadErrorHandling } from '@internal/errors/execution';
 import type {
   MongoControlAdapter,
   MongoRunnerDependencies,
+  RecordedPolicies,
 } from '@internal/family-mongo/control-adapter';
 import {
   APP_SPACE_ID,
   type ControlDriverInstance,
+  DATABASE_POLICIES_META_KEY,
   type DatabasePolicies,
+  type MarkerDestination,
+  storedDatabasePolicies,
 } from '@internal/framework-components/control';
 import { ledgerOriginFromStored } from '@internal/migration-tools/ledger-origin';
 import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
@@ -40,14 +44,11 @@ import { MongoInspectionExecutor } from './inspection-executor';
 import { extractDb, isMongoControlDriver, requireMongoControlDriver } from './mongo-control-driver';
 
 function policiesDocument(policies: DatabasePolicies): MongoValue {
-  return {
-    change: [...policies.change],
-    dataProtection: {
-      dataLoss: policies.dataProtection.dataLoss,
-      accessWidening: policies.dataProtection.accessWidening,
-    },
-  };
+  const stored = storedDatabasePolicies(policies);
+  return { change: stored.change, dataProtection: { ...stored.dataProtection } };
 }
+
+const POLICIES_PATH = `meta.${DATABASE_POLICIES_META_KEY}`;
 
 /**
  * Mongo control adapter for control-plane operations like introspection
@@ -172,12 +173,7 @@ export class MongoControlAdapterImpl implements MongoControlAdapter<'mongo'> {
   async initMarker(
     driver: ControlDriverInstance<'mongo', 'mongo'>,
     space: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-      readonly databasePolicies?: DatabasePolicies;
-    },
+    destination: MarkerDestination,
   ): Promise<void> {
     const { databasePolicies } = destination;
     const document: Record<string, MongoValue> = {
@@ -189,7 +185,10 @@ export class MongoControlAdapterImpl implements MongoControlAdapter<'mongo'> {
       canonicalVersion: null,
       updatedAt: new Date(),
       appTag: null,
-      meta: databasePolicies === undefined ? {} : { policies: policiesDocument(databasePolicies) },
+      meta:
+        databasePolicies === undefined
+          ? {}
+          : { [DATABASE_POLICIES_META_KEY]: policiesDocument(databasePolicies) },
       invariants: [...(destination.invariants ?? [])],
     };
     await this.#execute(driver, this.#markerLedgerCollection.insertOne(document));
@@ -199,12 +198,8 @@ export class MongoControlAdapterImpl implements MongoControlAdapter<'mongo'> {
     driver: ControlDriverInstance<'mongo', 'mongo'>,
     space: string,
     expectedFrom: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-      readonly databasePolicies?: DatabasePolicies;
-    },
+    destination: MarkerDestination,
+    unchangedPolicies?: RecordedPolicies,
   ): Promise<boolean> {
     const { invariants, databasePolicies } = destination;
     const fields: Record<string, MongoAggExpr> = {
@@ -216,19 +211,34 @@ export class MongoControlAdapterImpl implements MongoControlAdapter<'mongo'> {
         invariants === undefined ? undefined : this.#invariantMergeExpr(invariants),
       ),
       ...ifDefined(
-        'meta.policies',
+        POLICIES_PATH,
         databasePolicies === undefined
           ? undefined
           : MongoAggLiteral.of(policiesDocument(databasePolicies)),
       ),
     };
+    const atExpectedHash = this.#markerLedgerCollection
+      .match((f) => f._id.eq(space))
+      .match((f) => f.space.eq(space))
+      .match((f) => f.storageHash.eq(expectedFrom));
+    const guarded =
+      unchangedPolicies === undefined
+        ? atExpectedHash
+        : atExpectedHash.match((f) =>
+            unchangedPolicies.recorded === undefined
+              ? f.rawPath(POLICIES_PATH).exists(false)
+              : f
+                  .rawPath(POLICIES_PATH)
+                  .eq(
+                    blindCast<
+                      MongoValue,
+                      'read back from the marker document, so it is a BSON value'
+                    >(unchangedPolicies.recorded),
+                  ),
+          );
     const docs = await this.#execute(
       driver,
-      this.#markerLedgerCollection
-        .match((f) => f._id.eq(space))
-        .match((f) => f.space.eq(space))
-        .match((f) => f.storageHash.eq(expectedFrom))
-        .findOneAndUpdate((f) => [f.stage.set(fields)], { upsert: false }),
+      guarded.findOneAndUpdate((f) => [f.stage.set(fields)], { upsert: false }),
     );
     return docs.length > 0;
   }
@@ -333,8 +343,8 @@ export class MongoControlAdapterImpl implements MongoControlAdapter<'mongo'> {
       markerOps: {
         readMarker: (space) => this.readMarker(controlDriver, space),
         initMarker: (space, destination) => this.initMarker(controlDriver, space, destination),
-        updateMarker: (space, expectedFrom, destination) =>
-          this.updateMarker(controlDriver, space, expectedFrom, destination),
+        updateMarker: (space, expectedFrom, destination, unchangedPolicies) =>
+          this.updateMarker(controlDriver, space, expectedFrom, destination, unchangedPolicies),
         writeLedgerEntry: (space, entry) => this.writeLedgerEntry(controlDriver, space, entry),
       },
       introspectSchema: () => this.introspectSchema(controlDriver),

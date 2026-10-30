@@ -31,6 +31,7 @@ import {
   APP_SPACE_ID,
   failedPostcheckWhy,
   failedPrecheckWhy,
+  markerHoldsDatabasePolicies,
   schemaCheckWhy,
   withDatabaseUnchanged,
   withFailingSpace,
@@ -107,6 +108,25 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
     if (!ensureResult.ok) return ensureResult;
     const existingMarker = await this.family.readMarker({ driver, space });
 
+    if (
+      options.expectedDatabasePolicies !== undefined &&
+      !markerHoldsDatabasePolicies(existingMarker, options.expectedDatabasePolicies)
+    ) {
+      return runnerFailure(
+        'MIGRATION.MARKER_CAS_FAILURE',
+        'Marker was modified by another process during migration execution.',
+        {
+          why: "The database's policies changed after this run checked them. Run the command again to check them anew.",
+          meta: {
+            space,
+            expectedStorageHash: options.plan.origin?.storageHash ?? null,
+            foundStorageHash: existingMarker?.storageHash ?? null,
+            destinationStorageHash: options.plan.destination.storageHash,
+          },
+        },
+      );
+    }
+
     const markerCheck = this.ensureMarkerCompatibility(existingMarker, options.plan);
     if (!markerCheck.ok) return markerCheck;
 
@@ -151,15 +171,13 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
     const incomingInvariants = options.plan.providedInvariants;
     const existingInvariants = new Set(existingMarker?.invariants ?? []);
     const incomingIsSubsetOfExisting = incomingInvariants.every((id) => existingInvariants.has(id));
-    const isSelfEdgeNoOp =
-      isSelfEdge &&
-      operationsExecuted === 0 &&
-      incomingIsSubsetOfExisting &&
-      options.databasePolicies === undefined;
+    const isSelfEdgeNoOp = isSelfEdge && operationsExecuted === 0 && incomingIsSubsetOfExisting;
 
-    if (!isSelfEdgeNoOp) {
+    if (!isSelfEdgeNoOp || options.databasePolicies !== undefined) {
       const markerResult = await this.upsertMarker(driver, options, existingMarker, space);
       if (!markerResult.ok) return markerResult;
+    }
+    if (!isSelfEdgeNoOp) {
       await this.recordLedgerEntries(driver, options, executedOperations);
     }
 
