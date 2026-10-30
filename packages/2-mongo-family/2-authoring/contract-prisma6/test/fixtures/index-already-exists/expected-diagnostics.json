@@ -2,13 +2,19 @@
   {
     "code": "PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS",
     "file": "schema.prisma",
+    "line": 8,
+    "message": "@unique on field \"User.email\" has the same fields, with the same sort, as another index of the model. Prisma 6 refuses this: \"Index already exists in the model.\" Remove one of them."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS",
+    "file": "schema.prisma",
     "line": 11,
-    "message": "@@unique on model \"User\" indexes the same fields with the same sort as an earlier index of the model. Prisma 6 refuses this: \"Index already exists in the model.\" Remove one of the two."
+    "message": "@@unique on model \"User\" has the same fields, with the same sort, as another index of the model. Prisma 6 refuses this: \"Index already exists in the model.\" Remove one of them."
   },
   {
     "code": "PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS",
     "file": "schema.prisma",
     "line": 13,
-    "message": "@@index on model \"User\" indexes the same fields with the same sort as an earlier index of the model. Prisma 6 refuses this: \"Index already exists in the model.\" Remove one of the two."
+    "message": "Model \"User\" has two indexes on the same fields that differ only in whether they write sort: Asc, which is the default sort. MongoDB holds them as one index, so the database cannot have both. Remove one of them."
   }
 ]

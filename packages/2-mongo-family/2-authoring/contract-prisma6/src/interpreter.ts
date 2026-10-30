@@ -1487,6 +1487,20 @@ function readRelationFields(
   }
 }
 
+/**
+ * The indexes of one model that Prisma 6 refuses with "Index already exists in the model.": each index whose fields, in order, have the same names and the same written sort as another index of the model, whatever the kind of either index. An unwritten sort differs from `sort: Asc`.
+ */
+function clashingIndexes(attributes: readonly IndexAttribute[]): ReadonlySet<IndexAttribute> {
+  const writtenKey = (attribute: IndexAttribute) =>
+    JSON.stringify(attribute.fields.map((field) => [field.name, field.direction ?? null]));
+  const counts = new Map<string, number>();
+  for (const attribute of attributes) {
+    const key = writtenKey(attribute);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return new Set(attributes.filter((attribute) => (counts.get(writtenKey(attribute)) ?? 0) > 1));
+}
+
 /** A model's indexes as the builder takes them, with where each is written. */
 function buildIndexes(
   build: ModelBuild,
@@ -1495,8 +1509,9 @@ function buildIndexes(
   const { symbol, sourceId } = build.located;
   const indexes: (IndexSite & { readonly index: IndexNode })[] = [];
   let textIndexes = 0;
-  const writtenKeys = new Set<string>();
-  for (const attribute of [...build.uniqueFields, ...build.modelIndexes]) {
+  const attributes = [...build.uniqueFields, ...build.modelIndexes];
+  const clashing = clashingIndexes(attributes);
+  for (const attribute of attributes) {
     const names = attribute.fields.map((field) => field.name);
     const usedBy: IgnoredFieldUse = {
       kind: 'index',
@@ -1522,6 +1537,17 @@ function buildIndexes(
       });
       continue;
     }
+    if (clashing.has(attribute)) {
+      diagnostics.push(
+        prisma6Diagnostic(
+          'PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS',
+          `${usedBy.text} has the same fields, with the same sort, as another index of the model. Prisma 6 refuses this: "Index already exists in the model." Remove one of them.`,
+          sourceId,
+          attribute.span,
+        ),
+      );
+      continue;
+    }
     const text = attribute.kind === 'fulltext';
     if (text) {
       textIndexes++;
@@ -1534,19 +1560,6 @@ function buildIndexes(
       field.name,
       field.direction ?? (text ? 'text' : 1),
     ]);
-    const writtenKey = JSON.stringify(keys);
-    if (writtenKeys.has(writtenKey)) {
-      diagnostics.push(
-        prisma6Diagnostic(
-          'PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS',
-          `${usedBy.text} indexes the same fields with the same sort as an earlier index of the model. Prisma 6 refuses this: "Index already exists in the model." Remove one of the two.`,
-          sourceId,
-          attribute.span,
-        ),
-      );
-      continue;
-    }
-    writtenKeys.add(writtenKey);
     const index: IndexNode = {
       fields: Object.fromEntries(keys),
       ...(attribute.kind === 'unique' ? { options: { unique: true } } : {}),

@@ -86,7 +86,9 @@ export function refusalDiagnostic(
       if (site === undefined) break;
       return prisma6Diagnostic(
         'PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS',
-        `Model "${refusal.key.model}" writes an index that model "${refusal.firstModel}" writes too, and both are stored in collection "${refusal.collection}". MongoDB cannot hold the same index twice in one collection. Remove it from one of the two models.`,
+        refusal.firstModel === refusal.key.model
+          ? `Model "${refusal.key.model}" has two indexes on the same fields that differ only in whether they write sort: Asc, which is the default sort. MongoDB holds them as one index, so the database cannot have both. Remove one of them.`
+          : `Model "${refusal.key.model}" writes an index that model "${refusal.firstModel}" writes too, and both are stored in collection "${refusal.collection}". MongoDB cannot hold the same index twice in one collection. Remove it from one of the two models.`,
         site.sourceId,
         site.span,
       );
