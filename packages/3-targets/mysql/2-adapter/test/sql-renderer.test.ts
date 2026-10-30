@@ -7,6 +7,7 @@ import {
   CastExpr,
   CodecJsonValueProjection,
   ColumnRef,
+  DefaultValueExpr,
   DeleteAst,
   DerivedTableSource,
   EqColJoinOn,
@@ -15,6 +16,7 @@ import {
   FunctionSource,
   IdentifierRef,
   InsertAst,
+  InsertOnConflict,
   JoinAst,
   JsonArrayAggExpr,
   JsonDocumentProjection,
@@ -523,6 +525,102 @@ describe('MySQL lowering of NULLS FIRST and NULLS LAST', () => {
   });
 });
 
+const insertUser = InsertAst.into(TableSource.named('user', 'user')).withRows([
+  { email: ParamRef.of('a@b.c'), role: ParamRef.of('USER') },
+]);
+
+describe('MySQL lowering of writes', () => {
+  it('writes a multi-row insert with the bare table name, and DEFAULT where a row has no value', () => {
+    expect(
+      lower(
+        InsertAst.into(TableSource.named('user', 'u')).withRows([
+          { email: ParamRef.of('a@b.c'), role: ParamRef.of('USER') },
+          { email: ParamRef.of('d@e.f'), role: new DefaultValueExpr() },
+        ]),
+      ),
+    ).toEqual({
+      sql: 'INSERT INTO `user` (`email`, `role`) VALUES (?1, ?2), (?3, DEFAULT)',
+      params: [
+        { kind: 'literal', value: 'a@b.c' },
+        { kind: 'literal', value: 'USER' },
+        { kind: 'literal', value: 'd@e.f' },
+      ],
+    });
+  });
+
+  it('writes rows with no values as empty column and value lists', () => {
+    expect(sqlOf(InsertAst.into(TableSource.named('user')).withRows([{}, {}]))).toBe(
+      'INSERT INTO `user` () VALUES (), ()',
+    );
+  });
+
+  it('writes an upsert as an insert whose row is named new, updating the row on a duplicate key', () => {
+    expect(
+      lower(
+        insertUser.withOnConflict(
+          InsertOnConflict.on([email]).doUpdateSet({ role: ParamRef.of('ADMIN') }),
+        ),
+      ),
+    ).toEqual({
+      sql: 'INSERT INTO `user` (`email`, `role`) VALUES (?1, ?2) AS `new` ON DUPLICATE KEY UPDATE `role` = ?3',
+      params: [
+        { kind: 'literal', value: 'a@b.c' },
+        { kind: 'literal', value: 'USER' },
+        { kind: 'literal', value: 'ADMIN' },
+      ],
+    });
+  });
+
+  it('writes the proposed row, excluded, as new, and a column of the aliased table by its table name', () => {
+    expect(
+      sqlOf(
+        InsertAst.into(TableSource.named('user', 'u'))
+          .withRows([{ email: ParamRef.of('a@b.c'), role: ParamRef.of('USER') }])
+          .withOnConflict(
+            InsertOnConflict.on([ColumnRef.of('u', 'email')]).doUpdateSet({
+              email: ColumnRef.of('excluded', 'email'),
+              role: ColumnRef.of('u', 'role'),
+            }),
+          ),
+      ),
+    ).toBe(
+      'INSERT INTO `user` (`email`, `role`) VALUES (?1, ?2) AS `new` ON DUPLICATE KEY UPDATE `email` = `new`.`email`, `role` = `user`.`role`',
+    );
+  });
+
+  it('writes an update and a delete with the table alias', () => {
+    const userId = ColumnRef.of('u', 'id');
+    expect({
+      update: sqlOf(
+        UpdateAst.table(TableSource.named('user', 'u'))
+          .withSet({ email: ParamRef.of('x'), role: ParamRef.of('ADMIN') })
+          .withWhere(BinaryExpr.eq(userId, ParamRef.of(1))),
+      ),
+      delete: sqlOf(
+        DeleteAst.from(TableSource.named('user', 'u')).withWhere(
+          BinaryExpr.eq(userId, ParamRef.of(1)),
+        ),
+      ),
+      deleteAll: sqlOf(DeleteAst.from(TableSource.named('user'))),
+    }).toEqual({
+      update: 'UPDATE `user` AS `u` SET `email` = ?1, `role` = ?2 WHERE `u`.`id` = ?3',
+      delete: 'DELETE FROM `user` AS `u` WHERE `u`.`id` = ?1',
+      deleteAll: 'DELETE FROM `user`',
+    });
+  });
+
+  it.each([
+    ['an insert with no rows', InsertAst.into(TableSource.named('user')).withRows([])],
+    ['an update with nothing to set', UpdateAst.table(TableSource.named('user'))],
+    [
+      'an upsert with nothing to update',
+      insertUser.withOnConflict(InsertOnConflict.on([email]).doUpdateSet({})),
+    ],
+  ])('refuses %s with RUNTIME.AST_INVALID', (_name, ast) => {
+    expect(() => sqlOf(ast)).toThrow(expect.objectContaining({ code: 'RUNTIME.AST_INVALID' }));
+  });
+});
+
 describe('MySQL lowering refusals', () => {
   it.each([
     ['a FULL JOIN', selectId.withJoins([JoinAst.full(TableSource.named('post'), id)])],
@@ -540,9 +638,22 @@ describe('MySQL lowering refusals', () => {
     ],
     ['a locking clause', selectId.withLocking([LockingClause.of('forUpdate')])],
     ['DISTINCT ON', selectId.withDistinctOn([email])],
-    ['an insert', InsertAst.into(TableSource.named('user')).withRows([{ id: ParamRef.of(1) }])],
-    ['an update', UpdateAst.table(TableSource.named('user')).withSet({ email: ParamRef.of('x') })],
-    ['a delete', DeleteAst.from(TableSource.named('user'))],
+    ['an insert returning rows', insertUser.withReturning([ProjectionItem.of('id', id)])],
+    [
+      'an update returning rows',
+      UpdateAst.table(TableSource.named('user'))
+        .withSet({ email: ParamRef.of('x') })
+        .withReturning([ProjectionItem.of('id', id)]),
+    ],
+    [
+      'a delete returning rows',
+      DeleteAst.from(TableSource.named('user')).withReturning([ProjectionItem.of('id', id)]),
+    ],
+    ['an insert that skips any conflict', insertUser.withOnConflict(InsertOnConflict.doNothing())],
+    [
+      'an insert that skips a conflict on named columns',
+      insertUser.withOnConflict(InsertOnConflict.on([email]).doNothing()),
+    ],
   ])('refuses %s with RUNTIME.AST_UNSUPPORTED', (_name, ast) => {
     expect(() => sqlOf(ast)).toThrow(expect.objectContaining({ code: 'RUNTIME.AST_UNSUPPORTED' }));
   });
