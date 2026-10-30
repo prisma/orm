@@ -4,7 +4,9 @@
  * `User.address` holds an `Address` and `User.previous` a list of them. Adding `country String` to `Address`:
  *
  * - B1: `migration plan` without a statement is refused, naming `--backfill Address.country`. With it, the plan writes one `fillStoredKey` per column and path whose value is `placeholder("Address.country:value")`, and `ops.json` stays empty. Writing the value and running `node migration.ts` writes `ops.json`; `db migrate` fills every object, the new check accepts the rows, and a further plan is empty.
- * - B2: `db update` fills the field with a temporary value, `""`, and prints it with the `--backfill` statement that chooses the value.
+ * - B2: `db update` fills the field with a temporary value, `""`, and prints it with the `--backfill` statement that chooses the value. Adding `seen DateTime` next is refused, since `""` is no date, naming `migration plan --backfill Address.seen`.
+ *
+ * Each reads the rows back, shows the shape checks of both columns were replaced over the filled rows, and ends with `db verify --schema-only` clean and a further plan empty.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -46,6 +48,7 @@ model User {
 
 const ADDRESS = userContract('  street String\n');
 const ADDRESS_WITH_COUNTRY = userContract('  street  String\n  country String\n');
+const ADDRESS_WITH_SEEN = userContract('  street  String\n  country String\n  seen    DateTime\n');
 
 const ROWS = `INSERT INTO "user" (id, address, previous) VALUES
   (1, '{"street": "Main St"}', '[{"street": "Elm St"}, {"street": "Oak St"}]'),
@@ -55,6 +58,31 @@ async function emit(ctx: JourneyContext, psl: string, label: string): Promise<vo
   writeFileSync(join(ctx.testDir, 'contract.prisma'), psl, 'utf-8');
   const emitted = await runContractEmit(ctx);
   expect(emitted.exitCode, `${label}: emit: ${emitted.stderr}`).toBe(0);
+}
+
+async function shapeChecks(connectionString: string): Promise<readonly string[]> {
+  const { rows } = await sql(
+    connectionString,
+    `SELECT conname FROM pg_constraint WHERE conrelid = 'public.user'::regclass AND contype = 'c' ORDER BY conname`,
+  );
+  return rows.map((row) => String(row['conname']));
+}
+
+/** Both shape checks are new, so each was added over the filled rows. */
+async function expectNewShapeChecks(
+  connectionString: string,
+  before: readonly string[],
+  label: string,
+): Promise<void> {
+  const after = await shapeChecks(connectionString);
+  expect(after, `${label}: one shape check per column`).toEqual([
+    expect.stringMatching(/^user_address_shape_[0-9a-f]{8}$/),
+    expect.stringMatching(/^user_previous_shape_[0-9a-f]{8}$/),
+  ]);
+  expect(
+    after.filter((name) => before.includes(name)),
+    `${label}: each check is new`,
+  ).toEqual([]);
 }
 
 async function users(connectionString: string): Promise<unknown[]> {
@@ -78,6 +106,7 @@ withTempDir(({ createTempDir }) => {
         expect(initial.exitCode, `B1.02: plan: ${initial.stderr}`).toBe(0);
         expect((await runMigrate(ctx)).exitCode, 'B1.02: migrate').toBe(0);
         await sql(db.connectionString, ROWS);
+        const before = await shapeChecks(db.connectionString);
 
         await emit(ctx, ADDRESS_WITH_COUNTRY, 'B1.03');
         const from = ['--name', 'country', '--from', latestMigrationDirName(ctx)];
@@ -134,6 +163,7 @@ withTempDir(({ createTempDir }) => {
           },
           { id: 2, address: null, previous: [] },
         ]);
+        await expectNewShapeChecks(db.connectionString, before, 'B1.08');
         const verify = await runDbVerify(ctx, ['--schema-only']);
         expect(verify.exitCode, `B1.08: db verify: ${verify.stderr}`).toBe(0);
         const again = await runMigrationPlan(ctx, [
@@ -162,6 +192,7 @@ withTempDir(({ createTempDir }) => {
         await emit(ctx, ADDRESS, 'B2.01');
         expect((await runDbUpdate(ctx, ['--json'])).exitCode, 'B2.02: db update').toBe(0);
         await sql(db.connectionString, ROWS);
+        const before = await shapeChecks(db.connectionString);
 
         await emit(ctx, ADDRESS_WITH_COUNTRY, 'B2.03');
         const human = await runDbUpdate(ctx, ['--dry-run']);
@@ -192,8 +223,23 @@ withTempDir(({ createTempDir }) => {
           },
           { id: 2, address: null, previous: [] },
         ]);
+        await expectNewShapeChecks(db.connectionString, before, 'B2.06');
         const verify = await runDbVerify(ctx, ['--schema-only']);
         expect(verify.exitCode, `B2.06: db verify: ${verify.stderr}`).toBe(0);
+        const dryRun = await runDbUpdate(ctx, ['--dry-run', '--json']);
+        expect(dryRun.exitCode, `B2.07: db update --dry-run: ${dryRun.stderr}`).toBe(0);
+        expect(
+          parseJsonOutput<{ plan: { operations: readonly unknown[] } }>(dryRun).plan.operations,
+          'B2.07: nothing left to plan',
+        ).toEqual([]);
+
+        await emit(ctx, ADDRESS_WITH_SEEN, 'B2.08');
+        const refused = await runDbUpdate(ctx, ['--json']);
+        expect(refused.exitCode, 'B2.09: a DateTime field is refused').not.toBe(0);
+        expect(
+          JSON.stringify(engineError(refused)),
+          'B2.09: names migration plan --backfill',
+        ).toContain('prisma migration plan --backfill Address.seen');
       },
       timeouts.spinUpPpgDev,
     );
