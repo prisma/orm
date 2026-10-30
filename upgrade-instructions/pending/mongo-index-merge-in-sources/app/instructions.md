@@ -25,5 +25,5 @@ model User {
 ## `mongo-prisma6-indexes-as-prisma6-reads-them`
 
 1. Run `prisma contract emit` for each project that reads a Prisma 6 schema with `prisma6Schema()`.
-2. If it reports `PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS`, the schema has two indexes Prisma 6 also refused. Remove one of them.
+2. If it reports `PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS`, the schema has two indexes that Prisma 6 refuses, or two that Prisma 6 accepts but MongoDB cannot hold, because they have the same keys and options in one collection. The message names both. Remove one of them.
 3. If the storage hash changed, the schema writes a unique and a plain index on the same keys with different written sorts, and the contract now holds both, as the database does. Run `prisma db sign` again.
