@@ -162,14 +162,12 @@ describe('providePslCompletionItems', () => {
       ...postgresTags.map((name) => tag(postgresEntries, name, true)),
     ]);
     const sqliteEntries = withFamilyEntry(sqlite.sqliteDataTypeEntries());
+    const sqliteTags = ['sql', 'json', 'blob', 'datetime', 'date', 'time', 'duration'];
     expect(complete(sqliteEntries, true)).toEqual([
       value('true'),
       value('false'),
       value('null'),
-      tag(sqliteEntries, 'sql', true),
-      tag(sqliteEntries, 'json', true),
-      tag(sqliteEntries, 'blob', true),
-      tag(sqliteEntries, 'datetime', true),
+      ...sqliteTags.map((name) => tag(sqliteEntries, name, true)),
     ]);
     expect(complete(postgresEntries, false)).toEqual([
       value('true'),
