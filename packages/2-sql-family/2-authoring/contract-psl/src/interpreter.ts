@@ -130,6 +130,8 @@ import {
   getAttribute,
   getNamedArgument,
   mapFieldNamesToColumns,
+  renamedTypeConstructorsOf,
+  reportFieldDbAttributes,
   storageName,
 } from './psl-attribute-parsing';
 import type { ColumnDescriptor } from './psl-column-resolution';
@@ -2167,6 +2169,13 @@ export function interpretPslDocumentToSqlContract(
   assertDefined(anchorDocument, 'interpretPslDocumentToSqlContract requires at least one document');
   const source = diagnosticSource(input.sources, anchorDocument.syntax);
   const diagnostics = createPslDiagnosticCollector(input.sources);
+  const renamedTypeConstructors = renamedTypeConstructorsOf(input.target.authoring);
+  reportFieldDbAttributes({
+    symbolTable: input.symbolTable,
+    sources: input.sources,
+    diagnostics,
+    renamedTypeConstructors,
+  });
   const modelAttributesByName = buildModelAttributesByName(input.authoringContributions);
   const contributedModelSpecs = modelAttributeSpecsFrom(modelAttributesByName);
   const composedPslBlockDescriptors = input.authoringContributions?.pslBlockDescriptors ?? {};
@@ -2489,6 +2498,7 @@ export function interpretPslDocumentToSqlContract(
     dataTypes,
     diagnostics,
     authoringTypes: input.authoringContributions?.type,
+    renamedTypeConstructors,
   });
 
   const modelNodes = new Map<ModelSymbol, ModelNode>();

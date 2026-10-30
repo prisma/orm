@@ -290,8 +290,7 @@
                   "columns": [
                     "ingestedAt"
                   ],
-                  "name": "telemetry_event_ingestedAt_idx_272db6ba",
-                  "prefix": "telemetry_event_ingestedAt_idx",
+                  "name": "telemetry_event_ingestedAt_idx",
                   "unique": false
                 }
               ],
@@ -308,7 +307,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "e67e21d7b394c09f2b8def12f966ffbef30679d7802e3f721850782fb1e1a83b"
+    "storageHash": "ab4b37f4e30e5935f5e9dc3b6cffb6fca4827e975950a41dfe30a10ed89f5cc3"
   },
   "capabilities": {
     "postgres": {

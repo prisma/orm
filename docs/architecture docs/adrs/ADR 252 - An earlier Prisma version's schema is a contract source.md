@@ -6,6 +6,8 @@ Status: **Accepted**
 
 Prisma 8 reads the schema file of an earlier Prisma version directly as a contract source. A project that still runs Prisma 7 points Prisma 8 at the `schema.prisma` it already has, and `prisma contract emit` produces the contract from it. The file is not converted, and nothing is inferred from the database.
 
+**What such a source is for.** It interprets the earlier version's schema as the Prisma 8 contract of the database that version built from it. So `prisma db sign` accepts that database as it is, with zero findings and without changing it. That is the source's whole purpose, and every rule below serves it. Nothing between the source and the emitted contract may change what the source describes. That includes the family's contract builder (ADR 306). A builder step that tidies a contract for another source, such as merging a redundant index or deriving an index for a foreign key, must leave this source's description alone, even when the database holds something redundant or pointless.
+
 Prisma 8 describes a database with a contract, and every command reads that contract. Prisma 7 describes a database with `schema.prisma`, and its migrations keep that file current. A project moving from Prisma 7 to Prisma 8 runs both for a while: Prisma 7 still owns the database and its migrations, and Prisma 8 adopts the database as it is. During that time the Prisma 7 schema is the only description of the database that stays correct, so it is the one Prisma 8 reads.
 
 ## The decision in a config file

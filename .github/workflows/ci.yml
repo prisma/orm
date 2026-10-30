@@ -336,12 +336,12 @@ jobs:
 
   test:
     name: Test
-    needs: [build, changes, test-packages, test-examples, coverage, test-integration]
+    needs: [build, changes, test-packages, test-examples, test-telemetry-backend, coverage, test-integration]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - name: Propagate test failures
-        if: ${{ needs.build.result != 'success' || needs.changes.result != 'success' || (needs.changes.outputs.inert != 'true' && (needs.test-packages.result != 'success' || needs.test-examples.result != 'success' || needs.coverage.result != 'success')) }}
+        if: ${{ needs.build.result != 'success' || needs.changes.result != 'success' || (needs.changes.outputs.inert != 'true' && (needs.test-packages.result != 'success' || needs.test-examples.result != 'success' || needs.test-telemetry-backend.result != 'success' || needs.coverage.result != 'success')) }}
         run: exit 1
       - name: Require integration tests in the merge queue
         if: ${{ github.event_name == 'merge_group' && needs.changes.outputs.inert != 'true' && needs.test-integration.result != 'success' }}
@@ -384,6 +384,28 @@ jobs:
       - name: Check working tree is clean
         if: needs.changes.outputs.inert != 'true'
         run: pnpm check:clean-tree
+
+  test-telemetry-backend:
+    name: Telemetry Backend Tests
+    needs: [build, changes]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Install dependencies
+        if: needs.changes.outputs.inert != 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Build (restored from Turbo cache)
+        if: needs.changes.outputs.inert != 'true'
+        run: pnpm build
+      - name: Link bins
+        if: needs.changes.outputs.inert != 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Run telemetry backend tests
+        if: needs.changes.outputs.inert != 'true'
+        run: pnpm --filter telemetry-backend test
 
   test-integration:
     name: Integration Tests (${{ matrix.shard }})
