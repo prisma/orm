@@ -1,4 +1,4 @@
-import { APP_SPACE_ID } from '@internal/framework-components/control';
+import { APP_SPACE_ID, DEFAULT_DATABASE_POLICIES } from '@internal/framework-components/control';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import type { SqlControlAdapter } from '../src/core/control-adapter';
@@ -8,6 +8,7 @@ import { buildContract, FIXTURE_HASH, makeStack } from './control-instance-stack
 interface StoredMarker {
   readonly storageHash: string;
   readonly profileHash: string;
+  readonly meta?: Record<string, unknown>;
 }
 
 const EXT_SPACE_ID = 'pgvector';
@@ -68,7 +69,7 @@ function createMarkerStore(
       const stored = markers.get(space);
       return stored === undefined
         ? null
-        : { ...stored, contractJson: null, updatedAt: new Date(), invariants: [] };
+        : { meta: {}, ...stored, contractJson: null, updatedAt: new Date(), invariants: [] };
     },
     async insertMarker(_driver: unknown, space: string, destination: StoredMarker) {
       events.push(`insert ${space}`);
@@ -271,6 +272,38 @@ describe('sql family signSpaces', () => {
       [APP_SPACE_ID]: { storageHash: 'moved-by-migrate', profileHash: 'moved-profile' },
       [EXT_SPACE_ID]: { storageHash: EXT_HASH, profileHash: 'ext-profile' },
     });
+  });
+
+  it('leaves a marker whose policies changed after the check as it was, as a conflict', async () => {
+    const moved = {
+      storageHash: 'old-app',
+      profileHash: 'old-app-profile',
+      meta: { policies: { change: ['migrate'] } },
+    };
+    const store = createMarkerStore({ [APP_SPACE_ID]: moved });
+
+    const signatures = await store.instance.signSpaces({
+      driver,
+      spaces: [
+        {
+          space: APP_SPACE_ID,
+          contract: appContract,
+          expected: { storageHash: 'old-app', profileHash: 'old-app-profile' },
+          expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+        },
+      ],
+    });
+
+    expect(signatures).toEqual([
+      {
+        status: 'conflict',
+        space: APP_SPACE_ID,
+        contract: appHashes,
+        expected: { storageHash: 'old-app', profileHash: 'old-app-profile' },
+        found: { storageHash: 'old-app', profileHash: 'old-app-profile' },
+      },
+    ]);
+    expect(store.markers()).toEqual({ [APP_SPACE_ID]: moved });
   });
 
   it('reports a marker written after a verification that found none as a conflict', async () => {
