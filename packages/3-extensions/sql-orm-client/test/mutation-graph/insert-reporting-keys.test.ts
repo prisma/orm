@@ -10,12 +10,10 @@ describe('InsertReportingKeys', () => {
   it('runs its statements without RETURNING and gives the keys the client wrote', async () => {
     const asts = [insertInto('users', [{ id: 1 }, { id: 2 }]), insertInto('users', [{ id: 3 }])];
     const run = recordingRun([], 2);
-    const insert = new InsertReportingKeys(
-      asts,
-      [{ id: 1 }, { id: 2 }, { id: 3 }],
-      undefined,
-      'User',
-    );
+    const insert = new InsertReportingKeys(asts, [{ id: 1 }, { id: 2 }, { id: 3 }], undefined, {
+      operation: 'createAll',
+      modelName: 'User',
+    });
 
     expect(await insert.execute({}, run)).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }]);
     expect({
@@ -27,7 +25,10 @@ describe('InsertReportingKeys', () => {
 
   it('gives the key the database generated for a one-row insert, decoded from its insert id', async () => {
     const run = recordingRun([], 1, '7');
-    const insert = new InsertReportingKeys([ada], [{ tenant: 'a' }], generatedId, 'User');
+    const insert = new InsertReportingKeys([ada], [{ tenant: 'a' }], generatedId, {
+      operation: 'create',
+      modelName: 'User',
+    });
 
     expect(await insert.execute({}, run)).toEqual([{ tenant: 'a', id: 7 }]);
   });
@@ -35,14 +36,17 @@ describe('InsertReportingKeys', () => {
   it.each([
     ['reports no insert id', recordingRun([], 1)],
     ['changed another number of rows', recordingRun([], 2, '7')],
-  ])('fails with ORM.INSERT_ID_MISSING when the insert %s', async (_case, run) => {
-    const insert = new InsertReportingKeys([ada], [{}], generatedId, 'User');
+  ])('fails with ORM.MUTATION_ROW_MISSING when the insert %s', async (_case, run) => {
+    const insert = new InsertReportingKeys([ada], [{}], generatedId, {
+      operation: 'create',
+      modelName: 'User',
+    });
 
     await expect(insert.execute({}, run)).rejects.toMatchObject({
-      code: 'ORM.INSERT_ID_MISSING',
+      code: 'ORM.MUTATION_ROW_MISSING',
       message:
-        'The insert for model "User" reported no generated value for key column "id", so the ORM cannot read the row back. A middleware that answers the statement in place of the database must report the row\'s insertId.',
-      meta: { model: 'User', column: 'id' },
+        'create() for model "User" cannot find the row it inserted: the insert\'s result carried no insert id for key column "id". A middleware may have answered the statement in place of the database without one.',
+      meta: { operation: 'create', model: 'User', phase: 'insert-id', column: 'id' },
     });
   });
 });

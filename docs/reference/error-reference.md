@@ -1092,10 +1092,6 @@ An `include()` usage is structurally invalid: the refinement callback returned s
 
 The include is well-formed but not supported in this position: scalar aggregations or `combine()` on a to-one relation (SQL), or including an embed relation / compound reference (Mongo; only reference relations can be included). Payload: `relation`, `kind`, `model`.
 
-### ORM.INSERT_ID_MISSING
-
-On a contract without the `returning` capability, an insert whose key the database generates reported no `insertId`, so the ORM cannot read the inserted row back. The driver reports the value for a one-row insert; a middleware that answers the insert's statement with an `intercept.onExecute` result of its own must report it too. The call fails inside its transaction, so the insert rolls back. Raised by `create()`, `createAll()` of one row, and nested creates. Payload: `model`, `column`, `affectedRows`.
-
 ### ORM.INTERCEPTED_RESULT_INVALID
 
 An `intercept.onActivity` handler answered an `orm-call` activity with a value of the wrong shape for its terminal method: not an array for `all()`, `createAll()`, `updateAll()`, `deleteAll()` or `groupBy().aggregate()`; not an object for `create()`, `upsert()`, `firstOrThrow()` or `aggregate()`; neither an object nor `null` for `first()`, `update()` or `delete()`; or not a number for `createAndCount()`, `updateAndCount()` or `deleteAndCount()`. The SQL ORM ends the call `failed` and returns nothing. Payload: `method`.
@@ -1114,7 +1110,7 @@ The Mongo ORM client was asked to operate on a model name that is not in the con
 
 ### ORM.MUTATION_ROW_MISSING
 
-A mutation that expected the database to return a row got none: `create()`/`upsert()` read-back, MTI base or variant INSERT, or a nested create. On a contract without the `returning` capability, also raised inside the transaction, which then rolls back, when the `SELECT` that reads a created or upserted row back by key finds none, for example because an upsert collided on a unique index the contract does not list (`phase: 'read-back'`). The Prisma-classic analogue of P2025. Payload: `operation`, `model`, `tableName`, `phase`.
+A mutation that expected the database to return a row got none: `create()`/`upsert()` read-back, MTI base or variant INSERT, or a nested create. On a contract without the `returning` capability, also raised inside the transaction, which then rolls back, when the `SELECT` that reads a created or upserted row back by key finds none, for example because an upsert collided on a unique index the contract does not list (`phase: 'read-back'`); and when an insert whose key the database generates reports no `insertId`, so the ORM cannot read the row back (`phase: 'insert-id'`, with `column` and `affectedRows`). The driver reports the value for a one-row insert; a middleware that answers the insert's statement with an `intercept.onExecute` result of its own may leave it out. The Prisma-classic analogue of P2025. Payload: `operation`, `model`, `tableName`, `phase`.
 
 ### ORM.OPERATION_UNSUPPORTED
 

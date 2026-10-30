@@ -361,7 +361,7 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
     });
   });
 
-  it('a create fails with ORM.INSERT_ID_MISSING and rolls back when a middleware answers its insert without an insert id', async () => {
+  it('a create fails with ORM.MUTATION_ROW_MISSING and rolls back when a middleware answers its insert without an insert id', async () => {
     const answersPostInserts: SqlMiddleware = {
       name: 'answers-post-inserts',
       intercept: {
@@ -377,15 +377,19 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
         await expect(
           db.Post.create({ title: 'Hello', author: (author) => author.create(ada) }),
         ).rejects.toMatchObject({
-          code: 'ORM.INSERT_ID_MISSING',
+          code: 'ORM.MUTATION_ROW_MISSING',
           message:
-            'The insert for model "Post" reported no generated value for key column "id", so the ORM cannot read the row back. A middleware that answers the statement in place of the database must report the row\'s insertId.',
+            'create() for model "Post" cannot find the row it inserted: the insert\'s result carried no insert id for key column "id". A middleware may have answered the statement in place of the database without one.',
+          meta: expect.objectContaining({ phase: 'insert-id', column: 'id', affectedRows: 1 }),
         });
         expect(rowsOf(database, 'users')).toEqual([]);
         const { id } = await db.User.create(ada);
         await expect(
           db.Post.include('author').create({ title: 'Hello', authorId: id }),
-        ).rejects.toMatchObject({ code: 'ORM.INSERT_ID_MISSING' });
+        ).rejects.toMatchObject({
+          code: 'ORM.MUTATION_ROW_MISSING',
+          meta: expect.objectContaining({ phase: 'insert-id' }),
+        });
         expect(rowsOf(database, 'posts')).toEqual([]);
       },
       [answersPostInserts],

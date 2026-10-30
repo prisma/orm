@@ -1,6 +1,6 @@
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { InsertAst } from '@internal/sql-relational-core/ast';
-import { type GeneratedKey, reportedInsertId } from '../written-keys';
+import { type GeneratedKey, reportedInsertId, type WrittenRowOwner } from '../written-keys';
 import type { StorageRow } from './edge';
 import { type Executed, Node, type OutputsOf, type Run } from './node';
 
@@ -13,29 +13,29 @@ export class InsertReportingKeys extends Node<NoInputs> {
   readonly asts: readonly InsertAst[];
   readonly keys: readonly StorageRow[];
   readonly generated: GeneratedKey | undefined;
-  readonly modelName: string;
+  readonly owner: WrittenRowOwner;
 
   constructor(
     asts: readonly InsertAst[],
     keys: readonly StorageRow[],
     generated: GeneratedKey | undefined,
-    modelName: string,
+    owner: WrittenRowOwner,
   ) {
     super();
     this.asts = Object.freeze([...asts]);
     this.keys = Object.freeze([...keys]);
     this.generated = generated;
-    this.modelName = modelName;
+    this.owner = owner;
     Object.freeze(this);
   }
 
   override execute(_inputs: OutputsOf<NoInputs>, run: Run): Executed {
-    const { asts, keys, generated, modelName } = this;
+    const { asts, keys, generated, owner } = this;
     const generator = async function* (): AsyncGenerator<StorageRow, void, unknown> {
       for (const ast of asts) {
         const stats = await run.execute(ast);
         if (generated !== undefined) {
-          const insertId = reportedInsertId(stats, generated, modelName);
+          const insertId = reportedInsertId(stats, generated, owner);
           yield { ...keys[0], [generated.column]: await generated.decode(insertId) };
           return;
         }

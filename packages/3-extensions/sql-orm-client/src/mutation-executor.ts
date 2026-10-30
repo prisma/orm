@@ -1271,7 +1271,9 @@ async function insertAndReadBack(
       ? suppliedKey
       : {
           ...suppliedKey,
-          [generated.column]: await generated.decode(reportedInsertId(stats, generated, modelName)),
+          [generated.column]: await generated.decode(
+            reportedInsertId(stats, generated, { operation: 'create', modelName }),
+          ),
         };
   const criterion = Object.fromEntries(
     Object.entries(key).map(([column, value]) => [

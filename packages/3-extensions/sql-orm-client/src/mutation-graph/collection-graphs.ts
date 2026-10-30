@@ -33,13 +33,13 @@ import { collectionSelectAst, collectionSelectWithIncludesAst } from '../query-p
 import { variantReturning } from '../query-plan-source';
 import type { AliasedTable } from '../table-scope';
 import { type CollectionState, emptyState } from '../types';
-import { readBackIdentity, writtenKeys } from '../written-keys';
+import { readBackIdentity, type WrittenRowOwner, writtenKeys } from '../written-keys';
 import { CrossJoin } from './cross-join';
 import { Delete } from './delete';
 import type { ColumnPair, NodeId, StorageRow } from './edge';
 import { FilterData } from './filter-data';
 import { Find } from './find';
-import { FindByKeys, type MissingRow } from './find-by-keys';
+import { FindByKeys } from './find-by-keys';
 import { Graph } from './graph';
 import { Insert } from './insert';
 import { InsertChunked } from './insert-chunked';
@@ -181,15 +181,13 @@ export function createAllGraph(
       : groupRowsByColumnSignature(rows).map((group) =>
           insertAst(contract, root, group, undefined),
         );
-    const inserted = graph.add(
-      new InsertReportingKeys(asts, keys, generated, collection.modelName),
-      {},
-    );
+    const owner = {
+      operation: rows.length === 1 ? 'create' : 'createAll',
+      modelName: collection.modelName,
+    };
+    const inserted = graph.add(new InsertReportingKeys(asts, keys, generated, owner), {});
     graph.setResult(
-      addFindOfWrittenRows(graph, collection, inserted, identityProjection(collection), {
-        operation: rows.length === 1 ? 'create' : 'createAll',
-        modelName: collection.modelName,
-      }),
+      addFindOfWrittenRows(graph, collection, inserted, identityProjection(collection), owner),
     );
     return graph;
   }
@@ -295,8 +293,9 @@ export function upsertGraph(
   const upsert = upsertAst(contract, root, create, targeted ? conflictColumns : [], updateSet);
   if (readsBack(collection, 'rows')) {
     const conflictValues = upsertConflictValues(collection, create, update, conflictColumns);
+    const upsertOwner = { operation: 'upsert', modelName: collection.modelName };
     const upserted = graph.add(
-      new InsertReportingKeys([upsert], [conflictValues], undefined, collection.modelName),
+      new InsertReportingKeys([upsert], [conflictValues], undefined, upsertOwner),
       {},
     );
     graph.setResult(
@@ -305,7 +304,7 @@ export function upsertGraph(
         collection,
         upserted,
         projectTableColumns(contract, root, conflictColumns),
-        { operation: 'upsert', modelName: collection.modelName },
+        upsertOwner,
       ),
     );
     return graph;
@@ -359,10 +358,10 @@ function addFindOfWrittenRows(
   collection: DescribeCollectionRowsOptions,
   inserted: NodeId,
   keyColumns: readonly ProjectionItem[],
-  missing: MissingRow,
+  owner: WrittenRowOwner,
 ): NodeId {
   const pairs = sameColumns(keyColumns);
-  return graph.add(new FindByKeys(readBackAst(collection), pairs, missing), {
+  return graph.add(new FindByKeys(readBackAst(collection), pairs, owner), {
     keys: new Rows(inserted, pairs),
   });
 }

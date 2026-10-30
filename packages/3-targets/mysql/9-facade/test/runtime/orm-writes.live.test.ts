@@ -248,7 +248,7 @@ describe('MySQL writes through the ORM', { timeout: timeouts.databaseOperation }
     });
   });
 
-  it('a create fails with ORM.INSERT_ID_MISSING and rolls back when a middleware answers its insert without an insert id', async (test) => {
+  it('a create fails with ORM.MUTATION_ROW_MISSING and rolls back when a middleware answers its insert without an insert id', async (test) => {
     const answersPostInserts: SqlMiddleware = {
       name: 'answers-post-inserts',
       intercept: {
@@ -271,7 +271,10 @@ describe('MySQL writes through the ORM', { timeout: timeouts.databaseOperation }
           title: 'Hello',
           author: (author) => author.create({ email: 'a@example.com', role: 'USER' }),
         }),
-      ).rejects.toMatchObject({ code: 'ORM.INSERT_ID_MISSING' });
+      ).rejects.toMatchObject({
+        code: 'ORM.MUTATION_ROW_MISSING',
+        meta: expect.objectContaining({ phase: 'insert-id' }),
+      });
       expect(await db.orm.User.all()).toEqual([]);
     });
   });

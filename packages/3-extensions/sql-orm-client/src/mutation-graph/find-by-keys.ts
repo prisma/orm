@@ -2,6 +2,7 @@ import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import { ProjectionItem, type SelectAst } from '@internal/sql-relational-core/ast';
 import { ormError } from '../orm-errors';
 import { combineWhereExprs } from '../where-utils';
+import type { WrittenRowOwner } from '../written-keys';
 import type { ColumnPair, StorageRow } from './edge';
 import { keyCondition } from './filter-data';
 import { anyOf, withColumns } from './filtered-statement';
@@ -11,12 +12,6 @@ import { rowsResult } from './run-statement';
 import { StatementNode } from './statement-node';
 
 type Keyed = { keys: Rows };
-
-/** The call a read-back belongs to, named in the error when a row is missing. */
-export interface MissingRow {
-  readonly operation: string;
-  readonly modelName: string;
-}
 
 const KEY_ALIAS_PREFIX = '__written_key_';
 
@@ -28,9 +23,9 @@ const KEY_ALIAS_PREFIX = '__written_key_';
 export class FindByKeys extends StatementNode<Keyed> {
   readonly ast: SelectAst;
   readonly keyColumns: readonly ColumnPair[];
-  readonly missing: MissingRow;
+  readonly missing: WrittenRowOwner;
 
-  constructor(ast: SelectAst, keyColumns: readonly ColumnPair[], missing: MissingRow) {
+  constructor(ast: SelectAst, keyColumns: readonly ColumnPair[], missing: WrittenRowOwner) {
     super();
     this.keyColumns = Object.freeze([...keyColumns]);
     this.ast = ast.withProjection(

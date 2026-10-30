@@ -2,7 +2,6 @@ import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlStatementStats } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
-import type { StructuredError } from '@internal/utils/structured-error';
 import { isAutoIncrementColumn, resolveRowIdentityColumns } from './collection-contract';
 import { ormError } from './orm-errors';
 
@@ -85,26 +84,32 @@ export function readBackIdentity(
   );
 }
 
+/** The call a write belongs to, named in the error when the ORM cannot find the row it wrote. */
+export interface WrittenRowOwner {
+  readonly operation: string;
+  readonly modelName: string;
+}
+
 /** The `insertId` a one-row insert reported, or the error that it reported none, which a middleware answering the statement may cause. */
 export function reportedInsertId(
   stats: SqlStatementStats,
   generated: GeneratedKey,
-  modelName: string,
+  owner: WrittenRowOwner,
 ): string {
   if (stats.affectedRows === 1 && stats.insertId !== undefined) {
     return stats.insertId;
   }
-  throw insertIdMissing(generated, modelName, stats.affectedRows);
-}
-
-function insertIdMissing(
-  generated: GeneratedKey,
-  modelName: string,
-  affectedRows: number,
-): StructuredError {
-  return ormError(
-    'ORM.INSERT_ID_MISSING',
-    `The insert for model "${modelName}" reported no generated value for key column "${generated.column}", so the ORM cannot read the row back. A middleware that answers the statement in place of the database must report the row's insertId.`,
-    { meta: { model: modelName, column: generated.column, affectedRows } },
+  throw ormError(
+    'ORM.MUTATION_ROW_MISSING',
+    `${owner.operation}() for model "${owner.modelName}" cannot find the row it inserted: the insert's result carried no insert id for key column "${generated.column}". A middleware may have answered the statement in place of the database without one.`,
+    {
+      meta: {
+        operation: owner.operation,
+        model: owner.modelName,
+        phase: 'insert-id',
+        column: generated.column,
+        affectedRows: stats.affectedRows,
+      },
+    },
   );
 }
