@@ -300,3 +300,69 @@ Rows R1 to R17 from round 2 stand. R3 (invalid `meta.policies`) moves from WEAK 
 | WEAK | 1 (E10) |
 | FAIL | 0 |
 | NOT VERIFIED | 0 |
+
+## Round 4
+
+Reviews `8693a70269...HEAD` at `6f6e6c1200`. Persona: principal engineer.
+
+### Summary
+
+F13, F14 and F15 are fixed, and E10 now has a test. `db sign` compares the policies whether or not the application space is being signed, on all four targets. A shared journey proves the MongoDB crash is gone. MongoDB's failed marker swap is now reported by its cause, with one bounded retry. SQL runners share `checkDatabasePoliciesHeld`.
+
+Two small new findings, both about MongoDB's retry: the error reference does not describe it (F16), and its classification code is written twice (F17).
+
+Verified by running, with output under `wip/`:
+
+- **Errors, framework, CLI:** `wip/review4-errors.txt` (31), `wip/review4-fw.txt` (20), `wip/review4-cli.txt` (56).
+- **SQL family signing and `checkDatabasePoliciesHeld`:** `wip/review4-sqlfamily.txt` (15).
+- **MongoDB family, runner and adapter:** `wip/review4-mongofamily.txt` (29), `wip/review4-mongo-runner.txt` (34), `wip/review4-mongo-adapter.txt` (4).
+- **Postgres and SQLite runners:** `wip/review4-pg.txt` (7), `wip/review4-sqlite.txt` (8).
+- **MySQL, against a private `mysqld`, stopped afterwards:** facade live test `wip/review4-mysql-live.txt` (6), CLI journeys `wip/review4-mysql-e2e.txt` (24).
+- **Integration journeys on PostgreSQL, SQLite and MongoDB** (`enforcement`, `migrate`, `mongo` files): `wip/review4-e2e.txt` (74).
+- **`pnpm lint:deps`** (`wip/review4-lintdeps.txt`) and `pnpm typecheck` in the ten touched packages.
+
+All pass.
+
+### Round-3 findings
+
+| Finding | Verdict | Evidence |
+|---|---|---|
+| F13 — `db sign` on MongoDB threw an internal error when the application space was not being signed | Fixed in `7d78c41fdb` | `SpaceDatabasePoliciesConflict` no longer carries `contract`, so neither family needs the application space in `spaces`. Both throws are gone. Each family has two new tests: an extension space alone signs when the policies hold and is not signed when they moved. The new shared journey `reports the schema failure of an application space it cannot sign, on a database with a marker` runs on all four targets. It asserts `ok: false`, the application space `failed`, and an unchanged marker. Before the fix it would have crashed on MongoDB. |
+| F14 — MongoDB's failed swap fell back to a storage-hash conflict with equal hashes | Fixed in `7d78c41fdb` and `6f6e6c1200` | Runner (`mongo-runner.ts` `updateMarker`, 500–528) and family (`signSpaceMarker`, 255–284): if the storage hash moved, the failure is `reason: 'storageHash'`. Unreadable policies raise the corrupt-marker error. Moved policies raise the policies failure. Policies that read the same retry once with the raw value found; a second failure reports moved policies with checked equal to found, and the why says they were stored again in a different form. Runner and family tests cover unreadable, a successful retry and a second failure. |
+| F15 — `MigrateOptions` lost its doc comment | Fixed in `3a813c7b9c` | `MigrateTarget` now sits above the `MigrateOptions` doc block. |
+| E10 — no test of an extension marker carrying policies | Fixed in `a26c6da7ff` | SQLite runner test plants `change: [migrate]` on an extension marker, runs with the default policies checked, and asserts the run succeeds, records the application space's policies and leaves the extension marker's value alone. |
+
+### Findings
+
+#### F16 — The error reference does not describe MongoDB's retry or a failure whose checked and found policies are equal
+
+Path: docs/reference/error-reference.md, `MIGRATION.MARKER_CAS_FAILURE` entry (line 1725).
+
+The entry says the `why` names each setting that moved. After MongoDB's second failed swap the failure carries equal `checkedDatabasePolicies` and `foundDatabasePolicies`, and the `why` says the policies were stored again in a different form. The entry does not mention this, so a reader with equal payloads has no explanation. It also says the MongoDB write-time failure fails "the same way", but that failure comes after earlier spaces ran, so `databaseUnchanged` can be false.
+
+Suggestion: add one sentence for the MongoDB case. State that the swap is retried once when the policies were stored again unchanged, and that a second failure reports equal checked and found policies. State that this failure can follow changes made by earlier spaces.
+
+#### F17 — The swap-failure classification is written twice for MongoDB
+
+Paths: packages/3-targets/mongo/1-target/src/core/migrations/mongo-runner.ts 500–528; packages/2-mongo-family/9-family/src/core/control-instance.ts 255–284.
+
+The runner and the family each have the same loop: swap, re-read, check the hash, check the policies, retry once. They already differ slightly. The family compares both hashes with `expected`; the runner compares only the storage hash with `expectedFrom`. The next change to the retry rule has to be made in two places and tested twice.
+
+Suggestion: move the classification after a failed swap into `marker-policies.ts` beside `checkMarkerPolicies`. It should return `hashMoved`, `policiesMoved`, `unreadable` or `retryWith(raw)`. Each caller then maps that result to its own failure type.
+
+### Deferred
+
+Unchanged from round 3. Also: MongoDB's `initMarker` is a plain `insertOne`. A concurrent first marker write fails as a duplicate key, not as a classified conflict. This predates the slice and is not a silent overwrite.
+
+### Acceptance rows these changes touch
+
+| # | Row | Round 3 | Round 4 | What I checked |
+|---|---|---|---|---|
+| E8 | `db sign` with no marker proceeds | PASS | PASS | No policies are passed when there is no application marker; journey unchanged and passing on all four targets. |
+| E9 | `db sign` on a migrations-only database is refused | PASS | PASS | Enforcement journey on all four targets. The family check no longer depends on the application space being signed. |
+| E10 | Extension marker policies are ignored | WEAK | PASS | New SQLite runner test (above). The CLI reads only the application space's marker. |
+| E11 | Unreadable `meta.policies` gives advice that keeps the marker | PASS | PASS | New summary and wording asserted as a whole envelope in `execution.test.ts` and the control-API test. New runner tests on SQLite and MySQL (unreadable under the lock or transaction), plus the MongoDB runner and family after a failed swap. The reference entry matches the new wording. |
+| D1e | `db update` and `db sign` refused under `change: [migrate]` | PASS | PASS | Enforcement journey on all four targets. |
+| R7 | The runner compares the checked policies under its lock | PASS | PASS | Postgres, SQLite and MySQL use `checkDatabasePoliciesHeld` (`packages/2-sql-family/9-family/src/core/migrations/database-policies-check.ts`), unit-tested for held, moved and unreadable. MongoDB compares before the first space and guards the write. |
+
+Totals: 30 PASS of 30 edge cases and done conditions.

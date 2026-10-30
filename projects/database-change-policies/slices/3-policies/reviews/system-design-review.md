@@ -328,3 +328,50 @@ Suggestion: add the case to SQLite and MySQL, or to the shared SQL-family functi
 ### Routed to the code review (round 3)
 
 - MongoDB's `updateMarker` failure path (`mongo-runner.ts` lines 460-482) compares policies only when the storage hash still matches, and acts only on `moved`. When the policies became unreadable after the check, it reports `MIGRATION.MARKER_CAS_FAILURE` with `reason: 'storageHash'`, while the expected and found storage hashes are equal. That is the round 2 routed item, now in this form.
+
+## Round 4
+
+Re-reviewed at `6f6e6c1200`, covering `8693a70269...HEAD` (five commits). New code read: `checkDatabasePoliciesHeld` (`packages/2-sql-family/9-family/src/core/migrations/database-policies-check.ts`), `checkMarkerPolicies` and `CheckedMarkerPolicies` (`packages/2-mongo-family/9-family/src/core/marker-policies.ts`, `control-adapter.ts`), the required `MarkerOperations.markerLocation`, the re-signed `movedDatabasePoliciesWhy(actor, checked, found)` and `databasePoliciesMovedFailure(checked, found)`, the MongoDB marker swap retry in the runner and in `signSpaces`, and the document changes. `pnpm lint:deps` passes; the SQL family's new dependency on `@internal/errors` points down to framework core, as the MongoDB family's already did.
+
+### Verdicts on the third round
+
+| ID | Verdict | Evidence |
+|---|---|---|
+| A18 | Fixed | The `moved` arm is `{ kind: 'moved'; found }` (`framework-components/src/control/database-policies.ts` line 180). `movedDatabasePoliciesWhy(actor, checked, found)` and `databasePoliciesMovedFailure(checked, found)` compute the settings that moved themselves (lines 203-243). `SpaceDatabasePoliciesConflict` no longer carries `differences` or `contract`. |
+| A19 | Fixed | ADR 314 line 29, `7. Migration System.md` line 374 and slice spec line 209 now say the runner compares before the first space, under its lock (SQLite: its exclusive transaction), and that MongoDB compares first and then guards the application marker's write. |
+| A20 | Fixed | One record, `CheckedMarkerPolicies { checked; raw }`, in the MongoDB family (`control-adapter.ts` lines 20-31), used by the runner and `signSpaces`. The raw value is `RawStoredPolicies`. The CLI's `CheckedDatabasePolicies` no longer has a namesake. |
+| A21 | Fixed | The three SQL runners call `checkDatabasePoliciesHeld(family, driver, checked)` (Postgres `runner.ts` line 313, SQLite line 230, MySQL line 113). The check has its own family test (`2-sql-family/9-family/test/database-policies-check.test.ts`). |
+| A22 | Fixed | `marker-mismatch.ts` line 32 and the `MIGRATION.MARKER_MISMATCH` payload say "the database's"; spec line 66 uses the current names and says who raises the error; the glossary's Change Policy entry names the `db migrate` refusal. |
+| A23 | Fixed | `errorMarkerPoliciesCorrupt` says "the marker" and "the marker for space … in <location>" (`errors/src/execution.ts` lines 98-117), with a test. Its summary is now "The marker's policies cannot be read". |
+| A24 | Fixed | SQLite and MySQL each test unreadable policies inside the run, and each also tests that an extension space's marker policies are ignored. |
+
+### New findings
+
+#### A25 — The MongoDB swap retry reports "the policies changed" when they did not, and puts that MongoDB case into the framework's text (medium-low)
+
+Location: `packages/3-targets/mongo/1-target/src/core/migrations/mongo-runner.ts` lines 500-527 (`updateMarker`, `attempt === 2` returns `databasePoliciesMovedFailure(guard.checked, guard.checked)`); `packages/2-mongo-family/9-family/src/core/control-instance.ts` lines 255-284 (same loop in `signSpaceMarker`, returning `{ kind: 'moved', found: guard.checked }`); `packages/1-framework/1-core/framework-components/src/control/database-policies.ts` lines 203-220 (`movedDatabasePoliciesWhy`, new branch for no differences).
+
+Issue: MongoDB guards the application marker's write by matching the raw `meta.policies` subdocument, and that match is sensitive to field order and array order. So another writer can store the same settings in a different form, and the swap fails although no setting changed. The code retries once with the raw value it found. If the second swap also fails, it reports a `moved` comparison and a `MIGRATION.MARKER_CAS_FAILURE` with `reason: 'databasePolicies'` whose `foundDatabasePolicies` equals `checkedDatabasePolicies`. That breaks the meaning of `moved` ("the marker records different policies"). A consumer that reads `found` sees the policies it checked, presented as the policies another process wrote. To make the message read correctly, `movedDatabasePoliciesWhy` gained a branch for "no setting moved". That branch only exists because of how MongoDB's swap compares, and the framework now carries that MongoDB case in its shared text.
+
+Suggestion: keep "the settings moved" and "the marker kept changing under the swap" apart. Either make MongoDB's guard compare the policies in an order-independent way (match each setting's path, and `change` as a set), so a form change never fails the swap and the retry goes away. Or, if the retry stays, report its second failure as its own cause in the MongoDB code, with what was found. Then `movedDatabasePoliciesWhy` loses the no-difference branch and `moved` always has a real difference.
+
+#### A26 — The MongoDB swap-and-retry loop is written twice (low)
+
+Location: `mongo-runner.ts` lines 500-527; `2-mongo-family/9-family/src/core/control-instance.ts` lines 255-284.
+
+Issue: The runner's `updateMarker` and the family's `signSpaceMarker` each contain the same loop: swap with the raw guard, re-read on failure, report a storage-hash conflict if the hash moved, compare the policies, retry once with the new raw value, give up on the second attempt. They differ only in the result type they build. A21 moved the SQL version of this rule into the family; the MongoDB version is still in two places, one of them in the target.
+
+Suggestion: put the loop in the MongoDB family beside `checkMarkerPolicies`, returning a small result (`swapped`, `storageHashMoved` with what was found, `policiesMoved` with what was found, `unreadable`). The runner and `signSpaces` then only map that result to their own failure or conflict. If A25 removes the retry, this mostly goes away.
+
+#### A27 — The error reference and the upgrade note do not describe the retry (low)
+
+Location: `docs/reference/error-reference.md`, `MIGRATION.MARKER_CAS_FAILURE` ("The database's policies moved") and `CONTRACT.MARKER_ROW_CORRUPT`; `upgrade-instructions/pending/database-policies/extension/instructions.md` line 5.
+
+Issue: The code can now produce the `why` "Another process stored the database's policies again after … checked them, with the same settings in a different form." The error reference does not list it. `MARKER_ROW_CORRUPT` still says the runners raise it "when they read the policies again under their lock", but MongoDB has no lock and raises it after a failed swap. The upgrade note tells an extension author to "swap again with the raw value found" without saying how many times, though the code stops after one retry. An author who follows the note literally could retry forever.
+
+Suggestion: after deciding A25, describe what the code then does in all three places. If the retry stays, say "once" in the upgrade note, list the second cause under `MARKER_CAS_FAILURE`, and say "under their lock, or after a failed swap on MongoDB" under `MARKER_ROW_CORRUPT`.
+
+### Notes that need no change
+
+- `MarkerOperations.markerLocation` is a fact about the store those operations write to, so it belongs there. The runner no longer needs `family.markerLocation` passed beside the operations. The upgrade note announces the new required field.
+- `checkDatabasePoliciesHeld` is exported from `@internal/family-sql/control` and `checkMarkerPolicies` from `@internal/family-mongo/control`. Both are the family's rule, called by that family's targets, and neither leaks into the framework.
