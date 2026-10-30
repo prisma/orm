@@ -178,8 +178,32 @@ describe('supabase() binding option', () => {
       code: 'RUNTIME.BINDING_INVALID',
       why: expect.any(String),
       fix: expect.any(String),
-      meta: { received: null },
+      meta: { receivedType: 'null' },
     });
+  });
+
+  it('reports the null input, not the input count, when another input is also given', async () => {
+    const input = { url: null, pg: new Pool() } as unknown as ReadOptions;
+
+    await expect(supabase({ contract, jwtSecret, ...input })).rejects.toMatchObject({
+      code: 'RUNTIME.BINDING_INVALID',
+      message: 'The url option must be a string',
+    });
+  });
+
+  it('never copies a wrongly typed input into the error', async () => {
+    const secret = 's3cret-password';
+    const pg = `postgres://user:${secret}@host/db` as unknown as Pool;
+
+    const error = await supabase({ contract, jwtSecret, pg }).catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({
+      code: 'RUNTIME.BINDING_INVALID',
+      meta: { receivedType: 'string' },
+    });
+    expect(JSON.stringify(error)).not.toContain(secret);
+    expect(String(error)).not.toContain(secret);
+    expect(JSON.stringify(Object.getOwnPropertyDescriptors(error))).not.toContain(secret);
   });
 
   it('rejects more than one binding input with RUNTIME.BINDING_INVALID', async () => {

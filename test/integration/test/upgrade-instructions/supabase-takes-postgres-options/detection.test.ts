@@ -22,6 +22,14 @@ describe('the supabase-one-binding-input detection', () => {
       "postgres({ contract, url: process.env['DATABASE_URL'] ?? null })",
     ],
     ['a binding that falls back to null', 'const options = { binding: config.binding ?? null };'],
+    [
+      'a url that falls back to null with ||',
+      'postgres({ contract, url: env.DATABASE_URL || null })',
+    ],
+    [
+      'a url that is null on one branch',
+      'supabase({ contract, url: ready ? env.url : null, jwtSecret })',
+    ],
   ])('finds %s', (_name, content) => {
     expect(detects(content)).toBe(true);
   });
@@ -38,6 +46,14 @@ describe('the supabase-one-binding-input detection', () => {
     ],
     ['a property whose name ends in url', 'const options = { imageUrl: null };'],
     ['a member access named pg', 'const pool = config.pg ?? null;'],
+    [
+      'a url that falls back to a string with ||',
+      "postgres({ contract, url: env.url || 'postgres://localhost' })",
+    ],
+    [
+      'a conditional url with no null branch',
+      'postgres({ contract, url: ready ? env.url : fallback })',
+    ],
   ])('skips %s', (_name, content) => {
     expect(detects(content)).toBe(false);
   });
