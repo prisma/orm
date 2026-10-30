@@ -2,6 +2,8 @@
 
 > **Update — `targetTypes` is removed** by [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md): a codec names the data type it represents, and the data type declares how the database names the type. Where this ADR names `targetTypes`, it describes the codec shape of its time.
 
+> **Update (2026-10-30) — the MySQL driver lets its library substitute values.** It hands `sql` and the values to the `mariadb` package's `query`, which writes each value into the statement as an escaped literal and sends it in one round trip. A server-side prepared statement costs a second round trip for every statement. Our code still never writes a value into SQL. Over this text protocol MySQL types a quoted number as text, and compares it with an expression as a double, so the MySQL `bigint` codec sends a JavaScript `bigint`, which the library writes as bare digits. The [MySQL driver's README](../../../packages/3-targets/mysql/3-driver/README.md) states what the database and the application must guarantee for this to keep values in their literals.
+
 Prisma Next executes parameterized query Plans:
 
 - lanes build an AST and a separate `params[]` array (no SQL literal concatenation)
