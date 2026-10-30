@@ -72,10 +72,10 @@ export type PostgresOptions<
 
 type ConnectedBinding = Exclude<DriverPostgresBinding, { readonly kind: 'url' }>;
 
-function toRuntimeBinding<
-  TContract extends Contract<SqlStorage>,
-  TCollections extends CollectionClasses,
->(binding: PostgresBinding, options: PostgresOptions<TContract, TCollections>): ConnectedBinding {
+export function toRuntimeBinding(
+  binding: PostgresBinding,
+  options: Pick<PostgresOptionsBase, 'poolOptions'>,
+): ConnectedBinding {
   if (binding.kind !== 'url') {
     return { ...binding, ownedByDriver: false };
   }

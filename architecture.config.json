@@ -775,6 +775,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/3-targets/postgres/9-facade/src/exports/internal-options.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "runtime"
+    },
+    {
       "glob": "packages/3-targets/postgres/9-facade/src/exports/internal-transaction-members.ts",
       "domain": "extensions",
       "layer": "adapters",

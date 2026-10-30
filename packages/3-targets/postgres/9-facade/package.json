@@ -76,6 +76,7 @@
     "./contract-builder": "./dist/contract-builder.mjs",
     "./control": "./dist/control.mjs",
     "./family": "./dist/family.mjs",
+    "./internal/options": "./dist/internal/options.mjs",
     "./internal/static-context": "./dist/internal/static-context.mjs",
     "./internal/transaction-members": "./dist/internal/transaction-members.mjs",
     "./internal/validate-contract": "./dist/internal/validate-contract.mjs",

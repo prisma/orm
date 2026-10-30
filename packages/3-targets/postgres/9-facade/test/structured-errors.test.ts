@@ -3,7 +3,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { isInternalError } from '@internal/utils/internal-error';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { createContract } from '@repo/test-utils';
-import type { Client } from 'pg';
+import { type Client, Pool } from 'pg';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('pg', () => {
@@ -147,6 +147,51 @@ describe('binding validation raises RUNTIME.BINDING_INVALID', () => {
     );
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({ code: 'RUNTIME.BINDING_INVALID' });
+  });
+});
+
+describe('postgres() given null as its database input', () => {
+  type Options = Parameters<typeof postgres<typeof contract>>[0];
+
+  it.each([
+    ['pg', { pg: null }, 'The pg option must be a pg.Pool or a pg.Client'],
+    ['url', { url: null }, 'The url option must be a string'],
+    ['binding', { binding: null }, 'The binding option must be an object with a kind'],
+  ])('raises RUNTIME.BINDING_INVALID for %s: null', (_name, input, message) => {
+    const error = capture(() => postgres({ contract, ...input } as unknown as Options));
+    expect(isStructuredError(error)).toBe(true);
+    expect(error).toMatchObject({
+      code: 'RUNTIME.BINDING_INVALID',
+      message,
+      why: expect.any(String),
+      fix: expect.any(String),
+      meta: { extension: 'postgres', receivedType: 'null' },
+    });
+  });
+
+  it('reports the null input, not the input count, when another input is also given', () => {
+    const error = capture(() =>
+      postgres({ contract, url: null, pg: new Pool() } as unknown as Options),
+    );
+    expect(error).toMatchObject({
+      code: 'RUNTIME.BINDING_INVALID',
+      message: 'The url option must be a string',
+    });
+  });
+
+  it('never copies a wrongly typed input into the error', () => {
+    const secret = 's3cret-password';
+    const error = capture(() =>
+      postgres({ contract, pg: `postgres://user:${secret}@host/db` } as unknown as Options),
+    );
+    expect(error).toMatchObject({
+      code: 'RUNTIME.BINDING_INVALID',
+      message: 'The pg option must be a pg.Pool or a pg.Client',
+      meta: { receivedType: 'string' },
+    });
+    expect(JSON.stringify(error)).not.toContain(secret);
+    expect(String(error)).not.toContain(secret);
+    expect(JSON.stringify(Object.getOwnPropertyDescriptors(error))).not.toContain(secret);
   });
 });
 

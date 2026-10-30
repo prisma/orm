@@ -65,7 +65,47 @@ export function validatePostgresUrl(url: string): string {
   return trimmed;
 }
 
+function typeOfInput(value: unknown): string {
+  return value === null ? 'null' : typeof value;
+}
+
+const inputRequirements = {
+  binding: {
+    accepts: (value: unknown) => typeof value === 'object' && value !== null,
+    message: 'The binding option must be an object with a kind',
+    expected: 'an object with a kind',
+    fix: "Pass binding: { kind: 'url', url }, { kind: 'pgPool', pool } or { kind: 'pgClient', client }.",
+  },
+  url: {
+    accepts: (value: unknown) => typeof value === 'string',
+    message: 'The url option must be a string',
+    expected: 'a connection string',
+    fix: 'Pass a postgres:// or postgresql:// connection string as url, and check that the variable it comes from is set.',
+  },
+  pg: {
+    accepts: (value: unknown) => typeof value === 'object' && value !== null,
+    message: 'The pg option must be a pg.Pool or a pg.Client',
+    expected: 'a pg.Pool or pg.Client object',
+    fix: 'Pass a pg.Pool or pg.Client as pg, or pass a connection string as url.',
+  },
+} as const;
+
+function checkInputTypes(options: PostgresBindingFields): void {
+  for (const option of ['binding', 'url', 'pg'] as const) {
+    const value: unknown = options[option];
+    const requirement = inputRequirements[option];
+    if (value === undefined || requirement.accepts(value)) continue;
+    const receivedType = typeOfInput(value);
+    throw postgresError('RUNTIME.BINDING_INVALID', requirement.message, {
+      why: `The ${option} option is ${receivedType === 'null' ? 'null' : `a ${receivedType}`}, and it must be ${requirement.expected}.`,
+      fix: requirement.fix,
+      meta: { extension: 'postgres', reason: `invalid ${option} input`, receivedType },
+    });
+  }
+}
+
 export function resolvePostgresBinding(options: PostgresBindingInput): PostgresBinding {
+  checkInputTypes(options);
   const providedCount =
     Number(options.binding !== undefined) +
     Number(options.url !== undefined) +
