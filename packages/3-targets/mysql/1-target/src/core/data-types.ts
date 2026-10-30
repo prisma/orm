@@ -273,6 +273,11 @@ export const mysqlTime = sqlDataType('mysql/time', {
   casts: {},
 });
 
+/** The length of the `varchar` a duration column is stored in. A codec reference with none, as a raw parameter writes, reads and writes the same values. */
+export const mysqlDurationParams = arktype({
+  'length?': 'number.integer >= 1 & number.integer <= 65535',
+});
+
 /** A length of time, stored in a `varchar` column as the ISO 8601 duration it was written as, `PT1H30M`, so that MySQL can index it. MySQL has no interval type, and equal durations can be written differently, `P1D` and `PT24H`, so a duration keeps its spelling. ADR 315. */
 export const mysqlDuration = sqlDataType('mysql/duration', {
   storedAs: mysqlVarchar.id,

@@ -35,12 +35,12 @@ import {
   mysqlDatetimeParams,
   mysqlDatetimeText,
   mysqlDuration,
+  mysqlDurationParams,
   mysqlDurationText,
   mysqlTime,
   mysqlTimestamp,
   mysqlTimestampText,
   mysqlTimeText,
-  mysqlVarcharParams,
 } from './data-types';
 import {
   dateOfWireText,
@@ -516,14 +516,13 @@ export class MysqlDurationStringCodec extends CodecImpl<
   }
 }
 
-/** The length of the `varchar` a duration is stored in. */
-type DurationParams = typeof mysqlVarcharParams.infer;
+type DurationParams = typeof mysqlDurationParams.infer;
 
 export class MysqlDurationStringDescriptor extends MysqlCodecDescriptor<DurationParams> {
   override readonly dataType = mysqlDuration.id;
   override readonly codecId = MYSQL_DURATION_STRING_CODEC_ID;
   override readonly traits = ['equality'] as const;
-  override readonly paramsSchema = mysqlVarcharParams;
+  override readonly paramsSchema = mysqlDurationParams;
   override renderValueLiteral(value: JsonValue): string | undefined {
     return renderTsLiteral(value);
   }
