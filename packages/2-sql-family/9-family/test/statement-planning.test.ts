@@ -108,7 +108,7 @@ describe('appliedStatementsInOrder', () => {
       appliedStatementsInOrder(
         [convert, rename, backfill],
         [{ statement: rename, operations: { kind: 'planned', operationIndexes: [0, 1] } }],
-        () => [9],
+        (statement) => (statement === rename ? [] : [9]),
       ),
     ).toEqual([
       { statement: convert, operationIndexes: [] },
@@ -138,6 +138,19 @@ describe('appliedStatementsInOrder', () => {
       { statement: enumValueRename, operationIndexes: [4, 5] },
       { statement: rename, operationIndexes: [0] },
     ]);
+  });
+});
+
+describe('appliedStatementsInOrder for a variant rename', () => {
+  it('adds the stored value rewrite the target places to the operations of a model rename', () => {
+    const rename = renameModel('Bug', 'Defect');
+    expect(
+      appliedStatementsInOrder(
+        [rename],
+        [{ statement: rename, operations: { kind: 'planned', operationIndexes: [0] } }],
+        () => [3],
+      ),
+    ).toEqual([{ statement: rename, operationIndexes: [0, 3] }]);
   });
 });
 

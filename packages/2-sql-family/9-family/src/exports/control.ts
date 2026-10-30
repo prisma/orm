@@ -209,6 +209,10 @@ export {
   planValueObjectFieldRewrites,
   type StoredKeyRewrite,
 } from '../core/migrations/value-object-field-planning';
+export {
+  planVariantRowRewrites,
+  type VariantRowRewrite,
+} from '../core/migrations/variant-planning';
 export type {
   ContractColumn,
   ContractColumns,

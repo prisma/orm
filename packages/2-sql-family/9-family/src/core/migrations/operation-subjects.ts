@@ -39,6 +39,8 @@ export interface SubjectStorage {
   readonly enumValue?: EnumValueCoordinate;
   /** The value object field the operation is about, when it rewrites one key of a value object. */
   readonly valueObjectField?: ValueObjectFieldCoordinate;
+  /** The variant the operation is about, when it deletes the rows of one variant. */
+  readonly model?: ModelCoordinate;
 }
 
 /** What a codec hook's call is about: the column of the field event it was returned for. */
@@ -103,6 +105,8 @@ interface SubjectContext {
   /** Where the plan's statements put the origin's tables and columns. */
   readonly origins: WorkingSchemaOrigins;
   readonly byHand: TableRenameByHand;
+  /** The variants of the origin the destination no longer has and no rename names: their columns are asked about as the variant. */
+  readonly removedVariants: readonly ModelCoordinate[];
 }
 
 interface StoringModel {
@@ -133,11 +137,18 @@ function modelsStoring(
   );
 }
 
+function isRemovedVariant(model: ModelCoordinate, context: SubjectContext): boolean {
+  return context.removedVariants.some(
+    (variant) => variant.namespaceId === model.namespaceId && variant.model === model.model,
+  );
+}
+
 function subjectOf(target: SubjectStorage, context: SubjectContext): MigrationSubject {
   if (target.enumValue !== undefined) return { kind: 'enumValue', ...target.enumValue };
   if (target.valueObjectField !== undefined) {
     return { kind: 'valueObjectField', ...target.valueObjectField };
   }
+  if (target.model !== undefined) return { kind: 'model', ...target.model };
   const storage: MigrationSubject = { kind: 'storage', name: target.storageName };
   const { fromContract } = context;
   if (target.table === undefined || fromContract === null) return storage;
@@ -153,7 +164,10 @@ function subjectOf(target: SubjectStorage, context: SubjectContext): MigrationSu
   const column = context.origins.originColumn(origin, target.table.column);
   for (const model of [...models].sort((a, b) => Number(b.isRoot) - Number(a.isRoot))) {
     const field = Object.entries(model.fields).find(([, stored]) => stored.column === column)?.[0];
-    if (field !== undefined) return { kind: 'field', ...model.coordinate, field };
+    if (field === undefined) continue;
+    return isRemovedVariant(model.coordinate, context)
+      ? { kind: 'model', ...model.coordinate }
+      : { kind: 'field', ...model.coordinate, field };
   }
   return storage;
 }

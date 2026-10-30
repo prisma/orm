@@ -1010,7 +1010,8 @@ function operationsOutsideStatementPlanner(
 /**
  * Every statement of a plan in the order given, with the operations it accounts for: a planned
  * statement's from `planned`, and a statement planned with the diff's from
- * `operationIndexesPlannedWithDiff`, which finds them among the target's whole plan.
+ * `operationIndexesPlannedWithDiff`, which finds them among the target's whole plan. A model rename
+ * takes both, since renaming a variant whose discriminator value changed also rewrites the value.
  */
 export function appliedStatementsInOrder(
   statements: readonly ResolvedMigrationStatement[],
@@ -1021,12 +1022,17 @@ export function appliedStatementsInOrder(
     const operations =
       planned.find((entry) => entry.statement === statement)?.operations ??
       operationsOutsideStatementPlanner(statement);
+    if (operations.kind === 'plannedWithDiff') {
+      return { statement, operationIndexes: operationIndexesPlannedWithDiff(statement) };
+    }
+    const renamesVariant = statement.kind === 'rename' && statement.entity === 'model';
     return {
       statement,
-      operationIndexes:
-        operations.kind === 'planned'
-          ? operations.operationIndexes
-          : operationIndexesPlannedWithDiff(statement),
+      operationIndexes: renamesVariant
+        ? [...operations.operationIndexes, ...operationIndexesPlannedWithDiff(statement)].sort(
+            (left, right) => left - right,
+          )
+        : operations.operationIndexes,
     };
   });
 }

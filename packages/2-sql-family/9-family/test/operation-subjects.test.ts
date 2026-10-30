@@ -62,6 +62,7 @@ describe('subjectsOfCalls', () => {
         fromContract: origin,
         contract: contractOf({ User: { table: 'user', fields: { id: 'id' } } }),
         byHand,
+        removedVariants: [],
         origins: NO_RENAMED_ORIGINS,
       }),
     ).toEqual({
@@ -102,7 +103,13 @@ describe('subjectsOfCalls', () => {
             ],
           },
         ],
-        { fromContract: origin, contract: origin, byHand, origins: NO_RENAMED_ORIGINS },
+        {
+          fromContract: origin,
+          contract: origin,
+          byHand,
+          removedVariants: [],
+          origins: NO_RENAMED_ORIGINS,
+        },
       ).dataLoss,
     ).toEqual([
       {
@@ -126,7 +133,13 @@ describe('subjectsOfCalls', () => {
             dataLoss: [{ ...column('user', 'full_name'), valueObjectField, loss: 'drop' }],
           },
         ],
-        { fromContract: origin, contract: origin, byHand, origins: NO_RENAMED_ORIGINS },
+        {
+          fromContract: origin,
+          contract: origin,
+          byHand,
+          removedVariants: [],
+          origins: NO_RENAMED_ORIGINS,
+        },
       ).dataLoss,
     ).toEqual([
       {
@@ -136,6 +149,51 @@ describe('subjectsOfCalls', () => {
         label: 'Remove key',
       },
     ]);
+  });
+
+  describe('a removed variant', () => {
+    const tasks = contractOf({
+      Task: { table: 'tasks', fields: { id: 'id', type: 'type' } },
+      Bug: { table: 'tasks', fields: { severity: 'severity' }, base: 'Task' },
+    });
+    const bug = { namespaceId: app, model: 'Bug' };
+
+    it('names the variant for its row deletion and its dropped columns', () => {
+      expect(
+        subjectsOfCalls(
+          [
+            {
+              ...unchanged,
+              label: 'Delete rows',
+              dataLoss: [{ ...table('tasks'), model: bug, loss: 'drop' }],
+            },
+            losing(column('tasks', 'severity')),
+          ],
+          {
+            fromContract: tasks,
+            contract: tasks,
+            byHand,
+            removedVariants: [bug],
+            origins: NO_RENAMED_ORIGINS,
+          },
+        ).dataLoss.map(({ subject }) => subject),
+      ).toEqual([
+        { kind: 'model', ...bug },
+        { kind: 'model', ...bug },
+      ]);
+    });
+
+    it('names the field of a dropped column of a variant the destination keeps', () => {
+      expect(
+        subjectsOfCalls([losing(column('tasks', 'severity'))], {
+          fromContract: tasks,
+          contract: tasks,
+          byHand,
+          removedVariants: [],
+          origins: NO_RENAMED_ORIGINS,
+        }).dataLoss.map(({ subject }) => subject),
+      ).toEqual([{ kind: 'field', ...bug, field: 'severity' }]);
+    });
   });
 
   it('counts every operation of a call with companions before the next call', () => {
@@ -151,7 +209,13 @@ describe('subjectsOfCalls', () => {
           },
           losing(table('legacy')),
         ],
-        { fromContract: origin, contract: origin, byHand, origins: NO_RENAMED_ORIGINS },
+        {
+          fromContract: origin,
+          contract: origin,
+          byHand,
+          removedVariants: [],
+          origins: NO_RENAMED_ORIGINS,
+        },
       ).dataLoss,
     ).toEqual([
       {
@@ -175,6 +239,7 @@ describe('subjectsOfCalls', () => {
         fromContract: from,
         contract: destination,
         byHand,
+        removedVariants: [],
         origins: {
           originTable: (current) =>
             current.table === 'account' ? { namespaceId: app, table: 'user' } : current,
@@ -204,7 +269,13 @@ describe('subjectsOfCalls', () => {
             temporaryValues: [],
           },
         ],
-        { fromContract: origin, contract: origin, byHand, origins: NO_RENAMED_ORIGINS },
+        {
+          fromContract: origin,
+          contract: origin,
+          byHand,
+          removedVariants: [],
+          origins: NO_RENAMED_ORIGINS,
+        },
       ).dataLoss,
     ).toEqual([
       {
@@ -225,6 +296,7 @@ describe('subjectsOfCalls', () => {
         fromContract: origin,
         contract: destination,
         byHand,
+        removedVariants: [],
         origins: NO_RENAMED_ORIGINS,
       }).dataLoss.map(({ subject }) => subject),
     ).toEqual([{ kind: 'field', namespaceId: app, model: 'User', field: 'name' }]);
@@ -238,6 +310,7 @@ describe('subjectsOfCalls', () => {
           fromContract: origin,
           contract: origin,
           byHand,
+          removedVariants: [],
           origins: NO_RENAMED_ORIGINS,
         },
       ).dataLoss,
@@ -263,6 +336,7 @@ describe('subjectsOfCalls', () => {
         fromContract: null,
         contract: origin,
         byHand,
+        removedVariants: [],
         origins: NO_RENAMED_ORIGINS,
       }).dataLoss,
     ).toEqual([
@@ -287,6 +361,7 @@ describe('subjectsOfCalls', () => {
         fromContract: origin,
         contract: origin,
         byHand,
+        removedVariants: [],
         origins: NO_RENAMED_ORIGINS,
       }).dataLoss,
     ).toEqual([
@@ -312,7 +387,13 @@ describe('subjectsOfCalls', () => {
             temporaryValues: [],
           },
         ],
-        { fromContract: origin, contract: origin, byHand, origins: NO_RENAMED_ORIGINS },
+        {
+          fromContract: origin,
+          contract: origin,
+          byHand,
+          removedVariants: [],
+          origins: NO_RENAMED_ORIGINS,
+        },
       ),
     ).toEqual({
       dataLoss: [],
@@ -340,6 +421,7 @@ describe('subjectsOfCalls', () => {
           fromContract: sharing,
           contract: sharing,
           byHand,
+          removedVariants: [],
           origins: NO_RENAMED_ORIGINS,
         }).dataLoss.map(({ subject }) => subject),
       ).toEqual([
@@ -354,6 +436,7 @@ describe('subjectsOfCalls', () => {
           fromContract: sharing,
           contract: sharing,
           byHand,
+          removedVariants: [],
           origins: NO_RENAMED_ORIGINS,
         }).dataLoss.map(({ subject }) => subject),
       ).toEqual([{ kind: 'field', namespaceId: app, model: 'Admin', field: 'level' }]);
@@ -385,7 +468,13 @@ describe('fieldEventStorage', () => {
           fieldEventStorage({ namespaceId: 'app', tableName: 'user', columnName: 'nickname' }),
         ),
       ],
-      { fromContract: origin, contract: origin, byHand, origins: NO_RENAMED_ORIGINS },
+      {
+        fromContract: origin,
+        contract: origin,
+        byHand,
+        removedVariants: [],
+        origins: NO_RENAMED_ORIGINS,
+      },
     );
     expect(subjects.dataLoss.map(({ subject }) => subject)).toEqual([
       { kind: 'field', namespaceId: app, model: 'User', field: 'name' },
@@ -410,6 +499,7 @@ describe('subjectsOfCalls for a table whose model keeps its name', () => {
         contract: to,
         origins: NO_RENAMED_ORIGINS,
         byHand,
+        removedVariants: [],
       }).dataLoss,
     ).toEqual([
       {
@@ -432,6 +522,7 @@ describe('subjectsOfCalls for a table whose model keeps its name', () => {
         contract: to,
         origins: NO_RENAMED_ORIGINS,
         byHand,
+        removedVariants: [],
       }).dataLoss,
     ).toEqual([
       {
@@ -456,6 +547,7 @@ describe('subjectsOfCalls for a table whose model keeps its name', () => {
         contract: to,
         origins: NO_RENAMED_ORIGINS,
         byHand,
+        removedVariants: [],
       }).dataLoss.map(({ keepDataAdvice }) => keepDataAdvice),
     ).toEqual([undefined]);
   });
