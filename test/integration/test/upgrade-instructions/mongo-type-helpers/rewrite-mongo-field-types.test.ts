@@ -58,14 +58,23 @@ describe.each(Object.entries(SCRIPT_PATHS))(
         stderr: '',
         stdout: [
           'aliased.ts: rewrote 3 field helper calls.',
-          'binds-type.ts: already binds the name "type", which the rewrite needs for the MongoDB type helpers; left unchanged. Rename the other binding and run the script again.',
+          'binds-type.ts: line 6: field.objectId(): not rewritten, as type names another value here; write it as field.scalar(type.X(...)).',
           'comments.ts: rewrote 2 field helper calls.',
+          'constant.ts: rewrote 1 field helper call.',
+          'constant.ts: line 9: field.scalar(CODEC): not rewritten, as its argument is not a codec id string or a type.X() call; write it as field.scalar(type.X(...)).',
           'contract.ts: rewrote 23 field helper calls.',
+          'mixed.ts: rewrote 2 field helper calls.',
+          "param.ts: line 4: field.string(): not rewritten, as the script cannot tell this field is the MongoDB builder's; write it as field.scalar(type.X(...)).",
+          "reexport.ts: line 3: field.objectId(): not rewritten, as the script cannot tell this field is the MongoDB builder's; write it as field.scalar(type.X(...)).",
           'renamed.ts: rewrote 4 field helper calls.',
+          'required.cjs: rewrote 1 field helper call.',
+          'rest.ts: rewrote 1 field helper call.',
+          'shadowed.ts: rewrote 1 field helper call.',
+          'shadowed.ts: line 7: field.string(): not rewritten, as type names another value here; write it as field.scalar(type.X(...)).',
           'unsupported.ts: rewrote 1 field helper call.',
           `unsupported.ts: line 9: field.scalar('geo/point@1'): not rewritten, as codec "geo/point@1" has no type constructor here; write it as field.scalar(type.X(...)).`,
           'unsupported.ts: line 10: field.vector({ typeParams: { length: dimensions(), other: 1 } }): not rewritten, as its arguments are not { typeParams: { length } }; write it as field.scalar(type.X(...)).',
-          'Changed 5 files.',
+          'Changed 10 files.',
           '',
         ].join('\n'),
       });
@@ -75,7 +84,15 @@ describe.each(Object.entries(SCRIPT_PATHS))(
     it('leaves the files it rewrote unchanged on a second run', () => {
       const dir = copyBefore();
       run(script, dir);
-      const second = run(script, dir, ['contract.ts', 'aliased.ts', 'renamed.ts', 'comments.ts']);
+      const second = run(script, dir, [
+        'contract.ts',
+        'aliased.ts',
+        'renamed.ts',
+        'comments.ts',
+        'mixed.ts',
+        'rest.ts',
+        'required.cjs',
+      ]);
       expect({ stdout: second.stdout, files: filesOf(dir) }).toEqual({
         stdout: 'Changed 0 files.\n',
         files: filesOf(join(fixturesDir, 'after')),

@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 /**
- * Rewrites the removed MongoDB field helpers of TypeScript contracts to `field.scalar(type.X())`: `field.objectId()` becomes `field.scalar(type.ObjectId())`, `field.scalar('mongo/string@1')` becomes `field.scalar(type.String())`, and `field.vector({ typeParams: { length: 3 } })` becomes `field.scalar(type.Vector(3))`. A call on a helpers object, such as `helpers.field.int32()`, becomes `helpers.field.scalar(helpers.type.Int32())`. It finds `field` under any name the file gives it: `import { field as f }` from a MongoDB contract builder entry, or `({ field: f })` in a destructuring. Where a rewritten call reads `type` by itself, the script adds `type` to the destructuring or the import that gives the call its `field`.
+ * Rewrites the removed MongoDB field helpers of TypeScript contracts to `field.scalar(type.X())`: `field.objectId()` becomes `field.scalar(type.ObjectId())`, `field.scalar('mongo/string@1')` becomes `field.scalar(type.String())`, and `field.vector({ typeParams: { length: 3 } })` becomes `field.scalar(type.Vector(3))`.
+ *
+ * It rewrites a call only where its `field` is the MongoDB builder's: imported or required from a MongoDB contract builder entry under any name, destructured from the helpers of a `defineContract` imported from one, or read as `helpers.field` from them, which becomes `helpers.field.scalar(helpers.type.Int32())`. Where a rewritten call reads `type` by itself, the script adds `type` to the import or destructuring that gives the call its `field`. A `field` of another builder, such as a SQL `defineContract`'s, is left alone.
  *
  * Usage: node rewrite-mongo-field-types.ts [file or directory ...]
  *
- * The paths default to the working directory. In a directory the script reads every TypeScript and JavaScript file outside `node_modules`, `.git`, `dist` and `build`. It rewrites only files that import from a MongoDB contract builder entry, and only code: comments and strings stay as they are. The contract each file builds does not change. It reads the files with the project's `typescript` package. It prints one line per file it changes, and one line per thing it leaves for a person: a call it cannot carry over, such as a codec id with no type constructor, a file that already binds the name `type` some other way, which it leaves unchanged, and a file whose `type` no import can give.
+ * The paths default to the working directory. In a directory the script reads every TypeScript and JavaScript file outside `node_modules`, `.git`, `dist` and `build`. It rewrites only code: comments and strings stay as they are, and the contract each file builds does not change. It reads the files with the `typescript` package of the project, or of the folder the script is in. It prints one line per file it changes, and one line per call it leaves for a person: a call it cannot carry over, such as a codec id with no type constructor; a call where `type` already names another value; and a removed helper called on a `field` it cannot tell is the MongoDB builder's, such as one imported from a module of the project.
  */
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -16,6 +18,7 @@ const SOURCE_FILE = /\.(?:[cm]?ts|tsx|[cm]?js|jsx)$/;
 const BUILDER_MODULE =
   /^(?:@prisma\/orm-mongo|@prisma\/orm-family-mongo\/contract-ts|@internal\/mongo|@internal\/mongo-contract-ts)\/contract-builder$/;
 const TYPE_EXPORTING_MODULE = /^(?:@prisma\/orm-mongo|@internal\/mongo)\/contract-builder$/;
+const WRITE_BY_HAND = 'write it as field.scalar(type.X(...))';
 
 const TYPE_OF_HELPER: Readonly<Record<string, string>> = {
   objectId: 'ObjectId',
@@ -57,17 +60,23 @@ interface Edit {
   readonly text: string;
 }
 
-/** Where a call's `field` comes from, and what reads its `type`. */
-interface Receiver {
-  /** The `type` the rewritten call reads, such as `type` or `helpers.type`. */
-  readonly typeText: string;
-  /** Adds the `type` binding this receiver needs, once; undefined when the receiver needs none. */
-  readonly bind: (() => void) | undefined;
-}
+/** What a name binds `field` to: the MongoDB builder's, another builder's, or something the script cannot tell. */
+type Origin =
+  | {
+      readonly kind: 'mongo';
+      /** The `type` the rewritten call reads, such as `type` or `helpers.type`. */
+      readonly typeText: string;
+      /** Adds `type` beside the `field` binding, once; undefined when the rewrite reads a `type` already there. */
+      readonly bind: (() => void) | undefined;
+      /** The declaration of the `type` this origin reads or adds, which is not a conflict. */
+      readonly ownType: TypeScript.Node | undefined;
+    }
+  | { readonly kind: 'other' }
+  | { readonly kind: 'unknown' };
 
-/** A receiver, and the code its binding of `field` reaches: the function a parameter belongs to, the block a declaration is in, or the file for an import. */
-interface ScopedReceiver {
-  readonly receiver: Receiver;
+/** A binding of a name and the code it reaches. */
+interface Scoped<Value> {
+  readonly value: Value;
   readonly scope: TypeScript.Node;
 }
 
@@ -75,15 +84,24 @@ interface FileResult {
   readonly text: string;
   readonly rewritten: number;
   readonly reports: readonly string[];
-  readonly typeConflict: boolean;
 }
 
-function isBuilderImport(node: TypeScript.Node): node is TypeScript.ImportDeclaration {
-  return (
-    ts.isImportDeclaration(node) &&
-    ts.isStringLiteral(node.moduleSpecifier) &&
-    BUILDER_MODULE.test(node.moduleSpecifier.text)
-  );
+function moduleOf(node: TypeScript.Node): string | undefined {
+  if (ts.isImportDeclaration(node)) {
+    return ts.isStringLiteral(node.moduleSpecifier) ? node.moduleSpecifier.text : undefined;
+  }
+  if (
+    ts.isCallExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === 'require' &&
+    node.arguments.length === 1
+  ) {
+    const [specifier] = node.arguments;
+    return specifier !== undefined && ts.isStringLiteralLike(specifier)
+      ? specifier.text
+      : undefined;
+  }
+  return undefined;
 }
 
 function propertyNameOf(element: TypeScript.BindingElement | TypeScript.ImportSpecifier) {
@@ -91,145 +109,273 @@ function propertyNameOf(element: TypeScript.BindingElement | TypeScript.ImportSp
   return ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : undefined;
 }
 
+/** The code a declaration reaches: a parameter's function, an import's file, and otherwise the nearest block. */
+function scopeOf(declaration: TypeScript.Node): TypeScript.Node {
+  let node: TypeScript.Node = declaration;
+  while (
+    ts.isBindingElement(node) ||
+    ts.isObjectBindingPattern(node) ||
+    ts.isArrayBindingPattern(node)
+  ) {
+    node = node.parent;
+  }
+  if (ts.isParameter(node)) return node.parent;
+  while (
+    !ts.isBlock(node) &&
+    !ts.isSourceFile(node) &&
+    !ts.isCaseClause(node) &&
+    !ts.isFunctionLike(node) &&
+    node.parent !== undefined
+  ) {
+    node = node.parent;
+  }
+  return node;
+}
+
 function rewrite(file: TypeScript.SourceFile): FileResult {
-  const text = file.text;
   const edits: Edit[] = [];
   const reports: string[] = [];
-  const receivers = new Map<string, ScopedReceiver[]>();
-  let bindsOtherType = false;
-  let addsType = false;
+  const fields = new Map<string, Scoped<Origin>[]>();
+  const helpersObjects = new Map<string, Scoped<'mongo' | 'other'>[]>();
+  const typeDeclarations: Scoped<TypeScript.Node>[] = [];
+  const mongoDefines = new Set<string>();
+  const otherDefines = new Set<string>();
+  const mongoNamespaces = new Map<string, string>();
+  const knownPatterns = new Set<TypeScript.Node>();
   let rewritten = 0;
-  const lineOf = (node: TypeScript.Node) =>
-    file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1;
+
   const report = (node: TypeScript.Node, why: string) => {
+    const line = file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1;
     const call = node.getText(file).replace(/\s+/g, ' ');
     reports.push(
-      `line ${lineOf(node)}: ${call.length > 100 ? `${call.slice(0, 97)}...` : call}: ${why}`,
+      `line ${line}: ${call.length > 100 ? `${call.slice(0, 97)}...` : call}: not rewritten, as ${why}; ${WRITE_BY_HAND}.`,
     );
   };
-  const addReceiver = (name: string, receiver: Receiver, scope: TypeScript.Node) => {
-    receivers.set(name, [...(receivers.get(name) ?? []), { receiver, scope }]);
+  const contains = (scope: TypeScript.Node, node: TypeScript.Node) =>
+    scope.getStart(file) <= node.getStart(file) && node.end <= scope.end;
+  function innermost<Value>(
+    bindings: readonly Scoped<Value>[] | undefined,
+    node: TypeScript.Node,
+  ): Value | undefined {
+    const reaching = (bindings ?? []).filter(({ scope }) => contains(scope, node));
+    reaching.sort(
+      (a, b) => a.scope.end - a.scope.getStart(file) - (b.scope.end - b.scope.getStart(file)),
+    );
+    return reaching[0]?.value;
+  }
+  const add = <Value>(map: Map<string, Scoped<Value>[]>, name: string, binding: Scoped<Value>) => {
+    map.set(name, [...(map.get(name) ?? []), binding]);
   };
 
-  function scopeOf(pattern: TypeScript.ObjectBindingPattern): TypeScript.Node {
-    if (ts.isParameter(pattern.parent)) return pattern.parent.parent;
-    let node: TypeScript.Node = pattern.parent;
-    while (!ts.isBlock(node) && !ts.isSourceFile(node) && node.parent !== undefined) {
-      node = node.parent;
-    }
-    return node;
-  }
-
-  function bindingReceiver(pattern: TypeScript.ObjectBindingPattern): Receiver {
-    const existing = pattern.elements.find((element) => propertyNameOf(element) === 'type');
-    if (existing !== undefined && ts.isIdentifier(existing.name)) {
-      return { typeText: existing.name.text, bind: undefined };
-    }
-    let bound = false;
-    return {
-      typeText: 'type',
-      bind: () => {
-        if (bound) return;
-        bound = true;
-        addsType = true;
-        const last = pattern.elements[pattern.elements.length - 1];
-        if (last === undefined) return;
-        edits.push({ start: last.end, end: last.end, text: ', type' });
-      },
-    };
-  }
-
-  function importReceiver(declaration: TypeScript.ImportDeclaration): Receiver {
-    const bindings = declaration.importClause?.namedBindings;
-    const module = ts.isStringLiteral(declaration.moduleSpecifier)
-      ? declaration.moduleSpecifier.text
-      : '';
-    const elements = bindings !== undefined && ts.isNamedImports(bindings) ? bindings.elements : [];
+  /** The origin of `field` bound in `elements`, beside which `type` is added when needed. */
+  function mongoOrigin(
+    elements: TypeScript.NodeArray<TypeScript.BindingElement | TypeScript.ImportSpecifier>,
+    exportsType: boolean,
+    where: TypeScript.Node,
+  ): Origin {
     const existing = elements.find((element) => propertyNameOf(element) === 'type');
-    if (existing !== undefined) return { typeText: existing.name.text, bind: undefined };
+    if (existing !== undefined && ts.isIdentifier(existing.name)) {
+      return { kind: 'mongo', typeText: existing.name.text, bind: undefined, ownType: existing };
+    }
     let bound = false;
     return {
+      kind: 'mongo',
       typeText: 'type',
+      ownType: undefined,
       bind: () => {
         if (bound) return;
         bound = true;
-        addsType = true;
         const last = elements[elements.length - 1];
-        if (!TYPE_EXPORTING_MODULE.test(module) || last === undefined) {
+        if (!exportsType || last === undefined) {
+          const line = file.getLineAndCharacterOfPosition(where.getStart(file)).line + 1;
           reports.push(
-            `line ${lineOf(declaration)}: ${module} does not export type; import type from @prisma/orm-mongo/contract-builder.`,
+            `line ${line}: this module does not export type; import type from @prisma/orm-mongo/contract-builder.`,
           );
           return;
         }
-        edits.push({ start: last.end, end: last.end, text: ', type' });
+        if (ts.isBindingElement(last) && last.dotDotDotToken !== undefined) {
+          edits.push({ start: last.getStart(file), end: last.getStart(file), text: 'type, ' });
+        } else {
+          edits.push({ start: last.end, end: last.end, text: ', type' });
+        }
       },
     };
   }
 
-  function collect(node: TypeScript.Node): void {
-    if (isBuilderImport(node)) {
+  /** Records what an import or `require` of a builder entry binds. */
+  function bindModule(
+    module: string,
+    names:
+      | TypeScript.NamedImports
+      | TypeScript.ObjectBindingPattern
+      | TypeScript.Identifier
+      | undefined,
+    where: TypeScript.Node,
+  ): void {
+    if (names === undefined) return;
+    const isMongo = BUILDER_MODULE.test(module);
+    const isOtherBuilder = !isMongo && /\/contract-builder$/.test(module);
+    if (ts.isObjectBindingPattern(names)) knownPatterns.add(names);
+    if (ts.isIdentifier(names)) {
+      if (isMongo) mongoNamespaces.set(names.text, module);
+      return;
+    }
+    for (const element of names.elements) {
+      if (!ts.isIdentifier(element.name)) continue;
+      const imported = propertyNameOf(element);
+      if (imported === 'defineContract') {
+        (isMongo ? mongoDefines : otherDefines).add(element.name.text);
+      }
+      if (imported === 'field') {
+        add(fields, element.name.text, {
+          value: isMongo
+            ? mongoOrigin(names.elements, TYPE_EXPORTING_MODULE.test(module), where)
+            : { kind: isOtherBuilder ? 'other' : 'unknown' },
+          scope: file,
+        });
+      }
+    }
+  }
+
+  function collectModules(node: TypeScript.Node): void {
+    if (ts.isImportDeclaration(node)) {
+      const module = moduleOf(node);
       const bindings = node.importClause?.namedBindings;
-      if (bindings !== undefined && ts.isNamedImports(bindings)) {
-        for (const element of bindings.elements) {
-          if (propertyNameOf(element) === 'field') {
-            addReceiver(element.name.text, importReceiver(node), file);
-          }
+      if (module !== undefined && node.importClause?.isTypeOnly !== true) {
+        if (bindings !== undefined && ts.isNamedImports(bindings))
+          bindModule(module, bindings, node);
+        if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
+          bindModule(module, bindings.name, node);
         }
       }
     }
-    if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent)) {
-      if (propertyNameOf(node) === 'field' && ts.isIdentifier(node.name)) {
-        addReceiver(node.name.text, bindingReceiver(node.parent), scopeOf(node.parent));
+    if (ts.isVariableDeclaration(node) && node.initializer !== undefined) {
+      const module = moduleOf(node.initializer);
+      if (
+        module !== undefined &&
+        (ts.isObjectBindingPattern(node.name) || ts.isIdentifier(node.name))
+      ) {
+        bindModule(module, node.name, node);
+      }
+    }
+    ts.forEachChild(node, collectModules);
+  }
+
+  /** Whether `callee` is a `defineContract` of the MongoDB builder, of another builder, or neither. */
+  function defineOf(callee: TypeScript.Expression): 'mongo' | 'other' | undefined {
+    if (ts.isIdentifier(callee)) {
+      if (mongoDefines.has(callee.text)) return 'mongo';
+      return otherDefines.has(callee.text) ? 'other' : undefined;
+    }
+    if (
+      ts.isPropertyAccessExpression(callee) &&
+      callee.name.text === 'defineContract' &&
+      ts.isIdentifier(callee.expression)
+    ) {
+      return mongoNamespaces.has(callee.expression.text) ? 'mongo' : undefined;
+    }
+    return undefined;
+  }
+
+  /** Records the bindings of `field`, of a helpers object, and of other values named `type`. */
+  function collectBindings(node: TypeScript.Node): void {
+    if (ts.isCallExpression(node)) {
+      const define = defineOf(node.expression);
+      if (define !== undefined) {
+        for (const argument of node.arguments) {
+          if (!ts.isArrowFunction(argument) && !ts.isFunctionExpression(argument)) continue;
+          const [helpers] = argument.parameters;
+          if (helpers === undefined) continue;
+          if (ts.isIdentifier(helpers.name)) {
+            add(helpersObjects, helpers.name.text, { value: define, scope: argument });
+          }
+          if (ts.isObjectBindingPattern(helpers.name)) bindHelpers(helpers.name, define, argument);
+        }
       }
     }
     if (
-      (ts.isVariableDeclaration(node) ||
-        ts.isParameter(node) ||
-        ts.isFunctionDeclaration(node) ||
-        ts.isClassDeclaration(node)) &&
-      node.name !== undefined &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === 'type'
+      ts.isVariableDeclaration(node) &&
+      ts.isObjectBindingPattern(node.name) &&
+      node.initializer !== undefined &&
+      ts.isIdentifier(node.initializer)
     ) {
-      bindsOtherType = true;
+      const origin = innermost(helpersObjects.get(node.initializer.text), node);
+      if (origin !== undefined) bindHelpers(node.name, origin, scopeOf(node));
     }
-    ts.forEachChild(node, collect);
-  }
-
-  for (const statement of file.statements) {
-    if (!ts.isImportDeclaration(statement) || isBuilderImport(statement)) continue;
-    const clause = statement.importClause;
-    const bindings = clause?.namedBindings;
-    const importsType =
-      clause?.isTypeOnly !== true &&
-      (clause?.name?.text === 'type' ||
-        (bindings !== undefined &&
-          (ts.isNamespaceImport(bindings)
-            ? bindings.name.text === 'type'
-            : bindings.elements.some(
-                (element) => !element.isTypeOnly && element.name.text === 'type',
-              ))));
-    if (importsType) bindsOtherType = true;
-  }
-
-  /** The receiver of `expression`, a `field` the file binds, or `<object>.field`. */
-  function receiverOf(expression: TypeScript.Expression): Receiver | undefined {
-    if (ts.isIdentifier(expression)) {
-      const position = expression.getStart(file);
-      const reaching = (receivers.get(expression.text) ?? []).filter(
-        ({ scope }) => scope.getStart(file) <= position && position < scope.end,
-      );
-      const innermost = reaching.sort(
-        (a, b) => a.scope.end - a.scope.getStart(file) - (b.scope.end - b.scope.getStart(file)),
-      )[0];
-      return innermost?.receiver;
+    if (ts.isParameter(node) && ts.isIdentifier(node.name) && node.name.text === 'field') {
+      if (!isHelpersParameter(node))
+        add(fields, 'field', { value: { kind: 'unknown' }, scope: node.parent });
     }
     if (
-      ts.isPropertyAccessExpression(expression) &&
-      expression.name.text === 'field' &&
-      ts.isIdentifier(expression.expression)
+      ts.isBindingElement(node) &&
+      ts.isIdentifier(node.name) &&
+      propertyNameOf(node) === 'field' &&
+      !isKnownPattern(node.parent)
     ) {
-      return { typeText: `${expression.expression.text}.type`, bind: undefined };
+      add(fields, node.name.text, { value: { kind: 'unknown' }, scope: scopeOf(node) });
+    }
+    const declared = declaredName(node);
+    if (declared === 'type') typeDeclarations.push({ value: node, scope: scopeOf(node) });
+    ts.forEachChild(node, collectBindings);
+  }
+
+  function isKnownPattern(pattern: TypeScript.Node): boolean {
+    return knownPatterns.has(pattern);
+  }
+  function isHelpersParameter(parameter: TypeScript.ParameterDeclaration): boolean {
+    const owner = parameter.parent;
+    return ts.isCallExpression(owner.parent) && defineOf(owner.parent.expression) !== undefined;
+  }
+
+  function bindHelpers(
+    pattern: TypeScript.ObjectBindingPattern,
+    define: 'mongo' | 'other',
+    scope: TypeScript.Node,
+  ): void {
+    knownPatterns.add(pattern);
+    for (const element of pattern.elements) {
+      if (propertyNameOf(element) !== 'field' || !ts.isIdentifier(element.name)) continue;
+      add(fields, element.name.text, {
+        value:
+          define === 'mongo' ? mongoOrigin(pattern.elements, true, pattern) : { kind: 'other' },
+        scope,
+      });
+    }
+  }
+
+  /** The name a declaration binds, when it is one. */
+  function declaredName(node: TypeScript.Node): string | undefined {
+    if (
+      ts.isVariableDeclaration(node) ||
+      ts.isParameter(node) ||
+      ts.isBindingElement(node) ||
+      ts.isFunctionDeclaration(node) ||
+      ts.isClassDeclaration(node) ||
+      ts.isImportSpecifier(node) ||
+      ts.isNamespaceImport(node) ||
+      ts.isImportClause(node)
+    ) {
+      return node.name !== undefined && ts.isIdentifier(node.name) ? node.name.text : undefined;
+    }
+    return undefined;
+  }
+
+  /** The origin of the `field` a call reads through `receiver`. */
+  function originOf(receiver: TypeScript.Expression): Origin | undefined {
+    if (ts.isIdentifier(receiver)) return innermost(fields.get(receiver.text), receiver);
+    if (
+      ts.isPropertyAccessExpression(receiver) &&
+      receiver.name.text === 'field' &&
+      ts.isIdentifier(receiver.expression)
+    ) {
+      const object = receiver.expression.text;
+      const helpers = innermost(helpersObjects.get(object), receiver);
+      const module = mongoNamespaces.get(object);
+      if (helpers === 'other') return { kind: 'other' };
+      if (helpers === 'mongo' || (module !== undefined && TYPE_EXPORTING_MODULE.test(module))) {
+        return { kind: 'mongo', typeText: `${object}.type`, bind: undefined, ownType: undefined };
+      }
+      return { kind: 'unknown' };
     }
     return undefined;
   }
@@ -254,14 +400,23 @@ function rewrite(file: TypeScript.SourceFile): FileResult {
     return ts.isPropertyAssignment(length) ? length.initializer.getText(file) : undefined;
   }
 
-  /** The type call a removed-helper call becomes, or the reason it cannot be rewritten. */
+  /** The type call a removed-helper call becomes, the reason it cannot be rewritten, or `keep` for a call that is not a removed helper. */
   function typeCallOf(
     helper: string,
     args: readonly TypeScript.Expression[],
   ): { readonly typeName: string; readonly argument: string } | string {
     if (helper === 'scalar') {
       const [codec, options] = args;
-      if (codec === undefined || !ts.isStringLiteralLike(codec)) return 'keep';
+      if (
+        codec === undefined ||
+        ts.isCallExpression(codec) ||
+        ts.isObjectLiteralExpression(codec)
+      ) {
+        return 'keep';
+      }
+      if (!ts.isStringLiteralLike(codec)) {
+        return 'its argument is not a codec id string or a type.X() call';
+      }
       const typeName = TYPE_OF_CODEC[codec.text];
       if (typeName === undefined) return `codec "${codec.text}" has no type constructor here`;
       if (args.length === 1) return { typeName, argument: '' };
@@ -278,23 +433,35 @@ function rewrite(file: TypeScript.SourceFile): FileResult {
     return 'its arguments are not { typeParams: { length } }';
   }
 
+  /** Whether a `type` other than the builder's reaches `node`. */
+  function typeIsTaken(
+    node: TypeScript.Node,
+    origin: Origin & { readonly kind: 'mongo' },
+  ): boolean {
+    return typeDeclarations.some(
+      ({ value, scope }) => value !== origin.ownType && contains(scope, node),
+    );
+  }
+
   function visit(node: TypeScript.Node): void {
     if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
       const callee = node.expression;
-      const receiver = receiverOf(callee.expression);
-      const helper = callee.name.text;
-      if (receiver !== undefined) {
-        const typeCall = typeCallOf(helper, node.arguments);
-        if (typeof typeCall === 'string') {
-          if (typeCall !== 'keep')
-            report(node, `not rewritten, as ${typeCall}; write it as field.scalar(type.X(...)).`);
+      const origin = originOf(callee.expression);
+      const typeCall = origin === undefined ? 'keep' : typeCallOf(callee.name.text, node.arguments);
+      if (origin !== undefined && typeCall !== 'keep' && origin.kind !== 'other') {
+        if (origin.kind === 'unknown') {
+          report(node, "the script cannot tell this field is the MongoDB builder's");
+        } else if (typeof typeCall === 'string') {
+          report(node, typeCall);
+        } else if (origin.typeText === 'type' && typeIsTaken(node, origin)) {
+          report(node, 'type names another value here');
         } else {
-          receiver.bind?.();
+          origin.bind?.();
           rewritten += 1;
           edits.push({
             start: node.getStart(file),
             end: node.end,
-            text: `${callee.expression.getText(file)}.scalar(${receiver.typeText}.${typeCall.typeName}(${typeCall.argument}))`,
+            text: `${callee.expression.getText(file)}.scalar(${origin.typeText}.${typeCall.typeName}(${typeCall.argument}))`,
           });
           for (const argument of node.arguments) ts.forEachChild(argument, visit);
           return;
@@ -304,15 +471,16 @@ function rewrite(file: TypeScript.SourceFile): FileResult {
     ts.forEachChild(node, visit);
   }
 
-  collect(file);
+  collectModules(file);
+  collectBindings(file);
   visit(file);
-  const next = edits
+  const text = edits
     .sort((a, b) => b.start - a.start)
     .reduce(
       (result, edit) => result.slice(0, edit.start) + edit.text + result.slice(edit.end),
-      text,
+      file.text,
     );
-  return { text: next, rewritten, reports, typeConflict: addsType && bindsOtherType };
+  return { text, rewritten, reports };
 }
 
 function sourceFilesIn(directory: string): readonly string[] {
@@ -334,9 +502,10 @@ function main(args: readonly string[]): void {
   const root = process.cwd();
   let changed = 0;
   const paths = args.length === 0 ? ['.'] : args;
-  for (const file of paths.flatMap((path) =>
+  const files = paths.flatMap((path) =>
     statSync(path).isDirectory() ? sourceFilesIn(path) : [path],
-  )) {
+  );
+  for (const file of files) {
     const name = relative(root, file) || file;
     const text = readFileSync(file, 'utf8');
     const source = ts.createSourceFile(
@@ -346,14 +515,7 @@ function main(args: readonly string[]): void {
       true,
       scriptKindOf(file),
     );
-    if (!source.statements.some(isBuilderImport)) continue;
     const result = rewrite(source);
-    if (result.typeConflict) {
-      console.log(
-        `${name}: already binds the name "type", which the rewrite needs for the MongoDB type helpers; left unchanged. Rename the other binding and run the script again.`,
-      );
-      continue;
-    }
     if (result.text !== text) {
       writeFileSync(file, result.text);
       changed += 1;
