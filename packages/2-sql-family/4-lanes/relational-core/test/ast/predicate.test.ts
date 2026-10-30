@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AndExpr,
   BinaryExpr,
   ExistsExpr,
   ListExpression,
@@ -60,5 +61,40 @@ describe('ast/predicate', () => {
       col('post', 'userId'),
       col('user', 'id'),
     ]);
+  });
+
+  it('collects param refs across nested predicate trees in order', () => {
+    const params = Array.from({ length: 6 }, (_, i) => param(i));
+    const where = OrExpr.of([
+      AndExpr.of([
+        BinaryExpr.in(col('user', 'id'), ListExpression.of([params[0]!, params[1]!])),
+        BinaryExpr.eq(col('user', 'email'), params[2]!),
+      ]),
+      BinaryExpr.eq(col('user', 'name'), lit('alice')),
+      BinaryExpr.in(col('user', 'id'), ListExpression.of([params[3]!, params[4]!, params[5]!])),
+    ]);
+
+    const refs = where.collectParamRefs();
+    refs.push(param(99));
+
+    expect(refs.slice(0, -1)).toEqual(params);
+    expect(where.collectParamRefs()).toEqual(params);
+    expect(BinaryExpr.eq(col('user', 'id'), lit(1)).collectParamRefs()).toEqual([]);
+  });
+
+  it('collects refs from large IN lists and OR chains in linear time', () => {
+    const count = 100_000;
+    const params = Array.from({ length: count }, (_, i) => param(i));
+    const inList = BinaryExpr.in(col('user', 'id'), ListExpression.of(params));
+    const orChain = OrExpr.of(params.map((p) => BinaryExpr.eq(col('user', 'id'), p)));
+
+    const inRefs = inList.collectParamRefs();
+    const orRefs = orChain.collectParamRefs();
+
+    expect(inRefs).toHaveLength(count);
+    expect(inRefs.every((ref, i) => ref === params[i])).toBe(true);
+    expect(orRefs).toHaveLength(count);
+    expect(orRefs.every((ref, i) => ref === params[i])).toBe(true);
+    expect(orChain.collectColumnRefs()).toHaveLength(count);
   });
 });
