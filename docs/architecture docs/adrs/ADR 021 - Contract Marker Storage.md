@@ -1,6 +1,6 @@
 # ADR 021 — Contract marker storage & verification modes
 
-**Status:** Accepted. [ADR 309](ADR%20309%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md) adds `meta.policies`, the policies in force, and requires every marker write to preserve the `meta` keys it does not own.
+**Status:** Accepted. [ADR 314](ADR%20314%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md) adds `meta.policies`, the policies in force, and requires every marker write to preserve the `meta` keys it does not own.
 
 ## Context
 

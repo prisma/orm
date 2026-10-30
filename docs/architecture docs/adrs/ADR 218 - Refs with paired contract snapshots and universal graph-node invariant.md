@@ -2,7 +2,7 @@
 
 ## Status
 
-**Accepted** — closes the dev → ship transition trap tracked in [TML-2629](https://linear.app/prisma-company/issue/TML-2629/dev-ship-transition-broken-first-migration-plan-after-db-update). [ADR 309](ADR%20309%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md) adds an optional `policies` field to the ref pointer and requires every ref writer to keep the fields it does not change.
+**Accepted** — closes the dev → ship transition trap tracked in [TML-2629](https://linear.app/prisma-company/issue/TML-2629/dev-ship-transition-broken-first-migration-plan-after-db-update). [ADR 314](ADR%20314%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md) adds an optional `policies` field to the ref pointer and requires every ref writer to keep the fields it does not change.
 
 The **paired contract snapshot** part of this decision (a ref carrying its own `<name>.contract.json` / `<name>.contract.d.ts` copy) was folded into the shared content-addressed store introduced by [ADR 240](ADR%20240%20-%20Contract%20snapshots%20live%20in%20a%20content-addressed%20store.md) (TML-3072). A ref is now only its pointer file (`{hash, invariants}`); the contract bytes it names resolve through `migrations/snapshots/<hex>/contract.{json,d.ts}` by that hash, the same store every graph node resolves through. The **universal graph-node invariant** and **asymmetric ref-advancement** decisions below are unaffected and remain current. `db sign` was later added to the implicit-advancement set (see the row in the table under *Asymmetric ref-advancement*); unlike `db init` / `db update`, its `--db` flag does not suppress the advancement; `--no-advance-ref` skips it.
 

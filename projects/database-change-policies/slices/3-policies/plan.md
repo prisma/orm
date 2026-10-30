@@ -30,4 +30,4 @@ Spec: [`spec.md`](spec.md). One persistent Opus implementer runs the dispatches 
 
 ## Orchestrator-owned
 
-ADR 309; status notes on ADR 021 and ADR 218; glossary; `skills/prisma-8` (`SKILL.md`, `references/migrations.md`, `references/debug.md`); `pnpm check:error-reference`; `/drive-code-review`; pre-push checks per `drive/calibration/dod.md`; PR text.
+ADR 314; status notes on ADR 021 and ADR 218; glossary; `skills/prisma-8` (`SKILL.md`, `references/migrations.md`, `references/debug.md`); `pnpm check:error-reference`; `/drive-code-review`; pre-push checks per `drive/calibration/dod.md`; PR text.
