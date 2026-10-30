@@ -37,21 +37,21 @@ describe('renameStoredKey', () => {
         {
           description:
             'ensure no object at path "$[*]" in column "history" of "place" has both key "lat" and key "latitude"',
-          sql: `SELECT NOT EXISTS (SELECT 1 FROM "app"."place" WHERE jsonb_path_exists("history", 'strict $ ? (@.type() == "array" || @.type() == "object").**{1} ? (@.type() == "object" && exists(@.keyvalue() ? (@.key == "lat")) && exists(@.keyvalue() ? (@.key == "latitude")))')) AS result`,
+          sql: `SELECT NOT EXISTS (SELECT 1 FROM "app"."place" WHERE jsonb_path_exists(("history"::jsonb), 'strict $ ? (@.type() == "array" || @.type() == "object").**{1} ? (@.type() == "object" && exists(@.keyvalue() ? (@.key == "lat")) && exists(@.keyvalue() ? (@.key == "latitude")))')) AS result`,
         },
       ],
       execute: [
         {
           description:
             'rename key "lat" to "latitude" at path "$[*]" in column "history" of "place"',
-          sql: `UPDATE "app"."place" SET "history" = CASE jsonb_typeof("history") WHEN 'array' THEN (SELECT coalesce(jsonb_agg(CASE WHEN jsonb_typeof(e0.v) = 'object' AND e0.v ? 'lat' THEN (e0.v - 'lat') || jsonb_build_object('latitude', e0.v -> 'lat') ELSE e0.v END ORDER BY e0.i), '[]'::jsonb) FROM jsonb_array_elements("history") WITH ORDINALITY AS e0(v, i)) WHEN 'object' THEN (SELECT coalesce(jsonb_object_agg(e0.k, CASE WHEN jsonb_typeof(e0.v) = 'object' AND e0.v ? 'lat' THEN (e0.v - 'lat') || jsonb_build_object('latitude', e0.v -> 'lat') ELSE e0.v END), '{}'::jsonb) FROM jsonb_each("history") AS e0(k, v)) ELSE "history" END WHERE jsonb_path_exists("history", 'strict $ ? (@.type() == "array" || @.type() == "object").**{1} ? (@.type() == "object" && exists(@.keyvalue() ? (@.key == "lat")))')`,
+          sql: `UPDATE "app"."place" SET "history" = CASE jsonb_typeof(("history"::jsonb)) WHEN 'array' THEN (SELECT coalesce(jsonb_agg(CASE WHEN jsonb_typeof(e0.v) = 'object' AND e0.v ? 'lat' THEN (e0.v - 'lat') || jsonb_build_object('latitude', e0.v -> 'lat') ELSE e0.v END ORDER BY e0.i), '[]'::jsonb) FROM jsonb_array_elements(("history"::jsonb)) WITH ORDINALITY AS e0(v, i)) WHEN 'object' THEN (SELECT coalesce(jsonb_object_agg(e0.k, CASE WHEN jsonb_typeof(e0.v) = 'object' AND e0.v ? 'lat' THEN (e0.v - 'lat') || jsonb_build_object('latitude', e0.v -> 'lat') ELSE e0.v END), '{}'::jsonb) FROM jsonb_each(("history"::jsonb)) AS e0(k, v)) ELSE ("history"::jsonb) END WHERE jsonb_path_exists(("history"::jsonb), 'strict $ ? (@.type() == "array" || @.type() == "object").**{1} ? (@.type() == "object" && exists(@.keyvalue() ? (@.key == "lat")))')`,
         },
       ],
       postcheck: [
         {
           description:
             'verify no object at path "$[*]" in column "history" of "place" has key "lat"',
-          sql: `SELECT NOT EXISTS (SELECT 1 FROM "app"."place" WHERE jsonb_path_exists("history", 'strict $ ? (@.type() == "array" || @.type() == "object").**{1} ? (@.type() == "object" && exists(@.keyvalue() ? (@.key == "lat")))')) AS result`,
+          sql: `SELECT NOT EXISTS (SELECT 1 FROM "app"."place" WHERE jsonb_path_exists(("history"::jsonb), 'strict $ ? (@.type() == "array" || @.type() == "object").**{1} ? (@.type() == "object" && exists(@.keyvalue() ? (@.key == "lat")))')) AS result`,
         },
       ],
     });
@@ -114,7 +114,7 @@ describe('renameStoredKey', () => {
 describe('removeStoredKey', () => {
   it('removes the key only from the rows whose objects hold it', () => {
     const op = new RemoveStoredKeyCall('app', 'place', 'point', '$.lat').toOp();
-    const holdsKey = `jsonb_path_exists("point", 'strict $ ? (@.type() == "object" && exists(@.keyvalue() ? (@.key == "lat")))')`;
+    const holdsKey = `jsonb_path_exists(("point"::jsonb), 'strict $ ? (@.type() == "object" && exists(@.keyvalue() ? (@.key == "lat")))')`;
 
     expect(op).toMatchObject({
       id: 'removeStoredKey.place.point.$.lat',
@@ -123,7 +123,7 @@ describe('removeStoredKey', () => {
       precheck: [],
       execute: [
         {
-          sql: `UPDATE "app"."place" SET "point" = CASE WHEN jsonb_typeof("point") = 'object' THEN "point" - 'lat' ELSE "point" END WHERE ${holdsKey}`,
+          sql: `UPDATE "app"."place" SET "point" = CASE WHEN jsonb_typeof(("point"::jsonb)) = 'object' THEN ("point"::jsonb) - 'lat' ELSE ("point"::jsonb) END WHERE ${holdsKey}`,
         },
       ],
       postcheck: [
@@ -152,7 +152,7 @@ describe('removeStoredKey', () => {
 
 describe('fillStoredKey', () => {
   it('fills the key only in the rows with an object that lacks it or holds JSON null there, passing the value as JSON text', () => {
-    const lacks = `jsonb_path_exists("point", 'strict $ ? (@.type() == "object" && !(exists(@.keyvalue() ? (@.key == "country" && @.value.type() != "null"))))')`;
+    const lacks = `jsonb_path_exists(("point"::jsonb), 'strict $ ? (@.type() == "object" && !(exists(@.keyvalue() ? (@.key == "country" && @.value.type() != "null"))))')`;
 
     expect(
       new FillStoredKeyCall('app', 'place', 'point', '$.country', { code: 'NZ' }).toOp(),
@@ -163,7 +163,7 @@ describe('fillStoredKey', () => {
       precheck: [],
       execute: [
         {
-          sql: `UPDATE "app"."place" SET "point" = CASE WHEN jsonb_typeof("point") = 'object' AND coalesce("point" -> 'country', 'null'::jsonb) = 'null'::jsonb THEN "point" || jsonb_build_object('country', $1::jsonb) ELSE "point" END WHERE ${lacks}`,
+          sql: `UPDATE "app"."place" SET "point" = CASE WHEN jsonb_typeof(("point"::jsonb)) = 'object' AND coalesce(("point"::jsonb) -> 'country', 'null'::jsonb) = 'null'::jsonb THEN ("point"::jsonb) || jsonb_build_object('country', $1::jsonb) ELSE ("point"::jsonb) END WHERE ${lacks}`,
           params: ['{"code":"NZ"}'],
         },
       ],

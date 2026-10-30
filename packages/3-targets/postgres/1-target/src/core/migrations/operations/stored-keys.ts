@@ -2,6 +2,7 @@ import { type JsonKeyPath, jsonPathText } from '@internal/family-sql/control';
 import { quoteIdentifier } from '../../sql-utils';
 import { qualifyTableName } from '../planner-sql-checks';
 import {
+  asJsonb,
   hasMemberFilter,
   hasValueFilter,
   jsonPathMatches,
@@ -24,7 +25,7 @@ function noRowWhere(schemaName: string, tableName: string, condition: string): s
 }
 
 function where(columnName: string, keyPath: JsonKeyPath, filter: string): string {
-  return jsonPathMatches(quoteIdentifier(columnName), keyPath.objects, 'object', filter);
+  return jsonPathMatches(asJsonb(quoteIdentifier(columnName)), keyPath.objects, 'object', filter);
 }
 
 export function renameStoredKey(
@@ -37,7 +38,7 @@ export function renameStoredKey(
   const column = quoteIdentifier(columnName);
   const from = keyLiteral(keyPath.key);
   const renamed = jsonRewrite(
-    column,
+    asJsonb(column),
     keyPath.objects,
     (object) =>
       `CASE WHEN jsonb_typeof(${object}) = 'object' AND ${object} ? ${from} THEN (${object} - ${from}) || jsonb_build_object(${keyLiteral(to)}, ${object} -> ${from}) ELSE ${object} END`,
@@ -83,7 +84,7 @@ export function removeStoredKey(
   const column = quoteIdentifier(columnName);
   const key = keyLiteral(keyPath.key);
   const removed = jsonRewrite(
-    column,
+    asJsonb(column),
     keyPath.objects,
     (object) =>
       `CASE WHEN jsonb_typeof(${object}) = 'object' THEN ${object} - ${key} ELSE ${object} END`,
@@ -122,7 +123,7 @@ export function fillStoredKey(
   const column = quoteIdentifier(columnName);
   const key = keyLiteral(keyPath.key);
   const filled = jsonRewrite(
-    column,
+    asJsonb(column),
     keyPath.objects,
     (object) =>
       `CASE WHEN jsonb_typeof(${object}) = 'object' AND coalesce(${object} -> ${key}, 'null'::jsonb) = 'null'::jsonb THEN ${object} || jsonb_build_object(${key}, $1::jsonb) ELSE ${object} END`,

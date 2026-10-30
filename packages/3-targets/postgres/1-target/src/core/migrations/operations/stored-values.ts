@@ -11,6 +11,7 @@ import { postgresCreateNamespace } from '../../postgres-schema';
 import { quoteIdentifier } from '../../sql-utils';
 import { qualifyTableName } from '../planner-sql-checks';
 import {
+  asJsonb,
   CHILD_EQUALS_FILTER,
   jsonPathMatches,
   jsonRewrite,
@@ -163,7 +164,8 @@ function pathParts(path: JsonPath): {
 }
 
 /** Whether `column` holds the JSON value of parameter `param` at the end of `path`. */
-function holdsAtPath(column: string, path: JsonPath, param: string): string {
+function holdsAtPath(columnSql: string, path: JsonPath, param: string): string {
+  const column = asJsonb(columnSql);
   const { reach, last } = pathParts(path);
   return last.kind === 'member'
     ? jsonPathMatches(column, reach, 'object', memberEqualsFilter(last.name), `${param}::jsonb`)
@@ -171,7 +173,8 @@ function holdsAtPath(column: string, path: JsonPath, param: string): string {
 }
 
 /** The `jsonb` expression that sets the value at the end of `path` that equals `$1` to `replacement`, or, when `replacement` is undefined, removes it from a list or removes the member of an object that holds it. */
-function rewriteAtPath(column: string, path: JsonPath, replacement: string | undefined): string {
+function rewriteAtPath(columnSql: string, path: JsonPath, replacement: string | undefined): string {
+  const column = asJsonb(columnSql);
   const { reach, last } = pathParts(path);
   if (last.kind === 'member') {
     const key = keyLiteral(last.name);

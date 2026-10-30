@@ -13,7 +13,7 @@ function replaceAt(path: string): ReplaceStoredValueCall {
 
 describe('replaceStoredValue and removeStoredValue at a path', () => {
   it('compare the value at a member as a JSON value, passed as JSON text', async () => {
-    const holds = `jsonb_path_exists("doc", 'strict $ ? (@.type() == "object").keyvalue() ? (@.key == "items").value ? (@.type() == "array" || @.type() == "object").**{1} ? (@.type() == "object" && exists(@.keyvalue() ? (@.key == "status" && @.value == $v)))', jsonb_build_object('v', $1::jsonb))`;
+    const holds = `jsonb_path_exists(("doc"::jsonb), 'strict $ ? (@.type() == "object").keyvalue() ? (@.key == "items").value ? (@.type() == "array" || @.type() == "object").**{1} ? (@.type() == "object" && exists(@.keyvalue() ? (@.key == "status" && @.value == $v)))', jsonb_build_object('v', $1::jsonb))`;
 
     expect(await replaceAt('$.items[*].status').toOp()).toMatchObject({
       id: 'replaceStoredValue.issue.doc.$.items[*].status.OPEN',
@@ -22,7 +22,7 @@ describe('replaceStoredValue and removeStoredValue at a path', () => {
       precheck: [],
       execute: [
         {
-          sql: `UPDATE "app"."issue" SET "doc" = CASE WHEN jsonb_typeof("doc") = 'object' AND "doc" ? 'items' THEN jsonb_set("doc", ARRAY['items'], CASE jsonb_typeof(("doc" -> 'items')) WHEN 'array' THEN (SELECT coalesce(jsonb_agg(CASE WHEN jsonb_typeof(e0.v) = 'object' AND e0.v -> 'status' = $1::jsonb THEN jsonb_set(e0.v, ARRAY['status'], $2::jsonb) ELSE e0.v END ORDER BY e0.i), '[]'::jsonb) FROM jsonb_array_elements(("doc" -> 'items')) WITH ORDINALITY AS e0(v, i)) WHEN 'object' THEN (SELECT coalesce(jsonb_object_agg(e0.k, CASE WHEN jsonb_typeof(e0.v) = 'object' AND e0.v -> 'status' = $1::jsonb THEN jsonb_set(e0.v, ARRAY['status'], $2::jsonb) ELSE e0.v END), '{}'::jsonb) FROM jsonb_each(("doc" -> 'items')) AS e0(k, v)) ELSE ("doc" -> 'items') END) ELSE "doc" END WHERE ${holds}`,
+          sql: `UPDATE "app"."issue" SET "doc" = CASE WHEN jsonb_typeof(("doc"::jsonb)) = 'object' AND ("doc"::jsonb) ? 'items' THEN jsonb_set(("doc"::jsonb), ARRAY['items'], CASE jsonb_typeof((("doc"::jsonb) -> 'items')) WHEN 'array' THEN (SELECT coalesce(jsonb_agg(CASE WHEN jsonb_typeof(e0.v) = 'object' AND e0.v -> 'status' = $1::jsonb THEN jsonb_set(e0.v, ARRAY['status'], $2::jsonb) ELSE e0.v END ORDER BY e0.i), '[]'::jsonb) FROM jsonb_array_elements((("doc"::jsonb) -> 'items')) WITH ORDINALITY AS e0(v, i)) WHEN 'object' THEN (SELECT coalesce(jsonb_object_agg(e0.k, CASE WHEN jsonb_typeof(e0.v) = 'object' AND e0.v -> 'status' = $1::jsonb THEN jsonb_set(e0.v, ARRAY['status'], $2::jsonb) ELSE e0.v END), '{}'::jsonb) FROM jsonb_each((("doc"::jsonb) -> 'items')) AS e0(k, v)) ELSE (("doc"::jsonb) -> 'items') END) ELSE ("doc"::jsonb) END WHERE ${holds}`,
           params: ['"OPEN"', '"DONE"'],
         },
       ],
@@ -77,7 +77,7 @@ describe('replaceStoredValue and removeStoredValue at a path', () => {
     }).toEqual({
       fromList: [],
       list: expect.stringContaining(
-        `(SELECT coalesce(jsonb_agg(e0.v ORDER BY e0.i), '[]'::jsonb) FROM jsonb_array_elements(("doc" -> 'ranks')) WITH ORDINALITY AS e0(v, i) WHERE e0.v <> $1::jsonb)`,
+        `(SELECT coalesce(jsonb_agg(e0.v ORDER BY e0.i), '[]'::jsonb) FROM jsonb_array_elements((("doc"::jsonb) -> 'ranks')) WITH ORDINALITY AS e0(v, i) WHERE e0.v <> $1::jsonb)`,
       ),
       required: [
         {
@@ -96,7 +96,9 @@ describe('replaceStoredValue and removeStoredValue at a path', () => {
         },
       ],
       nullable: [],
-      setsNull: expect.stringContaining(`jsonb_set("doc", ARRAY['status'], 'null'::jsonb)`),
+      setsNull: expect.stringContaining(
+        `jsonb_set(("doc"::jsonb), ARRAY['status'], 'null'::jsonb)`,
+      ),
     });
   });
 

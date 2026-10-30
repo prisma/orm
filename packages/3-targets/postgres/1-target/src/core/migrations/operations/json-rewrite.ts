@@ -4,6 +4,14 @@ import { escapeLiteral } from '../../sql-utils';
 /** Builds the `jsonb` value a rewrite leaves at the end of a path, from the value there and the depth of list elements. */
 export type JsonLeaf = (value: string, depth: number) => string;
 
+/**
+ * A column read as `jsonb`, so a `json` column takes the same path operations. A rewrite assigned
+ * back to a `json` column is cast to `json` by the assignment.
+ */
+export function asJsonb(column: string): string {
+  return `(${column}::jsonb)`;
+}
+
 export function keyLiteral(name: string): string {
   return `'${escapeLiteral(name)}'`;
 }
