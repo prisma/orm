@@ -301,7 +301,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     );
   });
 
-  it('sends every statement in one round trip and prepares none: session setup, a query with values, a stream and a transaction', async (test) => {
+  it('sends every statement in one round trip and prepares none: session setup, a query with values, a stream and a transaction, not counting the ping the pool sends before reusing a connection idle for over 500 ms', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
       withCountingProxy(url, async (proxyUrl, counts) => {
         await withDriver(
@@ -323,7 +323,9 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
             expect({
               streamed,
               opened: counts.opened(),
-              commands: counts.commands(),
+              commands: Object.fromEntries(
+                Object.entries(counts.commands()).filter(([name]) => name !== 'COM_PING'),
+              ),
             }).toEqual({
               streamed: [{ n: '1' }, { n: '2' }],
               opened: 1,
