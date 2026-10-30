@@ -161,26 +161,29 @@ withTempDir(({ createTempDir }) => {
                 .affectedCount()
                 .build(),
             );
-            const read = await db.orm.Event.select(
-              'at',
-              'exactAt',
-              'textAt',
-              'stamp',
-              'stampT',
-              'stampText',
-              'day',
-              'dayT',
-              'opensAt',
-              'opensAtT',
-              'lasts',
-              'dbAt',
-              'dbStamp',
-              'dbDay',
-              'dbClock',
-              'fixedDay',
-              'fixedTime',
-              'fixedSpan',
-            )
+            const events = db.orm['Event'];
+            if (events === undefined) return expect.unreachable('the contract has an Event model');
+            const read = await events
+              .select(
+                'at',
+                'exactAt',
+                'textAt',
+                'stamp',
+                'stampT',
+                'stampText',
+                'day',
+                'dayT',
+                'opensAt',
+                'opensAtT',
+                'lasts',
+                'dbAt',
+                'dbStamp',
+                'dbDay',
+                'dbClock',
+                'fixedDay',
+                'fixedTime',
+                'fixedSpan',
+              )
               .where({ id: 1 })
               .first();
             expect(read).toEqual({
@@ -204,17 +207,18 @@ withTempDir(({ createTempDir }) => {
               fixedSpan: 'PT1H30M',
             });
             expect({
-              exactAt: String(read?.exactAt),
-              stampT: String(read?.stampT),
-              dayT: String(read?.dayT),
-              opensAtT: String(read?.opensAtT),
+              exactAt: String(read?.['exactAt']),
+              stampT: String(read?.['stampT']),
+              dayT: String(read?.['dayT']),
+              opensAtT: String(read?.['opensAtT']),
             }).toEqual({
               exactAt: '2024-02-29T10:00:00.123456Z',
               stampT: '2024-02-29T10:00:00.75Z',
               dayT: '2024-03-01',
               opensAtT: '17:45:00.25',
             });
-            const dbAt = read?.dbAt?.getTime() ?? 0;
+            const dbAtValue = read?.['dbAt'];
+            const dbAt = dbAtValue instanceof Date ? dbAtValue.getTime() : Number.NaN;
             expect(dbAt).toBeGreaterThanOrEqual(before);
             expect(dbAt).toBeLessThanOrEqual(Date.now() + 1000);
           } finally {
