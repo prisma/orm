@@ -68,4 +68,55 @@ describe('migrationWithUnfilledPlaceholders', () => {
     ]);
     expect(await migrationWithUnfilledPlaceholders(plans, ['app'], migrationsDir)).toBeUndefined();
   });
+
+  describe('reads the code of migration.ts, not its text', () => {
+    async function unfilled(source: string): Promise<string | undefined> {
+      await migration('1_country', source);
+      return migrationWithUnfilledPlaceholders(
+        new Map([['app', plan([{ dirName: '1_country', operationCount: 0 }])]]),
+        ['app'],
+        migrationsDir,
+      );
+    }
+    const named = join('app', '1_country');
+
+    it.each([
+      [
+        'a comment',
+        FILLED.replace("'NO'", "'NO' /* fill placeholder('x') later */ // placeholder("),
+      ],
+      ['a string', FILLED.replace("'NO'", '"call placeholder(here)"')],
+      ['a template string', FILLED.replace("'NO'", '`placeholder(${1})`')],
+      [
+        'a function of its own named placeholder',
+        `import { Migration } from '@internal/sqlite/migration';
+import { placeholder } from './helpers';
+function local() { return placeholder('x'); }
+export default class M extends Migration {}`,
+      ],
+      ['a method named placeholder', FILLED.replace("'NO'", "this.placeholder('x')")],
+    ])('finds no placeholder in %s', async (_, source) => {
+      expect(await unfilled(source)).toBeUndefined();
+    });
+
+    it.each([
+      [
+        'an import under another name',
+        UNFILLED.replace('placeholder }', 'placeholder as fill }').replace(
+          "placeholder('Address",
+          "fill('Address",
+        ),
+      ],
+      [
+        'a namespace import',
+        `import * as m from '@prisma/orm-postgres/migration';
+export default class M extends m.Migration {
+  override get operations() { return [this.fillStoredKey({ value: m.placeholder('x') })]; }
+}`,
+      ],
+      ['a template expression', FILLED.replace("'NO'", "`${placeholder('x')}`")],
+    ])('finds a placeholder called through %s', async (_, source) => {
+      expect(await unfilled(source)).toBe(join(migrationsDir, named));
+    });
+  });
 });
