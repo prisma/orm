@@ -1490,6 +1490,10 @@ A migration reference (directory name or hash prefix) passed to a CLI command ma
 
 A hash resolves to a node in the migration graph, but no on-disk migration package has that hash as its destination (`to`), so there is no bundle to read for it. Hit when resolving a ref or hash to a migration bundle (e.g. `migration show`, contract-at resolution). Payload: `hash`, `explicitLabel` (when the user supplied a named reference).
 
+### MIGRATION.CHANGE_POLICY_FORBIDS
+
+The database's change policy, recorded in its marker's `meta.policies.change`, does not permit the command's way of moving the database. A database whose change policy is `migrate` alone changes only through migrations, so `db update`, its `--dry-run`, and `db sign` refuse it with the summary "This database's change policy permits only migrations" and one next action: author a migration with `migration plan`, then deploy it. A database whose change policy is `reconcile` alone changes only through `db update`, so `db migrate` and the control API's `migrate` refuse it with the summary "This database's change policy permits only db update" and one next action, the `db update --to <target>` command. Every contract space is checked, so an extension space whose marker records `change: [migrate]` refuses `db update` too. Raised before anything is planned or written; `db sign` on a database with no marker is never refused. The `why` names the strategies the marker records and the command. Payload: `spaceId`; `command`, one of `db update`, `db sign`, `db migrate`; `change`, the strategies in force.
+
 ### MIGRATION.CHECK_CONTRACT_UNREADABLE
 
 A `migration check` finding, carried as an `error` diagnostic on a completed run that exits `4`: the `contract.json` for a contract space cannot be read or validated. Re-emit the extension contract artifacts or fix the descriptor producing the invalid contract.
@@ -1787,6 +1791,10 @@ An authored migration's `operations` getter returned something other than an arr
 ### MIGRATION.PLAN_ORIGIN_UNKNOWN
 
 `migration plan` or `migration new` was run without `--from` and without a `db` ref while migrations already exist on disk. Planning would silently fall back to an empty-database origin and produce a migration that recreates everything the existing history already creates, so the command refuses. Set the `db` ref (`migration ref set db <contract>` or `db update`), pass `--from <contract>`, or (for `migration plan`) pass `--from @empty` to deliberately plan from an empty database. Payload: `reachableRefs`.
+
+### MIGRATION.POLICY_MISMATCH
+
+`db migrate --to <ref>`, `db update --to <ref>` or the control API's `migrate` or `dbUpdate` given a ref: the ref declares policies (its `policies` field) that differ from those the database's marker records in `meta.policies`, or from the defaults when it records none. Only the settings the ref declares are compared, and the change strategies are compared as a set. Raised before anything is planned or written, for the application space only. The `why` has one sentence per differing setting, `<ref> declares <setting>: <declared>; the database has <setting>: <in force>.`, with change strategies printed comma-separated. The next action is a user choice: make the ref match the database, or have whoever owns the database apply the ref's policies. Payload: `spaceId`; `refName`; `differences`, a list of `{ setting, declared, inForce }` where `setting` is `change`, `dataLoss` or `accessWidening`.
 
 ### MIGRATION.POLICY_VIOLATION
 
