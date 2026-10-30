@@ -51,4 +51,4 @@ node scripts/rewrite-mongo-field-types.ts
 
 Pass files or directories to limit it. Fix by hand each line the script reports, then type-check the project.
 
-MongoDB PSL is unchanged for an existing schema. It gains `Vector` and `Vector(length)` for `mongo/vector@1`, which had no PSL name before, and it now reads the arguments of a type call, so `Vector(3)` keeps its length.
+MongoDB PSL gains `Vector` and `Vector(length)` for `mongo/vector@1`, which had no PSL name before. It now reads the arguments of a type call, so `Vector(3)` keeps its length. A type that takes no arguments, written with one, such as `String(5)`, used to have the argument ignored and is now refused with a message naming the argument; remove the argument.
