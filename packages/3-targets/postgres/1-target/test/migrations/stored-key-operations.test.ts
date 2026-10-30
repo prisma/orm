@@ -1,4 +1,5 @@
 import type { JsonValue } from '@internal/contract/types';
+import { UnfilledValue } from '@internal/family-sql/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
 import {
@@ -149,8 +150,8 @@ describe('removeStoredKey', () => {
 });
 
 describe('fillStoredKey', () => {
-  it('fills the key only in the rows with an object that lacks it, passing the value as JSON text', () => {
-    const lacks = `jsonb_path_exists("point", 'strict $ ? (@.type() == "object" && !(exists(@.keyvalue() ? (@.key == "country"))))')`;
+  it('fills the key only in the rows with an object that lacks it or holds JSON null there, passing the value as JSON text', () => {
+    const lacks = `jsonb_path_exists("point", 'strict $ ? (@.type() == "object" && !(exists(@.keyvalue() ? (@.key == "country" && @.value.type() != "null"))))')`;
 
     expect(
       new FillStoredKeyCall('app', 'place', 'point', '$.country', { code: 'NZ' }).toOp(),
@@ -161,7 +162,7 @@ describe('fillStoredKey', () => {
       precheck: [],
       execute: [
         {
-          sql: `UPDATE "app"."place" SET "point" = CASE WHEN jsonb_typeof("point") = 'object' AND NOT "point" ? 'country' THEN "point" || jsonb_build_object('country', $1::jsonb) ELSE "point" END WHERE ${lacks}`,
+          sql: `UPDATE "app"."place" SET "point" = CASE WHEN jsonb_typeof("point") = 'object' AND coalesce("point" -> 'country', 'null'::jsonb) = 'null'::jsonb THEN "point" || jsonb_build_object('country', $1::jsonb) ELSE "point" END WHERE ${lacks}`,
           params: ['{"code":"NZ"}'],
         },
       ],
@@ -197,5 +198,26 @@ describe('fillStoredKey', () => {
     ).toBe(
       'this.fillStoredKey({ schema: "app", table: "place", column: "point", path: "$.country", value: { code: "NZ", parts: [1, null] } })',
     );
+  });
+
+  it('takes an unfilled value, which its migration.ts writes as a placeholder and its operation refuses', async () => {
+    const call = new FillStoredKeyCall(
+      'app',
+      'place',
+      'point',
+      '$.country',
+      new UnfilledValue('GeoPoint.country:value'),
+    );
+
+    expect(call.renderTypeScript()).toBe(
+      'this.fillStoredKey({ schema: "app", table: "place", column: "point", path: "$.country", value: placeholder("GeoPoint.country:value") })',
+    );
+    expect(call.importRequirements()).toEqual([
+      { moduleSpecifier: '@internal/postgres/migration', symbol: 'placeholder' },
+    ]);
+    await expect(call.toOp()).rejects.toMatchObject({
+      code: 'MIGRATION.UNFILLED_PLACEHOLDER',
+      meta: { slot: 'GeoPoint.country:value' },
+    });
   });
 });

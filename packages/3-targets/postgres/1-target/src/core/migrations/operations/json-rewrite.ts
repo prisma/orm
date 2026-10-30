@@ -53,6 +53,11 @@ export function hasMemberFilter(name: string): string {
   return `exists(@.keyvalue() ? (@.key == ${jsonPathString(name)}))`;
 }
 
+/** A typed strict SQL/JSON path filter that tests whether the object `@` has member `name` with a value other than JSON `null`. */
+export function hasValueFilter(name: string): string {
+  return `exists(@.keyvalue() ? (@.key == ${jsonPathString(name)} && @.value.type() != "null"))`;
+}
+
 /** A typed strict SQL/JSON path filter that tests whether member `name` of the object `@` equals `$v`. */
 export function memberEqualsFilter(name: string): string {
   return `exists(@.keyvalue() ? (@.key == ${jsonPathString(name)} && @.value == $v))`;

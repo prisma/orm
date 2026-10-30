@@ -99,7 +99,7 @@ export function removeStoredKey(tableName: string, columnName: string, keyPath: 
   };
 }
 
-/** `value` is the JSON text of the value the key takes, passed as a parameter. */
+/** `value` is the JSON text of the value the key takes, passed as a parameter. A key that holds JSON `null` is filled too, as a member that becomes required needs. */
 export function fillStoredKey(
   tableName: string,
   columnName: string,
@@ -109,12 +109,12 @@ export function fillStoredKey(
   const column = quoteIdentifier(columnName);
   const member = memberPath(keyPath.key);
   const lacks = (object: string) =>
-    `(json_type(${object}) = 'object' AND json_type(${object}, ${member}) IS NULL)`;
+    `(json_type(${object}) = 'object' AND coalesce(json_type(${object}, ${member}), 'null') = 'null')`;
   const filled = jsonRewrite(
     column,
     keyPath.objects,
     (object) =>
-      `CASE WHEN ${lacks(object)} THEN json_insert(${object}, ${member}, json(?1)) ELSE ${object} END`,
+      `CASE WHEN ${lacks(object)} THEN json_set(${object}, ${member}, json(?1)) ELSE ${object} END`,
   );
   const lacksKey = objectsMatch(columnName, keyPath, lacks);
   const place = keyPlace(keyPath, tableName, columnName);
@@ -126,7 +126,7 @@ export function fillStoredKey(
     precheck: [],
     execute: [
       step(
-        `fill key "${keyPath.key}" ${place} in every object that lacks it`,
+        `fill key "${keyPath.key}" ${place} in every object that lacks it or holds JSON null there`,
         `UPDATE ${quoteIdentifier(tableName)} SET ${column} = ${filled} WHERE ${lacksKey}`,
         [value],
       ),

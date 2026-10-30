@@ -342,5 +342,22 @@ describe('Postgres stored key operations', { concurrent: false }, () => {
         { lng: 3, country: { code: 'AU' } },
       ]);
     });
+
+    it('fills the key in an object that holds JSON null there', {
+      timeout: testTimeout,
+    }, async () => {
+      await driver.query(
+        `update app.place set history = '[{"lat": 1, "country": null}, {"country": {"code": "AU"}}]' where id = 1`,
+      );
+
+      await operationsExecuted(
+        await new FillStoredKeyCall('app', 'place', 'history', '$[*].country', NZ).toOp(),
+      );
+
+      expect((await values('history'))[0]).toEqual([
+        { lat: 1, country: NZ },
+        { country: { code: 'AU' } },
+      ]);
+    });
   });
 });

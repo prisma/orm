@@ -313,5 +313,20 @@ describe('SQLite stored key operations', { timeout: timeouts.databaseOperation }
         { lng: 3, country: { code: 'AU' } },
       ]);
     });
+
+    it('fills the key in an object that holds JSON null there', async () => {
+      await testDb.driver.query(
+        `UPDATE "place" SET history = '[{"lat": 1, "country": null}, {"country": {"code": "AU"}}]' WHERE id = 1`,
+      );
+
+      await operationsExecuted(
+        await new FillStoredKeyCall('place', 'history', '$[*].country', NZ).toOp(),
+      );
+
+      expect((await values('history'))[0]).toEqual([
+        { lat: 1, country: NZ },
+        { country: { code: 'AU' } },
+      ]);
+    });
   });
 });

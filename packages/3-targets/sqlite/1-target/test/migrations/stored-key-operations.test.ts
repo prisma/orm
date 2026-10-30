@@ -1,4 +1,5 @@
 import type { JsonValue } from '@internal/contract/types';
+import { UnfilledValue } from '@internal/family-sql/control';
 import { describe, expect, it } from 'vitest';
 import {
   FillStoredKeyCall,
@@ -138,8 +139,8 @@ describe('removeStoredKey', () => {
 });
 
 describe('fillStoredKey', () => {
-  it('fills the key only in the rows with an object that lacks it, passing the value as JSON text', () => {
-    const lacks = `(json_type("point") = 'object' AND json_type("point", '$."country"') IS NULL)`;
+  it('fills the key only in the rows with an object that lacks it or holds JSON null there, passing the value as JSON text', () => {
+    const lacks = `(json_type("point") = 'object' AND coalesce(json_type("point", '$."country"'), 'null') = 'null')`;
 
     expect(
       new FillStoredKeyCall('place', 'point', '$.country', { code: 'NZ' }).toOp(),
@@ -150,7 +151,7 @@ describe('fillStoredKey', () => {
       precheck: [],
       execute: [
         {
-          sql: `UPDATE "place" SET "point" = CASE WHEN ${lacks} THEN json_insert("point", '$."country"', json(?1)) ELSE "point" END WHERE ${lacks}`,
+          sql: `UPDATE "place" SET "point" = CASE WHEN ${lacks} THEN json_set("point", '$."country"', json(?1)) ELSE "point" END WHERE ${lacks}`,
           params: ['{"code":"NZ"}'],
         },
       ],
@@ -184,5 +185,25 @@ describe('fillStoredKey', () => {
     ).toBe(
       'this.fillStoredKey({ table: "place", column: "point", path: "$.country", value: { code: "NZ", parts: [1, null] } })',
     );
+  });
+
+  it('takes an unfilled value, which its migration.ts writes as a placeholder and its operation refuses', async () => {
+    const call = new FillStoredKeyCall(
+      'place',
+      'point',
+      '$.country',
+      new UnfilledValue('GeoPoint.country:value'),
+    );
+
+    expect(call.renderTypeScript()).toBe(
+      'this.fillStoredKey({ table: "place", column: "point", path: "$.country", value: placeholder("GeoPoint.country:value") })',
+    );
+    expect(call.importRequirements()).toEqual([
+      { moduleSpecifier: '@internal/sqlite/migration', symbol: 'placeholder' },
+    ]);
+    await expect(call.toOp()).rejects.toMatchObject({
+      code: 'MIGRATION.UNFILLED_PLACEHOLDER',
+      meta: { slot: 'GeoPoint.country:value' },
+    });
   });
 });

@@ -27,6 +27,7 @@ import {
   type StoredValueCodec,
   slotSource,
   sqlOfSlot,
+  UnfilledValue,
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer, Lowerer } from '@internal/family-sql/control-adapter';
 import type {
@@ -1539,42 +1540,59 @@ function requireJsonValue(
     : value;
 }
 
-/** Sets the key at the end of a JSON path to a value, in every object of a column the path reaches that lacks it. */
+/**
+ * Sets the key at the end of a JSON path to a value, in every object of a column the path reaches that lacks it or holds JSON `null` there. An unfilled value is a placeholder the user fills in `migration.ts`; until then the call lowers to no operation.
+ */
 export class FillStoredKeyCall extends SqliteOpFactoryCallNode {
   readonly factoryName = 'fillStoredKey' as const;
   readonly operationClass = 'widening' as const;
   readonly tableName: string;
   readonly columnName: string;
   readonly path: JsonKeyPath;
-  readonly value: JsonValue;
+  readonly value: JsonValue | UnfilledValue;
   readonly label: string;
 
-  constructor(tableName: string, columnName: string, path: string, value: JsonValue) {
+  constructor(
+    tableName: string,
+    columnName: string,
+    path: string,
+    value: JsonValue | UnfilledValue,
+  ) {
     super();
     const location = columnCallLocation(tableName, columnName);
     this.tableName = tableName;
     this.columnName = columnName;
     this.path = requireKeyPath(path, this.factoryName, location);
-    this.value = requireJsonValue(value, this.factoryName, location);
+    this.value =
+      value instanceof UnfilledValue ? value : requireJsonValue(value, this.factoryName, location);
     this.label = `Fill key "${this.path.key}" ${keyPlace(this.path, tableName, columnName)}`;
     this.freeze();
   }
 
-  toOp(): Op {
+  toOp(): Op | Promise<Op> {
+    if (this.value instanceof UnfilledValue) {
+      return unfilledPlaceholderOperation(this.value.slot);
+    }
     return fillStoredKey(this.tableName, this.columnName, this.path, JSON.stringify(this.value));
   }
 
   renderTypeScript(): string {
+    const value =
+      this.value instanceof UnfilledValue
+        ? `placeholder(${jsonToTsSource(this.value.slot)})`
+        : jsonToTsSource(this.value);
     const opts = [
       ...columnCallLocation(this.tableName, this.columnName),
       `path: ${jsonToTsSource(this.path.path.text)}`,
-      `value: ${jsonToTsSource(this.value)}`,
+      `value: ${value}`,
     ];
     return `this.fillStoredKey({ ${opts.join(', ')} })`;
   }
 
   override importRequirements(): readonly ImportRequirement[] {
-    return [];
+    return this.value instanceof UnfilledValue
+      ? [{ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: 'placeholder' }]
+      : [];
   }
 }
 

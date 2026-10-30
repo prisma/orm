@@ -1,7 +1,13 @@
 import { type JsonKeyPath, jsonPathText } from '@internal/family-sql/control';
 import { quoteIdentifier } from '../../sql-utils';
 import { qualifyTableName } from '../planner-sql-checks';
-import { hasMemberFilter, jsonPathMatches, jsonRewrite, keyLiteral } from './json-rewrite';
+import {
+  hasMemberFilter,
+  hasValueFilter,
+  jsonPathMatches,
+  jsonRewrite,
+  keyLiteral,
+} from './json-rewrite';
 import { type Op, step, targetDetails } from './shared';
 
 function at(keyPath: JsonKeyPath): string {
@@ -105,7 +111,7 @@ export function removeStoredKey(
   };
 }
 
-/** `value` is the JSON text of the value the key takes, passed as a parameter. */
+/** `value` is the JSON text of the value the key takes, passed as a parameter. A key that holds JSON `null` is filled too, as a member that becomes required needs. */
 export function fillStoredKey(
   schemaName: string,
   tableName: string,
@@ -119,9 +125,9 @@ export function fillStoredKey(
     column,
     keyPath.objects,
     (object) =>
-      `CASE WHEN jsonb_typeof(${object}) = 'object' AND NOT ${object} ? ${key} THEN ${object} || jsonb_build_object(${key}, $1::jsonb) ELSE ${object} END`,
+      `CASE WHEN jsonb_typeof(${object}) = 'object' AND coalesce(${object} -> ${key}, 'null'::jsonb) = 'null'::jsonb THEN ${object} || jsonb_build_object(${key}, $1::jsonb) ELSE ${object} END`,
   );
-  const lacksKey = where(columnName, keyPath, `!(${hasMemberFilter(keyPath.key)})`);
+  const lacksKey = where(columnName, keyPath, `!(${hasValueFilter(keyPath.key)})`);
   const place = keyPlace(keyPath, tableName, columnName);
   return {
     id: `fillStoredKey.${tableName}.${columnName}.${keyPath.path.text}`,
@@ -131,7 +137,7 @@ export function fillStoredKey(
     precheck: [],
     execute: [
       step(
-        `fill key "${keyPath.key}" ${place} in every object that lacks it`,
+        `fill key "${keyPath.key}" ${place} in every object that lacks it or holds JSON null there`,
         `UPDATE ${qualifyTableName(schemaName, tableName)} SET ${column} = ${filled} WHERE ${lacksKey}`,
         [value],
       ),

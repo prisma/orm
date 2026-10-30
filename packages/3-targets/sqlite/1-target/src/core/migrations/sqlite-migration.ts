@@ -366,7 +366,7 @@ export abstract class SqliteMigration<
   }
 
   /**
-   * Emit an `UPDATE` operation that sets the key at the end of `path` to `value`, in every object of `column` the path reaches that lacks the key. `path` is written as for `renameStoredKey`; `value` is a JSON value, passed as a parameter. Only rows with an object that lacks the key are written.
+   * Emit an `UPDATE` operation that sets the key at the end of `path` to `value`, in every object of `column` the path reaches that lacks the key or holds JSON `null` there. `path` is written as for `renameStoredKey`; `value` is a JSON value, passed as a parameter. Only rows with such an object are written.
    */
   protected fillStoredKey(options: {
     readonly table: string;

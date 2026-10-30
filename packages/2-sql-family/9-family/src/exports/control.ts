@@ -205,6 +205,7 @@ export {
   convertedColumnOf,
   unconvertedFieldOf,
 } from '../core/migrations/unconverted-field';
+export { UnfilledValue } from '../core/migrations/unfilled-value';
 export {
   planValueObjectFieldRewrites,
   type StoredKeyRewrite,
