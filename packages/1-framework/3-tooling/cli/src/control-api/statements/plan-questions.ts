@@ -587,17 +587,6 @@ function changedVariant(
 }
 
 /**
- * The question for one operation that would lose data. A field whose type changes may be converted
- * where the command writes a migration to fill in; the convert names the field as the destination
- * names it. A variant whose discriminator value changed may be converted by any command, since
- * the convert needs no code the user writes. A model or field the destination no longer has, and no rename of the plan renamed, may
- * be renamed instead of deleted; a rename is resolved against the two contracts after the plan's
- * other renames, and its old name must be the subject. Anything else, and data no model stores,
- * can only be deleted. A field whose model the destination names differently can be renamed only
- * after a statement renames the model, so the question says to pass one. The question ends with
- * the planner's advice on keeping the data, when it gives any.
- */
-/**
  * What `--delete` of a value object field leaves in the required fields the value object gained:
  * `migration plan` needs a backfill statement for each the run does not backfill, and `db update`
  * fills a temporary value.
@@ -651,6 +640,17 @@ function quotedList(items: readonly string[]): string {
     : `${quoted.slice(0, -1).join(', ')} and ${quoted.at(-1)}`;
 }
 
+/**
+ * The question for one operation that would lose data. A field whose type changes may be converted
+ * where the command writes a migration to fill in; the convert names the field as the destination
+ * names it. A variant whose discriminator value changed may be converted by any command, since
+ * the convert needs no code the user writes. A model or field the destination no longer has, and no rename of the plan renamed, may
+ * be renamed instead of deleted; a rename is resolved against the two contracts after the plan's
+ * other renames, and its old name must be the subject. Anything else, and data no model stores,
+ * can only be deleted. A field whose model the destination names differently can be renamed only
+ * after a statement renames the model, so the question says to pass one. The question ends with
+ * the planner's advice on keeping the data, when it gives any.
+ */
 export function dataLossQuestion(
   loss: PlannedDataLoss,
   contracts: DataLossContracts,
