@@ -396,7 +396,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       fromContract: options.fromContract,
       contract: options.contract,
       tables,
-      codecs: types.codecLookup,
+      types,
       unnamed: unnamedMemberFillOf(options.policy),
     });
     if (!memberFills.ok) {

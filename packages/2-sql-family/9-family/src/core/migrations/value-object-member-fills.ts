@@ -7,7 +7,7 @@ import {
   valueObjectAt,
   valueObjectsWithCoordinates,
 } from '@internal/contract/types';
-import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import { dataTypeParams, type TypeLookups } from '@internal/framework-components/codec';
 import {
   type MigrationOperationPolicy,
   type ResolvedMigrationStatement,
@@ -18,6 +18,7 @@ import {
 import { declaredJsonType } from '@internal/sql-contract/codec-json-type';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import { isStructuredError } from '@internal/utils/structured-error';
 import { jsonPathText } from './json-path';
 import type { SchemaTables } from './schema-tables';
 import type { SqlPlannerConflict } from './types';
@@ -70,21 +71,43 @@ const TEMPORARY_JSON_VALUES: Readonly<Record<string, JsonValue>> = {
   array: [],
 };
 
+function acceptedByDataType(
+  json: JsonValue,
+  codecId: string,
+  typeParams: unknown,
+  types: TypeLookups,
+): boolean {
+  const descriptor = types.codecLookup.descriptorFor(codecId);
+  const dataType =
+    descriptor === undefined ? undefined : types.dataTypeLookup.get(descriptor.dataType);
+  if (dataType === undefined) return false;
+  try {
+    dataType.fromContract(json, dataTypeParams(dataType, typeParams));
+    return true;
+  } catch (error) {
+    if (isStructuredError(error)) return false;
+    throw error;
+  }
+}
+
 /**
  * The temporary value of a member, as JSON: an empty list for a list, and for a scalar the empty
- * value of the JSON type its codec declares. A member that holds a value object or an enum value has
- * none, since no one value stands for every object or member.
+ * value of the JSON type its codec declares, when the codec's data type takes it. A member that
+ * holds a value object or an enum value has none, since no one value stands for every object or
+ * member; nor does a scalar whose data type refuses the empty value, as a date refuses `""`.
  */
 function temporaryValueOf(
   field: ContractValueObjectField,
-  codecs: Pick<CodecLookupWithDescriptors, 'descriptorFor'>,
+  types: TypeLookups,
 ): JsonValue | undefined {
   const { type } = field;
   if (type.kind !== 'scalar' || field.valueSet !== undefined) return undefined;
   if (field.many !== undefined && field.many !== false) return [];
-  const descriptor = codecs.descriptorFor(type.codecId);
+  const descriptor = types.codecLookup.descriptorFor(type.codecId);
   const jsonType = descriptor === undefined ? undefined : declaredJsonType(descriptor);
-  return jsonType === undefined ? undefined : TEMPORARY_JSON_VALUES[jsonType];
+  const empty = jsonType === undefined ? undefined : TEMPORARY_JSON_VALUES[jsonType];
+  if (empty === undefined) return undefined;
+  return acceptedByDataType(empty, type.codecId, type.typeParams, types) ? empty : undefined;
 }
 
 interface RequiredMember {
@@ -194,7 +217,8 @@ const REACH_REASONS = {
  * is filled when the destination makes it required and the origin lacks it or makes it optional. A
  * backfill statement fills it with a value the user writes in `migration.ts`. Without one,
  * `unnamed` decides: `refuse` names the statement, and `temporaryValue` fills a scalar member whose
- * codec has a temporary value and refuses any other. Each fill acts on every column of the working
+ * codec has a temporary value its data type takes, and refuses any other.
+ * Each fill acts on every column of the working
  * schema whose field holds the value object, at every path to its objects, nested or in lists, as
  * the destination names them. A column that holds the value object where its paths cannot be listed
  * is refused. With no origin contract, nothing is known to have changed.
@@ -204,7 +228,7 @@ export function planValueObjectMemberFills(input: {
   readonly fromContract: Contract<SqlStorage> | null;
   readonly contract: Contract<SqlStorage>;
   readonly tables: SchemaTables;
-  readonly codecs: Pick<CodecLookupWithDescriptors, 'descriptorFor'>;
+  readonly types: TypeLookups;
   readonly unnamed: UnnamedMemberFill;
 }): Result<readonly StoredKeyFill[], SqlPlannerConflict> {
   const { fromContract, contract } = input;
@@ -226,7 +250,7 @@ export function planValueObjectMemberFills(input: {
       member.statement !== undefined
         ? new UnfilledValue(`${text}:value`)
         : input.unnamed === 'temporaryValue'
-          ? temporaryValueOf(member.field, input.codecs)
+          ? temporaryValueOf(member.field, input.types)
           : undefined;
     if (value === undefined) {
       return notOk(

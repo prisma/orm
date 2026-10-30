@@ -231,7 +231,8 @@ export class SqliteMigrationPlanner
       return plannerFailure([defaultedBackfill]);
     }
     const codecHooks = extractCodecControlHooks(options.frameworkComponents);
-    const { codecLookup } = sqlTypeLookupsOf(options.frameworkComponents);
+    const types = sqlTypeLookupsOf(options.frameworkComponents);
+    const { codecLookup } = types;
     const tables = sqliteSchemaTables(statements.value.schema);
     const keyRewrites = planValueObjectFieldRewrites({
       statements: options.statements,
@@ -246,7 +247,7 @@ export class SqliteMigrationPlanner
       fromContract: options.fromContract,
       contract: options.contract,
       tables,
-      codecs: codecLookup,
+      types,
       unnamed: unnamedMemberFillOf(options.policy),
     });
     if (!memberFills.ok) return plannerFailure([memberFills.failure]);

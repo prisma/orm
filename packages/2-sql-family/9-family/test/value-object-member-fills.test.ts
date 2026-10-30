@@ -1,15 +1,21 @@
 import type { ContractValueObjectField } from '@internal/contract/types';
+import {
+  createDataTypeLookup,
+  dataType,
+  type TypeLookups,
+} from '@internal/framework-components/codec';
 import type {
   ResolvedValueObjectFieldBackfillStatement,
   ResolvedValueObjectFieldRenameStatement,
 } from '@internal/framework-components/control';
+import { structuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { UnfilledValue } from '../src/core/migrations/unfilled-value';
 import {
   planValueObjectMemberFills,
   type UnnamedMemberFill,
 } from '../src/core/migrations/value-object-member-fills';
-import { TEXT_CODEC_ID, testCodecLookup } from './enum-entity-fixtures';
+import { TEXT_CODEC_ID, testCodecLookup, textType as textDataType } from './enum-entity-fixtures';
 import {
   allTables,
   type ColumnSpec,
@@ -20,12 +26,27 @@ import {
   valueObjectRef,
 } from './value-object-contract-fixtures';
 
+const DATE_CODEC_ID = 'test/date@1';
+const dateDataType = dataType('test/date', {
+  read: (json) => {
+    if (typeof json === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(json)) return json;
+    throw structuredError('RUNTIME.DECODE_FAILED', 'test/date JSON value must be a date');
+  },
+});
 const textDescriptor = testCodecLookup.descriptorFor(TEXT_CODEC_ID);
-const codecs = {
-  descriptorFor: (id: string) =>
-    id === textType.codecId && textDescriptor !== undefined
-      ? { ...textDescriptor, codecId: id, jsonType: 'string' }
-      : undefined,
+const types: TypeLookups = {
+  codecLookup: {
+    ...testCodecLookup,
+    descriptorFor: (id: string) => {
+      if (textDescriptor === undefined) return undefined;
+      if (id === textType.codecId) return { ...textDescriptor, codecId: id, jsonType: 'string' };
+      if (id === DATE_CODEC_ID) {
+        return { ...textDescriptor, codecId: id, dataType: dateDataType.id, jsonType: 'string' };
+      }
+      return undefined;
+    },
+  },
+  dataTypeLookup: createDataTypeLookup([textDataType, dateDataType]),
 };
 
 function backfill(valueObject: string, name: string): ResolvedValueObjectFieldBackfillStatement {
@@ -71,7 +92,7 @@ function plan(options: {
     fromContract: contractWith({ valueObjects: options.from, columns }),
     contract: contractWith({ valueObjects: options.to, columns }),
     tables: allTables(),
-    codecs,
+    types,
     unnamed: options.unnamed ?? 'refuse',
   });
 }
@@ -190,7 +211,7 @@ describe('planValueObjectMemberFills', () => {
             columns: [place],
           }),
           tables: allTables(),
-          codecs,
+          types,
           unnamed: 'refuse',
         }),
       ),
@@ -240,6 +261,10 @@ describe('planValueObjectMemberFills', () => {
       [
         'holds an enum value',
         member({ valueSet: { ...valueObjectRef('Color', 'app'), entityKind: 'valueSet' } }),
+      ],
+      [
+        'has a codec whose data type refuses the empty value of its JSON type',
+        member({ type: { kind: 'scalar', codecId: DATE_CODEC_ID } }),
       ],
       [
         'has a codec with no JSON type',

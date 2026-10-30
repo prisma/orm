@@ -166,6 +166,33 @@ describe('SQLite planner, value object member fills', () => {
       );
     });
 
+    it('refuses a DateTime field, whose data type does not take the empty string', () => {
+      expect(
+        conflictsOf(
+          plan(
+            placeContract({ GeoPoint: GEO }, [location], 'from'),
+            placeContract(
+              {
+                GeoPoint: {
+                  ...GEO,
+                  country: required({ type: { kind: 'scalar', codecId: 'sqlite/datetime@1' } }),
+                },
+              },
+              [location],
+              'to',
+            ),
+            [],
+            ALL_CLASSES,
+          ),
+        ),
+      ).toMatchObject([
+        {
+          kind: 'nullabilityConflict',
+          why: expect.stringContaining('prisma migration plan --backfill GeoPoint.country'),
+        },
+      ]);
+    });
+
     it.each([
       ['holds a value object', { valueObject: 'Label' }],
       [
