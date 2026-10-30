@@ -290,7 +290,7 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
       'MIGRATION.FOREIGN_KEY_VIOLATION',
       `Foreign key integrity check failed after migration: ${result.rows.length} violation(s).`,
       {
-        why: 'PRAGMA foreign_key_check reported violations after applying recreate-table operations.',
+        why: 'PRAGMA foreign_key_check reported violations after the migration ran with foreign keys off: rows of the listed tables reference rows that a recreate-table or deleteRows operation removed, and no cascade ran.',
         meta: { violations: result.rows },
       },
     );
