@@ -14,7 +14,7 @@ pnpm add @prisma/orm-mysql
 └── @prisma/orm-toolchain    ORM command family for the `prisma` CLI, emitter, config loader
 ```
 
-MySQL support is early. The package covers contracts and migrations (`prisma contract emit`, `prisma migration plan`, `prisma db migrate`, `prisma db verify` and `prisma db sign`) and reads: `mysql({ contract, url })` from `/runtime` runs ORM and SQL builder reads, raw SQL and transactions, sending every value as a server-side prepared-statement parameter. Writing rows through the ORM or the SQL builder, row locks such as `FOR UPDATE`, and `LATERAL` joins are refused as not supported on MySQL yet.
+MySQL support is early. The package covers contracts and migrations (`prisma contract emit`, `prisma migration plan`, `prisma db migrate`, `prisma db verify` and `prisma db sign`) and reads: `mysql({ contract, url })` from `/runtime` runs ORM and SQL builder reads, raw SQL and transactions. The `mariadb` package writes each value into the statement with its own escaping, so Prisma's code never puts a value into SQL. Writing rows through the ORM or the SQL builder, row locks such as `FOR UPDATE`, and `LATERAL` joins are refused as not supported on MySQL yet.
 
 ## Entrypoints
 
