@@ -214,6 +214,13 @@ const COMPARISON_OPERATORS: ReadonlySet<string> = new Set([
 ]);
 const MEMBERSHIP_OPERATORS: ReadonlySet<string> = new Set(['$in', '$nin']);
 
+const MATCH_ALL_WRITES: Readonly<Record<string, string>> = {
+  updateAll: 'updateAll',
+  updateAndCount: 'updateAll',
+  deleteAll: 'deleteAll',
+  deleteAndCount: 'deleteAll',
+};
+
 type ValuePurpose = 'write' | 'filter';
 
 function modelOf(contract: MongoContract, modelName: string): ContractModel<MongoModelStorage> {
@@ -1396,9 +1403,13 @@ export class MongoCollectionImpl<
 
   #requireFilters(methodName: string): void {
     if (this.#state.filters.length === 0) {
+      const matchAll = MATCH_ALL_WRITES[methodName];
+      const remedy = matchAll
+        ? `Use db.query.from(...).${matchAll}() to write every document`
+        : `Call .where() with a condition before .${methodName}()`;
       throw ormError(
         'ORM.WHERE_MISSING',
-        `${methodName}() requires a .where() filter. Call .where() before .${methodName}()`,
+        `${methodName}() requires a .where() filter with at least one condition; .where({}) has none. ${remedy}`,
         { meta: { method: methodName } },
       );
     }
