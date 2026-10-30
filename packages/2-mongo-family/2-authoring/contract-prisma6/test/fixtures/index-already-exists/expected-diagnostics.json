@@ -1,0 +1,14 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS",
+    "file": "schema.prisma",
+    "line": 11,
+    "message": "@@unique on model \"User\" indexes the same fields with the same sort as an earlier index of the model. Prisma 6 refuses this: \"Index already exists in the model.\" Remove one of the two."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS",
+    "file": "schema.prisma",
+    "line": 13,
+    "message": "@@index on model \"User\" indexes the same fields with the same sort as an earlier index of the model. Prisma 6 refuses this: \"Index already exists in the model.\" Remove one of the two."
+  }
+]

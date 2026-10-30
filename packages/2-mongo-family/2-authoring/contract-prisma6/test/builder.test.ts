@@ -6,48 +6,108 @@ import { loadPrisma6Schema, serializeMongoContract } from './support';
 const casesDir = join(dirname(fileURLToPath(import.meta.url)), 'builder-cases');
 
 describe('the Prisma 6 reader on the contract builder', () => {
+  function indexesOf(serialized: unknown, collection: string): unknown {
+    return (
+      serialized as {
+        storage: {
+          namespaces: {
+            __unbound__: { entries: { collection: Record<string, { indexes?: unknown }> } };
+          };
+        };
+      }
+    ).storage.namespaces.__unbound__.entries.collection[collection]?.indexes;
+  }
+
+  async function diagnosticsOf(caseName: string) {
+    const result = await loadPrisma6Schema(join(casesDir, caseName, 'schema.prisma'));
+    if (result.ok) throw new Error('Expected the schema to be refused');
+    return result.failure.diagnostics.map(({ code, message, span }) => ({
+      code,
+      message,
+      line: span?.start.line,
+    }));
+  }
+
   it.each<[string, string, string, readonly unknown[]]>([
     [
-      '@unique and @@unique on one field',
-      'unique-twice',
+      'the same fields in another order or with another sort',
+      'same-fields-other-order',
       'User',
-      [{ kind: 'mongo-index', keys: [{ field: 'email', direction: 1 }], unique: true }],
-    ],
-    [
-      '@unique and @@index on one field',
-      'unique-and-index',
-      'User',
-      [{ kind: 'mongo-index', keys: [{ field: 'email', direction: 1 }], unique: true }],
-    ],
-    [
-      '@@fulltext on one field of two models in one collection',
-      'fulltext-on-two-models',
-      'people',
-      [{ kind: 'mongo-index', keys: [{ field: 'name', direction: 'text' }] }],
+      [
+        { kind: 'mongo-index', keys: [{ field: 'email', direction: -1 }], unique: true },
+        {
+          kind: 'mongo-index',
+          keys: [
+            { field: 'email', direction: 1 },
+            { field: 'name', direction: 1 },
+          ],
+        },
+        {
+          kind: 'mongo-index',
+          keys: [
+            { field: 'name', direction: 1 },
+            { field: 'email', direction: 1 },
+          ],
+        },
+        { kind: 'mongo-index', keys: [{ field: 'email', direction: 1 }] },
+      ],
     ],
     [
       "@unique on a later model and @@index on an earlier model's field in one collection",
       'unique-on-later-model',
       'people',
       [
+        { kind: 'mongo-index', keys: [{ field: 'email', direction: 1 }] },
         { kind: 'mongo-index', keys: [{ field: 'name', direction: 1 }] },
         { kind: 'mongo-index', keys: [{ field: 'email', direction: 1 }], unique: true },
       ],
     ],
-  ])('merges an identical or redundant index for %s', async (_, caseName, collection, indexes) => {
+  ])('keeps every index for %s', async (_, caseName, collection, indexes) => {
     const result = await loadPrisma6Schema(join(casesDir, caseName, 'schema.prisma'));
     if (!result.ok) throw new Error(JSON.stringify(result.failure.diagnostics));
-    const serialized = serializeMongoContract(result.value) as {
-      storage: {
-        namespaces: {
-          __unbound__: { entries: { collection: Record<string, { indexes?: unknown }> } };
-        };
-      };
-    };
 
-    expect(
-      serialized.storage.namespaces.__unbound__.entries.collection[collection]?.indexes,
-    ).toEqual(indexes);
+    expect(indexesOf(serializeMongoContract(result.value), collection)).toEqual(indexes);
+  });
+
+  it.each<[string, string, number, string]>([
+    [
+      '@unique and @@unique on one field',
+      'unique-twice',
+      10,
+      '@@unique on model "User" indexes the same fields with the same sort as an earlier index of the model. Prisma 6 refuses this: "Index already exists in the model." Remove one of the two.',
+    ],
+    [
+      '@unique and @@index on one field',
+      'unique-and-index',
+      10,
+      '@@index on model "User" indexes the same fields with the same sort as an earlier index of the model. Prisma 6 refuses this: "Index already exists in the model." Remove one of the two.',
+    ],
+  ])('refuses %s, as Prisma 6 does', async (_, caseName, line, message) => {
+    expect(await diagnosticsOf(caseName)).toEqual([
+      { code: 'PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS', message, line },
+    ]);
+  });
+
+  it('refuses the same @@index on two models in one collection', async () => {
+    expect(await diagnosticsOf('index-on-two-models')).toEqual([
+      {
+        code: 'PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS',
+        message:
+          'Model "Admin" writes an index that model "User" writes too, and both are stored in collection "people". MongoDB cannot hold the same index twice in one collection. Remove it from one of the two models.',
+        line: 18,
+      },
+    ]);
+  });
+
+  it('refuses @@fulltext on one field of two models in one collection', async () => {
+    expect(await diagnosticsOf('fulltext-on-two-models')).toEqual([
+      {
+        code: 'PSL.PRISMA6_MONGO_TEXT_INDEX_LIMIT',
+        message:
+          'Model "Admin" has a @@fulltext, but another model stored in the same collection has one too; MongoDB allows one text index per collection. Merge the fields into one @@fulltext.',
+        line: 18,
+      },
+    ]);
   });
 
   it('reports a builder refusal where the schema writes its subject', async () => {

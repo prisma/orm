@@ -1495,6 +1495,7 @@ function buildIndexes(
   const { symbol, sourceId } = build.located;
   const indexes: (IndexSite & { readonly index: IndexNode })[] = [];
   let textIndexes = 0;
+  const writtenKeys = new Set<string>();
   for (const attribute of [...build.uniqueFields, ...build.modelIndexes]) {
     const names = attribute.fields.map((field) => field.name);
     const usedBy: IgnoredFieldUse = {
@@ -1529,10 +1530,25 @@ function buildIndexes(
         continue;
       }
     }
+    const keys = attribute.fields.map((field) => [
+      field.name,
+      field.direction ?? (text ? 'text' : 1),
+    ]);
+    const writtenKey = JSON.stringify(keys);
+    if (writtenKeys.has(writtenKey)) {
+      diagnostics.push(
+        prisma6Diagnostic(
+          'PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS',
+          `${usedBy.text} indexes the same fields with the same sort as an earlier index of the model. Prisma 6 refuses this: "Index already exists in the model." Remove one of the two.`,
+          sourceId,
+          attribute.span,
+        ),
+      );
+      continue;
+    }
+    writtenKeys.add(writtenKey);
     const index: IndexNode = {
-      fields: Object.fromEntries(
-        attribute.fields.map((field) => [field.name, field.direction ?? (text ? 'text' : 1)]),
-      ),
+      fields: Object.fromEntries(keys),
       ...(attribute.kind === 'unique' ? { options: { unique: true } } : {}),
     };
     indexes.push({ index, sourceId, span: attribute.span });
