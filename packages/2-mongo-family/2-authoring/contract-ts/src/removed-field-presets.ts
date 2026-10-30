@@ -47,6 +47,19 @@ function refuseScalarHelper(name: string): never {
   );
 }
 
+/** Refuses an argument of `field.scalar()` that is not a type from the type helpers, naming the type to write when `value` is the codec id of a removed scalar helper. */
+export function refuseScalarArgument(value: unknown): never {
+  const helper = Object.keys(REMOVED_SCALAR_HELPERS).find((name) => value === `mongo/${name}@1`);
+  const typeName = helper === undefined ? undefined : REMOVED_SCALAR_HELPERS[helper];
+  throw contractError(
+    'CONTRACT.ARGUMENT_INVALID',
+    typeName === undefined
+      ? `field.scalar() takes a type from the type helpers, such as field.scalar(type.String()), and was given ${JSON.stringify(value)}.`
+      : `field.scalar() takes a type, not the codec id "${String(value)}". Write field.scalar(type.${typeName}()).`,
+    { meta: { helper: 'field.scalar' } },
+  );
+}
+
 /**
  * The MongoDB `field` helpers, where a read of a removed scalar helper such as `field.objectId`, or of a removed field preset under `field.temporal`, throws `CONTRACT.FIELD_HELPER_UNKNOWN` with its rewrite, so a JavaScript caller, or a contract emitted before it is type-checked, learns what to write instead. Every other read behaves as on `helpers`.
  */

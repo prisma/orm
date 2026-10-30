@@ -84,7 +84,7 @@ import { contractError } from './contract-errors';
 import { buildContractDefinition, type DslContractInput } from './contract-lowering';
 import type { EnumTypeHandle } from './enum-type';
 import { authoringWarningOf, refusalError } from './refusal-errors';
-import { refusingRemovedFieldHelpers } from './removed-field-presets';
+import { refuseScalarArgument, refusingRemovedFieldHelpers } from './removed-field-presets';
 import type { MongoTypeInstance, ScalarFieldType, TypeHelpersOfPacks } from './type-helpers';
 
 type StringListInput = string | readonly string[];
@@ -1107,13 +1107,7 @@ function scalarField<const Instance extends MongoTypeInstance>(
   undefined,
   AliasExecutionDefaults<Instance>
 > {
-  if (!isTypeInstance(type)) {
-    throw contractError(
-      'CONTRACT.FIELD_HELPER_UNKNOWN',
-      `field.scalar() takes a type from the type helpers, such as field.scalar(type.String()), and was given ${JSON.stringify(type)}. Prisma 8 removed field.scalar(codecId).`,
-      { meta: { helper: 'field.scalar' } },
-    );
-  }
+  if (!isTypeInstance(type)) refuseScalarArgument(type);
   const { generatorCalls, ...fieldType } = type;
   return createFieldBuilder(
     {

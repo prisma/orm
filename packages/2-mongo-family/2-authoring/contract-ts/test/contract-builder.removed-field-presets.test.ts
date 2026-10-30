@@ -55,12 +55,26 @@ describe('a read of a field helper the MongoDB builder does not have', () => {
     });
   });
 
-  it('refuses field.scalar given a codec id, with its rewrite', () => {
-    expect(() => Reflect.apply(field.scalar, field, ['mongo/string@1'])).toThrow(
+  it.each([
+    ['mongo/string@1', 'field.scalar(type.String())'],
+    ['mongo/objectId@1', 'field.scalar(type.ObjectId())'],
+    ['mongo/vector@1', 'field.scalar(type.Vector())'],
+  ])('refuses field.scalar given the codec id %s, naming the type to write', (codecId, rewrite) => {
+    expect(() => Reflect.apply(field.scalar, field, [codecId])).toThrow(
       expect.objectContaining({
-        code: 'CONTRACT.FIELD_HELPER_UNKNOWN',
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message: `field.scalar() takes a type, not the codec id "${codecId}". Write ${rewrite}.`,
+        meta: { helper: 'field.scalar' },
+      }),
+    );
+  });
+
+  it('refuses field.scalar given anything else that is not a type', () => {
+    expect(() => Reflect.apply(field.scalar, field, ['geo/point@1'])).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ARGUMENT_INVALID',
         message:
-          'field.scalar() takes a type from the type helpers, such as field.scalar(type.String()), and was given "mongo/string@1". Prisma 8 removed field.scalar(codecId).',
+          'field.scalar() takes a type from the type helpers, such as field.scalar(type.String()), and was given "geo/point@1".',
         meta: { helper: 'field.scalar' },
       }),
     );
