@@ -42,6 +42,7 @@ import {
   type FieldNode,
   type IndexNode,
   type ModelNode,
+  mergeRedundantIndexes,
   type RelationNode,
   type ValueObjectNode,
 } from '@internal/mongo-contract-ts/contract-builder';
@@ -984,6 +985,19 @@ function processEnumDeclarations(input: {
 }
 
 /** Whether PSL already reported the cause of a refusal, so the builder's refusal would repeat it. */
+function withoutMergedIndexSites(
+  modelSites: ReadonlyMap<string, ModelSites>,
+  definition: ContractDefinition,
+): ReadonlyMap<string, ModelSites> {
+  const kept = new Set(definition.models.flatMap((model) => model.indexes ?? []));
+  return new Map(
+    [...modelSites].map(([modelName, sites]) => [
+      modelName,
+      { ...sites, indexes: sites.indexes.filter((site) => kept.has(site.index)) },
+    ]),
+  );
+}
+
 function alreadyReported(
   refusal: BuildRefusal,
   dropped: ReadonlySet<string>,
@@ -1429,7 +1443,7 @@ export function interpretPslDocumentToMongoContract(
     ...node,
     relations: relationsByModel.get(node.modelName) ?? [],
   }));
-  const definition: ContractDefinition = {
+  const written: ContractDefinition = {
     target: input.target,
     ...ifDefined('extensions', input.extensionPacks),
     // Variants come last, so each collection lists a variant's indexes after its base's, as earlier releases did.
@@ -1442,8 +1456,9 @@ export function interpretPslDocumentToMongoContract(
     writesCollectionValidators: true,
     warnings: undefined,
   };
+  const definition = mergeRedundantIndexes(written, codecLookup, input.dataTypes);
   const sites: SchemaSites = {
-    models: modelSites,
+    models: withoutMergedIndexSites(modelSites, definition),
     fields: fieldSites,
     enums: enumSites,
   };

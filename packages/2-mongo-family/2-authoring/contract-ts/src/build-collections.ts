@@ -1,4 +1,5 @@
 import {
+  type ApplyScopeResult,
   applyPolymorphicScopeToMongoIndex,
   indexLookupKey,
   type MongoCollectionInput,
@@ -7,6 +8,7 @@ import {
   type MongoCollectionOptionsInput,
   MongoIndex,
   type MongoIndexInput,
+  type PolymorphicIndexScope,
 } from '@internal/mongo-contract';
 import { canonicalStringify } from '@internal/utils/canonical-stringify';
 import { blindCast } from '@internal/utils/casts';
@@ -40,6 +42,18 @@ function toStorageIndex(index: IndexNode, fields: readonly FieldNode[]): MongoIn
   );
 }
 
+/** The storage index a written index gives, with its variant's discriminator scope applied when it has one. */
+export function scopedStorageIndex(
+  written: IndexNode,
+  fields: readonly FieldNode[],
+  polymorphicScope: PolymorphicIndexScope | undefined,
+): ApplyScopeResult {
+  const storageIndex = toStorageIndex(written, fields);
+  return polymorphicScope === undefined
+    ? { kind: 'ok', index: storageIndex }
+    : applyPolymorphicScopeToMongoIndex(storageIndex, polymorphicScope);
+}
+
 function toStorageCollectionOptions(
   opts: MongoCollectionOptionsAuthoringInput,
 ): MongoCollectionOptions {
@@ -61,7 +75,10 @@ function toStorageCollectionOptions(
   return new MongoCollectionOptions(input);
 }
 
-function findMissingIndexField(index: IndexNode, fields: readonly FieldNode[]): string | undefined {
+export function findMissingIndexField(
+  index: IndexNode,
+  fields: readonly FieldNode[],
+): string | undefined {
   for (const fieldName of Object.keys(index.fields)) {
     const wildcardMatch = fieldName.match(/^(.+)\.\$\*\*$/);
     const lookupName = wildcardMatch ? wildcardMatch[1] : fieldName;
@@ -83,7 +100,7 @@ function isTextIndex(index: IndexNode): boolean {
 }
 
 /** The first shape rule an index breaks, of those MongoDB enforces when it creates the index. */
-function indexShapeProblem(index: IndexNode): IndexShapeRule | undefined {
+export function indexShapeProblem(index: IndexNode): IndexShapeRule | undefined {
   const keys = Object.entries(index.fields);
   const hasWildcard = keys.some(([key]) => isWildcardKey(key));
   const directions = keys.map(([, direction]) => direction);
@@ -105,11 +122,11 @@ function indexShapeProblem(index: IndexNode): IndexShapeRule | undefined {
   return undefined;
 }
 
-function resolveVariantScope(
+export function resolveVariantScope(
   model: ModelNode,
   modelsByName: ReadonlyMap<string, ModelNode>,
   variantValues: ReadonlyMap<string, string>,
-): { discriminatorField: string; discriminatorValue: string } | undefined {
+): PolymorphicIndexScope | undefined {
   if (!model.base) return undefined;
   const base = modelsByName.get(model.base.model);
   const discriminatorField = base?.discriminator?.field;
@@ -148,7 +165,7 @@ export function buildCollections(input: {
 }): Record<string, MongoCollectionInput> {
   const { models, variantValues, refusals } = input;
   const intermediate: Record<string, MongoCollectionInput> = {};
-  const indexesByCollection = new Map<string, MongoIndex[]>();
+  const indexOwnersByCollection = new Map<string, Map<string, string>>();
   const textIndexCollections = new Set<string>();
   const modelsByName = new Map(models.map((model) => [model.modelName, model]));
 
@@ -160,8 +177,9 @@ export function buildCollections(input: {
     }
     const collectionKey = { kind: 'collectionSettings', model: modelName } as const;
     const existingCollection: MongoCollectionInput = intermediate[collection] ?? {};
-    const collectionIndexes = indexesByCollection.get(collection) ?? [];
-    indexesByCollection.set(collection, collectionIndexes);
+    const existingIndexes = existingCollection.indexes ?? [];
+    const indexOwners = indexOwnersByCollection.get(collection) ?? new Map<string, string>();
+    indexOwnersByCollection.set(collection, indexOwners);
 
     if (existingCollection.options && model.collectionOptions) {
       refusals.push({
@@ -181,7 +199,7 @@ export function buildCollections(input: {
     }
 
     const polymorphicScope = resolveVariantScope(model, modelsByName, variantValues);
-    let indexesChanged = false;
+    const storageIndexes: MongoIndex[] = [];
     (model.indexes ?? []).forEach((written, position) => {
       const key: IndexKey = { kind: 'index', model: modelName, position };
       const signature = canonicalStringify(written);
@@ -195,32 +213,26 @@ export function buildCollections(input: {
         refusals.push({ kind: 'indexShape', key, rule: shapeProblem, signature });
         return;
       }
-      const storageIndex = toStorageIndex(written, model.fields);
-      const scoped =
-        polymorphicScope === undefined
-          ? { kind: 'ok' as const, index: storageIndex }
-          : applyPolymorphicScopeToMongoIndex(storageIndex, polymorphicScope);
-      if (scoped.kind === 'conflict') {
-        refusals.push({ kind: 'indexScopeConflict', key, reason: scoped.reason, signature });
-        return;
-      }
-      const lookupKey = indexLookupKey({ ...scoped.index, unique: undefined });
-      const matchingAt = collectionIndexes.findIndex(
-        (held) => indexLookupKey({ ...held, unique: undefined }) === lookupKey,
-      );
-      const held = collectionIndexes[matchingAt];
-      if (held !== undefined) {
-        if (held.unique === true || scoped.index.unique !== true) return;
-        collectionIndexes.splice(matchingAt, 1);
-      } else if (isTextIndex(written)) {
+      if (isTextIndex(written)) {
         if (textIndexCollections.has(collection)) {
           refusals.push({ kind: 'indexShape', key, rule: 'second-text-index', signature });
           return;
         }
         textIndexCollections.add(collection);
       }
-      collectionIndexes.push(scoped.index);
-      indexesChanged = true;
+      const scoped = scopedStorageIndex(written, model.fields, polymorphicScope);
+      if (scoped.kind === 'conflict') {
+        refusals.push({ kind: 'indexScopeConflict', key, reason: scoped.reason, signature });
+        return;
+      }
+      const lookupKey = indexLookupKey(scoped.index);
+      const firstModel = indexOwners.get(lookupKey);
+      if (firstModel !== undefined) {
+        refusals.push({ kind: 'indexDuplicate', key, collection, firstModel, signature });
+        return;
+      }
+      indexOwners.set(lookupKey, modelName);
+      storageIndexes.push(scoped.index);
     });
 
     const storageOptions = model.collectionOptions
@@ -228,18 +240,19 @@ export function buildCollections(input: {
       : undefined;
     const controlPatch = model.controlPolicy !== undefined ? { control: model.controlPolicy } : {};
 
-    intermediate[collection] = indexesChanged
-      ? {
-          ...existingCollection,
-          indexes: [...collectionIndexes],
-          ...(storageOptions ? { options: storageOptions } : {}),
-          ...controlPatch,
-        }
-      : storageOptions
-        ? { ...existingCollection, options: storageOptions, ...controlPatch }
-        : Object.keys(controlPatch).length > 0
-          ? { ...existingCollection, ...controlPatch }
-          : existingCollection;
+    intermediate[collection] =
+      storageIndexes.length > 0
+        ? {
+            ...existingCollection,
+            indexes: [...existingIndexes, ...storageIndexes],
+            ...(storageOptions ? { options: storageOptions } : {}),
+            ...controlPatch,
+          }
+        : storageOptions
+          ? { ...existingCollection, options: storageOptions, ...controlPatch }
+          : Object.keys(controlPatch).length > 0
+            ? { ...existingCollection, ...controlPatch }
+            : existingCollection;
   }
 
   return intermediate;

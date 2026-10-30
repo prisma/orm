@@ -4,7 +4,13 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
 import { buildMongoContractFromDefinition } from '../src/build-contract';
 import { field } from '../src/contract-builder';
-import type { FieldNode, IndexNode, ModelNode } from '../src/contract-definition';
+import type {
+  ContractDefinition,
+  FieldNode,
+  IndexNode,
+  ModelNode,
+} from '../src/contract-definition';
+import { mergeRedundantIndexes } from '../src/merge-redundant-indexes';
 import { mongoFamilyPack, mongoTargetPack } from './mongo-test-packs';
 
 const codecLookup = extractCodecLookup([mongoFamilyPack, mongoTargetPack]);
@@ -30,12 +36,21 @@ function inUsers(modelName: string, indexes: readonly IndexNode[]): ModelNode {
   return { modelName, collection: 'users', fields, indexes };
 }
 
+function definitionOf(models: readonly ModelNode[]): ContractDefinition {
+  return {
+    target: mongoTargetPack,
+    models,
+    writesCollectionValidators: false,
+    warnings: undefined,
+  };
+}
+
+function merged(models: readonly ModelNode[]): ContractDefinition {
+  return mergeRedundantIndexes(definitionOf(models), codecLookup, dataTypes);
+}
+
 function indexesOf(models: readonly ModelNode[]): unknown {
-  const built = buildMongoContractFromDefinition(
-    { target: mongoTargetPack, models, writesCollectionValidators: false, warnings: undefined },
-    codecLookup,
-    dataTypes,
-  );
+  const built = buildMongoContractFromDefinition(merged(models), codecLookup, dataTypes);
   if (!built.ok) throw new Error(`refused: ${JSON.stringify(built.failure.refusals)}`);
   const collections =
     built.value.contract.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries['collection'];
@@ -48,7 +63,7 @@ const ab = [
   { field: 'b', direction: 1 },
 ];
 
-describe('the builder merges identical and redundant indexes in a collection', () => {
+describe('mergeRedundantIndexes', () => {
   it.each<[string, readonly IndexNode[]]>([
     [
       'the unique index first',
@@ -236,6 +251,84 @@ describe('the builder merges identical and redundant indexes in a collection', (
         keys: [{ field: 'c', direction: 1 }],
         partialFilterExpression: { type: 'feature' },
       },
+    ]);
+  });
+
+  it("keeps one of two identical indexes a variant writes, scoped to the variant's value", () => {
+    expect(
+      indexesOf([
+        {
+          ...inUsers('User', []),
+          fields: fields.slice(0, 2),
+          discriminator: { field: 'type' },
+        },
+        {
+          modelName: 'Bug',
+          fields: [scalar('c')],
+          indexes: [{ fields: { c: 1 } }, { fields: { c: 1 } }],
+          base: { model: 'User', value: { kind: 'string', text: 'bug' } },
+        },
+      ]),
+    ).toEqual([
+      {
+        kind: 'mongo-index',
+        keys: [{ field: 'c', direction: 1 }],
+        partialFilterExpression: { type: 'bug' },
+      },
+    ]);
+  });
+
+  it('removes the merged index from the model that wrote it and keeps every other index node', () => {
+    const plain: IndexNode = { fields: { a: 1 } };
+    const other: IndexNode = { fields: { b: 1 } };
+    const unique: IndexNode = { fields: { a: 1 }, options: { unique: true } };
+    expect(
+      merged([inUsers('User', [plain, other]), inUsers('Admin', [unique])]).models.map(
+        (model) => model.indexes,
+      ),
+    ).toEqual([[other], [unique]]);
+  });
+
+  it('returns the definition it is given when no index merges', () => {
+    const definition = definitionOf([
+      inUsers('User', [{ fields: { a: 1 } }, { fields: { b: 1 } }]),
+    ]);
+    expect(mergeRedundantIndexes(definition, codecLookup, dataTypes)).toBe(definition);
+  });
+
+  it.each<[string, IndexNode]>([
+    ['on an unknown field', { fields: { nope: 1 } }],
+    ['with a shape MongoDB refuses', { fields: { '$**': 1 }, options: { unique: true } }],
+  ])('leaves two identical indexes %s for the builder to refuse', (_, index) => {
+    expect(merged([inUsers('User', [index, index])]).models[0]?.indexes).toEqual([index, index]);
+  });
+
+  it('leaves two identical variant indexes whose filter contradicts the discriminator value for the builder to refuse', () => {
+    const conflicting: IndexNode = {
+      fields: { c: 1 },
+      options: { partialFilterExpression: { type: 'x' } },
+    };
+    const models = merged([
+      {
+        ...inUsers('User', []),
+        fields: fields.slice(0, 2),
+        discriminator: { field: 'type' },
+      },
+      {
+        modelName: 'Bug',
+        fields: [scalar('c')],
+        indexes: [conflicting, conflicting],
+        base: { model: 'User', value: { kind: 'string', text: 'bug' } },
+      },
+    ]).models;
+    expect(models[1]?.indexes).toEqual([conflicting, conflicting]);
+  });
+
+  it('skips a model stored in no collection', () => {
+    const embedded: ModelNode = { modelName: 'Address', fields, indexes: [{ fields: { a: 1 } }] };
+    expect(merged([embedded, embedded]).models.map((model) => model.indexes)).toEqual([
+      [{ fields: { a: 1 } }],
+      [{ fields: { a: 1 } }],
     ]);
   });
 });

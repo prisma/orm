@@ -46,3 +46,4 @@ export type {
 } from '../contract-dsl';
 export type { BoundEnumType, CodecTypeMap, EnumMember, EnumTypeHandle } from '../enum-type';
 export { bindEnumType, enumType, isEnumTypeHandle, member } from '../enum-type';
+export { mergeRedundantIndexes } from '../merge-redundant-indexes';

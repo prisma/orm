@@ -237,6 +237,23 @@ describe('buildMongoContractFromDefinition', () => {
       fields: { severity: { field: 'severity' } },
     });
   });
+
+  it('keeps both a unique and a plain index on the same keys, in the order they are written', () => {
+    const contract = contractOf({
+      models: [
+        user([scalar('a')], {
+          indexes: [{ fields: { a: 1 } }, { fields: { a: 1 }, options: { unique: true } }],
+        }),
+      ],
+    });
+    const users =
+      contract.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries['collection']?.['users'];
+
+    expect(JSON.parse(JSON.stringify(users))['indexes']).toEqual([
+      { kind: 'mongo-index', keys: [{ field: 'a', direction: 1 }] },
+      { kind: 'mongo-index', keys: [{ field: 'a', direction: 1 }], unique: true },
+    ]);
+  });
 });
 
 describe('buildMongoContractFromDefinition refusals', () => {
@@ -374,6 +391,26 @@ describe('buildMongoContractFromDefinition refusals', () => {
         ],
       },
       [{ kind: 'indexScopeConflict', key: { kind: 'index', model: 'Bug', position: 0 } }],
+    ],
+    [
+      'an index its model writes twice',
+      { models: [user([scalar('a')], { indexes: [{ fields: { a: 1 } }, { fields: { a: 1 } }] })] },
+      [{ kind: 'indexDuplicate', key: { kind: 'index', model: 'User', position: 1 } }],
+    ],
+    [
+      'an index another model in the same collection writes too',
+      {
+        models: [
+          user([scalar('a')], { indexes: [{ fields: { a: 1 } }] }),
+          {
+            modelName: 'Admin',
+            collection: 'users',
+            fields: [scalar('a')],
+            indexes: [{ fields: { a: 1 } }],
+          },
+        ],
+      },
+      [{ kind: 'indexDuplicate', key: { kind: 'index', model: 'Admin', position: 0 } }],
     ],
     [
       'a generated value on a value object field',
@@ -613,6 +650,30 @@ describe('buildMongoContractFromDefinition refusals with their whole data', () =
     );
     return built.ok ? [] : built.failure.refusals;
   };
+
+  it('refuses an index another model in the same collection writes, naming the first model', () => {
+    expect(
+      refusalsWith({
+        models: [
+          user([scalar('a')], { indexes: [{ fields: { a: 1 } }] }),
+          {
+            modelName: 'Admin',
+            collection: 'users',
+            fields: [scalar('a')],
+            indexes: [{ fields: { a: 1 } }],
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        kind: 'indexDuplicate',
+        key: { kind: 'index', model: 'Admin', position: 0 },
+        collection: 'users',
+        firstModel: 'User',
+        signature: '{"fields":{"a":1}}',
+      },
+    ]);
+  });
 
   it("refuses type parameters the field's data type does not accept", () => {
     expect(
