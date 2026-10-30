@@ -7,6 +7,7 @@ import type { ContractSourceContext } from '@internal/cli/config-types';
 import type { Contract } from '@internal/contract/types';
 import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
 import { createControlStack } from '@internal/framework-components/control';
+import { defineContract, field, model, type } from '@internal/mongo/contract-builder';
 import { mongoContract } from '@internal/mongo-contract-psl/provider';
 import { type MongoTargetContract, mongoTargetDescriptor } from '@internal/target-mongo/control';
 import mongoTargetPack from '@internal/target-mongo/pack';
@@ -24,8 +25,11 @@ const EXPECTED_STDOUT = [
   'migrations/app/20260101T0000_initial/contract.prisma: rewrote 6 field types.',
   'src/contract.prisma: rewrote 6 field types.',
   'src/contract.ts: rewrote 2 type.Date() calls.',
+  "src/date-model.prisma: line 3: the schema declares its own Date, so the script cannot tell which fields typed Date are MongoDB's date; write each of those as DateTime.",
+  'src/namespaced.ts: rewrote 1 type.Date() call.',
   'src/published.ts: rewrote 1 type.Date() call.',
-  'Changed 4 files.',
+  'src/unknown.ts: line 4: types.Date(): the script cannot tell this is the type of a MongoDB contract builder; if it is, write DateTime.',
+  'Changed 5 files.',
   '',
 ].join('\n');
 
@@ -100,7 +104,12 @@ describe.each(Object.entries(SCRIPT_PATHS))(
       const dir = copyBefore();
       run(script, dir);
       expect({ stdout: run(script, dir).stdout, files: filesOf(dir) }).toEqual({
-        stdout: 'Changed 0 files.\n',
+        stdout: [
+          EXPECTED_STDOUT.split('\n').find((line) => line.startsWith('src/date-model.prisma')),
+          EXPECTED_STDOUT.split('\n').find((line) => line.startsWith('src/unknown.ts')),
+          'Changed 0 files.',
+          '',
+        ].join('\n'),
         files: filesOf(join(fixturesDir, 'after')),
       });
     });
@@ -126,58 +135,54 @@ const sourceContext: ContractSourceContext = {
   capabilities: mongoStack.capabilities,
 };
 
-interface SerializedEntities {
-  readonly [entity: string]: {
-    readonly fields?: Readonly<Record<string, { readonly type?: { readonly codecId?: string } }>>;
-  };
-}
+const serialize = (contract: Contract) =>
+  mongoTargetDescriptor.contractSerializer.serializeContract(contract as MongoTargetContract);
 
-/** Each scalar field's codec, by `Model.field`, from the serialized contract. */
-function codecsOf(contract: Contract): Readonly<Record<string, string>> {
-  const json = mongoTargetDescriptor.contractSerializer.serializeContract(
-    contract as MongoTargetContract,
-  ) as {
-    readonly domain: {
-      readonly namespaces: Readonly<Record<string, Readonly<Record<string, SerializedEntities>>>>;
-    };
-  };
-  return Object.fromEntries(
-    Object.values(json.domain.namespaces).flatMap((kinds) =>
-      Object.values(kinds).flatMap((entities) =>
-        Object.entries(entities).flatMap(([entity, { fields = {} }]) =>
-          Object.entries(fields).flatMap(([name, { type }]) =>
-            type?.codecId === undefined ? [] : [[`${entity}.${name}`, type.codecId]],
-          ),
-        ),
-      ),
-    ),
-  );
+/** The type constructor `Date` was before this release: an instant read as a JavaScript Date. */
+const dateBeforeThisRelease = {
+  kind: 'typeConstructor',
+  documentation: 'A date and time with millisecond precision, stored as BSON date.',
+  output: { codecId: 'mongo/date@1' },
+} as const;
+
+async function loadSchema(schema: string, context: ContractSourceContext): Promise<Contract> {
+  const loaded = await mongoContract(schema, { target: mongoTargetPack }).source.load({
+    ...context,
+    resolvedInputs: [schema],
+  });
+  if (!loaded.ok) throw new Error(JSON.stringify(loaded.failure));
+  return loaded.value;
 }
 
 describe('the rewritten contracts', () => {
-  it('keep every field the script rewrote on mongo/date@1, the codec Date named before', async () => {
-    const schema = join(fixturesDir, 'after/src/contract.prisma');
-    const loaded = await mongoContract(schema, { target: mongoTargetPack }).source.load({
+  it('emit the contract the schema emitted before, when Date was an instant', async () => {
+    const before = await loadSchema(join(fixturesDir, 'before/src/contract.prisma'), {
       ...sourceContext,
-      resolvedInputs: [schema],
+      authoringContributions: {
+        ...sourceContext.authoringContributions,
+        type: { ...sourceContext.authoringContributions.type, Date: dateBeforeThisRelease },
+      },
     });
-    if (!loaded.ok) throw new Error(JSON.stringify(loaded.failure));
-    expect({
-      psl: codecsOf(loaded.value),
-      ts: codecsOf(rewrittenTsContract),
-    }).toEqual({
-      psl: expect.objectContaining({
-        'Post.publishedAt': 'mongo/date@1',
-        'Post.editedAt': 'mongo/date@1',
-        'Post.createdAt': 'mongo/date@1',
-        'Post.updatedAt': 'mongo/date@1',
-        'Post.reviewedAt': 'mongo/date@1',
-      }),
-      ts: expect.objectContaining({
-        'Post.publishedAt': 'mongo/date@1',
-        'Post.createdAt': 'mongo/date@1',
-        'Post.updatedAt': 'mongo/date@1',
-      }),
-    });
+    const after = await loadSchema(join(fixturesDir, 'after/src/contract.prisma'), sourceContext);
+
+    expect(serialize(after)).toEqual(serialize(before));
+  });
+
+  it('emit the contract the TypeScript contract built before, when type.Date() was DateJsDate', () => {
+    const before = defineContract({}, ({ gen, type: t }) => ({
+      models: {
+        Post: model('Post', {
+          collection: 'posts',
+          fields: {
+            _id: field.scalar(type.ObjectId()),
+            publishedAt: field.scalar(type.DateJsDate()).optional(),
+            createdAt: field.scalar(t.DateJsDate()).onCreate(gen.now()),
+            updatedAt: field.scalar(type.DateTime()).onCreate(gen.now()).onUpdate(gen.now()),
+          },
+        }),
+      },
+    }));
+
+    expect(serialize(rewrittenTsContract)).toEqual(serialize(before));
   });
 });
