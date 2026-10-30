@@ -81,6 +81,27 @@ describe.each(Object.entries(SCRIPT_PATHS))(
       expect(filesOf(dir)).toEqual(filesOf(join(fixturesDir, 'after')));
     });
 
+    it('exits 1 and changes nothing when neither the project nor the script folder has typescript', () => {
+      const dir = copyBefore();
+      cpSync(join(repoRoot, script), join(dir, 'rewrite.ts'));
+      const result = spawnSync(process.execPath, ['rewrite.ts', 'contract.ts'], {
+        cwd: dir,
+        encoding: 'utf8',
+      });
+      expect({
+        status: result.status,
+        stdout: result.stdout,
+        stderr: result.stderr,
+        contract: readFileSync(join(dir, 'contract.ts'), 'utf8'),
+      }).toEqual({
+        status: 1,
+        stdout: '',
+        stderr:
+          'The script reads files with the "typescript" package, which this project does not have. Install it, for example with "pnpm add -D typescript", and run the script again.\n',
+        contract: readFileSync(join(fixturesDir, 'before', 'contract.ts'), 'utf8'),
+      });
+    });
+
     it('leaves the files it rewrote unchanged on a second run', () => {
       const dir = copyBefore();
       run(script, dir);
