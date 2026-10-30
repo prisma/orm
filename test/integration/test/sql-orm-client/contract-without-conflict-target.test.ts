@@ -1,35 +1,26 @@
 import postgresAdapter from '@internal/adapter-postgres/runtime';
-import pgvectorRuntime from '@internal/extension-pgvector/runtime';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
-import postgresTarget from '@internal/target-postgres/runtime';
+import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
-import { getTestContract, withCapabilities } from './helpers';
+import type { Contract } from './fixtures/without-conflict-target/generated/contract';
+import contractJson from './fixtures/without-conflict-target/generated/contract.json' with {
+  type: 'json',
+};
 import { timeouts, withCollectionRuntime } from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
 /**
- * A contract emitted before the adapters reported `sql.insertOnConflictTarget` lacks the key. The execution context adds the adapter's capabilities to the contract, so through the standard stack such a contract upserts and skips conflicts on named columns as before.
+ * A contract emitted before the Postgres adapter reported `sql.insertOnConflictTarget` lacks the key. The execution context adds the adapter's capabilities to the contract, so through the standard stack such a contract upserts and skips conflicts on named columns as before.
  */
-function usersOnContractWithoutConflictTarget(runtime: PgIntegrationRuntime) {
-  const emitted = getTestContract();
-  const { insertOnConflictTarget: _target, ...sql } = emitted.capabilities.sql;
-  const context = createExecutionContext({
-    contract: withCapabilities(emitted, { ...emitted.capabilities, sql }),
-    stack: createSqlExecutionStack({
-      target: postgresTarget,
-      adapter: postgresAdapter,
-      extensions: [pgvectorRuntime],
-    }),
-  });
-  return {
-    contractCapability: 'insertOnConflictTarget' in sql,
-    runtimeCapability: Object.hasOwn(
-      context.contract.capabilities['sql'] ?? {},
-      'insertOnConflictTarget',
-    ),
-    users: new Collection({ runtime, context }, 'User', { namespaceId: 'public' }),
-  };
+const contract = new PostgresContractSerializer().deserializeContract<Contract>(contractJson);
+const context = createExecutionContext<Contract>({
+  contract,
+  stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
+});
+
+function createUsers(runtime: PgIntegrationRuntime) {
+  return new Collection({ runtime, context }, 'User', { namespaceId: 'public' });
 }
 
 describe('integration/contract emitted before insertOnConflictTarget', () => {
@@ -37,13 +28,12 @@ describe('integration/contract emitted before insertOnConflictTarget', () => {
     'upserts and skips conflicts on named columns, because the runtime adds the adapter capability',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const { contractCapability, runtimeCapability, users } =
-          usersOnContractWithoutConflictTarget(runtime);
+        const users = createUsers(runtime);
         await runtime.query('create unique index users_email_unique on users (email)');
 
         expect({
-          contractCapability,
-          runtimeCapability,
+          emitted: Object.hasOwn(contract.capabilities.sql, 'insertOnConflictTarget'),
+          atRuntime: Object.hasOwn(context.contract.capabilities.sql, 'insertOnConflictTarget'),
           upserted: await users.select('id', 'name').upsert({
             create: { id: 1, name: 'Alice', email: 'alice@example.com', invitedById: null },
             update: { name: 'Alice Updated' },
@@ -65,13 +55,13 @@ describe('integration/contract emitted before insertOnConflictTarget', () => {
             )
             .toArray(),
         }).toEqual({
-          contractCapability: false,
-          runtimeCapability: true,
+          emitted: false,
+          atRuntime: true,
           upserted: { id: 1, name: 'Alice' },
           updated: { id: 1, name: 'Alice Updated' },
           skipped: [{ id: 4 }],
         });
-      });
+      }, contract);
     },
     timeouts.spinUpPpgDev,
   );
