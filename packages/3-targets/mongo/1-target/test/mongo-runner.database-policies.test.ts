@@ -82,7 +82,7 @@ class MarkerStore {
 
   constructor(public marker: ContractMarkerRecord | null = null) {}
 
-  readonly ops: MarkerOperations = {
+  ops: MarkerOperations = {
     markerLocation: '_prisma_migrations',
     readMarker: async () => this.marker,
     initMarker: async (_space, destination) => {
@@ -408,6 +408,54 @@ describe('MongoMigrationRunner database policies', () => {
     expect({ storageHash: store.marker?.storageHash, meta: store.marker?.meta }).toEqual({
       storageHash: DEST,
       meta: { policies: RECONCILE_ONLY },
+    });
+  });
+
+  it('fails as a concurrent change when the retried swap also fails because the policies were stored again', async () => {
+    const store = new MarkerStore(markerAt('start', {}));
+    const update = store.ops.updateMarker;
+    const forms: unknown[] = [DEFAULT_DATABASE_POLICIES, { change: ['migrate', 'reconcile'] }];
+    let swaps = 0;
+    store.ops = {
+      ...store.ops,
+      updateMarker: async (...args) => {
+        const form = forms[swaps++];
+        if (store.marker !== null && form !== undefined) {
+          store.marker = { ...store.marker, meta: { policies: form } };
+        }
+        return update(...args);
+      },
+    };
+
+    const result = await runSpaces(
+      makeDependencies(store),
+      [
+        {
+          space: 'app',
+          plan: makePlan([createCollection('items')], 'start'),
+          migrationEdges: [edge('start', DEST, '002_items')],
+          databasePolicies: RECONCILE_ONLY,
+        },
+      ],
+      DEFAULT_DATABASE_POLICIES,
+    );
+
+    expect({
+      failure: result.assertNotOk(),
+      swaps,
+      storageHash: store.marker?.storageHash,
+    }).toMatchObject({
+      failure: {
+        code: 'MIGRATION.MARKER_CAS_FAILURE',
+        why: "Another process stored the database's policies again after this run checked them, with the same settings in a different form. Run the command again to check them anew. The operations that ran before the failure stay applied.",
+        meta: {
+          reason: 'databasePolicies',
+          checkedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+          foundDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+        },
+      },
+      swaps: 2,
+      storageHash: 'start',
     });
   });
 

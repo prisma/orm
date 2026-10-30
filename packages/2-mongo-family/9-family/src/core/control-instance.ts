@@ -253,7 +253,7 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
       return { ...signed, status: 'unchanged' };
     }
     let guard = space === APP_SPACE_ID ? policies : undefined;
-    for (;;) {
+    for (let attempt = 1; ; attempt++) {
       const updated = await controlAdapter.updateMarker(
         driver,
         space,
@@ -276,6 +276,9 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
       }
       const check = checkMarkerPolicies(found, guard.checked);
       if (check.kind !== 'held') return databasePoliciesConflict(guard.checked, check);
+      if (attempt === 2) {
+        return databasePoliciesConflict(guard.checked, { kind: 'moved', found: guard.checked });
+      }
       guard = check.policies;
     }
   }

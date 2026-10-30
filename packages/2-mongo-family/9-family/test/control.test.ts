@@ -264,7 +264,12 @@ describe('createMongoFamilyInstance', () => {
     const migrateOnly = { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] as const };
     const expected = { storageHash: 'old', profileHash: 'old-profile' };
 
-    function policiesStore(options: { readonly policiesAfterCheck?: unknown } = {}) {
+    function policiesStore(
+      options: {
+        readonly policiesAfterCheck?: unknown;
+        readonly policiesAtEachWrite?: readonly unknown[];
+      } = {},
+    ) {
       const writes: unknown[][] = [];
       let policies: unknown = recorded;
       let changed = false;
@@ -275,6 +280,8 @@ describe('createMongoFamilyInstance', () => {
         },
         updateMarker: async (...args: unknown[]) => {
           writes.push(['update', ...args.slice(1)]);
+          const rewritten = options.policiesAtEachWrite?.[writes.length - 1];
+          if (rewritten !== undefined) policies = rewritten;
           if (options.policiesAfterCheck !== undefined && !changed) {
             policies = options.policiesAfterCheck;
             changed = true;
@@ -411,6 +418,29 @@ describe('createMongoFamilyInstance', () => {
         status: 'conflict',
         reason: 'databasePolicies',
         comparison: { kind: 'unreadable' },
+      });
+    });
+
+    it('reports a second failed swap, with the policies stored again in another form each time, as moved policies', async () => {
+      const { instance, contract, driver, writes } = policiesStore({
+        policiesAtEachWrite: [migrateOnly, recorded],
+      });
+
+      const [signature] = await instance.signSpaces({
+        driver,
+        spaces: [{ space: 'app', contract, expected }],
+        expectedDatabasePolicies: migrateOnly,
+      });
+
+      expect({ signature, swaps: writes.length }).toEqual({
+        signature: {
+          status: 'conflict',
+          reason: 'databasePolicies',
+          space: 'app',
+          checked: migrateOnly,
+          comparison: { kind: 'moved', found: migrateOnly },
+        },
+        swaps: 2,
       });
     });
 

@@ -200,13 +200,17 @@ export function databasePolicyValueText(value: DatabasePolicyDifference['declare
   return typeof value === 'string' ? value : value.join(', ');
 }
 
-/** Why the policies `actor` checked no longer hold: each setting that moved, from the value checked to the value found. */
+/** Why the policies `actor` checked no longer hold: each setting that moved, from the value checked to the value found, or that they were stored again unchanged. */
 export function movedDatabasePoliciesWhy(
   actor: string,
   checked: DatabasePolicies,
   found: DatabasePolicies,
 ): string {
-  const moved = databasePolicyDifferences(checked, found)
+  const differences = databasePolicyDifferences(checked, found);
+  if (differences.length === 0) {
+    return `Another process stored the database's policies again after ${actor} checked them, with the same settings in a different form.`;
+  }
+  const moved = differences
     .map(
       ({ setting, declared: checkedValue, inForce: foundValue }) =>
         `${setting} moved from ${databasePolicyValueText(checkedValue)} to ${databasePolicyValueText(foundValue)}`,

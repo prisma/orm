@@ -187,6 +187,14 @@ describe('movedDatabasePoliciesWhy', () => {
       "The database's policies changed after db sign checked them: change moved from migrate, reconcile to migrate; dataProtection.dataLoss moved from data-loss-with-consent to data-loss-forbidden; dataProtection.accessWidening moved from access-widening-with-consent to access-widening-forbidden.",
     );
   });
+
+  it('says the policies were stored again when no setting moved', () => {
+    expect(
+      movedDatabasePoliciesWhy('db sign', DEFAULT_DATABASE_POLICIES, DEFAULT_DATABASE_POLICIES),
+    ).toBe(
+      "Another process stored the database's policies again after db sign checked them, with the same settings in a different form.",
+    );
+  });
 });
 
 describe('storedDatabasePolicies', () => {

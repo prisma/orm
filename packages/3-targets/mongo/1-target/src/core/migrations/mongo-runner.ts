@@ -499,8 +499,8 @@ export class MongoMigrationRunner {
 
   /**
    * Writes the marker while it still holds `expectedFrom` and, for the application space, the raw
-   * policies the run checked. A swap that fails only because the stored policies changed form while
-   * reading the same is tried again with the value found.
+   * policies the run checked. A swap that fails because the stored policies changed form while
+   * reading the same is tried once more with the value found; a second failure is a concurrent change.
    */
   private async updateMarker(
     markerOps: MarkerOperations,
@@ -510,7 +510,7 @@ export class MongoMigrationRunner {
     checkedPolicies: CheckedMarkerPolicies | undefined,
   ): Promise<MongoMigrationRunnerFailure | undefined> {
     let guard = checkedPolicies;
-    for (;;) {
+    for (let attempt = 1; ; attempt++) {
       if (await markerOps.updateMarker(space, expectedFrom, destination, guard?.raw)) {
         return undefined;
       }
@@ -521,6 +521,7 @@ export class MongoMigrationRunner {
       const check = checkMarkerPolicies(found, guard.checked);
       if (check.kind === 'unreadable') throw markerPoliciesCorrupt(markerOps, check.why);
       if (check.kind === 'moved') return databasePoliciesMovedFailure(guard.checked, check.found);
+      if (attempt === 2) return databasePoliciesMovedFailure(guard.checked, guard.checked);
       guard = check.policies;
     }
   }
