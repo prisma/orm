@@ -14,6 +14,7 @@ import type {
   SqlTransaction,
 } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import {
   type ConnectionConfig,
   createConnection,
@@ -108,12 +109,15 @@ async function dropRest(rows: Readable & { close?: () => void }): Promise<void> 
 function ignoreAfterStop(): void {}
 
 /**
- * Interrupts the statement running on the connection with id `threadId` by sending `KILL QUERY` over a short-lived connection of its own, because MySQL cannot interrupt a statement from the connection that runs it. The package does the same when it destroys a connection with a statement still running, but leaves a failure of its `KILL` unhandled, which ends a Node.js process; so the driver interrupts the statement itself, and destroys the connection only once its result has ended.
+ * Interrupts the statement running on the connection with id `threadId` by sending `KILL QUERY` over a short-lived connection of its own, because MySQL cannot interrupt a statement from the connection that runs it. That connection waits for the reply no longer than it waits to connect. The package does the same when it destroys a connection with a statement still running, but leaves a failure of its `KILL` unhandled, which ends a Node.js process; so the driver interrupts the statement itself, and destroys the connection only once its result has ended.
  */
 async function interruptStatement(options: ConnectionConfig, threadId: number): Promise<void> {
-  const connection = await createConnection(options);
+  const connection = await createConnection({
+    ...options,
+    ...ifDefined('socketTimeout', options.connectTimeout),
+  });
   try {
-    await connection.query(`KILL QUERY ${threadId}`);
+    await connection.query('KILL QUERY ?', [threadId]);
   } finally {
     connection.destroy();
   }
