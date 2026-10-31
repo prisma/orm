@@ -52,6 +52,10 @@
       "types": "./dist/exports/semantic-lines.d.mts",
       "import": "./dist/exports/semantic-lines.mjs"
     },
+    "./temporal-fallback-entries": {
+      "types": "./dist/exports/temporal-fallback-entries.d.mts",
+      "import": "./dist/exports/temporal-fallback-entries.mjs"
+    },
     "./timeouts": {
       "types": "./dist/exports/timeouts.d.mts",
       "import": "./dist/exports/timeouts.mjs"

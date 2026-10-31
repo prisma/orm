@@ -21,6 +21,7 @@ export default defineConfig({
     'src/exports/render-ops.ts',
     'src/exports/runtime.ts',
     'src/exports/sql-utils.ts',
+    'src/exports/types.ts',
     'src/exports/control-tables.ts',
   ],
 });

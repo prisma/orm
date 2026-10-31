@@ -1,8 +1,8 @@
 import { coreHash } from '@internal/contract/types';
 import { validateContractOnce } from '@internal/contract/validate-once';
 import { SqlStorage } from '@internal/sql-contract/types';
-import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
 import { SqliteContractSerializer } from '@internal/target-sqlite/runtime';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { createContract } from '@repo/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Contract } from '../../1-target/test/fixtures/sqlite-contract.d';

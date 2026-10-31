@@ -71,7 +71,7 @@ describe('readPostgresDefault', () => {
 });
 
 describe('postgresResolveDefault', () => {
-  const single = { typeText: 'int4', many: false };
+  const single = { typeText: 'int4', dataTypeId: 'pg/int4', many: false };
 
   it.each([
     ["nextval('my_seq'::regclass)", 'autoincrement()'],
@@ -86,7 +86,10 @@ describe('postgresResolveDefault', () => {
   it('keeps an expression that is a literal as the expression', () => {
     const expression = "'{a,b}'::text[]";
     expect(
-      postgresResolveDefault({ kind: 'function', expression }, { typeText: 'text', many: true }),
+      postgresResolveDefault(
+        { kind: 'function', expression },
+        { typeText: 'text', dataTypeId: 'pg/text', many: true },
+      ),
     ).toEqual({
       kind: 'function',
       expression,

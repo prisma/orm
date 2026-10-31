@@ -32,6 +32,15 @@ function readsLowestInt64AsNumber(): boolean {
   }
 }
 
+const instantsEqual = (left: unknown, right: unknown): boolean =>
+  left instanceof Temporal.Instant && right instanceof Temporal.Instant && left.equals(right);
+
+const plainDatesEqual = (left: unknown, right: unknown): boolean =>
+  left instanceof Temporal.PlainDate && right instanceof Temporal.PlainDate && left.equals(right);
+
+const plainTimesEqual = (left: unknown, right: unknown): boolean =>
+  left instanceof Temporal.PlainTime && right instanceof Temporal.PlainTime && left.equals(right);
+
 export const sqliteConformanceCases: readonly SqliteCodecConformanceCase[] = [
   { codecId: 'sql/char@1', label: 'single character', value: 'a', storageType: 'TEXT' },
   { codecId: 'sql/varchar@1', label: 'text', value: 'hello', storageType: 'TEXT' },
@@ -278,6 +287,153 @@ export const sqliteConformanceCases: readonly SqliteCodecConformanceCase[] = [
     value: 0.1,
     storageType: 'REAL',
   },
+  // The Temporal-backed codecs' application value is a `Temporal.*`, and every two Temporal values
+  // of a kind are deep-equal, so these cases give the round trip its own equality.
+  {
+    codecId: 'sqlite/datetime-temporal@1',
+    label: 'instant with milliseconds',
+    value: Temporal.Instant.from('2026-01-02T03:04:05.678Z'),
+    storageType: 'TEXT',
+    valueEquality: instantsEqual,
+    projectionEquality: instantsEqual,
+  },
+  {
+    codecId: 'sqlite/datetime-temporal@1',
+    label: 'instant on a whole second',
+    value: Temporal.Instant.from('2026-01-02T03:04:05Z'),
+    storageType: 'TEXT',
+    valueEquality: instantsEqual,
+    projectionEquality: instantsEqual,
+  },
+  {
+    codecId: 'sqlite/datetime-temporal@1',
+    label: 'instant past the year 9999',
+    value: Temporal.Instant.from('+012026-01-02T03:04:05.678Z'),
+    storageType: 'TEXT',
+    valueEquality: instantsEqual,
+    projectionEquality: instantsEqual,
+  },
+  {
+    codecId: 'sqlite/date-temporal@1',
+    label: 'leap day',
+    value: Temporal.PlainDate.from('2024-02-29'),
+    storageType: 'TEXT',
+    valueEquality: plainDatesEqual,
+    projectionEquality: plainDatesEqual,
+  },
+  {
+    codecId: 'sqlite/date-temporal@1',
+    label: 'earliest date SQLite reads',
+    value: Temporal.PlainDate.from('0000-01-01'),
+    storageType: 'TEXT',
+    valueEquality: plainDatesEqual,
+    projectionEquality: plainDatesEqual,
+  },
+  {
+    codecId: 'sqlite/date-temporal@1',
+    label: 'latest date SQLite reads',
+    value: Temporal.PlainDate.from('9999-12-31'),
+    storageType: 'TEXT',
+    valueEquality: plainDatesEqual,
+    projectionEquality: plainDatesEqual,
+  },
+  {
+    codecId: 'sqlite/time-temporal@1',
+    label: 'time of day with milliseconds',
+    value: Temporal.PlainTime.from('03:04:05.678'),
+    storageType: 'TEXT',
+    valueEquality: plainTimesEqual,
+    projectionEquality: plainTimesEqual,
+  },
+  {
+    codecId: 'sqlite/time-temporal@1',
+    label: 'midnight',
+    value: Temporal.PlainTime.from('00:00'),
+    storageType: 'TEXT',
+    valueEquality: plainTimesEqual,
+    projectionEquality: plainTimesEqual,
+  },
+  {
+    codecId: 'sqlite/time-temporal@1',
+    label: 'last millisecond of the day',
+    value: Temporal.PlainTime.from('23:59:59.999'),
+    storageType: 'TEXT',
+    valueEquality: plainTimesEqual,
+    projectionEquality: plainTimesEqual,
+  },
+  // The `*-string` codecs' application value is the text their data type stores, which a row and a
+  // projection both carry as it is.
+  {
+    codecId: 'sqlite/datetime-string@1',
+    label: 'instant with milliseconds',
+    value: '2026-01-02T03:04:05.678Z',
+    storageType: 'TEXT',
+  },
+  {
+    codecId: 'sqlite/datetime-string@1',
+    label: 'instant on a whole second',
+    value: '2026-01-02T03:04:05.000Z',
+    storageType: 'TEXT',
+  },
+  {
+    codecId: 'sqlite/datetime-string@1',
+    label: 'instant past the year 9999',
+    value: '+012026-01-02T03:04:05.678Z',
+    storageType: 'TEXT',
+  },
+  { codecId: 'sqlite/date-string@1', label: 'leap day', value: '2024-02-29', storageType: 'TEXT' },
+  {
+    codecId: 'sqlite/date-string@1',
+    label: 'earliest date SQLite reads',
+    value: '0000-01-01',
+    storageType: 'TEXT',
+  },
+  {
+    codecId: 'sqlite/date-string@1',
+    label: 'latest date SQLite reads',
+    value: '9999-12-31',
+    storageType: 'TEXT',
+  },
+  {
+    codecId: 'sqlite/time-string@1',
+    label: 'time of day with milliseconds',
+    value: '03:04:05.678',
+    storageType: 'TEXT',
+  },
+  {
+    codecId: 'sqlite/time-string@1',
+    label: 'midnight',
+    value: '00:00:00.000',
+    storageType: 'TEXT',
+  },
+  {
+    codecId: 'sqlite/time-string@1',
+    label: 'last millisecond of the day',
+    value: '23:59:59.999',
+    storageType: 'TEXT',
+  },
+  // A duration is stored as written, so a component of every unit and a sign on each component
+  // must come back as they went.
+  {
+    codecId: 'sqlite/duration-string@1',
+    label: 'hours and minutes',
+    value: 'PT1H30M',
+    storageType: 'TEXT',
+  },
+  {
+    codecId: 'sqlite/duration-string@1',
+    label: 'every component',
+    value: 'P1Y2M3DT4H5M6.5S',
+    storageType: 'TEXT',
+  },
+  { codecId: 'sqlite/duration-string@1', label: 'negative', value: '-P1D', storageType: 'TEXT' },
+  {
+    codecId: 'sqlite/duration-string@1',
+    label: 'a sign on each component',
+    value: 'P1M-1DT-1H',
+    storageType: 'TEXT',
+  },
+  { codecId: 'sqlite/duration-string@1', label: 'zero', value: 'PT0S', storageType: 'TEXT' },
   // Every column can be NULL, and no `value` denotes it: NULL is a state of the
   // column rather than something a codec can be handed. Most codecs reject
   // `null`; the JSON codecs accept it, but there `value: null` means a JSON
@@ -344,6 +500,55 @@ export const sqliteConformanceCases: readonly SqliteCodecConformanceCase[] = [
   },
   {
     codecId: 'sqlite/datetime@1',
+    label: 'null',
+    value: undefined,
+    storageType: 'TEXT',
+    nullValue: true,
+  },
+  {
+    codecId: 'sqlite/date-string@1',
+    label: 'null',
+    value: undefined,
+    storageType: 'TEXT',
+    nullValue: true,
+  },
+  {
+    codecId: 'sqlite/date-temporal@1',
+    label: 'null',
+    value: undefined,
+    storageType: 'TEXT',
+    nullValue: true,
+  },
+  {
+    codecId: 'sqlite/datetime-string@1',
+    label: 'null',
+    value: undefined,
+    storageType: 'TEXT',
+    nullValue: true,
+  },
+  {
+    codecId: 'sqlite/datetime-temporal@1',
+    label: 'null',
+    value: undefined,
+    storageType: 'TEXT',
+    nullValue: true,
+  },
+  {
+    codecId: 'sqlite/duration-string@1',
+    label: 'null',
+    value: undefined,
+    storageType: 'TEXT',
+    nullValue: true,
+  },
+  {
+    codecId: 'sqlite/time-string@1',
+    label: 'null',
+    value: undefined,
+    storageType: 'TEXT',
+    nullValue: true,
+  },
+  {
+    codecId: 'sqlite/time-temporal@1',
     label: 'null',
     value: undefined,
     storageType: 'TEXT',

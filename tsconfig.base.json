@@ -32,6 +32,7 @@
 
     { "path": "./packages/3-extensions/pgvector" },
 
+    { "path": "./packages/3-targets/0-shared/type-implementations" },
     { "path": "./packages/3-targets/postgres/1-target" },
     { "path": "./packages/3-targets/postgres/2-adapter" },
     { "path": "./packages/3-targets/postgres/3-driver" },

@@ -12,6 +12,8 @@ semantics) lives in `test/e2e/framework/test/sqlite/` and the
 `@prisma/orm-sqlite/orm-client` / `@prisma/orm-sqlite/builder` integration
 suites — this example deliberately doesn't duplicate it.
 
+The `Event` model uses the convenience date and time types: `startsAt DateTime` reads a JavaScript `Date`, and `day Date` and `opensAt Time` read the ISO 8601 text SQLite stores (`2024-02-29`, `09:30:00.000`). `bookedOn` defaults to the current date in the database. `pnpm test` creates a database of its own, writes events and reads them back.
+
 ## Setup
 
 ```bash

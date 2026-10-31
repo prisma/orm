@@ -1,7 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import { coreHash } from '@internal/contract/types';
 import { SqlStorage } from '@internal/sql-contract/types';
-import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { createContract } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 

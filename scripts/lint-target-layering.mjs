@@ -5,6 +5,8 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const TARGETS_ROOT = join('packages', '3-targets');
+/** The folder of code several targets share, which is no database; its packages depend on no target. */
+const SHARED_FOLDER = '0-shared';
 const NUMBERED_PACKAGE = /^(\d+)-[a-z][a-z0-9-]*$/;
 const PRODUCTION_DEPENDENCY_FIELDS = ['dependencies', 'peerDependencies', 'optionalDependencies'];
 const MODULE_SPECIFIER = /\b(?:from|import)\s*\(?\s*(['"])([^'"\n]+)\1/g;
@@ -30,7 +32,8 @@ function* sourceFiles(dir) {
 
 export function targetPackages(baseDir = repoRoot) {
   const targetsDir = join(baseDir, TARGETS_ROOT);
-  return directories(targetsDir).flatMap((database) =>
+  const databases = directories(targetsDir).filter((folder) => folder !== SHARED_FOLDER);
+  return databases.flatMap((database) =>
     directories(join(targetsDir, database)).flatMap((folder) => {
       const numbered = NUMBERED_PACKAGE.exec(folder);
       const dir = join(targetsDir, database, folder);

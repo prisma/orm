@@ -3,7 +3,7 @@ import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageColumn } from '@internal/sql-contract/types';
 import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
-import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createTestSqliteControlAdapter } from '../helpers/test-control-adapter';

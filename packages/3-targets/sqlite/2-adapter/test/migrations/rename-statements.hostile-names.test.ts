@@ -8,9 +8,9 @@ import {
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlSchemaIR } from '@internal/sql-schema-ir/types';
-import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
 import { CONTROL_TABLE_NAMES } from '@internal/target-sqlite/control-tables';
 import type { SqlitePlanTargetDetails } from '@internal/target-sqlite/planner-target-details';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { applicationDomainOf, timeouts } from '@repo/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
