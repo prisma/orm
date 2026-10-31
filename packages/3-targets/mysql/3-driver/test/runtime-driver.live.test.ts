@@ -59,7 +59,7 @@ const COMMAND_NAMES: Readonly<Record<number, string>> = {
 };
 
 /**
- * Runs `fn` with a URL that reaches the server through a local proxy, which counts the connections the client opens and the commands it sends, by MySQL's name for each. They are counted where the client makes them: the server's own statistics for an account miss a connection for a moment while it closes, so a count read then is one short.
+ * Runs `fn` with a URL that reaches the server through a local proxy, which counts the connections the client opens and the commands it sends, by MySQL's name for each. They are counted where the client makes them: the server's own statistics for an account miss a connection for a moment while it closes, so a count read then is one short. With `closeAfterKill`, the proxy passes a `KILL` statement on to the server and then closes the client's side of that connection before the reply comes back.
  */
 async function withCountingProxy<T>(
   url: string,
@@ -67,6 +67,7 @@ async function withCountingProxy<T>(
     proxyUrl: URL,
     counts: { opened(): number; commands(): Record<string, number> },
   ) => Promise<T>,
+  options: { readonly closeAfterKill?: boolean } = {},
 ): Promise<T> {
   const target = new URL(url);
   let opened = 0;
@@ -88,6 +89,10 @@ async function withCountingProxy<T>(
         if (startsCommand) {
           const name = COMMAND_NAMES[pending[4] ?? -1] ?? `0x${pending[4]?.toString(16)}`;
           commands[name] = (commands[name] ?? 0) + 1;
+          const statement = pending.subarray(5, 4 + length).toString('utf8');
+          if (options.closeAfterKill && name === 'COM_QUERY' && /^KILL\b/i.test(statement)) {
+            setImmediate(() => client.destroy());
+          }
         }
         pending = pending.subarray(4 + length);
       }
@@ -805,6 +810,36 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     );
   });
 
+  it('leaves no unhandled rejection when the KILL for a pooled connection stopped early fails, because the driver sends it itself and catches its failure', async (test) => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    try {
+      await withMysqlDatabase(test, ({ url }) =>
+        withCountingProxy(
+          url,
+          async (proxyUrl) => {
+            await withDriver(
+              proxyUrl.toString(),
+              async (driver) => {
+                const first = await connectionId(driver);
+                for await (const _row of driver.query({ sql: slowRows })) break;
+                const next = await connectionId(driver);
+                expect(next).not.toBe(first);
+              },
+              single,
+            );
+          },
+          { closeAfterKill: true },
+        ),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', record);
+    }
+  });
+
   it('runs a statement awaited inside the loop over a query on the same transaction, because a query reads its whole result first, as Postgres does without a cursor', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
       withDriver(url, async (driver) => {
@@ -907,6 +942,41 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
         state: driver.state,
       }).toEqual({ newConnection: true, state: 'closed' });
     });
+  });
+
+  it('leaves no unhandled rejection when the KILL for a held connection released with a stream still open fails', async (test) => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    try {
+      await withMysqlDatabase(test, ({ url }) =>
+        withCountingProxy(
+          url,
+          async (proxyUrl) => {
+            await withDriver(
+              proxyUrl.toString(),
+              async (driver) => {
+                const connection = await driver.acquireConnection();
+                const transaction = await connection.beginTransaction();
+                const rows = transaction.query({ sql: slowRows })[Symbol.asyncIterator]();
+                await rows.next();
+                await connection.release();
+                const [after] = await collect(
+                  driver.query<{ n: string }>({ sql: 'SELECT 1 AS n' }),
+                );
+                expect(after).toEqual({ n: '1' });
+              },
+              single,
+            );
+          },
+          { closeAfterKill: true },
+        ),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', record);
+    }
   });
 
   it('fails a statement at once when MySQL refuses the sign-in or the account needs the server public key, and neither is transient, as on Postgres', async (test) => {

@@ -14,9 +14,19 @@ import type {
   SqlTransaction,
 } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
-import { createPool, type Pool, type PoolConnection } from 'mariadb';
+import {
+  type ConnectionConfig,
+  createConnection,
+  createPool,
+  type Pool,
+  type PoolConnection,
+} from 'mariadb';
 import { acquireClientQueryLock } from '../client-query-lock';
-import { type MysqlPoolOptions, mysqlPoolOptions } from '../connection-options';
+import {
+  type MysqlPoolOptions,
+  mysqlConnectionOptions,
+  mysqlPoolOptions,
+} from '../connection-options';
 import { connectingCannotSucceed, isFatal, normalizeMysqlError } from '../normalize-error';
 import { SessionSettingsGuard } from '../session-settings';
 import { statementFor } from '../statement';
@@ -97,11 +107,30 @@ async function dropRest(rows: Readable & { close?: () => void }): Promise<void> 
 /** The package can report an error on a stream after the caller stopped reading it, such as the one for a connection destroyed mid-result; the generator has already settled by then. */
 function ignoreAfterStop(): void {}
 
+/**
+ * Interrupts the statement running on the connection with id `threadId` by sending `KILL QUERY` over a short-lived connection of its own, because MySQL cannot interrupt a statement from the connection that runs it. The package does the same when it destroys a connection with a statement still running, but leaves a failure of its `KILL` unhandled, which ends a Node.js process; so the driver interrupts the statement itself, and destroys the connection only once its result has ended.
+ */
+async function interruptStatement(options: ConnectionConfig, threadId: number): Promise<void> {
+  const connection = await createConnection(options);
+  try {
+    await connection.query(`KILL QUERY ${threadId}`);
+  } finally {
+    connection.destroy();
+  }
+}
+
+/** A failed interruption leaves the statement running; the caller then reads the rest of its result. */
+function ignoreInterruptFailure(): void {}
+
 abstract class MysqlQueryable implements SqlQueryable {
   protected abstract acquireClient(): Promise<PoolConnection>;
   protected abstract releaseClient(client: PoolConnection, outcome: Outcome): Promise<void>;
   /** Whether the caller holds the client, so its session must survive a stream the caller stops early. */
   protected abstract readonly holdsClient: boolean;
+  /** Interrupts the statement running on `client`; see {@link interruptStatement}. Never rejects. */
+  protected abstract interruptStatement(client: PoolConnection): Promise<void>;
+  /** Called with each stream when it starts and with `undefined` when it ends, so a held connection can end a stream its caller abandoned. */
+  protected streamChanged(_rows: Readable | undefined): void {}
 
   constructor(protected readonly streams: boolean) {}
 
@@ -150,6 +179,7 @@ abstract class MysqlQueryable implements SqlQueryable {
     try {
       const rows = startStream(client, request, outcome);
       rows.on('error', ignoreAfterStop);
+      this.streamChanged(rows);
       let settled = false;
       try {
         for await (const row of rows.iterator({ destroyOnReturn: false })) {
@@ -163,8 +193,9 @@ abstract class MysqlQueryable implements SqlQueryable {
         settled = true;
         throw settle(error, outcome);
       } finally {
-        if (!settled) await this.#stopEarly(rows, outcome);
+        if (!settled) await this.#stopEarly(client, rows, outcome);
         if (outcome.destroy) rows.destroy();
+        this.streamChanged(undefined);
       }
     } finally {
       releaseLock();
@@ -173,12 +204,12 @@ abstract class MysqlQueryable implements SqlQueryable {
   }
 
   /**
-   * Ends a stream the caller stopped reading early. Once the whole result has arrived, or on a held client whose session must survive, the rest is read and dropped and the client stays usable. A pooled client whose result is still arriving is destroyed instead, so a large result is not downloaded only to be thrown away; MySQL does not say how many rows remain. Destroying it mid-result makes the package open one short-lived extra connection to send `KILL`, because MySQL cannot cancel a statement on its own connection.
+   * Ends a stream the caller stopped reading early. Once the whole result has arrived, or on a held client whose session must survive, the rest is read and dropped and the client stays usable. A pooled client whose result is still arriving has its statement interrupted first, so a large result is not downloaded only to be thrown away, since MySQL does not say how many rows remain; the rest then ends at once, and the client is destroyed.
    */
-  async #stopEarly(rows: Readable, outcome: Outcome): Promise<void> {
+  async #stopEarly(client: PoolConnection, rows: Readable, outcome: Outcome): Promise<void> {
     if (!this.holdsClient && !resultReceived(rows)) {
       outcome.destroy = true;
-      return;
+      await this.interruptStatement(client);
     }
     await dropRest(rows).catch((error: unknown) => {
       if (isFatal(error)) outcome.destroy = true;
@@ -190,6 +221,8 @@ abstract class MysqlQueryable implements SqlQueryable {
 interface HeldState {
   /** How many statements are running or waiting for the client's lock; a stream the caller dropped without finishing it stays running. */
   running: number;
+  /** The stream open on the client, if any, so that destroying the connection can end it first. */
+  stream: Readable | undefined;
 }
 
 /**
@@ -202,8 +235,17 @@ abstract class MysqlHeldQueryable extends MysqlQueryable {
     protected readonly client: PoolConnection,
     protected readonly held: HeldState,
     streams: boolean,
+    protected readonly interrupt: (client: PoolConnection) => Promise<void>,
   ) {
     super(streams);
+  }
+
+  protected interruptStatement(client: PoolConnection): Promise<void> {
+    return this.interrupt(client);
+  }
+
+  protected override streamChanged(rows: Readable | undefined): void {
+    this.held.stream = rows;
   }
 
   protected async acquireClient(): Promise<PoolConnection> {
@@ -236,8 +278,13 @@ abstract class MysqlHeldQueryable extends MysqlQueryable {
 class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
   #onRelease: (() => void) | undefined;
 
-  constructor(client: PoolConnection, streams: boolean, onRelease: () => void) {
-    super(client, { running: 0 }, streams);
+  constructor(
+    client: PoolConnection,
+    streams: boolean,
+    interrupt: (client: PoolConnection) => Promise<void>,
+    onRelease: () => void,
+  ) {
+    super(client, { running: 0, stream: undefined }, streams, interrupt);
     this.#onRelease = onRelease;
   }
 
@@ -249,7 +296,7 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
 
   async beginTransaction(): Promise<SqlTransaction> {
     await this.underLock(() => this.client.beginTransaction());
-    return new MysqlTransactionImpl(this.client, this.held, this.streams);
+    return new MysqlTransactionImpl(this.client, this.held, this.streams, this.interrupt);
   }
 
   /**
@@ -264,7 +311,13 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
     }
   }
 
+  /** Destroys the connection. A stream still open on it, which its caller abandoned, has its statement interrupted and its rest dropped first; see {@link interruptStatement}. */
   async destroy(_reason?: unknown): Promise<void> {
+    const stream = this.held.stream;
+    if (stream !== undefined) {
+      await this.interruptStatement(this.client);
+      await dropRest(stream).catch(ignoreAfterStop);
+    }
     this.client.destroy();
     this.#released();
   }
@@ -350,6 +403,8 @@ export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
   protected readonly holdsClient = false;
 
   #state: DriverState = { kind: 'unbound' };
+  /** The options of the short-lived connection that interrupts a statement; set by `connect()` and kept through `close()`, which waits for streams still ending. */
+  #interruptOptions: ConnectionConfig | undefined;
   readonly #inUse = new ClientsInUse();
   readonly #options: MysqlDriverCreateOptions;
   readonly #sessionSettings: SessionSettingsGuard;
@@ -376,12 +431,26 @@ export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
       logger: { error: (error) => waiting.reported(error) },
     });
     if (pool instanceof EventEmitter) pool.on('error', ignoreConnectionFailure);
+    this.#interruptOptions = mysqlConnectionOptions(binding.url, {
+      connectTimeoutMs: this.#options.poolOptions?.connectionTimeoutMillis,
+    });
     this.#state = { kind: 'connected', pool, waiting };
+  }
+
+  protected async interruptStatement(client: PoolConnection): Promise<void> {
+    const options = this.#interruptOptions;
+    if (options === undefined || client.threadId === null) return;
+    await interruptStatement(options, client.threadId).catch(ignoreInterruptFailure);
   }
 
   async acquireConnection(): Promise<SqlConnection> {
     const client = await this.acquireClient();
-    return new MysqlConnectionImpl(client, this.streams, () => this.#inUse.released());
+    return new MysqlConnectionImpl(
+      client,
+      this.streams,
+      (held) => this.interruptStatement(held),
+      () => this.#inUse.released(),
+    );
   }
 
   async close(): Promise<void> {
