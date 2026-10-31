@@ -11,14 +11,14 @@ import {
 import { describe, expect, it } from 'vitest';
 import pgvectorControl from '../src/exports/control';
 
-function inferFrom(extensions: readonly (typeof pgvectorControl)[]) {
+function inferFrom(extensions: readonly (typeof pgvectorControl)[], typeText = 'vector(3)') {
   const stack = createControlStack({
     family: sqlFamilyDescriptor,
     target: postgresTarget,
     adapter: postgresAdapter,
     extensions,
   });
-  const vector = { text: 'vector(3)', kind: undefined, schema: 'public', name: 'vector' };
+  const vector = { text: typeText, kind: undefined, schema: 'public', name: 'vector' };
   const tree = new PostgresDatabaseSchemaNode({
     extensions: undefined,
     namespaces: {
@@ -41,13 +41,13 @@ function inferFrom(extensions: readonly (typeof pgvectorControl)[]) {
               },
               embedding: {
                 name: 'embedding',
-                typeText: 'vector(3)',
+                typeText,
                 nullable: false,
                 reportedType: vector,
               },
               history: {
                 name: 'history',
-                typeText: 'vector(3)',
+                typeText,
                 nullable: false,
                 many: true,
                 reportedType: vector,
@@ -71,21 +71,25 @@ function inferFrom(extensions: readonly (typeof pgvectorControl)[]) {
 }
 
 describe('contract infer over a pgvector column', () => {
-  it('prints pgvector.Vector(3) when the pack is configured', async () => {
-    const fields = flatPslModels(await inferFrom([pgvectorControl])())[0]?.fields ?? [];
-    expect(
-      fields.map((field) => ({
-        name: field.name,
-        path: field.typeConstructor?.path ?? [field.typeName],
-        args: field.typeConstructor?.args.map((arg) => arg.value) ?? [],
-        list: field.list,
-      })),
-    ).toEqual([
-      { name: 'id', path: ['Int'], args: [], list: false },
-      { name: 'embedding', path: ['pgvector', 'Vector'], args: ['3'], list: false },
-      { name: 'history', path: ['pgvector', 'Vector'], args: ['3'], list: true },
-    ]);
-  });
+  it.each(['vector(3)', 'vector'])(
+    'prints the constructor for %s when the pack is configured',
+    async (typeText) => {
+      const args = typeText === 'vector' ? [] : ['3'];
+      const fields = flatPslModels(await inferFrom([pgvectorControl], typeText)())[0]?.fields ?? [];
+      expect(
+        fields.map((field) => ({
+          name: field.name,
+          path: field.typeConstructor?.path ?? [field.typeName],
+          args: field.typeConstructor?.args.map((arg) => arg.value) ?? [],
+          list: field.list,
+        })),
+      ).toEqual([
+        { name: 'id', path: ['Int'], args: [], list: false },
+        { name: 'embedding', path: ['pgvector', 'Vector'], args, list: false },
+        { name: 'history', path: ['pgvector', 'Vector'], args, list: true },
+      ]);
+    },
+  );
 
   it('fails and names each vector column when the pack is not configured', async () => {
     await expect(inferFrom([])()).rejects.toThrow(
