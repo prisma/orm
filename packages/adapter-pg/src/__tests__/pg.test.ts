@@ -152,4 +152,44 @@ describe('PrismaPgAdapterFactory', () => {
 
     await adapter.dispose()
   })
+  it('should serialize concurrent queries within a transaction', async () => {
+    const config: pg.PoolConfig = { user: 'test', password: 'test', database: 'test', port: 5432, host: 'localhost' }
+    const factory = new PrismaPgAdapterFactory(config)
+    const adapter = await factory.connect()
+
+    let concurrentQueries = 0
+    let maxConcurrentQueries = 0
+
+    const mockConnection = {
+      on: vi.fn(),
+      removeListener: vi.fn(),
+      query: vi.fn().mockImplementation(async () => {
+        concurrentQueries++
+        maxConcurrentQueries = Math.max(maxConcurrentQueries, concurrentQueries)
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        concurrentQueries--
+        return { rows: [], fields: [], rowCount: 0 }
+      }),
+      release: vi.fn(),
+      listenerCount: vi.fn().mockReturnValue(0),
+    }
+
+    adapter['client'].connect = vi.fn().mockResolvedValue(mockConnection)
+
+    const transaction = await adapter.startTransaction()
+
+    const q1: SqlQuery = { sql: 'SELECT 1', args: [], argTypes: [] }
+    const q2: SqlQuery = { sql: 'SELECT 2', args: [], argTypes: [] }
+    const q3: SqlQuery = { sql: 'SELECT 3', args: [], argTypes: [] }
+
+    await Promise.all([
+      transaction.queryRaw(q1),
+      transaction.queryRaw(q2),
+      transaction.queryRaw(q3),
+    ])
+
+    expect(maxConcurrentQueries).toBe(1)
+    await transaction.commit()
+    await adapter.dispose()
+  })
 })
