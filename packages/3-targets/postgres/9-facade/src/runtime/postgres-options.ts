@@ -39,6 +39,12 @@ export interface PostgresExecutionOptions {
   readonly log?: Log;
   readonly cursor?: PostgresCursorOptions;
   readonly mode?: RuntimeMode;
+  /**
+   * Use server-side prepared statements for requests prepared with `prepare()`. Default `true`.
+   * Set `false` when running behind a transaction-mode pooler that does not support
+   * session-scoped prepared statements (e.g. PgBouncer transaction mode).
+   */
+  readonly preparedStatements?: boolean | undefined;
 }
 
 const cursorOptionsSchema = type({

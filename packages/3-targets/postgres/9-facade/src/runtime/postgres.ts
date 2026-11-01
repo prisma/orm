@@ -10,6 +10,7 @@ import type { CollectionClasses, NoCollectionClasses } from '@internal/sql-orm-c
 import type { Runtime } from '@internal/sql-runtime';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
+import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import type { Client, Pool } from 'pg';
 import { postgresError } from '../errors';
@@ -195,6 +196,7 @@ export default function postgres<
 
     const driver = driverDescriptor.create({
       cursor: toDriverCursorOptions(cursor),
+      ...ifDefined('preparedStatements', options.preparedStatements),
     });
     runtimeDriver = driver;
     // A client is shared by many callers, so its runtime stops admitting work when close() is called.

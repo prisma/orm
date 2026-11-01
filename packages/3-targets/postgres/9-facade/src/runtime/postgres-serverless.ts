@@ -9,6 +9,7 @@ import type { CollectionClasses, NoCollectionClasses } from '@internal/sql-orm-c
 import type { Runtime } from '@internal/sql-runtime';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
+import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { redactDatabaseUrl } from '@internal/utils/redact-db-url';
 import { postgresError } from '../errors';
@@ -199,6 +200,7 @@ export default function postgresServerless<
       const adapter = stack.adapter.create(stack);
       const driver = driverDescriptor.create({
         cursor: toDriverCursorOptions(cursor),
+        ...ifDefined('preparedStatements', options.preparedStatements),
       });
 
       const pgClient = suppressIdleConnectionErrors(

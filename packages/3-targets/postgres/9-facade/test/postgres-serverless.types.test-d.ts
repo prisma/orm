@@ -76,3 +76,13 @@ test('the cursor option has no disabled flag', () => {
     cursor: { disabled: true },
   });
 });
+
+test('preparedStatements accepts a boolean option on both postgres() and postgresServerless()', () => {
+  const contract = {} as TestContract;
+  void postgres<TestContract>({ contract, url: 'x', preparedStatements: false });
+  void postgresServerless<TestContract>({ contract, preparedStatements: false });
+  // @ts-expect-error preparedStatements must be boolean
+  void postgres<TestContract>({ contract, url: 'x', preparedStatements: 'false' });
+  // @ts-expect-error preparedStatements must be boolean
+  void postgresServerless<TestContract>({ contract, preparedStatements: 'false' });
+});
