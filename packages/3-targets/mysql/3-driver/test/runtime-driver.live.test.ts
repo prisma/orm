@@ -2,7 +2,7 @@ import { connect, createServer, type Socket } from 'node:net';
 import { inspect } from 'node:util';
 import { timeouts } from '@repo/test-utils';
 import { withMysqlDatabase } from '@repo/test-utils/mysql-database';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import mysqlControlDriver from '../src/core/migrations/control-driver';
 import mysqlRuntimeDriver from '../src/core/runtime/runtime-driver';
 
@@ -59,19 +59,20 @@ const COMMAND_NAMES: Readonly<Record<number, string>> = {
 };
 
 /**
- * Runs `fn` with a URL that reaches the server through a local proxy, which counts the connections the client opens and the commands it sends, by MySQL's name for each. They are counted where the client makes them: the server's own statistics for an account miss a connection for a moment while it closes, so a count read then is one short. With `closeAfterKill`, the proxy passes a `KILL` statement on to the server and then closes the client's side of that connection before the reply comes back.
+ * Runs `fn` with a URL that reaches the server through a local proxy, which counts the connections the client opens and the commands it sends, by MySQL's name for each, and records each `KILL` statement. They are counted where the client makes them: the server's own statistics for an account miss a connection for a moment while it closes, so a count read then is one short. With `closeAfterKill`, the proxy passes a `KILL` statement on to the server and then closes the client's side of that connection before the reply comes back.
  */
 async function withCountingProxy<T>(
   url: string,
   fn: (
     proxyUrl: URL,
-    counts: { opened(): number; commands(): Record<string, number> },
+    counts: { opened(): number; commands(): Record<string, number>; kills(): string[] },
   ) => Promise<T>,
   options: { readonly closeAfterKill?: boolean } = {},
 ): Promise<T> {
   const target = new URL(url);
   let opened = 0;
   const commands: Record<string, number> = {};
+  const kills: string[] = [];
   const sockets = new Set<Socket>();
   const proxy = createServer((client) => {
     opened += 1;
@@ -90,8 +91,9 @@ async function withCountingProxy<T>(
           const name = COMMAND_NAMES[pending[4] ?? -1] ?? `0x${pending[4]?.toString(16)}`;
           commands[name] = (commands[name] ?? 0) + 1;
           const statement = pending.subarray(5, 4 + length).toString('utf8');
-          if (options.closeAfterKill && name === 'COM_QUERY' && /^KILL\b/i.test(statement)) {
-            setImmediate(() => client.destroy());
+          if (name === 'COM_QUERY' && /^KILL\b/i.test(statement)) {
+            kills.push(statement);
+            if (options.closeAfterKill) setImmediate(() => client.destroy());
           }
         }
         pending = pending.subarray(4 + length);
@@ -108,7 +110,11 @@ async function withCountingProxy<T>(
   proxyUrl.hostname = '127.0.0.1';
   proxyUrl.port = String(address.port);
   try {
-    return await fn(proxyUrl, { opened: () => opened, commands: () => ({ ...commands }) });
+    return await fn(proxyUrl, {
+      opened: () => opened,
+      commands: () => ({ ...commands }),
+      kills: () => [...kills],
+    });
   } finally {
     for (const socket of sockets) socket.destroy();
     await new Promise((resolve) => proxy.close(resolve));
@@ -818,7 +824,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
       await withMysqlDatabase(test, ({ url }) =>
         withCountingProxy(
           url,
-          async (proxyUrl) => {
+          async (proxyUrl, { kills }) => {
             await withDriver(
               proxyUrl.toString(),
               async (driver) => {
@@ -829,11 +835,12 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
               },
               single,
             );
+            await vi.waitFor(() => expect(kills()).not.toEqual([]));
+            expect(kills().filter((kill) => !kill.startsWith('KILL QUERY '))).toEqual([]);
           },
           { closeAfterKill: true },
         ),
       );
-      await new Promise((resolve) => setTimeout(resolve, 500));
       expect(unhandled).toEqual([]);
     } finally {
       process.off('unhandledRejection', record);
@@ -952,7 +959,7 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
       await withMysqlDatabase(test, ({ url }) =>
         withCountingProxy(
           url,
-          async (proxyUrl) => {
+          async (proxyUrl, { kills }) => {
             await withDriver(
               proxyUrl.toString(),
               async (driver) => {
@@ -968,11 +975,52 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
               },
               single,
             );
+            await vi.waitFor(() => expect(kills()).not.toEqual([]));
+            expect(kills().filter((kill) => !kill.startsWith('KILL QUERY '))).toEqual([]);
           },
           { closeAfterKill: true },
         ),
       );
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', record);
+    }
+  });
+
+  it('interrupts a statement still running on a held connection that is released, without a stream, and destroys the connection once it has ended', async (test) => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    try {
+      await withMysqlDatabase(test, ({ url }) =>
+        withCountingProxy(
+          url,
+          async (proxyUrl, { kills, commands }) => {
+            await withDriver(
+              proxyUrl.toString(),
+              async (driver) => {
+                const connection = await driver.acquireConnection();
+                const sent = commands()['COM_QUERY'] ?? 0;
+                const sleeping = connection.execute({ sql: 'SELECT SLEEP(30)' }).then(
+                  () => 'settled',
+                  () => 'settled',
+                );
+                await vi.waitFor(() => expect(commands()['COM_QUERY'] ?? 0).toBeGreaterThan(sent));
+                const started = Date.now();
+                await connection.release();
+                expect({
+                  sleeping: await sleeping,
+                  releasedQuickly: Date.now() - started < 3_000,
+                }).toEqual({ sleeping: 'settled', releasedQuickly: true });
+              },
+              { poolOptions: { max: 1 } },
+            );
+            await vi.waitFor(() => expect(kills()).not.toEqual([]));
+            expect(kills().filter((kill) => !kill.startsWith('KILL QUERY '))).toEqual([]);
+          },
+          { closeAfterKill: true },
+        ),
+      );
       expect(unhandled).toEqual([]);
     } finally {
       process.off('unhandledRejection', record);
