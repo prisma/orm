@@ -396,6 +396,9 @@ describeMatrix(sqliteOnly, 'SQLite', () => {
     // Unset the CI env vars from setup.ts and beforeEach, only the TTY check should skip the prompt
     delete process.env.CI
     delete process.env.GITHUB_ACTIONS
+    // To make sure the terminal is always detected
+    // as non interactive, locally and in CI
+    process.env.TERM = 'dumb'
 
     const result = MigrateDev.new('prisma').parse([], await ctx.config(), ctx.configDir())
 
