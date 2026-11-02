@@ -212,3 +212,50 @@ describe('context.applyMutationDefaults', () => {
     ]);
   });
 });
+
+describe('createMongoExecutionContext contract requirements', () => {
+  const requiringX: MongoContract = { ...testContract, extensions: { x: {} } };
+
+  it('throws RUNTIME.MISSING_EXTENSION_PACK when the stack lacks a required extension', () => {
+    const stack = createMongoExecutionStack({ target: target(), adapter: adapter() });
+    expect(() => createMongoExecutionContext({ contract: requiringX, stack })).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.MISSING_EXTENSION_PACK',
+        message:
+          "Contract requires extension pack(s) 'x', but runtime descriptors do not provide matching component(s).",
+        details: { packIds: ['x'] },
+      }),
+    );
+  });
+
+  it('builds the context when the stack provides the required extension', () => {
+    const stack = createMongoExecutionStack({
+      target: target(),
+      adapter: adapter(),
+      extensions: [extension('x', {})],
+    });
+    expect(createMongoExecutionContext({ contract: requiringX, stack }).contract).toBe(requiringX);
+  });
+
+  it('throws RUNTIME.CONTRACT_TARGET_MISMATCH for a contract of another target', () => {
+    const stack = createMongoExecutionStack({ target: target(), adapter: adapter() });
+    const contract: MongoContract = { ...testContract, target: 'postgres' };
+    expect(() => createMongoExecutionContext({ contract, stack })).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.CONTRACT_TARGET_MISMATCH',
+        message: "Contract target 'postgres' does not match runtime target descriptor 'mongo'.",
+      }),
+    );
+  });
+
+  it('throws RUNTIME.CONTRACT_FAMILY_MISMATCH for a contract of another family', () => {
+    const stack = createMongoExecutionStack({ target: target(), adapter: adapter() });
+    const contract: MongoContract = { ...testContract, targetFamily: 'sql' };
+    expect(() => createMongoExecutionContext({ contract, stack })).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.CONTRACT_FAMILY_MISMATCH',
+        message: "Contract target family 'sql' does not match runtime family 'mongo'.",
+      }),
+    );
+  });
+});

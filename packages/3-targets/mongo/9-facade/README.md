@@ -197,6 +197,12 @@ Exports: `Binary`, `Decimal128`, `Long`, `MongoClient`, `ObjectId`, `Timestamp`.
 
 The default export is `mongo({ contract, ... })`, a lazy MongoDB client. It builds an execution stack from the MongoDB target, adapter and runtime driver descriptor (`@internal/driver-mongo/runtime`), as `postgres()` does. On the first query or `connect()` it creates the driver with `stack.driver.create()` and connects it to the binding resolved from `url`, `uri` + `dbName`, `mongoClient` + `dbName` or `binding`. `close()` closes the driver: a `MongoClient` the driver created from a URL is closed, and a `mongoClient` the caller passed stays open.
 
+Options besides the binding:
+
+- `extensions`: the runtime descriptors of the extension packs the contract was built with, as `postgres()` takes them. Their codecs encode and decode the fields that use them. A contract that requires a pack missing from `extensions` fails the factory call with `RUNTIME.MISSING_EXTENSION_PACK`. `mongoStatic()` takes the same option.
+- `middleware`: a middleware chain applied to every MongoDB execution.
+- `mode`: the runtime mode.
+
 Also exports the `MongoBinding`, `MongoBindingInput`, `MongoClient`, `MongoOptions` and `MongoTargetId` types.
 
 ### `@internal/mongo/family`

@@ -1,3 +1,4 @@
+import { checkContractComponentRequirements } from '@internal/framework-components/components';
 import {
   createExecutionStack,
   type RuntimeAdapterDescriptor,
@@ -129,6 +130,8 @@ export function createMongoExecutionContext<
   readonly contract: TContract;
   readonly stack: MongoExecutionStack<TTargetId>;
 }): MongoExecutionContext<TContract> {
+  assertMongoExecutionStackContractRequirements(options.contract, options.stack);
+
   const registry = newMongoCodecRegistry();
   const owners = new Map<string, string>();
 
@@ -164,6 +167,48 @@ export function createMongoExecutionContext<
     applyMutationDefaults: (mutation: MutationDefaultsOptions) =>
       applyMutationDefaults(execution, generators, mutation),
   });
+}
+
+function assertMongoExecutionStackContractRequirements<TTargetId extends string>(
+  contract: MongoContract,
+  stack: MongoExecutionStack<TTargetId>,
+): void {
+  const result = checkContractComponentRequirements({
+    contract,
+    expectedTargetFamily: 'mongo',
+    expectedTargetId: stack.target.targetId,
+    providedComponentIds: [
+      stack.target.id,
+      stack.adapter.id,
+      ...stack.extensions.map((pack) => pack.id),
+    ],
+  });
+
+  if (result.familyMismatch) {
+    throw runtimeError(
+      'RUNTIME.CONTRACT_FAMILY_MISMATCH',
+      `Contract target family '${result.familyMismatch.actual}' does not match runtime family '${result.familyMismatch.expected}'.`,
+      { actual: result.familyMismatch.actual, expected: result.familyMismatch.expected },
+    );
+  }
+
+  if (result.targetMismatch) {
+    throw runtimeError(
+      'RUNTIME.CONTRACT_TARGET_MISMATCH',
+      `Contract target '${result.targetMismatch.actual}' does not match runtime target descriptor '${result.targetMismatch.expected}'.`,
+      { actual: result.targetMismatch.actual, expected: result.targetMismatch.expected },
+    );
+  }
+
+  if (result.missingExtensionPackIds.length > 0) {
+    const packIds = result.missingExtensionPackIds;
+    const packList = packIds.map((id) => `'${id}'`).join(', ');
+    throw runtimeError(
+      'RUNTIME.MISSING_EXTENSION_PACK',
+      `Contract requires extension pack(s) ${packList}, but runtime descriptors do not provide matching component(s).`,
+      { packIds },
+    );
+  }
 }
 
 function* iterateCodecs(registry: MongoCodecRegistry): Iterable<MongoCodec<string>> {

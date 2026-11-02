@@ -5,10 +5,30 @@ import type {
   RuntimeAdapterInstance,
 } from '@internal/framework-components/execution';
 import type { RuntimeMutationDefaultGenerator } from '@internal/framework-components/runtime';
-import type { MongoCodecRegistry } from '@internal/mongo-codec';
+import { type MongoCodecRegistry, newMongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoAdapter } from '@internal/mongo-lowering';
 import { buildStandardCodecRegistry } from '@internal/target-mongo/codecs';
 import { createMongoAdapter } from '../mongo-adapter';
+
+interface MongoCodecContributor {
+  readonly codecs: () => MongoCodecRegistry;
+}
+
+interface MongoCodecContributingStack {
+  readonly target: MongoCodecContributor;
+  readonly adapter: MongoCodecContributor;
+  readonly extensions: readonly MongoCodecContributor[];
+}
+
+function stackCodecs(stack: MongoCodecContributingStack): MongoCodecRegistry {
+  const registry = newMongoCodecRegistry();
+  for (const component of [stack.target, stack.adapter, ...stack.extensions]) {
+    for (const codec of component.codecs().values()) {
+      registry.register(codec);
+    }
+  }
+  return registry;
+}
 
 /**
  * adapter-mongo deliberately does NOT import the `MongoRuntimeAdapterDescriptor` type alias from `@internal/mongo-runtime`. The adapter package is downstream of the Mongo runtime package only conceptually; introducing a hard import would create a workspace dependency cycle (`mongo-runtime` consumes the runtime descriptor's `create(stack)` factory; `adapter-mongo` would then need `mongo-runtime` to type the
@@ -19,13 +39,15 @@ interface MongoRuntimeAdapterInstance
   extends RuntimeAdapterInstance<'mongo', 'mongo'>,
     MongoAdapter {}
 
-const mongoRuntimeAdapterDescriptor: RuntimeAdapterDescriptor<
-  'mongo',
-  'mongo',
-  MongoRuntimeAdapterInstance
+const mongoRuntimeAdapterDescriptor: Omit<
+  RuntimeAdapterDescriptor<'mongo', 'mongo', MongoRuntimeAdapterInstance>,
+  'create'
 > & {
   readonly codecs: () => MongoCodecRegistry;
   readonly mutationDefaultGenerators: () => ReadonlyArray<RuntimeMutationDefaultGenerator>;
+  create(
+    stack: ExecutionStack<'mongo', 'mongo'> & MongoCodecContributingStack,
+  ): MongoRuntimeAdapterInstance;
 } = {
   kind: 'adapter',
   id: 'mongo',
@@ -34,8 +56,10 @@ const mongoRuntimeAdapterDescriptor: RuntimeAdapterDescriptor<
   version: '0.0.1',
   codecs: buildStandardCodecRegistry,
   mutationDefaultGenerators: () => [timestampNowRuntimeGenerator()],
-  create(_stack: ExecutionStack<'mongo', 'mongo'>): MongoRuntimeAdapterInstance {
-    const adapter = createMongoAdapter();
+  create(
+    stack: ExecutionStack<'mongo', 'mongo'> & MongoCodecContributingStack,
+  ): MongoRuntimeAdapterInstance {
+    const adapter = createMongoAdapter(stackCodecs(stack));
     return {
       familyId: 'mongo' as const,
       targetId: 'mongo' as const,

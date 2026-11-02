@@ -339,16 +339,14 @@ class MongoAdapterImpl implements MongoAdapter {
 }
 
 /**
- * Construct a Mongo adapter with the standard wire-type codecs registered
- * for encode-side dispatch (`MongoParamRef.codecId` lookups).
+ * Construct a Mongo adapter that encodes `MongoParamRef` leaves with `codecs`, the standard wire-type codecs when omitted.
  *
- * The runtime-side codec registry the runtime decodes against is composed
- * separately by `createMongoExecutionContext`. This factory exists for
- * direct adapter use (the runtime descriptor's `create(stack)` calls
- * through it). User code should compose a stack/context instead.
+ * The runtime descriptor's `create(stack)` passes the codecs of every component in the stack, so extension codecs encode as well as decode. User code should compose a stack/context instead.
  */
-export function createMongoAdapter(): MongoAdapter {
-  return new MongoAdapterImpl(buildStandardCodecRegistry());
+export function createMongoAdapter(
+  codecs: MongoCodecRegistry = buildStandardCodecRegistry(),
+): MongoAdapter {
+  return new MongoAdapterImpl(codecs);
 }
 
 /**
