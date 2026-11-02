@@ -15,6 +15,14 @@ describe('the supabase-one-binding-input detection', () => {
     ['an options variable', 'const db = await supabase(options);'],
     ['a type argument', 'await supabase<Contract>({\n  contract,\n  url,\n})'],
     ['a spread call on a new line', 'supabase(\n  { ...config, contract },\n)'],
+    [
+      'an aliased import from the published package',
+      "import { contractSpace, supabase as createDb } from '@prisma/orm-extension-supabase/runtime';",
+    ],
+    [
+      'an aliased import from the workspace package',
+      "import {\n  supabase as createDb,\n} from '@internal/extension-supabase/runtime';",
+    ],
     ['a match on the old message', "expect(error.message).toBe('The pg option takes a pg.Pool');"],
     ['a null pg', 'postgres({ contract, pg: null })'],
     [
@@ -44,6 +52,18 @@ describe('the supabase-one-binding-input detection', () => {
     ['a longer name', 'createSupabaseClient(options); mysupabase(options);'],
     ['a name that starts with supabase', 'supabaseClient(options)'],
     ['an import', "import { supabase } from '@prisma/orm-extension-supabase/runtime';"],
+    [
+      'an aliased import of another export',
+      "import { supabaseRuntime as runtime } from '@prisma/orm-extension-supabase/runtime';",
+    ],
+    [
+      'an aliased import from another package',
+      "import { supabase as sb } from '@supabase/supabase-js';",
+    ],
+    [
+      'an alias to supabase of another export',
+      "import { createClient as supabase } from '@prisma/orm-extension-supabase/runtime';",
+    ],
     [
       'a url that falls back to a string',
       "postgres({ contract, url: env.url ?? 'postgres://localhost' })",

@@ -90,6 +90,30 @@ const inputRequirements = {
   },
 } as const;
 
+const bindingKinds: ReadonlySet<unknown> = new Set<PostgresBinding['kind']>([
+  'url',
+  'pgPool',
+  'pgClient',
+]);
+
+function checkBindingKind(binding: object): void {
+  const kind: unknown = 'kind' in binding ? binding.kind : undefined;
+  if (bindingKinds.has(kind)) return;
+  const receivedKind = typeof kind === 'string' ? kind : typeOfInput(kind);
+  throw postgresError(
+    'RUNTIME.BINDING_INVALID',
+    "The binding option must have kind 'url', 'pgPool' or 'pgClient'",
+    {
+      why:
+        kind === undefined
+          ? 'The binding option has no kind, so it names no database.'
+          : `The binding option has kind ${typeof kind === 'string' ? `'${kind}'` : `of type ${receivedKind}`}, which is not a Postgres binding kind.`,
+      fix: "Pass binding: { kind: 'url', url }, { kind: 'pgPool', pool } or { kind: 'pgClient', client }.",
+      meta: { extension: 'postgres', reason: 'unknown binding kind', receivedKind },
+    },
+  );
+}
+
 function checkInputTypes(options: PostgresBindingFields): void {
   for (const option of ['binding', 'url', 'pg'] as const) {
     const value: unknown = options[option];
@@ -102,6 +126,7 @@ function checkInputTypes(options: PostgresBindingFields): void {
       meta: { extension: 'postgres', reason: `invalid ${option} input`, receivedType },
     });
   }
+  if (options.binding !== undefined) checkBindingKind(options.binding);
 }
 
 export function resolvePostgresBinding(options: PostgresBindingInput): PostgresBinding {

@@ -169,6 +169,21 @@ describe('postgres() given null as its database input', () => {
     });
   });
 
+  it.each([
+    ['an object with no kind', {}, 'undefined'],
+    ['an unknown kind', { kind: 'bogus' }, 'bogus'],
+    ['an array', [], 'undefined'],
+  ])('raises RUNTIME.BINDING_INVALID for a binding that is %s', (_name, binding, receivedKind) => {
+    const error = capture(() => postgres({ contract, binding } as unknown as Options));
+    expect(error).toMatchObject({
+      code: 'RUNTIME.BINDING_INVALID',
+      message: "The binding option must have kind 'url', 'pgPool' or 'pgClient'",
+      why: expect.any(String),
+      fix: expect.any(String),
+      meta: { extension: 'postgres', receivedKind },
+    });
+  });
+
   it('reports the null input, not the input count, when another input is also given', () => {
     const error = capture(() =>
       postgres({ contract, url: null, pg: new Pool() } as unknown as Options),

@@ -182,6 +182,19 @@ describe('supabase() binding option', () => {
     });
   });
 
+  it.each([
+    ['an object with no kind', {}],
+    ['an unknown kind', { kind: 'bogus' }],
+    ['an array', []],
+  ])('rejects a binding that is %s with RUNTIME.BINDING_INVALID', async (_name, binding) => {
+    const input = { binding } as unknown as ReadOptions;
+
+    await expect(supabase({ contract, jwtSecret, ...input })).rejects.toMatchObject({
+      code: 'RUNTIME.BINDING_INVALID',
+      message: "The binding option must have kind 'url', 'pgPool' or 'pgClient'",
+    });
+  });
+
   it('reports the null input, not the input count, when another input is also given', async () => {
     const input = { url: null, pg: new Pool() } as unknown as ReadOptions;
 
