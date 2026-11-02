@@ -1,6 +1,6 @@
 import {
   int4Column,
-  numericColumn,
+  numericStringColumn,
   rawColumn as postgresRawColumn,
   varcharColumn,
 } from '@internal/adapter-postgres/column-types';
@@ -121,7 +121,7 @@ describe('type-constructor value arguments give the same contract from PSL and T
           fields: {
             id: field.column(int4Column).id(),
             name: field.column(varcharColumn(255)),
-            price: field.column(numericColumn(10, 2)),
+            price: field.column(numericStringColumn(10, 2)),
             label: field.column(type.sql.String(50)),
             kind: field.column(type.Raw(sql`"MyType"[]`)).optional(),
             shape: field.column(postgresRawColumn(sql`"MyType"[]`)).optional(),
