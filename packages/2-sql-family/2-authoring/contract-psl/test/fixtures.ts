@@ -475,6 +475,7 @@ export function interpretSqlContract(
         ? { composedExtensionPackRefs: options.composedExtensionPackRefs }
         : {}),
       enumInferenceCodecs: options.enumInferenceCodecs ?? postgresEnumInferenceCodecs,
+      ...(options.reportWarning === undefined ? {} : { reportWarning: options.reportWarning }),
     }),
     bound.seedDiagnostics,
   );

@@ -126,6 +126,7 @@ import { isStructuredError } from '@internal/utils/structured-error';
 import { compareStrings } from './compare-strings';
 import { contractError } from './contract-errors';
 import { defaultTableName } from './default-table-name';
+import { type DeprecatedTypeNameWarner, deprecatedTypeNameWarner } from './deprecated-type-names';
 import {
   getAttribute,
   getNamedArgument,
@@ -199,6 +200,8 @@ export interface InterpretPslDocumentToSqlContractInput {
   /** The target's default codec ids for an `enum` block that omits `@@type`. */
   readonly enumInferenceCodecs?: { readonly text: string; readonly int: string };
   readonly capabilities: CapabilityMatrix;
+  /** Receives a warning for each field or type alias typed with a deprecated type name. */
+  readonly reportWarning?: (diagnostic: ContractSourceDiagnostic) => void;
 }
 
 function declarationsHoldingModels(namespace: NamespaceSymbol): ReadonlySet<SyntaxNode> {
@@ -525,6 +528,7 @@ interface BuildModelNodeInput {
   >;
   /** Codec-id-keyed descriptor lookup — forwarded to `collectResolvedFields` for entity-ref type-constructor resolution (e.g. `pg.enum(Ref)`). */
   readonly codecLookup: CodecLookupWithDescriptors;
+  readonly warnDeprecated: DeprecatedTypeNameWarner;
   /** Contributed model-attribute descriptors keyed by bare `@@` attribute name (the exact shape `buildModelAttributesByName` produces). */
   readonly modelAttributesByName: ReadonlyMap<string, AuthoringModelAttributeDescriptor>;
   readonly contributedModelAttributeSpecs: Readonly<Record<string, ModelAttributeSpecFactory>>;
@@ -637,6 +641,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     namespaceId: modelNamespaceId,
     ...ifDefined('namespaceExtensionEntities', input.namespaceExtensionEntities),
     codecLookup: input.codecLookup,
+    warnDeprecated: input.warnDeprecated,
   });
 
   const inlineIdFields = resolvedFields.filter((field) => field.isId);
@@ -1450,6 +1455,7 @@ interface BuildValueObjectNodesInput {
   >;
   readonly codecLookup: CodecLookupWithDescriptors;
   readonly binder: Binder;
+  readonly warnDeprecated: DeprecatedTypeNameWarner;
 }
 
 function buildValueObjectNodes(input: BuildValueObjectNodesInput): ValueObjectNode[] {
@@ -1498,6 +1504,7 @@ function buildValueObjectNodes(input: BuildValueObjectNodesInput): ValueObjectNo
         binder,
         codecLookup: input.codecLookup,
         dataTypes: input.dataTypes,
+        warnDeprecated: input.warnDeprecated,
       });
       if (!resolved.ok) {
         input.droppedFields.add(field);
@@ -2170,6 +2177,10 @@ export function interpretPslDocumentToSqlContract(
   const source = diagnosticSource(input.sources, anchorDocument.syntax);
   const diagnostics = createPslDiagnosticCollector(input.sources);
   const renamedTypeConstructors = renamedTypeConstructorsOf(input.target.authoring);
+  const warnDeprecated = deprecatedTypeNameWarner({
+    sources: input.sources,
+    reportWarning: input.reportWarning,
+  });
   reportFieldDbAttributes({
     symbolTable: input.symbolTable,
     sources: input.sources,
@@ -2499,6 +2510,7 @@ export function interpretPslDocumentToSqlContract(
     diagnostics,
     authoringTypes: input.authoringContributions?.type,
     renamedTypeConstructors,
+    warnDeprecated,
   });
 
   const modelNodes = new Map<ModelSymbol, ModelNode>();
@@ -2529,6 +2541,7 @@ export function interpretPslDocumentToSqlContract(
     codecLookup: input.codecLookup,
     dataTypes: input.dataTypes,
     binder,
+    warnDeprecated,
   });
   const valueObjectTypes: ValueObjectTypes = {
     nodes: new Map(valueObjects.map((valueObject) => [valueObject.name, valueObject])),
@@ -2565,6 +2578,7 @@ export function interpretPslDocumentToSqlContract(
       capabilities: input.capabilities,
       ...(namespaceExtensionEntities.size > 0 ? { namespaceExtensionEntities } : {}),
       codecLookup: input.codecLookup,
+      warnDeprecated,
       modelAttributesByName,
       contributedModelAttributeSpecs: contributedModelSpecs,
       parsedBlocks,
