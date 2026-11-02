@@ -4,7 +4,7 @@ import type {
   AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
-import { postgresNativeScalarTypeDescriptors, postgresScalarAuthoringTypes } from './fixtures';
+import { fixturePostgresTypeNamespace, postgresNativeScalarTypeDescriptors } from './fixtures';
 import {
   builtinControlMutationDefaults,
   interpretPostgresSchema,
@@ -18,7 +18,7 @@ const varchar = {
 } as const;
 
 const types = {
-  ...postgresScalarAuthoringTypes,
+  ...fixturePostgresTypeNamespace,
   Int2: { kind: 'typeConstructor', output: { codecId: 'pg/int2@1' } },
   Varchar: varchar,
   Short: {

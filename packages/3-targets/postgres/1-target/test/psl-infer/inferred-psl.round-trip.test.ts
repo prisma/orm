@@ -32,11 +32,11 @@ import { postgresDataTypeEntries } from '../../src/core/data-type-entries';
 import { postgresDataTypes } from '../../src/core/data-types';
 import { type PostgresSchema, postgresCreateNamespace } from '../../src/core/postgres-schema';
 import { postgresCodecRegistry } from '../../src/core/registry';
-import { postgresTypeNamespace } from '../../src/core/type-constructors';
+import { postgresScalarTypes } from '../../src/core/type-constructors';
 import { printPslFromFlat } from './fixtures';
 
 /** The type constructors the printed schema names, as the target contributes them. */
-const authoringTypes = postgresTypeNamespace;
+const authoringTypes = postgresScalarTypes;
 
 const assembled = assembleAuthoringContributions([
   {

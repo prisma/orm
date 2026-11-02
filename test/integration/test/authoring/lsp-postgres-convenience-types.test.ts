@@ -113,6 +113,7 @@ describe('the language server with the PostgreSQL convenience scalar types', () 
       UnboundedInt: expect.stringContaining('Deprecated: use NumericBigInt.'),
       Real: expect.stringContaining('Deprecated: use Float4.'),
       VarChar: expect.stringContaining('Deprecated: use Varchar.'),
+      VarBit: expect.stringContaining('Deprecated: use Varbit.'),
     });
   });
 });

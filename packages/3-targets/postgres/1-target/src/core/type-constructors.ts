@@ -71,6 +71,16 @@ const varchar = {
   },
 } as const;
 
+const varbit = {
+  kind: 'typeConstructor',
+  documentation: 'A variable-length bit string with an optional maximum length in bits.',
+  args: [length],
+  output: {
+    codecId: 'pg/varbit@1',
+    typeParams: { length: { kind: 'arg', index: 0 } },
+  },
+} as const;
+
 /**
  * PostgreSQL's explicit types: each names one codec, and is what the contract stores. Each is named after the database type, plus the application value where the database type has more than one codec (ADR 257, ADR 316). `Json` keeps its name until the `Json` convenience type is decided.
  */
@@ -274,16 +284,7 @@ export const postgresExplicitTypes = {
       typeParams: { length: { kind: 'arg', index: 0 } },
     },
   },
-  VarBit: {
-    kind: 'typeConstructor',
-    inferred: true,
-    documentation: 'A variable-length bit string with an optional maximum length in bits.',
-    args: [{ kind: 'value', dataType: PG_SIZE_TYPE, name: 'length', optional: true }],
-    output: {
-      codecId: 'pg/varbit@1',
-      typeParams: { length: { kind: 'arg', index: 0 } },
-    },
-  },
+  Varbit: { ...varbit, inferred: true },
   Xml: {
     kind: 'typeConstructor',
     inferred: true,
@@ -337,6 +338,7 @@ export const postgresDeprecatedScalarTypes = {
   UnboundedInt: { ...numericBigInt, deprecated: { replacement: 'NumericBigInt' } },
   Real: { ...float4, deprecated: { replacement: 'Float4' } },
   VarChar: { ...varchar, deprecated: { replacement: 'Varchar' } },
+  VarBit: { ...varbit, deprecated: { replacement: 'Varbit' } },
 } as const satisfies AuthoringTypeNamespace;
 
 const precision = {
@@ -596,9 +598,9 @@ export const postgresConvenienceScalarTypes = {
 } as const satisfies AuthoringTypeNamespace;
 
 /**
- * The target's whole `type` namespace: its explicit types, convenience types and deprecated aliases. The target contributes it, so PSL and the TypeScript builder's `type.*` see the same names.
+ * PostgreSQL's scalar types: the explicit types, the convenience types and the deprecated aliases. It is not the whole `type` namespace: the target contributes it together with `postgresAuthoringTypes`, which adds the namespaced `sql.*`, `temporal.*` and `pg.enum` and the generated-ID aliases such as `UuidString`.
  */
-export const postgresTypeNamespace = {
+export const postgresScalarTypes = {
   ...postgresExplicitTypes,
   ...postgresConvenienceDateTimeTypes,
   ...postgresConvenienceScalarTypes,

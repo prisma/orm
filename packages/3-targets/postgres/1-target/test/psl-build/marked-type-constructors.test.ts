@@ -5,11 +5,11 @@ import { describe, expect, it } from 'vitest';
 import { postgresAuthoringTypes } from '../../src/core/authoring';
 import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-registry';
 import { postgresDataTypes } from '../../src/core/data-types';
-import { postgresTypeNamespace } from '../../src/core/type-constructors';
+import { postgresScalarTypes } from '../../src/core/type-constructors';
 
 const authoringTypes: AuthoringTypeNamespace = {
   ...postgresAuthoringTypes,
-  ...postgresTypeNamespace,
+  ...postgresScalarTypes,
 };
 const dataTypeLookup = createDataTypeLookup(postgresDataTypes);
 const constructors = inferredTypeConstructors({
@@ -68,7 +68,7 @@ describe('fewestArgumentsCall', () => {
       char1: { path: ['Char'], args: [] },
       char5: { path: ['Char'], args: [5] },
       bit1: { path: ['Bit'], args: [] },
-      varbit: { path: ['VarBit'], args: [] },
+      varbit: { path: ['Varbit'], args: [] },
       timestamptz3: { path: ['TimestamptzJsDate'], args: [3] },
       text: { path: ['Text'], args: [] },
     });

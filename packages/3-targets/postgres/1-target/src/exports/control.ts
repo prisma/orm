@@ -85,6 +85,6 @@ const postgresTargetDescriptor = createPostgresTargetDescriptor();
 
 export { postgresNowGeneratorControlDescriptors } from '../core/date-time-now-generators';
 export { decodePostgresListText, parsePostgresListText } from '../core/list-decoder';
-export { postgresExplicitTypes, postgresTypeNamespace } from '../core/type-constructors';
+export { postgresExplicitTypes, postgresScalarTypes } from '../core/type-constructors';
 
 export default postgresTargetDescriptor;

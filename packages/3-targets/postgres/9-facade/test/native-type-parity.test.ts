@@ -322,13 +322,13 @@ const parityCases: readonly ParityCase[] = [
 const bitAndIntervalCases = [
   ['Bit', 'pg/bit', 'pg/bit@1', {}],
   ['Bit(8)', 'pg/bit', 'pg/bit@1', { length: 8 }],
-  ['VarBit', 'pg/varbit', 'pg/varbit@1', {}],
-  ['VarBit(16)', 'pg/varbit', 'pg/varbit@1', { length: 16 }],
+  ['Varbit', 'pg/varbit', 'pg/varbit@1', {}],
+  ['Varbit(16)', 'pg/varbit', 'pg/varbit@1', { length: 16 }],
   ['IntervalParts', 'pg/interval', 'pg/interval@1', {}],
   ['IntervalParts(3)', 'pg/interval', 'pg/interval@1', { precision: 3 }],
 ] as const;
 
-describe('Bit, VarBit and IntervalParts', () => {
+describe('Bit, Varbit and IntervalParts', () => {
   it.each(bitAndIntervalCases)(
     '%s gives its codec and parameters as a scalar and as a list',
     (spelling, dataType, codecId, typeParams) => {

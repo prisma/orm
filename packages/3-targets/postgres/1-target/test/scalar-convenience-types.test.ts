@@ -8,7 +8,7 @@ import {
   postgresConvenienceScalarTypes,
   postgresDeprecatedScalarTypes,
   postgresExplicitTypes,
-  postgresTypeNamespace,
+  postgresScalarTypes,
 } from '../src/core/type-constructors';
 
 type ConvenienceName = keyof typeof postgresConvenienceScalarTypes;
@@ -16,7 +16,7 @@ type ExplicitName = keyof typeof postgresExplicitTypes;
 
 function convenience(name: ConvenienceName, written: Readonly<Record<string, unknown>> = {}) {
   const args = typeChoiceArgumentsFromObject(name, postgresConvenienceScalarTypes[name], [written]);
-  return instantiateAuthoringTypeCall(postgresTypeNamespace, name, args);
+  return instantiateAuthoringTypeCall(postgresScalarTypes, name, args);
 }
 
 function explicit(name: ExplicitName, args: readonly unknown[] = []) {
@@ -71,6 +71,7 @@ describe('a deprecated explicit type name', () => {
     ['UnboundedInt', 'NumericBigInt'],
     ['Real', 'Float4'],
     ['VarChar', 'Varchar'],
+    ['VarBit', 'Varbit'],
   ] as const)('%s is an alias of %s, with the same codec and arguments', (alias, replacement) => {
     const { deprecated, ...descriptor } = postgresDeprecatedScalarTypes[alias];
     const { inferred: _inferred, ...replacing } = {

@@ -104,6 +104,10 @@ model Account {
       'Argument \\"length\\" of String does not apply to Text, the type that storage: text chooses.',
     ],
     ['Int(storage: int8)', 'Argument \\"storage\\" of Int is int8; write one of: int4, int2.'],
+    [
+      'Decimal(10, 2)',
+      'type \\"Decimal\\" argument #1 is 10, but argument \\"storage\\" takes one of these names, written without quotes: numeric.',
+    ],
   ])('refuses %s at the argument', async (written, message) => {
     await expect(readPsl(model(`value ${written}`))).rejects.toThrow(message);
   });
@@ -141,6 +145,7 @@ describe('a renamed explicit type name', () => {
     ['UnboundedInt', 'NumericBigInt'],
     ['Real', 'Float4'],
     ['VarChar(12)', 'Varchar(12)'],
+    ['VarBit(8)', 'Varbit(8)'],
   ])(
     '%s warns that it is deprecated, and emits the contract %s emits',
     async (written, current) => {

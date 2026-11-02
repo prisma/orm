@@ -42,7 +42,7 @@ describe('the Prisma 7 type table', () => {
         JsonB: { constructorPath: ['Jsonb'], args: [] },
         ByteA: { constructorPath: ['Bytea'], args: [] },
         Bit: { constructorPath: ['Bit'], args: [1] },
-        VarBit: { constructorPath: ['VarBit'], args: [] },
+        VarBit: { constructorPath: ['Varbit'], args: [] },
         Xml: { constructorPath: ['Xml'], args: [] },
         Oid: { constructorPath: ['Oid'], args: [] },
         Money: { constructorPath: ['Money'], args: [] },
@@ -83,6 +83,7 @@ describe('the Prisma 7 type table', () => {
       Time: 'TimeString',
       JsonB: 'Jsonb',
       ByteA: 'Bytea',
+      VarBit: 'Varbit',
       Citext: 'citext.Citext',
     });
     expect(postgresTargetDescriptorMeta.authoring.renamedTypeConstructors).toBe(

@@ -85,7 +85,7 @@ describe('postgres scalar types derived from the unified namespace', () => {
       TimestamptzJsDate: { codecId: 'pg/timestamptz-date@1' },
       TimeString: { codecId: 'pg/time-string@1' },
       Bit: { codecId: 'pg/bit@1' },
-      VarBit: { codecId: 'pg/varbit@1' },
+      Varbit: { codecId: 'pg/varbit@1' },
       Xml: { codecId: 'pg/xml@1' },
       Oid: { codecId: 'pg/oid@1' },
       Money: { codecId: 'pg/money@1' },
@@ -112,6 +112,7 @@ describe('postgres scalar types derived from the unified namespace', () => {
       UnboundedInt: { codecId: 'pg/unboundedint@1' },
       Real: { codecId: 'pg/float4@1' },
       VarChar: { codecId: 'sql/varchar@1' },
+      VarBit: { codecId: 'pg/varbit@1' },
     });
   });
 
@@ -168,6 +169,7 @@ describe('postgres scalar types derived from the unified namespace', () => {
       'Uuid',
       'VarBit',
       'VarChar',
+      'Varbit',
       'Varchar',
       'Xml',
     ]);

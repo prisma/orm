@@ -59,7 +59,7 @@ model Sample {
   instantText TimestamptzString @default(${tagged('timestamptz', '2024-01-01T00:00:00Z')})
   clockText   TimeString        @default(${tagged('time', '12:00:00')})
   bits        Bit(3)            @default("101")
-  varbits     VarBit(5)         @default("1")
+  varbits     Varbit(5)         @default("1")
   span        IntervalParts          @default(${tagged('interval', 'P1DT2H')})
   tags        String[]          @default(["a", "b"])
   counts      Int[]             @default([1, 2])

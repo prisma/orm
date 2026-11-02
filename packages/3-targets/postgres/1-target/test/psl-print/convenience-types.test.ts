@@ -113,6 +113,7 @@ describe('contract print never writes a deprecated alias', () => {
         return printedType({ ...output, dataType, nullable: false }, aliasesFirst);
       });
       for (const text of printed) {
+        expect(text).toEqual(expect.stringMatching(/\S/));
         expect(Object.keys(postgresDeprecatedScalarTypes)).not.toContain(text?.split('(')[0]);
       }
     },

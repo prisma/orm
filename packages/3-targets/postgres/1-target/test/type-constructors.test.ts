@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
 import { postgresAuthoringTypes } from '../src/core/authoring';
 import { createPostgresBuiltinCodecLookup } from '../src/core/codec-registry';
 import { postgresDataTypes } from '../src/core/data-types';
-import { postgresExplicitTypes, postgresTypeNamespace } from '../src/core/type-constructors';
+import { postgresExplicitTypes, postgresScalarTypes } from '../src/core/type-constructors';
 import postgresTargetPack from '../src/exports/pack';
 
 describe('the constructor contract print writes for a Temporal column', () => {
@@ -35,7 +35,7 @@ describe('the constructor contract print writes for a Temporal column', () => {
 describe('the type constructors the target contributes', () => {
   it('are the scalar, native and target-only ones, so PSL and type.* see the same names', () => {
     expect(postgresTargetPack.authoring.type).toEqual({
-      ...postgresTypeNamespace,
+      ...postgresScalarTypes,
       ...postgresAuthoringTypes,
     });
     expect(Object.keys(postgresAuthoringTypes)).toEqual([
@@ -112,7 +112,7 @@ describe('the type constructors the target contributes', () => {
   });
 
   it('contribute the temporal type aliases on the type bare DateTime becomes', () => {
-    const dateTime = instantiateAuthoringTypeCall(postgresTypeNamespace, 'DateTime', []);
+    const dateTime = instantiateAuthoringTypeCall(postgresScalarTypes, 'DateTime', []);
     expect(
       Object.fromEntries(
         Object.entries(postgresAuthoringTypes.temporal).map(([name, { kind, output }]) => [
@@ -132,7 +132,7 @@ const now = { name: 'now', args: {} };
 
 const everyPostgresConstructor = {
   ...postgresAuthoringTypes,
-  ...postgresTypeNamespace,
+  ...postgresScalarTypes,
 };
 
 /** The constructor `contract infer` prints for each data type that has one. */
@@ -158,7 +158,7 @@ const INFERRED = [
   'TimestampJsDate',
   'TimestamptzJsDate',
   'Bit',
-  'VarBit',
+  'Varbit',
   'Xml',
   'Oid',
   'Money',
@@ -264,7 +264,7 @@ describe('postgresExplicitTypes', () => {
       TimestamptzJsDate: { codecId: 'pg/timestamptz-date@1' },
       TimeString: { codecId: 'pg/time-string@1' },
       Bit: { codecId: 'pg/bit@1' },
-      VarBit: { codecId: 'pg/varbit@1' },
+      Varbit: { codecId: 'pg/varbit@1' },
       Xml: { codecId: 'pg/xml@1' },
       Oid: { codecId: 'pg/oid@1' },
       Money: { codecId: 'pg/money@1' },
@@ -299,8 +299,8 @@ describe('postgresExplicitTypes', () => {
   it.each([
     ['Bit', [], { codecId: 'pg/bit@1' }],
     ['Bit', [8], { codecId: 'pg/bit@1', typeParams: { length: 8 } }],
-    ['VarBit', [], { codecId: 'pg/varbit@1' }],
-    ['VarBit', [16], { codecId: 'pg/varbit@1', typeParams: { length: 16 } }],
+    ['Varbit', [], { codecId: 'pg/varbit@1' }],
+    ['Varbit', [16], { codecId: 'pg/varbit@1', typeParams: { length: 16 } }],
     ['IntervalParts', [], { codecId: 'pg/interval@1' }],
     ['IntervalParts', [3], { codecId: 'pg/interval@1', typeParams: { precision: 3 } }],
     ['IntervalString', [3], { codecId: 'pg/interval-string@1', typeParams: { precision: 3 } }],
@@ -340,7 +340,7 @@ describe('postgresExplicitTypes', () => {
       ['Timetz', [7]],
       ['TimestamptzJsDate', [7]],
       ['Bit', [0]],
-      ['VarBit', [0]],
+      ['Varbit', [0]],
       ['IntervalParts', [7]],
       ['IntervalString', [7]],
       ['TimestampInstant', [7]],
@@ -430,7 +430,7 @@ describe('precision is a value of pg/int4, bounded by the data type', () => {
     'TimestamptzString',
     'TimeString',
   ] as const)('%s declares no bound of its own on precision', (typeName) => {
-    const typeConstructor = postgresTypeNamespace[typeName];
+    const typeConstructor = postgresScalarTypes[typeName];
     expect(typeConstructor.args?.find((arg) => arg.name === 'precision')).toEqual({
       kind: 'value',
       dataType: 'pg/int4',

@@ -235,7 +235,10 @@ export const postgresScalarTypeDescriptors = collectScalarTypeConstructors(
   postgresBaseScalarAuthoringTypes,
 );
 
-export const postgresScalarAuthoringTypes: AuthoringTypeNamespace = {
+/**
+ * A hand-built PostgreSQL-like `type` namespace for the interpreter tests, so they do not depend on the target package. Its names are not the target's names.
+ */
+export const fixturePostgresTypeNamespace: AuthoringTypeNamespace = {
   ...postgresBaseScalarAuthoringTypes,
   Uuid: { kind: 'typeConstructor', output: { codecId: 'pg/uuid@1' } },
   Inet: { kind: 'typeConstructor', output: { codecId: 'pg/inet@1' } },
@@ -307,7 +310,7 @@ export const postgresScalarAuthoringTypes: AuthoringTypeNamespace = {
 };
 
 export const postgresNativeScalarTypeDescriptors = collectScalarTypeConstructors(
-  postgresScalarAuthoringTypes,
+  fixturePostgresTypeNamespace,
 );
 
 /**
@@ -320,7 +323,7 @@ export const pgvectorAuthoringContributions = {
   modelAttributes: {},
   attributeSpecs: sqlAttributeSpecs,
   type: {
-    ...postgresScalarAuthoringTypes,
+    ...fixturePostgresTypeNamespace,
     pgvector: {
       Vector: {
         kind: 'typeConstructor',
@@ -517,7 +520,7 @@ export function createPostgresTestContext(
     composedExtensionContracts: new Map(),
     authoringContributions: {
       dataTypes: fixtureDataTypeSupport.entries,
-      type: postgresScalarAuthoringTypes,
+      type: fixturePostgresTypeNamespace,
       entityTypes: {},
       pslBlockDescriptors: {},
       modelAttributes: {},
