@@ -22,16 +22,12 @@ import type {
   BindSiteParams,
   Declaration,
   ExecutionContext,
-  Log,
   ParamsFromDeclaration,
   Runtime,
-  RuntimeMode,
+  SqlExecutionOptions,
   SqlExecutionStackWithDriver,
-  SqlMiddleware,
-  SqlRuntimeExtensionDescriptor,
   ToSqlMember,
   TransactionContext,
-  VerifyMarkerOption,
 } from '@internal/sql-runtime';
 import {
   activitySource,
@@ -39,6 +35,7 @@ import {
   createSqlExecutionStack,
   delegatingActivitySource,
   delegatingRuntime,
+  toRuntimeOptions,
   withTransaction,
   withTransactionMembers,
 } from '@internal/sql-runtime';
@@ -182,13 +179,7 @@ function buildSqliteTransactionMembers<
   };
 }
 
-export interface SqliteOptionsBase {
-  readonly extensions?: readonly SqlRuntimeExtensionDescriptor<SqliteTargetId>[];
-  readonly middleware?: readonly SqlMiddleware[];
-  readonly verifyMarker?: VerifyMarkerOption;
-  readonly log?: Log;
-  readonly mode?: RuntimeMode;
-}
+export type SqliteOptionsBase = SqlExecutionOptions<SqliteTargetId>;
 
 export type SqliteOptions<
   TContract extends Contract<SqlStorage>,
@@ -300,10 +291,7 @@ export default function sqlite<
       context,
       adapter,
       driver,
-      ...ifDefined('verifyMarker', options.verifyMarker),
-      ...ifDefined('middleware', options.middleware),
-      ...ifDefined('log', options.log),
-      ...ifDefined('mode', options.mode),
+      ...toRuntimeOptions(options),
       closeRefusal: 'at-once',
     });
 

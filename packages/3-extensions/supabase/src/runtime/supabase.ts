@@ -12,7 +12,6 @@ import {
   resolveOptionalPostgresBinding,
   toDriverCursorOptions,
   toRuntimeBinding,
-  toRuntimeOptions,
   validateCursorOptions,
 } from '@internal/postgres/internal/options';
 import { buildPostgresStaticContext } from '@internal/postgres/internal/static-context';
@@ -48,6 +47,7 @@ import {
   createExecutionContext,
   createSqlExecutionStack,
   delegatingRuntime,
+  toRuntimeOptions,
   withTransaction,
   withTransactionMembers,
 } from '@internal/sql-runtime';

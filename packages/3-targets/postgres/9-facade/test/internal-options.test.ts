@@ -8,7 +8,6 @@ describe('the internal options entry', () => {
       'resolveOptionalPostgresBinding',
       'toDriverCursorOptions',
       'toRuntimeBinding',
-      'toRuntimeOptions',
       'validateCursorOptions',
     ];
     expect({

@@ -28,6 +28,8 @@ import {
   assertMutationDefaultGeneratorsAvailable,
   collectMutationDefaultGenerators,
   type MutationDefaultGeneratorContributor,
+  type RuntimeLog,
+  type RuntimeMode,
   runtimeError,
 } from '@internal/framework-components/runtime';
 import { canonicalizeJson } from '@internal/framework-components/utils';
@@ -49,7 +51,10 @@ import type {
   ExecutionContext,
 } from '@internal/sql-relational-core/query-lane-context';
 import { blindCast } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import { createAstCodecResolver } from './codecs/ast-codec-resolver';
+import type { SqlMiddleware } from './middleware/sql-middleware';
+import type { VerifyMarkerOption } from './runtime-spi';
 
 /**
  * Runtime parameterized codec descriptor.
@@ -100,6 +105,26 @@ export interface SqlRuntimeExtensionDescriptor<TTargetId extends string = string
   extends RuntimeExtensionDescriptor<'sql', TTargetId, SqlRuntimeExtensionInstance<TTargetId>>,
     SqlStaticContributions {
   create(): SqlRuntimeExtensionInstance<TTargetId>;
+}
+
+/** The options every SQL client takes for how queries run. */
+export interface SqlExecutionOptions<TTargetId extends string> {
+  readonly extensions?: readonly SqlRuntimeExtensionDescriptor<TTargetId>[];
+  readonly middleware?: readonly SqlMiddleware[];
+  readonly verifyMarker?: VerifyMarkerOption;
+  readonly log?: RuntimeLog;
+  readonly mode?: RuntimeMode;
+}
+
+export function toRuntimeOptions<TTargetId extends string>(
+  options: SqlExecutionOptions<TTargetId>,
+) {
+  return {
+    ...ifDefined('verifyMarker', options.verifyMarker),
+    ...ifDefined('middleware', options.middleware),
+    ...ifDefined('log', options.log),
+    ...ifDefined('mode', options.mode),
+  };
 }
 
 export interface SqlExecutionStack<TTargetId extends string = string> {

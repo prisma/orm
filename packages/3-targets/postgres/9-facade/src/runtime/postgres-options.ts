@@ -1,11 +1,5 @@
 import type { PostgresDriverCreateOptions } from '@internal/driver-postgres/runtime';
-import type {
-  Log,
-  RuntimeMode,
-  SqlMiddleware,
-  SqlRuntimeExtensionDescriptor,
-  VerifyMarkerOption,
-} from '@internal/sql-runtime';
+import type { SqlExecutionOptions } from '@internal/sql-runtime';
 import { ifDefined } from '@internal/utils/defined';
 import { type } from 'arktype';
 import { postgresError } from '../errors';
@@ -32,13 +26,8 @@ export interface PostgresCursorOptions {
  * The options `postgres()` and `postgresServerless()` share: how queries run, not where the
  * database is.
  */
-export interface PostgresExecutionOptions {
-  readonly extensions?: readonly SqlRuntimeExtensionDescriptor<PostgresTargetId>[];
-  readonly middleware?: readonly SqlMiddleware[];
-  readonly verifyMarker?: VerifyMarkerOption;
-  readonly log?: Log;
+export interface PostgresExecutionOptions extends SqlExecutionOptions<PostgresTargetId> {
   readonly cursor?: PostgresCursorOptions;
-  readonly mode?: RuntimeMode;
 }
 
 const cursorOptionsSchema = type({
@@ -67,13 +56,4 @@ export function toDriverCursorOptions(
   cursor: PostgresCursorOptions | undefined,
 ): PostgresDriverCursorOptions {
   return cursor === undefined ? { disabled: true } : ifDefined('batchSize', cursor.batchSize);
-}
-
-export function toRuntimeOptions(options: PostgresExecutionOptions) {
-  return {
-    ...ifDefined('verifyMarker', options.verifyMarker),
-    ...ifDefined('middleware', options.middleware),
-    ...ifDefined('log', options.log),
-    ...ifDefined('mode', options.mode),
-  };
 }

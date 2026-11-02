@@ -8,7 +8,11 @@ import postgresDriver, {
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { CollectionClasses, NoCollectionClasses } from '@internal/sql-orm-client';
 import type { Runtime } from '@internal/sql-runtime';
-import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
+import {
+  createExecutionContext,
+  createSqlExecutionStack,
+  toRuntimeOptions,
+} from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { InternalError } from '@internal/utils/internal-error';
 import type { Client, Pool } from 'pg';
@@ -32,7 +36,6 @@ import {
   DEFAULT_CONNECT_TIMEOUT_MILLIS,
   type PostgresExecutionOptions,
   toDriverCursorOptions,
-  toRuntimeOptions,
   validateCursorOptions,
 } from './postgres-options';
 import { PostgresRuntimeImpl } from './postgres-runtime';

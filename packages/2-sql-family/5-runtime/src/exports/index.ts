@@ -75,6 +75,7 @@ export type {
 export type {
   ExecutionContext,
   RuntimeParameterizedCodecDescriptor,
+  SqlExecutionOptions,
   SqlExecutionStack,
   SqlExecutionStackWithDriver,
   SqlRuntimeAdapterDescriptor,
@@ -88,6 +89,7 @@ export type {
 export {
   createExecutionContext,
   createSqlExecutionStack,
+  toRuntimeOptions,
 } from '../sql-context';
 export type {
   ActivityRoute,
