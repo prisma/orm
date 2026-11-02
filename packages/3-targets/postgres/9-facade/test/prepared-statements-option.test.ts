@@ -15,6 +15,7 @@ const recorded = vi.hoisted(() => ({
 }));
 
 vi.mock('pg', () => {
+  /** Records query configuration objects for assertions and resolves with a fixed single-row result. */
   function query(request: unknown) {
     if (typeof request === 'object' && request !== null) {
       recorded.queries.push(request as RecordedQuery);
