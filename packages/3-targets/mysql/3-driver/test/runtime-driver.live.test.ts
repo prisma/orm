@@ -2,7 +2,7 @@ import { connect, createServer, type Socket } from 'node:net';
 import { inspect } from 'node:util';
 import { timeouts } from '@repo/test-utils';
 import { withMysqlDatabase } from '@repo/test-utils/mysql-database';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import mysqlControlDriver from '../src/core/migrations/control-driver';
 import mysqlRuntimeDriver from '../src/core/runtime/runtime-driver';
 
@@ -63,18 +63,20 @@ const COMMAND_NAMES: Readonly<Record<number, string>> = {
 };
 
 /**
- * Runs `fn` with a URL that reaches the server through a local proxy, which counts the connections the client opens and the commands it sends, by MySQL's name for each. They are counted where the client makes them: the server's own statistics for an account miss a connection for a moment while it closes, so a count read then is one short.
+ * Runs `fn` with a URL that reaches the server through a local proxy, which counts the connections the client opens and the commands it sends, by MySQL's name for each, and records each `KILL` statement. They are counted where the client makes them: the server's own statistics for an account miss a connection for a moment while it closes, so a count read then is one short. With `closeAfterKill`, the proxy passes a `KILL` statement on to the server and then closes the client's side of that connection before the reply comes back.
  */
 async function withCountingProxy<T>(
   url: string,
   fn: (
     proxyUrl: URL,
-    counts: { opened(): number; commands(): Record<string, number> },
+    counts: { opened(): number; commands(): Record<string, number>; kills(): string[] },
   ) => Promise<T>,
+  options: { readonly closeAfterKill?: boolean } = {},
 ): Promise<T> {
   const target = new URL(url);
   let opened = 0;
   const commands: Record<string, number> = {};
+  const kills: string[] = [];
   const sockets = new Set<Socket>();
   const clients = new Set<Socket>();
   const proxy = createServer((client) => {
@@ -95,6 +97,11 @@ async function withCountingProxy<T>(
         if (startsCommand) {
           const name = COMMAND_NAMES[pending[4] ?? -1] ?? `0x${pending[4]?.toString(16)}`;
           commands[name] = (commands[name] ?? 0) + 1;
+          const statement = pending.subarray(5, 4 + length).toString('utf8');
+          if (name === 'COM_QUERY' && /^KILL\b/i.test(statement)) {
+            kills.push(statement);
+            if (options.closeAfterKill) setImmediate(() => client.destroy());
+          }
         }
         pending = pending.subarray(4 + length);
       }
@@ -110,7 +117,11 @@ async function withCountingProxy<T>(
   proxyUrl.hostname = '127.0.0.1';
   proxyUrl.port = String(address.port);
   try {
-    return await fn(proxyUrl, { opened: () => opened, commands: () => ({ ...commands }) });
+    return await fn(proxyUrl, {
+      opened: () => opened,
+      commands: () => ({ ...commands }),
+      kills: () => [...kills],
+    });
   } finally {
     await connectionsClosed(clients);
     for (const socket of sockets) socket.destroy();
@@ -119,7 +130,7 @@ async function withCountingProxy<T>(
 }
 
 /**
- * Waits for the connections through the proxy to close, and fails if any is still open after five seconds. After `fn` closes its driver, the only ones left should be those the `mariadb` package opens in the background to send `KILL` for a connection destroyed mid-result.
+ * Waits for the connections through the proxy to close, and fails if any is still open after five seconds. After `fn` closes its driver, every connection it opened, its pool's and its cancel connection, should close.
  */
 async function connectionsClosed(clients: ReadonlySet<Socket>): Promise<void> {
   const deadline = Date.now() + 5000;
@@ -1310,6 +1321,84 @@ describe('MySQL runtime driver', { timeout: timeouts.databaseOperation }, () => 
     } finally {
       process.off('unhandledRejection', record);
     }
+  });
+
+  it.for<[string, boolean]>([
+    ['a pooled stream stopped early', false],
+    ['a held connection released with a stream still open', true],
+  ])(
+    'sends only its own KILL QUERY, never the package KILL, and leaves no unhandled rejection when that KILL fails, for %s',
+    async ([, held], test) => {
+      const unhandled: unknown[] = [];
+      const record = (reason: unknown) => unhandled.push(reason);
+      process.on('unhandledRejection', record);
+      try {
+        await withMysqlDatabase(test, ({ url }) =>
+          withCountingProxy(
+            url,
+            async (proxyUrl, { kills }) => {
+              await withDriver(
+                proxyUrl.toString(),
+                async (driver) => {
+                  const first = await connectionId(driver);
+                  if (held) {
+                    const connection = await driver.acquireConnection();
+                    const transaction = await connection.beginTransaction();
+                    const rows = transaction.query({ sql: slowRows })[Symbol.asyncIterator]();
+                    await rows.next();
+                    await connection.release();
+                  } else {
+                    for await (const _row of driver.query({ sql: slowRows })) break;
+                  }
+                  expect(await connectionId(driver)).not.toBe(first);
+                },
+                single,
+              );
+              await vi.waitFor(() => expect(kills()).not.toEqual([]));
+              expect(kills().filter((kill) => !kill.startsWith('KILL QUERY '))).toEqual([]);
+            },
+            { closeAfterKill: true },
+          ),
+        );
+        expect(unhandled).toEqual([]);
+      } finally {
+        process.off('unhandledRejection', record);
+      }
+    },
+  );
+
+  it('releases quickly a held connection whose streamed SELECT SLEEP(30) still runs, and destroys quickly one whose SELECT SLEEP(30) without a stream still runs, sending only KILL QUERY', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withCountingProxy(url, async (proxyUrl, { kills, commands }) => {
+        const timed = async (stream: boolean) => {
+          const driver = mysqlRuntimeDriver.create({ stream, poolOptions: { max: 1 } });
+          await driver.connect({ kind: 'url', url: proxyUrl.toString() });
+          try {
+            const connection = await driver.acquireConnection();
+            const sent = commands()['COM_QUERY'] ?? 0;
+            const sleeping = collect(connection.query({ sql: 'SELECT SLEEP(30) AS s' })).then(
+              () => 'settled',
+              () => 'settled',
+            );
+            await vi.waitFor(() => expect(commands()['COM_QUERY'] ?? 0).toBeGreaterThan(sent));
+            const started = Date.now();
+            if (stream) await connection.release();
+            else await connection.destroy();
+            return { sleeping: await sleeping, quick: Date.now() - started < 3_000 };
+          } finally {
+            await driver.close();
+          }
+        };
+        expect({ released: await timed(true), destroyed: await timed(false) }).toEqual({
+          released: { sleeping: 'settled', quick: true },
+          destroyed: { sleeping: 'settled', quick: true },
+        });
+        expect({
+          kills: kills().length,
+          others: kills().filter((kill) => !kill.startsWith('KILL QUERY ')),
+        }).toEqual({ kills: 2, others: [] });
+      }),
+    );
   });
 
   it('runs a statement awaited inside the loop over a query on the same transaction, because a query reads its whole result first, as Postgres does without a cursor', async (test) => {

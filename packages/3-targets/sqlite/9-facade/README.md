@@ -114,7 +114,7 @@ await db.orm.Post.with(titled).all();
 
 ### Running plans and rendering SQL
 
-`db.query(plan)` runs a plan from `db.sql`, `db.raw` or the ORM and returns its rows as an `AsyncIterableResult`; `await` it for an array. `db.execute(plan)` runs a plan and resolves its statistics, `{ affectedRows }`, with no rows. Both have the types `tx.query` and `tx.execute` have inside `db.transaction(...)`. For an ORM plan such as `db.orm.Post.where({ title: 'Hello' }).prepared.all().plan`, `db.query` yields the database rows, not the result the ORM builds from them.
+`db.query(plan)` runs a plan from `db.sql`, `db.raw` or the ORM and returns its rows as an `AsyncIterableResult`; `await` it for an array. `db.execute(plan)` runs a plan and resolves its statistics, `{ affectedRows }`, with no rows; a statement that changed one row also reports `insertId`, which names the row only after a one-row insert (see the [driver README](../3-driver/README.md)). Both have the types `tx.query` and `tx.execute` have inside `db.transaction(...)`. For an ORM plan such as `db.orm.Post.where({ title: 'Hello' }).prepared.all().plan`, `db.query` yields the database rows, not the result the ORM builds from them.
 
 `db.toSql(plan)` returns the SQL and parameters the plan would run, `{ sql, params }`, with no database. `params` are the values the plan holds, before codecs encode them for the driver. Middleware rewrites (`beforeCompile`) are not applied, because they belong to running a query. A plan with `prepare` bind sites throws `RUNTIME.PREPARE_BIND_ON_ADHOC`, and a plan built for another contract throws `PLAN.HASH_MISMATCH`, as running it would. `sqliteStatic()` has `toSql` too.
 

@@ -114,6 +114,9 @@ const state = vi.hoisted(() => ({
   pools: [] as unknown[],
   cancels: [] as string[],
   cancel: 'answers' as 'answers' | 'refuses' | 'cannot-connect',
+  cancelConnectTimeouts: [] as unknown[],
+  /** Runs when the fake `KILL QUERY` reaches the server, before its reply comes back. */
+  beforeKillReply: undefined as (() => void) | undefined,
 }));
 
 /** The canceller's own connection: it records each statement, and answers or refuses it as the test sets. */
@@ -121,6 +124,8 @@ function cancelConnection() {
   return {
     query: async (sql: string) => {
       state.cancels.push(sql);
+      state.beforeKillReply?.();
+      await new Promise((resolve) => setTimeout(resolve, 10));
       if (state.cancel === 'refuses') throw new Error('KILL refused');
       return { affectedRows: 0 };
     },
@@ -132,7 +137,8 @@ function cancelConnection() {
 let connection = new FakeConnection();
 
 vi.mock('mariadb', () => ({
-  createConnection: async () => {
+  createConnection: async (options: { connectTimeout?: number }) => {
+    state.cancelConnectTimeouts.push(options.connectTimeout);
     if (state.cancel === 'cannot-connect') throw new Error('connect ECONNREFUSED');
     return cancelConnection();
   },
@@ -172,6 +178,8 @@ beforeEach(() => {
   connection = new FakeConnection();
   state.cancels = [];
   state.cancel = 'answers';
+  state.cancelConnectTimeouts = [];
+  state.beforeKillReply = undefined;
 });
 
 describe('MySQL runtime driver and its pool', () => {
@@ -589,6 +597,63 @@ describe('MySQL runtime driver and its pool', () => {
       { call: 'query', released: 0, destroyed: 1 },
       { call: 'execute', released: 0, destroyed: 1 },
     ]);
+  });
+
+  it.for<[string, number | undefined]>([
+    ['the default', undefined],
+    ['1500 ms', 1500],
+    ['0, which the package reads as no limit', 0],
+  ])(
+    'opens the cancel connection with a two-second connect timeout when the pool connection timeout is %s',
+    async ([, connectionTimeoutMillis]) => {
+      const driver = await connected({
+        ...streaming,
+        ...(connectionTimeoutMillis === undefined
+          ? {}
+          : { poolOptions: { connectionTimeoutMillis } }),
+      });
+      for await (const _row of driver.query(valued)) break;
+      await driver.close();
+      expect(state.cancelConnectTimeouts).toEqual([2000]);
+    },
+  );
+
+  it('leaves no unhandled rejection when the cancelled stream fails before the reply to its KILL QUERY comes back', async () => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    state.beforeKillReply = () => {
+      const stream: unknown = connection.queryStream.mock.results[0]?.value;
+      if (stream instanceof Readable) {
+        stream.destroy(
+          Object.assign(new Error('Query execution was interrupted'), { errno: 1317 }),
+        );
+      }
+    };
+    try {
+      const driver = await connected(streaming);
+      for await (const _row of driver.query(valued)) break;
+      await driver.close();
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', record);
+    }
+  });
+
+  it('releases a held connection whose caller abandoned a stream whose whole result has arrived, cancelling it and dropping the buffered rest instead of waiting for a reader that never comes, and returns the connection', async () => {
+    connection.behaviour = { kind: 'received', rows: [{ n: 1 }, { n: 2 }, { n: 3 }] };
+    const driver = await connected(streaming);
+    const held = await driver.acquireConnection();
+    const rows = held.query(valued)[Symbol.asyncIterator]();
+    await rows.next();
+    await held.release();
+    expect({
+      cancels: state.cancels,
+      destroyed: connection.destroy.mock.calls.length,
+      released: connection.release.mock.calls.length,
+      drained: connection.streamClosed.mock.calls.length,
+    }).toEqual({ cancels: ['KILL QUERY 1'], destroyed: 0, released: 1, drained: 1 });
   });
 
   it('drops the rest of a stream on a held connection the caller stops early, and keeps the connection', async () => {
