@@ -95,6 +95,36 @@ describe('executeDbUpdate with convert and backfill statements', () => {
     });
   });
 
+  describe('when the database contract has no snapshot', () => {
+    async function updateWithoutSnapshot(fieldStatements: readonly StatementText[]) {
+      const recording = recordingMigrations();
+      const result = update({
+        migrationsDir: await migrationsDirWithSnapshot(undefined),
+        marker: markerAt(ORIGIN_HASH),
+        renames: [],
+        fieldStatements,
+        destination,
+        migrations: recording.migrations,
+      });
+      return { result, calls: recording.calls };
+    }
+
+    it('refuses a field convert as needing a migration file, as it would once the snapshot exists', async () => {
+      const { result, calls } = await updateWithoutSnapshot([
+        { verb: 'convert', text: 'User.age' },
+      ]);
+      await expect(result).rejects.toMatchObject({
+        code: 'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
+      });
+      expect(calls).toEqual([]);
+    });
+
+    it('refuses a variant convert as needing the origin contract', async () => {
+      const { result } = await updateWithoutSnapshot([{ verb: 'convert', text: 'Bug' }]);
+      await expect(result).rejects.toMatchObject({ code: 'MIGRATION.STATEMENT_ORIGIN_UNKNOWN' });
+    });
+  });
+
   it('refuses a convert that does not resolve as unresolved', async () => {
     const { result, calls } = await updateWith([{ verb: 'convert', text: 'User.nickname' }]);
     await expect(result).rejects.toMatchObject({ code: 'MIGRATION.STATEMENT_UNRESOLVED' });

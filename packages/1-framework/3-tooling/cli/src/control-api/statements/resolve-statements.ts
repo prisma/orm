@@ -1821,6 +1821,37 @@ export function renamedAndDeleted(
   );
 }
 
+function namesFieldOnly(destination: ContractWithDomain, names: ParsedFieldStatement['field']) {
+  const namespaces = destination.domain.namespaces;
+  const modelAtName = (namespaceId: string, model: string) => {
+    const namespace = Object.hasOwn(namespaces, namespaceId) ? namespaces[namespaceId] : undefined;
+    return namespace === undefined ? undefined : modelIn(namespace, model);
+  };
+  const modelHasField = (namespaceId: string, model: string, field: string) => {
+    const found = modelAtName(namespaceId, model);
+    return found !== undefined && hasField(found, field);
+  };
+  if (names.length === 3) return modelHasField(...names);
+  if (names.length === 1) return false;
+  const [model, field] = names;
+  const asField = Object.keys(namespaces).some((namespaceId) =>
+    modelHasField(namespaceId, model, field),
+  );
+  return asField && modelAtName(model, field) === undefined;
+}
+
+/** The convert statements the destination contract reads only as a field, which need no origin contract to be told apart from a variant convert. */
+export function fieldConvertsInDestination(
+  statements: readonly StatementText[],
+  destination: ContractWithDomain,
+): readonly StatementText[] {
+  return statements.filter((entry) => {
+    if (entry.verb !== 'convert') return false;
+    const parsed = parseFieldStatement({ ...entry, verb: entry.verb });
+    return parsed.ok && namesFieldOnly(destination, parsed.value.field);
+  });
+}
+
 /**
  * Resolves the statements a user gave against the origin and destination contracts. Renames
  * resolve first, in the order given, so a convert or backfill statement can name a renamed field

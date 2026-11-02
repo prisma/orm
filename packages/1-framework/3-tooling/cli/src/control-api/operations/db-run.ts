@@ -71,7 +71,11 @@ import {
   reportAppliedStatements,
   reportConsentStatement,
 } from '../statements/report-applied-statements';
-import { resolveStatements, type StatementOrigin } from '../statements/resolve-statements';
+import {
+  fieldConvertsInDestination,
+  resolveStatements,
+  type StatementOrigin,
+} from '../statements/resolve-statements';
 import { isPlannedStatement, type StatementText } from '../statements/statement-text';
 import { reportTemporaryValues, type TemporaryValueReport } from '../statements/temporary-values';
 import type {
@@ -255,8 +259,15 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     return resolved.value;
   };
   const consentTexts = statementTexts.filter((statement) => !isPlannedStatement(statement));
-  const firstResolved = resolveRenames(statementTexts);
-  const needsMigrationFile = statementsNeedingMigrationFile(statementTexts, firstResolved);
+  const fieldConverts =
+    appOrigin?.origin.kind === 'missing'
+      ? fieldConvertsInDestination(statementTexts, contract)
+      : [];
+  const firstResolved = fieldConverts.length > 0 ? [] : resolveRenames(statementTexts);
+  const needsMigrationFile =
+    fieldConverts.length > 0
+      ? fieldConverts
+      : statementsNeedingMigrationFile(statementTexts, firstResolved);
   if (needsMigrationFile.length > 0) {
     const markerHash = markerRows.get(aggregate.app.spaceId)?.storageHash;
     throw errorStatementNeedsMigrationFile(
