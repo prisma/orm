@@ -24,6 +24,7 @@ import type {
   PostgresQueryMembers,
   PostgresTransactionContext,
 } from '@internal/postgres/runtime';
+import { isPgClient } from '@internal/postgres/runtime';
 import type { Db } from '@internal/sql-builder/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import {
@@ -59,6 +60,7 @@ import {
 import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
 import { createRemoteJWKSet, decodeProtectedHeader, type JWTVerifyResult, jwtVerify } from 'jose';
 import type { Pool } from 'pg';
@@ -262,9 +264,20 @@ const supabaseBindingRules: PostgresBindingRules = {
   kinds: ['url', 'pgPool'],
 };
 
+function givesPgClient(options: SupabaseBindingOptions): boolean {
+  const binding: unknown = options.binding;
+  const pg: unknown = options.pg;
+  return (
+    (typeof binding === 'object' &&
+      binding !== null &&
+      'kind' in binding &&
+      binding.kind === 'pgClient') ||
+    (options.pg !== undefined && typeof pg === 'object' && pg !== null && isPgClient(options.pg))
+  );
+}
+
 function resolveSupabaseBinding(options: SupabaseBindingOptions): SupabaseBinding | undefined {
-  const binding = resolveOptionalPostgresBinding(options, supabaseBindingRules);
-  if (binding?.kind === 'pgClient') {
+  if (givesPgClient(options)) {
     throw supabaseError(
       'SUPABASE.CONFIG_INVALID',
       'Supabase takes a pg.Pool or a url, not a pg.Client',
@@ -274,6 +287,10 @@ function resolveSupabaseBinding(options: SupabaseBindingOptions): SupabaseBindin
         meta: { reason: 'the database input is a pg.Client' },
       },
     );
+  }
+  const binding = resolveOptionalPostgresBinding(options, supabaseBindingRules);
+  if (binding?.kind === 'pgClient') {
+    throw new InternalError('a pg.Client is refused before the database input is resolved');
   }
   return binding;
 }

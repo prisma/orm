@@ -159,6 +159,21 @@ describe('supabase() binding option', () => {
     await expect(supabase({ contract, jwtSecret, pg })).rejects.toMatchObject(refusal);
   });
 
+  it.each([
+    ['a client that is not an object', 'not-an-object'],
+    ['no client', undefined],
+  ])(
+    'rejects a pgClient binding with %s with SUPABASE.CONFIG_INVALID, before its contents are checked',
+    async (_name, client) => {
+      const input = { binding: { kind: 'pgClient', client } } as unknown as ReadOptions;
+
+      await expect(supabase({ contract, jwtSecret, ...input })).rejects.toMatchObject({
+        code: 'SUPABASE.CONFIG_INVALID',
+        message: 'Supabase takes a pg.Pool or a url, not a pg.Client',
+      });
+    },
+  );
+
   it('rejects a pg object that is neither a pool nor a client with RUNTIME.BINDING_INVALID, as postgres() does', async () => {
     const pg = {} as unknown as Pool;
 
