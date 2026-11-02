@@ -1,8 +1,6 @@
 import { ifDefined } from '@internal/utils/defined';
 import type { SqlRuntimeExtensionDescriptor } from './sql-context';
-import type { RuntimeOptions } from './sql-runtime';
-
-type RuntimeExecutionOptions = Pick<RuntimeOptions, 'verifyMarker' | 'middleware' | 'log' | 'mode'>;
+import type { RuntimeExecutionOptions } from './sql-runtime';
 
 /** The options every SQL client takes for how queries run. */
 export interface SqlExecutionOptions<TTargetId extends string> extends RuntimeExecutionOptions {

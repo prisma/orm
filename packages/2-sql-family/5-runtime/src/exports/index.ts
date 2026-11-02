@@ -96,6 +96,7 @@ export type {
   ConnectionProvider,
   Runtime,
   RuntimeConnection,
+  RuntimeExecutionOptions,
   RuntimeOptions,
   RuntimeQueryable,
   RuntimeTransaction,
