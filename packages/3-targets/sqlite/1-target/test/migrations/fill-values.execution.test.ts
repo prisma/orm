@@ -36,7 +36,18 @@ describe('the temporary value a new required SQLite column takes', () => {
         ];
       }),
     );
-    expect(Object.fromEntries(read)).toEqual({
+    expect(
+      Object.fromEntries(
+        read.map(([codecId, value]) => [
+          codecId,
+          value instanceof Temporal.Instant ||
+          value instanceof Temporal.PlainDate ||
+          value instanceof Temporal.PlainTime
+            ? value.toString()
+            : value,
+        ]),
+      ),
+    ).toEqual({
       'sql/char@1': '',
       'sql/varchar@1': '',
       'sql/int@1': 0,
@@ -46,6 +57,13 @@ describe('the temporary value a new required SQLite column takes', () => {
       'sqlite/real@1': 0,
       'sqlite/blob@1': new Uint8Array(),
       'sqlite/datetime@1': new Date(0),
+      'sqlite/datetime-temporal@1': '1970-01-01T00:00:00Z',
+      'sqlite/datetime-string@1': '1970-01-01T00:00:00.000Z',
+      'sqlite/date-string@1': '1970-01-01',
+      'sqlite/date-temporal@1': '1970-01-01',
+      'sqlite/time-string@1': '00:00:00.000',
+      'sqlite/time-temporal@1': '00:00:00',
+      'sqlite/duration-string@1': 'PT0S',
       'sqlite/json@1': {},
       'sqlite/bigint@1': 0n,
       'sqlite/bigintnumber@1': 0,

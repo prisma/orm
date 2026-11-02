@@ -8,12 +8,17 @@ import type { PslSpan } from '@internal/psl-parser';
 import { prisma6Diagnostic } from './diagnostics';
 
 /** Where a part of a Prisma 6 schema is written. */
-export interface IndexSite {
+export interface Site {
   readonly sourceId: string;
   readonly span: PslSpan;
 }
 
-export interface FieldSite extends IndexSite {
+export interface IndexSite extends Site {
+  /** How the schema writes the index, such as `@@index([email]) on model "User"`. */
+  readonly label: string;
+}
+
+export interface FieldSite extends Site {
   readonly storedName: string;
 }
 
@@ -77,6 +82,17 @@ export function refusalDiagnostic(
       return prisma6Diagnostic(
         'PSL.PRISMA6_MONGO_TEXT_INDEX_LIMIT',
         `Model "${refusal.key.model}" has a @@fulltext, but another model stored in the same collection has one too; MongoDB allows one text index per collection. Merge the fields into one @@fulltext.`,
+        site.sourceId,
+        site.span,
+      );
+    }
+    case 'indexDuplicate': {
+      const site = sites.indexes.get(refusal.key.model)?.[refusal.key.position];
+      const first = sites.indexes.get(refusal.firstModel)?.[refusal.firstPosition];
+      if (site === undefined || first === undefined) break;
+      return prisma6Diagnostic(
+        'PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS',
+        `${site.label} and ${first.label} are the same index, with the same keys and options, in collection "${refusal.collection}". MongoDB cannot hold two identical indexes in one collection. Remove one of them.`,
         site.sourceId,
         site.span,
       );

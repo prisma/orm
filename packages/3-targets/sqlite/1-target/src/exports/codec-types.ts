@@ -21,6 +21,15 @@ import {
   sqliteSqlVarcharDescriptor,
   sqliteTextDescriptor,
 } from '../core/codecs';
+import {
+  sqliteDateStringDescriptor,
+  sqliteDateTemporalDescriptor,
+  sqliteDatetimeStringDescriptor,
+  sqliteDatetimeTemporalDescriptor,
+  sqliteDurationStringDescriptor,
+  sqliteTimeStringDescriptor,
+  sqliteTimeTemporalDescriptor,
+} from '../core/date-time-codecs';
 
 const codecDescriptorMap = {
   char: sqliteSqlCharDescriptor,
@@ -32,6 +41,13 @@ const codecDescriptorMap = {
   real: sqliteRealDescriptor,
   blob: sqliteBlobDescriptor,
   datetime: sqliteDatetimeDescriptor,
+  'datetime-temporal': sqliteDatetimeTemporalDescriptor,
+  'datetime-string': sqliteDatetimeStringDescriptor,
+  'date-string': sqliteDateStringDescriptor,
+  'date-temporal': sqliteDateTemporalDescriptor,
+  'time-string': sqliteTimeStringDescriptor,
+  'time-temporal': sqliteTimeTemporalDescriptor,
+  'duration-string': sqliteDurationStringDescriptor,
   json: sqliteJsonDescriptor,
   bigint: sqliteBigintDescriptor,
   bigintnumber: sqliteBigintNumberDescriptor,
