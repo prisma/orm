@@ -22,7 +22,7 @@
     "@internal/sql-relational-core": "workspace:8.0.0-rc.22",
     "@internal/target-mysql": "workspace:8.0.0-rc.22",
     "@internal/utils": "workspace:8.0.0-rc.22",
-    "arktype": "^2.2.2",
+    "arktype": "^2.2.9",
     "mariadb": "3.5.4"
   },
   "devDependencies": {
