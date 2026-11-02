@@ -1,3 +1,4 @@
+import { ifDefined } from '@internal/utils/defined';
 import type { SqlRuntimeExtensionDescriptor } from './sql-context';
 import type { RuntimeExecutionOptions } from './sql-runtime';
 
@@ -6,20 +7,18 @@ export interface SqlExecutionOptions<TTargetId extends string> extends RuntimeEx
   readonly extensions?: readonly SqlRuntimeExtensionDescriptor<TTargetId>[];
 }
 
-const runtimeExecutionKeys: Record<keyof RuntimeExecutionOptions, true> = {
-  verifyMarker: true,
-  middleware: true,
-  log: true,
-  mode: true,
+type RuntimeExecutionCopies = {
+  readonly [K in keyof RuntimeExecutionOptions]-?: Pick<RuntimeExecutionOptions, K>;
 };
 
 export function toRuntimeOptions<TTargetId extends string>(
   options: SqlExecutionOptions<TTargetId>,
 ): RuntimeExecutionOptions {
-  return Object.fromEntries(
-    Object.keys(runtimeExecutionKeys).flatMap((key) => {
-      const value: unknown = Reflect.get(options, key);
-      return value === undefined ? [] : [[key, value]];
-    }),
-  );
+  const copies: RuntimeExecutionCopies = {
+    verifyMarker: ifDefined('verifyMarker', options.verifyMarker),
+    middleware: ifDefined('middleware', options.middleware),
+    log: ifDefined('log', options.log),
+    mode: ifDefined('mode', options.mode),
+  };
+  return { ...copies.verifyMarker, ...copies.middleware, ...copies.log, ...copies.mode };
 }

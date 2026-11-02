@@ -9,6 +9,6 @@ export type {
 } from '../runtime/postgres';
 export { default } from '../runtime/postgres';
 export type { PostgresQueryMembers, PostgresTransactionContext } from '../runtime/postgres-members';
-export type { PostgresCursorOptions } from '../runtime/postgres-options';
+export type { PostgresCursorOptions, PostgresPoolOptions } from '../runtime/postgres-options';
 export type { PostgresRuntime } from '../runtime/postgres-runtime';
 export { PostgresRuntimeImpl } from '../runtime/postgres-runtime';

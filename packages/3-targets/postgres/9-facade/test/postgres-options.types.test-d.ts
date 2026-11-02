@@ -1,5 +1,6 @@
 import type { SqlExecutionOptions } from '@internal/sql-runtime';
 import { expectTypeOf, test } from 'vitest';
+import type { PostgresOptionsBase, PostgresPoolOptions } from '../src/exports/runtime';
 import type {
   PostgresCursorOptions,
   PostgresExecutionOptions,
@@ -12,5 +13,11 @@ test('postgres() takes every SQL execution option, plus cursor', () => {
   >();
   expectTypeOf<PostgresExecutionOptions['cursor']>().toEqualTypeOf<
     PostgresCursorOptions | undefined
+  >();
+});
+
+test('the runtime entry exports the type of poolOptions', () => {
+  expectTypeOf<PostgresOptionsBase['poolOptions']>().toEqualTypeOf<
+    PostgresPoolOptions | undefined
   >();
 });
