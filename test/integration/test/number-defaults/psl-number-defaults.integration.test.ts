@@ -24,8 +24,8 @@ import {
 } from '../scalar-lists/psl-list-authoring';
 
 const schema = `types {
-  Money = Numeric(65, 30)
-  Price = Numeric(10, 2)
+  Money = NumericString(65, 30)
+  Price = NumericString(10, 2)
 }
 
 model NumberDefault {

@@ -9,49 +9,143 @@ import {
 /** The data type of every size argument on Postgres, such as a length or a precision: a typmod is an `int4`. */
 export const PG_SIZE_TYPE = 'pg/int4' as const;
 
+const length = {
+  kind: 'value',
+  dataType: PG_SIZE_TYPE,
+  name: 'length',
+  optional: true,
+} as const;
+
+const int2 = {
+  kind: 'typeConstructor',
+  documentation:
+    'A signed 16-bit integer stored as PostgreSQL int2 and represented as a JavaScript number.',
+  output: { codecId: 'pg/int2@1' },
+} as const;
+
+const int8Number = {
+  kind: 'typeConstructor',
+  documentation:
+    'A signed 64-bit integer stored as PostgreSQL int8 and represented as a JavaScript number within its safe integer range.',
+  output: { codecId: 'pg/int8number@1' },
+} as const;
+
+const numericString = {
+  kind: 'typeConstructor',
+  documentation:
+    'An exact decimal value stored as PostgreSQL numeric, with optional precision and scale, and represented as decimal text.',
+  args: [
+    { kind: 'value', dataType: PG_SIZE_TYPE, name: 'precision', optional: true },
+    { kind: 'value', dataType: PG_SIZE_TYPE, name: 'scale', optional: true },
+  ],
+  output: {
+    codecId: 'pg/numeric@1',
+    typeParams: {
+      precision: { kind: 'arg', index: 0 },
+      scale: { kind: 'arg', index: 1 },
+    },
+  },
+} as const;
+
+const numericBigInt = {
+  kind: 'typeConstructor',
+  documentation:
+    'An arbitrary-precision integer stored as PostgreSQL numeric and represented as a JavaScript bigint.',
+  output: { codecId: 'pg/unboundedint@1' },
+} as const;
+
+const float4 = {
+  kind: 'typeConstructor',
+  documentation: 'A single-precision floating-point number stored as PostgreSQL float4.',
+  output: { codecId: 'pg/float4@1' },
+} as const;
+
+const varchar = {
+  kind: 'typeConstructor',
+  documentation:
+    'Variable-length text stored as PostgreSQL character varying, with an optional maximum character length.',
+  args: [length],
+  output: {
+    codecId: 'sql/varchar@1',
+    typeParams: { length: { kind: 'arg', index: 0 } },
+  },
+} as const;
+
 /**
- * The base PSL scalars as zero-arg type constructors in the unified authoring
- * channel. Each names a codec; the column's database type is its data type's.
- *
- * The type position is the only storage decider: a mutation-default generator
- * (`@onCreate(uuid())`) never re-picks a column's storage.
+ * The explicit types of PostgreSQL's integer, decimal, floating-point, text, boolean and binary columns. Each is named after the database type, plus the application value where the database type has more than one codec (ADR 257, ADR 316).
  */
-export const postgresScalarAuthoringTypes = {
-  String: {
+export const postgresExplicitScalarTypes = {
+  Int2: { ...int2, inferred: true },
+  Int4: {
+    kind: 'typeConstructor',
+    inferred: true,
+    documentation:
+      'A signed 32-bit integer stored as PostgreSQL int4 and represented as a JavaScript number.',
+    output: { codecId: 'pg/int4@1' },
+  },
+  Int8BigInt: {
+    kind: 'typeConstructor',
+    inferred: true,
+    documentation:
+      'A signed 64-bit integer stored as PostgreSQL int8 and represented as a JavaScript bigint.',
+    output: { codecId: 'pg/int8@1' },
+  },
+  Int8Number: int8Number,
+  NumericString: { ...numericString, inferred: true },
+  NumericBigInt: numericBigInt,
+  Float4: { ...float4, inferred: true },
+  Float8: {
+    kind: 'typeConstructor',
+    inferred: true,
+    documentation: 'A double-precision floating-point number stored as PostgreSQL float8.',
+    output: { codecId: 'pg/float8@1' },
+  },
+  Text: {
     kind: 'typeConstructor',
     inferred: true,
     documentation: 'Variable-length text stored as PostgreSQL text.',
     output: { codecId: 'pg/text@1' },
   },
-  Boolean: {
+  Varchar: { ...varchar, inferred: true },
+  Char: {
     kind: 'typeConstructor',
     inferred: true,
-    documentation: 'A true or false value stored as PostgreSQL boolean.',
+    documentation:
+      'Fixed-length, blank-padded text stored as PostgreSQL character, with an optional character length.',
+    args: [length],
+    output: {
+      codecId: 'sql/char@1',
+      typeParams: { length: { kind: 'arg', index: 0 } },
+    },
+  },
+  Bool: {
+    kind: 'typeConstructor',
+    inferred: true,
+    documentation: 'A true or false value stored as PostgreSQL bool.',
     output: { codecId: 'pg/bool@1' },
   },
-  Int: {
+  Bytea: {
     kind: 'typeConstructor',
     inferred: true,
-    documentation: 'A signed 32-bit integer represented as a JavaScript number.',
-    output: { codecId: 'pg/int4@1' },
+    documentation: 'Binary data stored as PostgreSQL bytea and represented as a Uint8Array.',
+    output: { codecId: 'pg/bytea@1' },
   },
-  BigInt: {
-    kind: 'typeConstructor',
-    inferred: true,
-    documentation: 'A signed 64-bit integer represented as a JavaScript bigint.',
-    output: { codecId: 'pg/int8@1' },
-  },
-  Float: {
-    kind: 'typeConstructor',
-    inferred: true,
-    documentation: 'A double-precision floating-point number.',
-    output: { codecId: 'pg/float8@1' },
-  },
-  Decimal: {
-    kind: 'typeConstructor',
-    documentation: 'An exact decimal value stored as PostgreSQL numeric.',
-    output: { codecId: 'pg/numeric@1' },
-  },
+} as const satisfies AuthoringTypeNamespace;
+
+/**
+ * The explicit types' former names, kept for one release line as deprecated aliases. Each gives the same codec as its replacement, and the PSL interpreter warns where one is written (ADR 257).
+ */
+export const postgresDeprecatedScalarTypes = {
+  SmallInt: { ...int2, deprecated: { replacement: 'Int2' } },
+  BigIntNumber: { ...int8Number, deprecated: { replacement: 'Int8Number' } },
+  Numeric: { ...numericString, deprecated: { replacement: 'NumericString' } },
+  UnboundedInt: { ...numericBigInt, deprecated: { replacement: 'NumericBigInt' } },
+  Real: { ...float4, deprecated: { replacement: 'Float4' } },
+  VarChar: { ...varchar, deprecated: { replacement: 'Varchar' } },
+} as const satisfies AuthoringTypeNamespace;
+
+/** The JSON types, which keep their names until the `Json` convenience type is decided. */
+export const postgresScalarAuthoringTypes = {
   Json: {
     kind: 'typeConstructor',
     inferred: true,
@@ -64,51 +158,9 @@ export const postgresScalarAuthoringTypes = {
     documentation: 'A JSON value stored in PostgreSQL binary jsonb format.',
     output: { codecId: 'pg/jsonb@1' },
   },
-  Bytes: {
-    kind: 'typeConstructor',
-    inferred: true,
-    documentation: 'Binary data stored as PostgreSQL bytea.',
-    output: { codecId: 'pg/bytea@1' },
-  },
 } as const satisfies AuthoringTypeNamespace;
 
 export const postgresNativeAuthoringTypes = {
-  VarChar: {
-    kind: 'typeConstructor',
-    inferred: true,
-    documentation: 'Variable-length text with an optional maximum character length.',
-    args: [{ kind: 'value', dataType: PG_SIZE_TYPE, name: 'length', optional: true }],
-    output: {
-      codecId: 'sql/varchar@1',
-      typeParams: { length: { kind: 'arg', index: 0 } },
-    },
-  },
-  Char: {
-    kind: 'typeConstructor',
-    inferred: true,
-    documentation: 'Fixed-length, blank-padded text with an optional character length.',
-    args: [{ kind: 'value', dataType: PG_SIZE_TYPE, name: 'length', optional: true }],
-    output: {
-      codecId: 'sql/char@1',
-      typeParams: { length: { kind: 'arg', index: 0 } },
-    },
-  },
-  Numeric: {
-    kind: 'typeConstructor',
-    inferred: true,
-    documentation: 'An exact decimal value with optional precision and scale.',
-    args: [
-      { kind: 'value', dataType: PG_SIZE_TYPE, name: 'precision', optional: true },
-      { kind: 'value', dataType: PG_SIZE_TYPE, name: 'scale', optional: true },
-    ],
-    output: {
-      codecId: 'pg/numeric@1',
-      typeParams: {
-        precision: { kind: 'arg', index: 0 },
-        scale: { kind: 'arg', index: 1 },
-      },
-    },
-  },
   TimestampTemporal: {
     kind: 'typeConstructor',
     documentation: 'A date and time without a time zone, represented as Temporal.PlainDateTime.',
@@ -159,18 +211,6 @@ export const postgresNativeAuthoringTypes = {
     inferred: true,
     documentation: 'An IPv4 or IPv6 address with an optional subnet mask.',
     output: { codecId: 'pg/inet@1' },
-  },
-  SmallInt: {
-    kind: 'typeConstructor',
-    inferred: true,
-    documentation: 'A signed 16-bit integer represented as a JavaScript number.',
-    output: { codecId: 'pg/int2@1' },
-  },
-  Real: {
-    kind: 'typeConstructor',
-    inferred: true,
-    documentation: 'A single-precision floating-point number.',
-    output: { codecId: 'pg/float4@1' },
   },
   DateTemporal: {
     kind: 'typeConstructor',
@@ -430,10 +470,146 @@ export const postgresConvenienceDateTimeTypes = {
 } as const satisfies AuthoringTypeNamespace;
 
 /**
+ * The convenience types of PostgreSQL's other scalars. Each is a type choice: `storage` chooses the database type and, for `BigInt`, `as` chooses the application value; `precision`, `scale` and `length` are passed on to the explicit type chosen. ADR 279, ADR 316.
+ */
+export const postgresConvenienceScalarTypes = {
+  Int: {
+    kind: 'typeChoice',
+    documentation:
+      'An integer read as a JavaScript number. `storage` is int4, a 32-bit integer, or int2, a 16-bit integer.',
+    args: [
+      {
+        kind: 'option',
+        name: 'storage',
+        values: ['int4', 'int2'],
+        default: 'int4',
+        optional: true,
+      },
+    ],
+    choices: [
+      { when: { storage: 'int4' }, type: 'Int4' },
+      { when: { storage: 'int2' }, type: 'Int2' },
+    ],
+  },
+  BigInt: {
+    kind: 'typeChoice',
+    documentation:
+      'An integer that may exceed 32 bits. `as` is what the application reads: bigint, or number within the safe integer range. `storage` is int8, a 64-bit integer, or numeric, an integer of any size, with as: bigint.',
+    args: [
+      {
+        kind: 'option',
+        name: 'as',
+        values: ['bigint', 'number'],
+        default: 'bigint',
+        optional: true,
+      },
+      {
+        kind: 'option',
+        name: 'storage',
+        values: ['int8', 'numeric'],
+        default: 'int8',
+        optional: true,
+      },
+    ],
+    choices: [
+      { when: { as: 'bigint', storage: 'int8' }, type: 'Int8BigInt' },
+      { when: { as: 'number', storage: 'int8' }, type: 'Int8Number' },
+      { when: { as: 'bigint', storage: 'numeric' }, type: 'NumericBigInt' },
+    ],
+  },
+  Float: {
+    kind: 'typeChoice',
+    documentation:
+      'A floating-point number. `storage` is float8, double precision, or float4, single precision.',
+    args: [
+      {
+        kind: 'option',
+        name: 'storage',
+        values: ['float8', 'float4'],
+        default: 'float8',
+        optional: true,
+      },
+    ],
+    choices: [
+      { when: { storage: 'float8' }, type: 'Float8' },
+      { when: { storage: 'float4' }, type: 'Float4' },
+    ],
+  },
+  Decimal: {
+    kind: 'typeChoice',
+    documentation:
+      'An exact decimal number, read as decimal text such as "12.50". `storage` is numeric, with optional precision and scale.',
+    args: [
+      {
+        kind: 'option',
+        name: 'storage',
+        values: ['numeric'],
+        default: 'numeric',
+        optional: true,
+      },
+      precision,
+      { kind: 'value', dataType: PG_SIZE_TYPE, name: 'scale', optional: true },
+    ],
+    choices: [{ when: { storage: 'numeric' }, type: 'NumericString' }],
+  },
+  String: {
+    kind: 'typeChoice',
+    documentation:
+      'Text. `storage` is text, of any length, or varchar or char, which take an optional length.',
+    args: [
+      {
+        kind: 'option',
+        name: 'storage',
+        values: ['text', 'varchar', 'char'],
+        default: 'text',
+        optional: true,
+      },
+      length,
+    ],
+    choices: [
+      { when: { storage: 'text' }, type: 'Text' },
+      { when: { storage: 'varchar' }, type: 'Varchar' },
+      { when: { storage: 'char' }, type: 'Char' },
+    ],
+  },
+  Boolean: {
+    kind: 'typeChoice',
+    documentation: 'A true or false value. `storage` is bool.',
+    args: [
+      {
+        kind: 'option',
+        name: 'storage',
+        values: ['bool'],
+        default: 'bool',
+        optional: true,
+      },
+    ],
+    choices: [{ when: { storage: 'bool' }, type: 'Bool' }],
+  },
+  Bytes: {
+    kind: 'typeChoice',
+    documentation: 'Binary data, read as a Uint8Array. `storage` is bytea.',
+    args: [
+      {
+        kind: 'option',
+        name: 'storage',
+        values: ['bytea'],
+        default: 'bytea',
+        optional: true,
+      },
+    ],
+    choices: [{ when: { storage: 'bytea' }, type: 'Bytea' }],
+  },
+} as const satisfies AuthoringTypeNamespace;
+
+/**
  * The base scalars and native types as type constructors. The target contributes them, so PSL and the TypeScript builder's `type.*` see the same names.
  */
 export const postgresScalarAndNativeTypeConstructors = {
+  ...postgresExplicitScalarTypes,
   ...postgresNativeAuthoringTypes,
   ...postgresScalarAuthoringTypes,
   ...postgresConvenienceDateTimeTypes,
+  ...postgresConvenienceScalarTypes,
+  ...postgresDeprecatedScalarTypes,
 } as const satisfies AuthoringTypeNamespace;

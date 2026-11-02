@@ -15,6 +15,7 @@ import { postgresAuthoringTypes } from '../src/core/authoring';
 import { createPostgresBuiltinCodecLookup } from '../src/core/codec-registry';
 import { postgresDataTypes } from '../src/core/data-types';
 import {
+  postgresExplicitScalarTypes,
   postgresNativeAuthoringTypes,
   postgresScalarAndNativeTypeConstructors,
   postgresScalarAuthoringTypes,
@@ -50,8 +51,6 @@ describe('the type constructors the target contributes', () => {
       'Nanoid',
       'Cuid2',
       'Ksuid',
-      'BigIntNumber',
-      'UnboundedInt',
       'pg',
       'temporal',
     ]);
@@ -77,7 +76,7 @@ describe('the type constructors the target contributes', () => {
   ] as const)('stores %s as Char(%i) stores it, with params its codec accepts', (name, length) => {
     const alias = instantiateAuthoringTypeAlias(postgresAuthoringTypes[name]);
     expect(alias).toEqual({
-      type: instantiateAuthoringTypeConstructor(postgresNativeAuthoringTypes.Char, [length]),
+      type: instantiateAuthoringTypeConstructor(postgresExplicitScalarTypes.Char, [length]),
     });
     const paramsSchema = createPostgresBuiltinCodecLookup().descriptorFor?.(
       alias.type.codecId,
@@ -148,19 +147,19 @@ const everyPostgresConstructor = {
 
 /** The constructor `contract infer` prints for each data type that has one. */
 const INFERRED = [
-  'String',
-  'Boolean',
-  'Int',
-  'BigInt',
-  'Float',
-  'Numeric',
+  'Text',
+  'Bool',
+  'Int4',
+  'Int8BigInt',
+  'Float8',
+  'NumericString',
   'Json',
   'Jsonb',
-  'Bytes',
-  'SmallInt',
-  'Real',
+  'Bytea',
+  'Int2',
+  'Float4',
   'Char',
-  'VarChar',
+  'Varchar',
   'Uuid',
   'Inet',
   'DateString',
@@ -214,65 +213,79 @@ describe('the constructors contract infer prints', () => {
   });
 });
 
-describe('postgresScalarAuthoringTypes', () => {
+describe('postgresExplicitScalarTypes', () => {
   const codecLookup = createPostgresBuiltinCodecLookup();
-  const namespace: AuthoringTypeNamespace = postgresScalarAuthoringTypes;
+  const namespace: AuthoringTypeNamespace = postgresExplicitScalarTypes;
 
-  // The legacy scalar-type map channel (name-to-codecId, retired in TML-2985) is gone; the pinned
-  // name → codecId pairs below carry the retired map's claims forward.
-  const expectedScalars = [
-    ['String', 'pg/text@1', 'text'],
-    ['Boolean', 'pg/bool@1', 'bool'],
-    ['Int', 'pg/int4@1', 'int4'],
-    ['BigInt', 'pg/int8@1', 'int8'],
-    ['Float', 'pg/float8@1', 'float8'],
-    ['Decimal', 'pg/numeric@1', 'numeric'],
-    ['Json', 'pg/json@1', 'json'],
-    ['Jsonb', 'pg/jsonb@1', 'jsonb'],
-    ['Bytes', 'pg/bytea@1', 'bytea'],
+  const expected = [
+    ['Int2', 'pg/int2@1', 'int2'],
+    ['Int4', 'pg/int4@1', 'int4'],
+    ['Int8BigInt', 'pg/int8@1', 'int8'],
+    ['Int8Number', 'pg/int8number@1', 'int8'],
+    ['NumericString', 'pg/numeric@1', 'numeric'],
+    ['NumericBigInt', 'pg/unboundedint@1', 'numeric'],
+    ['Float4', 'pg/float4@1', 'float4'],
+    ['Float8', 'pg/float8@1', 'float8'],
+    ['Text', 'pg/text@1', 'text'],
+    ['Varchar', 'sql/varchar@1', 'character varying'],
+    ['Char', 'sql/char@1', 'character'],
+    ['Bool', 'pg/bool@1', 'bool'],
+    ['Bytea', 'pg/bytea@1', 'bytea'],
   ] as const;
 
-  it('pins every base scalar as a zero-arg type constructor naming its codec', () => {
-    expect(Object.keys(namespace).sort()).toEqual(expectedScalars.map(([name]) => name).sort());
-    for (const [name, codecId] of expectedScalars) {
-      expect(namespace[name]).toEqual({
-        kind: 'typeConstructor',
-        documentation: expect.stringMatching(/\S/),
-        ...(INFERRED.includes(name) ? { inferred: true } : {}),
-        output: { codecId },
-      });
-    }
+  it('names each explicit type after its database type, and its codec', () => {
+    expect(
+      Object.fromEntries(
+        Object.entries(namespace).map(([name, descriptor]) => [
+          name,
+          descriptor.kind === 'typeConstructor' ? descriptor.output.codecId : descriptor.kind,
+        ]),
+      ),
+    ).toEqual(Object.fromEntries(expected.map(([name, codecId]) => [name, codecId])));
   });
 
-  it.each(expectedScalars)(
-    '%s keeps its type name, now its codec’s data type’s',
-    (_name, codecId, typeName) => {
-      expect(
-        unquotedSqlBaseNameOfCodec(codecId, undefined, {
-          codecLookup,
-          dataTypeLookup: createDataTypeLookup(postgresDataTypes),
-        }),
-      ).toBe(typeName);
-    },
-  );
+  it.each(expected)('%s stores %s as %s', (_name, codecId, typeName) => {
+    expect(
+      unquotedSqlBaseNameOfCodec(codecId, undefined, {
+        codecLookup,
+        dataTypeLookup: createDataTypeLookup(postgresDataTypes),
+      }),
+    ).toBe(typeName);
+  });
 });
+
+describe('postgresScalarAuthoringTypes', () => {
+  it('holds the JSON types, which keep their names', () => {
+    expect(postgresScalarAuthoringTypes).toEqual({
+      Json: {
+        kind: 'typeConstructor',
+        inferred: true,
+        documentation: 'A JSON value stored as PostgreSQL json.',
+        output: { codecId: 'pg/json@1' },
+      },
+      Jsonb: {
+        kind: 'typeConstructor',
+        inferred: true,
+        documentation: 'A JSON value stored in PostgreSQL binary jsonb format.',
+        output: { codecId: 'pg/jsonb@1' },
+      },
+    });
+  });
+});
+
+const explicitTypes = { ...postgresExplicitScalarTypes, ...postgresNativeAuthoringTypes };
 
 describe('postgresNativeAuthoringTypes', () => {
   it('contributes all native types as bare-eligible top-level constructors', () => {
     const derived = collectScalarTypeConstructors(postgresNativeAuthoringTypes);
 
     expect(Object.fromEntries(derived)).toEqual({
-      VarChar: { codecId: 'sql/varchar@1' },
-      Char: { codecId: 'sql/char@1' },
-      Numeric: { codecId: 'pg/numeric@1' },
       TimestampTemporal: { codecId: 'pg/timestamp-temporal@1' },
       TimestamptzTemporal: { codecId: 'pg/timestamptz-temporal@1' },
       TimeTemporal: { codecId: 'pg/time-temporal@1' },
       Timetz: { codecId: 'pg/timetz@1' },
       Uuid: { codecId: 'pg/uuid@1' },
       Inet: { codecId: 'pg/inet@1' },
-      SmallInt: { codecId: 'pg/int2@1' },
-      Real: { codecId: 'pg/float4@1' },
       DateTemporal: { codecId: 'pg/date-temporal@1' },
       DateString: { codecId: 'pg/date-string@1' },
       TimestampString: { codecId: 'pg/timestamp-string@1' },
@@ -292,20 +305,20 @@ describe('postgresNativeAuthoringTypes', () => {
   });
 
   it('materializes typeParams keys only for arguments that are given', () => {
-    expect(
-      instantiateAuthoringTypeConstructor(postgresNativeAuthoringTypes.VarChar, [191]),
-    ).toEqual({
-      codecId: 'sql/varchar@1',
-      typeParams: { length: 191 },
-    });
-    expect(instantiateAuthoringTypeConstructor(postgresNativeAuthoringTypes.Numeric, [10])).toEqual(
+    expect(instantiateAuthoringTypeConstructor(postgresExplicitScalarTypes.Varchar, [191])).toEqual(
       {
-        codecId: 'pg/numeric@1',
-        typeParams: { precision: 10 },
+        codecId: 'sql/varchar@1',
+        typeParams: { length: 191 },
       },
     );
     expect(
-      instantiateAuthoringTypeConstructor(postgresNativeAuthoringTypes.Numeric, [10, 2]),
+      instantiateAuthoringTypeConstructor(postgresExplicitScalarTypes.NumericString, [10]),
+    ).toEqual({
+      codecId: 'pg/numeric@1',
+      typeParams: { precision: 10 },
+    });
+    expect(
+      instantiateAuthoringTypeConstructor(postgresExplicitScalarTypes.NumericString, [10, 2]),
     ).toEqual({
       codecId: 'pg/numeric@1',
       typeParams: { precision: 10, scale: 2 },
@@ -334,8 +347,8 @@ describe('postgresNativeAuthoringTypes', () => {
 
   describe('arguments are bounded by the codec’s data type, not by the constructor', () => {
     const codecLookup = createPostgresBuiltinCodecLookup();
-    const check = (name: keyof typeof postgresNativeAuthoringTypes, args: readonly unknown[]) => {
-      const descriptor = postgresNativeAuthoringTypes[name];
+    const check = (name: keyof typeof explicitTypes, args: readonly unknown[]) => {
+      const descriptor = explicitTypes[name];
       const output = instantiateAuthoringTypeConstructor(descriptor, args);
       validateAuthoringTypeParams(
         name,
@@ -346,13 +359,13 @@ describe('postgresNativeAuthoringTypes', () => {
     };
 
     it.each([
-      ['VarChar', [0]],
-      ['VarChar', [10485761]],
+      ['Varchar', [0]],
+      ['Varchar', [10485761]],
       ['Char', [0]],
       ['Char', [10485761]],
-      ['Numeric', [0]],
-      ['Numeric', [1001]],
-      ['Numeric', [10, 1001]],
+      ['NumericString', [0]],
+      ['NumericString', [1001]],
+      ['NumericString', [10, 1001]],
       ['TimestampTemporal', [-1]],
       ['TimestampTemporal', [7]],
       ['TimestamptzTemporal', [7]],
@@ -372,11 +385,11 @@ describe('postgresNativeAuthoringTypes', () => {
     });
 
     it.each([
-      ['VarChar', [1]],
-      ['VarChar', [10485760]],
+      ['Varchar', [1]],
+      ['Varchar', [10485760]],
       ['Char', [10485760]],
-      ['Numeric', [1000, 1000]],
-      ['Numeric', [1, 0]],
+      ['NumericString', [1000, 1000]],
+      ['NumericString', [1, 0]],
       ['TimestampTemporal', [0]],
       ['TimestampTemporal', [6]],
       ['Timetz', [6]],
@@ -389,7 +402,7 @@ describe('postgresNativeAuthoringTypes', () => {
     });
 
     it('declares no minimum or maximum on any argument', () => {
-      const bounded = Object.entries(postgresNativeAuthoringTypes).filter(([, descriptor]) =>
+      const bounded = Object.entries(explicitTypes).filter(([, descriptor]) =>
         (('args' in descriptor ? descriptor.args : undefined) ?? []).some(
           (arg) => 'minimum' in arg || 'maximum' in arg,
         ),

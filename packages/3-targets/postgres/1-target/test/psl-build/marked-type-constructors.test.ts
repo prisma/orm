@@ -33,8 +33,8 @@ describe('inferredTypeConstructors', () => {
         ]),
       ),
     ).toEqual({
-      'pg/text': ['String'],
-      'pg/numeric': ['Numeric'],
+      'pg/text': ['Text'],
+      'pg/numeric': ['NumericString'],
       'pg/timestamptz': ['TimestamptzJsDate'],
       'pg/bit': ['Bit'],
       'pg/enum': ['pg', 'enum'],
@@ -62,15 +62,15 @@ describe('fewestArgumentsCall', () => {
       timestamptz3: call('pg/timestamptz', { precision: 3 }),
       text: call('pg/text', {}),
     }).toEqual({
-      numeric10: { path: ['Numeric'], args: [10] },
-      numeric10_2: { path: ['Numeric'], args: [10, 2] },
-      numeric: { path: ['Numeric'], args: [] },
+      numeric10: { path: ['NumericString'], args: [10] },
+      numeric10_2: { path: ['NumericString'], args: [10, 2] },
+      numeric: { path: ['NumericString'], args: [] },
       char1: { path: ['Char'], args: [] },
       char5: { path: ['Char'], args: [5] },
       bit1: { path: ['Bit'], args: [] },
       varbit: { path: ['VarBit'], args: [] },
       timestamptz3: { path: ['TimestamptzJsDate'], args: [3] },
-      text: { path: ['String'], args: [] },
+      text: { path: ['Text'], args: [] },
     });
   });
 

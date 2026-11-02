@@ -3,13 +3,13 @@
 
 types {
   CreatedAt = TimestampTemporal
-  EmailChangeConfirmStatus = SmallInt
-  Hash = VarChar(40)
+  EmailChangeConfirmStatus = Int(storage: int2)
+  Hash = String(storage: varchar, length: 40)
   Id = Uuid
   IpAddress = Inet
-  IpAddress2 = VarChar(64)
-  Name = VarChar(100)
-  Parent = VarChar(255)
+  IpAddress2 = String(storage: varchar, length: 64)
+  Name = String(storage: varchar, length: 100)
+  Parent = String(storage: varchar, length: 255)
   Payload = Json
 }
 

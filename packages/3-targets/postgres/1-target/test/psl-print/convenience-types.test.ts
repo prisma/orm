@@ -50,3 +50,35 @@ describe('contract print writes a date or time column as the convenience type it
     ]).toEqual(['TimestampTemporal(3)', 'TimestamptzJsDate']);
   });
 });
+
+const scalar = (dataType: string, codecId: string, typeParams?: Record<string, number>) => ({
+  dataType,
+  codecId,
+  nullable: false,
+  ...(typeParams === undefined ? {} : { typeParams }),
+});
+
+describe('contract print writes a scalar column as the convenience type it becomes', () => {
+  it.each([
+    [scalar('pg/int4', 'pg/int4@1'), 'Int'],
+    [scalar('pg/int2', 'pg/int2@1'), 'Int(storage: int2)'],
+    [scalar('pg/int8', 'pg/int8@1'), 'BigInt'],
+    [scalar('pg/int8', 'pg/int8number@1'), 'BigInt(as: number)'],
+    [scalar('pg/numeric', 'pg/unboundedint@1'), 'BigInt(storage: numeric)'],
+    [scalar('pg/float8', 'pg/float8@1'), 'Float'],
+    [scalar('pg/float4', 'pg/float4@1'), 'Float(storage: float4)'],
+    [scalar('pg/numeric', 'pg/numeric@1'), 'Decimal'],
+    [
+      scalar('pg/numeric', 'pg/numeric@1', { precision: 10, scale: 2 }),
+      'Decimal(precision: 10, scale: 2)',
+    ],
+    [scalar('pg/text', 'pg/text@1'), 'String'],
+    [scalar('pg/varchar', 'sql/varchar@1'), 'String(storage: varchar)'],
+    [scalar('pg/varchar', 'sql/varchar@1', { length: 12 }), 'String(storage: varchar, length: 12)'],
+    [scalar('pg/char', 'sql/char@1', { length: 3 }), 'String(storage: char, length: 3)'],
+    [scalar('pg/bool', 'pg/bool@1'), 'Boolean'],
+    [scalar('pg/bytea', 'pg/bytea@1'), 'Bytes'],
+  ])('%j prints as %s', (shape, expected) => {
+    expect(printedType(shape)).toBe(expected);
+  });
+});

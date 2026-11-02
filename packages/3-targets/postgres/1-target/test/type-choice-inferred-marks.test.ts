@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { createPostgresBuiltinCodecLookup } from '../src/core/codec-registry';
 import {
   postgresConvenienceDateTimeTypes,
+  postgresConvenienceScalarTypes,
   postgresScalarAndNativeTypeConstructors,
 } from '../src/core/type-constructors';
 
@@ -43,6 +44,46 @@ function convenienceDefaults(choice: AuthoringTypeChoiceDescriptor): readonly st
 }
 
 const defaults = Object.values(postgresConvenienceDateTimeTypes).flatMap(convenienceDefaults);
+const scalarDefaults = Object.values(postgresConvenienceScalarTypes).flatMap(convenienceDefaults);
+
+function markedFor(constructorName: string) {
+  const dataType = dataTypeOf(constructorName);
+  const marked = [...constructors].flatMap(([name, descriptor]) =>
+    descriptor.inferred === true && dataTypeOf(name) === dataType ? [name] : [],
+  );
+  return { dataType, marked };
+}
+
+describe('the explicit type contract infer writes for an integer, decimal, float, text, boolean or binary column', () => {
+  const expected = [
+    ['pg/int2', 'Int2'],
+    ['pg/int4', 'Int4'],
+    ['pg/int8', 'Int8BigInt'],
+    ['pg/numeric', 'NumericString'],
+    ['pg/float4', 'Float4'],
+    ['pg/float8', 'Float8'],
+    ['pg/text', 'Text'],
+    ['pg/varchar', 'Varchar'],
+    ['pg/char', 'Char'],
+    ['pg/bool', 'Bool'],
+    ['pg/bytea', 'Bytea'],
+  ] as const;
+
+  it.each(expected)('for %s is %s, and no other type is marked', (dataType, constructorName) => {
+    expect(markedFor(constructorName)).toEqual({ dataType, marked: [constructorName] });
+  });
+
+  it.each(expected)(
+    'for %s is %s, a type a convenience call writing only storage gives',
+    (_dataType, constructorName) => {
+      expect(scalarDefaults).toContain(constructorName);
+    },
+  );
+
+  it('is not the type BigInt(storage: numeric) gives, since Decimal is the default for numeric', () => {
+    expect(markedFor('NumericBigInt').marked).toEqual(['NumericString']);
+  });
+});
 
 describe('the explicit type contract infer writes for a date or time column', () => {
   it.each(defaults)(

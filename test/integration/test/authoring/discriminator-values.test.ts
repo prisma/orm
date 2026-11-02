@@ -19,7 +19,7 @@ describe.each([
     stack: createControlStack({ family: sql, target: postgres, adapter: postgresAdapter }),
     pack: postgresPackRef,
     createNamespace: postgresCreateNamespace,
-    lengthLimited: 'VarChar(5)',
+    lengthLimited: 'Varchar(5)',
     notText: [
       ['Uuid', '"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"'],
       ['Inet', '"10.0.0.1"'],

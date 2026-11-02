@@ -124,22 +124,6 @@ const PSL_ROLE_BLOCK_OUTSIDE_UNBOUND_NAMESPACE: ContributedPslDiagnosticCode =
 export const postgresAuthoringTypes = {
   .../* @__PURE__ */ sqlTargetTypeConstructors({ sizeType: PG_SIZE_TYPE }),
   ...generatedIdColumnAliases,
-  BigIntNumber: {
-    kind: 'typeConstructor',
-    documentation:
-      'A PostgreSQL 64-bit integer represented as a JavaScript number within its safe integer range.',
-    output: {
-      codecId: 'pg/int8number@1',
-    },
-  },
-  UnboundedInt: {
-    kind: 'typeConstructor',
-    documentation:
-      'An arbitrary-precision integer stored as PostgreSQL numeric and represented as bigint.',
-    output: {
-      codecId: 'pg/unboundedint@1',
-    },
-  },
   pg: {
     enum: {
       kind: 'typeConstructor',

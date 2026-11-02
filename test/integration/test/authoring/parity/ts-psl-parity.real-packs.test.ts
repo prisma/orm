@@ -76,7 +76,7 @@ function constructorCalls(
   constructors: AuthoringTypeNamespace,
 ): readonly { readonly column: string; readonly name: string; readonly args: readonly number[] }[] {
   return Object.entries(constructors).flatMap(([name, descriptor]) => {
-    if (!isAuthoringTypeConstructorDescriptor(descriptor)) return [];
+    if (!isAuthoringTypeConstructorDescriptor(descriptor) || descriptor.deprecated) return [];
     const declared = descriptor.args ?? [];
     const sampled = declared.map((arg) => {
       const value = arg.name === undefined ? undefined : SAMPLE_ARGUMENTS[arg.name];
@@ -182,7 +182,7 @@ model Document {
             Post: model('Post', {
               fields: {
                 id: field.column(type.String()).id().onCreate(gen.uuid()),
-                slug: field.column(type.VarChar(64)),
+                slug: field.column(type.Varchar(64)),
                 updatedAt: UpdatedAt.default(now()),
               },
             }).sql({ table: 'Post' }),
@@ -192,7 +192,7 @@ model Document {
     );
 
     const interpreted = interpretWithRealPacks(`types {
-  Slug      = VarChar(64)
+  Slug      = Varchar(64)
   UpdatedAt = TimestampString(3) @onCreate(now()) @onUpdate(now())
 }
 
