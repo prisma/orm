@@ -47,7 +47,9 @@ const runtime = createMongoRuntime({
 });
 ```
 
-Custom or third-party codecs (encryption, vendor scalars) are contributed via an extension-pack descriptor whose `codecs` slot returns the codec descriptors; `createMongoExecutionContext` folds them into the same registry. Duplicate codec ids across contributors throw `RUNTIME.DUPLICATE_CODEC` at composition time.
+Custom or third-party codecs (encryption, vendor scalars) are contributed via an extension-pack descriptor whose `codecs` slot returns the codec descriptors; `createMongoExecutionContext` folds them into the same registry with `composeMongoCodecRegistry` from `@internal/mongo-codec`. Duplicate codec ids across contributors throw `RUNTIME.DUPLICATE_CODEC` at composition time, naming both contributors.
+
+Before it composes anything, `createMongoExecutionContext` checks the contract against the stack, as SQL's `createExecutionContext` does. A contract of another family throws `RUNTIME.CONTRACT_FAMILY_MISMATCH`, a contract of another target throws `RUNTIME.CONTRACT_TARGET_MISMATCH`, and a contract that requires an extension pack the stack does not hold throws `RUNTIME.MISSING_EXTENSION_PACK`.
 
 ## Responsibilities
 

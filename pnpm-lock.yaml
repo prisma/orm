@@ -3855,6 +3855,9 @@ importers:
       '@internal/mongo-query-builder':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../2-mongo-family/5-query-builders/query-builder
+      '@internal/mongo-runtime':
+        specifier: workspace:8.0.0-rc.22
+        version: link:../../../2-mongo-family/7-runtime
       '@internal/mongo-schema-ir':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../2-mongo-family/3-tooling/mongo-schema-ir

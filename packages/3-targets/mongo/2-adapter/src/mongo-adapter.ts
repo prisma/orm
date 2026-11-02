@@ -348,14 +348,3 @@ export function createMongoAdapter(
 ): MongoAdapter {
   return new MongoAdapterImpl(codecs);
 }
-
-/**
- * Internal escape hatch — direct adapter construction with a caller-supplied
- * codec registry, used only by adapter unit tests that exercise the
- * encode-side codec-dispatch path with synthetic codecs. Not re-exported
- * from the package's public surface and not for production use; production
- * callers compose a `MongoExecutionStack` and `MongoExecutionContext`.
- */
-export function _unstable_createMongoAdapterWithCodecs(codecs: MongoCodecRegistry): MongoAdapter {
-  return new MongoAdapterImpl(codecs);
-}

@@ -18,8 +18,7 @@ import {
   type MutationDefaultsOptions,
   runtimeError,
 } from '@internal/framework-components/runtime';
-import type { MongoCodec } from '@internal/mongo-codec';
-import { type MongoCodecRegistry, newMongoCodecRegistry } from '@internal/mongo-codec';
+import { composeMongoCodecRegistry, type MongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoContract } from '@internal/mongo-contract';
 import type { MongoAdapter, MongoDriver } from '@internal/mongo-lowering';
 import type { MongoExecutionContext } from '@internal/mongo-query-ast/execution';
@@ -132,9 +131,6 @@ export function createMongoExecutionContext<
 }): MongoExecutionContext<TContract> {
   assertMongoExecutionStackContractRequirements(options.contract, options.stack);
 
-  const registry = newMongoCodecRegistry();
-  const owners = new Map<string, string>();
-
   const contributors: ReadonlyArray<MongoStaticContributions & { readonly id: string }> = [
     options.stack.target,
     options.stack.adapter,
@@ -145,21 +141,7 @@ export function createMongoExecutionContext<
   const execution = options.contract.execution;
   assertMutationDefaultGeneratorsAvailable(execution, generators);
 
-  for (const contributor of contributors) {
-    const contributed = contributor.codecs();
-    for (const codec of iterateCodecs(contributed)) {
-      const existingOwner = owners.get(codec.id);
-      if (existingOwner !== undefined) {
-        throw runtimeError(
-          'RUNTIME.DUPLICATE_CODEC',
-          `Duplicate Mongo codec id '${codec.id}' contributed by '${contributor.id}' (already registered by '${existingOwner}').`,
-          { codecId: codec.id, existingOwner, incomingOwner: contributor.id },
-        );
-      }
-      registry.register(codec);
-      owners.set(codec.id, contributor.id);
-    }
-  }
+  const registry = composeMongoCodecRegistry(contributors);
 
   return Object.freeze({
     contract: options.contract,
@@ -209,8 +191,4 @@ function assertMongoExecutionStackContractRequirements<TTargetId extends string>
       { packIds },
     );
   }
-}
-
-function* iterateCodecs(registry: MongoCodecRegistry): Iterable<MongoCodec<string>> {
-  yield* registry.values();
 }

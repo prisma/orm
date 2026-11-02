@@ -42,6 +42,7 @@ function contractWith(
   valueObject: Record<string, unknown> = { Address: address },
 ) {
   return {
+    target: 'mongo',
     targetFamily: 'mongo',
     roots: { users: { namespace: NAMESPACE, model: 'User' } },
     domain: {
