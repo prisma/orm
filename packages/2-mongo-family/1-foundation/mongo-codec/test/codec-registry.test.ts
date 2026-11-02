@@ -1,6 +1,6 @@
 import { type DataTypeValue, dataType, readJsonString } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
-import { composeMongoCodecRegistry, newMongoCodecRegistry } from '../src/codec-registry';
+import { assembleMongoCodecRegistry, newMongoCodecRegistry } from '../src/codec-registry';
 import { mongoCodec } from '../src/codecs';
 
 const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
@@ -26,9 +26,9 @@ function contributor(id: string, ...codecIds: readonly string[]) {
   };
 }
 
-describe('composeMongoCodecRegistry', () => {
+describe('assembleMongoCodecRegistry', () => {
   it('holds the codecs of every contributor', () => {
-    const registry = composeMongoCodecRegistry([
+    const registry = assembleMongoCodecRegistry([
       contributor('target', 'test/target@1'),
       contributor('adapter', 'test/adapter@1'),
       contributor('extension', 'test/extension@1'),
@@ -42,7 +42,7 @@ describe('composeMongoCodecRegistry', () => {
 
   it('throws RUNTIME.DUPLICATE_CODEC naming both contributors', () => {
     expect(() =>
-      composeMongoCodecRegistry([
+      assembleMongoCodecRegistry([
         contributor('adapter', 'test/text@1'),
         contributor('extension', 'test/text@1'),
       ]),

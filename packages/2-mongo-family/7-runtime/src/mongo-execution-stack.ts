@@ -18,7 +18,7 @@ import {
   type MutationDefaultsOptions,
   runtimeError,
 } from '@internal/framework-components/runtime';
-import { composeMongoCodecRegistry, type MongoCodecRegistry } from '@internal/mongo-codec';
+import { assembleMongoCodecRegistry, type MongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoContract } from '@internal/mongo-contract';
 import type { MongoAdapter, MongoDriver } from '@internal/mongo-lowering';
 import type { MongoExecutionContext } from '@internal/mongo-query-ast/execution';
@@ -141,7 +141,7 @@ export function createMongoExecutionContext<
   const execution = options.contract.execution;
   assertMutationDefaultGeneratorsAvailable(execution, generators);
 
-  const registry = composeMongoCodecRegistry(contributors);
+  const registry = assembleMongoCodecRegistry(contributors);
 
   return Object.freeze({
     contract: options.contract,

@@ -42,7 +42,7 @@ export interface MongoCodecContributor {
 /**
  * One registry holding the codecs of every contributor, such as an execution stack's target, adapter and extensions. Throws `RUNTIME.DUPLICATE_CODEC` naming both contributors when two contribute the same codec id.
  */
-export function composeMongoCodecRegistry(
+export function assembleMongoCodecRegistry(
   contributors: readonly MongoCodecContributor[],
 ): MongoCodecRegistry {
   const registry = newMongoCodecRegistry();
