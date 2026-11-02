@@ -1,5 +1,5 @@
 import type { CodecCallContext } from '@internal/framework-components/codec';
-import type { MongoCodecRegistry } from '@internal/mongo-codec';
+import { assembleMongoCodecRegistry, type MongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoAdapter, MongoDdlPlan, MongoLoweredDraft } from '@internal/mongo-lowering';
 import type { AnyMongoDdlCommand } from '@internal/mongo-query-ast/control';
 import { keysToKeySpec } from '@internal/mongo-query-ast/control';
@@ -30,7 +30,7 @@ import {
   UpdateManyWireCommand,
   UpdateOneWireCommand,
 } from '@internal/mongo-wire';
-import { buildStandardCodecRegistry } from '@internal/target-mongo/codecs';
+import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { assertNever } from '@internal/utils/internal-error';
 import { structuralLowerFilter, structuralLowerPipeline } from './lowering';
@@ -339,12 +339,12 @@ class MongoAdapterImpl implements MongoAdapter {
 }
 
 /**
- * Construct a Mongo adapter that encodes `MongoParamRef` leaves with `codecs`, the standard wire-type codecs when omitted.
+ * Construct a Mongo adapter that encodes `MongoParamRef` leaves with `codecs`, the MongoDB target's codecs when omitted.
  *
  * The runtime descriptor's `create(stack)` passes the codecs of every component in the stack, so extension codecs encode as well as decode. User code should compose a stack/context instead.
  */
 export function createMongoAdapter(
-  codecs: MongoCodecRegistry = buildStandardCodecRegistry(),
+  codecs: MongoCodecRegistry = assembleMongoCodecRegistry([mongoRuntimeTarget]),
 ): MongoAdapter {
   return new MongoAdapterImpl(codecs);
 }

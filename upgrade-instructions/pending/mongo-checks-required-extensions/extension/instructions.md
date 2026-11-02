@@ -15,6 +15,13 @@ changes:
       glob: "**/*.{ts,mts,cts}"
       matches:
         - '(?<![\s\S])(?=[\s\S]*\bMongoRuntime(?:Extension|Target|Adapter)Descriptor\b)[\s\S]*\bcodecs\s*:'
+  - id: mongo-standard-codecs-removed
+    summary: |
+      `mongoStandardCodecs` and `buildStandardCodecRegistry` are gone from `@prisma/orm-mongo/target/codecs`. The target declares its codecs once, in `mongoCodecDescriptors`. A registry of them is `assembleMongoCodecRegistry([mongoRuntimeTarget])`, with `assembleMongoCodecRegistry` from `@prisma/orm-family-mongo/codec` and the target from `@prisma/orm-mongo/target/runtime`.
+    detection:
+      glob: "**/*.{ts,mts,cts}"
+      matches:
+        - '\b(?:mongoStandardCodecs|buildStandardCodecRegistry)\b'
 ---
 
 # MongoDB execution contexts check the contract against the stack
@@ -52,3 +59,8 @@ export const shoutRuntime: MongoRuntimeExtensionDescriptor<'mongo'> = {
 1. For each codec the `codecs()` registry held, add `mongoCodecDescriptor(codec, { traits })` to `types.codecTypes.codecDescriptors`, with the traits the pack declared for it. If the pack already lists a hand-written descriptor for the codec, replace it with this one.
 2. Delete `codecs` from the descriptor.
 3. Make the runtime and control descriptors spread the same metadata as the pack, so all three list the same descriptors and `dataTypes`.
+
+## `mongo-standard-codecs-removed`
+
+1. Replace `buildStandardCodecRegistry()` with `assembleMongoCodecRegistry([mongoRuntimeTarget])`.
+2. Replace a read of `mongoStandardCodecs` with the registry: `registry.get(codecId)` for one codec, `[...registry]` for all of them, or with `mongoCodecDescriptors` where only the codec ids or metadata are needed.

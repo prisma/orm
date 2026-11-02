@@ -12,12 +12,7 @@ import {
   readJsonFloat,
   renderTsLiteral,
 } from '@internal/framework-components/codec';
-import {
-  type MongoCodecRegistry,
-  mongoCodec,
-  mongoCodecDescriptor,
-  newMongoCodecRegistry,
-} from '@internal/mongo-codec';
+import { mongoCodec, mongoCodecDescriptor } from '@internal/mongo-codec';
 import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
 import { ifDefined } from '@internal/utils/defined';
 import type { Binary, Decimal128, Double, Long, ObjectId } from 'bson';
@@ -228,27 +223,6 @@ export const mongoBsonCodec = mongoCodec<
 });
 
 /**
- * The canonical set of Mongo wire-type codecs.
- *
- * Single source of truth for both control- and runtime-plane adapter descriptors. Don't duplicate this list — import it.
- */
-export const mongoStandardCodecs = [
-  mongoObjectIdCodec,
-  mongoStringCodec,
-  mongoDoubleCodec,
-  mongoInt32Codec,
-  mongoBooleanCodec,
-  mongoDateCodec,
-  mongoVectorCodec,
-  mongoInt64Codec,
-  mongoInt64NumberCodec,
-  mongoDecimal128Codec,
-  mongoBinaryCodec,
-  mongoJsonCodec,
-  mongoBsonCodec,
-] as const;
-
-/**
  * Mongo wire-type codec descriptors. Static metadata such as `traits` lives here (the descriptor shape) — `MongoCodec` itself carries its data type and the four conversion methods (TML-2357).
  */
 export const mongoCodecDescriptors: ReadonlyArray<CodecDescriptor> = [
@@ -306,17 +280,4 @@ export const mongoCodecDescriptors: ReadonlyArray<CodecDescriptor> = [
  */
 export function mongoDescriptorById(codecId: string): CodecDescriptor | undefined {
   return mongoCodecDescriptors.find((d) => d.codecId === codecId);
-}
-
-/**
- * Build a {@link MongoCodecRegistry} preloaded with the standard Mongo wire-type codecs.
- *
- * Single point of truth for adapter-side codec construction: used by the legacy synchronous `createMongoAdapter()` factory and by the runtime adapter descriptor's `codecs()` getter. Userland code obtains a registry via the framework's execution-stack composition (see `createMongoExecutionContext`) instead of calling this directly.
- */
-export function buildStandardCodecRegistry(): MongoCodecRegistry {
-  const registry = newMongoCodecRegistry();
-  for (const codec of mongoStandardCodecs) {
-    registry.register(codec);
-  }
-  return registry;
 }

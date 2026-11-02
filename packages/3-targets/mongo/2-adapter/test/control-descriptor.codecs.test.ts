@@ -8,6 +8,8 @@ import { describe, expect, it } from 'vitest';
 import mongoAdapterDescriptor from '../src/exports/control';
 import { shoutExtension } from './fixtures/shout-extension';
 
+const OWNER_ID = '507f1f77bcf86cd799439011';
+
 const fakeControlDriver = {
   familyId: 'mongo',
   targetId: 'mongo',
@@ -35,13 +37,19 @@ describe('mongo control adapter descriptor', () => {
         collection: 'greetings',
         command: new InsertOneCommand('greetings', {
           text: new MongoParamRef('hello', { codecId: 'shout/text@1' }),
-          title: new MongoParamRef('hi', { codecId: 'mongo/string@1' }),
+          ownerId: new MongoParamRef(OWNER_ID, { codecId: 'mongo/objectId@1' }),
         }),
         meta: { target: 'mongo', storageHash: 'test', lane: 'mongo' },
       },
       {},
     );
 
-    expect(command).toMatchObject({ document: { text: 'HELLO', title: 'hi' } });
+    expect(command).toMatchObject({
+      document: {
+        text: 'HELLO',
+        ownerId: expect.objectContaining({ _bsontype: 'ObjectId' }),
+      },
+    });
+    expect(String(Reflect.get(Reflect.get(command, 'document'), 'ownerId'))).toBe(OWNER_ID);
   });
 });

@@ -70,3 +70,15 @@ describe('the extension mongo-codecs-declared-once detection', () => {
     ]).toEqual([true, false, false]);
   });
 });
+
+describe('the extension mongo-standard-codecs-removed detection', () => {
+  const matches = matcher(EXTENSION_NOTE, 'mongo-standard-codecs-removed');
+
+  it('matches the removed exports, and not the descriptors that replace them', () => {
+    expect([
+      matches('const registry = buildStandardCodecRegistry();'),
+      matches("import { mongoStandardCodecs } from '@prisma/orm-mongo/target/codecs';"),
+      matches("import { mongoCodecDescriptors } from '@prisma/orm-mongo/target/codecs';"),
+    ]).toEqual([true, true, false]);
+  });
+});

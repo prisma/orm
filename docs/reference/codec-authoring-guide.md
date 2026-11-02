@@ -426,7 +426,7 @@ The Mongo target package owns every built-in Mongo codec, as the Postgres target
 | Module | Holds |
 | --- | --- |
 | `@internal/target-mongo/codec-ids` | the codec id constants (`MONGO_INT64_CODEC_ID`, …) |
-| `@internal/target-mongo/codecs` | the codecs built with `mongoCodec(...)`, their descriptors (`mongoCodecDescriptors`, `mongoDescriptorById`), `mongoStandardCodecs` and `buildStandardCodecRegistry` |
+| `@internal/target-mongo/codecs` | the codecs built with `mongoCodec(...)`, and their descriptors (`mongoCodecDescriptors`, `mongoDescriptorById`) |
 | `@internal/target-mongo/data-types` | the data type each codec represents |
 | `@internal/target-mongo/codec-types` | the `CodecTypes` map emitted `contract.d.ts` files import |
 

@@ -243,7 +243,7 @@ export const shoutRuntime: MongoRuntimeExtensionDescriptor<'mongo'> = {
 ```
 
 - `dataTypes`: the data types the extension's codecs represent, built with `mongoDataType`, which names the BSON types a value is stored as.
-- `types.codecTypes.codecDescriptors`: one `mongoCodecDescriptor(codec, { traits })` per codec. Contract authoring reads the metadata; the runtime and the migration runner take the codec from it, to encode writes and decode reads. Pass `withParams` for a codec whose data type has parameters.
+- `types.codecTypes.codecDescriptors`: one `mongoCodecDescriptor(codec, { traits })` per codec. Contract authoring reads the metadata; the runtime and the migration runner take the codec from it, to encode writes and decode reads. A codec whose data type has parameters is registered once, as its descriptor builds it without parameters, so it never sees a field's parameters; per-field parameterised codecs are follow-up work (Linear TML-3793).
 - `__codecTypes`: a type-only field that gives each codec id its TypeScript input and output types, so fields that use the codec are typed in the contract and in `db.orm` results.
 - The pack goes in `defineContract({ extensions: { shout: shoutPack } })`, and the runtime descriptor in `mongo({ extensions: [shoutRuntime] })` and `mongoStatic({ extensions: [shoutRuntime] })`. The control descriptor for `extensions` in `prisma.config.ts` spreads the same metadata and adds `create()`, as the runtime descriptor does.
 
