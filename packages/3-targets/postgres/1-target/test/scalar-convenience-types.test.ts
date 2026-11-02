@@ -7,20 +7,20 @@ import { describe, expect, it } from 'vitest';
 import {
   postgresConvenienceScalarTypes,
   postgresDeprecatedScalarTypes,
-  postgresExplicitScalarTypes,
-  postgresScalarAndNativeTypeConstructors,
+  postgresExplicitTypes,
+  postgresTypeNamespace,
 } from '../src/core/type-constructors';
 
 type ConvenienceName = keyof typeof postgresConvenienceScalarTypes;
-type ExplicitName = keyof typeof postgresExplicitScalarTypes;
+type ExplicitName = keyof typeof postgresExplicitTypes;
 
 function convenience(name: ConvenienceName, written: Readonly<Record<string, unknown>> = {}) {
   const args = typeChoiceArgumentsFromObject(name, postgresConvenienceScalarTypes[name], [written]);
-  return instantiateAuthoringTypeCall(postgresScalarAndNativeTypeConstructors, name, args);
+  return instantiateAuthoringTypeCall(postgresTypeNamespace, name, args);
 }
 
 function explicit(name: ExplicitName, args: readonly unknown[] = []) {
-  return instantiateAuthoringTypeConstructor(postgresExplicitScalarTypes[name], args);
+  return instantiateAuthoringTypeConstructor(postgresExplicitTypes[name], args);
 }
 
 describe('a convenience scalar type', () => {
@@ -75,7 +75,7 @@ describe('a deprecated explicit type name', () => {
     const { deprecated, ...descriptor } = postgresDeprecatedScalarTypes[alias];
     const { inferred: _inferred, ...replacing } = {
       inferred: undefined,
-      ...postgresExplicitScalarTypes[replacement],
+      ...postgresExplicitTypes[replacement],
     };
     expect({ deprecated, descriptor }).toEqual({
       deprecated: { replacement },

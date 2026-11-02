@@ -72,9 +72,9 @@ const varchar = {
 } as const;
 
 /**
- * The explicit types of PostgreSQL's integer, decimal, floating-point, text, boolean and binary columns. Each is named after the database type, plus the application value where the database type has more than one codec (ADR 257, ADR 316).
+ * PostgreSQL's explicit types: each names one codec, and is what the contract stores. Each is named after the database type, plus the application value where the database type has more than one codec (ADR 257, ADR 316). `Json` keeps its name until the `Json` convenience type is decided.
  */
-export const postgresExplicitScalarTypes = {
+export const postgresExplicitTypes = {
   Int2: { ...int2, inferred: true },
   Int4: {
     kind: 'typeConstructor',
@@ -130,22 +130,6 @@ export const postgresExplicitScalarTypes = {
     documentation: 'Binary data stored as PostgreSQL bytea and represented as a Uint8Array.',
     output: { codecId: 'pg/bytea@1' },
   },
-} as const satisfies AuthoringTypeNamespace;
-
-/**
- * The explicit types' former names, kept for one release line as deprecated aliases. Each gives the same codec as its replacement, and the PSL interpreter warns where one is written (ADR 257).
- */
-export const postgresDeprecatedScalarTypes = {
-  SmallInt: { ...int2, deprecated: { replacement: 'Int2' } },
-  BigIntNumber: { ...int8Number, deprecated: { replacement: 'Int8Number' } },
-  Numeric: { ...numericString, deprecated: { replacement: 'NumericString' } },
-  UnboundedInt: { ...numericBigInt, deprecated: { replacement: 'NumericBigInt' } },
-  Real: { ...float4, deprecated: { replacement: 'Float4' } },
-  VarChar: { ...varchar, deprecated: { replacement: 'Varchar' } },
-} as const satisfies AuthoringTypeNamespace;
-
-/** The JSON types, which keep their names until the `Json` convenience type is decided. */
-export const postgresScalarAuthoringTypes = {
   Json: {
     kind: 'typeConstructor',
     inferred: true,
@@ -158,9 +142,6 @@ export const postgresScalarAuthoringTypes = {
     documentation: 'A JSON value stored in PostgreSQL binary jsonb format.',
     output: { codecId: 'pg/jsonb@1' },
   },
-} as const satisfies AuthoringTypeNamespace;
-
-export const postgresNativeAuthoringTypes = {
   TimestampTemporal: {
     kind: 'typeConstructor',
     documentation: 'A date and time without a time zone, represented as Temporal.PlainDateTime.',
@@ -344,6 +325,18 @@ export const postgresNativeAuthoringTypes = {
       typeParams: { precision: { kind: 'arg', index: 0 } },
     },
   },
+} as const satisfies AuthoringTypeNamespace;
+
+/**
+ * The explicit types' former names, kept for one release line as deprecated aliases. Each gives the same codec as its replacement, and the PSL interpreter warns where one is written (ADR 257).
+ */
+export const postgresDeprecatedScalarTypes = {
+  SmallInt: { ...int2, deprecated: { replacement: 'Int2' } },
+  BigIntNumber: { ...int8Number, deprecated: { replacement: 'Int8Number' } },
+  Numeric: { ...numericString, deprecated: { replacement: 'NumericString' } },
+  UnboundedInt: { ...numericBigInt, deprecated: { replacement: 'NumericBigInt' } },
+  Real: { ...float4, deprecated: { replacement: 'Float4' } },
+  VarChar: { ...varchar, deprecated: { replacement: 'Varchar' } },
 } as const satisfies AuthoringTypeNamespace;
 
 const precision = {
@@ -603,12 +596,10 @@ export const postgresConvenienceScalarTypes = {
 } as const satisfies AuthoringTypeNamespace;
 
 /**
- * The base scalars and native types as type constructors. The target contributes them, so PSL and the TypeScript builder's `type.*` see the same names.
+ * The target's whole `type` namespace: its explicit types, convenience types and deprecated aliases. The target contributes it, so PSL and the TypeScript builder's `type.*` see the same names.
  */
-export const postgresScalarAndNativeTypeConstructors = {
-  ...postgresExplicitScalarTypes,
-  ...postgresNativeAuthoringTypes,
-  ...postgresScalarAuthoringTypes,
+export const postgresTypeNamespace = {
+  ...postgresExplicitTypes,
   ...postgresConvenienceDateTimeTypes,
   ...postgresConvenienceScalarTypes,
   ...postgresDeprecatedScalarTypes,

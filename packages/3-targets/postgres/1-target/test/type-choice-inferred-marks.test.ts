@@ -9,13 +9,13 @@ import { createPostgresBuiltinCodecLookup } from '../src/core/codec-registry';
 import {
   postgresConvenienceDateTimeTypes,
   postgresConvenienceScalarTypes,
-  postgresScalarAndNativeTypeConstructors,
+  postgresTypeNamespace,
 } from '../src/core/type-constructors';
 
 const codecLookup = createPostgresBuiltinCodecLookup();
 
 const constructors: ReadonlyMap<string, AuthoringTypeConstructorDescriptor> = new Map(
-  Object.entries(postgresScalarAndNativeTypeConstructors).flatMap(([name, member]) =>
+  Object.entries(postgresTypeNamespace).flatMap(([name, member]) =>
     member.kind === 'typeConstructor' ? [[name, member]] : [],
   ),
 );

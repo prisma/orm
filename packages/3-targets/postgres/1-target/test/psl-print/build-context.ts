@@ -16,7 +16,7 @@ import { postgresDataTypeEntries } from '../../src/core/data-type-entries';
 import { pgText, postgresDataTypes } from '../../src/core/data-types';
 import { postgresTargetDescriptorMeta } from '../../src/core/descriptor-meta';
 import { postgresCodecDescriptorRegistry } from '../../src/core/registry';
-import { postgresScalarAndNativeTypeConstructors } from '../../src/core/type-constructors';
+import { postgresTypeNamespace } from '../../src/core/type-constructors';
 
 const citextTemplate: CodecDescriptorTemplate & { readonly jsonType: 'string' } = {
   jsonType: 'string',
@@ -58,7 +58,7 @@ export function testBuildContext(
       type: {
         ...sqlFamilyPack.authoring.type,
         ...postgresAuthoringTypes,
-        ...postgresScalarAndNativeTypeConstructors,
+        ...postgresTypeNamespace,
         ...extra.types,
       },
     },

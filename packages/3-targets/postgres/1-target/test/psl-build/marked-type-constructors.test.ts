@@ -5,11 +5,11 @@ import { describe, expect, it } from 'vitest';
 import { postgresAuthoringTypes } from '../../src/core/authoring';
 import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-registry';
 import { postgresDataTypes } from '../../src/core/data-types';
-import { postgresScalarAndNativeTypeConstructors } from '../../src/core/type-constructors';
+import { postgresTypeNamespace } from '../../src/core/type-constructors';
 
 const authoringTypes: AuthoringTypeNamespace = {
   ...postgresAuthoringTypes,
-  ...postgresScalarAndNativeTypeConstructors,
+  ...postgresTypeNamespace,
 };
 const dataTypeLookup = createDataTypeLookup(postgresDataTypes);
 const constructors = inferredTypeConstructors({

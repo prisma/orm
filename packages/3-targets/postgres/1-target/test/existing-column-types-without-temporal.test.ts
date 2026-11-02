@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { prisma7PostgresTypeMap } from '../src/core/prisma7-type-map';
-import { postgresScalarAndNativeTypeConstructors } from '../src/core/type-constructors';
+import { postgresTypeNamespace } from '../src/core/type-constructors';
 
 const TEMPORAL_CODEC_IDS = [
   'pg/date-temporal@1',
@@ -11,7 +11,7 @@ const TEMPORAL_CODEC_IDS = [
 ];
 
 const constructorNames = [
-  ...Object.entries(postgresScalarAndNativeTypeConstructors)
+  ...Object.entries(postgresTypeNamespace)
     .filter(([, descriptor]) => 'inferred' in descriptor)
     .map(([name]) => ({ source: 'contract infer', name })),
   ...[
@@ -21,10 +21,8 @@ const constructorNames = [
 ];
 
 function codecIdOf(name: string): string | undefined {
-  const descriptor = Object.hasOwn(postgresScalarAndNativeTypeConstructors, name)
-    ? postgresScalarAndNativeTypeConstructors[
-        name as keyof typeof postgresScalarAndNativeTypeConstructors
-      ]
+  const descriptor = Object.hasOwn(postgresTypeNamespace, name)
+    ? postgresTypeNamespace[name as keyof typeof postgresTypeNamespace]
     : undefined;
   return descriptor?.kind === 'typeConstructor' ? descriptor.output.codecId : undefined;
 }
@@ -47,7 +45,7 @@ describe('the types contract infer and prisma7Schema write', () => {
 describe('the constructors marked inferred', () => {
   it('name no codec that needs Temporal', () => {
     expect(
-      Object.entries(postgresScalarAndNativeTypeConstructors)
+      Object.entries(postgresTypeNamespace)
         .flatMap(([name, descriptor]) =>
           descriptor.kind === 'typeConstructor' && 'inferred' in descriptor
             ? [{ name, codecId: descriptor.output.codecId }]

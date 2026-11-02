@@ -21,9 +21,7 @@ import { bindPslSchema, contractSourceContextFromControlStack } from '@internal/
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import { defineContract as defineSqliteContract } from '@internal/sqlite/contract-builder';
-import postgresControl, {
-  postgresScalarAndNativeTypeConstructors,
-} from '@internal/target-postgres/control';
+import postgresControl, { postgresTypeNamespace } from '@internal/target-postgres/control';
 import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import sqliteControl, {
@@ -321,7 +319,7 @@ model Post {
 
 describe('type.* helpers and PSL type constructors', () => {
   it('give the same column for every Postgres constructor and the same arguments', () => {
-    const calls = constructorCalls(postgresScalarAndNativeTypeConstructors);
+    const calls = constructorCalls(postgresTypeNamespace);
     const tsContract = defineContract(
       { extensions: { pgvector: pgvectorPack } },
       ({ type, field, model }) => ({

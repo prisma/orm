@@ -15,7 +15,7 @@ Every PSL storage type comes from one contributed authoring namespace. A scalar 
 A SQL target defines its ordinary scalars and parameterized storage types with the same descriptor shape, and contributes them:
 
 ```ts
-const postgresScalarAndNativeTypeConstructors = {
+const postgresTypeNamespace = {
   String: {
     kind: 'typeConstructor',
     output: { codecId: 'pg/text@1' },
@@ -82,7 +82,7 @@ A bare type name `T` is semantically the zero-argument instantiation `T()`. The 
 
 Parameterized storage types use the same descriptor and resolver. Their argument declarations validate the authoring call, and their output templates place resolved values in structured `typeParams`. The data type the codec represents writes the type's name from those parameters and bounds them, as decided by [ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md), which supersedes ADR 171's expansion hooks.
 
-Storage-type ownership follows the component boundary. For a SQL target the rule has two parts. The target defines its base scalars and native types next to the codecs they name, as one set (`postgresScalarAndNativeTypeConstructors`, `sqliteScalarTypeConstructors`), and contributes that set together with its other constructors, such as PostgreSQL's `BigIntNumber`, `UnboundedInt` and `pg.enum`. The TypeScript contract builder builds its `type.*` helpers from the family, the target and the extension packs, so PSL and `type.*` see the same constructors, such as `type.String()` and `type.VarChar(64)`. (Amended by ADR 275, 2026-10-21: the adapter contributed the base set before, to keep it out of `type.*`.) Extension packs contribute namespaced constructors unless the short-name policy permits otherwise. The SQL family interpreter resolves the assembled namespace generically and contains no PostgreSQL-native mapping table.
+Storage-type ownership follows the component boundary. For a SQL target the rule has two parts. The target defines its base scalars and native types next to the codecs they name, as one set (`postgresTypeNamespace`, `sqliteScalarTypeConstructors`), and contributes that set together with its other constructors, such as PostgreSQL's `BigIntNumber`, `UnboundedInt` and `pg.enum`. The TypeScript contract builder builds its `type.*` helpers from the family, the target and the extension packs, so PSL and `type.*` see the same constructors, such as `type.String()` and `type.VarChar(64)`. (Amended by ADR 275, 2026-10-21: the adapter contributed the base set before, to keep it out of `type.*`.) Extension packs contribute namespaced constructors unless the short-name policy permits otherwise. The SQL family interpreter resolves the assembled namespace generically and contains no PostgreSQL-native mapping table.
 
 PSL storage is selected only in type position. The former `@db.X(args)` channel is removed. Remaining source using that spelling fails with actionable migration guidance: rewrite `@db.X` as `X` and `@db.X(args)` as `X(args)` in type position.
 
@@ -130,4 +130,4 @@ The namespace could contain a scalar leaf kind alongside a constructor leaf kind
 - [Ecosystem Extensions & Packs subsystem](../subsystems/6.%20Ecosystem%20Extensions%20&%20Packs.md) — component contribution and extension authoring boundaries.
 - Constructor and contribution types: [`framework-authoring.ts`](../../../packages/1-framework/1-core/framework-components/src/shared/framework-authoring.ts).
 - Namespace assembly and derived scalar view: [`control-stack.ts`](../../../packages/1-framework/1-core/framework-components/src/control/control-stack.ts).
-- PostgreSQL scalar and native-type constructors: defined as `postgresScalarAndNativeTypeConstructors` in [`type-constructors.ts`](../../../packages/3-targets/postgres/1-target/src/core/type-constructors.ts) in the target, next to the codecs they name, and contributed by the target in [`descriptor-meta.ts`](../../../packages/3-targets/postgres/1-target/src/core/descriptor-meta.ts), so they are also TypeScript `type.*` helpers.
+- PostgreSQL scalar and native-type constructors: defined as `postgresTypeNamespace` in [`type-constructors.ts`](../../../packages/3-targets/postgres/1-target/src/core/type-constructors.ts) in the target, next to the codecs they name, and contributed by the target in [`descriptor-meta.ts`](../../../packages/3-targets/postgres/1-target/src/core/descriptor-meta.ts), so they are also TypeScript `type.*` helpers.

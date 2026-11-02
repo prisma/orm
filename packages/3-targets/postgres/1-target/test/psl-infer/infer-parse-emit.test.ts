@@ -24,11 +24,11 @@ import {
 } from '../../src/core/authoring';
 import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-registry';
 import { type PostgresSchema, postgresCreateNamespace } from '../../src/core/postgres-schema';
-import { postgresScalarAndNativeTypeConstructors } from '../../src/core/type-constructors';
+import { postgresTypeNamespace } from '../../src/core/type-constructors';
 import { postgresDataTypeSupport } from '../fixtures/postgres-data-type-support';
 import { printPslFromFlat } from './fixtures';
 
-const authoringTypes: AuthoringTypeNamespace = postgresScalarAndNativeTypeConstructors;
+const authoringTypes: AuthoringTypeNamespace = postgresTypeNamespace;
 
 const assembled = assembleAuthoringContributions([
   {

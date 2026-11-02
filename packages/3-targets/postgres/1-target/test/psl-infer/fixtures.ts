@@ -29,7 +29,7 @@ import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-da
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresNativeEnumSchemaNode } from '../../src/core/schema-ir/postgres-native-enum-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
-import { postgresScalarAndNativeTypeConstructors } from '../../src/core/type-constructors';
+import { postgresTypeNamespace } from '../../src/core/type-constructors';
 
 /** The native enums a fixture declares, by the type name a column is written with: bare or schema-qualified. */
 export type FixtureEnums = ReadonlyMap<string, { readonly schema: string; readonly name: string }>;
@@ -227,7 +227,7 @@ export const inferBuildContext: SqlPslBuildContext = {
     type: {
       ...sqlFamilyPack.authoring.type,
       ...postgresAuthoringTypes,
-      ...postgresScalarAndNativeTypeConstructors,
+      ...postgresTypeNamespace,
     },
   },
   generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
