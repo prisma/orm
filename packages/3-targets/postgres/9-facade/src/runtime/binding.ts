@@ -1,7 +1,14 @@
+import {
+  createPgPool,
+  type PostgresBinding as DriverPostgresBinding,
+  suppressIdleConnectionErrors,
+} from '@internal/driver-postgres/runtime';
+import postgresTarget from '@internal/target-postgres/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import type { Client, Pool } from 'pg';
 import { postgresError } from '../errors';
+import { DEFAULT_CONNECT_TIMEOUT_MILLIS, type PostgresPoolOptions } from './postgres-options';
 
 export const isPgPool = (pg: Pool | Client): pg is Pool =>
   'totalCount' in pg && 'idleCount' in pg && 'waitingCount' in pg;
@@ -37,11 +44,11 @@ type PostgresBindingFields = {
   readonly pg?: Pool | Client;
 };
 
-export function validatePostgresUrl(url: string): string {
+export function validatePostgresUrl(url: string, extension = 'postgres'): string {
   const trimmed = url.trim();
   if (trimmed.length === 0) {
     throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a non-empty string', {
-      meta: { extension: 'postgres', reason: 'empty url' },
+      meta: { extension, reason: 'empty url' },
     });
   }
 
@@ -50,7 +57,7 @@ export function validatePostgresUrl(url: string): string {
     parsed = new URL(trimmed);
   } catch {
     throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
-      meta: { extension: 'postgres', reason: 'unparseable url' },
+      meta: { extension, reason: 'unparseable url' },
     });
   }
 
@@ -58,7 +65,7 @@ export function validatePostgresUrl(url: string): string {
     throw postgresError(
       'RUNTIME.BINDING_INVALID',
       'Postgres URL must use postgres:// or postgresql://',
-      { meta: { extension: 'postgres', reason: 'wrong scheme', received: parsed.protocol } },
+      { meta: { extension, reason: 'wrong scheme', received: parsed.protocol } },
     );
   }
 
@@ -69,32 +76,89 @@ function typeOfInput(value: unknown): string {
   return value === null ? 'null' : typeof value;
 }
 
-const inputRequirements = {
-  binding: {
-    accepts: (value: unknown) => typeof value === 'object' && value !== null,
-    message: 'The binding option must be an object with a kind',
-    expected: 'an object with a kind',
-    fix: "Pass binding: { kind: 'url', url }, { kind: 'pgPool', pool } or { kind: 'pgClient', client }.",
-  },
-  url: {
-    accepts: (value: unknown) => typeof value === 'string',
-    message: 'The url option must be a string',
-    expected: 'a connection string',
-    fix: 'Pass a postgres:// or postgresql:// connection string as url, and check that the variable it comes from is set.',
-  },
-  pg: {
-    accepts: (value: unknown) => typeof value === 'object' && value !== null,
-    message: 'The pg option must be a pg.Pool or a pg.Client',
-    expected: 'a pg.Pool or pg.Client object',
-    fix: 'Pass a pg.Pool or pg.Client as pg, or pass a connection string as url.',
-  },
-} as const;
+function isObject(value: unknown): value is object {
+  return typeof value === 'object' && value !== null;
+}
 
-const bindingKinds: ReadonlySet<unknown> = new Set<PostgresBinding['kind']>([
-  'url',
-  'pgPool',
-  'pgClient',
-]);
+type BindingKind = PostgresBinding['kind'];
+
+type AcceptedBinding<TKind extends BindingKind> = Extract<
+  PostgresBinding,
+  { readonly kind: TKind }
+>;
+
+/** The binding kinds a client accepts, and the extension its errors name. */
+export interface PostgresBindingRules<TKind extends BindingKind> {
+  readonly extension: string;
+  readonly kinds: readonly TKind[];
+  /** The error for a binding of a Postgres kind the client does not accept. */
+  readonly refuse?: (kind: BindingKind) => Error;
+}
+
+export const postgresBindingRules: PostgresBindingRules<BindingKind> = {
+  extension: 'postgres',
+  kinds: ['url', 'pgPool', 'pgClient'],
+};
+
+const postgresBindingKinds: ReadonlySet<unknown> = new Set<BindingKind>(postgresBindingRules.kinds);
+
+const bindingForms: Record<BindingKind, string> = {
+  url: "{ kind: 'url', url }",
+  pgPool: "{ kind: 'pgPool', pool }",
+  pgClient: "{ kind: 'pgClient', client }",
+};
+
+const pgObjectNames: Partial<Record<BindingKind, string>> = {
+  pgPool: 'pg.Pool',
+  pgClient: 'pg.Client',
+};
+
+function orList(items: readonly string[]): string {
+  return items.length < 2
+    ? items.join('')
+    : `${items.slice(0, -1).join(', ')} or ${items[items.length - 1]}`;
+}
+
+interface BindingWording {
+  readonly extension: string;
+  readonly kinds: string;
+  readonly forms: string;
+  readonly pgForms: string;
+  readonly pgObjects: string;
+  readonly pgObjectsEach: string;
+}
+
+function wordingOf<TKind extends BindingKind>(rules: PostgresBindingRules<TKind>): BindingWording {
+  const pgKinds = rules.kinds.filter((kind) => pgObjectNames[kind] !== undefined);
+  const pgNames = pgKinds.flatMap((kind) => pgObjectNames[kind] ?? []);
+  return {
+    extension: rules.extension,
+    kinds: orList(rules.kinds.map((kind) => `'${kind}'`)),
+    forms: orList(rules.kinds.map((kind) => bindingForms[kind])),
+    pgForms: orList(pgKinds.map((kind) => `binding: ${bindingForms[kind]}`)),
+    pgObjects: orList(pgNames),
+    pgObjectsEach: orList(pgNames.map((name) => `a ${name}`)),
+  };
+}
+
+function invalidInput(
+  wording: BindingWording,
+  input: {
+    readonly name: string;
+    readonly value: unknown;
+    readonly expected: string;
+    readonly reason: string;
+  },
+  message: string,
+  fix: string,
+): Error {
+  const receivedType = typeOfInput(input.value);
+  return postgresError('RUNTIME.BINDING_INVALID', message, {
+    why: `The ${input.name} is ${receivedType === 'null' ? 'null' : `a ${receivedType}`}, and it must be ${input.expected}.`,
+    fix,
+    meta: { extension: wording.extension, reason: input.reason, receivedType },
+  });
+}
 
 const echoableKind = /^[A-Za-z_][A-Za-z0-9_]{0,31}$/;
 
@@ -110,7 +174,7 @@ function describeUnknownKind(kind: unknown): {
   }
   if (typeof kind === 'string' && echoableKind.test(kind)) {
     return {
-      why: `The binding option has kind '${kind}', which is not a Postgres binding kind.`,
+      why: `The binding option has kind '${kind}', which is not a binding kind this client takes.`,
       received: { receivedKind: kind },
     };
   }
@@ -118,44 +182,133 @@ function describeUnknownKind(kind: unknown): {
   return {
     why:
       typeof kind === 'string'
-        ? 'The binding option has a kind that is a string not in the list of Postgres binding kinds.'
-        : `The binding option has kind of type ${receivedType}, which is not a Postgres binding kind.`,
+        ? 'The binding option has a kind that is a string not in the list of binding kinds.'
+        : `The binding option has kind of type ${receivedType}, which is not a binding kind.`,
     received: typeof kind === 'string' ? { receivedType } : { receivedKind: receivedType },
   };
 }
 
-function checkBindingKind(binding: object): void {
-  const kind: unknown = 'kind' in binding ? binding.kind : undefined;
-  if (bindingKinds.has(kind)) return;
+function unknownKindError(wording: BindingWording, kind: unknown): Error {
   const { why, received } = describeUnknownKind(kind);
-  throw postgresError(
+  return postgresError(
     'RUNTIME.BINDING_INVALID',
-    "The binding option must have kind 'url', 'pgPool' or 'pgClient'",
+    `The binding option must have kind ${wording.kinds}`,
     {
       why,
-      fix: "Pass binding: { kind: 'url', url }, { kind: 'pgPool', pool } or { kind: 'pgClient', client }.",
-      meta: { extension: 'postgres', reason: 'unknown binding kind', ...received },
+      fix: `Pass binding: ${wording.forms}.`,
+      meta: { extension: wording.extension, reason: 'unknown binding kind', ...received },
     },
   );
 }
 
-function checkInputTypes(options: PostgresBindingFields): void {
-  for (const option of ['binding', 'url', 'pg'] as const) {
-    const value: unknown = options[option];
-    const requirement = inputRequirements[option];
-    if (value === undefined || requirement.accepts(value)) continue;
-    const receivedType = typeOfInput(value);
-    throw postgresError('RUNTIME.BINDING_INVALID', requirement.message, {
-      why: `The ${option} option is ${receivedType === 'null' ? 'null' : `a ${receivedType}`}, and it must be ${requirement.expected}.`,
-      fix: requirement.fix,
-      meta: { extension: 'postgres', reason: `invalid ${option} input`, receivedType },
-    });
+function checkInputTypes(options: PostgresBindingFields, wording: BindingWording): void {
+  const binding: unknown = options.binding;
+  const url: unknown = options.url;
+  const pg: unknown = options.pg;
+  if (binding !== undefined && !isObject(binding)) {
+    throw invalidInput(
+      wording,
+      {
+        name: 'binding option',
+        value: binding,
+        expected: 'an object with a kind',
+        reason: 'invalid binding input',
+      },
+      'The binding option must be an object with a kind',
+      `Pass binding: ${wording.forms}.`,
+    );
   }
-  if (options.binding !== undefined) checkBindingKind(options.binding);
+  if (url !== undefined && typeof url !== 'string') {
+    throw invalidInput(
+      wording,
+      {
+        name: 'url option',
+        value: url,
+        expected: 'a connection string',
+        reason: 'invalid url input',
+      },
+      'The url option must be a string',
+      'Pass a postgres:// or postgresql:// connection string as url, and check that the variable it comes from is set.',
+    );
+  }
+  if (pg !== undefined && !isObject(pg)) {
+    throw invalidInput(
+      wording,
+      {
+        name: 'pg option',
+        value: pg,
+        expected: `a ${wording.pgObjects} object`,
+        reason: 'invalid pg input',
+      },
+      `The pg option must be ${wording.pgObjectsEach}`,
+      `Pass a ${wording.pgObjects} as pg, or pass a connection string as url.`,
+    );
+  }
+  if (binding !== undefined) {
+    const kind: unknown = 'kind' in binding ? binding.kind : undefined;
+    if (!postgresBindingKinds.has(kind)) throw unknownKindError(wording, kind);
+  }
 }
 
-export function resolvePostgresBinding(options: PostgresBindingInput): PostgresBinding {
-  checkInputTypes(options);
+function accept<TKind extends BindingKind>(
+  binding: PostgresBinding,
+  rules: PostgresBindingRules<TKind>,
+  wording: BindingWording,
+): AcceptedBinding<TKind> {
+  if (isAcceptedBinding(binding, rules.kinds)) return binding;
+  throw rules.refuse?.(binding.kind) ?? unknownKindError(wording, binding.kind);
+}
+
+function isAcceptedBinding<TKind extends BindingKind>(
+  binding: PostgresBinding,
+  kinds: readonly TKind[],
+): binding is AcceptedBinding<TKind> {
+  return new Set<string>(kinds).has(binding.kind);
+}
+
+function checkBindingContents(binding: PostgresBinding, wording: BindingWording): PostgresBinding {
+  if (binding.kind === 'url') {
+    const url: unknown = binding.url;
+    if (typeof url !== 'string') {
+      throw invalidInput(
+        wording,
+        {
+          name: 'url in the binding option',
+          value: url,
+          expected: 'a connection string',
+          reason: 'invalid binding url',
+        },
+        'The url in the binding option must be a string',
+        "Pass binding: { kind: 'url', url } with a postgres:// or postgresql:// connection string, and check that the variable it comes from is set.",
+      );
+    }
+    return { kind: 'url', url: validatePostgresUrl(url, wording.extension) };
+  }
+  const [name, value]: readonly [string, unknown] =
+    binding.kind === 'pgPool' ? ['pool', binding.pool] : ['client', binding.client];
+  if (!isObject(value)) {
+    const objectName = binding.kind === 'pgPool' ? 'pg.Pool' : 'pg.Client';
+    throw invalidInput(
+      wording,
+      {
+        name: `${name} in the binding option`,
+        value,
+        expected: `a ${objectName}`,
+        reason: `invalid binding ${name}`,
+      },
+      `The ${name} in the binding option must be a ${objectName}`,
+      `Pass binding: ${bindingForms[binding.kind]} with a ${objectName}.`,
+    );
+  }
+  return binding;
+}
+
+function resolveBinding<TKind extends BindingKind>(
+  options: PostgresBindingInput,
+  rules: PostgresBindingRules<TKind>,
+): AcceptedBinding<TKind> {
+  const wording = wordingOf(rules);
+  checkInputTypes(options, wording);
   const providedCount =
     Number(options.binding !== undefined) +
     Number(options.url !== undefined) +
@@ -167,17 +320,22 @@ export function resolvePostgresBinding(options: PostgresBindingInput): PostgresB
       'Provide one binding input: binding, url, or pg',
       {
         fix: 'Pass exactly one of `binding`, `url`, or `pg`.',
-        meta: { extension: 'postgres', reason: 'zero or multiple binding inputs' },
+        meta: { extension: rules.extension, reason: 'zero or multiple binding inputs' },
       },
     );
   }
 
   if (options.binding !== undefined) {
-    return options.binding;
+    const accepted = accept(options.binding, rules, wording);
+    return accept(checkBindingContents(accepted, wording), rules, wording);
   }
 
   if (options.url !== undefined) {
-    return { kind: 'url', url: validatePostgresUrl(options.url) };
+    return accept(
+      { kind: 'url', url: validatePostgresUrl(options.url, rules.extension) },
+      rules,
+      wording,
+    );
   }
 
   const pgBinding = options.pg;
@@ -186,26 +344,31 @@ export function resolvePostgresBinding(options: PostgresBindingInput): PostgresB
   }
 
   if (isPgPool(pgBinding)) {
-    return { kind: 'pgPool', pool: pgBinding };
+    return accept({ kind: 'pgPool', pool: pgBinding }, rules, wording);
   }
 
   if (isPgClient(pgBinding)) {
-    return { kind: 'pgClient', client: pgBinding };
+    return accept({ kind: 'pgClient', client: pgBinding }, rules, wording);
   }
 
   throw postgresError(
     'RUNTIME.BINDING_INVALID',
     'Unable to determine pg binding type from pg input; use binding with explicit kind',
     {
-      fix: 'Pass `binding: { kind: "pgPool", pool }` or `binding: { kind: "pgClient", client }` instead of `pg`.',
-      meta: { extension: 'postgres', reason: 'unrecognizable pg object' },
+      fix: `Pass ${wording.pgForms} instead of pg.`,
+      meta: { extension: rules.extension, reason: 'unrecognizable pg object' },
     },
   );
 }
 
-export function resolveOptionalPostgresBinding(
+export function resolvePostgresBinding(options: PostgresBindingInput): PostgresBinding {
+  return resolveBinding(options, postgresBindingRules);
+}
+
+export function resolveOptionalPostgresBinding<TKind extends BindingKind>(
   options: PostgresBindingFields,
-): PostgresBinding | undefined {
+  rules: PostgresBindingRules<TKind>,
+): AcceptedBinding<TKind> | undefined {
   const providedCount =
     Number(options.binding !== undefined) +
     Number(options.url !== undefined) +
@@ -215,10 +378,55 @@ export function resolveOptionalPostgresBinding(
     return undefined;
   }
 
-  return resolvePostgresBinding(
+  return resolveBinding(
     blindCast<
       PostgresBindingInput,
       'provided-count validation narrows optional binding fields to one binding input'
     >(options),
+    rules,
   );
+}
+
+type ConnectedBinding = Exclude<DriverPostgresBinding, { readonly kind: 'url' }>;
+
+function toRuntimeBinding(
+  binding: PostgresBinding,
+  options: { readonly poolOptions?: PostgresPoolOptions | undefined },
+): ConnectedBinding {
+  if (binding.kind !== 'url') {
+    return { ...binding, ownedByDriver: false };
+  }
+
+  return {
+    kind: 'pgPool',
+    ownedByDriver: true,
+    pool: suppressIdleConnectionErrors(
+      createPgPool(
+        {
+          connectionString: binding.url,
+          connectionTimeoutMillis:
+            options.poolOptions?.connectionTimeoutMillis ?? DEFAULT_CONNECT_TIMEOUT_MILLIS,
+          idleTimeoutMillis: options.poolOptions?.idleTimeoutMillis ?? 30_000,
+        },
+        postgresTarget.sessionSettings ?? {},
+      ),
+    ),
+  } as const;
+}
+
+/** Connects `driver` to `binding`, and ends the pool created for a url binding when the connection fails. */
+export async function connectWithBinding(
+  driver: { connect(binding: DriverPostgresBinding): Promise<void> },
+  binding: PostgresBinding,
+  options: { readonly poolOptions?: PostgresPoolOptions | undefined },
+): Promise<void> {
+  const runtimeBinding = toRuntimeBinding(binding, options);
+  try {
+    await driver.connect(runtimeBinding);
+  } catch (error) {
+    if (runtimeBinding.kind === 'pgPool' && runtimeBinding.ownedByDriver) {
+      await runtimeBinding.pool.end().catch(() => undefined);
+    }
+    throw error;
+  }
 }

@@ -1,6 +1,7 @@
 import { contractFromJson } from '@internal/postgres/static';
 import { createDevDatabase, timeouts, withClient } from '@repo/test-utils';
 import { SignJWT } from 'jose';
+import { Pool } from 'pg';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { type SupabaseDb, supabase } from '../src/exports/runtime';
 import type { Contract } from './fixtures/example-app/contract';
@@ -143,24 +144,51 @@ describe('a Supabase client with cursor set, against a real Postgres', () => {
   );
 
   it(
-    'resets the session after a stream left early, so the next role sees its own role',
+    'resets the session after a stream left early and returns its connection to the pool',
     async () => {
-      const user = await signedInUser();
-      const series = user.raw.sql`SELECT n FROM generate_series(1, 25) AS n`
-        .returnsRow({ n: 'pg/int4@1' })
-        .build();
-      const seen: number[] = [];
-      for await (const { n } of user.query(series)) {
-        seen.push(n);
-        if (seen.length === 3) break;
+      const pool = new Pool({ connectionString: database.connectionString, max: 1 });
+      const pooled = await supabase({
+        contract,
+        pg: pool,
+        jwtSecret: fixtureJwt,
+        verifyMarker: false,
+        cursor: { batchSize: 4 },
+      });
+      try {
+        const user = await pooled.asUser(
+          await signJwt({ sub: crypto.randomUUID(), role: 'authenticated' }),
+        );
+        const series = user.raw
+          .sql`SELECT n, pg_backend_pid() AS pid FROM generate_series(1, 25) AS n`
+          .returnsRow({ n: 'pg/int4@1', pid: 'pg/int4@1' })
+          .build();
+        const seen: number[] = [];
+        let streamPid: number | undefined;
+        for await (const { n, pid } of user.query(series)) {
+          seen.push(n);
+          streamPid = pid;
+          if (seen.length === 3) break;
+        }
+
+        const { rows } = await pool.query<{
+          pid: number;
+          role: string;
+          login: string;
+          claims: string | null;
+        }>(
+          "SELECT pg_backend_pid() AS pid, current_user AS role, session_user AS login, current_setting('request.jwt.claims', true) AS claims",
+        );
+        const login = rows[0]?.login;
+
+        expect({ seen, after: rows }).toEqual({
+          seen: [1, 2, 3],
+          after: [{ pid: streamPid, role: login, login, claims: '' }],
+        });
+        expect(login).not.toBe('authenticated');
+      } finally {
+        await pooled.close();
+        await pool.end();
       }
-
-      const anon = db.asAnon();
-      const roles = await anon.query(
-        anon.raw.sql`SELECT current_user AS role`.returnsRow({ role: 'pg/text@1' }).build(),
-      );
-
-      expect({ seen, roles }).toEqual({ seen: [1, 2, 3], roles: [{ role: 'anon' }] });
     },
     timeouts.spinUpPpgDev,
   );

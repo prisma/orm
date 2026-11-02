@@ -1,10 +1,6 @@
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import type { Contract } from '@internal/contract/types';
-import postgresDriver, {
-  createPgPool,
-  type PostgresBinding as DriverPostgresBinding,
-  suppressIdleConnectionErrors,
-} from '@internal/driver-postgres/runtime';
+import postgresDriver from '@internal/driver-postgres/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { CollectionClasses, NoCollectionClasses } from '@internal/sql-orm-client';
 import type { Runtime } from '@internal/sql-runtime';
@@ -20,8 +16,10 @@ import { postgresError } from '../errors';
 import { validatePostgresContract } from '../static/contract-from-json';
 import { buildPostgresStaticContext } from '../static/postgres-static';
 import {
+  connectWithBinding,
   type PostgresBinding,
   type PostgresBindingInput,
+  postgresBindingRules,
   resolveOptionalPostgresBinding,
   resolvePostgresBinding,
 } from './binding';
@@ -33,8 +31,8 @@ import {
   type PostgresStaticMembers,
 } from './postgres-members';
 import {
-  DEFAULT_CONNECT_TIMEOUT_MILLIS,
   type PostgresExecutionOptions,
+  type PostgresPoolOptions,
   toDriverCursorOptions,
   validateCursorOptions,
 } from './postgres-options';
@@ -52,10 +50,7 @@ export interface PostgresClient<
 }
 
 export interface PostgresOptionsBase extends PostgresExecutionOptions {
-  readonly poolOptions?: {
-    readonly connectionTimeoutMillis?: number;
-    readonly idleTimeoutMillis?: number;
-  };
+  readonly poolOptions?: PostgresPoolOptions;
 }
 
 export interface PostgresBindingOptions {
@@ -72,33 +67,6 @@ export type PostgresOptions<
     readonly contract: TContract;
     readonly collections?: TCollections;
   };
-
-type ConnectedBinding = Exclude<DriverPostgresBinding, { readonly kind: 'url' }>;
-
-export function toRuntimeBinding(
-  binding: PostgresBinding,
-  options: Pick<PostgresOptionsBase, 'poolOptions'>,
-): ConnectedBinding {
-  if (binding.kind !== 'url') {
-    return { ...binding, ownedByDriver: false };
-  }
-
-  return {
-    kind: 'pgPool',
-    ownedByDriver: true,
-    pool: suppressIdleConnectionErrors(
-      createPgPool(
-        {
-          connectionString: binding.url,
-          connectionTimeoutMillis:
-            options.poolOptions?.connectionTimeoutMillis ?? DEFAULT_CONNECT_TIMEOUT_MILLIS,
-          idleTimeoutMillis: options.poolOptions?.idleTimeoutMillis ?? 30_000,
-        },
-        postgresTarget.sessionSettings ?? {},
-      ),
-    ),
-  } as const;
-}
 
 /**
  * Creates a lazy Postgres client. The client infers its contract type from `contract`: a value from
@@ -123,7 +91,7 @@ export default function postgres<
 >(options: PostgresOptions<TContract, TCollections>): PostgresClient<TContract, TCollections> {
   const cursor = validateCursorOptions(options.cursor, 'postgres');
   const contract = validatePostgresContract(options.contract);
-  let binding = resolveOptionalPostgresBinding(options);
+  let binding = resolveOptionalPostgresBinding(options, postgresBindingRules);
 
   const stack = createSqlExecutionStack({
     target: postgresTarget,
@@ -163,18 +131,13 @@ export default function postgres<
     if (driverConnected) return;
     if (!runtimeDriver) throw new InternalError('Postgres runtime driver missing');
     if (connectPromise) return connectPromise;
-    const runtimeBinding = toRuntimeBinding(resolvedBinding, options);
-    connectPromise = runtimeDriver
-      .connect(runtimeBinding)
+    connectPromise = connectWithBinding(runtimeDriver, resolvedBinding, options)
       .then(() => {
         driverConnected = true;
       })
-      .catch(async (err) => {
+      .catch((err: unknown) => {
         backgroundConnectError = err;
         connectPromise = undefined;
-        if (runtimeBinding.kind === 'pgPool' && runtimeBinding.ownedByDriver) {
-          await runtimeBinding.pool.end().catch(() => undefined);
-        }
         throw err;
       });
     return connectPromise;

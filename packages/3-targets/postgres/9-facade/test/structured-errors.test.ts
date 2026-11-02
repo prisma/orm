@@ -227,6 +227,61 @@ describe('postgres() given null as its database input', () => {
   });
 });
 
+describe('postgres() given a binding whose contents are wrong', () => {
+  type Options = Parameters<typeof postgres<typeof contract>>[0];
+
+  it.each([
+    ['an empty url', { kind: 'url', url: '  ' }, 'Postgres URL must be a non-empty string', {}],
+    [
+      'a url with another scheme',
+      { kind: 'url', url: 'mysql://user:secret@host/db' },
+      'Postgres URL must use postgres:// or postgresql://',
+      {},
+    ],
+    [
+      'a url that is null',
+      { kind: 'url', url: null },
+      'The url in the binding option must be a string',
+      { receivedType: 'null' },
+    ],
+    [
+      'a url that is a number',
+      { kind: 'url', url: 5432 },
+      'The url in the binding option must be a string',
+      { receivedType: 'number' },
+    ],
+    [
+      'a pool that is missing',
+      { kind: 'pgPool', pool: undefined },
+      'The pool in the binding option must be a pg.Pool',
+      { receivedType: 'undefined' },
+    ],
+    [
+      'a client that is a string',
+      { kind: 'pgClient', client: 'postgres://user:secret@host/db' },
+      'The client in the binding option must be a pg.Client',
+      { receivedType: 'string' },
+    ],
+  ])(
+    'raises RUNTIME.BINDING_INVALID for %s, with no value in the error',
+    (_name, binding, message, meta) => {
+      const error = capture(() => postgres({ contract, binding } as unknown as Options));
+      expect(error).toMatchObject({
+        code: 'RUNTIME.BINDING_INVALID',
+        message,
+        meta: { extension: 'postgres', ...meta },
+      });
+      expect(JSON.stringify(Object.getOwnPropertyDescriptors(error))).not.toContain('secret');
+    },
+  );
+
+  it('keeps the trimmed url of a url binding', () => {
+    expect(
+      resolvePostgresBinding({ binding: { kind: 'url', url: ' postgres://localhost/db ' } }),
+    ).toEqual({ kind: 'url', url: 'postgres://localhost/db' });
+  });
+});
+
 describe('facade lifecycle codes', () => {
   it('connect() without a binding raises RUNTIME.BINDING_MISSING', async () => {
     const db = postgres({ contract } as Parameters<typeof postgres<typeof contract>>[0]);

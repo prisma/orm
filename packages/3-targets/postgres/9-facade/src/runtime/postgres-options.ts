@@ -13,6 +13,12 @@ type PostgresDriverCursorOptions = NonNullable<PostgresDriverCreateOptions['curs
  */
 export const DEFAULT_CONNECT_TIMEOUT_MILLIS = 20_000;
 
+/** Timeouts for the pool a client creates from a url. */
+export interface PostgresPoolOptions {
+  readonly connectionTimeoutMillis?: number;
+  readonly idleTimeoutMillis?: number;
+}
+
 /**
  * Server-side cursor for reads. Unset reads the whole result before the first row; set streams
  * rows in batches of `batchSize`, 100 when omitted or `undefined`. A `batchSize` that is not a

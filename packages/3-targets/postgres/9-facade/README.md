@@ -193,6 +193,7 @@ These changes are not specific to a Prisma 7 schema. They apply to any Postgres 
 
 Creating a client has no side effects. The pool is created on the first query, `db.runtime()` or `db.connect(...)`.
 Connection binding can be provided up front (`url`, `pg`, `binding`) or deferred via `db.connect(...)`.
+`postgres()` checks the database input when it is called and fails with `RUNTIME.BINDING_INVALID` if it is wrong: `null` or a value of the wrong type as `url`, `pg` or `binding`; more than one of them; a `url` that is empty, cannot be parsed or is not `postgres://` or `postgresql://`; a `binding` whose `kind` is not `'url'`, `'pgPool'` or `'pgClient'`; and a `binding` whose `url` is not such a string, or whose `pool` or `client` is not an object. The error never contains the value, so a connection string passed by mistake never puts its password in an error.
 
 Pass `collections` to give models custom collection classes: `postgres({ contract, url, collections: { Post: PostCollection } })`, where `PostCollection` extends `Collection<Contract, 'Post'>` from `@prisma/orm-postgres/orm-client`. `db.orm.public.Post` and `tx.orm.public.Post` inside `db.transaction(...)` are then a `PostCollection`. The client's type carries the classes as its second type parameter, `PostgresClient<Contract, { Post: typeof PostCollection }>`, which defaults to no classes; a parameter typed `PostgresClient<Contract>` accepts a client with classes. `postgresServerless()` accepts the same option, and every connection it opens uses the classes.
 

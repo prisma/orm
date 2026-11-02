@@ -186,14 +186,80 @@ describe('supabase() binding option', () => {
     ['an object with no kind', {}],
     ['an unknown kind', { kind: 'bogus' }],
     ['an array', []],
-  ])('rejects a binding that is %s with RUNTIME.BINDING_INVALID', async (_name, binding) => {
-    const input = { binding } as unknown as ReadOptions;
+  ])(
+    'rejects a binding that is %s with RUNTIME.BINDING_INVALID, naming only the kinds Supabase takes',
+    async (_name, binding) => {
+      const input = { binding } as unknown as ReadOptions;
 
-    await expect(supabase({ contract, jwtSecret, ...input })).rejects.toMatchObject({
+      const error = await supabase({ contract, jwtSecret, ...input }).catch(
+        (caught: unknown) => caught,
+      );
+
+      expect(error).toMatchObject({
+        code: 'RUNTIME.BINDING_INVALID',
+        message: "The binding option must have kind 'url' or 'pgPool'",
+        fix: "Pass binding: { kind: 'url', url } or { kind: 'pgPool', pool }.",
+        meta: { extension: 'supabase' },
+      });
+    },
+  );
+
+  it.each([
+    ['a pg that is not an object', { pg: 'pool' }, 'The pg option must be a pg.Pool'],
+    [
+      'a pg that is neither a pool nor a client',
+      { pg: {} },
+      'Unable to determine pg binding type from pg input; use binding with explicit kind',
+    ],
+  ])('rejects %s without offering a pg.Client', async (_name, input, message) => {
+    const options = input as unknown as ReadOptions;
+
+    const error = await supabase({ contract, jwtSecret, ...options }).catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toMatchObject({
       code: 'RUNTIME.BINDING_INVALID',
-      message: "The binding option must have kind 'url', 'pgPool' or 'pgClient'",
+      message,
+      meta: { extension: 'supabase' },
     });
+    expect(JSON.stringify(Object.getOwnPropertyDescriptors(error))).not.toMatch(/Client/);
   });
+
+  it.each([
+    ['an empty url', { kind: 'url', url: '' }, 'Postgres URL must be a non-empty string'],
+    [
+      'a url with another scheme',
+      { kind: 'url', url: 'mysql://user:secret@host/db' },
+      'Postgres URL must use postgres:// or postgresql://',
+    ],
+    [
+      'a url that is null',
+      { kind: 'url', url: null },
+      'The url in the binding option must be a string',
+    ],
+    [
+      'a pool that is missing',
+      { kind: 'pgPool', pool: undefined },
+      'The pool in the binding option must be a pg.Pool',
+    ],
+  ])(
+    'rejects a binding with %s with RUNTIME.BINDING_INVALID, with no value in the error',
+    async (_name, binding, message) => {
+      const input = { binding } as unknown as ReadOptions;
+
+      const error = await supabase({ contract, jwtSecret, ...input }).catch(
+        (caught: unknown) => caught,
+      );
+
+      expect(error).toMatchObject({
+        code: 'RUNTIME.BINDING_INVALID',
+        message,
+        meta: { extension: 'supabase' },
+      });
+      expect(JSON.stringify(Object.getOwnPropertyDescriptors(error))).not.toContain('secret');
+    },
+  );
 
   it('reports the null input, not the input count, when another input is also given', async () => {
     const input = { url: null, pg: new Pool() } as unknown as ReadOptions;

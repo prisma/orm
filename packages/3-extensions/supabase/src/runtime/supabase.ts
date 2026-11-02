@@ -1,17 +1,16 @@
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import type { NamespacedEnums } from '@internal/contract/enum-accessor';
 import type { Contract } from '@internal/contract/types';
-import postgresDriver, {
-  type PostgresBinding as DriverPostgresBinding,
-} from '@internal/driver-postgres/runtime';
+import postgresDriver from '@internal/driver-postgres/runtime';
 import type {
   AsyncIterableResult,
   RuntimeExecuteOptions,
 } from '@internal/framework-components/runtime';
 import {
+  connectWithBinding,
+  type PostgresBindingRules,
   resolveOptionalPostgresBinding,
   toDriverCursorOptions,
-  toRuntimeBinding,
   validateCursorOptions,
 } from '@internal/postgres/internal/options';
 import { buildPostgresStaticContext } from '@internal/postgres/internal/static-context';
@@ -258,20 +257,19 @@ function algKeyMismatchReason(jwt: string, kind: KeyMaterial['kind']): string | 
   return undefined;
 }
 
+const supabaseBindingRules: PostgresBindingRules<SupabaseBinding['kind']> = {
+  extension: 'supabase',
+  kinds: ['url', 'pgPool'],
+  refuse: () =>
+    supabaseError('SUPABASE.CONFIG_INVALID', 'Supabase takes a pg.Pool or a url, not a pg.Client', {
+      why: 'Each role-bound query needs a connection of its own, which a single pg.Client cannot give.',
+      fix: "Pass a pg.Pool as pg, a url, or binding: { kind: 'pgPool', pool } or { kind: 'url', url }.",
+      meta: { reason: 'the database input is a pg.Client' },
+    }),
+};
+
 function resolveSupabaseBinding(options: SupabaseBindingOptions): SupabaseBinding | undefined {
-  const binding = resolveOptionalPostgresBinding(options);
-  if (binding?.kind === 'pgClient') {
-    throw supabaseError(
-      'SUPABASE.CONFIG_INVALID',
-      'Supabase takes a pg.Pool or a url, not a pg.Client',
-      {
-        why: 'Each role-bound query needs a connection of its own, which a single pg.Client cannot give.',
-        fix: "Pass a pg.Pool as pg, a url, or binding: { kind: 'pgPool', pool } or { kind: 'url', url }.",
-        meta: { reason: 'the database input is a pg.Client' },
-      },
-    );
-  }
-  return binding;
+  return resolveOptionalPostgresBinding(options, supabaseBindingRules);
 }
 
 function withSupabaseDescriptor(
@@ -389,12 +387,8 @@ export default async function supabase<
     });
 
     if (binding !== undefined) {
-      const runtimeBinding: DriverPostgresBinding = toRuntimeBinding(binding, options);
-      driver.connect(runtimeBinding).catch(async (err: unknown) => {
+      connectWithBinding(driver, binding, options).catch((err: unknown) => {
         connectError = { error: err };
-        if (runtimeBinding.kind === 'pgPool' && runtimeBinding.ownedByDriver) {
-          await runtimeBinding.pool.end().catch(() => undefined);
-        }
       });
     }
 
