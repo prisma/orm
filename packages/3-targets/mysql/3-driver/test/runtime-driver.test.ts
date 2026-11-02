@@ -64,6 +64,9 @@ function resultStream(behaviour: StreamBehaviour, closed: () => void): Readable 
 
 class FakeConnection extends EventEmitter {
   readonly info = { threadId: 1, status: 0, collation: { charset: 'utf8', maxLength: 4 } };
+  get threadId(): number {
+    return this.info.threadId;
+  }
   readonly release = vi.fn(async () => {});
   readonly destroy = vi.fn();
   readonly beginTransaction = vi.fn(async () => {});
@@ -109,10 +112,30 @@ class FakePool extends EventEmitter {
   }
 }
 
-const state = vi.hoisted(() => ({ pools: [] as unknown[] }));
+const state = vi.hoisted(() => ({
+  pools: [] as unknown[],
+  interruptions: [] as string[],
+  interruptTimeouts: [] as unknown[],
+  /** Runs when the fake `KILL QUERY` reaches the server, before its reply comes back. */
+  beforeKillReply: undefined as (() => void) | undefined,
+}));
 let connection = new FakeConnection();
 
 vi.mock('mariadb', () => ({
+  createConnection: async (options: { connectTimeout?: number; socketTimeout?: number }) => {
+    state.interruptTimeouts.push({
+      connect: options.connectTimeout,
+      socket: options.socketTimeout,
+    });
+    return {
+      query: async (sql: string, values: readonly unknown[]) => {
+        state.interruptions.push(`${sql} ${values.join(',')}`);
+        state.beforeKillReply?.();
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      },
+      destroy: () => {},
+    };
+  },
   createPool: (options: ConstructorParameters<typeof FakePool>[0]) => {
     const pool = new FakePool(options, connection);
     state.pools.push(pool);
@@ -399,14 +422,22 @@ describe('MySQL runtime driver and its pool', () => {
     });
   });
 
-  it('destroys a pooled connection whose stream the caller stops early while the rest of the result is still arriving', async () => {
-    const driver = await connected(streaming);
+  it('interrupts the statement of a pooled connection whose stream the caller stops early while the rest of the result is still arriving, drops the rest and then destroys the connection', async () => {
+    state.interruptions.length = 0;
+    state.interruptTimeouts.length = 0;
+    const driver = await connected({
+      ...streaming,
+      poolOptions: { connectionTimeoutMillis: 1500 },
+    });
     for await (const _row of driver.query(valued)) break;
+    await driver.close();
     expect({
+      interruptions: state.interruptions,
       destroyed: connection.destroy.mock.calls.length,
       released: connection.release.mock.calls.length,
       drained: connection.streamClosed.mock.calls.length,
-    }).toEqual({ destroyed: 1, released: 0, drained: 0 });
+    }).toEqual({ interruptions: ['KILL QUERY ? 1'], destroyed: 1, released: 0, drained: 1 });
+    expect(state.interruptTimeouts).toEqual([{ connect: 1500, socket: 1500 }]);
   });
 
   it('drops the rest of a pooled stream the caller stops early once the whole result has arrived, and returns the connection to the pool', async () => {
@@ -420,7 +451,8 @@ describe('MySQL runtime driver and its pool', () => {
     }).toEqual({ destroyed: 0, released: 1, drained: 1 });
   });
 
-  it('destroys a pooled connection whose stream the caller stops early when Node keeps no record of whether the result has arrived', async () => {
+  it('interrupts and destroys a pooled connection whose stream the caller stops early when Node keeps no record of whether the result has arrived', async () => {
+    state.interruptions.length = 0;
     connection.behaviour = {
       kind: 'received',
       rows: [{ n: 1 }, { n: 2 }, { n: 3 }],
@@ -428,11 +460,13 @@ describe('MySQL runtime driver and its pool', () => {
     };
     const driver = await connected(streaming);
     for await (const _row of driver.query(valued)) break;
+    await driver.close();
     expect({
+      interruptions: state.interruptions,
       destroyed: connection.destroy.mock.calls.length,
       released: connection.release.mock.calls.length,
       drained: connection.streamClosed.mock.calls.length,
-    }).toEqual({ destroyed: 1, released: 0, drained: 0 });
+    }).toEqual({ interruptions: ['KILL QUERY ? 1'], destroyed: 1, released: 0, drained: 1 });
   });
 
   it('drops the rest of a stream on a held connection the caller stops early when Node keeps no record of whether the result has arrived, and keeps the connection', async () => {
@@ -510,6 +544,53 @@ describe('MySQL runtime driver and its pool', () => {
       { call: 'query', released: 0, destroyed: 1 },
       { call: 'execute', released: 0, destroyed: 1 },
     ]);
+  });
+
+  it('interrupts with the default 20-second limit when connectionTimeoutMillis is 0, which the package reads as no limit', async () => {
+    state.interruptTimeouts.length = 0;
+    const driver = await connected({ ...streaming, poolOptions: { connectionTimeoutMillis: 0 } });
+    for await (const _row of driver.query(valued)) break;
+    await driver.close();
+    expect(state.interruptTimeouts).toEqual([{ connect: 20_000, socket: 20_000 }]);
+  });
+
+  it('leaves no unhandled rejection when the interrupted stream fails before the reply to its KILL comes back', async () => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    state.beforeKillReply = () => {
+      const stream: unknown = connection.queryStream.mock.results[0]?.value;
+      if (stream instanceof Readable) {
+        stream.destroy(
+          Object.assign(new Error('Query execution was interrupted'), { errno: 1317 }),
+        );
+      }
+    };
+    try {
+      const driver = await connected(streaming);
+      for await (const _row of driver.query(valued)) break;
+      await driver.close();
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(unhandled).toEqual([]);
+    } finally {
+      state.beforeKillReply = undefined;
+      process.off('unhandledRejection', record);
+    }
+  });
+
+  it('releases a held connection whose caller abandoned a stream whose whole result has arrived, interrupting it and dropping the buffered rest instead of waiting for a reader that never comes', async () => {
+    state.interruptions.length = 0;
+    connection.behaviour = { kind: 'received', rows: [{ n: 1 }, { n: 2 }, { n: 3 }] };
+    const driver = await connected(streaming);
+    const held = await driver.acquireConnection();
+    const rows = held.query(valued)[Symbol.asyncIterator]();
+    await rows.next();
+    await held.release();
+    expect({
+      interruptions: state.interruptions,
+      destroyed: connection.destroy.mock.calls.length,
+      released: connection.release.mock.calls.length,
+    }).toEqual({ interruptions: ['KILL QUERY ? 1'], destroyed: 1, released: 0 });
   });
 
   it('drops the rest of a stream on a held connection the caller stops early, and keeps the connection', async () => {
