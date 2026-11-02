@@ -546,6 +546,14 @@ describe('MySQL runtime driver and its pool', () => {
     ]);
   });
 
+  it('interrupts with the default 20-second limit when connectionTimeoutMillis is 0, which the package reads as no limit', async () => {
+    state.interruptTimeouts.length = 0;
+    const driver = await connected({ ...streaming, poolOptions: { connectionTimeoutMillis: 0 } });
+    for await (const _row of driver.query(valued)) break;
+    await driver.close();
+    expect(state.interruptTimeouts).toEqual([{ connect: 20_000, socket: 20_000 }]);
+  });
+
   it('leaves no unhandled rejection when the interrupted stream fails before the reply to its KILL comes back', async () => {
     const unhandled: unknown[] = [];
     const record = (reason: unknown) => unhandled.push(reason);

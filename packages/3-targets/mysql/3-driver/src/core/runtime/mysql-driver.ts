@@ -25,6 +25,7 @@ import {
 } from 'mariadb';
 import { acquireClientQueryLock } from '../client-query-lock';
 import {
+  DEFAULT_CONNECT_TIMEOUT_MILLIS,
   type MysqlPoolOptions,
   mysqlConnectionOptions,
   mysqlPoolOptions,
@@ -461,7 +462,7 @@ export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
   protected readonly holdsClient = false;
 
   #state: DriverState = { kind: 'unbound' };
-  /** The options of the short-lived connection that interrupts a statement, and how long to wait for an interrupted statement to end: as long as a connection may take to open. Set by `connect()` and kept through `close()`, which waits for statements still ending. */
+  /** The options of the short-lived connection that interrupts a statement, and how long to wait for an interrupted statement to end: as long as a connection may take to open, or the default when `connectionTimeoutMillis` is 0, which the package reads as no limit. Set by `connect()` and kept through `close()`, which waits for statements still ending. */
   #interrupt: { readonly options: ConnectionConfig; readonly waitMs: number } | undefined;
   readonly #inUse = new ClientsInUse();
   readonly #options: MysqlDriverCreateOptions;
@@ -489,10 +490,15 @@ export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
       logger: { error: (error) => waiting.reported(error) },
     });
     if (pool instanceof EventEmitter) pool.on('error', ignoreConnectionFailure);
-    const interruptOptions = mysqlConnectionOptions(binding.url, {
-      connectTimeoutMs: this.#options.poolOptions?.connectionTimeoutMillis,
-    });
-    this.#interrupt = { options: interruptOptions, waitMs: interruptOptions.connectTimeout ?? 0 };
+    const connectionTimeout = this.#options.poolOptions?.connectionTimeoutMillis;
+    const interruptTimeoutMs =
+      connectionTimeout !== undefined && connectionTimeout > 0
+        ? connectionTimeout
+        : DEFAULT_CONNECT_TIMEOUT_MILLIS;
+    this.#interrupt = {
+      options: mysqlConnectionOptions(binding.url, { connectTimeoutMs: interruptTimeoutMs }),
+      waitMs: interruptTimeoutMs,
+    };
     this.#state = { kind: 'connected', pool, waiting };
   }
 
