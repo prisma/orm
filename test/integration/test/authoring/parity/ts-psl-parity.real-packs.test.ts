@@ -26,11 +26,9 @@ import postgresControl, {
 } from '@internal/target-postgres/control';
 import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
-import sqliteControl, {
-  sqliteCreateNamespace,
-  sqliteScalarTypeConstructors,
-} from '@internal/target-sqlite/control';
+import sqliteControl, { sqliteScalarTypeConstructors } from '@internal/target-sqlite/control';
 import sqlitePack from '@internal/target-sqlite/pack';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { describe, expect, it } from 'vitest';
 
 const int4Column = {

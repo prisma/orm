@@ -24,10 +24,16 @@ import {
   SQLITE_BIGINT_CODEC_ID,
   SQLITE_BIGINT_NUMBER_CODEC_ID,
   SQLITE_BLOB_CODEC_ID,
+  SQLITE_DATE_STRING_CODEC_ID,
+  SQLITE_DATE_TEMPORAL_CODEC_ID,
   SQLITE_DATETIME_CODEC_ID,
+  SQLITE_DATETIME_STRING_CODEC_ID,
+  SQLITE_DATETIME_TEMPORAL_CODEC_ID,
   SQLITE_INTEGER_CODEC_ID,
   SQLITE_JSON_CODEC_ID,
   SQLITE_REAL_CODEC_ID,
+  SQLITE_TIME_STRING_CODEC_ID,
+  SQLITE_TIME_TEMPORAL_CODEC_ID,
 } from './codec-ids';
 
 /** The input matches available to an overload that consumes a value — the only ones these helpers build, since every aggregate here but `count` needs something to fold. */
@@ -121,10 +127,16 @@ const INTEGER_CODECS = [
 const REAL_CODECS = [SQLITE_REAL_CODEC_ID, SQL_FLOAT_CODEC_ID] as const;
 
 /**
- * Codecs whose `min`/`max` returns the input value and whose traits do not already say so: SQLite compares blobs bytewise and text by its collation, so a datetime, a JSON document, and a blob each have a well-defined least and greatest — unlike the numeric and textual codecs, whose traits carry them.
+ * Codecs whose `min`/`max` returns the input value and whose traits do not already say so: SQLite compares blobs bytewise and text by its collation, so a datetime, a JSON document, and a blob each have a well-defined least and greatest — unlike the numeric and textual codecs, whose traits carry them. An instant, a date and a time of day are stored in one form that sorts in the order of the values, so their least and greatest text is the earliest and latest value. A duration is not: its text does not sort in the order of the durations.
  */
 const MIN_MAX_PRESERVING_CODECS = [
   SQLITE_DATETIME_CODEC_ID,
+  SQLITE_DATETIME_TEMPORAL_CODEC_ID,
+  SQLITE_DATETIME_STRING_CODEC_ID,
+  SQLITE_DATE_STRING_CODEC_ID,
+  SQLITE_DATE_TEMPORAL_CODEC_ID,
+  SQLITE_TIME_STRING_CODEC_ID,
+  SQLITE_TIME_TEMPORAL_CODEC_ID,
   SQLITE_JSON_CODEC_ID,
   SQLITE_BLOB_CODEC_ID,
 ] as const;
