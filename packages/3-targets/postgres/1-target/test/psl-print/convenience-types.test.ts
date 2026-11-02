@@ -1,8 +1,16 @@
+import type { SqlPslBuildContext } from '@internal/family-sql/control';
+import {
+  type AuthoringTypeConstructorDescriptor,
+  instantiateAuthoringTypeConstructor,
+} from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
+import { postgresDeprecatedScalarTypes } from '../../src/core/type-constructors';
+import { testBuildContext } from './build-context';
 import { buildModels, type ColumnShape, fieldText, INT_COLUMN, table } from './print-support';
 
-function printedType(column: ColumnShape): string | undefined {
+function printedType(column: ColumnShape, context?: SqlPslBuildContext): string | undefined {
   const [model] = buildModels({
+    ...(context === undefined ? {} : { context }),
     models: {
       Event: { table: 'Event', fields: { id: { column: 'id' }, at: { column: 'at' } } },
     },
@@ -81,4 +89,32 @@ describe('contract print writes a scalar column as the convenience type it becom
   ])('%j prints as %s', (shape, expected) => {
     expect(printedType(shape)).toBe(expected);
   });
+});
+
+describe('contract print never writes a deprecated alias', () => {
+  const stack = testBuildContext();
+  const aliasesFirst: SqlPslBuildContext = {
+    ...stack,
+    authoringContributions: {
+      ...stack.authoringContributions,
+      type: { ...postgresDeprecatedScalarTypes, ...stack.authoringContributions.type },
+    },
+  };
+  const representativeArgs: Record<string, number> = { length: 12, precision: 10, scale: 2 };
+
+  it.each(Object.entries<AuthoringTypeConstructorDescriptor>(postgresDeprecatedScalarTypes))(
+    'prints the codec of %s without naming an alias, wherever the aliases are declared',
+    (_alias, descriptor) => {
+      const args = (descriptor.args ?? []).map((arg) => representativeArgs[arg.name ?? '']);
+      const printed = [[], args].map((written) => {
+        const output = instantiateAuthoringTypeConstructor(descriptor, written);
+        const dataType = stack.dataTypes.dataTypeOfCodec(output.codecId);
+        if (dataType === undefined) throw new Error(`no data type for ${output.codecId}`);
+        return printedType({ ...output, dataType, nullable: false }, aliasesFirst);
+      });
+      for (const text of printed) {
+        expect(Object.keys(postgresDeprecatedScalarTypes)).not.toContain(text?.split('(')[0]);
+      }
+    },
+  );
 });
