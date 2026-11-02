@@ -9,11 +9,25 @@ changes:
         - '(?<![\s\S])(?![\s\S]*(?<![\w$])datasource[ \t]+\w+[ \t]*\{)[\s\S]*\n[ \t]+[A-Za-z_]\w*[ \t]+(?:=[ \t]*)?(?:SmallInt|BigIntNumber|Numeric|UnboundedInt|Real|VarChar)(?![\w$])'
   - id: ts-renamed-postgres-scalar-helpers
     summary: |
-      In a TypeScript contract on PostgreSQL, `type.SmallInt()`, `type.BigIntNumber()`, `type.Numeric(...)`, `type.UnboundedInt()`, `type.Real()` and `type.VarChar(...)` are deprecated. Call the convenience helper that gives the same type instead, such as `type.String({ storage: 'varchar', length: 64 })` for `type.VarChar(64)`.
+      In a TypeScript contract on PostgreSQL, `type.SmallInt()`, `type.BigIntNumber()`, `type.Numeric(...)`, `type.UnboundedInt()`, `type.Real()` and `type.VarChar(...)` are deprecated. They still compile and give no warning, and they are removed together with the deprecated schema names. Call the convenience helper that gives the same type instead, such as `type.String({ storage: 'varchar', length: 64 })` for `type.VarChar(64)`.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - '(?<![\w$])type\.(?:SmallInt|BigIntNumber|Numeric|UnboundedInt|Real|VarChar)\('
+  - id: ts-renamed-postgres-column-helpers
+    summary: |
+      The PostgreSQL column helpers `int8Column` and `numericColumn` are renamed to `int8BigIntColumn` and `numericStringColumn`, after the explicit types they give (`Int8BigInt` and `NumericString`). The old names are removed. The contract does not change.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx}"
+      matches:
+        - '(?<![\w$])(?:int8Column|numericColumn)(?![\w$])'
+  - id: ts-renamed-postgres-type-groupings
+    summary: |
+      `@internal/target-postgres/control` exports `postgresExplicitTypes`, every explicit PostgreSQL type, and `postgresTypeNamespace`, the target's whole `type` namespace. They replace `postgresScalarAuthoringTypes`, `postgresNativeAuthoringTypes` and `postgresScalarAndNativeTypeConstructors`, which are removed.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx}"
+      matches:
+        - '(?<![\w$])(?:postgresScalarAuthoringTypes|postgresNativeAuthoringTypes|postgresScalarAndNativeTypeConstructors)(?![\w$])'
 ---
 
 # PostgreSQL's integer, decimal, float and text types are convenience types
@@ -38,7 +52,7 @@ Rewrite each field or `types {}` alias written with an old name, keeping its oth
 | `VarChar` | `String(storage: varchar)` | `Varchar` |
 | `VarChar(n)` | `String(storage: varchar, length: n)` | `Varchar(n)` |
 
-Writing the explicit type in the last column instead is equally correct; it is the same type.
+Writing the explicit type in the last column instead is equally correct; it is the same type, and both emit the same contract. The warning names the explicit type because it is the exact replacement for the old name.
 
 ```prisma
 model Account {
@@ -66,3 +80,28 @@ field.column(type.String({ storage: 'varchar', length: 64 })); // was type.VarCh
 ```
 
 The explicit helpers `type.Int2()`, `type.Int8Number()`, `type.NumericString(10, 2)`, `type.NumericBigInt()`, `type.Float4()` and `type.Varchar(64)` give the same types.
+
+The old helpers still compile, and nothing warns where they are called. They are removed in the same release as the deprecated schema names, so rewrite them now.
+
+## `ts-renamed-postgres-column-helpers`
+
+Rename the imports and every use. Each column helper is named after the explicit type it gives:
+
+```ts
+import { int8BigIntColumn, numericStringColumn } from '@prisma/orm-postgres/adapter/column-types';
+
+field.column(int8BigIntColumn); // was int8Column
+field.column(numericStringColumn(10, 2)); // was numericColumn(10, 2)
+```
+
+## `ts-renamed-postgres-type-groupings`
+
+Replace the removed exports of `@internal/target-postgres/control`:
+
+| Before | After |
+| --- | --- |
+| `postgresScalarAndNativeTypeConstructors` | `postgresTypeNamespace` |
+| `postgresNativeAuthoringTypes` | `postgresExplicitTypes` |
+| `postgresScalarAuthoringTypes` | `postgresExplicitTypes` |
+
+`postgresExplicitTypes` holds only explicit types. A test that built a type namespace from `postgresScalarAuthoringTypes` and spread it under `assembleAuthoringContributions([...]).type` can drop it: the assembled namespace already holds every PostgreSQL type, including the convenience types.

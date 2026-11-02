@@ -1,7 +1,7 @@
 # ADR 316 — PostgreSQL scalars get convenience types
 
 **Status:** Accepted
-**Builds on:** [ADR 257 — Scalar types are named after the target on every surface](ADR%20257%20-%20Scalar%20types%20are%20named%20after%20the%20target%20on%20every%20surface.md), [ADR 279 — Convenience types choose an explicit type from their arguments](ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md)
+**Amends:** [ADR 257 — Scalar types are named after the target on every surface](ADR%20257%20-%20Scalar%20types%20are%20named%20after%20the%20target%20on%20every%20surface.md), [ADR 279 — Convenience types choose an explicit type from their arguments](ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md)
 
 ## At a glance
 
@@ -24,7 +24,7 @@ model Account {
 
 ## Decision
 
-PostgreSQL's integer, decimal, floating-point, text, boolean and binary types get convenience types, built with the type choice mechanism of ADR 279. Every option is optional and has a default, so the bare name is a working type. An argument that is not an option is passed on to the explicit type the row names.
+PostgreSQL's integer, decimal, floating-point, text, boolean and binary types get convenience types, built with the type choice mechanism of ADR 279. Every option is optional and has a default, so the bare name is a working type. An argument that is not an option is passed on to the explicit type the row names. Arguments to a convenience type are written by name, such as `Decimal(precision: 10, scale: 2)`.
 
 | Convenience type | `as` | `storage` | Becomes |
 | --- | --- | --- | --- |
@@ -42,7 +42,9 @@ PostgreSQL's integer, decimal, floating-point, text, boolean and binary types ge
 | `Boolean(storage?)` | | `bool` (default) | `Bool` |
 | `Bytes(storage?)` | | `bytea` (default) | `Bytea` |
 
-The explicit types follow ADR 257's token rule and ADR 279's suffix rule: the database type, plus a suffix naming the application value when the database type has more than one codec. No codec id changes.
+Every convenience type has a `storage` option, even where PostgreSQL has one storage for it, as `Date(storage: date)` already does under ADR 279. A convenience type then has the same arguments on every target, and a target adds a storage value without changing them.
+
+The PSL name of an explicit type is the database type, plus a suffix naming the application value where the database type has more than one codec. This amends ADR 257's token rule, which derived the name from the codec id. Codec ids are frozen identifiers and are not renamed, so they need not match the PSL name: `Int8BigInt` is `pg/int8@1` and `NumericBigInt` is `pg/unboundedint@1`. Internal symbols named after a codec, such as `PG_UNBOUNDED_INT_CODEC_ID`, keep their names too.
 
 | Explicit type | Codec id | Database type | Application value |
 | --- | --- | --- | --- |
@@ -61,6 +63,10 @@ The explicit types follow ADR 257's token rule and ADR 279's suffix rule: the da
 | `Bytea` | `pg/bytea@1` | `bytea` | `Uint8Array` |
 
 The explicit names that disappear, `SmallInt`, `BigIntNumber`, `Numeric`, `UnboundedInt`, `Real` and `VarChar`, stay for one release line as deprecated aliases of `Int2`, `Int8Number`, `NumericString`, `NumericBigInt`, `Float4` and `Varchar`, under ADR 257's rule. The names that become convenience types need no alias: at their defaults they give the codec they gave before, so no existing schema or contract changes.
+
+A TypeScript column helper is named after the explicit type it gives: `int8Column` becomes `int8BigIntColumn` and `numericColumn` becomes `numericStringColumn`. The other helpers, such as `int2Column`, `textColumn` and `varcharColumn`, already match.
+
+The family's `sql.String(n)` and `sql.Char(n)` stay as they are: they are family-wide explicit types for `varchar` and `char` with a required length, shared with SQLite and MySQL. `sql.String(12)` is `Varchar(12)`, not the `String` convenience type. They are reconsidered with the other targets in TML-3790.
 
 `Json` and `Jsonb` keep their names; a `Json` convenience type is decided separately. Types that already name one concept keep a single explicit name and get no convenience type: `Uuid`, `Inet`, `Bit`, `VarBit`, `Xml`, `Oid`, `Money`, `citext.Citext` and `pg.enum(...)`.
 
@@ -93,7 +99,7 @@ BigInt: {
 },
 ```
 
-A deprecated alias is the same type constructor as its replacement with `deprecated: { replacement }` and no `inferred` mark. The aliases are declared after the types they replace, so `contract print`, which takes the first constructor that produces a codec when no marked one does, never writes one.
+A deprecated alias is the same type constructor as its replacement with `deprecated: { replacement }` and no `inferred` mark. When no marked constructor produces a column's codec, `contract print` takes the first constructor that does, and it leaves out constructors marked `deprecated`. So print never writes an alias, wherever the aliases are declared.
 
 ### Two refusals the mechanism gives
 
@@ -104,7 +110,13 @@ The type choice mechanism is not changed, so two of its rules shape these types:
 
 ### Deprecated names warn in SQL schemas
 
-The SQL family's PSL interpreter reports `PSL_DEPRECATED_SCALAR_NAME` at the type of a field or `types {}` alias written with a constructor marked deprecated, with or without arguments, through the contract source's warning channel. MongoDB's interpreter already did. `contract emit` prints the warning and still emits; the language server shows it.
+The SQL family's PSL interpreter reports `PSL_DEPRECATED_SCALAR_NAME` wherever a constructor marked deprecated is written, as ADR 257 states: with or without arguments, as the type of a field, a value object member or a `types {}` alias. It goes through the contract source's warning channel. `contract emit` prints the warning and still emits; the language server shows it.
+
+The warning names the explicit replacement, such as `use "Int2"` for `SmallInt`, because that is the exact replacement for the old name. The convenience call `Int(storage: int2)` is the form the tools write. Both emit the same contract.
+
+### Deprecated names in TypeScript
+
+The aliases are in the same `type` namespace, so `type.SmallInt()`, `type.VarChar(64)` and the others still compile in a TypeScript contract and give the same type. Nothing warns where they are called. They are removed in the same release as the PSL aliases.
 
 ### The tools
 
@@ -128,6 +140,7 @@ For each database type, the explicit type marked `inferred` is the one the conve
 - `contract infer` and `contract print` write different text for some columns, such as `Int(storage: int2)` where they wrote `SmallInt`. The contract they describe is the same.
 - In a TypeScript contract, `type.Int()`, `type.BigInt({ as: 'number' })` and so on are typed as the explicit type they choose, and a combination with no row does not compile.
 - SQLite, MySQL and MongoDB use some of these names for explicit types today. They get the same convenience types over their own explicit types in a later change, decided on its own.
+- This ADR's `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean` and `Bytes` are the cross-target concepts. SQLite's `Int` today is a 64-bit `integer`, which does not fit `Int`, an integer within 32 bits. TML-3790 must rename it or decide otherwise.
 
 ## Alternatives considered
 
@@ -135,6 +148,6 @@ For each database type, the explicit type marked `inferred` is the one the conve
 
 **One `Int` convenience type covering `int2`, `int4` and `int8`.** Fewer names, but every surveyed tool separates an integer from a big integer, and an `int8` read as a `number` would sit beside one read as a `bigint` under one name, so the default application value would depend on the storage chosen.
 
-**An `as` option on every convenience type.** It would let every name grow application values without a new option later, but an option with one value says nothing, and adding an option later does not rename anything.
+**An `as` option on every convenience type.** It would let every name grow application values without a new option later. An `as` option appears only where there is a choice of application value, because adding one later renames nothing. `storage` differs: it is on every convenience type so the arguments are the same on every target, as the Decision says.
 
 **Remove the old explicit names at once.** ADR 279 did this for the date and time types before the release candidate. These names are in released schemas, so ADR 257's one-release-line alias rule applies.

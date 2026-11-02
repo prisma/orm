@@ -1,27 +1,14 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
-
-const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = join(here, '../../../../..');
+import { detectionPatterns } from '../guide-detections';
 
 const GUIDES = [
   'upgrade-instructions/pending/scalar-convenience-types/app/instructions.md',
   'upgrade-instructions/pending/scalar-convenience-types/extension/instructions.md',
 ];
 
-function patternsOf(guidePath: string, id: string): readonly RegExp[] {
-  const guide = readFileSync(join(repoRoot, guidePath), 'utf-8');
-  const block = guide.split(/\n {2}- id: /).find((entry) => entry.startsWith(`${id}\n`)) ?? '';
-  return [...block.matchAll(/^ {8}- '(.*)'$/gm)].map(
-    ([, pattern]) => new RegExp((pattern ?? '').replaceAll("''", "'")),
-  );
-}
-
 describe.each(GUIDES)('the renamed PostgreSQL scalar type detection in %s', (guidePath) => {
   const matches = (id: string, content: string) =>
-    patternsOf(guidePath, id).some((pattern) => pattern.test(content));
+    detectionPatterns(guidePath, id).some((pattern) => pattern.test(content));
 
   it('matches a Prisma 8 field or alias typed with a renamed name, and nothing else', () => {
     const psl = (body: string) =>
@@ -72,5 +59,41 @@ describe.each(GUIDES)('the renamed PostgreSQL scalar type detection in %s', (gui
       sqlString: false,
       convenience: false,
     });
+  });
+
+  it('matches the renamed column helpers only', () => {
+    const ts = (content: string) => matches('ts-renamed-postgres-column-helpers', content);
+    expect({
+      int8: ts("import { int8Column } from '@prisma/orm-postgres/adapter/column-types';"),
+      numeric: ts('field.column(numericColumn(10, 2))'),
+      int8BigInt: ts('field.column(int8BigIntColumn)'),
+      numericString: ts('field.column(numericStringColumn(10, 2))'),
+      int4: ts('field.column(int4Column)'),
+    }).toEqual({
+      int8: true,
+      numeric: true,
+      int8BigInt: false,
+      numericString: false,
+      int4: false,
+    });
+  });
+});
+
+describe('the renamed PostgreSQL type grouping detection in the extension guide', () => {
+  const matches = (content: string) =>
+    detectionPatterns(GUIDES[1] ?? '', 'ts-renamed-postgres-type-groupings').some((pattern) =>
+      pattern.test(content),
+    );
+
+  it('matches the removed exports only', () => {
+    expect({
+      scalar: matches(
+        "import { postgresScalarAuthoringTypes } from '@internal/target-postgres/control';",
+      ),
+      native: matches('collectScalarTypeConstructors(postgresNativeAuthoringTypes)'),
+      aggregate: matches('{ ...postgresScalarAndNativeTypeConstructors }'),
+      explicit: matches('collectScalarTypeConstructors(postgresExplicitTypes)'),
+      namespace: matches('{ ...postgresTypeNamespace }'),
+    }).toEqual({ scalar: true, native: true, aggregate: true, explicit: false, namespace: false });
   });
 });
