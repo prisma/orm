@@ -20,5 +20,8 @@ export function toRuntimeOptions<TTargetId extends string>(
     log: ifDefined('log', options.log),
     mode: ifDefined('mode', options.mode),
   };
-  return { ...copies.verifyMarker, ...copies.middleware, ...copies.log, ...copies.mode };
+  return Object.values(copies).reduce<RuntimeExecutionOptions>(
+    (merged, copy) => Object.assign(merged, copy),
+    {},
+  );
 }

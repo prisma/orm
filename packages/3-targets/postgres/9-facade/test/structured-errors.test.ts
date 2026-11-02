@@ -139,6 +139,20 @@ describe('binding validation raises RUNTIME.BINDING_INVALID', () => {
     });
   });
 
+  it('never copies part of a url with no scheme into the error', () => {
+    const error = capture(() => resolvePostgresBinding({ url: 'admin:hunter2@db.internal/app' }));
+    expect(error).toMatchObject({
+      code: 'RUNTIME.BINDING_INVALID',
+      message: 'Postgres URL must use postgres:// or postgresql://',
+      meta: { extension: 'postgres', reason: 'wrong scheme' },
+    });
+    const descriptors = JSON.stringify(Object.getOwnPropertyDescriptors(error));
+    expect(
+      ['admin', 'hunter2', 'db.internal'].filter((part) => descriptors.includes(part)),
+    ).toEqual([]);
+    expect(error).not.toHaveProperty('meta.received');
+  });
+
   it('unrecognizable pg object', () => {
     const error = capture(() =>
       resolvePostgresBinding({

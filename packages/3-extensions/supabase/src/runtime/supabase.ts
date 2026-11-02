@@ -257,19 +257,25 @@ function algKeyMismatchReason(jwt: string, kind: KeyMaterial['kind']): string | 
   return undefined;
 }
 
-const supabaseBindingRules: PostgresBindingRules<SupabaseBinding['kind']> = {
+const supabaseBindingRules: PostgresBindingRules = {
   extension: 'supabase',
   kinds: ['url', 'pgPool'],
-  refuse: () =>
-    supabaseError('SUPABASE.CONFIG_INVALID', 'Supabase takes a pg.Pool or a url, not a pg.Client', {
-      why: 'Each role-bound query needs a connection of its own, which a single pg.Client cannot give.',
-      fix: "Pass a pg.Pool as pg, a url, or binding: { kind: 'pgPool', pool } or { kind: 'url', url }.",
-      meta: { reason: 'the database input is a pg.Client' },
-    }),
 };
 
 function resolveSupabaseBinding(options: SupabaseBindingOptions): SupabaseBinding | undefined {
-  return resolveOptionalPostgresBinding(options, supabaseBindingRules);
+  const binding = resolveOptionalPostgresBinding(options, supabaseBindingRules);
+  if (binding?.kind === 'pgClient') {
+    throw supabaseError(
+      'SUPABASE.CONFIG_INVALID',
+      'Supabase takes a pg.Pool or a url, not a pg.Client',
+      {
+        why: 'Each role-bound query needs a connection of its own, which a single pg.Client cannot give.',
+        fix: "Pass a pg.Pool as pg, a url, or binding: { kind: 'pgPool', pool } or { kind: 'url', url }.",
+        meta: { reason: 'the database input is a pg.Client' },
+      },
+    );
+  }
+  return binding;
 }
 
 function withSupabaseDescriptor(

@@ -5,6 +5,7 @@ import {
 } from '@internal/driver-postgres/runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { blindCast } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import type { Client, Pool } from 'pg';
 import { postgresError } from '../errors';
@@ -62,10 +63,17 @@ export function validatePostgresUrl(url: string, extension = 'postgres'): string
   }
 
   if (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') {
+    const hasScheme = trimmed.toLowerCase().startsWith(`${parsed.protocol}//`);
     throw postgresError(
       'RUNTIME.BINDING_INVALID',
       'Postgres URL must use postgres:// or postgresql://',
-      { meta: { extension, reason: 'wrong scheme', received: parsed.protocol } },
+      {
+        meta: {
+          extension,
+          reason: 'wrong scheme',
+          ...ifDefined('received', hasScheme ? parsed.protocol : undefined),
+        },
+      },
     );
   }
 
@@ -82,20 +90,13 @@ function isObject(value: unknown): value is object {
 
 type BindingKind = PostgresBinding['kind'];
 
-type AcceptedBinding<TKind extends BindingKind> = Extract<
-  PostgresBinding,
-  { readonly kind: TKind }
->;
-
-/** The binding kinds a client accepts, and the extension its errors name. */
-export interface PostgresBindingRules<TKind extends BindingKind> {
+/** The binding kinds a client's errors offer, and the extension they name. */
+export interface PostgresBindingRules {
   readonly extension: string;
-  readonly kinds: readonly TKind[];
-  /** The error for a binding of a Postgres kind the client does not accept. */
-  readonly refuse?: (kind: BindingKind) => Error;
+  readonly kinds: readonly BindingKind[];
 }
 
-export const postgresBindingRules: PostgresBindingRules<BindingKind> = {
+export const postgresBindingRules: PostgresBindingRules = {
   extension: 'postgres',
   kinds: ['url', 'pgPool', 'pgClient'],
 };
@@ -128,7 +129,7 @@ interface BindingWording {
   readonly pgObjectsEach: string;
 }
 
-function wordingOf<TKind extends BindingKind>(rules: PostgresBindingRules<TKind>): BindingWording {
+function wordingOf(rules: PostgresBindingRules): BindingWording {
   const pgKinds = rules.kinds.filter((kind) => pgObjectNames[kind] !== undefined);
   const pgNames = pgKinds.flatMap((kind) => pgObjectNames[kind] ?? []);
   return {
@@ -250,22 +251,6 @@ function checkInputTypes(options: PostgresBindingFields, wording: BindingWording
   }
 }
 
-function accept<TKind extends BindingKind>(
-  binding: PostgresBinding,
-  rules: PostgresBindingRules<TKind>,
-  wording: BindingWording,
-): AcceptedBinding<TKind> {
-  if (isAcceptedBinding(binding, rules.kinds)) return binding;
-  throw rules.refuse?.(binding.kind) ?? unknownKindError(wording, binding.kind);
-}
-
-function isAcceptedBinding<TKind extends BindingKind>(
-  binding: PostgresBinding,
-  kinds: readonly TKind[],
-): binding is AcceptedBinding<TKind> {
-  return new Set<string>(kinds).has(binding.kind);
-}
-
 function checkBindingContents(binding: PostgresBinding, wording: BindingWording): PostgresBinding {
   if (binding.kind === 'url') {
     const url: unknown = binding.url;
@@ -303,10 +288,10 @@ function checkBindingContents(binding: PostgresBinding, wording: BindingWording)
   return binding;
 }
 
-function resolveBinding<TKind extends BindingKind>(
+function resolveBinding(
   options: PostgresBindingInput,
-  rules: PostgresBindingRules<TKind>,
-): AcceptedBinding<TKind> {
+  rules: PostgresBindingRules,
+): PostgresBinding {
   const wording = wordingOf(rules);
   checkInputTypes(options, wording);
   const providedCount =
@@ -326,16 +311,11 @@ function resolveBinding<TKind extends BindingKind>(
   }
 
   if (options.binding !== undefined) {
-    const accepted = accept(options.binding, rules, wording);
-    return accept(checkBindingContents(accepted, wording), rules, wording);
+    return checkBindingContents(options.binding, wording);
   }
 
   if (options.url !== undefined) {
-    return accept(
-      { kind: 'url', url: validatePostgresUrl(options.url, rules.extension) },
-      rules,
-      wording,
-    );
+    return { kind: 'url', url: validatePostgresUrl(options.url, rules.extension) };
   }
 
   const pgBinding = options.pg;
@@ -344,11 +324,11 @@ function resolveBinding<TKind extends BindingKind>(
   }
 
   if (isPgPool(pgBinding)) {
-    return accept({ kind: 'pgPool', pool: pgBinding }, rules, wording);
+    return { kind: 'pgPool', pool: pgBinding };
   }
 
   if (isPgClient(pgBinding)) {
-    return accept({ kind: 'pgClient', client: pgBinding }, rules, wording);
+    return { kind: 'pgClient', client: pgBinding };
   }
 
   throw postgresError(
@@ -365,10 +345,10 @@ export function resolvePostgresBinding(options: PostgresBindingInput): PostgresB
   return resolveBinding(options, postgresBindingRules);
 }
 
-export function resolveOptionalPostgresBinding<TKind extends BindingKind>(
+export function resolveOptionalPostgresBinding(
   options: PostgresBindingFields,
-  rules: PostgresBindingRules<TKind>,
-): AcceptedBinding<TKind> | undefined {
+  rules: PostgresBindingRules,
+): PostgresBinding | undefined {
   const providedCount =
     Number(options.binding !== undefined) +
     Number(options.url !== undefined) +
