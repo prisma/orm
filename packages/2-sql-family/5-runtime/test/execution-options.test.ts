@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { toRuntimeOptions } from '../src/execution-options';
 import type { SqlMiddleware } from '../src/middleware/sql-middleware';
-import { toRuntimeOptions } from '../src/sql-context';
 
 describe('toRuntimeOptions', () => {
   it('keeps the options the runtime takes and drops extensions', () => {

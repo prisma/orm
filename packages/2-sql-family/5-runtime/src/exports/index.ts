@@ -42,6 +42,7 @@ export {
   validateContractCodecMappings,
 } from '../codecs/validation';
 export { type DelegatingRuntime, delegatingRuntime } from '../delegating-runtime';
+export { type SqlExecutionOptions, toRuntimeOptions } from '../execution-options';
 export { lowerSqlPlan } from '../lower-sql-plan';
 export type { BudgetsOptions } from '../middleware/budgets';
 export { budgets } from '../middleware/budgets';
@@ -75,7 +76,6 @@ export type {
 export type {
   ExecutionContext,
   RuntimeParameterizedCodecDescriptor,
-  SqlExecutionOptions,
   SqlExecutionStack,
   SqlExecutionStackWithDriver,
   SqlRuntimeAdapterDescriptor,
@@ -89,7 +89,6 @@ export type {
 export {
   createExecutionContext,
   createSqlExecutionStack,
-  toRuntimeOptions,
 } from '../sql-context';
 export type {
   ActivityRoute,

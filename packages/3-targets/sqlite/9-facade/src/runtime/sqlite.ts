@@ -179,7 +179,7 @@ function buildSqliteTransactionMembers<
   };
 }
 
-export type SqliteOptionsBase = SqlExecutionOptions<SqliteTargetId>;
+export interface SqliteOptionsBase extends SqlExecutionOptions<SqliteTargetId> {}
 
 export type SqliteOptions<
   TContract extends Contract<SqlStorage>,
