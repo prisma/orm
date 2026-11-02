@@ -1,4 +1,3 @@
-import { newMongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoRuntimeExtensionDescriptor } from '@internal/mongo-runtime';
 import { test } from 'vitest';
 import type { Contract } from '../../../../2-mongo-family/1-foundation/mongo-contract/test/fixtures/orm-contract';
@@ -15,7 +14,6 @@ function extensionOfFamily<const Family extends string>(familyId: Family) {
     familyId,
     targetId: 'mongo',
     version: '0.0.1',
-    codecs: newMongoCodecRegistry,
     create: () => ({ familyId, targetId: 'mongo' as const }),
   } as const;
 }

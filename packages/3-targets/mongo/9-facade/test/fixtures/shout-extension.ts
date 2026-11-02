@@ -1,6 +1,5 @@
-import type { CodecDescriptor, DataTypeValue } from '@internal/framework-components/codec';
 import type { ExtensionPackRef } from '@internal/framework-components/components';
-import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
+import { mongoCodec, mongoCodecDescriptor } from '@internal/mongo-codec';
 import { mongoDataType } from '@internal/mongo-contract/data-type';
 import type { MongoRuntimeExtensionDescriptor } from '@internal/mongo-runtime';
 
@@ -14,38 +13,29 @@ const shoutCodec = mongoCodec({
   dataType: shoutType,
   toWire: (value: string) => `shout:${value.toUpperCase()}`,
   fromWire: (wire: string) => wire.slice('shout:'.length).toLowerCase(),
-  fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
+  fromDataTypeValue: (value) => String(value.value),
 });
 
-const shoutDescriptor: CodecDescriptor = {
-  codecId: shoutCodec.id,
-  dataType: shoutType.id,
-  traits: ['equality'],
-  paramsSchema: undefined,
-  isParameterized: false,
-  factory: () => () => shoutCodec,
+type ShoutCodecTypes = {
+  readonly 'shout/text@1': { readonly input: string; readonly output: string };
 };
 
-export const shoutPack = {
+const shoutPackMeta = {
   kind: 'extension',
   id: 'shout',
   familyId: 'mongo',
   targetId: 'mongo',
   version: '0.0.1',
   dataTypes: [shoutType],
-  types: { codecTypes: { codecDescriptors: [shoutDescriptor] } },
+  types: {
+    codecTypes: { codecDescriptors: [mongoCodecDescriptor(shoutCodec, { traits: ['equality'] })] },
+  },
 } as const satisfies ExtensionPackRef<'mongo', 'mongo'>;
 
+export const shoutPack: typeof shoutPackMeta & { readonly __codecTypes?: ShoutCodecTypes } =
+  shoutPackMeta;
+
 export const shoutRuntime: MongoRuntimeExtensionDescriptor<'mongo'> = {
-  kind: 'extension',
-  id: 'shout',
-  familyId: 'mongo',
-  targetId: 'mongo',
-  version: '0.0.1',
-  codecs: () => {
-    const registry = newMongoCodecRegistry();
-    registry.register(shoutCodec);
-    return registry;
-  },
+  ...shoutPackMeta,
   create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
 };

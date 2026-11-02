@@ -1,7 +1,7 @@
 import { type ExecutionMutationDefault, executionHash } from '@internal/contract/types';
 import { type DataTypeValue, dataType, readJsonString } from '@internal/framework-components/codec';
 import type { RuntimeMutationDefaultGenerator } from '@internal/framework-components/runtime';
-import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
+import { mongoCodec, mongoCodecDescriptor } from '@internal/mongo-codec';
 import type { MongoContract } from '@internal/mongo-contract';
 import { describe, expect, it } from 'vitest';
 import {
@@ -17,20 +17,23 @@ const NS = '__unbound__';
 
 const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
 
-function registryWith(...ids: readonly string[]) {
-  const registry = newMongoCodecRegistry();
-  for (const id of ids) {
-    registry.register(
-      mongoCodec({
-        typeId: id,
-        fromWire: (w: string) => w,
-        toWire: (v: string) => v,
-        dataType: textType,
-        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
-      }),
-    );
-  }
-  return registry;
+function codecTypesWith(...ids: readonly string[]) {
+  return {
+    codecTypes: {
+      codecDescriptors: ids.map((id) =>
+        mongoCodecDescriptor(
+          mongoCodec({
+            typeId: id,
+            fromWire: (w: string) => w,
+            toWire: (v: string) => v,
+            dataType: textType,
+            fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
+          }),
+          { traits: [] },
+        ),
+      ),
+    },
+  };
 }
 
 function target(): MongoRuntimeTargetDescriptor<'mongo'> {
@@ -40,7 +43,7 @@ function target(): MongoRuntimeTargetDescriptor<'mongo'> {
     familyId: 'mongo',
     targetId: 'mongo',
     version: '0.0.1',
-    codecs: () => registryWith('test/target@1'),
+    types: codecTypesWith('test/target@1'),
     create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
   };
 }
@@ -54,7 +57,7 @@ function adapter(
     familyId: 'mongo',
     targetId: 'mongo',
     version: '0.0.1',
-    codecs: () => registryWith('test/adapter@1'),
+    types: codecTypesWith('test/adapter@1'),
     mutationDefaultGenerators: () => generators,
     create: () => {
       throw new Error('the execution context never instantiates the adapter');
@@ -75,7 +78,7 @@ function extension(
     familyId: 'mongo',
     targetId: 'mongo',
     version: '0.0.1',
-    codecs: () => registryWith(...(options.codecIds ?? [])),
+    types: codecTypesWith(...(options.codecIds ?? [])),
     ...(options.generators ? { mutationDefaultGenerators: () => options.generators ?? [] } : {}),
     create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
   };

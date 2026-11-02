@@ -8,6 +8,13 @@ changes:
       matches:
         - '\bcreateMongoExecutionContext\b'
         - '\bMongoRuntimeExtensionDescriptor\b'
+  - id: mongo-codecs-declared-once
+    summary: |
+      A MongoDB target, adapter or extension descriptor declares each codec once, as a codec descriptor in `types.codecTypes.codecDescriptors`, as a Postgres extension does. The `codecs()` slot that returned a `MongoCodecRegistry` is gone from `MongoStaticContributions`, `MongoRuntimeTargetDescriptor`, `MongoRuntimeAdapterDescriptor` and `MongoRuntimeExtensionDescriptor`. The runtime, the adapter and the migration runner take each codec from its descriptor with `assembleMongoCodecRegistry`. Build a descriptor from a codec with `mongoCodecDescriptor` from `@prisma/orm-family-mongo/codec`.
+    detection:
+      glob: "**/*.{ts,mts,cts}"
+      matches:
+        - '(?<![\s\S])(?=[\s\S]*\bMongoRuntime(?:Extension|Target|Adapter)Descriptor\b)[\s\S]*\bcodecs\s*:'
 ---
 
 # MongoDB execution contexts check the contract against the stack
@@ -15,4 +22,33 @@ changes:
 ## `mongo-execution-context-checks-contract-requirements`
 
 1. Where code calls `createMongoExecutionContext({ contract, stack })` with a contract that requires extension packs, build the stack with those packs: `createMongoExecutionStack({ target, adapter, extensions: [myPack] })`.
-2. A MongoDB extension's codecs now encode values on writes as well as decode them on reads. Check that each codec's `toWire` returns the form the database stores, and that `fromWire` reads that form back. Build codecs and the registry `codecs()` returns with `mongoCodec` and `newMongoCodecRegistry` from `@prisma/orm-family-mongo/codec`.
+2. A MongoDB extension's codecs now encode values on writes as well as decode them on reads. Check that each codec's `toWire` returns the form the database stores, and that `fromWire` reads that form back.
+
+## `mongo-codecs-declared-once`
+
+Replace the `codecs()` slot of a MongoDB descriptor with one codec descriptor per codec, shared by the pack and the runtime descriptor:
+
+```typescript
+import { mongoCodec, mongoCodecDescriptor } from '@prisma/orm-family-mongo/codec';
+
+const shoutCodec = mongoCodec({ typeId: 'shout/text@1', dataType: shoutText, toWire, fromWire, fromDataTypeValue });
+
+const shoutMeta = {
+  kind: 'extension',
+  id: 'shout',
+  familyId: 'mongo',
+  targetId: 'mongo',
+  version: '0.0.1',
+  dataTypes: [shoutText],
+  types: { codecTypes: { codecDescriptors: [mongoCodecDescriptor(shoutCodec, { traits: ['equality'] })] } },
+} as const;
+
+export const shoutRuntime: MongoRuntimeExtensionDescriptor<'mongo'> = {
+  ...shoutMeta,
+  create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
+};
+```
+
+1. For each codec the `codecs()` registry held, add `mongoCodecDescriptor(codec, { traits })` to `types.codecTypes.codecDescriptors`, with the traits the pack declared for it. If the pack already lists a hand-written descriptor for the codec, replace it with this one.
+2. Delete `codecs` from the descriptor.
+3. Make the runtime and control descriptors spread the same metadata as the pack, so all three list the same descriptors and `dataTypes`.

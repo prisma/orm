@@ -18,20 +18,16 @@ import {
   type MutationDefaultsOptions,
   runtimeError,
 } from '@internal/framework-components/runtime';
-import { assembleMongoCodecRegistry, type MongoCodecRegistry } from '@internal/mongo-codec';
+import { assembleMongoCodecRegistry, type MongoCodecContributor } from '@internal/mongo-codec';
 import type { MongoContract } from '@internal/mongo-contract';
 import type { MongoAdapter, MongoDriver } from '@internal/mongo-lowering';
 import type { MongoExecutionContext } from '@internal/mongo-query-ast/execution';
 
 /**
- * Mongo-specific static contributions a runtime descriptor declares.
- *
- * Mirrors `SqlStaticContributions` in shape: a `codecs()` getter that yields a `MongoCodecRegistry` populated with this contributor's codecs. The registry is then walked by `createMongoExecutionContext` and folded into the single per-execution registry the runtime reads from at decode time.
+ * Mongo-specific static contributions a runtime descriptor declares. Codecs are not among them: a descriptor declares its codecs once, as codec descriptors in `types.codecTypes.codecDescriptors`, which `createMongoExecutionContext` and the adapter both read with `assembleMongoCodecRegistry`.
  */
 export interface MongoStaticContributions
-  extends Pick<MutationDefaultGeneratorContributor, 'mutationDefaultGenerators'> {
-  readonly codecs: () => MongoCodecRegistry;
-}
+  extends Pick<MutationDefaultGeneratorContributor, 'mutationDefaultGenerators'> {}
 
 export interface MongoRuntimeTargetDescriptor<
   TTargetId extends string = 'mongo',
@@ -131,7 +127,7 @@ export function createMongoExecutionContext<
 }): MongoExecutionContext<TContract> {
   assertMongoExecutionStackContractRequirements(options.contract, options.stack);
 
-  const contributors: ReadonlyArray<MongoStaticContributions & { readonly id: string }> = [
+  const contributors: ReadonlyArray<MongoStaticContributions & MongoCodecContributor> = [
     options.stack.target,
     options.stack.adapter,
     ...options.stack.extensions,

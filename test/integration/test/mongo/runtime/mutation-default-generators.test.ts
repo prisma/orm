@@ -1,7 +1,6 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
 import { type ExecutionMutationDefault, executionHash } from '@internal/contract/types';
 import type { RuntimeMutationDefaultGenerator } from '@internal/framework-components/runtime';
-import { newMongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoContract } from '@internal/mongo-contract';
 import {
   createMongoExecutionContext,
@@ -35,7 +34,6 @@ function extensionWith(
     familyId: 'mongo',
     targetId: 'mongo',
     version: '0.0.1',
-    codecs: () => newMongoCodecRegistry(),
     mutationDefaultGenerators: () => generators,
     create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
   };

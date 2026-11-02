@@ -39,3 +39,34 @@ describe('the extension mongo-execution-context-checks-contract-requirements det
     ]).toEqual([true, true, false, false]);
   });
 });
+
+describe('the app mongo-contract-requires-target detection', () => {
+  const matches = matcher(APP_NOTE, 'mongo-contract-requires-target');
+
+  it('matches a MongoDB contract without a target, and not one with it or a SQL contract', () => {
+    expect([
+      matches('{\n  "targetFamily": "mongo",\n  "roots": {}\n}\n'),
+      matches('{\n  "target": "mongo",\n  "targetFamily": "mongo",\n  "roots": {}\n}\n'),
+      matches('{\n  "targetFamily": "mongo",\n  "target": "mongo"\n}\n'),
+      matches('{\n  "targetFamily": "sql",\n  "roots": {}\n}\n'),
+    ]).toEqual([true, false, false, false]);
+  });
+});
+
+describe('the extension mongo-codecs-declared-once detection', () => {
+  const matches = matcher(EXTENSION_NOTE, 'mongo-codecs-declared-once');
+
+  it('matches a MongoDB descriptor with a codecs slot, and not one without it or a SQL one', () => {
+    expect([
+      matches(
+        "const pack: MongoRuntimeExtensionDescriptor<'mongo'> = {\n  kind: 'extension',\n  codecs: () => registry,\n};",
+      ),
+      matches(
+        "const pack: MongoRuntimeExtensionDescriptor<'mongo'> = {\n  kind: 'extension',\n  types: { codecTypes: { codecDescriptors } },\n};",
+      ),
+      matches(
+        "const pack: SqlRuntimeExtensionDescriptor<'postgres'> = {\n  codecs: () => descriptors,\n};",
+      ),
+    ]).toEqual([true, false, false]);
+  });
+});

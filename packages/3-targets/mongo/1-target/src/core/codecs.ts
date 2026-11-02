@@ -1,7 +1,6 @@
 import type { JsonValue } from '@internal/contract/types';
 import type {
   CodecDescriptor,
-  CodecTrait,
   DataTypeParams,
   DataTypeValue,
 } from '@internal/framework-components/codec';
@@ -14,13 +13,12 @@ import {
   renderTsLiteral,
 } from '@internal/framework-components/codec';
 import {
-  type MongoCodec,
   type MongoCodecRegistry,
   mongoCodec,
+  mongoCodecDescriptor,
   newMongoCodecRegistry,
 } from '@internal/mongo-codec';
 import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
-import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { Binary, Decimal128, Double, Long, ObjectId } from 'bson';
 import { bsonToJson, decodeBsonValue, encodeBsonValue, readBsonJson } from './bson-codec-helpers';
@@ -251,93 +249,54 @@ export const mongoStandardCodecs = [
 ] as const;
 
 /**
- * Build a {@link CodecDescriptor} for a Mongo wire-type codec.
- *
- * Wraps an existing {@link MongoCodec} instance into a descriptor whose factory hands out the same shared codec, or, for a codec whose data type has parameters, one built for the column's parameters. Mongo's full migration to descriptor-first authoring is tracked under TML-2324; for now the descriptor view is composed from the existing `mongoCodec()` outputs.
- */
-function descriptorFor<Id extends string>(
-  codec: MongoCodec<Id, readonly CodecTrait[]>,
-  metadata: {
-    readonly traits: readonly CodecTrait[];
-    /** Builds the codec for a column's parameters, for a codec whose data type has parameters. */
-    readonly withParams?: (params: DataTypeParams) => MongoCodec<Id, readonly CodecTrait[]>;
-    readonly renderValueLiteral?: CodecDescriptor['renderValueLiteral'];
-    readonly keepsWrittenForm?: true;
-  },
-): CodecDescriptor {
-  return {
-    codecId: codec.id,
-    dataType: codec.dataType.id,
-    traits: metadata.traits,
-    paramsSchema: blindCast<
-      CodecDescriptor['paramsSchema'],
-      "the codec takes exactly its data type's parameters, and the descriptor list erases each codec's own parameter type"
-    >(codec.dataType.params),
-    isParameterized: codec.dataType.params !== undefined,
-    factory: blindCast<
-      CodecDescriptor['factory'],
-      'a codec whose type has no parameters is shared by every column'
-    >((params: DataTypeParams | undefined) => {
-      const built =
-        metadata.withParams === undefined || params === undefined
-          ? codec
-          : metadata.withParams(params);
-      return () => built;
-    }),
-    ...ifDefined('renderValueLiteral', metadata.renderValueLiteral),
-    ...ifDefined('keepsWrittenForm', metadata.keepsWrittenForm),
-  };
-}
-
-/**
  * Mongo wire-type codec descriptors. Static metadata such as `traits` lives here (the descriptor shape) — `MongoCodec` itself carries its data type and the four conversion methods (TML-2357).
  */
 export const mongoCodecDescriptors: ReadonlyArray<CodecDescriptor> = [
-  descriptorFor(mongoObjectIdCodec, {
+  mongoCodecDescriptor(mongoObjectIdCodec, {
     traits: ['equality'],
   }),
-  descriptorFor(mongoStringCodec, {
+  mongoCodecDescriptor(mongoStringCodec, {
     traits: ['equality', 'order', 'textual'],
     renderValueLiteral: renderTsLiteral,
   }),
-  descriptorFor(mongoDoubleCodec, {
+  mongoCodecDescriptor(mongoDoubleCodec, {
     traits: ['equality', 'order', 'numeric'],
     renderValueLiteral: floatNumberLiteral,
   }),
-  descriptorFor(mongoInt32Codec, {
+  mongoCodecDescriptor(mongoInt32Codec, {
     traits: ['equality', 'order', 'numeric'],
     renderValueLiteral: renderTsLiteral,
   }),
-  descriptorFor(mongoBooleanCodec, {
+  mongoCodecDescriptor(mongoBooleanCodec, {
     traits: ['equality', 'boolean'],
     renderValueLiteral: renderTsLiteral,
   }),
-  descriptorFor(mongoDateCodec, {
+  mongoCodecDescriptor(mongoDateCodec, {
     traits: ['equality', 'order'],
   }),
-  descriptorFor(mongoVectorCodec, {
+  mongoCodecDescriptor(mongoVectorCodec, {
     traits: ['equality'],
     withParams: vectorCodec,
   }),
-  descriptorFor(mongoInt64Codec, {
+  mongoCodecDescriptor(mongoInt64Codec, {
     traits: ['equality', 'order', 'numeric'],
     renderValueLiteral: decimalTextBigintLiteral,
   }),
-  descriptorFor(mongoInt64NumberCodec, {
+  mongoCodecDescriptor(mongoInt64NumberCodec, {
     traits: ['equality', 'order', 'numeric'],
     renderValueLiteral: decimalTextNumberLiteral,
   }),
-  descriptorFor(mongoDecimal128Codec, {
+  mongoCodecDescriptor(mongoDecimal128Codec, {
     traits: ['equality', 'order', 'numeric'],
     keepsWrittenForm: true,
   }),
-  descriptorFor(mongoBinaryCodec, {
+  mongoCodecDescriptor(mongoBinaryCodec, {
     traits: ['equality'],
   }),
-  descriptorFor(mongoJsonCodec, {
+  mongoCodecDescriptor(mongoJsonCodec, {
     traits: [],
   }),
-  descriptorFor(mongoBsonCodec, {
+  mongoCodecDescriptor(mongoBsonCodec, {
     traits: [],
   }),
 ];

@@ -5,7 +5,6 @@ import type {
   MongoRuntimeAdapterDescriptor,
   MongoRuntimeAdapterInstance,
 } from '@internal/mongo-runtime';
-import { buildStandardCodecRegistry } from '@internal/target-mongo/codecs';
 import { createMongoAdapter } from '../mongo-adapter';
 
 const mongoRuntimeAdapterDescriptor: MongoRuntimeAdapterDescriptor<
@@ -17,7 +16,6 @@ const mongoRuntimeAdapterDescriptor: MongoRuntimeAdapterDescriptor<
   familyId: 'mongo',
   targetId: 'mongo',
   version: '0.0.1',
-  codecs: buildStandardCodecRegistry,
   mutationDefaultGenerators: () => [timestampNowRuntimeGenerator()],
   create(stack: MongoExecutionStack<'mongo'>): MongoRuntimeAdapterInstance<'mongo'> {
     const adapter = createMongoAdapter(
