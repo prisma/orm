@@ -26,5 +26,23 @@ export {
   sqliteRealColumn,
   sqliteTextColumn,
 } from '../core/codecs';
-export { SQLITE_NOW_EXPRESSION } from '../core/datetime-text';
+export type {
+  SqliteDateStringDescriptor,
+  SqliteDateTemporalDescriptor,
+  SqliteDatetimeStringDescriptor,
+  SqliteDatetimeTemporalDescriptor,
+  SqliteDurationStringDescriptor,
+  SqliteTimeStringDescriptor,
+  SqliteTimeTemporalDescriptor,
+} from '../core/date-time-codecs';
+export {
+  sqliteDateStringColumn,
+  sqliteDateTemporalColumn,
+  sqliteDatetimeStringColumn,
+  sqliteDatetimeTemporalColumn,
+  sqliteDurationStringColumn,
+  sqliteTimeStringColumn,
+  sqliteTimeTemporalColumn,
+} from '../core/date-time-codecs';
+export { SQLITE_NOW_EXPRESSION, sqliteNowExpressionFor } from '../core/datetime-text';
 export { sqliteCodecDescriptorRegistry, sqliteCodecRegistry } from '../core/registry';

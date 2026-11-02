@@ -5,11 +5,14 @@ import {
   sqliteCharacter,
   sqliteCharacterVarying,
   sqliteDataTypes,
+  sqliteDate,
   sqliteDatetime,
+  sqliteDuration,
   sqliteInteger,
   sqliteJson,
   sqliteReal,
   sqliteText,
+  sqliteTime,
 } from '../src/core/data-types';
 
 const sourcesOf = (type: { readonly casts: Readonly<Record<string, unknown>> }) =>
@@ -22,11 +25,14 @@ describe('the data types this target registers', () => {
       'sqlite/blob',
       'sqlite/character',
       'sqlite/character-varying',
+      'sqlite/date',
       'sqlite/datetime',
+      'sqlite/duration',
       'sqlite/integer',
       'sqlite/json',
       'sqlite/real',
       'sqlite/text',
+      'sqlite/time',
     ]);
   });
 
@@ -38,6 +44,9 @@ describe('the data types this target registers', () => {
     ['sqlite/character', sqliteCharacter, ['sqlite/text']],
     ['sqlite/character-varying', sqliteCharacterVarying, ['sqlite/text']],
     ['sqlite/datetime', sqliteDatetime, []],
+    ['sqlite/date', sqliteDate, []],
+    ['sqlite/time', sqliteTime, []],
+    ['sqlite/duration', sqliteDuration, []],
     ['sqlite/json', sqliteJson, []],
   ])('%s casts from exactly the types the design names', (_id, type, sources) => {
     expect(sourcesOf(type)).toEqual(sources);
@@ -96,15 +105,18 @@ describe('what each cast converts', () => {
 });
 
 describe('the types stored as text', () => {
-  it('stores sqlite/datetime and sqlite/json as sqlite/text, with no texts of their own', () => {
+  it('stores the date and time types and sqlite/json as sqlite/text, with no texts of their own', () => {
     expect(
-      [sqliteDatetime, sqliteJson].map((type) => ({
+      [sqliteDatetime, sqliteDate, sqliteTime, sqliteDuration, sqliteJson].map((type) => ({
         id: type.id,
         storedAs: type.sql.storedAs,
         texts: type.sql.texts,
       })),
     ).toEqual([
       { id: 'sqlite/datetime', storedAs: 'sqlite/text', texts: [] },
+      { id: 'sqlite/date', storedAs: 'sqlite/text', texts: [] },
+      { id: 'sqlite/time', storedAs: 'sqlite/text', texts: [] },
+      { id: 'sqlite/duration', storedAs: 'sqlite/text', texts: [] },
       { id: 'sqlite/json', storedAs: 'sqlite/text', texts: [] },
     ]);
   });

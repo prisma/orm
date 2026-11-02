@@ -8,6 +8,8 @@ import type {
 } from '@internal/framework-components/control';
 import { SqlStorage } from '@internal/sql-contract/types';
 import { relationalNodeEntityKind, relationalNodeGranularity } from '@internal/sql-schema-ir/types';
+import { setFallbackTemporal } from '@internal/type-implementations/temporal';
+import { Temporal as fallbackTemporal } from 'temporal-polyfill/full/implementation';
 import { sqliteTargetDescriptorMeta } from '../descriptor-meta';
 import { sqliteError } from '../errors';
 import { SqliteContractSerializer } from '../sqlite-contract-serializer';
@@ -21,8 +23,12 @@ function isSqlContract(contract: Contract | null): contract is Contract<SqlStora
   return contract === null || contract.storage instanceof SqlStorage;
 }
 
-const sqliteControlTargetDescriptor: SqlControlTargetDescriptor<'sqlite', SqlitePlanTargetDetails> =
-  {
+function createSqliteControlTargetDescriptor(): SqlControlTargetDescriptor<
+  'sqlite',
+  SqlitePlanTargetDetails
+> {
+  setFallbackTemporal(fallbackTemporal);
+  return {
     ...sqliteTargetDescriptorMeta,
     contractSerializer: new SqliteContractSerializer(),
     schemaVerifier: new SqliteSchemaVerifier(),
@@ -68,5 +74,8 @@ const sqliteControlTargetDescriptor: SqlControlTargetDescriptor<'sqlite', Sqlite
       return createSqliteMigrationRunner(family);
     },
   };
+}
+
+const sqliteControlTargetDescriptor = createSqliteControlTargetDescriptor();
 
 export default sqliteControlTargetDescriptor;
