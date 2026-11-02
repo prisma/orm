@@ -24,12 +24,12 @@ import {
   type ValueObjectNode,
 } from '@internal/sql-contract-ts/contract-builder';
 import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
-import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
 import { sqliteDataTypes } from '@internal/target-sqlite/data-types';
 import { FillStoredKeyCall } from '@internal/target-sqlite/op-factory-call';
 import sqlitePack from '@internal/target-sqlite/pack';
 import { createSqliteMigrationPlanner } from '@internal/target-sqlite/planner';
 import type { SqlitePlanTargetDetails } from '@internal/target-sqlite/planner-target-details';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
