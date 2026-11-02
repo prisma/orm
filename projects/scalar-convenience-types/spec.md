@@ -59,7 +59,7 @@ A type has an `as` option only where its database types have more than one codec
 Two consequences of the type-choice mechanism, which is not changed (it lives in the framework domain):
 
 - An option's default does not depend on another option. `BigInt(as: number)` works because its default storage `int8` has a `number` row. `BigInt(storage: numeric, as: number)` is refused, because no row exists.
-- An argument the chosen type does not take is refused. `String(length: 12)` chooses `Text`, which takes no length, so it is refused; the message names the accepted arguments. The user writes `String(storage: varchar, length: 12)`.
+- An argument the chosen type does not take is refused. `String(length: 12)` chooses `Text`, which takes no length, so it is refused at `length`, with a message that says `Text`, the type `storage: text` chooses, takes no `length`. The user writes `String(storage: varchar, length: 12)`.
 
 Types that already name one concept keep a single explicit name and get no convenience type: `Uuid`, `Inet`, `Bit`, `VarBit`, `Xml`, `Oid`, `Money`, `citext.Citext` and `pg.enum(...)`.
 
