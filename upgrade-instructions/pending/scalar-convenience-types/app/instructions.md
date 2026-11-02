@@ -2,32 +2,32 @@
 changes:
   - id: psl-renamed-postgres-scalar-types
     summary: |
-      In a Prisma 8 schema on PostgreSQL, `SmallInt`, `BigIntNumber`, `Numeric`, `UnboundedInt`, `Real` and `VarChar` are deprecated and report `PSL_DEPRECATED_SCALAR_NAME` as a warning. Write the convenience call that gives the same type instead: `Int(storage: int2)`, `BigInt(as: number)`, `Decimal(precision: p, scale: s)`, `BigInt(storage: numeric)`, `Float(storage: float4)` and `String(storage: varchar, length: n)`. The contract does not change. A Prisma 7 schema, which has a `datasource` block, is not affected.
+      In a Prisma 8 schema on PostgreSQL, `SmallInt`, `BigIntNumber`, `Numeric`, `UnboundedInt`, `Real`, `VarChar` and `VarBit` are deprecated and report `PSL_DEPRECATED_SCALAR_NAME` as a warning. Write the convenience call that gives the same type instead: `Int(storage: int2)`, `BigInt(as: number)`, `Decimal(precision: p, scale: s)`, `BigInt(storage: numeric)`, `Float(storage: float4)` and `String(storage: varchar, length: n)`; `VarBit` has no convenience type and becomes `Varbit`. The contract does not change. A Prisma 7 schema, which has a `datasource` block, is not affected.
     detection:
       glob: "**/*.prisma"
       matches:
-        - '(?<![\s\S])(?![\s\S]*(?<![\w$])datasource[ \t]+\w+[ \t]*\{)[\s\S]*\n[ \t]+[A-Za-z_]\w*[ \t]+(?:=[ \t]*)?(?:SmallInt|BigIntNumber|Numeric|UnboundedInt|Real|VarChar)(?![\w$])'
+        - '(?<![\s\S])(?![\s\S]*(?<![\w$])datasource[ \t]+\w+[ \t]*\{)[\s\S]*\n[ \t]+[A-Za-z_]\w*[ \t]+(?:=[ \t]*)?(?:SmallInt|BigIntNumber|Numeric|UnboundedInt|Real|VarChar|VarBit)(?![\w$])'
   - id: ts-renamed-postgres-scalar-helpers
     summary: |
-      In a TypeScript contract on PostgreSQL, `type.SmallInt()`, `type.BigIntNumber()`, `type.Numeric(...)`, `type.UnboundedInt()`, `type.Real()` and `type.VarChar(...)` are deprecated. They still compile and give no warning, and they are removed together with the deprecated schema names. Call the convenience helper that gives the same type instead, such as `type.String({ storage: 'varchar', length: 64 })` for `type.VarChar(64)`.
+      In a TypeScript contract on PostgreSQL, `type.SmallInt()`, `type.BigIntNumber()`, `type.Numeric(...)`, `type.UnboundedInt()`, `type.Real()`, `type.VarChar(...)` and `type.VarBit(...)` are deprecated. They still compile and give no warning, and they are removed together with the deprecated schema names. Call the convenience helper that gives the same type instead, such as `type.String({ storage: 'varchar', length: 64 })` for `type.VarChar(64)`, or `type.Varbit(n)` for `type.VarBit(n)`.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
-        - '(?<![\w$])type\.(?:SmallInt|BigIntNumber|Numeric|UnboundedInt|Real|VarChar)\('
+        - '(?<![\w$])type\.(?:SmallInt|BigIntNumber|Numeric|UnboundedInt|Real|VarChar|VarBit)\('
   - id: ts-renamed-postgres-column-helpers
     summary: |
       The PostgreSQL column helpers `int8Column` and `numericColumn` are renamed to `int8BigIntColumn` and `numericStringColumn`, after the explicit types they give (`Int8BigInt` and `NumericString`). The old names are removed. The contract does not change.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
-        - '(?<![\w$])(?:int8Column|numericColumn)(?![\w$])'
+        - 'import[ \t]+(?:type[ \t]+)?\{[^}]*(?<![\w$])(?:int8Column|numericColumn)(?![\w$])[^}]*\}[ \t]*from[ \t]*[''"](?:@prisma/orm-postgres/adapter/column-types|@internal/adapter-postgres/column-types)[''"]'
 ---
 
 # PostgreSQL's integer, decimal, float and text types are convenience types
 
 On PostgreSQL, `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean` and `Bytes` are now convenience types, as `DateTime` already is. Each is named for what a field means, and its optional `storage` argument (and `as`, for `BigInt`) chooses an explicit type named after the database type. Written bare, each gives the same type as before, so schemas that use these names need no change.
 
-The explicit types took the database's names. Six old names stay for one release line as deprecated aliases: they give the same codec and the same contract, and `prisma contract emit` and the editor report a warning where one is written.
+The explicit types took the database's names. Seven old names stay for one release line as deprecated aliases: they give the same codec and the same contract, and `prisma contract emit` and the editor report a warning where one is written.
 
 ## `psl-renamed-postgres-scalar-types`
 
@@ -44,8 +44,10 @@ Rewrite each field or `types {}` alias written with an old name, keeping its oth
 | `Real` | `Float(storage: float4)` | `Float4` |
 | `VarChar` | `String(storage: varchar)` | `Varchar` |
 | `VarChar(n)` | `String(storage: varchar, length: n)` | `Varchar(n)` |
+| `VarBit` | `Varbit` | `Varbit` |
+| `VarBit(n)` | `Varbit(n)` | `Varbit(n)` |
 
-Writing the explicit type in the last column instead is equally correct; it is the same type, and both emit the same contract. The warning names the explicit type because it is the exact replacement for the old name.
+`VarBit` has no convenience type, so its replacement is the explicit type. For the others, writing the explicit type in the last column instead is equally correct; it is the same type, and both emit the same contract. The warning names the explicit type because it is the exact replacement for the old name.
 
 ```prisma
 model Account {
@@ -70,6 +72,7 @@ field.column(type.Decimal({ precision: 10, scale: 2 })); // was type.Numeric(10,
 field.column(type.BigInt({ storage: 'numeric' })); // was type.UnboundedInt()
 field.column(type.Float({ storage: 'float4' })); // was type.Real()
 field.column(type.String({ storage: 'varchar', length: 64 })); // was type.VarChar(64)
+field.column(type.Varbit(16)); // was type.VarBit(16)
 ```
 
 The explicit helpers `type.Int2()`, `type.Int8Number()`, `type.NumericString(10, 2)`, `type.NumericBigInt()`, `type.Float4()` and `type.Varchar(64)` give the same types.
@@ -78,7 +81,7 @@ The old helpers still compile, and nothing warns where they are called. They are
 
 ## `ts-renamed-postgres-column-helpers`
 
-Rename the imports and every use. Each column helper is named after the explicit type it gives:
+The detection matches a file that imports `int8Column` or `numericColumn` from `@prisma/orm-postgres/adapter/column-types` or `@internal/adapter-postgres/column-types`. In that file, rename the import and every use of the imported name. Each column helper is named after the explicit type it gives:
 
 ```ts
 import { int8BigIntColumn, numericStringColumn } from '@prisma/orm-postgres/adapter/column-types';

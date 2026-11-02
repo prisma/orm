@@ -81,7 +81,7 @@ PostgreSQL's types have two layers ([ADR 279](../architecture%20docs/adrs/ADR%20
 | `Boolean(storage?)` | | `bool` (default) | `Bool` |
 | `Bytes(storage?)` | | `bytea` (default) | `Bytea` |
 
-`length` applies only to `varchar` and `char`: `String(length: 12)` is refused, because it chooses `Text`, which takes no length; write `String(storage: varchar, length: 12)`. An option's default does not depend on another option, so `BigInt(storage: numeric, as: number)` is refused at `storage`: no row stores a `number` as `numeric`. `Json` and `Jsonb` are explicit types and have no convenience type yet.
+Positional arguments fill the arguments in the order the table shows, options first, so `Decimal(10, 2)` sets `storage` to `10` and is refused at `storage`. Write precision, scale and length by name: `Decimal(precision: 10, scale: 2)`, `String(storage: varchar, length: 12)`. `length` applies only to `varchar` and `char`: `String(length: 12)` is refused, because it chooses `Text`, which takes no length; write `String(storage: varchar, length: 12)`. An option's default does not depend on another option, so `BigInt(storage: numeric, as: number)` is refused at `storage`: no row stores a `number` as `numeric`. `Json` and `Jsonb` are explicit types and have no convenience type yet.
 
 | Convenience type | `as` | `storage` | Becomes |
 | --- | --- | --- | --- |
@@ -101,7 +101,7 @@ PostgreSQL's types have two layers ([ADR 279](../architecture%20docs/adrs/ADR%20
 
 The arguments are written as bare names, by name or in this order: `DateTime(as: string, precision: 6)`, `DateTime(temporal, timestamp)`. A combination the table does not list, such as `Time(as: temporal, storage: timetz)` or `Date(as: jsDate)`, is refused at the argument that makes it invalid, naming the values it accepts; so is a `precision` the chosen type does not take. No default needs a global `Temporal`. In a TypeScript contract the helpers take the same arguments as one object, `type.DateTime({ as: 'string', precision: 6 })`, and are typed as the explicit type they choose; a combination the table does not list, or an argument the chosen type does not take, does not compile. An options object kept in a variable needs `as const`, so each option keeps its literal value: `const options = { as: 'string' } as const; type.DateTime(options)`.
 
-The names `SmallInt`, `BigIntNumber`, `Numeric`, `UnboundedInt`, `Real` and `VarChar` are deprecated aliases of `Int2`, `Int8Number`, `NumericString`, `NumericBigInt`, `Float4` and `Varchar`; they give the same codec, report `PSL_DEPRECATED_SCALAR_NAME` as a warning, and will be removed. The date and time types' old names `Timestamptz`, `Timestamp` and `Interval` were removed with no deprecated alias.
+The names `SmallInt`, `BigIntNumber`, `Numeric`, `UnboundedInt`, `Real`, `VarChar` and `VarBit` are deprecated aliases of `Int2`, `Int8Number`, `NumericString`, `NumericBigInt`, `Float4`, `Varchar` and `Varbit`; they give the same codec, report `PSL_DEPRECATED_SCALAR_NAME` as a warning, and will be removed. The date and time types' old names `Timestamptz`, `Timestamp` and `Interval` were removed with no deprecated alias.
 
 | PSL name | TS helper | Codec id | Storage type | Application type |
 | --- | --- | --- | --- | --- |
@@ -134,7 +134,7 @@ The names `SmallInt`, `BigIntNumber`, `Numeric`, `UnboundedInt`, `Real` and `Var
 | `IntervalParts(p?)` | — | `pg/interval@1` | `interval` | `{ months: number; days: number; micros: bigint }` |
 | `IntervalString(p?)` | — | `pg/interval-string@1` | `interval` | `string`, the ISO 8601 duration, such as `P1Y2M` |
 | `Bit(n?)` | — | `pg/bit@1` | `bit` | `string` (the bits as `0` and `1`) |
-| `VarBit(n?)` | — | `pg/varbit@1` | `bit varying` | `string` (the bits as `0` and `1`) |
+| `Varbit(n?)` | — | `pg/varbit@1` | `bit varying` | `string` (the bits as `0` and `1`) |
 | `Xml` | — | `pg/xml@1` | `xml` | `string` |
 | `Oid` | — | `pg/oid@1` | `oid` | `number`, from 0 to 4294967295 |
 | `Money` | — | `pg/money@1` | `money` | `string` (decimal text with two fraction digits, such as `-1234.56`) |
@@ -207,6 +207,6 @@ The PSL name on each target for a concept, and the Prisma 6/7 name a migrating s
 
 A Prisma 6 MongoDB schema read with `prisma6Schema` may keep its native types. Each native type Prisma 6.19 accepts gives the field the MongoDB type of what Prisma 6 stores: `Int @db.Int` is `Int32`, `Int @db.Long` is `Int64Number` like a plain `Int`, `BigInt @db.Long` is `Int64`, `Bytes @db.ObjectId` is `ObjectId`, and `@db.String`, `@db.Bool`, `@db.Double`, `@db.Date`, `@db.BinData` and `@db.Json` are the same type as the plain field. `DateTime @db.Timestamp` stores a BSON timestamp, which no MongoDB scalar type holds, so `prisma6Schema` refuses it.
 
-A Prisma 7 PostgreSQL schema read with `prisma7Schema` reads every `@db.*` type Prisma 7 accepts. `@db.Bit`, `@db.VarBit`, `@db.Xml`, `@db.Oid` and `@db.Money` are the types of the same names above. `@db.Citext` is `citext.Citext` from the citext pack, so it reads only when `extensions` in `prisma.config.ts` holds `citext` from `@prisma/orm-postgres-contrib/citext/control`; without it, the field is refused with `PSL.PRISMA7_EXTENSION_PACK_MISSING`.
+A Prisma 7 PostgreSQL schema read with `prisma7Schema` reads every `@db.*` type Prisma 7 accepts. `@db.Bit`, `@db.Xml`, `@db.Oid` and `@db.Money` are the types of the same names above, and `@db.VarBit` is `Varbit`. `@db.Citext` is `citext.Citext` from the citext pack, so it reads only when `extensions` in `prisma.config.ts` holds `citext` from `@prisma/orm-postgres-contrib/citext/control`; without it, the field is refused with `PSL.PRISMA7_EXTENSION_PACK_MISSING`.
 
 A Prisma 7 PostgreSQL schema read with `prisma7Schema`, or a database Prisma 7 created and `contract infer` reads, gets `TimestampJsDate(3)` for `DateTime`, written `DateTime(storage: timestamp)`, and `TimestampJsDate(p)`, `TimestamptzJsDate(p)`, `DateString`, `TimeString(p)` and `Timetz(p)` for `@db.Timestamp`, `@db.Timestamptz`, `@db.Date`, `@db.Time` and `@db.Timetz`, so a `DateTime` field still reads a JavaScript `Date`. The PostgreSQL cell above is what a new Prisma 8 schema writes for the concept.

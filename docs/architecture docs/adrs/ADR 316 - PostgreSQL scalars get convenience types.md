@@ -24,7 +24,7 @@ model Account {
 
 ## Decision
 
-PostgreSQL's integer, decimal, floating-point, text, boolean and binary types get convenience types, built with the type choice mechanism of ADR 279. Every option is optional and has a default, so the bare name is a working type. An argument that is not an option is passed on to the explicit type the row names. Arguments to a convenience type are written by name, such as `Decimal(precision: 10, scale: 2)`.
+PostgreSQL's integer, decimal, floating-point, text, boolean and binary types get convenience types, built with the type choice mechanism of ADR 279. Every option is optional and has a default, so the bare name is a working type. An argument that is not an option is passed on to the explicit type the row names. Positional arguments fill the arguments in their declared order, and the options come first, so `Decimal(10, 2)` sets `storage` to `10` and is refused at `storage`. Precision, scale and length are therefore written by name, such as `Decimal(precision: 10, scale: 2)`.
 
 | Convenience type | `as` | `storage` | Becomes |
 | --- | --- | --- | --- |
@@ -62,13 +62,13 @@ The PSL name of an explicit type is the database type, plus a suffix naming the 
 | `Bool` | `pg/bool@1` | `bool` | `boolean` |
 | `Bytea` | `pg/bytea@1` | `bytea` | `Uint8Array` |
 
-The explicit names that disappear, `SmallInt`, `BigIntNumber`, `Numeric`, `UnboundedInt`, `Real` and `VarChar`, stay for one release line as deprecated aliases of `Int2`, `Int8Number`, `NumericString`, `NumericBigInt`, `Float4` and `Varchar`, under ADR 257's rule. The names that become convenience types need no alias: at their defaults they give the codec they gave before, so no existing schema or contract changes.
+The explicit names that disappear, `SmallInt`, `BigIntNumber`, `Numeric`, `UnboundedInt`, `Real`, `VarChar` and `VarBit`, stay for one release line as deprecated aliases of `Int2`, `Int8Number`, `NumericString`, `NumericBigInt`, `Float4`, `Varchar` and `Varbit`, under ADR 257's rule. `VarBit` is renamed only to follow the naming rule above, as `VarChar` is: the database type is `varbit`. The names that become convenience types need no alias: at their defaults they give the codec they gave before, so no existing schema or contract changes.
 
 A TypeScript column helper is named after the explicit type it gives: `int8Column` becomes `int8BigIntColumn` and `numericColumn` becomes `numericStringColumn`. The other helpers, such as `int2Column`, `textColumn` and `varcharColumn`, already match.
 
 The family's `sql.String(n)` and `sql.Char(n)` stay as they are: they are family-wide explicit types for `varchar` and `char` with a required length, shared with SQLite and MySQL. `sql.String(12)` is `Varchar(12)`, not the `String` convenience type. They are reconsidered with the other targets in TML-3790.
 
-`Json` and `Jsonb` keep their names; a `Json` convenience type is decided separately. Types that already name one concept keep a single explicit name and get no convenience type: `Uuid`, `Inet`, `Bit`, `VarBit`, `Xml`, `Oid`, `Money`, `citext.Citext` and `pg.enum(...)`.
+`Json` and `Jsonb` keep their names; a `Json` convenience type is decided separately. Types that already name one concept keep a single explicit name and get no convenience type: `Uuid`, `Inet`, `Bit`, `Varbit`, `Xml`, `Oid`, `Money`, `citext.Citext` and `pg.enum(...)`.
 
 ## Why
 
@@ -116,7 +116,7 @@ The warning names the explicit replacement, such as `use "Int2"` for `SmallInt`,
 
 ### Deprecated names in TypeScript
 
-The aliases are in the same `type` namespace, so `type.SmallInt()`, `type.VarChar(64)` and the others still compile in a TypeScript contract and give the same type. Nothing warns where they are called. They are removed in the same release as the PSL aliases.
+The aliases are in the same `type` namespace, so `type.SmallInt()`, `type.VarChar(64)`, `type.VarBit(16)` and the others still compile in a TypeScript contract and give the same type. Nothing warns where they are called. They are removed in the same release as the PSL aliases.
 
 ### The tools
 
