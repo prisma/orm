@@ -1,67 +1,12 @@
-import mongoFamilyPack from '@internal/family-mongo/pack';
-import type { CodecDescriptor, DataTypeValue } from '@internal/framework-components/codec';
-import type { ExtensionPackRef } from '@internal/framework-components/components';
-import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
-import { mongoDataType } from '@internal/mongo-contract/data-type';
-import { defineContract, field, model } from '@internal/mongo-contract-ts/contract-builder';
-import type { MongoRuntimeExtensionDescriptor } from '@internal/mongo-runtime';
-import mongoTargetPack from '@internal/target-mongo/pack';
 import { timeouts } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { defineContract } from '../src/exports/contract-builder';
 import mongo from '../src/runtime/mongo';
+import { shoutPack, shoutRuntime } from './fixtures/shout-extension';
 
-const shoutType = mongoDataType('shout/text', {
-  bsonTypes: ['string'],
-  read: (json) => json,
-});
-
-const shoutCodec = mongoCodec({
-  typeId: 'shout/text@1',
-  dataType: shoutType,
-  toWire: (value: string) => `shout:${value.toUpperCase()}`,
-  fromWire: (wire: string) => wire.slice('shout:'.length).toLowerCase(),
-  fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
-});
-
-const shoutDescriptor: CodecDescriptor = {
-  codecId: shoutCodec.id,
-  dataType: shoutType.id,
-  traits: ['equality'],
-  paramsSchema: undefined,
-  isParameterized: false,
-  factory: () => () => shoutCodec,
-};
-
-const shoutPack = {
-  kind: 'extension',
-  id: 'shout',
-  familyId: 'mongo',
-  targetId: 'mongo',
-  version: '0.0.1',
-  dataTypes: [shoutType],
-  types: { codecTypes: { codecDescriptors: [shoutDescriptor] } },
-} as const satisfies ExtensionPackRef<'mongo', 'mongo'>;
-
-const shoutRuntime: MongoRuntimeExtensionDescriptor<'mongo'> = {
-  kind: 'extension',
-  id: 'shout',
-  familyId: 'mongo',
-  targetId: 'mongo',
-  version: '0.0.1',
-  codecs: () => {
-    const registry = newMongoCodecRegistry();
-    registry.register(shoutCodec);
-    return registry;
-  },
-  create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
-};
-
-const contract = defineContract({
-  family: mongoFamilyPack,
-  target: mongoTargetPack,
-  extensions: { shout: shoutPack },
+const contract = defineContract({ extensions: { shout: shoutPack } }, ({ field, model }) => ({
   models: {
     Greeting: model('Greeting', {
       collection: 'greetings',
@@ -69,7 +14,7 @@ const contract = defineContract({
     }),
   },
   roots: { greetings: 'Greeting' },
-});
+}));
 
 describe('mongo() with extensions', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
   let replSet: MongoMemoryReplSet;

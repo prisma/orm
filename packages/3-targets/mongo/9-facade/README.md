@@ -145,7 +145,7 @@ Code that moves from the Prisma 6 client to the Prisma 8 client reads the same d
 
 ### `@internal/mongo/contract-builder`
 
-TypeScript contract authoring DSL (`defineContract`, `field`, `model`, `rel`, `index`, `valueObject`, …). The `defineContract` facade pre-binds `family` and `target` — callers do not pass those fields.
+TypeScript contract authoring DSL (`defineContract`, `field`, `model`, `rel`, `index`, `valueObject`, …). The `defineContract` facade pre-binds `family` and `target` — callers do not pass those fields. Pass `extensions: { [id]: pack }` with the extension packs whose codecs the contract uses, as the Postgres `defineContract` takes them; the contract records them, and `mongo()` requires their runtime descriptors.
 
 ```typescript
 import { defineContract, field, model } from '@internal/mongo/contract-builder';
@@ -199,7 +199,7 @@ The default export is `mongo({ contract, ... })`, a lazy MongoDB client. It buil
 
 Options besides the binding:
 
-- `extensions`: the runtime descriptors of the extension packs the contract was built with, as `postgres()` takes them. Their codecs encode and decode the fields that use them. A contract that requires a pack missing from `extensions` fails the factory call with `RUNTIME.MISSING_EXTENSION_PACK`. `mongoStatic()` takes the same option.
+- `extensions`: the runtime descriptors of the extension packs the contract was built with, as `postgres()` takes them. Their codecs encode and decode the fields that use them. An extension builds its codecs, and the registry its descriptor's `codecs()` returns, with `mongoCodec` and `newMongoCodecRegistry` from `@prisma/orm-family-mongo/codec`. A contract that requires a pack missing from `extensions` fails the factory call with `RUNTIME.MISSING_EXTENSION_PACK`. `mongoStatic()` takes the same option.
 - `middleware`: a middleware chain applied to every MongoDB execution.
 - `mode`: the runtime mode.
 

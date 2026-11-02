@@ -15,4 +15,4 @@ changes:
 ## `mongo-execution-context-checks-contract-requirements`
 
 1. Where code calls `createMongoExecutionContext({ contract, stack })` with a contract that requires extension packs, build the stack with those packs: `createMongoExecutionStack({ target, adapter, extensions: [myPack] })`.
-2. A MongoDB extension's codecs now encode values on writes as well as decode them on reads. Check that each codec's `toWire` returns the form the database stores, and that `fromWire` reads that form back.
+2. A MongoDB extension's codecs now encode values on writes as well as decode them on reads. Check that each codec's `toWire` returns the form the database stores, and that `fromWire` reads that form back. Build codecs and the registry `codecs()` returns with `mongoCodec` and `newMongoCodecRegistry` from `@prisma/orm-family-mongo/codec`.
