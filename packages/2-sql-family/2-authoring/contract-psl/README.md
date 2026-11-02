@@ -18,7 +18,8 @@ This keeps core/CLI source-agnostic while giving PSL-first SQL users a one-line 
 - Interpret SQL timestamp semantics: `DateTime @default(now())` as a storage default, and `temporal.CreatedAt` / `temporal.UpdatedAt` as client-side execution mutation defaults
 - Lower shared constructor expressions in both `types {}` blocks and inline field positions (for example `ShortName = sql.String(length: 35)` and `embedding pgvector.Vector(length: 1536)?`)
 - Lower supported default functions through composed registry inputs
-- Resolve Postgres native storage types from bare names and constructor calls in type position (`Char`, `VarChar`, `Numeric`, `Uuid`, `Inet`, `SmallInt`, `Real`, `TimestampTemporal`, `TimestamptzTemporal`, `DateTemporal`, `TimeTemporal`, `Timetz`, `IntervalParts`, `Bit`, `VarBit`, `Json`, `Jsonb`, `BigIntNumber`, `UnboundedInt`), and resolve a type choice, such as the convenience types `DateTime`, `Date`, `Time` and `Duration`, to the constructor its arguments choose, in a field and in a `types {}` alias; `@default` and `@onCreate`/`@onUpdate` are read against the chosen constructor's codec
+- Resolve Postgres native storage types from bare names and constructor calls in type position (`Text`, `Char`, `Varchar`, `NumericString`, `Int2`, `Int4`, `Int8BigInt`, `Int8Number`, `NumericBigInt`, `Float4`, `Float8`, `Bool`, `Bytea`, `Uuid`, `Inet`, `TimestampTemporal`, `TimestamptzTemporal`, `DateTemporal`, `TimeTemporal`, `Timetz`, `IntervalParts`, `Bit`, `VarBit`, `Json`, `Jsonb`), and resolve a type choice, such as the convenience types `Int`, `BigInt`, `String`, `Decimal`, `DateTime`, `Date`, `Time` and `Duration`, to the constructor its arguments choose, in a field and in a `types {}` alias; `@default` and `@onCreate`/`@onUpdate` are read against the chosen constructor's codec
+- Report `PSL_DEPRECATED_SCALAR_NAME` as a warning, through the source's `reportWarning`, at the type of a field or `types {}` alias written with a type constructor marked `deprecated`, naming its replacement
 - Map PSL relation action tokens to SQL contract referential actions and emit diagnostics for unsupported values
 - Emit deterministic relation metadata in `models.<Model>.relations`
 - Enforce extension composition for namespaced constructor expressions and emit strict diagnostics for unsupported namespaced attributes
@@ -72,8 +73,8 @@ Supported `@default(...)` surface in v1 when composed contributors provide handl
 
 Polymorphism:
 
-- `@@discriminator(field)` takes a field stored in one of the stack's text data types (`textDataTypes` in the authoring contributions): on Postgres `String`, `Char(n)` and `VarChar(n)`; on SQLite `String`, `sql.String(n)` (character varying) and `sql.Char(n)` (character). The field must also be required and hold one value. The framework's discriminator rule decides this, applied through `applyDiscriminatorRule`, as in MongoDB PSL; a refused field is `PSL_INVALID_ATTRIBUTE_ARGUMENT` at the `@@discriminator`, as in `must be text, such as String` or `must be required, but it is optional`.
-- `@@base(Model, "value")` takes a quoted string, read into the discriminator column's codec with `readWrittenValueIntoCodec`: cast into its data type and checked by its codec, so a Postgres `VarChar(5)` discriminator refuses `"circle"` with `PSL_VALUE_REFUSED`; SQLite does not limit a `sql.String(n)` value's length. When an enum types the discriminator, a value that is not one of its members is `PSL_INVALID_ATTRIBUTE_ARGUMENT` at the value. The variant is keyed by the value as the column stores it, and two variants with the same stored value are `PSL_DUPLICATE_DISCRIMINATOR_VALUE`.
+- `@@discriminator(field)` takes a field stored in one of the stack's text data types (`textDataTypes` in the authoring contributions): on Postgres `String`, `Text`, `Char(n)` and `Varchar(n)`; on SQLite `String`, `sql.String(n)` (character varying) and `sql.Char(n)` (character). The field must also be required and hold one value. The framework's discriminator rule decides this, applied through `applyDiscriminatorRule`, as in MongoDB PSL; a refused field is `PSL_INVALID_ATTRIBUTE_ARGUMENT` at the `@@discriminator`, as in `must be text, such as String` or `must be required, but it is optional`.
+- `@@base(Model, "value")` takes a quoted string, read into the discriminator column's codec with `readWrittenValueIntoCodec`: cast into its data type and checked by its codec, so a Postgres `Varchar(5)` discriminator refuses `"circle"` with `PSL_VALUE_REFUSED`; SQLite does not limit a `sql.String(n)` value's length. When an enum types the discriminator, a value that is not one of its members is `PSL_INVALID_ATTRIBUTE_ARGUMENT` at the value. The variant is keyed by the value as the column stores it, and two variants with the same stored value are `PSL_DUPLICATE_DISCRIMINATOR_VALUE`.
 
 Supported timestamp authoring surface:
 
@@ -98,7 +99,7 @@ Type aliases:
 
 ```prisma
 types {
-  Slug      = VarChar(64)
+  Slug      = Varchar(64)
   UpdatedAt = TimestampString(3) @onCreate(now()) @onUpdate(now())
 }
 
@@ -119,8 +120,8 @@ model Post {
 Integer representation authoring surface:
 
 - `BigInt` keeps the lossless `bigint` codec (`pg/int8@1` / `sqlite/bigint@1`): values read and write as JS `bigint`, and 64-bit integers travel through database-produced JSON as decimal text.
-- Bare `BigIntNumber` (PostgreSQL and SQLite) opts an `int8`/INTEGER column into JS `number` reads and writes. Both directions throw structured errors outside ±(2^53 − 1) or on non-integral values: `RUNTIME.ENCODE_FAILED` on write, `RUNTIME.DECODE_FAILED` on read.
-- Bare `UnboundedInt` (PostgreSQL only) reads and writes an unconstrained `numeric` as a JS `bigint`, exact at any magnitude; decode rejects non-integral values. SQLite declares no equivalent because it has no lossless unbounded integer storage.
+- `BigInt(as: number)` on PostgreSQL (the explicit type `Int8Number`) and bare `BigIntNumber` on SQLite opt an `int8`/INTEGER column into JS `number` reads and writes. Both directions throw structured errors outside ±(2^53 − 1) or on non-integral values: `RUNTIME.ENCODE_FAILED` on write, `RUNTIME.DECODE_FAILED` on read.
+- `BigInt(storage: numeric)` (PostgreSQL only, the explicit type `NumericBigInt`) reads and writes an unconstrained `numeric` as a JS `bigint`, exact at any magnitude; decode rejects non-integral values. SQLite declares no equivalent because it has no lossless unbounded integer storage.
 - These are ordinary target-scoped types, so ordinary scalar modifiers apply subject to the target's capabilities.
 - Selection guidance, canonical JSON forms, the safe-range soundness argument, and aggregate behavior: [Integer representation types](../../../../docs/reference/integer-representation-types.md).
 

@@ -16,14 +16,14 @@ This page collects user-facing helper semantics that are too detailed for the pa
 The composed-type form passes the constructor result to `field.column(...)`. A constant shares it between fields:
 
 ```typescript
-const BigIntNumber = field.column(type.BigIntNumber());
+const SafeCount = field.column(type.BigInt({ as: 'number' }));
 
 return {
   models: {
     Meter: model('Meter', {
       fields: {
-        peak: BigIntNumber,
-        lifetime: field.column(type.UnboundedInt()),
+        peak: SafeCount,
+        lifetime: field.column(type.BigInt({ storage: 'numeric' })),
       },
     }),
   },
