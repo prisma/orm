@@ -34,6 +34,7 @@ const authoringContributions = {
   pslBlockDescriptors: {},
   modelAttributes: {},
   type: types,
+  valueObjectStorageType: 'Jsonb',
 } satisfies AuthoringContributions;
 
 function interpret(schema: string, reportWarning?: (diagnostic: ContractSourceDiagnostic) => void) {
@@ -92,6 +93,14 @@ describe('a deprecated type name in a SQL schema', () => {
     expect(contract).toBe(
       interpretWithWarnings(`types {\n  Code = Varchar(3)\n}\n\n${model('Code')}`).contract,
     );
+  });
+
+  it('warns at the type of a value object member that names it', () => {
+    const valueObject = (memberType: string) =>
+      `type Money {\n  cents ${memberType}\n}\n\n${model('Money')}`;
+    const { warnings, contract } = interpretWithWarnings(valueObject('Short'));
+    expect(warnings).toEqual([warningAt('Short', 'Int2', 2, 9)]);
+    expect(contract).toBe(interpretWithWarnings(valueObject('Int2')).contract);
   });
 
   it('is accepted when no warning sink is supplied', () => {

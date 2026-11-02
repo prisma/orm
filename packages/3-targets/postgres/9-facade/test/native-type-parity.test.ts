@@ -108,21 +108,21 @@ const parityCases: readonly ParityCase[] = [
     };
   }),
   {
-    title: 'VarChar(191)',
-    bare: 'VarChar(191)',
-    alias: 'VarChar(191)',
+    title: 'Varchar(191)',
+    bare: 'Varchar(191)',
+    alias: 'Varchar(191)',
     expected: { ...varcharOut, typeParams: { length: 191 } },
   },
   {
-    title: 'VarChar() — arg omitted',
-    bare: 'VarChar()',
-    alias: 'VarChar',
+    title: 'Varchar() — arg omitted',
+    bare: 'Varchar()',
+    alias: 'Varchar',
     expected: { ...varcharOut, typeParams: {} },
   },
   {
-    title: 'VarChar — bare',
-    bare: 'VarChar',
-    alias: 'VarChar',
+    title: 'Varchar — bare',
+    bare: 'Varchar',
+    alias: 'Varchar',
     expected: { ...varcharOut, typeParams: {} },
   },
   {
@@ -138,21 +138,21 @@ const parityCases: readonly ParityCase[] = [
     expected: { ...charOut, typeParams: {} },
   },
   {
-    title: 'Numeric(10, 2)',
-    bare: 'Numeric(10, 2)',
-    alias: 'Numeric(10, 2)',
+    title: 'NumericString(10, 2)',
+    bare: 'NumericString(10, 2)',
+    alias: 'NumericString(10, 2)',
     expected: { ...numericOut, typeParams: { precision: 10, scale: 2 } },
   },
   {
-    title: 'Numeric(10) — one arg',
-    bare: 'Numeric(10)',
-    alias: 'Numeric(10)',
+    title: 'NumericString(10) — one arg',
+    bare: 'NumericString(10)',
+    alias: 'NumericString(10)',
     expected: { ...numericOut, typeParams: { precision: 10 } },
   },
   {
-    title: 'Numeric — bare',
-    bare: 'Numeric',
-    alias: 'Numeric',
+    title: 'NumericString — bare',
+    bare: 'NumericString',
+    alias: 'NumericString',
     expected: { ...numericOut, typeParams: {} },
   },
   {
@@ -300,15 +300,15 @@ const parityCases: readonly ParityCase[] = [
     expected: { dataType: 'pg/money', codecId: 'pg/money@1', typeParams: {} },
   },
   {
-    title: 'SmallInt — bare',
-    bare: 'SmallInt',
-    alias: 'SmallInt',
+    title: 'Int2 — bare',
+    bare: 'Int2',
+    alias: 'Int2',
     expected: { dataType: 'pg/int2', codecId: 'pg/int2@1', typeParams: {} },
   },
   {
-    title: 'Real — bare',
-    bare: 'Real',
-    alias: 'Real',
+    title: 'Float4 — bare',
+    bare: 'Float4',
+    alias: 'Float4',
     expected: { dataType: 'pg/float4', codecId: 'pg/float4@1', typeParams: {} },
   },
   {
@@ -453,10 +453,10 @@ describe('native types as bare scalar types — parity with the live bare-type p
     ]);
   });
 
-  it('rejects VarChar(0) in field position via its data type’s bound', () => {
+  it('rejects Varchar(0) in field position via its data type’s bound', () => {
     const result = emit(`model sample {
   id Int @id
-  name VarChar(0)
+  name Varchar(0)
 }
 `);
     expect(result.ok).toBe(false);
@@ -471,9 +471,9 @@ describe('native types as bare scalar types — parity with the live bare-type p
     );
   });
 
-  it('rejects VarChar(0) in named-type position via its data type’s bound', () => {
+  it('rejects Varchar(0) in named-type position via its data type’s bound', () => {
     const result = emit(`types {
-  Bad = VarChar(0)
+  Bad = Varchar(0)
 }
 
 model sample {
@@ -493,10 +493,10 @@ model sample {
     );
   });
 
-  it('rejects Numeric(0) in field position, matching Numeric\u2019s positive-precision rule', () => {
+  it('rejects NumericString(0) in field position, matching NumericString\u2019s positive-precision rule', () => {
     const result = emit(`model sample {
   id Int @id
-  amount Numeric(0)
+  amount NumericString(0)
 }
 `);
     expect(result.ok).toBe(false);
@@ -511,9 +511,9 @@ model sample {
     );
   });
 
-  it('rejects Numeric(0) in named-type position, matching Numeric\u2019s positive-precision rule', () => {
+  it('rejects NumericString(0) in named-type position, matching NumericString\u2019s positive-precision rule', () => {
     const result = emit(`types {
-  Bad = Numeric(0)
+  Bad = NumericString(0)
 }
 
 model sample {

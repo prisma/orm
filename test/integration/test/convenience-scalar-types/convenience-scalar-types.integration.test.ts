@@ -1,6 +1,11 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
+import {
+  type AuthoringTypeNamespaceMember,
+  isAuthoringTypeChoiceDescriptor,
+  isAuthoringTypeConstructorDescriptor,
+} from '@internal/framework-components/authoring';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { PG_INT_CODEC_ID, PG_TEXT_CODEC_ID } from '@internal/target-postgres/codec-ids';
 import postgresPackRef from '@internal/target-postgres/pack';
@@ -155,4 +160,31 @@ describe('a renamed explicit type name', () => {
       expect(deprecated.contract).toEqual(replaced.contract);
     },
   );
+});
+
+describe('a current type name', () => {
+  const writtenBare = (member: AuthoringTypeNamespaceMember) =>
+    isAuthoringTypeChoiceDescriptor(member) ||
+    (isAuthoringTypeConstructorDescriptor(member) &&
+      member.deprecated === undefined &&
+      (member.args ?? []).every((arg) => arg.optional === true));
+  const currentNames = Object.entries(postgresPackRef.authoring.type)
+    .filter(([, member]) => writtenBare(member))
+    .map(([name]) => name);
+
+  it('covers every convenience type and every renamed explicit type', () => {
+    expect(currentNames).toEqual(
+      expect.arrayContaining([
+        ...new Set(rows.flatMap((row) => row.map((written) => written.replace(/[([?].*$/, '')))),
+      ]),
+    );
+  });
+
+  it('never warns, whether written bare or as any convenience row', async () => {
+    const fields = [...currentNames, ...rows.flat()].map(
+      (written, index) => `f${index} ${written}`,
+    );
+    const { warnings } = await emitWithWarnings(model(...fields));
+    expect(warnings).toEqual([]);
+  });
 });
