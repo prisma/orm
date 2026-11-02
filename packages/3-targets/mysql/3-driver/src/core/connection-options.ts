@@ -16,7 +16,7 @@ export interface MysqlPoolOptions {
   readonly max?: number;
 }
 
-const DEFAULT_CONNECT_TIMEOUT_MILLIS = 20_000;
+export const DEFAULT_CONNECT_TIMEOUT_MILLIS = 20_000;
 const DEFAULT_IDLE_TIMEOUT_MILLIS = 30_000;
 
 /**
