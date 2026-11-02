@@ -42,7 +42,7 @@ PostgreSQL's integer, decimal, floating-point, text, boolean and binary types ge
 | `Boolean(storage?)` | | `bool` (default) | `Bool` |
 | `Bytes(storage?)` | | `bytea` (default) | `Bytea` |
 
-Every convenience type has a `storage` option, even where PostgreSQL has one storage for it, as `Date(storage: date)` already does under ADR 279. A convenience type then has the same arguments on every target, and a target adds a storage value without changing them.
+Every convenience type has a `storage` option, even where PostgreSQL has one storage for it, as `Date(storage: date)` already does under ADR 279. A convenience type then has the same options on every target, and a target adds a storage value without changing them. The values of `storage` and `as` are each target's own, as [ADR 315](ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md) decided for the date and time types.
 
 The PSL name of an explicit type is the database type, plus a suffix naming the application value where the database type has more than one codec. This amends ADR 257's token rule, which derived the name from the codec id. Codec ids are frozen identifiers and are not renamed, so they need not match the PSL name: `Int8BigInt` is `pg/int8@1` and `NumericBigInt` is `pg/unboundedint@1`. Internal symbols named after a codec, such as `PG_UNBOUNDED_INT_CODEC_ID`, keep their names too.
 
@@ -76,7 +76,7 @@ A name such as `Int` should mean "an integer", not "a PostgreSQL `int4`". ADR 25
 
 The concepts are the ones other data tools use. Every tool that names concepts rather than column types has separate names for an integer and a big integer (SQLAlchemy `Integer` and `BigInteger`, Django `IntegerField` and `BigIntegerField`, Rails `:integer` and `:bigint`, Prisma 7 `Int` and `BigInt`), so `Int` covers integers within 32 bits and `BigInt` integers that may exceed them. Drizzle (`mode: 'bigint'`), MikroORM (`new DecimalType('number')`) and SQLAlchemy (`asdecimal=False`) choose the application value with an option, as `as:` does.
 
-A type has an `as` option only where its database types have more than one codec. Today only `BigInt` does. `Int8Number` is reached only through `BigInt(as: number)`, so each explicit type has one convenience call. Adding an application value later, such as a decimal library value for `Decimal`, adds an option and rows without renaming anything.
+A convenience type has an `as` option only where some target offers more than one application value for it, and then it has the option on every target, even with one value, as SQLite's `Duration` has `as: string` ([ADR 315](ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md)). Among these types, today only `BigInt` has one. `Int8Number` is reached only through `BigInt(as: number)`, so each explicit type has one convenience call. Adding an application value later, such as a decimal library value for `Decimal`, adds an option and rows without renaming anything.
 
 ## How it works
 
@@ -139,8 +139,8 @@ For each database type, the explicit type marked `inferred` is the one the conve
 - Existing schemas and contracts do not change. A schema that names a deprecated alias emits the same contract and warns.
 - `contract infer` and `contract print` write different text for some columns, such as `Int(storage: int2)` where they wrote `SmallInt`. The contract they describe is the same.
 - In a TypeScript contract, `type.Int()`, `type.BigInt({ as: 'number' })` and so on are typed as the explicit type they choose, and a combination with no row does not compile.
-- SQLite, MySQL and MongoDB use some of these names for explicit types today. They get the same convenience types over their own explicit types in a later change, decided on its own.
-- This ADR's `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean` and `Bytes` are the cross-target concepts. SQLite's `Int` today is a 64-bit `integer`, which does not fit `Int`, an integer within 32 bits. TML-3790 must rename it or decide otherwise.
+- SQLite, MySQL and MongoDB use some of these names for explicit types today. They get the same convenience types over their own explicit types in a later change, decided on its own, as [ADR 315](ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md) did for the date and time types.
+- This ADR's `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean` and `Bytes` are concepts, not representations, as in [ADR 315](ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md). SQLite's `Int` today is an explicit type: SQLite's `integer`, read as a `number`. Under ADR 315 an explicit type does not take a convenience name, so TML-3790 must rename it and declare SQLite's `Int` as a convenience type over it. That SQLite stores the integer in 64 bits is SQLite's representation and does not change the concept.
 
 ## Alternatives considered
 
@@ -148,6 +148,6 @@ For each database type, the explicit type marked `inferred` is the one the conve
 
 **One `Int` convenience type covering `int2`, `int4` and `int8`.** Fewer names, but every surveyed tool separates an integer from a big integer, and an `int8` read as a `number` would sit beside one read as a `bigint` under one name, so the default application value would depend on the storage chosen.
 
-**An `as` option on every convenience type.** It would let every name grow application values without a new option later. An `as` option appears only where there is a choice of application value, because adding one later renames nothing. `storage` differs: it is on every convenience type so the arguments are the same on every target, as the Decision says.
+**An `as` option on every convenience type.** It would let every name grow application values without a new option later. An `as` option appears only where some target has a choice of application value, because adding one later renames nothing. `storage` differs: it is on every convenience type so the options are the same on every target, as the Decision says.
 
 **Remove the old explicit names at once.** ADR 279 did this for the date and time types before the release candidate. These names are in released schemas, so ADR 257's one-release-line alias rule applies.
