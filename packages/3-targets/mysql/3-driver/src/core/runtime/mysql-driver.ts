@@ -264,7 +264,7 @@ abstract class MysqlQueryable implements SqlQueryable {
    * Ends a stream the caller stopped reading early on a pooled client whose result is still arriving. The client is destroyed rather than kept, so a large result is not downloaded only to be thrown away, since MySQL does not say how many rows remain; before that, its statement is interrupted and the rest of the result dropped, so the package finds nothing left to interrupt. Settles once the result has ended or the wait for it is over.
    */
   async #interruptAndEnd(client: PoolConnection, rows: Readable): Promise<void> {
-    await this.endStatement(client, dropRest(rows));
+    await this.endStatement(client, dropRest(rows).catch(ignoreAfterStop));
     rows.destroy();
   }
 }
@@ -498,10 +498,11 @@ export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
 
   /** See {@link EndStatement}. When the `KILL` cannot be sent at all, there is no wait: the client is destroyed at once, and the package interrupts the statement itself. */
   protected async endStatement(client: PoolConnection, ended: Promise<unknown>): Promise<void> {
+    const settled = ended.then(settledEither, settledEither);
     const interrupt = this.#interrupt;
     if (interrupt === undefined || client.threadId === null) return;
     if (await interruptStatement(interrupt.options, client.threadId)) {
-      await settledWithin(ended, interrupt.waitMs);
+      await settledWithin(settled, interrupt.waitMs);
     }
   }
 

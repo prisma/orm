@@ -116,6 +116,8 @@ const state = vi.hoisted(() => ({
   pools: [] as unknown[],
   interruptions: [] as string[],
   interruptTimeouts: [] as unknown[],
+  /** Runs when the fake `KILL QUERY` reaches the server, before its reply comes back. */
+  beforeKillReply: undefined as (() => void) | undefined,
 }));
 let connection = new FakeConnection();
 
@@ -128,6 +130,8 @@ vi.mock('mariadb', () => ({
     return {
       query: async (sql: string, values: readonly unknown[]) => {
         state.interruptions.push(`${sql} ${values.join(',')}`);
+        state.beforeKillReply?.();
+        await new Promise((resolve) => setTimeout(resolve, 10));
       },
       destroy: () => {},
     };
@@ -540,6 +544,30 @@ describe('MySQL runtime driver and its pool', () => {
       { call: 'query', released: 0, destroyed: 1 },
       { call: 'execute', released: 0, destroyed: 1 },
     ]);
+  });
+
+  it('leaves no unhandled rejection when the interrupted stream fails before the reply to its KILL comes back', async () => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    state.beforeKillReply = () => {
+      const stream: unknown = connection.queryStream.mock.results[0]?.value;
+      if (stream instanceof Readable) {
+        stream.destroy(
+          Object.assign(new Error('Query execution was interrupted'), { errno: 1317 }),
+        );
+      }
+    };
+    try {
+      const driver = await connected(streaming);
+      for await (const _row of driver.query(valued)) break;
+      await driver.close();
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(unhandled).toEqual([]);
+    } finally {
+      state.beforeKillReply = undefined;
+      process.off('unhandledRejection', record);
+    }
   });
 
   it('releases a held connection whose caller abandoned a stream whose whole result has arrived, interrupting it and dropping the buffered rest instead of waiting for a reader that never comes', async () => {
