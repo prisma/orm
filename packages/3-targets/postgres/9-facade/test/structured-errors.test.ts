@@ -184,6 +184,23 @@ describe('postgres() given null as its database input', () => {
     });
   });
 
+  it('does not echo a binding kind that is not a short identifier, so a connection string never reaches the error', () => {
+    const error = capture(() =>
+      postgres({
+        contract,
+        binding: { kind: 'postgres://user:secret@host/db' },
+      } as unknown as Options),
+    );
+    expect(error).toMatchObject({
+      code: 'RUNTIME.BINDING_INVALID',
+      message: "The binding option must have kind 'url', 'pgPool' or 'pgClient'",
+      meta: { extension: 'postgres', reason: 'unknown binding kind', receivedType: 'string' },
+    });
+    const { message, why, meta } = error as { message: string; why: string; meta: object };
+    expect(JSON.stringify({ message, why, meta })).not.toContain('secret');
+    expect(meta).not.toHaveProperty('receivedKind');
+  });
+
   it('reports the null input, not the input count, when another input is also given', () => {
     const error = capture(() =>
       postgres({ contract, url: null, pg: new Pool() } as unknown as Options),

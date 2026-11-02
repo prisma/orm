@@ -10,6 +10,7 @@ changes:
         - 'The pg option takes a pg\.Pool'
         - 'import\s*\{[^}]*(?<![\w$])supabase\s+as\s+[A-Za-z_$][^}]*\}\s*from\s*[''"]@(?:prisma/orm-|internal/)extension-supabase(?:/[^''"]*)?[''"]'
         - '(?<![\w$.])(?:pg|url|binding)\s*:\s*(?:null\b|[^,}\n]*(?:\?|\|\||:)\s*null\b)'
+        - '(?<![\w$.])(?:postgres|supabase)(?:<[^>]*>)?\(\s*\{[^)]*?(?<![\w$])binding\s*:\s*\{[^}]*?(?<![\w$])kind\s*:\s*([''"`])(?!(?:url|pgPool|pgClient)\1)[^''"`]*\1'
 ---
 
 # `supabase()` takes one database input, checked when it is called
@@ -38,3 +39,5 @@ postgres({ contract, url: process.env['DATABASE_URL'] ?? null });
 const url = process.env['DATABASE_URL'];
 postgres({ contract, ...(url === undefined ? {} : { url }) });
 ```
+
+A `binding` whose `kind` is not `'url'`, `'pgPool'` or `'pgClient'` now fails with `RUNTIME.BINDING_INVALID` when `postgres()` or `supabase()` is called, not on the first query. Correct the kind, for example `{ kind: 'pgpool', pool }` becomes `{ kind: 'pgPool', pool }`.

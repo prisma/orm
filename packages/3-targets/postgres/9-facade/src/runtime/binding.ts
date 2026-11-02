@@ -96,20 +96,45 @@ const bindingKinds: ReadonlySet<unknown> = new Set<PostgresBinding['kind']>([
   'pgClient',
 ]);
 
+const echoableKind = /^[A-Za-z_][A-Za-z0-9_]{0,31}$/;
+
+function describeUnknownKind(kind: unknown): {
+  readonly why: string;
+  readonly received: { readonly receivedKind: string } | { readonly receivedType: string };
+} {
+  if (kind === undefined) {
+    return {
+      why: 'The binding option has no kind, so it names no database.',
+      received: { receivedKind: 'undefined' },
+    };
+  }
+  if (typeof kind === 'string' && echoableKind.test(kind)) {
+    return {
+      why: `The binding option has kind '${kind}', which is not a Postgres binding kind.`,
+      received: { receivedKind: kind },
+    };
+  }
+  const receivedType = typeOfInput(kind);
+  return {
+    why:
+      typeof kind === 'string'
+        ? 'The binding option has a kind that is a string not in the list of Postgres binding kinds.'
+        : `The binding option has kind of type ${receivedType}, which is not a Postgres binding kind.`,
+    received: typeof kind === 'string' ? { receivedType } : { receivedKind: receivedType },
+  };
+}
+
 function checkBindingKind(binding: object): void {
   const kind: unknown = 'kind' in binding ? binding.kind : undefined;
   if (bindingKinds.has(kind)) return;
-  const receivedKind = typeof kind === 'string' ? kind : typeOfInput(kind);
+  const { why, received } = describeUnknownKind(kind);
   throw postgresError(
     'RUNTIME.BINDING_INVALID',
     "The binding option must have kind 'url', 'pgPool' or 'pgClient'",
     {
-      why:
-        kind === undefined
-          ? 'The binding option has no kind, so it names no database.'
-          : `The binding option has kind ${typeof kind === 'string' ? `'${kind}'` : `of type ${receivedKind}`}, which is not a Postgres binding kind.`,
+      why,
       fix: "Pass binding: { kind: 'url', url }, { kind: 'pgPool', pool } or { kind: 'pgClient', client }.",
-      meta: { extension: 'postgres', reason: 'unknown binding kind', receivedKind },
+      meta: { extension: 'postgres', reason: 'unknown binding kind', ...received },
     },
   );
 }

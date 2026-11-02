@@ -42,6 +42,15 @@ describe('the supabase-one-binding-input detection', () => {
       'a url that is null on the first branch',
       'postgres({ contract, url: ready ? null : env.url })',
     ],
+    ['a binding with an unknown kind', "postgres({ contract, binding: { kind: 'bogus' } })"],
+    [
+      'a binding with a misspelt kind on several lines',
+      'postgres<Contract>({\n  contract,\n  binding: { kind: "pgpool", pool },\n})',
+    ],
+    [
+      'a binding kind that extends a known kind',
+      "postgres({ contract, binding: { kind: 'urls', url } })",
+    ],
   ])('finds %s', (_name, content) => {
     expect(detects(content)).toBe(true);
   });
@@ -78,6 +87,11 @@ describe('the supabase-one-binding-input detection', () => {
       'a conditional url with no null branch',
       'postgres({ contract, url: ready ? env.url : fallback })',
     ],
+    ['a url binding', "postgres({ contract, binding: { kind: 'url', url } })"],
+    ['a pgPool binding', 'postgres({ contract, binding: { kind: "pgPool", pool } })'],
+    ['a pgClient binding', "postgres({\n  contract,\n  binding: { kind: 'pgClient', client },\n})"],
+    ['an unknown kind outside a client call', "const binding = { kind: 'bogus' };"],
+    ['a kind on another option', "postgres({ contract, cursor: { kind: 'bogus' } })"],
   ])('skips %s', (_name, content) => {
     expect(detects(content)).toBe(false);
   });
