@@ -1,6 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import type { ReferentialAction, SqlStorage } from '@internal/sql-contract/types';
 import type { TableCoordinate } from '@internal/sql-relational-core/ast';
+import { cachedFor } from '../contract-cache';
 
 export type WriteKind = 'insert' | 'update' | 'delete';
 
@@ -10,11 +11,6 @@ interface Referencing {
   readonly onUpdate: ReferentialAction | undefined;
 }
 
-const referencingByContract = new WeakMap<
-  Contract<SqlStorage>,
-  ReadonlyMap<string, readonly Referencing[]>
->();
-
 export function tableKey(table: TableCoordinate): string {
   return JSON.stringify([table.namespaceId, table.name]);
 }
@@ -22,31 +18,28 @@ export function tableKey(table: TableCoordinate): string {
 function referencingOf(
   contract: Contract<SqlStorage>,
 ): ReadonlyMap<string, readonly Referencing[]> {
-  const known = referencingByContract.get(contract);
-  if (known !== undefined) {
-    return known;
-  }
-  const referencing = new Map<string, Referencing[]>();
-  for (const [namespaceId, namespace] of Object.entries(contract.storage.namespaces)) {
-    for (const [name, table] of Object.entries(namespace.entries.table ?? {})) {
-      for (const foreignKey of table.foreignKeys) {
-        const key = tableKey({
-          namespaceId: foreignKey.target.namespaceId,
-          name: foreignKey.target.tableName,
-        });
-        referencing.set(key, [
-          ...(referencing.get(key) ?? []),
-          {
-            table: { namespaceId, name },
-            onDelete: foreignKey.onDelete,
-            onUpdate: foreignKey.onUpdate,
-          },
-        ]);
+  return cachedFor(contract, ['referencingForeignKeys'], () => {
+    const referencing = new Map<string, Referencing[]>();
+    for (const [namespaceId, namespace] of Object.entries(contract.storage.namespaces)) {
+      for (const [name, table] of Object.entries(namespace.entries.table ?? {})) {
+        for (const foreignKey of table.foreignKeys) {
+          const key = tableKey({
+            namespaceId: foreignKey.target.namespaceId,
+            name: foreignKey.target.tableName,
+          });
+          referencing.set(key, [
+            ...(referencing.get(key) ?? []),
+            {
+              table: { namespaceId, name },
+              onDelete: foreignKey.onDelete,
+              onUpdate: foreignKey.onUpdate,
+            },
+          ]);
+        }
       }
     }
-  }
-  referencingByContract.set(contract, referencing);
-  return referencing;
+    return referencing;
+  });
 }
 
 type ChangeKind = Exclude<WriteKind, 'insert'>;
