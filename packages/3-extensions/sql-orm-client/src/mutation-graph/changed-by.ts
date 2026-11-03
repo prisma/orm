@@ -5,48 +5,21 @@ import { cachedFor } from '../contract-cache';
 
 export type WriteKind = 'insert' | 'update' | 'delete';
 
+type ChangeKind = Exclude<WriteKind, 'insert'>;
+
 interface Referencing {
   readonly table: TableCoordinate;
   readonly onDelete: ReferentialAction | undefined;
   readonly onUpdate: ReferentialAction | undefined;
 }
 
-export function tableKey(table: TableCoordinate): string {
-  return JSON.stringify([table.namespaceId, table.name]);
-}
-
-function referencingOf(
-  contract: Contract<SqlStorage>,
-): ReadonlyMap<string, readonly Referencing[]> {
-  return cachedFor(contract, ['referencingForeignKeys'], () => {
-    const referencing = new Map<string, Referencing[]>();
-    for (const [namespaceId, namespace] of Object.entries(contract.storage.namespaces)) {
-      for (const [name, table] of Object.entries(namespace.entries.table ?? {})) {
-        for (const foreignKey of table.foreignKeys) {
-          const key = tableKey({
-            namespaceId: foreignKey.target.namespaceId,
-            name: foreignKey.target.tableName,
-          });
-          referencing.set(key, [
-            ...(referencing.get(key) ?? []),
-            {
-              table: { namespaceId, name },
-              onDelete: foreignKey.onDelete,
-              onUpdate: foreignKey.onUpdate,
-            },
-          ]);
-        }
-      }
-    }
-    return referencing;
-  });
-}
-
-type ChangeKind = Exclude<WriteKind, 'insert'>;
-
 interface Step {
   readonly table: TableCoordinate;
   readonly kind: ChangeKind;
+}
+
+export function tableKey(table: TableCoordinate): string {
+  return JSON.stringify([table.namespaceId, table.name]);
 }
 
 export function changedBy(
@@ -57,21 +30,43 @@ export function changedBy(
   if (write === 'insert') {
     return [table];
   }
-  const referencing = referencingOf(contract);
-  const changed = new Map([[tableKey(table), table]]);
-  const visited = new Set([stepKey({ table, kind: write })]);
-  const pending: Step[] = [{ table, kind: write }];
-  for (let step = pending.shift(); step !== undefined; step = pending.shift()) {
-    for (const reference of referencing.get(tableKey(step.table)) ?? []) {
-      const next = nextStep(step.kind, reference);
-      if (next !== undefined && !visited.has(stepKey(next))) {
-        visited.add(stepKey(next));
-        changed.set(tableKey(next.table), next.table);
-        pending.push(next);
+  return cachedFor(contract, ['changedBy', write, table.namespaceId, table.name], () => {
+    const changed = new Map([[tableKey(table), table]]);
+    const visited = new Set([stepKey({ table, kind: write })]);
+    const pending: Step[] = [{ table, kind: write }];
+    for (let step = pending.shift(); step !== undefined; step = pending.shift()) {
+      for (const reference of referencesTo(contract, step.table)) {
+        const next = nextStep(step.kind, reference);
+        if (next !== undefined && !visited.has(stepKey(next))) {
+          visited.add(stepKey(next));
+          changed.set(tableKey(next.table), next.table);
+          pending.push(next);
+        }
       }
     }
-  }
-  return [...changed.values()];
+    return Object.freeze([...changed.values()]);
+  });
+}
+
+function referencesTo(contract: Contract<SqlStorage>, target: TableCoordinate): Referencing[] {
+  const key = tableKey(target);
+  return Object.entries(contract.storage.namespaces).flatMap(([namespaceId, namespace]) =>
+    Object.entries(namespace.entries.table ?? {}).flatMap(([name, table]) =>
+      table.foreignKeys
+        .filter(
+          (foreignKey) =>
+            tableKey({
+              namespaceId: foreignKey.target.namespaceId,
+              name: foreignKey.target.tableName,
+            }) === key,
+        )
+        .map((foreignKey) => ({
+          table: { namespaceId, name },
+          onDelete: foreignKey.onDelete,
+          onUpdate: foreignKey.onUpdate,
+        })),
+    ),
+  );
 }
 
 function nextStep(kind: ChangeKind, reference: Referencing): Step | undefined {
