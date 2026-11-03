@@ -6,9 +6,9 @@
 
 ## At a glance
 
-Seven slices in two stages. Stage 1 (three slices, in order) moves every write method of the collection onto the mutation graph with no new behaviour, and removes the nested-write executor. Stage 2 (four slices) adds the project's operations as entries in the graph's translation. `has-one-unique` does not touch the ORM client and can be built at any time.
+Eight slices in two stages. Stage 1 (three slices, in order) moves every write method of the collection onto the mutation graph with no new behaviour, and removes the nested-write executor. Stage 2 (five slices) adds the project's operations as entries in the graph's translation, and nested creates of a chosen variant. `has-one-unique` does not touch the ORM client and can be built at any time.
 
-Seven is more than the one to four slices a project should have. Stage 1 could be a project of its own; it is kept here because the project owner asked for the graph to be worked into this project.
+Eight is more than the one to four slices a project should have. Stage 1 could be a project of its own; it is kept here because the project owner asked for the graph to be worked into this project.
 
 PR [#30634](https://github.com/prisma/orm/pull/30634), the first build of `filtered-many-writes` on the executor, is closed without merging. Its mutator types, integration tests and docs are reused in slice 4. PR [#30642](https://github.com/prisma/orm/pull/30642), its ports, is rebased onto slice 4.
 
@@ -42,19 +42,25 @@ PR [#30634](https://github.com/prisma/orm/pull/30634), the first build of `filte
    - **Hands to:** The array return and the mutator's `where` step; the peephole that inlines a junction `Find` as `IN (SELECT ...)`. Slice 7 adds `upsert` beside these and uses the array form in its ports.
    - **Focus:** Translation entries for `updateAll` and `deleteAll`; the inlining peephole, which ships in this slice because many-to-many `updateAll` and `deleteAll` are not usable without it; the row-value form of `IN` for composite keys, added to the SQL AST and both adapters. Reused from #30634: the mutator types for these operations, the integration tests, the README and error-reference text, the upgrade entry. Ports: the 22 tests the slice spec lists, from #30642.
 
-5. **Slice `create-on-conflict`** — `projects/nested-mutations/slices/create-on-conflict/`
+5. **Slice `nested-variant-creates`** — `projects/nested-mutations/slices/nested-variant-creates/`
+   - **Outcome:** A relation's mutator has `variant(value)`, as collections and include refinements already do: `t.variant('feature').create(…)` takes the base's fields plus that variant's own fields, without the discriminator, and creates a complete row on either storage layout. A variant stored in the base table is one `Insert` with the discriminator filled in; a variant stored in its own table is slice `graph-creates`' chain (base `Insert`, variant `Insert` reading the key by `PayloadData`, `CrossJoin`), linked to the parent as any nested create. Works in `create()` and `update()`, for one row and for an array.
+   - **Builds on:** Slice `graph-nested`'s translation; slice `filtered-many-writes`' mutator shape.
+   - **Hands to:** Project close-out.
+   - **Focus:** The narrowed mutator's types and the translation entry. Open when the slice is specified: whether `t.create(…)` without `variant()` on a polymorphic target becomes a type error as `create` on a polymorphic collection is (consistent, but breaks code that compiles today), and whether `connect`/`disconnect` on a variant are included. Main has no variant handling in nested creates: a variant's own fields are rejected with `ORM.FIELD_UNKNOWN`, and setting the discriminator of a variant stored in its own table writes only the base row.
+
+6. **Slice `create-on-conflict`** — `projects/nested-mutations/slices/create-on-conflict/`
    - **Outcome:** Nested `create` takes `{ onConflict: 'skip' | 'connect', conflictOn? }` in `create()` and `update()`. `'skip'` leaves out colliding rows on one-to-many relations. `'connect'` links the existing row on every relation layout and leaves its other fields unchanged.
    - **Builds on:** Slice 3's translation table. Independent of slice 4.
    - **Hands to:** Project close-out. Nothing downstream consumes it.
    - **Focus:** The options argument on nested `create` and its types; `'skip'` rejected on to-one and many-to-many; both values rejected on inheritance variants; `'connect'` not offered on top-level `createAll`; the `Insert` that returns the row on conflict, and the link written from it per layout by a data edge. Ports: `nested_create_many.rs` (5, with the `skipDuplicates` non-ported entry removed), `nested_connect_or_create.rs` (6), `prisma_11731.rs` (2), `if_node_siblig_dep_regression.rs` (1), `nested_pagination.rs` (3), `prisma_27452.rs` (1).
 
-6. **Slice `has-one-unique`** — `projects/nested-mutations/slices/has-one-unique/` (independent of every other slice; can be built during stage 1)
+7. **Slice `has-one-unique`** — `projects/nested-mutations/slices/has-one-unique/` (independent of every other slice; can be built during stage 1)
    - **Outcome:** TypeScript contract authoring rejects a `hasOne` relation whose `by` fields are not covered by a unique constraint on the child model, with an error naming the relation and the fields, as PSL authoring already does.
    - **Builds on:** None.
    - **Hands to:** The guarantee slice 7 relies on to use the child's foreign key as a conflict target.
    - **Focus:** The rule in `packages/2-sql/2-authoring/contract-ts`; the in-repo contracts that break under it (`test/e2e/framework/test/sqlite/fixtures/contract.ts`, `test/integration/test/sql-builder/fixtures/contract.ts`, `contract-no-pgvector.ts`, and the package's own tests) and their regenerated fixtures; the upgrade-instructions entry for app authors. The contract validator is not changed.
 
-7. **Slice `nested-upsert`** — `projects/nested-mutations/slices/nested-upsert/`
+8. **Slice `nested-upsert`** — `projects/nested-mutations/slices/nested-upsert/`
    - **Outcome:** Inside `update()`, a relation callback can return `r.upsert({ create, update, conflictOn? })`. On a to-one relation it updates the linked row or creates and links one. On a to-many relation it finds the row by conflict columns and updates it only if it is related to the parent; a conflicting unrelated row raises `ORM.NESTED_UPSERT_CONFLICT`. Works on Postgres and SQLite.
    - **Builds on:** Slice 4's array return and mutator shape; slice 6's unique foreign key on `1:1` relations.
    - **Hands to:** Project close-out. Nothing downstream consumes it.
