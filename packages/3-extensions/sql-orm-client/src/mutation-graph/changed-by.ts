@@ -10,12 +10,6 @@ interface Referencing {
   readonly onUpdate: ReferentialAction | undefined;
 }
 
-const changingActions: ReadonlySet<ReferentialAction | undefined> = new Set([
-  'cascade',
-  'setNull',
-  'setDefault',
-]);
-
 const referencingByContract = new WeakMap<
   Contract<SqlStorage>,
   ReadonlyMap<string, readonly Referencing[]>
@@ -55,6 +49,13 @@ function referencingOf(
   return referencing;
 }
 
+type ChangeKind = Exclude<WriteKind, 'insert'>;
+
+interface Step {
+  readonly table: TableCoordinate;
+  readonly kind: ChangeKind;
+}
+
 export function changedBy(
   contract: Contract<SqlStorage>,
   write: WriteKind,
@@ -65,16 +66,34 @@ export function changedBy(
   }
   const referencing = referencingOf(contract);
   const changed = new Map([[tableKey(table), table]]);
-  const pending = [table];
-  for (let next = pending.shift(); next !== undefined; next = pending.shift()) {
-    for (const reference of referencing.get(tableKey(next)) ?? []) {
-      const action = write === 'delete' ? reference.onDelete : reference.onUpdate;
-      const key = tableKey(reference.table);
-      if (changingActions.has(action) && !changed.has(key)) {
-        changed.set(key, reference.table);
-        pending.push(reference.table);
+  const visited = new Set([stepKey({ table, kind: write })]);
+  const pending: Step[] = [{ table, kind: write }];
+  for (let step = pending.shift(); step !== undefined; step = pending.shift()) {
+    for (const reference of referencing.get(tableKey(step.table)) ?? []) {
+      const next = nextStep(step.kind, reference);
+      if (next !== undefined && !visited.has(stepKey(next))) {
+        visited.add(stepKey(next));
+        changed.set(tableKey(next.table), next.table);
+        pending.push(next);
       }
     }
   }
   return [...changed.values()];
+}
+
+function nextStep(kind: ChangeKind, reference: Referencing): Step | undefined {
+  const action = kind === 'delete' ? reference.onDelete : reference.onUpdate;
+  switch (action) {
+    case 'cascade':
+      return { table: reference.table, kind };
+    case 'setNull':
+    case 'setDefault':
+      return { table: reference.table, kind: 'update' };
+    default:
+      return undefined;
+  }
+}
+
+function stepKey(step: Step): string {
+  return JSON.stringify([step.kind, step.table.namespaceId, step.table.name]);
 }

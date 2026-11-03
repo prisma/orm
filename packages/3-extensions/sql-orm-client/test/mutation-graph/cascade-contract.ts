@@ -55,6 +55,90 @@ const Right = model('Right', {
   },
 });
 
+const Order = model('Order', { fields: { id: field.column(int4Column).id() } });
+
+const Shipment = model('Shipment', {
+  fields: {
+    id: field.column(int4Column).id(),
+    orderId: field.column(int4Column).optional().unique(),
+  },
+  relations: {
+    order: rel
+      .belongsTo(Order, { from: 'orderId', to: 'id' })
+      .sql({ fk: { onDelete: 'setNull', onUpdate: 'restrict' } }),
+  },
+});
+
+const Label = model('Label', {
+  fields: { id: field.column(int4Column).id(), shipmentOrderId: field.column(int4Column) },
+  relations: {
+    shipment: rel
+      .belongsTo(Shipment, { from: 'shipmentOrderId', to: 'orderId' })
+      .sql({ fk: { onDelete: 'restrict', onUpdate: 'cascade' } }),
+  },
+});
+
+const Root = model('Root', { fields: { id: field.column(int4Column).id() } });
+
+const Mid = model('Mid', {
+  fields: { id: field.column(int4Column).id(), rootId: field.column(int4Column) },
+  relations: {
+    root: rel
+      .belongsTo(Root, { from: 'rootId', to: 'id' })
+      .sql({ fk: { onDelete: 'cascade', onUpdate: 'restrict' } }),
+  },
+});
+
+const Leaf = model('Leaf', {
+  fields: {
+    id: field.column(int4Column).id(),
+    rootId: field.column(int4Column).optional(),
+    midId: field.column(int4Column),
+  },
+  relations: {
+    root: rel
+      .belongsTo(Root, { from: 'rootId', to: 'id' })
+      .sql({ fk: { onDelete: 'setNull', onUpdate: 'restrict' } }),
+    mid: rel
+      .belongsTo(Mid, { from: 'midId', to: 'id' })
+      .sql({ fk: { onDelete: 'cascade', onUpdate: 'restrict' } }),
+  },
+});
+
+const DeletedWithLeaf = model('DeletedWithLeaf', {
+  fields: { id: field.column(int4Column).id(), leafId: field.column(int4Column) },
+  relations: {
+    leaf: rel
+      .belongsTo(Leaf, { from: 'leafId', to: 'id' })
+      .sql({ fk: { onDelete: 'cascade', onUpdate: 'restrict' } }),
+  },
+});
+
+const UpdatedWithLeaf = model('UpdatedWithLeaf', {
+  fields: { id: field.column(int4Column).id(), leafId: field.column(int4Column) },
+  relations: {
+    leaf: rel
+      .belongsTo(Leaf, { from: 'leafId', to: 'id' })
+      .sql({ fk: { onDelete: 'restrict', onUpdate: 'cascade' } }),
+  },
+});
+
 export const cascadeContract = defineContract({
-  models: { Org, Team, Member, Badge, Note, Left, Right },
+  models: {
+    Org,
+    Team,
+    Member,
+    Badge,
+    Note,
+    Left,
+    Right,
+    Order,
+    Shipment,
+    Label,
+    Root,
+    Mid,
+    Leaf,
+    DeletedWithLeaf,
+    UpdatedWithLeaf,
+  },
 });

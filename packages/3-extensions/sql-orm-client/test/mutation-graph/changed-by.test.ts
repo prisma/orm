@@ -30,6 +30,20 @@ describe('changedBy', () => {
     expect(names('delete', 'Left')).toEqual(['public.Left', 'public.Right']);
   });
 
+  it('follows onUpdate from a table a delete sets a column of to null', () => {
+    expect(names('delete', 'Order')).toEqual(['public.Order', 'public.Shipment', 'public.Label']);
+  });
+
+  it('follows a table reached as an update and as a delete both ways', () => {
+    expect([...names('delete', 'Root')].sort()).toEqual([
+      'public.DeletedWithLeaf',
+      'public.Leaf',
+      'public.Mid',
+      'public.Root',
+      'public.UpdatedWithLeaf',
+    ]);
+  });
+
   it('gives the table itself when no foreign key points at it', () => {
     expect(names('delete', 'Note')).toEqual(['public.Note']);
   });
