@@ -1,5 +1,5 @@
 import { getLogs } from '@prisma/debug'
-import type { SqlQuery } from '@prisma/driver-adapter-utils'
+import { DriverAdapterError, type SqlQuery } from '@prisma/driver-adapter-utils'
 import pg, { DatabaseError } from 'pg'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -149,6 +149,142 @@ describe('PrismaPgAdapterFactory', () => {
     await adapter.queryRaw(query)
 
     expect(mockQuery).toHaveBeenCalledWith(expect.objectContaining({ name: undefined }))
+
+    await adapter.dispose()
+  })
+
+  it.each(['commit', 'rollback'] as const)(
+    'should release connection with the client error after %s when a query failed with a non-server error',
+    async (method) => {
+      const config: pg.PoolConfig = { user: 'test', password: 'test', database: 'test', port: 5432, host: 'localhost' }
+      const factory = new PrismaPgAdapterFactory(config)
+      const adapter = await factory.connect()
+
+      const queryError = new Error('Query read timeout')
+      const mockConnection = {
+        on: vi.fn(),
+        removeListener: vi.fn(),
+        query: vi.fn().mockResolvedValueOnce({ rows: [], rowCount: 0 }).mockRejectedValueOnce(queryError),
+        release: vi.fn(),
+        listenerCount: vi.fn().mockReturnValue(0),
+      }
+      adapter['client'].connect = vi.fn().mockResolvedValue(mockConnection)
+
+      const transaction = await adapter.startTransaction()
+      await expect(transaction.executeRaw({ sql: 'SELECT 1', args: [], argTypes: [] })).rejects.toBe(queryError)
+
+      await transaction[method]()
+      expect(mockConnection.release).toHaveBeenCalledTimes(1)
+      expect(mockConnection.release.mock.calls[0][0]).toBe(queryError)
+
+      await adapter.dispose()
+    },
+  )
+
+  it('should release connection without error after rollback when a query failed with a server error', async () => {
+    const config: pg.PoolConfig = { user: 'test', password: 'test', database: 'test', port: 5432, host: 'localhost' }
+    const factory = new PrismaPgAdapterFactory(config)
+    const adapter = await factory.connect()
+
+    const serverError = new DatabaseError('duplicate key value violates unique constraint', 0, 'error')
+    serverError.severity = 'ERROR'
+    serverError.code = '23505'
+
+    const mockConnection = {
+      on: vi.fn(),
+      removeListener: vi.fn(),
+      query: vi.fn().mockResolvedValueOnce({ rows: [], rowCount: 0 }).mockRejectedValueOnce(serverError),
+      release: vi.fn(),
+      listenerCount: vi.fn().mockReturnValue(0),
+    }
+    adapter['client'].connect = vi.fn().mockResolvedValue(mockConnection)
+
+    const transaction = await adapter.startTransaction()
+    await expect(transaction.executeRaw({ sql: 'SELECT 1', args: [], argTypes: [] })).rejects.toBeInstanceOf(
+      DriverAdapterError,
+    )
+
+    await transaction.rollback()
+    expect(mockConnection.release).toHaveBeenCalledTimes(1)
+    expect(mockConnection.release.mock.calls[0][0]).toBeUndefined()
+
+    await adapter.dispose()
+  })
+
+  it('should release connection without error after commit when no query failed', async () => {
+    const config: pg.PoolConfig = { user: 'test', password: 'test', database: 'test', port: 5432, host: 'localhost' }
+    const factory = new PrismaPgAdapterFactory(config)
+    const adapter = await factory.connect()
+
+    const mockConnection = {
+      on: vi.fn(),
+      removeListener: vi.fn(),
+      query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+      release: vi.fn(),
+      listenerCount: vi.fn().mockReturnValue(0),
+    }
+    adapter['client'].connect = vi.fn().mockResolvedValue(mockConnection)
+
+    const transaction = await adapter.startTransaction()
+    await transaction.commit()
+    expect(mockConnection.release).toHaveBeenCalledTimes(1)
+    expect(mockConnection.release.mock.calls[0][0]).toBeUndefined()
+
+    await adapter.dispose()
+  })
+
+  it('should keep only the first non-server error for connection release', async () => {
+    const config: pg.PoolConfig = { user: 'test', password: 'test', database: 'test', port: 5432, host: 'localhost' }
+    const factory = new PrismaPgAdapterFactory(config)
+    const adapter = await factory.connect()
+
+    const firstError = new Error('Query read timeout')
+    const secondError = new Error('Connection terminated unexpectedly')
+    const mockConnection = {
+      on: vi.fn(),
+      removeListener: vi.fn(),
+      query: vi
+        .fn()
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+        .mockRejectedValueOnce(firstError)
+        .mockRejectedValueOnce(secondError),
+      release: vi.fn(),
+      listenerCount: vi.fn().mockReturnValue(0),
+    }
+    adapter['client'].connect = vi.fn().mockResolvedValue(mockConnection)
+
+    const transaction = await adapter.startTransaction()
+    await expect(transaction.executeRaw({ sql: 'SELECT 1', args: [], argTypes: [] })).rejects.toBe(firstError)
+    await expect(transaction.executeRaw({ sql: 'SELECT 2', args: [], argTypes: [] })).rejects.toBe(secondError)
+
+    await transaction.commit()
+    expect(mockConnection.release).toHaveBeenCalledTimes(1)
+    expect(mockConnection.release.mock.calls[0][0]).toBe(firstError)
+
+    await adapter.dispose()
+  })
+
+  it('should release connection with an Error wrapping a non-Error rejection after rollback', async () => {
+    const config: pg.PoolConfig = { user: 'test', password: 'test', database: 'test', port: 5432, host: 'localhost' }
+    const factory = new PrismaPgAdapterFactory(config)
+    const adapter = await factory.connect()
+
+    const mockConnection = {
+      on: vi.fn(),
+      removeListener: vi.fn(),
+      query: vi.fn().mockResolvedValueOnce({ rows: [], rowCount: 0 }).mockRejectedValueOnce('connection lost'),
+      release: vi.fn(),
+      listenerCount: vi.fn().mockReturnValue(0),
+    }
+    adapter['client'].connect = vi.fn().mockResolvedValue(mockConnection)
+
+    const transaction = await adapter.startTransaction()
+    await expect(transaction.executeRaw({ sql: 'SELECT 1', args: [], argTypes: [] })).rejects.toBe('connection lost')
+
+    await transaction.rollback()
+    expect(mockConnection.release).toHaveBeenCalledTimes(1)
+    expect(mockConnection.release.mock.calls[0][0]).toBeInstanceOf(Error)
+    expect(mockConnection.release.mock.calls[0][0]).toHaveProperty('message', 'connection lost')
 
     await adapter.dispose()
   })

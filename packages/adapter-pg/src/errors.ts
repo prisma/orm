@@ -206,7 +206,7 @@ function mapDriverError(error: DatabaseError): MappedError {
   }
 }
 
-function isDriverError(error: any): error is DatabaseError {
+export function isDriverError(error: any): error is DatabaseError {
   return (
     typeof error.code === 'string' &&
     typeof error.message === 'string' &&
