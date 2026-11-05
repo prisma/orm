@@ -147,3 +147,53 @@ describe('the extension mongo-codecs-declared-once detection, within one object'
     ]).toEqual([false, false, false]);
   });
 });
+
+describe('the app mongo-client-takes-extensions detection, for the shorthand property', () => {
+  const matches = matcher(APP_NOTE, 'mongo-client-takes-extensions');
+
+  it('matches extensions written as a shorthand property in a MongoDB config, and not a config without them', () => {
+    expect([
+      matches(
+        "import { defineConfig } from '@prisma/orm-mongo/config';\nimport { extensions } from './extensions';\n\nexport default defineConfig({ contract: './prisma/schema.prisma', extensions });\n",
+      ),
+      matches(
+        "import { defineConfig } from '@prisma/orm-mongo/config';\n\nconst contract = './prisma/schema.prisma';\nexport default defineConfig({\n  contract,\n  extensions,\n});\n",
+      ),
+      matches(
+        "import { defineConfig } from '@prisma/orm-mongo/config';\n\n// Add extensions here later.\nexport default defineConfig({ contract: './prisma/schema.prisma' });\n",
+      ),
+    ]).toEqual([true, true, false]);
+  });
+});
+
+describe('the extension mongo-codecs-declared-once detection, for spread metadata and nested values', () => {
+  const matches = matcher(EXTENSION_NOTE, 'mongo-codecs-declared-once');
+
+  it('matches a codecs slot in a file that uses the MongoDB codec registry, with the family in another module', () => {
+    expect([
+      matches(
+        "import { newMongoCodecRegistry } from '@prisma/orm-family-mongo/codec';\nimport meta from './meta.js';\n\nconst registry = newMongoCodecRegistry();\nexport default { ...meta, create, codecs() { return registry; } };\n",
+      ),
+      matches(
+        "import meta from './meta.js';\n\n/** @type {() => import('@prisma/orm-family-mongo/codec').MongoCodecRegistry} */\nconst build = () => registry;\nexport default { ...meta, create, codecs: () => build() };\n",
+      ),
+      matches(
+        "import type { MongoCodecRegistry } from '@prisma/orm-family-mongo/codec';\n\nconst context = Object.freeze({ contract, codecs: registry as MongoCodecRegistry });\n",
+      ),
+    ]).toEqual([true, true, false]);
+  });
+
+  it('matches a codecs slot beside nested codec descriptors, in either order', () => {
+    expect([
+      matches(
+        "export default {\n  kind: 'extension',\n  familyId: 'mongo',\n  types: { codecTypes: { codecDescriptors: [mongoCodecDescriptor(codec, { traits: ['equality'] })] } },\n  codecs() {\n    return registry;\n  },\n};\n",
+      ),
+      matches(
+        "export default {\n  kind: 'extension',\n  codecs: () => registry,\n  types: { codecTypes: { codecDescriptors: [mongoCodecDescriptor(codec, { traits: ['equality'] })] } },\n  familyId: 'mongo',\n};\n",
+      ),
+      matches(
+        "const pack: MongoRuntimeExtensionDescriptor<'mongo'> = {\n  kind: 'extension',\n  types: { codecTypes: { codecDescriptors: [mongoCodecDescriptor(codec, { traits: ['equality'] })] } },\n  codecs: () => registry,\n};\n",
+      ),
+    ]).toEqual([true, true, true]);
+  });
+});

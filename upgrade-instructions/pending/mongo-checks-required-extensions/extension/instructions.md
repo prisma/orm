@@ -14,9 +14,10 @@ changes:
     detection:
       glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs,jsx}"
       matches:
-        - '\bMongoRuntime(?:Extension|Target|Adapter)Descriptor\b(?:<[^<>]*>)?\s*(?:=>?|\{\s*return)\s*\(?\s*\{(?:[^{}]|\{[^{}]*\})*?\bcodecs\s*[:(]'
-        - '\bfamilyId\s*:\s*[''"]mongo[''"](?:[^{}]|\{[^{}]*\})*?\bcodecs\s*[:(]'
-        - '\bcodecs\s*[:(](?:[^{}]|\{[^{}]*\})*?\bfamilyId\s*:\s*[''"]mongo[''"]'
+        - '\bMongoRuntime(?:Extension|Target|Adapter)Descriptor\b(?:<[^<>]*>)?\s*(?:=>?|\{\s*return)\s*\(?\s*\{(?:[^{}]|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})*?\bcodecs\s*[:(]'
+        - '\bfamilyId\s*:\s*[''"]mongo[''"](?:[^{}]|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})*?\bcodecs\s*[:(]'
+        - '\bcodecs\s*[:(](?:[^{}]|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})*?\bfamilyId\s*:\s*[''"]mongo[''"]'
+        - '(?<![\s\S])(?=[\s\S]*\b(?:newMongoCodecRegistry|MongoCodecRegistry)\b)[\s\S]*\bcodecs\s*(?::\s*(?:(?:async\s*)?(?:\([^()]*\)|\w+)\s*=>|function\b|newMongoCodecRegistry\b(?!\s*\())|\([^()]*\)\s*\{)'
   - id: mongo-standard-codecs-removed
     summary: |
       `mongoStandardCodecs` and `buildStandardCodecRegistry` are gone from `@prisma/orm-mongo/target/codecs`. The target declares its codecs once, in `mongoCodecDescriptors`. A registry of them is `assembleMongoCodecRegistry([mongoRuntimeTarget])`, with `assembleMongoCodecRegistry` from `@prisma/orm-family-mongo/codec` and the target from `@prisma/orm-mongo/target/runtime`.
