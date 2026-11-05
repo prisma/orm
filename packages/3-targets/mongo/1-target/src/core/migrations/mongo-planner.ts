@@ -294,10 +294,14 @@ function callsOf(diff: CollectionDiff): readonly OpFactoryCall[] {
   ];
 }
 
+/**
+ * The calls for one collection. Indexes are paired in `originColl` and `destColl`, which may hold indexes in the form the verifier compares; each create is built from the contract's index as written, in `writtenDestColl`.
+ */
 function planCollectionDiff(
   collName: string,
   originColl: MongoSchemaCollection | undefined,
   destColl: MongoSchemaCollection | undefined,
+  writtenDestColl: MongoSchemaCollection | undefined,
 ): CollectionDiff {
   const collCreates: OpFactoryCall[] = [];
   const drops: OpFactoryCall[] = [];
@@ -368,7 +372,11 @@ function planCollectionDiff(
 
   for (const [lookupKey, idx] of destLookup) {
     if (originLookup.get(lookupKey)?.name !== idx.name) {
-      creates.push(new CreateIndexCall(collName, idx.keys, schemaIndexToCreateIndexOptions(idx)));
+      const asWritten =
+        writtenDestColl?.indexes.find((written) => written.name === idx.name) ?? idx;
+      creates.push(
+        new CreateIndexCall(collName, asWritten.keys, schemaIndexToCreateIndexOptions(asWritten)),
+      );
     }
   }
   return { collCreates, drops, creates, validatorOps, mutableOptionOps, collDrops, conflicts };
@@ -407,6 +415,7 @@ function withIndexesOf(schema: MongoSchemaIR, indexesFrom: MongoSchemaIR): Mongo
           ...ifDefined('options', collection.options),
         }),
     ),
+    { fromDatabase: schema.fromDatabase },
   );
 }
 
@@ -445,9 +454,10 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       MongoSchemaIR,
       'framework planner passes the inspected Mongo schema IR selected for the mongo target'
     >(options.schema);
+    const writtenDestinationIR = contractToMongoSchemaIR(contract);
     const { origin: originIR, destination: destinationIR } = comparableIndexes(
       options.statementCalls?.schema ?? schema,
-      contractToMongoSchemaIR(contract),
+      writtenDestinationIR,
       schema.fromDatabase,
     );
 
@@ -467,7 +477,12 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
 
     for (const collName of [...allCollectionNames].sort()) {
       const originColl = originIR.collection(collName);
-      const planned = planCollectionDiff(collName, originColl, destinationIR.collection(collName));
+      const planned = planCollectionDiff(
+        collName,
+        originColl,
+        destinationIR.collection(collName),
+        writtenDestinationIR.collection(collName),
+      );
       const control = collectionControlOf(contract, options.fromContract, collName);
       if (!plansChangesTo(control.policy, originColl !== undefined)) {
         warnings.push(

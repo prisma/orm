@@ -85,7 +85,7 @@ function makeContract(
 
 function planForContract(
   contract: ReturnType<typeof makeContract>,
-  origin: MongoSchemaIR = new MongoSchemaIR([]),
+  origin: MongoSchemaIR = new MongoSchemaIR([], { fromDatabase: false }),
 ): MigrationPlan {
   const planner = new MongoMigrationPlanner();
   const result = planner.plan({

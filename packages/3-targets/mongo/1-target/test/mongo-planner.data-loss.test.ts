@@ -73,13 +73,16 @@ function plan(
 ) {
   const result = new MongoMigrationPlanner().plan({
     contract,
-    schema: new MongoSchemaIR([
-      new MongoSchemaCollection({ name: 'users' }),
-      new MongoSchemaCollection({
-        name: 'events',
-        indexes: [new MongoSchemaIndex({ name: 'at_1', keys: [{ field: 'at', direction: 1 }] })],
-      }),
-    ]),
+    schema: new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({ name: 'users' }),
+        new MongoSchemaCollection({
+          name: 'events',
+          indexes: [new MongoSchemaIndex({ name: 'at_1', keys: [{ field: 'at', direction: 1 }] })],
+        }),
+      ],
+      { fromDatabase: false },
+    ),
     policy: ALL_CLASSES_POLICY,
     fromContract,
     origin: null,

@@ -210,7 +210,7 @@ export function plan(input: {
 }) {
   return new MongoMigrationPlanner().plan({
     contract: input.to,
-    schema: new MongoSchemaIR(input.schema),
+    schema: new MongoSchemaIR(input.schema, { fromDatabase: false }),
     policy: input.policy ?? ALL_CLASSES_POLICY,
     fromContract: input.from,
     origin: input.origin ?? null,

@@ -98,7 +98,7 @@ describe('MongoSchemaIndex', () => {
 describe('MongoSchemaIR origin', () => {
   it('records whether it was read from a database', () => {
     expect([
-      new MongoSchemaIR([]).fromDatabase,
+      new MongoSchemaIR([], { fromDatabase: false }).fromDatabase,
       new MongoSchemaIR([], { fromDatabase: true }).fromDatabase,
     ]).toEqual([false, true]);
   });
@@ -534,7 +534,7 @@ describe('indexLookupKey identifies an index', () => {
 
 describe('MongoSchemaIR', () => {
   it('constructs with empty collections', () => {
-    const ir = new MongoSchemaIR([]);
+    const ir = new MongoSchemaIR([], { fromDatabase: false });
     expect(ir.nodeKind).toBe('schema');
     expect(ir.collections).toEqual([]);
   });
@@ -542,19 +542,21 @@ describe('MongoSchemaIR', () => {
   it('constructs with collections sorted by name', () => {
     const users = new MongoSchemaCollection({ name: 'users' });
     const posts = new MongoSchemaCollection({ name: 'posts' });
-    const ir = new MongoSchemaIR([users, posts]);
+    const ir = new MongoSchemaIR([users, posts], { fromDatabase: false });
     expect(ir.collections).toHaveLength(2);
     expect(ir.collections[0]).toBe(posts);
     expect(ir.collections[1]).toBe(users);
   });
 
   it('is frozen after construction', () => {
-    const ir = new MongoSchemaIR([]);
+    const ir = new MongoSchemaIR([], { fromDatabase: false });
     expect(Object.isFrozen(ir)).toBe(true);
   });
 
   it('dispatches via visitor', () => {
-    const ir = new MongoSchemaIR([new MongoSchemaCollection({ name: 'users' })]);
+    const ir = new MongoSchemaIR([new MongoSchemaCollection({ name: 'users' })], {
+      fromDatabase: false,
+    });
     const visitor: MongoSchemaVisitor<string> = {
       schema: (node) => `schema:${node.collections.length}`,
       collection: () => 'collection',
@@ -568,17 +570,17 @@ describe('MongoSchemaIR', () => {
   it('looks up collection by name', () => {
     const users = new MongoSchemaCollection({ name: 'users' });
     const posts = new MongoSchemaCollection({ name: 'posts' });
-    const ir = new MongoSchemaIR([users, posts]);
+    const ir = new MongoSchemaIR([users, posts], { fromDatabase: false });
     expect(ir.collection('users')).toBe(users);
     expect(ir.collection('posts')).toBe(posts);
     expect(ir.collection('missing')).toBeUndefined();
   });
 
   it('exposes sorted collection names', () => {
-    const ir = new MongoSchemaIR([
-      new MongoSchemaCollection({ name: 'zebra' }),
-      new MongoSchemaCollection({ name: 'alpha' }),
-    ]);
+    const ir = new MongoSchemaIR(
+      [new MongoSchemaCollection({ name: 'zebra' }), new MongoSchemaCollection({ name: 'alpha' })],
+      { fromDatabase: false },
+    );
     expect(ir.collectionNames).toEqual(['alpha', 'zebra']);
   });
 });

@@ -227,25 +227,28 @@ describe('introspectSchema', () => {
 
   describe('round-trip with contractToMongoSchemaIR', () => {
     it('produces equivalent IR through contract -> apply -> introspect', async () => {
-      const contractIR = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          indexes: [
-            new MongoSchemaIndex({
-              name: 'email_1',
-              keys: [{ field: 'email', direction: 1 }],
-              unique: true,
-            }),
-            new MongoSchemaIndex({
-              name: 'lastName_1_firstName_1',
-              keys: [
-                { field: 'lastName', direction: 1 },
-                { field: 'firstName', direction: 1 },
-              ],
-            }),
-          ],
-        }),
-      ]);
+      const contractIR = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            indexes: [
+              new MongoSchemaIndex({
+                name: 'email_1',
+                keys: [{ field: 'email', direction: 1 }],
+                unique: true,
+              }),
+              new MongoSchemaIndex({
+                name: 'lastName_1_firstName_1',
+                keys: [
+                  { field: 'lastName', direction: 1 },
+                  { field: 'firstName', direction: 1 },
+                ],
+              }),
+            ],
+          }),
+        ],
+        { fromDatabase: false },
+      );
 
       await db.createCollection('users');
       await db.collection('users').createIndex({ email: 1 }, { unique: true });

@@ -75,12 +75,15 @@ describe('verifyMongoSchema control policy', () => {
     const contract = buildContract({ items: { control: 'managed' } });
     const result = verifyMongoSchema({
       contract,
-      schema: new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'items',
-          indexes: [idx([{ field: 'extra', direction: 1 }])],
-        }),
-      ]),
+      schema: new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'items',
+            indexes: [idx([{ field: 'extra', direction: 1 }])],
+          }),
+        ],
+        { fromDatabase: false },
+      ),
       strict: true,
       frameworkComponents: [],
     });
@@ -97,12 +100,15 @@ describe('verifyMongoSchema control policy', () => {
     const contract = buildContract({ items: { control: 'managed' } }, 'external');
     const result = verifyMongoSchema({
       contract,
-      schema: new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'items',
-          indexes: [idx([{ field: 'extra', direction: 1 }])],
-        }),
-      ]),
+      schema: new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'items',
+            indexes: [idx([{ field: 'extra', direction: 1 }])],
+          }),
+        ],
+        { fromDatabase: false },
+      ),
       strict: true,
       frameworkComponents: [],
     });
@@ -114,7 +120,7 @@ describe('verifyMongoSchema control policy', () => {
     const contract = buildContract({ items: { control: 'external' } });
     const result = verifyMongoSchema({
       contract,
-      schema: new MongoSchemaIR([]),
+      schema: new MongoSchemaIR([], { fromDatabase: false }),
       strict: true,
       frameworkComponents: [],
     });
@@ -126,10 +132,13 @@ describe('verifyMongoSchema control policy', () => {
     const contract = buildContract({ items: { control: 'external' } }, 'external');
     const result = verifyMongoSchema({
       contract,
-      schema: new MongoSchemaIR([
-        new MongoSchemaCollection({ name: 'items', indexes: [] }),
-        new MongoSchemaCollection({ name: 'audit', indexes: [] }),
-      ]),
+      schema: new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({ name: 'items', indexes: [] }),
+          new MongoSchemaCollection({ name: 'audit', indexes: [] }),
+        ],
+        { fromDatabase: false },
+      ),
       strict: true,
       frameworkComponents: [],
     });
@@ -142,12 +151,15 @@ describe('verifyMongoSchema control policy', () => {
   it('softens a non-strict extra index to warn for tolerated and observed alike', () => {
     for (const controlPolicy of ['tolerated', 'observed'] as const) {
       const contract = buildContract({ items: { control: controlPolicy } });
-      const liveSchema = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'items',
-          indexes: [idx([{ field: 'extra', direction: 1 }])],
-        }),
-      ]);
+      const liveSchema = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'items',
+            indexes: [idx([{ field: 'extra', direction: 1 }])],
+          }),
+        ],
+        { fromDatabase: false },
+      );
       const result = verifyMongoSchema({
         contract,
         schema: liveSchema,
@@ -167,7 +179,7 @@ describe('verifyMongoSchema control policy', () => {
     const contract = buildContract({ items: { control: 'tolerated' } });
     const result = verifyMongoSchema({
       contract,
-      schema: new MongoSchemaIR([]),
+      schema: new MongoSchemaIR([], { fromDatabase: false }),
       strict: true,
       frameworkComponents: [],
     });
@@ -179,12 +191,15 @@ describe('verifyMongoSchema control policy', () => {
     const contract = buildContract({ items: { control: 'external' } });
     const result = verifyMongoSchema({
       contract,
-      schema: new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'items',
-          indexes: [idx([{ field: 'extra', direction: 1 }])],
-        }),
-      ]),
+      schema: new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'items',
+            indexes: [idx([{ field: 'extra', direction: 1 }])],
+          }),
+        ],
+        { fromDatabase: false },
+      ),
       strict: true,
       frameworkComponents: [],
     });
@@ -198,12 +213,15 @@ describe('verifyMongoSchema control policy', () => {
 
   it('downgrades drift to warn under observed', () => {
     const contract = buildContract({ items: { control: 'observed' } });
-    const liveSchema = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'items',
-        indexes: [idx([{ field: 'extra', direction: 1 }])],
-      }),
-    ]);
+    const liveSchema = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'items',
+          indexes: [idx([{ field: 'extra', direction: 1 }])],
+        }),
+      ],
+      { fromDatabase: false },
+    );
     const result = verifyMongoSchema({
       contract,
       schema: liveSchema,

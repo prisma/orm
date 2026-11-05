@@ -75,7 +75,7 @@ function makeContract(collections: Record<string, MongoCollectionData>): MongoCo
 }
 
 function emptyIR(): MongoSchemaIR {
-  return new MongoSchemaIR([]);
+  return new MongoSchemaIR([], { fromDatabase: false });
 }
 
 describe('renderOps', () => {
@@ -200,14 +200,17 @@ describe('renderOps', () => {
 
     it('produces identical JSON for index drop scenario', () => {
       const contract = makeContract({ users: {} });
-      const schema = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          indexes: [
-            new MongoSchemaIndex({ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }),
-          ],
-        }),
-      ]);
+      const schema = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            indexes: [
+              new MongoSchemaIndex({ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }),
+            ],
+          }),
+        ],
+        { fromDatabase: false },
+      );
 
       const planResult = planner.plan({
         contract,
@@ -278,14 +281,17 @@ describe('renderOps', () => {
 
     it('produces identical JSON for collection drop scenario', () => {
       const contract = makeContract({});
-      const schema = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          indexes: [
-            new MongoSchemaIndex({ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }),
-          ],
-        }),
-      ]);
+      const schema = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            indexes: [
+              new MongoSchemaIndex({ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }),
+            ],
+          }),
+        ],
+        { fromDatabase: false },
+      );
 
       const planResult = planner.plan({
         contract,
@@ -324,17 +330,20 @@ describe('renderOps', () => {
           },
         },
       });
-      const schema = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          indexes: [],
-          validator: new MongoSchemaValidator({
-            jsonSchema: { required: ['email'] },
-            validationLevel: 'moderate',
-            validationAction: 'warn',
+      const schema = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            indexes: [],
+            validator: new MongoSchemaValidator({
+              jsonSchema: { required: ['email'] },
+              validationLevel: 'moderate',
+              validationAction: 'warn',
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
 
       const planResult = planner.plan({
         contract,
@@ -381,22 +390,25 @@ describe('renderOps', () => {
           },
         },
       });
-      const schema = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'orders',
-          indexes: [
-            new MongoSchemaIndex({
-              name: 'customerId_1',
-              keys: [{ field: 'customerId', direction: 1 }],
-            }),
-            new MongoSchemaIndex({ name: 'status_1', keys: [{ field: 'status', direction: 1 }] }),
-          ],
-        }),
-        new MongoSchemaCollection({
-          name: 'legacy',
-          indexes: [],
-        }),
-      ]);
+      const schema = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'orders',
+            indexes: [
+              new MongoSchemaIndex({
+                name: 'customerId_1',
+                keys: [{ field: 'customerId', direction: 1 }],
+              }),
+              new MongoSchemaIndex({ name: 'status_1', keys: [{ field: 'status', direction: 1 }] }),
+            ],
+          }),
+          new MongoSchemaCollection({
+            name: 'legacy',
+            indexes: [],
+          }),
+        ],
+        { fromDatabase: false },
+      );
 
       const planResult = planner.plan({
         contract,

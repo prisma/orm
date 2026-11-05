@@ -188,16 +188,19 @@ describe('MongoMigrationRunner - closed validators', () => {
       profileHash: 'p1',
     });
 
-    const originIR = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'users',
-        validator: new MongoSchemaValidator({
-          jsonSchema: { ...CLOSED_USERS },
-          validationLevel: 'strict',
-          validationAction: 'error',
+    const originIR = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'users',
+          validator: new MongoSchemaValidator({
+            jsonSchema: { ...CLOSED_USERS },
+            validationLevel: 'strict',
+            validationAction: 'error',
+          }),
         }),
-      }),
-    ]);
+      ],
+      { fromDatabase: false },
+    );
 
     const destContract = makeContractWithValidator('users', { ...CLOSED_USERS_WIDENED }, 'dest');
 

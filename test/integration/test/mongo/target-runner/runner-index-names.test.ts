@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import mongoAdapter, {
   introspectSchema,
@@ -6,10 +7,12 @@ import mongoAdapter, {
 import type { ContractSourceContext } from '@internal/cli/config-types';
 import { MongoControlDriver } from '@internal/driver-mongo/control';
 import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
+import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import { verifyMongoSchema } from '@internal/family-mongo/schema-verify';
 import {
   createControlStack,
   type MigrationPlan,
+  type MigrationPlanOperation,
   planOriginOf,
 } from '@internal/framework-components/control';
 import {
@@ -18,7 +21,10 @@ import {
 } from '@internal/migration-tools/aggregate';
 import type { MongoContract, MongoIndexInput } from '@internal/mongo-contract';
 import { mongoContract } from '@internal/mongo-contract-psl/provider';
-import type { AnyMongoMigrationOperation } from '@internal/mongo-query-ast/control';
+import type {
+  AnyMongoMigrationOperation,
+  MongoMigrationPlanOperation,
+} from '@internal/mongo-query-ast/control';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import {
   MongoMigrationPlanner,
@@ -120,6 +126,29 @@ function plan(contract: MongoContract, origin: MongoSchemaIR): MigrationPlan {
   return result.plan;
 }
 
+function operationIds(migration: MigrationPlan): string[] {
+  return (migration.operations as readonly MigrationPlanOperation[]).map((op) => op.id);
+}
+
+/** The command each operation of the plan runs. */
+function commandsOf(migration: MigrationPlan): unknown[] {
+  return (migration.operations as readonly MongoMigrationPlanOperation[]).flatMap((op) =>
+    op.execute.map((step) => step.command),
+  );
+}
+
+const retailStoreContract = new MongoContractSerializer().deserializeContract(
+  JSON.parse(
+    readFileSync(
+      join(
+        dirname(fileURLToPath(import.meta.url)),
+        '../../../../../examples/retail-store/src/contract.json',
+      ),
+      'utf8',
+    ),
+  ),
+) as unknown as MongoContract;
+
 function edges(migration: MigrationPlan): readonly AggregateMigrationEdgeRef[] {
   return [
     buildFabricatedMigrationEdge({
@@ -148,7 +177,7 @@ async function apply(contract: MongoContract) {
     frameworkComponents: [],
   });
   return {
-    operationIds: migration.operations.map((op) => op.id),
+    operationIds: operationIds(migration),
     ok: result.ok,
   };
 }
@@ -317,12 +346,92 @@ describe('MongoDB indexes by name, against a real database', () => {
         },
         'server-defaults',
       );
-      const created = await apply(contract);
+      const created = commandsOf(plan(contract, await introspectSchema(db)));
+      const applied = await apply(contract);
 
       expect({
-        created: created.ok,
-        again: plan(contract, await introspectSchema(db)).operations.map((op) => op.id),
-      }).toEqual({ created: true, again: [] });
+        created,
+        applied: applied.ok,
+        again: operationIds(plan(contract, await introspectSchema(db))),
+      }).toEqual({
+        created: [
+          expect.objectContaining({
+            kind: 'createIndex',
+            name: 'title_text_body_text',
+            keys: [
+              { field: 'title', direction: 'text' },
+              { field: 'body', direction: 'text' },
+            ],
+            weights: { title: 10 },
+          }),
+          expect.objectContaining({
+            kind: 'createIndex',
+            name: 'slug_1',
+            keys: [{ field: 'slug', direction: 1 }],
+            collation: { locale: 'en', strength: 2 },
+          }),
+        ],
+        applied: true,
+        again: [],
+      });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'plans nothing against a database created from a contract with compound indexes and their options',
+    async () => {
+      const contract = contractWith(
+        {
+          places: [
+            {
+              name: 'city_1_country_1',
+              keys: [
+                { field: 'city', direction: 1 },
+                { field: 'country', direction: 1 },
+              ],
+              collation: { locale: 'en', strength: 2 },
+            },
+            {
+              name: 'country_1_createdAt_-1',
+              keys: [
+                { field: 'country', direction: 1 },
+                { field: 'createdAt', direction: -1 },
+              ],
+              unique: true,
+              partialFilterExpression: { country: { $exists: true } },
+            },
+            {
+              name: 'category_1_title_text',
+              keys: [
+                { field: 'category', direction: 1 },
+                { field: 'title', direction: 'text' },
+              ],
+              default_language: 'french',
+            },
+          ],
+        },
+        'compound',
+      );
+      const applied = await apply(contract);
+
+      expect({
+        applied: applied.ok,
+        again: operationIds(plan(contract, await introspectSchema(db))),
+      }).toEqual({ applied: true, again: [] });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'plans nothing against a database created from the retail-store example contract',
+    async () => {
+      const applied = await apply(retailStoreContract);
+
+      expect({
+        applied: applied.ok,
+        again: operationIds(plan(retailStoreContract, await introspectSchema(db))),
+      }).toEqual({ applied: true, again: [] });
     },
     timeouts.spinUpMongoMemoryServer,
   );
@@ -405,7 +514,7 @@ describe('MongoDB indexes by name, against a real database', () => {
         'unchanged',
       );
 
-      expect(plan(contract, await introspectSchema(db)).operations).toEqual([]);
+      expect(operationIds(plan(contract, await introspectSchema(db)))).toEqual([]);
     },
     timeouts.spinUpMongoMemoryServer,
   );

@@ -124,7 +124,7 @@ function bareContract(storageHash: string): MongoContract {
 
 function planForContract(
   contract: ReturnType<typeof makeContract>,
-  origin: MongoSchemaIR = new MongoSchemaIR([]),
+  origin: MongoSchemaIR = new MongoSchemaIR([], { fromDatabase: false }),
   fromContract: MongoContract | null = null,
 ) {
   const planner = new MongoMigrationPlanner();
@@ -195,17 +195,20 @@ describe('MongoMigrationRunner', () => {
     await db.createCollection('posts');
     await db.collection('posts').createIndex({ title: 1 }, { name: 'title_1' });
 
-    const originIR = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'posts',
-        indexes: [
-          new MongoSchemaIndex({
-            name: 'title_1',
-            keys: [{ field: 'title', direction: 1 }],
-          }),
-        ],
-      }),
-    ]);
+    const originIR = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'posts',
+          indexes: [
+            new MongoSchemaIndex({
+              name: 'title_1',
+              keys: [{ field: 'title', direction: 1 }],
+            }),
+          ],
+        }),
+      ],
+      { fromDatabase: false },
+    );
     const contract = makeContract({ posts: {} }, 'dropped');
     const plan = planForContract(contract, originIR);
     const serialized = serializePlan(plan);
@@ -770,7 +773,7 @@ describe('MongoMigrationRunner - E2E round-trip', () => {
     });
     const ddlResult = planner.plan({
       contract,
-      schema: new MongoSchemaIR([]),
+      schema: new MongoSchemaIR([], { fromDatabase: false }),
       policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
       fromContract: bareContract('00'),
       origin: planOriginOf(bareContract('00')),

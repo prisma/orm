@@ -9,7 +9,9 @@ const ab = [
 const oddField = [{ field: 'a:1,b', direction: 1 as const }];
 
 function users(indexes: MongoSchemaIndex[]): MongoSchemaIR {
-  return new MongoSchemaIR([new MongoSchemaCollection({ name: 'users', indexes })]);
+  return new MongoSchemaIR([new MongoSchemaCollection({ name: 'users', indexes })], {
+    fromDatabase: false,
+  });
 }
 
 describe('verify pairs each live index with its contract index', () => {

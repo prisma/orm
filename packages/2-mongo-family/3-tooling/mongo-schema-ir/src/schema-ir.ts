@@ -16,10 +16,10 @@ export class MongoSchemaIR extends MongoSchemaIRNode {
 
   constructor(
     collections: ReadonlyArray<MongoSchemaCollection>,
-    options: { readonly fromDatabase?: boolean } = {},
+    options: { readonly fromDatabase: boolean },
   ) {
     super();
-    this.fromDatabase = options.fromDatabase ?? false;
+    this.fromDatabase = options.fromDatabase;
     const sorted = [...collections].sort((a, b) => a.name.localeCompare(b.name));
     this.collections = sorted;
     this._byName = new Map(sorted.map((c) => [c.name, c]));

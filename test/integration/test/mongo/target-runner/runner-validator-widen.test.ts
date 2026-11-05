@@ -141,16 +141,19 @@ describe('MongoMigrationRunner - validator widen', () => {
       profileHash: 'p1',
     });
 
-    const originIR = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'users',
-        validator: new MongoSchemaValidator({
-          jsonSchema: { ...ORIGIN_SCHEMA },
-          validationLevel: 'strict',
-          validationAction: 'error',
+    const originIR = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'users',
+          validator: new MongoSchemaValidator({
+            jsonSchema: { ...ORIGIN_SCHEMA },
+            validationLevel: 'strict',
+            validationAction: 'error',
+          }),
         }),
-      }),
-    ]);
+      ],
+      { fromDatabase: false },
+    );
 
     const destContract = makeContractWithValidator('users', { ...WIDENED_SCHEMA }, 'dest');
 
@@ -215,16 +218,19 @@ describe('MongoMigrationRunner - validator widen', () => {
     const destContract = makeContractWithValidator('users', { ...WIDENED_SCHEMA }, 'dest');
 
     // Origin IR also matches the widened schema (simulating a retry / re-apply).
-    const originIR = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'users',
-        validator: new MongoSchemaValidator({
-          jsonSchema: { ...WIDENED_SCHEMA },
-          validationLevel: 'strict',
-          validationAction: 'error',
+    const originIR = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'users',
+          validator: new MongoSchemaValidator({
+            jsonSchema: { ...WIDENED_SCHEMA },
+            validationLevel: 'strict',
+            validationAction: 'error',
+          }),
         }),
-      }),
-    ]);
+      ],
+      { fromDatabase: false },
+    );
 
     const planner = new MongoMigrationPlanner();
     const planResult = planner.plan({
@@ -261,16 +267,19 @@ describe('MongoMigrationRunner - validator widen', () => {
     // origin assumption lags the live database. The op targets the same widened
     // schema the live collection already has, so the runner's postcheck idempotency
     // probe must skip it rather than re-executing.
-    const staleOriginIR = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'users',
-        validator: new MongoSchemaValidator({
-          jsonSchema: { ...ORIGIN_SCHEMA },
-          validationLevel: 'strict',
-          validationAction: 'error',
+    const staleOriginIR = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'users',
+          validator: new MongoSchemaValidator({
+            jsonSchema: { ...ORIGIN_SCHEMA },
+            validationLevel: 'strict',
+            validationAction: 'error',
+          }),
         }),
-      }),
-    ]);
+      ],
+      { fromDatabase: false },
+    );
 
     const destContract = makeContractWithValidator('users', { ...WIDENED_SCHEMA }, 'dest');
 

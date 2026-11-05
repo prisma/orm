@@ -251,7 +251,7 @@ function makeHarness(): Harness {
       log.record(`ddl:${command.kind}:${command.collection}`);
     },
     markerOps: NOOP_MARKER_OPS,
-    introspectSchema: async () => new MongoSchemaIR([]),
+    introspectSchema: async () => new MongoSchemaIR([], { fromDatabase: false }),
   };
   return {
     runner: new MongoMigrationRunner(deps),
@@ -512,7 +512,9 @@ describe('MongoMigrationRunner schema verification', () => {
     const driver = new StubMongoDriver();
     const adapter = new StubMongoAdapter();
     const inspectionExecutor = new StubInspectionExecutor();
-    const driftIR = new MongoSchemaIR([new MongoSchemaCollection({ name: 'rogue' })]);
+    const driftIR = new MongoSchemaIR([new MongoSchemaCollection({ name: 'rogue' })], {
+      fromDatabase: false,
+    });
     const deps: MongoRunnerDependencies = {
       inspectionExecutor,
       adapter,
@@ -569,7 +571,9 @@ describe('MongoMigrationRunner schema verification', () => {
     const driver = new StubMongoDriver();
     const adapter = new StubMongoAdapter();
     const inspectionExecutor = new StubInspectionExecutor();
-    const driftIR = new MongoSchemaIR([new MongoSchemaCollection({ name: 'rogue' })]);
+    const driftIR = new MongoSchemaIR([new MongoSchemaCollection({ name: 'rogue' })], {
+      fromDatabase: false,
+    });
     const deps: MongoRunnerDependencies = {
       inspectionExecutor,
       adapter,
@@ -654,7 +658,7 @@ function makeLedgerHarness(): {
     driver: new StubMongoDriver(),
     executeDdl: async () => {},
     markerOps,
-    introspectSchema: async () => new MongoSchemaIR([]),
+    introspectSchema: async () => new MongoSchemaIR([], { fromDatabase: false }),
   };
   return { runner: new MongoMigrationRunner(deps), ledgerEntries };
 }

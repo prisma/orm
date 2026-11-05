@@ -81,7 +81,7 @@ function buildContract(
 }
 
 function ir(collections: MongoSchemaCollection[]): MongoSchemaIR {
-  return new MongoSchemaIR(collections);
+  return new MongoSchemaIR(collections, { fromDatabase: false });
 }
 
 function coll(

@@ -55,8 +55,8 @@ export function canonicalizeSchemasForVerification(
   );
 
   return {
-    live: new MongoSchemaIRCtor(canonicalLive),
-    expected: new MongoSchemaIRCtor(canonicalExpected),
+    live: new MongoSchemaIRCtor(canonicalLive, { fromDatabase: live.fromDatabase }),
+    expected: new MongoSchemaIRCtor(canonicalExpected, { fromDatabase: expected.fromDatabase }),
   };
 }
 

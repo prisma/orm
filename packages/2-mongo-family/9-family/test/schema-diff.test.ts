@@ -10,7 +10,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { diffMongoSchemas } from '../src/core/schema-diff';
 
-const emptyIR = new MongoSchemaIR([]);
+const emptyIR = new MongoSchemaIR([], { fromDatabase: false });
 
 const managedCollectionControlPolicy = (): ControlPolicy => 'managed';
 
@@ -19,7 +19,7 @@ function diffMongoSchemasManaged(live: MongoSchemaIR, expected: MongoSchemaIR, s
 }
 
 function ir(collections: Record<string, MongoSchemaCollection>): MongoSchemaIR {
-  return new MongoSchemaIR(Object.values(collections));
+  return new MongoSchemaIR(Object.values(collections), { fromDatabase: false });
 }
 
 function coll(
