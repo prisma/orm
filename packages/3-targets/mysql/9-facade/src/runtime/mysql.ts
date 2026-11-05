@@ -22,16 +22,12 @@ import type {
   BindSiteParams,
   Declaration,
   ExecutionContext,
-  Log,
   ParamsFromDeclaration,
   Runtime,
-  RuntimeMode,
+  SqlExecutionOptions,
   SqlExecutionStackWithDriver,
-  SqlMiddleware,
-  SqlRuntimeExtensionDescriptor,
   ToSqlMember,
   TransactionContext,
-  VerifyMarkerOption,
 } from '@internal/sql-runtime';
 import {
   activitySource,
@@ -39,6 +35,7 @@ import {
   createSqlExecutionStack,
   delegatingActivitySource,
   delegatingRuntime,
+  toRuntimeOptions,
   withTransaction,
   withTransactionMembers,
 } from '@internal/sql-runtime';
@@ -183,12 +180,7 @@ function buildMysqlTransactionMembers<
   };
 }
 
-export interface MysqlOptionsBase {
-  readonly extensions?: readonly SqlRuntimeExtensionDescriptor<MysqlTargetId>[];
-  readonly middleware?: readonly SqlMiddleware[];
-  readonly verifyMarker?: VerifyMarkerOption;
-  readonly log?: Log;
-  readonly mode?: RuntimeMode;
+export interface MysqlOptionsBase extends SqlExecutionOptions<MysqlTargetId> {
   /**
    * Stream each query's rows as they arrive. Unset reads the whole result before the first row, as the Postgres facade does without `cursor`. It is a boolean, not Postgres's `cursor: { batchSize }`, because MySQL has no server-side cursor for a query: the server sends the whole result and the driver reads it from the socket as the caller asks for rows. A value that is not a boolean fails the factory call. While a stream on a connection is open, a statement sent on the same connection waits for it, so one awaited inside the loop over a stream in a transaction never finishes.
    */
@@ -310,10 +302,7 @@ export default function mysql<
       context,
       adapter,
       driver,
-      ...ifDefined('verifyMarker', options.verifyMarker),
-      ...ifDefined('middleware', options.middleware),
-      ...ifDefined('log', options.log),
-      ...ifDefined('mode', options.mode),
+      ...toRuntimeOptions(options),
       closeRefusal: 'at-once',
     });
 
