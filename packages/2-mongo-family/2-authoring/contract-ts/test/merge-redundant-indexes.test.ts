@@ -10,7 +10,11 @@ import type {
   IndexNode,
   ModelNode,
 } from '../src/contract-definition';
-import { mergeRedundantIndexes } from '../src/merge-redundant-indexes';
+import {
+  mergeRedundantIndexes,
+  refusalAtWrittenPositions,
+  writtenIndexPosition,
+} from '../src/merge-redundant-indexes';
 import { nameIndexes } from '../src/name-indexes';
 import { mongoFamilyPack, mongoTargetPack } from './mongo-test-packs';
 
@@ -392,5 +396,55 @@ describe('mergeRedundantIndexes', () => {
       [{ fields: { a: 1 }, options: { name: 'a_1' } }],
       [{ fields: { a: 1 }, options: { name: 'a_1' } }],
     ]);
+  });
+});
+
+describe('refusalAtWrittenPositions', () => {
+  const removed = [
+    { model: 'User', position: 1 },
+    { model: 'User', position: 3 },
+  ];
+
+  it('counts positions as the model wrote its indexes, before the merge removed some', () => {
+    expect([0, 1, 2].map((position) => writtenIndexPosition(removed, 'User', position))).toEqual([
+      0, 2, 4,
+    ]);
+    expect(writtenIndexPosition(removed, 'Admin', 1)).toBe(1);
+  });
+
+  it('maps the index and the first index of a refusal, and leaves other refusals alone', () => {
+    const key = { kind: 'index', model: 'User', position: 1 } as const;
+    expect({
+      shape: refusalAtWrittenPositions(
+        { kind: 'indexShape', key, rule: 'unique-wildcard', signature: '{}' },
+        removed,
+      ).key,
+      duplicate: refusalAtWrittenPositions(
+        {
+          kind: 'indexNameDuplicate',
+          key,
+          collection: 'users',
+          name: 'n',
+          firstModel: 'User',
+          firstPosition: 0,
+        },
+        removed,
+      ),
+      model: refusalAtWrittenPositions(
+        { kind: 'duplicateModel', key: { kind: 'model', model: 'User' } },
+        removed,
+      ),
+    }).toEqual({
+      shape: { ...key, position: 2 },
+      duplicate: {
+        kind: 'indexNameDuplicate',
+        key: { ...key, position: 2 },
+        collection: 'users',
+        name: 'n',
+        firstModel: 'User',
+        firstPosition: 0,
+      },
+      model: { kind: 'duplicateModel', key: { kind: 'model', model: 'User' } },
+    });
   });
 });

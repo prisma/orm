@@ -158,6 +158,25 @@ describe('mongo contract builder — polymorphic index scoping', () => {
     );
   });
 
+  it('names the written positions of two indexes with one name when an earlier index was merged away', () => {
+    const User = model('User', {
+      collection: 'users',
+      fields: { _id: field.objectId(), a: field.string(), b: field.string(), c: field.string() },
+      indexes: [
+        index({ a: 1 }, { unique: true }),
+        index({ a: 1 }),
+        index({ b: 1 }, { name: 'by_field' }),
+        index({ c: 1 }, { name: 'by_field' }),
+      ],
+    });
+
+    expect(() =>
+      defineContract({ family: mongoFamilyPack, target: mongoTargetPack, models: { User } }),
+    ).toThrow(
+      'Collection "users" has two indexes named "by_field": index 2 of model "User" and index 3 of model "User".',
+    );
+  });
+
   it('allows sibling variants on the same collection to declare structurally identical indexes, each named', () => {
     const Task = model('Task', {
       collection: 'tasks',

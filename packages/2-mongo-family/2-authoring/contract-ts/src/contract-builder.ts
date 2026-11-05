@@ -80,7 +80,7 @@ import {
 import { contractError } from './contract-errors';
 import { buildContractDefinition, type DslContractInput } from './contract-lowering';
 import type { EnumTypeHandle } from './enum-type';
-import { mergeRedundantIndexes } from './merge-redundant-indexes';
+import { mergeRedundantIndexes, refusalAtWrittenPositions } from './merge-redundant-indexes';
 import { nameIndexes } from './name-indexes';
 import { authoringWarningOf, refusalError } from './refusal-errors';
 import { refusingRemovedFieldPresets } from './removed-field-presets';
@@ -1601,18 +1601,15 @@ function buildContractFromDsl<const Input extends DslContractInput>(
   const { codecLookup, dataTypes } =
     lookups ??
     stackLookupsOf([input.family, input.target, ...Object.values(input.extensions ?? {})]);
-  const built = buildMongoContractFromDefinition(
-    mergeRedundantIndexes(nameIndexes(definition), codecLookup, dataTypes).definition,
-    codecLookup,
-    dataTypes,
-  );
+  const merged = mergeRedundantIndexes(nameIndexes(definition), codecLookup, dataTypes);
+  const built = buildMongoContractFromDefinition(merged.definition, codecLookup, dataTypes);
   flushAuthoringWarnings(
     (built.ok ? built.value.warnings : built.failure.warnings).map(authoringWarningOf),
   );
   if (!built.ok) {
     const [first] = built.failure.refusals;
     assertDefined(first, 'a refused build has at least one refusal');
-    throw refusalError(first);
+    throw refusalError(refusalAtWrittenPositions(first, merged.removedIndexes));
   }
   return blindCast<
     MongoContractResult<Input>,
