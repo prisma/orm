@@ -147,18 +147,21 @@ type ContractBase = Omit<
               readonly indexes: readonly [
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'authorId' }];
-                  readonly kind: 'mongo-index'; readonly name: 'authorId_1';
+                  readonly kind: 'mongo-index';
+                  readonly name: 'authorId_1';
                 },
                 {
                   readonly keys: readonly [
                     { readonly direction: -1; readonly field: 'createdAt' },
                     { readonly direction: 1; readonly field: 'authorId' },
                   ];
-                  readonly kind: 'mongo-index'; readonly name: 'createdAt_-1_authorId_1';
+                  readonly kind: 'mongo-index';
+                  readonly name: 'createdAt_-1_authorId_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'summary' }];
-                  readonly kind: 'mongo-index'; readonly name: 'summary_1';
+                  readonly kind: 'mongo-index';
+                  readonly name: 'summary_1';
                   readonly partialFilterExpression: { readonly kind: 'article' };
                   readonly unique: true;
                 },

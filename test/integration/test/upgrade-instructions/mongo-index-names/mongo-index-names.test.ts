@@ -74,10 +74,34 @@ describe('a project read with prisma6Schema() whose snapshot indexes have no nam
       result: {
         status: 0,
         stdout:
-          'migrations/snapshots/c608a6990faced294eef8a9279dfbd595662d77dea731ff3a0f11ad3cc33795a/contract.json\nRewrote 1 file.\n',
+          'migrations/snapshots/c608a6990faced294eef8a9279dfbd595662d77dea731ff3a0f11ad3cc33795a/contract.json\n' +
+          'migrations/snapshots/c608a6990faced294eef8a9279dfbd595662d77dea731ff3a0f11ad3cc33795a/contract.json: the index on { legacy: 1 } in collection "Post" is in no emitted contract under .; named legacy_1 after its keys.\n' +
+          'Rewrote 1 file.\n',
         stderr: '',
       },
       tree: readTree(join(fixtures, 'prisma6-project', 'after')),
+    });
+  });
+});
+
+describe('projects whose snapshots hold an index on a collection of the same name', () => {
+  const root = copyFixture('before', 'two-projects');
+  const result = run(root);
+
+  it("names each snapshot's indexes from its own project's emitted contract, and says which it named after their keys", () => {
+    expect({ result, tree: readTree(root) }).toEqual({
+      result: {
+        status: 0,
+        stdout:
+          'app-a/migrations/snapshots/aaaa/contract.json\n' +
+          'app-b/migrations/snapshots/bbbb/contract.json\n' +
+          'app-c/migrations/snapshots/cccc/contract.json\n' +
+          'app-a/migrations/snapshots/aaaa/contract.json: the index on { nickname: 1 } in collection "users" is in no emitted contract under app-a; named nickname_1 after its keys.\n' +
+          'app-c/migrations/snapshots/cccc/contract.json: the index on { email: 1 } in collection "users" is named admin_email and by_email by the emitted contracts under app-c; named email_1 after its keys.\n' +
+          'Rewrote 3 files.\n',
+        stderr: '',
+      },
+      tree: readTree(join(fixtures, 'two-projects', 'after')),
     });
   });
 });
