@@ -360,13 +360,13 @@ function planCollectionDiff(
   }
 
   for (const [lookupKey, idx] of originLookup) {
-    if (!destLookup.has(lookupKey)) {
-      drops.push(new DropIndexCall(collName, idx.keys));
+    if (destLookup.get(lookupKey)?.name !== idx.name) {
+      drops.push(new DropIndexCall(collName, idx.keys, schemaIndexToCreateIndexOptions(idx)));
     }
   }
 
   for (const [lookupKey, idx] of destLookup) {
-    if (!originLookup.has(lookupKey)) {
+    if (originLookup.get(lookupKey)?.name !== idx.name) {
       creates.push(new CreateIndexCall(collName, idx.keys, schemaIndexToCreateIndexOptions(idx)));
     }
   }

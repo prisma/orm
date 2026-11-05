@@ -95,6 +95,7 @@ function ascIndex(
   options?: { unique?: boolean; sparse?: boolean },
 ): MongoSchemaIndex {
   return new MongoSchemaIndex({
+    name: `${field}_1`,
     keys: [{ field, direction: 1 }],
     unique: options?.unique,
     sparse: options?.sparse,
@@ -128,7 +129,7 @@ describe('MongoMigrationPlanner', () => {
   describe('index diffing', () => {
     it('emits createIndex when destination has an index origin lacks', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
       });
       const plan = planSuccess(planner, contract, emptyIR());
 
@@ -158,7 +159,7 @@ describe('MongoMigrationPlanner', () => {
 
     it('emits no operations when indexes are identical', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
       });
       const origin = irWithCollection('users', [ascIndex('email')]);
       const plan = planSuccess(planner, contract, origin);
@@ -167,7 +168,7 @@ describe('MongoMigrationPlanner', () => {
 
     it('treats indexes with same keys but different name as equivalent (no-op)', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
       });
       const origin = irWithCollection('users', [ascIndex('email')]);
       const plan = planSuccess(planner, contract, origin);
@@ -176,7 +177,9 @@ describe('MongoMigrationPlanner', () => {
 
     it('includes sparse flag in index lookup key', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }], sparse: true }] },
+        users: {
+          indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }], sparse: true }],
+        },
       });
       const origin = irWithCollection('users', [ascIndex('email', { sparse: true })]);
       const plan = planSuccess(planner, contract, origin);
@@ -185,7 +188,9 @@ describe('MongoMigrationPlanner', () => {
 
     it('treats indexes with same keys but different options as different', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }], unique: true }] },
+        users: {
+          indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }], unique: true }],
+        },
       });
       const origin = irWithCollection('users', [ascIndex('email')]);
       const plan = planSuccess(planner, contract, origin);
@@ -200,11 +205,18 @@ describe('MongoMigrationPlanner', () => {
     it('treats indexes with same keys but different TTL as different', () => {
       const contract = makeContract({
         sessions: {
-          indexes: [{ keys: [{ field: 'createdAt', direction: 1 }], expireAfterSeconds: 3600 }],
+          indexes: [
+            {
+              name: 'createdAt_1',
+              keys: [{ field: 'createdAt', direction: 1 }],
+              expireAfterSeconds: 3600,
+            },
+          ],
         },
       });
       const origin = irWithCollection('sessions', [
         new MongoSchemaIndex({
+          name: 'createdAt_1',
           keys: [{ field: 'createdAt', direction: 1 }],
           expireAfterSeconds: 7200,
         }),
@@ -218,6 +230,7 @@ describe('MongoMigrationPlanner', () => {
         items: {
           indexes: [
             {
+              name: 'status_1',
               keys: [{ field: 'status', direction: 1 }],
               partialFilterExpression: { active: true },
             },
@@ -226,6 +239,7 @@ describe('MongoMigrationPlanner', () => {
       });
       const origin = irWithCollection('items', [
         new MongoSchemaIndex({
+          name: 'status_1',
           keys: [{ field: 'status', direction: 1 }],
           partialFilterExpression: { active: false },
         }),
@@ -238,8 +252,8 @@ describe('MongoMigrationPlanner', () => {
       const contract = makeContract({
         users: {
           indexes: [
-            { keys: [{ field: 'email', direction: 1 }] },
-            { keys: [{ field: 'name', direction: 1 }] },
+            { name: 'email_1', keys: [{ field: 'email', direction: 1 }] },
+            { name: 'name_1', keys: [{ field: 'name', direction: 1 }] },
           ],
         },
       });
@@ -250,8 +264,8 @@ describe('MongoMigrationPlanner', () => {
 
     it('handles multiple collections', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
-        posts: { indexes: [{ keys: [{ field: 'title', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
+        posts: { indexes: [{ name: 'title_1', keys: [{ field: 'title', direction: 1 }] }] },
       });
       const plan = planSuccess(planner, contract, emptyIR());
       expect(plan.operations).toHaveLength(2);
@@ -279,8 +293,8 @@ describe('MongoMigrationPlanner', () => {
       const contract = makeContract({
         users: {
           indexes: [
-            { keys: [{ field: 'email', direction: 1 }], unique: true },
-            { keys: [{ field: 'name', direction: 1 }] },
+            { name: 'email_1', keys: [{ field: 'email', direction: 1 }], unique: true },
+            { name: 'name_1', keys: [{ field: 'name', direction: 1 }] },
           ],
         },
       });
@@ -293,7 +307,7 @@ describe('MongoMigrationPlanner', () => {
   describe('ordering', () => {
     it('orders drops before creates', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'name', direction: 1 }] }] },
+        users: { indexes: [{ name: 'name_1', keys: [{ field: 'name', direction: 1 }] }] },
       });
       const origin = irWithCollection('users', [ascIndex('email')]);
       const plan = planSuccess(planner, contract, origin);
@@ -305,8 +319,8 @@ describe('MongoMigrationPlanner', () => {
 
     it('orders operations deterministically by collection then keys', () => {
       const contract = makeContract({
-        beta: { indexes: [{ keys: [{ field: 'x', direction: 1 }] }] },
-        alpha: { indexes: [{ keys: [{ field: 'y', direction: 1 }] }] },
+        beta: { indexes: [{ name: 'x_1', keys: [{ field: 'x', direction: 1 }] }] },
+        alpha: { indexes: [{ name: 'y_1', keys: [{ field: 'y', direction: 1 }] }] },
       });
       const plan = planSuccess(planner, contract, emptyIR());
 
@@ -339,7 +353,7 @@ describe('MongoMigrationPlanner', () => {
 
     it('allows additive operations with additive-only policy', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
       });
       const plan = planSuccess(planner, contract, emptyIR(), ADDITIVE_ONLY_POLICY);
       expect(plan.operations).toHaveLength(1);
@@ -416,17 +430,123 @@ describe('MongoMigrationPlanner', () => {
     });
   });
 
+  describe('index names', () => {
+    const email = [{ field: 'email', direction: 1 as const }];
+    const planIds = (contract: MongoContract, origin: MongoSchemaIR) =>
+      planSuccess(planner, contract, origin).operations.map((op) => op.id);
+
+    it('drops and creates an index whose content stays and whose name changes', () => {
+      const contract = makeContract({
+        users: { indexes: [{ name: 'User_email_key', keys: email, unique: true }] },
+      });
+      const origin = irWithCollection('users', [
+        new MongoSchemaIndex({ name: 'email_1', keys: email, unique: true }),
+      ]);
+
+      expect(planIds(contract, origin)).toEqual([
+        'index.users.drop(email_1)',
+        'index.users.create(User_email_key)',
+      ]);
+    });
+
+    it('plans nothing for indexes whose names and content match', () => {
+      const contract = makeContract({
+        users: {
+          indexes: [
+            { name: 'User_email_key', keys: email, unique: true },
+            { name: 'User_email_idx', keys: email },
+          ],
+        },
+      });
+      const origin = irWithCollection('users', [
+        new MongoSchemaIndex({ name: 'User_email_idx', keys: email }),
+        new MongoSchemaIndex({ name: 'User_email_key', keys: email, unique: true }),
+      ]);
+
+      expect(planIds(contract, origin)).toEqual([]);
+    });
+
+    it('drops and creates an index whose name stays and whose content changes', () => {
+      const contract = makeContract({
+        users: { indexes: [{ name: 'email_1', keys: email, unique: true }] },
+      });
+      const origin = irWithCollection('users', [
+        new MongoSchemaIndex({ name: 'email_1', keys: email }),
+      ]);
+
+      expect(planIds(contract, origin)).toEqual([
+        'index.users.drop(email_1)',
+        'index.users.create(email_1)',
+      ]);
+    });
+
+    it('creates each of two indexes on the same keys with different options under its own name', () => {
+      const contract = makeContract({
+        users: {
+          indexes: [
+            { name: 'User_email_key', keys: email, unique: true },
+            { name: 'User_email_idx', keys: email },
+            { name: 'User_email_sparse', keys: email, sparse: true },
+          ],
+        },
+      });
+      const plan = planSuccess(planner, contract, emptyIR());
+
+      expect(
+        plan.operations.map((op) => [
+          op.id,
+          (op as MongoMigrationPlanOperation).execute[0]?.command,
+        ]),
+      ).toEqual([
+        [
+          'index.users.create(User_email_key)',
+          expect.objectContaining({ name: 'User_email_key', unique: true }),
+        ],
+        ['index.users.create(User_email_idx)', expect.objectContaining({ name: 'User_email_idx' })],
+        [
+          'index.users.create(User_email_sparse)',
+          expect.objectContaining({ name: 'User_email_sparse', sparse: true }),
+        ],
+      ]);
+    });
+
+    it('drops an index by the name the origin holds it under, checking its options', () => {
+      const contract = makeContract({ users: {} });
+      const origin = irWithCollection('users', [
+        new MongoSchemaIndex({ name: 'User_email_key', keys: email, unique: true }),
+      ]);
+      const plan = planSuccess(planner, contract, origin);
+
+      const op = plan.operations[0] as MongoMigrationPlanOperation;
+      expect({ command: op.execute[0]?.command, precheck: op.precheck[0]?.filter }).toEqual({
+        command: expect.objectContaining({ kind: 'dropIndex', name: 'User_email_key' }),
+        precheck: expect.objectContaining({
+          exprs: [
+            expect.objectContaining({ field: 'name', value: 'User_email_key' }),
+            expect.objectContaining({
+              exprs: expect.arrayContaining([
+                expect.objectContaining({ field: 'unique', value: true }),
+              ]),
+            }),
+          ],
+        }),
+      });
+    });
+  });
+
   describe('operation structure', () => {
     it('createIndex has correct precheck/execute/postcheck', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
       });
       const plan = planSuccess(planner, contract, emptyIR());
       const op = plan.operations[0] as MongoMigrationPlanOperation;
 
-      expect(op.precheck).toHaveLength(1);
-      expect(op.precheck[0]!.source.kind).toBe('listIndexes');
-      expect(op.precheck[0]!.expect).toBe('notExists');
+      expect(op.precheck).toHaveLength(2);
+      expect(op.precheck.map((check) => [check.source.kind, check.expect])).toEqual([
+        ['listIndexes', 'notExists'],
+        ['listIndexes', 'notExists'],
+      ]);
 
       expect(op.execute).toHaveLength(1);
       expect(op.execute[0]!.command.kind).toBe('createIndex');
@@ -456,7 +576,9 @@ describe('MongoMigrationPlanner', () => {
 
     it('unique index postcheck includes unique filter', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }], unique: true }] },
+        users: {
+          indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }], unique: true }],
+        },
       });
       const plan = planSuccess(planner, contract, emptyIR());
       const op = plan.operations[0] as MongoMigrationPlanOperation;
@@ -466,7 +588,7 @@ describe('MongoMigrationPlanner', () => {
 
     it('non-unique index postcheck requires the index not to be unique', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
       });
       const plan = planSuccess(planner, contract, emptyIR());
       const op = plan.operations[0] as MongoMigrationPlanOperation;
@@ -474,24 +596,29 @@ describe('MongoMigrationPlanner', () => {
       expect(op.postcheck[0]!.filter).toMatchObject({
         kind: 'and',
         exprs: expect.arrayContaining([
-          { kind: 'not', expr: expect.objectContaining({ field: 'unique', value: true }) },
+          expect.objectContaining({
+            kind: 'and',
+            exprs: expect.arrayContaining([
+              { kind: 'not', expr: expect.objectContaining({ field: 'unique', value: true }) },
+            ]),
+          }),
         ]),
       });
     });
 
     it('createIndex sets a deterministic operation id', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
       });
       const plan = planSuccess(planner, contract, emptyIR());
-      expect(plan.operations[0]!.id).toBe('index.users.create(email:1)');
+      expect(plan.operations[0]!.id).toBe('index.users.create(email_1)');
     });
 
     it('dropIndex sets a deterministic operation id', () => {
       const contract = makeContract({ users: {} });
       const origin = irWithCollection('users', [ascIndex('email')]);
       const plan = planSuccess(planner, contract, origin);
-      expect(plan.operations[0]!.id).toBe('index.users.drop(email:1)');
+      expect(plan.operations[0]!.id).toBe('index.users.drop(email_1)');
     });
   });
 
@@ -501,6 +628,7 @@ describe('MongoMigrationPlanner', () => {
         users: {
           indexes: [
             {
+              name: '$**_1',
               keys: [{ field: '$**', direction: 1 }],
               wildcardProjection: { name: 1, email: 1 },
             },
@@ -509,6 +637,7 @@ describe('MongoMigrationPlanner', () => {
       });
       const origin = irWithCollection('users', [
         new MongoSchemaIndex({
+          name: '$**_1',
           keys: [{ field: '$**', direction: 1 }],
           wildcardProjection: { name: 1 },
         }),
@@ -522,6 +651,7 @@ describe('MongoMigrationPlanner', () => {
         users: {
           indexes: [
             {
+              name: 'name_1',
               keys: [{ field: 'name', direction: 1 }],
               collation: { locale: 'en', strength: 2 },
             },
@@ -530,6 +660,7 @@ describe('MongoMigrationPlanner', () => {
       });
       const origin = irWithCollection('users', [
         new MongoSchemaIndex({
+          name: 'name_1',
           keys: [{ field: 'name', direction: 1 }],
           collation: { locale: 'fr', strength: 2 },
         }),
@@ -543,6 +674,7 @@ describe('MongoMigrationPlanner', () => {
         users: {
           indexes: [
             {
+              name: 'name_1',
               keys: [{ field: 'name', direction: 1 }],
               collation: { strength: 2, locale: 'en' },
             },
@@ -551,6 +683,7 @@ describe('MongoMigrationPlanner', () => {
       });
       const origin = irWithCollection('users', [
         new MongoSchemaIndex({
+          name: 'name_1',
           keys: [{ field: 'name', direction: 1 }],
           collation: { locale: 'en', strength: 2 },
         }),
@@ -564,6 +697,7 @@ describe('MongoMigrationPlanner', () => {
         users: {
           indexes: [
             {
+              name: 'bio_text',
               keys: [{ field: 'bio', direction: 'text' }],
               weights: { bio: 10 },
             },
@@ -572,6 +706,7 @@ describe('MongoMigrationPlanner', () => {
       });
       const origin = irWithCollection('users', [
         new MongoSchemaIndex({
+          name: 'bio_text',
           keys: [{ field: 'bio', direction: 'text' }],
           weights: { bio: 5 },
         }),
@@ -585,6 +720,7 @@ describe('MongoMigrationPlanner', () => {
         users: {
           indexes: [
             {
+              name: 'bio_text',
               keys: [{ field: 'bio', direction: 'text' }],
               weights: { bio: 10 },
               default_language: 'english',
@@ -1440,7 +1576,7 @@ describe('MongoMigrationPlanner', () => {
       const contract = makeContract({
         newColl: {
           options: { capped: { size: 1024 } },
-          indexes: [{ keys: [{ field: 'ts', direction: 1 }] }],
+          indexes: [{ name: 'ts_1', keys: [{ field: 'ts', direction: 1 }] }],
         },
       });
       const result = planner.plan({
@@ -1458,7 +1594,7 @@ describe('MongoMigrationPlanner', () => {
       expect(result.conflicts.some((c) => c.summary.includes('Create collection newColl'))).toBe(
         true,
       );
-      expect(result.conflicts.some((c) => c.summary.includes('Create index on newColl'))).toBe(
+      expect(result.conflicts.some((c) => c.summary.includes('Create index ts_1 on newColl'))).toBe(
         true,
       );
     });
@@ -1548,7 +1684,7 @@ describe('MongoMigrationPlanner', () => {
     it('orders creates before indexes, drops after', () => {
       const contract = makeContract({
         events: {
-          indexes: [{ keys: [{ field: 'ts', direction: 1 as const }] }],
+          indexes: [{ name: 'ts_1', keys: [{ field: 'ts', direction: 1 as const }] }],
           options: { capped: { size: 1048576 } },
         },
       });
@@ -1597,7 +1733,7 @@ describe('MongoMigrationPlanner', () => {
 
     it('returns OpFactoryCall[] for index creation', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
       });
       const calls = planCallsSuccess(planner, contract, emptyIR());
 
@@ -1645,7 +1781,7 @@ describe('MongoMigrationPlanner', () => {
 
     it('returns failure when policy rejects operation class', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
       });
 
       const result = planner.planCalls({
@@ -1742,7 +1878,7 @@ describe('MongoMigrationPlanner', () => {
 
     it('returns empty calls when schemas are identical', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
       });
       const origin = irWithCollection('users', [ascIndex('email')]);
       const calls = planCallsSuccess(planner, contract, origin);
@@ -1755,7 +1891,7 @@ describe('MongoMigrationPlanner', () => {
     it('does not createCollection for variant names when contract has only the base collection', () => {
       const contract = makeContract({
         tasks: {
-          indexes: [{ keys: [{ field: 'title', direction: 1 }] }],
+          indexes: [{ name: 'title_1', keys: [{ field: 'title', direction: 1 }] }],
           validator: {
             jsonSchema: {
               bsonType: 'object',
@@ -1933,7 +2069,7 @@ describe('MongoMigrationPlanner', () => {
       // set. The planner reads only entries.collection, so the value set produces
       // no op — the validator (physical artifact) is unchanged.
       const contract = makeContractWithValueSet(
-        { users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] } },
+        { users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] } },
         { Role: { kind: 'valueSet', values: ['admin', 'author', 'reader'] } },
       );
       const origin = irWithCollection('users', [ascIndex('email')]);

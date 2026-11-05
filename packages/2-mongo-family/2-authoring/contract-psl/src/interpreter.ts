@@ -43,6 +43,7 @@ import {
   type IndexNode,
   type ModelNode,
   mergeRedundantIndexes,
+  nameIndexes,
   type RelationNode,
   type RemovedIndex,
   type ValueObjectNode,
@@ -517,6 +518,7 @@ function buildNormalIndex(
   return {
     fields: resolved.fields,
     options: indexOptions({
+      ...ifDefined('name', parsed.map),
       ...(unique && { unique: true }),
       ...ifDefined('sparse', parsed.sparse),
       ...ifDefined('expireAfterSeconds', parsed.expireAfterSeconds),
@@ -546,6 +548,7 @@ function buildTextIndex(parsed: TextIndexArgs, ctx: IndexBuildContext): IndexNod
   return {
     fields: resolved.fields,
     options: indexOptions({
+      ...ifDefined('name', parsed.map),
       ...ifDefined('partialFilterExpression', parsed.filter),
       ...ifDefined('collation', collation),
       ...ifDefined('weights', parsed.weights),
@@ -622,10 +625,19 @@ function collectIndexes(
       diagnostics,
     });
     if (unique === undefined) continue;
+    const source = diagnosticSource(sources, uniqueNode.syntax);
+    const span = nodePslSpan(uniqueNode.syntax, sources);
+    if (unique.map === '') {
+      reportEmptyIndexMap(diagnostics, source, span);
+      continue;
+    }
     indexes.push({
-      index: { fields: { [field.name]: 1 }, options: { unique: true } },
-      source: diagnosticSource(sources, uniqueNode.syntax),
-      span: nodePslSpan(uniqueNode.syntax, sources),
+      index: {
+        fields: { [field.name]: 1 },
+        options: { unique: true, ...ifDefined('name', unique.map) },
+      },
+      source,
+      span,
     });
   }
 
@@ -674,9 +686,26 @@ function collectIndexes(
       if (!parsed) continue;
       index = buildNormalIndex(parsed, unique, ctx);
     }
-    if (index !== undefined) indexes.push({ index, source, span: attr.span });
+    if (index === undefined) continue;
+    if (index.options?.name === '') {
+      reportEmptyIndexMap(diagnostics, source, attr.span);
+      continue;
+    }
+    indexes.push({ index, source, span: attr.span });
   }
   return indexes;
+}
+
+function reportEmptyIndexMap(
+  diagnostics: PslDiagnosticCollector,
+  source: DiagnosticSource,
+  span: PslSpan,
+): void {
+  diagnostics.push({
+    code: 'PSL_INVALID_INDEX',
+    message: 'The `map` argument of an index cannot be an empty string.',
+    ...source.at(span),
+  });
 }
 
 function fieldTypeResolution(field: FieldSymbol, binder: Binder): Resolution | undefined {
@@ -1462,7 +1491,7 @@ export function interpretPslDocumentToMongoContract(
     warnings: undefined,
   };
   const { definition, removedIndexes } = mergeRedundantIndexes(
-    written,
+    nameIndexes(written),
     codecLookup,
     input.dataTypes,
   );

@@ -37,7 +37,7 @@ describe('PSL indexes identical to, or redundant beside, another index in the co
   @@map("users")
 }
 `),
-    ).toEqual([{ kind: 'mongo-index', keys: a, unique: true }]);
+    ).toEqual([{ kind: 'mongo-index', name: 'a_1', keys: a, unique: true }]);
   });
 
   it('becomes one unique index for @@unique and @@index on the same fields', () => {
@@ -51,7 +51,7 @@ describe('PSL indexes identical to, or redundant beside, another index in the co
   @@map("users")
 }
 `),
-    ).toEqual([{ kind: 'mongo-index', keys: ab, unique: true }]);
+    ).toEqual([{ kind: 'mongo-index', name: 'a_1_b_1', keys: ab, unique: true }]);
   });
 
   it('stays two indexes for the same fields in another order', () => {
@@ -66,8 +66,8 @@ describe('PSL indexes identical to, or redundant beside, another index in the co
 }
 `),
     ).toEqual([
-      { kind: 'mongo-index', keys: ab },
-      { kind: 'mongo-index', keys: [ab[1], ab[0]] },
+      { kind: 'mongo-index', name: 'a_1_b_1', keys: ab },
+      { kind: 'mongo-index', name: 'b_1_a_1', keys: [ab[1], ab[0]] },
     ]);
   });
 
@@ -89,8 +89,8 @@ model Admin {
 }
 `),
     ).toEqual([
-      { kind: 'mongo-index', keys: [{ field: 'b', direction: 1 }] },
-      { kind: 'mongo-index', keys: a, unique: true },
+      { kind: 'mongo-index', name: 'b_1', keys: [{ field: 'b', direction: 1 }] },
+      { kind: 'mongo-index', name: 'a_1', keys: a, unique: true },
     ]);
   });
 
@@ -103,7 +103,7 @@ model Admin {
   @@map("users")
 }
 `),
-    ).toEqual([{ kind: 'mongo-index', keys: a, unique: true }]);
+    ).toEqual([{ kind: 'mongo-index', name: 'a_1', keys: a, unique: true }]);
   });
 
   it('becomes one index for an index two models in the collection declare', () => {
@@ -122,7 +122,7 @@ model Admin {
   @@map("users")
 }
 `),
-    ).toEqual([{ kind: 'mongo-index', keys: a }]);
+    ).toEqual([{ kind: 'mongo-index', name: 'a_1', keys: a }]);
   });
 
   it('becomes one text index for a text index two models in the collection declare', () => {
@@ -141,7 +141,7 @@ model Admin {
   @@map("users")
 }
 `),
-    ).toEqual([{ kind: 'mongo-index', keys: [{ field: 'a', direction: 'text' }] }]);
+    ).toEqual([{ kind: 'mongo-index', name: 'a_text', keys: [{ field: 'a', direction: 'text' }] }]);
   });
 
   it('becomes one index for an index with sparse set to false beside one without options', () => {
@@ -154,30 +154,78 @@ model Admin {
   @@map("users")
 }
 `),
-    ).toEqual([{ kind: 'mongo-index', keys: a }]);
+    ).toEqual([{ kind: 'mongo-index', name: 'a_1', keys: a }]);
   });
 
-  it('stays two indexes on the same field with another collation or filter', () => {
+  it('stays two indexes on the same field with another collation or filter, each named', () => {
     expect(
       indexesOf(`model User {
   id ObjectId @id @map("_id")
   a  String
   @@index([a])
-  @@index([a], collationLocale: "fr")
-  @@index([a], filter: "{\\"a\\": \\"x\\"}")
+  @@index([a], collationLocale: "fr", map: "a_fr")
+  @@index([a], filter: "{\\"a\\": \\"x\\"}", map: "a_x")
   @@map("users")
 }
 `),
     ).toEqual([
-      { kind: 'mongo-index', keys: a },
-      { kind: 'mongo-index', keys: a, collation: { locale: 'fr' } },
-      { kind: 'mongo-index', keys: a, partialFilterExpression: { a: 'x' } },
+      { kind: 'mongo-index', name: 'a_1', keys: a },
+      { kind: 'mongo-index', name: 'a_fr', keys: a, collation: { locale: 'fr' } },
+      { kind: 'mongo-index', name: 'a_x', keys: a, partialFilterExpression: { a: 'x' } },
     ]);
   });
 
-  it('stays one index for each variant that indexes the same field', () => {
+  it('stays two indexes for a unique and a plain index that map gives other names', () => {
+    expect(
+      indexesOf(`model User {
+  id ObjectId @id @map("_id")
+  a  String   @unique(map: "User_a_key")
+  @@index([a], map: "User_a_idx")
+  @@map("users")
+}
+`),
+    ).toEqual([
+      { kind: 'mongo-index', name: 'User_a_key', keys: a, unique: true },
+      { kind: 'mongo-index', name: 'User_a_idx', keys: a },
+    ]);
+  });
+
+  it('stays one index for each variant that indexes the same field under its own map', () => {
     expect(
       indexesOf(`model Task {
+  id   ObjectId @id @map("_id")
+  type String
+  @@discriminator(type)
+  @@map("users")
+}
+
+model Bug {
+  a String
+  @@base(Task, "bug")
+  @@index([a], map: "bug_a")
+}
+
+model Feature {
+  a String
+  @@base(Task, "feature")
+  @@index([a], map: "feature_a")
+}
+`),
+    ).toEqual([
+      { kind: 'mongo-index', name: 'bug_a', keys: a, partialFilterExpression: { type: 'bug' } },
+      {
+        kind: 'mongo-index',
+        name: 'feature_a',
+        keys: a,
+        partialFilterExpression: { type: 'feature' },
+      },
+    ]);
+  });
+
+  it.each([
+    [
+      'two variants that index the same field without map',
+      `model Task {
   id   ObjectId @id @map("_id")
   type String
   @@discriminator(type)
@@ -195,11 +243,66 @@ model Feature {
   @@base(Task, "feature")
   @@index([a])
 }
-`),
-    ).toEqual([
-      { kind: 'mongo-index', keys: a, partialFilterExpression: { type: 'bug' } },
-      { kind: 'mongo-index', keys: a, partialFilterExpression: { type: 'feature' } },
-    ]);
+`,
+      {
+        line: 17,
+        message:
+          'Index on model "Feature" is named "a_1", as is an index of model "Bug" in collection "users". An index without `map` is named after its keys and directions. Give one of them another name with `map`.',
+      },
+    ],
+    [
+      'two indexes that map gives one name',
+      `model User {
+  id ObjectId @id @map("_id")
+  a  String
+  b  String
+  @@index([a], map: "by")
+  @@index([b], map: "by")
+  @@map("users")
+}
+`,
+      {
+        line: 6,
+        message:
+          'Index on model "User" is named "by", as is an index of model "User" in collection "users". An index without `map` is named after its keys and directions. Give one of them another name with `map`.',
+      },
+    ],
+    [
+      'two identical indexes with different names',
+      `model User {
+  id ObjectId @id @map("_id")
+  a  String   @unique
+  @@unique([a], map: "User_a_key")
+  @@map("users")
+}
+`,
+      {
+        line: 4,
+        message:
+          'Index on model "User" has the same keys and options as an index of model "User" in collection "users", but another name. MongoDB cannot hold both. Remove one of them, or give them the same `map`.',
+      },
+    ],
+    [
+      'an empty map',
+      `model User {
+  id ObjectId @id @map("_id")
+  a  String   @unique(map: "")
+  @@map("users")
+}
+`,
+      { line: 3, message: 'The `map` argument of an index cannot be an empty string.' },
+    ],
+  ])('refuses %s at the index', (_, schema, expected) => {
+    const result = interpretMongoContract(schema, lookups);
+    if (result.ok) throw new Error('Expected the schema to be refused');
+
+    expect(
+      result.failure.diagnostics.map(({ code, span, message }) => ({
+        code,
+        line: span?.start.line,
+        message,
+      })),
+    ).toEqual([{ code: 'PSL_INVALID_INDEX', ...expected }]);
   });
 
   it('reports a refused index after a merged one at the line that writes it', () => {

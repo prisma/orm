@@ -16,8 +16,8 @@ describe('MongoMigrationPlanner, model statements', () => {
   it('without a statement, drops the old collection and creates the new one', () => {
     expect(planned(plan({ from: profiles, to: users, schema: profilesSchema })).labels).toEqual([
       'Create collection users',
-      'Drop index on profiles (name:1)',
-      'Create index on users (name:1)',
+      'Drop index name_1 on profiles (name:1)',
+      'Create index name_1 on users (name:1)',
       'Drop collection profiles',
     ]);
   });

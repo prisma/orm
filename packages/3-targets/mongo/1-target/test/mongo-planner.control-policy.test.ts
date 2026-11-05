@@ -16,7 +16,11 @@ const ALL_CLASSES_POLICY: MigrationOperationPolicy = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'],
 };
 
-const emailIndex = { keys: [{ field: 'email', direction: 1 as const }], unique: true };
+const emailIndex = {
+  name: 'email_1',
+  keys: [{ field: 'email', direction: 1 as const }],
+  unique: true,
+};
 
 const declared: MongoCollectionInput = {
   indexes: [emailIndex],
@@ -107,7 +111,7 @@ describe('MongoMigrationPlanner under a collection control policy', () => {
     (control) => {
       const contract = contractOf({ users: { ...declared, control } });
       const live = liveCollection('users', [
-        new MongoSchemaIndex({ keys: [{ field: 'legacy', direction: 1 }] }),
+        new MongoSchemaIndex({ name: 'legacy_1', keys: [{ field: 'legacy', direction: 1 }] }),
       ]);
 
       expect(plannedCommands(contract, new MongoSchemaIR([live]))).toEqual([]);
@@ -153,7 +157,7 @@ describe('MongoMigrationPlanner under a collection control policy', () => {
         {
           kind: 'controlPolicySuppressedCall',
           summary:
-            "control policy suppressed: Create index on users (email:1) — collection \"users\" has effective control 'external' but declared 'managed'",
+            "control policy suppressed: Create index email_1 on users (email:1) — collection \"users\" has effective control 'external' but declared 'managed'",
           meta: { controlPolicy: 'external', declaredControlPolicy: 'managed' },
         },
         {
@@ -169,20 +173,20 @@ describe('MongoMigrationPlanner under a collection control policy', () => {
   it('warns about each change a policy leaves out of an existing external collection', () => {
     const contract = contractOf({ users: { indexes: [emailIndex], control: 'external' } });
     const live = liveCollection('users', [
-      new MongoSchemaIndex({ keys: [{ field: 'legacy', direction: 1 }] }),
+      new MongoSchemaIndex({ name: 'legacy_1', keys: [{ field: 'legacy', direction: 1 }] }),
     ]);
 
     expect(planOf(contract, new MongoSchemaIR([live])).warnings).toEqual([
       {
         kind: 'controlPolicySuppressedCall',
         summary:
-          'control policy suppressed: Drop index on users (legacy:1) — collection "users" has effective control \'external\'',
+          'control policy suppressed: Drop index legacy_1 on users (legacy:1) — collection "users" has effective control \'external\'',
         meta: { controlPolicy: 'external', declaredControlPolicy: 'external' },
       },
       {
         kind: 'controlPolicySuppressedCall',
         summary:
-          'control policy suppressed: Create index on users (email:1) — collection "users" has effective control \'external\'',
+          'control policy suppressed: Create index email_1 on users (email:1) — collection "users" has effective control \'external\'',
         meta: { controlPolicy: 'external', declaredControlPolicy: 'external' },
       },
     ]);

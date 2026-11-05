@@ -16,6 +16,7 @@ import { ifDefined } from '@internal/utils/defined';
 
 function convertIndex(index: MongoIndex): MongoSchemaIndex {
   return new MongoSchemaIndex({
+    name: index.name,
     keys: index.keys,
     unique: index.unique,
     sparse: index.sparse,

@@ -13,11 +13,13 @@ import {
 import { canonicalStringify } from '@internal/utils/canonical-stringify';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { InternalError } from '@internal/utils/internal-error';
 import { storedFieldNameIn } from './build-models';
 import type { BuildRefusal, IndexKey, IndexShapeRule } from './build-refusals';
 import type { FieldNode, IndexNode, ModelNode } from './contract-definition';
 
-function storedIndexKey(fields: readonly FieldNode[], key: string): string {
+/** The stored form of an index key: the field's stored name, with a wildcard scope kept. */
+export function storedIndexKey(fields: readonly FieldNode[], key: string): string {
   const wildcardMatch = key.match(/^(.+)\.\$\*\*$/);
   const scope = wildcardMatch?.[1];
   if (scope !== undefined) return `${storedFieldNameIn(fields, scope)}.$**`;
@@ -25,6 +27,11 @@ function storedIndexKey(fields: readonly FieldNode[], key: string): string {
 }
 
 function toStorageIndex(index: IndexNode, fields: readonly FieldNode[]): MongoIndex {
+  if (index.options?.name === undefined) {
+    throw new InternalError(
+      `An index on ${Object.keys(index.fields).join(', ')} reached the MongoDB contract builder without a name. Call nameIndexes on the definition before building it.`,
+    );
+  }
   const keys = Object.entries(index.fields).map(([field, direction]) => ({
     field: storedIndexKey(fields, field),
     direction,
@@ -204,6 +211,7 @@ export function buildCollections(input: {
   const { models, variantValues, refusals } = input;
   const intermediate: Record<string, MongoCollectionInput> = {};
   const indexOwnersByCollection = new Map<string, Map<string, IndexKey>>();
+  const indexNameOwnersByCollection = new Map<string, Map<string, IndexKey>>();
   const textIndexCollections = new Set<string>();
   const modelsByName = new Map(models.map((model) => [model.modelName, model]));
 
@@ -218,6 +226,8 @@ export function buildCollections(input: {
     const existingIndexes = existingCollection.indexes ?? [];
     const indexOwners = indexOwnersByCollection.get(collection) ?? new Map<string, IndexKey>();
     indexOwnersByCollection.set(collection, indexOwners);
+    const nameOwners = indexNameOwnersByCollection.get(collection) ?? new Map<string, IndexKey>();
+    indexNameOwnersByCollection.set(collection, nameOwners);
 
     if (existingCollection.options && model.collectionOptions) {
       refusals.push({
@@ -264,7 +274,20 @@ export function buildCollections(input: {
         });
         return;
       }
+      const firstNamed = nameOwners.get(checked.index.name);
+      if (firstNamed !== undefined) {
+        refusals.push({
+          kind: 'indexNameDuplicate',
+          key,
+          collection,
+          name: checked.index.name,
+          firstModel: firstNamed.model,
+          firstPosition: firstNamed.position,
+        });
+        return;
+      }
       indexOwners.set(lookupKey, key);
+      nameOwners.set(checked.index.name, key);
       storageIndexes.push(checked.index);
     });
 

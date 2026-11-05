@@ -59,6 +59,21 @@ describe('introspectSchema', () => {
     expect(users.indexes).toEqual([]);
   });
 
+  it('reads each index under the name MongoDB holds it by, two indexes on the same keys apart', async () => {
+    await db
+      .collection('users')
+      .createIndex({ email: 1 }, { unique: true, name: 'User_email_key' });
+    await db.collection('users').createIndex({ email: 1 }, { name: 'User_email_idx' });
+
+    const ir = await introspectSchema(db);
+    const users = ir.collection('users')!;
+
+    expect(users.indexes.map(({ id, name, unique }) => ({ id, name, unique }))).toEqual([
+      { id: 'User_email_key', name: 'User_email_key', unique: true },
+      { id: 'User_email_idx', name: 'User_email_idx', unique: false },
+    ]);
+  });
+
   it('introspects indexes with various key types', async () => {
     await db.createCollection('users');
     await db.collection('users').createIndex({ email: 1 }, { unique: true });
@@ -216,10 +231,12 @@ describe('introspectSchema', () => {
           name: 'users',
           indexes: [
             new MongoSchemaIndex({
+              name: 'email_1',
               keys: [{ field: 'email', direction: 1 }],
               unique: true,
             }),
             new MongoSchemaIndex({
+              name: 'lastName_1_firstName_1',
               keys: [
                 { field: 'lastName', direction: 1 },
                 { field: 'firstName', direction: 1 },

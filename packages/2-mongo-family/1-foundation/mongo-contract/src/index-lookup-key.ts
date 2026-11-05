@@ -15,8 +15,10 @@ export function listsEveryOption<Option extends string>() {
   ): T => options;
 }
 
-/** The index options that tell two indexes on the same keys apart: every option of an index. */
-export const MONGO_INDEX_OPTION_KEYS = listsEveryOption<Exclude<keyof MongoIndexInput, 'keys'>>()([
+/** The index options that tell two indexes on the same keys apart: every option of an index. The name is not an option. */
+export const MONGO_INDEX_OPTION_KEYS = listsEveryOption<
+  Exclude<keyof MongoIndexInput, 'keys' | 'name'>
+>()([
   'unique',
   'sparse',
   'expireAfterSeconds',
@@ -35,7 +37,7 @@ export type MongoIndexLookupInput = { readonly keys: ReadonlyArray<MongoIndexKey
   readonly [Option in MongoIndexOptionKey]?: MongoIndexInput[Option] | undefined;
 };
 
-/** Identifies an index by its keys and the options it sets; an option set to `false` counts as unset. No field name or option value can make two different indexes share a key. */
+/** Identifies an index by its keys and the options it sets, not by its name; an option set to `false` counts as unset. No field name or option value can make two different indexes share a key. */
 export function indexLookupKey(index: MongoIndexLookupInput): string {
   const options = Object.fromEntries(
     MONGO_INDEX_OPTION_KEYS.flatMap((option) => {

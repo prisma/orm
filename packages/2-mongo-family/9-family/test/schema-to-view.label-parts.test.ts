@@ -15,6 +15,7 @@ describe('mongoSchemaToView label parts', () => {
         name: 'users',
         indexes: [
           new MongoSchemaIndex({
+            name: 'email_1_createdAt_-1',
             keys: [
               { field: 'email', direction: 1 },
               { field: 'createdAt', direction: -1 },

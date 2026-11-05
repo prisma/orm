@@ -21,6 +21,7 @@ export interface MergedIndexes {
 
 interface HeldIndex extends RemovedIndex {
   readonly lookupKey: string;
+  readonly name: string;
   readonly unique: boolean;
 }
 
@@ -29,7 +30,7 @@ function positionKey({ model, position }: RemovedIndex): string {
 }
 
 /**
- * Removes each identical or redundant index in a collection, for the Prisma 8 authoring sources to call before the builder. Two indexes match when their storage indexes, variant scope applied, have the same `indexLookupKey` with `unique` left out. Of a matching pair the first is kept, unless only the later one is unique; then the later one is kept and the earlier removed. Indexes the builder refuses are left for it to refuse. A source that reports the builder's refusals by index position maps them back through `removedIndexes`.
+ * Removes each identical or redundant index in a collection, for the Prisma 8 authoring sources to call after `nameIndexes` and before the builder. Two indexes match when they have the same name and their storage indexes, variant scope applied, have the same `indexLookupKey` with `unique` left out. Indexes with different names are both kept: the user named them apart, and the builder refuses two identical ones. Of a matching pair the first is kept, unless only the later one is unique; then the later one is kept and the earlier removed. Indexes the builder refuses are left for it to refuse. A source that reports the builder's refusals by index position maps them back through `removedIndexes`.
  */
 export function mergeRedundantIndexes(
   definition: ContractDefinition,
@@ -60,9 +61,12 @@ export function mergeRedundantIndexes(
         model: model.modelName,
         position,
         lookupKey: indexLookupKey({ ...checked.index, unique: undefined }),
+        name: checked.index.name,
         unique: checked.index.unique === true,
       };
-      const matchingAt = held.findIndex((candidate) => candidate.lookupKey === index.lookupKey);
+      const matchingAt = held.findIndex(
+        (candidate) => candidate.lookupKey === index.lookupKey && candidate.name === index.name,
+      );
       const match = held[matchingAt];
       if (match !== undefined) {
         if (match.unique || !index.unique) {

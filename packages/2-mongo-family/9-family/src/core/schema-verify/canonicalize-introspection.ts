@@ -109,6 +109,7 @@ function canonicalizeTextIndexKeyOrder(index: MongoSchemaIndex): MongoSchemaInde
   const hasTextKey = index.keys.some((k) => k.direction === 'text');
   if (!hasTextKey) return index;
   return new MongoSchemaIndexCtor({
+    name: index.name,
     keys: sortTextKeys(index.keys),
     unique: index.unique,
     ...ifDefined('sparse', index.sparse),
@@ -183,6 +184,7 @@ function canonicalizeLiveIndex(
       : liveIndex.language_override;
 
   return new MongoSchemaIndexCtor({
+    name: liveIndex.name,
     keys: projectedKeys,
     unique: liveIndex.unique,
     ...ifDefined('sparse', liveIndex.sparse),
@@ -198,18 +200,19 @@ function canonicalizeLiveIndex(
 
 /**
  * Locate the contract-side index that corresponds to a live index for the
- * purpose of contract-aware normalization. We deliberately match by the
- * *projected* (contract-shaped) key list — so a live `_fts/_ftsx` index
- * resolves to a contract `{title: 'text', body: 'text'}` index — and pick
- * the first match. Contracts very rarely contain duplicate-key indexes; if
- * we have no counterpart we fall back to no normalization for that index.
+ * purpose of contract-aware normalization. We match by the *projected*
+ * (contract-shaped) key list — so a live `_fts/_ftsx` index resolves to a
+ * contract `{title: 'text', body: 'text'}` index. Of several contract indexes
+ * on those keys, the one with the live index's name wins; without one, the
+ * first. With no counterpart we fall back to no normalization for that index.
  */
 function findExpectedIndexCounterpart(
   liveIndex: MongoSchemaIndex,
   expectedIndexes: ReadonlyArray<MongoSchemaIndex>,
 ): MongoSchemaIndex | undefined {
   const liveKeys = keyPatternOf(projectTextIndexKeys(liveIndex));
-  return expectedIndexes.find((expected) => keyPatternOf(expected.keys) === liveKeys);
+  const sameKeys = expectedIndexes.filter((expected) => keyPatternOf(expected.keys) === liveKeys);
+  return sameKeys.find((expected) => expected.name === liveIndex.name) ?? sameKeys[0];
 }
 
 function keyPatternOf(keys: ReturnType<typeof projectTextIndexKeys>): string {

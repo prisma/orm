@@ -332,10 +332,12 @@ describe('toSchemaView', () => {
         name: 'users',
         indexes: [
           new MongoSchemaIndex({
+            name: 'email_1',
             keys: [{ field: 'email', direction: 1 }],
             unique: true,
           }),
           new MongoSchemaIndex({
+            name: 'lastName_1_firstName_1',
             keys: [
               { field: 'lastName', direction: 1 },
               { field: 'firstName', direction: 1 },
@@ -366,6 +368,7 @@ describe('toSchemaView', () => {
         name: 'events',
         indexes: [
           new MongoSchemaIndex({
+            name: 'userId_1_timestamp_-1',
             keys: [
               { field: 'userId', direction: 1 },
               { field: 'timestamp', direction: -1 },
@@ -388,9 +391,11 @@ describe('toSchemaView', () => {
         name: 'products',
         indexes: [
           new MongoSchemaIndex({
+            name: 'code_hashed',
             keys: [{ field: 'code', direction: 'hashed' }],
           }),
           new MongoSchemaIndex({
+            name: 'description_text',
             keys: [
               { field: '_fts', direction: 'text' },
               { field: '_ftsx', direction: 1 },

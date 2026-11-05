@@ -1043,7 +1043,7 @@ describe('MongoMigrationRunner, a failure after an earlier space changed the dat
 });
 
 describe('MongoMigrationRunner, an index check that finds an index of the same keys', () => {
-  it('names the keys it matched, not a name the check does not test', async () => {
+  it('names the keys it matched when another index holds the same keys and options', async () => {
     const harness = makeHarness();
     harness.inspectionExecutor.indexes = [{ name: 'by_email', key: { email: 1 } }];
 
@@ -1058,7 +1058,26 @@ describe('MongoMigrationRunner, an index check that finds an index of the same k
     );
 
     expect(result.assertNotOk().why).toBe(
-      'Before operation index.users.create(email:1) runs, it checks: index does not already exist on users. That check failed: the database already has an index on { email: 1 } in "users". The failed apply changed nothing.',
+      'Before operation index.users.create(email_1) runs, it checks: no index with the same keys and options exists on users. That check failed: the database already has an index on { email: 1 } in "users". The failed apply changed nothing.',
+    );
+  });
+
+  it('names the index name it matched when another index holds the name', async () => {
+    const harness = makeHarness();
+    harness.inspectionExecutor.indexes = [{ name: 'email_1', key: { name: 1 } }];
+
+    const result = await execute(
+      harness,
+      [createIndex('users', [{ field: 'email', direction: 1 }], { name: 'email_1' })],
+      {
+        prechecks: true,
+        postchecks: false,
+        idempotencyChecks: false,
+      },
+    );
+
+    expect(result.assertNotOk().why).toBe(
+      'Before operation index.users.create(email_1) runs, it checks: no index named email_1 exists on users. That check failed: the database already has an index named "email_1" in "users". The failed apply changed nothing.',
     );
   });
 });

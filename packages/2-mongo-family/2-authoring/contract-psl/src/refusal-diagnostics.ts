@@ -303,11 +303,24 @@ export function refusalDiagnostic(
             `Variant "${model}" index conflicts with discriminator scope: ${refusal.reason}`,
           );
         case 'indexDuplicate':
-          throw new InternalError(
-            `PSL merges identical indexes before the build, so index ${position} of "${model}" cannot duplicate one of model "${refusal.firstModel}" in collection "${refusal.collection}". This is a defect in the PSL interpreter.`,
+          return at(
+            site,
+            'PSL_INVALID_INDEX',
+            `Index on model "${model}" has the same keys and options as an index of model "${refusal.firstModel}" in collection "${refusal.collection}", but another name. MongoDB cannot hold both. Remove one of them, or give them the same \`map\`.`,
           );
       }
       break;
+    }
+    case 'indexNameDuplicate': {
+      const { model, position } = refusal.key;
+      const site = modelSitesOf(sites, model).indexes[position];
+      if (site === undefined)
+        throw new InternalError(`Index ${position} of "${model}" has a site.`);
+      return at(
+        site,
+        'PSL_INVALID_INDEX',
+        `Index on model "${model}" is named "${refusal.name}", as is an index of model "${refusal.firstModel}" in collection "${refusal.collection}". An index without \`map\` is named after its keys and directions. Give one of them another name with \`map\`.`,
+      );
     }
     case 'generatedOnValueObject':
       return generatedOnValueObjectDiagnostic(

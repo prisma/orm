@@ -1,4 +1,8 @@
-import { MONGO_INDEX_OPTION_KEYS, type MongoIndexOptionKey } from '@internal/mongo-contract';
+import {
+  defaultMongoIndexName,
+  MONGO_INDEX_OPTION_KEYS,
+  type MongoIndexOptionKey,
+} from '@internal/mongo-contract';
 import type {
   MongoDmlCheck,
   MongoDmlOperation,
@@ -13,7 +17,6 @@ import {
   type CreateIndexOptions,
   DropCollectionCommand,
   DropIndexCommand,
-  defaultMongoIndexName,
   keysToKeySpec,
   ListCollectionsCommand,
   ListIndexesCommand,
@@ -288,11 +291,19 @@ function formatKeys(keys: ReadonlyArray<MongoIndexKey>): string {
   return keys.map((k) => `${k.field}:${k.direction}`).join(', ');
 }
 
-/** What an index check matches, which is the index's keys and collection, not its name. */
+/** What an index content check matches: the index's keys and options in its collection, whatever its name. */
 function indexObject(collectionName: string, keys: ReadonlyArray<MongoIndexKey>): string {
   if (isTextIndex(keys)) return `a text index in "${collectionName}"`;
   const spec = keys.map((key) => `${key.field}: ${JSON.stringify(key.direction)}`).join(', ');
   return `an index on { ${spec} } in "${collectionName}"`;
+}
+
+function namedIndexObject(collectionName: string, name: string): string {
+  return `an index named "${name}" in "${collectionName}"`;
+}
+
+function nameFilter(name: string): MongoFilterExpr {
+  return MongoFieldFilter.eq('name', name);
 }
 
 function isTextIndex(keys: ReadonlyArray<MongoIndexKey>): boolean {
@@ -372,7 +383,7 @@ const textIndexOnly =
   (options, keys) =>
     isTextIndex(keys) ? filter(options, keys) : [];
 
-/** `name` is derived from the keys, so it tells no two indexes apart. */
+/** The name is checked on its own, beside the definition. */
 type UncomparedCreateIndexOption = 'name';
 
 /**
@@ -436,30 +447,40 @@ function indexDefinitionFilter(
 const TEXT_INDEX_DEFAULT_LANGUAGE = 'english';
 const TEXT_INDEX_DEFAULT_LANGUAGE_OVERRIDE = 'language';
 
+/**
+ * Creates an index under `options.name`, or under the name MongoDB would give it when the call gives none. The precheck requires that the collection holds no index with that name and none with the same keys and options; the postcheck requires an index with that name, keys and options.
+ */
 export function createIndex(
   collectionName: string,
   keys: ReadonlyArray<MongoIndexKey>,
   options?: CreateIndexOptions,
 ): MongoMigrationPlanOperation {
-  const name = defaultMongoIndexName(keys);
-  const filter = keyFilter(keys);
+  const name = options?.name ?? defaultMongoIndexName(keys);
+  const definition = indexDefinitionFilter(keys, options);
 
   return {
-    id: buildIndexOpId('create', collectionName, keys),
-    label: `Create index on ${collectionName} (${formatKeys(keys)})`,
+    id: buildIndexOpId('create', collectionName, name),
+    label: `Create index ${name} on ${collectionName} (${formatKeys(keys)})`,
     operationClass: 'additive',
     precheck: [
       {
-        description: `index does not already exist on ${collectionName}`,
+        description: `no index named ${name} exists on ${collectionName}`,
         source: new ListIndexesCommand(collectionName),
-        filter,
+        filter: nameFilter(name),
+        expect: 'notExists',
+        object: namedIndexObject(collectionName, name),
+      },
+      {
+        description: `no index with the same keys and options exists on ${collectionName}`,
+        source: new ListIndexesCommand(collectionName),
+        filter: definition,
         expect: 'notExists',
         object: indexObject(collectionName, keys),
       },
     ],
     execute: [
       {
-        description: `create index on ${collectionName}`,
+        description: `create index ${name} on ${collectionName}`,
         command: collection(collectionName).createIndex(keys, {
           ...options,
           name,
@@ -468,48 +489,52 @@ export function createIndex(
     ],
     postcheck: [
       {
-        description: `index exists on ${collectionName}`,
+        description: `index ${name} exists on ${collectionName}`,
         source: new ListIndexesCommand(collectionName),
-        filter: indexDefinitionFilter(keys, options),
+        filter: MongoAndExpr.of([nameFilter(name), definition]),
         expect: 'exists',
       },
     ],
   };
 }
 
+/**
+ * Drops the index named `options.name`, or the name MongoDB would give the keys when the call gives none. The precheck requires an index with that name, keys and options; a call without options checks the keys only. The postcheck requires that no index with that name is left.
+ */
 export function dropIndex(
   collectionName: string,
   keys: ReadonlyArray<MongoIndexKey>,
+  options?: CreateIndexOptions,
 ): MongoMigrationPlanOperation {
-  const indexName = defaultMongoIndexName(keys);
-  const filter = keyFilter(keys);
+  const name = options?.name ?? defaultMongoIndexName(keys);
+  const content = options === undefined ? keyFilter(keys) : indexDefinitionFilter(keys, options);
 
   return {
-    id: buildIndexOpId('drop', collectionName, keys),
-    label: `Drop index on ${collectionName} (${formatKeys(keys)})`,
+    id: buildIndexOpId('drop', collectionName, name),
+    label: `Drop index ${name} on ${collectionName} (${formatKeys(keys)})`,
     operationClass: 'widening',
     precheck: [
       {
-        description: `index exists on ${collectionName}`,
+        description: `index ${name} exists on ${collectionName} with the expected keys and options`,
         source: new ListIndexesCommand(collectionName),
-        filter,
+        filter: MongoAndExpr.of([nameFilter(name), content]),
         expect: 'exists',
-        object: indexObject(collectionName, keys),
+        object: namedIndexObject(collectionName, name),
       },
     ],
     execute: [
       {
-        description: `drop index on ${collectionName}`,
-        command: new DropIndexCommand(collectionName, indexName),
+        description: `drop index ${name} on ${collectionName}`,
+        command: new DropIndexCommand(collectionName, name),
       },
     ],
     postcheck: [
       {
-        description: `index no longer exists on ${collectionName}`,
+        description: `index ${name} no longer exists on ${collectionName}`,
         source: new ListIndexesCommand(collectionName),
-        filter,
+        filter: nameFilter(name),
         expect: 'notExists',
-        object: indexObject(collectionName, keys),
+        object: namedIndexObject(collectionName, name),
       },
     ],
   };

@@ -112,7 +112,9 @@ describe('MongoTargetSchemaVerifier', () => {
     const schema = new MongoSchemaIR([
       new MongoSchemaCollection({
         name: 'items',
-        indexes: [new MongoSchemaIndex({ keys: [{ field: 'extra', direction: 1 }] })],
+        indexes: [
+          new MongoSchemaIndex({ name: 'extra_1', keys: [{ field: 'extra', direction: 1 }] }),
+        ],
       }),
     ]);
 

@@ -35,6 +35,7 @@ export function isDefaultIdIndex(doc: Document): boolean {
 function parseIndex(doc: Document): MongoSchemaIndex {
   const keySpec = doc['key'] as Record<string, unknown>;
   return new MongoSchemaIndex({
+    name: String(doc['name']),
     keys: parseIndexKeys(keySpec),
     unique: doc['unique'] as boolean | undefined,
     sparse: doc['sparse'] as boolean | undefined,

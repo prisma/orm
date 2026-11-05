@@ -34,7 +34,7 @@ describe('mongo builder storageHash pin', () => {
     });
 
     expect(String(contract.storage.storageHash)).toBe(
-      '5d42e6d82387b059ecc9ffc13e1bf085b978380e0668fe85433f1c72df20df3d',
+      'fa0d1f7630ce87eb9bd3f7250d2ed8fd2322ef400c0b8727cb56ec046fd26e54',
     );
   });
 });

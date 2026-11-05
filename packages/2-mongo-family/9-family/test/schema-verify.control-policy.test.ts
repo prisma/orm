@@ -1,7 +1,11 @@
 import { type ControlPolicy, effectiveControlPolicy } from '@internal/contract/types';
 import { issueOutcome } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { MongoCollection, type MongoContract } from '@internal/mongo-contract';
+import {
+  defaultMongoIndexName,
+  MongoCollection,
+  type MongoContract,
+} from '@internal/mongo-contract';
 import { MongoSchemaCollection, MongoSchemaIndex, MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { describe, expect, it } from 'vitest';
 import { contractToMongoSchemaIR } from '../src/core/contract-to-schema';
@@ -43,7 +47,7 @@ function buildContract(
 }
 
 function idx(keys: Array<{ field: string; direction: 1 | -1 }>): MongoSchemaIndex {
-  return new MongoSchemaIndex({ keys });
+  return new MongoSchemaIndex({ name: defaultMongoIndexName(keys), keys });
 }
 
 /**
