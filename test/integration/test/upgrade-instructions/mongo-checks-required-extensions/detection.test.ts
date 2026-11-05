@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detectionPatterns, guideChange } from '../guide-detections';
+import { detectionPatterns, guideChange, guideChanges, patternsOf } from '../guide-detections';
 
 const APP_NOTE =
   'upgrade-instructions/pending/mongo-checks-required-extensions/app/instructions.md';
@@ -196,4 +196,65 @@ describe('the extension mongo-codecs-declared-once detection, for spread metadat
       ),
     ]).toEqual([true, true, true]);
   });
+});
+
+describe('the detections, on files that only look like the old code', () => {
+  const codecsSlot = matcher(EXTENSION_NOTE, 'mongo-codecs-declared-once');
+  const configExtensions = matcher(APP_NOTE, 'mongo-client-takes-extensions');
+
+  it('match a spread descriptor whose codecs method has a return type, and a config whose shorthand extensions come first', () => {
+    expect([
+      codecsSlot(
+        "import { newMongoCodecRegistry } from 'x';\nexport const rt = {\n  ...meta,\n  codecs(): MongoCodecRegistry {\n    return newMongoCodecRegistry();\n  },\n};",
+      ),
+      configExtensions(
+        "import { defineConfig } from '@prisma/orm-mongo/config';\nexport default defineConfig({ extensions, contract: 'x' });",
+      ),
+    ]).toEqual([true, true]);
+  });
+
+  it('do not match a SQL codecs slot in a file that names the MongoDB registry, or extensions in a comment', () => {
+    expect([
+      codecsSlot(
+        "import { MongoCodecRegistry } from 'x';\nconst sqlPack = { familyId: 'sql', codecs: () => [] };",
+      ),
+      codecsSlot(
+        "import { MongoCodecRegistry } from 'x';\nconst sqlPack = { ...sqlMeta, familyId: 'sql', codecs: () => [] };",
+      ),
+      configExtensions(
+        "import { defineConfig } from '@prisma/orm-mongo/config';\nexport default defineConfig({ contract: './prisma/schema.prisma' });\n// extensions, later",
+      ),
+    ]).toEqual([false, false, false]);
+  });
+});
+
+describe('every detection in the MongoDB required-extensions notes', () => {
+  const adversarial = [
+    `familyId: "mongo"${' {'.repeat(500_000)}`,
+    `familyId: "mongo"${'{ { { '.repeat(100_000)}${'x'.repeat(400_000)}`,
+    `MongoCodecRegistry\n${'codecs: ('.repeat(110_000)}`,
+    `MongoCodecRegistry\n${'codecs ( '.repeat(110_000)}`,
+    `MongoCodecRegistry\n{ ...meta, ${'codecs: () => x, '.repeat(60_000)}`,
+    `MongoRuntimeExtensionDescriptor<'mongo'> = {${'{a:{b:{c:1}}}, '.repeat(70_000)}`,
+    `codecs: ${'{ '.repeat(3)}${'a'.repeat(1_000_000)}`,
+    `${'codecs: () => x, '.repeat(60_000)}familyId: 'mongo'`,
+    `import '@prisma/orm-mongo/config';\n${'extensions '.repeat(90_000)}`,
+    `{"targetFamily": "mongo", ${'"x": 1, '.repeat(120_000)}}`,
+  ];
+  const patterns = [APP_NOTE, EXTENSION_NOTE].flatMap((note) =>
+    guideChanges(note).flatMap((change) =>
+      patternsOf(change).map((pattern) => ({ id: change.id, pattern })),
+    ),
+  );
+
+  it.each(adversarial.map((input, index) => ({ index, input })))(
+    'finishes within a second on adversarial input $index',
+    ({ input }) => {
+      for (const { pattern } of patterns) {
+        const started = performance.now();
+        pattern.test(input);
+        expect(performance.now() - started).toBeLessThan(1000);
+      }
+    },
+  );
 });

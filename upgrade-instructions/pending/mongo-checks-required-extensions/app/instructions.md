@@ -6,7 +6,7 @@ changes:
     detection:
       glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs,jsx}"
       matches:
-        - '(?<![\s\S])(?=[\s\S]*@prisma/orm-mongo/config)[\s\S]*\bextensions\s*[:,}]'
+        - '(?<![\s\S])(?=[\s\S]*@prisma/orm-mongo/config)[\s\S]*[{,]\s{0,100}extensions\s{0,20}[:,}]'
   - id: mongo-contract-requires-target
     summary: |
       A MongoDB `contract.json` must have `"target"`, as a SQL contract must. `contractFromJson`, `mongo()` and `mongoStatic()` refuse a contract without it with `CONTRACT.VALIDATION_FAILED`. Every contract `prisma contract emit` writes has it, so only a hand-written or hand-edited contract is affected.

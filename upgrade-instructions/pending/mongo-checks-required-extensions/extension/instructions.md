@@ -14,10 +14,10 @@ changes:
     detection:
       glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs,jsx}"
       matches:
-        - '\bMongoRuntime(?:Extension|Target|Adapter)Descriptor\b(?:<[^<>]*>)?\s*(?:=>?|\{\s*return)\s*\(?\s*\{(?:[^{}]|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})*?\bcodecs\s*[:(]'
-        - '\bfamilyId\s*:\s*[''"]mongo[''"](?:[^{}]|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})*?\bcodecs\s*[:(]'
-        - '\bcodecs\s*[:(](?:[^{}]|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})*?\bfamilyId\s*:\s*[''"]mongo[''"]'
-        - '(?<![\s\S])(?=[\s\S]*\b(?:newMongoCodecRegistry|MongoCodecRegistry)\b)[\s\S]*\bcodecs\s*(?::\s*(?:(?:async\s*)?(?:\([^()]*\)|\w+)\s*=>|function\b|newMongoCodecRegistry\b(?!\s*\())|\([^()]*\)\s*\{)'
+        - '\bMongoRuntime(?:Extension|Target|Adapter)Descriptor\b(?:<[^<>]{0,200}>)?\s{0,20}(?:=>?|\{\s{0,20}return)\s{0,20}\(?\s{0,20}\{(?:[^{}]|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]{0,500}\}){0,500}\}){0,500}\}){0,500}?\bcodecs\s{0,20}[:(]'
+        - '\bfamilyId\s{0,20}:\s{0,20}[''"]mongo[''"](?:[^{}]|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]{0,500}\}){0,500}\}){0,500}\}){0,500}?\bcodecs\s{0,20}[:(]'
+        - '\bcodecs\s{0,20}[:(](?:[^{}]|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]{0,500}\}){0,500}\}){0,500}\}){0,500}?\bfamilyId\s{0,20}:\s{0,20}[''"]mongo[''"]'
+        - '(?<![\s\S])(?=[\s\S]*?\b(?:newMongoCodecRegistry|MongoCodecRegistry)\b)[\s\S]*?\{(?:(?!\bfamilyId\s{0,20}:\s{0,20}[''"](?!mongo[''"]))(?:[^{}]|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]{0,500}\}){0,500}\}){0,500}\})){0,500}?(?:\.\.\.(?:(?!\bfamilyId\s{0,20}:\s{0,20}[''"](?!mongo[''"]))(?:[^{}]|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]{0,500}\}){0,500}\}){0,500}\})){0,500}?\bcodecs\s{0,20}(?::\s{0,20}(?:(?:async\s{1,20})?(?:\([^()]{0,200}\)|[\w$]{1,100})\s{0,20}=>|function\b|newMongoCodecRegistry\b(?!\s{0,20}\())|\([^()]{0,200}\)\s{0,20}(?::[^{};]{0,200})?\{(?:[^{}]|\{(?:[^{}]|\{[^{}]{0,500}\}){0,500}\}){0,500}\})|\bcodecs\s{0,20}(?::\s{0,20}(?:(?:async\s{1,20})?(?:\([^()]{0,200}\)|[\w$]{1,100})\s{0,20}=>|function\b|newMongoCodecRegistry\b(?!\s{0,20}\())|\([^()]{0,200}\)\s{0,20}(?::[^{};]{0,200})?\{(?:[^{}]|\{(?:[^{}]|\{[^{}]{0,500}\}){0,500}\}){0,500}\})(?:(?!\bfamilyId\s{0,20}:\s{0,20}[''"](?!mongo[''"]))(?:[^{}]|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]{0,500}\}){0,500}\}){0,500}\})){0,500}?\.\.\.)(?:(?!\bfamilyId\s{0,20}:\s{0,20}[''"](?!mongo[''"]))(?:[^{}]|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]{0,500}\}){0,500}\}){0,500}\})){0,500}?\}'
   - id: mongo-standard-codecs-removed
     summary: |
       `mongoStandardCodecs` and `buildStandardCodecRegistry` are gone from `@prisma/orm-mongo/target/codecs`. The target declares its codecs once, in `mongoCodecDescriptors`. A registry of them is `assembleMongoCodecRegistry([mongoRuntimeTarget])`, with `assembleMongoCodecRegistry` from `@prisma/orm-family-mongo/codec` and the target from `@prisma/orm-mongo/target/runtime`.
