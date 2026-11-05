@@ -114,10 +114,15 @@ describe('resolveOptionalPostgresBinding with a narrowed list of kinds', () => {
     );
   });
 
-  it('refuses a pg.Client passed as pg when pgClient is not listed', () => {
-    const client = new Client();
-
-    expect(() => resolveOptionalPostgresBinding({ pg: client }, rules)).toThrow(
+  it('refuses a binding of a kind outside the list before checking its contents', () => {
+    expect(() =>
+      resolveOptionalPostgresBinding(
+        { binding: { kind: 'pgClient', client: 'x' } } as unknown as Parameters<
+          typeof resolveOptionalPostgresBinding
+        >[0],
+        rules,
+      ),
+    ).toThrow(
       expect.objectContaining({
         code: 'RUNTIME.BINDING_INVALID',
         message: "The binding option must have kind 'url' or 'pgPool'",
@@ -126,6 +131,34 @@ describe('resolveOptionalPostgresBinding with a narrowed list of kinds', () => {
           reason: 'unknown binding kind',
           receivedKind: 'pgClient',
         },
+      }),
+    );
+  });
+
+  it('refuses a pg.Client passed as pg, naming the pg option', () => {
+    const client = new Client();
+
+    expect(() => resolveOptionalPostgresBinding({ pg: client }, rules)).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.BINDING_INVALID',
+        message: 'The pg option is a pg.Client, which this client does not take',
+        fix: "Pass a pg.Pool as pg, or binding: { kind: 'url', url } or { kind: 'pgPool', pool }.",
+        meta: { extension: 'test-client', reason: 'refused pg input', receivedKind: 'pgClient' },
+      }),
+    );
+  });
+
+  it('refuses a url when url is not listed, naming the url option', () => {
+    expect(() =>
+      resolveOptionalPostgresBinding(
+        { url: 'postgres://localhost/db' },
+        { extension: 'test-client', kinds: { pgPool: true } },
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.BINDING_INVALID',
+        message: 'The url option is a connection string, which this client does not take',
+        meta: { extension: 'test-client', reason: 'refused url input', receivedKind: 'url' },
       }),
     );
   });

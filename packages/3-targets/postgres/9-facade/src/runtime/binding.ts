@@ -213,7 +213,11 @@ function unknownKindError(wording: BindingWording, kind: unknown): Error {
   );
 }
 
-function checkInputTypes(options: PostgresBindingFields, wording: BindingWording): void {
+function checkInputTypes(
+  options: PostgresBindingFields,
+  rules: PostgresBindingRules,
+  wording: BindingWording,
+): void {
   const binding: unknown = options.binding;
   const url: unknown = options.url;
   const pg: unknown = options.pg;
@@ -258,7 +262,7 @@ function checkInputTypes(options: PostgresBindingFields, wording: BindingWording
   }
   if (binding !== undefined) {
     const kind: unknown = 'kind' in binding ? binding.kind : undefined;
-    if (!isBindingKind(kind)) throw unknownKindError(wording, kind);
+    if (!isBindingKind(kind) || rules.kinds[kind] !== true) throw unknownKindError(wording, kind);
   }
 }
 
@@ -304,10 +308,34 @@ function resolveBinding(
   rules: PostgresBindingRules,
 ): PostgresBinding {
   const wording = wordingOf(rules);
-  checkInputTypes(options, wording);
+  checkInputTypes(options, rules, wording);
   const binding = resolveInput(options, rules, wording);
-  if (rules.kinds[binding.kind] !== true) throw unknownKindError(wording, binding.kind);
+  if (rules.kinds[binding.kind] !== true) {
+    throw refusedInputError(wording, options.url !== undefined ? 'url' : 'pg', binding.kind);
+  }
   return binding;
+}
+
+const inputDescriptions: Record<BindingKind, string> = {
+  url: 'a connection string',
+  pgPool: 'a pg.Pool',
+  pgClient: 'a pg.Client',
+};
+
+function refusedInputError(
+  wording: BindingWording,
+  option: 'url' | 'pg',
+  kind: BindingKind,
+): Error {
+  const pgFix = wording.pgObjectsEach === '' ? '' : `${wording.pgObjectsEach} as pg, or `;
+  return postgresError(
+    'RUNTIME.BINDING_INVALID',
+    `The ${option} option is ${inputDescriptions[kind]}, which this client does not take`,
+    {
+      fix: `Pass ${pgFix}binding: ${wording.forms}.`,
+      meta: { extension: wording.extension, reason: `refused ${option} input`, receivedKind: kind },
+    },
+  );
 }
 
 function resolveInput(
