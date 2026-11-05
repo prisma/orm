@@ -14,8 +14,9 @@ changes:
     detection:
       glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs,jsx}"
       matches:
-        - '(?<![\s\S])(?=[\s\S]*\bMongoRuntime(?:Extension|Target|Adapter)Descriptor\b)[\s\S]*\bcodecs\s*[:(]'
-        - '(?<![\s\S])(?=[\s\S]*\bfamilyId\s*:\s*[''"]mongo[''"])[\s\S]*\bcodecs\s*[:(]'
+        - '\bMongoRuntime(?:Extension|Target|Adapter)Descriptor\b(?:<[^<>]*>)?\s*(?:=>?|\{\s*return)\s*\(?\s*\{(?:[^{}]|\{[^{}]*\})*?\bcodecs\s*[:(]'
+        - '\bfamilyId\s*:\s*[''"]mongo[''"](?:[^{}]|\{[^{}]*\})*?\bcodecs\s*[:(]'
+        - '\bcodecs\s*[:(](?:[^{}]|\{[^{}]*\})*?\bfamilyId\s*:\s*[''"]mongo[''"]'
   - id: mongo-standard-codecs-removed
     summary: |
       `mongoStandardCodecs` and `buildStandardCodecRegistry` are gone from `@prisma/orm-mongo/target/codecs`. The target declares its codecs once, in `mongoCodecDescriptors`. A registry of them is `assembleMongoCodecRegistry([mongoRuntimeTarget])`, with `assembleMongoCodecRegistry` from `@prisma/orm-family-mongo/codec` and the target from `@prisma/orm-mongo/target/runtime`.

@@ -118,3 +118,32 @@ describe('the extension mongo-codecs-declared-once detection, for other ways of 
     ]).toEqual([true, true, true, false, false]);
   });
 });
+
+describe('the extension mongo-codecs-declared-once detection, within one object', () => {
+  const matches = matcher(EXTENSION_NOTE, 'mongo-codecs-declared-once');
+
+  it('matches a codecs slot in the same object as the MongoDB marker, in either order', () => {
+    expect([
+      matches(
+        "function target(): MongoRuntimeTargetDescriptor<'mongo'> {\n  return {\n    kind: 'target',\n    create: () => ({ familyId: 'mongo', targetId: 'mongo' }),\n    codecs: () => registry,\n  };\n}",
+      ),
+      matches(
+        "export default {\n  kind: 'extension',\n  codecs: () => registry,\n  targetId: 'mongo',\n  familyId: 'mongo',\n};\n",
+      ),
+    ]).toEqual([true, true]);
+  });
+
+  it('does not match a codecs key in another object than the MongoDB marker', () => {
+    expect([
+      matches(
+        "const pack: SqlRuntimeExtensionDescriptor<'postgres'> = {\n  familyId: 'sql',\n  codecs: () => [],\n};\nconst wrongFamily = {\n  name: 'mongo-only',\n  familyId: 'mongo',\n  intercept: async () => undefined,\n};\n",
+      ),
+      matches(
+        "const wrongFamily = {\n  familyId: 'mongo',\n  name: 'mongo-only',\n};\nconst pack: SqlRuntimeExtensionDescriptor<'postgres'> = {\n  familyId: 'sql',\n  codecs: () => [],\n};\n",
+      ),
+      matches(
+        "import type { MongoRuntimeAdapterDescriptor } from '@prisma/orm-mongo/family-runtime';\nconst adapter: MongoRuntimeAdapterDescriptor<'mongo'> = { kind: 'adapter', id: 'mongo', create };\nconst context: MongoExecutionContext<Contract> = Object.freeze({\n  contract,\n  codecs: registry,\n});\n",
+      ),
+    ]).toEqual([false, false, false]);
+  });
+});
