@@ -4,7 +4,7 @@ changes:
     summary: |
       `createMongoExecutionContext` from `@prisma/orm-mongo/family-runtime` refuses a contract its stack cannot serve: `RUNTIME.CONTRACT_FAMILY_MISMATCH` for a contract of another family, `RUNTIME.CONTRACT_TARGET_MISMATCH` for another target, and `RUNTIME.MISSING_EXTENSION_PACK` for a contract that requires an extension pack the stack does not hold. The MongoDB adapter's runtime descriptor now encodes with the codecs of every extension in the stack, so an extension's codec `toWire` runs on writes.
     detection:
-      glob: "**/*.{ts,mts,cts}"
+      glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs,jsx}"
       matches:
         - '\bcreateMongoExecutionContext\b'
         - '\bMongoRuntimeExtensionDescriptor\b'
@@ -12,14 +12,15 @@ changes:
     summary: |
       A MongoDB target, adapter or extension descriptor declares each codec once, as a codec descriptor in `types.codecTypes.codecDescriptors`, as a Postgres extension does. The `codecs()` slot that returned a `MongoCodecRegistry` is gone from `MongoStaticContributions`, `MongoRuntimeTargetDescriptor`, `MongoRuntimeAdapterDescriptor` and `MongoRuntimeExtensionDescriptor`. The runtime, the adapter and the migration runner take each codec from its descriptor with `assembleMongoCodecRegistry`. Build a descriptor from a codec with `mongoCodecDescriptor` from `@prisma/orm-family-mongo/codec`.
     detection:
-      glob: "**/*.{ts,mts,cts}"
+      glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs,jsx}"
       matches:
-        - '(?<![\s\S])(?=[\s\S]*\bMongoRuntime(?:Extension|Target|Adapter)Descriptor\b)[\s\S]*\bcodecs\s*:'
+        - '(?<![\s\S])(?=[\s\S]*\bMongoRuntime(?:Extension|Target|Adapter)Descriptor\b)[\s\S]*\bcodecs\s*[:(]'
+        - '(?<![\s\S])(?=[\s\S]*\bfamilyId\s*:\s*[''"]mongo[''"])[\s\S]*\bcodecs\s*[:(]'
   - id: mongo-standard-codecs-removed
     summary: |
       `mongoStandardCodecs` and `buildStandardCodecRegistry` are gone from `@prisma/orm-mongo/target/codecs`. The target declares its codecs once, in `mongoCodecDescriptors`. A registry of them is `assembleMongoCodecRegistry([mongoRuntimeTarget])`, with `assembleMongoCodecRegistry` from `@prisma/orm-family-mongo/codec` and the target from `@prisma/orm-mongo/target/runtime`.
     detection:
-      glob: "**/*.{ts,mts,cts}"
+      glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs,jsx}"
       matches:
         - '\b(?:mongoStandardCodecs|buildStandardCodecRegistry)\b'
 ---

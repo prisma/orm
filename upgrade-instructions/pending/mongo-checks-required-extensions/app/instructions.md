@@ -4,7 +4,7 @@ changes:
     summary: |
       `mongo()` and `mongoStatic()` from `@prisma/orm-mongo` take an `extensions` option, as `postgres()` does, and refuse a contract that requires an extension pack they are not given, with `RUNTIME.MISSING_EXTENSION_PACK`. A MongoDB project whose `prisma.config.ts` composes extension packs passes each pack's runtime descriptor to `mongo({ extensions })` and `mongoStatic({ extensions })`.
     detection:
-      glob: "**/*.{ts,mts,cts}"
+      glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs,jsx}"
       matches:
         - '(?<![\s\S])(?=[\s\S]*@prisma/orm-mongo/config)[\s\S]*\bextensions\s*:'
   - id: mongo-contract-requires-target

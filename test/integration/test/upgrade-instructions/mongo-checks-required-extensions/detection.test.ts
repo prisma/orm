@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detectionPatterns } from '../guide-detections';
+import { detectionPatterns, guideChange } from '../guide-detections';
 
 const APP_NOTE =
   'upgrade-instructions/pending/mongo-checks-required-extensions/app/instructions.md';
@@ -80,5 +80,41 @@ describe('the extension mongo-standard-codecs-removed detection', () => {
       matches("import { mongoStandardCodecs } from '@prisma/orm-mongo/target/codecs';"),
       matches("import { mongoCodecDescriptors } from '@prisma/orm-mongo/target/codecs';"),
     ]).toEqual([true, true, false]);
+  });
+});
+
+describe('the detections that read source code', () => {
+  it('are written for JavaScript files as well as TypeScript files', () => {
+    const globs = [
+      guideChange(APP_NOTE, 'mongo-client-takes-extensions'),
+      guideChange(EXTENSION_NOTE, 'mongo-execution-context-checks-contract-requirements'),
+      guideChange(EXTENSION_NOTE, 'mongo-codecs-declared-once'),
+      guideChange(EXTENSION_NOTE, 'mongo-standard-codecs-removed'),
+    ].map((change) => change.detection?.glob);
+    expect(globs).toEqual(Array(4).fill('**/*.{ts,mts,cts,tsx,js,mjs,cjs,jsx}'));
+  });
+});
+
+describe('the extension mongo-codecs-declared-once detection, for other ways of writing the slot', () => {
+  const matches = matcher(EXTENSION_NOTE, 'mongo-codecs-declared-once');
+
+  it('matches the method form on a typed descriptor and an untyped MongoDB descriptor in a .js file, and not a SQL one', () => {
+    expect([
+      matches(
+        "const pack: MongoRuntimeExtensionDescriptor<'mongo'> = {\n  kind: 'extension',\n  codecs() {\n    return registry;\n  },\n};",
+      ),
+      matches(
+        "export default {\n  kind: 'extension',\n  familyId: 'mongo',\n  targetId: 'mongo',\n  codecs: () => registry,\n};\n",
+      ),
+      matches(
+        "export default {\n  kind: 'extension',\n  familyId: 'mongo',\n  codecs() {\n    return registry;\n  },\n};\n",
+      ),
+      matches(
+        "export default {\n  kind: 'extension',\n  familyId: 'sql',\n  targetId: 'postgres',\n  codecs: () => descriptors,\n};\n",
+      ),
+      matches(
+        "export default {\n  kind: 'extension',\n  familyId: 'mongo',\n  types: { codecTypes: { codecDescriptors } },\n};\n",
+      ),
+    ]).toEqual([true, true, true, false, false]);
   });
 });
