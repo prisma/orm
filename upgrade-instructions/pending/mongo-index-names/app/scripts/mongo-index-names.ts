@@ -3,11 +3,20 @@
 // A contract snapshot's index takes the name its own project's emitted contract gives the index with the same
 // collection, keys and options. A snapshot's project is the nearest folder, going up from the folder that holds
 // its `migrations` folder, that holds an emitted contract (a MongoDB contract outside every `snapshots` folder).
+// The walk stops at the first folder with a `package.json`, the project root, so no name comes from another project.
 // When no emitted contract of the project has the index, or two of them name it differently, the index gets the
 // name earlier releases gave it in the database, its keys and directions such as `email_1`, and the script says so.
 // Usage: node mongo-index-names.ts [<root>]
 
-import { readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
 const SKIPPED_DIRECTORIES = new Set(['node_modules', '.git', 'dist', 'build']);
@@ -237,13 +246,14 @@ function main(): number {
     ({ path, contract }) => !isSnapshot(path) && !hasUnnamedIndex(contract),
   );
 
-  /** The names the emitted contracts of the nearest folder up from `start` that holds any give their indexes. */
+  /** The names the emitted contracts of the nearest folder up from `start` that holds any give their indexes, going no higher than the first folder with a `package.json`. */
   const projectNames = (
     start: string,
   ): { readonly folder: string; readonly names: EmittedNames } => {
     for (let folder = start; ; folder = dirname(folder)) {
       const inFolder = emittedContracts.filter(({ path }) => path.startsWith(`${folder}${sep}`));
-      if (inFolder.length > 0 || folder === root || folder === dirname(folder)) {
+      const projectRoot = existsSync(join(folder, 'package.json'));
+      if (inFolder.length > 0 || projectRoot || folder === root || folder === dirname(folder)) {
         const names: EmittedNames = new Map();
         for (const { contract } of inFolder) recordEmittedNames(contract, names);
         return { folder, names };
