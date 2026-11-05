@@ -39,6 +39,9 @@ const storedMembers: Readonly<Record<string, JsonValue>> = {
   'sqlite/real': 2.25,
   'sqlite/blob': '68656C6C6F',
   'sqlite/datetime': '2024-01-02T03:04:05.500Z',
+  'sqlite/date': '2024-02-29',
+  'sqlite/time': '09:30:00.500',
+  'sqlite/duration': 'PT1H30M',
   'sqlite/json': '"low"',
 };
 
