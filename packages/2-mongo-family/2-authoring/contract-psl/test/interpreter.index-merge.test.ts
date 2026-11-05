@@ -247,7 +247,7 @@ model Feature {
       {
         line: 17,
         message:
-          'Index on model "Feature" is named "a_1", as is an index of model "Bug" in collection "users". An index without `map` is named after its keys and directions. Give one of them another name with `map`.',
+          '@@index([a]) on model "Feature" is named "a_1", as is @@index([a]) on model "Bug", in collection "users". An index without `map` is named after its keys and directions. Give one of them another name with `map`.',
       },
     ],
     [
@@ -264,7 +264,7 @@ model Feature {
       {
         line: 6,
         message:
-          'Index on model "User" is named "by", as is an index of model "User" in collection "users". An index without `map` is named after its keys and directions. Give one of them another name with `map`.',
+          '@@index([b], map: "by") on model "User" is named "by", as is @@index([a], map: "by") on model "User", in collection "users". An index without `map` is named after its keys and directions. Give one of them another name with `map`.',
       },
     ],
     [
@@ -279,7 +279,7 @@ model Feature {
       {
         line: 4,
         message:
-          'Index on model "User" has the same keys and options as an index of model "User" in collection "users", but another name. MongoDB cannot hold both. Remove one of them, or give them the same `map`.',
+          '@@unique([a], map: "User_a_key") on model "User" has the same keys and options as @unique on field "User.a", in collection "users", but another name. MongoDB cannot hold both. Remove one of them, or give them the same `map`.',
       },
     ],
     [

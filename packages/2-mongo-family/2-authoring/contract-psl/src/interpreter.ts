@@ -61,6 +61,7 @@ import type {
   ParsedWrittenScalar,
   PslSpan,
   Resolution,
+  ResolvedAttribute,
   SymbolTable,
 } from '@internal/psl-parser';
 import {
@@ -115,6 +116,7 @@ import {
   type EnumSite,
   type FieldSite,
   fieldSiteKey,
+  type IndexSite,
   type ModelSites,
   refusalDiagnostic,
   type SchemaSites,
@@ -599,12 +601,13 @@ function collectIndexes(
   sources: PslSources,
   binder: Binder,
   diagnostics: PslDiagnosticCollector,
-): (Site & { readonly index: IndexNode })[] {
-  const indexes: (Site & { readonly index: IndexNode })[] = [];
+): IndexSite[] {
+  const indexes: IndexSite[] = [];
   for (const field of Object.values(pslModel.fields)) {
     if (fieldTypeResolution(field, binder)?.kind === 'model') continue;
-    const uniqueNode = field.attributes.find((attr) => attr.name === 'unique')?.node;
-    if (!uniqueNode) continue;
+    const uniqueAttribute = field.attributes.find((attr) => attr.name === 'unique');
+    const uniqueNode = uniqueAttribute?.node;
+    if (!uniqueAttribute || !uniqueNode) continue;
     const unique = interpretFieldAttribute({
       symbols: specContext.symbols,
       node: uniqueNode,
@@ -638,6 +641,7 @@ function collectIndexes(
       },
       source,
       span,
+      label: `${attributeText('@', uniqueAttribute)} on field "${pslModel.name}.${field.name}"`,
     });
   }
 
@@ -691,9 +695,23 @@ function collectIndexes(
       reportEmptyIndexMap(diagnostics, source, attr.span);
       continue;
     }
-    indexes.push({ index, source, span: attr.span });
+    indexes.push({
+      index,
+      source,
+      span: attr.span,
+      label: `${attributeText('@@', attr)} on model "${pslModel.name}"`,
+    });
   }
   return indexes;
+}
+
+/** An attribute as the schema writes it, with its arguments as written. */
+function attributeText(prefix: '@' | '@@', attribute: ResolvedAttribute): string {
+  if (attribute.args.length === 0) return `${prefix}${attribute.name}`;
+  const args = attribute.args.map((arg) =>
+    arg.kind === 'named' ? `${arg.name}: ${arg.value}` : arg.value,
+  );
+  return `${prefix}${attribute.name}(${args.join(', ')})`;
 }
 
 function reportEmptyIndexMap(

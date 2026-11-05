@@ -6,7 +6,7 @@
   "psl": [
     {
       "code": "PSL_INVALID_INDEX",
-      "message": "Index on model \"User\" is named \"email_1\", as is an index of model \"User\" in collection \"users\". An index without `map` is named after its keys and directions. Give one of them another name with `map`.",
+      "message": "@@index([email], sparse: true) on model \"User\" is named \"email_1\", as is @unique on field \"User.email\", in collection \"users\". An index without `map` is named after its keys and directions. Give one of them another name with `map`.",
       "spanText": "@@index([email], sparse: true)"
     }
   ]

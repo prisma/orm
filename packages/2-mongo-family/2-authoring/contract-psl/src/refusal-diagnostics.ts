@@ -34,10 +34,16 @@ export interface FieldSite {
   readonly storedName: string;
 }
 
+/** Where an index is written, and the index as the schema writes it, such as `@@index([email]) on model "User"`. */
+export interface IndexSite extends Site {
+  readonly index: IndexNode;
+  readonly label: string;
+}
+
 /** Where a model's polymorphism and indexes are written. */
 export interface ModelSites {
   /** Each of the model's indexes, in the order the definition lists them. */
-  readonly indexes: readonly (Site & { readonly index: IndexNode })[];
+  readonly indexes: readonly IndexSite[];
   readonly discriminator?: Site & { readonly fieldName: string };
   readonly base?: Site & { readonly valueSpan: PslSpan };
 }
@@ -70,6 +76,12 @@ function modelSitesOf(sites: SchemaSites, model: string): ModelSites {
   const modelSites = sites.models.get(model);
   if (modelSites === undefined) throw new InternalError(`A refused model "${model}" has sites.`);
   return modelSites;
+}
+
+function indexSiteOf(sites: SchemaSites, model: string, position: number): IndexSite {
+  const site = modelSitesOf(sites, model).indexes[position];
+  if (site === undefined) throw new InternalError(`Index ${position} of "${model}" has a site.`);
+  return site;
 }
 
 function at(site: Site, code: string, message: string): PslDiagnostic {
@@ -306,7 +318,7 @@ export function refusalDiagnostic(
           return at(
             site,
             'PSL_INVALID_INDEX',
-            `Index on model "${model}" has the same keys and options as an index of model "${refusal.firstModel}" in collection "${refusal.collection}", but another name. MongoDB cannot hold both. Remove one of them, or give them the same \`map\`.`,
+            `${site.label} has the same keys and options as ${indexSiteOf(sites, refusal.firstModel, refusal.firstPosition).label}, in collection "${refusal.collection}", but another name. MongoDB cannot hold both. Remove one of them, or give them the same \`map\`.`,
           );
       }
       break;
@@ -319,7 +331,7 @@ export function refusalDiagnostic(
       return at(
         site,
         'PSL_INVALID_INDEX',
-        `Index on model "${model}" is named "${refusal.name}", as is an index of model "${refusal.firstModel}" in collection "${refusal.collection}". An index without \`map\` is named after its keys and directions. Give one of them another name with \`map\`.`,
+        `${site.label} is named "${refusal.name}", as is ${indexSiteOf(sites, refusal.firstModel, refusal.firstPosition).label}, in collection "${refusal.collection}". An index without \`map\` is named after its keys and directions. Give one of them another name with \`map\`.`,
       );
     }
     case 'generatedOnValueObject':
