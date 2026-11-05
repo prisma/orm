@@ -90,7 +90,7 @@ function isObject(value: unknown): value is object {
 
 type BindingKind = PostgresBinding['kind'];
 
-/** The binding kinds a client's errors offer, and the extension they name. */
+/** The binding kinds a client accepts, and the extension its errors name. A binding of another kind fails with `RUNTIME.BINDING_INVALID`. */
 export interface PostgresBindingRules {
   readonly extension: string;
   readonly kinds: readonly BindingKind[];
@@ -98,10 +98,8 @@ export interface PostgresBindingRules {
 
 export const postgresBindingRules: PostgresBindingRules = {
   extension: 'postgres',
-  kinds: ['url', 'pgPool', 'pgClient'],
+  kinds: ['url', 'pgPool', 'pgClient'] satisfies readonly PostgresBinding['kind'][],
 };
-
-const postgresBindingKinds: ReadonlySet<unknown> = new Set<BindingKind>(postgresBindingRules.kinds);
 
 const bindingForms: Record<BindingKind, string> = {
   url: "{ kind: 'url', url }",
@@ -202,7 +200,11 @@ function unknownKindError(wording: BindingWording, kind: unknown): Error {
   );
 }
 
-function checkInputTypes(options: PostgresBindingFields, wording: BindingWording): void {
+function checkInputTypes(
+  options: PostgresBindingFields,
+  rules: PostgresBindingRules,
+  wording: BindingWording,
+): void {
   const binding: unknown = options.binding;
   const url: unknown = options.url;
   const pg: unknown = options.pg;
@@ -247,7 +249,7 @@ function checkInputTypes(options: PostgresBindingFields, wording: BindingWording
   }
   if (binding !== undefined) {
     const kind: unknown = 'kind' in binding ? binding.kind : undefined;
-    if (!postgresBindingKinds.has(kind)) throw unknownKindError(wording, kind);
+    if (!new Set<unknown>(rules.kinds).has(kind)) throw unknownKindError(wording, kind);
   }
 }
 
@@ -293,7 +295,7 @@ function resolveBinding(
   rules: PostgresBindingRules,
 ): PostgresBinding {
   const wording = wordingOf(rules);
-  checkInputTypes(options, wording);
+  checkInputTypes(options, rules, wording);
   const providedCount =
     Number(options.binding !== undefined) +
     Number(options.url !== undefined) +
