@@ -9,7 +9,13 @@ import {
   classifyEnumMemberType,
   instantiateAuthoringTypeConstructor,
   isAuthoringArgRef,
+  isAuthoringEntityTypeDescriptor,
+  isAuthoringModelAttributeDescriptor,
+  isAuthoringPslBlockDescriptor,
+  isAuthoringTypeAliasDescriptor,
+  isAuthoringTypeChoiceDescriptor,
   isAuthoringTypeConstructorDescriptor,
+  isAuthoringTypeDescriptor,
   resolveAuthoringTemplateValue,
   validateAuthoringHelperArguments,
 } from '../src/shared/framework-authoring';
@@ -27,6 +33,32 @@ describe('authoring template resolution', () => {
   it('classifies a sub-namespace as not a descriptor', () => {
     const typeNamespace = { nested: typeConstructor } satisfies AuthoringTypeNamespace;
     expect(isAuthoringTypeConstructorDescriptor(typeNamespace)).toBe(false);
+  });
+
+  it('safely rejects non-object and primitive values without throwing TypeError', () => {
+    const nonObjects = [
+      'typeChoice',
+      'typeConstructor',
+      'typeAlias',
+      '',
+      123,
+      0,
+      true,
+      false,
+      Symbol('kind'),
+      null,
+      undefined,
+    ];
+
+    for (const val of nonObjects) {
+      expect(isAuthoringTypeConstructorDescriptor(val)).toBe(false);
+      expect(isAuthoringTypeAliasDescriptor(val)).toBe(false);
+      expect(isAuthoringTypeChoiceDescriptor(val)).toBe(false);
+      expect(isAuthoringTypeDescriptor(val)).toBe(false);
+      expect(isAuthoringEntityTypeDescriptor(val)).toBe(false);
+      expect(isAuthoringPslBlockDescriptor(val)).toBe(false);
+      expect(isAuthoringModelAttributeDescriptor(val)).toBe(false);
+    }
   });
 
   it('rejects arg refs with an invalid index', () => {

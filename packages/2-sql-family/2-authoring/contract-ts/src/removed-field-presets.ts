@@ -175,11 +175,14 @@ function codecIdAt(
   path: readonly string[],
   options: Readonly<Record<string, string>> | undefined,
 ): string | undefined {
+  if (typeof types !== 'object' || types === null) return undefined;
   const [name, ...rest] = path;
   if (name === undefined || !Object.hasOwn(types, name)) return undefined;
   const value = types[name];
   if (value === undefined) return undefined;
-  if (!isAuthoringTypeDescriptor(value)) return codecIdAt(value, rest, options);
+  if (!isAuthoringTypeDescriptor(value)) {
+    return typeof value === 'object' && value !== null ? codecIdAt(value, rest, options) : undefined;
+  }
   if (rest.length > 0) return undefined;
   if (isAuthoringTypeChoiceDescriptor(value)) {
     const args = value.args.map((argument) =>

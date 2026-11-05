@@ -231,7 +231,12 @@ function memberNamed(
 function subNamespace(
   member: AuthoringTypeNamespaceMember | undefined,
 ): AuthoringTypeNamespace | undefined {
-  return member === undefined || isAuthoringTypeDescriptor(member) ? undefined : member;
+  return member === undefined ||
+    typeof member !== 'object' ||
+    member === null ||
+    isAuthoringTypeDescriptor(member)
+    ? undefined
+    : member;
 }
 
 /** The sub-namespace at `path` of a type namespace, or `undefined` when a segment names no sub-namespace. */
