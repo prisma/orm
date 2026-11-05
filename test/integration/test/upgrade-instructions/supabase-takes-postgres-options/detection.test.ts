@@ -88,6 +88,18 @@ describe('the postgres-checks-database-input detection', () => {
       "postgres({ contract, binding: { kind: 'url', url: env.DATABASE_URL } })",
     ],
     [
+      'a binding with an unknown kind after a nested call',
+      "postgres({ contract: makeContract(), binding: { kind: 'bogus' } })",
+    ],
+    [
+      'a binding with an unknown kind after a call nested two deep',
+      "supabase({ contract: load(read('contract.json')), binding: { kind: 'pgpool', pool } })",
+    ],
+    [
+      'a url binding after a nested call',
+      "postgres({ contract: makeContract(), binding: { kind: 'url', url: env('DATABASE_URL') } })",
+    ],
+    [
       'a url binding on several lines',
       'postgres<Contract>({\n  contract,\n  binding: {\n    kind: "url",\n    url,\n  },\n})',
     ],
@@ -116,6 +128,14 @@ describe('the postgres-checks-database-input detection', () => {
     ['a kind on another option', "postgres({ contract, cursor: { kind: 'bogus' } })"],
     ['a url binding outside a client call', "const binding = { kind: 'url', url };"],
     ['a top-level url', 'postgres({ contract, url })'],
+    [
+      'a binding after the call has closed',
+      "postgres({ contract: makeContract() });\nconst other = { binding: { kind: 'bogus' } };",
+    ],
+    [
+      'a url binding after the call has closed',
+      "postgres({ contract: makeContract() });\nconst other = { binding: { kind: 'url', url } };",
+    ],
   ])('skips %s', (_name, content) => {
     expect(detects(content)).toBe(false);
   });

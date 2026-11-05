@@ -16,8 +16,8 @@ changes:
       glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs}"
       matches:
         - '(?<![\w$.])(?:pg|url|binding)\s*:\s*(?:null\b|[^,}\n]*(?:\?|\|\||:)\s*null\b)'
-        - '(?<![\w$.])(?:postgres|supabase)(?:<[^>]*>)?\(\s*\{[^)]*?(?<![\w$])binding\s*:\s*\{[^}]*?(?<![\w$])kind\s*:\s*([''"`])(?!(?:url|pgPool|pgClient)\1)[^''"`]*\1'
-        - '(?<![\w$.])postgres(?:<[^>]*>)?\(\s*\{[^)]*?(?<![\w$])binding\s*:\s*\{[^}]*?(?<![\w$])kind\s*:\s*([''"`])url\1'
+        - '(?<![\w$.])(?:postgres|supabase)(?:<[^>]*>)?\(\s*\{(?:[^()]|\((?:[^()]|\([^()]*\))*\))*?(?<![\w$])binding\s*:\s*\{[^}]*?(?<![\w$])kind\s*:\s*([''"`])(?!(?:url|pgPool|pgClient)\1)[^''"`]*\1'
+        - '(?<![\w$.])postgres(?:<[^>]*>)?\(\s*\{(?:[^()]|\((?:[^()]|\([^()]*\))*\))*?(?<![\w$])binding\s*:\s*\{[^}]*?(?<![\w$])kind\s*:\s*([''"`])url\1'
 ---
 
 # `supabase()` and `postgres()` check their database input when they are called
